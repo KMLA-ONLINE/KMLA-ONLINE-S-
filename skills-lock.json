@@ -13,6 +13,12 @@
       "skillPath": "skills/supabase/SKILL.md",
       "computedHash": "c4cbf2d313f6afb1ff810623b732961752bb64638f648c7a355449eb6aac9530"
     },
+    "tdd": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/tdd/SKILL.md",
+      "computedHash": "81eca2a5b53a63f481c0849be7a663a8cd43d5cf53f32b644ec0a2f50cf91aa2"
+    },
     "vercel-react-best-practices": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
