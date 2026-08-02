@@ -1,0 +1,24 @@
+# Closes the last CRLF gap: Prettier fixes files it formats and .gitattributes
+# fixes checkouts, but neither controls what the editor writes into a brand-new
+# file. Windows editors default to CRLF; this makes them start at LF instead.
+#
+# Values are kept in sync with .prettierrc.json on purpose — Prettier reads this
+# file too, and an explicit .prettierrc option would silently win over a
+# conflicting one here.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+# Markdown gives meaning to two trailing spaces (hard line break).
+trim_trailing_whitespace = false
+
+[*.{png,ico,woff2}]
+insert_final_newline = false
+trim_trailing_whitespace = false
