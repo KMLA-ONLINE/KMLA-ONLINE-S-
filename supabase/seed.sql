@@ -1,0 +1,2 @@
+-- Development seed data. Runs on `npm run db:reset` after every migration.
+-- Keep this idempotent and safe to run repeatedly; it never touches production.

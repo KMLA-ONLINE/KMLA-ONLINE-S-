@@ -1,0 +1,11 @@
+# Prettier writes LF. Without this, Windows checkouts get CRLF and every
+# `prettier --check` / lint-staged run fights the working copy.
+* text=auto eol=lf
+
+# Husky hooks are executed by git's bash; CRLF would break the shebang-less
+# scripts on some setups.
+.husky/** text eol=lf
+
+*.png binary
+*.ico binary
+*.woff2 binary
