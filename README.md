@@ -82,6 +82,10 @@ globbing 하게 됩니다 ([vite-pwa/vite-plugin-pwa#809](https://github.com/vit
 `npm run build`에 체이닝되어 있으므로 별도로 호출할 필요는 없습니다.
 
 - `index.html`이 precache에 포함되고 navigation fallback으로 바인딩됩니다 (딥링크 오프라인 동작).
+- **폰트는 precache에 넣지 않습니다.** Pretendard는 한글 글리프 전체가 단일 ~750 kB 파일이라
+  설치 시점 다운로드가 두 배 이상으로 불어납니다. 대신 `runtimeCaching`의 CacheFirst로
+  `fonts` 캐시에 담습니다 (파일명이 해시라 stale 위험 없음). 대가는 최초 1회 렌더에서
+  시스템 폰트로 잠깐 보일 수 있다는 것뿐입니다.
 - `skipWaiting: false`이므로 새 버전은 사용자가 수락할 때까지 대기합니다
   (`app/pwa/use-service-worker.ts` → `app/pwa/update-prompt.tsx`).
 - 개발 서버에는 서비스 워커가 등록되지 않습니다 (`import.meta.env.PROD` 가드).

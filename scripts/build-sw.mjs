@@ -22,9 +22,30 @@ if (!existsSync(indexHtml)) {
 const { count, size, warnings } = await generateSW({
   globDirectory: clientDir,
   swDest: resolve(clientDir, "sw.js"),
-  globPatterns: ["**/*.{html,js,css,ico,png,svg,webmanifest,woff2}"],
+  // Fonts are deliberately absent: Pretendard ships every Hangul glyph in one
+  // ~750 kB file, which would more than double what a first-time visitor has to
+  // download before the app is installable. They are runtime-cached instead
+  // (see below), so the first render may fall back to a system font once.
+  globPatterns: ["**/*.{html,js,css,ico,png,svg,webmanifest}"],
   // sw.js registers itself; the Vite manifest is a build artifact.
   globIgnores: ["sw.js", "workbox-*.js", ".vite/**"],
+  runtimeCaching: [
+    {
+      // Vite content-hashes font filenames, so a cached entry can never go
+      // stale — CacheFirst with a long TTL is safe. maxEntries bounds the
+      // leftovers from previous deploys.
+      urlPattern: /\.woff2$/,
+      handler: "CacheFirst",
+      options: {
+        cacheName: "fonts",
+        expiration: {
+          maxEntries: 20,
+          maxAgeSeconds: 60 * 60 * 24 * 365,
+        },
+        cacheableResponse: { statuses: [0, 200] },
+      },
+    },
+  ],
   // App-shell routing: any navigation the SW cannot match falls back to the
   // precached index.html, which is what makes deep links work offline.
   navigateFallback: "/index.html",

@@ -1,4 +1,6 @@
-import { Button } from "~/components/ui/button";
+import { Link } from "react-router";
+
+import { Button, buttonVariants } from "~/components/ui/button";
 import {
   Card,
   CardContent,
@@ -52,7 +54,15 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               ? `Supabase 연결됨 · 세션 ${status.session ? "있음" : "없음"}`
               : `Supabase 연결 실패: ${status.error}`}
           </p>
-          <Button>시작하기</Button>
+          <div className="flex gap-2">
+            <Button>시작하기</Button>
+            <Link
+              className={buttonVariants({ variant: "outline" })}
+              to="/theme"
+            >
+              팔레트 보기
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </main>
