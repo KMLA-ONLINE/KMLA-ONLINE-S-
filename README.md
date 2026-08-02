@@ -16,7 +16,9 @@ Facebook 형태의 커뮤니티 웹앱. **SPA로 동작하는 PWA**이며 Vercel
 
 ## 요구사항
 
-- **Node >= 22.22.0** (React Router 8은 ESM-only, 이 프로젝트는 24 LTS 기준)
+- **Node** — `.nvmrc`가 24.18.1을 고정합니다 (CI도 이 파일을 읽습니다).
+  `engines`의 `>=22.22.0`은 React Router 8의 실제 최소 요구치이고, `.nvmrc`는 개발/CI에서
+  실제로 쓰는 버전입니다. 둘은 다른 의미이니 함께 봐주세요.
 - Docker Desktop (로컬 Supabase 스택)
 
 ## 시작하기
@@ -50,6 +52,8 @@ npm run dev           # http://localhost:5173
 | `npm run lint` / `lint:fix`                  | ESLint                                      |
 | `npm run format` / `format:check`            | Prettier                                    |
 | `npm run check`                              | lint + format + typecheck + test 일괄       |
+| `npm run verify`                             | `check` + 프로덕션 빌드 (CI가 실행하는 것)  |
+| `npm run e2e:install`                        | Playwright 브라우저 5종 설치                |
 
 ## 아키텍처에서 반드시 알아야 할 것
 
@@ -122,6 +126,30 @@ husky가 두 단계로 나눠 겁니다.
 
 `.gitattributes`가 `eol=lf`를 강제합니다 — Prettier가 LF로 쓰는데 Windows 체크아웃이 CRLF로
 바꾸면 `format:check`가 매번 실패합니다.
+
+### 5. CI
+
+`.github/workflows/quality.yml`이 `npm run verify`를, `playwright.yml`이 E2E를 돌립니다.
+둘 다 `.nvmrc`로 Node 버전을 맞춥니다.
+
+E2E 워크플로는 러너에서 `supabase start`로 로컬 스택을 띄운 뒤,
+**URL과 키를 하드코딩하지 않고 `supabase status -o env`에서 읽어옵니다.**
+`supabase/config.toml`의 포트를 바꿔도 CI가 어긋나지 않게 하기 위함입니다.
+
+### 6. 에이전트 MCP
+
+`.mcp.json`에 두 서버가 정의돼 있습니다.
+
+| 서버       | 엔드포인트                       |
+| ---------- | -------------------------------- |
+| `shadcn`   | `npx shadcn mcp`                 |
+| `supabase` | `http://127.0.0.1:54623/api/mcp` |
+
+로컬 Supabase MCP는 **Studio 포트의 `/api/mcp`**입니다 —
+`supabase status`가 보여주는 `MCP_URL`(API 포트 + `/mcp`)이 아닙니다. 그쪽은 400을 반환합니다.
+`supabase/config.toml`의 `studio.port`를 바꾸면 이 URL도 함께 고쳐야 합니다.
+
+스택이 떠 있어야 동작하며(`npm run db:start`), 클라이언트에서 서버 승인이 한 번 필요합니다.
 
 ## 배포 (Vercel)
 

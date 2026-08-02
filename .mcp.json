@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "shadcn": {
+      "command": "npx",
+      "args": ["shadcn", "mcp"]
+    },
+    "supabase": {
+      "type": "http",
+      "url": "http://127.0.0.1:54623/api/mcp"
+    }
+  }
+}
