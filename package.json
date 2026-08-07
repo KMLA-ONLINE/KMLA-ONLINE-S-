@@ -13,7 +13,7 @@
     "build:app": "react-router build",
     "preview": "vite preview",
     "typecheck": "react-router typegen && tsc",
-    "lint": "eslint .",
+    "lint": "react-router typegen && eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
