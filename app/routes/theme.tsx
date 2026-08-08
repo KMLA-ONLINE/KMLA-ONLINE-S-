@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 
-import { Badge } from "~/components/ui/badge";
-import { Button, buttonVariants } from "~/components/ui/button";
+import { Badge } from "~/shared/ui/badge";
+import { Button, buttonVariants } from "~/shared/ui/button";
 import {
   Card,
   CardContent,
@@ -9,7 +9,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "~/components/ui/card";
+} from "~/shared/ui/card";
 import {
   Dialog,
   DialogClose,
@@ -19,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "~/components/ui/dialog";
+} from "~/shared/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,10 +28,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { cn } from "~/lib/utils";
+} from "~/shared/ui/dropdown-menu";
+import { Input } from "~/shared/ui/input";
+import { Label } from "~/shared/ui/label";
+import { cn } from "~/shared/lib/utils";
 import type { Route } from "./+types/theme";
 
 export function meta(_: Route.MetaArgs) {

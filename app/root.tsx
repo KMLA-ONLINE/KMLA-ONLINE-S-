@@ -1,3 +1,4 @@
+import { ThemeProvider } from "next-themes";
 import {
   isRouteErrorResponse,
   Links,
@@ -8,7 +9,10 @@ import {
 } from "react-router";
 
 import type { Route } from "./+types/root";
-import { ServiceWorkerUpdatePrompt } from "~/pwa/update-prompt";
+import { ErrorPage } from "~/shared/components/error-page";
+import { ServiceWorkerUpdatePrompt } from "~/shared/components/update-prompt";
+import { Toaster } from "~/shared/ui/sonner";
+import { TooltipProvider } from "~/shared/ui/tooltip";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
@@ -24,7 +28,8 @@ export const links: Route.LinksFunction = () => [
  */
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko">
+    // next-themes가 하이드레이션 전에 <html>의 class를 바꾸므로 서버 마크업과 어긋나는 게 정상이다.
+    <html lang="ko" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta
@@ -37,8 +42,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      <body>
-        {children}
+      {/* overscroll-none: 셸이 h-dvh라 body는 스크롤하지 않는다. 그래도 남는 고무줄
+          바운스(특히 iOS)를 여기서 끊는다. */}
+      <body className="overscroll-none">
+        {/* app.css의 dark 변형이 `.dark` 클래스 기준이라(@custom-variant dark (&:is(.dark *)))
+            attribute는 class여야 한다. */}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <TooltipProvider>
+            {children}
+            <Toaster />
+          </TooltipProvider>
+        </ThemeProvider>
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -56,45 +75,42 @@ export default function App() {
 }
 
 /**
- * Baked into index.html at build time and shown until the SPA bundle hydrates.
+ * 셸의 `clientLoader`가 도는 동안(세션 확인 + 프로필 + 뱃지) 보이는 화면.
+ *
+ * SPA 모드에서는 **root 라우트에서만** `HydrateFallback`을 export 할 수 있다 — 다른 라우트에
+ * 두면 빌드가 `SPA Mode: Invalid HydrateFallback export`로 끊긴다. 그래서 셸 골격을 여기에 둔다.
+ *
+ * 스피너가 아니라 골격을 그리는 이유: 첫 페인트에서 화면 구조가 자리를 잡고 있으면 데이터가
+ * 도착할 때 레이아웃이 튀지 않는다. 어차피 정적으로 프리렌더되는 유일한 부분이기도 하다.
  */
 export function HydrateFallback() {
   return (
-    <div className="flex min-h-dvh items-center justify-center">
-      <div
-        role="status"
-        aria-label="불러오는 중"
-        className="size-8 animate-spin rounded-full border-2 border-muted border-t-foreground"
-      />
+    <div className="flex h-dvh flex-col overflow-hidden bg-background">
+      <div className="h-[var(--app-header-h)] shrink-0 border-b max-md:hidden" />
+      <div className="flex min-h-0 flex-1">
+        <div className="w-[var(--app-rail-w)] shrink-0 border-r max-md:hidden" />
+        <div className="min-h-0 flex-1" />
+      </div>
+      <div className="h-[calc(var(--app-tabbar-h)+var(--app-safe-b))] shrink-0 border-t md:hidden" />
     </div>
   );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  let message = "Oops!";
-  let details = "An unexpected error occurred.";
+  let status: number | undefined;
   let stack: string | undefined;
 
   if (isRouteErrorResponse(error)) {
-    message = error.status === 404 ? "404" : "Error";
-    details =
-      error.status === 404
-        ? "The requested page could not be found."
-        : error.statusText || details;
+    status = error.status;
   } else if (import.meta.env.DEV && error && error instanceof Error) {
-    details = error.message;
     stack = error.stack;
   }
 
   return (
-    <main className="container mx-auto p-4 pt-16">
-      <h1>{message}</h1>
-      <p>{details}</p>
-      {stack && (
-        <pre className="w-full overflow-x-auto p-4">
-          <code>{stack}</code>
-        </pre>
-      )}
-    </main>
+    <ErrorPage
+      status={status}
+      stack={stack}
+      onRetry={() => window.location.reload()}
+    />
   );
 }

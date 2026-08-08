@@ -36,24 +36,24 @@ npm run dev           # http://localhost:5173
 
 ## 스크립트
 
-| 명령                                         | 설명                                        |
-| -------------------------------------------- | ------------------------------------------- |
-| `npm run dev`                                | 개발 서버 (서비스 워커 비활성)              |
-| `npm run build`                              | SPA 빌드 + 서비스 워커 생성                 |
-| `npm run preview`                            | 빌드 결과를 로컬에서 서빙                   |
-| `npm run typecheck`                          | 라우트 타입 생성 후 `tsc`                   |
-| `npm test` / `test:watch` / `test:coverage`  | Vitest                                      |
-| `npm run e2e` / `e2e:ui`                     | Playwright (빌드 후 자동 서빙)              |
-| `npm run db:start` / `db:stop` / `db:status` | 로컬 Supabase                               |
-| `npm run db:reset`                           | 마이그레이션 + seed 재적용                  |
-| `npm run db:diff -- <name>`                  | 로컬 변경분을 마이그레이션 파일로 추출      |
-| `npm run db:types`                           | `app/lib/supabase/database.types.ts` 재생성 |
-| `npm run pwa:assets`                         | `public/logo.svg`에서 아이콘 일체 재생성    |
-| `npm run lint` / `lint:fix`                  | ESLint                                      |
-| `npm run format` / `format:check`            | Prettier                                    |
-| `npm run check`                              | lint + format + typecheck + test 일괄       |
-| `npm run verify`                             | `check` + 프로덕션 빌드 (CI가 실행하는 것)  |
-| `npm run e2e:install`                        | Playwright 브라우저 5종 설치                |
+| 명령                                         | 설명                                           |
+| -------------------------------------------- | ---------------------------------------------- |
+| `npm run dev`                                | 개발 서버 (서비스 워커 비활성)                 |
+| `npm run build`                              | SPA 빌드 + 서비스 워커 생성                    |
+| `npm run preview`                            | 빌드 결과를 로컬에서 서빙                      |
+| `npm run typecheck`                          | 라우트 타입 생성 후 `tsc`                      |
+| `npm test` / `test:watch` / `test:coverage`  | Vitest                                         |
+| `npm run e2e` / `e2e:ui`                     | Playwright (빌드 후 자동 서빙)                 |
+| `npm run db:start` / `db:stop` / `db:status` | 로컬 Supabase                                  |
+| `npm run db:reset`                           | 마이그레이션 + seed 재적용                     |
+| `npm run db:diff -- <name>`                  | 로컬 변경분을 마이그레이션 파일로 추출         |
+| `npm run db:types`                           | `app/shared/supabase/database.types.ts` 재생성 |
+| `npm run pwa:assets`                         | `public/logo.svg`에서 아이콘 일체 재생성       |
+| `npm run lint` / `lint:fix`                  | ESLint                                         |
+| `npm run format` / `format:check`            | Prettier                                       |
+| `npm run check`                              | lint + format + typecheck + test 일괄          |
+| `npm run verify`                             | `check` + 프로덕션 빌드 (CI가 실행하는 것)     |
+| `npm run e2e:install`                        | Playwright 브라우저 5종 설치                   |
 
 ## 아키텍처에서 반드시 알아야 할 것
 
@@ -87,7 +87,7 @@ globbing 하게 됩니다 ([vite-pwa/vite-plugin-pwa#809](https://github.com/vit
   `fonts` 캐시에 담습니다 (파일명이 해시라 stale 위험 없음). 대가는 최초 1회 렌더에서
   시스템 폰트로 잠깐 보일 수 있다는 것뿐입니다.
 - `skipWaiting: false`이므로 새 버전은 사용자가 수락할 때까지 대기합니다
-  (`app/pwa/use-service-worker.ts` → `app/pwa/update-prompt.tsx`).
+  (`app/shared/hooks/use-service-worker.ts` → `app/shared/components/update-prompt.tsx`).
 - 개발 서버에는 서비스 워커가 등록되지 않습니다 (`import.meta.env.PROD` 가드).
 
 ### 3. 테스트에서는 React Router Vite 플러그인을 쓰지 않습니다
@@ -97,11 +97,11 @@ globbing 하게 됩니다 ([vite-pwa/vite-plugin-pwa#809](https://github.com/vit
 대신 `test/router.tsx`의 `renderRoute()`가 `createRoutesStub`으로 라우터 컨텍스트를 만듭니다.
 
 ```tsx
-import { renderRoute, screen } from "../../test/router";
-import Home from "./home";
+import { renderRoute, screen } from "../../../../test/router";
+import Feed from "./feed";
 
-renderRoute(Home, {
-  hydrationData: { loaderData: { "0": { ok: true, session: false } } },
+renderRoute(Feed, {
+  hydrationData: { loaderData: { "0": { posts: [] } } },
 });
 ```
 
@@ -123,7 +123,7 @@ husky가 두 단계로 나눠 겁니다.
 잡히지 않습니다. 그래서 commit이 아니라 push에 걸었습니다.
 
 `.lintstagedrc.mjs`의 `--no-warn-ignored`는 필수입니다. lint-staged는 ESLint에 파일 경로를 직접
-넘기는데, `globalIgnores` 대상(`app/components/ui/**`, `database.types.ts`)이 스테이지되면
+넘기는데, `globalIgnores` 대상(`app/shared/ui/**`, `database.types.ts`)이 스테이지되면
 "ignored" 경고가 나고 `--max-warnings 0` 때문에 커밋이 실패합니다.
 
 훅을 한 번 건너뛰려면 `HUSKY=0 git commit ...` 또는 `git commit --no-verify`.
