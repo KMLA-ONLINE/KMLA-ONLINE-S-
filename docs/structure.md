@@ -19,7 +19,7 @@ app/
     <feature>/
       AGENTS.md          ← 이 기능의 규칙/불변조건 (선택)
       components/
-      data/              ← queries.ts, mutations.ts. Supabase 호출은 여기서만
+      data/              ← queries · mutations · subscriptions · files. Supabase 호출은 여기서만
       model/             ← types.ts(database.types.ts 파생), format.ts, constants.ts
       mock.ts            ← 스키마가 생기면 통째로 지울 파일
       index.ts           ← route와 다른 feature가 쓰는 좁은 public API
@@ -56,3 +56,31 @@ Vitest 테스트는 소스 옆에 두지 않고 `test/` 아래에서 대상 코�
 - 일반 앱 route는 `handle.chrome`에 `header`와 `bottomNav` 모드를 모두 명시한다.
 - 두 모드는 각각 `none`, `sticky`, `hide-on-scroll` 중 하나다.
 - `PageHeader`는 페이지 콘텐츠이므로 route chrome 설정에 포함하지 않는다.
+
+## data 층
+
+`data/**`는 아래 네 파일로 닫는다. 분할 기준은 도메인이 아니라 호출 수명주기다.
+
+- `queries.ts` — 1회 읽기. `clientLoader`에서 부른다.
+- `mutations.ts` — 1회 쓰기. `clientAction`에서 부른다.
+- `subscriptions.ts` — realtime 채널. `useEffect`에서 부르고 unsubscribe를 반환한다.
+- `files.ts` — Supabase Storage. 이벤트 핸들러에서 부르며 업로드와 경로→URL 해석을 맡는다.
+
+`posts.ts`, `comments.ts`처럼 도메인으로 쪼개지 않는다. 그건 feature 폴더가 이미 하는 일이다.
+
+- 네 파일로 부족해지면 파일을 늘리기 전에 RPC 설계를 의심한다.
+- `data/**`는 얇은 I/O 껍데기다. 순수 로직은 `model/`이 가진다. `data/**`를 검증하려면 Supabase
+  client를 통째로 대역으로 세워야 하므로, 대역 없이 검증할 수 있는 로직은 `model/`에 둔다.
+- 에러 코드를 사용자 문구로 바꾸는 매핑은 `model/format.ts`다. 입력이 wire라도 출력이 화면이면
+  `model/`이다.
+- 브라우저 storage(localStorage, sessionStorage)는 Supabase 호출이 아니다. `data/`가 아니라
+  `model/`이나 feature hook에 둔다. `mutations.ts`가 `queries.ts`를 import하게 되면 대개
+  이 규칙을 어긴 것이다.
+
+## Supabase 호출
+
+- loader 하나에 RPC 하나를 목표로 한다. SPA + RLS라 왕복 하나하나가 그대로 네트워크다.
+- 따라서 `queries.ts`의 함수는 테이블이 아니라 화면에 대응한다. 작성자, 집계, 내 반응은 RPC 안에서 조인해 한 번에 받는다.
+- 조인이 SQL에서 끝나므로 읽기에는 소유권이 없다. 다른 feature의 쿼리를 부르지 않는다.
+- 쓰기는 다르다. 한 테이블을 수정하는 mutation은 정확히 한 feature의 `mutations.ts`에만 둔다.
+- 모델은 생성된 타입에서 파생한다. 손으로 옮겨 담는 매퍼가 두꺼워지면 RPC가 화면 모양이 아니라는 신호다.
