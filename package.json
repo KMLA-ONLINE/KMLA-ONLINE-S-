@@ -2,7 +2,6 @@
   "name": "kmlaonlinev2",
   "private": true,
   "type": "module",
-  "packageManager": "npm@11.18.0",
   "engines": {
     "node": ">=22.22.0",
     "npm": ">=11"
