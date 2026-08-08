@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 test("셸이 뜨고 index 라우트(피드)가 렌더된다", async ({ page }) => {
   await page.goto("/");
 
-  // 셸 로더가 준 프로필을 페이지가 `useShellData()`로 읽는다.
-  // (아직 `domains/shell/mock.ts`의 값이다 — 스키마가 들어오면 실제 프로필로 바뀐다.)
+  // 셸 로더가 준 프로필을 페이지가 `useAppShell()`로 읽는다.
+  // (아직 `features/app-shell/mock.ts`의 값이다 — 스키마가 들어오면 실제 프로필로 바뀐다.)
   await expect(page.getByText("홍길동님, 안녕하세요")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "동아리 박람회 안내" }),

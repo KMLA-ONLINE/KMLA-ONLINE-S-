@@ -8,10 +8,10 @@
 
 ## Source Layout
 
-- `app/` follows `docs/structure.md`: `app/shared/` (`ui/`, `lib/`, `hooks/`, `supabase/`, `components/`) for domain-free code, `app/domains/<domain>/` (`routes/`, `components/`, `data/`, `model/`, `mock.ts`, `index.ts`) for everything else. There is no top-level `app/routes/` or `app/lib/`.
-- Supabase calls belong in a domain's `data/` only. Routes, components, and `model/` must not import `getSupabase()` directly.
-- Cross-domain imports go through the other domain's `index.ts`. `app/shared/**` must never import from `app/domains/**`.
-- `app/domains/shell/` owns the app chrome: the auth gate, the shell loader, and the three layouts (`document`, `focused`, `immersive`). Which layout a screen gets is decided by its position in `app/routes.ts` — never by a `handle` export on the route module.
+- `app/` follows `docs/structure.md`: `app/routes/` contains thin React Router FS-convention route modules, `app/features/<feature>/` owns product UI/data/model code, and `app/shared/` contains domain-free code. There is no top-level `app/lib/`.
+- Dependencies flow `routes → features → shared`. Features never import routes, and shared never imports routes or features. Cross-feature imports use the other feature's narrow `index.ts` public API.
+- Supabase calls belong in a feature's `data/` only. Routes, components, and `model/` must not import `getSupabase()` directly.
+- `app/features/app-shell/` owns app chrome and shell data; `app/routes/_app.tsx` owns the auth gate. The three pathless layouts are `_app._document.tsx`, `_app._focused.tsx`, and `_app._immersive.tsx`. A screen's layout is decided by its FS route filename, never by a `handle` export.
 - `mock.ts` files stand in for tables and RPCs that `supabase/migrations/` does not have yet. Each one is read by exactly one `data/queries.ts`; delete the mock when the migration lands and change only that query.
 
 ## Runtime Constraints
@@ -45,7 +45,7 @@
 ## Build and Verification
 
 - `npm run check` is the full required sequence: lint, format check, React Router type generation plus TypeScript, then unit tests.
-- Run one unit file with `npx vitest run app/domains/shell/routes/theme.test.tsx`; Vitest matches `app/**` and `test/**` test/spec files.
+- Run one unit file with `npx vitest run test/routes/theme.test.tsx`; Vitest matches `app/**` and `test/**` test/spec files.
 - Vitest intentionally does not load the React Router Vite plugin. Render route modules with `test/router.tsx`'s `renderRoute()`; when exercising a `clientLoader`, pass it to `createRoutesStub` as `loader`. Import `describe`, `it`, and `expect` explicitly because globals are disabled.
 - Run one E2E file/project with `npx playwright test e2e/smoke.spec.ts --project=chromium`. Unless `E2E_BASE_URL` is set in the process environment, Playwright builds the production app and serves it on port 4173; the smoke suite also expects Supabase to be reachable.
 - `npm run build` must remain `react-router build` followed by `scripts/build-sw.mjs`. The service worker is generated from the completed `build/client`; do not move it into a Vite PWA plugin. Use `npm run build:app` only when intentionally skipping service-worker generation.

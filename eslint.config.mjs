@@ -86,6 +86,57 @@ export default defineConfig([
     },
   },
 
+  // ── Architecture boundaries ───────────────────────────────────────────────
+  {
+    files: ["app/features/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["~/routes", "~/routes/**"],
+              message: "Features must not depend on route modules.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["app/shared/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["~/features", "~/features/**", "~/routes", "~/routes/**"],
+              message: "Shared code must not depend on features or routes.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["app/routes/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["~/shared/supabase", "~/shared/supabase/**"],
+              message:
+                "Route modules must call Supabase through feature data APIs.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // ── Node-side tooling ─────────────────────────────────────────────────────
   {
     files: ["scripts/**/*.mjs", "*.config.{ts,mjs}"],

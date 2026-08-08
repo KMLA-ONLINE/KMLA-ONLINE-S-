@@ -10,7 +10,7 @@ import { createContext, use, type RefObject } from "react";
  * 셸 도메인이 아니라 `shared/`에 있는 이유: 컨텍스트를 채우는 건 셸(`ScrollRegion`)이지만
  * 읽는 쪽은 어느 도메인의 페이지든 될 수 있다. `shared/`가 도메인을 import 하는 일이 없어야 한다.
  *
- * 컴포넌트(`ScrollRegion`)는 `~/domains/shell`에 따로 있다. 한 파일에서 컴포넌트와 훅을 같이
+ * 컴포넌트(`ScrollRegion`)는 `~/features/app-shell`에 따로 있다. 한 파일에서 컴포넌트와 훅을 같이
  * export 하면 fast refresh가 그 모듈을 통째로 새로 만든다.
  */
 export const ScrollContainerContext =
