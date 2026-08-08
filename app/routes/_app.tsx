@@ -9,7 +9,6 @@ import {
   AppShellProvider,
   AppSidebar,
   loadShellData,
-  type ProfileStatus,
   type ShellData,
 } from "~/features/app-shell";
 import type { Route } from "./+types/_app";
@@ -33,12 +32,11 @@ import type { Route } from "./+types/_app";
  * `Exclude<..., "accepted">`라서 상태가 하나 늘면 여기서 컴파일이 깨진다 — 새 상태를 조용히
  * 통과시키는 일이 없다.
  */
-const GATE_REDIRECT: Record<Exclude<ProfileStatus, "accepted">, string> = {
-  none: "/setup",
+const GATE_REDIRECT = {
   rejected: "/setup",
   pending: "/pending",
   withdrawn: "/login",
-};
+} as const;
 
 export async function clientLoader(): Promise<ShellData> {
   const shell = await loadShellData();
@@ -47,11 +45,15 @@ export async function clientLoader(): Promise<ShellData> {
     throw redirect("/login");
   }
 
+  if (!shell.profile) {
+    throw redirect("/setup");
+  }
+
   if (shell.profile.status !== "accepted") {
     throw redirect(GATE_REDIRECT[shell.profile.status]);
   }
 
-  return shell;
+  return { ...shell, profile: shell.profile };
 }
 
 /**

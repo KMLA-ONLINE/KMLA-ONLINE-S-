@@ -1,10 +1,18 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function loginAsAcceptedStudent(page: Page) {
+  await page.goto("/login");
+  await page.getByLabel("이메일").fill("student@kmla.hs.kr");
+  await page.getByLabel("비밀번호", { exact: true }).fill("password123");
+  await page.getByRole("button", { name: "로그인" }).click();
+  await expect(page).toHaveURL(/\/$/);
+}
 
 test("셸이 뜨고 index 라우트(피드)가 렌더된다", async ({ page }) => {
+  await loginAsAcceptedStudent(page);
   await page.goto("/");
 
-  // 셸 로더가 준 프로필을 페이지가 `useAppShell()`로 읽는다.
-  // (아직 `features/app-shell/mock.ts`의 값이다 — 스키마가 들어오면 실제 프로필로 바뀐다.)
+  // 셸 로더가 실제 Supabase 프로필을 읽어 페이지에 제공한다.
   await expect(page.getByText("홍길동님, 안녕하세요")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "동아리 박람회 안내" }),
@@ -12,6 +20,7 @@ test("셸이 뜨고 index 라우트(피드)가 렌더된다", async ({ page }) =
 });
 
 test("주요 메뉴는 뷰포트마다 정확히 하나만 노출된다", async ({ page }) => {
+  await loginAsAcceptedStudent(page);
   // 사이드바(`max-md:hidden`)와 탭바(`md:hidden`) 둘 다 DOM에 있지만 `display:none`이
   // 접근성 트리에서 빼 주므로, 어느 폭에서든 내비게이션 랜드마크는 하나여야 한다.
   await page.goto("/");
@@ -21,6 +30,7 @@ test("주요 메뉴는 뷰포트마다 정확히 하나만 노출된다", async 
 });
 
 test("focused 레이아웃에는 탭바가 없다", async ({ page }) => {
+  await loginAsAcceptedStudent(page);
   // 레이아웃은 라우트 모듈의 플래그가 아니라 `routes.ts`상의 위치가 정한다.
   // `groups/create`는 `focused` 밑에 있으므로 탭바 없이 뒤로가기만 있어야 한다.
   await page.setViewportSize({ width: 390, height: 780 });
@@ -41,7 +51,7 @@ test("client-side navigation falls back to index.html on deep links", async ({
   const response = await page.goto("/definitely-not-a-route");
 
   expect(response?.status()).toBe(200);
-  await expect(page.getByText("404")).toBeVisible();
+  await expect(page.getByText("404", { exact: true })).toBeVisible();
 });
 
 test("PWA manifest is served and installable", async ({ page, request }) => {
@@ -62,4 +72,52 @@ test("PWA manifest is served and installable", async ({ page, request }) => {
   expect(json.start_url).toBe("/");
   expect(json.display).toBe("standalone");
   expect(json.icons.some((icon) => icon.sizes === "512x512")).toBeTruthy();
+});
+
+test("회원가입 후 OTP로 프로필을 제출한다", async ({
+  page,
+  request,
+}, testInfo) => {
+  const email = `e2e-${testInfo.project.name}-${Date.now()}@example.com`;
+
+  await page.goto("/signup");
+  await page.getByLabel("이메일").fill(email);
+  await page.getByLabel("비밀번호", { exact: true }).fill("password123");
+  await page.getByLabel("비밀번호 확인", { exact: true }).fill("password123");
+  await page.getByRole("button", { name: "계정 만들기" }).click();
+  await expect(page).toHaveURL(/\/setup$/);
+
+  await page.getByLabel("이름").fill("가입 테스트");
+  await page.getByLabel("사용자 유형").selectOption("teacher");
+  await page.getByLabel("전화번호 (선택)").fill("010-1234-5678");
+
+  let token = "";
+  await expect
+    .poll(
+      async () => {
+        const response = await request.get(
+          "http://127.0.0.1:54624/api/v1/messages",
+        );
+        const body = (await response.json()) as {
+          messages: {
+            To: { Address: string }[];
+            Snippet: string;
+          }[];
+        };
+        const message = body.messages.find((item) =>
+          item.To.some((recipient) => recipient.Address === email),
+        );
+        token = message?.Snippet.match(/\b\d{6}\b/)?.[0] ?? "";
+        return token;
+      },
+      { timeout: 10_000 },
+    )
+    .not.toBe("");
+
+  await page.getByLabel("인증 코드").fill(token);
+  await page.getByRole("button", { name: "가입 신청 제출" }).click();
+  await expect(page).toHaveURL(/\/pending$/);
+  await expect(
+    page.getByRole("heading", { name: "가입 신청을 확인하고 있어요" }),
+  ).toBeVisible();
 });
