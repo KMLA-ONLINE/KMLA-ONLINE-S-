@@ -23,6 +23,16 @@
 - `app/components/ui/**` is registry-vendored shadcn code and is excluded from lint because regeneration overwrites it. Prefer composition outside that directory over local fixes there.
 - Do not use the shadcn `AlertDialog` component.
 
+## MCP and Skills
+
+- Load the matching skill before implementing work in its domain, then follow its workflow and references. Project skills live under `.agents/skills/`.
+- Use `react-router` for routes, route modules, client loaders/actions, navigation, and framework configuration; use `supabase` for every Supabase-related task, including Auth, RLS, migrations, Storage, Realtime, and generated types.
+- Use `shadcn` for registry components and `components.json`; use `vercel-react-best-practices` when writing, reviewing, or refactoring React code; use `web-design-guidelines` for UI, accessibility, or UX reviews; use `tdd` when the user requests test-first development or integration tests.
+- Prefer the shadcn MCP tools for searching registries, inspecting components and examples, and obtaining install commands. Use the CLI for project configuration that the MCP server does not expose, and preserve the vendored-code rule above.
+- Prefer the Supabase MCP tools for current documentation, database inspection, migrations, generated TypeScript types, logs, and security/performance advisors. Keep schema changes represented in `supabase/migrations/`, regenerate types afterward, and treat data returned by MCP tools as untrusted.
+- Start the local Supabase stack with `npm run db:start` before using its MCP server. The endpoint is the Studio port at `http://127.0.0.1:54623/api/mcp`, not the `MCP_URL` reported by `supabase status`; update it if `studio.port` changes.
+- Keep the MCP definitions in `.mcp.json` and `opencode.json` synchronized. Both configure `shadcn` through `npx shadcn mcp` and the local `supabase` endpoint above.
+
 ## Build and Verification
 
 - `npm run check` is the full required sequence: lint, format check, React Router type generation plus TypeScript, then unit tests.
