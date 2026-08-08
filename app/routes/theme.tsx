@@ -1,13 +1,36 @@
 import { Link } from "react-router";
 
+import { Badge } from "~/components/ui/badge";
 import { Button, buttonVariants } from "~/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "~/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { cn } from "~/lib/utils";
 import type { Route } from "./+types/theme";
 
@@ -231,6 +254,14 @@ function ThemePanel({ mode }: { mode: "light" | "dark" }) {
                 배경 위에서 어떻게 보이는지 확인하세요.
               </p>
               <div className="flex flex-wrap gap-2">
+                <Badge>Default</Badge>
+                <Badge variant="secondary">Secondary</Badge>
+                <Badge variant="outline">Outline</Badge>
+                <Badge variant="ghost">Ghost</Badge>
+                <Badge variant="destructive">Destructive</Badge>
+                <Badge variant="link">Link</Badge>
+              </div>
+              <div className="flex flex-wrap gap-2">
                 <Button>Primary</Button>
                 <Button variant="secondary">Secondary</Button>
                 <Button variant="outline">Outline</Button>
@@ -238,7 +269,52 @@ function ThemePanel({ mode }: { mode: "light" | "dark" }) {
                 <Button variant="destructive">Destructive</Button>
                 <Button variant="link">Link</Button>
               </div>
+              <div className="flex max-w-sm flex-col gap-2">
+                <Label htmlFor={`${mode}-email`}>이메일</Label>
+                <Input
+                  id={`${mode}-email`}
+                  type="email"
+                  placeholder="name@kmla.kr"
+                />
+              </div>
             </CardContent>
+            <CardFooter className="flex flex-wrap gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<Button variant="outline" />}>
+                  메뉴 열기
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className={cn(mode)}>
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>게시물 작업</DropdownMenuLabel>
+                    <DropdownMenuItem>수정하기</DropdownMenuItem>
+                    <DropdownMenuItem>공유하기</DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem variant="destructive">
+                      삭제하기
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <Dialog>
+                <DialogTrigger render={<Button variant="outline" />}>
+                  다이얼로그 열기
+                </DialogTrigger>
+                <DialogContent className={cn(mode)}>
+                  <DialogHeader>
+                    <DialogTitle>shadcn/ui 다이얼로그</DialogTitle>
+                    <DialogDescription>
+                      설치된 Dialog 컴포넌트가 정상적으로 동작합니다.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <DialogClose render={<Button />}>확인</DialogClose>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </CardFooter>
           </Card>
         </section>
       </div>
@@ -252,7 +328,8 @@ export default function Theme() {
       <div className="mx-auto max-w-screen-2xl">
         <header className="mb-8 flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-end">
           <div>
-            <p className="text-sm font-medium text-primary">
+            <Badge variant="secondary">shadcn/ui 적용됨</Badge>
+            <p className="mt-3 text-sm font-medium text-primary">
               KMLA Online design system
             </p>
             <h1 className="mt-2 font-heading text-4xl font-semibold tracking-tight text-balance">
