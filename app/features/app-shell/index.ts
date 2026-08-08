@@ -13,5 +13,6 @@ export type {
   ProfileRole,
   ProfileStatus,
   ShellData,
+  ShellLoadData,
   ShellProfile,
 } from "~/features/app-shell/model/types";

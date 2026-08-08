@@ -34,16 +34,208 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          academic_track:
+            | Database["public"]["Enums"]["profile_academic_track"]
+            | null
+          anonymous_username: string | null
+          auth_user_id: string | null
+          avatar_path: string | null
+          birthday: string | null
+          class_no: number | null
+          cohort: number | null
+          created_at: string
+          deleted_at: string | null
+          description: string | null
+          dorm_room: number | null
+          gender: Database["public"]["Enums"]["profile_gender"] | null
+          id: number
+          name: string
+          onboarding_completed_at: string
+          phone_number: string | null
+          pub_id: string
+          rejection_reason: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          status: Database["public"]["Enums"]["profile_status"]
+          status_updated_at: string
+          status_updated_by: number | null
+          student_number: string | null
+          submitted_at: string
+          type: Database["public"]["Enums"]["profile_type"]
+          updated_at: string
+        }
+        Insert: {
+          academic_track?:
+            | Database["public"]["Enums"]["profile_academic_track"]
+            | null
+          anonymous_username?: string | null
+          auth_user_id?: string | null
+          avatar_path?: string | null
+          birthday?: string | null
+          class_no?: number | null
+          cohort?: number | null
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          dorm_room?: number | null
+          gender?: Database["public"]["Enums"]["profile_gender"] | null
+          id?: never
+          name: string
+          onboarding_completed_at?: string
+          phone_number?: string | null
+          pub_id?: string
+          rejection_reason?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
+          status?: Database["public"]["Enums"]["profile_status"]
+          status_updated_at?: string
+          status_updated_by?: number | null
+          student_number?: string | null
+          submitted_at?: string
+          type: Database["public"]["Enums"]["profile_type"]
+          updated_at?: string
+        }
+        Update: {
+          academic_track?:
+            | Database["public"]["Enums"]["profile_academic_track"]
+            | null
+          anonymous_username?: string | null
+          auth_user_id?: string | null
+          avatar_path?: string | null
+          birthday?: string | null
+          class_no?: number | null
+          cohort?: number | null
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          dorm_room?: number | null
+          gender?: Database["public"]["Enums"]["profile_gender"] | null
+          id?: never
+          name?: string
+          onboarding_completed_at?: string
+          phone_number?: string | null
+          pub_id?: string
+          rejection_reason?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
+          status?: Database["public"]["Enums"]["profile_status"]
+          status_updated_at?: string
+          status_updated_by?: number | null
+          student_number?: string | null
+          submitted_at?: string
+          type?: Database["public"]["Enums"]["profile_type"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_status_updated_by_fkey"
+            columns: ["status_updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_my_profile: {
+        Args: never
+        Returns: {
+          academic_track:
+            | Database["public"]["Enums"]["profile_academic_track"]
+            | null
+          anonymous_username: string | null
+          auth_user_id: string | null
+          avatar_path: string | null
+          birthday: string | null
+          class_no: number | null
+          cohort: number | null
+          created_at: string
+          deleted_at: string | null
+          description: string | null
+          dorm_room: number | null
+          gender: Database["public"]["Enums"]["profile_gender"] | null
+          id: number
+          name: string
+          onboarding_completed_at: string
+          phone_number: string | null
+          pub_id: string
+          rejection_reason: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          status: Database["public"]["Enums"]["profile_status"]
+          status_updated_at: string
+          status_updated_by: number | null
+          student_number: string | null
+          submitted_at: string
+          type: Database["public"]["Enums"]["profile_type"]
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      submit_my_profile: {
+        Args: {
+          p_academic_track?: Database["public"]["Enums"]["profile_academic_track"]
+          p_birthday?: string
+          p_class_no?: number
+          p_cohort?: number
+          p_dorm_room?: number
+          p_gender?: Database["public"]["Enums"]["profile_gender"]
+          p_name: string
+          p_phone_number?: string
+          p_student_number?: string
+          p_type: Database["public"]["Enums"]["profile_type"]
+        }
+        Returns: {
+          academic_track:
+            | Database["public"]["Enums"]["profile_academic_track"]
+            | null
+          anonymous_username: string | null
+          auth_user_id: string | null
+          avatar_path: string | null
+          birthday: string | null
+          class_no: number | null
+          cohort: number | null
+          created_at: string
+          deleted_at: string | null
+          description: string | null
+          dorm_room: number | null
+          gender: Database["public"]["Enums"]["profile_gender"] | null
+          id: number
+          name: string
+          onboarding_completed_at: string
+          phone_number: string | null
+          pub_id: string
+          rejection_reason: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          status: Database["public"]["Enums"]["profile_status"]
+          status_updated_at: string
+          status_updated_by: number | null
+          student_number: string | null
+          submitted_at: string
+          type: Database["public"]["Enums"]["profile_type"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "member" | "admin"
+      profile_academic_track: "domestic" | "international"
+      profile_gender: "male" | "female"
+      profile_status: "pending" | "accepted" | "rejected" | "withdrawn"
+      profile_type: "student" | "alumni" | "teacher"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -173,7 +365,13 @@ export const Constants = {
     Enums: {},
   },
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["member", "admin"],
+      profile_academic_track: ["domestic", "international"],
+      profile_gender: ["male", "female"],
+      profile_status: ["pending", "accepted", "rejected", "withdrawn"],
+      profile_type: ["student", "alumni", "teacher"],
+    },
   },
 } as const
 
