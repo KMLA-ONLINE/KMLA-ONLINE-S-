@@ -45,7 +45,7 @@
 ## Build and Verification
 
 - `npm run check` is the full required sequence: lint, format check, React Router type generation plus TypeScript, then unit tests.
-- Run one unit file with `npx vitest run test/routes/theme.test.tsx`; Vitest matches `app/**` and `test/**` test/spec files.
+- Keep all Vitest unit, component, and route tests under `test/`, mirroring the relevant `app/` area; keep Playwright tests under `e2e/`. Run one unit file with `npx vitest run test/routes/theme.test.tsx`.
 - Vitest intentionally does not load the React Router Vite plugin. Render route modules with `test/router.tsx`'s `renderRoute()`; when exercising a `clientLoader`, pass it to `createRoutesStub` as `loader`. Import `describe`, `it`, and `expect` explicitly because globals are disabled.
 - Run one E2E file/project with `npx playwright test e2e/smoke.spec.ts --project=chromium`. Unless `E2E_BASE_URL` is set in the process environment, Playwright builds the production app and serves it on port 4173; the smoke suite also expects Supabase to be reachable.
 - `npm run build` must remain `react-router build` followed by `scripts/build-sw.mjs`. The service worker is generated from the completed `build/client`; do not move it into a Vite PWA plugin. Use `npm run build:app` only when intentionally skipping service-worker generation.

@@ -95,14 +95,15 @@ globbing 하게 됩니다 ([vite-pwa/vite-plugin-pwa#809](https://github.com/vit
 `vitest.config.ts`는 `reactRouter()` 플러그인을 포함하지 않습니다. 이 플러그인은 typegen과
 가상 서버 모듈을 포함한 프레임워크 그래프를 구성하는데 Vitest 환경에서 동작하지 않습니다.
 대신 `test/router.tsx`의 `renderRoute()`가 `createRoutesStub`으로 라우터 컨텍스트를 만듭니다.
+Vitest 테스트는 `test/` 아래에 두고 `app/`의 영역 구조를 따라 배치합니다. Playwright 테스트는
+별도의 `e2e/`에 둡니다.
 
 ```tsx
-import { renderRoute, screen } from "../../../../test/router";
-import Feed from "./feed";
+// test/routes/theme.test.tsx
+import Theme from "~/routes/theme";
+import { renderRoute, screen } from "../router";
 
-renderRoute(Feed, {
-  hydrationData: { loaderData: { "0": { posts: [] } } },
-});
+renderRoute(Theme, { path: "/theme" });
 ```
 
 `createRoutesStub`은 `clientLoader` 키를 모르므로, 로더를 직접 태우고 싶다면 `loader`로 넘기세요.

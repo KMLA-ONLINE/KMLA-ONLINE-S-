@@ -4,7 +4,7 @@ import {
   DEFAULT_APP_CHROME,
   defineAppChrome,
   resolveAppChrome,
-} from "../../app/features/app-shell/model/chrome";
+} from "~/features/app-shell/model/chrome";
 
 describe("app chrome", () => {
   it("uses the deepest matched route config", () => {

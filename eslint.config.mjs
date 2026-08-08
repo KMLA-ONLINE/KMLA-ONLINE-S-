@@ -153,7 +153,7 @@ export default defineConfig([
 
   // ── Unit / component tests ────────────────────────────────────────────────
   {
-    files: ["app/**/*.{test,spec}.{ts,tsx}", "test/**/*.{ts,tsx}"],
+    files: ["test/**/*.{ts,tsx}"],
     extends: [
       testingLibrary.configs["flat/react"],
       jestDom.configs["flat/recommended"],

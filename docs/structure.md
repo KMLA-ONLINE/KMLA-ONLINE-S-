@@ -29,6 +29,12 @@ app/
     hooks/
     supabase/            ← client.ts, database.types.ts
     components/          ← domain-free components
+test/                    ← Vitest 단위·컴포넌트·라우트 테스트
+  features/              ← app/features 구조를 따라 배치
+  routes/                ← app/routes 구조를 따라 배치
+  router.tsx             ← React Router 테스트 헬퍼
+  setup.ts               ← Vitest 전역 설정
+e2e/                     ← Playwright E2E 테스트
 ```
 
 의존성은 `routes → features → shared` 한 방향이다.
@@ -39,6 +45,9 @@ app/
 - `features/**`는 `routes/**`를 import하지 않는다.
 - `shared/**`는 `routes/**`나 `features/**`를 import하지 않는다.
 - Supabase 호출은 `features/<feature>/data/**`에서만 한다.
+
+Vitest 테스트는 소스 옆에 두지 않고 `test/` 아래에서 대상 코드의 `app/` 구조를 반영한다.
+애플리케이션 코드는 `~/*` alias로 import하고, Playwright 테스트는 `e2e/`에 분리한다.
 
 ## Route 설정
 
