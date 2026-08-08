@@ -2,6 +2,7 @@ import { BellIcon, SearchIcon } from "lucide-react";
 import { Link } from "react-router";
 
 import { useAppShell } from "~/features/app-shell/model/app-shell-context";
+import { UserAvatar } from "~/shared/components/user-avatar";
 import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
 import { cn } from "~/shared/lib/utils";
@@ -49,11 +50,7 @@ export function AppHeader({ className }: { className?: string }) {
           <BellIcon />
         </Button>
         <Link to="/profile" aria-label="내 프로필">
-          {/* 프로필 도메인이 ProfileAvatar를 내놓으면 그걸로 교체한다. 여기서는 셸이 프로필을
-              로더에서 읽는다는 것만 보이면 되므로 최소로 둔다. */}
-          <span className="flex size-8 items-center justify-center rounded-full bg-muted text-xs font-medium">
-            {profile.name.slice(0, 1)}
-          </span>
+          <UserAvatar src={profile.avatar_url} name={profile.name} />
         </Link>
       </div>
     </header>
