@@ -6,21 +6,30 @@
 - It is one npm package, not a monorepo. Use Node `>=22.22.0` and the committed `package-lock.json`.
 - React Router 8 runs in framework mode with `ssr: false`; `app/routes.ts` is the route registry and `app/root.tsx` is the document shell.
 
+## Source Layout
+
+- `app/` follows `docs/structure.md`: `app/shared/` (`ui/`, `lib/`, `hooks/`, `supabase/`, `components/`) for domain-free code, `app/domains/<domain>/` (`routes/`, `components/`, `data/`, `model/`, `mock.ts`, `index.ts`) for everything else. There is no top-level `app/routes/` or `app/lib/`.
+- Supabase calls belong in a domain's `data/` only. Routes, components, and `model/` must not import `getSupabase()` directly.
+- Cross-domain imports go through the other domain's `index.ts`. `app/shared/**` must never import from `app/domains/**`.
+- `app/domains/shell/` owns the app chrome: the auth gate, the shell loader, and the three layouts (`document`, `focused`, `immersive`). Which layout a screen gets is decided by its position in `app/routes.ts` — never by a `handle` export on the route module.
+- `mock.ts` files stand in for tables and RPCs that `supabase/migrations/` does not have yet. Each one is read by exactly one `data/queries.ts`; delete the mock when the migration lands and change only that query.
+
 ## Runtime Constraints
 
 - There is no application server at runtime. Route data and mutations must use `clientLoader`/`clientAction`, not `loader`/`action`.
 - Despite SPA mode, React Router renders `app/root.tsx` at build time to create `build/client/index.html`. Keep `Layout` and its import graph safe from render-time `window`, `document`, `localStorage`, and eager Supabase client access.
 - Browser code talks directly to Supabase. Client-side checks are UX only; authorization belongs in Postgres RLS. Add grants and RLS policies in the same migration as every new table.
 - Every `VITE_*` value is public in the bundle. Never place a `service_role` key or other secret there; use a Supabase Edge Function for webhooks, privileged work, or third-party secrets.
-- Use the lazy singleton `getSupabase()` from `app/lib/supabase/client.ts`, and call it only from browser-only paths such as client loaders, effects, and event handlers.
+- Use the lazy singleton `getSupabase()` from `app/shared/supabase/client.ts`, and call it only from browser-only paths such as client loaders, effects, and event handlers.
 
 ## Database and Generated Code
 
 - Docker Desktop is required for the local Supabase stack. Setup order is `npm install`, create `.env.local` from `.env.example`, `npm run db:start`, fill in the printed API URL/publishable key, then `npm run db:types`.
 - Create schema changes as migrations under `supabase/migrations/`; use `npm run db:diff -- <name>` to capture local changes and `npm run db:reset` to replay migrations plus `supabase/seed.sql`.
 - Keep `supabase/seed.sql` idempotent and development-only.
-- Never hand-edit `app/lib/supabase/database.types.ts`; regenerate it with `npm run db:types` after schema changes.
-- `app/components/ui/**` is registry-vendored shadcn code and is excluded from lint because regeneration overwrites it. Prefer composition outside that directory over local fixes there.
+- Never hand-edit `app/shared/supabase/database.types.ts`; regenerate it with `npm run db:types` after schema changes.
+- `app/shared/ui/**` is registry-vendored shadcn code and is excluded from lint because regeneration overwrites it. Prefer composition outside that directory over local fixes there.
+- The vendored shadcn style is `base-vega`, built on Base UI, not Radix. Compose with the `render` prop (`<Button render={<Link to="/" />}>`), not `asChild` — `asChild` does not exist on these components.
 - Do not use the shadcn `AlertDialog` component.
 
 ## MCP and Skills
@@ -36,7 +45,7 @@
 ## Build and Verification
 
 - `npm run check` is the full required sequence: lint, format check, React Router type generation plus TypeScript, then unit tests.
-- Run one unit file with `npx vitest run app/routes/home.test.tsx`; Vitest matches `app/**` and `test/**` test/spec files.
+- Run one unit file with `npx vitest run app/domains/shell/routes/theme.test.tsx`; Vitest matches `app/**` and `test/**` test/spec files.
 - Vitest intentionally does not load the React Router Vite plugin. Render route modules with `test/router.tsx`'s `renderRoute()`; when exercising a `clientLoader`, pass it to `createRoutesStub` as `loader`. Import `describe`, `it`, and `expect` explicitly because globals are disabled.
 - Run one E2E file/project with `npx playwright test e2e/smoke.spec.ts --project=chromium`. Unless `E2E_BASE_URL` is set in the process environment, Playwright builds the production app and serves it on port 4173; the smoke suite also expects Supabase to be reachable.
 - `npm run build` must remain `react-router build` followed by `scripts/build-sw.mjs`. The service worker is generated from the completed `build/client`; do not move it into a Vite PWA plugin. Use `npm run build:app` only when intentionally skipping service-worker generation.

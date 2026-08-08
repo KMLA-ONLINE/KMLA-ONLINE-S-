@@ -6,6 +6,33 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* 셸 치수 토큰.
+ *
+ * 헤더·탭바·사이드바 높이가 여러 파일에 하드코딩되면 헤더 하나 바꿀 때 여러 곳을 고쳐야 한다.
+ * 셸(app/domains/shell)은 이 변수들만 읽는다.
+ *
+ * `:root`에 두는 이유: Tailwind v4의 `@theme`은 유틸리티 생성용이고, 여기 값들은
+ * `h-[var(--app-header-h)]`처럼 임의 값으로 참조되므로 일반 커스텀 프로퍼티면 충분하다. */
+:root {
+  /* 데스크톱 전역 헤더 */
+  --app-header-h: 3.5rem;
+  /* 모바일 하단 탭바 */
+  --app-tabbar-h: 4rem;
+  /* 페이지가 직접 그리는 sticky 헤더(PageHeader) */
+  --app-page-header-h: 3.25rem;
+
+  /* 사이드바: 접힌 아이콘 레일 / hover로 펼친 폭 */
+  --app-rail-w: 4rem;
+  --app-sidebar-w: 14rem;
+
+  /* 노치·홈 인디케이터. `env()`는 지원하지 않는 브라우저에서 선언 전체를 무효화시키므로
+   * 여기서 한 번 폴백을 씌워 두고, 이후로는 이 변수만 쓴다. */
+  --app-safe-t: env(safe-area-inset-top, 0px);
+  --app-safe-b: env(safe-area-inset-bottom, 0px);
+  --app-safe-l: env(safe-area-inset-left, 0px);
+  --app-safe-r: env(safe-area-inset-right, 0px);
+}
+
 @theme {
   --font-sans:
     Pretendard, "Inter Variable", ui-sans-serif, system-ui, sans-serif,
