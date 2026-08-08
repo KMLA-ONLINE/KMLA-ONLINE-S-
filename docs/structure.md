@@ -1,13 +1,20 @@
 ```text
 app/
   root.tsx
-  routes.ts              ← `flatRoutes()` 설정만 둔다
-  routes/                ← FS convention 기반의 얇은 route module
-    _app.tsx             ← pathless 앱 셸 + 인증/승인 게이트
-    _app._document.tsx   ← pathless 문서형 레이아웃
-    _app._focused.tsx    ← pathless 집중형 레이아웃
-    _app._immersive.tsx  ← pathless 앱형 레이아웃
-    ...
+  routes.ts              ← 명시적 route tree
+  routes/                ← 기능별로 묶은 얇은 route module
+    auth/                ← 로그인, 가입, 초기 설정
+    app/
+      gate.tsx           ← pathless 인증/승인 게이트 + 셸 데이터 provider
+      layout.tsx         ← 일반 앱 셸
+      groups/            ← 그룹 route module
+      clubs/             ← 동아리 route module
+      menu/              ← 메뉴 route module
+      profile/           ← 프로필 route module
+    messenger/
+      layout.tsx         ← 사이드바 없는 메신저 셸
+      index.tsx
+      room.tsx
   features/
     <feature>/
       AGENTS.md          ← 이 기능의 규칙/불변조건 (선택)
@@ -33,15 +40,10 @@ app/
 - `shared/**`는 `routes/**`나 `features/**`를 import하지 않는다.
 - Supabase 호출은 `features/<feature>/data/**`에서만 한다.
 
-## FS route 이름
+## Route 설정
 
-- `_leading`: URL segment가 없는 pathless layout이다.
-- `.`: URL segment와 route nesting을 만든다.
-- `$param`: 동적 URL segment다.
-- trailing `_`: URL은 중첩하지만 같은 이름의 부모 UI에는 중첩하지 않는다.
-- `_index`: 부모의 index route다.
-- `$`: catch-all route다.
-
-레이아웃은 `handle`이 아니라 파일명의 `_document`, `_focused`, `_immersive` pathless prefix로 정한다.
-예를 들어 `groups_.discover.tsx`는 `/groups/discover` URL을 만들지만 `/groups` 화면의 `Outlet`에는
-들어가지 않는다.
+- URL, pathless layout, index, 동적 segment와 route nesting은 모두 `app/routes.ts`에서 선언한다.
+- 일반 앱과 메신저는 인증 게이트 아래의 별도 layout branch다.
+- 일반 앱 route는 `handle.chrome`에 `header`와 `bottomNav` 모드를 모두 명시한다.
+- 두 모드는 각각 `none`, `sticky`, `hide-on-scroll` 중 하나다.
+- `PageHeader`는 페이지 콘텐츠이므로 route chrome 설정에 포함하지 않는다.

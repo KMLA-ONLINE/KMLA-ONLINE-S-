@@ -1,4 +1,40 @@
-import { type RouteConfig } from "@react-router/dev/routes";
-import { flatRoutes } from "@react-router/fs-routes";
+import {
+  index,
+  layout,
+  route,
+  type RouteConfig,
+} from "@react-router/dev/routes";
 
-export default flatRoutes() satisfies RouteConfig;
+export default [
+  route("login", "routes/auth/login.tsx"),
+  route("signup", "routes/auth/signup.tsx"),
+  route("setup", "routes/auth/setup.tsx"),
+  route("pending", "routes/auth/pending.tsx"),
+  route("logout", "routes/auth/logout.tsx"),
+  route("theme", "routes/theme.tsx"),
+  layout("routes/app/gate.tsx", [
+    layout("routes/app/layout.tsx", [
+      index("routes/app/home.tsx"),
+      route("profile", "routes/app/profile/index.tsx"),
+      route("noti", "routes/app/notifications.tsx"),
+      route("menu", "routes/app/menu/index.tsx"),
+      route("menu/meal", "routes/app/menu/meal.tsx"),
+      route("groups", "routes/app/groups/index.tsx"),
+      route("groups/discover", "routes/app/groups/discover.tsx"),
+      route("clubs", "routes/app/clubs/index.tsx"),
+      route("profile/:profileId", "routes/app/profile/detail.tsx"),
+      route("groups/create", "routes/app/groups/create.tsx"),
+      route("groups/:pubId", "routes/app/groups/detail.tsx", [
+        route("posts/:postId", "routes/app/groups/post.tsx"),
+      ]),
+      route("clubs/:clubId", "routes/app/clubs/detail.tsx"),
+      route("admin/approvals", "routes/app/admin/approvals.tsx"),
+    ]),
+    layout("routes/messenger/layout.tsx", [
+      route("messenger", "routes/messenger/index.tsx", [
+        route(":roomId", "routes/messenger/room.tsx"),
+      ]),
+    ]),
+  ]),
+  route("*", "routes/catch-all.tsx"),
+] satisfies RouteConfig;

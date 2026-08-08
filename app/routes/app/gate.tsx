@@ -5,23 +5,20 @@ import {
 } from "react-router";
 
 import {
-  AppHeader,
   AppShellProvider,
-  AppSidebar,
   loadShellData,
   type ShellData,
 } from "~/features/app-shell";
-import type { Route } from "./+types/_app";
+import type { Route } from "./+types/gate";
 
 /**
  * 로그인한 사용자가 보는 모든 화면의 바깥 껍데기.
  *
- * 여기가 하는 일은 셋뿐이다.
+ * 여기가 하는 일은 둘뿐이다.
  *  1. 인증/승인 게이트 — 앱 전체에서 이 한 곳
  *  2. 셸 데이터(프로필 + 내비 뱃지) 적재
- *  3. 데스크톱 크롬(헤더 + 사이드바) 프레임
  *
- * 어떤 화면이 어떤 레이아웃을 쓰는지는 `routes.ts`가 정한다. 이 파일은 모른다.
+ * 실제 화면 chrome은 아래의 일반 앱/메신저 레이아웃이 각각 소유한다.
  */
 
 /**
@@ -87,18 +84,7 @@ export function shouldRevalidate({
 export default function Shell({ loaderData }: Route.ComponentProps) {
   return (
     <AppShellProvider value={loaderData}>
-      {/* h-dvh는 모바일 브라우저의 실제 보이는 높이를 따른다. */}
-      <div className="flex h-dvh flex-col overflow-hidden bg-background">
-        <AppHeader className="max-md:hidden" />
-
-        <div className="flex min-h-0 flex-1">
-          <AppSidebar className="max-md:hidden" />
-
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <Outlet />
-          </div>
-        </div>
-      </div>
+      <Outlet />
     </AppShellProvider>
   );
 }

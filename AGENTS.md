@@ -8,10 +8,10 @@
 
 ## Source Layout
 
-- `app/` follows `docs/structure.md`: `app/routes/` contains thin React Router FS-convention route modules, `app/features/<feature>/` owns product UI/data/model code, and `app/shared/` contains domain-free code. There is no top-level `app/lib/`.
+- `app/` follows `docs/structure.md`: `app/routes.ts` explicitly declares the route tree, `app/routes/` contains thin route modules, `app/features/<feature>/` owns product UI/data/model code, and `app/shared/` contains domain-free code. There is no top-level `app/lib/`.
 - Dependencies flow `routes → features → shared`. Features never import routes, and shared never imports routes or features. Cross-feature imports use the other feature's narrow `index.ts` public API.
 - Supabase calls belong in a feature's `data/` only. Routes, components, and `model/` must not import `getSupabase()` directly.
-- `app/features/app-shell/` owns app chrome and shell data; `app/routes/_app.tsx` owns the auth gate. The three pathless layouts are `_app._document.tsx`, `_app._focused.tsx`, and `_app._immersive.tsx`. A screen's layout is decided by its FS route filename, never by a `handle` export.
+- `app/features/app-shell/` owns app chrome and shell data; `app/routes/app/gate.tsx` owns the auth gate. `app/routes/app/layout.tsx` owns the standard app shell, while `app/routes/messenger/layout.tsx` owns the sidebar-free messenger shell. Standard app routes configure the global header and mobile bottom nav through a typed `handle.chrome` export; `PageHeader` remains page-owned and is not part of this config.
 - `mock.ts` files stand in for tables and RPCs that `supabase/migrations/` does not have yet. Each one is read by exactly one `data/queries.ts`; delete the mock when the migration lands and change only that query.
 
 ## Runtime Constraints

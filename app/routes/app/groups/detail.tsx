@@ -1,7 +1,12 @@
 import { Outlet } from "react-router";
 
-import { PageHeader } from "~/features/app-shell";
+import { defineAppChrome, PageHeader } from "~/features/app-shell";
 import { StubPage } from "~/shared/components/stub-page";
+
+export const handle = defineAppChrome({
+  header: "sticky",
+  bottomNav: "none",
+});
 
 /**
  * `groups/:pubId`. 게시물 상세(`posts/:postId`)를 자식으로 가지므로 `<Outlet />`을 그린다 —

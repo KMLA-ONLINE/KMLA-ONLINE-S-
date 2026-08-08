@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type RefObject } from "react";
 
 import { useScrollContainer } from "~/shared/lib/scroll-container";
 
@@ -9,6 +9,8 @@ interface Options {
   threshold?: number;
   /** 방향을 인정하기 위한 최소 이동량(px). 트랙패드 미세 스크롤로 토글되는 걸 막는다. */
   tolerance?: number;
+  /** 셸처럼 컨텍스트 바깥에서 스크롤 영역을 소유할 때 직접 전달한다. */
+  containerRef?: RefObject<HTMLElement | null>;
 }
 
 /**
@@ -24,12 +26,14 @@ export function useHideOnScroll({
   enabled = true,
   threshold = 64,
   tolerance = 8,
+  containerRef,
 }: Options = {}) {
-  const containerRef = useScrollContainer();
+  const contextRef = useScrollContainer();
+  const resolvedRef = containerRef ?? contextRef;
   const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
-    const element = containerRef?.current;
+    const element = resolvedRef?.current;
     if (!enabled || !element) {
       setHidden(false);
       return;
@@ -57,7 +61,7 @@ export function useHideOnScroll({
       element.removeEventListener("scroll", onScroll);
       if (frameId !== 0) window.cancelAnimationFrame(frameId);
     };
-  }, [containerRef, enabled, threshold, tolerance]);
+  }, [resolvedRef, enabled, threshold, tolerance]);
 
   return hidden;
 }

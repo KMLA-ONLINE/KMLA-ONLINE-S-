@@ -1,5 +1,10 @@
-import { PageHeader } from "~/features/app-shell";
+import { defineAppChrome, PageHeader } from "~/features/app-shell";
 import { StubPage } from "~/shared/components/stub-page";
+
+export const handle = defineAppChrome({
+  header: "sticky",
+  bottomNav: "none",
+});
 
 export default function GroupPostPage() {
   return (

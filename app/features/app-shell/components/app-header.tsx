@@ -1,4 +1,4 @@
-import { BellIcon, SearchIcon } from "lucide-react";
+import { BellIcon, MessagesSquareIcon, SearchIcon } from "lucide-react";
 import { Link } from "react-router";
 
 import { useAppShell } from "~/features/app-shell/model/app-shell-context";
@@ -41,6 +41,14 @@ export function AppHeader({ className }: { className?: string }) {
       </div>
 
       <div className="flex flex-1 basis-0 items-center justify-end gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="메시지"
+          render={<Link to="/messenger" />}
+        >
+          <MessagesSquareIcon />
+        </Button>
         <Button
           variant="ghost"
           size="icon"
