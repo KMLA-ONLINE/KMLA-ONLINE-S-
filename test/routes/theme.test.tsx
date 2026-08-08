@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import Theme from "../../app/routes/theme";
+import Theme from "~/routes/theme";
 import { renderRoute, screen } from "../router";
 
 describe("Theme", () => {

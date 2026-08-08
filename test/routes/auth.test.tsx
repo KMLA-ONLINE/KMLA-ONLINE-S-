@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import LoginPage from "~/routes/login";
-import SignupPage from "~/routes/signup";
+import LoginPage from "~/routes/auth/login";
+import SignupPage from "~/routes/auth/signup";
 import { renderRoute, screen } from "../router";
 
 describe("auth routes", () => {

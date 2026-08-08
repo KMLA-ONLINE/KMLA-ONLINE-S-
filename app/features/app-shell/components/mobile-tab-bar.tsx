@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from "react-router";
 
 import { NavBadge } from "~/features/app-shell/components/nav-badge";
-import { useNavBadges } from "~/features/app-shell/model/app-shell-context";
+import { useNavBadges } from "~/features/app-shell/context/app-shell-context";
 import {
   isNavItemActive,
   navItems,
@@ -11,11 +11,10 @@ import { cn } from "~/shared/lib/utils";
 /**
  * 모바일 하단 탭바.
  *
- * `fixed`가 아니라 `document` 레이아웃의 flex 흐름 마지막 행이다. 그래서 콘텐츠가 탭바에 가리지
+ * `fixed`가 아니라 일반 앱 셸의 flex 흐름 마지막 행이다. 그래서 콘텐츠가 탭바에 가리지
  * 않게 하려고 `pb-[calc(4rem+env(safe-area-inset-bottom))]`을 계산해 붙이는 코드가 아예 없다.
  *
- * 자동 숨김도 하지 않는다. 흐름 안에 있으니 사라지면 리플로우가 나고, 위쪽 `PageHeader`만
- * 숨어도 화면은 충분히 넓어진다.
+ * 표시와 자동 숨김 여부는 현재 route의 `handle.chrome.bottomNav`가 정한다.
  */
 export function MobileTabBar({ className }: { className?: string }) {
   const location = useLocation();
@@ -29,7 +28,7 @@ export function MobileTabBar({ className }: { className?: string }) {
         className,
       )}
     >
-      <ul className="grid h-[var(--app-tabbar-h)] grid-cols-5">
+      <ul className="grid h-[var(--app-tabbar-h)] grid-cols-4">
         {navItems.map((item) => {
           const isActive = isNavItemActive(location.pathname, item);
           const unread = badges[item.to] ?? 0;

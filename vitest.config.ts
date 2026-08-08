@@ -15,21 +15,14 @@ export default defineConfig({
     // `expect` can coexist under a single tsconfig without clashing.
     globals: false,
     setupFiles: ["./test/setup.ts"],
-    include: [
-      "app/**/*.{test,spec}.{ts,tsx}",
-      "test/**/*.{test,spec}.{ts,tsx}",
-    ],
+    include: ["test/**/*.{test,spec}.{ts,tsx}"],
     exclude: ["e2e/**", "node_modules/**", "build/**"],
     css: true,
     coverage: {
       provider: "v8",
       reportsDirectory: "./coverage",
       include: ["app/**/*.{ts,tsx}"],
-      exclude: [
-        "app/**/*.{test,spec}.{ts,tsx}",
-        "app/routes.ts",
-        "app/**/+types/**",
-      ],
+      exclude: ["app/routes.ts", "app/**/+types/**"],
     },
   },
 });

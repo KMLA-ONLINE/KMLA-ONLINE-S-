@@ -1,7 +1,6 @@
 export { AuthCard } from "~/features/auth/components/auth-card";
 export { PasswordField } from "~/features/auth/components/password-field";
 export {
-  getAuthErrorMessage,
   resendSignupOtp,
   signIn,
   signOut,
@@ -9,10 +8,9 @@ export {
   submitProfile,
   verifySignupOtp,
 } from "~/features/auth/data/mutations";
-export {
-  getPendingSignupEmail,
-  loadAuthState,
-} from "~/features/auth/data/queries";
+export { loadAuthState } from "~/features/auth/data/queries";
+export { getAuthErrorMessage } from "~/features/auth/model/format";
+export { getPendingSignupEmail } from "~/features/auth/storage/pending-signup";
 export {
   hasErrors,
   readFormText,

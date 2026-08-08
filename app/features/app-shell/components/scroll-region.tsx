@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useRef, type ReactNode, type RefObject } from "react";
 
 import { ScrollContainerContext } from "~/shared/lib/scroll-container";
 import { cn } from "~/shared/lib/utils";
@@ -12,11 +12,14 @@ import { cn } from "~/shared/lib/utils";
 export function ScrollRegion({
   className,
   children,
+  scrollRef,
 }: {
   className?: string;
   children: ReactNode;
+  scrollRef?: RefObject<HTMLElement | null>;
 }) {
-  const ref = useRef<HTMLElement>(null);
+  const internalRef = useRef<HTMLElement>(null);
+  const ref = scrollRef ?? internalRef;
 
   return (
     <ScrollContainerContext value={ref}>
