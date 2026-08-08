@@ -2,7 +2,7 @@ import { getSupabase } from "~/shared/supabase/client";
 import {
   clearPendingSignupEmail,
   setPendingSignupEmail,
-} from "~/features/auth/model/pending-signup";
+} from "~/features/auth/storage/pending-signup";
 import type { ProfileFormValues } from "~/features/auth/model/types";
 
 function optionalNumber(value: string): number | undefined {

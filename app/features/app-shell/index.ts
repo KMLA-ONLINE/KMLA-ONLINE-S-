@@ -13,7 +13,7 @@ export {
   AppShellProvider,
   useAppShell,
   useNavBadges,
-} from "~/features/app-shell/model/app-shell-context";
+} from "~/features/app-shell/context/app-shell-context";
 export type {
   AppChromeConfig,
   AppChromeHandle,

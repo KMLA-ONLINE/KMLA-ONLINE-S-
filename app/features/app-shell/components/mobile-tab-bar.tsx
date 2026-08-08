@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from "react-router";
 
 import { NavBadge } from "~/features/app-shell/components/nav-badge";
-import { useNavBadges } from "~/features/app-shell/model/app-shell-context";
+import { useNavBadges } from "~/features/app-shell/context/app-shell-context";
 import {
   isNavItemActive,
   navItems,

@@ -1,7 +1,7 @@
 import { BellIcon, MessagesSquareIcon, SearchIcon } from "lucide-react";
 import { Link } from "react-router";
 
-import { useAppShell } from "~/features/app-shell/model/app-shell-context";
+import { useAppShell } from "~/features/app-shell/context/app-shell-context";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";

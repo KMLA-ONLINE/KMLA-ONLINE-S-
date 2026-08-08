@@ -19,8 +19,11 @@ app/
     <feature>/
       AGENTS.md          ← 이 기능의 규칙/불변조건 (선택)
       components/
+      context/           ← React context와 provider (선택)
       data/              ← queries · mutations · subscriptions · files. Supabase 호출은 여기서만
-      model/             ← types.ts(database.types.ts 파생), format.ts, constants.ts
+      hooks/             ← feature 전용 React hook (선택)
+      model/             ← 순수 타입·정책·계산. types.ts는 database.types.ts에서 파생
+      storage/           ← localStorage · sessionStorage adapter (선택)
       mock.ts            ← 스키마가 생기면 통째로 지울 파일
       index.ts           ← route와 다른 feature가 쓰는 좁은 public API
   shared/
@@ -41,7 +44,7 @@ e2e/                     ← Playwright E2E 테스트
 
 - `routes/**`는 `clientLoader`, `clientAction`, URL 파싱, redirect, route error, `Outlet`, 페이지
   chrome 조립만 담당한다.
-- `features/**`는 제품 UI, 데이터 접근, 모델, feature hook과 mock을 담당한다.
+- `features/**`는 제품 UI, 데이터 접근, 순수 모델, React 상태, 브라우저 storage와 mock을 담당한다.
 - `features/**`는 `routes/**`를 import하지 않는다.
 - `shared/**`는 `routes/**`나 `features/**`를 import하지 않는다.
 - Supabase 호출은 `features/<feature>/data/**`에서만 한다.
@@ -59,28 +62,35 @@ Vitest 테스트는 소스 옆에 두지 않고 `test/` 아래에서 대상 코�
 
 ## data 층
 
-`data/**`는 아래 네 파일로 닫는다. 분할 기준은 도메인이 아니라 호출 수명주기다.
+`data/**`는 아래 네 lifecycle 파일을 기본 진입점으로 사용한다.
 
 - `queries.ts` — 1회 읽기. `clientLoader`에서 부른다.
 - `mutations.ts` — 1회 쓰기. `clientAction`에서 부른다.
 - `subscriptions.ts` — realtime 채널. `useEffect`에서 부르고 unsubscribe를 반환한다.
 - `files.ts` — Supabase Storage. 이벤트 핸들러에서 부르며 업로드와 경로→URL 해석을 맡는다.
 
-`posts.ts`, `comments.ts`처럼 도메인으로 쪼개지 않는다. 그건 feature 폴더가 이미 하는 일이다.
+작은 feature에서는 `posts.ts`, `comments.ts`처럼 도메인으로 미리 쪼개지 않는다. feature 폴더가 이미
+도메인 경계이기 때문이다. 한 lifecycle 파일이 탐색과 변경 단위로 지나치게 커지면 구현을 하위
+모듈로 분리할 수 있지만, 외부 진입점은 위 네 파일에 유지한다.
 
-- 네 파일로 부족해지면 파일을 늘리기 전에 RPC 설계를 의심한다.
+- 파일이 커진 원인이 반복 왕복이나 두꺼운 응답 매핑이라면 파일을 늘리기 전에 RPC 설계를 점검한다.
 - `data/**`는 얇은 I/O 껍데기다. 순수 로직은 `model/`이 가진다. `data/**`를 검증하려면 Supabase
   client를 통째로 대역으로 세워야 하므로, 대역 없이 검증할 수 있는 로직은 `model/`에 둔다.
+- wire 요청·응답에만 필요한 얇은 변환은 `data/`에 둘 수 있다. 재사용되는 정책, 검증, 계산은
+  `model/`로 옮긴다.
 - 에러 코드를 사용자 문구로 바꾸는 매핑은 `model/format.ts`다. 입력이 wire라도 출력이 화면이면
   `model/`이다.
-- 브라우저 storage(localStorage, sessionStorage)는 Supabase 호출이 아니다. `data/`가 아니라
-  `model/`이나 feature hook에 둔다. `mutations.ts`가 `queries.ts`를 import하게 되면 대개
-  이 규칙을 어긴 것이다.
+- 브라우저 storage(localStorage, sessionStorage)는 Supabase 호출이 아니지만 외부 상태를 다루는
+  I/O다. `data/`나 `model/`이 아니라 feature의 `storage/`에 adapter를 둔다.
+- React context와 provider는 `context/`, feature 전용 React hook은 `hooks/`에 둔다. `model/`은
+  React와 브라우저 API에 의존하지 않는다.
+- `mutations.ts`가 `queries.ts`를 import하게 되면 대개 이 경계를 어긴 것이다.
 
 ## Supabase 호출
 
 - loader 하나에 RPC 하나를 목표로 한다. SPA + RLS라 왕복 하나하나가 그대로 네트워크다.
-- 따라서 `queries.ts`의 함수는 테이블이 아니라 화면에 대응한다. 작성자, 집계, 내 반응은 RPC 안에서 조인해 한 번에 받는다.
+- 이 프로젝트의 SPA 성능 전략으로 `queries.ts` 함수는 테이블보다 loader나 화면 use case에 대응한다.
+  작성자, 집계, 내 반응은 가능한 한 RPC 안에서 조인해 한 번에 받는다.
 - 조인이 SQL에서 끝나므로 읽기에는 소유권이 없다. 다른 feature의 쿼리를 부르지 않는다.
 - 쓰기는 다르다. 한 테이블을 수정하는 mutation은 정확히 한 feature의 `mutations.ts`에만 둔다.
 - 모델은 생성된 타입에서 파생한다. 손으로 옮겨 담는 매퍼가 두꺼워지면 RPC가 화면 모양이 아니라는 신호다.
