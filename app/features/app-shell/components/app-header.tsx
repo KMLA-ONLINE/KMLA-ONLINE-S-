@@ -23,19 +23,23 @@ export function AppHeader({ className }: { className?: string }) {
         className,
       )}
     >
-      <Link
-        to="/"
-        className="text-sm font-semibold tracking-wide hover:text-primary"
-      >
-        KMLA Online
-      </Link>
+      {/* 양옆을 `flex-1 basis-0`으로 두면 로고/액션 폭과 무관하게 남는 공간이 균등하게 나뉘어,
+          가운데 검색창이 헤더 정중앙에 놓인다. */}
+      <div className="flex flex-1 basis-0 items-center">
+        <Link
+          to="/"
+          className="text-sm font-semibold tracking-wide whitespace-nowrap hover:text-primary"
+        >
+          KMLA Online
+        </Link>
+      </div>
 
-      <div className="relative mx-auto w-full max-w-xl">
+      <div className="relative w-full max-w-xl">
         <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input className="h-9 pl-9" placeholder="그룹 · 게시물 · 사람 검색" />
       </div>
 
-      <div className="ml-auto flex shrink-0 items-center gap-2">
+      <div className="flex flex-1 basis-0 items-center justify-end gap-2">
         <Button
           variant="ghost"
           size="icon"
