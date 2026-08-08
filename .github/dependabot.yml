@@ -1,0 +1,40 @@
+version: 2
+updates:
+  # Keep bundler dependencies up to date
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "01:00"
+      timezone: "Asia/Seoul"
+    target-branch: "dev"
+    groups:
+      prod-deps:
+        dependency-type: "production"
+        exclude-patterns:
+          - "@react-router/*"
+          - "react*"
+          - "@types/react*"
+      dev-deps:
+        dependency-type: "development"
+        exclude-patterns:
+          - "@react-router/*"
+          - "react*"
+          - "@types/react*"
+      react-router:
+        patterns:
+          - "@react-router/*"
+          - "react-router"
+        exclude-patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react*"
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react*"
+        exclude-patterns:
+          - "@react-router/*"
+          - "react-router"
