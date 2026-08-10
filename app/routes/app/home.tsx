@@ -1,4 +1,4 @@
-import { PenSquareIcon, SearchIcon } from "lucide-react";
+import { MessagesSquareIcon, SearchIcon } from "lucide-react";
 import { Link } from "react-router";
 
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
@@ -53,10 +53,10 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
             <Button
               variant="ghost"
               size="icon"
-              aria-label="글쓰기"
-              render={<Link to="/groups" />}
+              aria-label="메시지"
+              render={<Link to="/messenger" />}
             >
-              <PenSquareIcon />
+              <MessagesSquareIcon />
             </Button>
           </>
         }
