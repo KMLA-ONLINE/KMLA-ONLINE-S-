@@ -309,7 +309,7 @@ export function ImageCropper({
               onKeyDown={onKeyDown}
               tabIndex={busy || !ready ? -1 : 0}
               style={{ aspectRatio: String(aspect) }}
-              className="relative w-full touch-none overflow-hidden select-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+              className="relative w-full touch-none overflow-hidden select-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
               role="application"
               aria-label="크롭 영역"
               aria-describedby="image-cropper-help"

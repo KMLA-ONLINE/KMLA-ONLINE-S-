@@ -10,7 +10,7 @@ import {
 
 import type { Route } from "./+types/root";
 import { ErrorPage } from "~/shared/components/error-page";
-import { ServiceWorkerUpdatePrompt } from "~/shared/components/update-prompt";
+import { PwaPrompts } from "~/shared/components/pwa-prompts";
 import { Toaster } from "~/shared/ui/sonner";
 import { TooltipProvider } from "~/shared/ui/tooltip";
 import "./app.css";
@@ -69,7 +69,7 @@ export default function App() {
   return (
     <>
       <Outlet />
-      <ServiceWorkerUpdatePrompt />
+      <PwaPrompts />
     </>
   );
 }

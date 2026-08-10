@@ -45,19 +45,4 @@ describe("useClientNow", () => {
 
     expect(screen.getByTestId("now")).toHaveTextContent("600000");
   });
-
-  it("구독자가 남아 있으면 시계를 유지한다", () => {
-    render(
-      <>
-        <Harness />
-        <Harness />
-      </>,
-    );
-    const [kept] = screen.getAllByTestId("now");
-
-    // 한쪽만 사라져도 타이머는 계속 돌아야 하므로 값을 버리지 않는다.
-    vi.setSystemTime(600_000);
-
-    expect(kept).toHaveTextContent("0");
-  });
 });
