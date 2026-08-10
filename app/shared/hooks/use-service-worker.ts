@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Workbox } from "workbox-window";
 
+const reloadPage = () => window.location.reload();
+
 /**
  * Registers the Workbox service worker emitted by `vite-plugin-pwa`.
  *
@@ -11,10 +13,12 @@ import type { Workbox } from "workbox-window";
  * The generated SW runs with `skipWaiting: false`, so a new build sits in the
  * `waiting` state until the user accepts — no reload is ever forced mid-scroll.
  */
-export function useServiceWorker() {
+export function useServiceWorker(reload = reloadPage) {
   const [updateReady, setUpdateReady] = useState(false);
   const [offlineReady, setOfflineReady] = useState(false);
   const wbRef = useRef<Workbox | null>(null);
+  const updateAcceptedRef = useRef(false);
+  const updateAppliedElsewhereRef = useRef(false);
 
   useEffect(() => {
     if (!import.meta.env.PROD) return;
@@ -33,9 +37,19 @@ export function useServiceWorker() {
       wb.addEventListener("activated", (event) => {
         if (!event.isUpdate) setOfflineReady(true);
       });
-      // The reload has to happen after the new SW takes control, otherwise the
-      // page is still served by the old one.
-      wb.addEventListener("controlling", () => window.location.reload());
+      wb.addEventListener("controlling", (event) => {
+        // clientsClaim also fires this on the first install. Only updates that
+        // this tab accepted may interrupt the current page automatically.
+        if (!event.isUpdate) return;
+
+        if (updateAcceptedRef.current) {
+          reload();
+          return;
+        }
+
+        updateAppliedElsewhereRef.current = true;
+        setUpdateReady(true);
+      });
 
       await wb.register();
     })();
@@ -43,12 +57,19 @@ export function useServiceWorker() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reload]);
 
   const applyUpdate = useCallback(() => {
     setUpdateReady(false);
+
+    if (updateAppliedElsewhereRef.current) {
+      reload();
+      return;
+    }
+
+    updateAcceptedRef.current = true;
     void wbRef.current?.messageSkipWaiting();
-  }, []);
+  }, [reload]);
 
   const dismissOfflineReady = useCallback(() => setOfflineReady(false), []);
 
