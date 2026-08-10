@@ -6,6 +6,12 @@
 - It is one npm package, not a monorepo. Use Node `>=22.22.0` and the committed `package-lock.json`.
 - React Router 8 runs in framework mode with `ssr: false`; `app/routes.ts` is the route registry and `app/root.tsx` is the document shell.
 
+## Product Requirements
+
+- Before implementing or changing a product feature, start at `docs/KMLA_SPEC_INDEX.md` and follow its links to the relevant domain specification and technical design documents.
+- If the required behavior is ambiguous or unspecified, ask the user before implementation rather than deciding it implicitly.
+- When a user decision changes or adds product behavior, update the relevant functional specification or technical design document as part of the same change.
+
 ## Source Layout
 
 - `app/` follows `docs/structure.md`: `app/routes.ts` explicitly declares the route tree, `app/routes/` contains thin route modules, `app/features/<feature>/` owns product UI/data/model code, and `app/shared/` contains domain-free code. There is no top-level `app/lib/`.
