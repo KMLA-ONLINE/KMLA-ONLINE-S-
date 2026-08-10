@@ -45,11 +45,21 @@ function DialogContent({
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean;
 }) {
+  const popupRef = React.useRef<HTMLDivElement>(null);
+
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
+        // Base UI는 기본적으로 팝업 안의 첫 tabbable 요소로 포커스를 옮긴다. 열자마자
+        // 닫기나 취소 버튼에 포커스 링이 붙어 거절을 권하는 모양이 되므로, 팝업
+        // 컨테이너(tabindex=-1)로 보낸다 — 터치로 열렸을 때 Base UI가 하는 동작과 같고,
+        // `aria-labelledby` 덕에 버튼 대신 다이얼로그 제목이 읽힌다. 포커스를 아예 끄면
+        // (`initialFocus={false}`) 배경이 inert인 트랩 안에 갈 곳이 없어진다.
+        // `{...props}`가 뒤에 있으므로 호출부에서 계속 덮어쓸 수 있다.
+        ref={popupRef}
+        initialFocus={popupRef}
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-xl bg-popover p-6 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className,
