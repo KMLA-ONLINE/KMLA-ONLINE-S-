@@ -70,10 +70,10 @@ supabase login
 ### 5.2 프로젝트 연결
 
 ```bash
-supabase link --ref <supabase project id>
+supabase link --ref <project id>
 ```
 
-Supabase start를 한 후에, studio로 들어가([127.0.0.1:54623](http://127.0.0.1:54623)) project id를 찾아 복사해서 붙여넣습니다.
+[링크](https://supabase.com/dashboard/project/nvgtzkylunpefdvonioo/settings/general) 에 들어가서 project id를 복붙합니다.
 
 ---
 
