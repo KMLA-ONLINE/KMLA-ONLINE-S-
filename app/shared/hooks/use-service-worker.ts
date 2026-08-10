@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Workbox } from "workbox-window";
 
 const reloadPage = () => window.location.reload();
+const OFFLINE_READY_DURATION_MS = 5000;
 
 /**
  * Registers the Workbox service worker emitted by `vite-plugin-pwa`.
@@ -16,7 +17,10 @@ const reloadPage = () => window.location.reload();
 export function useServiceWorker(reload = reloadPage) {
   const [updateReady, setUpdateReady] = useState(false);
   const [offlineReady, setOfflineReady] = useState(false);
+  const [applyingUpdate, setApplyingUpdate] = useState(false);
+  const [updateAppliedElsewhere, setUpdateAppliedElsewhere] = useState(false);
   const wbRef = useRef<Workbox | null>(null);
+  const offlineReadyTimerRef = useRef<number | null>(null);
   const updateAcceptedRef = useRef(false);
   const updateAppliedElsewhereRef = useRef(false);
 
@@ -33,9 +37,22 @@ export function useServiceWorker(reload = reloadPage) {
       const wb = new Workbox("/sw.js", { scope: "/" });
       wbRef.current = wb;
 
-      wb.addEventListener("waiting", () => setUpdateReady(true));
+      wb.addEventListener("waiting", () => {
+        updateAcceptedRef.current = false;
+        updateAppliedElsewhereRef.current = false;
+        setApplyingUpdate(false);
+        setUpdateAppliedElsewhere(false);
+        setOfflineReady(false);
+        setUpdateReady(true);
+      });
       wb.addEventListener("activated", (event) => {
-        if (!event.isUpdate) setOfflineReady(true);
+        if (!event.isUpdate) {
+          setOfflineReady(true);
+          offlineReadyTimerRef.current = window.setTimeout(
+            () => setOfflineReady(false),
+            OFFLINE_READY_DURATION_MS,
+          );
+        }
       });
       wb.addEventListener("controlling", (event) => {
         // clientsClaim also fires this on the first install. Only updates that
@@ -48,6 +65,8 @@ export function useServiceWorker(reload = reloadPage) {
         }
 
         updateAppliedElsewhereRef.current = true;
+        setUpdateAppliedElsewhere(true);
+        setOfflineReady(false);
         setUpdateReady(true);
       });
 
@@ -56,11 +75,14 @@ export function useServiceWorker(reload = reloadPage) {
 
     return () => {
       cancelled = true;
+      if (offlineReadyTimerRef.current !== null) {
+        window.clearTimeout(offlineReadyTimerRef.current);
+      }
     };
   }, [reload]);
 
   const applyUpdate = useCallback(() => {
-    setUpdateReady(false);
+    setApplyingUpdate(true);
 
     if (updateAppliedElsewhereRef.current) {
       reload();
@@ -73,5 +95,12 @@ export function useServiceWorker(reload = reloadPage) {
 
   const dismissOfflineReady = useCallback(() => setOfflineReady(false), []);
 
-  return { updateReady, offlineReady, applyUpdate, dismissOfflineReady };
+  return {
+    updateReady,
+    offlineReady,
+    applyingUpdate,
+    updateAppliedElsewhere,
+    applyUpdate,
+    dismissOfflineReady,
+  };
 }

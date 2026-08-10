@@ -97,6 +97,7 @@ describe("useServiceWorker", () => {
     act(() => result.current.applyUpdate());
 
     expect(workbox.messageSkipWaiting).toHaveBeenCalledOnce();
+    expect(result.current.applyingUpdate).toBe(true);
     expect(reload).not.toHaveBeenCalled();
 
     emit("controlling", { isUpdate: true });
@@ -109,11 +110,25 @@ describe("useServiceWorker", () => {
     emit("controlling", { isUpdate: true });
 
     expect(result.current.updateReady).toBe(true);
+    expect(result.current.updateAppliedElsewhere).toBe(true);
     expect(reload).not.toHaveBeenCalled();
 
     act(() => result.current.applyUpdate());
 
     expect(reload).toHaveBeenCalledOnce();
     expect(workbox.messageSkipWaiting).not.toHaveBeenCalled();
+  });
+
+  it("외부 적용 뒤 새 업데이트가 대기하면 최신 SW를 적용한다", async () => {
+    const { emit, reload, result, workbox } = await setupHook();
+
+    emit("controlling", { isUpdate: true });
+    emit("waiting", { isUpdate: true });
+
+    expect(result.current.updateAppliedElsewhere).toBe(false);
+    act(() => result.current.applyUpdate());
+
+    expect(workbox.messageSkipWaiting).toHaveBeenCalledOnce();
+    expect(reload).not.toHaveBeenCalled();
   });
 });

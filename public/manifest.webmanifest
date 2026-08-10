@@ -1,15 +1,15 @@
 {
   "name": "KMLA Online",
   "short_name": "KMLA",
-  "description": "KMLA 커뮤니티",
+  "description": "KMLA 구성원을 위한 피드, 그룹, 메신저 통합 커뮤니티",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
-  "orientation": "portrait",
   "lang": "ko",
   "dir": "ltr",
+  "categories": ["social", "education"],
   "background_color": "#ffffff",
   "theme_color": "#0f172a",
   "icons": [
@@ -33,6 +33,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/feed-mobile.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "KMLA Online 모바일 피드"
+    },
+    {
+      "src": "/screenshots/feed-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "KMLA Online 데스크톱 피드"
     }
   ]
 }

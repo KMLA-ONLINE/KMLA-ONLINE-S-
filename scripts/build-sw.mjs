@@ -28,7 +28,9 @@ const { count, size, warnings } = await generateSW({
   // (see below), so the first render may fall back to a system font once.
   globPatterns: ["**/*.{html,js,css,ico,png,svg,webmanifest}"],
   // sw.js registers itself; the Vite manifest is a build artifact.
-  globIgnores: ["sw.js", "workbox-*.js", ".vite/**"],
+  // Promotional screenshots are only needed when the browser expands its
+  // install UI; downloading them with the offline app shell wastes bandwidth.
+  globIgnores: ["sw.js", "workbox-*.js", ".vite/**", "screenshots/**"],
   runtimeCaching: [
     {
       // Vite content-hashes font filenames, so a cached entry can never go

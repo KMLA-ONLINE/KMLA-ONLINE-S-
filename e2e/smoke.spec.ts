@@ -68,10 +68,49 @@ test("PWA manifest is served and installable", async ({ page, request }) => {
     start_url: string;
     display: string;
     icons: { sizes: string }[];
+    orientation?: string;
+    screenshots: { form_factor?: string; sizes: string; src: string }[];
   };
   expect(json.start_url).toBe("/");
   expect(json.display).toBe("standalone");
+  expect(json.orientation).toBeUndefined();
   expect(json.icons.some((icon) => icon.sizes === "512x512")).toBeTruthy();
+  expect(
+    json.screenshots.some(({ form_factor }) => form_factor === "narrow"),
+  ).toBeTruthy();
+  expect(
+    json.screenshots.some(({ form_factor }) => form_factor === "wide"),
+  ).toBeTruthy();
+  const screenshots = await Promise.all(
+    json.screenshots.map(({ src }) => request.get(src)),
+  );
+  expect(screenshots.every((response) => response.ok())).toBe(true);
+});
+
+test("첫 서비스 워커 설치는 현재 페이지를 새로고침하지 않는다", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const count = Number(sessionStorage.getItem("document-load-count") ?? "0");
+    sessionStorage.setItem("document-load-count", String(count + 1));
+  });
+  await page.goto("/login");
+
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() => Boolean(navigator.serviceWorker.controller)),
+    )
+    .toBe(true);
+  await expect(
+    page.getByText("오프라인에서도 사용할 수 있습니다."),
+  ).toBeVisible();
+
+  expect(
+    await page.evaluate(() => sessionStorage.getItem("document-load-count")),
+  ).toBe("1");
 });
 
 test("회원가입 후 OTP로 프로필을 제출한다", async ({
