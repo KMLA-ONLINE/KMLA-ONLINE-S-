@@ -91,22 +91,22 @@
 
 ### 6.1 버킷 제한
 
-`MiB`는 1,048,576바이트, `MB`는 1,000,000바이트를 뜻한다. 메시지 버킷은 Supabase Free 프로젝트의 전역 50MB 제한을 기준으로 한다.
+`MiB`는 1,048,576바이트를 뜻한다. 배포 환경은 Supabase Pro 프로젝트를 기준으로 한다.
 
 | 버킷                         | Object 최대 크기 | Storage MIME 정책          |
 | ---------------------------- | ---------------- | -------------------------- |
 | `profile-media`              | 4MiB             | `image/webp`만 허용        |
 | `group-media`                | 4MiB             | `image/webp`만 허용        |
-| `post-attachments`           | 25MiB            | 모든 MIME type 허용        |
-| `direct-message-attachments` | 26MiB            | `application/octet-stream` |
-| `group-message-attachments`  | 26MiB            | `application/octet-stream` |
+| `post-attachments`           | 30MiB            | 모든 MIME type 허용        |
+| `direct-message-attachments` | 31MiB            | `application/octet-stream` |
+| `group-message-attachments`  | 31MiB            | `application/octet-stream` |
 
 Bucket 제한은 object 하나에 적용되는 최종 방어선이다. 이미지 종류별 제한은 클라이언트가 검사하고, 암호화 전 메시지 파일 제한은 클라이언트가 제출한 metadata와 암호문 길이의 일관성을 finalize RPC가 검사한다. 서버는 E2EE 평문 자체를 검사할 수 없다.
 
 ### 6.2 이미지 입력
 
 - JPEG, PNG 및 WebP만 입력으로 받는다.
-- 입력 파일은 최대 25MiB 및 50메가픽셀이다.
+- 입력 파일은 최대 30MiB 및 50메가픽셀이다.
 - GIF, SVG 및 HEIC는 받지 않는다.
 - 원본 이미지는 보존하지 않는다.
 - 모든 입력 이미지는 클라이언트에서 EXIF 등 metadata를 제거하고 WebP로 다시 인코딩한다.
@@ -125,8 +125,8 @@ Bucket 제한은 object 하나에 적용되는 최종 방어선이다. 이미지
 ### 6.4 일반 파일과 미디어
 
 - 게시물과 메시지는 파일 형식을 제한하지 않는다.
-- 게시물의 비이미지 파일은 최대 25MiB다.
-- 메시지의 비이미지 일반 파일, 오디오 및 동영상은 암호화 전 최대 25MiB다.
+- 게시물의 비이미지 파일은 최대 30MiB다.
+- 메시지의 비이미지 일반 파일, 오디오 및 동영상은 암호화 전 최대 30MiB다.
 - 메시지 안에서 재생할 수 있는 오디오는 MP3, M4A, OGG, WAV 및 WebM이다.
 - 메시지 안에서 재생할 수 있는 동영상은 MP4, WebM 및 MOV다.
 - 정규화된 WebP 이미지와 위 오디오·동영상 allowlist만 앱 안에서 표시하거나 재생한다.
