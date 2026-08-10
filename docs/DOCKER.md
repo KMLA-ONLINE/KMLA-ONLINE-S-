@@ -70,14 +70,10 @@ supabase login
 ### 5.2 프로젝트 연결
 
 ```bash
-supabase link
+supabase link --ref <supabase project id>
 ```
 
-터미널에 프로젝트 목록이 뜨면 연결할 프로젝트를 선택하고, DB 비밀번호를 입력합니다.
-
-> **실패 시**: `config.toml`의 일부 값이 remote와 달라서 링크가 실패할 수 있습니다.
-> 터미널에 `- enroll_enabled = false` / `+ enroll_enabled = true` 같은 diff가 출력되면,
-> `-`가 붙은 값을 `+`가 붙은 값으로 `config.toml`에서 수정한 후 `supabase link`를 다시 실행하세요.
+Supabase start를 한 후에, studio로 들어가([127.0.0.1:54623](http://127.0.0.1:54623)) project id를 찾아 복사해서 붙여넣습니다.
 
 ---
 
