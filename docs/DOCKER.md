@@ -73,7 +73,7 @@ supabase login
 supabase link --ref <project id>
 ```
 
-[링크](https://supabase.com/dashboard/project/nvgtzkylunpefdvonioo/settings/general) 에 들어가서 project id를 복붙합니다.
+[supabase.com](https://) project에 들어가서 project id를 복붙합니다.
 
 ---
 
