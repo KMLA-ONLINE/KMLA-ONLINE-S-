@@ -7,10 +7,11 @@ import {
   MessageSquareTextIcon,
   MoreHorizontalIcon,
   PinIcon,
+  SettingsIcon,
   UsersIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useSearchParams } from "react-router";
 
 import { GroupAvatar } from "~/features/groups/components/group-avatar";
 import {
@@ -20,10 +21,10 @@ import {
 import {
   getGroupIdentityPolicyLabel,
   getGroupJoinPolicyLabel,
-  getGroupMemberRoleLabel,
   getGroupPostingPolicyLabel,
 } from "~/features/groups/model/format";
 import type { GroupDetail } from "~/features/groups/model/types";
+import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import {
@@ -38,6 +39,17 @@ import {
 import { Spinner } from "~/shared/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";
 
+type GroupTab = "posts" | "members" | "settings";
+
+const GROUP_TABS: {
+  id: GroupTab;
+  label: string;
+}[] = [
+  { id: "posts", label: "게시물" },
+  { id: "members", label: "멤버" },
+  { id: "settings", label: "그룹 설정" },
+];
+
 export function GroupDetailScreen({
   group,
   profileId,
@@ -48,6 +60,7 @@ export function GroupDetailScreen({
   isTeacher: boolean;
 }) {
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const pending = fetcher.state !== "idle";
   const isMember = group.membership_state === "member";
   const isPrivate = group.join_policy === "invite_only";
@@ -56,6 +69,29 @@ export function GroupDetailScreen({
   // 기능 명세 7.12: 공식 그룹은 나갈 수 없고, 소유자는 소유권을 이전해야 나갈 수 있다.
   const canLeave =
     isMember && group.kind !== "official" && group.member_role !== "owner";
+  const canManage =
+    group.member_role === "owner" || group.member_role === "admin";
+  const canCurate = canManage || group.member_role === "manager";
+  const canViewMembers =
+    group.identity_policy !== "always_anonymous" || canManage;
+  const requestedTab = searchParams.get("tab");
+  const tab: GroupTab =
+    (requestedTab === "members" && canViewMembers) ||
+    (requestedTab === "settings" && canCurate)
+      ? requestedTab
+      : "posts";
+  const visibleTabs = GROUP_TABS.filter(
+    (item) =>
+      (item.id !== "members" || canViewMembers) &&
+      (item.id !== "settings" || canCurate),
+  );
+
+  const setTab = (nextTab: GroupTab) => {
+    const next = new URLSearchParams(searchParams);
+    if (nextTab === "posts") next.delete("tab");
+    else next.set("tab", nextTab);
+    setSearchParams(next, { preventScrollReset: true });
+  };
 
   return (
     <div className="pb-10 md:pt-0">
@@ -106,9 +142,6 @@ export function GroupDetailScreen({
               <VisibilityIcon aria-hidden className="size-3.5 shrink-0" />
               {isPrivate ? "비공개 그룹" : "공개 그룹"} · 멤버{" "}
               {group.member_count.toLocaleString("ko-KR")}명
-              {group.member_role ? (
-                <> · {getGroupMemberRoleLabel(group.member_role)}</>
-              ) : null}
             </p>
             {group.identity_policy === "always_anonymous" ? (
               <p className="mt-1 text-xs text-muted-foreground">
@@ -187,20 +220,50 @@ export function GroupDetailScreen({
         </div>
       </section>
 
-      <div className="grid gap-6 px-4 py-4 md:px-0 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <Card className="order-2 h-fit lg:order-1">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquareTextIcon aria-hidden className="size-5" />
-              그룹 활동
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-lg border border-dashed px-4 py-12 text-center text-sm text-muted-foreground">
-              아직 표시할 활동이 없습니다.
-            </div>
-          </CardContent>
-        </Card>
+      <nav
+        className="mx-2 mt-1 hidden items-center gap-1 border-b md:flex"
+        aria-label="그룹 메뉴"
+      >
+        {visibleTabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setTab(item.id)}
+            aria-current={tab === item.id ? "page" : undefined}
+            className={cn(
+              "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+              tab === item.id
+                ? "border-foreground text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="grid gap-6 py-3 md:py-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="min-w-0 lg:order-1">
+          {tab === "posts" ? (
+            <EmptyTabCard
+              icon={<MessageSquareTextIcon aria-hidden />}
+              title="게시물"
+              description="아직 게시물이 없습니다."
+            />
+          ) : tab === "members" ? (
+            <EmptyTabCard
+              icon={<UsersIcon aria-hidden />}
+              title={`멤버 ${group.member_count.toLocaleString("ko-KR")}`}
+              description="멤버 명부 기능을 준비하고 있습니다."
+            />
+          ) : (
+            <EmptyTabCard
+              icon={<SettingsIcon aria-hidden />}
+              title="그룹 설정"
+              description="그룹 설정 기능을 준비하고 있습니다."
+            />
+          )}
+        </div>
 
         <aside className="hidden lg:order-2 lg:block">
           <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 lg:sticky lg:top-4">
@@ -253,6 +316,32 @@ export function GroupDetailScreen({
         }}
       />
     </div>
+  );
+}
+
+function EmptyTabCard({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Card className="h-fit rounded-none border-x-0 md:rounded-xl md:border">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 [&_svg]:size-5">
+          {icon}
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-lg border border-dashed px-4 py-12 text-center text-sm text-muted-foreground">
+          {description}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

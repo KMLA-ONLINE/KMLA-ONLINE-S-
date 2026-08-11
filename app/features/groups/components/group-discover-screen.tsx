@@ -1,4 +1,4 @@
-import { ChevronLeftIcon, SearchIcon, XIcon } from "lucide-react";
+import { CheckIcon, ChevronLeftIcon, SearchIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Form, Link, useFetcher, useSearchParams } from "react-router";
 
@@ -30,19 +30,23 @@ export function GroupDiscoverScreen({
   query,
   includeJoined,
   profileId,
+  searchOpen,
+  focusSearch,
+  onSearchOpenChange,
 }: {
   initialPage: GroupDiscoveryPage;
   query: string;
   includeJoined: boolean;
   profileId: number;
+  searchOpen: boolean;
+  focusSearch: boolean;
+  onSearchOpenChange: (open: boolean) => void;
 }) {
-  const [searchOpen, setSearchOpen] = useState(Boolean(query));
   const [input, setInput] = useState(query);
   const [composing, setComposing] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<DiscoveryLoaderData>();
   const inputRef = useRef<HTMLInputElement>(null);
-  const focusAfterOpenRef = useRef(false);
   const [pagination, setPagination] = useState<PaginationState>({
     initialPage,
     additionalPages: [],
@@ -68,10 +72,9 @@ export function GroupDiscoverScreen({
   const nextCursor = pages.at(-1)?.nextCursor ?? null;
 
   useEffect(() => {
-    if (!searchOpen || !focusAfterOpenRef.current) return;
-    focusAfterOpenRef.current = false;
+    if (!searchOpen || !focusSearch) return;
     inputRef.current?.focus();
-  }, [searchOpen]);
+  }, [focusSearch, searchOpen]);
 
   function loadMore() {
     if (!nextCursor || fetcher.state !== "idle") return;
@@ -92,13 +95,12 @@ export function GroupDiscoverScreen({
   });
 
   function openSearch() {
-    focusAfterOpenRef.current = true;
-    setSearchOpen(true);
+    onSearchOpenChange(true);
   }
 
   function closeSearch() {
     setInput("");
-    setSearchOpen(false);
+    onSearchOpenChange(false);
     if (!query) return;
 
     const next = new URLSearchParams(searchParams);
@@ -128,20 +130,16 @@ export function GroupDiscoverScreen({
         <h1 className="text-2xl font-semibold">비공식 그룹 찾기</h1>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
+      <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:gap-x-3">
         {searchOpen ? (
           <Form
             method="get"
-            className="flex min-w-0 flex-1 items-center gap-2 sm:max-w-md"
+            className="flex w-full min-w-0 items-center gap-2 md:max-w-md md:flex-1"
             onSubmit={(event) => {
               if (composing || !canSearch) event.preventDefault();
             }}
           >
             <div className="relative min-w-0 flex-1">
-              <SearchIcon
-                aria-hidden
-                className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-              />
               <Input
                 ref={inputRef}
                 name="q"
@@ -155,18 +153,25 @@ export function GroupDiscoverScreen({
                 onKeyDown={(event) => {
                   if (event.key === "Escape") closeSearch();
                 }}
-                className="pl-8"
+                className="rounded-full pr-10 md:rounded-md"
                 placeholder="그룹 이름을 두 글자 이상 입력…"
                 aria-label="그룹 이름"
                 autoComplete="off"
               />
+              <Button
+                type="submit"
+                variant="ghost"
+                size="icon-sm"
+                className="absolute top-1/2 right-1 -translate-y-1/2"
+                aria-label="그룹 검색"
+                disabled={!canSearch || composing}
+              >
+                <SearchIcon aria-hidden />
+              </Button>
             </div>
             {includeJoined ? (
               <input type="hidden" name="includeJoined" value="true" />
             ) : null}
-            <Button type="submit" size="sm" disabled={!canSearch || composing}>
-              검색
-            </Button>
             <Button
               type="button"
               variant="ghost"
@@ -182,6 +187,7 @@ export function GroupDiscoverScreen({
             type="button"
             variant="outline"
             size="icon-sm"
+            className="hidden md:inline-flex"
             aria-label="그룹 검색"
             onClick={openSearch}
           >
@@ -189,7 +195,24 @@ export function GroupDiscoverScreen({
           </Button>
         )}
 
-        <Field orientation="horizontal" className="w-full sm:ml-auto sm:w-auto">
+        <Button
+          type="button"
+          variant={includeJoined ? "default" : "outline"}
+          size="sm"
+          className="self-end rounded-full md:hidden"
+          aria-pressed={includeJoined}
+          onClick={() => changeJoinedFilter(!includeJoined)}
+        >
+          {includeJoined ? (
+            <CheckIcon aria-hidden data-icon="inline-start" />
+          ) : null}
+          {includeJoined ? "가입한 그룹 포함 중" : "가입한 그룹 포함"}
+        </Button>
+
+        <Field
+          orientation="horizontal"
+          className="ml-auto hidden w-auto md:flex"
+        >
           <Checkbox
             id="include-joined"
             checked={includeJoined}

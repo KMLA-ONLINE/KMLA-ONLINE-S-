@@ -1,3 +1,5 @@
+import { SearchIcon } from "lucide-react";
+import { useState } from "react";
 import { data, redirect } from "react-router";
 
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
@@ -12,6 +14,7 @@ import {
   normalizeGroupSearchInput,
   requestGroupJoin,
 } from "~/features/groups";
+import { Button } from "~/shared/ui/button";
 import type { Route } from "./+types/discover";
 
 export const handle = defineAppChrome({
@@ -70,17 +73,38 @@ export default function GroupDiscoverPage({
   loaderData,
 }: Route.ComponentProps) {
   const { profile } = useAppShell();
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const searchOpen = searchExpanded || Boolean(loaderData.query);
   if (profile.type === "teacher") return null;
 
   return (
     <>
-      <PageHeader title="그룹 찾기" back="/groups" />
+      <PageHeader
+        title="그룹 찾기"
+        back="/groups"
+        actions={
+          !searchOpen ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="그룹 검색 열기"
+              onClick={() => setSearchExpanded(true)}
+            >
+              <SearchIcon aria-hidden />
+            </Button>
+          ) : null
+        }
+      />
       <GroupDiscoverScreen
         key={`${loaderData.query}:${loaderData.includeJoined}`}
         initialPage={loaderData.page}
         query={loaderData.query}
         includeJoined={loaderData.includeJoined}
         profileId={profile.id}
+        searchOpen={searchOpen}
+        focusSearch={searchExpanded}
+        onSearchOpenChange={setSearchExpanded}
       />
     </>
   );
