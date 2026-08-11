@@ -34,6 +34,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      group_categories: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          name: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          name: string
+          position: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          name?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_categories_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_join_requests: {
         Row: {
           group_id: string
@@ -171,11 +206,101 @@ export type Database = {
           },
         ]
       }
+      posts: {
+        Row: {
+          author_identity: Database["public"]["Enums"]["post_identity"]
+          body: string
+          body_format_version: number
+          category_id: string | null
+          created_at: string
+          deleted_at: string | null
+          display_author_profile_id: number | null
+          edited_at: string | null
+          group_id: string | null
+          id: string
+          kind: Database["public"]["Enums"]["post_kind"]
+          pinned_at: string | null
+          published_at: string | null
+          search_text: string | null
+          timeline_profile_id: number | null
+          title: string | null
+          visibility: Database["public"]["Enums"]["post_visibility"] | null
+        }
+        Insert: {
+          author_identity: Database["public"]["Enums"]["post_identity"]
+          body?: string
+          body_format_version?: number
+          category_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          display_author_profile_id?: number | null
+          edited_at?: string | null
+          group_id?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["post_kind"]
+          pinned_at?: string | null
+          published_at?: string | null
+          search_text?: string | null
+          timeline_profile_id?: number | null
+          title?: string | null
+          visibility?: Database["public"]["Enums"]["post_visibility"] | null
+        }
+        Update: {
+          author_identity?: Database["public"]["Enums"]["post_identity"]
+          body?: string
+          body_format_version?: number
+          category_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          display_author_profile_id?: number | null
+          edited_at?: string | null
+          group_id?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["post_kind"]
+          pinned_at?: string | null
+          published_at?: string | null
+          search_text?: string | null
+          timeline_profile_id?: number | null
+          title?: string | null
+          visibility?: Database["public"]["Enums"]["post_visibility"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "posts_category_group_fkey"
+            columns: ["category_id", "group_id"]
+            isOneToOne: false
+            referencedRelation: "group_categories"
+            referencedColumns: ["id", "group_id"]
+          },
+          {
+            foreignKeyName: "posts_display_author_profile_id_fkey"
+            columns: ["display_author_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posts_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posts_timeline_profile_id_fkey"
+            columns: ["timeline_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           academic_track:
             | Database["public"]["Enums"]["profile_academic_track"]
             | null
+          allow_timeline_posts: boolean
           anonymous_username: string | null
           auth_user_id: string | null
           avatar_path: string | null
@@ -206,6 +331,7 @@ export type Database = {
           academic_track?:
             | Database["public"]["Enums"]["profile_academic_track"]
             | null
+          allow_timeline_posts?: boolean
           anonymous_username?: string | null
           auth_user_id?: string | null
           avatar_path?: string | null
@@ -236,6 +362,7 @@ export type Database = {
           academic_track?:
             | Database["public"]["Enums"]["profile_academic_track"]
             | null
+          allow_timeline_posts?: boolean
           anonymous_username?: string | null
           auth_user_id?: string | null
           avatar_path?: string | null
@@ -323,6 +450,7 @@ export type Database = {
           academic_track:
             | Database["public"]["Enums"]["profile_academic_track"]
             | null
+          allow_timeline_posts: boolean
           anonymous_username: string | null
           auth_user_id: string | null
           avatar_path: string | null
@@ -390,6 +518,7 @@ export type Database = {
           academic_track:
             | Database["public"]["Enums"]["profile_academic_track"]
             | null
+          allow_timeline_posts: boolean
           anonymous_username: string | null
           auth_user_id: string | null
           avatar_path: string | null
@@ -434,6 +563,9 @@ export type Database = {
       group_kind: "official" | "unofficial"
       group_member_role: "owner" | "admin" | "manager" | "member"
       group_posting_policy: "members" | "staff"
+      post_identity: "identified" | "anonymous" | "staff"
+      post_kind: "group" | "profile"
+      post_visibility: "public" | "private"
       profile_academic_track: "domestic" | "international"
       profile_gender: "male" | "female"
       profile_status: "pending" | "accepted" | "rejected" | "withdrawn"
@@ -578,6 +710,9 @@ export const Constants = {
       group_kind: ["official", "unofficial"],
       group_member_role: ["owner", "admin", "manager", "member"],
       group_posting_policy: ["members", "staff"],
+      post_identity: ["identified", "anonymous", "staff"],
+      post_kind: ["group", "profile"],
+      post_visibility: ["public", "private"],
       profile_academic_track: ["domestic", "international"],
       profile_gender: ["male", "female"],
       profile_status: ["pending", "accepted", "rejected", "withdrawn"],
