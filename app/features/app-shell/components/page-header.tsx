@@ -30,7 +30,7 @@ export function PageHeader({
   title,
   back,
   actions,
-  hideOnScroll = false,
+  hideOnScroll = true,
   className,
 }: PageHeaderProps) {
   const navigate = useNavigate();
@@ -39,7 +39,7 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        "sticky top-0 z-10 flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] items-center gap-2 border-b bg-background/95 px-3 pt-[var(--app-safe-t)] backdrop-blur md:hidden",
+        "sticky top-0 z-10 flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] items-center gap-2 bg-background/95 px-3 pt-[var(--app-safe-t)] backdrop-blur md:hidden",
         hideOnScroll &&
           "transition-transform duration-200 ease-out motion-reduce:transition-none",
         // 숨김은 모바일에서만. 이 헤더 자체가 md:hidden이라 어차피 데스크톱에선 안 보이지만,
@@ -62,7 +62,7 @@ export function PageHeader({
         </Button>
       ) : null}
 
-      <h1 className="min-w-0 flex-1 truncate text-base font-semibold">
+      <h1 className="min-w-0 flex-1 truncate text-2xl font-semibold">
         {title}
       </h1>
 

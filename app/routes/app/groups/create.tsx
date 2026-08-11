@@ -15,6 +15,7 @@ import type { Route } from "./+types/create";
 export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "none",
+  contentWidth: "2xl",
 });
 
 export async function clientAction({ request }: Route.ClientActionArgs) {

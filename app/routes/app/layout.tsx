@@ -11,6 +11,13 @@ import {
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
 import { cn } from "~/shared/lib/utils";
 
+const CONTENT_WIDTH_CLASS = {
+  "2xl": "max-w-2xl",
+  "3xl": "max-w-3xl",
+  "5xl": "max-w-5xl",
+  full: "max-w-none",
+} as const;
+
 export default function MainAppLayout() {
   const matches = useMatches();
   const chrome = resolveAppChrome(matches);
@@ -43,7 +50,14 @@ export default function MainAppLayout() {
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <ScrollRegion scrollRef={scrollRef}>
             <div className="md:px-8">
-              <div className="mx-auto w-full max-w-3xl md:py-6">
+              <div
+                data-slot="app-content"
+                data-content-width={chrome.contentWidth}
+                className={cn(
+                  "mx-auto w-full md:py-6",
+                  CONTENT_WIDTH_CLASS[chrome.contentWidth],
+                )}
+              >
                 <Outlet />
               </div>
             </div>
