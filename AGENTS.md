@@ -30,6 +30,7 @@
 - A `clientLoader` must not create dependent request waterfalls or per-item queries. Run independent requests in parallel with `Promise.all`; they remain separate requests.
 - Every mutating route defines how its loader data becomes current: revalidate, merge the canonical mutation result, or use an optimistic update with rollback. Do not disable revalidation without another update path.
 - Browser code talks directly to Supabase. Client-side checks are UX only; authorization belongs in Postgres and defaults to RLS.
+- Database constraints, triggers, or transactional RPCs enforce uniqueness, ownership, state transitions, and cross-row invariants; client validation is UX only.
 - Every `VITE_*` value is public in the bundle. Never place a `service_role` key or other secret there; use a Supabase Edge Function for webhooks, privileged work, or third-party secrets.
 - Use the lazy singleton `getSupabase()` from `app/shared/supabase/client.ts`, and call it only from browser-only paths such as client loaders, effects, and event handlers.
 
@@ -38,10 +39,11 @@
 - Docker Desktop is required for the local Supabase stack. Setup order is `npm install`, create `.env.local` from `.env.example`, `npm run db:start`, fill in the printed API URL/publishable key, then `npm run db:types`.
 - Create schema changes as migrations under `supabase/migrations/`; use `npm run db:diff -- <name>` to capture local changes and `npm run db:reset` to replay migrations plus `supabase/seed.sql`.
 - Give every browser-accessible table its grants and RLS policies in the same migration. Use table APIs for simple reads and writes, `security_invoker` RPCs for atomic writes or reusable complex SQL, and `security_invoker = true` views when a view is the better read shape.
-- When anonymous or pseudonymous rows vary in identity visibility, keep presentation fields in client-readable rows and the real identity in a grant-free `private` schema. This rule does not apply to ordinary public profile or membership identity.
+- When anonymous or pseudonymous rows vary in identity visibility, keep presentation fields in client-readable rows and the real identity in `private` tables with no client grants. This rule does not apply to ordinary public profile or membership identity.
 - Do not use `security definer` for general list or detail reads. Reserve it for narrow private-schema operations, identity-free moderation, self-only sensitive reads, RLS helpers, and privileged trigger helpers. Set `search_path = ''`, re-check the caller, revoke default `EXECUTE`, and grant only the required role. Existing broad group read functions are debt, not a pattern.
 - A feature read may join tables from other domains but must not call another feature's query function.
 - Add focused database integration tests for grants, RLS allow/deny behavior, state transitions, triggers, and atomic RPC invariants.
+- Keep pgTAP tests under `supabase/tests/` and run them with `npm run test:db` against the reset local database; CI runs the same path.
 - Keep `supabase/seed.sql` idempotent and development-only.
 - Never hand-edit `app/shared/supabase/database.types.ts`; regenerate it with `npm run db:types` after schema changes.
 - `app/shared/ui/**` is registry-vendored shadcn code and is excluded from lint because regeneration overwrites it. Prefer composition outside that directory over local fixes there.

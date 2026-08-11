@@ -12,6 +12,7 @@ app/
   shared/                ← 도메인 없는 코드
 test/                    ← Vitest. app/ 구조를 반영
 e2e/                     ← Playwright
+supabase/tests/          ← pgTAP DB 통합 테스트
 ```
 
 ## 레이어
@@ -90,13 +91,16 @@ feature 폴더가 도메인 경계이므로 작은 feature의 data를 미리 세
 - 여러 행의 불변조건과 원자성이 필요하면 `security invoker` RPC를 사용한다.
 - direct mutation과 RPC를 포함해 한 테이블의 변경은 하나의 feature가 소유한다.
 - 클라이언트 입력으로 사용자 ID, 역할과 권한을 신뢰하지 않는다.
+- 클라이언트 검증은 UX다. 유일성, 상태 전이, 소유권과 교차 행 불변조건은 DB constraint, trigger 또는
+  transaction RPC가 강제한다.
 
 ## 인가와 민감 정보
 
 - 브라우저가 접근하는 모든 테이블은 같은 migration에서 grant와 RLS policy를 정의한다.
 - 일반 목록과 상세 읽기에 `security definer`를 사용하지 않는다.
 - 익명·가명 기능에서 실제 신원의 공개 여부가 행마다 달라지면 RLS가 아니라 스키마 분리로 해결한다.
-- 이 경우 클라이언트가 읽는 행에는 표시 정보만 두고 실제 신원은 grant가 없는 `private` 스키마에 둔다.
+- 이 경우 클라이언트가 읽는 행에는 표시 정보만 두고 실제 신원은 table grant가 없는 `private` 스키마에
+  둔다.
 - 익명 표시값은 쓰기 시점에 확정하며 일반 읽기 경로가 실제 신원을 참조하지 않게 한다.
 
 `security definer`는 다음의 좁은 경계에만 사용한다.
@@ -132,6 +136,9 @@ RLS와 DB 불변조건은 실제 DB role로 table API와 RPC를 호출하는 통
 - trigger와 상태 전이
 - 동시성 또는 원자성이 필요한 RPC
 - `private.*` grant와 definer 반환 타입
+
+DB 테스트는 `supabase/tests/*.sql`에 두고 `npm run test:db`로 실행한다. CI는 migration과 seed를 reset한
+로컬 Supabase에서 이 테스트를 실행한다.
 
 ## Realtime과 Storage
 
