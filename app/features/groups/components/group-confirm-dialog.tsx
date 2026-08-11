@@ -86,7 +86,7 @@ export function GroupJoinRequestDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={groupName}
-      description="이 그룹에 가입을 요청할까요? 소유자나 관리자가 승인하면 멤버가 됩니다."
+      description="이 그룹에 가입을 요청할까요? 관리자가 승인하면 가입됩니다."
       confirmLabel="가입 요청"
       pending={pending}
       onConfirm={onConfirm}
