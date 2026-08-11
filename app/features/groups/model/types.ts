@@ -53,6 +53,17 @@ export type DiscoverGroupItem = Omit<
   requested_at: string | null;
 };
 
+export interface GroupDiscoveryCursor {
+  rank: number;
+  memberCount: number;
+  groupId: string;
+}
+
+export interface GroupDiscoveryPage {
+  groups: DiscoverGroupItem[];
+  nextCursor: GroupDiscoveryCursor | null;
+}
+
 export type GroupDetail = GroupSummary & {
   group_id: GroupRow["id"];
   membership_state: GroupMembershipState;

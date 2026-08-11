@@ -1,14 +1,12 @@
-import {
-  CompassIcon,
-  PlusIcon,
-  ShieldCheckIcon,
-  UsersIcon,
-} from "lucide-react";
-import { Link } from "react-router";
+import { CirclePlusIcon } from "lucide-react";
+import { Link, useSearchParams } from "react-router";
 
 import { GroupSummaryCard } from "~/features/groups/components/group-summary-card";
 import type { GroupHomeItem } from "~/features/groups/model/types";
 import { Button } from "~/shared/ui/button";
+import { cn } from "~/shared/lib/utils";
+
+type GroupTab = "official" | "unofficial";
 
 export function GroupHomeScreen({
   groups,
@@ -19,124 +17,157 @@ export function GroupHomeScreen({
   isTeacher: boolean;
   profileId: number;
 }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab: GroupTab =
+    searchParams.get("tab") === "unofficial" ? "unofficial" : "official";
   const officialGroups = groups.filter((group) => group.section === "official");
   const myGroups = groups.filter((group) => group.section === "mine");
   const popularGroups = groups.filter((group) => group.section === "popular");
 
-  return (
-    <div className="flex flex-col gap-10 px-4 py-6 md:px-0 md:py-8">
-      <section className="relative overflow-hidden rounded-2xl border bg-card p-6 shadow-xs md:p-8">
-        <div className="absolute -top-12 -right-10 size-40 rounded-full bg-primary/10 blur-2xl" />
-        <div className="relative max-w-xl">
-          <p className="mb-2 text-sm font-medium text-primary">KMLA GROUPS</p>
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
-            함께할 사람과 공간을 찾으세요
-          </h1>
-          <p className="mt-3 leading-7 text-muted-foreground">
-            공식 소식을 확인하고, 관심사가 같은 구성원과 새로운 그룹을 만들어
-            보세요.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-2">
-            {!isTeacher ? (
-              <Button render={<Link to="/groups/discover" />}>
-                <CompassIcon data-icon="inline-start" />
-                그룹 찾기
-              </Button>
-            ) : null}
-            <Button variant="outline" render={<Link to="/groups/create" />}>
-              <PlusIcon data-icon="inline-start" />
-              그룹 만들기
-            </Button>
-          </div>
-        </div>
-      </section>
+  if (isTeacher) {
+    return (
+      <div className="mx-auto flex w-full flex-col gap-6 px-4 pb-5 md:px-0 md:py-0">
+        <ScreenHeader actionLabel="비공식 그룹 만들기" />
+        <GroupRows
+          title="내 그룹"
+          groups={myGroups}
+          profileId={profileId}
+          emptyText="아직 내 그룹이 없습니다."
+        />
+      </div>
+    );
+  }
 
-      {!isTeacher ? (
-        <GroupSection
-          icon={<ShieldCheckIcon aria-hidden />}
-          title="공식 그룹"
-          description="학교가 운영하는 공식 공간입니다."
+  return (
+    <div className="mx-auto flex w-full flex-col gap-5 px-1 pb-5 md:px-0 md:py-0">
+      <ScreenHeader actionLabel={tab === "unofficial" ? "그룹 만들기" : null} />
+
+      <nav className="flex items-center gap-1 border-b" aria-label="그룹 종류">
+        {(["official", "unofficial"] as const).map((item) => (
+          <button
+            key={item}
+            type="button"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              if (item === "official") next.delete("tab");
+              else next.set("tab", item);
+              setSearchParams(next, { preventScrollReset: true });
+            }}
+            aria-current={tab === item ? "page" : undefined}
+            className={cn(
+              "-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
+              tab === item
+                ? "border-foreground text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {item === "official" ? "공식" : "비공식"}
+          </button>
+        ))}
+      </nav>
+
+      {tab === "official" ? (
+        <GroupRows
           groups={officialGroups}
           profileId={profileId}
-          showPin
+          emptyText="표시할 공식 그룹이 없습니다."
         />
-      ) : null}
-
-      <GroupSection
-        icon={<UsersIcon aria-hidden />}
-        title="내 비공식 그룹"
-        description={
-          isTeacher
-            ? "직접 만들었거나 초대를 받아 참여한 그룹입니다."
-            : "참여 중인 비공식 그룹입니다."
-        }
-        groups={myGroups}
-        profileId={profileId}
-        showPin
-        emptyText="아직 참여 중인 비공식 그룹이 없습니다."
-      />
-
-      {!isTeacher ? (
-        <GroupSection
-          icon={<CompassIcon aria-hidden />}
-          title="지금 많이 찾는 그룹"
-          description="아직 가입하지 않은 공개 그룹 중 멤버가 많은 곳입니다."
-          groups={popularGroups}
-          profileId={profileId}
-          emptyText="추천할 공개 그룹이 아직 없습니다."
-        />
-      ) : null}
+      ) : (
+        <div className="flex flex-col gap-7">
+          <GroupRows
+            title="내 그룹"
+            groups={myGroups}
+            profileId={profileId}
+            emptyText="아직 참여 중인 비공식 그룹이 없습니다."
+          />
+          <section
+            className="flex flex-col gap-3"
+            aria-labelledby="popular-groups-heading"
+          >
+            <div className="flex items-baseline justify-between gap-2 px-2 md:px-0">
+              <h2 id="popular-groups-heading" className="text-sm font-semibold">
+                인기 그룹
+              </h2>
+              <Link
+                to="/groups/discover"
+                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                전체 보기 →
+              </Link>
+            </div>
+            {popularGroups.length > 0 ? (
+              <div className="hidden gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-3">
+                {popularGroups.map((group) => (
+                  <GroupSummaryCard
+                    key={group.group_id}
+                    group={group}
+                    profileId={profileId}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                더 들어갈 공개 그룹이 없습니다.
+              </p>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }
 
-function GroupSection({
-  icon,
+function ScreenHeader({ actionLabel }: { actionLabel: string | null }) {
+  return (
+    <header className="hidden items-center justify-between gap-3 md:flex">
+      <h1 className="text-2xl font-semibold">그룹</h1>
+      {actionLabel ? (
+        <Button size="sm" render={<Link to="/groups/create" />}>
+          <CirclePlusIcon data-icon="inline-start" aria-hidden />
+          {actionLabel}
+        </Button>
+      ) : null}
+    </header>
+  );
+}
+
+function GroupRows({
   title,
-  description,
   groups,
   profileId,
-  showPin = false,
-  emptyText = "표시할 그룹이 없습니다.",
+  emptyText,
 }: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
+  title?: string;
   groups: GroupHomeItem[];
   profileId: number;
-  showPin?: boolean;
-  emptyText?: string;
+  emptyText: string;
 }) {
-  const headingId = `group-section-${title.replaceAll(" ", "-")}`;
-
   return (
-    <section aria-labelledby={headingId}>
-      <div className="mb-4 flex items-start gap-3">
-        <div className="mt-0.5 flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary [&_svg]:size-5">
-          {icon}
-        </div>
-        <div>
-          <h2 id={headingId} className="text-lg font-semibold">
-            {title}
-          </h2>
-          <p className="text-sm text-muted-foreground">{description}</p>
-        </div>
-      </div>
+    <section className="flex flex-col gap-3" aria-label={title ?? "공식 그룹"}>
+      {title ? (
+        <h2 className="pl-2 text-sm font-semibold md:pl-0">
+          {title}{" "}
+          <span className="font-normal text-muted-foreground">
+            {groups.length}
+          </span>
+        </h2>
+      ) : null}
       {groups.length > 0 ? (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
           {groups.map((group) => (
             <GroupSummaryCard
-              key={`${group.section}-${group.group_id}`}
+              key={group.group_id}
               group={group}
               profileId={profileId}
-              showPin={showPin}
+              variant="row"
+              showPin
             />
           ))}
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed px-5 py-10 text-center text-sm text-muted-foreground">
+        <p className="rounded-xl border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
           {emptyText}
-        </div>
+        </p>
       )}
     </section>
   );

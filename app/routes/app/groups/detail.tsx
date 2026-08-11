@@ -1,9 +1,10 @@
 import { data, Outlet } from "react-router";
 
-import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import {
   cancelGroupJoinRequest,
   getGroupErrorMessage,
+  GroupDetailMobileHeader,
   GroupDetailScreen,
   joinGroup,
   loadGroupDetail,
@@ -63,7 +64,10 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <PageHeader title={loaderData.group.name} back="/groups" />
+      <GroupDetailMobileHeader
+        name={loaderData.group.name}
+        iconPath={loaderData.group.icon_path}
+      />
       <GroupDetailScreen
         group={loaderData.group}
         profileId={profile.id}

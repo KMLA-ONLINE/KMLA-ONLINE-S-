@@ -1,4 +1,5 @@
-import { data } from "react-router";
+import { PlusIcon } from "lucide-react";
+import { data, Link } from "react-router";
 
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import {
@@ -11,6 +12,7 @@ import {
   setGroupPinned,
 } from "~/features/groups";
 import type { Route } from "./+types/index";
+import { Button } from "~/shared/ui/button";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -58,7 +60,19 @@ export default function GroupListPage({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <PageHeader title="그룹" />
+      <PageHeader
+        title="그룹"
+        actions={
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="그룹 만들기"
+            render={<Link to="/groups/create" />}
+          >
+            <PlusIcon />
+          </Button>
+        }
+      />
       <GroupHomeScreen
         groups={loaderData.groups}
         isTeacher={profile.type === "teacher"}

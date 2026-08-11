@@ -476,7 +476,11 @@ select is(
 );
 
 select throws_ok(
-  $$select * from public.discover_groups('', false, 24)$$,
+  $$select * from public.discover_groups(
+    p_query => '',
+    p_include_joined => false,
+    p_limit => 24
+  )$$,
   '42501',
   'group discovery is not allowed',
   'teacher cannot discover groups'

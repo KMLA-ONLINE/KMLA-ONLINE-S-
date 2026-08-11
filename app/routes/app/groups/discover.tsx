@@ -5,8 +5,11 @@ import {
   cancelGroupJoinRequest,
   discoverGroups,
   getGroupErrorMessage,
+  type GroupDiscoveryCursor,
   GroupDiscoverScreen,
+  hasMinimumGroupSearchLength,
   joinGroup,
+  normalizeGroupSearchInput,
   requestGroupJoin,
 } from "~/features/groups";
 import type { Route } from "./+types/discover";
@@ -18,12 +21,14 @@ export const handle = defineAppChrome({
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const url = new URL(request.url);
-  const query = url.searchParams.get("q")?.trim() ?? "";
+  const rawQuery = normalizeGroupSearchInput(url.searchParams.get("q") ?? "");
+  const query = hasMinimumGroupSearchLength(rawQuery) ? rawQuery : "";
   const includeJoined = url.searchParams.get("includeJoined") === "true";
+  const cursor = readDiscoveryCursor(url.searchParams);
 
   try {
     return {
-      groups: await discoverGroups({ query, includeJoined }),
+      page: await discoverGroups({ query, includeJoined, cursor }),
       query,
       includeJoined,
     };
@@ -69,13 +74,38 @@ export default function GroupDiscoverPage({
 
   return (
     <>
-      <PageHeader title="그룹 찾기" />
+      <PageHeader title="그룹 찾기" back="/groups" />
       <GroupDiscoverScreen
-        groups={loaderData.groups}
+        key={`${loaderData.query}:${loaderData.includeJoined}`}
+        initialPage={loaderData.page}
         query={loaderData.query}
         includeJoined={loaderData.includeJoined}
         profileId={profile.id}
       />
     </>
   );
+}
+
+function readDiscoveryCursor(
+  searchParams: URLSearchParams,
+): GroupDiscoveryCursor | null {
+  const rankValue = searchParams.get("afterRank");
+  const memberCountValue = searchParams.get("afterMemberCount");
+  const groupId = searchParams.get("afterId");
+  if (!rankValue && !memberCountValue && !groupId) return null;
+
+  const rank = Number(rankValue);
+  const memberCount = Number(memberCountValue);
+  if (
+    !groupId ||
+    !Number.isInteger(rank) ||
+    rank < 0 ||
+    rank > 2 ||
+    !Number.isSafeInteger(memberCount) ||
+    memberCount < 0
+  ) {
+    throw new Response("잘못된 그룹 페이지입니다.", { status: 400 });
+  }
+
+  return { rank, memberCount, groupId };
 }

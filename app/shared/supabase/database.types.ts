@@ -293,7 +293,14 @@ export type Database = {
         }[]
       }
       discover_groups: {
-        Args: { p_include_joined?: boolean; p_limit?: number; p_query?: string }
+        Args: {
+          p_after_id?: string
+          p_after_member_count?: number
+          p_after_rank?: number
+          p_include_joined?: boolean
+          p_limit?: number
+          p_query?: string
+        }
         Returns: {
           cover_path: string
           description: string
@@ -307,6 +314,7 @@ export type Database = {
           name: string
           requested_at: string
           slug: string
+          sort_rank: number
         }[]
       }
       get_my_profile: {

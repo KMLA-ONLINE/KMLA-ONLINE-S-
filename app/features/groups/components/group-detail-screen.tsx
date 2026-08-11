@@ -1,10 +1,12 @@
 import {
+  BadgeCheckIcon,
   BellIcon,
-  EyeIcon,
+  Globe2Icon,
+  LandmarkIcon,
   LockIcon,
   MessageSquareTextIcon,
+  MoreHorizontalIcon,
   PinIcon,
-  ShieldCheckIcon,
   UsersIcon,
 } from "lucide-react";
 import { useFetcher } from "react-router";
@@ -17,10 +19,18 @@ import {
   getGroupPostingPolicyLabel,
 } from "~/features/groups/model/format";
 import type { GroupDetail } from "~/features/groups/model/types";
-import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "~/shared/ui/dropdown-menu";
 import { Spinner } from "~/shared/ui/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";
 
 export function GroupDetailScreen({
   group,
@@ -34,141 +44,159 @@ export function GroupDetailScreen({
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const pending = fetcher.state !== "idle";
   const isMember = group.membership_state === "member";
+  const isPrivate = group.join_policy === "invite_only";
+  const VisibilityIcon = isPrivate ? LockIcon : Globe2Icon;
 
   return (
-    <div className="pb-10 md:pt-6">
-      <section className="overflow-hidden border-y bg-card md:rounded-2xl md:border">
-        <div className="relative aspect-[5/2] min-h-40 overflow-hidden bg-muted">
+    <div className="pb-10 md:pt-0">
+      <section className="overflow-hidden border-b bg-card md:rounded-xl md:border">
+        <div className="relative aspect-[4/1] w-full overflow-hidden bg-gradient-to-br from-primary/30 to-primary/5">
           {group.cover_path ? (
             <img
               src={group.cover_path}
               alt=""
+              width={1200}
+              height={300}
+              fetchPriority="high"
               className="size-full object-cover"
             />
-          ) : (
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_25%,color-mix(in_oklch,var(--primary)_24%,transparent),transparent_42%),linear-gradient(135deg,var(--muted),var(--card))]" />
-          )}
-          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-foreground/25 to-transparent" />
+          ) : null}
         </div>
 
-        <div className="relative px-4 pb-5 md:px-6">
+        <div className="flex items-start gap-5 p-4 py-3 md:py-4">
           <GroupAvatar
             name={group.name}
             iconPath={group.icon_path}
-            className="-mt-10 size-20 border-4 border-card text-xl shadow-sm"
+            className="hidden size-16 shrink-0 rounded-xl text-xl shadow-xs sm:flex sm:size-20"
           />
-          <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-semibold tracking-tight">
-                  {group.name}
-                </h1>
-                {group.kind === "official" ? (
-                  <Badge>
-                    <ShieldCheckIcon data-icon="inline-start" />
-                    공식
-                  </Badge>
-                ) : null}
-                {group.join_policy === "invite_only" ? (
-                  <Badge variant="secondary">
-                    <LockIcon data-icon="inline-start" />
-                    비공개
-                  </Badge>
-                ) : null}
-              </div>
-              <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
-                <UsersIcon aria-hidden className="size-4" />
-                멤버 {group.member_count.toLocaleString("ko-KR")}명
-                {group.member_role ? (
-                  <> · {getGroupMemberRoleLabel(group.member_role)}</>
-                ) : null}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {isMember ? (
-                <div>
-                  <fetcher.Form method="post">
-                    <input type="hidden" name="intent" value="pin" />
-                    <input
-                      type="hidden"
-                      name="groupId"
-                      value={group.group_id}
+          <div className="min-w-0 flex-1 pt-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="truncate text-2xl font-bold">{group.name}</h1>
+              {group.kind === "official" ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span
+                        role="img"
+                        aria-label="공식 그룹"
+                        className="inline-flex shrink-0 cursor-default"
+                      />
+                    }
+                  >
+                    <BadgeCheckIcon
+                      aria-hidden
+                      className="size-6 text-primary"
                     />
-                    <input type="hidden" name="profileId" value={profileId} />
-                    <input
-                      type="hidden"
-                      name="pinned"
-                      value={group.pinned_at ? "false" : "true"}
-                    />
-                    <Button type="submit" variant="outline" disabled={pending}>
-                      {pending ? (
-                        <Spinner data-icon="inline-start" />
-                      ) : (
-                        <PinIcon data-icon="inline-start" />
-                      )}
-                      {group.pinned_at ? "고정 해제" : "내 그룹에 고정"}
-                    </Button>
-                  </fetcher.Form>
-                  {fetcher.data?.error ? (
-                    <p role="alert" className="mt-1 text-xs text-destructive">
-                      {fetcher.data.error}
-                    </p>
-                  ) : null}
-                </div>
+                  </TooltipTrigger>
+                  <TooltipContent>공식 그룹입니다</TooltipContent>
+                </Tooltip>
               ) : null}
+            </div>
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+              <VisibilityIcon aria-hidden className="size-3.5 shrink-0" />
+              {isPrivate ? "비공개 그룹" : "공개 그룹"} · 멤버{" "}
+              {group.member_count.toLocaleString("ko-KR")}명
+              {group.member_role ? (
+                <> · {getGroupMemberRoleLabel(group.member_role)}</>
+              ) : null}
+            </p>
+            {group.identity_policy === "always_anonymous" ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                게시물과 댓글이 모두 익명으로 표시됩니다.
+              </p>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1 pt-1">
+            <div className="flex flex-wrap justify-end gap-2">
               <MembershipAction
                 group={group}
                 profileId={profileId}
                 isTeacher={isTeacher}
               />
+              {isMember ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="그룹 옵션"
+                        disabled={pending}
+                      />
+                    }
+                  >
+                    {pending ? <Spinner /> : <MoreHorizontalIcon />}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>내 그룹 설정</DropdownMenuLabel>
+                      <DropdownMenuItem
+                        disabled={pending}
+                        onClick={() =>
+                          void fetcher.submit(
+                            {
+                              intent: "pin",
+                              groupId: group.group_id,
+                              profileId: String(profileId),
+                              pinned: group.pinned_at ? "false" : "true",
+                            },
+                            { method: "post" },
+                          )
+                        }
+                      >
+                        <PinIcon />
+                        {group.pinned_at ? "고정 해제" : "내 그룹에 고정"}
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
             </div>
+            {fetcher.data?.error ? (
+              <p role="alert" className="text-xs text-destructive">
+                {fetcher.data.error}
+              </p>
+            ) : null}
           </div>
         </div>
       </section>
 
-      <div className="grid gap-4 px-4 py-5 md:grid-cols-[minmax(0,1fr)_16rem] md:px-0">
-        <div className="flex flex-col gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>그룹 소개</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="leading-7 whitespace-pre-wrap text-muted-foreground">
-                {group.description || "아직 그룹 설명이 없습니다."}
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MessageSquareTextIcon aria-hidden className="size-5" />
-                그룹 활동
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-lg border border-dashed px-4 py-12 text-center text-sm text-muted-foreground">
-                아직 표시할 활동이 없습니다.
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      <div className="grid gap-6 px-4 py-4 md:px-0 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <Card className="order-2 h-fit lg:order-1">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquareTextIcon aria-hidden className="size-5" />
+              그룹 활동
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg border border-dashed px-4 py-12 text-center text-sm text-muted-foreground">
+              아직 표시할 활동이 없습니다.
+            </div>
+          </CardContent>
+        </Card>
 
-        <aside className="flex flex-col gap-3">
-          <PolicyItem
-            icon={<UsersIcon />}
-            label="가입 정책"
-            value={getGroupJoinPolicyLabel(group.join_policy)}
-          />
-          <PolicyItem
-            icon={<EyeIcon />}
-            label="활동 신원"
-            value={getGroupIdentityPolicyLabel(group.identity_policy)}
-          />
-          <PolicyItem
-            icon={<MessageSquareTextIcon />}
-            label="글쓰기"
-            value={getGroupPostingPolicyLabel(group.posting_policy)}
-          />
+        <aside className="hidden lg:order-2 lg:block">
+          <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 lg:sticky lg:top-4">
+            <h2 className="text-sm font-semibold">그룹 정보</h2>
+            <p className="text-sm leading-6 text-muted-foreground">
+              {group.description || "아직 그룹 설명이 없습니다."}
+            </p>
+            <InfoRow icon={<LandmarkIcon />}>
+              {group.kind === "official" ? "공식 그룹" : "비공식 그룹"}
+            </InfoRow>
+            <InfoRow icon={<VisibilityIcon />}>
+              {isPrivate ? "비공개" : "공개"} ·{" "}
+              {getGroupJoinPolicyLabel(group.join_policy)}
+            </InfoRow>
+            <InfoRow icon={<UsersIcon />}>
+              멤버 {group.member_count.toLocaleString("ko-KR")}명
+            </InfoRow>
+            <InfoRow icon={<MessageSquareTextIcon />}>
+              {getGroupIdentityPolicyLabel(group.identity_policy)} ·{" "}
+              {getGroupPostingPolicyLabel(group.posting_policy)}
+            </InfoRow>
+          </div>
         </aside>
       </div>
     </div>
@@ -247,24 +275,17 @@ function MembershipAction({
   );
 }
 
-function PolicyItem({
+function InfoRow({
   icon,
-  label,
-  value,
+  children,
 }: {
   icon: React.ReactNode;
-  label: string;
-  value: string;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border bg-card p-4">
-      <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-4">
-        {icon}
-      </div>
-      <div>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="mt-0.5 text-sm font-medium">{value}</p>
-      </div>
+    <div className="flex items-center gap-2 text-sm text-muted-foreground [&_svg]:size-4">
+      {icon}
+      <span>{children}</span>
     </div>
   );
 }

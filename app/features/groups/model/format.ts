@@ -7,7 +7,7 @@ import type {
 } from "~/features/groups/model/types";
 
 const JOIN_POLICY_LABELS: Record<GroupJoinPolicy, string> = {
-  open: "바로 가입",
+  open: "즉시 가입",
   request: "승인 후 가입",
   invite_only: "초대 전용",
 };
@@ -50,6 +50,14 @@ export function getGroupMemberRoleLabel(role: GroupMemberRole): string {
 
 export function getGroupKindLabel(kind: GroupKind): string {
   return kind === "official" ? "공식 그룹" : "비공식 그룹";
+}
+
+export function normalizeGroupSearchInput(value: string): string {
+  return value.normalize("NFC").trim();
+}
+
+export function hasMinimumGroupSearchLength(value: string): boolean {
+  return Array.from(normalizeGroupSearchInput(value)).length >= 2;
 }
 
 export function getGroupErrorMessage(error: unknown): string {

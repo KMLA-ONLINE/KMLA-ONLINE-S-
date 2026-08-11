@@ -2,6 +2,8 @@ import { getSupabase } from "~/shared/supabase/client";
 import type { Database } from "~/shared/supabase/database.types";
 import type {
   DiscoverGroupItem,
+  GroupDiscoveryCursor,
+  GroupDiscoveryPage,
   GroupDetail,
   GroupHomeItem,
   GroupMemberRole,
@@ -53,7 +55,7 @@ export async function loadGroupHome(): Promise<GroupHomeItem[]> {
         .select(`role, pinned_at, groups!inner(${GROUP_COLUMNS})`)
         .order("pinned_at", { ascending: false, nullsFirst: false }),
       supabase.from("group_join_requests").select("group_id, requested_at"),
-      supabase.rpc("list_popular_groups", { p_limit: 4 }),
+      supabase.rpc("list_popular_groups", { p_limit: 3 }),
     ]);
 
   if (officialResult.error) throw officialResult.error;
@@ -119,20 +121,40 @@ export async function loadGroupHome(): Promise<GroupHomeItem[]> {
   return [...official, ...mine, ...popular];
 }
 
+const DISCOVERY_PAGE_SIZE = 12;
+
 export async function discoverGroups({
   query,
   includeJoined,
+  cursor,
 }: {
   query: string;
   includeJoined: boolean;
-}): Promise<DiscoverGroupItem[]> {
+  cursor?: GroupDiscoveryCursor | null;
+}): Promise<GroupDiscoveryPage> {
   const { data, error } = await getSupabase().rpc("discover_groups", {
     p_query: query,
     p_include_joined: includeJoined,
-    p_limit: 24,
+    p_after_rank: cursor?.rank,
+    p_after_member_count: cursor?.memberCount,
+    p_after_id: cursor?.groupId,
+    p_limit: DISCOVERY_PAGE_SIZE + 1,
   });
   if (error) throw error;
-  return (data ?? []) as DiscoverGroupItem[];
+
+  const rows = (data ?? []) as DiscoverGroupItem[];
+  const groups = rows.slice(0, DISCOVERY_PAGE_SIZE);
+  const lastGroup = groups.at(-1);
+  const nextCursor =
+    rows.length > DISCOVERY_PAGE_SIZE && lastGroup
+      ? {
+          rank: lastGroup.sort_rank,
+          memberCount: lastGroup.member_count,
+          groupId: lastGroup.group_id,
+        }
+      : null;
+
+  return { groups, nextCursor };
 }
 
 export async function loadGroupDetail(
