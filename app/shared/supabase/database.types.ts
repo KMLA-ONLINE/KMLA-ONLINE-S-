@@ -34,6 +34,143 @@ export type Database = {
   }
   public: {
     Tables: {
+      group_join_requests: {
+        Row: {
+          group_id: string
+          profile_id: number
+          requested_at: string
+        }
+        Insert: {
+          group_id: string
+          profile_id: number
+          requested_at?: string
+        }
+        Update: {
+          group_id?: string
+          profile_id?: number
+          requested_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_join_requests_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_join_requests_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_memberships: {
+        Row: {
+          group_id: string
+          joined_at: string
+          pinned_at: string | null
+          profile_id: number
+          role: Database["public"]["Enums"]["group_member_role"]
+        }
+        Insert: {
+          group_id: string
+          joined_at?: string
+          pinned_at?: string | null
+          profile_id: number
+          role?: Database["public"]["Enums"]["group_member_role"]
+        }
+        Update: {
+          group_id?: string
+          joined_at?: string
+          pinned_at?: string | null
+          profile_id?: number
+          role?: Database["public"]["Enums"]["group_member_role"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_memberships_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_memberships_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      groups: {
+        Row: {
+          cover_path: string | null
+          created_at: string
+          created_by: number
+          description: string
+          icon_path: string | null
+          id: string
+          identity_policy: Database["public"]["Enums"]["group_identity_policy"]
+          join_policy: Database["public"]["Enums"]["group_join_policy"]
+          kind: Database["public"]["Enums"]["group_kind"]
+          member_count: number
+          name: string
+          posting_policy: Database["public"]["Enums"]["group_posting_policy"]
+          search_name: string | null
+          slug: string
+          slug_is_custom: boolean
+          updated_at: string
+        }
+        Insert: {
+          cover_path?: string | null
+          created_at?: string
+          created_by: number
+          description?: string
+          icon_path?: string | null
+          id?: string
+          identity_policy: Database["public"]["Enums"]["group_identity_policy"]
+          join_policy: Database["public"]["Enums"]["group_join_policy"]
+          kind: Database["public"]["Enums"]["group_kind"]
+          member_count?: number
+          name: string
+          posting_policy: Database["public"]["Enums"]["group_posting_policy"]
+          search_name?: string | null
+          slug: string
+          slug_is_custom?: boolean
+          updated_at?: string
+        }
+        Update: {
+          cover_path?: string | null
+          created_at?: string
+          created_by?: number
+          description?: string
+          icon_path?: string | null
+          id?: string
+          identity_policy?: Database["public"]["Enums"]["group_identity_policy"]
+          join_policy?: Database["public"]["Enums"]["group_join_policy"]
+          kind?: Database["public"]["Enums"]["group_kind"]
+          member_count?: number
+          name?: string
+          posting_policy?: Database["public"]["Enums"]["group_posting_policy"]
+          search_name?: string | null
+          slug?: string
+          slug_is_custom?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "groups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           academic_track:
@@ -140,6 +277,38 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_group: {
+        Args: {
+          p_description?: string
+          p_identity_policy?: Database["public"]["Enums"]["group_identity_policy"]
+          p_join_policy?: Database["public"]["Enums"]["group_join_policy"]
+          p_kind: Database["public"]["Enums"]["group_kind"]
+          p_name: string
+          p_posting_policy?: Database["public"]["Enums"]["group_posting_policy"]
+          p_slug?: string
+        }
+        Returns: {
+          group_id: string
+          slug: string
+        }[]
+      }
+      discover_groups: {
+        Args: { p_include_joined?: boolean; p_limit?: number; p_query?: string }
+        Returns: {
+          cover_path: string
+          description: string
+          group_id: string
+          icon_path: string
+          identity_policy: Database["public"]["Enums"]["group_identity_policy"]
+          join_policy: Database["public"]["Enums"]["group_join_policy"]
+          member_count: number
+          member_role: Database["public"]["Enums"]["group_member_role"]
+          membership_state: string
+          name: string
+          requested_at: string
+          slug: string
+        }[]
+      }
       get_my_profile: {
         Args: never
         Returns: {
@@ -178,6 +347,23 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      list_popular_groups: {
+        Args: { p_limit?: number }
+        Returns: {
+          cover_path: string
+          description: string
+          group_id: string
+          icon_path: string
+          identity_policy: Database["public"]["Enums"]["group_identity_policy"]
+          join_policy: Database["public"]["Enums"]["group_join_policy"]
+          member_count: number
+          member_role: Database["public"]["Enums"]["group_member_role"]
+          membership_state: string
+          name: string
+          requested_at: string
+          slug: string
+        }[]
       }
       submit_my_profile: {
         Args: {
@@ -232,6 +418,14 @@ export type Database = {
     }
     Enums: {
       app_role: "member" | "admin"
+      group_identity_policy:
+        | "identified"
+        | "optional_anonymous"
+        | "always_anonymous"
+      group_join_policy: "open" | "request" | "invite_only"
+      group_kind: "official" | "unofficial"
+      group_member_role: "owner" | "admin" | "manager" | "member"
+      group_posting_policy: "members" | "staff"
       profile_academic_track: "domestic" | "international"
       profile_gender: "male" | "female"
       profile_status: "pending" | "accepted" | "rejected" | "withdrawn"
@@ -367,6 +561,15 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["member", "admin"],
+      group_identity_policy: [
+        "identified",
+        "optional_anonymous",
+        "always_anonymous",
+      ],
+      group_join_policy: ["open", "request", "invite_only"],
+      group_kind: ["official", "unofficial"],
+      group_member_role: ["owner", "admin", "manager", "member"],
+      group_posting_policy: ["members", "staff"],
       profile_academic_track: ["domestic", "international"],
       profile_gender: ["male", "female"],
       profile_status: ["pending", "accepted", "rejected", "withdrawn"],
