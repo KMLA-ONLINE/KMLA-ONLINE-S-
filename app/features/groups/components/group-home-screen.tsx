@@ -153,7 +153,7 @@ function GroupRows({
         </h2>
       ) : null}
       {groups.length > 0 ? (
-        <div className="flex flex-col gap-1.5">
+        <div className="grid gap-1.5 md:grid-cols-2 md:gap-2">
           {groups.map((group) => (
             <GroupSummaryCard
               key={group.group_id}

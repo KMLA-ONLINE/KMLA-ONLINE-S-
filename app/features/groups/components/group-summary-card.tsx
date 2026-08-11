@@ -8,7 +8,7 @@ import {
 import { Link, useFetcher } from "react-router";
 
 import { GroupAvatar } from "~/features/groups/components/group-avatar";
-import { getGroupIdentityPolicyLabel } from "~/features/groups/model/format";
+import { GroupJoinRequestDialog } from "~/features/groups/components/group-confirm-dialog";
 import type {
   GroupIdentityPolicy,
   GroupJoinPolicy,
@@ -261,23 +261,18 @@ export function GroupSummaryCard({
             {group.name}
           </Link>
         </h3>
-        <div className="mt-1.5 flex flex-wrap gap-1.5 empty:hidden">
-          {group.join_policy === "request" ? (
-            <Badge variant="secondary">승인 후 가입</Badge>
-          ) : null}
-          {group.identity_policy === "always_anonymous" ? (
-            <Badge variant="outline">
-              {getGroupIdentityPolicyLabel(group.identity_policy)}
-            </Badge>
-          ) : null}
-        </div>
         <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
           {group.description || "아직 그룹 설명이 없습니다."}
         </p>
-        <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-          <UsersIcon aria-hidden className="size-3.5" />
-          멤버 {group.member_count.toLocaleString("ko-KR")}명
-        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <UsersIcon aria-hidden className="size-3.5" />
+            멤버 {group.member_count.toLocaleString("ko-KR")}명
+          </p>
+          {group.identity_policy === "always_anonymous" ? (
+            <Badge variant="outline">익명</Badge>
+          ) : null}
+        </div>
         <div className="mt-auto pt-4">
           <MembershipButton group={group} profileId={profileId} />
         </div>
@@ -305,7 +300,7 @@ function PinFields({
   );
 }
 
-function MembershipButton({
+export function MembershipButton({
   group,
   profileId,
 }: {
@@ -315,6 +310,7 @@ function MembershipButton({
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const pending = fetcher.state !== "idle";
   const actionError = fetcher.data?.error ?? null;
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   if (group.membership_state === "member") {
     return (
@@ -329,38 +325,70 @@ function MembershipButton({
   }
 
   const requested = group.membership_state === "requested";
+  // 승인제 그룹의 가입 요청만 확인 dialog를 거친다. 즉시 가입과 요청 취소는 바로 제출한다.
+  const needsConfirm = !requested && group.join_policy === "request";
+
   return (
     <div>
-      <fetcher.Form method="post">
-        <input
-          type="hidden"
-          name="intent"
-          value={
-            requested
-              ? "cancel-request"
+      {needsConfirm ? (
+        <>
+          <Button
+            type="button"
+            className="w-full"
+            disabled={pending}
+            onClick={() => setConfirmOpen(true)}
+          >
+            {pending ? <Spinner data-icon="inline-start" /> : null}
+            가입 요청
+          </Button>
+          <GroupJoinRequestDialog
+            open={confirmOpen}
+            onOpenChange={setConfirmOpen}
+            groupName={group.name}
+            pending={pending}
+            onConfirm={() => {
+              setConfirmOpen(false);
+              void fetcher.submit(
+                {
+                  intent: "request",
+                  groupId: group.group_id,
+                  profileId: String(profileId),
+                },
+                { method: "post" },
+              );
+            }}
+          />
+        </>
+      ) : (
+        <fetcher.Form method="post">
+          <input
+            type="hidden"
+            name="intent"
+            value={
+              requested
+                ? "cancel-request"
+                : group.join_policy === "open"
+                  ? "join"
+                  : "request"
+            }
+          />
+          <input type="hidden" name="groupId" value={group.group_id} />
+          <input type="hidden" name="profileId" value={profileId} />
+          <Button
+            type="submit"
+            variant={requested ? "outline" : "default"}
+            className="w-full"
+            disabled={pending || group.join_policy === "invite_only"}
+          >
+            {pending ? <Spinner data-icon="inline-start" /> : null}
+            {requested
+              ? "가입 요청 취소"
               : group.join_policy === "open"
-                ? "join"
-                : "request"
-          }
-        />
-        <input type="hidden" name="groupId" value={group.group_id} />
-        <input type="hidden" name="profileId" value={profileId} />
-        <Button
-          type="submit"
-          variant={requested ? "outline" : "default"}
-          className="w-full"
-          disabled={pending || group.join_policy === "invite_only"}
-        >
-          {pending ? <Spinner data-icon="inline-start" /> : null}
-          {requested
-            ? "가입 요청 취소"
-            : group.join_policy === "open"
-              ? "가입"
-              : group.join_policy === "request"
-                ? "가입 요청"
+                ? "가입"
                 : "초대 전용"}
-        </Button>
-      </fetcher.Form>
+          </Button>
+        </fetcher.Form>
+      )}
       {actionError ? (
         <p role="alert" className="mt-2 text-sm text-destructive">
           {actionError}

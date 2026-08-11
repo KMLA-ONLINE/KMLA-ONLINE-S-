@@ -38,7 +38,7 @@ describe("app chrome", () => {
     ).toEqual({
       header: "sticky",
       bottomNav: "sticky",
-      contentWidth: "5xl",
+      contentWidth: "4xl",
     });
   });
 

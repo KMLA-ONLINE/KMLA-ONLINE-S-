@@ -1,4 +1,4 @@
-import { data, Outlet } from "react-router";
+import { data, Outlet, redirect } from "react-router";
 
 import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import {
@@ -7,6 +7,7 @@ import {
   GroupDetailMobileHeader,
   GroupDetailScreen,
   joinGroup,
+  leaveGroup,
   loadGroupDetail,
   requestGroupJoin,
   setGroupPinned,
@@ -16,6 +17,7 @@ import type { Route } from "./+types/detail";
 export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "none",
+  contentWidth: "5xl",
 });
 
 /**
@@ -50,6 +52,13 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
       await requestGroupJoin(groupId, profileId);
     } else if (intent === "cancel-request") {
       await cancelGroupJoinRequest(groupId, profileId);
+    } else if (intent === "leave") {
+      // 비공개 그룹은 나가는 즉시 상세를 읽을 권한이 사라진다. 이 화면에 머무르면
+      // 재검증이 404로 떨어지므로 그룹 목록으로 보낸다.
+      if (!(await leaveGroup(groupId, profileId))) {
+        return data({ error: "이 그룹은 나갈 수 없습니다." }, { status: 400 });
+      }
+      return redirect("/groups");
     } else {
       return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
     }

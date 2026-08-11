@@ -14,6 +14,7 @@ import { cn } from "~/shared/lib/utils";
 const CONTENT_WIDTH_CLASS = {
   "2xl": "max-w-2xl",
   "3xl": "max-w-3xl",
+  "4xl": "max-w-4xl",
   "5xl": "max-w-5xl",
   full: "max-w-none",
 } as const;

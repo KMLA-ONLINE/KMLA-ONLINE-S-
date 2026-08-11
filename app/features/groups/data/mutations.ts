@@ -52,6 +52,24 @@ export async function cancelGroupJoinRequest(
   if (error) throw error;
 }
 
+/**
+ * 멤버십 행을 지우고 실제로 나갔는지 돌려준다. 공식 그룹과 소유자 멤버십은 RLS가
+ * 막는데, 거부된 삭제는 오류가 아니라 0행 삭제로 돌아오므로 삭제 건수로 판단한다.
+ */
+export async function leaveGroup(
+  groupId: string,
+  profileId: number,
+): Promise<boolean> {
+  const { data, error } = await getSupabase()
+    .from("group_memberships")
+    .delete()
+    .eq("group_id", groupId)
+    .eq("profile_id", profileId)
+    .select("group_id");
+  if (error) throw error;
+  return (data?.length ?? 0) > 0;
+}
+
 export async function setGroupPinned(
   groupId: string,
   profileId: number,

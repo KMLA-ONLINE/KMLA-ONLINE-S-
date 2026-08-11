@@ -208,7 +208,11 @@ export function GroupDiscoverScreen({
         <>
           <div className="grid grid-cols-2 gap-2 sm:hidden">
             {groups.map((group) => (
-              <GroupMobileDiscoverCard key={group.group_id} group={group} />
+              <GroupMobileDiscoverCard
+                key={group.group_id}
+                group={group}
+                profileId={profileId}
+              />
             ))}
           </div>
           <div className="hidden gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-3">

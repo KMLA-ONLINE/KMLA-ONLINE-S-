@@ -1,7 +1,12 @@
 import { ChevronLeftIcon } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Form, Link } from "react-router";
 
+import { GroupConfirmDialog } from "~/features/groups/components/group-confirm-dialog";
+import {
+  getGroupJoinPolicyLabel,
+  getGroupKindLabel,
+} from "~/features/groups/model/format";
 import type {
   CreateGroupErrors,
   CreateGroupValues,
@@ -50,6 +55,32 @@ export function GroupCreateForm({
     values.joinPolicy,
   );
   const customSlugAllowed = joinPolicy !== "invite_only";
+  const formRef = useRef<HTMLFormElement>(null);
+  const confirmedRef = useRef(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmName, setConfirmName] = useState("");
+
+  /**
+   * 확인 dialog를 거치지 않은 제출은 막고 dialog를 연다. 브라우저 기본 검증이
+   * submit 이벤트보다 먼저 돌기 때문에, 필수 입력이 비어 있으면 dialog가 열리지 않는다.
+   */
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    if (confirmedRef.current) {
+      confirmedRef.current = false;
+      return;
+    }
+
+    event.preventDefault();
+    const name = new FormData(event.currentTarget).get("name");
+    setConfirmName(typeof name === "string" ? name.trim() : "");
+    setConfirmOpen(true);
+  }
+
+  function confirmCreate() {
+    confirmedRef.current = true;
+    setConfirmOpen(false);
+    formRef.current?.requestSubmit();
+  }
 
   function changeKind(nextKind: GroupKind) {
     setKind(nextKind);
@@ -71,7 +102,12 @@ export function GroupCreateForm({
         <h1 className="text-2xl font-semibold">그룹 만들기</h1>
       </div>
 
-      <Form method="post" className="flex flex-col gap-4">
+      <Form
+        ref={formRef}
+        method="post"
+        className="flex flex-col gap-4"
+        onSubmit={handleSubmit}
+      >
         {errors.form ? (
           <div className="px-4 md:px-0">
             <FieldError>{errors.form}</FieldError>
@@ -272,6 +308,43 @@ export function GroupCreateForm({
           </Button>
         </div>
       </Form>
+
+      <GroupConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="그룹을 만들까요?"
+        description={
+          confirmName
+            ? `"${confirmName}" 그룹을 만듭니다. 그룹 종류와 주소는 만든 뒤에 바꿀 수 없습니다.`
+            : "입력한 정보로 그룹을 만듭니다. 그룹 종류와 주소는 만든 뒤에 바꿀 수 없습니다."
+        }
+        details={
+          <dl className="flex flex-col gap-1 text-sm">
+            <SummaryRow label="종류">{getGroupKindLabel(kind)}</SummaryRow>
+            <SummaryRow label="가입 정책">
+              {getGroupJoinPolicyLabel(joinPolicy)}
+            </SummaryRow>
+          </dl>
+        }
+        confirmLabel="만들기"
+        pending={pending}
+        onConfirm={confirmCreate}
+      />
+    </div>
+  );
+}
+
+function SummaryRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-medium">{children}</dd>
     </div>
   );
 }

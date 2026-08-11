@@ -1,13 +1,15 @@
 import { Link } from "react-router";
 
 import { GroupAvatar } from "~/features/groups/components/group-avatar";
+import { MembershipButton } from "~/features/groups/components/group-summary-card";
 import type { DiscoverGroupItem } from "~/features/groups/model/types";
-import { Badge } from "~/shared/ui/badge";
 
 export function GroupMobileDiscoverCard({
   group,
+  profileId,
 }: {
   group: DiscoverGroupItem;
+  profileId: number;
 }) {
   return (
     <article
@@ -32,7 +34,7 @@ export function GroupMobileDiscoverCard({
           iconPath={group.icon_path}
           className="-mt-5 mb-1.5 size-10 border-3 border-card text-sm"
         />
-        <h3 className="line-clamp-2 min-h-10 text-sm leading-5 font-semibold">
+        <h3 className="line-clamp-2 text-sm leading-5 font-semibold">
           <Link
             to={`/groups/${group.slug}`}
             className="after:absolute after:inset-0"
@@ -40,15 +42,11 @@ export function GroupMobileDiscoverCard({
             {group.name}
           </Link>
         </h3>
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          {group.join_policy === "request" ? (
-            <Badge variant="secondary">승인 후 가입</Badge>
-          ) : (
-            <span>즉시 가입</span>
-          )}
-          <span className="tabular-nums">
-            멤버 {group.member_count.toLocaleString("ko-KR")}명
-          </span>
+        <p className="mt-2 text-xs text-muted-foreground tabular-nums">
+          멤버 {group.member_count.toLocaleString("ko-KR")}명
+        </p>
+        <div className="relative z-10 mt-2.5">
+          <MembershipButton group={group} profileId={profileId} />
         </div>
       </div>
     </article>

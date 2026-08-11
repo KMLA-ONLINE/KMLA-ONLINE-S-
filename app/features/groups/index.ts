@@ -7,6 +7,7 @@ export {
   cancelGroupJoinRequest,
   createGroup,
   joinGroup,
+  leaveGroup,
   requestGroupJoin,
   setGroupPinned,
 } from "~/features/groups/data/mutations";

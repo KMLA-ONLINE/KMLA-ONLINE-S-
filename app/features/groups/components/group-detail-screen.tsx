@@ -1,17 +1,22 @@
 import {
   BadgeCheckIcon,
-  BellIcon,
   Globe2Icon,
   LandmarkIcon,
   LockIcon,
+  LogOutIcon,
   MessageSquareTextIcon,
   MoreHorizontalIcon,
   PinIcon,
   UsersIcon,
 } from "lucide-react";
+import { useState } from "react";
 import { useFetcher } from "react-router";
 
 import { GroupAvatar } from "~/features/groups/components/group-avatar";
+import {
+  GroupConfirmDialog,
+  GroupJoinRequestDialog,
+} from "~/features/groups/components/group-confirm-dialog";
 import {
   getGroupIdentityPolicyLabel,
   getGroupJoinPolicyLabel,
@@ -27,6 +32,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/shared/ui/dropdown-menu";
 import { Spinner } from "~/shared/ui/spinner";
@@ -46,6 +52,10 @@ export function GroupDetailScreen({
   const isMember = group.membership_state === "member";
   const isPrivate = group.join_policy === "invite_only";
   const VisibilityIcon = isPrivate ? LockIcon : Globe2Icon;
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  // 기능 명세 7.12: 공식 그룹은 나갈 수 없고, 소유자는 소유권을 이전해야 나갈 수 있다.
+  const canLeave =
+    isMember && group.kind !== "official" && group.member_role !== "owner";
 
   return (
     <div className="pb-10 md:pt-0">
@@ -67,7 +77,7 @@ export function GroupDetailScreen({
           <GroupAvatar
             name={group.name}
             iconPath={group.icon_path}
-            className="hidden size-16 shrink-0 rounded-xl text-xl shadow-xs sm:flex sm:size-20"
+            className="hidden size-16 shrink-0 rounded-xl text-xl sm:flex sm:size-20"
           />
           <div className="min-w-0 flex-1 pt-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -127,7 +137,10 @@ export function GroupDetailScreen({
                   >
                     {pending ? <Spinner /> : <MoreHorizontalIcon />}
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-auto whitespace-nowrap"
+                  >
                     <DropdownMenuGroup>
                       <DropdownMenuLabel>내 그룹 설정</DropdownMenuLabel>
                       <DropdownMenuItem
@@ -148,6 +161,19 @@ export function GroupDetailScreen({
                         {group.pinned_at ? "고정 해제" : "내 그룹에 고정"}
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
+                    {canLeave ? (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          disabled={pending}
+                          onClick={() => setLeaveOpen(true)}
+                        >
+                          <LogOutIcon />
+                          그룹 탈퇴
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : null}
@@ -199,6 +225,33 @@ export function GroupDetailScreen({
           </div>
         </aside>
       </div>
+
+      <GroupConfirmDialog
+        open={leaveOpen}
+        onOpenChange={setLeaveOpen}
+        title={group.name}
+        description={
+          isPrivate
+            ? "이 그룹에서 탈퇴할까요? 초대 전용 그룹이라 다시 들어오려면 새 초대를 받아야 합니다."
+            : group.join_policy === "request"
+              ? "이 그룹에서 탈퇴할까요? 다시 들어오려면 가입 요청과 승인을 거쳐야 합니다."
+              : "이 그룹에서 탈퇴할까요? 공개 그룹이라 언제든 다시 가입할 수 있습니다."
+        }
+        confirmLabel="탈퇴"
+        confirmVariant="destructive"
+        pending={pending}
+        onConfirm={() => {
+          setLeaveOpen(false);
+          void fetcher.submit(
+            {
+              intent: "leave",
+              groupId: group.group_id,
+              profileId: String(profileId),
+            },
+            { method: "post" },
+          );
+        }}
+      />
     </div>
   );
 }
@@ -215,6 +268,7 @@ function MembershipAction({
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const pending = fetcher.state !== "idle";
   const actionError = fetcher.data?.error ?? null;
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   if (group.membership_state === "requested") {
     return (
@@ -249,23 +303,45 @@ function MembershipAction({
 
   return (
     <div>
-      <fetcher.Form method="post">
-        <input
-          type="hidden"
-          name="intent"
-          value={canJoin ? "join" : "request"}
-        />
-        <input type="hidden" name="groupId" value={group.group_id} />
-        <input type="hidden" name="profileId" value={profileId} />
-        <Button type="submit" disabled={pending}>
-          {pending ? (
-            <Spinner data-icon="inline-start" />
-          ) : (
-            <BellIcon data-icon="inline-start" />
-          )}
-          {canJoin ? "그룹 가입" : "가입 요청"}
-        </Button>
-      </fetcher.Form>
+      {canJoin ? (
+        <fetcher.Form method="post">
+          <input type="hidden" name="intent" value="join" />
+          <input type="hidden" name="groupId" value={group.group_id} />
+          <input type="hidden" name="profileId" value={profileId} />
+          <Button type="submit" disabled={pending}>
+            {pending && <Spinner data-icon="inline-start" />}
+            그룹 가입
+          </Button>
+        </fetcher.Form>
+      ) : (
+        <>
+          <Button
+            type="button"
+            disabled={pending}
+            onClick={() => setConfirmOpen(true)}
+          >
+            {pending && <Spinner data-icon="inline-start" />}
+            가입 요청
+          </Button>
+          <GroupJoinRequestDialog
+            open={confirmOpen}
+            onOpenChange={setConfirmOpen}
+            groupName={group.name}
+            pending={pending}
+            onConfirm={() => {
+              setConfirmOpen(false);
+              void fetcher.submit(
+                {
+                  intent: "request",
+                  groupId: group.group_id,
+                  profileId: String(profileId),
+                },
+                { method: "post" },
+              );
+            }}
+          />
+        </>
+      )}
       {actionError ? (
         <p role="alert" className="mt-1 text-xs text-destructive">
           {actionError}
