@@ -49,8 +49,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             attribute는 class여야 한다. */}
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
+          defaultTheme="light"
           disableTransitionOnChange
         >
           <TooltipProvider>

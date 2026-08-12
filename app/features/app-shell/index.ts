@@ -17,6 +17,7 @@ export {
 export type {
   AppChromeConfig,
   AppChromeHandle,
+  AppContentWidth,
   ChromeMode,
 } from "~/features/app-shell/model/chrome";
 export type {

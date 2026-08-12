@@ -1,9 +1,14 @@
 export type ChromeMode = "none" | "sticky" | "hide-on-scroll";
+export type AppContentWidth = "2xl" | "3xl" | "4xl" | "5xl" | "full";
 
 export interface AppChromeConfig {
   header: ChromeMode;
   bottomNav: ChromeMode;
+  contentWidth: AppContentWidth;
 }
+
+type AppChromeDefinition = Omit<AppChromeConfig, "contentWidth"> &
+  Partial<Pick<AppChromeConfig, "contentWidth">>;
 
 export interface AppChromeHandle {
   chrome: AppChromeConfig;
@@ -12,10 +17,16 @@ export interface AppChromeHandle {
 export const DEFAULT_APP_CHROME: AppChromeConfig = {
   header: "sticky",
   bottomNav: "none",
+  contentWidth: "4xl",
 };
 
-export function defineAppChrome(chrome: AppChromeConfig): AppChromeHandle {
-  return { chrome };
+export function defineAppChrome(chrome: AppChromeDefinition): AppChromeHandle {
+  return {
+    chrome: {
+      ...chrome,
+      contentWidth: chrome.contentWidth ?? DEFAULT_APP_CHROME.contentWidth,
+    },
+  };
 }
 
 export function resolveAppChrome(
@@ -41,10 +52,22 @@ function isAppChromeHandle(handle: unknown): handle is AppChromeHandle {
     "header" in chrome &&
     isChromeMode(chrome.header) &&
     "bottomNav" in chrome &&
-    isChromeMode(chrome.bottomNav)
+    isChromeMode(chrome.bottomNav) &&
+    "contentWidth" in chrome &&
+    isContentWidth(chrome.contentWidth)
   );
 }
 
 function isChromeMode(value: unknown): value is ChromeMode {
   return value === "none" || value === "sticky" || value === "hide-on-scroll";
+}
+
+function isContentWidth(value: unknown): value is AppContentWidth {
+  return (
+    value === "2xl" ||
+    value === "3xl" ||
+    value === "4xl" ||
+    value === "5xl" ||
+    value === "full"
+  );
 }

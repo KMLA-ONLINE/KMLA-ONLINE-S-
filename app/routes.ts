@@ -24,7 +24,7 @@ export default [
       route("clubs", "routes/app/clubs/index.tsx"),
       route("profile/:profileId", "routes/app/profile/detail.tsx"),
       route("groups/create", "routes/app/groups/create.tsx"),
-      route("groups/:pubId", "routes/app/groups/detail.tsx", [
+      route("groups/:slug", "routes/app/groups/detail.tsx", [
         route("posts/:postId", "routes/app/groups/post.tsx"),
       ]),
       route("clubs/:clubId", "routes/app/clubs/detail.tsx"),

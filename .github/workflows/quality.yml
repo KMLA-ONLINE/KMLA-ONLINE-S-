@@ -24,6 +24,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Start local Supabase
+        run: npm run db:start
+
+      - name: Test database
+        run: npm run db:reset && npm run test:db
+
+      - name: Check database security
+        run: npm run db:lint && npm run db:advisors
+
       # lint + format:check + typecheck + test, then the production SPA build
       # (which also runs scripts/build-sw.mjs and so proves the service worker
       # still generates against the real output).

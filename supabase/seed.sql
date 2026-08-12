@@ -99,3 +99,244 @@ on conflict (auth_user_id) do update set
   name = excluded.name,
   status = excluded.status,
   updated_at = now();
+
+insert into public.profiles (
+  pub_id,
+  name,
+  role,
+  type,
+  cohort,
+  gender,
+  academic_track,
+  status
+)
+values
+  (
+    '30000000-0000-0000-0000-000000000001',
+    '김관리',
+    'admin',
+    'alumni',
+    20,
+    'female',
+    'domestic',
+    'accepted'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000002',
+    '이한별',
+    'member',
+    'alumni',
+    25,
+    'female',
+    'international',
+    'accepted'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000003',
+    '박새벽',
+    'member',
+    'alumni',
+    24,
+    'male',
+    'domestic',
+    'accepted'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000004',
+    '최푸름',
+    'member',
+    'alumni',
+    23,
+    'male',
+    'international',
+    'accepted'
+  )
+on conflict (pub_id) do update set
+  name = excluded.name,
+  role = excluded.role,
+  status = excluded.status,
+  updated_at = now();
+
+insert into public.groups (
+  id,
+  slug,
+  slug_is_custom,
+  kind,
+  name,
+  description,
+  join_policy,
+  identity_policy,
+  posting_policy,
+  created_by
+)
+values
+  (
+    '20000000-0000-0000-0000-000000000001',
+    'school-notices',
+    true,
+    'official',
+    '학교 공지',
+    '학교의 주요 일정과 공지 사항을 확인하는 공식 그룹입니다.',
+    'open',
+    'identified',
+    'staff',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000001')
+  ),
+  (
+    '20000000-0000-0000-0000-000000000002',
+    'g-8f2a1c4e6b9d7a3c5e10',
+    false,
+    'unofficial',
+    '29기 수학 탐구',
+    '함께 문제를 풀고 탐구 주제를 나누는 비공개 그룹입니다.',
+    'invite_only',
+    'optional_anonymous',
+    'members',
+    (select id from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001')
+  ),
+  (
+    '20000000-0000-0000-0000-000000000003',
+    'makers-lab',
+    true,
+    'unofficial',
+    '메이커스 랩',
+    '개발, 로보틱스, 제작 프로젝트를 함께 진행합니다.',
+    'open',
+    'optional_anonymous',
+    'members',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000001')
+  ),
+  (
+    '20000000-0000-0000-0000-000000000004',
+    'dorm-stories',
+    true,
+    'unofficial',
+    '기숙사 이야기',
+    '기숙사 생활의 팁과 이야기를 편하게 나누는 공간입니다.',
+    'request',
+    'always_anonymous',
+    'members',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000002')
+  ),
+  (
+    '20000000-0000-0000-0000-000000000005',
+    'weekend-hikers',
+    true,
+    'unofficial',
+    '주말 산책단',
+    '주말마다 학교 주변을 걷고 계절의 변화를 기록합니다.',
+    'open',
+    'identified',
+    'members',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000003')
+  ),
+  (
+    '20000000-0000-0000-0000-000000000006',
+    'film-circle',
+    true,
+    'unofficial',
+    '필름 서클',
+    '한 편의 영화를 깊게 보고 감상을 나눕니다.',
+    'request',
+    'optional_anonymous',
+    'members',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000004')
+  )
+on conflict (id) do update set
+  name = excluded.name,
+  description = excluded.description,
+  join_policy = excluded.join_policy,
+  identity_policy = excluded.identity_policy,
+  posting_policy = excluded.posting_policy,
+  updated_at = now();
+
+insert into public.group_memberships (group_id, profile_id, role, pinned_at)
+values
+  (
+    '20000000-0000-0000-0000-000000000001',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000001'),
+    'owner',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000001',
+    (select id from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001'),
+    'member',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000002',
+    (select id from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001'),
+    'owner',
+    now()
+  ),
+  (
+    '20000000-0000-0000-0000-000000000003',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000001'),
+    'owner',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000003',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000002'),
+    'member',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000003',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000003'),
+    'member',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000003',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000004'),
+    'member',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000004',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000002'),
+    'owner',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000004',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000003'),
+    'member',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000004',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000004'),
+    'member',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000005',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000003'),
+    'owner',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000005',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000004'),
+    'member',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000006',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000004'),
+    'owner',
+    null
+  )
+on conflict (group_id, profile_id) do update set
+  role = excluded.role,
+  pinned_at = excluded.pinned_at;
+
+insert into public.group_join_requests (group_id, profile_id)
+values (
+  '20000000-0000-0000-0000-000000000004',
+  (select id from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001')
+)
+on conflict (group_id, profile_id) do nothing;

@@ -15,6 +15,7 @@ describe("app chrome", () => {
     const child = defineAppChrome({
       header: "hide-on-scroll",
       bottomNav: "none",
+      contentWidth: "2xl",
     });
 
     expect(resolveAppChrome([{ handle: parent }, { handle: child }])).toEqual(
@@ -27,6 +28,32 @@ describe("app chrome", () => {
       resolveAppChrome([
         { handle: null },
         { handle: { chrome: { header: "invalid", bottomNav: "sticky" } } },
+      ]),
+    ).toEqual(DEFAULT_APP_CHROME);
+  });
+
+  it("uses the wide desktop canvas by default", () => {
+    expect(
+      defineAppChrome({ header: "sticky", bottomNav: "sticky" }).chrome,
+    ).toEqual({
+      header: "sticky",
+      bottomNav: "sticky",
+      contentWidth: "4xl",
+    });
+  });
+
+  it("rejects an invalid content width", () => {
+    expect(
+      resolveAppChrome([
+        {
+          handle: {
+            chrome: {
+              header: "sticky",
+              bottomNav: "sticky",
+              contentWidth: "7xl",
+            },
+          },
+        },
       ]),
     ).toEqual(DEFAULT_APP_CHROME);
   });

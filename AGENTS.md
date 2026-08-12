@@ -3,7 +3,7 @@
 ## Product and Shape
 
 - This is a Facebook-like community service for KMLA, delivered as an installable SPA/PWA. Preserve feed/social-product expectations and both desktop and mobile behavior.
-- It is one npm package, not a monorepo. Use Node `>=22.22.0` and the committed `package-lock.json`.
+- It is one npm package, not a monorepo. Use the Node version in `.nvmrc` and the committed `package-lock.json`; `engines` is only the supported minimum.
 - React Router 8 runs in framework mode with `ssr: false`; `app/routes.ts` is the route registry and `app/root.tsx` is the document shell.
 
 ## Product Requirements
@@ -14,9 +14,12 @@
 
 ## Source Layout
 
-- `app/` follows `docs/structure.md`: `app/routes.ts` explicitly declares the route tree, `app/routes/` contains thin route modules, `app/features/<feature>/` owns product UI/data/model code, and `app/shared/` contains domain-free code. There is no top-level `app/lib/`.
+- `app/` follows `docs/structure.md`: `app/routes.ts` explicitly declares the route tree, `app/routes/` contains thin route modules, `app/features/<feature>/` owns product UI/data/model code, and `app/shared/` contains domain-free code. There is no top-level `app/lib/`; domain-free utilities live in `app/shared/lib/`.
+- A feature directory may carry its own `AGENTS.md` holding that feature's rules and invariants, as `app/features/app-shell/AGENTS.md` does. Read it before changing anything in that feature, and update it in the same change when an invariant moves.
 - Dependencies flow `routes → features → shared`. Features never import routes, and shared never imports routes or features. Cross-feature imports use the other feature's narrow `index.ts` public API.
+- ESLint enforces the outer layer direction and prevents routes from importing Supabase directly. Feature components and models are kept out of Supabase by review.
 - Supabase calls belong in a feature's `data/` only. Routes, components, and `model/` must not import `getSupabase()` directly.
+- `data/` uses `queries.ts`, `mutations.ts`, `subscriptions.ts`, and `files.ts` for query, mutation, realtime, and Storage I/O. Do not pre-split a small feature's data by domain.
 - `app/features/app-shell/` owns app chrome and shell data; `app/routes/app/gate.tsx` owns the auth gate. `app/routes/app/layout.tsx` owns the standard app shell, while `app/routes/messenger/layout.tsx` owns the sidebar-free messenger shell. Standard app routes configure the global header and mobile bottom nav through a typed `handle.chrome` export; `PageHeader` remains page-owned and is not part of this config.
 - `mock.ts` files stand in for tables and RPCs that `supabase/migrations/` does not have yet. Each one is read by exactly one `data/queries.ts`; delete the mock when the migration lands and change only that query.
 
@@ -24,7 +27,10 @@
 
 - There is no application server at runtime. Route data and mutations must use `clientLoader`/`clientAction`, not `loader`/`action`.
 - Despite SPA mode, React Router renders `app/root.tsx` at build time to create `build/client/index.html`. Keep `Layout` and its import graph safe from render-time `window`, `document`, `localStorage`, and eager Supabase client access.
-- Browser code talks directly to Supabase. Client-side checks are UX only; authorization belongs in Postgres RLS. Add grants and RLS policies in the same migration as every new table.
+- A `clientLoader` must not create dependent request waterfalls or per-item queries. Run independent requests in parallel with `Promise.all`; they remain separate requests.
+- Every mutating route defines how its loader data becomes current: revalidate, merge the canonical mutation result, or use an optimistic update with rollback. Do not disable revalidation without another update path.
+- Browser code talks directly to Supabase. Client-side checks are UX only; authorization belongs in Postgres and defaults to RLS.
+- Database constraints, triggers, or transactional RPCs enforce uniqueness, ownership, state transitions, and cross-row invariants; client validation is UX only.
 - Every `VITE_*` value is public in the bundle. Never place a `service_role` key or other secret there; use a Supabase Edge Function for webhooks, privileged work, or third-party secrets.
 - Use the lazy singleton `getSupabase()` from `app/shared/supabase/client.ts`, and call it only from browser-only paths such as client loaders, effects, and event handlers.
 
@@ -32,6 +38,12 @@
 
 - Docker Desktop is required for the local Supabase stack. Setup order is `npm install`, create `.env.local` from `.env.example`, `npm run db:start`, fill in the printed API URL/publishable key, then `npm run db:types`.
 - Create schema changes as migrations under `supabase/migrations/`; use `npm run db:diff -- <name>` to capture local changes and `npm run db:reset` to replay migrations plus `supabase/seed.sql`.
+- Give every browser-accessible table its grants and RLS policies in the same migration. Use table APIs for simple reads and writes, `security_invoker` RPCs for atomic writes or reusable complex SQL, and `security_invoker = true` views when a view is the better read shape.
+- When anonymous or pseudonymous rows vary in identity visibility, keep presentation fields in client-readable rows and the real identity in `private` tables with no client grants. This rule does not apply to ordinary public profile or membership identity.
+- Do not use `security definer` for general list or detail reads. Reserve it for narrow private-schema operations, identity-free moderation, self-only sensitive reads, RLS helpers, and privileged trigger helpers. Set `search_path = ''`, re-check the caller, revoke default `EXECUTE`, and grant only the required role. Existing broad group read functions are debt, not a pattern.
+- A feature read may join tables from other domains but must not call another feature's query function.
+- Add focused database integration tests for grants, RLS allow/deny behavior, state transitions, triggers, and atomic RPC invariants.
+- Keep pgTAP tests under `supabase/tests/` and run them with `npm run test:db` against the reset local database; CI runs the same path.
 - Keep `supabase/seed.sql` idempotent and development-only.
 - Never hand-edit `app/shared/supabase/database.types.ts`; regenerate it with `npm run db:types` after schema changes.
 - `app/shared/ui/**` is registry-vendored shadcn code and is excluded from lint because regeneration overwrites it. Prefer composition outside that directory over local fixes there.
@@ -41,6 +53,7 @@
 ## MCP and Skills
 
 - Load the matching skill before implementing work in its domain, then follow its workflow and references. Project skills live under `.agents/skills/`.
+- Do not hand-edit skill files.
 - Use `react-router` for routes, route modules, client loaders/actions, navigation, and framework configuration; use `supabase` for every Supabase-related task, including Auth, RLS, migrations, Storage, Realtime, and generated types.
 - Use `shadcn` for registry components and `components.json`; use `vercel-react-best-practices` when writing, reviewing, or refactoring React code; use `web-design-guidelines` for UI, accessibility, or UX reviews; use `tdd` when the user requests test-first development or integration tests.
 - Prefer the shadcn MCP tools for searching registries, inspecting components and examples, and obtaining install commands. Use the CLI for project configuration that the MCP server does not expose, and preserve the vendored-code rule above.
@@ -50,7 +63,7 @@
 
 ## Build and Verification
 
-- `npm run check` is the full required sequence: lint, format check, React Router type generation plus TypeScript, then unit tests.
+- `npm run check` is lint, format check, React Router type generation plus TypeScript, then unit tests. `npm run verify` adds `npm run build` and is what CI runs in `.github/workflows/quality.yml`; use it before handing work off, because only the build proves `scripts/build-sw.mjs` still generates the service worker against real output.
 - Keep all Vitest unit, component, and route tests under `test/`, mirroring the relevant `app/` area; keep Playwright tests under `e2e/`. Run one unit file with `npx vitest run test/routes/theme.test.tsx`.
 - Vitest intentionally does not load the React Router Vite plugin. Render route modules with `test/router.tsx`'s `renderRoute()`; when exercising a `clientLoader`, pass it to `createRoutesStub` as `loader`. Import `describe`, `it`, and `expect` explicitly because globals are disabled.
 - Run one E2E file/project with `npx playwright test e2e/smoke.spec.ts --project=chromium`. Unless `E2E_BASE_URL` is set in the process environment, Playwright builds the production app and serves it on port 4173; the smoke suite also expects Supabase to be reachable.

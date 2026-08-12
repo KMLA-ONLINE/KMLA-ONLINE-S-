@@ -29,12 +29,12 @@ export function AppSidebar({ className }: { className?: string }) {
       <nav
         aria-label="주요 메뉴"
         className={cn(
-          "group/sidebar absolute inset-y-0 left-0 z-30 flex w-[var(--app-rail-w)] flex-col overflow-hidden border-r bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out",
+          "group/sidebar absolute inset-y-0 left-0 z-30 flex w-[var(--app-rail-w)] flex-col overflow-hidden border-r border-transparent bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out",
           // `:focus-within`이 아니라 `:has(:focus-visible)`인 이유: 링크를 클릭하면 DOM
           // 포커스가 그대로 남아서, `focus-within`이면 마우스가 나가도 펼친 채로 굳는다.
           // `:focus-visible`은 브라우저가 키보드 이동일 때만 켜므로 Tab 접근성은 그대로 살고
           // 마우스 클릭으로는 켜지지 않는다.
-          "hover:w-[var(--app-sidebar-w)] has-[:focus-visible]:w-[var(--app-sidebar-w)]",
+          "hover:w-[var(--app-sidebar-w)] hover:border-border has-[:focus-visible]:w-[var(--app-sidebar-w)] has-[:focus-visible]:border-border",
           "motion-reduce:transition-none",
         )}
       >
