@@ -56,7 +56,11 @@ export function AppSidebar({ className }: { className?: string }) {
                       : undefined
                   }
                   className={cn(
-                    "flex h-10 items-center gap-3 rounded-md px-3 transition-colors",
+                    // px-3.5(14px)인 이유: 접힌 레일에서 아이콘을 중앙에 놓기 위해서다.
+                    // 행이 flex라 아이콘(20px) + gap(12px)만으로도 레일 안쪽 폭을 넘겨서
+                    // 라벨과 오른쪽 패딩이 잘려 나가고, 아이콘 위치는 왼쪽 패딩만으로 정해진다.
+                    // 그래서 `ul`의 p-2(8px) + 여기 패딩 = (64 - 20) / 2 = 22px여야 한다.
+                    "flex h-10 items-center gap-3 rounded-md px-3.5 transition-colors",
                     isActive
                       ? "bg-sidebar-primary text-sidebar-primary-foreground"
                       : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
