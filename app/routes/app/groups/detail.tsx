@@ -15,6 +15,7 @@ import {
 import {
   createGroupCategory,
   deleteGroupCategory,
+  deleteGroupPost,
   getPostErrorMessage,
   listGroupCategories,
   listGroupPosts,
@@ -54,6 +55,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   const profileId = Number(formData.get("profileId"));
   const postIntent =
     intent === "pin-post" ||
+    intent === "delete-post" ||
     intent === "create-category" ||
     intent === "rename-category" ||
     intent === "move-category-up" ||
@@ -72,6 +74,13 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
       if (typeof postId !== "string")
         return data({ error: "게시물을 찾을 수 없습니다." }, { status: 400 });
       await setGroupPostPinned(postId, formData.get("pinned") === "true");
+    } else if (intent === "delete-post") {
+      // 카드의 ⋯ 메뉴에서 지우는 경로. 게시물 상세 route에도 같은 삭제가 있지만 그쪽은
+      // 지운 뒤 그룹으로 redirect한다 — 여기서는 이미 그룹에 있으므로 revalidate로 충분하다.
+      const postId = formData.get("postId");
+      if (typeof postId !== "string")
+        return data({ error: "게시물을 찾을 수 없습니다." }, { status: 400 });
+      await deleteGroupPost(postId);
     } else if (intent === "create-category") {
       const rawName = formData.get("name");
       const name = typeof rawName === "string" ? rawName.trim() : "";

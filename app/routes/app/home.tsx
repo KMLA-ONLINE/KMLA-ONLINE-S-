@@ -45,6 +45,7 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
             <Button
               variant="ghost"
               size="icon"
+              nativeButton={false}
               aria-label="검색"
               render={<Link to="/groups/discover" />}
             >
@@ -53,6 +54,7 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
             <Button
               variant="ghost"
               size="icon"
+              nativeButton={false}
               aria-label="메시지"
               render={<Link to="/messenger" />}
             >

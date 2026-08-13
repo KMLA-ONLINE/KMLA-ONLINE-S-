@@ -22,3 +22,13 @@ export function formatPostDate(value: string): string {
     timeStyle: "short",
   }).format(new Date(value));
 }
+
+const KIB = 1024;
+const MIB = KIB * KIB;
+
+/** 첨부 행에 붙는 크기 표기. 1KiB 미만은 정수 바이트, 1MiB 미만은 정수 KB, 그 위는 소수 첫째 자리. */
+export function formatFileSize(bytes: number): string {
+  if (bytes < KIB) return `${bytes}B`;
+  if (bytes < MIB) return `${Math.round(bytes / KIB)} KB`;
+  return `${(bytes / MIB).toFixed(1)} MB`;
+}

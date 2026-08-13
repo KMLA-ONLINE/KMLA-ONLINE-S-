@@ -7,10 +7,11 @@ import {
   MessageSquareTextIcon,
   MoreHorizontalIcon,
   PinIcon,
+  SearchIcon,
   UsersIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { useFetcher, useSearchParams } from "react-router";
+import { Link, useFetcher, useSearchParams } from "react-router";
 
 import { GroupAvatar } from "~/features/groups/components/group-avatar";
 import {
@@ -25,7 +26,9 @@ import {
 import type { GroupDetail } from "~/features/groups/model/types";
 import {
   CategoryManager,
+  GroupPostSearchDialog,
   GroupPostsPanel,
+  usePostViewMode,
   type GroupCategory,
   type GroupPostPage,
 } from "~/features/posts";
@@ -38,6 +41,8 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/shared/ui/dropdown-menu";
@@ -75,6 +80,8 @@ export function GroupDetailScreen({
   const isPrivate = group.join_policy === "invite_only";
   const VisibilityIcon = isPrivate ? LockIcon : Globe2Icon;
   const [leaveOpen, setLeaveOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [viewMode, setViewMode] = usePostViewMode();
   // 기능 명세 7.12: 공식 그룹은 나갈 수 없고, 소유자는 소유권을 이전해야 나갈 수 있다.
   const canLeave =
     isMember && group.kind !== "official" && group.member_role !== "owner";
@@ -106,7 +113,7 @@ export function GroupDetailScreen({
 
   return (
     <div className="pb-10 md:pt-0">
-      <section className="overflow-hidden border-b bg-card md:rounded-xl md:border">
+      <section className="overflow-hidden border-0 bg-card sm:rounded-xl sm:border">
         <div className="relative aspect-[4/1] w-full overflow-hidden bg-gradient-to-br from-primary/30 to-primary/5">
           {group.cover_path ? (
             <img
@@ -120,7 +127,7 @@ export function GroupDetailScreen({
           ) : null}
         </div>
 
-        <div className="flex items-start gap-5 p-4 py-3 md:py-4">
+        <div className="flex items-start gap-5 p-4 py-2 md:py-4">
           <GroupAvatar
             name={group.name}
             iconPath={group.icon_path}
@@ -168,6 +175,16 @@ export function GroupDetailScreen({
                 isTeacher={isTeacher}
               />
               {isMember ? (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="게시물 검색"
+                  onClick={() => setSearchOpen(true)}
+                >
+                  <SearchIcon />
+                </Button>
+              ) : null}
+              {isMember ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
@@ -185,6 +202,23 @@ export function GroupDetailScreen({
                     align="end"
                     className="w-auto whitespace-nowrap"
                   >
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>게시물 보기</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={viewMode}
+                        onValueChange={(value) =>
+                          setViewMode(value === "list" ? "list" : "card")
+                        }
+                      >
+                        <DropdownMenuRadioItem value="card">
+                          카드
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="list">
+                          목록
+                        </DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
                     <DropdownMenuGroup>
                       <DropdownMenuLabel>내 그룹 설정</DropdownMenuLabel>
                       <DropdownMenuItem
@@ -256,16 +290,18 @@ export function GroupDetailScreen({
       <div className="grid gap-6 py-3 md:py-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="min-w-0 lg:order-1">
           {tab === "posts" ? (
-            <GroupPostsPanel
-              key={posts.posts
-                .map((post) => `${post.post_id}:${post.is_pinned}`)
-                .join("|")}
-              groupId={group.group_id}
-              slug={group.slug}
-              categories={categories}
-              initialPage={posts}
-              canCreate={canCreatePost}
-            />
+            <div className="flex flex-col gap-3">
+              {canCreatePost ? <WritePostRow slug={group.slug} /> : null}
+              <GroupPostsPanel
+                key={posts.posts
+                  .map((post) => `${post.post_id}:${post.is_pinned}`)
+                  .join("|")}
+                groupId={group.group_id}
+                slug={group.slug}
+                categories={categories}
+                initialPage={posts}
+              />
+            </div>
           ) : tab === "members" ? (
             <EmptyTabCard
               icon={<UsersIcon aria-hidden />}
@@ -327,7 +363,36 @@ export function GroupDetailScreen({
           );
         }}
       />
+
+      <GroupPostSearchDialog
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        groupId={group.group_id}
+        slug={group.slug}
+      />
     </div>
+  );
+}
+
+/**
+ * 게시물 스택의 첫 카드처럼 보이는 글쓰기 진입점. 카드와 같은 프레이밍(모바일은 풀블리드,
+ * `md:`부터 테두리 있는 카드)을 그대로 쓰는 것이 핵심이다 — 별개의 버튼으로 보이면 피드
+ * 상단에 관련 없는 컨트롤이 하나 얹힌 것처럼 읽힌다.
+ */
+function WritePostRow({ slug }: { slug: string }) {
+  return (
+    <Link
+      to={`/groups/${slug}/posts/new`}
+      className="group flex items-center gap-3 overflow-hidden rounded-none border-b-2 border-foreground/20 bg-card px-4 py-3 md:rounded-xl md:border md:border-border md:px-3 md:py-2.5"
+    >
+      <div
+        className="size-9 shrink-0 rounded-full border bg-muted"
+        aria-hidden="true"
+      />
+      <span className="flex-1 rounded-full bg-muted px-4 py-2 text-sm text-muted-foreground transition-[filter] group-hover:brightness-95">
+        글쓰기…
+      </span>
+    </Link>
   );
 }
 

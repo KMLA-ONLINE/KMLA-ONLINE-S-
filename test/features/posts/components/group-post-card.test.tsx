@@ -1,0 +1,80 @@
+import { screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { GroupPostCard } from "~/features/posts/components/group-post-card";
+import { groupPost } from "../group-post-fixture";
+import { renderRoute } from "../../../router";
+
+/**
+ * jsdom은 레이아웃을 계산하지 않아 모든 높이가 0이다. "더 보기"는 본문이 실제로
+ * 잘렸는지를 측정해서 결정하므로, 그 측정값만 가짜로 넣어준다.
+ */
+function stubOverflow(overflowing: boolean) {
+  vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(
+    overflowing ? 400 : 100,
+  );
+  vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(128);
+}
+
+function renderCard(post = groupPost()) {
+  return renderRoute(() => (
+    <GroupPostCard
+      post={post}
+      slug="group"
+      onPin={vi.fn()}
+      onDelete={vi.fn()}
+    />
+  ));
+}
+
+afterEach(() => vi.restoreAllMocks());
+
+describe("GroupPostCard", () => {
+  it("links the title to the post", () => {
+    stubOverflow(false);
+    renderCard();
+
+    expect(screen.getByRole("link", { name: "제목" })).toHaveAttribute(
+      "href",
+      "/groups/group/posts/post-id",
+    );
+  });
+
+  it("omits the expander when the body fits", () => {
+    stubOverflow(false);
+    renderCard();
+
+    expect(
+      screen.queryByRole("button", { name: "더 보기" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("expands and collapses a clamped body", async () => {
+    stubOverflow(true);
+    const { user } = renderCard();
+
+    await user.click(screen.getByRole("button", { name: "더 보기" }));
+    const collapse = screen.getByRole("button", { name: "접기" });
+    expect(collapse).toBeInTheDocument();
+
+    await user.click(collapse);
+    expect(screen.getByRole("button", { name: "더 보기" })).toBeInTheDocument();
+  });
+
+  it("shows the pinned banner and the category badge when they apply", () => {
+    stubOverflow(false);
+    renderCard(groupPost({ is_pinned: true, category_name: "공지" }));
+
+    expect(screen.getByText("고정된 게시물")).toBeInTheDocument();
+    expect(screen.getByText("공지")).toBeInTheDocument();
+  });
+
+  it("hides the overflow menu when the viewer may do nothing", () => {
+    stubOverflow(false);
+    renderCard();
+
+    expect(
+      screen.queryByRole("button", { name: "게시물 옵션" }),
+    ).not.toBeInTheDocument();
+  });
+});

@@ -15,7 +15,11 @@ export default function MenuPage() {
       <PageHeader title="메뉴" />
       <StubPage title="메뉴" description="설정·바로가기 목록이 들어갑니다." />
       <div className="px-4 pb-4 md:hidden">
-        <Button className="w-full" render={<Link to="/messenger" />}>
+        <Button
+          className="w-full"
+          nativeButton={false}
+          render={<Link to="/messenger" />}
+        >
           메시지
         </Button>
       </div>

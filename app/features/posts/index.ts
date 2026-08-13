@@ -1,6 +1,8 @@
 export { CategoryManager } from "~/features/posts/components/category-manager";
 export { GroupPostOverlay } from "~/features/posts/components/group-post-overlay";
+export { GroupPostSearchDialog } from "~/features/posts/components/group-post-search-dialog";
 export { GroupPostsPanel } from "~/features/posts/components/group-posts-panel";
+export { usePostViewMode } from "~/features/posts/hooks/use-post-view-mode";
 export {
   createGroupCategory,
   createGroupPost,

@@ -85,6 +85,10 @@ const imeSafeShortcuts = $prose(
   (ctx) =>
     new Plugin({
       props: {
+        attributes: {
+          "aria-label": "본문",
+          "data-placeholder": "본문을 입력하세요",
+        },
         handleKeyDown(view, event) {
           if (event.isComposing || view.composing || event.keyCode === 229)
             return false;
@@ -179,7 +183,7 @@ function EditorSurface({ initialValue }: { initialValue: string }) {
         defaultValue={sanitizePostMarkdown(initialValue)}
       />
       <div
-        className="flex flex-wrap gap-1 border-b p-1"
+        className="flex flex-wrap gap-1 border-b bg-muted/50 p-1"
         role="toolbar"
         aria-label="본문 서식"
       >

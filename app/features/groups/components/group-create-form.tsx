@@ -299,7 +299,11 @@ export function GroupCreateForm({
         </SectionCard>
 
         <div className="flex justify-end gap-2 px-4 md:px-0">
-          <Button variant="ghost" render={<Link to="/groups" />}>
+          <Button
+            variant="ghost"
+            nativeButton={false}
+            render={<Link to="/groups" />}
+          >
             취소
           </Button>
           <Button type="submit" disabled={pending}>

@@ -12,7 +12,11 @@ import {
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
 import type { Route } from "./+types/post";
 
-export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
+export const handle = defineAppChrome({
+  header: "sticky",
+  bottomNav: "none",
+  contentWidth: "5xl",
+});
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const post = await getGroupPost(params.postId);

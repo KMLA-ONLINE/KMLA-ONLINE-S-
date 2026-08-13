@@ -4,14 +4,11 @@ import {
   ArrowUpIcon,
   FileIcon,
   ImagePlusIcon,
-  MoreHorizontalIcon,
-  PinIcon,
   PaperclipIcon,
-  Share2Icon,
   Trash2Icon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { Form, Link, useNavigate, useNavigation } from "react-router";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Form, useNavigate, useNavigation } from "react-router";
 
 import {
   createGroupPostWithAttachments,
@@ -22,16 +19,15 @@ import {
   preparePostFiles,
   releasePostFile,
 } from "~/features/posts/model/attachments";
-import { formatPostDate } from "~/features/posts/model/format";
 import { PostBodyInput } from "~/features/posts/components/post-body-input";
-import { PostMarkdown } from "~/features/posts/components/post-markdown";
+import { PostDetail } from "~/features/posts/components/post-detail";
 import type {
   GroupCategory,
   GroupPostDetail,
   PostFormErrors,
   PostFormValues,
-  PostIdentity,
   PostAttachment,
+  PostIdentity,
   PostSaveProgress,
   PreparedPostFile,
 } from "~/features/posts/model/types";
@@ -40,24 +36,10 @@ import {
   validatePostForm,
 } from "~/features/posts/model/validation";
 import { useFileDrop } from "~/shared/hooks/use-file-drop";
+import { useModalClose } from "~/shared/hooks/use-modal-close";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/shared/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "~/shared/ui/dropdown-menu";
 import { Input } from "~/shared/ui/input";
-import { Label } from "~/shared/ui/label";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 import { Spinner } from "~/shared/ui/spinner";
 
@@ -82,70 +64,32 @@ export function GroupPostOverlay({
   errors?: PostFormErrors;
   identities?: PostIdentity[];
 }) {
-  const navigate = useNavigate();
   const navigation = useNavigation();
-  const [deleteOpen, setDeleteOpen] = useState(false);
   const pending = navigation.state === "submitting";
-  const close = () => void navigate(`/groups/${slug}`);
+  // 그룹으로 `navigate`하면 히스토리에 작성 화면이 남아서, 뒤로 가기를 누른 사용자가 방금
+  // 버린 초안을 다시 마주하게 된다. 들어온 경로를 되감는 게 맞다.
+  const close = useModalClose(`/groups/${slug}`);
 
-  if (mode !== "detail") {
-    return (
-      <div className="fixed inset-0 z-50 flex h-dvh flex-col bg-background">
-        <PostEditor
-          mode={mode}
-          slug={slug}
-          groupName={groupName}
-          groupId={groupId}
-          categories={categories}
-          post={post}
-          values={values}
-          errors={errors}
-          identities={identities}
-          pending={pending}
-          onClose={close}
-        />
-      </div>
-    );
+  if (mode === "detail") {
+    return post ? <PostDetail post={post} slug={slug} /> : null;
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && close()}>
-      <DialogContent
-        className="inset-0 top-0 left-0 flex h-dvh max-w-none translate-x-0 translate-y-0 flex-col rounded-none p-0 sm:top-1/2 sm:left-1/2 sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl"
-        showCloseButton
-      >
-        {post ? (
-          <PostDetail
-            slug={slug}
-            groupName={groupName}
-            post={post}
-            attachments={post.attachments}
-            onDelete={() => setDeleteOpen(true)}
-          />
-        ) : null}
-      </DialogContent>
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>게시물 삭제</DialogTitle>
-            <DialogDescription>
-              삭제한 게시물은 되돌릴 수 없습니다.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
-              취소
-            </Button>
-            <Form method="post">
-              <input type="hidden" name="intent" value="delete" />
-              <Button type="submit" variant="destructive" disabled={pending}>
-                {pending ? <Spinner /> : null} 삭제
-              </Button>
-            </Form>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </Dialog>
+    <div className="fixed inset-0 z-50 flex h-dvh flex-col bg-background">
+      <PostEditor
+        mode={mode}
+        slug={slug}
+        groupName={groupName}
+        groupId={groupId}
+        categories={categories}
+        post={post}
+        values={values}
+        errors={errors}
+        identities={identities}
+        pending={pending}
+        onClose={close}
+      />
+    </div>
   );
 }
 
@@ -232,7 +176,7 @@ function PostEditor({
     (files) => void addFiles(files, "mixed"),
   );
 
-  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (saving) return;
     const data = new FormData(event.currentTarget);
@@ -277,7 +221,10 @@ function PostEditor({
               onProgress,
             );
       additions.forEach(releasePostFile);
-      void navigate(`/groups/${slug}/posts/${postId}`);
+      // `replace`가 핵심이다. push하면 히스토리가 `그룹 → 작성 → 상세`가 되고, 상세 모달을
+      // 닫을 때(뒤로 가기) 방금 떠난 작성 화면이 다시 열린다. 저장이 끝난 작성·수정 화면은
+      // 돌아갈 곳이 아니므로 그 자리를 상세로 갈아끼운다.
+      void navigate(`/groups/${slug}/posts/${postId}`, { replace: true });
     } catch (error) {
       setFormErrors({
         form:
@@ -329,8 +276,8 @@ function PostEditor({
       {...dropHandlers}
     >
       <input type="hidden" name="intent" value={mode} />
-      <header className="shrink-0 border-b bg-background pt-[env(safe-area-inset-top)]">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-3 sm:px-6">
+      <header className="shrink-0 border-b bg-background pt-[env(safe-area-inset-top)] md:border-b-0 md:bg-muted/40">
+        <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-3 sm:px-6 md:border-x md:border-b md:bg-background">
           <Button
             type="button"
             variant="ghost"
@@ -355,61 +302,73 @@ function PostEditor({
         </div>
       </header>
 
-      <main className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-5 sm:px-6 sm:py-8">
-          <div className="grid gap-4 border-b pb-5 sm:grid-cols-[minmax(0,1fr)_12rem_10rem]">
-            <Field label="제목" error={formErrors?.title}>
+      <main className="min-h-0 flex-1 overflow-y-auto md:bg-muted/40">
+        <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-5 sm:px-6 sm:py-8 md:border-x md:bg-background md:shadow-sm">
+          <div className="grid gap-2">
+            <div
+              className={cn(
+                "grid gap-2",
+                mode === "create" && identities.length > 1 && "grid-cols-2",
+              )}
+            >
+              <Field error={formErrors?.categoryId}>
+                <NativeSelect
+                  name="categoryId"
+                  defaultValue={initial.categoryId}
+                  aria-label="카테고리"
+                  className="w-full"
+                >
+                  <NativeSelectOption value="">미분류</NativeSelectOption>
+                  {categories.map((category) => (
+                    <NativeSelectOption key={category.id} value={category.id}>
+                      {category.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </Field>
+              {mode === "create" && identities.length > 1 ? (
+                <Field error={formErrors?.authorIdentity}>
+                  <NativeSelect
+                    name="authorIdentity"
+                    defaultValue={initial.authorIdentity}
+                    aria-label="작성 신원"
+                    className="w-full"
+                  >
+                    {identities.map((identity) => (
+                      <NativeSelectOption key={identity} value={identity}>
+                        {identity === "identified"
+                          ? "실명"
+                          : identity === "anonymous"
+                            ? "익명"
+                            : "운영진"}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+              ) : (
+                <input
+                  type="hidden"
+                  name="authorIdentity"
+                  value={initial.authorIdentity}
+                />
+              )}
+            </div>
+
+            <Field error={formErrors?.title}>
               <Input
                 name="title"
                 defaultValue={initial.title}
                 maxLength={100}
                 required
-                className="h-11 text-base font-medium"
+                aria-label="제목"
+                placeholder="제목"
+                className="h-9 rounded-md text-base font-medium"
               />
             </Field>
-            <Field label="카테고리" error={formErrors?.categoryId}>
-              <NativeSelect
-                name="categoryId"
-                defaultValue={initial.categoryId}
-                className="w-full"
-              >
-                <NativeSelectOption value="">미분류</NativeSelectOption>
-                {categories.map((category) => (
-                  <NativeSelectOption key={category.id} value={category.id}>
-                    {category.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </Field>
-            {mode === "create" ? (
-              <Field label="작성 신원" error={formErrors?.authorIdentity}>
-                <NativeSelect
-                  name="authorIdentity"
-                  defaultValue={initial.authorIdentity}
-                  className="w-full"
-                >
-                  {identities.map((identity) => (
-                    <NativeSelectOption key={identity} value={identity}>
-                      {identity === "identified"
-                        ? "실명"
-                        : identity === "anonymous"
-                          ? "익명"
-                          : "운영진"}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </Field>
-            ) : (
-              <input
-                type="hidden"
-                name="authorIdentity"
-                value={initial.authorIdentity}
-              />
-            )}
           </div>
 
           <div className="flex min-h-[24rem] flex-1 flex-col pt-5">
-            <Field label="본문" error={formErrors?.body}>
+            <Field error={formErrors?.body}>
               <PostBodyInput initialValue={initial.body} />
             </Field>
           </div>
@@ -614,183 +573,17 @@ function AttachmentEditorItem({
   );
 }
 
-function PostDetail({
-  slug,
-  groupName,
-  post,
-  attachments,
-  onDelete,
-}: {
-  slug: string;
-  groupName: string;
-  post: GroupPostDetail;
-  attachments: PostAttachment[];
-  onDelete: () => void;
-}) {
-  const share = async () => {
-    const url = window.location.href;
-    if (navigator.share) await navigator.share({ title: post.title, url });
-    else await navigator.clipboard.writeText(url);
-  };
-  return (
-    <article className="flex min-h-0 flex-1 flex-col">
-      <DialogHeader className="border-b p-5 pr-14">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <DialogTitle>{post.title}</DialogTitle>
-            <DialogDescription className="mt-2">
-              {groupName} · {post.category_name || "미분류"}
-            </DialogDescription>
-          </div>
-          {post.can_edit || post.can_delete || post.can_pin ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="게시물 메뉴"
-                  />
-                }
-              >
-                <MoreHorizontalIcon />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {post.can_edit ? (
-                  <DropdownMenuItem
-                    render={
-                      <Link to={`/groups/${slug}/posts/${post.post_id}/edit`} />
-                    }
-                  >
-                    수정
-                  </DropdownMenuItem>
-                ) : null}
-                {post.can_pin ? (
-                  <DropdownMenuItem render={<Form method="post" />}>
-                    <input type="hidden" name="intent" value="pin" />
-                    <input
-                      type="hidden"
-                      name="pinned"
-                      value={String(!post.is_pinned)}
-                    />
-                    <button type="submit" className="contents">
-                      {post.is_pinned ? "고정 해제" : "고정"}
-                    </button>
-                  </DropdownMenuItem>
-                ) : null}
-                {post.can_delete ? (
-                  <DropdownMenuItem variant="destructive" onClick={onDelete}>
-                    삭제
-                  </DropdownMenuItem>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </div>
-      </DialogHeader>
-      <div className="flex-1 overflow-y-auto p-5">
-        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          {post.is_pinned ? (
-            <>
-              <PinIcon className="size-4" /> 고정됨 ·
-            </>
-          ) : null}
-          <span>{post.author_name || post.author_label}</span>
-          <time dateTime={post.published_at}>
-            {formatPostDate(post.published_at)}
-          </time>
-          {post.edited_at ? <span>수정됨</span> : null}
-        </div>
-        <PostMarkdown className="mt-8">{post.body}</PostMarkdown>
-        <PostAttachments attachments={attachments} />
-      </div>
-      <div className="border-t p-4">
-        <Button variant="outline" onClick={() => void share()}>
-          <Share2Icon /> 공유
-        </Button>
-      </div>
-    </article>
-  );
-}
-
-export function PostAttachments({
-  attachments,
-  compact = false,
-}: {
-  attachments: PostAttachment[];
-  compact?: boolean;
-}) {
-  const images = attachments.filter((item) => item.mime_type === "image/webp");
-  const files = attachments.filter((item) => item.mime_type !== "image/webp");
-  if (!attachments.length) return null;
-  return (
-    <div className="mt-6 space-y-3">
-      {images.length ? (
-        <div
-          className={cn(
-            "grid gap-2 overflow-hidden rounded-xl",
-            images.length > 1 && "grid-cols-2",
-          )}
-        >
-          {images.slice(0, compact ? 4 : images.length).map((item) =>
-            item.signedUrl ? (
-              <img
-                key={item.attachment_id}
-                src={item.signedUrl}
-                alt={item.original_filename}
-                className={cn(
-                  "w-full object-cover",
-                  compact ? "h-36" : "max-h-[32rem]",
-                )}
-                loading="lazy"
-              />
-            ) : (
-              <div
-                key={item.attachment_id}
-                className="flex h-32 items-center justify-center bg-muted text-sm text-muted-foreground"
-              >
-                이미지를 불러오지 못했습니다.
-              </div>
-            ),
-          )}
-        </div>
-      ) : null}
-      {files.map((item) =>
-        item.signedUrl ? (
-          <a
-            key={item.attachment_id}
-            href={item.signedUrl}
-            download={item.original_filename}
-            className="flex items-center gap-2 rounded-lg border p-3 text-sm hover:bg-muted"
-          >
-            <FileIcon />{" "}
-            <span className="truncate">{item.original_filename}</span>
-          </a>
-        ) : (
-          <div
-            key={item.attachment_id}
-            className="flex items-center gap-2 rounded-lg border p-3 text-sm text-muted-foreground"
-          >
-            <FileIcon /> {item.original_filename} (다운로드할 수 없음)
-          </div>
-        ),
-      )}
-    </div>
-  );
-}
-
 function Field({
-  label,
+  className,
   error,
   children,
 }: {
-  label: string;
+  className?: string;
   error?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
+    <div className={cn("space-y-2", className)}>
       {children}
       {error ? (
         <p role="alert" className="text-sm text-destructive">

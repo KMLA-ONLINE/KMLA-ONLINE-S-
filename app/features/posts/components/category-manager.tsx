@@ -47,12 +47,12 @@ export function CategoryManager({
           <PlusIcon /> 추가
         </Button>
       </fetcher.Form>
-      <div className="mt-4 divide-y">
+      <div className="mt-4 flex flex-col gap-2">
         {categories.map((category, index) => (
           <fetcher.Form
             key={category.id}
             method="post"
-            className="flex items-center gap-2 py-2"
+            className="flex items-center gap-1.5"
           >
             <input type="hidden" name="categoryId" value={category.id} />
             <input type="hidden" name="position" value={category.position} />
@@ -98,7 +98,7 @@ export function CategoryManager({
             <Button
               type="button"
               size="icon-sm"
-              variant="ghost"
+              variant="destructive"
               aria-label={`${category.name} 삭제`}
               disabled={pending}
               onClick={() => setDeleteTarget(category)}

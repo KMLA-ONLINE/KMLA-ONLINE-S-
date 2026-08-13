@@ -122,7 +122,11 @@ function ScreenHeader({ actionLabel }: { actionLabel: string | null }) {
     <header className="hidden items-center justify-between gap-3 md:flex">
       <h1 className="text-2xl font-semibold">그룹</h1>
       {actionLabel ? (
-        <Button size="sm" render={<Link to="/groups/create" />}>
+        <Button
+          size="sm"
+          nativeButton={false}
+          render={<Link to="/groups/create" />}
+        >
           <CirclePlusIcon data-icon="inline-start" aria-hidden />
           {actionLabel}
         </Button>

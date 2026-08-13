@@ -29,6 +29,12 @@ if (!window.matchMedia) {
   });
 }
 
+// jsdom은 레이아웃을 계산하지 않아 스크롤 관련 메서드를 아예 구현하지 않는다. 이미지 뷰어의
+// 필름스트립처럼 활성 항목을 화면 안으로 밀어 넣는 코드는 이것이 없으면 마운트 중에 죽는다.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
+
 if (!globalThis.ResizeObserver) {
   globalThis.ResizeObserver = class {
     observe() {}

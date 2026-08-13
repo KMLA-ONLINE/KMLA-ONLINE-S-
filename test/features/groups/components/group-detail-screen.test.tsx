@@ -46,7 +46,7 @@ describe("GroupDetailScreen", () => {
       "aria-current",
       "page",
     );
-    expect(screen.getByText("아직 게시물이 없습니다.")).toBeInTheDocument();
+    expect(screen.getByText("아직 게시물이 없습니다")).toBeInTheDocument();
     expect(screen.getByText(/공개 그룹/)).toHaveTextContent(
       "공개 그룹 · 멤버 12명",
     );
@@ -99,6 +99,6 @@ describe("GroupDetailScreen", () => {
     expect(
       screen.getByRole("button", { name: "그룹 설정" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("아직 게시물이 없습니다.")).toBeInTheDocument();
+    expect(screen.getByText("아직 게시물이 없습니다")).toBeInTheDocument();
   });
 });

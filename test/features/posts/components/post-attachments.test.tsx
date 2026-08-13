@@ -1,8 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { PostAttachments } from "~/features/posts/components/group-post-overlay";
+import {
+  PostFileList,
+  PostImageGrid,
+  splitPostAttachments,
+} from "~/features/posts/components/post-attachments";
 import type { PostAttachment } from "~/features/posts/model/types";
+import { renderRoute } from "../../../router";
 
 function attachment(overrides: Partial<PostAttachment>): PostAttachment {
   return {
@@ -24,22 +29,66 @@ function attachment(overrides: Partial<PostAttachment>): PostAttachment {
   };
 }
 
-describe("PostAttachments", () => {
-  it("renders normalized WebP inline and other MIME types as downloads only", () => {
-    render(
-      <PostAttachments
-        attachments={[
-          attachment({
-            attachment_id: "image",
-            mime_type: "image/webp",
-            original_filename: "photo.webp",
-          }),
-          attachment({ attachment_id: "file" }),
-        ]}
-      />,
-    );
+const image = (id: string) =>
+  attachment({
+    attachment_id: id,
+    mime_type: "image/webp",
+    original_filename: `${id}.webp`,
+  });
 
-    expect(screen.getByRole("img", { name: "photo.webp" })).toBeInTheDocument();
+describe("splitPostAttachments", () => {
+  it("treats normalized WebP as images and everything else as files", () => {
+    const { images, files } = splitPostAttachments([
+      image("photo"),
+      attachment({ attachment_id: "doc" }),
+    ]);
+
+    expect(images.map((item) => item.attachment_id)).toEqual(["photo"]);
+    expect(files.map((item) => item.attachment_id)).toEqual(["doc"]);
+  });
+});
+
+describe("PostImageGrid", () => {
+  it("renders every image up to the tile limit", () => {
+    renderRoute(() => (
+      <PostImageGrid images={[image("a"), image("b"), image("c")]} />
+    ));
+
+    expect(screen.getAllByRole("img")).toHaveLength(3);
+  });
+
+  it("caps visible tiles at five and marks the rest as overflow", () => {
+    renderRoute(() => (
+      <PostImageGrid images={["a", "b", "c", "d", "e", "f", "g"].map(image)} />
+    ));
+
+    expect(screen.getAllByRole("img")).toHaveLength(5);
+    expect(screen.getByText("+2")).toBeInTheDocument();
+  });
+
+  it("disables the tile when the attachment could not be signed", () => {
+    renderRoute(() => (
+      <PostImageGrid
+        images={[
+          {
+            ...image("broken"),
+            signedUrl: null,
+          },
+        ]}
+      />
+    ));
+
+    expect(screen.getByRole("button", { name: /broken.webp/ })).toBeDisabled();
+    expect(
+      screen.getByText("이미지를 불러오지 못했습니다"),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("PostFileList", () => {
+  it("offers a download link for signed files", () => {
+    renderRoute(() => <PostFileList files={[attachment({})]} />);
+
     expect(screen.getByRole("link", { name: /document.pdf/ })).toHaveAttribute(
       "download",
       "document.pdf",
@@ -47,7 +96,10 @@ describe("PostAttachments", () => {
   });
 
   it("fails gracefully when signing fails", () => {
-    render(<PostAttachments attachments={[attachment({ signedUrl: null })]} />);
-    expect(screen.getByText(/다운로드할 수 없음/)).toBeInTheDocument();
+    renderRoute(() => (
+      <PostFileList files={[attachment({ signedUrl: null })]} />
+    ));
+
+    expect(screen.getByText("다운로드할 수 없음")).toBeInTheDocument();
   });
 });

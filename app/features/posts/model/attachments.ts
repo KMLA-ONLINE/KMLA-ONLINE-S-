@@ -43,6 +43,23 @@ export async function preparePostFiles(
   );
 }
 
+/**
+ * Supabase Storage의 signed URL에 `download` 쿼리를 붙인다.
+ *
+ * `<a download>`는 같은 출처에서만 동작한다. 첨부는 Storage 도메인에서 오므로 브라우저가
+ * 속성을 무시하고 그냥 탭에서 열어버린다(PDF는 뷰어로, 나머지는 빈 화면으로). Storage가
+ * 이 쿼리를 보면 `Content-Disposition: attachment`를 붙여 내려주므로, 저장 여부와 파일명
+ * 모두 서버 응답이 결정하게 된다.
+ */
+export function toAttachmentDownloadUrl(
+  signedUrl: string,
+  filename: string,
+): string {
+  const url = new URL(signedUrl);
+  url.searchParams.set("download", filename);
+  return url.toString();
+}
+
 export function releasePostFile(file: PreparedPostFile): void {
   if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
 }

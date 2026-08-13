@@ -1,0 +1,73 @@
+import { HeartIcon, MessageCircleIcon, SendIcon } from "lucide-react";
+import { toast } from "sonner";
+
+import { cn } from "~/shared/lib/utils";
+
+const ACTION_CLASS =
+  "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50";
+
+/**
+ * 게시물 하단 액션 바.
+ *
+ * 반응과 댓글은 아직 구현 전이라 자리만 잡고 비활성으로 둔다(기능 명세 §8.15). 카운트를 0으로
+ * 고정한 것도 같은 이유다 — 서버가 내려주는 값이 아니라 자리를 지키는 표시이므로, 붙일 때
+ * 레이아웃이 흔들리지 않게 지금부터 같은 자리를 차지하게 한다. `disabled` 하나로는 이유가
+ * 전달되지 않아서 레이블에 "준비 중"을 적는다.
+ */
+export function GroupPostActionBar({
+  sharePath,
+  shareTitle,
+  className,
+}: {
+  /** 게시물 상세의 앱 내부 경로. 절대 URL은 공유하는 순간에 만든다 — `window`를 render 중에 읽으면 build-time render가 깨진다. */
+  sharePath: string;
+  shareTitle: string;
+  className?: string;
+}) {
+  const share = async () => {
+    try {
+      const url = new URL(sharePath, window.location.origin).toString();
+      if (navigator.share) {
+        await navigator.share({ title: shareTitle, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      toast.success("링크를 복사했습니다.");
+    } catch (error) {
+      // 공유 시트를 사용자가 닫은 것은 실패가 아니다.
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      toast.error("링크를 공유하지 못했습니다.");
+    }
+  };
+
+  return (
+    <div className={cn("flex items-center px-2 py-1", className)}>
+      <div className="flex items-center text-muted-foreground">
+        <button
+          type="button"
+          disabled
+          aria-label="좋아요 (준비 중)"
+          className={ACTION_CLASS}
+        >
+          <HeartIcon className="size-4.5" />0
+        </button>
+        <button
+          type="button"
+          disabled
+          aria-label="댓글 (준비 중)"
+          className={ACTION_CLASS}
+        >
+          <MessageCircleIcon className="size-4.5" />0
+        </button>
+        <button
+          type="button"
+          aria-label="공유"
+          className={ACTION_CLASS}
+          onClick={() => void share()}
+        >
+          <SendIcon className="size-4.5" />
+        </button>
+      </div>
+    </div>
+  );
+}

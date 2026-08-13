@@ -317,6 +317,7 @@ export function MembershipButton({
       <Button
         variant="outline"
         className="w-full"
+        nativeButton={false}
         render={<Link to={`/groups/${group.slug}`} />}
       >
         열기

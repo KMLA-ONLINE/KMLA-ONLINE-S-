@@ -82,7 +82,7 @@ export function ErrorPage({ status, stack, onRetry }: ErrorPageProps) {
         </p>
 
         <div className="mt-7 flex flex-col justify-center gap-2 sm:flex-row">
-          <Button size="lg" render={<Link to="/" />}>
+          <Button size="lg" nativeButton={false} render={<Link to="/" />}>
             홈으로 돌아가기
           </Button>
           {onRetry ? (
