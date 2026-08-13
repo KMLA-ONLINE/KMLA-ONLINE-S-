@@ -18,14 +18,19 @@ import {
   GroupConfirmDialog,
   GroupJoinRequestDialog,
 } from "~/features/groups/components/group-confirm-dialog";
+import { GroupMembersPanel } from "~/features/groups/components/group-members-panel";
+import { GroupSettings } from "~/features/groups/components/group-settings";
 import {
   getGroupIdentityPolicyLabel,
   getGroupJoinPolicyLabel,
   getGroupPostingPolicyLabel,
 } from "~/features/groups/model/format";
-import type { GroupDetail } from "~/features/groups/model/types";
+import type {
+  GroupDetail,
+  GroupJoinRequest,
+  GroupMemberPage,
+} from "~/features/groups/model/types";
 import {
-  CategoryManager,
   GroupPostSearchDialog,
   GroupPostsPanel,
   usePostViewMode,
@@ -66,12 +71,16 @@ export function GroupDetailScreen({
   isTeacher,
   categories = [],
   posts = { posts: [], nextCursor: null },
+  memberPage,
+  joinRequests = [],
 }: {
   group: GroupDetail;
   profileId: number;
   isTeacher: boolean;
   categories?: GroupCategory[];
   posts?: GroupPostPage;
+  memberPage?: GroupMemberPage;
+  joinRequests?: GroupJoinRequest[];
 }) {
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -90,8 +99,7 @@ export function GroupDetailScreen({
   const canCurate = canManage || group.member_role === "manager";
   const canCreatePost =
     isMember && (group.posting_policy === "members" || canCurate);
-  const canViewMembers =
-    group.identity_policy !== "always_anonymous" || canManage;
+  const canViewMembers = isMember;
   const requestedTab = searchParams.get("tab");
   const tab: GroupTab =
     (requestedTab === "members" && canViewMembers) ||
@@ -158,8 +166,18 @@ export function GroupDetailScreen({
             </div>
             <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
               <VisibilityIcon aria-hidden className="size-3.5 shrink-0" />
-              {isPrivate ? "비공개 그룹" : "공개 그룹"} · 멤버{" "}
-              {group.member_count.toLocaleString("ko-KR")}명
+              {isPrivate ? "비공개 그룹" : "공개 그룹"} ·{" "}
+              {isMember ? (
+                <button
+                  type="button"
+                  className="hover:underline md:cursor-default md:hover:no-underline"
+                  onClick={() => setTab("members")}
+                >
+                  멤버 {group.member_count.toLocaleString("ko-KR")}명
+                </button>
+              ) : (
+                `멤버 ${group.member_count.toLocaleString("ko-KR")}명`
+              )}
             </p>
             {group.identity_policy === "always_anonymous" ? (
               <p className="mt-1 text-xs text-muted-foreground">
@@ -179,9 +197,10 @@ export function GroupDetailScreen({
                   variant="ghost"
                   size="icon-sm"
                   aria-label="게시물 검색"
+                  className="hidden md:inline-flex"
                   onClick={() => setSearchOpen(true)}
                 >
-                  <SearchIcon />
+                  <SearchIcon aria-hidden="true" />
                 </Button>
               ) : null}
               {isMember ? (
@@ -218,6 +237,14 @@ export function GroupDetailScreen({
                         </DropdownMenuRadioItem>
                       </DropdownMenuRadioGroup>
                     </DropdownMenuGroup>
+                    {canCurate ? (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => setTab("settings")}>
+                          그룹 설정
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
                     <DropdownMenuSeparator />
                     <DropdownMenuGroup>
                       <DropdownMenuLabel>내 그룹 설정</DropdownMenuLabel>
@@ -303,13 +330,24 @@ export function GroupDetailScreen({
               />
             </div>
           ) : tab === "members" ? (
-            <EmptyTabCard
-              icon={<UsersIcon aria-hidden />}
-              title={`멤버 ${group.member_count.toLocaleString("ko-KR")}`}
-              description="멤버 명부 기능을 준비하고 있습니다."
-            />
+            memberPage ? (
+              <GroupMembersPanel
+                groupId={group.group_id}
+                identityPolicy={group.identity_policy}
+                viewerRole={group.member_role}
+                initialPage={memberPage}
+                memberCount={group.member_count}
+                joinRequests={joinRequests}
+              />
+            ) : (
+              <EmptyTabCard
+                icon={<UsersIcon aria-hidden />}
+                title={`멤버 ${group.member_count.toLocaleString("ko-KR")}`}
+                description="멤버 명부 기능을 준비하고 있습니다."
+              />
+            )
           ) : (
-            <CategoryManager groupId={group.group_id} categories={categories} />
+            <GroupSettings group={group} categories={categories} />
           )}
         </div>
 

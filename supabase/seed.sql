@@ -132,7 +132,7 @@ insert into public.profiles (
 )
 values
   (
-    '30000000-0000-0000-0000-000000000001',
+    'kim-admin',
     '김관리',
     'admin',
     'alumni',
@@ -142,7 +142,7 @@ values
     'accepted'
   ),
   (
-    '30000000-0000-0000-0000-000000000002',
+    'hanbyeol-25',
     '이한별',
     'member',
     'alumni',
@@ -152,7 +152,7 @@ values
     'accepted'
   ),
   (
-    '30000000-0000-0000-0000-000000000003',
+    'saebyeok-24',
     '박새벽',
     'member',
     'alumni',
@@ -162,7 +162,7 @@ values
     'accepted'
   ),
   (
-    '30000000-0000-0000-0000-000000000004',
+    'pureum-23',
     '최푸름',
     'member',
     'alumni',
@@ -171,7 +171,7 @@ values
     'international',
     'accepted'
   )
-on conflict (pub_id) do update set
+on conflict (lower(pub_id)) do update set
   name = excluded.name,
   role = excluded.role,
   status = excluded.status,
@@ -200,7 +200,7 @@ values
     'open',
     'identified',
     'staff',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000001')
+    (select id from public.profiles where pub_id = 'kim-admin')
   ),
   (
     '20000000-0000-0000-0000-000000000002',
@@ -224,7 +224,7 @@ values
     'open',
     'optional_anonymous',
     'members',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000001')
+    (select id from public.profiles where pub_id = 'kim-admin')
   ),
   (
     '20000000-0000-0000-0000-000000000004',
@@ -236,7 +236,7 @@ values
     'request',
     'always_anonymous',
     'members',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000002')
+    (select id from public.profiles where pub_id = 'hanbyeol-25')
   ),
   (
     '20000000-0000-0000-0000-000000000005',
@@ -248,7 +248,7 @@ values
     'open',
     'identified',
     'members',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000003')
+    (select id from public.profiles where pub_id = 'saebyeok-24')
   ),
   (
     '20000000-0000-0000-0000-000000000006',
@@ -260,7 +260,7 @@ values
     'request',
     'optional_anonymous',
     'members',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000004')
+    (select id from public.profiles where pub_id = 'pureum-23')
   )
 on conflict (id) do update set
   name = excluded.name,
@@ -274,7 +274,7 @@ insert into public.group_memberships (group_id, profile_id, role, pinned_at)
 values
   (
     '20000000-0000-0000-0000-000000000001',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000001'),
+    (select id from public.profiles where pub_id = 'kim-admin'),
     'owner',
     null
   ),
@@ -292,61 +292,61 @@ values
   ),
   (
     '20000000-0000-0000-0000-000000000003',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000001'),
+    (select id from public.profiles where pub_id = 'kim-admin'),
     'owner',
     null
   ),
   (
     '20000000-0000-0000-0000-000000000003',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000002'),
+    (select id from public.profiles where pub_id = 'hanbyeol-25'),
     'member',
     null
   ),
   (
     '20000000-0000-0000-0000-000000000003',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000003'),
+    (select id from public.profiles where pub_id = 'saebyeok-24'),
     'member',
     null
   ),
   (
     '20000000-0000-0000-0000-000000000003',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000004'),
+    (select id from public.profiles where pub_id = 'pureum-23'),
     'member',
     null
   ),
   (
     '20000000-0000-0000-0000-000000000004',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000002'),
+    (select id from public.profiles where pub_id = 'hanbyeol-25'),
     'owner',
     null
   ),
   (
     '20000000-0000-0000-0000-000000000004',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000003'),
+    (select id from public.profiles where pub_id = 'saebyeok-24'),
     'member',
     null
   ),
   (
     '20000000-0000-0000-0000-000000000004',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000004'),
+    (select id from public.profiles where pub_id = 'pureum-23'),
     'member',
     null
   ),
   (
     '20000000-0000-0000-0000-000000000005',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000003'),
+    (select id from public.profiles where pub_id = 'saebyeok-24'),
     'owner',
     null
   ),
   (
     '20000000-0000-0000-0000-000000000005',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000004'),
+    (select id from public.profiles where pub_id = 'pureum-23'),
     'member',
     null
   ),
   (
     '20000000-0000-0000-0000-000000000006',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000004'),
+    (select id from public.profiles where pub_id = 'pureum-23'),
     'owner',
     null
   )
@@ -381,7 +381,7 @@ values
     '이번 주 프로젝트 일정을 확인해 주세요.',
     '20000000-0000-0000-0000-000000000003', '이번 주 프로젝트 일정',
     '80000000-0000-0000-0000-000000000002', 'identified',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000001'),
+    (select id from public.profiles where pub_id = 'kim-admin'),
     '2026-08-13 01:00:00+00', '2026-08-13 00:00:00+00', '2026-08-13 00:00:00+00'
   ),
   (
@@ -408,14 +408,14 @@ insert into private.post_authors (post_id, profile_id)
 values
   (
     '90000000-0000-0000-0000-000000000001',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000001')
+    (select id from public.profiles where pub_id = 'kim-admin')
   ),
   (
     '90000000-0000-0000-0000-000000000002',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000002')
+    (select id from public.profiles where pub_id = 'hanbyeol-25')
   ),
   (
     '90000000-0000-0000-0000-000000000003',
-    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000001')
+    (select id from public.profiles where pub_id = 'kim-admin')
   )
 on conflict (post_id) do update set profile_id = excluded.profile_id;

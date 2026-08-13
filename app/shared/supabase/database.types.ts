@@ -72,16 +72,19 @@ export type Database = {
       group_join_requests: {
         Row: {
           group_id: string
+          id: string
           profile_id: number
           requested_at: string
         }
         Insert: {
           group_id: string
+          id?: string
           profile_id: number
           requested_at?: string
         }
         Update: {
           group_id?: string
+          id?: string
           profile_id?: number
           requested_at?: string
         }
@@ -102,9 +105,66 @@ export type Database = {
           },
         ]
       }
+      group_media_objects: {
+        Row: {
+          cleanup_lease_expires_at: string | null
+          cleanup_lease_id: string | null
+          created_at: string
+          deleted_at: string | null
+          group_id: string
+          height: number
+          id: string
+          object_path: string
+          ready_at: string | null
+          size_bytes: number
+          slot: Database["public"]["Enums"]["group_media_slot"]
+          status: Database["public"]["Enums"]["group_media_status"]
+          width: number
+        }
+        Insert: {
+          cleanup_lease_expires_at?: string | null
+          cleanup_lease_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          group_id: string
+          height: number
+          id?: string
+          object_path: string
+          ready_at?: string | null
+          size_bytes: number
+          slot: Database["public"]["Enums"]["group_media_slot"]
+          status?: Database["public"]["Enums"]["group_media_status"]
+          width: number
+        }
+        Update: {
+          cleanup_lease_expires_at?: string | null
+          cleanup_lease_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          group_id?: string
+          height?: number
+          id?: string
+          object_path?: string
+          ready_at?: string | null
+          size_bytes?: number
+          slot?: Database["public"]["Enums"]["group_media_slot"]
+          status?: Database["public"]["Enums"]["group_media_status"]
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_media_objects_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_memberships: {
         Row: {
           group_id: string
+          id: string
           joined_at: string
           pinned_at: string | null
           profile_id: number
@@ -112,6 +172,7 @@ export type Database = {
         }
         Insert: {
           group_id: string
+          id?: string
           joined_at?: string
           pinned_at?: string | null
           profile_id: number
@@ -119,6 +180,7 @@ export type Database = {
         }
         Update: {
           group_id?: string
+          id?: string
           joined_at?: string
           pinned_at?: string | null
           profile_id?: number
@@ -469,6 +531,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      approve_group_join_request: {
+        Args: { p_group_id: string; p_request_id: string }
+        Returns: undefined
+      }
       claim_post_attachment_cleanup: {
         Args: { p_lease_seconds?: number; p_limit?: number }
         Returns: {
@@ -563,6 +629,7 @@ export type Database = {
           sort_rank: number
         }[]
       }
+      finalize_group_media: { Args: { p_media_id: string }; Returns: string }
       finalize_post_attachment: {
         Args: { p_attachment_id: string }
         Returns: {
@@ -653,6 +720,36 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      list_group_join_requests: {
+        Args: { p_group_id: string }
+        Returns: {
+          avatar_path: string
+          cohort: number
+          name: string
+          pub_id: string
+          request_id: string
+          requested_at: string
+        }[]
+      }
+      list_group_members: {
+        Args: {
+          p_after_joined_at?: string
+          p_after_membership_id?: string
+          p_after_role?: Database["public"]["Enums"]["group_member_role"]
+          p_group_id: string
+          p_limit?: number
+          p_query?: string
+        }
+        Returns: {
+          avatar_path: string
+          cohort: number
+          joined_at: string
+          membership_id: string
+          name: string
+          pub_id: string
+          role: Database["public"]["Enums"]["group_member_role"]
+        }[]
+      }
       list_group_posts: {
         Args: {
           p_category_id?: string
@@ -734,6 +831,19 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      prepare_group_media: {
+        Args: {
+          p_group_id: string
+          p_height: number
+          p_size_bytes: number
+          p_slot: Database["public"]["Enums"]["group_media_slot"]
+          p_width: number
+        }
+        Returns: {
+          media_id: string
+          object_path: string
+        }[]
+      }
       prepare_post_attachment: {
         Args: {
           p_height?: number
@@ -769,6 +879,17 @@ export type Database = {
         }
       }
       publish_group_post: { Args: { p_post_id: string }; Returns: string }
+      reject_group_join_request: {
+        Args: { p_group_id: string; p_request_id: string }
+        Returns: undefined
+      }
+      remove_group_media: {
+        Args: {
+          p_group_id: string
+          p_slot: Database["public"]["Enums"]["group_media_slot"]
+        }
+        Returns: undefined
+      }
       reorder_post_attachments: {
         Args: { p_attachment_ids: string[]; p_post_id: string }
         Returns: {
@@ -874,6 +995,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      transfer_group_ownership: {
+        Args: { p_group_id: string; p_target_membership_id: string }
+        Returns: undefined
+      }
       update_group_category: {
         Args: { p_category_id: string; p_name: string; p_position: number }
         Returns: {
@@ -891,6 +1016,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_group_member_role: {
+        Args: {
+          p_group_id: string
+          p_membership_id: string
+          p_role: Database["public"]["Enums"]["group_member_role"]
+        }
+        Returns: undefined
+      }
       update_group_post: {
         Args: {
           p_body: string
@@ -899,6 +1032,24 @@ export type Database = {
           p_title: string
         }
         Returns: string
+      }
+      update_group_settings: {
+        Args: {
+          p_description: string
+          p_group_id: string
+          p_identity_policy: Database["public"]["Enums"]["group_identity_policy"]
+          p_join_policy: Database["public"]["Enums"]["group_join_policy"]
+          p_name: string
+          p_posting_policy: Database["public"]["Enums"]["group_posting_policy"]
+        }
+        Returns: {
+          description: string
+          identity_policy: Database["public"]["Enums"]["group_identity_policy"]
+          join_policy: Database["public"]["Enums"]["group_join_policy"]
+          name: string
+          posting_policy: Database["public"]["Enums"]["group_posting_policy"]
+          updated_at: string
+        }[]
       }
     }
     Enums: {
@@ -909,6 +1060,8 @@ export type Database = {
         | "always_anonymous"
       group_join_policy: "open" | "request" | "invite_only"
       group_kind: "official" | "unofficial"
+      group_media_slot: "icon" | "cover"
+      group_media_status: "pending" | "ready" | "deleted"
       group_member_role: "owner" | "admin" | "manager" | "member"
       group_posting_policy: "members" | "staff"
       post_attachment_status: "pending" | "ready" | "deleted"
@@ -1057,6 +1210,8 @@ export const Constants = {
       ],
       group_join_policy: ["open", "request", "invite_only"],
       group_kind: ["official", "unofficial"],
+      group_media_slot: ["icon", "cover"],
+      group_media_status: ["pending", "ready", "deleted"],
       group_member_role: ["owner", "admin", "manager", "member"],
       group_posting_policy: ["members", "staff"],
       post_attachment_status: ["pending", "ready", "deleted"],

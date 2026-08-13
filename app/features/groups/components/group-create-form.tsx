@@ -317,11 +317,15 @@ export function GroupCreateForm({
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="그룹을 만들까요?"
-        description={
+        description={`${
           confirmName
-            ? `"${confirmName}" 그룹을 만듭니다. 그룹 종류와 주소는 만든 뒤에 바꿀 수 없습니다.`
-            : "입력한 정보로 그룹을 만듭니다. 그룹 종류와 주소는 만든 뒤에 바꿀 수 없습니다."
-        }
+            ? `"${confirmName}" 그룹을 만듭니다.`
+            : "입력한 정보로 그룹을 만듭니다."
+        } 그룹 종류와 주소는 만든 뒤에 바꿀 수 없습니다.${
+          joinPolicy === "invite_only"
+            ? " 나중에 공개할 수 있지만, 공개한 뒤에는 다시 비공개로 변경할 수 없습니다."
+            : " 공개 그룹은 만든 뒤 비공개로 변경할 수 없습니다."
+        }`}
         details={
           <dl className="flex flex-col gap-1 text-sm">
             <SummaryRow label="종류">{getGroupKindLabel(kind)}</SummaryRow>

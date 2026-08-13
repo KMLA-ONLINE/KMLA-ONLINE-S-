@@ -74,7 +74,7 @@ select is(
 );
 select is(
   (select author_pub_id from public.list_group_posts('20000000-0000-0000-0000-000000000002') where title = '익명 글'),
-  null::uuid, 'anonymous response never exposes actual identity'
+  null::text, 'anonymous response never exposes actual identity'
 );
 select ok(
   (select is_author from public.list_group_posts('20000000-0000-0000-0000-000000000002') where title = '익명 글'),
@@ -153,7 +153,7 @@ select is(
 );
 select is(
   (select author_pub_id from public.get_group_post((select id from public.posts where title = '운영진 글'))),
-  null::uuid, 'staff response never exposes actual identity'
+  null::text, 'staff response never exposes actual identity'
 );
 select is(
   (select author_name from public.get_group_post((select id from public.posts where title = '운영진 글'))),

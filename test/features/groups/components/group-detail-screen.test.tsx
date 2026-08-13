@@ -71,7 +71,7 @@ describe("GroupDetailScreen", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows settings to managers but hides an anonymous member directory", () => {
+  it("shows settings and an anonymized member directory to managers", () => {
     const { unmount } = renderRoute(DetailHarness, {
       path: "/groups/:slug",
       initialEntries: ["/groups/test-group?tab=members"],
@@ -93,12 +93,12 @@ describe("GroupDetailScreen", () => {
       initialEntries: ["/groups/test-group?tab=members"],
     });
 
-    expect(
-      screen.queryByRole("button", { name: "멤버" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "멤버" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "그룹 설정" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("아직 게시물이 없습니다")).toBeInTheDocument();
+    expect(
+      screen.getByText("멤버 명부 기능을 준비하고 있습니다."),
+    ).toBeInTheDocument();
   });
 });

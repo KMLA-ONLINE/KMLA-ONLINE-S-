@@ -21,7 +21,7 @@ insert into auth.users (
 );
 update public.profiles
 set auth_user_id = '10000000-0000-0000-0000-000000000002'
-where pub_id = '30000000-0000-0000-0000-000000000001';
+where pub_id = 'kim-admin';
 insert into public.group_memberships (group_id, profile_id, role)
 select '20000000-0000-0000-0000-000000000002', id, 'member'
 from public.profiles

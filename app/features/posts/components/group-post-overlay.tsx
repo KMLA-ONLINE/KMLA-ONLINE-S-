@@ -434,10 +434,7 @@ function AttachmentEditor({
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-medium">첨부</h2>
-          <p className="text-xs text-muted-foreground">
-            최대 10개, 데스크톱에서는 끌어놓을 수 있습니다.
-          </p>
+          <h2 className="font-medium">첨부 / 최대 10개</h2>
         </div>
         <div className="flex gap-2">
           <Button

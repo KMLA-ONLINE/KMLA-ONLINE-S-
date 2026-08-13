@@ -9,6 +9,12 @@ interface CleanupItem {
   lease_id: string;
 }
 
+interface GroupMediaCleanupItem {
+  media_id: string;
+  object_path: string;
+  lease_id: string;
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST")
     return new Response("Method not allowed", { status: 405 });
@@ -33,6 +39,12 @@ Deno.serve(async (request) => {
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
   const items = (data ?? []) as CleanupItem[];
+  const { data: groupMediaData, error: groupMediaError } = await supabase.rpc(
+    "claim_group_media_cleanup",
+    { p_limit: 100, p_lease_seconds: 300 },
+  );
+  if (groupMediaError)
+    return Response.json({ error: groupMediaError.message }, { status: 500 });
   let removed = 0;
   let failed = 0;
 
@@ -56,10 +68,32 @@ Deno.serve(async (request) => {
     else failed += 1;
   }
 
+  const groupMediaItems = (groupMediaData ?? []) as GroupMediaCleanupItem[];
+  for (const item of groupMediaItems) {
+    const { error: removeError } = await supabase.storage
+      .from("group-media")
+      .remove([item.object_path]);
+    const objectDeleted = !removeError;
+    const { error: completeError } = await supabase.rpc(
+      "complete_group_media_cleanup",
+      {
+        p_media_id: item.media_id,
+        p_lease_id: item.lease_id,
+        p_object_deleted: objectDeleted,
+      },
+    );
+    if (objectDeleted && !completeError) removed += 1;
+    else failed += 1;
+  }
+
   console.log("post attachment cleanup completed", {
-    claimed: items.length,
+    claimed: items.length + groupMediaItems.length,
     removed,
     failed,
   });
-  return Response.json({ claimed: items.length, removed, failed });
+  return Response.json({
+    claimed: items.length + groupMediaItems.length,
+    removed,
+    failed,
+  });
 });

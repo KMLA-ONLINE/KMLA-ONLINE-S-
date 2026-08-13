@@ -126,7 +126,7 @@ select lives_ok(
       '60000000-0000-0000-0000-000000000001',
       'identified',
       (select id from public.profiles
-       where pub_id = '30000000-0000-0000-0000-000000000001'),
+       where pub_id = 'kim-admin'),
       now()
     )$$,
   'an identified group post satisfies the common shape'
@@ -165,7 +165,7 @@ insert into private.post_authors (post_id, profile_id)
 values (
   '70000000-0000-0000-0000-000000000001',
   (select id from public.profiles
-   where pub_id = '30000000-0000-0000-0000-000000000001')
+   where pub_id = 'kim-admin')
 );
 
 select is(
@@ -210,7 +210,7 @@ select throws_ok(
       '작성자가 새는 익명 글',
       'anonymous',
       (select id from public.profiles
-       where pub_id = '30000000-0000-0000-0000-000000000002')
+       where pub_id = 'hanbyeol-25')
     )$$,
   '23514',
   null,
@@ -283,10 +283,10 @@ select lives_ok(
       '70000000-0000-0000-0000-000000000004',
       'profile',
       (select id from public.profiles
-       where pub_id = '30000000-0000-0000-0000-000000000003'),
+       where pub_id = 'saebyeok-24'),
       'identified',
       (select id from public.profiles
-       where pub_id = '30000000-0000-0000-0000-000000000002'),
+       where pub_id = 'hanbyeol-25'),
       'public',
       now()
     )$$,
@@ -311,7 +311,7 @@ select lives_ok(
       'private',
       now()
     from public.profiles as profile
-    where profile.pub_id = '30000000-0000-0000-0000-000000000002'$$,
+     where profile.pub_id = 'hanbyeol-25'$$,
   'a private profile post may target its author'
 );
 
@@ -325,10 +325,10 @@ select throws_ok(
     ) values (
       'profile',
       (select id from public.profiles
-       where pub_id = '30000000-0000-0000-0000-000000000003'),
+       where pub_id = 'saebyeok-24'),
       'identified',
       (select id from public.profiles
-       where pub_id = '30000000-0000-0000-0000-000000000002'),
+       where pub_id = 'hanbyeol-25'),
       'private'
     )$$,
   '23514',
@@ -349,11 +349,11 @@ select throws_ok(
       'profile',
       '20000000-0000-0000-0000-000000000001',
       (select id from public.profiles
-       where pub_id = '30000000-0000-0000-0000-000000000002'),
+       where pub_id = 'hanbyeol-25'),
       '개인 글 제목',
       'identified',
       (select id from public.profiles
-       where pub_id = '30000000-0000-0000-0000-000000000002'),
+       where pub_id = 'hanbyeol-25'),
       'public'
     )$$,
   '23514',

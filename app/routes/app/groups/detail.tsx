@@ -3,14 +3,21 @@ import { data, Outlet, redirect } from "react-router";
 import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import {
   cancelGroupJoinRequest,
+  approveGroupJoinRequest,
   getGroupErrorMessage,
   GroupDetailMobileHeader,
   GroupDetailScreen,
   joinGroup,
   leaveGroup,
+  listGroupJoinRequests,
+  listGroupMembers,
   loadGroupDetail,
   requestGroupJoin,
+  rejectGroupJoinRequest,
   setGroupPinned,
+  setGroupMemberRole,
+  transferGroupOwnership,
+  updateGroupSettings,
 } from "~/features/groups";
 import {
   createGroupCategory,
@@ -35,17 +42,30 @@ export const handle = defineAppChrome({
  * `groups/:slug`. 게시물 상세(`posts/:postId`)를 자식으로 가지므로 `<Outlet />`을 그린다 —
  * 게시물을 열어도 그룹 페이지가 언마운트되지 않아 스크롤 위치와 로더 데이터가 유지된다.
  */
-export async function clientLoader({ params }: Route.ClientLoaderArgs) {
+export async function clientLoader({
+  params,
+  request,
+}: Route.ClientLoaderArgs) {
   const group = await loadGroupDetail(params.slug);
   if (!group) throw new Response("그룹을 찾을 수 없습니다.", { status: 404 });
   if (group.membership_state !== "member") {
     return { group, categories: [], posts: { posts: [], nextCursor: null } };
   }
-  const [categories, posts] = await Promise.all([
+  const searchParams = new URL(request.url).searchParams;
+  const memberTab = searchParams.get("tab") === "members";
+  const canModerate =
+    group.member_role === "owner" || group.member_role === "admin";
+  const [categories, posts, memberPage, joinRequests] = await Promise.all([
     listGroupCategories(group.group_id),
     listGroupPosts(group.group_id),
+    memberTab
+      ? listGroupMembers(group.group_id, searchParams.get("memberQuery") ?? "")
+      : Promise.resolve(undefined),
+    memberTab && canModerate
+      ? listGroupJoinRequests(group.group_id)
+      : Promise.resolve([]),
   ]);
-  return { group, categories, posts };
+  return { group, categories, posts, memberPage, joinRequests };
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
@@ -61,9 +81,15 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     intent === "move-category-up" ||
     intent === "move-category-down" ||
     intent === "delete-category";
+  const profileIntent =
+    intent === "pin" ||
+    intent === "join" ||
+    intent === "request" ||
+    intent === "cancel-request" ||
+    intent === "leave";
   if (
-    !postIntent &&
-    (typeof groupId !== "string" || !Number.isSafeInteger(profileId))
+    (!postIntent && typeof groupId !== "string") ||
+    (profileIntent && !Number.isSafeInteger(profileId))
   ) {
     return data({ error: "그룹을 찾을 수 없습니다." }, { status: 400 });
   }
@@ -125,6 +151,66 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
       if (typeof categoryId !== "string")
         return data({ error: "카테고리를 찾을 수 없습니다." }, { status: 400 });
       await deleteGroupCategory(categoryId);
+    } else if (
+      intent === "approve-join-request" ||
+      intent === "reject-join-request"
+    ) {
+      const requestId = formData.get("requestId");
+      if (typeof groupId !== "string" || typeof requestId !== "string")
+        return data(
+          { error: "가입 요청을 찾을 수 없습니다." },
+          { status: 400 },
+        );
+      if (intent === "approve-join-request")
+        await approveGroupJoinRequest(groupId, requestId);
+      else await rejectGroupJoinRequest(groupId, requestId);
+    } else if (intent === "set-member-role") {
+      const memberId = formData.get("memberId");
+      const role = formData.get("role");
+      if (
+        typeof groupId !== "string" ||
+        typeof memberId !== "string" ||
+        (role !== "admin" && role !== "manager" && role !== "member")
+      )
+        return data(
+          { error: "멤버 역할을 다시 확인해 주세요." },
+          { status: 400 },
+        );
+      await setGroupMemberRole(groupId, memberId, role);
+    } else if (intent === "transfer-ownership") {
+      const memberId = formData.get("memberId");
+      if (typeof groupId !== "string" || typeof memberId !== "string")
+        return data({ error: "멤버를 찾을 수 없습니다." }, { status: 400 });
+      await transferGroupOwnership(groupId, memberId);
+    } else if (intent === "update-settings") {
+      const name = formData.get("name");
+      const description = formData.get("description");
+      const joinPolicy = formData.get("joinPolicy");
+      const identityPolicy = formData.get("identityPolicy");
+      const postingPolicy = formData.get("postingPolicy");
+      if (
+        typeof groupId !== "string" ||
+        typeof name !== "string" ||
+        typeof description !== "string" ||
+        (joinPolicy !== "open" &&
+          joinPolicy !== "request" &&
+          joinPolicy !== "invite_only") ||
+        (identityPolicy !== "identified" &&
+          identityPolicy !== "optional_anonymous" &&
+          identityPolicy !== "always_anonymous") ||
+        (postingPolicy !== "members" && postingPolicy !== "staff")
+      )
+        return data(
+          { error: "그룹 설정을 다시 확인해 주세요." },
+          { status: 400 },
+        );
+      await updateGroupSettings(groupId, {
+        name: name.trim(),
+        description,
+        joinPolicy,
+        identityPolicy,
+        postingPolicy,
+      });
     } else if (intent === "pin") {
       if (typeof groupId !== "string")
         return data({ error: "그룹을 찾을 수 없습니다." }, { status: 400 });
@@ -178,6 +264,9 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
       <GroupDetailMobileHeader
         name={loaderData.group.name}
         iconPath={loaderData.group.icon_path}
+        groupId={loaderData.group.group_id}
+        slug={loaderData.group.slug}
+        canSearch={loaderData.group.membership_state === "member"}
       />
       <GroupDetailScreen
         group={loaderData.group}
@@ -185,6 +274,8 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
         isTeacher={profile.type === "teacher"}
         categories={loaderData.categories}
         posts={loaderData.posts}
+        memberPage={loaderData.memberPage}
+        joinRequests={loaderData.joinRequests}
       />
       <Outlet />
     </>

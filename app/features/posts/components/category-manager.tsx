@@ -3,18 +3,9 @@ import { useState } from "react";
 import { useFetcher } from "react-router";
 
 import type { GroupCategory } from "~/features/posts/model/types";
+import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { Button } from "~/shared/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/shared/ui/dialog";
 import { Input } from "~/shared/ui/input";
-import { Spinner } from "~/shared/ui/spinner";
 
 export function CategoryManager({
   groupId,
@@ -24,16 +15,50 @@ export function CategoryManager({
   categories: GroupCategory[];
 }) {
   const fetcher = useFetcher<{ error?: string }>();
-  const [deleteTarget, setDeleteTarget] = useState<GroupCategory | null>(null);
+  const [pendingChange, setPendingChange] = useState<{
+    data: FormData;
+    title: string;
+    description: string;
+    confirmLabel: string;
+    destructive?: boolean;
+  } | null>(null);
   const pending = fetcher.state !== "idle";
 
+  const holdSubmit = (
+    event: React.FormEvent<HTMLFormElement>,
+    title: string,
+    description: string,
+    confirmLabel: string,
+  ) => {
+    event.preventDefault();
+    const submitter =
+      event.nativeEvent instanceof SubmitEvent
+        ? event.nativeEvent.submitter
+        : null;
+    const data = new FormData(event.currentTarget);
+    if (submitter instanceof HTMLButtonElement && submitter.name) {
+      data.set(submitter.name, submitter.value);
+    }
+    setPendingChange({ data, title, description, confirmLabel });
+  };
+
   return (
-    <section className="rounded-none border-y bg-card p-4 md:rounded-xl md:border">
-      <h2 className="font-semibold">카테고리 관리</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        게시물 분류를 추가하고 표시 순서를 정할 수 있습니다.
-      </p>
-      <fetcher.Form method="post" className="mt-4 flex gap-2">
+    <section className="overflow-hidden rounded-none border-y bg-card shadow-xs ring-foreground/10 md:rounded-xl md:border md:ring-1">
+      <header className="border-b px-4 py-4 sm:px-6 sm:py-5">
+        <h2 className="font-heading text-base font-medium">게시물 카테고리</h2>
+      </header>
+      <fetcher.Form
+        method="post"
+        className="flex gap-2 px-4 pt-4 sm:px-6 sm:pt-5"
+        onSubmit={(event) =>
+          holdSubmit(
+            event,
+            "카테고리 생성",
+            "입력한 이름으로 카테고리를 생성할까요?",
+            "생성",
+          )
+        }
+      >
         <input type="hidden" name="intent" value="create-category" />
         <input type="hidden" name="groupId" value={groupId} />
         <Input
@@ -41,18 +66,49 @@ export function CategoryManager({
           maxLength={30}
           required
           aria-label="새 카테고리 이름"
-          placeholder="새 카테고리"
+          placeholder="새 카테고리 이름…"
+          autoComplete="off"
         />
         <Button type="submit" disabled={pending}>
           <PlusIcon /> 추가
         </Button>
       </fetcher.Form>
-      <div className="mt-4 flex flex-col gap-2">
+      <div className="mt-4 px-4 pb-4 sm:px-6 sm:pb-5">
+        {categories.length === 0 ? (
+          <p className="rounded-lg px-4 py-8 text-center text-sm text-muted-foreground">
+            아직 카테고리가 없습니다.
+          </p>
+        ) : null}
         {categories.map((category, index) => (
           <fetcher.Form
             key={category.id}
             method="post"
-            className="flex items-center gap-1.5"
+            className="grid grid-cols-[minmax(0,1fr)_repeat(4,auto)] items-center gap-1.5 border-b py-2 last:border-b-0"
+            onSubmit={(event) => {
+              const submitter = event.nativeEvent.submitter;
+              if (!(submitter instanceof HTMLButtonElement)) return;
+              if (submitter.value === "rename-category") {
+                holdSubmit(
+                  event,
+                  "카테고리 저장",
+                  `‘${category.name}’ 카테고리의 변경 사항을 저장할까요?`,
+                  "저장",
+                );
+                return;
+              }
+              if (submitter.value === "delete-category") {
+                event.preventDefault();
+                const data = new FormData(event.currentTarget);
+                data.set(submitter.name, submitter.value);
+                setPendingChange({
+                  data,
+                  title: "카테고리 삭제",
+                  description: `‘${category.name}’ 카테고리를 삭제할까요? 기존 게시물은 미분류로 남습니다.`,
+                  confirmLabel: "삭제",
+                  destructive: true,
+                });
+              }
+            }}
           >
             <input type="hidden" name="categoryId" value={category.id} />
             <input type="hidden" name="position" value={category.position} />
@@ -62,6 +118,7 @@ export function CategoryManager({
               maxLength={30}
               required
               aria-label={`${category.name} 이름`}
+              className="col-span-full sm:col-span-1"
             />
             <Button
               type="submit"
@@ -96,12 +153,13 @@ export function CategoryManager({
               <ArrowDownIcon />
             </Button>
             <Button
-              type="button"
+              type="submit"
               size="icon-sm"
               variant="destructive"
               aria-label={`${category.name} 삭제`}
+              name="intent"
+              value="delete-category"
               disabled={pending}
-              onClick={() => setDeleteTarget(category)}
             >
               <Trash2Icon />
             </Button>
@@ -109,43 +167,27 @@ export function CategoryManager({
         ))}
       </div>
       {fetcher.data?.error ? (
-        <p role="alert" className="mt-3 text-sm text-destructive">
+        <p
+          role="alert"
+          className="px-4 pb-4 text-sm text-destructive sm:px-6 sm:pb-5"
+        >
           {fetcher.data.error}
         </p>
       ) : null}
-      <Dialog
-        open={deleteTarget !== null}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>카테고리 삭제</DialogTitle>
-            <DialogDescription>
-              ‘{deleteTarget?.name}’ 카테고리를 삭제할까요? 기존 게시물은
-              미분류로 남습니다.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>
-              취소
-            </DialogClose>
-            <Button
-              variant="destructive"
-              disabled={pending}
-              onClick={() => {
-                if (!deleteTarget) return;
-                void fetcher.submit(
-                  { intent: "delete-category", categoryId: deleteTarget.id },
-                  { method: "post" },
-                );
-                setDeleteTarget(null);
-              }}
-            >
-              {pending ? <Spinner /> : null} 삭제
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {pendingChange ? (
+        <ConfirmDialog
+          title={pendingChange.title}
+          description={pendingChange.description}
+          confirmLabel={pendingChange.confirmLabel}
+          destructive={pendingChange.destructive}
+          pending={pending}
+          onCancel={() => setPendingChange(null)}
+          onConfirm={() => {
+            void fetcher.submit(pendingChange.data, { method: "post" });
+            setPendingChange(null);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

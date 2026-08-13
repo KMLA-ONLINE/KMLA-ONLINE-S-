@@ -25,7 +25,7 @@ values (
   'invite_only',
   'optional_anonymous',
   'members',
-  (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000002')
+  (select id from public.profiles where pub_id = 'hanbyeol-25')
 );
 
 insert into public.profiles (
@@ -40,7 +40,7 @@ insert into public.profiles (
   status
 )
 values (
-  '50000000-0000-0000-0000-000000000002',
+  'auto-student',
   '자동 가입 학생',
   'student',
   '240098',
@@ -130,7 +130,7 @@ select throws_ok(
     values (
       '20000000-0000-0000-0000-000000000005',
       (select id from public.profiles
-       where pub_id = '30000000-0000-0000-0000-000000000002')
+       where pub_id = 'hanbyeol-25')
     )$$,
   '42501',
   null,
@@ -142,7 +142,7 @@ select throws_ok(
     values (
       '20000000-0000-0000-0000-000000000006',
       (select id from public.profiles
-       where pub_id = '30000000-0000-0000-0000-000000000002')
+       where pub_id = 'hanbyeol-25')
     )$$,
   '42501',
   null,
@@ -317,7 +317,7 @@ insert into public.profiles (
   status
 )
 values (
-  '50000000-0000-0000-0000-000000000003',
+  'pending-student',
   '승인 대기 학생',
   'student',
   '240097',
@@ -330,7 +330,7 @@ values (
 
 update public.profiles
 set status = 'accepted'
-where pub_id = '50000000-0000-0000-0000-000000000003';
+where pub_id = 'pending-student';
 
 select is(
   (select member_count from public.groups where slug = 'db-official-check'),
@@ -340,7 +340,7 @@ select is(
 
 update public.profiles
 set type = 'alumni'
-where pub_id = '50000000-0000-0000-0000-000000000003';
+where pub_id = 'pending-student';
 
 select is(
   (select member_count from public.groups where slug = 'db-official-check'),
@@ -356,7 +356,7 @@ set
   gender = null,
   academic_track = null,
   birthday = null
-where pub_id = '50000000-0000-0000-0000-000000000003';
+where pub_id = 'pending-student';
 
 select is(
   (select member_count from public.groups where slug = 'db-official-check'),
@@ -372,7 +372,7 @@ set
   gender = 'male',
   academic_track = 'international',
   birthday = '2007-01-04'
-where pub_id = '50000000-0000-0000-0000-000000000003';
+where pub_id = 'pending-student';
 
 select is(
   (select member_count from public.groups where slug = 'db-official-check'),
@@ -382,7 +382,7 @@ select is(
 
 update public.profiles
 set status = 'withdrawn'
-where pub_id = '50000000-0000-0000-0000-000000000003';
+where pub_id = 'pending-student';
 
 select is(
   (select member_count from public.groups where slug = 'db-official-check'),
@@ -392,7 +392,7 @@ select is(
 
 update public.profiles
 set status = 'accepted'
-where pub_id = '50000000-0000-0000-0000-000000000003';
+where pub_id = 'pending-student';
 
 select is(
   (select member_count from public.groups where slug = 'db-official-check'),
@@ -402,7 +402,7 @@ select is(
 
 update public.profiles
 set deleted_at = now()
-where pub_id = '50000000-0000-0000-0000-000000000003';
+where pub_id = 'pending-student';
 
 select is(
   (select member_count from public.groups where slug = 'db-official-check'),
@@ -452,7 +452,7 @@ set role = 'owner'
 where group_id = (select id from public.groups where slug = 'db-official-check')
   and profile_id = (
     select id from public.profiles
-    where pub_id = '50000000-0000-0000-0000-000000000002'
+    where pub_id = 'auto-student'
   );
 
 update public.profiles
