@@ -171,7 +171,7 @@ select is(
 );
 select is(
   (select count(*) from public.list_group_posts(
-    '20000000-0000-0000-0000-000000000003', null, '2026-08-13 03:00:00+00', '90000000-0000-0000-0000-000000000003', 20
+    '20000000-0000-0000-0000-000000000003', null, '2026-08-13 03:00:00+00', '90000000-0000-0000-0000-000000000003', false, 20
   ) where is_pinned),
   0::bigint, 'cursor pages do not repeat pinned posts'
 );

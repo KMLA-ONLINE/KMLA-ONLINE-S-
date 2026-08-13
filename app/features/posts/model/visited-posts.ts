@@ -1,4 +1,4 @@
-const STORAGE_KEY = "kmla-online:visited-posts:v1";
+export const VISITED_POSTS_STORAGE_KEY = "kmla-online:visited-posts:v1";
 
 /**
  * 무한정 쌓이면 목록 하나 그리자고 수 MB짜리 JSON을 파싱하게 된다. 오래된 쪽부터 버린다 —
@@ -13,7 +13,7 @@ const MAX_VISITED = 500;
 export function readVisitedPosts(): string[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(VISITED_POSTS_STORAGE_KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -32,7 +32,10 @@ export function appendVisitedPost(current: string[], postId: string): string[] {
 export function writeVisitedPosts(postIds: string[]): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(postIds));
+    window.localStorage.setItem(
+      VISITED_POSTS_STORAGE_KEY,
+      JSON.stringify(postIds),
+    );
   } catch {
     // 용량 초과. 다음 방문에 다시 시도한다.
   }

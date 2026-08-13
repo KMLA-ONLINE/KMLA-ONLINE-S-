@@ -28,7 +28,7 @@ export function GroupMediaSettings({ group }: { group: GroupDetail }) {
         <CardTitle>그룹 프로필</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="overflow-hidden rounded-xl border bg-muted/40">
+        <div className="overflow-hidden rounded-xl border bg-white">
           <div className="relative aspect-[4/1] w-full overflow-hidden bg-gradient-to-br from-primary/25 via-primary/10 to-muted">
             {group.cover_path ? (
               <img
@@ -51,9 +51,9 @@ export function GroupMediaSettings({ group }: { group: GroupDetail }) {
             <GroupAvatar
               name={group.name}
               iconPath={group.icon_path}
-              className="-mt-7 size-16 rounded-xl border-4 border-card bg-card text-xl shadow-sm"
+              className="-mt-7 size-16 translate-y-2 rounded-xl text-xl"
             />
-            <div className="min-w-0 flex-1 pb-0.5">
+            <div className="min-w-0 flex-1 pb-2">
               <p className="truncate font-semibold">{group.name}</p>
               <p className="text-xs text-muted-foreground">
                 멤버 {group.member_count.toLocaleString("ko-KR")}명
@@ -96,12 +96,8 @@ function MediaField({
       bitmap.close();
       await replaceGroupMedia(group.group_id, slot, file, dimensions);
       await revalidator.revalidate();
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "이미지를 저장하지 못했습니다.",
-      );
+    } catch {
+      setError("이미지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setPending(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -125,12 +121,8 @@ function MediaField({
     try {
       await removeGroupMedia(group.group_id, slot);
       await revalidator.revalidate();
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "이미지를 제거하지 못했습니다.",
-      );
+    } catch {
+      setError("이미지를 제거하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setPending(false);
     }

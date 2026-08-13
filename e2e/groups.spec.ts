@@ -59,7 +59,7 @@ test("모바일에서도 그룹 핵심 동선과 뒤로가기를 제공한다", 
   await loginAsAcceptedStudent(page);
   await page.goto("/groups?tab=unofficial");
   await expect(page.getByRole("heading", { name: "인기 그룹" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "메이커스 랩" })).toBeHidden();
+  await expect(page.getByRole("link", { name: "메이커스 랩" })).toBeVisible();
   const myGroupRow = page
     .locator('[data-slot="group-summary-row"]')
     .filter({ has: page.getByRole("link", { name: "29기 수학 탐구" }) });
@@ -83,6 +83,11 @@ test("모바일에서도 그룹 핵심 동선과 뒤로가기를 제공한다", 
   await expect(
     page.locator('[data-slot="group-mobile-discover-card"]'),
   ).toHaveCount(1);
+  await expect(
+    page
+      .locator('[data-slot="group-mobile-discover-card"]')
+      .getByText(/즉시 가입/),
+  ).toBeVisible();
   await page.goto("/groups/makers-lab");
 
   await expect(

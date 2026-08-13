@@ -5,7 +5,7 @@ import { Link } from "react-router";
 import { PostEditedMark } from "~/features/posts/components/post-edited-mark";
 import { searchGroupPosts } from "~/features/posts/data/queries";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
-import type { GroupPost } from "~/features/posts/model/types";
+import type { GroupPostSearchResult } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
@@ -43,11 +43,12 @@ export function GroupPostSearchDialog({
 }) {
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
-  const [results, setResults] = useState<GroupPost[]>([]);
+  const [results, setResults] = useState<GroupPostSearchResult[]>([]);
   const [composing, setComposing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const requestId = useRef(0);
 
   // `autoFocus` 속성 대신 직접 포커스를 옮긴다. 속성은 마운트 시점이 브라우저마다 달라
   // dialog가 자리를 잡기 전에 발동하면 화면이 한 번 스크롤된다.
@@ -56,6 +57,7 @@ export function GroupPostSearchDialog({
   }, [open]);
 
   const close = () => {
+    requestId.current += 1;
     onOpenChange(false);
     // 닫으면 검색어와 결과를 버린다(기능 명세 §8.9). 다시 열었을 때 지난 검색이 남아 있으면
     // 지금 목록과 무관한 결과를 보고 있게 된다.
@@ -73,15 +75,19 @@ export function GroupPostSearchDialog({
     const normalized = query.normalize("NFC").trim();
     if (!normalized) return;
 
+    const currentRequest = ++requestId.current;
     setLoading(true);
     setError(null);
     try {
-      setResults(await searchGroupPosts(groupId, normalized));
+      const nextResults = await searchGroupPosts(groupId, normalized);
+      if (currentRequest !== requestId.current) return;
+      setResults(nextResults);
       setSubmittedQuery(normalized);
     } catch {
+      if (currentRequest !== requestId.current) return;
       setError("검색 결과를 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      if (currentRequest === requestId.current) setLoading(false);
     }
   };
 

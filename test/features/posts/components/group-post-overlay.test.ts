@@ -19,36 +19,51 @@ describe("needsPostIdentityConfirmation", () => {
 });
 
 describe("isPostDraftDirty", () => {
-  const initial = { title: "제목", body: "본문", categoryId: "category" };
+  const initial = {
+    title: "제목",
+    body: "본문",
+    categoryId: "category",
+    authorIdentity: "identified" as const,
+  };
 
-  it("only considers body and attachments for new posts", () => {
+  it("considers every entered field and attachments for new posts", () => {
+    for (const change of [
+      { title: "새 제목" },
+      { categoryId: "other" },
+      { authorIdentity: "anonymous" as const },
+    ]) {
+      expect(
+        isPostDraftDirty({
+          mode: "create",
+          initial: { ...initial, title: "", body: "", categoryId: "" },
+          title: "",
+          body: "",
+          categoryId: "",
+          authorIdentity: "identified",
+          attachmentsChanged: false,
+          ...change,
+        }),
+      ).toBe(true);
+    }
     expect(
       isPostDraftDirty({
         mode: "create",
-        initial,
-        title: "바꾼 제목",
-        body: "  ",
-        categoryId: "other",
-        attachmentsChanged: false,
-      }),
-    ).toBe(false);
-    expect(
-      isPostDraftDirty({
-        mode: "create",
-        initial,
+        initial: { ...initial, title: "", body: "", categoryId: "" },
         title: "",
         body: "작성 중",
         categoryId: "",
+        authorIdentity: "identified",
         attachmentsChanged: false,
       }),
     ).toBe(true);
     expect(
       isPostDraftDirty({
         mode: "create",
-        initial,
+        initial: { ...initial, title: "", body: "", categoryId: "" },
         title: "",
         body: "",
         categoryId: "",
+        authorIdentity: "identified",
         attachmentsChanged: true,
       }),
     ).toBe(true);
@@ -62,6 +77,7 @@ describe("isPostDraftDirty", () => {
         title: initial.title,
         body: initial.body,
         categoryId: initial.categoryId,
+        authorIdentity: initial.authorIdentity,
         attachmentsChanged: false,
       }),
     ).toBe(false);
@@ -70,6 +86,7 @@ describe("isPostDraftDirty", () => {
       { title: "다른 제목" },
       { body: "다른 본문" },
       { categoryId: "other" },
+      { authorIdentity: "staff" as const },
       { attachmentsChanged: true },
     ]) {
       expect(
@@ -79,6 +96,7 @@ describe("isPostDraftDirty", () => {
           title: initial.title,
           body: initial.body,
           categoryId: initial.categoryId,
+          authorIdentity: initial.authorIdentity,
           attachmentsChanged: false,
           ...change,
         }),

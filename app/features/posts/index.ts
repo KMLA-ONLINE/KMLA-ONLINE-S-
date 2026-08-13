@@ -40,14 +40,19 @@ export {
 } from "~/features/posts/model/attachments";
 export {
   extractPostPlainText,
+  fromPostEditorMarkdown,
+  normalizePostMarkdownSource,
   parsePostMarkdown,
   sanitizePostMarkdown,
+  toPostEditorMarkdown,
+  toPostRenderMarkdown,
 } from "~/features/posts/model/markdown";
 export type {
   GroupCategory,
   GroupPost,
   GroupPostDetail,
   GroupPostPage,
+  GroupPostSearchResult,
   PostFormErrors,
   PostFormValues,
   PostIdentity,

@@ -1,4 +1,4 @@
-import { startTransition, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 
 import { GroupCategoryChips } from "~/features/posts/components/group-category-chips";
@@ -34,46 +34,69 @@ export function GroupPostsPanel({
   categories: GroupCategory[];
   initialPage: GroupPostPage;
 }) {
-  const mutationFetcher = useFetcher();
+  const mutationFetcher = useFetcher<{ error?: string }>();
   const [viewMode] = usePostViewMode();
   const [posts, setPosts] = useState(initialPage.posts);
   const [cursor, setCursor] = useState(initialPage.nextCursor);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestId = useRef(0);
+  const loadingMore = useRef(false);
+  const [loadedInitialPage, setLoadedInitialPage] = useState(initialPage);
+
+  if (loadedInitialPage !== initialPage) {
+    setLoadedInitialPage(initialPage);
+    setPosts(initialPage.posts);
+    setCursor(initialPage.nextCursor);
+  }
+
+  useEffect(() => {
+    requestId.current += 1;
+  }, [initialPage]);
 
   const selectCategory = async (nextCategoryId: string | null) => {
+    const currentRequest = ++requestId.current;
     setCategoryId(nextCategoryId);
+    setCursor(null);
     setLoading(true);
     setError(null);
     try {
       const page = await listGroupPosts(groupId, {
         categoryId: nextCategoryId,
       });
+      if (currentRequest !== requestId.current) return;
       startTransition(() => {
         setPosts(page.posts);
         setCursor(page.nextCursor);
       });
     } catch {
+      if (currentRequest !== requestId.current) return;
       setError("게시물을 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      if (currentRequest === requestId.current) setLoading(false);
     }
   };
 
   const loadMore = async () => {
-    if (!cursor) return;
+    if (!cursor || loadingMore.current) return;
+    loadingMore.current = true;
+    const currentRequest = requestId.current;
     setLoading(true);
+    setError(null);
     try {
       const page = await listGroupPosts(groupId, { categoryId, cursor });
+      if (currentRequest !== requestId.current) return;
       startTransition(() => {
         setPosts((current) => [...current, ...page.posts]);
         setCursor(page.nextCursor);
       });
     } catch {
+      if (currentRequest !== requestId.current) return;
       setError("이전 게시물을 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      loadingMore.current = false;
+      if (currentRequest === requestId.current) setLoading(false);
     }
   };
 
@@ -106,6 +129,12 @@ export function GroupPostsPanel({
       {error ? (
         <p role="alert" className="px-4 text-sm text-destructive md:px-0">
           {error}
+        </p>
+      ) : null}
+
+      {mutationFetcher.data?.error ? (
+        <p role="alert" className="px-4 text-sm text-destructive md:px-0">
+          {mutationFetcher.data.error}
         </p>
       ) : null}
 

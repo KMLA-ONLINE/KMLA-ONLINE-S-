@@ -183,14 +183,14 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
         return data({ error: "멤버를 찾을 수 없습니다." }, { status: 400 });
       await transferGroupOwnership(groupId, memberId);
     } else if (intent === "update-settings") {
-      const name = formData.get("name");
+      const rawName = formData.get("name");
       const description = formData.get("description");
       const joinPolicy = formData.get("joinPolicy");
       const identityPolicy = formData.get("identityPolicy");
       const postingPolicy = formData.get("postingPolicy");
       if (
         typeof groupId !== "string" ||
-        typeof name !== "string" ||
+        typeof rawName !== "string" ||
         typeof description !== "string" ||
         (joinPolicy !== "open" &&
           joinPolicy !== "request" &&
@@ -204,8 +204,22 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
           { error: "그룹 설정을 다시 확인해 주세요." },
           { status: 400 },
         );
+      const name = rawName.trim();
+      if (
+        !name ||
+        Array.from(name).length > 50 ||
+        Array.from(description).length > 2000
+      ) {
+        return data(
+          {
+            error:
+              "그룹 이름은 1자 이상 50자 이하, 설명은 2,000자 이하로 입력해 주세요.",
+          },
+          { status: 400 },
+        );
+      }
       await updateGroupSettings(groupId, {
-        name: name.trim(),
+        name,
         description,
         joinPolicy,
         identityPolicy,

@@ -20,6 +20,7 @@ import {
   useBlocker,
   useNavigate,
   useNavigation,
+  useRevalidator,
 } from "react-router";
 
 import {
@@ -31,6 +32,7 @@ import {
   preparePostFiles,
   releasePostFile,
 } from "~/features/posts/model/attachments";
+import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
 import { PostBodyInput } from "~/features/posts/components/post-body-input";
 import { PostDetail } from "~/features/posts/components/post-detail";
 import type {
@@ -64,25 +66,27 @@ export function needsPostIdentityConfirmation(
 }
 
 export function isPostDraftDirty({
-  mode,
+  mode: _mode,
   initial,
   title,
   body,
   categoryId,
+  authorIdentity,
   attachmentsChanged,
 }: {
   mode: "create" | "edit";
-  initial: Pick<PostFormValues, "title" | "body" | "categoryId">;
+  initial: PostFormValues;
   title: string;
   body: string;
   categoryId: string;
+  authorIdentity: PostIdentity;
   attachmentsChanged: boolean;
 }): boolean {
-  if (mode === "create") return body.trim().length > 0 || attachmentsChanged;
   return (
     title !== initial.title ||
     body !== initial.body ||
     categoryId !== initial.categoryId ||
+    authorIdentity !== initial.authorIdentity ||
     attachmentsChanged
   );
 }
@@ -92,7 +96,7 @@ export function GroupPostOverlay({
   slug,
   groupName,
   groupId,
-  categories,
+  categories = [],
   post,
   values,
   errors,
@@ -103,7 +107,7 @@ export function GroupPostOverlay({
   slug: string;
   groupName: string;
   groupId: string;
-  categories: GroupCategory[];
+  categories?: GroupCategory[];
   post?: GroupPostDetail | null;
   values?: PostFormValues;
   errors?: PostFormErrors;
@@ -168,12 +172,14 @@ function PostEditor({
   onClose: () => void;
 }) {
   const navigate = useNavigate();
-  const initial = values ?? {
+  const revalidator = useRevalidator();
+  const original: PostFormValues = {
     title: post?.title ?? "",
     body: post?.body ?? "",
     categoryId: post?.category_id ?? "",
     authorIdentity: post?.author_identity ?? identities[0],
   };
+  const initial = values ?? original;
   const [formErrors, setFormErrors] = useState(errors);
   const [existing, setExisting] = useState(post?.attachments ?? []);
   const [removedIds, setRemovedIds] = useState(new Set<string>());
@@ -187,6 +193,7 @@ function PostEditor({
   const [draftTitle, setDraftTitle] = useState(initial.title);
   const [draftBody, setDraftBody] = useState(initial.body);
   const [draftCategoryId, setDraftCategoryId] = useState(initial.categoryId);
+  const [draftIdentity, setDraftIdentity] = useState(initial.authorIdentity);
   const [saving, setSaving] = useState(false);
   const [pendingIdentity, setPendingIdentity] = useState<PostFormValues | null>(
     null,
@@ -205,10 +212,11 @@ function PostEditor({
     );
   const dirty = isPostDraftDirty({
     mode,
-    initial,
+    initial: original,
     title: draftTitle,
     body: draftBody,
     categoryId: draftCategoryId,
+    authorIdentity: draftIdentity,
     attachmentsChanged,
   });
   const blocker = useBlocker(
@@ -288,6 +296,7 @@ function PostEditor({
               onProgress,
             );
       additions.forEach(releasePostFile);
+      await revalidator.revalidate();
       void navigate(`/groups/${slug}/posts/${postId}`, { replace: true });
     } catch (error) {
       setFormErrors({
@@ -311,7 +320,7 @@ function PostEditor({
     };
     const nextValues: PostFormValues = {
       title: text("title").trim(),
-      body: bodyRef.current.trim(),
+      body: normalizePostMarkdownSource(bodyRef.current),
       categoryId: text("categoryId"),
       authorIdentity: (text("authorIdentity") || "identified") as PostIdentity,
     };
@@ -378,6 +387,8 @@ function PostEditor({
           }
           if (target.name === "title") setDraftTitle(target.value);
           if (target.name === "categoryId") setDraftCategoryId(target.value);
+          if (target.name === "authorIdentity")
+            setDraftIdentity(target.value as PostIdentity);
         }}
         className="flex min-h-0 flex-1 flex-col"
         {...dropHandlers}
@@ -477,7 +488,7 @@ function PostEditor({
             <div className="flex min-h-[24rem] flex-1 flex-col pt-5">
               <Field error={formErrors?.body}>
                 <PostBodyInput
-                  initialValue={initial.body}
+                  value={draftBody}
                   onValueChange={(value) => {
                     bodyRef.current = value;
                     setDraftBody(value);

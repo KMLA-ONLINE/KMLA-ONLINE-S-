@@ -22,7 +22,7 @@ import { Badge } from "~/shared/ui/badge";
  * 이루어져 있어서다 — `-webkit-line-clamp`는 한 덩어리의 인라인 흐름만 자르므로 문단이
  * 두 개면 첫 문단만 잘리고 나머지는 그대로 나온다.
  */
-const COLLAPSED_BODY_CLASS = "max-h-32 overflow-hidden";
+const COLLAPSED_BODY_CLASS = "max-h-[66px] overflow-hidden";
 
 export function GroupPostCard({
   post,
@@ -144,8 +144,11 @@ export function GroupPostCard({
             "더 보기" 버튼을 쓰므로 여기에 role을 얹지 않는다. */}
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
         <div
+          data-testid="group-post-body"
           ref={measureBody}
-          onClick={() => {
+          onClick={(event) => {
+            if (!window.matchMedia("(pointer: coarse)").matches) return;
+            if ((event.target as Element).closest("a, button")) return;
             if (clampable || expanded) setExpanded((current) => !current);
           }}
           className={cn(

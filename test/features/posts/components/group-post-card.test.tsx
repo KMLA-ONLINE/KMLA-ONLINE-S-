@@ -11,9 +11,9 @@ import { renderRoute } from "../../../router";
  */
 function stubOverflow(overflowing: boolean) {
   vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(
-    overflowing ? 400 : 100,
+    overflowing ? 400 : 60,
   );
-  vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(128);
+  vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(66);
 }
 
 function renderCard(post = groupPost()) {
@@ -91,6 +91,25 @@ describe("GroupPostCard", () => {
 
     await user.click(collapse);
     expect(screen.getByRole("button", { name: "더 보기" })).toBeInTheDocument();
+  });
+
+  it("does not expand when a desktop user clicks the body", async () => {
+    stubOverflow(true);
+    vi.spyOn(window, "matchMedia").mockReturnValue({
+      matches: false,
+    } as MediaQueryList);
+    const { user } = renderCard(groupPost({ body: "본문 내용" }));
+
+    await user.click(screen.getByText("본문 내용"));
+
+    expect(screen.getByRole("button", { name: "더 보기" })).toBeInTheDocument();
+  });
+
+  it("uses an exact three-line collapsed height", () => {
+    stubOverflow(true);
+    renderCard();
+
+    expect(screen.getByTestId("group-post-body")).toHaveClass("max-h-[66px]");
   });
 
   it("shows the pinned banner and the category badge when they apply", () => {

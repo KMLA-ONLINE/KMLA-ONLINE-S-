@@ -1,8 +1,8 @@
 import type {
   GroupCategory,
-  GroupPost,
   GroupPostDetail,
   GroupPostPage,
+  GroupPostSearchResult,
   PostCursor,
 } from "~/features/posts/model/types";
 import type { PostAttachment } from "~/features/posts/model/types";
@@ -26,7 +26,7 @@ async function attachFiles<T extends { post_id: string }>(
     )
     .eq("status", "ready")
     .order("position");
-  if (error) return posts.map((post) => ({ ...post, attachments: [] }));
+  if (error) throw error;
   const urls = await createPostAttachmentUrls(
     (data ?? []).map((item) => item.object_path),
   );
@@ -81,6 +81,7 @@ export async function listGroupPosts(
     p_category_id: options.categoryId ?? undefined,
     p_cursor_published_at: options.cursor?.publishedAt,
     p_cursor_post_id: options.cursor?.postId,
+    p_cursor_is_pinned: options.cursor?.isPinned,
     p_limit: GROUP_POST_PAGE_SIZE + 1,
   });
   if (error) throw error;
@@ -91,7 +92,11 @@ export async function listGroupPosts(
     posts,
     nextCursor:
       rows.length > GROUP_POST_PAGE_SIZE && last
-        ? { publishedAt: last.published_at, postId: last.post_id }
+        ? {
+            publishedAt: last.published_at,
+            postId: last.post_id,
+            isPinned: last.is_pinned,
+          }
         : null,
   };
 }
@@ -99,7 +104,7 @@ export async function listGroupPosts(
 export async function searchGroupPosts(
   groupId: string,
   query: string,
-): Promise<GroupPost[]> {
+): Promise<GroupPostSearchResult[]> {
   const normalized = query.normalize("NFC").trim();
   if (!normalized) return [];
   const { data, error } = await getSupabase().rpc("search_group_posts", {
@@ -108,7 +113,7 @@ export async function searchGroupPosts(
     p_limit: 50,
   });
   if (error) throw error;
-  return attachFiles(data ?? []);
+  return data ?? [];
 }
 
 export async function getGroupPost(

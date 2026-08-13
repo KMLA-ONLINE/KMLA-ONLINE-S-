@@ -7,10 +7,10 @@ const DesktopMarkdownEditor = lazy(
 );
 
 export function PostBodyInput({
-  initialValue,
+  value,
   onValueChange,
 }: {
-  initialValue: string;
+  value: string;
   onValueChange?: (value: string) => void;
 }) {
   const [desktop, setDesktop] = useState(false);
@@ -27,10 +27,9 @@ export function PostBodyInput({
     return (
       <Textarea
         name="body"
-        defaultValue={initialValue}
+        value={value}
         onChange={(event) => onValueChange?.(event.target.value)}
         maxLength={20_000}
-        required
         aria-label="Markdown 본문"
         placeholder="본문을 입력하세요"
         className="post-typography min-h-72 resize-y whitespace-pre-wrap md:hidden"
@@ -42,7 +41,7 @@ export function PostBodyInput({
       fallback={<div className="min-h-72 rounded-md border" aria-busy="true" />}
     >
       <DesktopMarkdownEditor
-        initialValue={initialValue}
+        initialValue={value}
         onValueChange={onValueChange}
       />
     </Suspense>

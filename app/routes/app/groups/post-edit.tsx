@@ -1,6 +1,7 @@
 import { data, redirect, useRouteLoaderData } from "react-router";
 
 import { defineAppChrome } from "~/features/app-shell";
+import { loadGroupDetail } from "~/features/groups";
 import {
   getGroupPost,
   getPostErrorMessage,
@@ -33,6 +34,16 @@ export async function clientAction({
   if (hasPostFormErrors(errors))
     return data({ errors, values }, { status: 400 });
   try {
+    const [group, post] = await Promise.all([
+      loadGroupDetail(params.slug),
+      getGroupPost(params.postId),
+    ]);
+    if (!group || post?.group_id !== group.group_id) {
+      return data(
+        { errors: { form: "게시물을 찾을 수 없습니다." }, values },
+        { status: 404 },
+      );
+    }
     await updateGroupPost(params.postId, values);
     throw redirect(`/groups/${params.slug}/posts/${params.postId}`);
   } catch (error) {

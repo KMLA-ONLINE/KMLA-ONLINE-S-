@@ -60,7 +60,7 @@ describe("post attachment orchestration", () => {
       "create_group_post",
       "prepare_post_attachment",
       "finalize_post_attachment",
-      "publish_group_post",
+      "commit_group_post",
     ]);
     expect(rpc).toHaveBeenNthCalledWith(
       1,
@@ -104,5 +104,44 @@ describe("post attachment orchestration", () => {
     expect(
       rpc.mock.calls.filter(([name]) => name === "prepare_post_attachment"),
     ).toHaveLength(1);
+  });
+
+  it("commits the latest form values when retrying a draft", async () => {
+    const session = createPostUploadSession();
+    rpc.mockImplementationOnce(() =>
+      Promise.resolve({ data: "post-id", error: null }),
+    );
+    rpc.mockImplementationOnce(() =>
+      Promise.resolve({
+        data: { id: "attachment-id", object_path: "post-id/attachment-id" },
+        error: null,
+      }),
+    );
+    uploadPostAttachment.mockRejectedValueOnce(new Error("offline"));
+    rpc.mockImplementationOnce(() =>
+      Promise.resolve({ data: null, error: new Error("not uploaded") }),
+    );
+    await expect(
+      createGroupPostWithAttachments("group-id", values, [prepared], session),
+    ).rejects.toThrow("offline");
+
+    rpc.mockImplementation(() => Promise.resolve({ data: null, error: null }));
+    uploadPostAttachment.mockResolvedValue(undefined);
+    await createGroupPostWithAttachments(
+      "group-id",
+      { ...values, title: "수정한 제목", body: "수정한 본문" },
+      [prepared],
+      session,
+    );
+
+    expect(rpc).toHaveBeenLastCalledWith(
+      "commit_group_post",
+      expect.objectContaining({
+        p_title: "수정한 제목",
+        p_body: "수정한 본문",
+        p_attachment_ids: ["attachment-id"],
+        p_publish: true,
+      }),
+    );
   });
 });

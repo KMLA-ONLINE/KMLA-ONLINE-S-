@@ -1,7 +1,8 @@
 import { CirclePlusIcon } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
 
-import { GroupSummaryCard } from "~/features/groups/components/group-summary-card";
+import { GroupDiscoverCard } from "~/features/groups/components/group-discover-card";
+import { GroupSummaryRow } from "~/features/groups/components/group-summary-row";
 import type { GroupHomeItem } from "~/features/groups/model/types";
 import { Button } from "~/shared/ui/button";
 import { cn } from "~/shared/lib/utils";
@@ -96,9 +97,9 @@ export function GroupHomeScreen({
               </Link>
             </div>
             {popularGroups.length > 0 ? (
-              <div className="hidden gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {popularGroups.map((group) => (
-                  <GroupSummaryCard
+                  <GroupDiscoverCard
                     key={group.group_id}
                     group={group}
                     profileId={profileId}
@@ -159,12 +160,10 @@ function GroupRows({
       {groups.length > 0 ? (
         <div className="grid gap-1.5 md:grid-cols-2 md:gap-2">
           {groups.map((group) => (
-            <GroupSummaryCard
+            <GroupSummaryRow
               key={group.group_id}
               group={group}
               profileId={profileId}
-              variant="row"
-              showPin
             />
           ))}
         </div>

@@ -1,12 +1,12 @@
 import { data, redirect, useRouteLoaderData } from "react-router";
 
 import { defineAppChrome } from "~/features/app-shell";
+import { loadGroupDetail } from "~/features/groups";
 import {
   deleteGroupPost,
   getGroupPost,
   getPostErrorMessage,
   GroupPostOverlay,
-  listGroupCategories,
   setGroupPostPinned,
 } from "~/features/posts";
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
@@ -21,8 +21,7 @@ export const handle = defineAppChrome({
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const post = await getGroupPost(params.postId);
   if (!post) throw new Response("게시물을 찾을 수 없습니다.", { status: 404 });
-  const categories = await listGroupCategories(post.group_id);
-  return { post, categories };
+  return { post };
 }
 
 export async function clientAction({
@@ -31,6 +30,13 @@ export async function clientAction({
 }: Route.ClientActionArgs) {
   const formData = await request.formData();
   try {
+    const [group, post] = await Promise.all([
+      loadGroupDetail(params.slug),
+      getGroupPost(params.postId),
+    ]);
+    if (!group || post?.group_id !== group.group_id) {
+      return data({ error: "게시물을 찾을 수 없습니다." }, { status: 404 });
+    }
     if (formData.get("intent") === "delete") {
       await deleteGroupPost(params.postId);
       throw redirect(`/groups/${params.slug}`);
@@ -65,7 +71,6 @@ export default function GroupPostPage({ loaderData }: Route.ComponentProps) {
       slug={parent.group.slug}
       groupName={parent.group.name}
       groupId={parent.group.group_id}
-      categories={loaderData.categories}
       post={loaderData.post}
     />
   );

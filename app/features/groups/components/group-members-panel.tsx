@@ -1,8 +1,9 @@
-import { MoreHorizontalIcon, SearchIcon, ShieldCheckIcon } from "lucide-react";
-import { useState } from "react";
+import { SearchIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher, useSearchParams } from "react-router";
 
-import { GroupConfirmDialog } from "~/features/groups/components/group-confirm-dialog";
+import { GroupJoinRequestsPanel } from "~/features/groups/components/group-join-requests-panel";
+import { MemberRoleMenu } from "~/features/groups/components/group-member-role-menu";
 import { getGroupMemberRoleLabel } from "~/features/groups/model/format";
 import type {
   GroupIdentityPolicy,
@@ -15,25 +16,11 @@ import { UserAvatar } from "~/shared/components/user-avatar";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "~/shared/ui/dropdown-menu";
 import { Input } from "~/shared/ui/input";
 import { Spinner } from "~/shared/ui/spinner";
 import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
 
 const STAFF_ROLES = new Set<GroupMemberRole>(["owner", "admin", "manager"]);
-const ASSIGNABLE_ROLES: Exclude<GroupMemberRole, "owner">[] = [
-  "admin",
-  "manager",
-  "member",
-];
 
 export function GroupMembersPanel({
   groupId,
@@ -58,26 +45,27 @@ export function GroupMembersPanel({
   const [pagination, setPagination] = useState({
     initialPage,
     additionalPages: [] as GroupMemberPage[],
-    processedData: undefined as GroupMemberPage | undefined,
   });
-  if (pagination.initialPage !== initialPage) {
-    setPagination({
-      initialPage,
-      additionalPages: [],
-      processedData: pageFetcher.data,
-    });
-  } else if (
-    pageFetcher.data &&
-    pagination.processedData !== pageFetcher.data
-  ) {
-    setPagination({
-      ...pagination,
-      additionalPages: [...pagination.additionalPages, pageFetcher.data],
-      processedData: pageFetcher.data,
-    });
-  }
+  const processedData = useRef(pageFetcher.data);
 
-  const pages = [pagination.initialPage, ...pagination.additionalPages];
+  useEffect(() => {
+    if (!pageFetcher.data || processedData.current === pageFetcher.data) return;
+    processedData.current = pageFetcher.data;
+    setPagination((current) => ({
+      initialPage,
+      additionalPages:
+        current.initialPage === initialPage
+          ? [...current.additionalPages, pageFetcher.data!]
+          : [pageFetcher.data!],
+    }));
+  }, [initialPage, pageFetcher.data]);
+
+  const pages = [
+    initialPage,
+    ...(pagination.initialPage === initialPage
+      ? pagination.additionalPages
+      : []),
+  ];
   const members = pages.flatMap((page) => page.members);
   const nextCursor = pages.at(-1)?.nextCursor ?? null;
   const loadMore = () => {
@@ -281,209 +269,6 @@ function MemberRow({
   );
 }
 
-function MemberRoleMenu({
-  groupId,
-  member,
-  viewerRole,
-}: {
-  groupId: string;
-  member: GroupMember;
-  viewerRole: GroupMemberRole | null;
-}) {
-  const fetcher = useFetcher<{ error?: string }>();
-  const [transferOpen, setTransferOpen] = useState(false);
-  const pending = fetcher.state !== "idle";
-  const canSetRole =
-    (viewerRole === "owner" || viewerRole === "admin") &&
-    member.role !== "owner";
-  const canTransfer = viewerRole === "owner" && member.role === "admin";
-
-  if (!canSetRole) return null;
-
-  return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`${member.name ?? cohortLabel(member.cohort)} 역할 관리`}
-              disabled={pending}
-            />
-          }
-        >
-          {pending ? <Spinner /> : <MoreHorizontalIcon />}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>역할 변경</DropdownMenuLabel>
-            {ASSIGNABLE_ROLES.map((role) => (
-              <DropdownMenuItem
-                key={role}
-                disabled={role === member.role || pending}
-                onClick={() =>
-                  void fetcher.submit(
-                    {
-                      intent: "set-member-role",
-                      groupId,
-                      memberId: member.membership_id,
-                      role,
-                    },
-                    { method: "post" },
-                  )
-                }
-              >
-                {getGroupMemberRoleLabel(role)}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuGroup>
-          {canTransfer ? (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setTransferOpen(true)}>
-                <ShieldCheckIcon /> 소유권 이전
-              </DropdownMenuItem>
-            </>
-          ) : null}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <GroupConfirmDialog
-        open={transferOpen}
-        onOpenChange={setTransferOpen}
-        title="그룹 소유권 이전"
-        description={`${member.name ?? cohortLabel(member.cohort)}에게 소유권을 이전할까요? 이전 후 현재 소유자는 관리자가 됩니다.`}
-        confirmLabel="소유권 이전"
-        pending={pending}
-        onConfirm={() => {
-          setTransferOpen(false);
-          void fetcher.submit(
-            {
-              intent: "transfer-ownership",
-              groupId,
-              memberId: member.membership_id,
-            },
-            { method: "post" },
-          );
-        }}
-      />
-    </>
-  );
-}
-
-function GroupJoinRequestsPanel({
-  groupId,
-  requests,
-  anonymous,
-}: {
-  groupId: string;
-  requests: GroupJoinRequest[];
-  anonymous: boolean;
-}) {
-  const fetcher = useFetcher<{ error?: string }>();
-  const pending = fetcher.state !== "idle";
-
-  if (requests.length === 0) return null;
-
-  return (
-    <Card className="rounded-none border-x-0 md:rounded-xl md:border">
-      <CardHeader>
-        <CardTitle>
-          가입 요청 {requests.length.toLocaleString("ko-KR")}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ul className="divide-y">
-          {requests.map((request) => (
-            <li
-              key={request.request_id}
-              className="flex min-h-16 items-center gap-3 py-2"
-            >
-              {!anonymous ? (
-                <UserAvatar
-                  src={request.avatar_path}
-                  name={request.name}
-                  size="lg"
-                />
-              ) : null}
-              <div className="min-w-0 flex-1">
-                {!anonymous && request.pub_id !== null ? (
-                  <Link
-                    to={`/profile/${request.pub_id}`}
-                    className="font-medium hover:underline"
-                  >
-                    {request.name}
-                  </Link>
-                ) : (
-                  <span className="font-medium">
-                    {cohortLabel(request.cohort)}
-                  </span>
-                )}
-                {!anonymous ? (
-                  <p className="text-xs text-muted-foreground">
-                    {cohortLabel(request.cohort)}
-                  </p>
-                ) : null}
-                <p className="text-xs text-muted-foreground">
-                  {formatDate(request.requested_at)} 요청
-                </p>
-              </div>
-              <div className="flex gap-1">
-                <Button
-                  size="sm"
-                  disabled={pending}
-                  onClick={() =>
-                    void fetcher.submit(
-                      {
-                        intent: "approve-join-request",
-                        groupId,
-                        requestId: request.request_id,
-                      },
-                      { method: "post" },
-                    )
-                  }
-                >
-                  승인
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={pending}
-                  onClick={() =>
-                    void fetcher.submit(
-                      {
-                        intent: "reject-join-request",
-                        groupId,
-                        requestId: request.request_id,
-                      },
-                      { method: "post" },
-                    )
-                  }
-                >
-                  거절
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
-        {fetcher.data?.error ? (
-          <p role="alert" className="mt-3 text-sm text-destructive">
-            {fetcher.data.error}
-          </p>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
 function cohortLabel(cohort: number | null): string {
   return cohort === null ? "기수 없음" : `${cohort}기`;
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("ko-KR", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(new Date(value));
 }

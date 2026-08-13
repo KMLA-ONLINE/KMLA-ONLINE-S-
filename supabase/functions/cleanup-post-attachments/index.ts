@@ -32,21 +32,18 @@ Deno.serve(async (request) => {
   const supabase = createClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  let removed = 0;
+  let failed = 0;
+  let claimed = 0;
+  const errors: string[] = [];
+
   const { data, error } = await supabase.rpc("claim_post_attachment_cleanup", {
     p_limit: 100,
     p_lease_seconds: 300,
   });
-  if (error) return Response.json({ error: error.message }, { status: 500 });
-
   const items = (data ?? []) as CleanupItem[];
-  const { data: groupMediaData, error: groupMediaError } = await supabase.rpc(
-    "claim_group_media_cleanup",
-    { p_limit: 100, p_lease_seconds: 300 },
-  );
-  if (groupMediaError)
-    return Response.json({ error: groupMediaError.message }, { status: 500 });
-  let removed = 0;
-  let failed = 0;
+  if (error) errors.push(error.message);
+  claimed += items.length;
 
   for (const item of items) {
     const { error: removeError } = await supabase.storage
@@ -68,7 +65,13 @@ Deno.serve(async (request) => {
     else failed += 1;
   }
 
+  const { data: groupMediaData, error: groupMediaError } = await supabase.rpc(
+    "claim_group_media_cleanup",
+    { p_limit: 100, p_lease_seconds: 300 },
+  );
   const groupMediaItems = (groupMediaData ?? []) as GroupMediaCleanupItem[];
+  if (groupMediaError) errors.push(groupMediaError.message);
+  claimed += groupMediaItems.length;
   for (const item of groupMediaItems) {
     const { error: removeError } = await supabase.storage
       .from("group-media")
@@ -87,13 +90,18 @@ Deno.serve(async (request) => {
   }
 
   console.log("post attachment cleanup completed", {
-    claimed: items.length + groupMediaItems.length,
+    claimed,
     removed,
     failed,
+    errors,
   });
-  return Response.json({
-    claimed: items.length + groupMediaItems.length,
-    removed,
-    failed,
-  });
+  return Response.json(
+    {
+      claimed,
+      removed,
+      failed,
+      errors,
+    },
+    { status: errors.length > 0 ? 500 : 200 },
+  );
 });

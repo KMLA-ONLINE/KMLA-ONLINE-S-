@@ -15,6 +15,7 @@ export type PostAttachment = Omit<
   signedUrl: string | null;
 };
 export type GroupPost = GroupPostRow & { attachments: PostAttachment[] };
+export type GroupPostSearchResult = GroupPostRow;
 export type GroupPostDetail = GroupPostDetailRow & {
   attachments: PostAttachment[];
 };
@@ -25,6 +26,7 @@ export type PostIdentity = Database["public"]["Enums"]["post_identity"];
 export interface PostCursor {
   publishedAt: string;
   postId: string;
+  isPinned: boolean;
 }
 
 export interface GroupPostPage {

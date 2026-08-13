@@ -3,6 +3,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import {
   appendVisitedPost,
   readVisitedPosts,
+  VISITED_POSTS_STORAGE_KEY,
   writeVisitedPosts,
 } from "~/features/posts/model/visited-posts";
 
@@ -29,8 +30,17 @@ function getServerSnapshot(): ReadonlySet<string> {
 }
 
 function subscribe(onChange: () => void): () => void {
+  const syncStorage = (event: StorageEvent) => {
+    if (event.key !== VISITED_POSTS_STORAGE_KEY) return;
+    snapshot = new Set(readVisitedPosts());
+    onChange();
+  };
   window.addEventListener(CHANGE_EVENT, onChange);
-  return () => window.removeEventListener(CHANGE_EVENT, onChange);
+  window.addEventListener("storage", syncStorage);
+  return () => {
+    window.removeEventListener(CHANGE_EVENT, onChange);
+    window.removeEventListener("storage", syncStorage);
+  };
 }
 
 export function useVisitedPosts() {

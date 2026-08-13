@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   extractPostPlainText,
+  fromPostEditorMarkdown,
+  normalizePostMarkdownSource,
   parsePostMarkdown,
   sanitizePostMarkdown,
+  toPostEditorMarkdown,
+  toPostRenderMarkdown,
 } from "~/features/posts/model/markdown";
 
 describe("Markdown v1", () => {
@@ -62,5 +66,34 @@ describe("Markdown v1", () => {
         "## Heading\n\n**Hello** [world](https://example.com)",
       ),
     ).toBe("Heading\n\nHello world");
+  });
+
+  it("removes boundary newlines and preserves internal line breaks", () => {
+    expect(normalizePostMarkdownSource("\r\n첫째 줄\r\n둘째 줄\r\n")).toBe(
+      "첫째 줄\n둘째 줄",
+    );
+    expect(normalizePostMarkdownSource("\n첫째 줄\n\n둘째 줄\n")).toBe(
+      "첫째 줄\n\n둘째 줄",
+    );
+  });
+
+  it("round-trips one Enter as one line and two Enters as a blank line", () => {
+    expect(fromPostEditorMarkdown("첫째 줄\n\n둘째 줄")).toBe(
+      "첫째 줄\n둘째 줄",
+    );
+    expect(fromPostEditorMarkdown("첫째 줄\n\n<br />\n\n둘째 줄")).toBe(
+      "첫째 줄\n\n둘째 줄",
+    );
+    expect(toPostEditorMarkdown("첫째 줄\n둘째 줄")).toBe("첫째 줄\n둘째 줄");
+    expect(toPostEditorMarkdown("첫째 줄\n\n둘째 줄")).toBe(
+      "첫째 줄\n\n<br />\n\n둘째 줄",
+    );
+  });
+
+  it("renders only intentional blank lines with an empty-line marker", () => {
+    expect(toPostRenderMarkdown("첫째 줄\n둘째 줄")).toBe("첫째 줄\n둘째 줄");
+    expect(toPostRenderMarkdown("첫째 줄\n\n둘째 줄")).toBe(
+      "첫째 줄\n\n\u200b\n\n둘째 줄",
+    );
   });
 });

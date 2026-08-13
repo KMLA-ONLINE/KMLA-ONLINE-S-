@@ -15,6 +15,12 @@ const serializer = unified()
   })
   .use(remarkGfm);
 
+const EMPTY_LINE_MARKER = "<br />";
+
+function isEmptyLineMarker(value: string): boolean {
+  return /^<br\s*\/?\s*>$/i.test(value.trim());
+}
+
 function isSafeLink(value: string): boolean {
   try {
     const url = new URL(value);
@@ -88,7 +94,11 @@ function blocks(nodes: RootContent[]): RootContent[] {
       );
     if (node.type === "code")
       return [{ type: "paragraph", children: [text(node.value)] }];
-    if (node.type === "html" || node.type === "thematicBreak") return [];
+    if (node.type === "html")
+      return isEmptyLineMarker(node.value)
+        ? [{ type: "html", value: EMPTY_LINE_MARKER }]
+        : [];
+    if (node.type === "thematicBreak") return [];
     const children = blockText(node);
     return children.length ? [{ type: "paragraph", children }] : [];
   });
@@ -100,7 +110,44 @@ export function parsePostMarkdown(markdown: string): Root {
 }
 
 export function sanitizePostMarkdown(markdown: string): string {
-  return serializer.stringify(parsePostMarkdown(markdown)).trimEnd();
+  const editorSource = toPostEditorMarkdown(
+    normalizePostMarkdownSource(markdown),
+  );
+  const parsed = parser.parse(editorSource);
+  const safe = serializer.stringify({
+    type: "root",
+    children: blocks(parsed.children),
+  });
+  return fromPostEditorMarkdown(safe);
+}
+
+export function normalizePostMarkdownSource(markdown: string): string {
+  return markdown.replace(/\r\n?/g, "\n").trim();
+}
+
+export function toPostEditorMarkdown(markdown: string): string {
+  return normalizePostMarkdownSource(markdown).replace(
+    /\n{2,}/g,
+    (breaks) =>
+      `\n\n${Array.from(
+        { length: breaks.length - 1 },
+        () => `${EMPTY_LINE_MARKER}\n\n`,
+      ).join("")}`,
+  );
+}
+
+export function fromPostEditorMarkdown(markdown: string): string {
+  return normalizePostMarkdownSource(markdown)
+    .split(/\n{2}/)
+    .map((block) => (isEmptyLineMarker(block) ? "" : block))
+    .join("\n");
+}
+
+export function toPostRenderMarkdown(markdown: string): string {
+  return toPostEditorMarkdown(sanitizePostMarkdown(markdown)).replace(
+    /^<br \/>$/gm,
+    "\u200b",
+  );
 }
 
 export function extractPostPlainText(markdown: string): string {

@@ -54,12 +54,12 @@ describe("post form validation", () => {
   it("normalizes form text and rejects unknown identity values", () => {
     const formData = new FormData();
     formData.set("title", "  제목  ");
-    formData.set("body", "  본문  ");
+    formData.set("body", "\r\n첫째 줄\r\n둘째 줄\r\n");
     formData.set("authorIdentity", "invalid");
 
     expect(readPostForm(formData)).toMatchObject({
       title: "제목",
-      body: "본문",
+      body: "첫째 줄\n둘째 줄",
       authorIdentity: "identified",
     });
   });

@@ -35,7 +35,7 @@
 
 @layer components {
   .post-typography {
-    @apply text-[15px] leading-7 break-words;
+    @apply text-[15px] leading-[22px] break-words;
   }
   .post-typography p + h2,
   .post-typography p + h3,
@@ -47,7 +47,7 @@
     @apply mt-6 text-xl leading-8 font-bold;
   }
   .post-typography h3 {
-    @apply mt-5 text-lg leading-7 font-semibold;
+    @apply mt-5 text-lg leading-[22px] font-semibold;
   }
   .post-typography a {
     @apply text-primary underline underline-offset-2;

@@ -106,4 +106,25 @@ describe("group detail management action", () => {
     expect(result).toMatchObject({ init: { status: 400 } });
     expect(mutations.setGroupMemberRole).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["   ", "설명"],
+    ["가".repeat(51), "설명"],
+    ["이름", "가".repeat(2001)],
+  ])("rejects invalid settings lengths", async (name, description) => {
+    const result = await action(
+      new URLSearchParams({
+        intent: "update-settings",
+        groupId: "group",
+        name,
+        description,
+        joinPolicy: "request",
+        identityPolicy: "identified",
+        postingPolicy: "members",
+      }),
+    );
+
+    expect(result).toMatchObject({ init: { status: 400 } });
+    expect(mutations.updateGroupSettings).not.toHaveBeenCalled();
+  });
 });

@@ -3,8 +3,6 @@ export { GroupDetailScreen } from "~/features/groups/components/group-detail-scr
 export { GroupDetailMobileHeader } from "~/features/groups/components/group-detail-mobile-header";
 export { GroupDiscoverScreen } from "~/features/groups/components/group-discover-screen";
 export { GroupHomeScreen } from "~/features/groups/components/group-home-screen";
-export { GroupMembersPanel } from "~/features/groups/components/group-members-panel";
-export { GroupSettings } from "~/features/groups/components/group-settings";
 export {
   approveGroupJoinRequest,
   cancelGroupJoinRequest,

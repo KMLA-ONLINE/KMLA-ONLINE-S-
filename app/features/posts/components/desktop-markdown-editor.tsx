@@ -14,10 +14,15 @@ import {
   headingAttr,
   headingIdGenerator,
   headingSchema,
+  htmlAttr,
+  htmlSchema,
   linkAttr,
   linkSchema,
   paragraphAttr,
   paragraphSchema,
+  remarkHtmlTransformer,
+  remarkLineBreak,
+  remarkPreserveEmptyLinePlugin,
   strongAttr,
   strongSchema,
   textSchema,
@@ -50,8 +55,10 @@ import {
 import { useEffect, useRef } from "react";
 
 import {
+  fromPostEditorMarkdown,
   isSafePostLink,
   sanitizePostMarkdown,
+  toPostEditorMarkdown,
 } from "~/features/posts/model/markdown";
 import { Button } from "~/shared/ui/button";
 
@@ -64,6 +71,8 @@ const markdownSchema = [
   headingSchema,
   hardbreakAttr,
   hardbreakSchema,
+  htmlAttr,
+  htmlSchema,
   emphasisAttr,
   emphasisSchema,
   strongAttr,
@@ -79,6 +88,9 @@ const markdownSchema = [
   toggleStrikethroughCommand,
   textSchema,
   remarkGFMPlugin,
+  remarkLineBreak,
+  remarkHtmlTransformer,
+  remarkPreserveEmptyLinePlugin,
 ].flat();
 
 const imeSafeShortcuts = $prose(
@@ -150,7 +162,9 @@ function EditorSurface({
   onValueChange?: (value: string) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
-  const lastValue = useRef(sanitizePostMarkdown(initialValue));
+  const lastValue = useRef(
+    toPostEditorMarkdown(sanitizePostMarkdown(initialValue)),
+  );
   const onValueChangeRef = useRef(onValueChange);
   useEffect(() => {
     onValueChangeRef.current = onValueChange;
@@ -162,8 +176,7 @@ function EditorSurface({
           ctx.set(rootCtx, root);
           ctx.set(defaultValueCtx, lastValue.current);
           ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
-            const safe = sanitizePostMarkdown(markdown);
-            lastValue.current = safe;
+            const safe = sanitizePostMarkdown(fromPostEditorMarkdown(markdown));
             if (input.current) input.current.value = safe;
             onValueChangeRef.current?.(safe);
           });
@@ -172,7 +185,7 @@ function EditorSurface({
         .use(history)
         .use(imeSafeShortcuts)
         .use(listener),
-    [initialValue],
+    [],
   );
 
   const run = (

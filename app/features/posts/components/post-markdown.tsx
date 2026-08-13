@@ -2,7 +2,7 @@ import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { sanitizePostMarkdown } from "~/features/posts/model/markdown";
+import { toPostRenderMarkdown } from "~/features/posts/model/markdown";
 import { cn } from "~/shared/lib/utils";
 
 const allowedElements = ["p", "br", "strong", "em", "del", "h2", "h3", "a"];
@@ -19,6 +19,13 @@ function ExternalLink({
   );
 }
 
+function Paragraph({
+  node: _node,
+  ...props
+}: ComponentPropsWithoutRef<"p"> & { node?: unknown }) {
+  return <p {...props} className="whitespace-pre-wrap" />;
+}
+
 export function PostMarkdown({
   children,
   className,
@@ -33,9 +40,10 @@ export function PostMarkdown({
         allowedElements={allowedElements}
         components={{
           a: ExternalLink,
+          p: Paragraph,
         }}
       >
-        {sanitizePostMarkdown(children)}
+        {toPostRenderMarkdown(children)}
       </ReactMarkdown>
     </div>
   );

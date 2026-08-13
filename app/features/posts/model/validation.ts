@@ -3,6 +3,7 @@ import type {
   PostFormValues,
   PostIdentity,
 } from "~/features/posts/model/types";
+import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
 
 const IDENTITIES: PostIdentity[] = ["identified", "anonymous", "staff"];
 
@@ -13,7 +14,7 @@ export function readPostForm(formData: FormData): PostFormValues {
   const categoryId = formData.get("categoryId");
   return {
     title: typeof title === "string" ? title.trim() : "",
-    body: typeof body === "string" ? body.trim() : "",
+    body: typeof body === "string" ? normalizePostMarkdownSource(body) : "",
     categoryId: typeof categoryId === "string" ? categoryId : "",
     authorIdentity: IDENTITIES.includes(identity as PostIdentity)
       ? (identity as PostIdentity)

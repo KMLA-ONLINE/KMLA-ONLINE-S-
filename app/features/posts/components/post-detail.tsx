@@ -1,4 +1,5 @@
 import { PinIcon, XIcon } from "lucide-react";
+import { useEffect } from "react";
 import { Link, useFetcher } from "react-router";
 
 import { GroupPostActionBar } from "~/features/posts/components/group-post-action-bar";
@@ -12,6 +13,7 @@ import { PostAuthorAvatar } from "~/features/posts/components/post-author-avatar
 import { PostEditedMark } from "~/features/posts/components/post-edited-mark";
 import { PostMarkdown } from "~/features/posts/components/post-markdown";
 import type { GroupPostDetail } from "~/features/posts/model/types";
+import { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
 import { Badge } from "~/shared/ui/badge";
@@ -41,12 +43,15 @@ export function PostDetail({
   post: GroupPostDetail;
   slug: string;
 }) {
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<{ error?: string }>();
+  const { markVisited } = useVisitedPosts();
   const close = useModalClose(`/groups/${slug}`);
 
   const { images, files } = splitPostAttachments(post.attachments);
   const authorName = post.author_name || post.author_label;
   const postPath = `/groups/${slug}/posts/${post.post_id}`;
+
+  useEffect(() => markVisited(post.post_id), [markVisited, post.post_id]);
 
   const submitIntent = (fields: Record<string, string>) =>
     void fetcher.submit(fields, { method: "post" });
@@ -73,6 +78,11 @@ export function PostDetail({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
+          {fetcher.data?.error ? (
+            <p role="alert" className="border-b p-3 text-sm text-destructive">
+              {fetcher.data.error}
+            </p>
+          ) : null}
           <article>
             <div className="flex flex-col gap-3 p-4">
               {post.is_pinned ? (

@@ -76,6 +76,7 @@ type PreparedAttachmentRow = Awaited<ReturnType<typeof preparePostAttachment>>;
 
 export interface PostUploadSession {
   postId?: string;
+  authorIdentity?: PostFormValues["authorIdentity"];
   files: Map<
     string,
     { attachment: PreparedAttachmentRow; uploaded: boolean; finalized: boolean }
@@ -84,6 +85,23 @@ export interface PostUploadSession {
 
 export function createPostUploadSession(): PostUploadSession {
   return { files: new Map() };
+}
+
+async function commitGroupPost(
+  postId: string,
+  values: PostFormValues,
+  attachmentIds: string[],
+  publish: boolean,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("commit_group_post", {
+    p_post_id: postId,
+    p_title: values.title,
+    p_body: values.body,
+    p_category_id: values.categoryId || undefined,
+    p_attachment_ids: attachmentIds,
+    p_publish: publish,
+  });
+  if (error) throw error;
 }
 
 async function preparePostAttachment(postId: string, item: PreparedPostFile) {
@@ -164,16 +182,22 @@ export async function createGroupPostWithAttachments(
   ) => void,
 ): Promise<string> {
   onProgress?.("creating", 0, files.length);
+  if (
+    session.postId &&
+    session.authorIdentity &&
+    session.authorIdentity !== values.authorIdentity
+  ) {
+    await deleteGroupPost(session.postId);
+    session.postId = undefined;
+    session.files.clear();
+  }
   const postId =
     session.postId ?? (await createGroupPost(groupId, values, false));
   session.postId = postId;
+  session.authorIdentity = values.authorIdentity;
   const ids = await uploadPreparedFiles(postId, files, session, onProgress);
-  if (ids.length > 1) await reorderPostAttachments(postId, ids);
   onProgress?.("publishing", files.length, files.length);
-  const { error } = await getSupabase().rpc("publish_group_post", {
-    p_post_id: postId,
-  });
-  if (error) throw error;
+  await commitGroupPost(postId, values, ids, true);
   return postId;
 }
 
@@ -198,16 +222,6 @@ export async function updateGroupPostWithAttachments(
     session,
     onProgress,
   );
-  onProgress?.("updating", 0, additions.length);
-  await updateGroupPost(postId, values);
-  onProgress?.("removing", 0, removedIds.size);
-  for (const [index, id] of [...removedIds].entries()) {
-    const { error } = await getSupabase().rpc("delete_post_attachment", {
-      p_attachment_id: id,
-    });
-    if (error) throw error;
-    onProgress?.("removing", index + 1, removedIds.size);
-  }
   const addedByKey = new Map(
     additions.map((item, index) => [item.key, addedIds[index]]),
   );
@@ -217,8 +231,8 @@ export async function updateGroupPostWithAttachments(
     const addedId = addedByKey.get(key);
     return addedId ? [addedId] : [];
   });
-  onProgress?.("ordering", 0, orderedIds.length);
-  if (orderedIds.length > 0) await reorderPostAttachments(postId, orderedIds);
+  onProgress?.("updating", 0, additions.length);
+  await commitGroupPost(postId, values, orderedIds, false);
   return postId;
 }
 

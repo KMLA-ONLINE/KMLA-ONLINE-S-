@@ -31,4 +31,11 @@ describe("PostMarkdown", () => {
     expect(screen.getByText("이모지 👍🏽 🇰🇷 👨‍👩‍👧‍👦")).toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
+
+  it("preserves single and blank lines without doubling every line", () => {
+    render(<PostMarkdown>{"\n첫째 줄\n둘째 줄\n"}</PostMarkdown>);
+
+    expect(screen.getByText(/첫째 줄/)).toHaveTextContent(/둘째 줄/);
+    expect(screen.getByText(/첫째 줄/)).toHaveClass("whitespace-pre-wrap");
+  });
 });

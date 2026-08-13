@@ -535,6 +535,14 @@ export type Database = {
         Args: { p_group_id: string; p_request_id: string }
         Returns: undefined
       }
+      claim_group_media_cleanup: {
+        Args: { p_lease_seconds?: number; p_limit?: number }
+        Returns: {
+          lease_id: string
+          media_id: string
+          object_path: string
+        }[]
+      }
       claim_post_attachment_cleanup: {
         Args: { p_lease_seconds?: number; p_limit?: number }
         Returns: {
@@ -543,6 +551,25 @@ export type Database = {
           object_path: string
           storage_bucket: string
         }[]
+      }
+      commit_group_post: {
+        Args: {
+          p_attachment_ids: string[]
+          p_body: string
+          p_category_id?: string
+          p_post_id: string
+          p_publish?: boolean
+          p_title: string
+        }
+        Returns: string
+      }
+      complete_group_media_cleanup: {
+        Args: {
+          p_lease_id: string
+          p_media_id: string
+          p_object_deleted: boolean
+        }
+        Returns: boolean
       }
       complete_post_attachment_cleanup: {
         Args: {
@@ -753,6 +780,7 @@ export type Database = {
       list_group_posts: {
         Args: {
           p_category_id?: string
+          p_cursor_is_pinned?: boolean
           p_cursor_post_id?: string
           p_cursor_published_at?: string
           p_group_id: string

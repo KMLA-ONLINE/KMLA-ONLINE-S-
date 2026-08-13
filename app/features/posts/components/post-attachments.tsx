@@ -32,7 +32,7 @@ export function splitPostAttachments(attachments: PostAttachment[]) {
  * 배치"가 정해져 있고, 화면 폭이 그걸 바꾸지는 않는다.
  */
 function containerClass(count: number): string {
-  if (count === 1) return "aspect-video";
+  if (count === 1) return "aspect-video border";
   if (count === 2) return "grid aspect-[2/1] grid-cols-2 gap-1";
   if (count <= 4) return "grid aspect-[4/3] grid-cols-2 grid-rows-2 gap-1";
   return "grid aspect-[4/3] grid-cols-6 grid-rows-2 gap-1";
@@ -109,6 +109,7 @@ export function PostImageGrid({
   return (
     <>
       <div
+        data-testid="post-image-grid"
         className={cn("bg-muted", containerClass(visible.length), className)}
       >
         {visible.map((item, index) => {

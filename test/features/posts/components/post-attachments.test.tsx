@@ -49,6 +49,19 @@ describe("splitPostAttachments", () => {
 });
 
 describe("PostImageGrid", () => {
+  it("adds a thin border only around a single image", () => {
+    const { unmount } = renderRoute(() => (
+      <PostImageGrid images={[image("single")]} />
+    ));
+
+    expect(screen.getByTestId("post-image-grid")).toHaveClass("border");
+
+    unmount();
+    renderRoute(() => <PostImageGrid images={[image("a"), image("b")]} />);
+
+    expect(screen.getByTestId("post-image-grid")).not.toHaveClass("border");
+  });
+
   it("renders every image up to the tile limit", () => {
     renderRoute(() => (
       <PostImageGrid images={[image("a"), image("b"), image("c")]} />

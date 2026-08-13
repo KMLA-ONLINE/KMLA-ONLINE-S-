@@ -29,14 +29,13 @@ export function GroupCategoryChips({
 
   return (
     <div
-      role="tablist"
+      role="group"
       aria-label="카테고리"
       className="no-scrollbar flex gap-2 overflow-x-auto px-4 md:px-0"
     >
       <button
         type="button"
-        role="tab"
-        aria-selected={selected === null}
+        aria-pressed={selected === null}
         onClick={() => onSelect(null)}
         className={chipClass(selected === null)}
       >
@@ -46,8 +45,7 @@ export function GroupCategoryChips({
         <button
           key={category.id}
           type="button"
-          role="tab"
-          aria-selected={selected === category.id}
+          aria-pressed={selected === category.id}
           onClick={() => onSelect(category.id)}
           className={chipClass(selected === category.id)}
         >

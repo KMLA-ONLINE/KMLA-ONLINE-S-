@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { createRoutesStub, data } from "react-router";
 
 import { GroupSettings } from "~/features/groups/components/group-settings";
 import type { GroupDetail } from "~/features/groups/model/types";
-import { renderRoute, screen } from "../../../router";
+import {
+  render,
+  renderRoute,
+  screen,
+  userEvent,
+  waitFor,
+  within,
+} from "../../../router";
 
 const group: GroupDetail = {
   id: "group-1",
@@ -105,5 +113,75 @@ describe("GroupSettings", () => {
 
     expect(screen.queryByLabelText("그룹 이름")).not.toBeInTheDocument();
     expect(screen.getByText("게시물 카테고리")).toBeVisible();
+  });
+
+  it("keeps basic edits and values open when saving fails", async () => {
+    const Stub = createRoutesStub([
+      {
+        path: "/",
+        Component: () => <GroupSettings group={group} categories={[]} />,
+        action: () => data({ error: "저장하지 못했습니다." }, { status: 400 }),
+      },
+    ]);
+    const user = userEvent.setup();
+    render(<Stub />);
+
+    await user.click(screen.getByRole("button", { name: "기본 정보 편집" }));
+    const name = screen.getByLabelText("그룹 이름");
+    await user.clear(name);
+    await user.type(name, "변경한 이름");
+    await user.click(screen.getByRole("button", { name: "저장" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "저장" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "저장하지 못했습니다.",
+    );
+    expect(screen.getByLabelText("그룹 이름")).toHaveValue("변경한 이름");
+  });
+
+  it("keeps policy edits open on failure and closes them on success", async () => {
+    let succeeds = false;
+    const Stub = createRoutesStub([
+      {
+        path: "/",
+        Component: () => <GroupSettings group={group} categories={[]} />,
+        action: () =>
+          succeeds
+            ? data({ ok: true })
+            : data({ error: "정책을 저장하지 못했습니다." }, { status: 400 }),
+      },
+    ]);
+    const user = userEvent.setup();
+    render(<Stub />);
+
+    await user.click(screen.getByRole("button", { name: "게시물 작성 변경" }));
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "게시물 작성" }),
+      "staff",
+    );
+    await user.click(screen.getByRole("button", { name: "저장" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "저장" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "정책을 저장하지 못했습니다.",
+    );
+    expect(screen.getByRole("combobox", { name: "게시물 작성" })).toHaveValue(
+      "staff",
+    );
+
+    succeeds = true;
+    await user.click(screen.getByRole("button", { name: "저장" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "저장" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("combobox", { name: "게시물 작성" }),
+      ).not.toBeInTheDocument(),
+    );
   });
 });

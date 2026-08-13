@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Form, Link, useFetcher, useSearchParams } from "react-router";
 
 import { GroupMobileDiscoverCard } from "~/features/groups/components/group-mobile-discover-card";
-import { GroupSummaryCard } from "~/features/groups/components/group-summary-card";
+import { GroupDiscoverCard } from "~/features/groups/components/group-discover-card";
 import { hasMinimumGroupSearchLength } from "~/features/groups/model/format";
 import type { GroupDiscoveryPage } from "~/features/groups/model/types";
 import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
@@ -22,7 +22,6 @@ interface DiscoveryLoaderData {
 interface PaginationState {
   initialPage: GroupDiscoveryPage;
   additionalPages: GroupDiscoveryPage[];
-  processedData: DiscoveryLoaderData | undefined;
 }
 
 export function GroupDiscoverScreen({
@@ -50,24 +49,27 @@ export function GroupDiscoverScreen({
   const [pagination, setPagination] = useState<PaginationState>({
     initialPage,
     additionalPages: [],
-    processedData: undefined,
   });
+  const processedData = useRef(fetcher.data);
 
-  if (pagination.initialPage !== initialPage) {
-    setPagination({
+  useEffect(() => {
+    if (!fetcher.data || processedData.current === fetcher.data) return;
+    processedData.current = fetcher.data;
+    setPagination((current) => ({
       initialPage,
-      additionalPages: [],
-      processedData: fetcher.data,
-    });
-  } else if (fetcher.data && pagination.processedData !== fetcher.data) {
-    setPagination({
-      ...pagination,
-      additionalPages: [...pagination.additionalPages, fetcher.data.page],
-      processedData: fetcher.data,
-    });
-  }
+      additionalPages:
+        current.initialPage === initialPage
+          ? [...current.additionalPages, fetcher.data!.page]
+          : [fetcher.data!.page],
+    }));
+  }, [fetcher.data, initialPage]);
 
-  const pages = [pagination.initialPage, ...pagination.additionalPages];
+  const pages = [
+    initialPage,
+    ...(pagination.initialPage === initialPage
+      ? pagination.additionalPages
+      : []),
+  ];
   const groups = pages.flatMap((page) => page.groups);
   const nextCursor = pages.at(-1)?.nextCursor ?? null;
 
@@ -240,7 +242,7 @@ export function GroupDiscoverScreen({
           </div>
           <div className="hidden gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-3">
             {groups.map((group) => (
-              <GroupSummaryCard
+              <GroupDiscoverCard
                 key={group.group_id}
                 group={group}
                 profileId={profileId}
