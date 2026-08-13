@@ -62,13 +62,6 @@
     @apply pointer-events-none float-left h-0 text-muted-foreground;
     content: attr(data-placeholder);
   }
-  img.twemoji {
-    display: inline-block;
-    width: 1em;
-    height: 1em;
-    margin: 0 0.05em 0 0.1em;
-    vertical-align: -0.1em;
-  }
 }
 
 /* 화면을 거의 채우는 시트형 모달(`.modal-sheet`)의 스크림에서는 `backdrop-filter`를 끈다.

@@ -7,8 +7,20 @@ import {
   PaperclipIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Form, useNavigate, useNavigation } from "react-router";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
+import {
+  Form,
+  useBeforeUnload,
+  useBlocker,
+  useNavigate,
+  useNavigation,
+} from "react-router";
 
 import {
   createGroupPostWithAttachments,
@@ -49,6 +61,30 @@ export function needsPostIdentityConfirmation(
   alwaysAnonymous: boolean,
 ): boolean {
   return identity === "staff" || (identity === "anonymous" && !alwaysAnonymous);
+}
+
+export function isPostDraftDirty({
+  mode,
+  initial,
+  title,
+  body,
+  categoryId,
+  attachmentsChanged,
+}: {
+  mode: "create" | "edit";
+  initial: Pick<PostFormValues, "title" | "body" | "categoryId">;
+  title: string;
+  body: string;
+  categoryId: string;
+  attachmentsChanged: boolean;
+}): boolean {
+  if (mode === "create") return body.trim().length > 0 || attachmentsChanged;
+  return (
+    title !== initial.title ||
+    body !== initial.body ||
+    categoryId !== initial.categoryId ||
+    attachmentsChanged
+  );
 }
 
 export function GroupPostOverlay({
@@ -148,6 +184,9 @@ function PostEditor({
   const additionsRef = useRef(additions);
   additionsRef.current = additions;
   const bodyRef = useRef(initial.body);
+  const [draftTitle, setDraftTitle] = useState(initial.title);
+  const [draftBody, setDraftBody] = useState(initial.body);
+  const [draftCategoryId, setDraftCategoryId] = useState(initial.categoryId);
   const [saving, setSaving] = useState(false);
   const [pendingIdentity, setPendingIdentity] = useState<PostFormValues | null>(
     null,
@@ -155,6 +194,37 @@ function PostEditor({
   const [progress, setProgress] = useState<PostSaveProgress | null>(null);
   const session = useRef(createPostUploadSession());
   const totalCount = existing.length + additions.length;
+  const originalAttachmentOrder =
+    post?.attachments.map((item) => item.attachment_id) ?? [];
+  const attachmentsChanged =
+    additions.length > 0 ||
+    removedIds.size > 0 ||
+    attachmentOrder.length !== originalAttachmentOrder.length ||
+    attachmentOrder.some(
+      (key, index) => key !== originalAttachmentOrder[index],
+    );
+  const dirty = isPostDraftDirty({
+    mode,
+    initial,
+    title: draftTitle,
+    body: draftBody,
+    categoryId: draftCategoryId,
+    attachmentsChanged,
+  });
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      dirty && !saving && currentLocation.pathname !== nextLocation.pathname,
+  );
+
+  useBeforeUnload(
+    useCallback(
+      (event) => {
+        if (!dirty || saving) return;
+        event.preventDefault();
+      },
+      [dirty, saving],
+    ),
+  );
 
   useEffect(() => () => additionsRef.current.forEach(releasePostFile), []);
 
@@ -294,132 +364,146 @@ function PostEditor({
         : "저장 중";
 
   return (
-    <Form
-      method="post"
-      onSubmit={(event) => void submit(event)}
-      className="flex min-h-0 flex-1 flex-col"
-      {...dropHandlers}
-    >
-      <input type="hidden" name="intent" value={mode} />
-      <header className="shrink-0 border-b bg-background pt-[env(safe-area-inset-top)] md:border-b-0 md:bg-muted/40">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-3 sm:px-6 md:border-x md:border-b md:bg-background md:shadow-sm">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="작성 화면 닫기"
-            onClick={onClose}
-          >
-            <ArrowLeftIcon />
-          </Button>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate font-semibold">
-              {mode === "create" ? "새 게시물" : "게시물 수정"}
-            </h1>
-            <p className="truncate text-xs text-muted-foreground">
-              {groupName}
-            </p>
-          </div>
-          <Button type="submit" disabled={pending || saving}>
-            {pending || saving ? <Spinner /> : null}{" "}
-            {saving ? progressLabel : mode === "create" ? "게시" : "저장"}
-          </Button>
-        </div>
-      </header>
-
-      <main className="min-h-0 flex-1 overflow-y-auto md:bg-muted/40">
-        <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-5 sm:px-6 sm:py-8 md:border-x md:bg-background md:shadow-sm">
-          <div className="grid gap-2">
-            <div
-              className={cn(
-                "grid gap-2",
-                mode === "create" && identities.length > 1 && "grid-cols-2",
-              )}
+    <>
+      <Form
+        method="post"
+        onSubmit={(event) => void submit(event)}
+        onChange={(event) => {
+          const target = event.target;
+          if (!(
+            target instanceof HTMLInputElement ||
+            target instanceof HTMLSelectElement
+          )) {
+            return;
+          }
+          if (target.name === "title") setDraftTitle(target.value);
+          if (target.name === "categoryId") setDraftCategoryId(target.value);
+        }}
+        className="flex min-h-0 flex-1 flex-col"
+        {...dropHandlers}
+      >
+        <input type="hidden" name="intent" value={mode} />
+        <header className="shrink-0 border-b bg-background pt-[env(safe-area-inset-top)] md:border-b-0 md:bg-muted/40">
+          <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-3 sm:px-6 md:border-x md:border-b md:bg-background md:shadow-sm">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="작성 화면 닫기"
+              onClick={onClose}
             >
-              <Field error={formErrors?.categoryId}>
-                <NativeSelect
-                  name="categoryId"
-                  defaultValue={initial.categoryId}
-                  aria-label="카테고리"
-                  className="w-full"
-                >
-                  <NativeSelectOption value="">미분류</NativeSelectOption>
-                  {categories.map((category) => (
-                    <NativeSelectOption key={category.id} value={category.id}>
-                      {category.name}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </Field>
-              {mode === "create" && identities.length > 1 ? (
-                <Field error={formErrors?.authorIdentity}>
+              <ArrowLeftIcon />
+            </Button>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate font-semibold">
+                {mode === "create" ? "새 게시물" : "게시물 수정"}
+              </h1>
+              <p className="truncate text-xs text-muted-foreground">
+                {groupName}
+              </p>
+            </div>
+            <Button type="submit" disabled={pending || saving}>
+              {pending || saving ? <Spinner /> : null}{" "}
+              {saving ? progressLabel : mode === "create" ? "게시" : "저장"}
+            </Button>
+          </div>
+        </header>
+
+        <main className="min-h-0 flex-1 overflow-y-auto md:bg-muted/40">
+          <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-5 sm:px-6 sm:py-8 md:border-x md:bg-background md:shadow-sm">
+            <div className="grid gap-2">
+              <div
+                className={cn(
+                  "grid gap-2",
+                  mode === "create" && identities.length > 1 && "grid-cols-2",
+                )}
+              >
+                <Field error={formErrors?.categoryId}>
                   <NativeSelect
-                    name="authorIdentity"
-                    defaultValue={initial.authorIdentity}
-                    aria-label="작성 신원"
+                    name="categoryId"
+                    defaultValue={initial.categoryId}
+                    aria-label="카테고리"
                     className="w-full"
                   >
-                    {identities.map((identity) => (
-                      <NativeSelectOption key={identity} value={identity}>
-                        {identity === "identified"
-                          ? "실명"
-                          : identity === "anonymous"
-                            ? "익명"
-                            : "운영진"}
+                    <NativeSelectOption value="">미분류</NativeSelectOption>
+                    {categories.map((category) => (
+                      <NativeSelectOption key={category.id} value={category.id}>
+                        {category.name}
                       </NativeSelectOption>
                     ))}
                   </NativeSelect>
                 </Field>
-              ) : (
-                <input
-                  type="hidden"
-                  name="authorIdentity"
-                  value={initial.authorIdentity}
+                {mode === "create" && identities.length > 1 ? (
+                  <Field error={formErrors?.authorIdentity}>
+                    <NativeSelect
+                      name="authorIdentity"
+                      defaultValue={initial.authorIdentity}
+                      aria-label="작성 신원"
+                      className="w-full"
+                    >
+                      {identities.map((identity) => (
+                        <NativeSelectOption key={identity} value={identity}>
+                          {identity === "identified"
+                            ? "실명"
+                            : identity === "anonymous"
+                              ? "익명"
+                              : "운영진"}
+                        </NativeSelectOption>
+                      ))}
+                    </NativeSelect>
+                  </Field>
+                ) : (
+                  <input
+                    type="hidden"
+                    name="authorIdentity"
+                    value={initial.authorIdentity}
+                  />
+                )}
+              </div>
+
+              <Field error={formErrors?.title}>
+                <Input
+                  name="title"
+                  defaultValue={initial.title}
+                  maxLength={100}
+                  required
+                  aria-label="제목"
+                  placeholder="제목"
+                  className="h-9 rounded-md text-base font-medium"
                 />
-              )}
+              </Field>
             </div>
 
-            <Field error={formErrors?.title}>
-              <Input
-                name="title"
-                defaultValue={initial.title}
-                maxLength={100}
-                required
-                aria-label="제목"
-                placeholder="제목"
-                className="h-9 rounded-md text-base font-medium"
-              />
-            </Field>
+            <div className="flex min-h-[24rem] flex-1 flex-col pt-5">
+              <Field error={formErrors?.body}>
+                <PostBodyInput
+                  initialValue={initial.body}
+                  onValueChange={(value) => {
+                    bodyRef.current = value;
+                    setDraftBody(value);
+                  }}
+                />
+              </Field>
+            </div>
+            <AttachmentEditor
+              existing={existing}
+              additions={additions}
+              order={attachmentOrder}
+              disabled={saving}
+              isDragging={isDragging}
+              onSelect={addFiles}
+              onRemoveExisting={removeExisting}
+              onRemoveAddition={removeAddition}
+              onMove={move}
+            />
+            {formErrors?.form ? (
+              <p role="alert" className="mt-4 text-sm text-destructive">
+                {formErrors.form}
+              </p>
+            ) : null}
           </div>
-
-          <div className="flex min-h-[24rem] flex-1 flex-col pt-5">
-            <Field error={formErrors?.body}>
-              <PostBodyInput
-                initialValue={initial.body}
-                onValueChange={(value) => {
-                  bodyRef.current = value;
-                }}
-              />
-            </Field>
-          </div>
-          <AttachmentEditor
-            existing={existing}
-            additions={additions}
-            order={attachmentOrder}
-            disabled={saving}
-            isDragging={isDragging}
-            onSelect={addFiles}
-            onRemoveExisting={removeExisting}
-            onRemoveAddition={removeAddition}
-            onMove={move}
-          />
-          {formErrors?.form ? (
-            <p role="alert" className="mt-4 text-sm text-destructive">
-              {formErrors.form}
-            </p>
-          ) : null}
-        </div>
-      </main>
+        </main>
+      </Form>
       {pendingIdentity ? (
         <ConfirmDialog
           title={
@@ -442,7 +526,23 @@ function PostEditor({
           }}
         />
       ) : null}
-    </Form>
+      {blocker.state === "blocked" ? (
+        <ConfirmDialog
+          title={
+            mode === "create" ? "작성 중인 게시물" : "저장하지 않은 변경 사항"
+          }
+          description={
+            mode === "create"
+              ? "작성 중인 본문이나 첨부가 있습니다. 저장하지 않고 나갈까요?"
+              : "수정한 내용이 저장되지 않았습니다. 저장하지 않고 나갈까요?"
+          }
+          confirmLabel="나가기"
+          destructive
+          onCancel={() => blocker.reset()}
+          onConfirm={() => blocker.proceed()}
+        />
+      ) : null}
+    </>
   );
 }
 

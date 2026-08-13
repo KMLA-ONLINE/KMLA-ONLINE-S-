@@ -1,8 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { PostMarkdown } from "~/features/posts/components/post-markdown";
-import { TwemojiText } from "~/features/posts/components/twemoji-text";
 
 describe("PostMarkdown", () => {
   it("renders safe external links without rendering HTML or unsafe links", () => {
@@ -25,25 +24,11 @@ describe("PostMarkdown", () => {
       screen.queryByText("html", { selector: "b" }),
     ).not.toBeInTheDocument();
   });
-});
 
-describe("TwemojiText", () => {
-  it.each(["👍🏽", "🇰🇷", "👨‍👩‍👧‍👦"])(
-    "renders the complex sequence %s as one self-hosted image",
-    (emoji) => {
-      const { container } = render(<TwemojiText>{`A${emoji}B`}</TwemojiText>);
-      const image = screen.getByRole("img", { name: emoji });
-      expect(image).toHaveAttribute(
-        "src",
-        expect.stringMatching(/^\/twemoji\/15\.0\.0\/.+\.svg$/),
-      );
-      expect(container).toHaveTextContent("AB");
-    },
-  );
+  it("renders emoji as the original Unicode text", () => {
+    render(<PostMarkdown>{"이모지 👍🏽 🇰🇷 👨‍👩‍👧‍👦"}</PostMarkdown>);
 
-  it("falls back to the original Unicode when the asset fails", () => {
-    render(<TwemojiText>{"Hello 😀"}</TwemojiText>);
-    fireEvent.error(screen.getByRole("img", { name: "😀" }));
-    expect(screen.getByText("Hello 😀")).toBeInTheDocument();
+    expect(screen.getByText("이모지 👍🏽 🇰🇷 👨‍👩‍👧‍👦")).toBeInTheDocument();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 });

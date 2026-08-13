@@ -30,13 +30,7 @@ const { count, size, warnings } = await generateSW({
   // sw.js registers itself; the Vite manifest is a build artifact.
   // Promotional screenshots are only needed when the browser expands its
   // install UI; downloading them with the offline app shell wastes bandwidth.
-  globIgnores: [
-    "sw.js",
-    "workbox-*.js",
-    ".vite/**",
-    "screenshots/**",
-    "twemoji/15.0.0/**",
-  ],
+  globIgnores: ["sw.js", "workbox-*.js", ".vite/**", "screenshots/**"],
   runtimeCaching: [
     {
       // Vite content-hashes font filenames, so a cached entry can never go
@@ -48,18 +42,6 @@ const { count, size, warnings } = await generateSW({
         cacheName: "fonts",
         expiration: {
           maxEntries: 20,
-          maxAgeSeconds: 60 * 60 * 24 * 365,
-        },
-        cacheableResponse: { statuses: [0, 200] },
-      },
-    },
-    {
-      urlPattern: /\/twemoji\/15\.0\.0\/[0-9a-f-]+\.svg$/,
-      handler: "CacheFirst",
-      options: {
-        cacheName: "twemoji-15.0.0",
-        expiration: {
-          maxEntries: 500,
           maxAgeSeconds: 60 * 60 * 24 * 365,
         },
         cacheableResponse: { statuses: [0, 200] },
