@@ -40,6 +40,38 @@ describe("GroupPostCard", () => {
     );
   });
 
+  it("links identified and staff authors to their profile", () => {
+    stubOverflow(false);
+    renderCard(
+      groupPost({
+        author_identity: "staff",
+        author_name: "김서민",
+        author_pub_id: "author-pub-id",
+      }),
+    );
+
+    expect(screen.getAllByRole("link", { name: /김서민/ })[0]).toHaveAttribute(
+      "href",
+      "/profile/author-pub-id",
+    );
+    expect(screen.getByText("운영진")).toHaveClass("text-muted-foreground");
+  });
+
+  it("does not link anonymous authors to a profile", () => {
+    stubOverflow(false);
+    renderCard(
+      groupPost({
+        author_identity: "anonymous",
+        author_name: null as unknown as string,
+        author_pub_id: null as unknown as string,
+      }),
+    );
+
+    expect(
+      screen.queryByRole("link", { name: /익명 프로필/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it("omits the expander when the body fits", () => {
     stubOverflow(false);
     renderCard();

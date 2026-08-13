@@ -92,6 +92,7 @@ export default function NewGroupPostPage({
       values={actionData?.values}
       errors={actionData?.errors}
       identities={identities}
+      alwaysAnonymous={group.identity_policy === "always_anonymous"}
     />
   );
 }

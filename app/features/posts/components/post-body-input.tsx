@@ -6,7 +6,13 @@ const DesktopMarkdownEditor = lazy(
   () => import("~/features/posts/components/desktop-markdown-editor"),
 );
 
-export function PostBodyInput({ initialValue }: { initialValue: string }) {
+export function PostBodyInput({
+  initialValue,
+  onValueChange,
+}: {
+  initialValue: string;
+  onValueChange?: (value: string) => void;
+}) {
   const [desktop, setDesktop] = useState(false);
 
   useEffect(() => {
@@ -22,6 +28,7 @@ export function PostBodyInput({ initialValue }: { initialValue: string }) {
       <Textarea
         name="body"
         defaultValue={initialValue}
+        onChange={(event) => onValueChange?.(event.target.value)}
         maxLength={20_000}
         required
         aria-label="Markdown 본문"
@@ -34,7 +41,10 @@ export function PostBodyInput({ initialValue }: { initialValue: string }) {
     <Suspense
       fallback={<div className="min-h-72 rounded-md border" aria-busy="true" />}
     >
-      <DesktopMarkdownEditor initialValue={initialValue} />
+      <DesktopMarkdownEditor
+        initialValue={initialValue}
+        onValueChange={onValueChange}
+      />
     </Suspense>
   );
 }

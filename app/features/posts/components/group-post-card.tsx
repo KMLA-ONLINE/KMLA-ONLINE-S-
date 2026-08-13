@@ -64,15 +64,48 @@ export function GroupPostCard({
           post.is_pinned ? "pt-2" : "pt-4",
         )}
       >
-        <PostAuthorAvatar
-          identity={post.author_identity}
-          name={post.author_name}
-          avatarPath={post.author_avatar_path}
-          size="lg"
-        />
+        {post.author_identity !== "anonymous" && post.author_pub_id ? (
+          <Link
+            to={`/profile/${post.author_pub_id}`}
+            aria-label={`${authorName} 프로필`}
+          >
+            <PostAuthorAvatar
+              identity={post.author_identity}
+              name={post.author_name}
+              avatarPath={post.author_avatar_path}
+              size="lg"
+            />
+          </Link>
+        ) : (
+          <PostAuthorAvatar
+            identity={post.author_identity}
+            name={post.author_name}
+            avatarPath={post.author_avatar_path}
+            size="lg"
+          />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-semibold">{authorName}</span>
+            {post.author_identity !== "anonymous" && post.author_pub_id ? (
+              <Link
+                to={`/profile/${post.author_pub_id}`}
+                className="truncate text-sm font-semibold hover:underline"
+              >
+                {authorName}
+              </Link>
+            ) : (
+              <span className="truncate text-sm font-semibold">
+                {authorName}
+              </span>
+            )}
+            {post.author_identity === "staff" ? (
+              <Badge
+                variant="outline"
+                className="shrink-0 text-muted-foreground"
+              >
+                운영진
+              </Badge>
+            ) : null}
             {post.is_author && post.author_identity !== "identified" ? (
               <Badge variant="secondary" className="shrink-0">
                 나

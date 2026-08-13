@@ -47,7 +47,7 @@ import {
   StrikethroughIcon,
   Undo2Icon,
 } from "lucide-react";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import {
   isSafePostLink,
@@ -127,19 +127,34 @@ const imeSafeShortcuts = $prose(
 
 export default function DesktopMarkdownEditor({
   initialValue,
+  onValueChange,
 }: {
   initialValue: string;
+  onValueChange?: (value: string) => void;
 }) {
   return (
     <MilkdownProvider>
-      <EditorSurface initialValue={initialValue} />
+      <EditorSurface
+        initialValue={initialValue}
+        onValueChange={onValueChange}
+      />
     </MilkdownProvider>
   );
 }
 
-function EditorSurface({ initialValue }: { initialValue: string }) {
+function EditorSurface({
+  initialValue,
+  onValueChange,
+}: {
+  initialValue: string;
+  onValueChange?: (value: string) => void;
+}) {
   const input = useRef<HTMLInputElement>(null);
   const lastValue = useRef(sanitizePostMarkdown(initialValue));
+  const onValueChangeRef = useRef(onValueChange);
+  useEffect(() => {
+    onValueChangeRef.current = onValueChange;
+  }, [onValueChange]);
   const { get } = useEditor(
     (root) =>
       MilkdownEditor.make()
@@ -150,6 +165,7 @@ function EditorSurface({ initialValue }: { initialValue: string }) {
             const safe = sanitizePostMarkdown(markdown);
             lastValue.current = safe;
             if (input.current) input.current.value = safe;
+            onValueChangeRef.current?.(safe);
           });
         })
         .use(markdownSchema)
@@ -239,7 +255,7 @@ function EditorSurface({ initialValue }: { initialValue: string }) {
         </Tool>
       </div>
       <div
-        className="post-typography min-h-72"
+        className="post-typography h-72 overflow-y-auto"
         role="presentation"
         onClick={(event) => {
           if (!(event.ctrlKey || event.metaKey)) return;

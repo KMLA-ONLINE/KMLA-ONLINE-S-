@@ -57,6 +57,11 @@ export function GroupPostRow({
         <span className="truncate">
           {post.author_name || post.author_label}
         </span>
+        {post.author_identity === "staff" ? (
+          <Badge variant="outline" className="shrink-0 text-muted-foreground">
+            운영진
+          </Badge>
+        ) : null}
         {post.is_author && post.author_identity !== "identified" ? (
           <Badge variant="secondary" className="shrink-0">
             나

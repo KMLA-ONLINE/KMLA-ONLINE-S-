@@ -1,5 +1,5 @@
 import { PinIcon, XIcon } from "lucide-react";
-import { useFetcher } from "react-router";
+import { Link, useFetcher } from "react-router";
 
 import { GroupPostActionBar } from "~/features/posts/components/group-post-action-bar";
 import { GroupPostMenu } from "~/features/posts/components/group-post-menu";
@@ -56,9 +56,7 @@ export function PostDetail({
       <DialogContent showCloseButton={false} className={DETAIL_DIALOG_CLASS}>
         <DialogHeader className="relative flex-row items-center justify-center border-b p-3">
           <DialogTitle className="text-base font-semibold">
-            {post.author_identity === "staff"
-              ? "운영진 게시물"
-              : `${authorName}님의 게시물`}
+            {authorName}님의 게시물
           </DialogTitle>
           <DialogDescription className="sr-only">
             게시물 상세와 댓글
@@ -85,17 +83,49 @@ export function PostDetail({
               ) : null}
 
               <header className="flex items-center gap-3">
-                <PostAuthorAvatar
-                  identity={post.author_identity}
-                  name={post.author_name}
-                  avatarPath={post.author_avatar_path}
-                  size="lg"
-                />
+                {post.author_identity !== "anonymous" && post.author_pub_id ? (
+                  <Link
+                    to={`/profile/${post.author_pub_id}`}
+                    aria-label={`${authorName} 프로필`}
+                  >
+                    <PostAuthorAvatar
+                      identity={post.author_identity}
+                      name={post.author_name}
+                      avatarPath={post.author_avatar_path}
+                      size="lg"
+                    />
+                  </Link>
+                ) : (
+                  <PostAuthorAvatar
+                    identity={post.author_identity}
+                    name={post.author_name}
+                    avatarPath={post.author_avatar_path}
+                    size="lg"
+                  />
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-semibold">
-                      {authorName}
-                    </span>
+                    {post.author_identity !== "anonymous" &&
+                    post.author_pub_id ? (
+                      <Link
+                        to={`/profile/${post.author_pub_id}`}
+                        className="truncate text-sm font-semibold hover:underline"
+                      >
+                        {authorName}
+                      </Link>
+                    ) : (
+                      <span className="truncate text-sm font-semibold">
+                        {authorName}
+                      </span>
+                    )}
+                    {post.author_identity === "staff" ? (
+                      <Badge
+                        variant="outline"
+                        className="shrink-0 text-muted-foreground"
+                      >
+                        운영진
+                      </Badge>
+                    ) : null}
                     {post.is_author && post.author_identity !== "identified" ? (
                       <Badge variant="secondary" className="shrink-0">
                         나

@@ -38,10 +38,18 @@ import {
 import { useFileDrop } from "~/shared/hooks/use-file-drop";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
 import { cn } from "~/shared/lib/utils";
+import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 import { Spinner } from "~/shared/ui/spinner";
+
+export function needsPostIdentityConfirmation(
+  identity: PostIdentity,
+  alwaysAnonymous: boolean,
+): boolean {
+  return identity === "staff" || (identity === "anonymous" && !alwaysAnonymous);
+}
 
 export function GroupPostOverlay({
   mode,
@@ -53,6 +61,7 @@ export function GroupPostOverlay({
   values,
   errors,
   identities = ["identified"],
+  alwaysAnonymous = false,
 }: {
   mode: "create" | "detail" | "edit";
   slug: string;
@@ -63,6 +72,7 @@ export function GroupPostOverlay({
   values?: PostFormValues;
   errors?: PostFormErrors;
   identities?: PostIdentity[];
+  alwaysAnonymous?: boolean;
 }) {
   const navigation = useNavigation();
   const pending = navigation.state === "submitting";
@@ -86,6 +96,7 @@ export function GroupPostOverlay({
         values={values}
         errors={errors}
         identities={identities}
+        alwaysAnonymous={alwaysAnonymous}
         pending={pending}
         onClose={close}
       />
@@ -103,6 +114,7 @@ function PostEditor({
   values,
   errors,
   identities,
+  alwaysAnonymous,
   pending,
   onClose,
 }: {
@@ -115,6 +127,7 @@ function PostEditor({
   values?: PostFormValues;
   errors?: PostFormErrors;
   identities: PostIdentity[];
+  alwaysAnonymous: boolean;
   pending: boolean;
   onClose: () => void;
 }) {
@@ -134,7 +147,11 @@ function PostEditor({
   );
   const additionsRef = useRef(additions);
   additionsRef.current = additions;
+  const bodyRef = useRef(initial.body);
   const [saving, setSaving] = useState(false);
+  const [pendingIdentity, setPendingIdentity] = useState<PostFormValues | null>(
+    null,
+  );
   const [progress, setProgress] = useState<PostSaveProgress | null>(null);
   const session = useRef(createPostUploadSession());
   const totalCount = existing.length + additions.length;
@@ -176,27 +193,7 @@ function PostEditor({
     (files) => void addFiles(files, "mixed"),
   );
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (saving) return;
-    const data = new FormData(event.currentTarget);
-    const text = (name: string) => {
-      const value = data.get(name);
-      return typeof value === "string" ? value : "";
-    };
-    const nextValues: PostFormValues = {
-      title: text("title").trim(),
-      body: text("body").trim(),
-      categoryId: text("categoryId"),
-      authorIdentity: (text("authorIdentity") || "identified") as PostIdentity,
-    };
-    const nextErrors = validatePostForm(
-      nextValues,
-      totalCount,
-      mode === "create" ? identities : undefined,
-      categories.map((category) => category.id),
-    );
-    if (hasPostFormErrors(nextErrors)) return setFormErrors(nextErrors);
+  const save = async (nextValues: PostFormValues) => {
     setSaving(true);
     setFormErrors({});
     try {
@@ -221,9 +218,6 @@ function PostEditor({
               onProgress,
             );
       additions.forEach(releasePostFile);
-      // `replace`가 핵심이다. push하면 히스토리가 `그룹 → 작성 → 상세`가 되고, 상세 모달을
-      // 닫을 때(뒤로 가기) 방금 떠난 작성 화면이 다시 열린다. 저장이 끝난 작성·수정 화면은
-      // 돌아갈 곳이 아니므로 그 자리를 상세로 갈아끼운다.
       void navigate(`/groups/${slug}/posts/${postId}`, { replace: true });
     } catch (error) {
       setFormErrors({
@@ -235,6 +229,37 @@ function PostEditor({
       setSaving(false);
       setProgress(null);
     }
+  };
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (saving) return;
+    const data = new FormData(event.currentTarget);
+    const text = (name: string) => {
+      const value = data.get(name);
+      return typeof value === "string" ? value : "";
+    };
+    const nextValues: PostFormValues = {
+      title: text("title").trim(),
+      body: bodyRef.current.trim(),
+      categoryId: text("categoryId"),
+      authorIdentity: (text("authorIdentity") || "identified") as PostIdentity,
+    };
+    const nextErrors = validatePostForm(
+      nextValues,
+      totalCount,
+      mode === "create" ? identities : undefined,
+      categories.map((category) => category.id),
+    );
+    if (hasPostFormErrors(nextErrors)) return setFormErrors(nextErrors);
+    if (
+      mode === "create" &&
+      needsPostIdentityConfirmation(nextValues.authorIdentity, alwaysAnonymous)
+    ) {
+      setPendingIdentity(nextValues);
+      return;
+    }
+    void save(nextValues);
   };
 
   const removeExisting = (id: string) => {
@@ -277,7 +302,7 @@ function PostEditor({
     >
       <input type="hidden" name="intent" value={mode} />
       <header className="shrink-0 border-b bg-background pt-[env(safe-area-inset-top)] md:border-b-0 md:bg-muted/40">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-3 sm:px-6 md:border-x md:border-b md:bg-background">
+        <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-3 sm:px-6 md:border-x md:border-b md:bg-background md:shadow-sm">
           <Button
             type="button"
             variant="ghost"
@@ -369,7 +394,12 @@ function PostEditor({
 
           <div className="flex min-h-[24rem] flex-1 flex-col pt-5">
             <Field error={formErrors?.body}>
-              <PostBodyInput initialValue={initial.body} />
+              <PostBodyInput
+                initialValue={initial.body}
+                onValueChange={(value) => {
+                  bodyRef.current = value;
+                }}
+              />
             </Field>
           </div>
           <AttachmentEditor
@@ -390,6 +420,28 @@ function PostEditor({
           ) : null}
         </div>
       </main>
+      {pendingIdentity ? (
+        <ConfirmDialog
+          title={
+            pendingIdentity.authorIdentity === "staff"
+              ? "운영진 명의로 작성"
+              : "익명으로 작성"
+          }
+          description={
+            pendingIdentity.authorIdentity === "staff"
+              ? "이 게시물은 그룹 운영진 명의로 표시됩니다. 게시할까요?"
+              : "이 게시물은 작성자의 이름을 표시하지 않습니다. 익명으로 게시할까요?"
+          }
+          confirmLabel="게시"
+          pending={saving}
+          onCancel={() => setPendingIdentity(null)}
+          onConfirm={() => {
+            const values = pendingIdentity;
+            setPendingIdentity(null);
+            void save(values);
+          }}
+        />
+      ) : null}
     </Form>
   );
 }

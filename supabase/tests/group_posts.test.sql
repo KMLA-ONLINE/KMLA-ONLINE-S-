@@ -151,13 +151,15 @@ select is(
   (select author_label from public.get_group_post((select id from public.posts where title = '운영진 글'))),
   '운영진', 'staff response uses the staff label'
 );
-select is(
+select isnt(
   (select author_pub_id from public.get_group_post((select id from public.posts where title = '운영진 글'))),
-  null::text, 'staff response never exposes actual identity'
+  null::text,
+  'staff response exposes the author profile link'
 );
 select is(
   (select author_name from public.get_group_post((select id from public.posts where title = '운영진 글'))),
-  null::text, 'staff response never exposes actual author name'
+  '홍길동',
+  'staff response uses the author profile name'
 );
 select lives_ok(
   $$select public.set_group_post_pinned((select id from public.posts where title = '운영진 글'), true)$$,

@@ -37,4 +37,15 @@ describe("PostBodyInput", () => {
     );
     expect(screen.getByRole("textbox")).toBeInTheDocument();
   });
+
+  it("reports the current mobile draft independently of form snapshots", () => {
+    const onValueChange = vi.fn();
+    render(<PostBodyInput initialValue="본문" onValueChange={onValueChange} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Markdown 본문" }), {
+      target: { value: "수정한 본문" },
+    });
+
+    expect(onValueChange).toHaveBeenLastCalledWith("수정한 본문");
+  });
 });
