@@ -31,7 +31,7 @@ export default function MainAppLayout() {
   });
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background">
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-background">
       {chrome.header === "none" ? null : (
         <AppHeader
           className={cn(
