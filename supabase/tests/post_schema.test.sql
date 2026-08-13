@@ -447,11 +447,10 @@ select set_config(
 );
 set local role authenticated;
 
-select throws_ok(
-  $$select * from public.posts$$,
-  '42501',
-  null,
-  'authenticated users cannot access posts before read policies land'
+select is(
+  (select count(*) from public.posts),
+  2::bigint,
+  'authenticated members can read published posts in their groups'
 );
 
 select throws_ok(
@@ -469,8 +468,8 @@ select ok(
 );
 
 select ok(
-  not has_table_privilege('authenticated', 'public.posts', 'SELECT'),
-  'authenticated has no posts select grant yet'
+  has_table_privilege('authenticated', 'public.posts', 'SELECT'),
+  'authenticated has the posts select grant constrained by RLS'
 );
 
 select ok(

@@ -124,6 +124,10 @@ file_size_limit = "50MiB"
 # allowed_mime_types = ["image/png", "image/jpeg"]
 # objects_path = "./images"
 
+[storage.buckets.post-attachments]
+public = false
+file_size_limit = "30MiB"
+
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
 enabled = true
@@ -390,6 +394,9 @@ policy = "per_worker"
 inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
+
+[functions.cleanup-post-attachments]
+verify_jwt = false
 
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"

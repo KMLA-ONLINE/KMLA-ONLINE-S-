@@ -207,7 +207,7 @@ export function GroupCreateForm({
                     비공개 · 초대 전용
                   </NativeSelectOption>
                   <NativeSelectOption value="request">
-                    공개 · 승인 후 가입
+                    공개 · 승인 가입
                   </NativeSelectOption>
                   <NativeSelectOption value="open">공개</NativeSelectOption>
                 </NativeSelect>

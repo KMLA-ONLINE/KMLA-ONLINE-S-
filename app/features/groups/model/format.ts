@@ -8,19 +8,19 @@ import type {
 
 const JOIN_POLICY_LABELS: Record<GroupJoinPolicy, string> = {
   open: "즉시 가입",
-  request: "승인 후 가입",
+  request: "승인 가입",
   invite_only: "초대 전용",
 };
 
 const IDENTITY_POLICY_LABELS: Record<GroupIdentityPolicy, string> = {
   identified: "실명 활동",
-  optional_anonymous: "익명 선택 가능",
+  optional_anonymous: "익명 선택",
   always_anonymous: "항상 익명",
 };
 
 const POSTING_POLICY_LABELS: Record<GroupPostingPolicy, string> = {
-  members: "모든 멤버 작성",
-  staff: "운영진만 작성",
+  members: "모든 멤버",
+  staff: "운영진만",
 };
 
 const MEMBER_ROLE_LABELS: Record<GroupMemberRole, string> = {

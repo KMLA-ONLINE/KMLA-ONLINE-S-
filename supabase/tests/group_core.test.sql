@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(38);
+select plan(39);
 
 insert into public.groups (
   id,
@@ -200,6 +200,11 @@ select ok(
 select ok(
   not has_table_privilege('authenticated', 'public.groups', 'DELETE'),
   'authenticated users cannot delete groups directly'
+);
+
+select ok(
+  not has_table_privilege('authenticated', 'public.groups', 'INSERT'),
+  'authenticated users cannot insert groups directly'
 );
 
 select ok(

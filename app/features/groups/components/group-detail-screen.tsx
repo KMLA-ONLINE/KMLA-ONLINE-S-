@@ -7,7 +7,6 @@ import {
   MessageSquareTextIcon,
   MoreHorizontalIcon,
   PinIcon,
-  SettingsIcon,
   UsersIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -24,6 +23,12 @@ import {
   getGroupPostingPolicyLabel,
 } from "~/features/groups/model/format";
 import type { GroupDetail } from "~/features/groups/model/types";
+import {
+  CategoryManager,
+  GroupPostsPanel,
+  type GroupCategory,
+  type GroupPostPage,
+} from "~/features/posts";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
@@ -54,10 +59,14 @@ export function GroupDetailScreen({
   group,
   profileId,
   isTeacher,
+  categories = [],
+  posts = { posts: [], nextCursor: null },
 }: {
   group: GroupDetail;
   profileId: number;
   isTeacher: boolean;
+  categories?: GroupCategory[];
+  posts?: GroupPostPage;
 }) {
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -72,6 +81,8 @@ export function GroupDetailScreen({
   const canManage =
     group.member_role === "owner" || group.member_role === "admin";
   const canCurate = canManage || group.member_role === "manager";
+  const canCreatePost =
+    isMember && (group.posting_policy === "members" || canCurate);
   const canViewMembers =
     group.identity_policy !== "always_anonymous" || canManage;
   const requestedTab = searchParams.get("tab");
@@ -245,10 +256,15 @@ export function GroupDetailScreen({
       <div className="grid gap-6 py-3 md:py-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="min-w-0 lg:order-1">
           {tab === "posts" ? (
-            <EmptyTabCard
-              icon={<MessageSquareTextIcon aria-hidden />}
-              title="게시물"
-              description="아직 게시물이 없습니다."
+            <GroupPostsPanel
+              key={posts.posts
+                .map((post) => `${post.post_id}:${post.is_pinned}`)
+                .join("|")}
+              groupId={group.group_id}
+              slug={group.slug}
+              categories={categories}
+              initialPage={posts}
+              canCreate={canCreatePost}
             />
           ) : tab === "members" ? (
             <EmptyTabCard
@@ -257,11 +273,7 @@ export function GroupDetailScreen({
               description="멤버 명부 기능을 준비하고 있습니다."
             />
           ) : (
-            <EmptyTabCard
-              icon={<SettingsIcon aria-hidden />}
-              title="그룹 설정"
-              description="그룹 설정 기능을 준비하고 있습니다."
-            />
+            <CategoryManager groupId={group.group_id} categories={categories} />
           )}
         </div>
 

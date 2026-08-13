@@ -1,6 +1,26 @@
 -- Development seed data. Runs on `npm run db:reset` after every migration.
 -- Keep this idempotent and safe to run repeatedly; it never touches production.
 
+select vault.create_secret(
+  'http://host.docker.internal:54621',
+  'project_url',
+  'Local API URL used by scheduled development jobs'
+)
+where not exists (
+  select 1 from vault.decrypted_secrets where name = 'project_url'
+);
+
+select vault.create_secret(
+  'local-post-attachment-cleanup-only',
+  'post_attachment_cleanup_secret',
+  'Development-only cleanup function secret'
+)
+where not exists (
+  select 1
+  from vault.decrypted_secrets
+  where name = 'post_attachment_cleanup_secret'
+);
+
 insert into auth.users (
   instance_id,
   id,
@@ -340,3 +360,62 @@ values (
   (select id from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001')
 )
 on conflict (group_id, profile_id) do nothing;
+
+insert into public.group_categories (id, group_id, name, position)
+values
+  ('80000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', '필독', 0),
+  ('80000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003', '제작', 0),
+  ('80000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000003', '질문', 1)
+on conflict (id) do update set
+  name = excluded.name,
+  position = excluded.position,
+  updated_at = now();
+
+insert into public.posts (
+  id, kind, body, group_id, title, category_id, author_identity,
+  display_author_profile_id, pinned_at, created_at, published_at
+)
+values
+  (
+    '90000000-0000-0000-0000-000000000001', 'group',
+    '이번 주 프로젝트 일정을 확인해 주세요.',
+    '20000000-0000-0000-0000-000000000003', '이번 주 프로젝트 일정',
+    '80000000-0000-0000-0000-000000000002', 'identified',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000001'),
+    '2026-08-13 01:00:00+00', '2026-08-13 00:00:00+00', '2026-08-13 00:00:00+00'
+  ),
+  (
+    '90000000-0000-0000-0000-000000000002', 'group',
+    '익명으로 남기는 제작 장비 사용 팁입니다.',
+    '20000000-0000-0000-0000-000000000003', '제작 장비 사용 팁',
+    null, 'anonymous', null, null,
+    '2026-08-13 02:00:00+00', '2026-08-13 02:00:00+00'
+  ),
+  (
+    '90000000-0000-0000-0000-000000000003', 'group',
+    '학교 행사 준비 일정을 안내합니다.',
+    '20000000-0000-0000-0000-000000000001', '학교 행사 준비 안내',
+    '80000000-0000-0000-0000-000000000001', 'staff', null, null,
+    '2026-08-13 03:00:00+00', '2026-08-13 03:00:00+00'
+  )
+on conflict (id) do update set
+  body = excluded.body,
+  title = excluded.title,
+  category_id = excluded.category_id,
+  pinned_at = excluded.pinned_at;
+
+insert into private.post_authors (post_id, profile_id)
+values
+  (
+    '90000000-0000-0000-0000-000000000001',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000001')
+  ),
+  (
+    '90000000-0000-0000-0000-000000000002',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000002')
+  ),
+  (
+    '90000000-0000-0000-0000-000000000003',
+    (select id from public.profiles where pub_id = '30000000-0000-0000-0000-000000000001')
+  )
+on conflict (post_id) do update set profile_id = excluded.profile_id;

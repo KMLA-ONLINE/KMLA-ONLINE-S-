@@ -206,6 +206,71 @@ export type Database = {
           },
         ]
       }
+      post_attachments: {
+        Row: {
+          cleanup_lease_expires_at: string | null
+          cleanup_lease_id: string | null
+          created_at: string
+          deleted_at: string | null
+          height: number | null
+          id: string
+          mime_type: string
+          object_path: string
+          original_filename: string
+          position: number
+          post_id: string
+          ready_at: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["post_attachment_status"]
+          storage_bucket: string
+          width: number | null
+        }
+        Insert: {
+          cleanup_lease_expires_at?: string | null
+          cleanup_lease_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          height?: number | null
+          id?: string
+          mime_type: string
+          object_path: string
+          original_filename: string
+          position: number
+          post_id: string
+          ready_at?: string | null
+          size_bytes: number
+          status?: Database["public"]["Enums"]["post_attachment_status"]
+          storage_bucket?: string
+          width?: number | null
+        }
+        Update: {
+          cleanup_lease_expires_at?: string | null
+          cleanup_lease_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          height?: number | null
+          id?: string
+          mime_type?: string
+          object_path?: string
+          original_filename?: string
+          position?: number
+          post_id?: string
+          ready_at?: string | null
+          size_bytes?: number
+          status?: Database["public"]["Enums"]["post_attachment_status"]
+          storage_bucket?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_attachments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           author_identity: Database["public"]["Enums"]["post_identity"]
@@ -404,6 +469,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_post_attachment_cleanup: {
+        Args: { p_lease_seconds?: number; p_limit?: number }
+        Returns: {
+          attachment_id: string
+          lease_id: string
+          object_path: string
+          storage_bucket: string
+        }[]
+      }
+      complete_post_attachment_cleanup: {
+        Args: {
+          p_attachment_id: string
+          p_lease_id: string
+          p_object_deleted: boolean
+        }
+        Returns: boolean
+      }
       create_group: {
         Args: {
           p_description?: string
@@ -418,6 +500,43 @@ export type Database = {
           group_id: string
           slug: string
         }[]
+      }
+      create_group_category: {
+        Args: { p_group_id: string; p_name: string; p_position?: number }
+        Returns: {
+          created_at: string
+          group_id: string
+          id: string
+          name: string
+          position: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "group_categories"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_group_post: {
+        Args: {
+          p_author_identity: Database["public"]["Enums"]["post_identity"]
+          p_body: string
+          p_category_id?: string
+          p_group_id: string
+          p_publish?: boolean
+          p_title: string
+        }
+        Returns: string
+      }
+      delete_group_category: {
+        Args: { p_category_id: string }
+        Returns: undefined
+      }
+      delete_group_post: { Args: { p_post_id: string }; Returns: undefined }
+      delete_post_attachment: {
+        Args: { p_attachment_id: string }
+        Returns: undefined
       }
       discover_groups: {
         Args: {
@@ -442,6 +561,56 @@ export type Database = {
           requested_at: string
           slug: string
           sort_rank: number
+        }[]
+      }
+      finalize_post_attachment: {
+        Args: { p_attachment_id: string }
+        Returns: {
+          cleanup_lease_expires_at: string | null
+          cleanup_lease_id: string | null
+          created_at: string
+          deleted_at: string | null
+          height: number | null
+          id: string
+          mime_type: string
+          object_path: string
+          original_filename: string
+          position: number
+          post_id: string
+          ready_at: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["post_attachment_status"]
+          storage_bucket: string
+          width: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "post_attachments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_group_post: {
+        Args: { p_post_id: string }
+        Returns: {
+          author_avatar_path: string
+          author_identity: Database["public"]["Enums"]["post_identity"]
+          author_label: string
+          author_name: string
+          author_pub_id: string
+          body: string
+          can_delete: boolean
+          can_edit: boolean
+          can_pin: boolean
+          category_id: string
+          category_name: string
+          edited_at: string
+          group_id: string
+          is_author: boolean
+          is_pinned: boolean
+          post_id: string
+          published_at: string
+          title: string
         }[]
       }
       get_my_profile: {
@@ -484,6 +653,35 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      list_group_posts: {
+        Args: {
+          p_category_id?: string
+          p_cursor_post_id?: string
+          p_cursor_published_at?: string
+          p_group_id: string
+          p_limit?: number
+        }
+        Returns: {
+          author_avatar_path: string
+          author_identity: Database["public"]["Enums"]["post_identity"]
+          author_label: string
+          author_name: string
+          author_pub_id: string
+          body: string
+          can_delete: boolean
+          can_edit: boolean
+          can_pin: boolean
+          category_id: string
+          category_name: string
+          edited_at: string
+          group_id: string
+          is_author: boolean
+          is_pinned: boolean
+          post_id: string
+          published_at: string
+          title: string
+        }[]
+      }
       list_popular_groups: {
         Args: { p_limit?: number }
         Returns: {
@@ -500,6 +698,130 @@ export type Database = {
           requested_at: string
           slug: string
         }[]
+      }
+      list_post_attachments: {
+        Args: { p_post_id: string }
+        Returns: {
+          attachment_id: string
+          created_at: string
+          height: number
+          mime_type: string
+          object_path: string
+          original_filename: string
+          position: number
+          post_id: string
+          ready_at: string
+          size_bytes: number
+          status: Database["public"]["Enums"]["post_attachment_status"]
+          storage_bucket: string
+          width: number
+        }[]
+      }
+      move_group_category: {
+        Args: { p_category_id: string; p_direction: number }
+        Returns: {
+          created_at: string
+          group_id: string
+          id: string
+          name: string
+          position: number
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "group_categories"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      prepare_post_attachment: {
+        Args: {
+          p_height?: number
+          p_mime_type: string
+          p_original_filename: string
+          p_post_id: string
+          p_size_bytes: number
+          p_width?: number
+        }
+        Returns: {
+          cleanup_lease_expires_at: string | null
+          cleanup_lease_id: string | null
+          created_at: string
+          deleted_at: string | null
+          height: number | null
+          id: string
+          mime_type: string
+          object_path: string
+          original_filename: string
+          position: number
+          post_id: string
+          ready_at: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["post_attachment_status"]
+          storage_bucket: string
+          width: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "post_attachments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      publish_group_post: { Args: { p_post_id: string }; Returns: string }
+      reorder_post_attachments: {
+        Args: { p_attachment_ids: string[]; p_post_id: string }
+        Returns: {
+          cleanup_lease_expires_at: string | null
+          cleanup_lease_id: string | null
+          created_at: string
+          deleted_at: string | null
+          height: number | null
+          id: string
+          mime_type: string
+          object_path: string
+          original_filename: string
+          position: number
+          post_id: string
+          ready_at: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["post_attachment_status"]
+          storage_bucket: string
+          width: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "post_attachments"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      search_group_posts: {
+        Args: { p_group_id: string; p_limit?: number; p_query: string }
+        Returns: {
+          author_avatar_path: string
+          author_identity: Database["public"]["Enums"]["post_identity"]
+          author_label: string
+          author_name: string
+          author_pub_id: string
+          body: string
+          can_delete: boolean
+          can_edit: boolean
+          can_pin: boolean
+          category_id: string
+          category_name: string
+          edited_at: string
+          group_id: string
+          is_author: boolean
+          is_pinned: boolean
+          post_id: string
+          published_at: string
+          title: string
+        }[]
+      }
+      set_group_post_pinned: {
+        Args: { p_pinned: boolean; p_post_id: string }
+        Returns: string
       }
       submit_my_profile: {
         Args: {
@@ -552,6 +874,32 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_group_category: {
+        Args: { p_category_id: string; p_name: string; p_position: number }
+        Returns: {
+          created_at: string
+          group_id: string
+          id: string
+          name: string
+          position: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "group_categories"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_group_post: {
+        Args: {
+          p_body: string
+          p_category_id?: string
+          p_post_id: string
+          p_title: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "member" | "admin"
@@ -563,6 +911,7 @@ export type Database = {
       group_kind: "official" | "unofficial"
       group_member_role: "owner" | "admin" | "manager" | "member"
       group_posting_policy: "members" | "staff"
+      post_attachment_status: "pending" | "ready" | "deleted"
       post_identity: "identified" | "anonymous" | "staff"
       post_kind: "group" | "profile"
       post_visibility: "public" | "private"
@@ -710,6 +1059,7 @@ export const Constants = {
       group_kind: ["official", "unofficial"],
       group_member_role: ["owner", "admin", "manager", "member"],
       group_posting_policy: ["members", "staff"],
+      post_attachment_status: ["pending", "ready", "deleted"],
       post_identity: ["identified", "anonymous", "staff"],
       post_kind: ["group", "profile"],
       post_visibility: ["public", "private"],

@@ -33,6 +33,38 @@
   --app-safe-r: env(safe-area-inset-right, 0px);
 }
 
+@layer components {
+  .post-typography {
+    @apply text-[15px] leading-7 break-words;
+  }
+  .post-typography p + p,
+  .post-typography p + h2,
+  .post-typography p + h3,
+  .post-typography h2 + p,
+  .post-typography h3 + p {
+    @apply mt-4;
+  }
+  .post-typography h2 {
+    @apply mt-6 text-xl leading-8 font-bold;
+  }
+  .post-typography h3 {
+    @apply mt-5 text-lg leading-7 font-semibold;
+  }
+  .post-typography a {
+    @apply text-primary underline underline-offset-2;
+  }
+  .post-typography .milkdown .ProseMirror {
+    @apply min-h-72 px-3 py-2 outline-none;
+  }
+  img.twemoji {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin: 0 0.05em 0 0.1em;
+    vertical-align: -0.1em;
+  }
+}
+
 @theme {
   --font-sans:
     Pretendard, "Inter Variable", ui-sans-serif, system-ui, sans-serif,

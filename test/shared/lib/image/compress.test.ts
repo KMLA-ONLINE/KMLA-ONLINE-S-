@@ -21,7 +21,7 @@ describe("compressImage", () => {
     expect(compress).not.toHaveBeenCalled();
   });
 
-  it("프리셋의 치수·용량으로 압축하고 WebP File로 정규화한다", async () => {
+  it("프리셋의 치수·품질로 한 번 압축하고 WebP File로 정규화한다", async () => {
     const file = new File([new Uint8Array(100)], "avatar.png", {
       type: "image/png",
     });
@@ -35,10 +35,10 @@ describe("compressImage", () => {
       file,
       expect.objectContaining({
         maxWidthOrHeight: 512,
-        maxSizeMB: 0.3,
-        initialQuality: 0.8,
+        initialQuality: 0.85,
         fileType: "image/webp",
         preserveExif: false,
+        alwaysKeepResolution: false,
       }),
     );
     expect(result).not.toBe(file);
@@ -55,13 +55,13 @@ describe("compressImage", () => {
     await compressImage(file, "photo");
     expect(compress).toHaveBeenLastCalledWith(
       file,
-      expect.objectContaining({ maxWidthOrHeight: 2048, maxSizeMB: 1.5 }),
+      expect.objectContaining({ maxWidthOrHeight: 3072, initialQuality: 0.85 }),
     );
 
     await compressImage(file, "banner");
     expect(compress).toHaveBeenLastCalledWith(
       file,
-      expect.objectContaining({ maxWidthOrHeight: 1600, maxSizeMB: 0.6 }),
+      expect.objectContaining({ maxWidthOrHeight: 2400, initialQuality: 0.85 }),
     );
   });
 
