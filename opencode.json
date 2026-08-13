@@ -1,5 +1,8 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "watcher": {
+    "ignore": ["**/.claude/**", ".claude/**/*"]
+  },
   "mcp": {
     "shadcn": {
       "type": "local",
