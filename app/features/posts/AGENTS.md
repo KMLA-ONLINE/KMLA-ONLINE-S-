@@ -23,6 +23,14 @@
 - `depth`와 `root_comment_id`가 실제 부모와 맞는지는 CHECK로 표현할 수 없다. 쓰기 경로가 `create_post_comment` 하나뿐이라는 전제 위에 서 있으므로 다른 insert 경로를 만들지 마라.
 - 댓글 본문은 평문이다. 게시물의 Markdown 파이프라인(`model/markdown.ts`)을 타지 않는다.
 
+## 본문 형식
+
+- 저장 형식은 줄바꿈 하나를 문단 안의 soft break로 둔다. 읽기 화면은 문단에 걸린 `whitespace-pre-wrap`이 그대로 줄바꿈으로 보여준다.
+- ProseMirror 문서에는 soft break에 해당하는 노드가 없다. 그래서 Milkdown에 넣을 때만 `toMilkdownMarkdown()`으로 줄바꿈 하나를 문단으로 갈라 준다. 이걸 빠뜨리면 여러 줄로 쓴 글이 편집기에서 한 줄로 붙어 버린다.
+- 그 변환을 공용 `toPostEditorMarkdown()`에 넣지 마라. `sanitizePostMarkdown()`과 `toPostRenderMarkdown()`이 같은 함수를 쓰고 있어서 정화 결과와 읽기 화면까지 함께 바뀐다.
+- 돌아오는 쪽은 `fromPostEditorMarkdown()`이 문단 사이를 줄바꿈 하나로 줄이므로 왕복이 맞는다.
+- 게시물에는 수정 표시를 두지 않는다. `PostEditedMark`는 댓글 전용이다.
+
 ## 카운트
 
 - `posts.comment_count`는 트리거가 유지하는 비정규화 값이며 삭제되지 않은 댓글만 센다. 목록 화면이 게시물마다 댓글을 세지 않게 하려는 것이다.

@@ -4,6 +4,21 @@ import { GroupPostActionBar } from "~/features/posts/components/group-post-actio
 import { renderRoute, screen } from "../../../router";
 
 describe("GroupPostActionBar", () => {
+  it("hides the comment count while nobody has commented", () => {
+    renderRoute(() => (
+      <GroupPostActionBar
+        sharePath="/groups/group/posts/post-id"
+        shareTitle="제목"
+        commentCount={0}
+        commentTo="/groups/group/posts/post-id"
+      />
+    ));
+
+    expect(
+      screen.getByRole("link", { name: "댓글 0개" }),
+    ).not.toHaveTextContent("0");
+  });
+
   it("keeps the reaction slot disabled until that feature lands", () => {
     renderRoute(() => (
       <GroupPostActionBar
@@ -14,7 +29,7 @@ describe("GroupPostActionBar", () => {
     ));
 
     expect(
-      screen.getByRole("button", { name: "좋아요 (준비 중)" }),
+      screen.getByRole("button", { name: "반응 (준비 중)" }),
     ).toBeDisabled();
     expect(screen.getByRole("button", { name: "공유" })).toBeEnabled();
   });

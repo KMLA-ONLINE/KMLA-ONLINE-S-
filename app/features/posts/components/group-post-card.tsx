@@ -10,7 +10,6 @@ import {
   splitPostAttachments,
 } from "~/features/posts/components/post-attachments";
 import { PostAuthorAvatar } from "~/features/posts/components/post-author-avatar";
-import { PostEditedMark } from "~/features/posts/components/post-edited-mark";
 import { PostMarkdown } from "~/features/posts/components/post-markdown";
 import type { GroupPost } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
@@ -119,7 +118,6 @@ export function GroupPostCard({
           </div>
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <RelativeTime value={post.published_at} />
-            <PostEditedMark at={post.edited_at} />
           </div>
         </div>
         <GroupPostMenu

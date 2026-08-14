@@ -1,34 +1,31 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { CommentComposer } from "~/features/posts/components/comment-composer";
 import { COMMENT_MAX_LENGTH } from "~/features/posts/model/comment-text";
 import type { PostIdentity } from "~/features/posts/model/types";
+import { renderRoute } from "../../../router";
 
-function renderComposer(
-  overrides: Partial<Parameters<typeof CommentComposer>[0]> = {},
-) {
+type ComposerProps = Parameters<typeof CommentComposer>[0];
+
+function renderComposer(overrides: Partial<ComposerProps> = {}) {
   const onSubmit = vi.fn();
   const onIdentityChange = vi.fn();
-  const onCancelReply = vi.fn();
   const identities: PostIdentity[] = ["identified", "anonymous"];
-  render(
-    <CommentComposer
-      identities={identities}
-      identity="identified"
-      onIdentityChange={onIdentityChange}
-      replyTo={null}
-      onCancelReply={onCancelReply}
-      onSubmit={onSubmit}
-      {...overrides}
-    />,
-  );
+  const props: ComposerProps = {
+    viewer: { name: "홍길동", avatarUrl: null },
+    identities,
+    identity: "identified",
+    onIdentityChange,
+    onSubmit,
+    ...overrides,
+  };
+  const view = renderRoute(() => <CommentComposer {...props} />);
   return {
-    user: userEvent.setup(),
+    ...view,
     onSubmit,
     onIdentityChange,
-    onCancelReply,
     input: screen.getByRole("textbox", { name: "댓글 입력" }),
   };
 }
@@ -60,8 +57,10 @@ describe("CommentComposer", () => {
     expect(onSubmit).toHaveBeenCalledWith("안녕하세");
   });
 
-  it("does not submit a blank comment", async () => {
+  it("keeps the send button unavailable while the draft is blank", async () => {
     const { user, onSubmit, input } = renderComposer();
+
+    expect(screen.getByRole("button", { name: "댓글 게시" })).toBeDisabled();
 
     await user.type(input, "   {Enter}");
     expect(onSubmit).not.toHaveBeenCalled();
@@ -73,24 +72,22 @@ describe("CommentComposer", () => {
   it("blocks submission once the body passes the length limit", async () => {
     const { onSubmit, input } = renderComposer();
 
-    await userEvent.setup().click(input);
     // 5,000자를 한 글자씩 입력하면 느리므로 값만 직접 넣는다.
-    const tooLong = "가".repeat(COMMENT_MAX_LENGTH + 1);
-    await userEvent.setup({ delay: null }).paste(tooLong);
+    const typist = userEvent.setup({ delay: null });
+    await typist.click(input);
+    await typist.paste("가".repeat(COMMENT_MAX_LENGTH + 1));
 
-    expect(screen.getByRole("button", { name: "댓글 등록" })).toBeDisabled();
-    expect(screen.getByText(`5,001 / 5,000`)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "댓글 게시" })).toBeDisabled();
+    expect(screen.getByText("5,001 / 5,000")).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it("confirms before switching the writing identity", async () => {
     const { user, onIdentityChange } = renderComposer();
 
-    await user.click(screen.getByRole("button", { name: /작성 신원/ }));
-    await user.click(await screen.findByRole("menuitem", { name: "익명" }));
-
+    await user.click(screen.getByRole("button", { name: /실명으로 작성 중/ }));
     expect(onIdentityChange).not.toHaveBeenCalled();
-    expect(screen.getByText("익명으로 작성")).toBeInTheDocument();
+    expect(await screen.findByText("익명으로 작성할까요?")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "바꾸기" }));
     expect(onIdentityChange).toHaveBeenCalledWith("anonymous");
@@ -99,28 +96,36 @@ describe("CommentComposer", () => {
   it("keeps the identity unchanged when the confirmation is dismissed", async () => {
     const { user, onIdentityChange } = renderComposer();
 
-    await user.click(screen.getByRole("button", { name: /작성 신원/ }));
-    await user.click(await screen.findByRole("menuitem", { name: "익명" }));
+    await user.click(screen.getByRole("button", { name: /실명으로 작성 중/ }));
     await user.click(await screen.findByRole("button", { name: "취소" }));
 
     expect(onIdentityChange).not.toHaveBeenCalled();
   });
 
-  it("hides the identity picker when only one identity is allowed", () => {
+  it("cycles through every identity the group allows", async () => {
+    const { user, onIdentityChange } = renderComposer({
+      identities: ["identified", "anonymous", "staff"],
+      identity: "anonymous",
+    });
+
+    await user.click(screen.getByRole("button", { name: /익명으로 작성 중/ }));
+    await user.click(await screen.findByRole("button", { name: "바꾸기" }));
+    expect(onIdentityChange).toHaveBeenCalledWith("staff");
+  });
+
+  it("hides the identity toggle when only one identity is allowed", () => {
     renderComposer({ identities: ["anonymous"], identity: "anonymous" });
 
     expect(
-      screen.queryByRole("button", { name: /작성 신원/ }),
+      screen.queryByRole("button", { name: /작성 중/ }),
     ).not.toBeInTheDocument();
   });
 
-  it("names the comment being replied to", async () => {
-    const { user, onCancelReply } = renderComposer({
-      replyTo: { commentId: "parent-id", authorLabel: "익명2" },
-    });
+  it("names the comment being replied to through its placeholder", () => {
+    renderComposer({ placeholder: "익명2님에게 답글 남기기…" });
 
-    expect(screen.getByText("익명2")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "답글 취소" }));
-    expect(onCancelReply).toHaveBeenCalled();
+    expect(
+      screen.getByPlaceholderText("익명2님에게 답글 남기기…"),
+    ).toBeInTheDocument();
   });
 });

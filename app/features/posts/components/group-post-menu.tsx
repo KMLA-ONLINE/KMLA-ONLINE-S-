@@ -15,7 +15,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/shared/ui/dropdown-menu";
 
@@ -75,7 +74,6 @@ export function GroupPostMenu({
               {isPinned ? "고정 해제" : "고정"}
             </DropdownMenuItem>
           ) : null}
-          {canDelete && (canEdit || canPin) ? <DropdownMenuSeparator /> : null}
           {canDelete ? (
             <DropdownMenuItem
               variant="destructive"

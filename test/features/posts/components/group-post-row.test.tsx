@@ -29,17 +29,26 @@ describe("GroupPostRow", () => {
     expect(onVisit).toHaveBeenCalledOnce();
   });
 
-  it("shows the category badge and the edited mark only when they apply", () => {
+  it("shows the category badge only when the post has one", () => {
     const { unmount } = renderRow();
     expect(screen.queryByText("공지")).not.toBeInTheDocument();
-    expect(screen.queryByText("수정됨")).not.toBeInTheDocument();
     unmount();
 
-    renderRow(
-      groupPost({ category_name: "공지", edited_at: "2026-08-13T01:00:00Z" }),
-    );
+    renderRow(groupPost({ category_name: "공지" }));
     expect(screen.getByText("공지")).toBeInTheDocument();
-    expect(screen.getByText("수정됨")).toBeInTheDocument();
+  });
+
+  it("does not mark an edited post", () => {
+    // 게시물에는 수정 표시를 두지 않는다. 댓글에만 남는다.
+    renderRow(groupPost({ edited_at: "2026-08-13T01:00:00Z" }));
+    expect(screen.queryByText("수정됨")).not.toBeInTheDocument();
+  });
+
+  it("shows the real comment count and keeps the reaction slot at zero", () => {
+    renderRow(groupPost({ comment_count: 12 }));
+
+    expect(screen.getByText("12")).toBeInTheDocument();
+    expect(screen.getByText("반응 (준비 중)")).toBeInTheDocument();
   });
 
   it("marks pinned posts", () => {

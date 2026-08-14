@@ -6,6 +6,7 @@ import {
   normalizePostMarkdownSource,
   parsePostMarkdown,
   sanitizePostMarkdown,
+  toMilkdownMarkdown,
   toPostEditorMarkdown,
   toPostRenderMarkdown,
 } from "~/features/posts/model/markdown";
@@ -88,6 +89,22 @@ describe("Markdown v1", () => {
     expect(toPostEditorMarkdown("첫째 줄\n\n둘째 줄")).toBe(
       "첫째 줄\n\n<br />\n\n둘째 줄",
     );
+  });
+
+  it("splits every stored line break into its own paragraph for the editor", () => {
+    // ProseMirror 문서에는 soft break가 없다. 갈라 주지 않으면 저장된 줄바꿈이 편집기에
+    // 들어가는 순간 사라져서, 여러 줄로 쓴 글이 한 줄로 보인다.
+    expect(toMilkdownMarkdown("첫째 줄\n둘째 줄")).toBe("첫째 줄\n\n둘째 줄");
+    expect(toMilkdownMarkdown("첫째 줄\n\n둘째 줄")).toBe(
+      "첫째 줄\n\n<br />\n\n둘째 줄",
+    );
+    // 편집기에서 돌아오는 값은 다시 저장 형식이 된다.
+    expect(fromPostEditorMarkdown(toMilkdownMarkdown("첫째 줄\n둘째 줄"))).toBe(
+      "첫째 줄\n둘째 줄",
+    );
+    expect(
+      fromPostEditorMarkdown(toMilkdownMarkdown("첫째 줄\n\n둘째 줄")),
+    ).toBe("첫째 줄\n\n둘째 줄");
   });
 
   it("renders only intentional blank lines with an empty-line marker", () => {

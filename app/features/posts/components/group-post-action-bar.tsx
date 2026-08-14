@@ -1,4 +1,4 @@
-import { HeartIcon, MessageCircleIcon, SendIcon } from "lucide-react";
+import { MessageCircleIcon, SendIcon, ThumbsUpIcon } from "lucide-react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 
@@ -10,9 +10,9 @@ const ACTION_CLASS =
 /**
  * 게시물 하단 액션 바.
  *
- * 반응은 아직 구현 전이라 자리만 잡고 비활성으로 둔다(기능 명세 §8.15). 카운트를 0으로 고정한
- * 것도 같은 이유다 — 서버가 내려주는 값이 아니라 자리를 지키는 표시다. `disabled` 하나로는
- * 이유가 전달되지 않아서 레이블에 "준비 중"을 적는다.
+ * 반응은 아직 구현 전이라 자리만 잡고 비활성으로 둔다(기능 명세 §8.15). 붙일 때 레이아웃이
+ * 흔들리지 않게 지금부터 같은 자리를 차지하게 하고, `disabled` 하나로는 이유가 전달되지 않아서
+ * 레이블에 "준비 중"을 적는다.
  *
  * 댓글은 목록에서는 상세로 보내고(`commentTo`), 상세에서는 입력창으로 보낸다(`onComment`).
  */
@@ -49,17 +49,26 @@ export function GroupPostActionBar({
   };
 
   const commentLabel = `댓글 ${commentCount}개`;
+  // 0은 숫자로 적지 않는다. 아직 아무도 남기지 않은 자리에 0이 붙으면 눈에 걸린다.
+  const commentInner = (
+    <>
+      <MessageCircleIcon className="size-4.5" aria-hidden="true" />
+      {commentCount > 0 ? commentCount : null}
+    </>
+  );
 
   return (
-    <div className={cn("flex items-center px-2 py-1", className)}>
+    <div
+      className={cn("flex items-center justify-between px-2 py-1", className)}
+    >
       <div className="flex items-center text-muted-foreground">
         <button
           type="button"
           disabled
-          aria-label="좋아요 (준비 중)"
+          aria-label="반응 (준비 중)"
           className={ACTION_CLASS}
         >
-          <HeartIcon className="size-4.5" />0
+          <ThumbsUpIcon className="size-4.5" aria-hidden="true" />
         </button>
         {commentTo ? (
           <Link
@@ -67,8 +76,7 @@ export function GroupPostActionBar({
             aria-label={commentLabel}
             className={ACTION_CLASS}
           >
-            <MessageCircleIcon className="size-4.5" />
-            {commentCount}
+            {commentInner}
           </Link>
         ) : (
           <button
@@ -77,8 +85,7 @@ export function GroupPostActionBar({
             className={ACTION_CLASS}
             onClick={onComment}
           >
-            <MessageCircleIcon className="size-4.5" />
-            {commentCount}
+            {commentInner}
           </button>
         )}
         <button
@@ -87,7 +94,7 @@ export function GroupPostActionBar({
           className={ACTION_CLASS}
           onClick={() => void share()}
         >
-          <SendIcon className="size-4.5" />
+          <SendIcon className="size-4.5" aria-hidden="true" />
         </button>
       </div>
     </div>

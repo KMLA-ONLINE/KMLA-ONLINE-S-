@@ -34,6 +34,7 @@ import {
 } from "~/features/posts/model/attachments";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
 import { PostBodyInput } from "~/features/posts/components/post-body-input";
+import type { CommentViewer } from "~/features/posts/components/comment-composer";
 import { PostDetail } from "~/features/posts/components/post-detail";
 import type {
   GroupCategory,
@@ -104,6 +105,7 @@ export function GroupPostOverlay({
   identities = ["identified"],
   alwaysAnonymous = false,
   comments,
+  viewer,
 }: {
   mode: "create" | "detail" | "edit";
   slug: string;
@@ -117,6 +119,8 @@ export function GroupPostOverlay({
   alwaysAnonymous?: boolean;
   /** 상세 모드에서만 쓴다. loader가 게시물과 함께 첫 페이지를 내려준다. */
   comments?: PostCommentPage;
+  /** 상세 모드에서만 쓴다. 댓글 입력창 왼쪽 아바타에 들어간다. */
+  viewer?: CommentViewer;
 }) {
   const navigation = useNavigation();
   const pending = navigation.state === "submitting";
@@ -125,10 +129,11 @@ export function GroupPostOverlay({
   const close = useModalClose(`/groups/${slug}`);
 
   if (mode === "detail") {
-    return post && comments ? (
+    return post && comments && viewer ? (
       <PostDetail
         post={post}
         slug={slug}
+        viewer={viewer}
         identities={identities}
         comments={comments}
       />

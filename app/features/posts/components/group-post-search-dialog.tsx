@@ -2,7 +2,6 @@ import { SearchIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 
-import { PostEditedMark } from "~/features/posts/components/post-edited-mark";
 import { searchGroupPosts } from "~/features/posts/data/queries";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
 import type { GroupPostSearchResult } from "~/features/posts/model/types";
@@ -177,7 +176,6 @@ export function GroupPostSearchDialog({
                       </span>
                       <span aria-hidden="true">·</span>
                       <RelativeTime value={post.published_at} />
-                      <PostEditedMark at={post.edited_at} />
                     </div>
                   </Link>
                 </li>

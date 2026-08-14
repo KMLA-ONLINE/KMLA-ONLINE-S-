@@ -38,7 +38,7 @@ export function PostBodyInput({
 
   return (
     <Suspense
-      fallback={<div className="min-h-72 rounded-md border" aria-busy="true" />}
+      fallback={<div className="min-h-96 rounded-md border" aria-busy="true" />}
     >
       <DesktopMarkdownEditor
         initialValue={value}

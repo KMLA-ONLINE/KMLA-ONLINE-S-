@@ -136,6 +136,27 @@ export function toPostEditorMarkdown(markdown: string): string {
   );
 }
 
+/**
+ * Milkdown(ProseMirror)에 넣을 Markdown.
+ *
+ * 저장 형식은 줄바꿈 하나를 문단 안의 soft break로 둔다. 읽기 화면은 문단에 걸린
+ * `whitespace-pre-wrap`이 그대로 줄바꿈으로 보여주지만, ProseMirror 문서에는 soft break에
+ * 해당하는 노드가 없어서 편집기에 넣는 순간 사라진다. 그래서 편집기로 들어갈 때만 줄바꿈
+ * 하나도 문단으로 갈라 준다.
+ *
+ * 되돌리는 쪽은 `fromPostEditorMarkdown`이 이미 문단 사이를 줄바꿈 하나로 줄이므로 왕복이 맞는다.
+ */
+export function toMilkdownMarkdown(markdown: string): string {
+  return normalizePostMarkdownSource(markdown).replace(
+    /\n+/g,
+    (breaks) =>
+      `\n\n${Array.from(
+        { length: breaks.length - 1 },
+        () => `${EMPTY_LINE_MARKER}\n\n`,
+      ).join("")}`,
+  );
+}
+
 export function fromPostEditorMarkdown(markdown: string): string {
   return normalizePostMarkdownSource(markdown)
     .split(/\n{2}/)
