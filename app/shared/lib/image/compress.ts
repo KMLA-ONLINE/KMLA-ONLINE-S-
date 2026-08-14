@@ -1,15 +1,8 @@
-import imageCompression from "browser-image-compression";
-// 워커는 `importScripts(libURL)`로 라이브러리를 다시 불러온다. 기본값은 jsDelivr URL이라
-// (버전은 고정돼 있어도) 런타임에 외부 출처를 타게 되고, 그러면 오프라인에서 압축이 죽고
-// `worker-src 'self'` CSP를 넣는 순간 함께 깨진다. Vite가 이 UMD 번들을 같은 출처 자산으로
-// 내보내게 해서 URL을 직접 넘긴다 — `build-sw.mjs`의 `**/*.js` 글로브에 걸려 프리캐시된다.
-import workerLibUrl from "browser-image-compression/dist/browser-image-compression.js?url";
-
 interface CompressionPolicy {
   /** 긴 변의 상한(px). */
   maxEdge: number;
-  /** 결과 용량 상한 힌트(MB). 라이브러리가 품질을 낮춰 근사한다. */
-  maxSizeMB: number;
+  /** 결과 용량 상한(byte). 초과하면 품질을 더 낮추지 않고 거부한다. */
+  maxBytes: number;
   /** 초기 품질(0 ~ 1). */
   quality: number;
 }
@@ -26,11 +19,11 @@ interface CompressionPolicy {
  */
 const PRESETS = {
   /** 아바타·그룹 아이콘. 목록에서 작게 뜨는 정사각. */
-  icon: { maxEdge: 512, maxSizeMB: 0.3, quality: 0.8 },
+  icon: { maxEdge: 512, maxBytes: 1024 * 1024, quality: 0.85 },
   /** 프로필·그룹 커버. 가로로 넓게 깔리는 띠. */
-  banner: { maxEdge: 1600, maxSizeMB: 0.6, quality: 0.8 },
+  banner: { maxEdge: 2400, maxBytes: 4 * 1024 * 1024, quality: 0.85 },
   /** 글·채팅에 첨부한 사진. 눌러서 크게 열 수 있다. */
-  photo: { maxEdge: 2048, maxSizeMB: 1.5, quality: 0.8 },
+  photo: { maxEdge: 3072, maxBytes: 8 * 1024 * 1024, quality: 0.85 },
 } as const satisfies Record<string, CompressionPolicy>;
 
 export type ImagePreset = keyof typeof PRESETS;
@@ -60,27 +53,45 @@ export async function compressImage(
 ): Promise<File> {
   if (!file.type.startsWith("image/")) return file;
 
-  const { maxEdge, maxSizeMB, quality } = PRESETS[preset];
-
-  let compressed: Blob;
-  try {
-    compressed = await imageCompression(file, {
-      maxWidthOrHeight: maxEdge,
-      maxSizeMB,
-      initialQuality: quality,
-      fileType: "image/webp",
-      useWebWorker: true,
-      libURL: workerLibUrl,
-      // 재인코딩하며 방향은 이미 반영되므로, 남는 건 떨궈야 할 메타데이터뿐이다.
-      // 라이브러리 기본값이지만 이 함수의 계약이라 명시해 둔다.
-      preserveExif: false,
-    });
-  } catch (cause) {
-    throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, { cause });
+  const { maxEdge, maxBytes, quality } = PRESETS[preset];
+  if (typeof createImageBitmap === "function") {
+    let bitmap: ImageBitmap;
+    try {
+      bitmap = await createImageBitmap(file, {
+        imageOrientation: "from-image",
+      });
+    } catch (cause) {
+      throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, {
+        cause,
+      });
+    }
+    const pixels = bitmap.width * bitmap.height;
+    bitmap.close();
+    if (pixels > 50_000_000)
+      throw new Error(`이미지는 50메가픽셀 이하여야 합니다: ${file.name}`);
   }
+
+  const compressed = await imageCompression(file, {
+    maxWidthOrHeight: maxEdge,
+    initialQuality: quality,
+    fileType: "image/webp",
+    useWebWorker: true,
+    libURL: workerLibUrl,
+    preserveExif: false,
+    alwaysKeepResolution: false,
+  }).catch((cause) => {
+    throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, { cause });
+  });
+  if (compressed.size > maxBytes)
+    throw new Error(`처리한 이미지가 용량 제한을 초과합니다: ${file.name}`);
 
   // 라이브러리가 이름·타입을 원본대로 남길 수 있어, 확장자와 MIME을 webp로 맞춰 다시 감싼다.
   // 스토리지의 insert 정책이 MIME을 보므로 일관돼야 한다.
   const base = file.name.replace(/\.[^./\\]+$/, "") || "image";
-  return new File([compressed], `${base}.webp`, { type: "image/webp" });
+  return new File([compressed], `${base}.webp`, {
+    type: "image/webp",
+    lastModified: file.lastModified,
+  });
 }
+import imageCompression from "browser-image-compression";
+import workerLibUrl from "browser-image-compression/dist/browser-image-compression.js?url";

@@ -34,7 +34,7 @@ begin
         birthday,
         status
       ) values (
-        '50000000-0000-0000-0000-000000000004',
+        'race-student',
         '동시 승인 학생',
         'student',
         '240096',
@@ -74,7 +74,7 @@ select is(
         'identified',
         'staff',
         (select id from public.profiles
-         where pub_id = '30000000-0000-0000-0000-000000000001')
+         where pub_id = 'kim-admin')
       )
       returning id
     $query$
@@ -89,7 +89,7 @@ select is(
     $query$
       update public.profiles
       set status = 'accepted'
-      where pub_id = '50000000-0000-0000-0000-000000000004'
+      where pub_id = 'race-student'
       returning id
     $query$
   ),
@@ -144,7 +144,7 @@ select is(
     where group_id = '50000000-0000-0000-0000-000000000005'
       and profile_id = (
         select id from public.profiles
-        where pub_id = '50000000-0000-0000-0000-000000000004'
+        where pub_id = 'race-student'
       )
   ),
   1::bigint,
@@ -165,7 +165,7 @@ select is(
   extensions.dblink_exec(
     'race_accept',
     $$delete from public.profiles
-      where pub_id = '50000000-0000-0000-0000-000000000004'$$
+      where pub_id = 'race-student'$$
   ),
   'DELETE 1',
   'concurrency test profile is removed'

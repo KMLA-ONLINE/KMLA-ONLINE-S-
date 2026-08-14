@@ -3,15 +3,33 @@ import { data, Outlet, redirect } from "react-router";
 import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import {
   cancelGroupJoinRequest,
+  approveGroupJoinRequest,
   getGroupErrorMessage,
   GroupDetailMobileHeader,
   GroupDetailScreen,
   joinGroup,
   leaveGroup,
+  listGroupJoinRequests,
+  listGroupMembers,
   loadGroupDetail,
   requestGroupJoin,
+  rejectGroupJoinRequest,
   setGroupPinned,
+  setGroupMemberRole,
+  transferGroupOwnership,
+  updateGroupSettings,
 } from "~/features/groups";
+import {
+  createGroupCategory,
+  deleteGroupCategory,
+  deleteGroupPost,
+  getPostErrorMessage,
+  listGroupCategories,
+  listGroupPosts,
+  moveGroupCategory,
+  setGroupPostPinned,
+  updateGroupCategory,
+} from "~/features/posts";
 import type { Route } from "./+types/detail";
 
 export const handle = defineAppChrome({
@@ -24,10 +42,30 @@ export const handle = defineAppChrome({
  * `groups/:slug`. 게시물 상세(`posts/:postId`)를 자식으로 가지므로 `<Outlet />`을 그린다 —
  * 게시물을 열어도 그룹 페이지가 언마운트되지 않아 스크롤 위치와 로더 데이터가 유지된다.
  */
-export async function clientLoader({ params }: Route.ClientLoaderArgs) {
+export async function clientLoader({
+  params,
+  request,
+}: Route.ClientLoaderArgs) {
   const group = await loadGroupDetail(params.slug);
   if (!group) throw new Response("그룹을 찾을 수 없습니다.", { status: 404 });
-  return { group };
+  if (group.membership_state !== "member") {
+    return { group, categories: [], posts: { posts: [], nextCursor: null } };
+  }
+  const searchParams = new URL(request.url).searchParams;
+  const memberTab = searchParams.get("tab") === "members";
+  const canModerate =
+    group.member_role === "owner" || group.member_role === "admin";
+  const [categories, posts, memberPage, joinRequests] = await Promise.all([
+    listGroupCategories(group.group_id),
+    listGroupPosts(group.group_id),
+    memberTab
+      ? listGroupMembers(group.group_id, searchParams.get("memberQuery") ?? "")
+      : Promise.resolve(undefined),
+    memberTab && canModerate
+      ? listGroupJoinRequests(group.group_id)
+      : Promise.resolve([]),
+  ]);
+  return { group, categories, posts, memberPage, joinRequests };
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
@@ -35,24 +73,181 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   const intent = formData.get("intent");
   const groupId = formData.get("groupId");
   const profileId = Number(formData.get("profileId"));
-  if (typeof groupId !== "string" || !Number.isSafeInteger(profileId)) {
+  const postIntent =
+    intent === "pin-post" ||
+    intent === "delete-post" ||
+    intent === "create-category" ||
+    intent === "rename-category" ||
+    intent === "move-category-up" ||
+    intent === "move-category-down" ||
+    intent === "delete-category";
+  const profileIntent =
+    intent === "pin" ||
+    intent === "join" ||
+    intent === "request" ||
+    intent === "cancel-request" ||
+    intent === "leave";
+  if (
+    (!postIntent && typeof groupId !== "string") ||
+    (profileIntent && !Number.isSafeInteger(profileId))
+  ) {
     return data({ error: "그룹을 찾을 수 없습니다." }, { status: 400 });
   }
 
   try {
-    if (intent === "pin") {
+    if (intent === "pin-post") {
+      const postId = formData.get("postId");
+      if (typeof postId !== "string")
+        return data({ error: "게시물을 찾을 수 없습니다." }, { status: 400 });
+      await setGroupPostPinned(postId, formData.get("pinned") === "true");
+    } else if (intent === "delete-post") {
+      // 카드의 ⋯ 메뉴에서 지우는 경로. 게시물 상세 route에도 같은 삭제가 있지만 그쪽은
+      // 지운 뒤 그룹으로 redirect한다 — 여기서는 이미 그룹에 있으므로 revalidate로 충분하다.
+      const postId = formData.get("postId");
+      if (typeof postId !== "string")
+        return data({ error: "게시물을 찾을 수 없습니다." }, { status: 400 });
+      await deleteGroupPost(postId);
+    } else if (intent === "create-category") {
+      const rawName = formData.get("name");
+      const name = typeof rawName === "string" ? rawName.trim() : "";
+      if (!name || Array.from(name).length > 30 || typeof groupId !== "string")
+        return data(
+          { error: "카테고리 이름은 1자 이상 30자 이하로 입력해 주세요." },
+          { status: 400 },
+        );
+      await createGroupCategory(groupId, name);
+    } else if (intent === "rename-category") {
+      const categoryId = formData.get("categoryId");
+      const rawName = formData.get("name");
+      const name = typeof rawName === "string" ? rawName.trim() : "";
+      const position = Number(formData.get("position"));
+      if (
+        typeof categoryId !== "string" ||
+        !name ||
+        Array.from(name).length > 30 ||
+        !Number.isFinite(position)
+      )
+        return data(
+          { error: "카테고리 정보를 다시 확인해 주세요." },
+          { status: 400 },
+        );
+      await updateGroupCategory(categoryId, name, position);
+    } else if (
+      intent === "move-category-up" ||
+      intent === "move-category-down"
+    ) {
+      const categoryId = formData.get("categoryId");
+      if (typeof categoryId !== "string")
+        return data(
+          { error: "카테고리 순서를 다시 확인해 주세요." },
+          { status: 400 },
+        );
+      await moveGroupCategory(
+        categoryId,
+        intent === "move-category-up" ? -1 : 1,
+      );
+    } else if (intent === "delete-category") {
+      const categoryId = formData.get("categoryId");
+      if (typeof categoryId !== "string")
+        return data({ error: "카테고리를 찾을 수 없습니다." }, { status: 400 });
+      await deleteGroupCategory(categoryId);
+    } else if (
+      intent === "approve-join-request" ||
+      intent === "reject-join-request"
+    ) {
+      const requestId = formData.get("requestId");
+      if (typeof groupId !== "string" || typeof requestId !== "string")
+        return data(
+          { error: "가입 요청을 찾을 수 없습니다." },
+          { status: 400 },
+        );
+      if (intent === "approve-join-request")
+        await approveGroupJoinRequest(groupId, requestId);
+      else await rejectGroupJoinRequest(groupId, requestId);
+    } else if (intent === "set-member-role") {
+      const memberId = formData.get("memberId");
+      const role = formData.get("role");
+      if (
+        typeof groupId !== "string" ||
+        typeof memberId !== "string" ||
+        (role !== "admin" && role !== "manager" && role !== "member")
+      )
+        return data(
+          { error: "멤버 역할을 다시 확인해 주세요." },
+          { status: 400 },
+        );
+      await setGroupMemberRole(groupId, memberId, role);
+    } else if (intent === "transfer-ownership") {
+      const memberId = formData.get("memberId");
+      if (typeof groupId !== "string" || typeof memberId !== "string")
+        return data({ error: "멤버를 찾을 수 없습니다." }, { status: 400 });
+      await transferGroupOwnership(groupId, memberId);
+    } else if (intent === "update-settings") {
+      const rawName = formData.get("name");
+      const description = formData.get("description");
+      const joinPolicy = formData.get("joinPolicy");
+      const identityPolicy = formData.get("identityPolicy");
+      const postingPolicy = formData.get("postingPolicy");
+      if (
+        typeof groupId !== "string" ||
+        typeof rawName !== "string" ||
+        typeof description !== "string" ||
+        (joinPolicy !== "open" &&
+          joinPolicy !== "request" &&
+          joinPolicy !== "invite_only") ||
+        (identityPolicy !== "identified" &&
+          identityPolicy !== "optional_anonymous" &&
+          identityPolicy !== "always_anonymous") ||
+        (postingPolicy !== "members" && postingPolicy !== "staff")
+      )
+        return data(
+          { error: "그룹 설정을 다시 확인해 주세요." },
+          { status: 400 },
+        );
+      const name = rawName.trim();
+      if (
+        !name ||
+        Array.from(name).length > 50 ||
+        Array.from(description).length > 2000
+      ) {
+        return data(
+          {
+            error:
+              "그룹 이름은 1자 이상 50자 이하, 설명은 2,000자 이하로 입력해 주세요.",
+          },
+          { status: 400 },
+        );
+      }
+      await updateGroupSettings(groupId, {
+        name,
+        description,
+        joinPolicy,
+        identityPolicy,
+        postingPolicy,
+      });
+    } else if (intent === "pin") {
+      if (typeof groupId !== "string")
+        return data({ error: "그룹을 찾을 수 없습니다." }, { status: 400 });
       await setGroupPinned(
         groupId,
         profileId,
         formData.get("pinned") === "true",
       );
     } else if (intent === "join") {
+      if (typeof groupId !== "string")
+        return data({ error: "그룹을 찾을 수 없습니다." }, { status: 400 });
       await joinGroup(groupId, profileId);
     } else if (intent === "request") {
+      if (typeof groupId !== "string")
+        return data({ error: "그룹을 찾을 수 없습니다." }, { status: 400 });
       await requestGroupJoin(groupId, profileId);
     } else if (intent === "cancel-request") {
+      if (typeof groupId !== "string")
+        return data({ error: "그룹을 찾을 수 없습니다." }, { status: 400 });
       await cancelGroupJoinRequest(groupId, profileId);
     } else if (intent === "leave") {
+      if (typeof groupId !== "string")
+        return data({ error: "그룹을 찾을 수 없습니다." }, { status: 400 });
       // 비공개 그룹은 나가는 즉시 상세를 읽을 권한이 사라진다. 이 화면에 머무르면
       // 재검증이 404로 떨어지므로 그룹 목록으로 보낸다.
       if (!(await leaveGroup(groupId, profileId))) {
@@ -64,7 +259,14 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     }
     return data({ ok: true });
   } catch (error) {
-    return data({ error: getGroupErrorMessage(error) }, { status: 400 });
+    return data(
+      {
+        error: postIntent
+          ? getPostErrorMessage(error)
+          : getGroupErrorMessage(error),
+      },
+      { status: 400 },
+    );
   }
 }
 
@@ -76,11 +278,18 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
       <GroupDetailMobileHeader
         name={loaderData.group.name}
         iconPath={loaderData.group.icon_path}
+        groupId={loaderData.group.group_id}
+        slug={loaderData.group.slug}
+        canSearch={loaderData.group.membership_state === "member"}
       />
       <GroupDetailScreen
         group={loaderData.group}
         profileId={profile.id}
         isTeacher={profile.type === "teacher"}
+        categories={loaderData.categories}
+        posts={loaderData.posts}
+        memberPage={loaderData.memberPage}
+        joinRequests={loaderData.joinRequests}
       />
       <Outlet />
     </>

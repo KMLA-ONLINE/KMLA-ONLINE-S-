@@ -23,7 +23,7 @@ supabase/tests/          ← pgTAP DB 통합 테스트
   담당한다.
 - `features/**`는 제품 UI, 데이터 접근, 모델, React 상태와 브라우저 storage를 담당한다.
 - `shared/**`는 도메인을 모른다.
-- 다른 feature는 상대 feature의 `index.ts`만 import한다.
+- 다른 feature는 상대 feature의 좁은 `index.ts`를 우선 사용한다. 다만 큰 barrel import, 순환 의존 또는 불필요한 공개 API 확장을 피할 수 있고 대상 모듈이 안정적인 경계라면 직접 module import를 허용한다.
 - 애플리케이션 코드는 `~/*` alias를 사용하고 테스트는 `test/` 아래에 둔다.
 
 Supabase 호출은 `features/<feature>/data/**`에서만 한다. ESLint가 모든 내부 경계를 막지는 않으므로
@@ -60,8 +60,7 @@ features/<feature>/
 - `subscriptions.ts` — realtime 구독. unsubscribe 반환
 - `files.ts` — Supabase Storage 업로드와 URL 해석
 
-`data/**`는 얇은 I/O 계층이다. Supabase 대역 없이 검증할 수 있는 로직은 `model/`에 둔다. 에러를
-사용자 문구로 바꾸는 작업도 `model/format.ts`가 담당한다.
+`data/**`는 기본적으로 I/O 계층이다. Supabase 대역 없이 검증할 수 있는 로직은 `model/`에 두고 에러를 사용자 문구로 바꾸는 작업도 `model/format.ts`가 담당한다. 다만 prepare, 파일 변환, upload, finalize, retry처럼 여러 I/O 단계가 하나의 사용자 작업을 이루면 `data/files.ts`나 `data/mutations.ts`가 transaction coordinator 역할을 맡을 수 있다. 파일 수를 줄이려고 흐름을 component로 올리거나, 얇게 보이게 하려고 하나의 작업을 여러 계층에 흩뜨리지 않는다.
 
 feature 폴더가 도메인 경계이므로 작은 feature의 data를 미리 세분화하지 않는다. 파일이 커진 원인이
 반복 왕복이나 두꺼운 응답 변환이면 파일을 나누기 전에 쿼리와 RPC 모양을 점검한다.
@@ -72,8 +71,7 @@ feature 폴더가 도메인 경계이므로 작은 feature의 data를 미리 세
 - 독립 호출은 `Promise.all`로 병렬 실행한다.
 - query 함수는 테이블 저장소가 아니라 화면 use case를 표현한다.
 - 단순 조회는 table API와 RLS를 사용한다.
-- table API로 표현하기 어렵거나 여러 화면에서 같은 SQL을 재사용하면 `security invoker` RPC 또는
-  `security_invoker = true` view를 사용한다.
+- table API로 표현하기 어렵거나 여러 화면에서 같은 SQL을 재사용하면 RPC 또는 `security_invoker = true` view를 사용한다. private 관계를 안전한 presentation으로 투영해야 하는 set-based read는 내부 인가를 다시 수행하는 좁은 `security definer` RPC를 사용할 수 있다.
 - RPC와 view는 화면에 필요한 열만 반환한다.
 - 다른 feature의 query를 호출하지 말고 필요한 조인은 같은 읽기 경로에서 끝낸다.
 
@@ -88,7 +86,7 @@ feature 폴더가 도메인 경계이므로 작은 feature의 data를 미리 세
 ## 쓰기
 
 - table API로 충분한 변경은 RLS 아래 직접 수행한다.
-- 여러 행의 불변조건과 원자성이 필요하면 `security invoker` RPC를 사용한다.
+- 여러 행의 불변조건과 원자성이 필요하면 transactional RPC를 사용한다. private schema나 직접 grant하지 않은 테이블이 필요하면 좁은 `security definer`를 사용하고 함수 안에서 호출자를 다시 검증한다.
 - direct mutation과 RPC를 포함해 한 테이블의 변경은 하나의 feature가 소유한다.
 - 클라이언트 입력으로 사용자 ID, 역할과 권한을 신뢰하지 않는다.
 - 클라이언트 검증은 UX다. 유일성, 상태 전이, 소유권과 교차 행 불변조건은 DB constraint, trigger 또는
@@ -97,23 +95,22 @@ feature 폴더가 도메인 경계이므로 작은 feature의 data를 미리 세
 ## 인가와 민감 정보
 
 - 브라우저가 접근하는 모든 테이블은 같은 migration에서 grant와 RLS policy를 정의한다.
-- 일반 목록과 상세 읽기에 `security definer`를 사용하지 않는다.
+- 일반 public table 조회를 편의상 `security definer`로 만들지 않는다. 다만 익명 presentation처럼 private 관계를 참조해야 하는 목록·상세는 실제 신원을 반환하지 않는 set-based definer RPC를 허용한다.
 - 익명·가명 기능에서 실제 신원의 공개 여부가 행마다 달라지면 RLS가 아니라 스키마 분리로 해결한다.
 - 이 경우 클라이언트가 읽는 행에는 표시 정보만 두고 실제 신원은 table grant가 없는 `private` 스키마에
   둔다.
 - 익명 표시값은 쓰기 시점에 확정하며 일반 읽기 경로가 실제 신원을 참조하지 않게 한다.
 
-`security definer`는 다음의 좁은 경계에만 사용한다.
+`security definer`는 다음의 좁은 경계에 사용한다.
 
 - `private.*`를 읽거나 쓰는 mutation
 - 반환값에 신원을 포함하지 않는 운영 조치
 - 본인에게만 반환하는 민감 조회
+- private 관계를 presentation-safe 결과로 투영하는 set-based 목록·상세 조회
 - RLS 자기 참조를 끊는 `private.*` policy helper
 - 일반 사용자 권한으로 수행할 수 없는 제한된 trigger helper
 
-definer 함수는 `set search_path = ''`을 사용하고 호출자를 다시 검증한다. broad 목록이나 화면 전체를
-반환하지 않는다. `PUBLIC`, `anon`과 불필요한 role의 `EXECUTE`를 회수하고 필요한 role에만 명시적으로
-grant한다.
+definer 함수는 `set search_path = ''`을 사용하고 호출자를 다시 검증한다. 화면 전체 결과를 반환할 때도 필요한 열만 선택하고 private 식별자를 반환 타입에 포함하지 않는다. per-row definer 호출보다 한 번의 set-based RPC를 우선한다. `PUBLIC`, `anon`과 불필요한 role의 `EXECUTE`를 회수하고 필요한 role에만 명시적으로 grant한다.
 
 ## 집계
 
@@ -152,6 +149,8 @@ Storage는 테이블 RLS와 별도의 인가면이다. 새 버킷은 정책과 �
 
 - URL과 route nesting은 `app/routes.ts`에서만 선언한다.
 - runtime server가 없으므로 `clientLoader`와 `clientAction`을 사용한다.
+- route-shaped form mutation은 `clientAction`을 우선하지만 파일 변환, upload progress, retry처럼 브라우저
+  객체와 긴 I/O 생명주기를 다루는 변경은 feature data 계층에서 직접 조정할 수 있다.
 - 일반 앱 route는 typed `handle.chrome`에 `header`와 `bottomNav`를 명시한다.
 - `PageHeader`는 route가 조립하는 페이지 콘텐츠다.
 - `root.tsx`의 import graph는 빌드 타임 렌더에서 브라우저 전역과 eager Supabase client를 사용하지 않는다.

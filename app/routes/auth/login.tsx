@@ -1,4 +1,5 @@
 import { data, Form, Link, redirect, useNavigation } from "react-router";
+import { useState } from "react";
 
 import {
   AuthCard,
@@ -77,6 +78,13 @@ export default function LoginPage({ actionData }: Route.ComponentProps) {
       }
     | undefined;
   const errors = result?.errors ?? {};
+  const actionEmail = result?.email ?? "";
+  const [email, setEmail] = useState(actionEmail);
+  const [lastActionEmail, setLastActionEmail] = useState(actionEmail);
+  if (actionEmail !== lastActionEmail) {
+    setLastActionEmail(actionEmail);
+    setEmail(actionEmail);
+  }
 
   return (
     <AuthCard
@@ -104,7 +112,8 @@ export default function LoginPage({ actionData }: Route.ComponentProps) {
               name="email"
               type="email"
               autoComplete="email"
-              defaultValue={result?.email}
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
               aria-invalid={Boolean(errors.email)}
               placeholder="name@example.com"
               disabled={pending}

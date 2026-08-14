@@ -22,7 +22,7 @@ select
   'identified',
   'members',
   (select id from public.profiles
-   where pub_id = '30000000-0000-0000-0000-000000000001')
+   where pub_id = 'kim-admin')
 from generate_series(1, 15) as series;
 
 insert into public.groups (
@@ -45,7 +45,7 @@ values
     'identified',
     'members',
     (select id from public.profiles
-     where pub_id = '30000000-0000-0000-0000-000000000001')
+     where pub_id = 'kim-admin')
   ),
   (
     'search-prefix-popular',
@@ -56,7 +56,7 @@ values
     'identified',
     'members',
     (select id from public.profiles
-     where pub_id = '30000000-0000-0000-0000-000000000001')
+     where pub_id = 'kim-admin')
   ),
   (
     'search-prefix-new',
@@ -67,7 +67,7 @@ values
     'identified',
     'members',
     (select id from public.profiles
-     where pub_id = '30000000-0000-0000-0000-000000000001')
+     where pub_id = 'kim-admin')
   ),
   (
     'search-contains-popular',
@@ -78,7 +78,7 @@ values
     'identified',
     'members',
     (select id from public.profiles
-     where pub_id = '30000000-0000-0000-0000-000000000001')
+     where pub_id = 'kim-admin')
   ),
   (
     'joined-discovery-check',
@@ -89,7 +89,7 @@ values
     'identified',
     'members',
     (select id from public.profiles
-     where pub_id = '30000000-0000-0000-0000-000000000001')
+     where pub_id = 'kim-admin')
   );
 
 insert into public.group_memberships (group_id, profile_id)
@@ -98,8 +98,8 @@ from public.groups as group_record
 cross join public.profiles as profile
 where group_record.slug = 'search-prefix-popular'
   and profile.pub_id in (
-    '30000000-0000-0000-0000-000000000002',
-    '30000000-0000-0000-0000-000000000003'
+    'hanbyeol-25',
+    'saebyeok-24'
   );
 
 insert into public.group_memberships (group_id, profile_id)
@@ -108,9 +108,9 @@ from public.groups as group_record
 cross join public.profiles as profile
 where group_record.slug = 'search-contains-popular'
   and profile.pub_id in (
-    '30000000-0000-0000-0000-000000000002',
-    '30000000-0000-0000-0000-000000000003',
-    '30000000-0000-0000-0000-000000000004'
+    'hanbyeol-25',
+    'saebyeok-24',
+    'pureum-23'
   );
 
 insert into public.group_memberships (group_id, profile_id)

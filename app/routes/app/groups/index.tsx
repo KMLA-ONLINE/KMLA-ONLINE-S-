@@ -66,6 +66,7 @@ export default function GroupListPage({ loaderData }: Route.ComponentProps) {
           <Button
             variant="ghost"
             size="icon"
+            nativeButton={false}
             aria-label="그룹 만들기"
             render={<Link to="/groups/create" />}
           >

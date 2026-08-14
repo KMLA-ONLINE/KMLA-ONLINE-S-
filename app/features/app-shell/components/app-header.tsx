@@ -44,6 +44,7 @@ export function AppHeader({ className }: { className?: string }) {
         <Button
           variant="ghost"
           size="icon"
+          nativeButton={false}
           aria-label="메시지"
           render={<Link to="/messenger" />}
         >
@@ -52,6 +53,7 @@ export function AppHeader({ className }: { className?: string }) {
         <Button
           variant="ghost"
           size="icon"
+          nativeButton={false}
           aria-label="알림"
           render={<Link to="/noti" />}
         >

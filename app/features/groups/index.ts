@@ -4,15 +4,24 @@ export { GroupDetailMobileHeader } from "~/features/groups/components/group-deta
 export { GroupDiscoverScreen } from "~/features/groups/components/group-discover-screen";
 export { GroupHomeScreen } from "~/features/groups/components/group-home-screen";
 export {
+  approveGroupJoinRequest,
   cancelGroupJoinRequest,
   createGroup,
   joinGroup,
   leaveGroup,
+  rejectGroupJoinRequest,
+  removeGroupMedia,
+  replaceGroupMedia,
   requestGroupJoin,
   setGroupPinned,
+  setGroupMemberRole,
+  transferGroupOwnership,
+  updateGroupSettings,
 } from "~/features/groups/data/mutations";
 export {
   discoverGroups,
+  listGroupJoinRequests,
+  listGroupMembers,
   loadGroupDetail,
   loadGroupHome,
 } from "~/features/groups/data/queries";
@@ -39,10 +48,16 @@ export type {
   GroupDiscoveryCursor,
   GroupDiscoveryPage,
   GroupHomeItem,
+  GroupJoinRequest,
   GroupIdentityPolicy,
   GroupJoinPolicy,
   GroupKind,
   GroupMemberRole,
+  GroupMember,
+  GroupMemberCursor,
+  GroupMemberPage,
+  GroupMediaSlot,
   GroupMembershipState,
   GroupPostingPolicy,
+  UpdateGroupSettingsValues,
 } from "~/features/groups/model/types";

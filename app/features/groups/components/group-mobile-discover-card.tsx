@@ -1,7 +1,8 @@
 import { Link } from "react-router";
 
 import { GroupAvatar } from "~/features/groups/components/group-avatar";
-import { MembershipButton } from "~/features/groups/components/group-summary-card";
+import { GroupMembershipAction } from "~/features/groups/components/group-membership-action";
+import { getGroupJoinPolicyLabel } from "~/features/groups/model/format";
 import type { DiscoverGroupItem } from "~/features/groups/model/types";
 
 export function GroupMobileDiscoverCard({
@@ -43,10 +44,15 @@ export function GroupMobileDiscoverCard({
           </Link>
         </h3>
         <p className="mt-2 text-xs text-muted-foreground tabular-nums">
-          멤버 {group.member_count.toLocaleString("ko-KR")}명
+          {getGroupJoinPolicyLabel(group.join_policy)} · 멤버{" "}
+          {group.member_count.toLocaleString("ko-KR")}명
         </p>
         <div className="relative z-10 mt-2.5">
-          <MembershipButton group={group} profileId={profileId} />
+          <GroupMembershipAction
+            group={group}
+            profileId={profileId}
+            fullWidth
+          />
         </div>
       </div>
     </article>

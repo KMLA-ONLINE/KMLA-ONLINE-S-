@@ -24,13 +24,19 @@ const baseGroup: GroupDetail = {
   pinned_at: null,
 };
 
-function DetailHarness({ group = baseGroup }: { group?: GroupDetail }) {
+function DetailHarness({
+  group = baseGroup,
+  isTeacher = false,
+}: {
+  group?: GroupDetail;
+  isTeacher?: boolean;
+}) {
   const location = useLocation();
 
   return (
     <>
       <span data-testid="location-search">{location.search}</span>
-      <GroupDetailScreen group={group} profileId={1} isTeacher={false} />
+      <GroupDetailScreen group={group} profileId={1} isTeacher={isTeacher} />
     </>
   );
 }
@@ -46,13 +52,45 @@ describe("GroupDetailScreen", () => {
       "aria-current",
       "page",
     );
-    expect(screen.getByText("아직 게시물이 없습니다.")).toBeInTheDocument();
+    expect(screen.getByText("아직 게시물이 없습니다")).toBeInTheDocument();
     expect(screen.getByText(/공개 그룹/)).toHaveTextContent(
       "공개 그룹 · 멤버 12명",
     );
     expect(screen.getByText(/공개 그룹/)).not.toHaveTextContent(
       "멤버 12명 · 멤버",
     );
+    expect(
+      screen.queryByRole("button", { name: "열기" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("uses the detail join label and prevents teachers from joining", () => {
+    const joinableGroup = {
+      ...baseGroup,
+      membership_state: "none" as const,
+      member_role: null,
+    };
+    const { unmount } = renderRoute(
+      () => <DetailHarness group={joinableGroup} />,
+      {
+        path: "/groups/:slug",
+        initialEntries: ["/groups/test-group"],
+      },
+    );
+
+    expect(
+      screen.getByRole("button", { name: "그룹 가입" }),
+    ).toBeInTheDocument();
+    unmount();
+
+    renderRoute(() => <DetailHarness group={joinableGroup} isTeacher />, {
+      path: "/groups/:slug",
+      initialEntries: ["/groups/test-group"],
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "그룹 가입" }),
+    ).not.toBeInTheDocument();
   });
 
   it("stores the selected member tab in the URL", async () => {
@@ -67,11 +105,11 @@ describe("GroupDetailScreen", () => {
       "?tab=members",
     );
     expect(
-      screen.getByText("멤버 명부 기능을 준비하고 있습니다."),
+      screen.getByText("멤버 명부를 불러오는 중입니다."),
     ).toBeInTheDocument();
   });
 
-  it("shows settings to managers but hides an anonymous member directory", () => {
+  it("shows settings and an anonymized member directory to managers", () => {
     const { unmount } = renderRoute(DetailHarness, {
       path: "/groups/:slug",
       initialEntries: ["/groups/test-group?tab=members"],
@@ -93,12 +131,12 @@ describe("GroupDetailScreen", () => {
       initialEntries: ["/groups/test-group?tab=members"],
     });
 
-    expect(
-      screen.queryByRole("button", { name: "멤버" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "멤버" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "그룹 설정" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("아직 게시물이 없습니다.")).toBeInTheDocument();
+    expect(
+      screen.getByText("멤버 명부를 불러오는 중입니다."),
+    ).toBeInTheDocument();
   });
 });

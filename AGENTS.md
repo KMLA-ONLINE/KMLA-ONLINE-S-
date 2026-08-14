@@ -16,10 +16,10 @@
 
 - `app/` follows `docs/structure.md`: `app/routes.ts` explicitly declares the route tree, `app/routes/` contains thin route modules, `app/features/<feature>/` owns product UI/data/model code, and `app/shared/` contains domain-free code. There is no top-level `app/lib/`; domain-free utilities live in `app/shared/lib/`.
 - A feature directory may carry its own `AGENTS.md` holding that feature's rules and invariants, as `app/features/app-shell/AGENTS.md` does. Read it before changing anything in that feature, and update it in the same change when an invariant moves.
-- Dependencies flow `routes → features → shared`. Features never import routes, and shared never imports routes or features. Cross-feature imports use the other feature's narrow `index.ts` public API.
+- Dependencies flow `routes → features → shared`. Features never import routes, and shared never imports routes or features. Prefer another feature's narrow `index.ts` public API; a direct module import is acceptable when it avoids a broad barrel or cycle and the imported module is intentionally stable.
 - ESLint enforces the outer layer direction and prevents routes from importing Supabase directly. Feature components and models are kept out of Supabase by review.
 - Supabase calls belong in a feature's `data/` only. Routes, components, and `model/` must not import `getSupabase()` directly.
-- `data/` uses `queries.ts`, `mutations.ts`, `subscriptions.ts`, and `files.ts` for query, mutation, realtime, and Storage I/O. Do not pre-split a small feature's data by domain.
+- `data/` uses `queries.ts`, `mutations.ts`, `subscriptions.ts`, and `files.ts` for query, mutation, realtime, and Storage I/O. Do not pre-split a small feature's data by domain. Multi-step browser I/O such as prepare/upload/finalize may be coordinated in `data/`; keeping an I/O transaction coherent is more important than making every data function thin.
 - `app/features/app-shell/` owns app chrome and shell data; `app/routes/app/gate.tsx` owns the auth gate. `app/routes/app/layout.tsx` owns the standard app shell, while `app/routes/messenger/layout.tsx` owns the sidebar-free messenger shell. Standard app routes configure the global header and mobile bottom nav through a typed `handle.chrome` export; `PageHeader` remains page-owned and is not part of this config.
 - `mock.ts` files stand in for tables and RPCs that `supabase/migrations/` does not have yet. Each one is read by exactly one `data/queries.ts`; delete the mock when the migration lands and change only that query.
 
@@ -28,7 +28,7 @@
 - There is no application server at runtime. Route data and mutations must use `clientLoader`/`clientAction`, not `loader`/`action`.
 - Despite SPA mode, React Router renders `app/root.tsx` at build time to create `build/client/index.html`. Keep `Layout` and its import graph safe from render-time `window`, `document`, `localStorage`, and eager Supabase client access.
 - A `clientLoader` must not create dependent request waterfalls or per-item queries. Run independent requests in parallel with `Promise.all`; they remain separate requests.
-- Every mutating route defines how its loader data becomes current: revalidate, merge the canonical mutation result, or use an optimistic update with rollback. Do not disable revalidation without another update path.
+- Every mutation defines how loader data becomes current: revalidate, merge the canonical result, or use an optimistic update with rollback. Prefer `clientAction` for route-shaped form mutations, but keep file processing, progress, retries, and other browser-I/O orchestration in the owning feature.
 - Browser code talks directly to Supabase. Client-side checks are UX only; authorization belongs in Postgres and defaults to RLS.
 - Database constraints, triggers, or transactional RPCs enforce uniqueness, ownership, state transitions, and cross-row invariants; client validation is UX only.
 - Every `VITE_*` value is public in the bundle. Never place a `service_role` key or other secret there; use a Supabase Edge Function for webhooks, privileged work, or third-party secrets.
@@ -38,9 +38,9 @@
 
 - Docker Desktop is required for the local Supabase stack. Setup order is `npm install`, create `.env.local` from `.env.example`, `npm run db:start`, fill in the printed API URL/publishable key, then `npm run db:types`.
 - Create schema changes as migrations under `supabase/migrations/`; use `npm run db:diff -- <name>` to capture local changes and `npm run db:reset` to replay migrations plus `supabase/seed.sql`.
-- Give every browser-accessible table its grants and RLS policies in the same migration. Use table APIs for simple reads and writes, `security_invoker` RPCs for atomic writes or reusable complex SQL, and `security_invoker = true` views when a view is the better read shape.
+- Give every browser-accessible table its grants and RLS policies in the same migration. Use table APIs for simple reads and writes. Use transactional RPCs when direct grants would expose invariant-bearing columns or private relations; choose invoker or definer from the actual privilege boundary rather than treating invoker as a goal by itself.
 - When anonymous or pseudonymous rows vary in identity visibility, keep presentation fields in client-readable rows and the real identity in `private` tables with no client grants. This rule does not apply to ordinary public profile or membership identity.
-- Do not use `security definer` for general list or detail reads. Reserve it for narrow private-schema operations, identity-free moderation, self-only sensitive reads, RLS helpers, and privileged trigger helpers. Set `search_path = ''`, re-check the caller, revoke default `EXECUTE`, and grant only the required role. Existing broad group read functions are debt, not a pattern.
+- A `security definer` read is allowed when one set-based screen query must combine private identity data with public presentation without exposing the private relation. It must return only presentation-safe fields, authorize the caller inside the function, use `search_path = ''`, revoke default `EXECUTE`, and grant only the required role. Do not use per-row definer helpers when one set-based RPC can do the work.
 - A feature read may join tables from other domains but must not call another feature's query function.
 - Add focused database integration tests for grants, RLS allow/deny behavior, state transitions, triggers, and atomic RPC invariants.
 - Keep pgTAP tests under `supabase/tests/` and run them with `npm run test:db` against the reset local database; CI runs the same path.

@@ -64,6 +64,17 @@ export interface GroupDiscoveryPage {
   nextCursor: GroupDiscoveryCursor | null;
 }
 
+export interface GroupMemberCursor {
+  role: GroupMemberRole;
+  joinedAt: string;
+  membershipId: string;
+}
+
+export interface GroupMemberPage {
+  members: GroupMember[];
+  nextCursor: GroupMemberCursor | null;
+}
+
 export type GroupDetail = GroupSummary & {
   group_id: GroupRow["id"];
   membership_state: GroupMembershipState;
@@ -81,6 +92,37 @@ export interface CreateGroupValues {
   identityPolicy: GroupIdentityPolicy;
   postingPolicy: GroupPostingPolicy;
 }
+
+/** Presentation-safe member row returned by `list_group_members`. */
+export interface GroupMember {
+  membership_id: string;
+  role: GroupMemberRole;
+  joined_at: string;
+  cohort: number | null;
+  pub_id: string | null;
+  name: string | null;
+  avatar_path: string | null;
+}
+
+/** Presentation-safe pending request returned by `list_group_join_requests`. */
+export interface GroupJoinRequest {
+  request_id: string;
+  requested_at: string;
+  cohort: number | null;
+  pub_id: string | null;
+  name: string | null;
+  avatar_path: string | null;
+}
+
+export interface UpdateGroupSettingsValues {
+  name: string;
+  description: string;
+  joinPolicy: GroupJoinPolicy;
+  identityPolicy: GroupIdentityPolicy;
+  postingPolicy: GroupPostingPolicy;
+}
+
+export type GroupMediaSlot = Database["public"]["Enums"]["group_media_slot"];
 
 export type CreateGroupField = keyof CreateGroupValues | "form";
 export type CreateGroupErrors = Partial<Record<CreateGroupField, string>>;

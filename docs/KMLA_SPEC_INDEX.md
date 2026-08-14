@@ -13,4 +13,4 @@
 ## 관련 기술 설계
 
 - [Supabase Storage 버킷 설계](STORAGE_BUCKETS.md): 기능 요구사항을 중복하지 않고 구현 및 Storage 세부 사항을 정의한다.
-- [콘텐츠 서식 및 이모지 설계](CONTENT_FORMATTING.md): 게시물 Markdown, 메시지 평문 입력기, 안전한 렌더링 및 Twemoji 제공 방식을 정의한다.
+- [콘텐츠 서식 및 이모지 설계](CONTENT_FORMATTING.md): 게시물 Markdown, 메시지 평문 입력기, 안전한 렌더링 및 Unicode 이모지 처리 방식을 정의한다.

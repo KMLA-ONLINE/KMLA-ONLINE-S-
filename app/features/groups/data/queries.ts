@@ -6,10 +6,15 @@ import type {
   GroupDiscoveryPage,
   GroupDetail,
   GroupHomeItem,
+  GroupJoinRequest,
+  GroupMember,
+  GroupMemberCursor,
+  GroupMemberPage,
   GroupMemberRole,
   GroupMembershipState,
   GroupSummary,
 } from "~/features/groups/model/types";
+import { createGroupMediaUrls } from "~/features/groups/data/files";
 
 type GroupRow = Database["public"]["Tables"]["groups"]["Row"];
 
@@ -118,7 +123,15 @@ export async function loadGroupHome(): Promise<GroupHomeItem[]> {
     ),
   );
 
-  return [...official, ...mine, ...popular];
+  const items = [...official, ...mine, ...popular];
+  const urls = await createGroupMediaUrls(
+    items.flatMap((item) => [item.icon_path, item.cover_path]),
+  );
+  return items.map((item) => ({
+    ...item,
+    icon_path: item.icon_path ? (urls.get(item.icon_path) ?? null) : null,
+    cover_path: item.cover_path ? (urls.get(item.cover_path) ?? null) : null,
+  }));
 }
 
 const DISCOVERY_PAGE_SIZE = 12;
@@ -154,7 +167,19 @@ export async function discoverGroups({
         }
       : null;
 
-  return { groups, nextCursor };
+  const urls = await createGroupMediaUrls(
+    groups.flatMap((group) => [group.icon_path, group.cover_path]),
+  );
+  return {
+    groups: groups.map((group) => ({
+      ...group,
+      icon_path: group.icon_path ? (urls.get(group.icon_path) ?? null) : null,
+      cover_path: group.cover_path
+        ? (urls.get(group.cover_path) ?? null)
+        : null,
+    })),
+    nextCursor,
+  };
 }
 
 export async function loadGroupDetail(
@@ -186,12 +211,64 @@ export async function loadGroupDetail(
 
   const membership = membershipResult.data;
   const request = requestResult.data;
+  const urls = await createGroupMediaUrls([
+    groupResult.data.icon_path,
+    groupResult.data.cover_path,
+  ]);
   return {
     ...groupResult.data,
+    icon_path: groupResult.data.icon_path
+      ? (urls.get(groupResult.data.icon_path) ?? null)
+      : null,
+    cover_path: groupResult.data.cover_path
+      ? (urls.get(groupResult.data.cover_path) ?? null)
+      : null,
     group_id: groupResult.data.id,
     membership_state: membership ? "member" : request ? "requested" : "none",
     member_role: membership?.role ?? null,
     pinned_at: membership?.pinned_at ?? null,
     requested_at: request?.requested_at ?? null,
   };
+}
+
+export async function listGroupMembers(
+  groupId: string,
+  query = "",
+  cursor: GroupMemberCursor | null = null,
+): Promise<GroupMemberPage> {
+  const pageSize = 30;
+  const { data, error } = await getSupabase().rpc("list_group_members", {
+    p_group_id: groupId,
+    p_query: query,
+    p_after_role: cursor?.role,
+    p_after_joined_at: cursor?.joinedAt,
+    p_after_membership_id: cursor?.membershipId,
+    p_limit: pageSize + 1,
+  });
+  if (error) throw error;
+
+  const rows = (data ?? []) as GroupMember[];
+  const members = rows.slice(0, pageSize);
+  const last = members.at(-1);
+  return {
+    members,
+    nextCursor:
+      rows.length > pageSize && last
+        ? {
+            role: last.role,
+            joinedAt: last.joined_at,
+            membershipId: last.membership_id,
+          }
+        : null,
+  };
+}
+
+export async function listGroupJoinRequests(
+  groupId: string,
+): Promise<GroupJoinRequest[]> {
+  const { data, error } = await getSupabase().rpc("list_group_join_requests", {
+    p_group_id: groupId,
+  });
+  if (error) throw error;
+  return data ?? [];
 }

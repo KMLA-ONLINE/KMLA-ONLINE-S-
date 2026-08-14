@@ -1,0 +1,192 @@
+import { useState } from "react";
+
+import {
+  createPostComment,
+  deletePostComment,
+  updatePostComment,
+} from "~/features/posts/data/mutations";
+import {
+  listPostCommentReplies,
+  listPostComments,
+} from "~/features/posts/data/queries";
+import { getCommentErrorMessage } from "~/features/posts/model/format";
+import type {
+  PostComment,
+  PostCommentPage,
+  PostIdentity,
+} from "~/features/posts/model/types";
+
+function liveCount(replies: PostComment[]): number {
+  return replies.filter((reply) => !reply.is_deleted).length;
+}
+
+/**
+ * 게시물 상세의 댓글 상태.
+ *
+ * 뮤테이션 뒤에 route를 재검증하지 않는다. 재검증하면 사용자가 펼쳐 둔 답글 묶음과 위로 불러온
+ * 이전 페이지가 통째로 초기화된다. 대신 RPC가 돌려준 정본 행을 목록에 병합한다.
+ *
+ * 답글은 만들거나 지운 뒤 그 묶음만 다시 불러온다. tombstone이 보이는지 여부는 "살아 있는
+ * 자손이 있는가"라는 서버 규칙이라, 클라이언트에서 흉내 내면 두 규칙이 갈라진다.
+ */
+export function usePostComments(postId: string, initialPage: PostCommentPage) {
+  const [comments, setComments] = useState(initialPage.comments);
+  const [olderCursor, setOlderCursor] = useState(initialPage.olderCursor);
+  const [replies, setReplies] = useState<Record<string, PostComment[]>>({});
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const [countDelta, setCountDelta] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loadedPage, setLoadedPage] = useState(initialPage);
+
+  // loader가 새 페이지를 내려주면(게시물 이동, 재검증) 로컬 상태를 버리고 다시 시작한다.
+  if (loadedPage !== initialPage) {
+    setLoadedPage(initialPage);
+    setComments(initialPage.comments);
+    setOlderCursor(initialPage.olderCursor);
+    setReplies({});
+    setExpanded(new Set());
+    setCountDelta(0);
+    setError(null);
+  }
+
+  const run = async <T>(action: () => Promise<T>): Promise<T | undefined> => {
+    setPending(true);
+    setError(null);
+    try {
+      return await action();
+    } catch (cause) {
+      setError(getCommentErrorMessage(cause));
+      return undefined;
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const refreshBundle = async (rootId: string) => {
+    const bundle = await listPostCommentReplies(rootId);
+    setReplies((current) => ({ ...current, [rootId]: bundle }));
+    setComments((current) =>
+      current.map((item) =>
+        item.comment_id === rootId
+          ? { ...item, reply_count: liveCount(bundle) }
+          : item,
+      ),
+    );
+    return bundle;
+  };
+
+  const loadOlder = async () => {
+    if (!olderCursor || loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const page = await listPostComments(postId, olderCursor);
+      setComments((current) => [...page.comments, ...current]);
+      setOlderCursor(page.olderCursor);
+    } catch (cause) {
+      setError(getCommentErrorMessage(cause));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleReplies = async (rootId: string) => {
+    const next = new Set(expanded);
+    if (next.has(rootId)) {
+      next.delete(rootId);
+      setExpanded(next);
+      return;
+    }
+    next.add(rootId);
+    setExpanded(next);
+    if (replies[rootId]) return;
+    await run(() => refreshBundle(rootId));
+  };
+
+  const create = (
+    body: string,
+    identity: PostIdentity,
+    parentCommentId: string | null,
+  ) =>
+    run(async () => {
+      const created = await createPostComment(
+        postId,
+        body,
+        identity,
+        parentCommentId,
+      );
+      setCountDelta((current) => current + 1);
+      if (created.depth === 0) {
+        setComments((current) => [...current, created]);
+        return created;
+      }
+      await refreshBundle(created.root_comment_id);
+      setExpanded((current) => new Set(current).add(created.root_comment_id));
+      return created;
+    });
+
+  const edit = (comment: PostComment, body: string) =>
+    run(async () => {
+      const updated = await updatePostComment(comment.comment_id, body);
+      const replace = (item: PostComment) =>
+        item.comment_id === updated.comment_id
+          ? { ...updated, reply_count: item.reply_count }
+          : item;
+      if (updated.depth === 0) {
+        setComments((current) => current.map(replace));
+      } else {
+        setReplies((current) => ({
+          ...current,
+          [updated.root_comment_id]: (
+            current[updated.root_comment_id] ?? []
+          ).map(replace),
+        }));
+      }
+      return updated;
+    });
+
+  const remove = (comment: PostComment) =>
+    run(async () => {
+      await deletePostComment(comment.comment_id);
+      if (comment.depth === 0) {
+        // 최상위를 지우면 답글 묶음까지 함께 사라진다(기능 명세 §9.4).
+        setCountDelta((current) => current - (1 + comment.reply_count));
+        setComments((current) =>
+          current.filter((item) => item.comment_id !== comment.comment_id),
+        );
+        setReplies((current) => {
+          const next = { ...current };
+          delete next[comment.comment_id];
+          return next;
+        });
+        setExpanded((current) => {
+          const next = new Set(current);
+          next.delete(comment.comment_id);
+          return next;
+        });
+        return;
+      }
+      const before = liveCount(replies[comment.root_comment_id] ?? []);
+      const bundle = await refreshBundle(comment.root_comment_id);
+      setCountDelta((current) => current - (before - liveCount(bundle)));
+    });
+
+  return {
+    comments,
+    replies,
+    expanded,
+    countDelta,
+    hasOlder: olderCursor !== null,
+    loading,
+    pending,
+    error,
+    clearError: () => setError(null),
+    loadOlder,
+    toggleReplies,
+    create,
+    edit,
+    remove,
+  };
+}
