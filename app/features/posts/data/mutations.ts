@@ -1,7 +1,9 @@
 import type {
   GroupCategory,
   PostAttachment,
+  PostComment,
   PostFormValues,
+  PostIdentity,
   PostSaveProgress,
   PreparedPostFile,
 } from "~/features/posts/model/types";
@@ -278,4 +280,49 @@ export async function setGroupPostPinned(
   });
   if (error) throw error;
   return data;
+}
+
+/**
+ * 댓글 작성.
+ *
+ * 세 뮤테이션 모두 RPC가 정본 행을 돌려준다. route를 재검증하는 대신 이 행을 목록에 병합하는
+ * 이유는 재검증이 펼쳐 둔 답글 묶음과 불러온 이전 페이지까지 되돌리기 때문이다.
+ */
+export async function createPostComment(
+  postId: string,
+  body: string,
+  authorIdentity: PostIdentity,
+  parentCommentId?: string | null,
+): Promise<PostComment> {
+  const { data, error } = await getSupabase().rpc("create_post_comment", {
+    p_post_id: postId,
+    p_body: body,
+    p_author_identity: authorIdentity,
+    p_parent_comment_id: parentCommentId ?? undefined,
+  });
+  if (error) throw error;
+  const comment = data?.[0];
+  if (!comment) throw new Error("댓글을 저장하지 못했습니다.");
+  return comment;
+}
+
+export async function updatePostComment(
+  commentId: string,
+  body: string,
+): Promise<PostComment> {
+  const { data, error } = await getSupabase().rpc("update_post_comment", {
+    p_comment_id: commentId,
+    p_body: body,
+  });
+  if (error) throw error;
+  const comment = data?.[0];
+  if (!comment) throw new Error("댓글을 수정하지 못했습니다.");
+  return comment;
+}
+
+export async function deletePostComment(commentId: string): Promise<void> {
+  const { error } = await getSupabase().rpc("delete_post_comment", {
+    p_comment_id: commentId,
+  });
+  if (error) throw error;
 }

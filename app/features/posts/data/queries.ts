@@ -1,8 +1,11 @@
 import type {
+  CommentCursor,
   GroupCategory,
   GroupPostDetail,
   GroupPostPage,
   GroupPostSearchResult,
+  PostComment,
+  PostCommentPage,
   PostCursor,
 } from "~/features/posts/model/types";
 import type { PostAttachment } from "~/features/posts/model/types";
@@ -10,6 +13,7 @@ import { createPostAttachmentUrls } from "~/features/posts/data/files";
 import { getSupabase } from "~/shared/supabase/client";
 
 export const GROUP_POST_PAGE_SIZE = 12;
+export const POST_COMMENT_PAGE_SIZE = 20;
 
 async function attachFiles<T extends { post_id: string }>(
   posts: T[],
@@ -126,4 +130,46 @@ export async function getGroupPost(
   const post = data?.[0];
   if (!post) return null;
   return { ...post, attachments: await listPostAttachments(postId) };
+}
+
+/**
+ * 최상위 댓글 한 페이지.
+ *
+ * RPC는 최신부터 골라 오래된 순으로 돌려준다. 화면은 오래된→최신으로 그리고 "이전 댓글 더
+ * 보기"가 위로 붙으므로, 한 건을 더 받아 초과분이 있으면 그 자리가 다음 커서가 된다.
+ */
+export async function listPostComments(
+  postId: string,
+  cursor?: CommentCursor | null,
+): Promise<PostCommentPage> {
+  const { data, error } = await getSupabase().rpc("list_post_comments", {
+    p_post_id: postId,
+    p_cursor_created_at: cursor?.createdAt,
+    p_cursor_comment_id: cursor?.commentId,
+    p_limit: POST_COMMENT_PAGE_SIZE + 1,
+  });
+  if (error) throw error;
+  const rows = data ?? [];
+  // 초과분은 가장 오래된 한 건이다. 잘라내고 남은 첫 건이 다음에 이어 볼 지점이 된다.
+  const hasOlder = rows.length > POST_COMMENT_PAGE_SIZE;
+  const comments = hasOlder ? rows.slice(1) : rows;
+  const oldest = comments[0];
+  return {
+    comments,
+    olderCursor:
+      hasOlder && oldest
+        ? { createdAt: oldest.created_at, commentId: oldest.comment_id }
+        : null,
+  };
+}
+
+/** 최상위 댓글 하나의 답글 묶음 전체. 펼칠 때 한 번만 부른다. */
+export async function listPostCommentReplies(
+  rootCommentId: string,
+): Promise<PostComment[]> {
+  const { data, error } = await getSupabase().rpc("list_post_comment_replies", {
+    p_root_comment_id: rootCommentId,
+  });
+  if (error) throw error;
+  return data ?? [];
 }

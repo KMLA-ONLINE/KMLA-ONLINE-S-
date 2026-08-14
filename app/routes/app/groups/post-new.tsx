@@ -9,8 +9,8 @@ import {
   hasPostFormErrors,
   listGroupCategories,
   readPostForm,
+  resolveIdentityOptions,
   validatePostForm,
-  type PostIdentity,
 } from "~/features/posts";
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
 import type { Route } from "./+types/post-new";
@@ -74,14 +74,10 @@ export default function NewGroupPostPage({
   const group = parent?.group ?? loaderData.group;
   if (!canCreate(group))
     throw new Response("게시물을 작성할 권한이 없습니다.", { status: 403 });
-  const identities: PostIdentity[] =
-    group.identity_policy === "always_anonymous"
-      ? ["anonymous"]
-      : group.identity_policy === "optional_anonymous"
-        ? ["identified", "anonymous"]
-        : ["identified"];
-  if (group.member_role && group.member_role !== "member")
-    identities.push("staff");
+  const identities = resolveIdentityOptions(
+    group.identity_policy,
+    group.member_role,
+  );
   return (
     <GroupPostOverlay
       mode="create"

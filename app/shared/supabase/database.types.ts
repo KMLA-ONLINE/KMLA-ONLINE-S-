@@ -333,12 +333,80 @@ export type Database = {
           },
         ]
       }
+      post_comments: {
+        Row: {
+          anon_alias_number: number | null
+          author_identity: Database["public"]["Enums"]["post_identity"]
+          body: string
+          created_at: string
+          deleted_at: string | null
+          depth: number
+          display_author_profile_id: number | null
+          edited_at: string | null
+          id: string
+          parent_comment_id: string | null
+          post_id: string
+          root_comment_id: string
+        }
+        Insert: {
+          anon_alias_number?: number | null
+          author_identity: Database["public"]["Enums"]["post_identity"]
+          body: string
+          created_at?: string
+          deleted_at?: string | null
+          depth?: number
+          display_author_profile_id?: number | null
+          edited_at?: string | null
+          id?: string
+          parent_comment_id?: string | null
+          post_id: string
+          root_comment_id: string
+        }
+        Update: {
+          anon_alias_number?: number | null
+          author_identity?: Database["public"]["Enums"]["post_identity"]
+          body?: string
+          created_at?: string
+          deleted_at?: string | null
+          depth?: number
+          display_author_profile_id?: number | null
+          edited_at?: string | null
+          id?: string
+          parent_comment_id?: string | null
+          post_id?: string
+          root_comment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_comments_display_author_profile_id_fkey"
+            columns: ["display_author_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "post_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           author_identity: Database["public"]["Enums"]["post_identity"]
           body: string
           body_format_version: number
           category_id: string | null
+          comment_count: number
           created_at: string
           deleted_at: string | null
           display_author_profile_id: number | null
@@ -358,6 +426,7 @@ export type Database = {
           body?: string
           body_format_version?: number
           category_id?: string | null
+          comment_count?: number
           created_at?: string
           deleted_at?: string | null
           display_author_profile_id?: number | null
@@ -377,6 +446,7 @@ export type Database = {
           body?: string
           body_format_version?: number
           category_id?: string | null
+          comment_count?: number
           created_at?: string
           deleted_at?: string | null
           display_author_profile_id?: number | null
@@ -622,6 +692,36 @@ export type Database = {
         }
         Returns: string
       }
+      create_post_comment: {
+        Args: {
+          p_author_identity: Database["public"]["Enums"]["post_identity"]
+          p_body: string
+          p_parent_comment_id?: string
+          p_post_id: string
+        }
+        Returns: {
+          author_avatar_path: string
+          author_identity: Database["public"]["Enums"]["post_identity"]
+          author_label: string
+          author_name: string
+          author_pub_id: string
+          body: string
+          can_delete: boolean
+          can_edit: boolean
+          comment_id: string
+          created_at: string
+          depth: number
+          edited_at: string
+          is_author: boolean
+          is_deleted: boolean
+          parent_author_label: string
+          parent_comment_id: string
+          parent_is_deleted: boolean
+          post_id: string
+          reply_count: number
+          root_comment_id: string
+        }[]
+      }
       delete_group_category: {
         Args: { p_category_id: string }
         Returns: undefined
@@ -629,6 +729,10 @@ export type Database = {
       delete_group_post: { Args: { p_post_id: string }; Returns: undefined }
       delete_post_attachment: {
         Args: { p_attachment_id: string }
+        Returns: undefined
+      }
+      delete_post_comment: {
+        Args: { p_comment_id: string }
         Returns: undefined
       }
       discover_groups: {
@@ -698,6 +802,7 @@ export type Database = {
           can_pin: boolean
           category_id: string
           category_name: string
+          comment_count: number
           edited_at: string
           group_id: string
           is_author: boolean
@@ -798,6 +903,7 @@ export type Database = {
           can_pin: boolean
           category_id: string
           category_name: string
+          comment_count: number
           edited_at: string
           group_id: string
           is_author: boolean
@@ -840,6 +946,61 @@ export type Database = {
           status: Database["public"]["Enums"]["post_attachment_status"]
           storage_bucket: string
           width: number
+        }[]
+      }
+      list_post_comment_replies: {
+        Args: { p_root_comment_id: string }
+        Returns: {
+          author_avatar_path: string
+          author_identity: Database["public"]["Enums"]["post_identity"]
+          author_label: string
+          author_name: string
+          author_pub_id: string
+          body: string
+          can_delete: boolean
+          can_edit: boolean
+          comment_id: string
+          created_at: string
+          depth: number
+          edited_at: string
+          is_author: boolean
+          is_deleted: boolean
+          parent_author_label: string
+          parent_comment_id: string
+          parent_is_deleted: boolean
+          post_id: string
+          reply_count: number
+          root_comment_id: string
+        }[]
+      }
+      list_post_comments: {
+        Args: {
+          p_cursor_comment_id?: string
+          p_cursor_created_at?: string
+          p_limit?: number
+          p_post_id: string
+        }
+        Returns: {
+          author_avatar_path: string
+          author_identity: Database["public"]["Enums"]["post_identity"]
+          author_label: string
+          author_name: string
+          author_pub_id: string
+          body: string
+          can_delete: boolean
+          can_edit: boolean
+          comment_id: string
+          created_at: string
+          depth: number
+          edited_at: string
+          is_author: boolean
+          is_deleted: boolean
+          parent_author_label: string
+          parent_comment_id: string
+          parent_is_deleted: boolean
+          post_id: string
+          reply_count: number
+          root_comment_id: string
         }[]
       }
       move_group_category: {
@@ -1077,6 +1238,31 @@ export type Database = {
           name: string
           posting_policy: Database["public"]["Enums"]["group_posting_policy"]
           updated_at: string
+        }[]
+      }
+      update_post_comment: {
+        Args: { p_body: string; p_comment_id: string }
+        Returns: {
+          author_avatar_path: string
+          author_identity: Database["public"]["Enums"]["post_identity"]
+          author_label: string
+          author_name: string
+          author_pub_id: string
+          body: string
+          can_delete: boolean
+          can_edit: boolean
+          comment_id: string
+          created_at: string
+          depth: number
+          edited_at: string
+          is_author: boolean
+          is_deleted: boolean
+          parent_author_label: string
+          parent_comment_id: string
+          parent_is_deleted: boolean
+          post_id: string
+          reply_count: number
+          root_comment_id: string
         }[]
       }
     }

@@ -14,6 +14,7 @@ export function groupPost(overrides: Partial<GroupPost> = {}): GroupPost {
     can_pin: false,
     category_id: null as unknown as string,
     category_name: null as unknown as string,
+    comment_count: 0,
     edited_at: null as unknown as string,
     group_id: "group-id",
     is_author: false,

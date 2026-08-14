@@ -4,6 +4,7 @@ type Functions = Database["public"]["Functions"];
 
 type GroupPostRow = Functions["list_group_posts"]["Returns"][number];
 type GroupPostDetailRow = Functions["get_group_post"]["Returns"][number];
+type GroupPostSearchRow = Functions["search_group_posts"]["Returns"][number];
 type PostAttachmentRow = Functions["list_post_attachments"]["Returns"][number];
 export type PostAttachment = Omit<
   PostAttachmentRow,
@@ -15,7 +16,8 @@ export type PostAttachment = Omit<
   signedUrl: string | null;
 };
 export type GroupPost = GroupPostRow & { attachments: PostAttachment[] };
-export type GroupPostSearchResult = GroupPostRow;
+// 검색 결과에는 댓글 수를 표시하지 않으므로(기능 명세 §8.9) 목록과 반환 모양이 다르다.
+export type GroupPostSearchResult = GroupPostSearchRow;
 export type GroupPostDetail = GroupPostDetailRow & {
   attachments: PostAttachment[];
 };
@@ -63,3 +65,19 @@ export type PostFormErrors = Partial<
 >;
 
 export type PostViewMode = "card" | "list";
+
+type PostCommentRow = Functions["list_post_comments"]["Returns"][number];
+/** 목록, 답글 묶음, 방금 작성한 댓글이 모두 같은 행 모양을 쓴다. */
+export type PostComment = PostCommentRow;
+
+export interface CommentCursor {
+  createdAt: string;
+  commentId: string;
+}
+
+export interface PostCommentPage {
+  /** 오래된 것부터 최신 순. 화면에 그리는 순서와 같다. */
+  comments: PostComment[];
+  /** 이보다 더 오래된 댓글이 남아 있을 때의 커서. 없으면 스레드의 처음까지 불러온 것이다. */
+  olderCursor: CommentCursor | null;
+}

@@ -181,6 +181,8 @@ export function GroupPostCard({
       <GroupPostActionBar
         sharePath={postPath}
         shareTitle={post.title}
+        commentCount={post.comment_count}
+        commentTo={postPath}
         className="mt-1"
       />
     </article>

@@ -7,6 +7,8 @@ import {
   getGroupPost,
   getPostErrorMessage,
   GroupPostOverlay,
+  listPostComments,
+  resolveIdentityOptions,
   setGroupPostPinned,
 } from "~/features/posts";
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
@@ -19,9 +21,13 @@ export const handle = defineAppChrome({
 });
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
-  const post = await getGroupPost(params.postId);
+  // 첨부는 `getGroupPost` 안에서 이어 부르므로, 댓글은 그 전체와 나란히 돈다.
+  const [post, comments] = await Promise.all([
+    getGroupPost(params.postId),
+    listPostComments(params.postId),
+  ]);
   if (!post) throw new Response("게시물을 찾을 수 없습니다.", { status: 404 });
-  return { post };
+  return { post, comments };
 }
 
 export async function clientAction({
@@ -72,6 +78,11 @@ export default function GroupPostPage({ loaderData }: Route.ComponentProps) {
       groupName={parent.group.name}
       groupId={parent.group.group_id}
       post={loaderData.post}
+      identities={resolveIdentityOptions(
+        parent.group.identity_policy,
+        parent.group.member_role,
+      )}
+      comments={loaderData.comments}
     />
   );
 }

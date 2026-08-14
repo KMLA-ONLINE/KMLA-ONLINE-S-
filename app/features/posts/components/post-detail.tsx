@@ -1,7 +1,12 @@
 import { PinIcon, XIcon } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 
+import {
+  CommentComposer,
+  type CommentReplyTarget,
+} from "~/features/posts/components/comment-composer";
+import { CommentThread } from "~/features/posts/components/comment-thread";
 import { GroupPostActionBar } from "~/features/posts/components/group-post-action-bar";
 import { GroupPostMenu } from "~/features/posts/components/group-post-menu";
 import {
@@ -12,7 +17,13 @@ import {
 import { PostAuthorAvatar } from "~/features/posts/components/post-author-avatar";
 import { PostEditedMark } from "~/features/posts/components/post-edited-mark";
 import { PostMarkdown } from "~/features/posts/components/post-markdown";
-import type { GroupPostDetail } from "~/features/posts/model/types";
+import type {
+  GroupPostDetail,
+  PostComment,
+  PostCommentPage,
+  PostIdentity,
+} from "~/features/posts/model/types";
+import { usePostComments } from "~/features/posts/hooks/use-post-comments";
 import { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
@@ -39,13 +50,23 @@ const DETAIL_DIALOG_CLASS =
 export function PostDetail({
   post,
   slug,
+  identities,
+  comments,
 }: {
   post: GroupPostDetail;
   slug: string;
+  /** 이 그룹에서 댓글에 쓸 수 있는 작성 신원. 첫 항목이 기본값이다. */
+  identities: PostIdentity[];
+  comments: PostCommentPage;
 }) {
   const fetcher = useFetcher<{ error?: string }>();
   const { markVisited } = useVisitedPosts();
   const close = useModalClose(`/groups/${slug}`);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const thread = usePostComments(post.post_id, comments);
+  const [identity, setIdentity] = useState<PostIdentity>(identities[0]);
+  const [replyTo, setReplyTo] = useState<CommentReplyTarget | null>(null);
 
   const { images, files } = splitPostAttachments(post.attachments);
   const authorName = post.author_name || post.author_label;
@@ -55,6 +76,29 @@ export function PostDetail({
 
   const submitIntent = (fields: Record<string, string>) =>
     void fetcher.submit(fields, { method: "post" });
+
+  const startReply = (comment: PostComment) =>
+    setReplyTo({
+      commentId: comment.comment_id,
+      authorLabel: comment.author_label ?? "익명",
+    });
+
+  const submitComment = async (body: string) => {
+    const created = await thread.create(
+      body,
+      identity,
+      replyTo?.commentId ?? null,
+    );
+    if (!created) return;
+    setReplyTo(null);
+    // 방금 쓴 댓글은 목록 맨 아래에 붙는다. 보이지 않는 곳에 등록되면 실패로 읽힌다.
+    if (created.depth === 0) {
+      requestAnimationFrame(() => {
+        const container = scrollRef.current;
+        if (container) container.scrollTop = container.scrollHeight;
+      });
+    }
+  };
 
   return (
     <Dialog open onOpenChange={(open) => !open && close()}>
@@ -77,7 +121,7 @@ export function PostDetail({
           </Button>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
           {fetcher.data?.error ? (
             <p role="alert" className="border-b p-3 text-sm text-destructive">
               {fetcher.data.error}
@@ -181,19 +225,43 @@ export function PostDetail({
               <PostFileList files={files} />
             </div>
 
-            <GroupPostActionBar sharePath={postPath} shareTitle={post.title} />
+            <GroupPostActionBar
+              sharePath={postPath}
+              shareTitle={post.title}
+              commentCount={post.comment_count + thread.countDelta}
+              onComment={() => composerRef.current?.focus()}
+            />
           </article>
 
-          {/* 댓글은 후속 기능이다. 자리를 비워두되 왜 비어 있는지는 밝힌다. */}
-          <section className="border-t p-4">
-            <div className="py-10 text-center text-muted-foreground">
-              <p className="font-semibold text-foreground">
-                아직 댓글이 없습니다
-              </p>
-              <p className="mt-1 text-sm">댓글 기능을 준비하고 있습니다.</p>
-            </div>
+          <section className="border-t">
+            <CommentThread
+              comments={thread.comments}
+              replies={thread.replies}
+              expanded={thread.expanded}
+              hasOlder={thread.hasOlder}
+              loading={thread.loading}
+              pending={thread.pending}
+              scrollRef={scrollRef}
+              onLoadOlder={thread.loadOlder}
+              onToggleReplies={thread.toggleReplies}
+              onReply={startReply}
+              onEdit={thread.edit}
+              onDelete={thread.remove}
+            />
           </section>
         </div>
+
+        <CommentComposer
+          identities={identities}
+          identity={identity}
+          onIdentityChange={setIdentity}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+          onSubmit={submitComment}
+          pending={thread.pending}
+          error={thread.error}
+          inputRef={composerRef}
+        />
       </DialogContent>
     </Dialog>
   );

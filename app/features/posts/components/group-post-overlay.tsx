@@ -38,6 +38,7 @@ import { PostDetail } from "~/features/posts/components/post-detail";
 import type {
   GroupCategory,
   GroupPostDetail,
+  PostCommentPage,
   PostFormErrors,
   PostFormValues,
   PostAttachment,
@@ -102,6 +103,7 @@ export function GroupPostOverlay({
   errors,
   identities = ["identified"],
   alwaysAnonymous = false,
+  comments,
 }: {
   mode: "create" | "detail" | "edit";
   slug: string;
@@ -113,6 +115,8 @@ export function GroupPostOverlay({
   errors?: PostFormErrors;
   identities?: PostIdentity[];
   alwaysAnonymous?: boolean;
+  /** 상세 모드에서만 쓴다. loader가 게시물과 함께 첫 페이지를 내려준다. */
+  comments?: PostCommentPage;
 }) {
   const navigation = useNavigation();
   const pending = navigation.state === "submitting";
@@ -121,7 +125,14 @@ export function GroupPostOverlay({
   const close = useModalClose(`/groups/${slug}`);
 
   if (mode === "detail") {
-    return post ? <PostDetail post={post} slug={slug} /> : null;
+    return post && comments ? (
+      <PostDetail
+        post={post}
+        slug={slug}
+        identities={identities}
+        comments={comments}
+      />
+    ) : null;
   }
 
   return (
