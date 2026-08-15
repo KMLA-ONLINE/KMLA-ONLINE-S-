@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(40);
+select plan(59);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -364,16 +364,39 @@ select lives_ok(
     '20000000-0000-0000-0000-000000000001',
     '학교 공지', '기본 정보 변경', 'open', 'identified', 'staff'
   )$$,
-  'official group basic information can change when policies stay fixed'
+  'an official group admin can save its settings'
 );
-select throws_ok(
+-- 공식 그룹이라는 이유만으로 정책을 잠그지는 않는다. 남는 제약은 그룹의 현재 상태에서 나온다.
+select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000001',
     '학교 공지', '정책 변경', 'request', 'identified', 'staff'
   )$$,
-  '55000',
-  'official group policies cannot be changed',
-  'official group policies cannot change'
+  'official group policies can change too'
+);
+select is(
+  (select join_policy from public.groups where id = '20000000-0000-0000-0000-000000000001'),
+  'request'::public.group_join_policy,
+  'the official group keeps its new join policy'
+);
+
+-- 정책은 바꿀 수 있어도 그룹 자체를 없앨 수는 없다. 승인된 재학생이 자동으로 가입하는 공간이
+-- 한 사람의 결정으로 사라지면 안 된다.
+select throws_ok(
+  $$select public.delete_group('20000000-0000-0000-0000-000000000001')$$,
+  '55000', 'official groups cannot be deleted',
+  'not even the owner can delete an official group'
+);
+
+-- 재학생이 자동 가입하는 그룹이라 익명으로 바꾸는 순간 되돌릴 수 없다. 전환만 막고, 처음부터
+-- 익명으로 만든 공식 그룹은 그대로 둔다.
+select throws_ok(
+  $$select * from public.update_group_settings(
+    '20000000-0000-0000-0000-000000000001',
+    '학교 공지', '익명 전환 시도', 'request', 'always_anonymous', 'staff'
+  )$$,
+  '55000', 'official groups cannot become anonymous',
+  'an official group cannot switch to always-anonymous'
 );
 select ok(
   not exists (
@@ -382,6 +405,37 @@ select ok(
     where pub_id is not null or name is not null or avatar_path is not null
   ),
   'changing to always anonymous immediately changes roster output'
+);
+
+-- 명부가 현재 정책으로 판단되므로, 익명을 걷는 순간 익명을 전제로 가입한 멤버의 이름이
+-- 한꺼번에 드러난다. 그 전환 자체를 막는다.
+select throws_ok(
+  $$select * from public.update_group_settings(
+    '20000000-0000-0000-0000-000000000003',
+    '메이커스 랩', '익명 해제 시도', 'open', 'optional_anonymous', 'members'
+  )$$,
+  '55000',
+  'anonymous groups cannot lift anonymity',
+  'a group with members cannot lift always-anonymous'
+);
+select lives_ok(
+  $$select * from public.update_group_settings(
+    '20000000-0000-0000-0000-000000000003',
+    '메이커스 랩', '나머지 설정은 그대로', 'open', 'always_anonymous', 'staff'
+  )$$,
+  'the lock only blocks the identity policy itself'
+);
+
+-- 소유자 혼자면 지킬 약속을 한 상대가 아직 없다. 만들자마자 알아챈 실수는 되돌릴 수 있어야 한다.
+select public.create_group(
+  'unofficial', '혼자 만든 익명 그룹', '', 'solo-anon', 'open', 'always_anonymous', 'members'
+);
+select lives_ok(
+  $$select * from public.update_group_settings(
+    (select id from public.groups where slug = 'solo-anon'),
+    '혼자 만든 익명 그룹', '', 'open', 'optional_anonymous', 'members'
+  )$$,
+  'a group whose only member is its owner can still lift always-anonymous'
 );
 
 reset role;
@@ -405,6 +459,138 @@ select throws_ok(
   '42501',
   'group administrator required',
   'non-admin cannot moderate requests'
+);
+
+-- 주말 산책단(`...0005`)의 시드 구성: 새벽=소유자(auth4), 시드 학생=관리자(auth1),
+-- 푸름=관리자(auth5), 한별=멤버(auth3). 관리자 자리에서 무엇을 할 수 있고 없는지를 본다.
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+set local role authenticated;
+
+select throws_ok(
+  $$select public.update_group_member_role(
+    '20000000-0000-0000-0000-000000000005',
+    (select membership_id from public.list_group_members('20000000-0000-0000-0000-000000000005')
+      where pub_id = 'pureum-23'),
+    'member'
+  )$$,
+  '42501', 'role change is not allowed', 'a plain member cannot change roles'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+
+select lives_ok(
+  $$select public.update_group_member_role(
+    '20000000-0000-0000-0000-000000000005',
+    (select membership_id from public.list_group_members('20000000-0000-0000-0000-000000000005')
+      where pub_id = 'hanbyeol-25'),
+    'manager'
+  )$$,
+  'an administrator can appoint a manager'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+set local role authenticated;
+
+select throws_ok(
+  $$select public.update_group_member_role(
+    '20000000-0000-0000-0000-000000000005',
+    (select membership_id from public.list_group_members('20000000-0000-0000-0000-000000000005')
+      where pub_id = 'pureum-23'),
+    'member'
+  )$$,
+  '42501', 'role change is not allowed', 'a manager cannot change roles either'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+
+-- 관리자를 세우는 것도 소유자만 한다. 늘리는 것은 아무나, 줄이는 것은 소유자만 할 수 있으면
+-- 관리자 수가 한 방향으로만 늘어난다.
+select throws_ok(
+  $$select public.update_group_member_role(
+    '20000000-0000-0000-0000-000000000005',
+    (select membership_id from public.list_group_members('20000000-0000-0000-0000-000000000005')
+      where pub_id = 'hanbyeol-25'),
+    'admin'
+  )$$,
+  '42501', 'only the owner can appoint an administrator',
+  'an administrator cannot appoint another administrator'
+);
+
+-- 이미 관리자인 사람은 소유자만 건드린다.
+select throws_ok(
+  $$select public.update_group_member_role(
+    '20000000-0000-0000-0000-000000000005',
+    (select membership_id from public.list_group_members('20000000-0000-0000-0000-000000000005')
+      where pub_id = 'pureum-23'),
+    'manager'
+  )$$,
+  '42501', 'only the owner can change an administrator',
+  'an administrator cannot demote another administrator'
+);
+select throws_ok(
+  $$select public.delete_group('20000000-0000-0000-0000-000000000005')$$,
+  '42501', 'group owner required', 'an administrator cannot delete the group'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000004', true);
+set local role authenticated;
+
+select lives_ok(
+  $$select public.update_group_member_role(
+    '20000000-0000-0000-0000-000000000005',
+    (select membership_id from public.list_group_members('20000000-0000-0000-0000-000000000005')
+      where pub_id = 'pureum-23'),
+    'member'
+  )$$,
+  'the owner can demote an administrator'
+);
+select lives_ok(
+  $$select public.update_group_member_role(
+    '20000000-0000-0000-0000-000000000005',
+    (select membership_id from public.list_group_members('20000000-0000-0000-0000-000000000005')
+      where pub_id = 'hanbyeol-25'),
+    'admin'
+  )$$,
+  'the owner can appoint an administrator'
+);
+
+select lives_ok(
+  $$select public.delete_group('20000000-0000-0000-0000-000000000005')$$,
+  'the owner can delete the group'
+);
+select is(
+  (select count(*) from public.groups where id = '20000000-0000-0000-0000-000000000005'),
+  0::bigint,
+  'a deleted group leaves every members view'
+);
+select throws_ok(
+  $$select public.delete_group('20000000-0000-0000-0000-000000000005')$$,
+  'P0002', 'group not found', 'a deleted group cannot be deleted twice'
+);
+
+reset role;
+
+select is(
+  (
+    select count(*) from public.group_memberships
+    where group_id = '20000000-0000-0000-0000-000000000005'
+  ),
+  0::bigint,
+  'deleting a group drops every membership'
+);
+select ok(
+  (
+    select deleted_at is not null from public.groups
+    where id = '20000000-0000-0000-0000-000000000005'
+  ),
+  'the group row survives as a tombstone so storage cleanup still has its targets'
 );
 
 select * from finish();

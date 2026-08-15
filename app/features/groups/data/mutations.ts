@@ -1,6 +1,7 @@
 import { getSupabase } from "~/shared/supabase/client";
 import type {
   CreateGroupValues,
+  GroupInvite,
   GroupMemberRole,
   GroupMediaSlot,
   UpdateGroupSettingsValues,
@@ -124,6 +125,20 @@ export async function setGroupMemberRole(
   if (error) throw error;
 }
 
+/**
+ * 그룹을 없앤다. 소유자만 부를 수 있다.
+ *
+ * 서버는 그룹 행을 tombstone으로 남기고 멤버십을 지운다 — 저장소 청소 워커가 첨부와 그룹
+ * 이미지를 회수할 수 있어야 하기 때문이다. 부르고 나면 호출자도 더는 멤버가 아니므로 상세
+ * 화면에 머무를 수 없다.
+ */
+export async function deleteGroup(groupId: string): Promise<void> {
+  const { error } = await getSupabase().rpc("delete_group", {
+    p_group_id: groupId,
+  });
+  if (error) throw error;
+}
+
 export async function transferGroupOwnership(
   groupId: string,
   memberId: string,
@@ -184,4 +199,46 @@ export async function removeGroupMedia(
     p_slot: slot,
   });
   if (error) throw error;
+}
+
+/**
+ * 초대 링크를 만들거나 다시 만든다. 그룹당 한 행이라 재발급은 곧 이전 링크의 무효화다.
+ * 유효 기간은 1시간에서 336시간(2주) 사이이며, 서버가 같은 범위를 다시 검사한다.
+ */
+export async function issueGroupInvite(
+  groupId: string,
+  hours: number,
+): Promise<GroupInvite> {
+  const { data, error } = await getSupabase().rpc("issue_group_invite", {
+    p_group_id: groupId,
+    p_hours: hours,
+  });
+  if (error) throw error;
+
+  const invite = data?.[0];
+  if (!invite) throw new Error("Issued group invite was not returned");
+  return invite;
+}
+
+/** 초대 링크를 끊는다. 재발급과 달리 새 링크를 남기지 않는다. */
+export async function revokeGroupInvite(groupId: string): Promise<void> {
+  const { error } = await getSupabase().rpc("revoke_group_invite", {
+    p_group_id: groupId,
+  });
+  if (error) throw error;
+}
+
+/**
+ * 초대를 수락하고 들어간 그룹의 주소를 돌려준다.
+ *
+ * 이미 멤버라면 서버가 역할을 그대로 두므로, 관리자가 자기 링크를 눌러도 멤버로 강등되지
+ * 않는다. 대기 중이던 가입 요청은 함께 걷힌다.
+ */
+export async function acceptGroupInvite(token: string): Promise<string> {
+  const { data, error } = await getSupabase().rpc("accept_group_invite", {
+    p_token: token,
+  });
+  if (error) throw error;
+  if (!data) throw new Error("Accepted group invite did not return a slug");
+  return data;
 }

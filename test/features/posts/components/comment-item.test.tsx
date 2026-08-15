@@ -9,11 +9,12 @@ type ItemProps = Parameters<typeof CommentItem>[0];
 function renderItem(overrides: Partial<ItemProps> = {}) {
   const props: ItemProps = {
     comment: postComment(),
-    indent: 0,
+    viewer: { name: "홍길동", avatarUrl: null },
     canReply: true,
     onReply: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
+    onReact: vi.fn(),
     ...overrides,
   };
   return {
@@ -84,7 +85,7 @@ describe("CommentItem", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("edits in place and reports the normalized body", async () => {
+  it("edits through the same composer the replies use", async () => {
     const onEdit = vi.fn();
     const { user } = renderItem({
       comment: postComment({ can_edit: true, body: "원래 본문" }),
@@ -94,12 +95,33 @@ describe("CommentItem", () => {
     await user.click(screen.getByRole("button", { name: "댓글 옵션" }));
     await user.click(await screen.findByRole("menuitem", { name: "수정" }));
 
-    const editor = screen.getByRole("textbox", { name: "댓글 수정" });
+    // 입력창은 원래 본문에서 시작하고, 신원은 바꿀 수 없으므로 토글이 없다.
+    const editor = screen.getByRole("textbox", { name: "댓글 입력" });
+    expect(editor).toHaveValue("원래 본문");
+    expect(
+      screen.queryByRole("button", { name: /작성 중/ }),
+    ).not.toBeInTheDocument();
+
     await user.clear(editor);
     await user.type(editor, "  고친 본문  ");
-    await user.click(screen.getByRole("button", { name: "저장" }));
+    await user.click(screen.getByRole("button", { name: "댓글 수정" }));
 
     expect(onEdit).toHaveBeenCalledWith("고친 본문");
+  });
+
+  it("leaves the comment untouched when the edit is reverted", async () => {
+    const onEdit = vi.fn();
+    const { user } = renderItem({
+      comment: postComment({ can_edit: true, body: "원래 본문" }),
+      onEdit,
+    });
+
+    await user.click(screen.getByRole("button", { name: "댓글 옵션" }));
+    await user.click(await screen.findByRole("menuitem", { name: "수정" }));
+    await user.click(screen.getByRole("button", { name: "되돌리기" }));
+
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(screen.getByText("원래 본문")).toBeInTheDocument();
   });
 
   it("confirms before deleting and warns when replies go with it", async () => {
@@ -129,7 +151,6 @@ describe("CommentItem", () => {
         parent_comment_id: "parent-id",
         parent_author_label: "익명1",
       }),
-      indent: 1,
       onJumpToParent,
     });
 
@@ -137,27 +158,21 @@ describe("CommentItem", () => {
     expect(onJumpToParent).toHaveBeenCalled();
   });
 
-  it("names a deleted parent instead of leaving the reference blank", () => {
-    renderItem({
-      comment: postComment({
-        depth: 2,
-        parent_comment_id: "parent-id",
-        parent_author_label: null as unknown as string,
-        parent_is_deleted: true,
-      }),
-      indent: 1,
-    });
+  it("reports the reaction the viewer picks", async () => {
+    const onReact = vi.fn();
+    const { user } = renderItem({ onReact });
 
-    expect(
-      screen.getByRole("button", { name: "@삭제된 댓글" }),
-    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "반응 남기기" }));
+    await user.click(screen.getByRole("button", { name: "하트 반응 남기기" }));
+
+    expect(onReact).toHaveBeenCalledWith("love");
   });
 
-  it("drops the reply affordance at the deepest level", () => {
-    renderItem({ canReply: false });
+  it("keeps a tombstone free of reactions", () => {
+    renderItem({ comment: postComment({ is_deleted: true, body: "" }) });
 
     expect(
-      screen.queryByRole("button", { name: "답글" }),
+      screen.queryByRole("button", { name: "반응 남기기" }),
     ).not.toBeInTheDocument();
   });
 });

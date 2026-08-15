@@ -4,7 +4,7 @@ import { Link, useFetcher } from "react-router";
 
 import {
   CommentComposer,
-  type CommentReplyTarget,
+  type CommentViewer,
 } from "~/features/posts/components/comment-composer";
 import { CommentThread } from "~/features/posts/components/comment-thread";
 import { GroupPostActionBar } from "~/features/posts/components/group-post-action-bar";
@@ -15,7 +15,6 @@ import {
   splitPostAttachments,
 } from "~/features/posts/components/post-attachments";
 import { PostAuthorAvatar } from "~/features/posts/components/post-author-avatar";
-import { PostEditedMark } from "~/features/posts/components/post-edited-mark";
 import { PostMarkdown } from "~/features/posts/components/post-markdown";
 import type {
   GroupPostDetail,
@@ -45,16 +44,19 @@ import {
  * 출렁인다. `svh`는 모바일 주소창이 접히며 높이가 변하는 것까지 막는다.
  */
 const DETAIL_DIALOG_CLASS =
-  "modal-sheet flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-2xl";
+  "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-2xl";
 
 export function PostDetail({
   post,
   slug,
+  viewer,
   identities,
   comments,
 }: {
   post: GroupPostDetail;
   slug: string;
+  /** 입력창 왼쪽 아바타에 쓰는 내 프로필. */
+  viewer: CommentViewer;
   /** 이 그룹에서 댓글에 쓸 수 있는 작성 신원. 첫 항목이 기본값이다. */
   identities: PostIdentity[];
   comments: PostCommentPage;
@@ -66,7 +68,6 @@ export function PostDetail({
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const thread = usePostComments(post.post_id, comments);
   const [identity, setIdentity] = useState<PostIdentity>(identities[0]);
-  const [replyTo, setReplyTo] = useState<CommentReplyTarget | null>(null);
 
   const { images, files } = splitPostAttachments(post.attachments);
   const authorName = post.author_name || post.author_label;
@@ -77,28 +78,19 @@ export function PostDetail({
   const submitIntent = (fields: Record<string, string>) =>
     void fetcher.submit(fields, { method: "post" });
 
-  const startReply = (comment: PostComment) =>
-    setReplyTo({
-      commentId: comment.comment_id,
-      authorLabel: comment.author_label ?? "익명",
-    });
-
   const submitComment = async (body: string) => {
-    const created = await thread.create(
-      body,
-      identity,
-      replyTo?.commentId ?? null,
-    );
-    if (!created) return;
-    setReplyTo(null);
+    const created = await thread.create(body, identity, null);
+    if (!created) return created;
     // 방금 쓴 댓글은 목록 맨 아래에 붙는다. 보이지 않는 곳에 등록되면 실패로 읽힌다.
-    if (created.depth === 0) {
-      requestAnimationFrame(() => {
-        const container = scrollRef.current;
-        if (container) container.scrollTop = container.scrollHeight;
-      });
-    }
+    requestAnimationFrame(() => {
+      const container = scrollRef.current;
+      if (container) container.scrollTop = container.scrollHeight;
+    });
+    return created;
   };
+
+  const submitReply = (parent: PostComment, body: string) =>
+    thread.create(body, identity, parent.comment_id);
 
   return (
     <Dialog open onOpenChange={(open) => !open && close()}>
@@ -193,7 +185,6 @@ export function PostDetail({
                   </div>
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
                     <RelativeTime value={post.published_at} />
-                    <PostEditedMark at={post.edited_at} />
                   </div>
                 </div>
                 <GroupPostMenu
@@ -226,6 +217,12 @@ export function PostDetail({
             </div>
 
             <GroupPostActionBar
+              postId={post.post_id}
+              reaction={{
+                reaction_count: post.reaction_count,
+                top_reactions: post.top_reactions,
+                my_reaction: post.my_reaction,
+              }}
               sharePath={postPath}
               shareTitle={post.title}
               commentCount={post.comment_count + thread.countDelta}
@@ -233,7 +230,7 @@ export function PostDetail({
             />
           </article>
 
-          <section className="border-t">
+          <section className="border-t p-4">
             <CommentThread
               comments={thread.comments}
               replies={thread.replies}
@@ -241,22 +238,26 @@ export function PostDetail({
               hasOlder={thread.hasOlder}
               loading={thread.loading}
               pending={thread.pending}
+              viewer={viewer}
+              identities={identities}
+              identity={identity}
+              onIdentityChange={setIdentity}
               scrollRef={scrollRef}
               onLoadOlder={thread.loadOlder}
               onToggleReplies={thread.toggleReplies}
-              onReply={startReply}
+              onSubmitReply={submitReply}
               onEdit={thread.edit}
+              onReact={thread.react}
               onDelete={thread.remove}
             />
           </section>
         </div>
 
         <CommentComposer
+          viewer={viewer}
           identities={identities}
           identity={identity}
           onIdentityChange={setIdentity}
-          replyTo={replyTo}
-          onCancelReply={() => setReplyTo(null)}
           onSubmit={submitComment}
           pending={thread.pending}
           error={thread.error}

@@ -2,7 +2,6 @@ import { SearchIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 
-import { PostEditedMark } from "~/features/posts/components/post-edited-mark";
 import { searchGroupPosts } from "~/features/posts/data/queries";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
 import type { GroupPostSearchResult } from "~/features/posts/model/types";
@@ -28,7 +27,7 @@ import { Spinner } from "~/shared/ui/spinner";
  * 브라우저의 주소창이 접힐 때 화면이 튀지 않게 하기 위해서다.
  */
 const SEARCH_DIALOG_CLASS =
-  "modal-sheet flex h-[85svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-lg";
+  "flex h-[85svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-lg";
 
 export function GroupPostSearchDialog({
   open,
@@ -177,7 +176,6 @@ export function GroupPostSearchDialog({
                       </span>
                       <span aria-hidden="true">·</span>
                       <RelativeTime value={post.published_at} />
-                      <PostEditedMark at={post.edited_at} />
                     </div>
                   </Link>
                 </li>

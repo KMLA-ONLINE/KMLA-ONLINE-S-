@@ -45,10 +45,13 @@ export function GroupPostsPanel({
   const loadingMore = useRef(false);
   const [loadedInitialPage, setLoadedInitialPage] = useState(initialPage);
 
+  // loader가 새 첫 페이지를 내려주면(고정·삭제 뒤 재검증) 그 페이지는 카테고리를 거치지 않은
+  // 전체 목록이다. 칩만 그대로 두면 "공지"를 고른 채 전체 글이 깔린다 — 선택도 함께 되돌린다.
   if (loadedInitialPage !== initialPage) {
     setLoadedInitialPage(initialPage);
     setPosts(initialPage.posts);
     setCursor(initialPage.nextCursor);
+    setCategoryId(null);
   }
 
   useEffect(() => {

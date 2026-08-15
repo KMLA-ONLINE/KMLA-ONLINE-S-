@@ -32,7 +32,9 @@ export function splitPostAttachments(attachments: PostAttachment[]) {
  * 배치"가 정해져 있고, 화면 폭이 그걸 바꾸지는 않는다.
  */
 function containerClass(count: number): string {
-  if (count === 1) return "aspect-video border";
+  // 한 장일 때만 테두리를 둘러 여백과 사진의 경계를 알린다. 좌우는 카드 폭에 꽉 차서 선이
+  // 카드 테두리와 겹쳐 두 줄로 보이므로 위아래만 긋는다.
+  if (count === 1) return "aspect-video border-y";
   if (count === 2) return "grid aspect-[2/1] grid-cols-2 gap-1";
   if (count <= 4) return "grid aspect-[4/3] grid-cols-2 grid-rows-2 gap-1";
   return "grid aspect-[4/3] grid-cols-6 grid-rows-2 gap-1";

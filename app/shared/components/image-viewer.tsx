@@ -355,10 +355,10 @@ export function ImageViewer({
           <Dialog.Title className="sr-only">{activeImage.name}</Dialog.Title>
 
           <header className="flex shrink-0 items-center gap-2 pt-[max(0.5rem,var(--app-safe-t))] pr-[max(0.5rem,var(--app-safe-r))] pb-2 pl-[max(0.5rem,var(--app-safe-l))] md:p-3">
+            {/* 파일 이름은 화면에 띄우지 않는다. 스크린리더용 제목과 저장 파일명에는 그대로 쓴다. */}
             <div className="min-w-0 flex-1 px-2">
-              <p className="truncate text-sm text-white">{activeImage.name}</p>
               {images.length > 1 ? (
-                <p className="text-xs text-white/60">
+                <p className="text-sm text-white/70">
                   {index + 1} / {images.length}
                 </p>
               ) : null}

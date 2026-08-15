@@ -177,6 +177,95 @@ on conflict (lower(pub_id)) do update set
   status = excluded.status,
   updated_at = now();
 
+-- 교사 계정. 그룹을 검색할 수도 가입 요청을 넣을 수도 없어서 초대 링크가 유일한 가입
+-- 경로다. 그 경로를 실제로 눌러 볼 수 있도록 로그인 가능한 계정으로 둔다. 어떤 그룹에도
+-- 넣지 않는 것이 요점이다.
+--
+-- auth 사용자 번호가 0099인 이유는 pgTAP 파일들이 `...0002`부터 차례로 자기 사용자를
+-- 만들어 seed 프로필에 붙이기 때문이다. 그 대역을 비켜 둬야 테스트가 충돌하지 않는다.
+insert into auth.users (
+  instance_id,
+  id,
+  aud,
+  role,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  confirmation_token,
+  recovery_token,
+  email_change_token_new,
+  email_change,
+  phone_change,
+  phone_change_token,
+  email_change_token_current,
+  reauthentication_token,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  created_at,
+  updated_at
+)
+values (
+  '00000000-0000-0000-0000-000000000000',
+  '10000000-0000-0000-0000-000000000099',
+  'authenticated',
+  'authenticated',
+  'teacher@kmla.hs.kr',
+  extensions.crypt('password123', extensions.gen_salt('bf')),
+  now(),
+  '',
+  '',
+  '',
+  '',
+  '',
+  '',
+  '',
+  '',
+  '{"provider":"email","providers":["email"]}',
+  '{}',
+  now(),
+  now()
+)
+on conflict (id) do update set
+  email = excluded.email,
+  encrypted_password = excluded.encrypted_password,
+  email_confirmed_at = excluded.email_confirmed_at,
+  updated_at = now();
+
+insert into auth.identities (
+  provider_id,
+  user_id,
+  identity_data,
+  provider,
+  last_sign_in_at,
+  created_at,
+  updated_at
+)
+values (
+  '10000000-0000-0000-0000-000000000099',
+  '10000000-0000-0000-0000-000000000099',
+  '{"sub":"10000000-0000-0000-0000-000000000099","email":"teacher@kmla.hs.kr","email_verified":true}',
+  'email',
+  now(),
+  now(),
+  now()
+)
+on conflict (provider_id, provider) do update set
+  identity_data = excluded.identity_data,
+  updated_at = now();
+
+insert into public.profiles (auth_user_id, pub_id, name, type, status)
+values (
+  '10000000-0000-0000-0000-000000000099',
+  'jung-teacher',
+  '정선생',
+  'teacher',
+  'accepted'
+)
+on conflict (auth_user_id) do update set
+  name = excluded.name,
+  status = excluded.status,
+  updated_at = now();
+
 insert into public.groups (
   id,
   slug,
@@ -290,6 +379,26 @@ values
     'owner',
     now()
   ),
+  -- 로그인 계정이 소유자인 그룹에 역할을 하나씩 채워 둔다. 소유자 자리에서 관리자·매니저·멤버를
+  -- 오르내리게 하고 그룹 삭제까지 눌러 볼 수 있어야 한다.
+  (
+    '20000000-0000-0000-0000-000000000002',
+    (select id from public.profiles where pub_id = 'hanbyeol-25'),
+    'admin',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000002',
+    (select id from public.profiles where pub_id = 'saebyeok-24'),
+    'manager',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000002',
+    (select id from public.profiles where pub_id = 'pureum-23'),
+    'member',
+    null
+  ),
   (
     '20000000-0000-0000-0000-000000000003',
     (select id from public.profiles where pub_id = 'kim-admin'),
@@ -338,9 +447,23 @@ values
     'owner',
     null
   ),
+  -- 반대편 자리도 하나 만든다. 여기서는 로그인 계정이 관리자이고 푸름도 관리자라, 관리자가 다른
+  -- 관리자의 역할을 바꾸지 못한다는 규칙과 관리자에게는 그룹 삭제가 없다는 것을 바로 볼 수 있다.
+  (
+    '20000000-0000-0000-0000-000000000005',
+    (select id from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001'),
+    'admin',
+    null
+  ),
   (
     '20000000-0000-0000-0000-000000000005',
     (select id from public.profiles where pub_id = 'pureum-23'),
+    'admin',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000005',
+    (select id from public.profiles where pub_id = 'hanbyeol-25'),
     'member',
     null
   ),
@@ -531,3 +654,62 @@ values
     (select id from public.profiles where pub_id = 'kim-admin')
   )
 on conflict (comment_id) do nothing;
+
+-- 반응 (기능 명세 §10). 상위 반응 정렬과 익명 묶음이 화면에서 어떻게 보이는지 확인할 수 있게
+-- 종류를 섞어 둔다.
+--
+-- `kim-admin`의 익명 반응은 메이커스 랩이 `optional_anonymous`인 지금은 나올 수 없는 조합처럼
+-- 보이지만, 익명 전용이던 그룹이 정책을 바꾸면 실제로 남는 상태다. 익명 여부는 누를 때의
+-- 정책으로 정해져 행에 남고 나중에 다시 계산하지 않는다.
+insert into public.post_reactions (post_id, profile_id, reaction, is_anonymous, created_at)
+values
+  (
+    '90000000-0000-0000-0000-000000000001',
+    (select id from public.profiles where pub_id = 'pureum-23'),
+    'like', false, '2026-08-13 02:10:00+00'
+  ),
+  (
+    '90000000-0000-0000-0000-000000000001',
+    (select id from public.profiles where pub_id = 'hanbyeol-25'),
+    'like', false, '2026-08-13 02:12:00+00'
+  ),
+  (
+    '90000000-0000-0000-0000-000000000001',
+    (select id from public.profiles where pub_id = 'saebyeok-24'),
+    'love', false, '2026-08-13 02:30:00+00'
+  ),
+  (
+    '90000000-0000-0000-0000-000000000001',
+    (select id from public.profiles where pub_id = 'kim-admin'),
+    'haha', true, '2026-08-13 02:45:00+00'
+  ),
+  (
+    '90000000-0000-0000-0000-000000000003',
+    (select id from public.profiles where pub_id = 'kim-admin'),
+    'like', false, '2026-08-13 05:00:00+00'
+  )
+on conflict (post_id, profile_id) do nothing;
+
+insert into public.comment_reactions (comment_id, profile_id, reaction, is_anonymous, created_at)
+values
+  (
+    'a0000000-0000-0000-0000-000000000007',
+    (select id from public.profiles where pub_id = 'kim-admin'),
+    'love', false, '2026-08-13 01:25:00+00'
+  ),
+  (
+    'a0000000-0000-0000-0000-000000000007',
+    (select id from public.profiles where pub_id = 'saebyeok-24'),
+    'love', false, '2026-08-13 01:31:00+00'
+  ),
+  (
+    'a0000000-0000-0000-0000-000000000007',
+    (select id from public.profiles where pub_id = 'hanbyeol-25'),
+    'haha', false, '2026-08-13 01:40:00+00'
+  ),
+  (
+    'a0000000-0000-0000-0000-000000000002',
+    (select id from public.profiles where pub_id = 'kim-admin'),
+    'wow', false, '2026-08-13 00:55:00+00'
+  )
+on conflict (comment_id, profile_id) do nothing;

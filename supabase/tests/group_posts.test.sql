@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(49);
+select plan(48);
 
 select ok(has_table_privilege('authenticated', 'public.posts', 'SELECT'), 'authenticated can select member-visible posts');
 select ok(not has_table_privilege('authenticated', 'public.posts', 'INSERT'), 'authenticated cannot insert posts directly');
@@ -183,10 +183,6 @@ select is(
 select lives_ok(
   $$select public.delete_group_category((select id from public.group_categories where name = '새 이름'))$$,
   'manager can delete a category'
-);
-select lives_ok(
-  $$select public.delete_group_category((select id from public.group_categories where name = '뒤 분류'))$$,
-  'manager can delete the second test category'
 );
 
 reset role;

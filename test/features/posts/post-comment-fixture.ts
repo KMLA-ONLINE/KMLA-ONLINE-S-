@@ -18,10 +18,12 @@ export function postComment(overrides: Partial<PostComment> = {}): PostComment {
     is_deleted: false,
     parent_author_label: null as unknown as string,
     parent_comment_id: null as unknown as string,
-    parent_is_deleted: false,
+    my_reaction: null,
     post_id: "post-id",
+    reaction_count: 0,
     reply_count: 0,
     root_comment_id: "comment-id",
+    top_reactions: [],
     ...overrides,
   };
 }

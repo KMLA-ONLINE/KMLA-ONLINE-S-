@@ -1,6 +1,6 @@
 Twemoji attribution
 
-The emoji graphics distributed under /twemoji/15.0.0 are from Twemoji,
+The emoji graphics distributed under /twemoji/15.1.0 are from Twemoji,
 Copyright 2020 Twitter, Inc. and other contributors.
 
 The graphics are licensed under Creative Commons Attribution 4.0 International:

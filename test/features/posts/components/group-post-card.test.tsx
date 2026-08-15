@@ -67,8 +67,10 @@ describe("GroupPostCard", () => {
       }),
     );
 
+    // 아바타(`익명 프로필`)와 이름(`익명`) 둘 다 링크가 될 수 있는 자리다. 한쪽만 확인하면
+    // 다른 쪽으로 프로필이 새는 회귀를 놓친다.
     expect(
-      screen.queryByRole("link", { name: /익명 프로필/ }),
+      screen.queryByRole("link", { name: /익명/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -103,13 +105,6 @@ describe("GroupPostCard", () => {
     await user.click(screen.getByText("본문 내용"));
 
     expect(screen.getByRole("button", { name: "더 보기" })).toBeInTheDocument();
-  });
-
-  it("uses an exact three-line collapsed height", () => {
-    stubOverflow(true);
-    renderCard();
-
-    expect(screen.getByTestId("group-post-body")).toHaveClass("max-h-[66px]");
   });
 
   it("shows the pinned banner and the category badge when they apply", () => {

@@ -7,6 +7,7 @@ import type {
   PostComment,
   PostCommentPage,
   PostCursor,
+  PostReactor,
 } from "~/features/posts/model/types";
 import type { PostAttachment } from "~/features/posts/model/types";
 import { createPostAttachmentUrls } from "~/features/posts/data/files";
@@ -169,6 +170,29 @@ export async function listPostCommentReplies(
 ): Promise<PostComment[]> {
   const { data, error } = await getSupabase().rpc("list_post_comment_replies", {
     p_root_comment_id: rootCommentId,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * 반응 참여자 목록 (기능 명세 §10.3). 요약을 누를 때만 부른다 — 목록 화면에서 게시물마다
+ * 미리 받으면 반응 하나 보자고 페이지 전체가 무거워진다.
+ */
+export async function listPostReactors(postId: string): Promise<PostReactor[]> {
+  const { data, error } = await getSupabase().rpc("list_post_reactors", {
+    p_post_id: postId,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** 댓글 반응 참여자 목록. 게시물과 같은 모양이라 같은 dialog가 받는다. */
+export async function listCommentReactors(
+  commentId: string,
+): Promise<PostReactor[]> {
+  const { data, error } = await getSupabase().rpc("list_comment_reactors", {
+    p_comment_id: commentId,
   });
   if (error) throw error;
   return data ?? [];

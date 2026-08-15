@@ -13,6 +13,9 @@
 # Vite / PWA dev output
 /dev-dist/
 
+# Lint and format caches (prettier's lives under node_modules/)
+/.eslintcache
+
 # Tests
 /coverage/
 /playwright-report/

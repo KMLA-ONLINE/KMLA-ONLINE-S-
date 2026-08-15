@@ -29,17 +29,28 @@ describe("GroupPostRow", () => {
     expect(onVisit).toHaveBeenCalledOnce();
   });
 
-  it("shows the category badge and the edited mark only when they apply", () => {
+  it("shows the category badge only when the post has one", () => {
     const { unmount } = renderRow();
     expect(screen.queryByText("공지")).not.toBeInTheDocument();
-    expect(screen.queryByText("수정됨")).not.toBeInTheDocument();
     unmount();
 
-    renderRow(
-      groupPost({ category_name: "공지", edited_at: "2026-08-13T01:00:00Z" }),
-    );
+    renderRow(groupPost({ category_name: "공지" }));
     expect(screen.getByText("공지")).toBeInTheDocument();
-    expect(screen.getByText("수정됨")).toBeInTheDocument();
+  });
+
+  it("shows the real comment and reaction counts", () => {
+    renderRow(
+      groupPost({
+        comment_count: 12,
+        reaction_count: 4,
+        top_reactions: ["like", "love"],
+      }),
+    );
+
+    expect(screen.getByText("12")).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
+    // 행 전체가 하나의 링크다. 반응 그래픽이 붙어도 그 안에 누를 것을 더 만들지 않는다.
+    expect(screen.getAllByRole("link")).toHaveLength(1);
   });
 
   it("marks pinned posts", () => {

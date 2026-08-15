@@ -64,23 +64,6 @@
   }
 }
 
-/* 화면을 거의 채우는 시트형 모달(`.modal-sheet`)의 스크림에서는 `backdrop-filter`를 끈다.
- *
- * blur는 스크림을 별도의 합성 레이어로 만든다. 그 위에서 모달이 opacity로 페이드하는 동안
- * Chrome이 두 레이어의 경계를 매 프레임 다시 합성하면서 가로로 1px짜리 이음매를 그렸다
- * 지우는데, 모달이 열리고 닫힐 때마다 화면 한가운데에 얇은 선이 번쩍이는 원인이 이것이다.
- * 작은 확인 dialog는 면적이 작아 눈에 띄지 않지만 90svh짜리 모달에서는 화면을 가로지른다.
- *
- * 이 크기의 모달은 어차피 뒤를 거의 다 가리므로 blur가 보여줄 것도 없다. 스크림 색은
- * 기본값 그대로 두고 필터만 뺀다.
- *
- * `@layer` 밖에 두는 이유: Tailwind 유틸리티는 `@layer utilities` 안에 있고, 레이어에 속하지
- * 않은 규칙은 레이어에 속한 규칙을 항상 이긴다. 클래스 순서에 기대지 않아도 된다. */
-div:has(> [data-slot="dialog-content"].modal-sheet)
-  > [data-slot="dialog-overlay"] {
-  backdrop-filter: none;
-}
-
 @theme {
   --font-sans:
     Pretendard, "Inter Variable", ui-sans-serif, system-ui, sans-serif,

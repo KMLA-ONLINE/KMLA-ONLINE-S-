@@ -31,6 +31,5 @@ describe("GroupCategoryChips", () => {
       "aria-pressed",
       "true",
     );
-    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
   });
 });

@@ -1,16 +1,10 @@
-import { data, redirect, useRouteLoaderData } from "react-router";
+import { useRouteLoaderData } from "react-router";
 
 import { defineAppChrome } from "~/features/app-shell";
-import { loadGroupDetail } from "~/features/groups";
 import {
   getGroupPost,
-  getPostErrorMessage,
   GroupPostOverlay,
-  hasPostFormErrors,
   listGroupCategories,
-  readPostForm,
-  updateGroupPost,
-  validatePostForm,
 } from "~/features/posts";
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
 import type { Route } from "./+types/post-edit";
@@ -25,39 +19,8 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   return { post, categories: await listGroupCategories(post.group_id) };
 }
 
-export async function clientAction({
-  request,
-  params,
-}: Route.ClientActionArgs) {
-  const values = readPostForm(await request.formData());
-  const errors = validatePostForm(values);
-  if (hasPostFormErrors(errors))
-    return data({ errors, values }, { status: 400 });
-  try {
-    const [group, post] = await Promise.all([
-      loadGroupDetail(params.slug),
-      getGroupPost(params.postId),
-    ]);
-    if (!group || post?.group_id !== group.group_id) {
-      return data(
-        { errors: { form: "게시물을 찾을 수 없습니다." }, values },
-        { status: 404 },
-      );
-    }
-    await updateGroupPost(params.postId, values);
-    throw redirect(`/groups/${params.slug}/posts/${params.postId}`);
-  } catch (error) {
-    if (error instanceof Response) throw error;
-    return data(
-      { errors: { form: getPostErrorMessage(error) }, values },
-      { status: 400 },
-    );
-  }
-}
-
 export default function EditGroupPostPage({
   loaderData,
-  actionData,
 }: Route.ComponentProps) {
   const parent = useRouteLoaderData<typeof groupLoader>(
     "routes/app/groups/detail",
@@ -75,8 +38,6 @@ export default function EditGroupPostPage({
       groupId={parent.group.group_id}
       categories={loaderData.categories}
       post={loaderData.post}
-      values={actionData?.values}
-      errors={actionData?.errors}
     />
   );
 }

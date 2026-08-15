@@ -1,7 +1,7 @@
 import { HeartIcon, MessageSquareIcon, PinIcon } from "lucide-react";
 import { Link } from "react-router";
 
-import { PostEditedMark } from "~/features/posts/components/post-edited-mark";
+import { ReactionEmoji } from "~/features/posts/components/reaction-emoji";
 import type { GroupPost } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";
@@ -69,14 +69,27 @@ export function GroupPostRow({
         ) : null}
         <span aria-hidden="true">·</span>
         <RelativeTime value={post.published_at} />
-        <PostEditedMark at={post.edited_at} />
-        {/* 반응·댓글은 아직 구현 전이라 자리만 잡는다(기능 명세 §8.15). */}
         <span className="ml-auto flex shrink-0 items-center gap-3">
+          {/* 행 전체가 링크라 여기서는 누를 수 없다. 반응은 카드나 상세에서 남긴다. */}
           <span className="flex items-center gap-1">
-            <HeartIcon className="size-3.5" aria-hidden="true" />0
+            {post.top_reactions.length > 0 ? (
+              post.top_reactions.map((reaction) => (
+                <ReactionEmoji
+                  key={reaction}
+                  reaction={reaction}
+                  className="text-sm"
+                />
+              ))
+            ) : (
+              <HeartIcon className="size-3.5" aria-hidden="true" />
+            )}
+            <span className="sr-only">반응</span>
+            {post.reaction_count}
           </span>
           <span className="flex items-center gap-1">
-            <MessageSquareIcon className="size-3.5" aria-hidden="true" />0
+            <MessageSquareIcon className="size-3.5" aria-hidden="true" />
+            <span className="sr-only">댓글</span>
+            {post.comment_count}
           </span>
         </span>
       </div>

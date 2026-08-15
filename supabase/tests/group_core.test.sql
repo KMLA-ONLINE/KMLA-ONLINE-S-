@@ -90,7 +90,7 @@ select is(
 
 select is(
   (select count(*) from public.group_memberships),
-  2::bigint,
+  3::bigint,
   'student reads only their own memberships'
 );
 
@@ -470,7 +470,7 @@ set local role authenticated;
 
 select is(
   (select count(*) from public.groups),
-  2::bigint,
+  3::bigint,
   'teacher sees only joined unofficial groups'
 );
 

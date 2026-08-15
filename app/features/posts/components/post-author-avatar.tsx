@@ -1,4 +1,4 @@
-import { VenetianMaskIcon } from "lucide-react";
+import { ShieldCheckIcon, VenetianMaskIcon } from "lucide-react";
 
 import type { PostIdentity } from "~/features/posts/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
@@ -24,13 +24,7 @@ export function PostAuthorAvatar({
   className?: string;
 }) {
   if (identity === "anonymous") {
-    return (
-      <Avatar size={size} className={className}>
-        <AvatarFallback className="bg-primary/80 text-primary-foreground">
-          <VenetianMaskIcon aria-label="익명" />
-        </AvatarFallback>
-      </Avatar>
-    );
+    return <PostAnonymousAvatar size={size} className={className} />;
   }
 
   return (
@@ -40,5 +34,55 @@ export function PostAuthorAvatar({
       size={size}
       className={className}
     />
+  );
+}
+
+const ANONYMOUS_ICON_SIZE = {
+  sm: "size-3",
+  default: "size-4",
+  lg: "size-5",
+} as const;
+
+export function PostAnonymousAvatar({
+  size = "default",
+  className,
+}: {
+  size?: "sm" | "default" | "lg";
+  className?: string;
+}) {
+  return (
+    <Avatar size={size} className={className}>
+      <AvatarFallback className="bg-primary/80 text-primary-foreground">
+        <VenetianMaskIcon
+          className={ANONYMOUS_ICON_SIZE[size]}
+          aria-hidden="true"
+        />
+      </AvatarFallback>
+    </Avatar>
+  );
+}
+
+/**
+ * 운영진 명의로 **작성하는 중**임을 알리는 아바타.
+ *
+ * 이미 올라간 운영진 명의 글과 댓글은 실제 작성자의 사진과 이름을 그대로 보여준다(기능 명세
+ * §8.6). 이 방패는 입력창에서 "지금 고른 명의가 운영진"이라는 표시로만 쓴다.
+ */
+export function PostStaffAvatar({
+  size = "default",
+  className,
+}: {
+  size?: "sm" | "default" | "lg";
+  className?: string;
+}) {
+  return (
+    <Avatar size={size} className={className}>
+      <AvatarFallback className="bg-primary text-primary-foreground">
+        <ShieldCheckIcon
+          className={ANONYMOUS_ICON_SIZE[size]}
+          aria-hidden="true"
+        />
+      </AvatarFallback>
+    </Avatar>
   );
 }

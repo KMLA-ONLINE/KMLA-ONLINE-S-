@@ -1,8 +1,10 @@
 import { useState } from "react";
 
 import {
+  clearCommentReaction,
   createPostComment,
   deletePostComment,
+  setCommentReaction,
   updatePostComment,
 } from "~/features/posts/data/mutations";
 import {
@@ -10,10 +12,13 @@ import {
   listPostComments,
 } from "~/features/posts/data/queries";
 import { getCommentErrorMessage } from "~/features/posts/model/format";
+import { applyReactionLocally } from "~/features/posts/model/reactions";
 import type {
   PostComment,
   PostCommentPage,
   PostIdentity,
+  PostReaction,
+  ReactionSummary,
 } from "~/features/posts/model/types";
 
 function liveCount(replies: PostComment[]): number {
@@ -173,6 +178,42 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
       setCountDelta((current) => current - (before - liveCount(bundle)));
     });
 
+  /**
+   * 댓글 반응 (기능 명세 §10.2). 게시물 반응과 같은 이유로 화면이 먼저 움직이고 정본이 덮는다.
+   *
+   * `run`을 쓰지 않는다 — 반응은 실패해도 되돌리면 그만이라 입력창까지 잠글 일이 아니다.
+   */
+  const react = (comment: PostComment, next: PostReaction | null) => {
+    const merge = (summary: ReactionSummary) => {
+      const patch = (item: PostComment) =>
+        item.comment_id === comment.comment_id ? { ...item, ...summary } : item;
+      if (comment.depth === 0) {
+        setComments((current) => current.map(patch));
+        return;
+      }
+      setReplies((current) => ({
+        ...current,
+        [comment.root_comment_id]: (current[comment.root_comment_id] ?? []).map(
+          patch,
+        ),
+      }));
+    };
+
+    merge(applyReactionLocally(comment, next));
+    void (async () => {
+      try {
+        merge(
+          next === null
+            ? await clearCommentReaction(comment.comment_id)
+            : await setCommentReaction(comment.comment_id, next),
+        );
+      } catch (cause) {
+        merge(comment);
+        setError(getCommentErrorMessage(cause));
+      }
+    })();
+  };
+
   return {
     comments,
     replies,
@@ -188,5 +229,6 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
     create,
     edit,
     remove,
+    react,
   };
 }

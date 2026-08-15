@@ -19,6 +19,34 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 
 type PolicyKind = Exclude<SettingsSection, "basic">;
 
+/**
+ * 지금 값에서 `next`로 넘어갈 수 있는지. 서버(`update_group_settings`)가 55000으로 막는 전환을
+ * 화면에서도 고를 수 없게 한다 — 저장을 눌러야 실패를 알게 되는 선택지를 남기지 않는다.
+ */
+function allowsPolicyChange(
+  group: GroupDetail,
+  kind: PolicyKind,
+  next: string,
+): boolean {
+  // 공개된 그룹은 비공개로 돌아갈 수 없다.
+  if (kind === "join" && next === "invite_only") {
+    return group.join_policy === "invite_only";
+  }
+  // 익명을 전제로 모인 그룹은 멤버가 있는 한 익명을 걷을 수 없다. 걷는 순간 멤버 명부의 이름이
+  // 한꺼번에 드러난다. 아직 혼자면 지킬 약속을 한 상대가 없으므로 열어 둔다.
+  if (kind === "identity" && next !== "always_anonymous") {
+    return (
+      group.identity_policy !== "always_anonymous" || group.member_count <= 1
+    );
+  }
+  // 공식 그룹은 재학생 전원이 자동 가입하므로 익명으로 바꾸는 순간 위 규칙에 걸려 영영 되돌릴
+  // 수 없다. 처음부터 익명으로 만든 공식 그룹은 현재 값이라 이 함수를 거치지 않는다.
+  if (kind === "identity" && next === "always_anonymous") {
+    return group.kind !== "official";
+  }
+  return true;
+}
+
 const POLICY = {
   join: {
     title: "가입 방식",
@@ -60,21 +88,6 @@ const POLICY = {
 
 export function PolicySettings({ group }: { group: GroupDetail }) {
   const [editing, setEditing] = useState<PolicyKind | null>(null);
-
-  if (group.kind === "official") {
-    return (
-      <Card className="rounded-none border-x-0 md:rounded-xl md:border">
-        <CardHeader className="border-b">
-          <CardTitle>운영 정책</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            공식 그룹의 운영 정책은 변경할 수 없습니다.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <Card className="rounded-none border-x-0 md:rounded-xl md:border">
@@ -125,10 +138,11 @@ function PolicyRow({
         ? group.identity_policy
         : group.posting_policy;
   const currentOption = config.options.find(([value]) => value === current);
-  const options =
-    kind === "join" && current !== "invite_only"
-      ? config.options.filter(([value]) => value !== "invite_only")
-      : config.options;
+  const options = config.options.filter(
+    ([value]) => value === current || allowsPolicyChange(group, kind, value),
+  );
+  // 고를 것이 지금 값 하나뿐이면 변경 버튼도 두지 않는다. 눌러 봐야 같은 값만 있는 폼이 열린다.
+  const changeable = options.length > 1;
 
   useEffect(() => {
     if (fetcher.state !== "idle" || !submitted.current) return;
@@ -150,7 +164,7 @@ function PolicyRow({
                 {config.description}
               </p>
             </div>
-            {!editing ? (
+            {!editing && changeable ? (
               <Button
                 type="button"
                 size="sm"

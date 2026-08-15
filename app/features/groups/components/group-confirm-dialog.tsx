@@ -23,6 +23,7 @@ export function GroupConfirmDialog({
   details,
   confirmLabel,
   confirmVariant = "default",
+  confirmDisabled = false,
   pending = false,
   onConfirm,
 }: {
@@ -33,6 +34,8 @@ export function GroupConfirmDialog({
   details?: ReactNode;
   confirmLabel: string;
   confirmVariant?: "default" | "destructive";
+  /** 확인 문구 입력처럼 아직 조건이 갖춰지지 않은 경우. `pending`과 달리 spinner를 띄우지 않는다. */
+  confirmDisabled?: boolean;
   pending?: boolean;
   onConfirm: () => void;
 }) {
@@ -55,7 +58,7 @@ export function GroupConfirmDialog({
           <Button
             type="button"
             variant={confirmVariant}
-            disabled={pending}
+            disabled={pending || confirmDisabled}
             onClick={onConfirm}
           >
             {pending ? <Spinner data-icon="inline-start" /> : null}

@@ -1,6 +1,6 @@
 export { CategoryManager } from "~/features/posts/components/category-manager";
 export { CommentComposer } from "~/features/posts/components/comment-composer";
-export type { CommentReplyTarget } from "~/features/posts/components/comment-composer";
+export type { CommentViewer } from "~/features/posts/components/comment-composer";
 export { CommentItem } from "~/features/posts/components/comment-item";
 export { CommentText } from "~/features/posts/components/comment-text";
 export { CommentThread } from "~/features/posts/components/comment-thread";
@@ -22,7 +22,6 @@ export {
   deleteGroupPost,
   setGroupPostPinned,
   updateGroupCategory,
-  updateGroupPost,
   updateGroupPostWithAttachments,
 } from "~/features/posts/data/mutations";
 export type { PostUploadSession } from "~/features/posts/data/mutations";
@@ -63,6 +62,7 @@ export {
   normalizePostMarkdownSource,
   parsePostMarkdown,
   sanitizePostMarkdown,
+  toMilkdownMarkdown,
   toPostEditorMarkdown,
   toPostRenderMarkdown,
 } from "~/features/posts/model/markdown";

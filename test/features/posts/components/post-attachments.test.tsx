@@ -49,17 +49,18 @@ describe("splitPostAttachments", () => {
 });
 
 describe("PostImageGrid", () => {
-  it("adds a thin border only around a single image", () => {
+  it("rules a single image top and bottom only", () => {
     const { unmount } = renderRoute(() => (
       <PostImageGrid images={[image("single")]} />
     ));
 
-    expect(screen.getByTestId("post-image-grid")).toHaveClass("border");
+    // 좌우는 카드 폭에 꽉 차서 카드 테두리와 겹쳐 두 줄로 보인다.
+    expect(screen.getByTestId("post-image-grid")).toHaveClass("border-y");
 
     unmount();
     renderRoute(() => <PostImageGrid images={[image("a"), image("b")]} />);
 
-    expect(screen.getByTestId("post-image-grid")).not.toHaveClass("border");
+    expect(screen.getByTestId("post-image-grid")).not.toHaveClass("border-y");
   });
 
   it("renders every image up to the tile limit", () => {
@@ -68,6 +69,7 @@ describe("PostImageGrid", () => {
     ));
 
     expect(screen.getAllByRole("img")).toHaveLength(3);
+    expect(screen.queryByText(/^\+/)).not.toBeInTheDocument();
   });
 
   it("caps visible tiles at five and marks the rest as overflow", () => {

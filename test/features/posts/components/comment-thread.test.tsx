@@ -39,9 +39,14 @@ function renderThread(overrides: Partial<ThreadProps> = {}) {
     hasOlder: false,
     loading: false,
     pending: false,
+    viewer: { name: "홍길동", avatarUrl: null },
+    identities: ["identified"],
+    identity: "identified",
+    onIdentityChange: vi.fn(),
+    onReact: vi.fn(),
     onLoadOlder: vi.fn(),
     onToggleReplies: vi.fn(),
-    onReply: vi.fn(),
+    onSubmitReply: vi.fn().mockResolvedValue(postComment()),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
     ...overrides,
@@ -60,11 +65,22 @@ describe("CommentThread", () => {
     const onToggleReplies = vi.fn();
     const { user } = renderThread({ onToggleReplies });
 
-    const toggle = screen.getByRole("button", { name: "답글 2개" });
+    const toggle = screen.getByRole("button", { name: "답글 2개 보기" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
 
     await user.click(toggle);
     expect(onToggleReplies).toHaveBeenCalledWith("root-id");
+  });
+
+  it("labels the toggle for collapsing once the bundle is open", () => {
+    renderThread({
+      replies: { "root-id": [firstReply] },
+      expanded: new Set(["root-id"]),
+    });
+
+    expect(
+      screen.getByRole("button", { name: "답글 숨기기" }),
+    ).toBeInTheDocument();
   });
 
   it("flattens replies past the second level instead of indenting further", () => {
@@ -73,17 +89,13 @@ describe("CommentThread", () => {
       expanded: new Set(["root-id"]),
     });
 
-    const shallow = screen.getByText("1단계 답글").closest("li");
-    const deep = screen.getByText("4단계 답글").closest("li");
-    expect(shallow?.className).toContain("pl-11");
-    // 4단계도 1단계와 같은 자리에 그린다. 대신 부모를 칩으로 밝힌다.
-    expect(deep?.className).toContain("pl-11");
+    // 깊이가 달라도 한 묶음에 나란히 놓이고, 부모는 본문 앞 칩이 밝힌다.
+    const bundle = screen.getByRole("list", { name: "답글" });
+    expect(within(bundle).getByText("1단계 답글")).toBeInTheDocument();
+    expect(within(bundle).getByText("4단계 답글")).toBeInTheDocument();
     expect(
-      within(deep as HTMLElement).getByRole("button", { name: "@이한별" }),
-    ).toBeInTheDocument();
-    expect(
-      within(shallow as HTMLElement).queryByRole("button", { name: "@이한별" }),
-    ).not.toBeInTheDocument();
+      within(bundle).getAllByRole("button", { name: "@이한별" }),
+    ).toHaveLength(2);
   });
 
   it("offers older comments above the list", async () => {
@@ -92,6 +104,26 @@ describe("CommentThread", () => {
 
     await user.click(screen.getByRole("button", { name: "이전 댓글 더 보기" }));
     expect(onLoadOlder).toHaveBeenCalled();
+  });
+
+  it("opens an inline composer under the comment being replied to", async () => {
+    const onSubmitReply = vi.fn().mockResolvedValue(postComment());
+    const { user } = renderThread({
+      replies: { "root-id": [firstReply] },
+      expanded: new Set(["root-id"]),
+      onSubmitReply,
+    });
+
+    await user.click(screen.getAllByRole("button", { name: "답글" })[0]);
+
+    const input =
+      await screen.findByPlaceholderText("이한별님에게 답글 남기기…");
+    await user.type(input, "답글 본문{Enter}");
+
+    expect(onSubmitReply).toHaveBeenCalledWith(
+      expect.objectContaining({ comment_id: "root-id" }),
+      "답글 본문",
+    );
   });
 
   it("does not offer a reply on a comment at the deepest level", () => {

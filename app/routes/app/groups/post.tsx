@@ -1,6 +1,6 @@
 import { data, redirect, useRouteLoaderData } from "react-router";
 
-import { defineAppChrome } from "~/features/app-shell";
+import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import { loadGroupDetail } from "~/features/groups";
 import {
   deleteGroupPost,
@@ -62,6 +62,7 @@ export async function clientAction({
 }
 
 export default function GroupPostPage({ loaderData }: Route.ComponentProps) {
+  const { profile } = useAppShell();
   const parent = useRouteLoaderData<typeof groupLoader>(
     "routes/app/groups/detail",
   );
@@ -83,6 +84,7 @@ export default function GroupPostPage({ loaderData }: Route.ComponentProps) {
         parent.group.member_role,
       )}
       comments={loaderData.comments}
+      viewer={{ name: profile.name, avatarUrl: profile.avatar_url }}
     />
   );
 }

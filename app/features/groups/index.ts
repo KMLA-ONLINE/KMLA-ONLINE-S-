@@ -3,16 +3,21 @@ export { GroupDetailScreen } from "~/features/groups/components/group-detail-scr
 export { GroupDetailMobileHeader } from "~/features/groups/components/group-detail-mobile-header";
 export { GroupDiscoverScreen } from "~/features/groups/components/group-discover-screen";
 export { GroupHomeScreen } from "~/features/groups/components/group-home-screen";
+export { GroupInviteScreen } from "~/features/groups/components/group-invite-screen";
 export {
+  acceptGroupInvite,
   approveGroupJoinRequest,
   cancelGroupJoinRequest,
   createGroup,
+  deleteGroup,
+  issueGroupInvite,
   joinGroup,
   leaveGroup,
   rejectGroupJoinRequest,
   removeGroupMedia,
   replaceGroupMedia,
   requestGroupJoin,
+  revokeGroupInvite,
   setGroupPinned,
   setGroupMemberRole,
   transferGroupOwnership,
@@ -20,6 +25,8 @@ export {
 } from "~/features/groups/data/mutations";
 export {
   discoverGroups,
+  getGroupInvite,
+  getGroupInvitePreview,
   listGroupJoinRequests,
   listGroupMembers,
   loadGroupDetail,
@@ -48,6 +55,8 @@ export type {
   GroupDiscoveryCursor,
   GroupDiscoveryPage,
   GroupHomeItem,
+  GroupInvite,
+  GroupInvitePreview,
   GroupJoinRequest,
   GroupIdentityPolicy,
   GroupJoinPolicy,

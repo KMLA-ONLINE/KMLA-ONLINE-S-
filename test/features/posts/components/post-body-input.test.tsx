@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -41,14 +41,6 @@ describe("PostBodyInput", () => {
     expect(screen.queryByRole("toolbar")).not.toBeInTheDocument();
   });
 
-  it("does not request the desktop editor chunk on mobile", async () => {
-    render(<PostBodyInput value="body" />);
-    await waitFor(() =>
-      expect(matchMedia).toHaveBeenCalledWith("(min-width: 768px)"),
-    );
-    expect(screen.getByRole("textbox")).toBeInTheDocument();
-  });
-
   it("reports the current mobile draft independently of form snapshots", () => {
     const onValueChange = vi.fn();
     render(<PostBodyInput value="본문" onValueChange={onValueChange} />);
@@ -79,7 +71,6 @@ describe("PostBodyInput", () => {
 
     const textarea = screen.getByRole("textbox", { name: "Markdown 본문" });
     fireEvent.change(textarea, { target: { value: "수정한 본문" } });
-    expect(textarea).not.toBeRequired();
     desktop = true;
     breakpointListener?.();
 

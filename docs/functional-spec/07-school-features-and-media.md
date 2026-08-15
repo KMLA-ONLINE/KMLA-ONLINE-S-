@@ -89,6 +89,5 @@
 - 사용자가 작성하는 텍스트에는 원래 Unicode 이모지를 저장한다.
 - 게시물, 댓글 및 메시지의 입력과 출력에는 기기의 기본 Unicode 이모지를 표시한다.
 - 반응에 통일된 이모지 그래픽이 필요해지면 일반 콘텐츠와 분리해 별도 지원한다.
+- 반응 그래픽에는 Twemoji SVG를 사용하고 반응 종류에 해당하는 파일만 서비스에 포함한다.
 - 사용자는 콘텐츠의 글꼴을 지정할 수 없으며 서비스가 정한 공통 글꼴과 대체 글꼴을 사용한다.
-
-나중에 확인해볼것: [Facebook식 이모지](https://www.jsdelivr.com/package/npm/emoji-datasource-facebook?tab=files&path=img%2Ffacebook%2Fsheets)
