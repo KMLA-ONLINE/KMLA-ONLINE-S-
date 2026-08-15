@@ -37,8 +37,16 @@ function DialogOverlay({
       // 동안 Chrome이 레이어 경계에 1px짜리 가로선을 그렸다 지운다 — 화면을 거의 채우는
       // 모달에서 특히 눈에 띈다. 게다가 `backdrop-blur-xs`는 2px이라 그 대가를 치를 만큼
       // 보이지도 않았다.
+      // 스크림 농도는 모드마다 다르다. light의 `--background`와 `--popover`는 둘 다 순백이라
+      // 모달을 배경에서 떼어 내는 건 오직 이 스크림이고, 흰 바탕에서는 10%만 깔려도 눈에 띈다.
+      // dark의 `--background`는 이미 oklch(0.22)라 같은 10%를 덮어도 sRGB로 2/255밖에 안
+      // 움직여 사실상 보이지 않는다 — 검은 스크림을 어두운 바탕에 얹으니 내려갈 자리가 없다.
+      // 대신 dark는 `--popover`(0.3)가 배경보다 밝아 분리 자체는 이미 되어 있으므로, 여기서
+      // 필요한 일은 뒤에 남은 밝은 본문과 글자를 눌러 주는 쪽이다. 40%면 흰 글자가 L* 98에서
+      // 60 근처까지 내려간다. 더 올리지 않는 건 위의 `forceRender` 때문이다 — 두 겹 겹치면
+      // 40%는 64%가 되고, 50%는 75%까지 올라 모달 두 장 뒤가 새까매진다.
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/10 duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-black/10 duration-100 dark:bg-black/40 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className,
       )}
       {...props}
