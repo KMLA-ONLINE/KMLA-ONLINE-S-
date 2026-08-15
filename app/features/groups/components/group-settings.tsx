@@ -1,6 +1,7 @@
 import { Settings2Icon } from "lucide-react";
 
 import { BasicInfoCard } from "~/features/groups/components/group-basic-settings";
+import { DangerSettings } from "~/features/groups/components/group-danger-settings";
 import { GroupMediaSettings } from "~/features/groups/components/group-media-settings";
 import { PolicySettings } from "~/features/groups/components/group-policy-settings";
 import type { GroupDetail } from "~/features/groups/model/types";
@@ -42,6 +43,9 @@ export function GroupSettings({
       ) : null}
 
       <CategoryManager groupId={group.group_id} categories={categories} />
+
+      {/* 되돌릴 수 없는 동작이라 맨 아래에 따로 둔다. */}
+      <DangerSettings group={group} />
     </div>
   );
 }

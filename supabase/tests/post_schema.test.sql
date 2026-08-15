@@ -439,7 +439,7 @@ set local role authenticated;
 
 select is(
   (select count(*) from public.posts),
-  2::bigint,
+  3::bigint,
   'authenticated members can read published posts in their groups'
 );
 

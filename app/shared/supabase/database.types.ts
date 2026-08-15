@@ -247,6 +247,7 @@ export type Database = {
           cover_path: string | null
           created_at: string
           created_by: number
+          deleted_at: string | null
           description: string
           icon_path: string | null
           id: string
@@ -265,6 +266,7 @@ export type Database = {
           cover_path?: string | null
           created_at?: string
           created_by: number
+          deleted_at?: string | null
           description?: string
           icon_path?: string | null
           id?: string
@@ -283,6 +285,7 @@ export type Database = {
           cover_path?: string | null
           created_at?: string
           created_by?: number
+          deleted_at?: string | null
           description?: string
           icon_path?: string | null
           id?: string
@@ -818,6 +821,7 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      delete_group: { Args: { p_group_id: string }; Returns: undefined }
       delete_group_category: {
         Args: { p_category_id: string }
         Returns: undefined

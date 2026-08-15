@@ -72,6 +72,27 @@ export function getGroupErrorMessage(error: unknown): string {
   }
   if (candidate.code === "42501") return "이 작업을 수행할 권한이 없습니다.";
   if (candidate.code === "P0002") return "그룹을 찾을 수 없습니다.";
+  // 55000은 "지금 이 그룹의 상태에서는 안 된다"는 뜻이라 이유마다 다른 조치가 필요하다.
+  if (candidate.code === "55000") {
+    if (candidate.message?.includes("lift anonymity")) {
+      return "멤버가 있는 항상 익명 그룹은 활동 신원을 바꿀 수 없습니다.";
+    }
+    if (candidate.message?.includes("pending join requests")) {
+      return "가입 요청을 모두 처리한 뒤에 바꿀 수 있습니다.";
+    }
+    if (candidate.message?.includes("become private")) {
+      return "공개된 그룹은 비공개로 바꿀 수 없습니다.";
+    }
+    if (candidate.message?.includes("official groups cannot be deleted")) {
+      return "공식 그룹은 삭제할 수 없습니다.";
+    }
+    if (
+      candidate.message?.includes("official groups cannot become anonymous")
+    ) {
+      return "공식 그룹은 항상 익명으로 바꿀 수 없습니다.";
+    }
+    return "지금은 이 설정을 바꿀 수 없습니다.";
+  }
 
   return "잠시 후 다시 시도해 주세요.";
 }

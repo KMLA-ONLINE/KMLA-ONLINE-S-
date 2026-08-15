@@ -124,6 +124,20 @@ export async function setGroupMemberRole(
   if (error) throw error;
 }
 
+/**
+ * 그룹을 없앤다. 소유자만 부를 수 있다.
+ *
+ * 서버는 그룹 행을 tombstone으로 남기고 멤버십을 지운다 — 저장소 청소 워커가 첨부와 그룹
+ * 이미지를 회수할 수 있어야 하기 때문이다. 부르고 나면 호출자도 더는 멤버가 아니므로 상세
+ * 화면에 머무를 수 없다.
+ */
+export async function deleteGroup(groupId: string): Promise<void> {
+  const { error } = await getSupabase().rpc("delete_group", {
+    p_group_id: groupId,
+  });
+  if (error) throw error;
+}
+
 export async function transferGroupOwnership(
   groupId: string,
   memberId: string,

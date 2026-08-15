@@ -3,7 +3,7 @@ import { useLocation } from "react-router";
 
 import { GroupMembersPanel } from "~/features/groups/components/group-members-panel";
 import type { GroupMember } from "~/features/groups/model/types";
-import { renderRoute, screen } from "../../../router";
+import { renderRoute, screen, within } from "../../../router";
 
 const member: GroupMember = {
   membership_id: "membership-1",
@@ -116,5 +116,88 @@ describe("GroupMembersPanel", () => {
     await user.click(screen.getByRole("button", { name: "30기 역할 관리" }));
     await user.click(await screen.findByText("소유권 이전"));
     expect(screen.getByRole("dialog")).toHaveTextContent("그룹 소유권 이전");
+  });
+
+  it("confirms a role change before submitting it", async () => {
+    // 드롭다운 항목은 서로 붙어 있어서 잘못 누르기 쉽다.
+    const { user } = renderRoute(() => (
+      <GroupMembersPanel
+        groupId="group-1"
+        identityPolicy="identified"
+        viewerRole="owner"
+        initialPage={{ members: [member], nextCursor: null }}
+        memberCount={1}
+      />
+    ));
+
+    await user.click(screen.getByRole("button", { name: "홍길동 역할 관리" }));
+    await user.click(await screen.findByRole("menuitem", { name: "관리자" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("홍길동님을 멤버에서 관리자로 바꿀까요?");
+    // 승격 뒤에는 소유자 말고 아무도 이 사람의 역할을 건드릴 수 없다.
+    expect(dialog).toHaveTextContent("소유자만 바꿀 수 있습니다");
+
+    await user.click(within(dialog).getByRole("button", { name: "취소" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps one administrator out of another administrator's reach", () => {
+    // 관리자끼리 서로 강등할 수 있으면 둘이 번갈아 내리는 상황을 그룹이 스스로 정리하지 못한다.
+    renderRoute(() => (
+      <GroupMembersPanel
+        groupId="group-1"
+        identityPolicy="identified"
+        viewerRole="admin"
+        initialPage={{
+          members: [{ ...member, role: "admin" }],
+          nextCursor: null,
+        }}
+        memberCount={1}
+      />
+    ));
+
+    expect(
+      screen.queryByRole("button", { name: /역할 관리/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("lets an administrator move managers but not appoint administrators", async () => {
+    // 늘리는 것은 아무나, 줄이는 것은 소유자만 할 수 있으면 관리자 수가 한 방향으로만 늘어난다.
+    const { user } = renderRoute(() => (
+      <GroupMembersPanel
+        groupId="group-1"
+        identityPolicy="identified"
+        viewerRole="admin"
+        initialPage={{
+          members: [{ ...member, role: "manager" }],
+          nextCursor: null,
+        }}
+        memberCount={1}
+      />
+    ));
+
+    await user.click(screen.getByRole("button", { name: /역할 관리/ }));
+
+    expect(await screen.findByRole("menuitem", { name: "멤버" })).toBeVisible();
+    expect(
+      screen.queryByRole("menuitem", { name: "관리자" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides role controls from a manager", () => {
+    renderRoute(() => (
+      <GroupMembersPanel
+        groupId="group-1"
+        identityPolicy="identified"
+        viewerRole="manager"
+        initialPage={{ members: [member], nextCursor: null }}
+        memberCount={1}
+      />
+    ));
+
+    expect(
+      screen.queryByRole("button", { name: /역할 관리/ }),
+    ).not.toBeInTheDocument();
   });
 });

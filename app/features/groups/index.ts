@@ -7,6 +7,7 @@ export {
   approveGroupJoinRequest,
   cancelGroupJoinRequest,
   createGroup,
+  deleteGroup,
   joinGroup,
   leaveGroup,
   rejectGroupJoinRequest,

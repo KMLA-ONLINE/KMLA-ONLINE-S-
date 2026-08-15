@@ -60,6 +60,46 @@ describe("GroupSettings", () => {
     expect(screen.getByRole("dialog")).toHaveTextContent("게시물 작성 저장");
   });
 
+  it("locks the identity policy once an anonymous group has members", () => {
+    // 익명을 걷으면 멤버 명부의 이름이 한꺼번에 드러난다. 서버가 55000으로 막으므로 저장을
+    // 눌러야 실패를 알게 되는 선택지를 화면에도 남기지 않는다.
+    renderRoute(() => (
+      <GroupSettings
+        group={{
+          ...group,
+          identity_policy: "always_anonymous",
+          member_count: 4,
+        }}
+        categories={[]}
+      />
+    ));
+
+    expect(
+      screen.queryByRole("button", { name: "활동 신원 변경" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "게시물 작성 변경" }),
+    ).toBeVisible();
+  });
+
+  it("still lets a lone owner undo always-anonymous", async () => {
+    const { user } = renderRoute(() => (
+      <GroupSettings
+        group={{
+          ...group,
+          identity_policy: "always_anonymous",
+          member_count: 1,
+        }}
+        categories={[]}
+      />
+    ));
+
+    await user.click(screen.getByRole("button", { name: "활동 신원 변경" }));
+    const select = screen.getByRole("combobox", { name: "활동 신원" });
+    await user.selectOptions(select, "optional_anonymous");
+    expect(select).toHaveValue("optional_anonymous");
+  });
+
   it("warns when making a private group public", async () => {
     const { user } = renderRoute(() => (
       <GroupSettings
@@ -90,17 +130,103 @@ describe("GroupSettings", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps official group policies read-only", () => {
+  it("lets official groups change their policies too", () => {
+    // 그룹 종류로 잠그지 않는다. 남는 제약은 지금 그룹의 상태에서만 나온다.
     renderRoute(() => (
       <GroupSettings group={{ ...group, kind: "official" }} categories={[]} />
     ));
 
     expect(
-      screen.getByText("공식 그룹의 운영 정책은 변경할 수 없습니다."),
+      screen.getByRole("button", { name: "가입 방식 변경" }),
     ).toBeVisible();
     expect(
-      screen.queryByRole("button", { name: /가입 방식 변경/ }),
+      screen.getByRole("button", { name: "활동 신원 변경" }),
+    ).toBeVisible();
+  });
+
+  it("keeps group deletion out of reach for everyone but the owner", () => {
+    // 관리자에게도 열어 주면 소유자가 모르는 사이에 그룹이 사라진다.
+    const { unmount } = renderRoute(() => (
+      <GroupSettings
+        group={{ ...group, member_role: "admin" }}
+        categories={[]}
+      />
+    ));
+
+    expect(
+      screen.queryByRole("button", { name: "그룹 삭제" }),
     ).not.toBeInTheDocument();
+    unmount();
+
+    renderRoute(() => <GroupSettings group={group} categories={[]} />);
+
+    expect(screen.getByRole("button", { name: "그룹 삭제" })).toBeVisible();
+  });
+
+  it("never offers to turn an official group anonymous", async () => {
+    // 재학생 전원이 자동 가입하므로 익명으로 바꾸는 순간 되돌릴 수 없게 된다.
+    const { user } = renderRoute(() => (
+      <GroupSettings group={{ ...group, kind: "official" }} categories={[]} />
+    ));
+
+    await user.click(screen.getByRole("button", { name: "활동 신원 변경" }));
+
+    expect(screen.getByRole("option", { name: "실명만" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: "항상 익명" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("never offers to delete an official group", () => {
+    // 승인된 재학생이 자동으로 가입하는 공간이라 한 사람의 결정으로 사라지면 안 된다.
+    renderRoute(() => (
+      <GroupSettings group={{ ...group, kind: "official" }} categories={[]} />
+    ));
+
+    expect(
+      screen.queryByRole("button", { name: "그룹 삭제" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("holds the deletion until the group name is typed back", async () => {
+    // 버튼을 한 번 더 누르는 확인은 습관이 되지만, 옮겨 적는 동안에는 어느 그룹을 지우는지
+    // 눈으로 확인할 수밖에 없다.
+    const { user } = renderRoute(() => (
+      <GroupSettings group={group} categories={[]} />
+    ));
+
+    await user.click(screen.getByRole("button", { name: "그룹 삭제" }));
+    const dialog = screen.getByRole("dialog");
+    const confirm = within(dialog).getByRole("button", { name: "영구 삭제" });
+    expect(confirm).toBeDisabled();
+
+    const input = within(dialog).getByLabelText(/group\/테스트 그룹/);
+    await user.type(input, "group/다른 그룹");
+    expect(confirm).toBeDisabled();
+
+    await user.clear(input);
+    await user.type(input, "group/테스트 그룹");
+    expect(confirm).toBeEnabled();
+  });
+
+  it("forgets what was typed when the dialog is dismissed", async () => {
+    const { user } = renderRoute(() => (
+      <GroupSettings group={group} categories={[]} />
+    ));
+
+    await user.click(screen.getByRole("button", { name: "그룹 삭제" }));
+    await user.type(
+      within(screen.getByRole("dialog")).getByLabelText(/group\//),
+      "group/테스트 그룹",
+    );
+    await user.click(screen.getByRole("button", { name: "취소" }));
+
+    await user.click(screen.getByRole("button", { name: "그룹 삭제" }));
+    expect(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "영구 삭제",
+      }),
+    ).toBeDisabled();
   });
 
   it("shows managers only category management", () => {

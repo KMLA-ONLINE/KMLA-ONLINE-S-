@@ -4,6 +4,7 @@ import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import {
   cancelGroupJoinRequest,
   approveGroupJoinRequest,
+  deleteGroup,
   getGroupErrorMessage,
   GroupDetailMobileHeader,
   GroupDetailScreen,
@@ -253,6 +254,12 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
       if (!(await leaveGroup(groupId, profileId))) {
         return data({ error: "이 그룹은 나갈 수 없습니다." }, { status: 400 });
       }
+      return redirect("/groups");
+    } else if (intent === "delete-group") {
+      if (typeof groupId !== "string")
+        return data({ error: "그룹을 찾을 수 없습니다." }, { status: 400 });
+      // 삭제하는 순간 호출자도 멤버가 아니게 되므로 이 화면에 남아 있으면 재검증이 404가 된다.
+      await deleteGroup(groupId);
       return redirect("/groups");
     } else {
       return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });

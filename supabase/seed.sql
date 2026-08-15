@@ -290,6 +290,26 @@ values
     'owner',
     now()
   ),
+  -- 로그인 계정이 소유자인 그룹에 역할을 하나씩 채워 둔다. 소유자 자리에서 관리자·매니저·멤버를
+  -- 오르내리게 하고 그룹 삭제까지 눌러 볼 수 있어야 한다.
+  (
+    '20000000-0000-0000-0000-000000000002',
+    (select id from public.profiles where pub_id = 'hanbyeol-25'),
+    'admin',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000002',
+    (select id from public.profiles where pub_id = 'saebyeok-24'),
+    'manager',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000002',
+    (select id from public.profiles where pub_id = 'pureum-23'),
+    'member',
+    null
+  ),
   (
     '20000000-0000-0000-0000-000000000003',
     (select id from public.profiles where pub_id = 'kim-admin'),
@@ -338,9 +358,23 @@ values
     'owner',
     null
   ),
+  -- 반대편 자리도 하나 만든다. 여기서는 로그인 계정이 관리자이고 푸름도 관리자라, 관리자가 다른
+  -- 관리자의 역할을 바꾸지 못한다는 규칙과 관리자에게는 그룹 삭제가 없다는 것을 바로 볼 수 있다.
+  (
+    '20000000-0000-0000-0000-000000000005',
+    (select id from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001'),
+    'admin',
+    null
+  ),
   (
     '20000000-0000-0000-0000-000000000005',
     (select id from public.profiles where pub_id = 'pureum-23'),
+    'admin',
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000005',
+    (select id from public.profiles where pub_id = 'hanbyeol-25'),
     'member',
     null
   ),
