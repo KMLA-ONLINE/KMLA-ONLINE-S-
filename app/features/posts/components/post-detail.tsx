@@ -44,7 +44,7 @@ import {
  * 출렁인다. `svh`는 모바일 주소창이 접히며 높이가 변하는 것까지 막는다.
  */
 const DETAIL_DIALOG_CLASS =
-  "modal-sheet flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-2xl";
+  "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-2xl";
 
 export function PostDetail({
   post,
@@ -216,6 +216,12 @@ export function PostDetail({
             </div>
 
             <GroupPostActionBar
+              postId={post.post_id}
+              reaction={{
+                reaction_count: post.reaction_count,
+                top_reactions: post.top_reactions,
+                my_reaction: post.my_reaction,
+              }}
               sharePath={postPath}
               shareTitle={post.title}
               commentCount={post.comment_count + thread.countDelta}
@@ -240,6 +246,7 @@ export function PostDetail({
               onToggleReplies={thread.toggleReplies}
               onSubmitReply={submitReply}
               onEdit={thread.edit}
+              onReact={thread.react}
               onDelete={thread.remove}
             />
           </section>

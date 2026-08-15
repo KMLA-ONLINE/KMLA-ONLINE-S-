@@ -27,7 +27,7 @@ import { Spinner } from "~/shared/ui/spinner";
  * 브라우저의 주소창이 접힐 때 화면이 튀지 않게 하기 위해서다.
  */
 const SEARCH_DIALOG_CLASS =
-  "modal-sheet flex h-[85svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-lg";
+  "flex h-[85svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-lg";
 
 export function GroupPostSearchDialog({
   open,

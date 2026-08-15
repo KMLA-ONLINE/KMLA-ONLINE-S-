@@ -28,8 +28,17 @@ function DialogOverlay({
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
+      // Base UI는 중첩된 dialog의 backdrop을 렌더하지 않는다(`enabled: forceRender || !nested`).
+      // 스크림이 겹겹이 쌓여 과하게 어두워지는 걸 막으려는 기본값인데, 이 앱은 게시물 상세가
+      // 화면을 거의 덮는 불투명 시트라 그 위에 뜬 dialog만 아무 배경도 없이 떠 있는 것처럼
+      // 보인다. 10%가 두 겹 겹쳐 봐야 과하지 않다.
+      forceRender
+      // blur는 쓰지 않는다. 스크림이 별도 합성 레이어가 되면서, 모달이 opacity로 페이드하는
+      // 동안 Chrome이 레이어 경계에 1px짜리 가로선을 그렸다 지운다 — 화면을 거의 채우는
+      // 모달에서 특히 눈에 띈다. 게다가 `backdrop-blur-xs`는 2px이라 그 대가를 치를 만큼
+      // 보이지도 않았다.
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-black/10 duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className,
       )}
       {...props}
