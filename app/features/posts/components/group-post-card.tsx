@@ -177,6 +177,12 @@ export function GroupPostCard({
       ) : null}
 
       <GroupPostActionBar
+        postId={post.post_id}
+        reaction={{
+          reaction_count: post.reaction_count,
+          top_reactions: post.top_reactions,
+          my_reaction: post.my_reaction,
+        }}
         sharePath={postPath}
         shareTitle={post.title}
         commentCount={post.comment_count}

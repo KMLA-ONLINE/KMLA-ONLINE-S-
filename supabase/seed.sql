@@ -531,3 +531,62 @@ values
     (select id from public.profiles where pub_id = 'kim-admin')
   )
 on conflict (comment_id) do nothing;
+
+-- 반응 (기능 명세 §10). 상위 반응 정렬과 익명 묶음이 화면에서 어떻게 보이는지 확인할 수 있게
+-- 종류를 섞어 둔다.
+--
+-- `kim-admin`의 익명 반응은 메이커스 랩이 `optional_anonymous`인 지금은 나올 수 없는 조합처럼
+-- 보이지만, 익명 전용이던 그룹이 정책을 바꾸면 실제로 남는 상태다. 익명 여부는 누를 때의
+-- 정책으로 정해져 행에 남고 나중에 다시 계산하지 않는다.
+insert into public.post_reactions (post_id, profile_id, reaction, is_anonymous, created_at)
+values
+  (
+    '90000000-0000-0000-0000-000000000001',
+    (select id from public.profiles where pub_id = 'pureum-23'),
+    'like', false, '2026-08-13 02:10:00+00'
+  ),
+  (
+    '90000000-0000-0000-0000-000000000001',
+    (select id from public.profiles where pub_id = 'hanbyeol-25'),
+    'like', false, '2026-08-13 02:12:00+00'
+  ),
+  (
+    '90000000-0000-0000-0000-000000000001',
+    (select id from public.profiles where pub_id = 'saebyeok-24'),
+    'love', false, '2026-08-13 02:30:00+00'
+  ),
+  (
+    '90000000-0000-0000-0000-000000000001',
+    (select id from public.profiles where pub_id = 'kim-admin'),
+    'haha', true, '2026-08-13 02:45:00+00'
+  ),
+  (
+    '90000000-0000-0000-0000-000000000003',
+    (select id from public.profiles where pub_id = 'kim-admin'),
+    'like', false, '2026-08-13 05:00:00+00'
+  )
+on conflict (post_id, profile_id) do nothing;
+
+insert into public.comment_reactions (comment_id, profile_id, reaction, is_anonymous, created_at)
+values
+  (
+    'a0000000-0000-0000-0000-000000000007',
+    (select id from public.profiles where pub_id = 'kim-admin'),
+    'love', false, '2026-08-13 01:25:00+00'
+  ),
+  (
+    'a0000000-0000-0000-0000-000000000007',
+    (select id from public.profiles where pub_id = 'saebyeok-24'),
+    'love', false, '2026-08-13 01:31:00+00'
+  ),
+  (
+    'a0000000-0000-0000-0000-000000000007',
+    (select id from public.profiles where pub_id = 'hanbyeol-25'),
+    'haha', false, '2026-08-13 01:40:00+00'
+  ),
+  (
+    'a0000000-0000-0000-0000-000000000002',
+    (select id from public.profiles where pub_id = 'kim-admin'),
+    'wow', false, '2026-08-13 00:55:00+00'
+  )
+on conflict (comment_id, profile_id) do nothing;

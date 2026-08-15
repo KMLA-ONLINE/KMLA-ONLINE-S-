@@ -4,8 +4,10 @@ import type {
   PostComment,
   PostFormValues,
   PostIdentity,
+  PostReaction,
   PostSaveProgress,
   PreparedPostFile,
+  ReactionSummary,
 } from "~/features/posts/model/types";
 import { uploadPostAttachment } from "~/features/posts/data/files";
 import { getSupabase } from "~/shared/supabase/client";
@@ -325,4 +327,63 @@ export async function deletePostComment(commentId: string): Promise<void> {
     p_comment_id: commentId,
   });
   if (error) throw error;
+}
+
+/**
+ * 반응 쓰기 (기능 명세 §10.1, §10.2).
+ *
+ * 넷 다 갱신된 요약을 그대로 돌려준다. 화면은 누르는 즉시 로컬 계산으로 앞서 나가고, 응답이
+ * 오면 이 정본으로 덮어쓴다 — 상위 반응 순위는 남들의 반응까지 봐야 알 수 있어서 클라이언트가
+ * 혼자 맞힐 수 없다.
+ *
+ * 실명이냐 익명이냐는 그룹 정책이 정하므로 인자로 받지 않는다.
+ */
+export async function setPostReaction(
+  postId: string,
+  reaction: PostReaction,
+): Promise<ReactionSummary> {
+  const { data, error } = await getSupabase().rpc("set_post_reaction", {
+    p_post_id: postId,
+    p_reaction: reaction,
+  });
+  if (error) throw error;
+  return readSummary(data);
+}
+
+export async function clearPostReaction(
+  postId: string,
+): Promise<ReactionSummary> {
+  const { data, error } = await getSupabase().rpc("clear_post_reaction", {
+    p_post_id: postId,
+  });
+  if (error) throw error;
+  return readSummary(data);
+}
+
+export async function setCommentReaction(
+  commentId: string,
+  reaction: PostReaction,
+): Promise<ReactionSummary> {
+  const { data, error } = await getSupabase().rpc("set_comment_reaction", {
+    p_comment_id: commentId,
+    p_reaction: reaction,
+  });
+  if (error) throw error;
+  return readSummary(data);
+}
+
+export async function clearCommentReaction(
+  commentId: string,
+): Promise<ReactionSummary> {
+  const { data, error } = await getSupabase().rpc("clear_comment_reaction", {
+    p_comment_id: commentId,
+  });
+  if (error) throw error;
+  return readSummary(data);
+}
+
+function readSummary(rows: ReactionSummary[] | null): ReactionSummary {
+  const summary = rows?.[0];
+  if (!summary) throw new Error("반응을 저장하지 못했습니다.");
+  return summary;
 }

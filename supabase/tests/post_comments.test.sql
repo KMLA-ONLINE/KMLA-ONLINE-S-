@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(43);
+select plan(44);
 
 -- 시드에는 로그인 가능한 계정이 하나뿐이라 신원 정책과 운영 조치를 함께 볼 수 없다. 시드를
 -- 건드리지 않고 트랜잭션 안에서만 두 계정을 더 붙인다.
@@ -313,6 +313,15 @@ select is(
   ),
   null::text,
   'a tombstone hides its author'
+);
+select isnt(
+  (
+    select parent_author_label
+    from public.list_post_comment_replies((select id from ids where name = 'root'))
+    where depth = 6
+  ),
+  null::text,
+  'a reply keeps naming its parent after that parent is deleted'
 );
 select is(
   (

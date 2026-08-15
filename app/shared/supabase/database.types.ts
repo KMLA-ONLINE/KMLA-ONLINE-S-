@@ -34,6 +34,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      comment_reactions: {
+        Row: {
+          comment_id: string
+          created_at: string
+          is_anonymous: boolean
+          profile_id: number
+          reaction: Database["public"]["Enums"]["post_reaction"]
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string
+          is_anonymous: boolean
+          profile_id: number
+          reaction: Database["public"]["Enums"]["post_reaction"]
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string
+          is_anonymous?: boolean
+          profile_id?: number
+          reaction?: Database["public"]["Enums"]["post_reaction"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_reactions_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "post_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_reactions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_categories: {
         Row: {
           created_at: string
@@ -400,6 +439,45 @@ export type Database = {
           },
         ]
       }
+      post_reactions: {
+        Row: {
+          created_at: string
+          is_anonymous: boolean
+          post_id: string
+          profile_id: number
+          reaction: Database["public"]["Enums"]["post_reaction"]
+        }
+        Insert: {
+          created_at?: string
+          is_anonymous: boolean
+          post_id: string
+          profile_id: number
+          reaction: Database["public"]["Enums"]["post_reaction"]
+        }
+        Update: {
+          created_at?: string
+          is_anonymous?: boolean
+          post_id?: string
+          profile_id?: number
+          reaction?: Database["public"]["Enums"]["post_reaction"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_reactions_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_reactions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           author_identity: Database["public"]["Enums"]["post_identity"]
@@ -622,6 +700,22 @@ export type Database = {
           storage_bucket: string
         }[]
       }
+      clear_comment_reaction: {
+        Args: { p_comment_id: string }
+        Returns: {
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          reaction_count: number
+          top_reactions: Database["public"]["Enums"]["post_reaction"][]
+        }[]
+      }
+      clear_post_reaction: {
+        Args: { p_post_id: string }
+        Returns: {
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          reaction_count: number
+          top_reactions: Database["public"]["Enums"]["post_reaction"][]
+        }[]
+      }
       commit_group_post: {
         Args: {
           p_attachment_ids: string[]
@@ -714,12 +808,15 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
           parent_is_deleted: boolean
           post_id: string
+          reaction_count: number
           reply_count: number
           root_comment_id: string
+          top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
       delete_group_category: {
@@ -807,9 +904,12 @@ export type Database = {
           group_id: string
           is_author: boolean
           is_pinned: boolean
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
           post_id: string
           published_at: string
+          reaction_count: number
           title: string
+          top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
       get_my_profile: {
@@ -851,6 +951,17 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      list_comment_reactors: {
+        Args: { p_comment_id: string }
+        Returns: {
+          anonymous_count: number
+          reacted_at: string
+          reaction: Database["public"]["Enums"]["post_reaction"]
+          reactor_avatar_path: string
+          reactor_name: string
+          reactor_pub_id: string
+        }[]
       }
       list_group_join_requests: {
         Args: { p_group_id: string }
@@ -908,9 +1019,12 @@ export type Database = {
           group_id: string
           is_author: boolean
           is_pinned: boolean
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
           post_id: string
           published_at: string
+          reaction_count: number
           title: string
+          top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
       list_popular_groups: {
@@ -965,12 +1079,15 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
           parent_is_deleted: boolean
           post_id: string
+          reaction_count: number
           reply_count: number
           root_comment_id: string
+          top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
       list_post_comments: {
@@ -995,12 +1112,26 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
           parent_is_deleted: boolean
           post_id: string
+          reaction_count: number
           reply_count: number
           root_comment_id: string
+          top_reactions: Database["public"]["Enums"]["post_reaction"][]
+        }[]
+      }
+      list_post_reactors: {
+        Args: { p_post_id: string }
+        Returns: {
+          anonymous_count: number
+          reacted_at: string
+          reaction: Database["public"]["Enums"]["post_reaction"]
+          reactor_avatar_path: string
+          reactor_name: string
+          reactor_pub_id: string
         }[]
       }
       move_group_category: {
@@ -1129,9 +1260,31 @@ export type Database = {
           title: string
         }[]
       }
+      set_comment_reaction: {
+        Args: {
+          p_comment_id: string
+          p_reaction: Database["public"]["Enums"]["post_reaction"]
+        }
+        Returns: {
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          reaction_count: number
+          top_reactions: Database["public"]["Enums"]["post_reaction"][]
+        }[]
+      }
       set_group_post_pinned: {
         Args: { p_pinned: boolean; p_post_id: string }
         Returns: string
+      }
+      set_post_reaction: {
+        Args: {
+          p_post_id: string
+          p_reaction: Database["public"]["Enums"]["post_reaction"]
+        }
+        Returns: {
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          reaction_count: number
+          top_reactions: Database["public"]["Enums"]["post_reaction"][]
+        }[]
       }
       submit_my_profile: {
         Args: {
@@ -1257,12 +1410,15 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
           parent_is_deleted: boolean
           post_id: string
+          reaction_count: number
           reply_count: number
           root_comment_id: string
+          top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
     }
@@ -1281,6 +1437,7 @@ export type Database = {
       post_attachment_status: "pending" | "ready" | "deleted"
       post_identity: "identified" | "anonymous" | "staff"
       post_kind: "group" | "profile"
+      post_reaction: "like" | "love" | "haha" | "wow" | "sad" | "angry"
       post_visibility: "public" | "private"
       profile_academic_track: "domestic" | "international"
       profile_gender: "male" | "female"
@@ -1431,6 +1588,7 @@ export const Constants = {
       post_attachment_status: ["pending", "ready", "deleted"],
       post_identity: ["identified", "anonymous", "staff"],
       post_kind: ["group", "profile"],
+      post_reaction: ["like", "love", "haha", "wow", "sad", "angry"],
       post_visibility: ["public", "private"],
       profile_academic_track: ["domestic", "international"],
       profile_gender: ["male", "female"],

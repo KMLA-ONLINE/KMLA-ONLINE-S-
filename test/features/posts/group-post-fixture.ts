@@ -20,8 +20,11 @@ export function groupPost(overrides: Partial<GroupPost> = {}): GroupPost {
     is_author: false,
     is_pinned: false,
     post_id: "post-id",
+    my_reaction: null,
     published_at: "2026-08-13T00:00:00Z",
+    reaction_count: 0,
     title: "제목",
+    top_reactions: [],
     ...overrides,
   };
 }

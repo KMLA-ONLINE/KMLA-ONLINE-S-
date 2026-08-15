@@ -436,7 +436,12 @@ function PostEditor({
           </div>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-y-auto md:bg-muted/40">
+        {/*
+          첨부를 더해 내용이 길어지면 스크롤바가 생긴다. 그대로 두면 그 폭만큼 콘텐츠 상자가
+          좁아지면서 `mx-auto`로 가운데 둔 본문이 왼쪽으로 밀리는데, 헤더는 이 스크롤 영역
+          밖이라 함께 밀리지 않아 둘이 어긋난다. 양쪽에 자리를 미리 잡아 둔다.
+        */}
+        <main className="min-h-0 flex-1 [scrollbar-gutter:stable_both-edges] overflow-y-auto md:bg-muted/40">
           <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-5 sm:px-6 sm:py-8 md:border-x md:bg-background md:shadow-sm">
             <div className="grid gap-2">
               <div

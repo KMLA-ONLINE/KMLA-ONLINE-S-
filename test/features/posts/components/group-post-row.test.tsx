@@ -44,11 +44,19 @@ describe("GroupPostRow", () => {
     expect(screen.queryByText("수정됨")).not.toBeInTheDocument();
   });
 
-  it("shows the real comment count and keeps the reaction slot at zero", () => {
-    renderRow(groupPost({ comment_count: 12 }));
+  it("shows the real comment and reaction counts", () => {
+    renderRow(
+      groupPost({
+        comment_count: 12,
+        reaction_count: 4,
+        top_reactions: ["like", "love"],
+      }),
+    );
 
     expect(screen.getByText("12")).toBeInTheDocument();
-    expect(screen.getByText("반응 (준비 중)")).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
+    // 행 전체가 하나의 링크다. 반응 그래픽이 붙어도 그 안에 누를 것을 더 만들지 않는다.
+    expect(screen.getAllByRole("link")).toHaveLength(1);
   });
 
   it("marks pinned posts", () => {

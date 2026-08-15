@@ -203,6 +203,55 @@ function EditorSurface({
     run(callCommand(toggleLinkCommand.key, { href: value }));
   };
 
+  const tools: {
+    label: string;
+    keys?: string;
+    icon: React.ReactNode;
+    run: () => void;
+  }[] = [
+    {
+      label: "굵게",
+      keys: "Control+B Meta+B",
+      icon: <BoldIcon />,
+      run: () => run(callCommand(toggleStrongCommand.key)),
+    },
+    {
+      label: "기울임",
+      keys: "Control+I Meta+I",
+      icon: <ItalicIcon />,
+      run: () => run(callCommand(toggleEmphasisCommand.key)),
+    },
+    {
+      label: "취소선",
+      keys: "Control+Shift+X Meta+Shift+X",
+      icon: <StrikethroughIcon />,
+      run: () => run(callCommand(toggleStrikethroughCommand.key)),
+    },
+    {
+      label: "큰 제목",
+      icon: <Heading2Icon />,
+      run: () => run(callCommand(wrapInHeadingCommand.key, 2)),
+    },
+    {
+      label: "작은 제목",
+      icon: <Heading3Icon />,
+      run: () => run(callCommand(wrapInHeadingCommand.key, 3)),
+    },
+    { label: "링크", icon: <LinkIcon />, run: link },
+    {
+      label: "실행 취소",
+      keys: "Control+Z Meta+Z",
+      icon: <Undo2Icon />,
+      run: () => run(callCommand(undoCommand.key)),
+    },
+    {
+      label: "다시 실행",
+      keys: "Control+Shift+Z Meta+Shift+Z",
+      icon: <Redo2Icon />,
+      run: () => run(callCommand(redoCommand.key)),
+    },
+  ];
+
   return (
     <div className="overflow-hidden rounded-md border bg-background">
       <input
@@ -211,61 +260,26 @@ function EditorSurface({
         name="body"
         defaultValue={sanitizePostMarkdown(initialValue)}
       />
+      {/*
+        툴바는 Tab 순서에서 뺀다. 제목에서 Tab을 누르면 서식 버튼 여덟 개를 지나는 게 아니라
+        본문으로 바로 가야 한다. 서식은 포인터로 누르거나 `aria-keyshortcuts`에 적힌 단축키로
+        적용한다.
+      */}
       <div
         className="flex flex-wrap gap-1 border-b bg-muted/50 p-1"
         role="toolbar"
         aria-label="본문 서식"
       >
-        <Tool
-          label="굵게"
-          keys="Control+B Meta+B"
-          onClick={() => run(callCommand(toggleStrongCommand.key))}
-        >
-          <BoldIcon />
-        </Tool>
-        <Tool
-          label="기울임"
-          keys="Control+I Meta+I"
-          onClick={() => run(callCommand(toggleEmphasisCommand.key))}
-        >
-          <ItalicIcon />
-        </Tool>
-        <Tool
-          label="취소선"
-          keys="Control+Shift+X Meta+Shift+X"
-          onClick={() => run(callCommand(toggleStrikethroughCommand.key))}
-        >
-          <StrikethroughIcon />
-        </Tool>
-        <Tool
-          label="큰 제목"
-          onClick={() => run(callCommand(wrapInHeadingCommand.key, 2))}
-        >
-          <Heading2Icon />
-        </Tool>
-        <Tool
-          label="작은 제목"
-          onClick={() => run(callCommand(wrapInHeadingCommand.key, 3))}
-        >
-          <Heading3Icon />
-        </Tool>
-        <Tool label="링크" onClick={link}>
-          <LinkIcon />
-        </Tool>
-        <Tool
-          label="실행 취소"
-          keys="Control+Z Meta+Z"
-          onClick={() => run(callCommand(undoCommand.key))}
-        >
-          <Undo2Icon />
-        </Tool>
-        <Tool
-          label="다시 실행"
-          keys="Control+Shift+Z Meta+Shift+Z"
-          onClick={() => run(callCommand(redoCommand.key))}
-        >
-          <Redo2Icon />
-        </Tool>
+        {tools.map((tool) => (
+          <Tool
+            key={tool.label}
+            label={tool.label}
+            keys={tool.keys}
+            onClick={tool.run}
+          >
+            {tool.icon}
+          </Tool>
+        ))}
       </div>
       <div
         className="post-typography h-96 overflow-y-auto"
@@ -306,6 +320,7 @@ function Tool({
       variant="ghost"
       aria-label={label}
       aria-keyshortcuts={keys}
+      tabIndex={-1}
       onClick={onClick}
     >
       {children}

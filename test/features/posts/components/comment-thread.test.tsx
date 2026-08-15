@@ -43,6 +43,7 @@ function renderThread(overrides: Partial<ThreadProps> = {}) {
     identities: ["identified"],
     identity: "identified",
     onIdentityChange: vi.fn(),
+    onReact: vi.fn(),
     onLoadOlder: vi.fn(),
     onToggleReplies: vi.fn(),
     onSubmitReply: vi.fn().mockResolvedValue(postComment()),

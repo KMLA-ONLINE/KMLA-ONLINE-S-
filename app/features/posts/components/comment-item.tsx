@@ -1,4 +1,4 @@
-import { MoreHorizontalIcon, SmilePlusIcon } from "lucide-react";
+import { MoreHorizontalIcon } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 
@@ -6,10 +6,16 @@ import {
   CommentComposer,
   type CommentViewer,
 } from "~/features/posts/components/comment-composer";
+import {
+  CommentReactionButton,
+  CommentReactionSummary,
+} from "~/features/posts/components/comment-reaction-button";
+import { ReactionListDialog } from "~/features/posts/components/reaction-list-dialog";
 import { CommentText } from "~/features/posts/components/comment-text";
 import { PostAuthorAvatar } from "~/features/posts/components/post-author-avatar";
 import { PostEditedMark } from "~/features/posts/components/post-edited-mark";
-import type { PostComment } from "~/features/posts/model/types";
+import { useCommentReactors } from "~/features/posts/hooks/use-comment-reactors";
+import type { PostComment, PostReaction } from "~/features/posts/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";
@@ -42,6 +48,7 @@ export function CommentItem({
   highlighted = false,
   pending = false,
   onReply,
+  onReact,
   onJumpToParent,
   onEdit,
   onDelete,
@@ -54,12 +61,15 @@ export function CommentItem({
   highlighted?: boolean;
   pending?: boolean;
   onReply: () => void;
+  onReact: (next: PostReaction | null) => void;
   onJumpToParent?: () => void;
   onEdit: (body: string) => void | Promise<unknown>;
   onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [reactorsOpen, setReactorsOpen] = useState(false);
+  const reactors = useCommentReactors(comment.comment_id);
 
   // 삭제된 댓글은 답글이 살아 있는 동안만 자리를 지킨다(없애면 답글 사슬이 끊긴다). 본문과
   // 작성자, 반응과 메뉴는 전부 사라지고 자국만 남는다.
@@ -83,10 +93,9 @@ export function CommentItem({
   const authorName = comment.author_name || comment.author_label || "익명";
   const linksToProfile =
     comment.author_identity !== "anonymous" && Boolean(comment.author_pub_id);
-  const parentLabel =
-    comment.parent_comment_id && !comment.parent_is_deleted
-      ? comment.parent_author_label
-      : null;
+  const parentLabel = comment.parent_comment_id
+    ? comment.parent_author_label
+    : null;
 
   // 수정은 답글 입력창을 그대로 쓴다. 화면에 입력기가 두 종류 있으면 같은 일을 하는데도
   // 다르게 생겨서, 한쪽만 고쳐지는 일이 반복된다. 신원은 작성 뒤 바꿀 수 없으므로 선택지를
@@ -135,7 +144,7 @@ export function CommentItem({
       )}
 
       <div className="flex min-w-0 flex-1 items-start gap-1">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div
             id={commentDomId(comment.comment_id)}
             className={cn(
@@ -167,6 +176,16 @@ export function CommentItem({
                   나
                 </Badge>
               ) : null}
+              <span
+                aria-hidden="true"
+                className="shrink-0 text-xs text-muted-foreground"
+              >
+                ·
+              </span>
+              <span className="flex shrink-0 items-center gap-1 text-xs font-normal text-muted-foreground">
+                <RelativeTime value={comment.created_at} />
+                <PostEditedMark at={comment.edited_at} />
+              </span>
             </div>
 
             <p className="text-sm wrap-break-word whitespace-pre-wrap">
@@ -184,15 +203,17 @@ export function CommentItem({
           </div>
 
           <div className="my-1 flex items-center gap-3 text-xs text-muted-foreground">
-            {/* 반응은 아직 구현 전이라 자리만 잡고 비활성으로 둔다(기능 명세 §8.15). */}
-            <button
-              type="button"
-              disabled
-              aria-label="반응 (준비 중)"
-              className="flex items-center disabled:opacity-50"
-            >
-              <SmilePlusIcon className="size-4" aria-hidden="true" />
-            </button>
+            <CommentReactionButton
+              summary={comment}
+              onSelect={(reaction) => {
+                reactors.invalidate();
+                onReact(reaction);
+              }}
+              onClear={() => {
+                reactors.invalidate();
+                onReact(null);
+              }}
+            />
             {canReply ? (
               <button
                 type="button"
@@ -203,11 +224,22 @@ export function CommentItem({
                 답글
               </button>
             ) : null}
-            <span className="flex items-center gap-1">
-              <RelativeTime value={comment.created_at} />
-              <PostEditedMark at={comment.edited_at} />
-            </span>
+            <CommentReactionSummary
+              summary={comment}
+              onOpen={() => {
+                setReactorsOpen(true);
+                reactors.load();
+              }}
+            />
           </div>
+
+          <ReactionListDialog
+            open={reactorsOpen}
+            onOpenChange={setReactorsOpen}
+            reactors={reactors.reactors}
+            loading={reactors.loading}
+            title="댓글 반응"
+          />
         </div>
 
         {comment.can_edit || comment.can_delete ? (

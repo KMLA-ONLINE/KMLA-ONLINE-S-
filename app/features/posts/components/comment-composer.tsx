@@ -111,7 +111,13 @@ export function CommentComposer({
   useEffect(() => {
     // `autoFocus` 속성 대신 직접 부른다. 스크롤 영역 안에서 마운트되는 입력기라 브라우저가
     // 자동으로 스크롤을 옮기면 읽고 있던 자리를 잃는다.
-    if (focusOnMount) input.current?.focus({ preventScroll: true });
+    const element = input.current;
+    if (!focusOnMount || !element) return;
+    element.focus({ preventScroll: true });
+    // 수정처럼 기존 본문을 담고 여는 입력창은 커서를 끝에 둔다. 그냥 포커스만 주면 맨 앞에
+    // 서서, 이어 쓰려던 사람이 매번 커서를 옮겨야 한다.
+    const end = element.value.length;
+    element.setSelectionRange(end, end);
   }, [focusOnMount, input]);
 
   // 높이 조절은 render가 끝난 뒤에 한다. 입력 핸들러 안에서 직접 스타일을 건드리면 등록 직후

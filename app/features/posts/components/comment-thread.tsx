@@ -8,7 +8,11 @@ import {
   CommentItem,
   commentDomId,
 } from "~/features/posts/components/comment-item";
-import type { PostComment, PostIdentity } from "~/features/posts/model/types";
+import type {
+  PostComment,
+  PostIdentity,
+  PostReaction,
+} from "~/features/posts/model/types";
 import { Spinner } from "~/shared/ui/spinner";
 
 /** 답글 최대 중첩 단계(기능 명세 §9.2). 이 깊이에 닿은 댓글에는 답글 버튼을 두지 않는다. */
@@ -33,6 +37,7 @@ export function CommentThread({
   onSubmitReply,
   onEdit,
   onDelete,
+  onReact,
 }: {
   comments: PostComment[];
   replies: Record<string, PostComment[]>;
@@ -51,6 +56,7 @@ export function CommentThread({
   onSubmitReply: (parent: PostComment, body: string) => Promise<unknown>;
   onEdit: (comment: PostComment, body: string) => void | Promise<unknown>;
   onDelete: (comment: PostComment) => void | Promise<unknown>;
+  onReact: (comment: PostComment, next: PostReaction | null) => void;
 }) {
   const [highlighted, setHighlighted] = useState<string | null>(null);
   // 답글 입력창은 한 번에 하나만 연다. 여러 개를 띄우면 어디에 쓰고 있었는지 놓친다.
@@ -154,6 +160,7 @@ export function CommentThread({
               onReply={() => startReply(comment)}
               onEdit={(body) => onEdit(comment, body)}
               onDelete={() => void onDelete(comment)}
+              onReact={(next) => onReact(comment, next)}
             />
 
             {comment.reply_count > 0 ? (
@@ -197,6 +204,7 @@ export function CommentThread({
                           }
                           onEdit={(body) => onEdit(reply, body)}
                           onDelete={() => void onDelete(reply)}
+                          onReact={(next) => onReact(reply, next)}
                         />
                         {replyingTo?.comment_id === reply.comment_id
                           ? replyComposer(reply)
