@@ -17,6 +17,7 @@ import {
 } from "~/features/groups/model/format";
 import type {
   GroupDetail,
+  GroupInvite,
   GroupJoinRequest,
   GroupMemberPage,
 } from "~/features/groups/model/types";
@@ -47,6 +48,7 @@ export function GroupDetailScreen({
   posts = { posts: [], nextCursor: null },
   memberPage,
   joinRequests = [],
+  invite = null,
 }: {
   group: GroupDetail;
   profileId: number;
@@ -55,6 +57,7 @@ export function GroupDetailScreen({
   posts?: GroupPostPage;
   memberPage?: GroupMemberPage;
   joinRequests?: GroupJoinRequest[];
+  invite?: GroupInvite | null;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const isMember = group.membership_state === "member";
@@ -150,7 +153,11 @@ export function GroupDetailScreen({
               />
             )
           ) : (
-            <GroupSettings group={group} categories={categories} />
+            <GroupSettings
+              group={group}
+              categories={categories}
+              invite={invite}
+            />
           )}
         </div>
 

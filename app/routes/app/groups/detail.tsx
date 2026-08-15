@@ -6,8 +6,10 @@ import {
   approveGroupJoinRequest,
   deleteGroup,
   getGroupErrorMessage,
+  getGroupInvite,
   GroupDetailMobileHeader,
   GroupDetailScreen,
+  issueGroupInvite,
   joinGroup,
   leaveGroup,
   listGroupJoinRequests,
@@ -15,6 +17,7 @@ import {
   loadGroupDetail,
   requestGroupJoin,
   rejectGroupJoinRequest,
+  revokeGroupInvite,
   setGroupPinned,
   setGroupMemberRole,
   transferGroupOwnership,
@@ -54,19 +57,28 @@ export async function clientLoader({
   }
   const searchParams = new URL(request.url).searchParams;
   const memberTab = searchParams.get("tab") === "members";
+  const settingsTab = searchParams.get("tab") === "settings";
   const canModerate =
     group.member_role === "owner" || group.member_role === "admin";
-  const [categories, posts, memberPage, joinRequests] = await Promise.all([
-    listGroupCategories(group.group_id),
-    listGroupPosts(group.group_id),
-    memberTab
-      ? listGroupMembers(group.group_id, searchParams.get("memberQuery") ?? "")
-      : Promise.resolve(undefined),
-    memberTab && canModerate
-      ? listGroupJoinRequests(group.group_id)
-      : Promise.resolve([]),
-  ]);
-  return { group, categories, posts, memberPage, joinRequests };
+  const [categories, posts, memberPage, joinRequests, invite] =
+    await Promise.all([
+      listGroupCategories(group.group_id),
+      listGroupPosts(group.group_id),
+      memberTab
+        ? listGroupMembers(
+            group.group_id,
+            searchParams.get("memberQuery") ?? "",
+          )
+        : Promise.resolve(undefined),
+      memberTab && canModerate
+        ? listGroupJoinRequests(group.group_id)
+        : Promise.resolve([]),
+      // 초대 링크는 설정 탭의 운영진에게만 보이고, 다른 사람이 부르면 서버가 42501로 막는다.
+      settingsTab && canModerate && group.kind !== "official"
+        ? getGroupInvite(group.group_id)
+        : Promise.resolve(null),
+    ]);
+  return { group, categories, posts, memberPage, joinRequests, invite };
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
@@ -255,6 +267,23 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
         return data({ error: "이 그룹은 나갈 수 없습니다." }, { status: 400 });
       }
       return redirect("/groups");
+    } else if (intent === "issue-invite") {
+      const hours = Number(formData.get("hours"));
+      if (
+        typeof groupId !== "string" ||
+        !Number.isSafeInteger(hours) ||
+        hours < 1 ||
+        hours > 336
+      )
+        return data(
+          { error: "유효 기간을 다시 확인해 주세요." },
+          { status: 400 },
+        );
+      await issueGroupInvite(groupId, hours);
+    } else if (intent === "revoke-invite") {
+      if (typeof groupId !== "string")
+        return data({ error: "그룹을 찾을 수 없습니다." }, { status: 400 });
+      await revokeGroupInvite(groupId);
     } else if (intent === "delete-group") {
       if (typeof groupId !== "string")
         return data({ error: "그룹을 찾을 수 없습니다." }, { status: 400 });
@@ -297,6 +326,7 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
         posts={loaderData.posts}
         memberPage={loaderData.memberPage}
         joinRequests={loaderData.joinRequests}
+        invite={loaderData.invite}
       />
       <Outlet />
     </>

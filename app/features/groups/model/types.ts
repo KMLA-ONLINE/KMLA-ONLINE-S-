@@ -114,6 +114,19 @@ export interface GroupJoinRequest {
   avatar_path: string | null;
 }
 
+/** 그룹당 하나만 살아 있는 초대 링크. 재발급하면 이전 토큰은 사라진다. */
+export type GroupInvite =
+  Database["public"]["Functions"]["get_group_invite"]["Returns"][number];
+
+/**
+ * 링크를 받은 사람에게 보여 줄 만큼의 그룹 정보.
+ *
+ * 아이콘과 커버가 없는 것은 빠뜨린 게 아니다. 저장소 정책이 비멤버에게 비공개 그룹의 이미지를
+ * 내주지 않고, 미리보기 한 장 때문에 그 정책을 넓히지 않기로 했다.
+ */
+export type GroupInvitePreview =
+  Database["public"]["Functions"]["get_group_invite_preview"]["Returns"][number];
+
 export interface UpdateGroupSettingsValues {
   name: string;
   description: string;

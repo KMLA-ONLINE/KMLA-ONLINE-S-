@@ -2,18 +2,21 @@ import { Settings2Icon } from "lucide-react";
 
 import { BasicInfoCard } from "~/features/groups/components/group-basic-settings";
 import { DangerSettings } from "~/features/groups/components/group-danger-settings";
+import { InviteSettings } from "~/features/groups/components/group-invite-settings";
 import { GroupMediaSettings } from "~/features/groups/components/group-media-settings";
 import { PolicySettings } from "~/features/groups/components/group-policy-settings";
-import type { GroupDetail } from "~/features/groups/model/types";
+import type { GroupDetail, GroupInvite } from "~/features/groups/model/types";
 import { CategoryManager, type GroupCategory } from "~/features/posts";
 import { Badge } from "~/shared/ui/badge";
 
 export function GroupSettings({
   group,
   categories,
+  invite = null,
 }: {
   group: GroupDetail;
   categories: GroupCategory[];
+  invite?: GroupInvite | null;
 }) {
   const canManage =
     group.member_role === "owner" || group.member_role === "admin";
@@ -38,11 +41,18 @@ export function GroupSettings({
         <>
           <GroupMediaSettings group={group} />
           <BasicInfoCard group={group} />
-          <PolicySettings group={group} />
         </>
       ) : null}
 
+      {/* 매니저에게는 이 카드 하나만 보인다. 그래서 canManage 블록 밖에 있다. */}
       <CategoryManager groupId={group.group_id} categories={categories} />
+
+      {canManage ? (
+        <>
+          <PolicySettings group={group} />
+          <InviteSettings group={group} invite={invite} />
+        </>
+      ) : null}
 
       {/* 되돌릴 수 없는 동작이라 맨 아래에 따로 둔다. */}
       <DangerSettings group={group} />

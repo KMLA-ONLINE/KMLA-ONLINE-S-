@@ -177,6 +177,95 @@ on conflict (lower(pub_id)) do update set
   status = excluded.status,
   updated_at = now();
 
+-- 교사 계정. 그룹을 검색할 수도 가입 요청을 넣을 수도 없어서 초대 링크가 유일한 가입
+-- 경로다. 그 경로를 실제로 눌러 볼 수 있도록 로그인 가능한 계정으로 둔다. 어떤 그룹에도
+-- 넣지 않는 것이 요점이다.
+--
+-- auth 사용자 번호가 0099인 이유는 pgTAP 파일들이 `...0002`부터 차례로 자기 사용자를
+-- 만들어 seed 프로필에 붙이기 때문이다. 그 대역을 비켜 둬야 테스트가 충돌하지 않는다.
+insert into auth.users (
+  instance_id,
+  id,
+  aud,
+  role,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  confirmation_token,
+  recovery_token,
+  email_change_token_new,
+  email_change,
+  phone_change,
+  phone_change_token,
+  email_change_token_current,
+  reauthentication_token,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  created_at,
+  updated_at
+)
+values (
+  '00000000-0000-0000-0000-000000000000',
+  '10000000-0000-0000-0000-000000000099',
+  'authenticated',
+  'authenticated',
+  'teacher@kmla.hs.kr',
+  extensions.crypt('password123', extensions.gen_salt('bf')),
+  now(),
+  '',
+  '',
+  '',
+  '',
+  '',
+  '',
+  '',
+  '',
+  '{"provider":"email","providers":["email"]}',
+  '{}',
+  now(),
+  now()
+)
+on conflict (id) do update set
+  email = excluded.email,
+  encrypted_password = excluded.encrypted_password,
+  email_confirmed_at = excluded.email_confirmed_at,
+  updated_at = now();
+
+insert into auth.identities (
+  provider_id,
+  user_id,
+  identity_data,
+  provider,
+  last_sign_in_at,
+  created_at,
+  updated_at
+)
+values (
+  '10000000-0000-0000-0000-000000000099',
+  '10000000-0000-0000-0000-000000000099',
+  '{"sub":"10000000-0000-0000-0000-000000000099","email":"teacher@kmla.hs.kr","email_verified":true}',
+  'email',
+  now(),
+  now(),
+  now()
+)
+on conflict (provider_id, provider) do update set
+  identity_data = excluded.identity_data,
+  updated_at = now();
+
+insert into public.profiles (auth_user_id, pub_id, name, type, status)
+values (
+  '10000000-0000-0000-0000-000000000099',
+  'jung-teacher',
+  '정선생',
+  'teacher',
+  'accepted'
+)
+on conflict (auth_user_id) do update set
+  name = excluded.name,
+  status = excluded.status,
+  updated_at = now();
+
 insert into public.groups (
   id,
   slug,

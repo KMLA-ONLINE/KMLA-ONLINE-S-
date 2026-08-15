@@ -682,6 +682,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_group_invite: { Args: { p_token: string }; Returns: string }
       approve_group_join_request: {
         Args: { p_group_id: string; p_request_id: string }
         Returns: undefined
@@ -888,6 +889,28 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_group_invite: {
+        Args: { p_group_id: string }
+        Returns: {
+          expires_at: string
+          token: string
+        }[]
+      }
+      get_group_invite_preview: {
+        Args: { p_token: string }
+        Returns: {
+          already_member: boolean
+          description: string
+          expires_at: string
+          group_id: string
+          identity_policy: Database["public"]["Enums"]["group_identity_policy"]
+          join_policy: Database["public"]["Enums"]["group_join_policy"]
+          member_count: number
+          name: string
+          posting_policy: Database["public"]["Enums"]["group_posting_policy"]
+          slug: string
+        }[]
+      }
       get_group_post: {
         Args: { p_post_id: string }
         Returns: {
@@ -954,6 +977,13 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      issue_group_invite: {
+        Args: { p_group_id: string; p_hours?: number }
+        Returns: {
+          expires_at: string
+          token: string
+        }[]
       }
       list_comment_reactors: {
         Args: { p_comment_id: string }
@@ -1238,6 +1268,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      revoke_group_invite: { Args: { p_group_id: string }; Returns: undefined }
       search_group_posts: {
         Args: { p_group_id: string; p_limit?: number; p_query: string }
         Returns: {

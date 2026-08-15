@@ -6,6 +6,8 @@ import type {
   GroupDiscoveryPage,
   GroupDetail,
   GroupHomeItem,
+  GroupInvite,
+  GroupInvitePreview,
   GroupJoinRequest,
   GroupMember,
   GroupMemberCursor,
@@ -271,4 +273,36 @@ export async function listGroupJoinRequests(
   });
   if (error) throw error;
   return data ?? [];
+}
+
+/**
+ * 그룹에 살아 있는 초대 링크. 없거나 만료됐으면 null이다.
+ *
+ * 발급과 분리한 이유는 설정 화면을 다시 열 때마다 링크가 바뀌면 안 되기 때문이다.
+ * 소유자와 관리자만 부를 수 있다.
+ */
+export async function getGroupInvite(
+  groupId: string,
+): Promise<GroupInvite | null> {
+  const { data, error } = await getSupabase().rpc("get_group_invite", {
+    p_group_id: groupId,
+  });
+  if (error) throw error;
+  return data?.[0] ?? null;
+}
+
+/**
+ * 초대 토큰이 가리키는 그룹의 미리보기. 토큰이 없거나 만료됐으면 null이다.
+ *
+ * 비공개 그룹의 행은 RLS가 비멤버에게 통째로 숨기므로, 이 definer RPC 없이는 링크를 받은
+ * 사람이 그룹 이름조차 볼 수 없다.
+ */
+export async function getGroupInvitePreview(
+  token: string,
+): Promise<GroupInvitePreview | null> {
+  const { data, error } = await getSupabase().rpc("get_group_invite_preview", {
+    p_token: token,
+  });
+  if (error) throw error;
+  return data?.[0] ?? null;
 }
