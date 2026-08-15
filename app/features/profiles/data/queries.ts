@@ -2,7 +2,7 @@ import type { AcceptedProfile } from "~/features/profiles/model/types";
 import { getSupabase } from "~/shared/supabase/client";
 
 const PROFILE_COLUMNS =
-  "pub_id, name, type, role, cohort, academic_track, avatar_path, description" as const;
+  "pub_id, name, type, role, cohort, academic_track, avatar_path, description, student_number, class_no, gender, phone_number, birthday, dorm_room" as const;
 
 export async function loadAcceptedProfile(
   pubId: string,
@@ -16,5 +16,6 @@ export async function loadAcceptedProfile(
     .maybeSingle();
 
   if (error) throw error;
+
   return data;
 }

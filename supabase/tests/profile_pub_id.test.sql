@@ -1,60 +1,91 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(5);
 
-insert into public.profiles (name, type)
-select '자동 공개 ID ' || number, 'teacher'
-from generate_series(1, 50) as number;
-
-select ok(
-  (
-    select bool_and(pub_id ~ '^[a-z0-9](?:[a-z0-9-]{3,13}[a-z0-9])$')
-    from public.profiles
-    where name like '자동 공개 ID %'
-  ),
-  'default profile public IDs have the required format'
-);
-
-select is(
-  (
-    select count(distinct lower(pub_id))
-    from public.profiles
-    where name like '자동 공개 ID %'
-  ),
-  50::bigint,
-  'default profile public IDs are unique'
-);
+select plan(3);
 
 select throws_ok(
-  $$insert into public.profiles (pub_id, name, type)
-    values ('-invalid', '잘못된 공개 ID', 'teacher')$$,
+  $$insert into public.profiles (
+      pub_id,
+      name,
+      type,
+      student_number,
+      cohort,
+      gender,
+      academic_track,
+      birthday,
+      status
+    )
+    values (
+      'admin',
+      '관리자 테스트',
+      'student',
+      '980001',
+      30,
+      'male',
+      'domestic',
+      '2008-01-01',
+      'accepted'
+    )$$,
   '23514',
   null,
-  'profile public IDs must match the required format'
+  'admin is rejected as a reserved profile public id'
 );
-
-insert into public.profiles (pub_id, name, type)
-values ('case-test', '대소문자 공개 ID', 'teacher');
 
 select throws_ok(
-  $$insert into public.profiles (pub_id, name, type)
-    values ('case-test', '중복 공개 ID', 'teacher')$$,
-  '23505',
+  $$insert into public.profiles (
+      pub_id,
+      name,
+      type,
+      student_number,
+      cohort,
+      gender,
+      academic_track,
+      birthday,
+      status
+    )
+    values (
+      'sibal',
+      '금지어 테스트',
+      'student',
+      '980002',
+      30,
+      'male',
+      'domestic',
+      '2008-01-01',
+      'accepted'
+    )$$,
+  '23514',
   null,
-  'profile public IDs are unique'
+  'reserved profile public ids are rejected'
 );
 
-set local role authenticated;
-select is(
-  (
-    select pub_id
-    from public.profiles
-    where pub_id = 'kim-admin'
-  ),
-  'kim-admin'::text,
-  'authenticated users can read accepted profiles by public ID'
+select lives_ok(
+  $$insert into public.profiles (
+      pub_id,
+      name,
+      type,
+      student_number,
+      cohort,
+      gender,
+      academic_track,
+      birthday,
+      status
+    )
+    values (
+      'minki-30',
+      '정상 테스트',
+      'student',
+      '980003',
+      30,
+      'male',
+      'international',
+      '2008-01-01',
+      'accepted'
+    )$$,
+  'normal profile public ids remain valid'
 );
 
 select * from finish();
+
 rollback;

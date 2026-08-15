@@ -12,4 +12,10 @@ export type AcceptedProfile = Pick<
   | "academic_track"
   | "avatar_path"
   | "description"
+  | "student_number"
+  | "class_no"
+  | "gender"
+  | "phone_number"
+  | "birthday"
+  | "dorm_room"
 >;
