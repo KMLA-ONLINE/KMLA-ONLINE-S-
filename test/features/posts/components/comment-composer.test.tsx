@@ -132,6 +132,45 @@ describe("CommentComposer", () => {
     expect((input as HTMLTextAreaElement).selectionStart).toBe(6);
   });
 
+  it("restores the draft when the submit fails", async () => {
+    // 실패는 오류 문구로만 알린다. 입력값까지 버리면 긴 댓글을 처음부터 다시 써야 한다.
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const { user, input } = renderComposer({ onSubmit });
+
+    await user.type(input, "지워지면 안 되는 댓글{Enter}");
+
+    expect(onSubmit).toHaveBeenCalledWith("지워지면 안 되는 댓글");
+    await screen.findByDisplayValue("지워지면 안 되는 댓글");
+  });
+
+  it("keeps the input clear when the submit succeeds", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
+    const { user, input } = renderComposer({ onSubmit });
+
+    await user.type(input, "올라간 댓글{Enter}");
+
+    expect(onSubmit).toHaveBeenCalledWith("올라간 댓글");
+    await vi.waitFor(() => expect(input).toHaveValue(""));
+  });
+
+  it("does not overwrite a newly typed draft when the submit fails", async () => {
+    let settle: (value: unknown) => void = vi.fn();
+    const onSubmit = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          settle = resolve;
+        }),
+    );
+    const { user, input } = renderComposer({ onSubmit });
+
+    await user.type(input, "첫 시도{Enter}");
+    await user.type(input, "다시 쓰는 중");
+    settle(undefined);
+
+    // 되돌리기는 그 사이 아무것도 쓰지 않았을 때만이다.
+    await vi.waitFor(() => expect(input).toHaveValue("다시 쓰는 중"));
+  });
+
   it("names the comment being replied to through its placeholder", () => {
     renderComposer({ placeholder: "익명2님에게 답글 남기기…" });
 

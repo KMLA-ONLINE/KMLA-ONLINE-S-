@@ -80,12 +80,13 @@ export function PostDetail({
 
   const submitComment = async (body: string) => {
     const created = await thread.create(body, identity, null);
-    if (!created) return;
+    if (!created) return created;
     // 방금 쓴 댓글은 목록 맨 아래에 붙는다. 보이지 않는 곳에 등록되면 실패로 읽힌다.
     requestAnimationFrame(() => {
       const container = scrollRef.current;
       if (container) container.scrollTop = container.scrollHeight;
     });
+    return created;
   };
 
   const submitReply = (parent: PostComment, body: string) =>

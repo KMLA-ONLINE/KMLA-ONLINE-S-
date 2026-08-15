@@ -251,20 +251,6 @@ export async function reorderPostAttachments(
   if (error) throw error;
 }
 
-export async function updateGroupPost(
-  postId: string,
-  values: PostFormValues,
-): Promise<string> {
-  const { data, error } = await getSupabase().rpc("update_group_post", {
-    p_post_id: postId,
-    p_title: values.title,
-    p_body: values.body,
-    p_category_id: values.categoryId || undefined,
-  });
-  if (error) throw error;
-  return data;
-}
-
 export async function deleteGroupPost(postId: string): Promise<void> {
   const { error } = await getSupabase().rpc("delete_group_post", {
     p_post_id: postId,

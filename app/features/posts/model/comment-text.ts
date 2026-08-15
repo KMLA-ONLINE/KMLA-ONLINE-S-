@@ -23,9 +23,22 @@ export function normalizeCommentBody(value: string): string {
  * 세면 사용자가 보는 길이와 어긋난다. 데이터베이스는 `char_length`로 세므로 두 값이 다를 수
  * 있지만, 클라이언트 검사는 UX용이고 실제 경계는 RPC가 잡는다.
  */
+let graphemeSegmenter: Intl.Segmenter | null | undefined;
+
+/** 생성 비용이 있는 객체다. 글자 수는 입력 한 글자마다 다시 세므로 한 번 만들어 재사용한다. */
+function getGraphemeSegmenter(): Intl.Segmenter | null {
+  if (graphemeSegmenter === undefined) {
+    graphemeSegmenter =
+      typeof Intl.Segmenter === "function"
+        ? new Intl.Segmenter("ko", { granularity: "grapheme" })
+        : null;
+  }
+  return graphemeSegmenter;
+}
+
 export function countCommentGraphemes(value: string): number {
-  if (typeof Intl.Segmenter === "function") {
-    const segmenter = new Intl.Segmenter("ko", { granularity: "grapheme" });
+  const segmenter = getGraphemeSegmenter();
+  if (segmenter) {
     let count = 0;
     for (const _ of segmenter.segment(value)) count += 1;
     return count;

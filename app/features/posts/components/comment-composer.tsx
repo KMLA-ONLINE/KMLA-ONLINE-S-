@@ -82,6 +82,7 @@ export function CommentComposer({
   identity: PostIdentity;
   /** 선택지가 하나뿐이면 토글이 없으므로 불리지 않는다. */
   onIdentityChange?: (next: PostIdentity) => void;
+  /** 성공하면 정본 행을, 실패하면 falsy를 돌려준다. falsy면 입력값을 되돌린다. */
   onSubmit: (body: string) => void | Promise<unknown>;
   /** 주면 되돌리기 버튼이 붙는다. 수정처럼 도중에 그만둘 수 있어야 하는 곳에서 쓴다. */
   onCancel?: () => void;
@@ -139,8 +140,15 @@ export function CommentComposer({
     if (reason) return setLocalError(reason);
     setLocalError(null);
     const body = normalizeCommentBody(draft);
+    // 입력창은 먼저 비운다(메신저처럼 즉시 반응해야 한다). 다만 등록이 실패하면 되돌린다 —
+    // 오류 문구만 남기고 쓴 글을 버리면 긴 댓글을 처음부터 다시 쓰는 수밖에 없다.
+    const submitted = draft;
     setDraft("");
-    void onSubmit(body);
+    void Promise.resolve(onSubmit(body)).then((created) => {
+      // 되돌리는 건 그 사이 아무것도 쓰지 않았을 때뿐이다. 새로 쓰고 있는 글을 덮으면 안 된다.
+      if (!created)
+        setDraft((current) => (current === "" ? submitted : current));
+    });
   };
 
   const shown = localError ?? error;

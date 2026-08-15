@@ -22,7 +22,6 @@ export {
   deleteGroupPost,
   setGroupPostPinned,
   updateGroupCategory,
-  updateGroupPost,
   updateGroupPostWithAttachments,
 } from "~/features/posts/data/mutations";
 export type { PostUploadSession } from "~/features/posts/data/mutations";

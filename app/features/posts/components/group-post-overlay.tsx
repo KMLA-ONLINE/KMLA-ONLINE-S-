@@ -15,11 +15,9 @@ import {
   type FormEvent,
 } from "react";
 import {
-  Form,
   useBeforeUnload,
   useBlocker,
   useNavigate,
-  useNavigation,
   useRevalidator,
 } from "react-router";
 
@@ -49,6 +47,7 @@ import type {
 } from "~/features/posts/model/types";
 import {
   hasPostFormErrors,
+  readPostForm,
   validatePostForm,
 } from "~/features/posts/model/validation";
 import { useFileDrop } from "~/shared/hooks/use-file-drop";
@@ -100,8 +99,6 @@ export function GroupPostOverlay({
   groupId,
   categories = [],
   post,
-  values,
-  errors,
   identities = ["identified"],
   alwaysAnonymous = false,
   comments,
@@ -113,8 +110,6 @@ export function GroupPostOverlay({
   groupId: string;
   categories?: GroupCategory[];
   post?: GroupPostDetail | null;
-  values?: PostFormValues;
-  errors?: PostFormErrors;
   identities?: PostIdentity[];
   alwaysAnonymous?: boolean;
   /** 상세 모드에서만 쓴다. loader가 게시물과 함께 첫 페이지를 내려준다. */
@@ -122,8 +117,6 @@ export function GroupPostOverlay({
   /** 상세 모드에서만 쓴다. 댓글 입력창 왼쪽 아바타에 들어간다. */
   viewer?: CommentViewer;
 }) {
-  const navigation = useNavigation();
-  const pending = navigation.state === "submitting";
   // 그룹으로 `navigate`하면 히스토리에 작성 화면이 남아서, 뒤로 가기를 누른 사용자가 방금
   // 버린 초안을 다시 마주하게 된다. 들어온 경로를 되감는 게 맞다.
   const close = useModalClose(`/groups/${slug}`);
@@ -149,11 +142,8 @@ export function GroupPostOverlay({
         groupId={groupId}
         categories={categories}
         post={post}
-        values={values}
-        errors={errors}
         identities={identities}
         alwaysAnonymous={alwaysAnonymous}
-        pending={pending}
         onClose={close}
       />
     </div>
@@ -167,11 +157,8 @@ function PostEditor({
   groupId,
   categories,
   post,
-  values,
-  errors,
   identities,
   alwaysAnonymous,
-  pending,
   onClose,
 }: {
   mode: "create" | "edit";
@@ -180,23 +167,22 @@ function PostEditor({
   groupId: string;
   categories: GroupCategory[];
   post?: GroupPostDetail | null;
-  values?: PostFormValues;
-  errors?: PostFormErrors;
   identities: PostIdentity[];
   alwaysAnonymous: boolean;
-  pending: boolean;
   onClose: () => void;
 }) {
   const navigate = useNavigate();
   const revalidator = useRevalidator();
-  const original: PostFormValues = {
+  // 저장은 이 컴포넌트가 RPC로 직접 돌린다(`AGENTS.md`: 파일 처리·진행률·재시도는 소유
+  // 기능에 둔다). route action으로 왕복하지 않으므로 되돌아온 값이 아니라 게시물 자체가
+  // 언제나 초기값이다.
+  const initial: PostFormValues = {
     title: post?.title ?? "",
     body: post?.body ?? "",
     categoryId: post?.category_id ?? "",
     authorIdentity: post?.author_identity ?? identities[0],
   };
-  const initial = values ?? original;
-  const [formErrors, setFormErrors] = useState(errors);
+  const [formErrors, setFormErrors] = useState<PostFormErrors>({});
   const [existing, setExisting] = useState(post?.attachments ?? []);
   const [removedIds, setRemovedIds] = useState(new Set<string>());
   const [additions, setAdditions] = useState<PreparedPostFile[]>([]);
@@ -228,7 +214,7 @@ function PostEditor({
     );
   const dirty = isPostDraftDirty({
     mode,
-    initial: original,
+    initial,
     title: draftTitle,
     body: draftBody,
     categoryId: draftCategoryId,
@@ -329,16 +315,10 @@ function PostEditor({
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (saving) return;
-    const data = new FormData(event.currentTarget);
-    const text = (name: string) => {
-      const value = data.get(name);
-      return typeof value === "string" ? value : "";
-    };
+    // 본문만 폼 밖에서 온다 — Markdown 편집기는 네이티브 폼 필드가 아니라 ref에 싣는다.
     const nextValues: PostFormValues = {
-      title: text("title").trim(),
+      ...readPostForm(new FormData(event.currentTarget)),
       body: normalizePostMarkdownSource(bodyRef.current),
-      categoryId: text("categoryId"),
-      authorIdentity: (text("authorIdentity") || "identified") as PostIdentity,
     };
     const nextErrors = validatePostForm(
       nextValues,
@@ -390,8 +370,12 @@ function PostEditor({
 
   return (
     <>
-      <Form
-        method="post"
+      {/*
+        제출은 이 폼이 직접 처리한다. react-router의 `<Form>`을 쓰면 route action으로 간다고
+        읽히지만, 첨부 업로드는 초안 생성→prepare→upload→finalize→commit으로 이어지는
+        브라우저 I/O라 action 한 번으로 표현할 수 없다.
+      */}
+      <form
         onSubmit={(event) => void submit(event)}
         onChange={(event) => {
           const target = event.target;
@@ -409,7 +393,6 @@ function PostEditor({
         className="flex min-h-0 flex-1 flex-col"
         {...dropHandlers}
       >
-        <input type="hidden" name="intent" value={mode} />
         <header className="shrink-0 border-b bg-background pt-[env(safe-area-inset-top)] md:border-b-0 md:bg-muted/40">
           <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-3 sm:px-6 md:border-x md:border-b md:bg-background md:shadow-sm">
             <Button
@@ -429,8 +412,8 @@ function PostEditor({
                 {groupName}
               </p>
             </div>
-            <Button type="submit" disabled={pending || saving}>
-              {pending || saving ? <Spinner /> : null}{" "}
+            <Button type="submit" disabled={saving}>
+              {saving ? <Spinner /> : null}{" "}
               {saving ? progressLabel : mode === "create" ? "게시" : "저장"}
             </Button>
           </div>
@@ -535,7 +518,7 @@ function PostEditor({
             ) : null}
           </div>
         </main>
-      </Form>
+      </form>
       {pendingIdentity ? (
         <ConfirmDialog
           title={

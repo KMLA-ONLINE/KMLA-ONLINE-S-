@@ -115,6 +115,7 @@ export function CommentThread({
       onSubmit={async (body) => {
         const created = await onSubmitReply(parent, body);
         if (created) setReplyingTo(null);
+        return created;
       }}
     />
   );

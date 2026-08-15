@@ -63,6 +63,7 @@ export function CommentItem({
   onReply: () => void;
   onReact: (next: PostReaction | null) => void;
   onJumpToParent?: () => void;
+  /** 성공하면 정본 행을 돌려준다. falsy면 수정 입력창을 열어 둔다. */
   onEdit: (body: string) => void | Promise<unknown>;
   onDelete: () => void;
 }) {
@@ -112,9 +113,11 @@ export function CommentItem({
         submitLabel="댓글 수정"
         pending={pending}
         onCancel={() => setEditing(false)}
-        onSubmit={(body) => {
-          setEditing(false);
-          return onEdit(body);
+        onSubmit={async (body) => {
+          // 저장에 성공했을 때만 닫는다. 먼저 닫으면 실패한 수정본이 입력창과 함께 사라진다.
+          const updated = await onEdit(body);
+          if (updated) setEditing(false);
+          return updated;
         }}
       />
     );

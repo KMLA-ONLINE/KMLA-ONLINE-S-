@@ -51,7 +51,11 @@ export function useVisitedPosts() {
   );
 
   const markVisited = useCallback((postId: string) => {
-    const next = appendVisitedPost([...getSnapshot()], postId);
+    const current = [...getSnapshot()];
+    const next = appendVisitedPost(current, postId);
+    // 이미 기록된 게시물이면 `appendVisitedPost`가 받은 배열을 그대로 돌려준다. 그때도 쓰고
+    // 알리면 다시 열 때마다 목록 전체가 새 snapshot으로 한 번씩 다시 그려진다.
+    if (next === current) return;
     writeVisitedPosts(next);
     snapshot = new Set(next);
     window.dispatchEvent(new Event(CHANGE_EVENT));

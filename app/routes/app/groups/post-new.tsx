@@ -1,16 +1,11 @@
-import { data, redirect, useRouteLoaderData } from "react-router";
+import { useRouteLoaderData } from "react-router";
 
 import { defineAppChrome } from "~/features/app-shell";
 import type { GroupDetail } from "~/features/groups";
 import {
-  createGroupPost,
-  getPostErrorMessage,
   GroupPostOverlay,
-  hasPostFormErrors,
   listGroupCategories,
-  readPostForm,
   resolveIdentityOptions,
-  validatePostForm,
 } from "~/features/posts";
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
 import type { Route } from "./+types/post-new";
@@ -27,33 +22,6 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   return { group, categories: await listGroupCategories(group.group_id) };
 }
 
-export async function clientAction({
-  request,
-  params,
-}: Route.ClientActionArgs) {
-  const values = readPostForm(await request.formData());
-  const errors = validatePostForm(values);
-  if (hasPostFormErrors(errors))
-    return data({ errors, values }, { status: 400 });
-  try {
-    const { loadGroupDetail } = await import("~/features/groups");
-    const group = await loadGroupDetail(params.slug);
-    if (!group || !canCreate(group))
-      return data(
-        { errors: { form: "게시물을 작성할 권한이 없습니다." }, values },
-        { status: 403 },
-      );
-    const postId = await createGroupPost(group.group_id, values);
-    throw redirect(`/groups/${params.slug}/posts/${postId}`);
-  } catch (error) {
-    if (error instanceof Response) throw error;
-    return data(
-      { errors: { form: getPostErrorMessage(error) }, values },
-      { status: 400 },
-    );
-  }
-}
-
 function canCreate(group: GroupDetail): boolean {
   return (
     group.membership_state === "member" &&
@@ -64,10 +32,7 @@ function canCreate(group: GroupDetail): boolean {
   );
 }
 
-export default function NewGroupPostPage({
-  loaderData,
-  actionData,
-}: Route.ComponentProps) {
+export default function NewGroupPostPage({ loaderData }: Route.ComponentProps) {
   const parent = useRouteLoaderData<typeof groupLoader>(
     "routes/app/groups/detail",
   );
@@ -85,8 +50,6 @@ export default function NewGroupPostPage({
       groupName={group.name}
       groupId={group.group_id}
       categories={loaderData.categories}
-      values={actionData?.values}
-      errors={actionData?.errors}
       identities={identities}
       alwaysAnonymous={group.identity_policy === "always_anonymous"}
     />
