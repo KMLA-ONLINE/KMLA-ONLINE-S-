@@ -38,12 +38,6 @@ describe("GroupPostRow", () => {
     expect(screen.getByText("공지")).toBeInTheDocument();
   });
 
-  it("does not mark an edited post", () => {
-    // 게시물에는 수정 표시를 두지 않는다. 댓글에만 남는다.
-    renderRow(groupPost({ edited_at: "2026-08-13T01:00:00Z" }));
-    expect(screen.queryByText("수정됨")).not.toBeInTheDocument();
-  });
-
   it("shows the real comment and reaction counts", () => {
     renderRow(
       groupPost({

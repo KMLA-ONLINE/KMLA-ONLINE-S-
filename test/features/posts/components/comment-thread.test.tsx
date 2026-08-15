@@ -90,7 +90,7 @@ describe("CommentThread", () => {
     });
 
     // 깊이가 달라도 한 묶음에 나란히 놓이고, 부모는 본문 앞 칩이 밝힌다.
-    const bundle = screen.getByRole("list", { name: "" });
+    const bundle = screen.getByRole("list", { name: "답글" });
     expect(within(bundle).getByText("1단계 답글")).toBeInTheDocument();
     expect(within(bundle).getByText("4단계 답글")).toBeInTheDocument();
     expect(

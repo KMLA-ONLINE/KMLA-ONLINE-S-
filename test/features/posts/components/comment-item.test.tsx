@@ -158,23 +158,6 @@ describe("CommentItem", () => {
     expect(onJumpToParent).toHaveBeenCalled();
   });
 
-  it("keeps the parent chip after the parent is deleted", async () => {
-    // 지우면 답글이 갑자기 최상위 댓글처럼 보여 엉뚱한 사람에게 한 말로 읽힌다(기능 명세 §9.2).
-    const onJumpToParent = vi.fn();
-    const { user } = renderItem({
-      comment: postComment({
-        depth: 2,
-        parent_comment_id: "parent-id",
-        parent_author_label: "익명1",
-        parent_is_deleted: true,
-      }),
-      onJumpToParent,
-    });
-
-    await user.click(screen.getByRole("button", { name: "@익명1" }));
-    expect(onJumpToParent).toHaveBeenCalled();
-  });
-
   it("reports the reaction the viewer picks", async () => {
     const onReact = vi.fn();
     const { user } = renderItem({ onReact });

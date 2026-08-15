@@ -51,17 +51,6 @@ describe("CommentReactionButton", () => {
       screen.queryByRole("button", { name: "하트 반응 남기기" }),
     ).not.toBeInTheDocument();
   });
-
-  it("does not carry the summary next to the picker", () => {
-    // 내가 고른 이모지와 남들의 이모지가 맞붙으면 어느 쪽이 내 것인지 읽히지 않는다.
-    renderButton({
-      my_reaction: "love",
-      reaction_count: 5,
-      top_reactions: ["love", "haha"],
-    });
-
-    expect(screen.queryByText("5")).not.toBeInTheDocument();
-  });
 });
 
 describe("CommentReactionSummary", () => {

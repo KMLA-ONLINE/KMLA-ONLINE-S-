@@ -35,7 +35,7 @@ describe("ReactionListDialog", () => {
     );
   });
 
-  it("folds anonymous reactions into a headcount with no profile link", () => {
+  it("folds anonymous reactions into a headcount that still counts", () => {
     renderDialog([
       identified(),
       {
@@ -48,26 +48,11 @@ describe("ReactionListDialog", () => {
       },
     ]);
 
+    // 개인은 드러내지 않지만 총계에는 들어간다(기능 명세 §10.3).
     expect(screen.getByText("익명 4명")).toBeInTheDocument();
     expect(screen.getAllByRole("link")).toHaveLength(1);
-  });
-
-  it("counts anonymous reactions into the totals", () => {
-    renderDialog([
-      identified(),
-      {
-        reaction: "love",
-        reactor_pub_id: null,
-        reactor_name: null,
-        reactor_avatar_path: null,
-        reacted_at: null,
-        anonymous_count: 4,
-      },
-    ]);
-
-    const tabs = screen.getByRole("tablist");
     expect(
-      within(tabs).getByRole("tab", { name: "전체 5" }),
+      within(screen.getByRole("tablist")).getByRole("tab", { name: "전체 5" }),
     ).toBeInTheDocument();
   });
 

@@ -69,6 +69,7 @@ describe("PostImageGrid", () => {
     ));
 
     expect(screen.getAllByRole("img")).toHaveLength(3);
+    expect(screen.queryByText(/^\+/)).not.toBeInTheDocument();
   });
 
   it("caps visible tiles at five and marks the rest as overflow", () => {

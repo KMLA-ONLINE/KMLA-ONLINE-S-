@@ -86,6 +86,33 @@ describe("PostReactionButton", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it("opens the picker for a mouse that lingers on the button", () => {
+    renderButton();
+
+    fireEvent.pointerOver(screen.getByRole("button", { name: "반응 남기기" }), {
+      pointerType: "mouse",
+    });
+    act(() => void vi.advanceTimersByTime(1000));
+
+    expect(
+      screen.getByRole("button", { name: "웃겨요 반응 남기기" }),
+    ).toBeInTheDocument();
+  });
+
+  it("ignores a touch that only grazes the button", () => {
+    // 터치에는 hover가 없다. 여기서 열면 스크롤하다 스친 버튼이 멋대로 피커를 편다.
+    renderButton();
+
+    fireEvent.pointerOver(screen.getByRole("button", { name: "반응 남기기" }), {
+      pointerType: "touch",
+    });
+    act(() => void vi.advanceTimersByTime(1000));
+
+    expect(
+      screen.queryByRole("button", { name: "웃겨요 반응 남기기" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("hides the count until someone reacts", () => {
     renderButton({ reaction_count: 0 });
     expect(

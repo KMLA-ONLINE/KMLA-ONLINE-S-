@@ -182,6 +182,7 @@ export function CommentThread({
             {(open && bundle.length > 0) || replyingInThread ? (
               <ul
                 id={`${commentDomId(comment.comment_id)}-replies`}
+                aria-label="답글"
                 className="mt-3 flex flex-col gap-3 pl-10"
               >
                 {replyingTo?.comment_id === comment.comment_id ? (

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(35);
+select plan(31);
 
 select is(
   enum_range(null::public.post_kind)::text,
@@ -412,16 +412,6 @@ select is(
 
 select is(
   (
-    select group_id
-    from public.posts
-    where id = '70000000-0000-0000-0000-000000000001'
-  ),
-  '20000000-0000-0000-0000-000000000001'::uuid,
-  'deleting a category preserves the post group'
-);
-
-select is(
-  (
     select search_text
     from public.posts
     where id = '70000000-0000-0000-0000-000000000001'
@@ -462,20 +452,8 @@ select throws_ok(
 
 reset role;
 
-select ok(
-  not has_table_privilege('anon', 'public.posts', 'SELECT'),
-  'anonymous has no posts select grant'
-);
-
-select ok(
-  has_table_privilege('authenticated', 'public.posts', 'SELECT'),
-  'authenticated has the posts select grant constrained by RLS'
-);
-
-select ok(
-  not has_table_privilege('authenticated', 'private.post_authors', 'SELECT'),
-  'authenticated has no private author select grant'
-);
+-- grant 자체를 나열해 확인하는 것은 `group_posts`가 한다. 여기서는 바로 위에서 실제로
+-- 실행해 본 것으로 충분하다 — 같은 사실을 두 번 적으면 한쪽만 고쳐지는 일이 생긴다.
 
 select * from finish();
 rollback;

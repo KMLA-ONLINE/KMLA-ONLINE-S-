@@ -811,7 +811,6 @@ export type Database = {
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
-          parent_is_deleted: boolean
           post_id: string
           reaction_count: number
           reply_count: number
@@ -1082,7 +1081,6 @@ export type Database = {
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
-          parent_is_deleted: boolean
           post_id: string
           reaction_count: number
           reply_count: number
@@ -1115,7 +1113,6 @@ export type Database = {
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
-          parent_is_deleted: boolean
           post_id: string
           reaction_count: number
           reply_count: number
@@ -1413,7 +1410,6 @@ export type Database = {
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
-          parent_is_deleted: boolean
           post_id: string
           reaction_count: number
           reply_count: number

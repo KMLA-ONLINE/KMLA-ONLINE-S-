@@ -121,6 +121,17 @@ describe("CommentComposer", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("puts the caret at the end when it opens with an existing body", () => {
+    // 수정은 이어 쓰는 일이다. 커서가 맨 앞에 서면 이어 쓰려는 사람이 매번 끝으로 옮겨야 한다.
+    const { input } = renderComposer({
+      focusOnMount: true,
+      initialValue: "고치던 본문",
+    });
+
+    expect(input).toHaveFocus();
+    expect((input as HTMLTextAreaElement).selectionStart).toBe(6);
+  });
+
   it("names the comment being replied to through its placeholder", () => {
     renderComposer({ placeholder: "익명2님에게 답글 남기기…" });
 
