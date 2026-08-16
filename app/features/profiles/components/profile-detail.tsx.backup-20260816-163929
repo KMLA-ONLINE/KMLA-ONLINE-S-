@@ -104,29 +104,27 @@ export function ProfileDetail({
 
   return (
     <main className="px-4 pb-10 md:px-0">
-      <div className="w-full space-y-4 md:relative md:left-1/2 md:w-[calc(100vw-8rem)] md:max-w-7xl md:-translate-x-1/2 md:space-y-6">
-        <section className="-mx-4 overflow-hidden border-y bg-background sm:mx-0 sm:rounded-2xl sm:border">
-          <div className="overflow-hidden bg-muted">
-            <div className="relative h-48 overflow-hidden bg-muted sm:h-64 lg:h-[28rem]">
-              {heroBackground ? (
-                <img
-                  src={heroBackground}
-                  alt=""
-                  aria-hidden="true"
-                  className={
-                    hasCoverImage
-                      ? "absolute inset-0 h-full w-full object-cover"
-                      : "absolute -inset-8 h-[calc(100%+4rem)] w-[calc(100%+4rem)] scale-110 object-cover blur-2xl"
-                  }
-                />
-              ) : null}
-              {hasCoverImage ? null : (
-                <div className="absolute inset-0 bg-black/10" aria-hidden />
-              )}
-            </div>
+      <div className="w-full max-w-none space-y-4 md:space-y-6">
+        <Card className="-mx-4 gap-0 overflow-hidden rounded-none border-x-0 py-0 sm:mx-0 sm:rounded-xl sm:border-x">
+          <div className="relative h-48 overflow-hidden bg-muted sm:h-64 lg:h-80">
+            {heroBackground ? (
+              <img
+                src={heroBackground}
+                alt=""
+                aria-hidden="true"
+                className={
+                  hasCoverImage
+                    ? "absolute inset-0 size-full object-cover"
+                    : "absolute -inset-8 h-[calc(100%+4rem)] w-[calc(100%+4rem)] scale-110 object-cover blur-2xl"
+                }
+              />
+            ) : null}
+            {hasCoverImage ? null : (
+              <div className="absolute inset-0 bg-black/10" aria-hidden />
+            )}
           </div>
 
-          <div className="relative border-t bg-background px-4 pt-5 pb-6 sm:px-8 sm:pt-6 sm:pb-7">
+          <CardContent className="relative -mt-16 px-4 pb-6 sm:-mt-20 sm:px-7">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
               <div className="w-fit shrink-0 rounded-full border-4 border-background bg-background shadow-sm">
                 <UserAvatar
@@ -182,10 +180,10 @@ export function ProfileDetail({
                 {profile.description}
               </p>
             ) : null}
-          </div>
-        </section>
+          </CardContent>
+        </Card>
 
-        <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start">
+        <div className="grid gap-4 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)] md:gap-6">
           <Card className="-mx-4 h-fit rounded-none border-x-0 sm:mx-0 sm:rounded-xl sm:border-x">
             <CardHeader>
               <CardTitle>정보</CardTitle>
@@ -225,7 +223,7 @@ export function ProfileDetail({
           </Card>
 
           <Card className="-mx-4 rounded-none border-x-0 sm:mx-0 sm:rounded-xl sm:border-x">
-            <div className="border-b px-5 py-4 sm:px-6">
+            <div className="px-6 pt-6">
               <h2 className="text-base font-semibold">게시물</h2>
             </div>
             <CardContent>

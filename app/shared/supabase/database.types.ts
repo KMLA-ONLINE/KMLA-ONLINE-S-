@@ -585,8 +585,11 @@ export type Database = {
           birthday: string | null
           class_no: number | null
           cohort: number | null
+          contact_email: string | null
+          cover_path: string | null
           created_at: string
           deleted_at: string | null
+          department: string | null
           description: string | null
           dorm_room: number | null
           gender: Database["public"]["Enums"]["profile_gender"] | null
@@ -616,8 +619,11 @@ export type Database = {
           birthday?: string | null
           class_no?: number | null
           cohort?: number | null
+          contact_email?: string | null
+          cover_path?: string | null
           created_at?: string
           deleted_at?: string | null
+          department?: string | null
           description?: string | null
           dorm_room?: number | null
           gender?: Database["public"]["Enums"]["profile_gender"] | null
@@ -647,8 +653,11 @@ export type Database = {
           birthday?: string | null
           class_no?: number | null
           cohort?: number | null
+          contact_email?: string | null
+          cover_path?: string | null
           created_at?: string
           deleted_at?: string | null
+          department?: string | null
           description?: string | null
           dorm_room?: number | null
           gender?: Database["public"]["Enums"]["profile_gender"] | null
@@ -951,8 +960,11 @@ export type Database = {
           birthday: string | null
           class_no: number | null
           cohort: number | null
+          contact_email: string | null
+          cover_path: string | null
           created_at: string
           deleted_at: string | null
+          department: string | null
           description: string | null
           dorm_room: number | null
           gender: Database["public"]["Enums"]["profile_gender"] | null
@@ -1241,6 +1253,49 @@ export type Database = {
         }
         Returns: undefined
       }
+      remove_my_profile_media: {
+        Args: { p_slot: string }
+        Returns: {
+          academic_track:
+            | Database["public"]["Enums"]["profile_academic_track"]
+            | null
+          allow_timeline_posts: boolean
+          anonymous_username: string | null
+          auth_user_id: string | null
+          avatar_path: string | null
+          birthday: string | null
+          class_no: number | null
+          cohort: number | null
+          contact_email: string | null
+          cover_path: string | null
+          created_at: string
+          deleted_at: string | null
+          department: string | null
+          description: string | null
+          dorm_room: number | null
+          gender: Database["public"]["Enums"]["profile_gender"] | null
+          id: number
+          name: string
+          onboarding_completed_at: string
+          phone_number: string | null
+          pub_id: string
+          rejection_reason: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          status: Database["public"]["Enums"]["profile_status"]
+          status_updated_at: string
+          status_updated_by: number | null
+          student_number: string | null
+          submitted_at: string
+          type: Database["public"]["Enums"]["profile_type"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       reorder_post_attachments: {
         Args: { p_attachment_ids: string[]; p_post_id: string }
         Returns: {
@@ -1307,6 +1362,49 @@ export type Database = {
         Args: { p_pinned: boolean; p_post_id: string }
         Returns: string
       }
+      set_my_profile_media: {
+        Args: { p_object_path: string; p_slot: string }
+        Returns: {
+          academic_track:
+            | Database["public"]["Enums"]["profile_academic_track"]
+            | null
+          allow_timeline_posts: boolean
+          anonymous_username: string | null
+          auth_user_id: string | null
+          avatar_path: string | null
+          birthday: string | null
+          class_no: number | null
+          cohort: number | null
+          contact_email: string | null
+          cover_path: string | null
+          created_at: string
+          deleted_at: string | null
+          department: string | null
+          description: string | null
+          dorm_room: number | null
+          gender: Database["public"]["Enums"]["profile_gender"] | null
+          id: number
+          name: string
+          onboarding_completed_at: string
+          phone_number: string | null
+          pub_id: string
+          rejection_reason: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          status: Database["public"]["Enums"]["profile_status"]
+          status_updated_at: string
+          status_updated_by: number | null
+          student_number: string | null
+          submitted_at: string
+          type: Database["public"]["Enums"]["profile_type"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_post_reaction: {
         Args: {
           p_post_id: string
@@ -1342,8 +1440,11 @@ export type Database = {
           birthday: string | null
           class_no: number | null
           cohort: number | null
+          contact_email: string | null
+          cover_path: string | null
           created_at: string
           deleted_at: string | null
+          department: string | null
           description: string | null
           dorm_room: number | null
           gender: Database["public"]["Enums"]["profile_gender"] | null
@@ -1424,6 +1525,62 @@ export type Database = {
           posting_policy: Database["public"]["Enums"]["group_posting_policy"]
           updated_at: string
         }[]
+      }
+      update_my_profile: {
+        Args: {
+          p_academic_track?: Database["public"]["Enums"]["profile_academic_track"]
+          p_allow_timeline_posts?: boolean
+          p_birthday?: string
+          p_class_no?: number
+          p_cohort?: number
+          p_contact_email?: string
+          p_department?: string
+          p_description?: string
+          p_dorm_room?: number
+          p_gender?: Database["public"]["Enums"]["profile_gender"]
+          p_name: string
+          p_phone_number?: string
+        }
+        Returns: {
+          academic_track:
+            | Database["public"]["Enums"]["profile_academic_track"]
+            | null
+          allow_timeline_posts: boolean
+          anonymous_username: string | null
+          auth_user_id: string | null
+          avatar_path: string | null
+          birthday: string | null
+          class_no: number | null
+          cohort: number | null
+          contact_email: string | null
+          cover_path: string | null
+          created_at: string
+          deleted_at: string | null
+          department: string | null
+          description: string | null
+          dorm_room: number | null
+          gender: Database["public"]["Enums"]["profile_gender"] | null
+          id: number
+          name: string
+          onboarding_completed_at: string
+          phone_number: string | null
+          pub_id: string
+          rejection_reason: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          status: Database["public"]["Enums"]["profile_status"]
+          status_updated_at: string
+          status_updated_by: number | null
+          student_number: string | null
+          submitted_at: string
+          type: Database["public"]["Enums"]["profile_type"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       update_post_comment: {
         Args: { p_body: string; p_comment_id: string }
