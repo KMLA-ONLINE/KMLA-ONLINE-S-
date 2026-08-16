@@ -3,9 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 
 import { GroupPostSearchDialog } from "~/features/posts";
-import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
 import { Button } from "~/shared/ui/button";
-import { cn } from "~/shared/lib/utils";
 
 export function GroupDetailMobileHeader({
   name,
@@ -21,17 +19,13 @@ export function GroupDetailMobileHeader({
   canSearch: boolean;
 }) {
   const navigate = useNavigate();
-  const hidden = useHideOnScroll();
   const [searchOpen, setSearchOpen] = useState(false);
 
   return (
     <>
       <header
         data-slot="group-detail-mobile-header"
-        className={cn(
-          "sticky top-0 z-10 flex h-[calc(2.75rem+var(--app-safe-t))] items-center gap-2 border-b bg-background/95 px-1.5 pt-[var(--app-safe-t)] backdrop-blur transition-transform duration-200 ease-out motion-reduce:transition-none md:hidden",
-          hidden && "-translate-y-full",
-        )}
+        className="sticky top-0 z-10 flex h-[calc(2.75rem+var(--app-safe-t))] items-center gap-2 border-b bg-background/95 px-1.5 pt-[var(--app-safe-t)] backdrop-blur md:hidden"
       >
         <Button
           type="button"
