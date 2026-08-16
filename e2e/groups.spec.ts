@@ -142,7 +142,7 @@ test("가입 요청, 고정, 초대 전용 그룹 생성을 실제로 반영한�
   await page.getByRole("button", { name: "가입 요청 취소" }).click();
   await expect(page.getByRole("button", { name: "가입 요청" })).toBeVisible();
 
-  await page.goto("/groups/g-8f2a1c4e6b9d7a3c5e10");
+  await page.goto("/groups/8f2a1c4e6b9d7a");
   await page.getByRole("button", { name: "그룹 옵션" }).click();
   await page.getByRole("menuitem", { name: "고정 해제" }).click();
   await page.getByRole("button", { name: "그룹 옵션" }).click();
@@ -168,7 +168,7 @@ test("가입 요청, 고정, 초대 전용 그룹 생성을 실제로 반영한�
     .getByRole("button", { name: "만들기", exact: true })
     .click();
 
-  await expect(page).toHaveURL(/\/groups\/g-[a-f0-9]{20}$/);
+  await expect(page).toHaveURL(/\/groups\/[a-f0-9]{14}$/);
   await expect(
     page.getByRole("heading", { name: groupName }).last(),
   ).toBeVisible();

@@ -207,7 +207,7 @@ select is(
 );
 select is(
   (select public.accept_group_invite((select token from invite_probe where label = 'live'))),
-  'g-8f2a1c4e6b9d7a3c5e10',
+  '8f2a1c4e6b9d7a',
   'accepting returns the group address to navigate to'
 );
 select is(

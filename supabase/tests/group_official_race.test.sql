@@ -66,7 +66,7 @@ select is(
         created_by
       ) values (
         '50000000-0000-0000-0000-000000000005',
-        'race-official-check',
+        'race-official',
         true,
         'official',
         '동시성 공식 그룹',

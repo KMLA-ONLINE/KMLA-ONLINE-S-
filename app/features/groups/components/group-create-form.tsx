@@ -229,9 +229,9 @@ export function GroupCreateForm({
                       id="group-slug"
                       name="slug"
                       defaultValue={values.slug}
-                      minLength={3}
-                      maxLength={50}
-                      pattern="[a-z0-9][a-z0-9-]{1,48}[a-z0-9]"
+                      minLength={4}
+                      maxLength={15}
+                      pattern="[a-z0-9][a-z0-9-]{2,13}[a-z0-9]"
                       placeholder="makers-lab"
                       disabled={pending}
                       aria-invalid={Boolean(errors.slug)}
@@ -240,8 +240,8 @@ export function GroupCreateForm({
                     />
                   </div>
                   <FieldDescription>
-                    비워 두면 임의 주소를 만듭니다. 영문 소문자, 숫자, 하이픈만
-                    사용할 수 있습니다.
+                    비워 두면 임의 주소를 만듭니다. 영문 소문자, 숫자,
+                    하이픈으로 4~15자입니다.
                   </FieldDescription>
                   <FieldError>{errors.slug}</FieldError>
                 </Field>

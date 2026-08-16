@@ -17,7 +17,7 @@ insert into public.groups (
 )
 values (
   '50000000-0000-0000-0000-000000000001',
-  'g-11111111111111111111',
+  '11111111111111',
   false,
   'unofficial',
   '숨은 초대 그룹',
@@ -52,7 +52,7 @@ values (
 );
 
 select is(
-  (select member_count from public.groups where slug = 'g-11111111111111111111'),
+  (select member_count from public.groups where slug = '11111111111111'),
   1::bigint,
   'membership trigger maintains the public member count'
 );
@@ -95,7 +95,7 @@ select is(
 );
 
 select is(
-  (select count(*) from public.groups where slug = 'g-11111111111111111111'),
+  (select count(*) from public.groups where slug = '11111111111111'),
   0::bigint,
   'uninvited private group is hidden'
 );
@@ -111,7 +111,7 @@ select throws_ok(
       posting_policy,
       created_by
     ) values (
-      'direct-insert-check',
+      'direct-insert',
       true,
       'unofficial',
       '직접 생성 우회',
@@ -269,7 +269,7 @@ select throws_ok(
     'official',
     '권한 없는 공식 그룹',
     '',
-    'unauthorized-official',
+    'unauth-official',
     'open',
     'identified',
     'staff'
@@ -290,7 +290,7 @@ select lives_ok(
     'official',
     'DB 공식 그룹',
     '',
-    'db-official-check',
+    'db-official',
     'open',
     'identified',
     'staff'
@@ -299,7 +299,7 @@ select lives_ok(
 );
 
 select is(
-  (select member_count from public.groups where slug = 'db-official-check'),
+  (select member_count from public.groups where slug = 'db-official'),
   2::bigint,
   'new official group enrolls all accepted students'
 );
@@ -333,7 +333,7 @@ set status = 'accepted'
 where pub_id = 'pending-student';
 
 select is(
-  (select member_count from public.groups where slug = 'db-official-check'),
+  (select member_count from public.groups where slug = 'db-official'),
   3::bigint,
   'newly accepted student joins existing official groups'
 );
@@ -343,7 +343,7 @@ set type = 'alumni'
 where pub_id = 'pending-student';
 
 select is(
-  (select member_count from public.groups where slug = 'db-official-check'),
+  (select member_count from public.groups where slug = 'db-official'),
   3::bigint,
   'a graduating student keeps existing official memberships'
 );
@@ -359,7 +359,7 @@ set
 where pub_id = 'pending-student';
 
 select is(
-  (select member_count from public.groups where slug = 'db-official-check'),
+  (select member_count from public.groups where slug = 'db-official'),
   2::bigint,
   'a teacher transition removes official memberships'
 );
@@ -375,7 +375,7 @@ set
 where pub_id = 'pending-student';
 
 select is(
-  (select member_count from public.groups where slug = 'db-official-check'),
+  (select member_count from public.groups where slug = 'db-official'),
   3::bigint,
   'restoring student eligibility restores official memberships'
 );
@@ -385,7 +385,7 @@ set status = 'withdrawn'
 where pub_id = 'pending-student';
 
 select is(
-  (select member_count from public.groups where slug = 'db-official-check'),
+  (select member_count from public.groups where slug = 'db-official'),
   2::bigint,
   'losing accepted status removes official memberships'
 );
@@ -395,7 +395,7 @@ set status = 'accepted'
 where pub_id = 'pending-student';
 
 select is(
-  (select member_count from public.groups where slug = 'db-official-check'),
+  (select member_count from public.groups where slug = 'db-official'),
   3::bigint,
   'restoring accepted status restores official memberships'
 );
@@ -405,21 +405,21 @@ set deleted_at = now()
 where pub_id = 'pending-student';
 
 select is(
-  (select member_count from public.groups where slug = 'db-official-check'),
+  (select member_count from public.groups where slug = 'db-official'),
   2::bigint,
   'deleting a profile removes official memberships'
 );
 
 select private.recount_group_members(
-  (select id from public.groups where slug = 'db-official-check')
+  (select id from public.groups where slug = 'db-official')
 );
 
 select is(
-  (select member_count from public.groups where slug = 'db-official-check'),
+  (select member_count from public.groups where slug = 'db-official'),
   (
     select count(*)
     from public.group_memberships
-    where group_id = (select id from public.groups where slug = 'db-official-check')
+    where group_id = (select id from public.groups where slug = 'db-official')
   ),
   'member count can be rebuilt from normalized memberships'
 );
@@ -441,7 +441,7 @@ select throws_ok(
 
 update public.group_memberships
 set role = 'member'
-where group_id = (select id from public.groups where slug = 'db-official-check')
+where group_id = (select id from public.groups where slug = 'db-official')
   and profile_id = (
     select id from public.profiles
     where auth_user_id = '10000000-0000-0000-0000-000000000001'
@@ -449,7 +449,7 @@ where group_id = (select id from public.groups where slug = 'db-official-check')
 
 update public.group_memberships
 set role = 'owner'
-where group_id = (select id from public.groups where slug = 'db-official-check')
+where group_id = (select id from public.groups where slug = 'db-official')
   and profile_id = (
     select id from public.profiles
     where pub_id = 'auto-student'
@@ -507,7 +507,7 @@ select throws_ok(
     'official',
     '교사 공식 그룹',
     '',
-    'teacher-official',
+    't-official',
     'open',
     'identified',
     'staff'
