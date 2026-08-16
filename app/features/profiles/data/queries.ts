@@ -46,3 +46,16 @@ export async function loadMyEditableProfile(): Promise<AcceptedProfile | null> {
 
   return hydrateProfile(profile);
 }
+
+export async function loadProfileDepartments(): Promise<string[]> {
+  const { data, error } = await getSupabase()
+    .from("profile_departments")
+    .select("name")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error) throw error;
+
+  return (data ?? []).map((department) => department.name);
+}

@@ -3,6 +3,7 @@ import { data, redirect } from "react-router";
 import { defineAppChrome, PageHeader } from "~/features/app-shell";
 import {
   loadMyEditableProfile,
+  loadProfileDepartments,
   ProfileEditScreen,
   readProfileEditForm,
   updateMyProfile,
@@ -17,7 +18,10 @@ export const handle = defineAppChrome({
 });
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
-  const profile = await loadMyEditableProfile();
+  const [profile, departments] = await Promise.all([
+    loadMyEditableProfile(),
+    loadProfileDepartments(),
+  ]);
 
   if (!profile) {
     throw new Response("편집할 프로필을 찾을 수 없습니다.", { status: 404 });
@@ -27,7 +31,7 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
     throw redirect(`/profile/${profile.pub_id}/edit`);
   }
 
-  return { profile };
+  return { profile, departments };
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
@@ -74,7 +78,11 @@ export default function ProfileEditPage({
         title="프로필 편집"
         back={`/profile/${loaderData.profile.pub_id}`}
       />
-      <ProfileEditScreen profile={loaderData.profile} actionData={actionData} />
+      <ProfileEditScreen
+        profile={loaderData.profile}
+        departments={loaderData.departments}
+        actionData={actionData}
+      />
     </>
   );
 }

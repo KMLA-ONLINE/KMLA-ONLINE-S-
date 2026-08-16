@@ -1,6 +1,7 @@
 import { MailIcon, PencilIcon, ShieldCheckIcon } from "lucide-react";
 import { Link } from "react-router";
 
+import { ProfileMediaEditor } from "~/features/profiles/components/profile-media-editor";
 import type { AcceptedProfile } from "~/features/profiles/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { Badge } from "~/shared/ui/badge";
@@ -113,7 +114,7 @@ export function ProfileDetail({
 
   return (
     <main className="px-4 pb-10 md:px-0">
-      <div className="w-full space-y-4 md:relative md:left-1/2 md:w-[calc(100vw-8rem)] md:max-w-7xl md:-translate-x-1/2 md:space-y-6">
+      <div className="w-full space-y-4 md:space-y-6">
         <section className="-mx-4 overflow-hidden border-y bg-background sm:mx-0 sm:rounded-2xl sm:border">
           <div className="overflow-hidden bg-muted">
             <div className="relative h-48 overflow-hidden bg-muted sm:h-64 lg:h-[28rem]">
@@ -132,17 +133,33 @@ export function ProfileDetail({
               {hasCoverImage ? null : (
                 <div className="absolute inset-0 bg-black/10" aria-hidden />
               )}
+
+              {isOwnProfile ? (
+                <ProfileMediaEditor
+                  profile={profile}
+                  slot="cover"
+                  className="absolute top-3 right-3 z-20 sm:top-auto sm:bottom-3"
+                />
+              ) : null}
             </div>
           </div>
 
           <div className="relative border-t bg-background px-4 pt-5 pb-6 sm:px-8 sm:pt-6 sm:pb-7">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-              <div className="w-fit shrink-0 rounded-full border-4 border-background bg-background shadow-sm">
+              <div className="relative w-fit shrink-0 rounded-full border-4 border-background bg-background shadow-sm">
                 <UserAvatar
                   src={profile.avatar_url}
                   name={profile.name}
                   className="size-28 sm:size-32"
                 />
+
+                {isOwnProfile ? (
+                  <ProfileMediaEditor
+                    profile={profile}
+                    slot="avatar"
+                    className="absolute right-0 bottom-1 z-20"
+                  />
+                ) : null}
               </div>
 
               <div className="min-w-0 flex-1 pb-1">

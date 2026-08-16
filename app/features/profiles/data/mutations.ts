@@ -123,8 +123,8 @@ export function validateProfileEdit(
     if (!validOptionalInteger(values.classNo, 1, 10)) {
       errors.classNo = "반은 1~10 사이의 숫자로 입력해 주세요.";
     }
-    if (!validOptionalInteger(values.dormRoom, 1, 999)) {
-      errors.dormRoom = "기숙사 방은 1~999 사이의 숫자로 입력해 주세요.";
+    if (!validOptionalInteger(values.dormRoom, 1, 1004)) {
+      errors.dormRoom = "기숙사 방은 1~1004 사이의 숫자로 입력해 주세요.";
     }
   }
 

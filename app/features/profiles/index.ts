@@ -8,6 +8,7 @@ export {
 export {
   loadAcceptedProfile,
   loadMyEditableProfile,
+  loadProfileDepartments,
 } from "~/features/profiles/data/queries";
 export type {
   AcceptedProfile,

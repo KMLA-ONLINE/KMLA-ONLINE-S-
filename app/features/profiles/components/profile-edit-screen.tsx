@@ -1,245 +1,39 @@
-import { ImageIcon, Trash2Icon, UploadIcon } from "lucide-react";
-import { useRef, useState } from "react";
-import { Form, Link, useNavigation, useRevalidator } from "react-router";
+import { useRef } from "react";
+import { Form, Link, useNavigation } from "react-router";
 
-import {
-  removeProfileMedia,
-  replaceProfileMedia,
-} from "~/features/profiles/data/media";
 import type {
   EditableProfile,
   ProfileEditActionData,
   ProfileEditValues,
-  ProfileMediaSlot,
 } from "~/features/profiles/model/types";
-import { ConfirmDialog } from "~/shared/components/confirm-dialog";
-import { ImageCropper } from "~/shared/components/image-cropper";
-import { UserAvatar } from "~/shared/components/user-avatar";
-import { useImageCrop } from "~/shared/hooks/use-image-crop";
-import { compressImage } from "~/shared/lib/image/compress";
 import { Button, buttonVariants } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Checkbox } from "~/shared/ui/checkbox";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from "~/shared/ui/field";
+import { Field, FieldError, FieldLabel } from "~/shared/ui/field";
 import { Input } from "~/shared/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 import { Spinner } from "~/shared/ui/spinner";
 import { Textarea } from "~/shared/ui/textarea";
 
-const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-
 export function ProfileEditScreen({
   profile,
+  departments,
   actionData,
 }: {
   profile: EditableProfile;
+  departments: string[];
   actionData?: ProfileEditActionData;
 }) {
   return (
     <main className="px-4 pb-10 md:px-0">
-      <div className="mx-auto max-w-5xl space-y-4 md:space-y-6">
-        <ProfileMediaSettings profile={profile} />
-        <ProfileEditForm profile={profile} actionData={actionData} />
+      <div className="w-full space-y-4 md:space-y-6">
+        <ProfileEditForm
+          profile={profile}
+          departments={departments}
+          actionData={actionData}
+        />
       </div>
     </main>
-  );
-}
-
-function ProfileMediaSettings({ profile }: { profile: EditableProfile }) {
-  const heroBackground = profile.cover_url ?? profile.avatar_url;
-
-  return (
-    <Card className="-mx-4 gap-0 overflow-hidden rounded-none border-x-0 py-0 sm:mx-0 sm:rounded-xl sm:border-x">
-      <div className="relative aspect-[3/1] min-h-32 w-full overflow-hidden bg-muted">
-        {heroBackground ? (
-          <img
-            src={heroBackground}
-            alt=""
-            aria-hidden="true"
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : (
-          <div className="grid size-full place-items-center">
-            <ImageIcon
-              aria-hidden="true"
-              className="size-8 text-muted-foreground/45"
-            />
-          </div>
-        )}
-        <div className="absolute inset-0 bg-background/25" aria-hidden />
-      </div>
-
-      <CardContent className="px-4 pb-5 sm:px-6">
-        <div className="-mt-10 flex items-end gap-3 sm:-mt-12">
-          <div className="rounded-full border-4 border-background bg-background">
-            <UserAvatar
-              src={profile.avatar_url}
-              name={profile.name}
-              className="size-20 sm:size-24"
-            />
-          </div>
-          <div className="min-w-0 pb-1">
-            <p className="truncate font-semibold">{profile.name}</p>
-            <p className="text-xs text-muted-foreground">@{profile.pub_id}</p>
-          </div>
-        </div>
-
-        <div className="mt-5 divide-y rounded-xl border">
-          <MediaField profile={profile} slot="avatar" />
-          <MediaField profile={profile} slot="cover" />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function MediaField({
-  profile,
-  slot,
-}: {
-  profile: EditableProfile;
-  slot: ProfileMediaSlot;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const revalidator = useRevalidator();
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [removeOpen, setRemoveOpen] = useState(false);
-  const isAvatar = slot === "avatar";
-  const currentPath = isAvatar ? profile.avatar_path : profile.cover_path;
-
-  const upload = async (cropped: File) => {
-    setPending(true);
-    setError(null);
-
-    try {
-      const file = await compressImage(cropped, isAvatar ? "icon" : "banner");
-      await replaceProfileMedia(profile, slot, file);
-      await revalidator.revalidate();
-    } catch {
-      setError("이미지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
-    } finally {
-      setPending(false);
-      if (inputRef.current) inputRef.current.value = "";
-    }
-  };
-
-  const crop = useImageCrop((file) => void upload(file));
-
-  const selectFile = (file: File | undefined) => {
-    if (!file) return;
-
-    if (!ACCEPTED_TYPES.has(file.type) || file.size > 30 * 1024 * 1024) {
-      setError("JPEG, PNG, WebP 이미지를 30MiB 이하로 선택해 주세요.");
-      return;
-    }
-
-    setError(null);
-    crop.start(file);
-  };
-
-  const remove = async () => {
-    setPending(true);
-    setError(null);
-
-    try {
-      await removeProfileMedia(profile, slot);
-      await revalidator.revalidate();
-    } catch {
-      setError("이미지를 제거하지 못했습니다. 잠시 후 다시 시도해 주세요.");
-    } finally {
-      setPending(false);
-    }
-  };
-
-  return (
-    <section className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-      <div className="min-w-0 flex-1">
-        <h3 className="text-sm font-medium">
-          {isAvatar ? "프로필 사진" : "커버 이미지"}
-        </h3>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {isAvatar
-            ? "정사각형으로 자른 뒤 최대 512px로 저장됩니다."
-            : "3:1 가로형으로 자른 뒤 긴 변 최대 2400px로 저장됩니다."}
-        </p>
-      </div>
-
-      <div className="flex shrink-0 flex-wrap gap-2">
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="sr-only"
-          onChange={(event) => selectFile(event.target.files?.[0])}
-          aria-label={`${isAvatar ? "프로필 사진" : "커버 이미지"} 파일 선택`}
-        />
-
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={pending}
-          onClick={() => inputRef.current?.click()}
-        >
-          {pending ? (
-            <Spinner data-icon="inline-start" />
-          ) : (
-            <UploadIcon aria-hidden="true" />
-          )}
-          {currentPath ? "변경" : "등록"}
-        </Button>
-
-        {currentPath ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={pending}
-            onClick={() => setRemoveOpen(true)}
-          >
-            <Trash2Icon aria-hidden="true" />
-            삭제
-          </Button>
-        ) : null}
-      </div>
-
-      {error ? (
-        <p role="alert" className="text-xs text-destructive sm:basis-full">
-          {error}
-        </p>
-      ) : null}
-
-      {crop.cropperProps ? (
-        <ImageCropper
-          {...crop.cropperProps}
-          aspect={isAvatar ? 1 : 3}
-          maxOutputEdge={isAvatar ? 512 : 2400}
-          round={isAvatar}
-          title={isAvatar ? "프로필 사진 편집" : "커버 이미지 편집"}
-        />
-      ) : null}
-
-      {removeOpen ? (
-        <ConfirmDialog
-          title={`${isAvatar ? "프로필 사진" : "커버 이미지"} 삭제`}
-          description={`현재 ${isAvatar ? "프로필 사진" : "커버 이미지"}을 삭제할까요?`}
-          confirmLabel="삭제"
-          destructive
-          pending={pending}
-          onCancel={() => setRemoveOpen(false)}
-          onConfirm={() => {
-            setRemoveOpen(false);
-            void remove();
-          }}
-        />
-      ) : null}
-    </section>
   );
 }
 
@@ -263,9 +57,11 @@ function initialValues(profile: EditableProfile): ProfileEditValues {
 
 function ProfileEditForm({
   profile,
+  departments,
   actionData,
 }: {
   profile: EditableProfile;
+  departments: string[];
   actionData?: ProfileEditActionData;
 }) {
   const navigation = useNavigation();
@@ -344,9 +140,6 @@ function ProfileEditForm({
                 <FieldLabel htmlFor="profile-timeline-posts">
                   다른 사용자의 내 타임라인 게시물 작성 허용
                 </FieldLabel>
-                <FieldDescription>
-                  개인 게시물 기능이 연결되면 이 설정이 적용됩니다.
-                </FieldDescription>
               </div>
             </Field>
           </div>
@@ -355,9 +148,6 @@ function ProfileEditForm({
             <section className="space-y-5 border-t pt-6">
               <div>
                 <h2 className="font-semibold">학교 정보</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  재학 중 자주 사용하는 학교 정보를 관리합니다.
-                </p>
               </div>
 
               <div className="grid gap-5 sm:grid-cols-2">
@@ -371,9 +161,6 @@ function ProfileEditForm({
                     aria-invalid={Boolean(errors.gender)}
                     className="w-full"
                   >
-                    <NativeSelectOption value="" disabled>
-                      선택
-                    </NativeSelectOption>
                     <NativeSelectOption value="male">남성</NativeSelectOption>
                     <NativeSelectOption value="female">여성</NativeSelectOption>
                   </NativeSelect>
@@ -390,9 +177,6 @@ function ProfileEditForm({
                     aria-invalid={Boolean(errors.academicTrack)}
                     className="w-full"
                   >
-                    <NativeSelectOption value="" disabled>
-                      선택
-                    </NativeSelectOption>
                     <NativeSelectOption value="domestic">
                       국내 계열
                     </NativeSelectOption>
@@ -410,13 +194,33 @@ function ProfileEditForm({
                       className="sm:col-span-2"
                     >
                       <FieldLabel htmlFor="profile-department">부서</FieldLabel>
-                      <Input
+
+                      <NativeSelect
                         id="profile-department"
                         name="department"
                         defaultValue={values.department}
-                        maxLength={100}
                         aria-invalid={Boolean(errors.department)}
-                      />
+                        className="w-full"
+                      >
+                        <NativeSelectOption value="">없음</NativeSelectOption>
+
+                        {values.department &&
+                        !departments.includes(values.department) ? (
+                          <NativeSelectOption value={values.department}>
+                            {values.department}
+                          </NativeSelectOption>
+                        ) : null}
+
+                        {departments.map((department) => (
+                          <NativeSelectOption
+                            key={department}
+                            value={department}
+                          >
+                            {department}
+                          </NativeSelectOption>
+                        ))}
+                      </NativeSelect>
+
                       <FieldError>{errors.department}</FieldError>
                     </Field>
 
@@ -430,7 +234,7 @@ function ProfileEditForm({
                         pattern="(?:[1-9]|10)"
                         maxLength={2}
                         defaultValue={values.classNo ?? ""}
-                        placeholder="1~10"
+                        placeholder="예: 3"
                         aria-invalid={Boolean(errors.classNo)}
                         onInput={(event) => {
                           let value = event.currentTarget.value
@@ -438,14 +242,14 @@ function ProfileEditForm({
                             .slice(0, 2);
 
                           if (value === "0") value = "";
-                          if (Number(value) > 10) value = "10";
+
+                          if (Number(value) > 10) {
+                            value = "10";
+                          }
 
                           event.currentTarget.value = value;
                         }}
                       />
-                      <FieldDescription>
-                        1~10 사이의 숫자만 입력할 수 있습니다.
-                      </FieldDescription>
                       <FieldError>{errors.classNo}</FieldError>
                     </Field>
 
@@ -456,15 +260,23 @@ function ProfileEditForm({
                         name="dormRoom"
                         type="text"
                         inputMode="numeric"
-                        pattern="[1-9][0-9]{0,2}"
-                        maxLength={3}
+                        pattern="(?:[1-9][0-9]{0,2}|100[0-4])"
+                        maxLength={4}
                         defaultValue={values.dormRoom ?? ""}
-                        placeholder="예: 302"
+                        placeholder="예: 305"
                         aria-invalid={Boolean(errors.dormRoom)}
                         onInput={(event) => {
-                          event.currentTarget.value = event.currentTarget.value
+                          let value = event.currentTarget.value
                             .replace(/\D/g, "")
-                            .slice(0, 3);
+                            .slice(0, 4);
+
+                          if (value === "0") value = "";
+
+                          if (Number(value) > 1004) {
+                            value = "1004";
+                          }
+
+                          event.currentTarget.value = value;
                         }}
                       />
                       <FieldError>{errors.dormRoom}</FieldError>
@@ -478,9 +290,6 @@ function ProfileEditForm({
           <section className="space-y-5 border-t pt-6">
             <div>
               <h2 className="font-semibold">기본 정보 및 연락처</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                자주 변경하지 않는 학교 정보와 연락처입니다.
-              </p>
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
@@ -538,11 +347,18 @@ function ProfileEditForm({
                   id="profile-phone"
                   name="phoneNumber"
                   type="tel"
+                  inputMode="tel"
                   autoComplete="tel"
                   maxLength={20}
+                  pattern="[0-9+ -]*"
                   defaultValue={values.phoneNumber}
-                  placeholder="+821012345678"
+                  placeholder="010-1234-5678"
                   aria-invalid={Boolean(errors.phoneNumber)}
+                  onInput={(event) => {
+                    event.currentTarget.value = event.currentTarget.value
+                      .replace(/[^0-9+ -]/g, "")
+                      .slice(0, 20);
+                  }}
                 />
                 <FieldError>{errors.phoneNumber}</FieldError>
               </Field>
@@ -572,10 +388,6 @@ function ProfileEditForm({
                   <div className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <FieldLabel>복학 여부</FieldLabel>
-                      <FieldDescription id="profile-returning-description">
-                        휴학 후 복학한 경우 켜 주세요. 켜면 표시 기수가 +0.5
-                        됩니다.
-                      </FieldDescription>
                     </div>
 
                     <input
@@ -590,7 +402,6 @@ function ProfileEditForm({
                       role="switch"
                       data-state={values.isReturningStudent ? "on" : "off"}
                       aria-checked={values.isReturningStudent}
-                      aria-describedby="profile-returning-description"
                       className="group inline-flex shrink-0 items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       onClick={(event) => {
                         const button = event.currentTarget;

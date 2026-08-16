@@ -7,6 +7,7 @@ import type { Route } from "./+types/detail";
 export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "sticky",
+  contentWidth: "5xl",
 });
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {

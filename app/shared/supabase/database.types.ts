@@ -573,6 +573,24 @@ export type Database = {
           },
         ]
       }
+      profile_departments: {
+        Row: {
+          is_active: boolean
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          is_active?: boolean
+          name: string
+          sort_order: number
+        }
+        Update: {
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           academic_track:
