@@ -15,8 +15,8 @@ test("그룹 홈, 찾기, 공개 상세가 실제 데이터로 이어진다", as
   await page.goto("/groups");
 
   const appContent = page.locator('[data-slot="app-content"]');
-  await expect(appContent).toHaveAttribute("data-content-width", "5xl");
-  expect((await appContent.boundingBox())?.width).toBeGreaterThanOrEqual(1000);
+  await expect(appContent).toHaveAttribute("data-content-width", "4xl");
+  expect((await appContent.boundingBox())?.width).toBeGreaterThanOrEqual(800);
 
   await expect(
     page.getByRole("button", { name: "공식", exact: true }),
@@ -29,7 +29,9 @@ test("그룹 홈, 찾기, 공개 상세가 실제 데이터로 이어진다", as
   await expect(
     page.getByRole("link", { name: "29기 수학 탐구" }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "인기 그룹" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "비공식 그룹 찾아보기" }),
+  ).toBeVisible();
 
   await page.goto("/groups/discover");
   await expect(page.getByRole("link", { name: "메이커스 랩" })).toBeVisible();
@@ -58,12 +60,16 @@ test("모바일에서도 그룹 핵심 동선과 뒤로가기를 제공한다", 
   await page.setViewportSize({ width: 390, height: 420 });
   await loginAsAcceptedStudent(page);
   await page.goto("/groups?tab=unofficial");
-  await expect(page.getByRole("heading", { name: "인기 그룹" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "메이커스 랩" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "메이커스 랩" })).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "비공식 그룹 찾아보기" }),
+  ).toHaveAttribute("href", "/groups/discover");
   const myGroupRow = page
     .locator('[data-slot="group-summary-row"]')
     .filter({ has: page.getByRole("link", { name: "29기 수학 탐구" }) });
-  await expect(myGroupRow.getByRole("button", { name: /고정/ })).toBeHidden();
+  await expect(myGroupRow.getByRole("button", { name: /고정/ })).toHaveClass(
+    /sr-only/,
+  );
   await expect(myGroupRow.getByText(/^멤버 \d+명$/)).toBeVisible();
   await myGroupRow.evaluate((element) => {
     const pointerEvent = {
