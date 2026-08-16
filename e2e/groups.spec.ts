@@ -95,9 +95,9 @@ test("모바일에서도 그룹 핵심 동선과 뒤로가기를 제공한다", 
   ).toBeVisible();
   const mobileHeader = page.locator('[data-slot="group-detail-mobile-header"]');
   await page.getByRole("main").evaluate((element) => element.scrollTo(0, 200));
-  await expect(mobileHeader).toHaveClass(/-translate-y-full/);
+  await expect(mobileHeader).toBeInViewport();
   await page.getByRole("main").evaluate((element) => element.scrollTo(0, 0));
-  await expect(mobileHeader).not.toHaveClass(/-translate-y-full/);
+  await expect(mobileHeader).toBeInViewport();
   await expect(
     page.getByRole("heading", { name: "메이커스 랩", exact: true }).last(),
   ).toBeVisible();
