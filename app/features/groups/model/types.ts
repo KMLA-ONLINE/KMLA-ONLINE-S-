@@ -13,7 +13,7 @@ export type GroupPostingPolicy =
 export type GroupMemberRole = Database["public"]["Enums"]["group_member_role"];
 
 export type GroupMembershipState = "member" | "requested" | "none";
-export type GroupHomeSection = "official" | "mine" | "popular";
+export type GroupHomeSection = "official" | "mine";
 
 export type GroupSummary = Pick<
   GroupRow,

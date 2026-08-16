@@ -120,7 +120,7 @@ export function GroupDiscoverScreen({
   const canSearch = hasMinimumGroupSearchLength(input);
 
   return (
-    <div className="mx-auto flex w-full flex-col gap-5 px-4 py-5 md:px-0 md:py-0">
+    <div className="mx-auto flex w-full flex-col gap-5 px-2 py-5 md:px-0 md:py-0">
       <div className="hidden flex-col gap-2 md:flex">
         <Link
           to="/groups"

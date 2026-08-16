@@ -94,7 +94,7 @@ export function GroupCreateForm({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 py-5 md:py-0">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 pb-3 md:py-0">
       <div className="hidden flex-col gap-2 md:flex">
         <Link
           to="/groups"
@@ -229,9 +229,9 @@ export function GroupCreateForm({
                       id="group-slug"
                       name="slug"
                       defaultValue={values.slug}
-                      minLength={3}
-                      maxLength={50}
-                      pattern="[a-z0-9][a-z0-9-]{1,48}[a-z0-9]"
+                      minLength={4}
+                      maxLength={15}
+                      pattern="[a-z0-9][a-z0-9-]{2,13}[a-z0-9]"
                       placeholder="makers-lab"
                       disabled={pending}
                       aria-invalid={Boolean(errors.slug)}
@@ -240,15 +240,14 @@ export function GroupCreateForm({
                     />
                   </div>
                   <FieldDescription>
-                    비워 두면 임의 주소를 만듭니다. 영문 소문자, 숫자, 하이픈만
-                    사용할 수 있습니다.
+                    비워 두면 임의 주소를 만듭니다. 영문 소문자, 숫자,
+                    하이픈으로 4~15자입니다.
                   </FieldDescription>
                   <FieldError>{errors.slug}</FieldError>
                 </Field>
               ) : (
                 <p className="rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
-                  초대 전용 그룹은 외부에서 추측하기 어려운 임의 주소를
-                  사용합니다.
+                  비공개 그룹은 임의 주소를 사용합니다.
                 </p>
               )}
             </FieldGroup>
@@ -288,7 +287,6 @@ export function GroupCreateForm({
                   // 가입한 멤버들의 이름이 명부에 한꺼번에 드러나므로 서버가 막는다.
                   <FieldDescription className="text-destructive">
                     멤버가 들어온 뒤에는 다른 신원 정책으로 바꿀 수 없습니다.
-                    익명을 믿고 가입한 멤버의 이름이 명부에 드러나기 때문입니다.
                   </FieldDescription>
                 ) : null}
                 <FieldError>{errors.identityPolicy}</FieldError>
@@ -333,14 +331,10 @@ export function GroupCreateForm({
       <GroupConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="그룹을 만들까요?"
-        description={`${
-          confirmName
-            ? `"${confirmName}" 그룹을 만듭니다.`
-            : "입력한 정보로 그룹을 만듭니다."
-        } 그룹 종류와 주소는 만든 뒤에 바꿀 수 없습니다.${
+        title={`'${confirmName}' 그룹을 만들까요?`}
+        description={`그룹 주소는 후에 수정할 수 없습니다.${
           joinPolicy === "invite_only"
-            ? " 나중에 공개할 수 있지만, 공개한 뒤에는 다시 비공개로 변경할 수 없습니다."
+            ? " 공개 전환 후에는 비공개로 변경할 수 없습니다."
             : " 공개 그룹은 만든 뒤 비공개로 변경할 수 없습니다."
         }`}
         details={

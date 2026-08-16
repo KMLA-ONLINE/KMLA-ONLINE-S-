@@ -50,8 +50,8 @@ function asHomeItem(
 
 export async function loadGroupHome(): Promise<GroupHomeItem[]> {
   const supabase = getSupabase();
-  const [officialResult, membershipsResult, requestsResult, popularResult] =
-    await Promise.all([
+  const [officialResult, membershipsResult, requestsResult] = await Promise.all(
+    [
       supabase
         .from("groups")
         .select(GROUP_COLUMNS)
@@ -62,13 +62,12 @@ export async function loadGroupHome(): Promise<GroupHomeItem[]> {
         .select(`role, pinned_at, groups!inner(${GROUP_COLUMNS})`)
         .order("pinned_at", { ascending: false, nullsFirst: false }),
       supabase.from("group_join_requests").select("group_id, requested_at"),
-      supabase.rpc("list_popular_groups", { p_limit: 3 }),
-    ]);
+    ],
+  );
 
   if (officialResult.error) throw officialResult.error;
   if (membershipsResult.error) throw membershipsResult.error;
   if (requestsResult.error) throw requestsResult.error;
-  if (popularResult.error) throw popularResult.error;
 
   const memberships = membershipsResult.data as MembershipWithGroup[];
   const membershipByGroup = new Map(
@@ -103,29 +102,7 @@ export async function loadGroupHome(): Promise<GroupHomeItem[]> {
       }),
     );
 
-  const popular = (popularResult.data ?? []).map((group) =>
-    asHomeItem(
-      {
-        id: group.group_id,
-        slug: group.slug,
-        name: group.name,
-        description: group.description,
-        kind: "unofficial",
-        join_policy: group.join_policy,
-        identity_policy: group.identity_policy,
-        posting_policy: "members",
-        icon_path: group.icon_path,
-        cover_path: group.cover_path,
-        member_count: group.member_count,
-      },
-      {
-        section: "popular",
-        state: group.membership_state as GroupMembershipState,
-      },
-    ),
-  );
-
-  const items = [...official, ...mine, ...popular];
+  const items = [...official, ...mine];
   const urls = await createGroupMediaUrls(
     items.flatMap((item) => [item.icon_path, item.cover_path]),
   );

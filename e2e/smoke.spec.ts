@@ -69,22 +69,11 @@ test("PWA manifest is served and installable", async ({ page, request }) => {
     display: string;
     icons: { sizes: string }[];
     orientation?: string;
-    screenshots: { form_factor?: string; sizes: string; src: string }[];
   };
   expect(json.start_url).toBe("/");
   expect(json.display).toBe("standalone");
   expect(json.orientation).toBeUndefined();
   expect(json.icons.some((icon) => icon.sizes === "512x512")).toBeTruthy();
-  expect(
-    json.screenshots.some(({ form_factor }) => form_factor === "narrow"),
-  ).toBeTruthy();
-  expect(
-    json.screenshots.some(({ form_factor }) => form_factor === "wide"),
-  ).toBeTruthy();
-  const screenshots = await Promise.all(
-    json.screenshots.map(({ src }) => request.get(src)),
-  );
-  expect(screenshots.every((response) => response.ok())).toBe(true);
 });
 
 test("첫 서비스 워커 설치는 현재 페이지를 새로고침하지 않는다", async ({

@@ -1060,23 +1060,6 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
-      list_popular_groups: {
-        Args: { p_limit?: number }
-        Returns: {
-          cover_path: string
-          description: string
-          group_id: string
-          icon_path: string
-          identity_policy: Database["public"]["Enums"]["group_identity_policy"]
-          join_policy: Database["public"]["Enums"]["group_join_policy"]
-          member_count: number
-          member_role: Database["public"]["Enums"]["group_member_role"]
-          membership_state: string
-          name: string
-          requested_at: string
-          slug: string
-        }[]
-      }
       list_post_attachments: {
         Args: { p_post_id: string }
         Returns: {

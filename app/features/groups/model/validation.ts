@@ -7,7 +7,7 @@ import type {
   GroupPostingPolicy,
 } from "~/features/groups/model/types";
 
-const GROUP_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/;
+const GROUP_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{2,13}[a-z0-9]$/;
 const RESERVED_GROUP_SLUGS = new Set(["create", "discover"]);
 const GROUP_KINDS = new Set<GroupKind>(["official", "unofficial"]);
 const JOIN_POLICIES = new Set<GroupJoinPolicy>([
@@ -68,7 +68,7 @@ export function validateCreateGroup(
     (!GROUP_SLUG_PATTERN.test(values.slug) ||
       RESERVED_GROUP_SLUGS.has(values.slug))
   ) {
-    errors.slug = "주소는 영문 소문자, 숫자, 하이픈으로 된 3~50자여야 합니다.";
+    errors.slug = "주소는 영문 소문자, 숫자, 하이픈으로 된 4~15자여야 합니다.";
   }
 
   return errors;

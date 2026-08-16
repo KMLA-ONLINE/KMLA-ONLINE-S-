@@ -1,7 +1,6 @@
-import { CirclePlusIcon } from "lucide-react";
+import { ChevronRightIcon, CirclePlusIcon, SearchIcon } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
 
-import { GroupDiscoverCard } from "~/features/groups/components/group-discover-card";
 import { GroupSummaryRow } from "~/features/groups/components/group-summary-row";
 import type { GroupHomeItem } from "~/features/groups/model/types";
 import { Button } from "~/shared/ui/button";
@@ -23,7 +22,6 @@ export function GroupHomeScreen({
     searchParams.get("tab") === "unofficial" ? "unofficial" : "official";
   const officialGroups = groups.filter((group) => group.section === "official");
   const myGroups = groups.filter((group) => group.section === "mine");
-  const popularGroups = groups.filter((group) => group.section === "popular");
 
   if (isTeacher) {
     return (
@@ -74,44 +72,14 @@ export function GroupHomeScreen({
           emptyText="표시할 공식 그룹이 없습니다."
         />
       ) : (
-        <div className="flex flex-col gap-7">
+        <div className="flex flex-col gap-4">
           <GroupRows
             title="내 그룹"
             groups={myGroups}
             profileId={profileId}
             emptyText="아직 참여 중인 비공식 그룹이 없습니다."
           />
-          <section
-            className="flex flex-col gap-3"
-            aria-labelledby="popular-groups-heading"
-          >
-            <div className="flex items-baseline justify-between gap-2 px-2 md:px-0">
-              <h2 id="popular-groups-heading" className="text-sm font-semibold">
-                인기 그룹
-              </h2>
-              <Link
-                to="/groups/discover"
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                전체 보기 →
-              </Link>
-            </div>
-            {popularGroups.length > 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {popularGroups.map((group) => (
-                  <GroupDiscoverCard
-                    key={group.group_id}
-                    group={group}
-                    profileId={profileId}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                더 들어갈 공개 그룹이 없습니다.
-              </p>
-            )}
-          </section>
+          <DiscoverEntry />
         </div>
       )}
     </div>
@@ -133,6 +101,32 @@ function ScreenHeader({ actionLabel }: { actionLabel: string | null }) {
         </Button>
       ) : null}
     </header>
+  );
+}
+
+/**
+ * 탐색으로 나가는 유일한 문. 새 그룹 찾기는 이 화면에서 드문 동선이라 목록 위가 아니라
+ * 아래에 둔다 — 내 그룹을 다 지나친 사람만 만나면 된다.
+ */
+function DiscoverEntry() {
+  return (
+    <Link
+      to="/groups/discover"
+      className="mt-10 flex items-center gap-3 rounded-xl border border-dashed px-3 py-2.5 transition-colors hover:bg-muted/40"
+    >
+      <span className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground">
+        <SearchIcon aria-hidden className="size-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">
+          비공식 그룹 찾아보기
+        </span>
+      </span>
+      <ChevronRightIcon
+        aria-hidden
+        className="size-4 shrink-0 text-muted-foreground"
+      />
+    </Link>
   );
 }
 

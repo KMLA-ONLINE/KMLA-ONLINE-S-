@@ -32,7 +32,7 @@ export function PostBodyInput({
         maxLength={20_000}
         aria-label="Markdown 본문"
         placeholder="본문을 입력하세요"
-        className="post-typography min-h-72 resize-y whitespace-pre-wrap md:hidden"
+        className="post-typography max-h-none min-h-72 resize-y whitespace-pre-wrap md:hidden"
       />
     );
 

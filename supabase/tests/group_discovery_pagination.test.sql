@@ -48,7 +48,7 @@ values
      where pub_id = 'kim-admin')
   ),
   (
-    'search-prefix-popular',
+    'sp-popular',
     true,
     'unofficial',
     '검색대상 인기',
@@ -59,7 +59,7 @@ values
      where pub_id = 'kim-admin')
   ),
   (
-    'search-prefix-new',
+    'sp-new',
     true,
     'unofficial',
     '검색대상 새내기',
@@ -70,7 +70,7 @@ values
      where pub_id = 'kim-admin')
   ),
   (
-    'search-contains-popular',
+    'sc-popular',
     true,
     'unofficial',
     '우리 검색대상 연구',
@@ -81,7 +81,7 @@ values
      where pub_id = 'kim-admin')
   ),
   (
-    'joined-discovery-check',
+    'joined-disc',
     true,
     'unofficial',
     '내가입페이지',
@@ -96,7 +96,7 @@ insert into public.group_memberships (group_id, profile_id)
 select group_record.id, profile.id
 from public.groups as group_record
 cross join public.profiles as profile
-where group_record.slug = 'search-prefix-popular'
+where group_record.slug = 'sp-popular'
   and profile.pub_id in (
     'hanbyeol-25',
     'saebyeok-24'
@@ -106,7 +106,7 @@ insert into public.group_memberships (group_id, profile_id)
 select group_record.id, profile.id
 from public.groups as group_record
 cross join public.profiles as profile
-where group_record.slug = 'search-contains-popular'
+where group_record.slug = 'sc-popular'
   and profile.pub_id in (
     'hanbyeol-25',
     'saebyeok-24',
@@ -115,7 +115,7 @@ where group_record.slug = 'search-contains-popular'
 
 insert into public.group_memberships (group_id, profile_id)
 values (
-  (select id from public.groups where slug = 'joined-discovery-check'),
+  (select id from public.groups where slug = 'joined-disc'),
   (select id from public.profiles
    where auth_user_id = '10000000-0000-0000-0000-000000000001')
 );
@@ -144,7 +144,7 @@ select is(
 );
 
 select is(
-  (select count(*) from first_discovery_page where slug = 'joined-discovery-check'),
+  (select count(*) from first_discovery_page where slug = 'joined-disc'),
   0::bigint,
   'default discovery excludes joined groups'
 );
@@ -188,7 +188,7 @@ select is(
       p_query => '내가입페이지',
       p_include_joined => true
     )
-    where slug = 'joined-discovery-check'
+    where slug = 'joined-disc'
   ),
   'member',
   'include-joined exposes the caller membership state'
