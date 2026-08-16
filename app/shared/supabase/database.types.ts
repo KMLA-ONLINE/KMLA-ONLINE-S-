@@ -594,6 +594,7 @@ export type Database = {
           dorm_room: number | null
           gender: Database["public"]["Enums"]["profile_gender"] | null
           id: number
+          is_returning_student: boolean
           name: string
           onboarding_completed_at: string
           phone_number: string | null
@@ -628,6 +629,7 @@ export type Database = {
           dorm_room?: number | null
           gender?: Database["public"]["Enums"]["profile_gender"] | null
           id?: never
+          is_returning_student?: boolean
           name: string
           onboarding_completed_at?: string
           phone_number?: string | null
@@ -662,6 +664,7 @@ export type Database = {
           dorm_room?: number | null
           gender?: Database["public"]["Enums"]["profile_gender"] | null
           id?: never
+          is_returning_student?: boolean
           name?: string
           onboarding_completed_at?: string
           phone_number?: string | null
@@ -969,6 +972,7 @@ export type Database = {
           dorm_room: number | null
           gender: Database["public"]["Enums"]["profile_gender"] | null
           id: number
+          is_returning_student: boolean
           name: string
           onboarding_completed_at: string
           phone_number: string | null
@@ -1275,6 +1279,7 @@ export type Database = {
           dorm_room: number | null
           gender: Database["public"]["Enums"]["profile_gender"] | null
           id: number
+          is_returning_student: boolean
           name: string
           onboarding_completed_at: string
           phone_number: string | null
@@ -1384,6 +1389,7 @@ export type Database = {
           dorm_room: number | null
           gender: Database["public"]["Enums"]["profile_gender"] | null
           id: number
+          is_returning_student: boolean
           name: string
           onboarding_completed_at: string
           phone_number: string | null
@@ -1449,6 +1455,7 @@ export type Database = {
           dorm_room: number | null
           gender: Database["public"]["Enums"]["profile_gender"] | null
           id: number
+          is_returning_student: boolean
           name: string
           onboarding_completed_at: string
           phone_number: string | null
@@ -1538,6 +1545,7 @@ export type Database = {
           p_description?: string
           p_dorm_room?: number
           p_gender?: Database["public"]["Enums"]["profile_gender"]
+          p_is_returning_student?: boolean
           p_name: string
           p_phone_number?: string
         }
@@ -1561,6 +1569,7 @@ export type Database = {
           dorm_room: number | null
           gender: Database["public"]["Enums"]["profile_gender"] | null
           id: number
+          is_returning_student: boolean
           name: string
           onboarding_completed_at: string
           phone_number: string | null

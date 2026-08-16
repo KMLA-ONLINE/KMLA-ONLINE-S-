@@ -31,6 +31,7 @@ describe("ProfileDetail", () => {
             contact_email: "hanbyeol@example.com",
             student_number: null,
             allow_timeline_posts: true,
+            is_returning_student: false,
           }}
           isOwnProfile
         />

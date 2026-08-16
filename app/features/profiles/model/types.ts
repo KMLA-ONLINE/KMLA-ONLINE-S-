@@ -28,6 +28,7 @@ export type AcceptedProfile = Pick<
   | "dorm_room"
   | "department"
   | "allow_timeline_posts"
+  | "is_returning_student"
 > & {
   avatar_url: string | null;
   cover_url: string | null;
@@ -48,6 +49,7 @@ export interface ProfileEditValues {
   classNo: number | null;
   dormRoom: number | null;
   allowTimelinePosts: boolean;
+  isReturningStudent: boolean;
 }
 
 export type ProfileEditErrors = Partial<

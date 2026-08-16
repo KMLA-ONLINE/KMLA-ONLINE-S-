@@ -37,6 +37,15 @@ function formatBirthday(value: string) {
   return `${Number(year)}년 ${Number(month)}월 ${Number(day)}일`;
 }
 
+function formatCohort(profile: AcceptedProfile) {
+  if (profile.cohort === null) return null;
+
+  const displayedCohort =
+    profile.cohort + (profile.is_returning_student ? 0.5 : 0);
+
+  return `${displayedCohort}기`;
+}
+
 export function ProfileDetail({
   profile,
   isOwnProfile,
@@ -45,7 +54,7 @@ export function ProfileDetail({
   isOwnProfile: boolean;
 }) {
   const schoolSummary = [
-    profile.cohort === null ? null : `${profile.cohort}기`,
+    formatCohort(profile),
     profile.academic_track === null
       ? null
       : TRACK_LABELS[profile.academic_track],
@@ -58,7 +67,7 @@ export function ProfileDetail({
     { label: "구분", value: TYPE_LABELS[profile.type] },
     {
       label: "기수",
-      value: profile.cohort === null ? null : `${profile.cohort}기`,
+      value: formatCohort(profile),
     },
     {
       label: "계열",

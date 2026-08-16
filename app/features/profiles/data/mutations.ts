@@ -44,6 +44,7 @@ export function readProfileEditForm(formData: FormData): ProfileEditValues {
     classNo: readNumber(formData, "classNo"),
     dormRoom: readNumber(formData, "dormRoom"),
     allowTimelinePosts: formData.get("allowTimelinePosts") === "on",
+    isReturningStudent: formData.get("isReturningStudent") === "on",
   };
 }
 
@@ -119,8 +120,8 @@ export function validateProfileEdit(
     if (values.department.trim().length > 100) {
       errors.department = "부서는 최대 100자까지 입력할 수 있습니다.";
     }
-    if (!validOptionalInteger(values.classNo, 1, 20)) {
-      errors.classNo = "반은 1~20 사이의 숫자로 입력해 주세요.";
+    if (!validOptionalInteger(values.classNo, 1, 10)) {
+      errors.classNo = "반은 1~10 사이의 숫자로 입력해 주세요.";
     }
     if (!validOptionalInteger(values.dormRoom, 1, 999)) {
       errors.dormRoom = "기숙사 방은 1~999 사이의 숫자로 입력해 주세요.";
@@ -151,6 +152,7 @@ export async function updateMyProfile(
     p_class_no: values.classNo ?? undefined,
     p_dorm_room: values.dormRoom ?? undefined,
     p_allow_timeline_posts: values.allowTimelinePosts,
+    p_is_returning_student: values.isReturningStudent,
   });
 
   if (error) throw error;

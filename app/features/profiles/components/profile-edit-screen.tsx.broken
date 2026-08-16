@@ -42,7 +42,7 @@ export function ProfileEditScreen({
 }) {
   return (
     <main className="px-4 pb-10 md:px-0">
-      <div className="mx-auto max-w-5xl space-y-4 md:space-y-6">
+      <div className="mx-auto max-w-4xl space-y-4 md:space-y-6">
         <ProfileMediaSettings profile={profile} />
         <ProfileEditForm profile={profile} actionData={actionData} />
       </div>
@@ -274,9 +274,9 @@ function ProfileEditForm({
   const errors = actionData?.errors ?? {};
   const academicProfile =
     profile.type === "student" || profile.type === "alumni";
-  const cohortInputRef = useRef<HTMLInputElement>(null);
-  const returningInputRef = useRef<HTMLInputElement>(null);
-  const returningStateRef = useRef<HTMLSpanElement>(null);
+  const [isReturningStudent, setIsReturningStudent] = useState(
+    values.isReturningStudent,
+  );
 
   return (
     <Card className="-mx-4 rounded-none border-x-0 sm:mx-0 sm:rounded-xl sm:border-x">
@@ -404,102 +404,110 @@ function ProfileEditForm({
                 </Field>
 
                 {profile.type === "student" ? (
-                  <>
-                    <Field
-                      data-invalid={Boolean(errors.department)}
-                      className="sm:col-span-2"
-                    >
-                      <FieldLabel htmlFor="profile-department">부서</FieldLabel>
-                      <Input
-                        id="profile-department"
-                        name="department"
-                        defaultValue={values.department}
-                        maxLength={100}
-                        aria-invalid={Boolean(errors.department)}
-                      />
-                      <FieldError>{errors.department}</FieldError>
-                    </Field>
+                <Field className="sm:col-span-2">
+                  <div className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium">복학 여부</span>
 
-                    <Field data-invalid={Boolean(errors.classNo)}>
-                      <FieldLabel htmlFor="profile-class">반</FieldLabel>
-                      <Input
-                        id="profile-class"
-                        name="classNo"
-                        type="text"
-                        inputMode="numeric"
-                        pattern="(?:[1-9]|10)"
-                        maxLength={2}
-                        defaultValue={values.classNo ?? ""}
-                        placeholder="1~10"
-                        aria-invalid={Boolean(errors.classNo)}
-                        onInput={(event) => {
-                          let value = event.currentTarget.value
-                            .replace(/\D/g, "")
-                            .slice(0, 2);
-
-                          if (value === "0") value = "";
-                          if (Number(value) > 10) value = "10";
-
-                          event.currentTarget.value = value;
-                        }}
-                      />
-                      <FieldDescription>
-                        1~10 사이의 숫자만 입력할 수 있습니다.
+                      <FieldDescription id="profile-returning-description">
+                        휴학 후 복학한 경우 켜 주세요. 켜면 프로필에서
+                        기수가 +0.5로 표시됩니다.
                       </FieldDescription>
-                      <FieldError>{errors.classNo}</FieldError>
-                    </Field>
+                    </div>
 
-                    <Field data-invalid={Boolean(errors.dormRoom)}>
-                      <FieldLabel htmlFor="profile-dorm">기숙사 방</FieldLabel>
-                      <Input
-                        id="profile-dorm"
-                        name="dormRoom"
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[1-9][0-9]{0,2}"
-                        maxLength={3}
-                        defaultValue={values.dormRoom ?? ""}
-                        placeholder="예: 302"
-                        aria-invalid={Boolean(errors.dormRoom)}
-                        onInput={(event) => {
-                          event.currentTarget.value = event.currentTarget.value
-                            .replace(/\D/g, "")
-                            .slice(0, 3);
+                    <label
+                      className="inline-flex shrink-0 cursor-pointer items-center gap-3"
+                      onMouseDown={(event) => event.preventDefault()}
+                    >
+                      <input
+                        name="isReturningStudent"
+                        type="checkbox"
+                        role="switch"
+                        defaultChecked={values.isReturningStudent}
+                        aria-describedby="profile-returning-description"
+                        className="peer sr-only"
+                        onChange={(event) => {
+                          const checked = event.currentTarget.checked;
+
+                          const cohortInput =
+                            document.getElementById(
+                              "profile-cohort",
+                            ) as HTMLInputElement | null;
+
+                          if (
+                            cohortInput &&
+                            profile.cohort !== null
+                          ) {
+                            cohortInput.value = String(
+                              profile.cohort + (checked ? 0.5 : 0),
+                            );
+                          }
+
+                          const stateText =
+                            document.getElementById(
+                              "profile-returning-state",
+                            );
+
+                          if (stateText) {
+                            stateText.textContent = checked
+                              ? "ON"
+                              : "OFF";
+                          }
+
+                          const liveText =
+                            document.getElementById(
+                              "profile-returning-live",
+                            );
+
+                          if (
+                            liveText &&
+                            profile.cohort !== null
+                          ) {
+                            liveText.textContent =
+                              `표시 기수 ${
+                                profile.cohort +
+                                (checked ? 0.5 : 0)
+                              }기`;
+                          }
                         }}
                       />
-                      <FieldError>{errors.dormRoom}</FieldError>
-                    </Field>
-                  </>
-                ) : null}
-              </div>
-            </section>
-          ) : null}
 
-          <section className="space-y-5 border-t pt-6">
-            <div>
-              <h2 className="font-semibold">기본 정보 및 연락처</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                자주 변경하지 않는 학교 정보와 연락처입니다.
-              </p>
-            </div>
+                      <span
+                        aria-hidden="true"
+                        className="relative h-6 w-11 rounded-full bg-muted-foreground/30 transition-colors
+                          after:absolute after:top-0.5 after:left-0.5 after:size-5
+                          after:rounded-full after:bg-background after:shadow-sm
+                          after:transition-transform
+                          peer-checked:bg-primary
+                          peer-checked:after:translate-x-5
+                          peer-focus-visible:ring-2
+                          peer-focus-visible:ring-ring
+                          peer-focus-visible:ring-offset-2"
+                      />
 
-            <div className="grid gap-5 sm:grid-cols-2">
-              {academicProfile ? (
-                <>
-                  <Field>
-                    <FieldLabel htmlFor="profile-cohort">기수</FieldLabel>
-                    <Input
-                      ref={cohortInputRef}
-                      id="profile-cohort"
-                      defaultValue={
-                        profile.cohort === null
-                          ? ""
-                          : profile.cohort +
-                            (values.isReturningStudent ? 0.5 : 0)
-                      }
-                      disabled
-                      readOnly
-                    />
+                      <span
+                        id="profile-returning-state"
+                        className="w-7 text-xs font-semibold text-muted-foreground"
+                      >
+                        {values.isReturningStudent ? "ON" : "OFF"}
+                      </span>
+
+                      <span
+                        id="profile-returning-live"
+                        className="sr-only"
+                        aria-live="polite"
+                      >
+                        {profile.cohort !== null
+                          ? `표시 기수 ${
+                              profile.cohort +
+                              (values.isReturningStudent ? 0.5 : 0)
+                            }기`
+                          : ""}
+                      </span>
+                    </label>
+                  </div>
+                </Field>
+              ) : null}
                   </Field>
 
                   {profile.student_number ? (
@@ -524,7 +532,6 @@ function ProfileEditForm({
                   id="profile-birthday"
                   name="birthday"
                   type="date"
-                  min="1900-01-01"
                   defaultValue={values.birthday}
                   required={profile.type === "student"}
                   aria-invalid={Boolean(errors.birthday)}
@@ -538,8 +545,6 @@ function ProfileEditForm({
                   id="profile-phone"
                   name="phoneNumber"
                   type="tel"
-                  autoComplete="tel"
-                  maxLength={20}
                   defaultValue={values.phoneNumber}
                   placeholder="+821012345678"
                   aria-invalid={Boolean(errors.phoneNumber)}
@@ -558,8 +563,6 @@ function ProfileEditForm({
                   id="profile-contact-email"
                   name="contactEmail"
                   type="email"
-                  autoComplete="email"
-                  maxLength={254}
                   defaultValue={values.contactEmail}
                   placeholder="name@example.com"
                   aria-invalid={Boolean(errors.contactEmail)}
@@ -570,67 +573,43 @@ function ProfileEditForm({
               {profile.type === "student" ? (
                 <Field className="sm:col-span-2">
                   <div className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <FieldLabel>복학 여부</FieldLabel>
+                    <div>
+                      <FieldLabel htmlFor="profile-returning">
+                        복학 여부
+                      </FieldLabel>
                       <FieldDescription id="profile-returning-description">
-                        휴학 후 복학한 경우 켜 주세요. 켜면 표시 기수가 +0.5
-                        됩니다.
+                        휴학 후 복학하여 반 기수가 추가되는 경우 켜 주세요. 켜면
+                        프로필의 기수가 +0.5로 표시됩니다.
                       </FieldDescription>
                     </div>
 
-                    <input
-                      ref={returningInputRef}
-                      type="hidden"
-                      name="isReturningStudent"
-                      defaultValue={values.isReturningStudent ? "on" : ""}
-                    />
-
-                    <button
-                      type="button"
-                      role="switch"
-                      data-state={values.isReturningStudent ? "on" : "off"}
-                      aria-checked={values.isReturningStudent}
-                      aria-describedby="profile-returning-description"
-                      className="group inline-flex shrink-0 items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      onClick={(event) => {
-                        const button = event.currentTarget;
-                        const isOn = button.dataset.state === "on";
-                        const next = !isOn;
-
-                        button.dataset.state = next ? "on" : "off";
-                        button.setAttribute("aria-checked", String(next));
-
-                        if (returningInputRef.current) {
-                          returningInputRef.current.value = next ? "on" : "";
-                        }
-
-                        if (cohortInputRef.current && profile.cohort !== null) {
-                          cohortInputRef.current.value = String(
-                            profile.cohort + (next ? 0.5 : 0),
-                          );
-                        }
-
-                        if (returningStateRef.current) {
-                          returningStateRef.current.textContent = next
-                            ? "ON"
-                            : "OFF";
-                        }
-                      }}
+                    <label
+                      htmlFor="profile-returning"
+                      className="inline-flex shrink-0 cursor-pointer items-center gap-3"
                     >
+                      <input
+                        id="profile-returning"
+                        name="isReturningStudent"
+                        type="checkbox"
+                        role="switch"
+                        checked={isReturningStudent}
+                        aria-checked={isReturningStudent}
+                        aria-describedby="profile-returning-description"
+                        onChange={(event) =>
+                          setIsReturningStudent(event.target.checked)
+                        }
+                        className="peer sr-only"
+                      />
+
                       <span
                         aria-hidden="true"
-                        className="relative h-6 w-11 rounded-full bg-muted-foreground/30 transition-colors group-data-[state=on]:bg-primary"
-                      >
-                        <span className="absolute top-0.5 left-0.5 size-5 rounded-full bg-background shadow-sm transition-transform group-data-[state=on]:translate-x-5" />
-                      </span>
+                        className="relative h-6 w-11 rounded-full bg-muted-foreground/30 transition-colors peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 after:absolute after:top-0.5 after:left-0.5 after:size-5 after:rounded-full after:bg-background after:shadow-sm after:transition-transform peer-checked:after:translate-x-5"
+                      />
 
-                      <span
-                        ref={returningStateRef}
-                        className="w-7 text-xs font-semibold text-muted-foreground"
-                      >
-                        {values.isReturningStudent ? "ON" : "OFF"}
+                      <span className="w-7 text-xs font-semibold text-muted-foreground">
+                        {isReturningStudent ? "ON" : "OFF"}
                       </span>
-                    </button>
+                    </label>
                   </div>
                 </Field>
               ) : null}

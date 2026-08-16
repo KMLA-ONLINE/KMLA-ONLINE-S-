@@ -25,7 +25,7 @@ select ok(
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean)',
+    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean,boolean)',
     'EXECUTE'
   ),
   'authenticated users can edit their profile through the RPC'
@@ -33,7 +33,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'anon',
-    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean)',
+    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean,boolean)',
     'EXECUTE'
   ),
   'anonymous users cannot edit profiles'
@@ -77,7 +77,8 @@ select lives_ok(
       '학생부'::text,
       7::smallint,
       201::smallint,
-      false
+      false,
+      true
     )$$,
   'accepted user can edit allowed profile fields'
 );
