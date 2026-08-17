@@ -113,44 +113,43 @@ export function ProfileDetail({
   ];
 
   return (
-    <main className="px-4 pb-10 md:px-0">
+    <main className="px-4 pb-8 md:px-0 md:pb-10">
       <div className="w-full space-y-4 md:space-y-6">
         <section className="-mx-4 overflow-hidden border-y bg-background sm:mx-0 sm:rounded-2xl sm:border">
-          <div className="overflow-hidden bg-muted">
-            <div className="relative h-48 overflow-hidden bg-muted sm:h-64 lg:h-[28rem]">
-              {heroBackground ? (
-                <img
-                  src={heroBackground}
-                  alt=""
-                  aria-hidden="true"
-                  className={
-                    hasCoverImage
-                      ? "absolute inset-0 h-full w-full object-cover"
-                      : "absolute -inset-8 h-[calc(100%+4rem)] w-[calc(100%+4rem)] scale-110 object-cover blur-2xl"
-                  }
-                />
-              ) : null}
-              {hasCoverImage ? null : (
-                <div className="absolute inset-0 bg-black/10" aria-hidden />
-              )}
+          <div className="relative aspect-[3/1] w-full overflow-hidden bg-muted">
+            {heroBackground ? (
+              <img
+                src={heroBackground}
+                alt=""
+                aria-hidden="true"
+                className={
+                  hasCoverImage
+                    ? "absolute inset-0 size-full object-cover"
+                    : "absolute -inset-8 h-[calc(100%+4rem)] w-[calc(100%+4rem)] scale-110 object-cover blur-2xl"
+                }
+              />
+            ) : null}
 
-              {isOwnProfile ? (
-                <ProfileMediaEditor
-                  profile={profile}
-                  slot="cover"
-                  className="absolute top-3 right-3 z-20 sm:top-auto sm:bottom-3"
-                />
-              ) : null}
-            </div>
+            {hasCoverImage ? null : (
+              <div className="absolute inset-0 bg-black/10" aria-hidden />
+            )}
+
+            {isOwnProfile ? (
+              <ProfileMediaEditor
+                profile={profile}
+                slot="cover"
+                className="absolute top-3 right-3 z-20 sm:top-auto sm:bottom-3"
+              />
+            ) : null}
           </div>
 
-          <div className="relative border-t bg-background px-4 pt-5 pb-6 sm:px-8 sm:pt-6 sm:pb-7">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <div className="relative bg-background px-4 pb-5 sm:px-8 sm:pb-7">
+            <div className="-mt-10 flex items-end justify-between gap-3 sm:-mt-14">
               <div className="relative w-fit shrink-0 rounded-full border-4 border-background bg-background shadow-sm">
                 <UserAvatar
                   src={profile.avatar_url}
                   name={profile.name}
-                  className="size-28 sm:size-32"
+                  className="size-24 sm:size-32"
                 />
 
                 {isOwnProfile ? (
@@ -162,39 +161,13 @@ export function ProfileDetail({
                 ) : null}
               </div>
 
-              <div className="min-w-0 flex-1 pb-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                    {profile.name}
-                  </h1>
-
-                  <Badge variant="secondary">{TYPE_LABELS[profile.type]}</Badge>
-
-                  {profile.role === "admin" ? (
-                    <Badge variant="outline">
-                      <ShieldCheckIcon />
-                      관리자
-                    </Badge>
-                  ) : null}
-                </div>
-
-                <p className="mt-1 text-sm text-muted-foreground">
-                  @{profile.pub_id}
-                </p>
-
-                {schoolSummary.length > 0 ? (
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {schoolSummary.join(" · ")}
-                  </p>
-                ) : null}
-              </div>
-
               {isOwnProfile ? (
                 <Link
                   to={`/profile/${profile.pub_id}/edit`}
                   className={buttonVariants({
                     variant: "outline",
-                    className: "w-full sm:w-auto",
+                    size: "sm",
+                    className: "mb-1 shrink-0 bg-background",
                   })}
                 >
                   <PencilIcon />
@@ -203,8 +176,35 @@ export function ProfileDetail({
               ) : null}
             </div>
 
+            <div className="mt-3 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight sm:text-3xl">
+                  {profile.name}
+                </h1>
+
+                <Badge variant="secondary">{TYPE_LABELS[profile.type]}</Badge>
+
+                {profile.role === "admin" ? (
+                  <Badge variant="outline">
+                    <ShieldCheckIcon />
+                    관리자
+                  </Badge>
+                ) : null}
+              </div>
+
+              <p className="mt-1 text-sm text-muted-foreground">
+                @{profile.pub_id}
+              </p>
+
+              {schoolSummary.length > 0 ? (
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  {schoolSummary.join(" · ")}
+                </p>
+              ) : null}
+            </div>
+
             {profile.description ? (
-              <p className="mt-5 max-w-3xl text-sm leading-6 whitespace-pre-wrap sm:text-base">
+              <p className="mt-4 max-w-3xl text-sm leading-6 whitespace-pre-wrap sm:text-base">
                 {profile.description}
               </p>
             ) : null}
@@ -212,8 +212,8 @@ export function ProfileDetail({
         </section>
 
         <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start">
-          <Card className="-mx-4 h-fit rounded-none border-x-0 sm:mx-0 sm:rounded-xl sm:border-x">
-            <CardHeader>
+          <Card className="h-fit rounded-xl">
+            <CardHeader className="pb-3">
               <CardTitle>정보</CardTitle>
             </CardHeader>
 
@@ -224,11 +224,12 @@ export function ProfileDetail({
                   .map((fact) => (
                     <div
                       key={fact.label}
-                      className="grid grid-cols-[72px_minmax(0,1fr)] gap-3 py-3 first:pt-0 last:pb-0"
+                      className="grid grid-cols-[68px_minmax(0,1fr)] gap-3 py-3 first:pt-0 last:pb-0 sm:grid-cols-[72px_minmax(0,1fr)]"
                     >
                       <dt className="text-sm text-muted-foreground">
                         {fact.label}
                       </dt>
+
                       <dd className="min-w-0 text-sm font-medium break-words">
                         {fact.href ? (
                           <a
@@ -250,12 +251,13 @@ export function ProfileDetail({
             </CardContent>
           </Card>
 
-          <Card className="-mx-4 rounded-none border-x-0 sm:mx-0 sm:rounded-xl sm:border-x">
+          <Card className="rounded-xl">
             <div className="border-b px-5 py-4 sm:px-6">
               <h2 className="text-base font-semibold">게시물</h2>
             </div>
+
             <CardContent>
-              <div className="flex min-h-64 items-center justify-center rounded-xl bg-muted/35 px-6 py-12 text-center">
+              <div className="flex min-h-48 items-center justify-center rounded-xl bg-muted/35 px-5 py-10 text-center sm:min-h-64 sm:px-6 sm:py-12">
                 <div>
                   <p className="font-medium">아직 게시물이 없습니다.</p>
                   <p className="mt-1 text-sm text-muted-foreground">

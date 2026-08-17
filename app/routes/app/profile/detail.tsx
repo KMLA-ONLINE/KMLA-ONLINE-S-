@@ -1,6 +1,7 @@
 import { redirect } from "react-router";
 
-import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { defineAppChrome, useAppShell } from "~/features/app-shell";
+import { ProfileDetailMobileHeader } from "~/features/profiles/components/profile-detail-mobile-header";
 import { loadAcceptedProfile, ProfileDetail } from "~/features/profiles";
 import type { Route } from "./+types/detail";
 
@@ -31,7 +32,12 @@ export default function ProfilePage({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <PageHeader title="프로필" back={!isOwnProfile} />
+      <ProfileDetailMobileHeader
+        name={loaderData.profile.name}
+        avatarUrl={loaderData.profile.avatar_url}
+        showBack={!isOwnProfile}
+      />
+
       <ProfileDetail profile={loaderData.profile} isOwnProfile={isOwnProfile} />
     </>
   );
