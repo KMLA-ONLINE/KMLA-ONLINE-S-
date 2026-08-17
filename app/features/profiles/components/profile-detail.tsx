@@ -191,7 +191,7 @@ export function ProfileDetail({
                     variant: "default",
                     size: "sm",
                     className:
-                      "col-span-2 mt-0 h-auto w-full justify-center py-2.5 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:mt-4 sm:w-auto sm:self-start sm:py-2",
+                      "col-span-2 h-10 w-full justify-center py-2 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:w-auto sm:self-center",
                   })}
                 >
                   <PencilIcon />
