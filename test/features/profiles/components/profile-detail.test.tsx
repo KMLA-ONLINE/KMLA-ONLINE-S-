@@ -39,7 +39,7 @@ describe("ProfileDetail", () => {
     );
 
     expect(screen.getByRole("heading", { name: "이한별" })).toBeVisible();
-    expect(screen.getByText("@hanbyeol-25")).toBeVisible();
+    expect(screen.queryByText("@hanbyeol-25")).not.toBeInTheDocument();
     expect(screen.getByText("25기 · 국제 계열")).toBeVisible();
     expect(screen.getByText("안녕하세요.")).toBeVisible();
     expect(screen.getByText("정보")).toBeVisible();

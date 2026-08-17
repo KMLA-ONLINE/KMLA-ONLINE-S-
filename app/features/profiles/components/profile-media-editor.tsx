@@ -1,7 +1,10 @@
-import { ImageIcon } from "lucide-react";
+import { ImageIcon, RotateCcwIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
-import { replaceProfileMedia } from "~/features/profiles/data/media";
+import {
+  removeProfileMedia,
+  replaceProfileMedia,
+} from "~/features/profiles/data/media";
 import type {
   AcceptedProfile,
   ProfileMediaSlot,
@@ -9,7 +12,15 @@ import type {
 import { ImageCropper } from "~/shared/components/image-cropper";
 import { useImageCrop } from "~/shared/hooks/use-image-crop";
 import { compressImage } from "~/shared/lib/image/compress";
+import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "~/shared/ui/dialog";
 import { Spinner } from "~/shared/ui/spinner";
 
 const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -24,10 +35,28 @@ export function ProfileMediaEditor({
   className?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+
   const [pending, setPending] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isAvatar = slot === "avatar";
+
+  const hasCurrentMedia = Boolean(
+    isAvatar ? profile.avatar_path : profile.cover_path,
+  );
+
+  const changeLabel = isAvatar
+    ? "프로필 이미지 변경하기"
+    : "커버 이미지 변경하기";
+
+  const openPicker = () => {
+    setActionsOpen(false);
+
+    requestAnimationFrame(() => {
+      inputRef.current?.click();
+    });
+  };
 
   const upload = async (cropped: File) => {
     setPending(true);
@@ -48,6 +77,20 @@ export function ProfileMediaEditor({
     }
   };
 
+  const reset = async () => {
+    setPending(true);
+    setError(null);
+
+    try {
+      await removeProfileMedia(profile, slot);
+      window.location.reload();
+    } catch {
+      setPending(false);
+      setActionsOpen(false);
+      setError("기본 이미지로 변경하지 못했습니다.");
+    }
+  };
+
   const crop = useImageCrop((file) => {
     void upload(file);
   });
@@ -64,9 +107,20 @@ export function ProfileMediaEditor({
     crop.start(file);
   };
 
+  const handleEditorClick = () => {
+    setError(null);
+
+    if (hasCurrentMedia) {
+      setActionsOpen(true);
+      return;
+    }
+
+    inputRef.current?.click();
+  };
+
   return (
     <>
-      <div className={className}>
+      <div className={cn("relative", className)}>
         <input
           ref={inputRef}
           type="file"
@@ -84,11 +138,11 @@ export function ProfileMediaEditor({
           size={isAvatar ? "icon-sm" : "sm"}
           disabled={pending}
           aria-label={isAvatar ? "프로필 사진 변경" : "커버 사진 변경"}
-          onClick={() => inputRef.current?.click()}
+          onClick={handleEditorClick}
           className={
             isAvatar
-              ? "rounded-full shadow-sm ring-2 ring-background"
-              : "shadow-sm"
+              ? "rounded-full bg-background shadow-sm ring-2 ring-background"
+              : "bg-background shadow-sm"
           }
         >
           {pending ? <Spinner /> : <ImageIcon aria-hidden="true" />}
@@ -99,12 +153,58 @@ export function ProfileMediaEditor({
         {error ? (
           <p
             role="alert"
-            className="absolute top-full right-0 mt-2 w-56 rounded-md border bg-background p-2 text-xs text-destructive shadow-md"
+            className="absolute top-full right-0 z-30 mt-2 w-56 rounded-md border bg-background p-2 text-xs text-destructive shadow-md"
           >
             {error}
           </p>
         ) : null}
       </div>
+
+      <Dialog
+        open={actionsOpen}
+        onOpenChange={(open) => {
+          if (!pending) setActionsOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {isAvatar ? "프로필 이미지" : "커버 이미지"}
+            </DialogTitle>
+
+            <DialogDescription>원하는 작업을 선택해 주세요.</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-2">
+            <Button
+              type="button"
+              className="w-full justify-start"
+              disabled={pending}
+              onClick={openPicker}
+            >
+              <ImageIcon />
+              {changeLabel}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-start"
+              disabled={pending}
+              onClick={() => {
+                void reset();
+              }}
+            >
+              {pending ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <RotateCcwIcon />
+              )}
+              기본 이미지로 변경하기
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {crop.cropperProps ? (
         <ImageCropper

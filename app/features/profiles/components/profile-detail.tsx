@@ -64,19 +64,9 @@ export function ProfileDetail({
   const hasCoverImage = Boolean(profile.cover_url?.trim());
   const heroBackground = hasCoverImage ? profile.cover_url : profile.avatar_url;
 
+  // 기수 / 계열은 이름 옆 summary에서 이미 보여주므로
+  // 정보 카드에서는 중복해서 표시하지 않는다.
   const facts: ProfileFact[] = [
-    { label: "구분", value: TYPE_LABELS[profile.type] },
-    {
-      label: "기수",
-      value: formatCohort(profile),
-    },
-    {
-      label: "계열",
-      value:
-        profile.academic_track === null
-          ? null
-          : TRACK_LABELS[profile.academic_track],
-    },
     {
       label: "성별",
       value: profile.gender === null ? null : GENDER_LABELS[profile.gender],
@@ -114,8 +104,9 @@ export function ProfileDetail({
 
   return (
     <main className="px-4 pb-8 md:px-0 md:pb-10">
-      <div className="w-full space-y-4 md:space-y-6">
+      <div className="w-full space-y-3 md:space-y-6">
         <section className="-mx-4 overflow-hidden border-y bg-background sm:mx-0 sm:rounded-2xl sm:border">
+          {/* cover */}
           <div className="relative aspect-[3/1] w-full overflow-hidden bg-muted">
             {heroBackground ? (
               <img
@@ -138,36 +129,69 @@ export function ProfileDetail({
               <ProfileMediaEditor
                 profile={profile}
                 slot="cover"
-                className="absolute top-3 right-3 z-20 sm:top-auto sm:bottom-3"
+                className="absolute top-3 right-3 z-20"
               />
             ) : null}
           </div>
 
-          <div className="relative bg-background px-4 pb-5 sm:px-8 sm:pb-7">
-            <div className="-mt-10 flex items-end justify-between gap-3 sm:-mt-14">
-              <div className="relative w-fit shrink-0 rounded-full border-4 border-background bg-background shadow-sm">
-                <UserAvatar
-                  src={profile.avatar_url}
-                  name={profile.name}
-                  className="size-24 sm:size-32"
-                />
-
-                {isOwnProfile ? (
-                  <ProfileMediaEditor
-                    profile={profile}
-                    slot="avatar"
-                    className="absolute right-0 bottom-1 z-20"
+          {/* profile identity */}
+          <div className="bg-background px-4 pb-3 sm:px-8 sm:pb-7">
+            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-5 sm:gap-y-3">
+              {/* avatar */}
+              <div className="relative z-10 row-span-2 -mt-10 w-fit shrink-0 rounded-full border-4 border-background bg-background shadow-sm sm:row-span-1 sm:-mt-14">
+                <div className="relative">
+                  <UserAvatar
+                    src={profile.avatar_url}
+                    name={profile.name}
+                    className="size-24 sm:size-32"
                   />
+
+                  {isOwnProfile ? (
+                    <ProfileMediaEditor
+                      profile={profile}
+                      slot="avatar"
+                      className="absolute right-0 bottom-0 z-20"
+                    />
+                  ) : null}
+                </div>
+              </div>
+
+              {/* name / summary */}
+              <div className="min-w-0 pt-3 sm:pt-4">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <h1 className="min-w-0 text-xl leading-tight font-semibold tracking-tight sm:text-3xl">
+                    {profile.name}
+                  </h1>
+
+                  <Badge variant="secondary">{TYPE_LABELS[profile.type]}</Badge>
+
+                  {profile.role === "admin" ? (
+                    <Badge variant="outline">
+                      <ShieldCheckIcon />
+                      관리자
+                    </Badge>
+                  ) : null}
+                </div>
+
+                {schoolSummary.length > 0 ? (
+                  <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
+                    {schoolSummary.join(" · ")}
+                  </p>
                 ) : null}
               </div>
 
+              {/* edit button
+                  mobile: 이름 오른쪽 영역 아래
+                  desktop: 동일 row 우측
+                  absolute/translate 사용하지 않음 */}
               {isOwnProfile ? (
                 <Link
                   to={`/profile/${profile.pub_id}/edit`}
                   className={buttonVariants({
-                    variant: "outline",
+                    variant: "default",
                     size: "sm",
-                    className: "mb-1 shrink-0 bg-background",
+                    className:
+                      "col-span-2 mt-0 w-full justify-center sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:mt-4 sm:w-auto sm:self-start",
                   })}
                 >
                   <PencilIcon />
@@ -176,55 +200,29 @@ export function ProfileDetail({
               ) : null}
             </div>
 
-            <div className="mt-3 min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight sm:text-3xl">
-                  {profile.name}
-                </h1>
-
-                <Badge variant="secondary">{TYPE_LABELS[profile.type]}</Badge>
-
-                {profile.role === "admin" ? (
-                  <Badge variant="outline">
-                    <ShieldCheckIcon />
-                    관리자
-                  </Badge>
-                ) : null}
-              </div>
-
-              <p className="mt-1 text-sm text-muted-foreground">
-                @{profile.pub_id}
-              </p>
-
-              {schoolSummary.length > 0 ? (
-                <p className="mt-1.5 text-sm text-muted-foreground">
-                  {schoolSummary.join(" · ")}
-                </p>
-              ) : null}
-            </div>
-
             {profile.description ? (
-              <p className="mt-4 max-w-3xl text-sm leading-6 whitespace-pre-wrap sm:text-base">
+              <p className="mt-4 max-w-3xl text-sm leading-6 whitespace-pre-wrap sm:mt-5 sm:text-base">
                 {profile.description}
               </p>
             ) : null}
           </div>
         </section>
 
-        <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start">
-          <Card className="h-fit rounded-xl">
-            <CardHeader className="pb-3">
-              <CardTitle>정보</CardTitle>
+        {/* content */}
+        <div className="grid gap-2 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start lg:gap-4">
+          <Card className="h-fit gap-2 rounded-xl py-3 shadow-none sm:gap-6 sm:py-6 sm:shadow-sm">
+            <CardHeader className="px-4 pt-0 pb-0 sm:px-6 sm:pt-0 sm:pb-3">
+              <CardTitle className="text-lg sm:text-xl">정보</CardTitle>
             </CardHeader>
 
-            <CardContent>
+            <CardContent className="px-4 pt-0 pb-4 sm:px-6 sm:pb-6">
               <dl className="divide-y divide-border/70">
                 {facts
                   .filter((fact) => fact.value !== null)
                   .map((fact) => (
                     <div
                       key={fact.label}
-                      className="grid grid-cols-[68px_minmax(0,1fr)] gap-3 py-3 first:pt-0 last:pb-0 sm:grid-cols-[72px_minmax(0,1fr)]"
+                      className="grid grid-cols-[60px_minmax(0,1fr)] gap-3 py-2.5 first:pt-0 last:pb-0 sm:grid-cols-[72px_minmax(0,1fr)] sm:py-3"
                     >
                       <dt className="text-sm text-muted-foreground">
                         {fact.label}
@@ -239,6 +237,7 @@ export function ProfileDetail({
                             {fact.label === "이메일" ? (
                               <MailIcon className="size-3.5" aria-hidden />
                             ) : null}
+
                             {fact.value}
                           </a>
                         ) : (
@@ -251,15 +250,16 @@ export function ProfileDetail({
             </CardContent>
           </Card>
 
-          <Card className="rounded-xl">
-            <div className="border-b px-5 py-4 sm:px-6">
-              <h2 className="text-base font-semibold">게시물</h2>
-            </div>
+          <Card className="gap-2 rounded-xl py-3 shadow-none sm:gap-6 sm:py-6 sm:shadow-sm">
+            <CardHeader className="border-b px-4 pt-0 pb-0 sm:px-6 sm:pt-0 sm:pb-3">
+              <CardTitle className="text-lg sm:text-xl">게시물</CardTitle>
+            </CardHeader>
 
-            <CardContent>
+            <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
               <div className="flex min-h-48 items-center justify-center rounded-xl bg-muted/35 px-5 py-10 text-center sm:min-h-64 sm:px-6 sm:py-12">
                 <div>
                   <p className="font-medium">아직 게시물이 없습니다.</p>
+
                   <p className="mt-1 text-sm text-muted-foreground">
                     개인 게시물이 추가되면 이곳에 최신순으로 표시됩니다.
                   </p>
