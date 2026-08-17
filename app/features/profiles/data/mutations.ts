@@ -94,7 +94,7 @@ export function validateProfileEdit(
       digits.length > 15
     ) {
       errors.phoneNumber =
-        "전화번호는 국가번호를 포함해 숫자 8~15자리로 입력해 주세요.";
+        "전화번호를 올바른 형식으로 입력해 주세요. (예: 010-1234-5678)";
     }
   }
 

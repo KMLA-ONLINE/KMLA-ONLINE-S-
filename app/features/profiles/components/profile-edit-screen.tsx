@@ -345,15 +345,30 @@ function ProfileEditForm({
                   type="tel"
                   inputMode="tel"
                   autoComplete="tel"
-                  maxLength={20}
-                  pattern="[0-9+ -]*"
+                  maxLength={13}
+                  pattern="010-[0-9]{4}-[0-9]{4}"
                   defaultValue={values.phoneNumber}
                   placeholder="010-1234-5678"
                   aria-invalid={Boolean(errors.phoneNumber)}
                   onInput={(event) => {
-                    event.currentTarget.value = event.currentTarget.value
-                      .replace(/[^0-9+ -]/g, "")
-                      .slice(0, 20);
+                    const digits = event.currentTarget.value
+                      .replace(/\D/g, "")
+                      .slice(0, 11);
+
+                    let value = digits;
+
+                    if (digits.length > 3) {
+                      value = `${digits.slice(0, 3)}-${digits.slice(3)}`;
+                    }
+
+                    if (digits.length > 7) {
+                      value = `${digits.slice(0, 3)}-${digits.slice(
+                        3,
+                        7,
+                      )}-${digits.slice(7)}`;
+                    }
+
+                    event.currentTarget.value = value;
                   }}
                 />
                 <FieldError>{errors.phoneNumber}</FieldError>
