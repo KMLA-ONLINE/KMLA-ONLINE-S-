@@ -12,7 +12,7 @@
 - 인증/승인 게이트는 `app/routes/app/gate.tsx` 한 곳에만 둔다.
 - 셸 loader는 mutation 이후와 명시적 revalidation 때만 다시 실행한다.
 - 모바일 전역 헤더는 없다. 각 page route가 `PageHeader`를 조립하며 이는 `handle.chrome` 설정과 무관하다.
-- `PageHeader`는 기본적으로 아래로 스크롤할 때 숨고 위로 스크롤하면 다시 나타난다. 고정이 꼭 필요한 화면만 `hideOnScroll={false}`를 명시한다.
+- `PageHeader`는 기본적으로 고정이다. 아래로 스크롤할 때 숨겨야 하는 긴 목록 화면만 `hideOnScroll`을 명시한다.
 - 일반 앱의 스크롤 컨테이너는 `ScrollRegion`의 `main` 하나이며 window가 아니다. 메신저는 각 패널이 스크롤을 소유한다.
 - `AppShellProvider`는 `routes/app/gate.tsx`의 loader data를 받는다. 물리적 route ID에 의존하지 않는다.
 

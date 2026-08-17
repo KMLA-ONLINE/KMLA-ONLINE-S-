@@ -12,7 +12,7 @@ interface PageHeaderProps {
   back?: boolean | string;
   /** 오른쪽 액션 슬롯. 검색·더보기 등. */
   actions?: ReactNode;
-  /** 아래로 읽으면 숨긴다. 긴 목록에서만 켠다. 효과는 모바일에서만 보인다. */
+  /** 아래로 읽으면 숨긴다. 기본은 고정이고, 긴 목록에서만 켠다. 효과는 모바일에서만 보인다. */
   hideOnScroll?: boolean;
   className?: string;
 }
@@ -30,7 +30,7 @@ export function PageHeader({
   title,
   back,
   actions,
-  hideOnScroll = true,
+  hideOnScroll = false,
   className,
 }: PageHeaderProps) {
   const navigate = useNavigate();
