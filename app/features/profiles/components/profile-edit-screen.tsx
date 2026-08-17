@@ -7,7 +7,7 @@ import type {
   ProfileEditValues,
 } from "~/features/profiles/model/types";
 import { Button, buttonVariants } from "~/shared/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
+import { Card, CardContent } from "~/shared/ui/card";
 import { Checkbox } from "~/shared/ui/checkbox";
 import { Field, FieldError, FieldLabel } from "~/shared/ui/field";
 import { Input } from "~/shared/ui/input";
@@ -25,8 +25,8 @@ export function ProfileEditScreen({
   actionData?: ProfileEditActionData;
 }) {
   return (
-    <main className="px-4 pb-10 md:px-0">
-      <div className="w-full space-y-4 md:space-y-6">
+    <main className="px-3 pb-6 md:px-0 md:pb-10">
+      <div className="w-full">
         <ProfileEditForm
           profile={profile}
           departments={departments}
@@ -75,13 +75,9 @@ function ProfileEditForm({
   const returningStateRef = useRef<HTMLSpanElement>(null);
 
   return (
-    <Card className="-mx-4 rounded-none border-x-0 sm:mx-0 sm:rounded-xl sm:border-x">
-      <CardHeader className="border-b">
-        <CardTitle>프로필 정보</CardTitle>
-      </CardHeader>
-
-      <CardContent>
-        <Form method="post" className="space-y-7">
+    <Card className="-mx-3 gap-4 rounded-none border-x-0 py-4 sm:mx-0 sm:gap-6 sm:rounded-xl sm:border-x sm:py-6">
+      <CardContent className="px-3 sm:px-6">
+        <Form method="post" className="space-y-5 sm:space-y-7">
           {errors.form ? (
             <div
               role="alert"
@@ -91,7 +87,7 @@ function ProfileEditForm({
             </div>
           ) : null}
 
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
             <Field
               data-invalid={Boolean(errors.name)}
               className="sm:col-span-2"
@@ -150,7 +146,7 @@ function ProfileEditForm({
                 <h2 className="font-semibold">학교 정보</h2>
               </div>
 
-              <div className="grid gap-5 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
                 <Field data-invalid={Boolean(errors.gender)}>
                   <FieldLabel htmlFor="profile-gender">성별</FieldLabel>
                   <NativeSelect
@@ -292,7 +288,7 @@ function ProfileEditForm({
               <h2 className="font-semibold">기본 정보 및 연락처</h2>
             </div>
 
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
               {academicProfile ? (
                 <>
                   <Field>
@@ -385,10 +381,8 @@ function ProfileEditForm({
 
               {profile.type === "student" ? (
                 <Field className="sm:col-span-2">
-                  <div className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <FieldLabel>복학 여부</FieldLabel>
-                    </div>
+                  <div className="flex items-center justify-between gap-4 py-1">
+                    <FieldLabel>복학 여부</FieldLabel>
 
                     <input
                       ref={returningInputRef}
@@ -448,14 +442,21 @@ function ProfileEditForm({
             </div>
           </section>
 
-          <div className="flex flex-col-reverse gap-2 border-t pt-6 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-2 border-t pt-5 pb-1 sm:flex-row sm:justify-end sm:pt-6 sm:pb-0">
             <Link
               to={`/profile/${profile.pub_id}`}
-              className={buttonVariants({ variant: "outline" })}
+              className={buttonVariants({
+                variant: "outline",
+                className: "w-full justify-center sm:w-auto",
+              })}
             >
               취소
             </Link>
-            <Button type="submit" disabled={pending}>
+            <Button
+              type="submit"
+              disabled={pending}
+              className="w-full sm:w-auto"
+            >
               {pending ? <Spinner data-icon="inline-start" /> : null}
               저장
             </Button>
