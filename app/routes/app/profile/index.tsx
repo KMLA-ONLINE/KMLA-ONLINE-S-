@@ -1,5 +1,6 @@
-import { defineAppChrome, PageHeader } from "~/features/app-shell";
-import { StubPage } from "~/shared/components/stub-page";
+import { Navigate } from "react-router";
+
+import { defineAppChrome, useAppShell } from "~/features/app-shell";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -7,13 +8,7 @@ export const handle = defineAppChrome({
 });
 
 export default function MyProfilePage() {
-  return (
-    <>
-      <PageHeader title="내 프로필" />
-      <StubPage
-        title="내 프로필"
-        description="내 프로필과 설정이 들어갑니다."
-      />
-    </>
-  );
+  const { profile } = useAppShell();
+
+  return <Navigate to={`/profile/${profile.pub_id}`} replace />;
 }

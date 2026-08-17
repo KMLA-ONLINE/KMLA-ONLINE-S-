@@ -4,6 +4,19 @@ import type {
 } from "~/features/app-shell/model/types";
 import { getSupabase } from "~/shared/supabase/client";
 
+async function resolveProfileAvatar(
+  path: string | null,
+): Promise<string | null> {
+  if (!path || /^https?:\/\//i.test(path)) return path;
+
+  const { data, error } = await getSupabase()
+    .storage.from("profile-media")
+    .createSignedUrl(path, 3600);
+
+  if (error) return null;
+  return data.signedUrl;
+}
+
 export async function loadShellData(): Promise<ShellLoadData | null> {
   const supabase = getSupabase();
   const {
@@ -30,13 +43,12 @@ export async function loadShellData(): Promise<ShellLoadData | null> {
     role: profile.role,
     type: profile.type,
     status: profile.status,
-    avatar_url: profile.avatar_path,
+    avatar_url: await resolveProfileAvatar(profile.avatar_path),
   };
 
   return {
     email: session.user.email ?? "",
     profile: shellProfile,
-    // Messaging and notification migrations have not landed yet.
     badges: {},
   };
 }
