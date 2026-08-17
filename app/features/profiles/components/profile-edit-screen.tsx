@@ -230,7 +230,7 @@ function ProfileEditForm({
                         pattern="(?:[1-9]|10)"
                         maxLength={2}
                         defaultValue={values.classNo ?? ""}
-                        placeholder="예: 3"
+                        placeholder="1 ~ 10"
                         aria-invalid={Boolean(errors.classNo)}
                         onInput={(event) => {
                           let value = event.currentTarget.value
@@ -259,7 +259,7 @@ function ProfileEditForm({
                         pattern="(?:[1-9][0-9]{0,2}|100[0-4])"
                         maxLength={4}
                         defaultValue={values.dormRoom ?? ""}
-                        placeholder="예: 305"
+                        placeholder="예: 100"
                         aria-invalid={Boolean(errors.dormRoom)}
                         onInput={(event) => {
                           let value = event.currentTarget.value
@@ -442,7 +442,7 @@ function ProfileEditForm({
             </div>
           </section>
 
-          <div className="flex flex-col-reverse gap-2 border-t pt-5 pb-1 sm:flex-row sm:justify-end sm:pt-6 sm:pb-0">
+          <div className="flex flex-col-reverse gap-2 pt-5 pb-1 sm:flex-row sm:justify-end sm:pt-6 sm:pb-0">
             <Link
               to={`/profile/${profile.pub_id}`}
               className={buttonVariants({
