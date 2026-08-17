@@ -17,7 +17,6 @@ import { Button } from "~/shared/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "~/shared/ui/dialog";
@@ -45,10 +44,6 @@ export function ProfileMediaEditor({
   const hasCurrentMedia = Boolean(
     isAvatar ? profile.avatar_path : profile.cover_path,
   );
-
-  const changeLabel = isAvatar
-    ? "프로필 이미지 변경하기"
-    : "커버 이미지 변경하기";
 
   const openPicker = () => {
     setActionsOpen(false);
@@ -135,19 +130,13 @@ export function ProfileMediaEditor({
         <Button
           type="button"
           variant="outline"
-          size={isAvatar ? "icon-sm" : "sm"}
+          size="icon-sm"
           disabled={pending}
           aria-label={isAvatar ? "프로필 사진 변경" : "커버 사진 변경"}
           onClick={handleEditorClick}
-          className={
-            isAvatar
-              ? "rounded-full bg-background shadow-sm ring-2 ring-background"
-              : "bg-background shadow-sm"
-          }
+          className="rounded-full bg-background shadow-sm ring-2 ring-background"
         >
           {pending ? <Spinner /> : <ImageIcon aria-hidden="true" />}
-
-          {isAvatar ? null : <span className="max-sm:sr-only">커버 사진</span>}
         </Button>
 
         {error ? (
@@ -168,11 +157,7 @@ export function ProfileMediaEditor({
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>
-              {isAvatar ? "프로필 이미지" : "커버 이미지"}
-            </DialogTitle>
-
-            <DialogDescription>원하는 작업을 선택해 주세요.</DialogDescription>
+            <DialogTitle>{isAvatar ? "프로필 사진" : "커버 사진"}</DialogTitle>
           </DialogHeader>
 
           <div className="grid gap-2">
@@ -183,7 +168,7 @@ export function ProfileMediaEditor({
               onClick={openPicker}
             >
               <ImageIcon />
-              {changeLabel}
+              사진 변경
             </Button>
 
             <Button
@@ -200,7 +185,7 @@ export function ProfileMediaEditor({
               ) : (
                 <RotateCcwIcon />
               )}
-              기본 이미지로 변경하기
+              기본 이미지로 변경
             </Button>
           </div>
         </DialogContent>

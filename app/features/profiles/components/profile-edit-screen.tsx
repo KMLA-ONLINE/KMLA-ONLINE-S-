@@ -70,9 +70,7 @@ function ProfileEditForm({
   const errors = actionData?.errors ?? {};
   const academicProfile =
     profile.type === "student" || profile.type === "alumni";
-  const cohortInputRef = useRef<HTMLInputElement>(null);
   const returningInputRef = useRef<HTMLInputElement>(null);
-  const returningStateRef = useRef<HTMLSpanElement>(null);
 
   return (
     <Card className="-mx-3 gap-4 rounded-none border-x-0 py-4 sm:mx-0 sm:gap-6 sm:rounded-xl sm:border-x sm:py-6">
@@ -108,12 +106,7 @@ function ProfileEditForm({
               data-invalid={Boolean(errors.description)}
               className="sm:col-span-2"
             >
-              <div className="flex items-center justify-between gap-3">
-                <FieldLabel htmlFor="profile-description">소개</FieldLabel>
-                <span className="text-xs text-muted-foreground">
-                  최대 500자
-                </span>
-              </div>
+              <FieldLabel htmlFor="profile-description">소개</FieldLabel>
               <Textarea
                 id="profile-description"
                 name="description"
@@ -285,44 +278,10 @@ function ProfileEditForm({
 
           <section className="space-y-5 border-t pt-6">
             <div>
-              <h2 className="font-semibold">기본 정보 및 연락처</h2>
+              <h2 className="font-semibold">기본 정보</h2>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
-              {academicProfile ? (
-                <>
-                  <Field>
-                    <FieldLabel htmlFor="profile-cohort">기수</FieldLabel>
-                    <Input
-                      ref={cohortInputRef}
-                      id="profile-cohort"
-                      defaultValue={
-                        profile.cohort === null
-                          ? ""
-                          : profile.cohort +
-                            (values.isReturningStudent ? 0.5 : 0)
-                      }
-                      disabled
-                      readOnly
-                    />
-                  </Field>
-
-                  {profile.student_number ? (
-                    <Field>
-                      <FieldLabel htmlFor="profile-student-number">
-                        학번
-                      </FieldLabel>
-                      <Input
-                        id="profile-student-number"
-                        value={profile.student_number}
-                        disabled
-                        readOnly
-                      />
-                    </Field>
-                  ) : null}
-                </>
-              ) : null}
-
               <Field data-invalid={Boolean(errors.birthday)}>
                 <FieldLabel htmlFor="profile-birthday">생일</FieldLabel>
                 <Input
@@ -423,18 +382,6 @@ function ProfileEditForm({
                         if (returningInputRef.current) {
                           returningInputRef.current.value = next ? "on" : "";
                         }
-
-                        if (cohortInputRef.current && profile.cohort !== null) {
-                          cohortInputRef.current.value = String(
-                            profile.cohort + (next ? 0.5 : 0),
-                          );
-                        }
-
-                        if (returningStateRef.current) {
-                          returningStateRef.current.textContent = next
-                            ? "ON"
-                            : "OFF";
-                        }
                       }}
                     >
                       <span
@@ -442,13 +389,6 @@ function ProfileEditForm({
                         className="relative h-6 w-11 rounded-full bg-muted-foreground/30 transition-colors group-data-[state=on]:bg-primary"
                       >
                         <span className="absolute top-0.5 left-0.5 size-5 rounded-full bg-background shadow-sm transition-transform group-data-[state=on]:translate-x-5" />
-                      </span>
-
-                      <span
-                        ref={returningStateRef}
-                        className="w-7 text-xs font-semibold text-muted-foreground"
-                      >
-                        {values.isReturningStudent ? "ON" : "OFF"}
                       </span>
                     </button>
                   </div>

@@ -1,18 +1,22 @@
-import { MailIcon, PencilIcon, ShieldCheckIcon } from "lucide-react";
+import {
+  Building2Icon,
+  CakeIcon,
+  GraduationCapIcon,
+  UsersRoundIcon,
+  HouseIcon,
+  MailIcon,
+  PencilIcon,
+  PhoneIcon,
+  UserRoundIcon,
+} from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 
 import { ProfileMediaEditor } from "~/features/profiles/components/profile-media-editor";
 import type { AcceptedProfile } from "~/features/profiles/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
-import { Badge } from "~/shared/ui/badge";
 import { buttonVariants } from "~/shared/ui/button";
 import { Card, CardContent } from "~/shared/ui/card";
-
-const TYPE_LABELS: Record<AcceptedProfile["type"], string> = {
-  student: "재학생",
-  alumni: "졸업생",
-  teacher: "교사",
-};
 
 const TRACK_LABELS: Record<
   NonNullable<AcceptedProfile["academic_track"]>,
@@ -30,6 +34,7 @@ const GENDER_LABELS: Record<NonNullable<AcceptedProfile["gender"]>, string> = {
 interface ProfileFact {
   label: string;
   value: string | null;
+  icon: ReactNode;
   href?: string;
 }
 
@@ -59,36 +64,48 @@ export function ProfileDetail({
     profile.academic_track === null
       ? null
       : TRACK_LABELS[profile.academic_track],
+    profile.type === "teacher" ? "교사" : null,
   ].filter((value): value is string => value !== null);
 
   const hasCoverImage = Boolean(profile.cover_url?.trim());
   const heroBackground = hasCoverImage ? profile.cover_url : profile.avatar_url;
 
-  // 기수 / 계열은 이름 옆 summary에서 이미 보여주므로
-  // 정보 카드에서는 중복해서 표시하지 않는다.
   const facts: ProfileFact[] = [
     {
-      label: "성별",
-      value: profile.gender === null ? null : GENDER_LABELS[profile.gender],
+      label: "학번",
+      value: profile.student_number,
+      icon: <GraduationCapIcon aria-hidden />,
     },
-    { label: "학번", value: profile.student_number },
     {
       label: "반",
       value: profile.class_no === null ? null : `${profile.class_no}반`,
+      icon: <UsersRoundIcon aria-hidden />,
     },
-    { label: "부서", value: profile.department },
+    {
+      label: "부서",
+      value: profile.department,
+      icon: <Building2Icon aria-hidden />,
+    },
     {
       label: "기숙사",
       value: profile.dorm_room === null ? null : `${profile.dorm_room}호`,
+      icon: <HouseIcon aria-hidden />,
+    },
+    {
+      label: "성별",
+      value: profile.gender === null ? null : GENDER_LABELS[profile.gender],
+      icon: <UserRoundIcon aria-hidden />,
     },
     {
       label: "생일",
       value:
         profile.birthday === null ? null : formatBirthday(profile.birthday),
+      icon: <CakeIcon aria-hidden />,
     },
     {
       label: "전화번호",
       value: profile.phone_number,
+      icon: <PhoneIcon aria-hidden />,
       href: profile.phone_number
         ? `tel:${profile.phone_number.replace(/[ -]/g, "")}`
         : undefined,
@@ -96,16 +113,21 @@ export function ProfileDetail({
     {
       label: "이메일",
       value: profile.contact_email,
+      icon: <MailIcon aria-hidden />,
       href: profile.contact_email
         ? `mailto:${profile.contact_email}`
         : undefined,
     },
   ];
 
+  const visibleFacts = facts.filter(
+    (fact) => fact.value !== null && fact.value.trim() !== "",
+  );
+
   return (
-    <main className="px-3 pb-6 md:px-0 md:pb-10">
-      <div className="w-full space-y-2.5 md:space-y-6">
-        <section className="-mx-3 overflow-hidden border-t bg-background sm:mx-0 sm:rounded-2xl sm:border">
+    <main className="px-3 pb-4 md:px-0 md:pb-10">
+      <div className="w-full space-y-2 md:space-y-6">
+        <section className="-mx-3 overflow-hidden bg-background sm:mx-0 sm:rounded-2xl sm:border">
           {/* cover */}
           <div className="relative aspect-[3/1] w-full overflow-hidden bg-muted">
             {heroBackground ? (
@@ -135,15 +157,15 @@ export function ProfileDetail({
           </div>
 
           {/* profile identity */}
-          <div className="bg-background px-3 pb-3 sm:px-8 sm:pb-7">
-            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-5 sm:gap-y-3">
+          <div className="bg-background px-3 pb-2.5 sm:px-8 sm:pb-7">
+            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-0.5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-5 sm:gap-y-3">
               {/* avatar */}
-              <div className="relative z-10 row-span-2 -mt-10 w-fit shrink-0 rounded-full border-4 border-background bg-background shadow-sm sm:row-span-1 sm:-mt-14">
+              <div className="relative z-10 row-span-2 -mt-9 w-fit shrink-0 rounded-full border-[3px] border-background bg-background shadow-sm sm:row-span-1 sm:-mt-14 sm:border-4">
                 <div className="relative">
                   <UserAvatar
                     src={profile.avatar_url}
                     name={profile.name}
-                    className="size-24 sm:size-32"
+                    className="size-[5.5rem] sm:size-32"
                   />
 
                   {isOwnProfile ? (
@@ -157,24 +179,13 @@ export function ProfileDetail({
               </div>
 
               {/* name / summary */}
-              <div className="min-w-0 pt-3 sm:pt-4">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <h1 className="min-w-0 text-xl leading-tight font-semibold tracking-tight sm:text-3xl">
-                    {profile.name}
-                  </h1>
-
-                  <Badge variant="secondary">{TYPE_LABELS[profile.type]}</Badge>
-
-                  {profile.role === "admin" ? (
-                    <Badge variant="outline">
-                      <ShieldCheckIcon />
-                      관리자
-                    </Badge>
-                  ) : null}
-                </div>
+              <div className="min-w-0 pt-2.5 sm:pt-4">
+                <h1 className="min-w-0 truncate text-[1.35rem] leading-tight font-semibold tracking-tight sm:text-3xl">
+                  {profile.name}
+                </h1>
 
                 {schoolSummary.length > 0 ? (
-                  <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
+                  <p className="mt-1 text-[13px] leading-5 text-muted-foreground sm:mt-1.5 sm:text-sm">
                     {schoolSummary.join(" · ")}
                   </p>
                 ) : null}
@@ -191,7 +202,7 @@ export function ProfileDetail({
                     variant: "default",
                     size: "sm",
                     className:
-                      "col-span-2 h-10 w-full justify-center py-2 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:w-auto sm:self-center",
+                      "col-span-2 mt-1 h-10 w-full justify-center sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:mt-4 sm:h-auto sm:w-auto sm:self-start sm:py-2",
                   })}
                 >
                   <PencilIcon />
@@ -201,7 +212,7 @@ export function ProfileDetail({
             </div>
 
             {profile.description ? (
-              <p className="mt-4 max-w-3xl text-sm leading-6 whitespace-pre-wrap sm:mt-5 sm:text-base">
+              <p className="mt-3 max-w-3xl text-sm leading-5.5 whitespace-pre-wrap sm:mt-5 sm:text-base sm:leading-6">
                 {profile.description}
               </p>
             ) : null}
@@ -209,65 +220,50 @@ export function ProfileDetail({
         </section>
 
         {/* content */}
-        <div className="grid gap-3 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start lg:gap-4">
+        <div className="grid gap-2.5 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start lg:gap-4">
           <section className="min-w-0 space-y-1.5 sm:space-y-2">
-            <h2 className="px-1 text-lg font-semibold tracking-tight sm:text-xl">
+            <h2 className="px-0.5 text-[17px] font-semibold tracking-tight sm:px-1 sm:text-xl">
               정보
             </h2>
 
-            <Card className="h-fit gap-0 rounded-xl py-0 shadow-none sm:shadow-sm">
-              <CardContent className="px-3 py-3 sm:px-6 sm:py-5">
-                <dl className="divide-y divide-border/70">
-                  {facts
-                    .filter((fact) => fact.value !== null)
-                    .map((fact) => (
-                      <div
-                        key={fact.label}
-                        className="grid grid-cols-[60px_minmax(0,1fr)] gap-3 py-2.5 first:pt-0 last:pb-0 sm:grid-cols-[72px_minmax(0,1fr)] sm:py-3"
-                      >
-                        <dt className="text-sm text-muted-foreground">
-                          {fact.label}
-                        </dt>
+            <Card className="-mx-3 h-fit gap-0 rounded-none border-x-0 py-0 shadow-none sm:mx-0 sm:rounded-xl sm:border sm:shadow-sm">
+              <CardContent className="px-3 py-2.5 sm:px-6 sm:py-5">
+                <div className="divide-y divide-border/70">
+                  {visibleFacts.map((fact) => (
+                    <div
+                      key={fact.label}
+                      className="flex min-w-0 items-center gap-2.5 py-2.5 first:pt-0 last:pb-0 sm:gap-3 sm:py-3"
+                    >
+                      <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground sm:size-8 [&_svg]:size-3.5 sm:[&_svg]:size-4">
+                        {fact.icon}
+                      </span>
 
-                        <dd className="min-w-0 text-sm font-medium break-words">
-                          {fact.href ? (
-                            <a
-                              href={fact.href}
-                              className="inline-flex items-center gap-1.5 hover:underline"
-                            >
-                              {fact.label === "이메일" ? (
-                                <MailIcon className="size-3.5" aria-hidden />
-                              ) : null}
+                      <div className="min-w-0 text-sm font-medium break-words">
+                        <span className="sr-only">{fact.label}: </span>
 
-                              {fact.value}
-                            </a>
-                          ) : (
-                            fact.value
-                          )}
-                        </dd>
+                        {fact.href ? (
+                          <a href={fact.href} className="hover:underline">
+                            {fact.value}
+                          </a>
+                        ) : (
+                          fact.value
+                        )}
                       </div>
-                    ))}
-                </dl>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </section>
 
           <section className="min-w-0 space-y-1.5 sm:space-y-2">
-            <h2 className="px-1 text-lg font-semibold tracking-tight sm:text-xl">
+            <h2 className="px-0.5 text-[17px] font-semibold tracking-tight sm:px-1 sm:text-xl">
               게시물
             </h2>
 
-            <Card className="gap-0 rounded-xl py-0 shadow-none sm:shadow-sm">
-              <CardContent className="px-3 py-3 sm:px-6 sm:py-5">
-                <div className="flex min-h-44 items-center justify-center rounded-lg bg-muted/35 px-4 py-8 text-center sm:min-h-64 sm:px-6 sm:py-12">
-                  <div>
-                    <p className="font-medium">아직 게시물이 없습니다.</p>
-
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      개인 게시물이 추가되면 이곳에 최신순으로 표시됩니다.
-                    </p>
-                  </div>
-                </div>
+            <Card className="-mx-3 gap-0 rounded-none border-x-0 py-0 shadow-none sm:mx-0 sm:rounded-xl sm:border sm:shadow-sm">
+              <CardContent className="flex min-h-24 items-center justify-center px-3 py-6 text-center text-sm text-muted-foreground sm:min-h-56 sm:px-6 sm:py-10">
+                아직 게시물이 없습니다.
               </CardContent>
             </Card>
           </section>
