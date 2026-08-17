@@ -165,7 +165,7 @@ export function GroupDetailScreen({
           <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 lg:sticky lg:top-4">
             <h2 className="text-sm font-semibold">그룹 정보</h2>
             <p className="text-sm leading-6 text-muted-foreground">
-              {group.description || "아직 그룹 설명이 없습니다."}
+              {group.description}
             </p>
             <InfoRow icon={<LandmarkIcon />}>
               {group.kind === "official" ? "공식 그룹" : "비공식 그룹"}

@@ -36,6 +36,11 @@ export function GroupSummaryRow({
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressStart = useRef({ x: 0, y: 0 });
   const suppressNextClick = useRef(false);
+  const memberCountLabel =
+    group.kind === "unofficial"
+      ? `멤버 ${group.member_count.toLocaleString("ko-KR")}명`
+      : null;
+  const description = group.description?.trim() || null;
 
   const cancelLongPress = () => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
@@ -123,14 +128,15 @@ export function GroupSummaryRow({
             ) : null}
             멤버 {group.member_count.toLocaleString("ko-KR")}명
           </p>
-          <p className="hidden truncate text-xs text-muted-foreground md:block">
-            {group.kind === "unofficial" ? (
-              <span className="tabular-nums">
-                멤버 {group.member_count.toLocaleString("ko-KR")}명 ·{" "}
-              </span>
-            ) : null}
-            {group.description || "아직 그룹 설명이 없습니다."}
-          </p>
+          {memberCountLabel || description ? (
+            <p className="hidden truncate text-xs text-muted-foreground md:block">
+              {memberCountLabel ? (
+                <span className="tabular-nums">{memberCountLabel}</span>
+              ) : null}
+              {memberCountLabel && description ? " · " : null}
+              {description}
+            </p>
+          ) : null}
           {actionError ? (
             <p role="alert" className="mt-1 text-xs text-destructive">
               {actionError}
