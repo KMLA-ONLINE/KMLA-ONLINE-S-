@@ -256,7 +256,7 @@ function ProfileEditForm({
                         name="dormRoom"
                         type="text"
                         inputMode="numeric"
-                        pattern="(?:[1-9][0-9]{0,2}|100[0-4])"
+                        pattern="(?:10[1-9]|1[1-9][0-9]|[2-9][0-9]{2}|100[0-8])"
                         maxLength={4}
                         defaultValue={values.dormRoom ?? ""}
                         placeholder="예: 100"
@@ -268,8 +268,8 @@ function ProfileEditForm({
 
                           if (value === "0") value = "";
 
-                          if (Number(value) > 1004) {
-                            value = "1004";
+                          if (Number(value) > 1008) {
+                            value = "1008";
                           }
 
                           event.currentTarget.value = value;

@@ -66,5 +66,5 @@ alter table public.profiles
 add constraint profiles_dorm_room_range
 check (
   dorm_room is null
-  or dorm_room between 1 and 1004
+  or dorm_room between 101 and 1008
 );
