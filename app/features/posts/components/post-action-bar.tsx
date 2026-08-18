@@ -24,7 +24,7 @@ const ACTION_CLASS =
  *
  * 댓글은 목록에서는 상세로 보내고(`commentTo`), 상세에서는 입력창으로 보낸다(`onComment`).
  */
-export function GroupPostActionBar({
+export function PostActionBar({
   postId,
   reaction,
   sharePath,

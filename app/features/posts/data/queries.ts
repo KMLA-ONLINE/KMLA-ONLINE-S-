@@ -8,12 +8,16 @@ import type {
   PostCommentPage,
   PostCursor,
   PostReactor,
+  ProfilePost,
+  ProfilePostCursor,
+  ProfilePostPage,
 } from "~/features/posts/model/types";
 import type { PostAttachment } from "~/features/posts/model/types";
 import { createPostAttachmentUrls } from "~/features/posts/data/files";
 import { getSupabase } from "~/shared/supabase/client";
 
 export const GROUP_POST_PAGE_SIZE = 12;
+export const PROFILE_POST_PAGE_SIZE = 12;
 export const POST_COMMENT_PAGE_SIZE = 20;
 
 async function attachFiles<T extends { post_id: string }>(
@@ -125,6 +129,50 @@ export async function getGroupPost(
   postId: string,
 ): Promise<GroupPostDetail | null> {
   const { data, error } = await getSupabase().rpc("get_group_post", {
+    p_post_id: postId,
+  });
+  if (error) throw error;
+  const post = data?.[0];
+  if (!post) return null;
+  return { ...post, attachments: await listPostAttachments(postId) };
+}
+
+/**
+ * 프로필 타임라인 한 페이지 (기능 명세 §12.4).
+ *
+ * 그룹 목록과 같은 방식으로 한 건을 더 받아 다음 커서를 정한다. 고정 게시물이 없으므로
+ * 커서는 `(published_at, post_id)` 두 값이면 충분하다.
+ *
+ * 타임라인을 화면과 같은 공개 ID로 가리키므로 loader가 프로필 조회를 기다리지 않는다 —
+ * 프로필과 타임라인이 나란히 나간다.
+ */
+export async function listProfilePosts(
+  timelinePubId: string,
+  cursor?: ProfilePostCursor | null,
+): Promise<ProfilePostPage> {
+  const { data, error } = await getSupabase().rpc("list_profile_posts", {
+    p_timeline_pub_id: timelinePubId,
+    p_cursor_published_at: cursor?.publishedAt,
+    p_cursor_post_id: cursor?.postId,
+    p_limit: PROFILE_POST_PAGE_SIZE + 1,
+  });
+  if (error) throw error;
+  const rows = data ?? [];
+  const posts = await attachFiles(rows.slice(0, PROFILE_POST_PAGE_SIZE));
+  const last = posts.at(-1);
+  return {
+    posts,
+    nextCursor:
+      rows.length > PROFILE_POST_PAGE_SIZE && last
+        ? { publishedAt: last.published_at, postId: last.post_id }
+        : null,
+  };
+}
+
+export async function getProfilePost(
+  postId: string,
+): Promise<ProfilePost | null> {
+  const { data, error } = await getSupabase().rpc("get_profile_post", {
     p_post_id: postId,
   });
   if (error) throw error;

@@ -14,170 +14,91 @@ import {
 } from "react-router";
 
 import {
-  createGroupPostWithAttachments,
+  PostAttachmentEditor,
+  PostFormField,
+} from "~/features/posts/components/post-attachment-editor";
+import { PostBodyInput } from "~/features/posts/components/post-body-input";
+import {
   createPostUploadSession,
-  updateGroupPostWithAttachments,
+  createProfilePostWithAttachments,
+  updateProfilePostWithAttachments,
 } from "~/features/posts/data/mutations";
 import {
   preparePostFiles,
   releasePostFile,
 } from "~/features/posts/model/attachments";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
-import {
-  PostAttachmentEditor,
-  PostFormField,
-} from "~/features/posts/components/post-attachment-editor";
-import { PostBodyInput } from "~/features/posts/components/post-body-input";
-import type { CommentViewer } from "~/features/posts/components/comment-composer";
-import { PostDetail } from "~/features/posts/components/post-detail";
 import type {
-  GroupCategory,
-  GroupPostDetail,
-  PostCommentPage,
-  PostFormErrors,
-  PostFormValues,
-  PostIdentity,
   PostSaveProgress,
+  PostVisibility,
   PreparedPostFile,
+  ProfilePost,
+  ProfilePostFormErrors,
+  ProfilePostFormValues,
 } from "~/features/posts/model/types";
 import {
-  hasPostFormErrors,
-  readPostForm,
-  validatePostForm,
+  hasProfilePostFormErrors,
+  readProfilePostForm,
+  validateProfilePostForm,
 } from "~/features/posts/model/validation";
 import { useFileDrop } from "~/shared/hooks/use-file-drop";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
-import { cn } from "~/shared/lib/utils";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { Button } from "~/shared/ui/button";
-import { Input } from "~/shared/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 import { Spinner } from "~/shared/ui/spinner";
 
-export function needsPostIdentityConfirmation(
-  identity: PostIdentity,
-  alwaysAnonymous: boolean,
-): boolean {
-  return identity === "staff" || (identity === "anonymous" && !alwaysAnonymous);
-}
-
-export function isPostDraftDirty({
-  mode: _mode,
+export function isProfilePostDraftDirty({
   initial,
-  title,
   body,
-  categoryId,
-  authorIdentity,
+  visibility,
   attachmentsChanged,
 }: {
-  mode: "create" | "edit";
-  initial: PostFormValues;
-  title: string;
+  initial: ProfilePostFormValues;
   body: string;
-  categoryId: string;
-  authorIdentity: PostIdentity;
+  visibility: PostVisibility;
   attachmentsChanged: boolean;
 }): boolean {
   return (
-    title !== initial.title ||
     body !== initial.body ||
-    categoryId !== initial.categoryId ||
-    authorIdentity !== initial.authorIdentity ||
+    visibility !== initial.visibility ||
     attachmentsChanged
   );
 }
 
-export function GroupPostOverlay({
+/**
+ * 개인 게시물 작성·수정 화면 (기능 명세 §8.4, §8.10).
+ *
+ * 그룹 편집기와 같은 전체화면 껍데기, 같은 본문 입력기, 같은 첨부 편집기를 쓴다. 입력 항목만
+ * 다르다 — 제목·카테고리·작성 신원이 없고 공개 범위가 그 자리에 온다.
+ *
+ * 공개 범위는 자기 타임라인 글에서만 고를 수 있다. 남의 타임라인에 쓴 글은 언제나 전체
+ * 공개이므로 고르게 두면 지킬 수 없는 약속이 된다 — 서버도 같은 이유로 되돌린다.
+ */
+export function ProfilePostEditor({
   mode,
-  slug,
-  groupName,
-  groupId,
-  categories = [],
+  timelinePubId,
+  timelineName,
+  canChooseVisibility,
   post,
-  identities = ["identified"],
-  alwaysAnonymous = false,
-  comments,
-  viewer,
-}: {
-  mode: "create" | "detail" | "edit";
-  slug: string;
-  groupName: string;
-  groupId: string;
-  categories?: GroupCategory[];
-  post?: GroupPostDetail | null;
-  identities?: PostIdentity[];
-  alwaysAnonymous?: boolean;
-  /** 상세 모드에서만 쓴다. loader가 게시물과 함께 첫 페이지를 내려준다. */
-  comments?: PostCommentPage;
-  /** 상세 모드에서만 쓴다. 댓글 입력창 왼쪽 아바타에 들어간다. */
-  viewer?: CommentViewer;
-}) {
-  // 그룹으로 `navigate`하면 히스토리에 작성 화면이 남아서, 뒤로 가기를 누른 사용자가 방금
-  // 버린 초안을 다시 마주하게 된다. 들어온 경로를 되감는 게 맞다.
-  const close = useModalClose(`/groups/${slug}`);
-
-  if (mode === "detail") {
-    return post && comments && viewer ? (
-      <PostDetail
-        post={post}
-        slug={slug}
-        viewer={viewer}
-        identities={identities}
-        comments={comments}
-      />
-    ) : null;
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex h-dvh flex-col bg-background">
-      <PostEditor
-        mode={mode}
-        slug={slug}
-        groupName={groupName}
-        groupId={groupId}
-        categories={categories}
-        post={post}
-        identities={identities}
-        alwaysAnonymous={alwaysAnonymous}
-        onClose={close}
-      />
-    </div>
-  );
-}
-
-function PostEditor({
-  mode,
-  slug,
-  groupName,
-  groupId,
-  categories,
-  post,
-  identities,
-  alwaysAnonymous,
-  onClose,
 }: {
   mode: "create" | "edit";
-  slug: string;
-  groupName: string;
-  groupId: string;
-  categories: GroupCategory[];
-  post?: GroupPostDetail | null;
-  identities: PostIdentity[];
-  alwaysAnonymous: boolean;
-  onClose: () => void;
+  timelinePubId: string;
+  timelineName: string;
+  canChooseVisibility: boolean;
+  post?: ProfilePost | null;
 }) {
   const navigate = useNavigate();
   const revalidator = useRevalidator();
-  // 저장은 이 컴포넌트가 RPC로 직접 돌린다(`AGENTS.md`: 파일 처리·진행률·재시도는 소유
-  // 기능에 둔다). route action으로 왕복하지 않으므로 되돌아온 값이 아니라 게시물 자체가
-  // 언제나 초기값이다.
-  const initial: PostFormValues = {
-    title: post?.title ?? "",
+  // 프로필로 `navigate`하면 히스토리에 작성 화면이 남아서, 뒤로 가기를 누른 사용자가 방금
+  // 버린 초안을 다시 마주하게 된다. 들어온 경로를 되감는 게 맞다.
+  const close = useModalClose(`/profile/${timelinePubId}`);
+
+  const initial: ProfilePostFormValues = {
     body: post?.body ?? "",
-    categoryId: post?.category_id ?? "",
-    authorIdentity: post?.author_identity ?? identities[0],
+    visibility: post?.visibility ?? "public",
   };
-  const [formErrors, setFormErrors] = useState<PostFormErrors>({});
+  const [formErrors, setFormErrors] = useState<ProfilePostFormErrors>({});
   const [existing, setExisting] = useState(post?.attachments ?? []);
   const [removedIds, setRemovedIds] = useState(new Set<string>());
   const [additions, setAdditions] = useState<PreparedPostFile[]>([]);
@@ -187,14 +108,9 @@ function PostEditor({
   const additionsRef = useRef(additions);
   additionsRef.current = additions;
   const bodyRef = useRef(initial.body);
-  const [draftTitle, setDraftTitle] = useState(initial.title);
   const [draftBody, setDraftBody] = useState(initial.body);
-  const [draftCategoryId, setDraftCategoryId] = useState(initial.categoryId);
-  const [draftIdentity, setDraftIdentity] = useState(initial.authorIdentity);
+  const [draftVisibility, setDraftVisibility] = useState(initial.visibility);
   const [saving, setSaving] = useState(false);
-  const [pendingIdentity, setPendingIdentity] = useState<PostFormValues | null>(
-    null,
-  );
   const [progress, setProgress] = useState<PostSaveProgress | null>(null);
   const session = useRef(createPostUploadSession());
   const totalCount = existing.length + additions.length;
@@ -207,13 +123,10 @@ function PostEditor({
     attachmentOrder.some(
       (key, index) => key !== originalAttachmentOrder[index],
     );
-  const dirty = isPostDraftDirty({
-    mode,
+  const dirty = isProfilePostDraftDirty({
     initial,
-    title: draftTitle,
     body: draftBody,
-    categoryId: draftCategoryId,
-    authorIdentity: draftIdentity,
+    visibility: draftVisibility,
     attachmentsChanged,
   });
   const blocker = useBlocker(
@@ -268,21 +181,21 @@ function PostEditor({
     (files) => void addFiles(files, "mixed"),
   );
 
-  const save = async (nextValues: PostFormValues) => {
+  const save = async (nextValues: ProfilePostFormValues) => {
     setSaving(true);
     setFormErrors({});
     try {
       const onProgress = (state: PostSaveProgress) => setProgress(state);
       const postId =
         mode === "create"
-          ? await createGroupPostWithAttachments(
-              groupId,
+          ? await createProfilePostWithAttachments(
+              timelinePubId,
               nextValues,
               additions,
               session.current,
               onProgress,
             )
-          : await updateGroupPostWithAttachments(
+          : await updateProfilePostWithAttachments(
               post!.post_id,
               nextValues,
               existing,
@@ -294,7 +207,9 @@ function PostEditor({
             );
       additions.forEach(releasePostFile);
       await revalidator.revalidate();
-      void navigate(`/groups/${slug}/posts/${postId}`, { replace: true });
+      void navigate(`/profile/${timelinePubId}/posts/${postId}`, {
+        replace: true,
+      });
     } catch (error) {
       setFormErrors({
         form:
@@ -311,24 +226,16 @@ function PostEditor({
     event.preventDefault();
     if (saving) return;
     // 본문만 폼 밖에서 온다 — Markdown 편집기는 네이티브 폼 필드가 아니라 ref에 싣는다.
-    const nextValues: PostFormValues = {
-      ...readPostForm(new FormData(event.currentTarget)),
+    const nextValues: ProfilePostFormValues = {
+      ...readProfilePostForm(new FormData(event.currentTarget)),
       body: normalizePostMarkdownSource(bodyRef.current),
     };
-    const nextErrors = validatePostForm(
+    const nextErrors = validateProfilePostForm(
       nextValues,
       totalCount,
-      mode === "create" ? identities : undefined,
-      categories.map((category) => category.id),
+      canChooseVisibility,
     );
-    if (hasPostFormErrors(nextErrors)) return setFormErrors(nextErrors);
-    if (
-      mode === "create" &&
-      needsPostIdentityConfirmation(nextValues.authorIdentity, alwaysAnonymous)
-    ) {
-      setPendingIdentity(nextValues);
-      return;
-    }
+    if (hasProfilePostFormErrors(nextErrors)) return setFormErrors(nextErrors);
     void save(nextValues);
   };
 
@@ -364,7 +271,7 @@ function PostEditor({
         : "저장 중";
 
   return (
-    <>
+    <div className="fixed inset-0 z-50 flex h-dvh flex-col bg-background">
       {/*
         제출은 이 폼이 직접 처리한다. react-router의 `<Form>`을 쓰면 route action으로 간다고
         읽히지만, 첨부 업로드는 초안 생성→prepare→upload→finalize→commit으로 이어지는
@@ -374,16 +281,12 @@ function PostEditor({
         onSubmit={(event) => void submit(event)}
         onChange={(event) => {
           const target = event.target;
-          if (!(
-            target instanceof HTMLInputElement ||
-            target instanceof HTMLSelectElement
-          )) {
-            return;
+          if (
+            target instanceof HTMLSelectElement &&
+            target.name === "visibility"
+          ) {
+            setDraftVisibility(target.value as PostVisibility);
           }
-          if (target.name === "title") setDraftTitle(target.value);
-          if (target.name === "categoryId") setDraftCategoryId(target.value);
-          if (target.name === "authorIdentity")
-            setDraftIdentity(target.value as PostIdentity);
         }}
         className="flex min-h-0 flex-1 flex-col"
         {...dropHandlers}
@@ -395,7 +298,7 @@ function PostEditor({
               variant="ghost"
               size="icon"
               aria-label="작성 화면 닫기"
-              onClick={onClose}
+              onClick={close}
             >
               <ArrowLeftIcon />
             </Button>
@@ -404,7 +307,7 @@ function PostEditor({
                 {mode === "create" ? "새 게시물" : "게시물 수정"}
               </h1>
               <p className="truncate text-xs text-muted-foreground">
-                {groupName}
+                {timelineName}님의 타임라인
               </p>
             </div>
             <Button type="submit" disabled={saving}>
@@ -421,68 +324,27 @@ function PostEditor({
         */}
         <main className="min-h-0 flex-1 [scrollbar-gutter:stable_both-edges] overflow-y-auto md:bg-muted/40">
           <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-5 sm:px-6 sm:py-8 md:border-x md:bg-background md:shadow-sm">
-            <div className="grid gap-2">
-              <div
-                className={cn(
-                  "grid gap-2",
-                  mode === "create" && identities.length > 1 && "grid-cols-2",
-                )}
-              >
-                <PostFormField error={formErrors?.categoryId}>
-                  <NativeSelect
-                    name="categoryId"
-                    defaultValue={initial.categoryId}
-                    aria-label="카테고리"
-                    className="w-full"
-                  >
-                    <NativeSelectOption value="">미분류</NativeSelectOption>
-                    {categories.map((category) => (
-                      <NativeSelectOption key={category.id} value={category.id}>
-                        {category.name}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
-                </PostFormField>
-                {mode === "create" && identities.length > 1 ? (
-                  <PostFormField error={formErrors?.authorIdentity}>
-                    <NativeSelect
-                      name="authorIdentity"
-                      defaultValue={initial.authorIdentity}
-                      aria-label="작성 신원"
-                      className="w-full"
-                    >
-                      {identities.map((identity) => (
-                        <NativeSelectOption key={identity} value={identity}>
-                          {identity === "identified"
-                            ? "실명"
-                            : identity === "anonymous"
-                              ? "익명"
-                              : "운영진"}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                  </PostFormField>
-                ) : (
-                  <input
-                    type="hidden"
-                    name="authorIdentity"
-                    value={initial.authorIdentity}
-                  />
-                )}
-              </div>
-
-              <PostFormField error={formErrors?.title}>
-                <Input
-                  name="title"
-                  defaultValue={initial.title}
-                  maxLength={100}
-                  required
-                  aria-label="제목"
-                  placeholder="제목"
-                  className="h-9 rounded-md text-base font-medium"
-                />
+            {canChooseVisibility ? (
+              <PostFormField error={formErrors?.visibility}>
+                <NativeSelect
+                  name="visibility"
+                  defaultValue={initial.visibility}
+                  aria-label="공개 범위"
+                  className="w-full sm:w-56"
+                >
+                  <NativeSelectOption value="public">
+                    전체 공개
+                  </NativeSelectOption>
+                  <NativeSelectOption value="private">
+                    비공개
+                  </NativeSelectOption>
+                </NativeSelect>
               </PostFormField>
-            </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                다른 사용자의 타임라인에 남기는 게시물은 전체 공개됩니다.
+              </p>
+            )}
 
             <div className="flex min-h-[24rem] flex-1 flex-col pt-5">
               <PostFormField error={formErrors?.body}>
@@ -495,6 +357,7 @@ function PostEditor({
                 />
               </PostFormField>
             </div>
+
             <PostAttachmentEditor
               existing={existing}
               additions={additions}
@@ -514,28 +377,7 @@ function PostEditor({
           </div>
         </main>
       </form>
-      {pendingIdentity ? (
-        <ConfirmDialog
-          title={
-            pendingIdentity.authorIdentity === "staff"
-              ? "운영진 명의로 작성"
-              : "익명으로 작성"
-          }
-          description={
-            pendingIdentity.authorIdentity === "staff"
-              ? "이 게시물은 그룹 운영진 명의로 표시됩니다. 게시할까요?"
-              : "이 게시물은 작성자의 이름을 표시하지 않습니다. 익명으로 게시할까요?"
-          }
-          confirmLabel="게시"
-          pending={saving}
-          onCancel={() => setPendingIdentity(null)}
-          onConfirm={() => {
-            const values = pendingIdentity;
-            setPendingIdentity(null);
-            void save(values);
-          }}
-        />
-      ) : null}
+
       {blocker.state === "blocked" ? (
         <ConfirmDialog
           title={
@@ -552,6 +394,6 @@ function PostEditor({
           onConfirm={() => blocker.proceed()}
         />
       ) : null}
-    </>
+    </div>
   );
 }

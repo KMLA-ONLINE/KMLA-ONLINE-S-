@@ -36,7 +36,13 @@ function DetailHarness({
   return (
     <>
       <span data-testid="location-search">{location.search}</span>
-      <GroupDetailScreen group={group} profileId={1} isTeacher={isTeacher} />
+      <GroupDetailScreen
+        group={group}
+        profileId={1}
+        viewerName="홍길동"
+        viewerAvatarUrl={null}
+        isTeacher={isTeacher}
+      />
     </>
   );
 }

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(33);
 
 select is(
   enum_range(null::public.post_kind)::text,
@@ -315,6 +315,41 @@ select lives_ok(
   'a private profile post may target its author'
 );
 
+-- 아래 읽기 검증은 인증 사용자가 붙어 있는 프로필로만 할 수 있다. 자기 비공개 글을
+-- 스스로 읽는 경로를 확인하려면 그 사용자의 비공개 글이 하나 필요하다.
+insert into public.posts (
+  id,
+  kind,
+  timeline_profile_id,
+  author_identity,
+  display_author_profile_id,
+  visibility,
+  published_at
+)
+select
+  '70000000-0000-0000-0000-000000000006',
+  'profile',
+  profile.id,
+  'identified',
+  profile.id,
+  'private',
+  now()
+from public.profiles as profile
+where profile.auth_user_id = '10000000-0000-0000-0000-000000000001';
+
+-- 실제 쓰기 경로는 게시물과 작성자 행을 함께 넣는다. 읽기 정책이 작성자 판정을 거치므로
+-- 여기서도 같이 넣어 준다.
+insert into private.post_authors (post_id, profile_id)
+select
+  post.id,
+  post.display_author_profile_id
+from public.posts as post
+where post.id in (
+  '70000000-0000-0000-0000-000000000004',
+  '70000000-0000-0000-0000-000000000005',
+  '70000000-0000-0000-0000-000000000006'
+);
+
 select throws_ok(
   $$insert into public.posts (
       kind,
@@ -437,10 +472,32 @@ select set_config(
 );
 set local role authenticated;
 
+-- 그룹 글 3건 + 남의 타임라인에 달린 전체 공개 개인 글 1건 + 내 비공개 개인 글 1건
+-- (기능 명세 §8.4, §12.4).
 select is(
   (select count(*) from public.posts),
-  3::bigint,
-  'authenticated members can read published posts in their groups'
+  5::bigint,
+  'accepted users read group posts, public profile posts, and their own private ones'
+);
+
+select is(
+  (
+    select count(*)
+    from public.posts
+    where id = '70000000-0000-0000-0000-000000000005'
+  ),
+  0::bigint,
+  'another user private profile post stays hidden'
+);
+
+select is(
+  (
+    select count(*)
+    from public.posts
+    where id = '70000000-0000-0000-0000-000000000006'
+  ),
+  1::bigint,
+  'the author reads their own private profile post'
 );
 
 select throws_ok(

@@ -7,6 +7,7 @@ import type {
   PostReaction,
   PostSaveProgress,
   PreparedPostFile,
+  ProfilePostFormValues,
   ReactionSummary,
 } from "~/features/posts/model/types";
 import { uploadPostAttachment } from "~/features/posts/data/files";
@@ -174,6 +175,30 @@ async function uploadPreparedFiles(
   return ids;
 }
 
+/**
+ * 화면이 들고 있던 표시 순서를 커밋이 받는 첨부 ID 배열로 옮긴다.
+ *
+ * 화면의 순서 배열은 기존 첨부의 ID와 아직 업로드되지 않은 새 파일의 로컬 key가 섞여 있다.
+ * 업로드가 끝나야 새 파일의 ID가 정해지므로 이 변환은 업로드 뒤에만 할 수 있다.
+ */
+function resolveAttachmentOrder(
+  order: string[],
+  existing: PostAttachment[],
+  removedIds: Set<string>,
+  additions: PreparedPostFile[],
+  addedIds: string[],
+): string[] {
+  const addedByKey = new Map(
+    additions.map((item, index) => [item.key, addedIds[index]]),
+  );
+  const existingIds = new Set(existing.map((item) => item.attachment_id));
+  return order.flatMap((key) => {
+    if (existingIds.has(key) && !removedIds.has(key)) return [key];
+    const addedId = addedByKey.get(key);
+    return addedId ? [addedId] : [];
+  });
+}
+
 export async function createGroupPostWithAttachments(
   groupId: string,
   values: PostFormValues,
@@ -226,18 +251,113 @@ export async function updateGroupPostWithAttachments(
     session,
     onProgress,
   );
-  const addedByKey = new Map(
-    additions.map((item, index) => [item.key, addedIds[index]]),
+  const orderedIds = resolveAttachmentOrder(
+    order,
+    existing,
+    removedIds,
+    additions,
+    addedIds,
   );
-  const existingIds = new Set(existing.map((item) => item.attachment_id));
-  const orderedIds = order.flatMap((key) => {
-    if (existingIds.has(key) && !removedIds.has(key)) return [key];
-    const addedId = addedByKey.get(key);
-    return addedId ? [addedId] : [];
-  });
   onProgress?.("updating", 0, additions.length);
   await commitGroupPost(postId, values, orderedIds, false);
   return postId;
+}
+
+/**
+ * 개인 게시물 작성 (기능 명세 §8.4).
+ *
+ * 그룹 게시물과 같은 초안→업로드→커밋 흐름을 쓴다. 첨부 업로드가 부모 게시물 UUID를 먼저
+ * 요구하기 때문이다. 다른 점은 커밋에 제목·카테고리 대신 공개 범위가 들어간다는 것뿐이라
+ * 업로드 단계는 `uploadPreparedFiles()`를 그대로 공유한다.
+ */
+export async function createProfilePost(
+  timelinePubId: string,
+  visibility: ProfilePostFormValues["visibility"],
+): Promise<string> {
+  const { data, error } = await getSupabase().rpc("create_profile_post", {
+    p_timeline_pub_id: timelinePubId,
+    p_visibility: visibility,
+  });
+  if (error) throw error;
+  return data;
+}
+
+async function commitProfilePost(
+  postId: string,
+  values: ProfilePostFormValues,
+  attachmentIds: string[],
+  publish: boolean,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("commit_profile_post", {
+    p_post_id: postId,
+    p_body: values.body,
+    p_attachment_ids: attachmentIds,
+    p_publish: publish,
+    p_visibility: values.visibility,
+  });
+  if (error) throw error;
+}
+
+export async function createProfilePostWithAttachments(
+  timelinePubId: string,
+  values: ProfilePostFormValues,
+  files: PreparedPostFile[],
+  session: PostUploadSession,
+  onProgress?: (
+    progress: PostSaveProgress,
+    completed: number,
+    total: number,
+  ) => void,
+): Promise<string> {
+  onProgress?.("creating", 0, files.length);
+  const postId =
+    session.postId ??
+    (await createProfilePost(timelinePubId, values.visibility));
+  session.postId = postId;
+  const ids = await uploadPreparedFiles(postId, files, session, onProgress);
+  onProgress?.("publishing", files.length, files.length);
+  await commitProfilePost(postId, values, ids, true);
+  return postId;
+}
+
+export async function updateProfilePostWithAttachments(
+  postId: string,
+  values: ProfilePostFormValues,
+  existing: PostAttachment[],
+  removedIds: Set<string>,
+  additions: PreparedPostFile[],
+  order: string[],
+  session: PostUploadSession,
+  onProgress?: (
+    progress: PostSaveProgress,
+    completed: number,
+    total: number,
+  ) => void,
+): Promise<string> {
+  session.postId = postId;
+  const addedIds = await uploadPreparedFiles(
+    postId,
+    additions,
+    session,
+    onProgress,
+  );
+  const orderedIds = resolveAttachmentOrder(
+    order,
+    existing,
+    removedIds,
+    additions,
+    addedIds,
+  );
+  onProgress?.("updating", 0, additions.length);
+  await commitProfilePost(postId, values, orderedIds, false);
+  return postId;
+}
+
+export async function deleteProfilePost(postId: string): Promise<void> {
+  const { error } = await getSupabase().rpc("delete_profile_post", {
+    p_post_id: postId,
+  });
+  if (error) throw error;
 }
 
 export async function reorderPostAttachments(

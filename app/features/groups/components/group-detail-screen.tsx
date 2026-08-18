@@ -5,7 +5,7 @@ import {
   MessageSquareTextIcon,
   UsersIcon,
 } from "lucide-react";
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 
 import { GroupDetailHero } from "~/features/groups/components/group-detail-hero";
 import { GroupMembersPanel } from "~/features/groups/components/group-members-panel";
@@ -23,6 +23,7 @@ import type {
 } from "~/features/groups/model/types";
 import {
   GroupPostsPanel,
+  PostWriteRow,
   type GroupCategory,
   type GroupPostPage,
 } from "~/features/posts";
@@ -43,6 +44,8 @@ const GROUP_TABS: {
 export function GroupDetailScreen({
   group,
   profileId,
+  viewerName,
+  viewerAvatarUrl,
   isTeacher,
   categories = [],
   posts = { posts: [], nextCursor: null },
@@ -52,6 +55,8 @@ export function GroupDetailScreen({
 }: {
   group: GroupDetail;
   profileId: number;
+  viewerName: string | null;
+  viewerAvatarUrl: string | null;
   isTeacher: boolean;
   categories?: GroupCategory[];
   posts?: GroupPostPage;
@@ -124,7 +129,13 @@ export function GroupDetailScreen({
         <div className="min-w-0 lg:order-1">
           {tab === "posts" ? (
             <div className="flex flex-col gap-3">
-              {canCreatePost ? <WritePostRow slug={group.slug} /> : null}
+              {canCreatePost ? (
+                <PostWriteRow
+                  to={`/groups/${group.slug}/posts/new`}
+                  viewerName={viewerName}
+                  viewerAvatarUrl={viewerAvatarUrl}
+                />
+              ) : null}
               <GroupPostsPanel
                 key={posts.posts
                   .map((post) => `${post.post_id}:${post.is_pinned}`)
@@ -185,28 +196,6 @@ export function GroupDetailScreen({
         </aside>
       </div>
     </div>
-  );
-}
-
-/**
- * 게시물 스택의 첫 카드처럼 보이는 글쓰기 진입점. 카드와 같은 프레이밍(모바일은 풀블리드,
- * `md:`부터 테두리 있는 카드)을 그대로 쓰는 것이 핵심이다 — 별개의 버튼으로 보이면 피드
- * 상단에 관련 없는 컨트롤이 하나 얹힌 것처럼 읽힌다.
- */
-function WritePostRow({ slug }: { slug: string }) {
-  return (
-    <Link
-      to={`/groups/${slug}/posts/new`}
-      className="group flex items-center gap-3 overflow-hidden rounded-none border-b-2 border-foreground/20 bg-card px-4 py-3 md:rounded-xl md:border md:border-border md:px-3 md:py-2.5"
-    >
-      <div
-        className="size-9 shrink-0 rounded-full border bg-muted"
-        aria-hidden="true"
-      />
-      <span className="flex-1 rounded-full bg-muted px-4 py-2 text-sm text-muted-foreground transition-[filter] group-hover:brightness-95">
-        글쓰기…
-      </span>
-    </Link>
   );
 }
 

@@ -12,6 +12,7 @@ import {
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
+import { ProfilePostsPanel, type ProfilePostPage } from "~/features/posts";
 import { ProfileMediaEditor } from "~/features/profiles/components/profile-media-editor";
 import type { AcceptedProfile } from "~/features/profiles/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
@@ -55,9 +56,16 @@ function formatCohort(profile: AcceptedProfile) {
 export function ProfileDetail({
   profile,
   isOwnProfile,
+  viewerName,
+  viewerAvatarUrl,
+  posts,
 }: {
   profile: AcceptedProfile;
   isOwnProfile: boolean;
+  /** 지금 보고 있는 사람. 타임라인 당사자와 다를 수 있어 `profile`로 대신하지 못한다. */
+  viewerName: string | null;
+  viewerAvatarUrl: string | null;
+  posts: ProfilePostPage;
 }) {
   const schoolSummary = [
     formatCohort(profile),
@@ -220,7 +228,7 @@ export function ProfileDetail({
         </section>
 
         {/* content */}
-        <div className="grid gap-2.5 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start lg:gap-4">
+        <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start">
           <section className="min-w-0 space-y-1.5 sm:space-y-2">
             <h2 className="px-0.5 text-[17px] font-semibold tracking-tight sm:px-1 sm:text-xl">
               정보
@@ -256,16 +264,23 @@ export function ProfileDetail({
             </Card>
           </section>
 
-          <section className="min-w-0 space-y-1.5 sm:space-y-2">
-            <h2 className="px-0.5 text-[17px] font-semibold tracking-tight sm:px-1 sm:text-xl">
+          {/* 타임라인은 게시물 카드가 스스로 프레이밍을 들고 있어서(모바일 풀블리드,
+              `md:`부터 테두리) 정보 카드처럼 Card로 감싸지 않는다. 감싸면 테두리가 두 겹이
+              된다. 좌우 여백을 지우는 구간도 카드가 모서리를 얻는 `md:`에 맞춘다 — `sm:`에서
+              풀면 모서리 없는 카드가 안쪽으로 들어와 어중간해진다. */}
+          <section className="-mx-3 min-w-0 space-y-1.5 sm:space-y-2 md:mx-0">
+            <h2 className="px-3.5 text-[17px] font-semibold tracking-tight sm:text-xl md:px-1">
               게시물
             </h2>
 
-            <Card className="-mx-3 gap-0 rounded-none border-x-0 py-0 shadow-none sm:mx-0 sm:rounded-xl sm:border sm:shadow-sm">
-              <CardContent className="flex min-h-24 items-center justify-center px-3 py-6 text-center text-sm text-muted-foreground sm:min-h-56 sm:px-6 sm:py-10">
-                아직 게시물이 없습니다.
-              </CardContent>
-            </Card>
+            <ProfilePostsPanel
+              timelinePubId={profile.pub_id}
+              canWrite={isOwnProfile || profile.allow_timeline_posts}
+              isOwnTimeline={isOwnProfile}
+              viewerName={viewerName}
+              viewerAvatarUrl={viewerAvatarUrl}
+              initialPage={posts}
+            />
           </section>
         </div>
       </div>

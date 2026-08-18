@@ -2,25 +2,10 @@ import { useRouteLoaderData } from "react-router";
 
 import { defineAppChrome } from "~/features/app-shell";
 import type { GroupDetail } from "~/features/groups";
-import {
-  GroupPostOverlay,
-  listGroupCategories,
-  resolveIdentityOptions,
-} from "~/features/posts";
+import { GroupPostOverlay, resolveIdentityOptions } from "~/features/posts";
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
-import type { Route } from "./+types/post-new";
 
 export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
-
-export async function clientLoader({ params }: Route.ClientLoaderArgs) {
-  const { loadGroupDetail } = await import("~/features/groups");
-  const group = await loadGroupDetail(params.slug);
-  if (group?.membership_state !== "member")
-    throw new Response("그룹 멤버만 게시물을 작성할 수 있습니다.", {
-      status: 403,
-    });
-  return { group, categories: await listGroupCategories(group.group_id) };
-}
 
 function canCreate(group: GroupDetail): boolean {
   return (
@@ -32,13 +17,25 @@ function canCreate(group: GroupDetail): boolean {
   );
 }
 
-export default function NewGroupPostPage({ loaderData }: Route.ComponentProps) {
+/**
+ * `/groups/:slug/posts/new`.
+ *
+ * 자기 loader가 없다. 이 route는 그룹 route의 자식이라 부모의 loader가 언제나 먼저 돌고,
+ * 그룹과 카테고리가 그 데이터에 이미 들어 있다. 여기서 다시 읽으면 글쓰기를 누를 때마다 같은
+ * 조회가 두 번 나가고, 카테고리는 그룹을 기다렸다 나가므로 왕복이 줄줄이 붙는다.
+ */
+export default function NewGroupPostPage() {
   const parent = useRouteLoaderData<typeof groupLoader>(
     "routes/app/groups/detail",
   );
-  const group = parent?.group ?? loaderData.group;
+  if (!parent) {
+    throw new Response("그룹을 찾을 수 없습니다.", { status: 404 });
+  }
+
+  const { group, categories } = parent;
   if (!canCreate(group))
     throw new Response("게시물을 작성할 권한이 없습니다.", { status: 403 });
+
   const identities = resolveIdentityOptions(
     group.identity_policy,
     group.member_role,
@@ -49,7 +46,7 @@ export default function NewGroupPostPage({ loaderData }: Route.ComponentProps) {
       slug={group.slug}
       groupName={group.name}
       groupId={group.group_id}
-      categories={loaderData.categories}
+      categories={categories}
       identities={identities}
       alwaysAnonymous={group.identity_policy === "always_anonymous"}
     />

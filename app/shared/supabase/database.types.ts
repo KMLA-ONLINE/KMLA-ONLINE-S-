@@ -761,6 +761,16 @@ export type Database = {
         }
         Returns: string
       }
+      commit_profile_post: {
+        Args: {
+          p_attachment_ids: string[]
+          p_body: string
+          p_post_id: string
+          p_publish?: boolean
+          p_visibility?: Database["public"]["Enums"]["post_visibility"]
+        }
+        Returns: string
+      }
       complete_group_media_cleanup: {
         Args: {
           p_lease_id: string
@@ -852,6 +862,13 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      create_profile_post: {
+        Args: {
+          p_timeline_pub_id: string
+          p_visibility?: Database["public"]["Enums"]["post_visibility"]
+        }
+        Returns: string
+      }
       delete_group: { Args: { p_group_id: string }; Returns: undefined }
       delete_group_category: {
         Args: { p_category_id: string }
@@ -866,6 +883,7 @@ export type Database = {
         Args: { p_comment_id: string }
         Returns: undefined
       }
+      delete_profile_post: { Args: { p_post_id: string }; Returns: undefined }
       discover_groups: {
         Args: {
           p_after_id?: string
@@ -1011,6 +1029,28 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_profile_post: {
+        Args: { p_post_id: string }
+        Returns: {
+          author_avatar_path: string
+          author_name: string
+          author_pub_id: string
+          body: string
+          can_delete: boolean
+          can_edit: boolean
+          comment_count: number
+          edited_at: string
+          is_author: boolean
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          post_id: string
+          published_at: string
+          reaction_count: number
+          timeline_name: string
+          timeline_pub_id: string
+          top_reactions: Database["public"]["Enums"]["post_reaction"][]
+          visibility: Database["public"]["Enums"]["post_visibility"]
+        }[]
       }
       issue_group_invite: {
         Args: { p_group_id: string; p_hours?: number }
@@ -1180,6 +1220,33 @@ export type Database = {
           reactor_avatar_path: string
           reactor_name: string
           reactor_pub_id: string
+        }[]
+      }
+      list_profile_posts: {
+        Args: {
+          p_cursor_post_id?: string
+          p_cursor_published_at?: string
+          p_limit?: number
+          p_timeline_pub_id: string
+        }
+        Returns: {
+          author_avatar_path: string
+          author_name: string
+          author_pub_id: string
+          body: string
+          can_delete: boolean
+          can_edit: boolean
+          comment_count: number
+          edited_at: string
+          is_author: boolean
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          post_id: string
+          published_at: string
+          reaction_count: number
+          timeline_name: string
+          timeline_pub_id: string
+          top_reactions: Database["public"]["Enums"]["post_reaction"][]
+          visibility: Database["public"]["Enums"]["post_visibility"]
         }[]
       }
       move_group_category: {

@@ -24,7 +24,11 @@ export default [
       route("groups/member-page", "routes/app/groups/member-page.ts"),
       route("clubs", "routes/app/clubs/index.tsx"),
       route("invite/:token", "routes/app/invite.tsx"),
-      route("profile/:pubId", "routes/app/profile/detail.tsx"),
+      route("profile/:pubId", "routes/app/profile/detail.tsx", [
+        route("posts/new", "routes/app/profile/post-new.tsx"),
+        route("posts/:postId", "routes/app/profile/post.tsx"),
+        route("posts/:postId/edit", "routes/app/profile/post-edit.tsx"),
+      ]),
       route("profile/:pubId/edit", "routes/app/profile/edit.tsx"),
       route("groups/create", "routes/app/groups/create.tsx"),
       route("groups/:slug", "routes/app/groups/detail.tsx", [
