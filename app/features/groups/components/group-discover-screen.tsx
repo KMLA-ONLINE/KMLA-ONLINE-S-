@@ -156,7 +156,7 @@ export function GroupDiscoverScreen({
                   if (event.key === "Escape") closeSearch();
                 }}
                 className="rounded-full pr-10 md:rounded-md"
-                placeholder="그룹 이름을 두 글자 이상 입력…"
+                placeholder="그룹 이름을 입력…"
                 aria-label="그룹 이름"
                 autoComplete="off"
               />

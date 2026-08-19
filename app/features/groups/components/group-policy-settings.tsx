@@ -16,6 +16,7 @@ import type { GroupDetail } from "~/features/groups/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
+import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 
 type PolicyKind = Exclude<SettingsSection, "basic">;
 
@@ -189,18 +190,18 @@ function PolicyRow({
             >
               <SettingsHidden group={group} omit={kind} />
               <label className="grid gap-2 text-sm font-medium">
-                <select
+                <NativeSelect
                   name={config.name}
                   defaultValue={current}
                   aria-label={config.title}
-                  className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/50"
+                  className="w-full [&_[data-slot=native-select]]:h-10 [&_[data-slot=native-select]]:rounded-lg"
                 >
                   {options.map(([value, label]) => (
-                    <option key={value} value={value}>
+                    <NativeSelectOption key={value} value={value}>
                       {label}
-                    </option>
+                    </NativeSelectOption>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
               {kind === "identity" ? (
                 <p className="rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">

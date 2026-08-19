@@ -1,7 +1,14 @@
+import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { CategoryManager } from "~/features/posts/components/category-manager";
-import { renderRoute, screen } from "../../../router";
+import {
+  render,
+  renderRoute,
+  screen,
+  userEvent,
+  waitFor,
+} from "../../../router";
 
 const categories = [
   {
@@ -23,6 +30,38 @@ const categories = [
 ];
 
 describe("CategoryManager", () => {
+  it("clears a created category name only after a successful action", async () => {
+    const Stub = createRoutesStub([
+      {
+        path: "/",
+        Component: () => (
+          <CategoryManager groupId="group-1" categories={categories} />
+        ),
+        action: async ({ request }) => {
+          const formData = await request.formData();
+          return formData.get("name") === "실패"
+            ? { error: "생성 실패" }
+            : { ok: true };
+        },
+      },
+    ]);
+    const user = userEvent.setup();
+    render(<Stub initialEntries={["/"]} />);
+    const input = screen.getByLabelText("새 카테고리 이름");
+
+    await user.type(input, "실패");
+    await user.click(screen.getByRole("button", { name: "추가" }));
+    await user.click(screen.getByRole("button", { name: "생성" }));
+    await screen.findByRole("alert");
+    expect(input).toHaveValue("실패");
+
+    await user.clear(input);
+    await user.type(input, "자료");
+    await user.click(screen.getByRole("button", { name: "추가" }));
+    await user.click(screen.getByRole("button", { name: "생성" }));
+    await waitFor(() => expect(input).toHaveValue(""));
+  });
+
   it("confirms category creation, saving, and deletion", async () => {
     const { user } = renderRoute(() => (
       <CategoryManager groupId="group-1" categories={categories} />
