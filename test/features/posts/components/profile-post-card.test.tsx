@@ -140,4 +140,25 @@ describe("ProfilePostCard", () => {
       expect(screen.queryByTestId("profile-post-body")).not.toBeInTheDocument();
     },
   );
+
+  it("opens a profile activity image in the image viewer", async () => {
+    const { user } = renderCard(
+      profilePost({
+        activity_kind: "avatar_changed",
+        activity_media_path: "1/avatar/image-id",
+        activity_media_url: "https://example.com/activity.webp",
+        author_name: "홍길동",
+      }),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "프로필 사진 크게 보기" }),
+    );
+
+    expect(screen.getByRole("dialog")).toBeVisible();
+    expect(screen.getByRole("link", { name: "다운로드" })).toHaveAttribute(
+      "href",
+      "https://example.com/activity.webp",
+    );
+  });
 });
