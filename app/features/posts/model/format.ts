@@ -3,6 +3,17 @@ export function getPostErrorMessage(error: unknown): string {
     return "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 
   const candidate = error as { code?: string; message?: string };
+  const message = candidate.message ?? "";
+
+  if (message.includes("timeline owner does not accept posts"))
+    return "이 사용자는 타임라인에 다른 사람의 글을 받지 않습니다.";
+  if (message.includes("only the author can commit"))
+    return "이 게시물을 수정할 권한이 없습니다.";
+  if (message.includes("post deletion is not allowed"))
+    return "이 게시물을 삭제할 권한이 없습니다.";
+  if (message.includes("requires a body or ready attachment"))
+    return "본문 또는 첨부 파일을 추가해 주세요.";
+
   if (candidate.code === "42501") return "이 작업을 수행할 권한이 없습니다.";
   if (candidate.code === "23505")
     return "같은 이름의 카테고리가 이미 있습니다.";
@@ -11,7 +22,7 @@ export function getPostErrorMessage(error: unknown): string {
   if (candidate.code === "23514" || candidate.code === "22023")
     return "입력 내용을 다시 확인해 주세요.";
   if (candidate.code === "P0002") return "게시물을 찾을 수 없습니다.";
-  if (candidate.message?.includes("category"))
+  if (message.includes("category"))
     return "카테고리 정보를 다시 확인해 주세요.";
   return "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
@@ -56,6 +67,10 @@ export function getCommentErrorMessage(error: unknown): string {
     return "이 그룹에서는 익명으로 댓글을 쓸 수 없습니다.";
   if (message.includes("identified commenting"))
     return "이 그룹에서는 실명으로 댓글을 쓸 수 없습니다.";
+  if (message.includes("profile post comments must be identified"))
+    return "개인 게시물의 댓글은 실명으로만 쓸 수 있습니다.";
+  if (message.includes("post is not accessible"))
+    return "이 게시물에 댓글을 남길 권한이 없습니다.";
   if (message.includes("only the author"))
     return "이 댓글을 수정하거나 삭제할 권한이 없습니다.";
   if (message.includes("parent comment"))

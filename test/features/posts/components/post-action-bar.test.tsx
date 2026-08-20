@@ -14,7 +14,7 @@ vi.mock("~/features/posts/data/mutations", () => ({
 }));
 vi.mock("~/features/posts/data/queries", () => ({ listPostReactors }));
 
-import { GroupPostActionBar } from "~/features/posts/components/group-post-action-bar";
+import { PostActionBar } from "~/features/posts/components/post-action-bar";
 import { renderRoute, screen } from "../../../router";
 
 beforeEach(() => {
@@ -47,10 +47,10 @@ const noReactions = {
 };
 
 function renderBar(
-  overrides: Partial<Parameters<typeof GroupPostActionBar>[0]> = {},
+  overrides: Partial<Parameters<typeof PostActionBar>[0]> = {},
 ) {
   return renderRoute(() => (
-    <GroupPostActionBar
+    <PostActionBar
       postId="post-id"
       reaction={noReactions}
       sharePath="/groups/group/posts/post-id"
@@ -61,7 +61,7 @@ function renderBar(
   ));
 }
 
-describe("GroupPostActionBar", () => {
+describe("PostActionBar", () => {
   it("hides the comment count while nobody has commented", () => {
     renderBar({ commentTo: "/groups/group/posts/post-id" });
 

@@ -7,10 +7,18 @@ export { CommentThread } from "~/features/posts/components/comment-thread";
 export { GroupPostOverlay } from "~/features/posts/components/group-post-overlay";
 export { GroupPostSearchDialog } from "~/features/posts/components/group-post-search-dialog";
 export { GroupPostsPanel } from "~/features/posts/components/group-posts-panel";
+export { PostWriteRow } from "~/features/posts/components/post-write-row";
+export { ProfilePostDetail } from "~/features/posts/components/profile-post-detail";
+export { ProfilePostEditor } from "~/features/posts/components/profile-post-editor";
+export { ProfilePostsPanel } from "~/features/posts/components/profile-posts-panel";
 export { usePostComments } from "~/features/posts/hooks/use-post-comments";
 export { usePostViewMode } from "~/features/posts/hooks/use-post-view-mode";
 export {
   createGroupCategory,
+  createProfilePost,
+  createProfilePostWithAttachments,
+  deleteProfilePost,
+  updateProfilePostWithAttachments,
   createGroupPost,
   createPostComment,
   deletePostComment,
@@ -27,6 +35,8 @@ export {
 export type { PostUploadSession } from "~/features/posts/data/mutations";
 export {
   getGroupPost,
+  getProfilePost,
+  listProfilePosts,
   listGroupCategories,
   listGroupPosts,
   listPostAttachments,
@@ -48,8 +58,11 @@ export {
 } from "~/features/posts/model/comment-text";
 export {
   hasPostFormErrors,
+  hasProfilePostFormErrors,
   readPostForm,
+  readProfilePostForm,
   validatePostForm,
+  validateProfilePostForm,
   validateSelectedFiles,
 } from "~/features/posts/model/validation";
 export {
@@ -80,6 +93,12 @@ export type {
   PostIdentity,
   PostAttachment,
   PostSaveProgress,
+  PostVisibility,
   PreparedPostFile,
   PostViewMode,
+  ProfilePost,
+  ProfilePostCursor,
+  ProfilePostFormErrors,
+  ProfilePostFormValues,
+  ProfilePostPage,
 } from "~/features/posts/model/types";

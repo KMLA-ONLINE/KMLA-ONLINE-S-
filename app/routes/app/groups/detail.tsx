@@ -321,6 +321,8 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
       <GroupDetailScreen
         group={loaderData.group}
         profileId={profile.id}
+        viewerName={profile.name}
+        viewerAvatarUrl={profile.avatar_url}
         isTeacher={profile.type === "teacher"}
         categories={loaderData.categories}
         posts={loaderData.posts}

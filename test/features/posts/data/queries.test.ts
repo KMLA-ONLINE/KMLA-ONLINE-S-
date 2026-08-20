@@ -9,7 +9,9 @@ vi.mock("~/features/posts/data/files", () => ({ createPostAttachmentUrls }));
 vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 
 import {
+  getProfilePost,
   listGroupPosts,
+  listProfilePosts,
   searchGroupPosts,
 } from "~/features/posts/data/queries";
 
@@ -58,6 +60,74 @@ describe("post queries", () => {
 
     await expect(listGroupPosts("group-id")).rejects.toBe(attachmentError);
     expect(createPostAttachmentUrls).not.toHaveBeenCalled();
+  });
+
+  it("asks for the timeline by public id so the loader need not resolve it first", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [], error: null });
+    getSupabase.mockReturnValue({ rpc, from: vi.fn() });
+
+    await listProfilePosts("jieun-29");
+
+    expect(rpc).toHaveBeenCalledWith(
+      "list_profile_posts",
+      expect.objectContaining({ p_timeline_pub_id: "jieun-29" }),
+    );
+  });
+
+  it("carries only time and id in the timeline cursor", async () => {
+    const rows = Array.from({ length: 13 }, (_, index) => ({
+      post_id: `post-${index}`,
+      published_at: `2026-08-18T00:00:${String(59 - index).padStart(2, "0")}Z`,
+    }));
+    const rpc = vi.fn().mockResolvedValue({ data: rows, error: null });
+    const query = {
+      select: vi.fn(),
+      in: vi.fn(),
+      eq: vi.fn(),
+      order: vi.fn().mockResolvedValue({ data: [], error: null }),
+    };
+    query.select.mockReturnValue(query);
+    query.in.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    getSupabase.mockReturnValue({ rpc, from: vi.fn().mockReturnValue(query) });
+
+    const page = await listProfilePosts("jieun-29");
+
+    expect(page.posts).toHaveLength(12);
+    expect(page.nextCursor).toEqual({
+      publishedAt: rows[11].published_at,
+      postId: "post-11",
+    });
+  });
+
+  it("stops at the last page of a timeline", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{ post_id: "post-id", published_at: "2026-08-18T00:00:00Z" }],
+      error: null,
+    });
+    const query = {
+      select: vi.fn(),
+      in: vi.fn(),
+      eq: vi.fn(),
+      order: vi.fn().mockResolvedValue({ data: [], error: null }),
+    };
+    query.select.mockReturnValue(query);
+    query.in.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    getSupabase.mockReturnValue({ rpc, from: vi.fn().mockReturnValue(query) });
+
+    await expect(listProfilePosts("jieun-29")).resolves.toMatchObject({
+      nextCursor: null,
+    });
+  });
+
+  it("treats a missing or unreadable profile post as absent", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [], error: null });
+    getSupabase.mockReturnValue({ rpc, from: vi.fn() });
+
+    await expect(getProfilePost("post-id")).resolves.toBeNull();
+    // 첨부를 이어 부르지 않는다 — 읽을 수 없는 게시물의 첨부를 물어볼 이유가 없다.
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 
   it("uses pinned state as part of the next-page cursor", async () => {

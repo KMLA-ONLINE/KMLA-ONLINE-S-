@@ -40,6 +40,51 @@ export type GroupPostSearchResult = GroupPostSearchRow;
 export type GroupPostDetail = WithReactions<GroupPostDetailRow> & {
   attachments: PostAttachment[];
 };
+export type PostVisibility = Database["public"]["Enums"]["post_visibility"];
+
+type ProfilePostRow = Functions["list_profile_posts"]["Returns"][number];
+/**
+ * 프로필 타임라인의 개인 게시물 (기능 명세 §8.4, §12.4).
+ *
+ * 목록과 상세가 같은 RPC 투영(`private.read_profile_posts`)을 쓰므로 한 타입이 둘을 모두
+ * 받는다. 그룹 게시물과 달리 제목·카테고리·작성 신원·고정이 없고, 대신 타임라인 당사자와
+ * 공개 범위가 있다.
+ *
+ * `author_*`는 작성자 프로필을 left join해 얻는다 — 계정이 사라지면 null이 된다. 생성기가
+ * RPC의 `returns table` 컬럼을 전부 not null로 적어 내려서 직접 고쳐 준다.
+ */
+export type ProfilePost = WithReactions<
+  Omit<
+    ProfilePostRow,
+    "author_pub_id" | "author_name" | "author_avatar_path" | "edited_at"
+  >
+> & {
+  author_pub_id: string | null;
+  author_name: string | null;
+  author_avatar_path: string | null;
+  edited_at: string | null;
+  attachments: PostAttachment[];
+};
+
+export interface ProfilePostCursor {
+  publishedAt: string;
+  postId: string;
+}
+
+export interface ProfilePostPage {
+  posts: ProfilePost[];
+  nextCursor: ProfilePostCursor | null;
+}
+
+export interface ProfilePostFormValues {
+  body: string;
+  visibility: PostVisibility;
+}
+
+export type ProfilePostFormErrors = Partial<
+  Record<"body" | "visibility" | "form", string>
+>;
+
 type PostReactorRow = Functions["list_post_reactors"]["Returns"][number];
 /**
  * 반응자 목록의 한 줄 (기능 명세 §10.3).
