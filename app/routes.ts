@@ -18,6 +18,7 @@ export default [
       route("profile", "routes/app/profile/index.tsx"),
       route("noti", "routes/app/notifications.tsx"),
       route("menu", "routes/app/menu/index.tsx"),
+      route("menu/licenses", "routes/app/menu/licenses.tsx"),
       route("menu/meal", "routes/app/menu/meal.tsx"),
       route("groups", "routes/app/groups/index.tsx"),
       route("groups/discover", "routes/app/groups/discover.tsx"),

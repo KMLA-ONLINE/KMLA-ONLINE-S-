@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(23);
 
 select is(
   (select public from storage.buckets where id = 'profile-media'),
@@ -146,6 +146,69 @@ select is(
   ),
   current_setting('test.profile_id') || '/avatar/10000000-0000-0000-0000-000000000001',
   'avatar path is connected to profile'
+);
+select is(
+  (
+    select activity_kind
+    from public.list_profile_posts(
+      (select pub_id from public.profiles where auth_user_id = auth.uid())
+    )
+    where activity_media_path = current_setting('test.profile_id')
+      || '/avatar/10000000-0000-0000-0000-000000000001'
+  ),
+  'avatar_changed'::public.profile_media_activity_kind,
+  'connecting an avatar creates an avatar activity post'
+);
+select is(
+  (
+    select activity_media_path
+    from public.list_profile_posts(
+      (select pub_id from public.profiles where auth_user_id = auth.uid())
+    )
+    where activity_kind = 'avatar_changed'
+  ),
+  current_setting('test.profile_id') || '/avatar/10000000-0000-0000-0000-000000000001',
+  'the activity keeps the changed image path'
+);
+select is(
+  (
+    select can_edit
+    from public.list_profile_posts(
+      (select pub_id from public.profiles where auth_user_id = auth.uid())
+    )
+    where activity_kind = 'avatar_changed'
+  ),
+  false,
+  'profile media activities cannot be edited'
+);
+select is(
+  (
+    select can_delete
+    from public.list_profile_posts(
+      (select pub_id from public.profiles where auth_user_id = auth.uid())
+    )
+    where activity_kind = 'avatar_changed'
+  ),
+  true,
+  'profile media activities can be deleted by their author'
+);
+select lives_ok(
+  $$select public.set_my_profile_media(
+      'avatar',
+      current_setting('test.profile_id') || '/avatar/10000000-0000-0000-0000-000000000001'
+    )$$,
+  'retrying the same media connection succeeds'
+);
+select is(
+  (
+    select count(*)::integer
+    from public.list_profile_posts(
+      (select pub_id from public.profiles where auth_user_id = auth.uid())
+    )
+    where activity_kind = 'avatar_changed'
+  ),
+  1,
+  'retrying the same media connection does not duplicate the activity'
 );
 select lives_ok(
   $$select public.remove_my_profile_media('avatar')$$,

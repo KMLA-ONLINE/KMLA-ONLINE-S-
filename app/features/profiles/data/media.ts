@@ -97,17 +97,9 @@ export async function replaceProfileMedia(
     throw connectError;
   }
 
+  // Storage RLS가 현재 프로필과 살아 있는 활동 게시물의 스냅샷은 보존한다.
   if (previousPath && !isExternalUrl(previousPath)) {
-    const { error: cleanupError } = await supabase.storage
-      .from(BUCKET)
-      .remove([previousPath]);
-
-    if (cleanupError) {
-      console.warn(
-        "[profile-media] previous object cleanup failed",
-        cleanupError,
-      );
-    }
+    await supabase.storage.from(BUCKET).remove([previousPath]);
   }
 }
 
@@ -125,15 +117,6 @@ export async function removeProfileMedia(
   if (error) throw error;
 
   if (previousPath && !isExternalUrl(previousPath)) {
-    const { error: cleanupError } = await supabase.storage
-      .from(BUCKET)
-      .remove([previousPath]);
-
-    if (cleanupError) {
-      console.warn(
-        "[profile-media] removed profile media cleanup failed",
-        cleanupError,
-      );
-    }
+    await supabase.storage.from(BUCKET).remove([previousPath]);
   }
 }

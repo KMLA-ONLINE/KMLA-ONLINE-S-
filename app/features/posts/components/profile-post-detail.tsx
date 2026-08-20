@@ -9,6 +9,7 @@ import {
 import { PostDetailDialog } from "~/features/posts/components/post-detail-dialog";
 import { PostMarkdown } from "~/features/posts/components/post-markdown";
 import { PostMenu } from "~/features/posts/components/post-menu";
+import { ProfileMediaActivity } from "~/features/posts/components/profile-media-activity";
 import {
   ProfilePostHeader,
   profilePostAuthorName,
@@ -79,11 +80,20 @@ export function ProfilePostDetail({
           }
         />
 
-        <PostMarkdown>{post.body}</PostMarkdown>
+        {post.activity_kind ? (
+          <ProfileMediaActivity post={post} className="rounded-lg" />
+        ) : (
+          <>
+            <PostMarkdown>{post.body}</PostMarkdown>
 
-        {/* 카드와 달리 모달은 콘텐츠에 `p-4` 여백이 있으므로 그리드도 모서리를 둥글린다. */}
-        <PostImageGrid images={images} className="overflow-hidden rounded-lg" />
-        <PostFileList files={files} />
+            {/* 카드와 달리 모달은 콘텐츠에 `p-4` 여백이 있으므로 그리드도 모서리를 둥글린다. */}
+            <PostImageGrid
+              images={images}
+              className="overflow-hidden rounded-lg"
+            />
+            <PostFileList files={files} />
+          </>
+        )}
       </div>
     </PostDetailDialog>
   );

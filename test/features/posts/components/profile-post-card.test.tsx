@@ -107,4 +107,37 @@ describe("ProfilePostCard", () => {
 
     expect(screen.getByText("알 수 없는 사용자")).toBeVisible();
   });
+
+  it.each([
+    ["avatar_changed", "프로필 사진을", "프로필 사진", "aspect-square"],
+    ["cover_changed", "프로필 커버를", "프로필 커버", "aspect-[3/1]"],
+  ] as const)(
+    "renders a %s activity instead of a regular post body",
+    (activityKind, phrase, imageLabel, aspectClass) => {
+      renderCard(
+        profilePost({
+          activity_kind: activityKind,
+          activity_media_path: "1/media/image-id",
+          activity_media_url: "https://example.com/activity.webp",
+          body: "표시하면 안 되는 본문",
+          author_name: "홍길동",
+          author_pub_id: "gildong-30",
+          timeline_name: "홍길동",
+          timeline_pub_id: "gildong-30",
+        }),
+      );
+
+      expect(
+        screen.getByText(new RegExp(`님이 ${phrase} 바꾸었습니다`)),
+      ).toBeVisible();
+      const image = screen.getByRole("img", {
+        name: `홍길동님이 변경한 ${imageLabel}`,
+      });
+      expect(image).toHaveAttribute("src", "https://example.com/activity.webp");
+      expect(screen.getByTestId("profile-media-activity")).toHaveClass(
+        aspectClass,
+      );
+      expect(screen.queryByTestId("profile-post-body")).not.toBeInTheDocument();
+    },
+  );
 });

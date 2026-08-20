@@ -41,6 +41,8 @@ export type GroupPostDetail = WithReactions<GroupPostDetailRow> & {
   attachments: PostAttachment[];
 };
 export type PostVisibility = Database["public"]["Enums"]["post_visibility"];
+export type ProfileMediaActivityKind =
+  Database["public"]["Enums"]["profile_media_activity_kind"];
 
 type ProfilePostRow = Functions["list_profile_posts"]["Returns"][number];
 /**
@@ -56,9 +58,17 @@ type ProfilePostRow = Functions["list_profile_posts"]["Returns"][number];
 export type ProfilePost = WithReactions<
   Omit<
     ProfilePostRow,
-    "author_pub_id" | "author_name" | "author_avatar_path" | "edited_at"
+    | "activity_kind"
+    | "activity_media_path"
+    | "author_pub_id"
+    | "author_name"
+    | "author_avatar_path"
+    | "edited_at"
   >
 > & {
+  activity_kind: ProfileMediaActivityKind | null;
+  activity_media_path: string | null;
+  activity_media_url: string | null;
   author_pub_id: string | null;
   author_name: string | null;
   author_avatar_path: string | null;
