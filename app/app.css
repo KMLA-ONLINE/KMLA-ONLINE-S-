@@ -208,34 +208,6 @@
     cursor: pointer;
   }
 
-  /* Chromium paints its own yellow/blue fill on autofilled inputs and ignores
-     `background-color`. The only lever is an inset box-shadow large enough to
-     cover the field; the 999999s transition and the no-op animation keep the
-     native color from flashing back in on focus/hover. */
-  input:-webkit-autofill,
-  input:-webkit-autofill:hover,
-  input:-webkit-autofill:focus,
-  input:-webkit-autofill:active,
-  [data-slot="input"]:-webkit-autofill,
-  [data-slot="input"]:-webkit-autofill:hover,
-  [data-slot="input"]:-webkit-autofill:focus,
-  [data-slot="input"]:-webkit-autofill:active {
-    -webkit-box-shadow: 0 0 0 1000px inset var(--background) !important;
-    -webkit-text-fill-color: var(--foreground) !important;
-    caret-color: var(--foreground) !important;
-    transition: background-color 999999s ease-in-out 0s;
-    animation: autofill-fix 0s forwards;
-  }
-
-  @keyframes autofill-fix {
-    from {
-      background-color: transparent;
-    }
-    to {
-      background-color: transparent;
-    }
-  }
-
   /* Thin pill-thumb scrollbar, applied globally. Track and thumb border are
      transparent (background-clip keeps the 2px inset) so the same neutral thumb
      reads correctly in both light and dark. */

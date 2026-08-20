@@ -179,7 +179,6 @@ export default function SetupPage({
               <Input
                 id="profile-name"
                 name="name"
-                autoComplete="name"
                 defaultValue={initialValues.name}
                 aria-invalid={Boolean(errors.name)}
                 disabled={pending}
@@ -347,7 +346,6 @@ export default function SetupPage({
                   id="phone-number"
                   name="phoneNumber"
                   type="tel"
-                  autoComplete="tel"
                   placeholder="010-1234-5678"
                   defaultValue={initialValues.phoneNumber}
                   aria-invalid={Boolean(errors.phoneNumber)}
