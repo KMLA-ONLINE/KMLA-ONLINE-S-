@@ -7,6 +7,7 @@ import { PostActionBar } from "~/features/posts/components/post-action-bar";
 import { PostBodyClamp } from "~/features/posts/components/post-body-clamp";
 import { PostMarkdown } from "~/features/posts/components/post-markdown";
 import { PostMenu } from "~/features/posts/components/post-menu";
+import { ProfileMediaActivity } from "~/features/posts/components/profile-media-activity";
 import {
   ProfilePostHeader,
   profilePostAuthorName,
@@ -46,18 +47,24 @@ export function ProfilePostCard({
         />
       </div>
 
-      <div className="px-4">
-        <PostBodyClamp testId="profile-post-body">
-          <PostMarkdown>{post.body}</PostMarkdown>
-        </PostBodyClamp>
-      </div>
+      {post.activity_kind ? (
+        <ProfileMediaActivity post={post} />
+      ) : (
+        <>
+          <div className="px-4">
+            <PostBodyClamp testId="profile-post-body">
+              <PostMarkdown>{post.body}</PostMarkdown>
+            </PostBodyClamp>
+          </div>
 
-      <PostImageGrid images={images} className="mt-3" />
-      {files.length > 0 ? (
-        <div className="mt-3 px-4">
-          <PostFileList files={files} />
-        </div>
-      ) : null}
+          <PostImageGrid images={images} className="mt-3" />
+          {files.length > 0 ? (
+            <div className="mt-3 px-4">
+              <PostFileList files={files} />
+            </div>
+          ) : null}
+        </>
+      )}
 
       <PostActionBar
         postId={post.post_id}

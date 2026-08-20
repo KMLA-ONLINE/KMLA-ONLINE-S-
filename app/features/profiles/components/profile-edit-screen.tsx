@@ -303,7 +303,6 @@ function ProfileEditForm({
                   name="phoneNumber"
                   type="tel"
                   inputMode="tel"
-                  autoComplete="tel"
                   maxLength={13}
                   pattern="010-[0-9]{4}-[0-9]{4}"
                   defaultValue={values.phoneNumber}
@@ -344,7 +343,6 @@ function ProfileEditForm({
                   id="profile-contact-email"
                   name="contactEmail"
                   type="email"
-                  autoComplete="email"
                   maxLength={254}
                   defaultValue={values.contactEmail}
                   placeholder="name@example.com"

@@ -483,6 +483,10 @@ export type Database = {
       }
       posts: {
         Row: {
+          activity_kind:
+            | Database["public"]["Enums"]["profile_media_activity_kind"]
+            | null
+          activity_media_path: string | null
           author_identity: Database["public"]["Enums"]["post_identity"]
           body: string
           body_format_version: number
@@ -503,6 +507,10 @@ export type Database = {
           visibility: Database["public"]["Enums"]["post_visibility"] | null
         }
         Insert: {
+          activity_kind?:
+            | Database["public"]["Enums"]["profile_media_activity_kind"]
+            | null
+          activity_media_path?: string | null
           author_identity: Database["public"]["Enums"]["post_identity"]
           body?: string
           body_format_version?: number
@@ -523,6 +531,10 @@ export type Database = {
           visibility?: Database["public"]["Enums"]["post_visibility"] | null
         }
         Update: {
+          activity_kind?:
+            | Database["public"]["Enums"]["profile_media_activity_kind"]
+            | null
+          activity_media_path?: string | null
           author_identity?: Database["public"]["Enums"]["post_identity"]
           body?: string
           body_format_version?: number
@@ -1033,6 +1045,8 @@ export type Database = {
       get_profile_post: {
         Args: { p_post_id: string }
         Returns: {
+          activity_kind: Database["public"]["Enums"]["profile_media_activity_kind"]
+          activity_media_path: string
           author_avatar_path: string
           author_name: string
           author_pub_id: string
@@ -1230,6 +1244,8 @@ export type Database = {
           p_timeline_pub_id: string
         }
         Returns: {
+          activity_kind: Database["public"]["Enums"]["profile_media_activity_kind"]
+          activity_media_path: string
           author_avatar_path: string
           author_name: string
           author_pub_id: string
@@ -1706,6 +1722,7 @@ export type Database = {
       post_visibility: "public" | "private"
       profile_academic_track: "domestic" | "international"
       profile_gender: "male" | "female"
+      profile_media_activity_kind: "avatar_changed" | "cover_changed"
       profile_status: "pending" | "accepted" | "rejected" | "withdrawn"
       profile_type: "student" | "alumni" | "teacher"
     }
@@ -1857,6 +1874,7 @@ export const Constants = {
       post_visibility: ["public", "private"],
       profile_academic_track: ["domestic", "international"],
       profile_gender: ["male", "female"],
+      profile_media_activity_kind: ["avatar_changed", "cover_changed"],
       profile_status: ["pending", "accepted", "rejected", "withdrawn"],
       profile_type: ["student", "alumni", "teacher"],
     },

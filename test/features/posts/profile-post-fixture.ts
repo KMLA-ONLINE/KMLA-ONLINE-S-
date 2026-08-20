@@ -2,6 +2,9 @@ import type { ProfilePost } from "~/features/posts/model/types";
 
 export function profilePost(overrides: Partial<ProfilePost> = {}): ProfilePost {
   return {
+    activity_kind: null,
+    activity_media_path: null,
+    activity_media_url: null,
     attachments: [],
     author_avatar_path: null,
     author_name: "김서민",

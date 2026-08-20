@@ -1,8 +1,8 @@
+import { ChevronRightIcon, FileTextIcon } from "lucide-react";
 import { Link } from "react-router";
 
-import { defineAppChrome, PageHeader } from "~/features/app-shell";
-import { StubPage } from "~/shared/components/stub-page";
-import { Button } from "~/shared/ui/button";
+import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { UserAvatar } from "~/shared/components/user-avatar";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -10,18 +10,55 @@ export const handle = defineAppChrome({
 });
 
 export default function MenuPage() {
+  const { profile } = useAppShell();
+
   return (
     <>
       <PageHeader title="메뉴" />
-      <StubPage title="메뉴" description="설정·바로가기 목록이 들어갑니다." />
-      <div className="px-4 pb-4 md:hidden">
-        <Button
-          className="w-full"
-          nativeButton={false}
-          render={<Link to="/messenger" />}
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
+        <h1 className="hidden text-2xl font-semibold md:block">메뉴</h1>
+
+        <Link
+          to="/profile"
+          className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3 transition-colors hover:bg-muted/60"
         >
-          메시지
-        </Button>
+          <UserAvatar
+            src={profile.avatar_url}
+            name={profile.name}
+            className="size-8"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold">{profile.name}</p>
+          </div>
+          <ChevronRightIcon
+            className="size-4 shrink-0 text-muted-foreground"
+            aria-hidden
+          />
+        </Link>
+
+        <section className="flex flex-col gap-1.5">
+          <h2 className="px-1 text-xs font-semibold tracking-wide text-muted-foreground">
+            정보
+          </h2>
+          <div className="overflow-hidden rounded-xl border bg-card">
+            <Link
+              to="/menu/licenses"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
+            >
+              <FileTextIcon
+                className="size-4.5 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                오픈소스 라이선스
+              </span>
+              <ChevronRightIcon
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+            </Link>
+          </div>
+        </section>
       </div>
     </>
   );

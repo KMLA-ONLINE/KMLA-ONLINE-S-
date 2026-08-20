@@ -7,6 +7,7 @@ import { MinusIcon } from "lucide-react";
 function InputOTP({
   className,
   containerClassName,
+  autoComplete = "one-time-code",
   ...props
 }: React.ComponentProps<typeof OTPInput> & {
   containerClassName?: string;
@@ -14,6 +15,7 @@ function InputOTP({
   return (
     <OTPInput
       data-slot="input-otp"
+      autoComplete={autoComplete}
       containerClassName={cn(
         "cn-input-otp flex items-center has-disabled:opacity-50",
         containerClassName,

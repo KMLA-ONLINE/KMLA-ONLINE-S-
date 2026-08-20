@@ -61,28 +61,41 @@ export function ProfilePostHeader({
       )}
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <ProfileNameLink pubId={post.author_pub_id} name={authorName} />
-          {onOwnTimeline ? null : (
-            <>
-              <ChevronRightIcon
-                className="size-3.5 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <ProfileNameLink
-                pubId={post.timeline_pub_id}
-                name={post.timeline_name}
-                label={`${post.timeline_name}님의 타임라인`}
-              />
-            </>
-          )}
-          {post.visibility === "private" ? (
-            <Badge variant="secondary" className="shrink-0 gap-1">
-              <LockIcon className="size-3" aria-hidden="true" />
-              비공개
-            </Badge>
-          ) : null}
-        </div>
+        {post.activity_kind ? (
+          <div className="flex min-w-0 items-center text-sm text-muted-foreground">
+            <ProfileNameLink pubId={post.author_pub_id} name={authorName} />
+            <span className="truncate">
+              님이{" "}
+              {post.activity_kind === "avatar_changed"
+                ? "프로필 사진을"
+                : "프로필 커버를"}{" "}
+              바꾸었습니다.
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <ProfileNameLink pubId={post.author_pub_id} name={authorName} />
+            {onOwnTimeline ? null : (
+              <>
+                <ChevronRightIcon
+                  className="size-3.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <ProfileNameLink
+                  pubId={post.timeline_pub_id}
+                  name={post.timeline_name}
+                  label={`${post.timeline_name}님의 타임라인`}
+                />
+              </>
+            )}
+            {post.visibility === "private" ? (
+              <Badge variant="secondary" className="shrink-0 gap-1">
+                <LockIcon className="size-3" aria-hidden="true" />
+                비공개
+              </Badge>
+            ) : null}
+          </div>
+        )}
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <RelativeTime value={post.published_at} />
         </div>

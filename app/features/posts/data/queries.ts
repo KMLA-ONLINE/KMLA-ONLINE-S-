@@ -14,6 +14,7 @@ import type {
 } from "~/features/posts/model/types";
 import type { PostAttachment } from "~/features/posts/model/types";
 import { createPostAttachmentUrls } from "~/features/posts/data/files";
+import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import { getSupabase } from "~/shared/supabase/client";
 
 export const GROUP_POST_PAGE_SIZE = 12;
@@ -48,6 +49,30 @@ async function attachFiles<T extends { post_id: string }>(
         attachment_id: item.id,
         signedUrl: urls.get(item.object_path) ?? null,
       })),
+  }));
+}
+
+async function attachProfileMedia<
+  T extends {
+    activity_media_path: string | null;
+    author_avatar_path: string | null;
+  },
+>(posts: T[]): Promise<(T & { activity_media_url: string | null })[]> {
+  const urls = await createProfileMediaUrls(
+    posts.flatMap((post) => [
+      post.author_avatar_path,
+      post.activity_media_path,
+    ]),
+  );
+
+  return posts.map((post) => ({
+    ...post,
+    author_avatar_path: post.author_avatar_path
+      ? (urls.get(post.author_avatar_path) ?? null)
+      : null,
+    activity_media_url: post.activity_media_path
+      ? (urls.get(post.activity_media_path) ?? null)
+      : null,
   }));
 }
 
@@ -158,7 +183,9 @@ export async function listProfilePosts(
   });
   if (error) throw error;
   const rows = data ?? [];
-  const posts = await attachFiles(rows.slice(0, PROFILE_POST_PAGE_SIZE));
+  const posts = await attachProfileMedia(
+    await attachFiles(rows.slice(0, PROFILE_POST_PAGE_SIZE)),
+  );
   const last = posts.at(-1);
   return {
     posts,
@@ -178,7 +205,10 @@ export async function getProfilePost(
   if (error) throw error;
   const post = data?.[0];
   if (!post) return null;
-  return { ...post, attachments: await listPostAttachments(postId) };
+  const [hydrated] = await attachProfileMedia([
+    { ...post, attachments: await listPostAttachments(postId) },
+  ]);
+  return hydrated;
 }
 
 /**

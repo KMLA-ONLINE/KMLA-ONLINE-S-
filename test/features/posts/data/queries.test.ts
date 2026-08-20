@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createPostAttachmentUrls, getSupabase } = vi.hoisted(() => ({
-  createPostAttachmentUrls: vi.fn().mockResolvedValue(new Map()),
-  getSupabase: vi.fn(),
-}));
+const { createPostAttachmentUrls, createProfileMediaUrls, getSupabase } =
+  vi.hoisted(() => ({
+    createPostAttachmentUrls: vi.fn().mockResolvedValue(new Map()),
+    createProfileMediaUrls: vi.fn().mockResolvedValue(new Map()),
+    getSupabase: vi.fn(),
+  }));
 
 vi.mock("~/features/posts/data/files", () => ({ createPostAttachmentUrls }));
+vi.mock("~/features/profiles/data/media", () => ({ createProfileMediaUrls }));
 vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 
 import {
