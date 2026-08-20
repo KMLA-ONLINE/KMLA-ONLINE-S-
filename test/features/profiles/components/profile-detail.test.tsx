@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ProfileDetail } from "~/features/profiles";
@@ -55,5 +55,48 @@ describe("ProfileDetail", () => {
       "href",
       "/profile/hanbyeol-25/posts/new",
     );
+  });
+
+  it("does not reuse the avatar as a missing cover image", () => {
+    const avatarUrl = "https://example.com/avatar.webp";
+
+    renderRoute(() => (
+      <ProfileDetail
+        profile={{
+          id: 25,
+          pub_id: "hanbyeol-25",
+          name: "이한별",
+          type: "alumni",
+          role: "member",
+          cohort: 25,
+          academic_track: "international",
+          avatar_path: "profiles/25/avatar.webp",
+          avatar_url: avatarUrl,
+          cover_path: null,
+          cover_url: null,
+          description: null,
+          birthday: null,
+          class_no: null,
+          dorm_room: null,
+          department: null,
+          gender: "female",
+          phone_number: null,
+          contact_email: null,
+          student_number: null,
+          allow_timeline_posts: true,
+          is_returning_student: false,
+        }}
+        isOwnProfile={false}
+        viewerName="김관리"
+        viewerAvatarUrl={null}
+        posts={{ posts: [], nextCursor: null }}
+      />
+    ));
+
+    expect(
+      within(screen.getByTestId("profile-cover")).queryByRole("img", {
+        hidden: true,
+      }),
+    ).not.toBeInTheDocument();
   });
 });

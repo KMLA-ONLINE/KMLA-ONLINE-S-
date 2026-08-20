@@ -76,7 +76,6 @@ export function ProfileDetail({
   ].filter((value): value is string => value !== null);
 
   const hasCoverImage = Boolean(profile.cover_url?.trim());
-  const heroBackground = hasCoverImage ? profile.cover_url : profile.avatar_url;
 
   const facts: ProfileFact[] = [
     {
@@ -137,23 +136,18 @@ export function ProfileDetail({
       <div className="w-full space-y-2 md:space-y-6">
         <section className="-mx-3 overflow-hidden bg-background sm:mx-0 sm:rounded-2xl sm:border">
           {/* cover */}
-          <div className="relative aspect-[3/1] w-full overflow-hidden bg-muted">
-            {heroBackground ? (
+          <div
+            data-testid="profile-cover"
+            className="relative aspect-[3/1] w-full overflow-hidden bg-[#F3F4F7]"
+          >
+            {hasCoverImage ? (
               <img
-                src={heroBackground}
+                src={profile.cover_url ?? undefined}
                 alt=""
                 aria-hidden="true"
-                className={
-                  hasCoverImage
-                    ? "absolute inset-0 size-full object-cover"
-                    : "absolute -inset-8 h-[calc(100%+4rem)] w-[calc(100%+4rem)] scale-110 object-cover blur-2xl"
-                }
+                className="absolute inset-0 size-full object-cover"
               />
             ) : null}
-
-            {hasCoverImage ? null : (
-              <div className="absolute inset-0 bg-black/10" aria-hidden />
-            )}
 
             {isOwnProfile ? (
               <ProfileMediaEditor
