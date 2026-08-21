@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { cn } from "~/shared/lib/utils";
+import { Spinner } from "~/shared/ui/spinner";
 
 import { getDefaultMeal, getMealDay, type MealDay } from "../data/neis";
 
@@ -9,8 +10,6 @@ const MEALS = [
   { api: "중식", label: "점심" },
   { api: "석식", label: "저녁" },
 ] as const;
-
-const SKELETON_WIDTHS = ["w-24", "w-32", "w-28", "w-36", "w-20", "w-16"];
 
 const weekdayFormatter = new Intl.DateTimeFormat("ko-KR", {
   weekday: "short",
@@ -38,15 +37,10 @@ function dayNumber(date: string) {
   return String(Number(date.slice(6, 8)));
 }
 
-/** 모바일에선 카드가 없으므로 회색 블록 대신 줄 단위로 비운다. */
-function MealSkeleton() {
+function MealLoading() {
   return (
-    <div className="px-1 md:px-4">
-      {SKELETON_WIDTHS.map((width) => (
-        <div key={width} className="py-2.5">
-          <div className={cn("h-4 animate-pulse rounded bg-muted", width)} />
-        </div>
-      ))}
+    <div className="flex justify-center py-16" aria-live="polite">
+      <Spinner aria-label="급식 불러오는 중" />
     </div>
   );
 }
@@ -166,7 +160,7 @@ export function MealScreen({
 
       <div className="mt-3 md:mt-4">
         {loadingDate === selectedDate ? (
-          <MealSkeleton />
+          <MealLoading />
         ) : selectedDay?.unavailable ? (
           <MealNotice>불러오지 못했습니다</MealNotice>
         ) : activeMeal ? (
@@ -183,7 +177,7 @@ export function MealScreen({
         ) : selectedDay ? (
           <MealNotice>식단 없음</MealNotice>
         ) : (
-          <MealSkeleton />
+          <MealLoading />
         )}
       </div>
     </div>
