@@ -10,7 +10,7 @@ const MEALS = [
   { api: "석식", label: "저녁" },
 ] as const;
 
-const SKELETON_WIDTHS = ["w-24", "w-32", "w-28", "w-36", "w-20", "w-28"];
+const SKELETON_WIDTHS = ["w-24", "w-32", "w-28", "w-36", "w-20", "w-16"];
 
 const weekdayFormatter = new Intl.DateTimeFormat("ko-KR", {
   weekday: "short",
