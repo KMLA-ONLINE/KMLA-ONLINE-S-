@@ -10,6 +10,8 @@ const MEALS = [
   { api: "석식", label: "저녁" },
 ] as const;
 
+const SKELETON_WIDTHS = ["w-24", "w-32", "w-28", "w-36", "w-20", "w-28"];
+
 const weekdayFormatter = new Intl.DateTimeFormat("ko-KR", {
   weekday: "short",
   timeZone: "UTC",
@@ -34,6 +36,27 @@ function toDate(date: string) {
 
 function dayNumber(date: string) {
   return String(Number(date.slice(6, 8)));
+}
+
+/** 모바일에선 카드가 없으므로 회색 블록 대신 줄 단위로 비운다. */
+function MealSkeleton() {
+  return (
+    <div className="px-1 md:px-4">
+      {SKELETON_WIDTHS.map((width) => (
+        <div key={width} className="py-2.5">
+          <div className={cn("h-4 animate-pulse rounded bg-muted", width)} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MealNotice({ children }: { children: string }) {
+  return (
+    <p className="py-16 text-center text-sm text-muted-foreground">
+      {children}
+    </p>
+  );
 }
 
 interface MealScreenProps {
@@ -81,87 +104,86 @@ export function MealScreen({
   };
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-3 pb-8 md:px-0">
-      <div className="space-y-3">
-        <div className="grid grid-cols-7 gap-1 rounded-2xl bg-muted p-1">
-          {dates.map((dateValue) => {
-            const date = toDate(dateValue);
-            const selected = dateValue === selectedDate;
+    <div className="mx-auto w-full max-w-2xl px-4 pb-10 md:px-0">
+      <div className="grid grid-cols-7">
+        {dates.map((dateValue) => {
+          const date = toDate(dateValue);
+          const selected = dateValue === selectedDate;
 
-            return (
-              <button
-                key={dateValue}
-                type="button"
-                aria-label={fullDateFormatter.format(date)}
-                aria-pressed={selected}
-                onClick={() => void selectDate(dateValue)}
+          return (
+            <button
+              key={dateValue}
+              type="button"
+              aria-label={fullDateFormatter.format(date)}
+              aria-pressed={selected}
+              onClick={() => void selectDate(dateValue)}
+              className="flex touch-manipulation flex-col items-center gap-1 rounded-xl py-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <span
                 className={cn(
-                  "flex min-h-12 touch-manipulation flex-col items-center justify-center rounded-xl px-1 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                  selected
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
+                  "text-xs transition-colors",
+                  selected ? "text-foreground" : "text-muted-foreground",
                 )}
               >
-                <span className="text-[11px] font-medium sm:text-xs">
-                  {weekdayFormatter.format(date).replace(".", "")}
-                </span>
+                {weekdayFormatter.format(date).replace(".", "")}
+              </span>
 
-                <span className="mt-0.5 text-sm font-semibold tabular-nums">
-                  {dayNumber(dateValue)}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="grid grid-cols-3 rounded-2xl bg-muted p-1">
-          {MEALS.map((meal) => {
-            const selected = selectedMeal === meal.api;
-
-            return (
-              <button
-                key={meal.api}
-                type="button"
-                aria-pressed={selected}
-                onClick={() => setSelectedMeal(meal.api)}
+              <span
                 className={cn(
-                  "min-h-11 touch-manipulation rounded-xl px-3 text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                  selected
-                    ? "bg-background text-primary shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
+                  "flex size-9 items-center justify-center rounded-full text-sm font-semibold tabular-nums transition-colors",
+                  selected && "bg-primary text-primary-foreground",
                 )}
               >
-                {meal.label}
-              </button>
-            );
-          })}
-        </div>
+                {dayNumber(dateValue)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
+      <div className="mt-1 flex border-b">
+        {MEALS.map((meal) => {
+          const selected = selectedMeal === meal.api;
+
+          return (
+            <button
+              key={meal.api}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => setSelectedMeal(meal.api)}
+              className={cn(
+                "-mb-px min-h-11 flex-1 touch-manipulation border-b-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                selected
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {meal.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 md:mt-4">
         {loadingDate === selectedDate ? (
-          <div className="h-52 animate-pulse rounded-2xl bg-muted" />
+          <MealSkeleton />
         ) : selectedDay?.unavailable ? (
-          <div className="rounded-2xl border bg-card py-12 text-center text-sm text-muted-foreground">
-            불러오지 못했습니다
-          </div>
+          <MealNotice>불러오지 못했습니다</MealNotice>
         ) : activeMeal ? (
-          <section className="overflow-hidden rounded-2xl border bg-card">
-            <div className="divide-y">
-              {activeMeal.items.map((item) => (
-                <div
-                  key={`${item.name}-${item.allergens.join(".")}`}
-                  className="px-5 py-3.5 text-[15px] leading-6 font-medium"
-                >
-                  {item.name}
-                </div>
-              ))}
-            </div>
-          </section>
+          <ul className="md:rounded-2xl md:border md:bg-card md:py-2">
+            {activeMeal.items.map((item) => (
+              <li
+                key={`${item.name}-${item.allergens.join(".")}`}
+                className="px-1 py-2.5 text-[15px] leading-6 md:px-5"
+              >
+                {item.name}
+              </li>
+            ))}
+          </ul>
         ) : selectedDay ? (
-          <div className="rounded-2xl border bg-card py-12 text-center text-sm text-muted-foreground">
-            식단 없음
-          </div>
+          <MealNotice>식단 없음</MealNotice>
         ) : (
-          <div className="h-52 animate-pulse rounded-2xl bg-muted" />
+          <MealSkeleton />
         )}
       </div>
     </div>
