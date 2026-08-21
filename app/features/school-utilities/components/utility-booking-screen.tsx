@@ -1,5 +1,10 @@
-import { Repeat2Icon, XIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  Repeat2Icon,
+  XIcon,
+} from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { useAppShell } from "~/features/app-shell";
@@ -63,6 +68,11 @@ const WEEKEND_KARAOKE_SLOTS: Slot[] = Array.from(
     };
   },
 );
+
+const WEEKEND_GONGANG_SLOTS: Slot[] = [
+  ...WEEKEND_KARAOKE_SLOTS,
+  ...GONGANG_SLOTS,
+];
 
 const rangeDateFormatter = new Intl.DateTimeFormat("ko-KR", {
   month: "numeric",
@@ -361,7 +371,13 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
   const { profile } = useAppShell();
   const [weekStart] = useState(() => startOfWeek(new Date()));
   const [selectedDay, setSelectedDay] = useState(initialDay);
-  const [selectedSlot, setSelectedSlot] = useState(GONGANG_SLOTS[0]?.id ?? "");
+  const [selectedSlot, setSelectedSlot] = useState(() =>
+    isWeekend(new Date())
+      ? (WEEKEND_GONGANG_SLOTS[0]?.id ?? "")
+      : (GONGANG_SLOTS[0]?.id ?? ""),
+  );
+
+  const weekendStripRef = useRef<HTMLDivElement>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [reservations, setReservations] = useState<Record<string, Reservation>>(
@@ -375,9 +391,24 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
   const selectedDate = dates[selectedDay] ?? weekStart;
   const weekEnd = dates[6] ?? weekStart;
 
-  const karaokeSlots = isWeekend(selectedDate)
-    ? WEEKEND_KARAOKE_SLOTS
-    : WEEKDAY_KARAOKE_SLOTS;
+  const weekend = isWeekend(selectedDate);
+
+  const karaokeSlots = weekend ? WEEKEND_KARAOKE_SLOTS : WEEKDAY_KARAOKE_SLOTS;
+
+  const gongangSlots = weekend ? WEEKEND_GONGANG_SLOTS : GONGANG_SLOTS;
+
+  const activeGongangSlot = gongangSlots.some(
+    (slot) => slot.id === selectedSlot,
+  )
+    ? selectedSlot
+    : (gongangSlots[0]?.id ?? "");
+
+  const scrollWeekendSlots = (direction: -1 | 1) => {
+    weekendStripRef.current?.scrollBy({
+      left: direction * 320,
+      behavior: "smooth",
+    });
+  };
 
   const updateDraft = (key: string, draft: Draft) => {
     setDrafts((current) => ({
@@ -500,6 +531,13 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
                   aria-pressed={selected}
                   onClick={() => {
                     setSelectedDay(position);
+
+                    setSelectedSlot(
+                      isWeekend(date)
+                        ? (WEEKEND_GONGANG_SLOTS[0]?.id ?? "")
+                        : (GONGANG_SLOTS[0]?.id ?? ""),
+                    );
+
                     setOpenKey(null);
                   }}
                   className={cn(
@@ -523,66 +561,141 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
 
         {mode === "gongang" ? (
           <>
-            <div className="grid grid-cols-3 rounded-xl bg-muted p-1 lg:hidden">
-              {GONGANG_SLOTS.map((slot) => (
-                <button
-                  key={slot.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedSlot(slot.id);
-                    setOpenKey(null);
-                  }}
-                  className={cn(
-                    "rounded-lg px-2 py-2 text-sm font-semibold transition-colors",
-                    selectedSlot === slot.id
-                      ? "bg-background shadow-sm"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  {slot.label}
-                </button>
-              ))}
-            </div>
+            {weekend ? (
+              <>
+                <div className="flex w-full items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="이전 시간 보기"
+                    onClick={() => scrollWeekendSlots(-1)}
+                    className="hidden shrink-0 lg:inline-flex"
+                  >
+                    <ChevronLeftIcon />
+                  </Button>
 
-            <div className="lg:hidden">
-              {GONGANG_SLOTS.filter((slot) => slot.id === selectedSlot).map(
-                (slot) => (
-                  <GongangSlot
-                    key={slot.id}
-                    slot={slot}
-                    date={selectedDate}
-                    reservations={reservations}
-                    recurringReservations={recurringReservations}
-                    drafts={drafts}
-                    openKey={openKey}
-                    onOpen={setOpenKey}
-                    onDraftChange={updateDraft}
-                    onClose={() => setOpenKey(null)}
-                    onSave={saveReservation}
-                    onCancel={cancelReservation}
-                  />
-                ),
-              )}
-            </div>
+                  <div
+                    ref={weekendStripRef}
+                    className="flex min-w-0 flex-1 snap-x snap-mandatory [scrollbar-width:none] gap-1 overflow-x-auto scroll-smooth rounded-xl bg-muted p-1 [&::-webkit-scrollbar]:hidden"
+                  >
+                    {gongangSlots.map((slot) => (
+                      <button
+                        key={slot.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedSlot(slot.id);
+                          setOpenKey(null);
+                        }}
+                        className={cn(
+                          "shrink-0 snap-start rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap transition-colors",
+                          activeGongangSlot === slot.id
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {slot.label}
+                      </button>
+                    ))}
+                  </div>
 
-            <div className="hidden gap-3 lg:grid lg:grid-cols-3">
-              {GONGANG_SLOTS.map((slot) => (
-                <GongangSlot
-                  key={slot.id}
-                  slot={slot}
-                  date={selectedDate}
-                  reservations={reservations}
-                  recurringReservations={recurringReservations}
-                  drafts={drafts}
-                  openKey={openKey}
-                  onOpen={setOpenKey}
-                  onDraftChange={updateDraft}
-                  onClose={() => setOpenKey(null)}
-                  onSave={saveReservation}
-                  onCancel={cancelReservation}
-                />
-              ))}
-            </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="다음 시간 보기"
+                    onClick={() => scrollWeekendSlots(1)}
+                    className="hidden shrink-0 lg:inline-flex"
+                  >
+                    <ChevronRightIcon />
+                  </Button>
+                </div>
+
+                <div>
+                  {gongangSlots
+                    .filter((slot) => slot.id === activeGongangSlot)
+                    .map((slot) => (
+                      <GongangSlot
+                        key={slot.id}
+                        slot={slot}
+                        date={selectedDate}
+                        reservations={reservations}
+                        recurringReservations={recurringReservations}
+                        drafts={drafts}
+                        openKey={openKey}
+                        onOpen={setOpenKey}
+                        onDraftChange={updateDraft}
+                        onClose={() => setOpenKey(null)}
+                        onSave={saveReservation}
+                        onCancel={cancelReservation}
+                      />
+                    ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 rounded-xl bg-muted p-1 lg:hidden">
+                  {GONGANG_SLOTS.map((slot) => (
+                    <button
+                      key={slot.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedSlot(slot.id);
+                        setOpenKey(null);
+                      }}
+                      className={cn(
+                        "rounded-lg px-2 py-2 text-sm font-semibold transition-colors",
+                        activeGongangSlot === slot.id
+                          ? "bg-background shadow-sm"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {slot.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="lg:hidden">
+                  {GONGANG_SLOTS.filter(
+                    (slot) => slot.id === activeGongangSlot,
+                  ).map((slot) => (
+                    <GongangSlot
+                      key={slot.id}
+                      slot={slot}
+                      date={selectedDate}
+                      reservations={reservations}
+                      recurringReservations={recurringReservations}
+                      drafts={drafts}
+                      openKey={openKey}
+                      onOpen={setOpenKey}
+                      onDraftChange={updateDraft}
+                      onClose={() => setOpenKey(null)}
+                      onSave={saveReservation}
+                      onCancel={cancelReservation}
+                    />
+                  ))}
+                </div>
+
+                <div className="hidden gap-3 lg:grid lg:grid-cols-3">
+                  {GONGANG_SLOTS.map((slot) => (
+                    <GongangSlot
+                      key={slot.id}
+                      slot={slot}
+                      date={selectedDate}
+                      reservations={reservations}
+                      recurringReservations={recurringReservations}
+                      drafts={drafts}
+                      openKey={openKey}
+                      onOpen={setOpenKey}
+                      onDraftChange={updateDraft}
+                      onClose={() => setOpenKey(null)}
+                      onSave={saveReservation}
+                      onCancel={cancelReservation}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </>
         ) : (
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
