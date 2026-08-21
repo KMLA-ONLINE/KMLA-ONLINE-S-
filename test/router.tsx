@@ -11,6 +11,12 @@ type RenderRouteOptions = RoutesTestStubProps &
     routes?: StubRoutes;
     /** Path pattern the component is mounted at. Defaults to `/`. */
     path?: string;
+    /**
+     * Action for the route under test. Pass it when the component submits a form
+     * or fetcher, so the submission resolves instead of rendering the router
+     * error boundary.
+     */
+    action?: StubRoutes[number]["action"];
   };
 
 /**
@@ -25,6 +31,7 @@ export function renderRoute(
   {
     routes = [],
     path = "/",
+    action,
     initialEntries,
     initialIndex,
     hydrationData,
@@ -32,7 +39,7 @@ export function renderRoute(
     ...renderOptions
   }: RenderRouteOptions = {},
 ) {
-  const Stub = createRoutesStub([{ path, Component }, ...routes]);
+  const Stub = createRoutesStub([{ path, Component, action }, ...routes]);
 
   return {
     user: userEvent.setup(),
