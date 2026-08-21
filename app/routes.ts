@@ -20,6 +20,7 @@ export default [
       route("menu", "routes/app/menu/index.tsx"),
       route("menu/licenses", "routes/app/menu/licenses.tsx"),
       route("menu/meal", "routes/app/menu/meal.tsx"),
+      route("menu/timetable", "routes/app/menu/timetable.tsx"),
       route("groups", "routes/app/groups/index.tsx"),
       route("groups/discover", "routes/app/groups/discover.tsx"),
       route("groups/member-page", "routes/app/groups/member-page.ts"),
