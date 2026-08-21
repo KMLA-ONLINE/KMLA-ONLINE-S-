@@ -4,10 +4,16 @@ import {
   Repeat2Icon,
   XIcon,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { useAppShell } from "~/features/app-shell";
+import {
+  createUtilityReservation,
+  deleteUtilityReservation,
+  loadUtilityReservations,
+  type UtilityReservation as DbReservation,
+} from "~/features/school-utilities/data/reservations";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -25,6 +31,7 @@ interface Slot {
 }
 
 interface Reservation {
+  id: number;
   applicantName: string;
   avatarUrl: string | null;
   detail: string;
@@ -152,6 +159,38 @@ function emptyDraft(): Draft {
     detail: "",
     recurring: false,
   };
+}
+
+function reservationFromDb(row: DbReservation): Reservation {
+  return {
+    id: row.id,
+    applicantName: row.applicantName,
+    avatarUrl: row.avatarUrl,
+    detail: row.detail,
+    recurring: row.recurring,
+  };
+}
+
+function buildReservationMaps(rows: DbReservation[]) {
+  const direct: Record<string, Reservation> = {};
+  const recurring: Record<string, Reservation> = {};
+
+  for (const row of rows) {
+    const date = new Date(`${row.reservationDate}T12:00:00`);
+    const reservation = reservationFromDb(row);
+
+    if (row.recurring) {
+      recurring[
+        recurringKey(row.mode, date, row.slot, row.location ?? undefined)
+      ] = reservation;
+    } else {
+      direct[
+        reservationKey(row.mode, date, row.slot, row.location ?? undefined)
+      ] = reservation;
+    }
+  }
+
+  return { direct, recurring };
 }
 
 interface ReservationEditorProps {
@@ -391,6 +430,26 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
   const selectedDate = dates[selectedDay] ?? weekStart;
   const weekEnd = dates[6] ?? weekStart;
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void loadUtilityReservations(mode, dateKey(weekStart), dateKey(weekEnd))
+      .then((rows) => {
+        if (cancelled) return;
+
+        const maps = buildReservationMaps(rows);
+        setReservations(maps.direct);
+        setRecurringReservations(maps.recurring);
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to load utility reservations", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, weekStart, weekEnd]);
+
   const weekend = isWeekend(selectedDate);
 
   const karaokeSlots = weekend ? WEEKEND_KARAOKE_SLOTS : WEEKDAY_KARAOKE_SLOTS;
@@ -417,64 +476,96 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
     }));
   };
 
-  const saveReservation = (key: string, repeatKey: string, draft: Draft) => {
+  const saveReservation = async (
+    key: string,
+    repeatKey: string,
+    draft: Draft,
+  ) => {
     const detail = draft.detail.trim();
     if (!detail) return;
 
-    const reservation: Reservation = {
-      applicantName: profile.name,
-      avatarUrl: profile.avatar_url,
-      detail,
-      recurring: mode === "gongang" && draft.recurring,
-    };
+    const parts = key.split(":");
+    const reservationDate = parts[1];
+    const slot = parts[2];
+    const location = parts[3] ?? null;
 
-    if (reservation.recurring) {
-      setRecurringReservations((current) => ({
-        ...current,
-        [repeatKey]: reservation,
-      }));
+    if (!reservationDate || !slot) return;
 
-      setReservations((current) => {
+    try {
+      const created = await createUtilityReservation({
+        profileId: profile.id,
+        mode,
+        reservationDate,
+        slot,
+        location: mode === "gongang" ? location : null,
+        detail,
+        recurring: mode === "gongang" && draft.recurring,
+      });
+
+      const reservation = reservationFromDb(created);
+
+      if (created.recurring) {
+        setRecurringReservations((current) => ({
+          ...current,
+          [repeatKey]: reservation,
+        }));
+
+        setReservations((current) => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
+      } else {
+        setReservations((current) => ({
+          ...current,
+          [key]: reservation,
+        }));
+      }
+
+      setDrafts((current) => {
         const next = { ...current };
         delete next[key];
         return next;
       });
-    } else {
-      setReservations((current) => ({
-        ...current,
-        [key]: reservation,
-      }));
+
+      setOpenKey(null);
+    } catch (error) {
+      console.error("Failed to create utility reservation", error);
     }
-
-    setDrafts((current) => {
-      const next = { ...current };
-      delete next[key];
-      return next;
-    });
-
-    setOpenKey(null);
   };
 
-  const cancelReservation = (
+  const cancelReservation = async (
     key: string,
     repeatKey: string,
     recurring: boolean,
   ) => {
-    if (recurring) {
-      setRecurringReservations((current) => {
-        const next = { ...current };
-        delete next[repeatKey];
-        return next;
-      });
-    } else {
-      setReservations((current) => {
-        const next = { ...current };
-        delete next[key];
-        return next;
-      });
-    }
+    const reservation = recurring
+      ? recurringReservations[repeatKey]
+      : reservations[key];
 
-    setOpenKey(null);
+    if (!reservation) return;
+
+    try {
+      await deleteUtilityReservation(reservation.id);
+
+      if (recurring) {
+        setRecurringReservations((current) => {
+          const next = { ...current };
+          delete next[repeatKey];
+          return next;
+        });
+      } else {
+        setReservations((current) => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
+      }
+
+      setOpenKey(null);
+    } catch (error) {
+      console.error("Failed to delete utility reservation", error);
+    }
   };
 
   return (
@@ -626,8 +717,12 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
                         onOpen={setOpenKey}
                         onDraftChange={updateDraft}
                         onClose={() => setOpenKey(null)}
-                        onSave={saveReservation}
-                        onCancel={cancelReservation}
+                        onSave={(key, repeatKey, draft) => {
+                          void saveReservation(key, repeatKey, draft);
+                        }}
+                        onCancel={(key, repeatKey, recurring) => {
+                          void cancelReservation(key, repeatKey, recurring);
+                        }}
                       />
                     ))}
                 </div>
@@ -670,8 +765,12 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
                       onOpen={setOpenKey}
                       onDraftChange={updateDraft}
                       onClose={() => setOpenKey(null)}
-                      onSave={saveReservation}
-                      onCancel={cancelReservation}
+                      onSave={(key, repeatKey, draft) => {
+                        void saveReservation(key, repeatKey, draft);
+                      }}
+                      onCancel={(key, repeatKey, recurring) => {
+                        void cancelReservation(key, repeatKey, recurring);
+                      }}
                     />
                   ))}
                 </div>
@@ -689,8 +788,12 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
                       onOpen={setOpenKey}
                       onDraftChange={updateDraft}
                       onClose={() => setOpenKey(null)}
-                      onSave={saveReservation}
-                      onCancel={cancelReservation}
+                      onSave={(key, repeatKey, draft) => {
+                        void saveReservation(key, repeatKey, draft);
+                      }}
+                      onCancel={(key, repeatKey, recurring) => {
+                        void cancelReservation(key, repeatKey, recurring);
+                      }}
                     />
                   ))}
                 </div>
@@ -730,7 +833,9 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
                     <div className="mt-3">
                       <ReservationInfo
                         reservation={reservation}
-                        onCancel={() => cancelReservation(key, "", false)}
+                        onCancel={() => {
+                          void cancelReservation(key, "", false);
+                        }}
                       />
                     </div>
                   ) : openKey === key ? (
@@ -740,7 +845,9 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
                         draft={draft}
                         onChange={(next) => updateDraft(key, next)}
                         onClose={() => setOpenKey(null)}
-                        onSave={() => saveReservation(key, "", draft)}
+                        onSave={() => {
+                          void saveReservation(key, "", draft);
+                        }}
                       />
                     </div>
                   ) : null}

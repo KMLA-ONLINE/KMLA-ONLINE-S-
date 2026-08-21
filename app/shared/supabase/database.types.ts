@@ -719,6 +719,56 @@ export type Database = {
           },
         ]
       }
+      utility_reservations: {
+        Row: {
+          applicant_name: string
+          avatar_path: string | null
+          created_at: string
+          detail: string
+          id: number
+          location: string | null
+          mode: string
+          profile_id: number
+          recurring: boolean
+          reservation_date: string
+          slot: string
+        }
+        Insert: {
+          applicant_name: string
+          avatar_path?: string | null
+          created_at?: string
+          detail: string
+          id?: never
+          location?: string | null
+          mode: string
+          profile_id: number
+          recurring?: boolean
+          reservation_date: string
+          slot: string
+        }
+        Update: {
+          applicant_name?: string
+          avatar_path?: string | null
+          created_at?: string
+          detail?: string
+          id?: never
+          location?: string | null
+          mode?: string
+          profile_id?: number
+          recurring?: boolean
+          reservation_date?: string
+          slot?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "utility_reservations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
