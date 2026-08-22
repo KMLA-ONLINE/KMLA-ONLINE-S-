@@ -1,9 +1,4 @@
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  Repeat2Icon,
-  XIcon,
-} from "lucide-react";
+import { PlusIcon, Repeat2Icon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 
@@ -17,7 +12,10 @@ import {
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
+import { Checkbox } from "~/shared/ui/checkbox";
 import { Input } from "~/shared/ui/input";
+import { Label } from "~/shared/ui/label";
+import { Spinner } from "~/shared/ui/spinner";
 
 export type UtilityMode = "gongang" | "karaoke";
 
@@ -33,6 +31,7 @@ interface Slot {
 interface Reservation {
   id: number;
   applicantName: string;
+  applicantCohort: number | null;
   avatarUrl: string | null;
   detail: string;
   recurring: boolean;
@@ -42,6 +41,11 @@ interface Draft {
   detail: string;
   recurring: boolean;
 }
+
+const MODES = [
+  { id: "gongang", label: "공강", to: "/util/gongang" },
+  { id: "karaoke", label: "노래방", to: "/util/karaoke" },
+] as const;
 
 const FLOORS = [
   { id: "floor_b1", label: "지하 1층" },
@@ -81,6 +85,9 @@ const WEEKEND_GONGANG_SLOTS: Slot[] = [
   ...GONGANG_SLOTS,
 ];
 
+/** 편집기는 한 번에 하나만 열리므로 이 id를 독점한다. */
+const RECURRING_FIELD_ID = "utility-recurring";
+
 const rangeDateFormatter = new Intl.DateTimeFormat("ko-KR", {
   month: "numeric",
   day: "numeric",
@@ -88,10 +95,6 @@ const rangeDateFormatter = new Intl.DateTimeFormat("ko-KR", {
 
 const weekdayFormatter = new Intl.DateTimeFormat("ko-KR", {
   weekday: "short",
-});
-
-const dayFormatter = new Intl.DateTimeFormat("ko-KR", {
-  day: "numeric",
 });
 
 const fullDateFormatter = new Intl.DateTimeFormat("ko-KR", {
@@ -165,6 +168,7 @@ function reservationFromDb(row: DbReservation): Reservation {
   return {
     id: row.id,
     applicantName: row.applicantName,
+    applicantCohort: row.applicantCohort,
     avatarUrl: row.avatarUrl,
     detail: row.detail,
     recurring: row.recurring,
@@ -193,216 +197,321 @@ function buildReservationMaps(rows: DbReservation[]) {
   return { direct, recurring };
 }
 
+function ModeTabs({ mode }: { mode: UtilityMode }) {
+  return (
+    <nav aria-label="공강 및 노래방" className="flex border-b">
+      {MODES.map((item) => {
+        const active = item.id === mode;
+
+        return (
+          <Link
+            key={item.id}
+            to={item.to}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "-mb-px inline-flex min-h-11 flex-1 items-center justify-center border-b-2 text-sm font-medium transition-colors",
+              active
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+interface WeekStripProps {
+  dates: Date[];
+  selectedDay: number;
+  onSelect: (position: number, date: Date) => void;
+}
+
+function WeekStrip({ dates, selectedDay, onSelect }: WeekStripProps) {
+  const today = dateKey(new Date());
+
+  return (
+    <div className="grid grid-cols-7">
+      {dates.map((date, position) => {
+        const selected = position === selectedDay;
+
+        return (
+          <button
+            key={dateKey(date)}
+            type="button"
+            aria-label={fullDateFormatter.format(date)}
+            aria-pressed={selected}
+            onClick={() => onSelect(position, date)}
+            className="flex touch-manipulation flex-col items-center gap-1 rounded-xl py-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            <span
+              className={cn(
+                "text-xs transition-colors",
+                selected ? "text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {weekdayFormatter.format(date).replace(".", "")}
+            </span>
+
+            <span
+              className={cn(
+                "flex size-9 items-center justify-center rounded-full text-sm font-semibold tabular-nums transition-colors",
+                selected && "bg-primary text-primary-foreground",
+                !selected && dateKey(date) === today && "text-primary",
+              )}
+            >
+              {date.getDate()}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+interface SlotTabsProps {
+  slots: Slot[];
+  activeSlot: string;
+  onSelect: (slot: string) => void;
+}
+
+/** 평일은 3개, 주말은 14개다. 모바일은 가로 스크롤, 데스크톱은 줄바꿈으로 전부 보여준다. */
+function SlotTabs({ slots, activeSlot, onSelect }: SlotTabsProps) {
+  return (
+    <div
+      role="group"
+      aria-label="시간"
+      className="-mx-4 no-scrollbar flex gap-2 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
+    >
+      {slots.map((slot) => {
+        const active = slot.id === activeSlot;
+
+        return (
+          <button
+            key={slot.id}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onSelect(slot.id)}
+            className={cn(
+              "inline-flex h-9 shrink-0 touch-manipulation items-center rounded-full border px-3.5 text-sm font-medium whitespace-nowrap tabular-nums transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              active
+                ? "border-foreground bg-foreground text-background"
+                : "border-transparent text-muted-foreground hover:bg-muted",
+            )}
+          >
+            {slot.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 interface ReservationEditorProps {
   mode: UtilityMode;
+  label: string;
+  labelClassName: string;
   draft: Draft;
   onChange: (draft: Draft) => void;
   onClose: () => void;
   onSave: () => void;
 }
 
+/** 열린 줄이 그대로 입력 폼이 된다. 줄을 눌러서 연 입력이므로 커서를 바로 넣어 준다. */
 function ReservationEditor({
   mode,
+  label,
+  labelClassName,
   draft,
   onChange,
   onClose,
   onSave,
 }: ReservationEditorProps) {
-  return (
-    <div className="space-y-2.5 rounded-xl bg-muted/60 p-2.5">
-      <Input
-        value={draft.detail}
-        placeholder={mode === "gongang" ? "목적" : "사용자 명단"}
-        autoComplete="off"
-        onChange={(event) =>
-          onChange({
-            ...draft,
-            detail: event.target.value,
-          })
-        }
-      />
+  const inputRef = useRef<HTMLInputElement>(null);
 
-      <div className="flex items-center justify-between gap-2">
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  return (
+    <form
+      className="px-1 py-2.5 md:px-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave();
+      }}
+    >
+      <div className="flex items-center gap-3">
+        <span className={cn("shrink-0 text-sm font-semibold", labelClassName)}>
+          {label}
+        </span>
+
+        <Input
+          ref={inputRef}
+          value={draft.detail}
+          aria-label={mode === "gongang" ? "목적" : "사용자 명단"}
+          placeholder={mode === "gongang" ? "목적" : "사용자 명단"}
+          onChange={(event) =>
+            onChange({
+              ...draft,
+              detail: event.target.value,
+            })
+          }
+        />
+      </div>
+
+      <div className="mt-2 flex items-center justify-end gap-2">
         {mode === "gongang" ? (
-          <label className="flex h-8 cursor-pointer items-center gap-2 text-sm font-medium">
-            <input
-              type="checkbox"
+          <div className="mr-auto flex items-center gap-2">
+            <Checkbox
+              id={RECURRING_FIELD_ID}
               checked={draft.recurring}
-              className="size-4 accent-primary"
-              onChange={(event) =>
+              onCheckedChange={(checked) =>
                 onChange({
                   ...draft,
-                  recurring: event.target.checked,
+                  recurring: checked === true,
                 })
               }
             />
-            장기
-          </label>
-        ) : (
-          <span />
-        )}
 
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="닫기"
-            onClick={onClose}
-          >
-            <XIcon />
-          </Button>
+            <Label
+              htmlFor={RECURRING_FIELD_ID}
+              className="font-normal text-muted-foreground"
+            >
+              장기
+            </Label>
+          </div>
+        ) : null}
 
-          <Button
-            type="button"
-            size="sm"
-            disabled={!draft.detail.trim()}
-            onClick={onSave}
-          >
-            신청
-          </Button>
-        </div>
+        <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+          취소
+        </Button>
+
+        <Button type="submit" size="sm" disabled={!draft.detail.trim()}>
+          신청
+        </Button>
       </div>
-    </div>
+    </form>
   );
 }
 
-function ReservationInfo({
-  reservation,
-  onCancel,
-}: {
-  reservation: Reservation;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="flex min-w-0 items-center gap-2.5">
-      <UserAvatar
-        src={reservation.avatarUrl}
-        name={reservation.applicantName}
-        size="sm"
-        className="shrink-0"
-      />
-
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <p className="truncate text-sm font-semibold">
-            {reservation.applicantName}
-          </p>
-
-          {reservation.recurring ? (
-            <Repeat2Icon
-              className="size-3.5 shrink-0 text-primary"
-              aria-label="매주"
-            />
-          ) : null}
-        </div>
-
-        <p className="truncate text-sm text-muted-foreground">
-          {reservation.detail}
-        </p>
-      </div>
-
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="예약 취소"
-        onClick={onCancel}
-      >
-        <XIcon />
-      </Button>
-    </div>
-  );
-}
-
-interface GongangSlotProps {
-  slot: Slot;
-  date: Date;
-  reservations: Record<string, Reservation>;
-  recurringReservations: Record<string, Reservation>;
-  drafts: Record<string, Draft>;
-  openKey: string | null;
-  onOpen: (key: string) => void;
-  onDraftChange: (key: string, draft: Draft) => void;
+interface BookingRowProps {
+  mode: UtilityMode;
+  label: string;
+  labelClassName: string;
+  reservation?: Reservation;
+  draft: Draft;
+  open: boolean;
+  onOpen: () => void;
+  onDraftChange: (draft: Draft) => void;
   onClose: () => void;
-  onSave: (key: string, recurringKeyValue: string, draft: Draft) => void;
-  onCancel: (
-    key: string,
-    recurringKeyValue: string,
-    recurring: boolean,
-  ) => void;
+  onSave: () => void;
+  onCancel: () => void;
 }
 
-function GongangSlot({
-  slot,
-  date,
-  reservations,
-  recurringReservations,
-  drafts,
-  openKey,
+/**
+ * 층(공강) 또는 시간(노래방) 한 줄.
+ *
+ * 비어 있으면 줄 전체가 신청 버튼이고, 열리면 같은 자리에서 바로 입력한다.
+ * 카드 안에 카드를 겹치지 않는 게 이 화면의 규칙이다.
+ */
+function BookingRow({
+  mode,
+  label,
+  labelClassName,
+  reservation,
+  draft,
+  open,
   onOpen,
   onDraftChange,
   onClose,
   onSave,
   onCancel,
-}: GongangSlotProps) {
-  return (
-    <section className="overflow-hidden rounded-xl border bg-card">
-      <h2 className="border-b px-3 py-2.5 text-sm font-semibold">
-        {slot.label}
-      </h2>
+}: BookingRowProps) {
+  if (reservation) {
+    return (
+      <div className="flex min-h-14 items-center gap-3 px-1 py-2 md:px-4">
+        <span className={cn("shrink-0 text-sm font-semibold", labelClassName)}>
+          {label}
+        </span>
 
-      <div className="divide-y">
-        {FLOORS.map((floor) => {
-          const key = reservationKey("gongang", date, slot.id, floor.id);
-          const repeatKey = recurringKey("gongang", date, slot.id, floor.id);
-          const directReservation = reservations[key];
-          const repeatingReservation = recurringReservations[repeatKey];
-          const reservation = directReservation ?? repeatingReservation;
-          const draft = drafts[key] ?? emptyDraft();
+        {/* `sm`(24px)은 두 줄짜리 줄에서 작아 보이고 `default`(32px)는 과하다.
+            `default` 기준 클래스만 tailwind-merge로 덮어써서 28px로 쓴다. */}
+        <UserAvatar
+          src={reservation.avatarUrl}
+          name={reservation.applicantName}
+          className="size-8 shrink-0"
+        />
 
-          return (
-            <div key={floor.id} className="p-3">
-              <div className="flex min-h-8 items-center gap-3">
-                <p className="w-14 shrink-0 text-sm font-semibold">
-                  {floor.label}
-                </p>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="truncate text-sm font-semibold">
+              {reservation.applicantCohort === null ? null : (
+                <span>{reservation.applicantCohort}기 </span>
+              )}
+              {reservation.applicantName}
+            </p>
 
-                <div className="min-w-0 flex-1">
-                  {reservation ? (
-                    <ReservationInfo
-                      reservation={reservation}
-                      onCancel={() =>
-                        onCancel(key, repeatKey, reservation.recurring)
-                      }
-                    />
-                  ) : openKey === key ? (
-                    <ReservationEditor
-                      mode="gongang"
-                      draft={draft}
-                      onChange={(next) => onDraftChange(key, next)}
-                      onClose={onClose}
-                      onSave={() => onSave(key, repeatKey, draft)}
-                    />
-                  ) : (
-                    <div className="flex justify-end">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onOpen(key)}
-                      >
-                        신청
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+            {reservation.recurring ? (
+              <Repeat2Icon
+                className="size-3.5 shrink-0 text-primary"
+                aria-label="매주"
+              />
+            ) : null}
+          </div>
+
+          <p className="truncate text-sm text-muted-foreground">
+            {reservation.detail}
+          </p>
+        </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`${label} 예약 취소`}
+          className="shrink-0 text-muted-foreground"
+          onClick={onCancel}
+        >
+          <XIcon />
+        </Button>
       </div>
-    </section>
+    );
+  }
+
+  if (open) {
+    return (
+      <ReservationEditor
+        mode={mode}
+        label={label}
+        labelClassName={labelClassName}
+        draft={draft}
+        onChange={onDraftChange}
+        onClose={onClose}
+        onSave={onSave}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group flex min-h-14 w-full touch-manipulation items-center gap-3 px-1 py-2 text-left transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none md:px-4"
+    >
+      <span className={cn("shrink-0 text-sm font-semibold", labelClassName)}>
+        {label}
+      </span>
+
+      <span className="flex-1" />
+
+      <span className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors group-hover:text-primary">
+        <PlusIcon className="size-4" aria-hidden />
+        신청
+      </span>
+    </button>
   );
 }
 
@@ -416,9 +525,11 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
       : (GONGANG_SLOTS[0]?.id ?? ""),
   );
 
-  const weekendStripRef = useRef<HTMLDivElement>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+
+  // 주는 고정이고 mode는 route가 바뀌며 다시 mount되므로, 로딩은 mount 직후 한 번뿐이다.
+  const [loading, setLoading] = useState(true);
   const [reservations, setReservations] = useState<Record<string, Reservation>>(
     {},
   );
@@ -443,6 +554,11 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
       })
       .catch((error: unknown) => {
         console.error("Failed to load utility reservations", error);
+      })
+      .finally(() => {
+        if (cancelled) return;
+
+        setLoading(false);
       });
 
     return () => {
@@ -461,13 +577,6 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
   )
     ? selectedSlot
     : (gongangSlots[0]?.id ?? "");
-
-  const scrollWeekendSlots = (direction: -1 | 1) => {
-    weekendStripRef.current?.scrollBy({
-      left: direction * 320,
-      behavior: "smooth",
-    });
-  };
 
   const updateDraft = (key: string, draft: Draft) => {
     setDrafts((current) => ({
@@ -568,292 +677,126 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
     }
   };
 
+  const selectDate = (position: number, date: Date) => {
+    setSelectedDay(position);
+
+    setSelectedSlot(
+      isWeekend(date)
+        ? (WEEKEND_GONGANG_SLOTS[0]?.id ?? "")
+        : (GONGANG_SLOTS[0]?.id ?? ""),
+    );
+
+    setOpenKey(null);
+  };
+
+  const rows =
+    mode === "gongang"
+      ? FLOORS.map((floor) => {
+          const key = reservationKey(
+            "gongang",
+            selectedDate,
+            activeGongangSlot,
+            floor.id,
+          );
+
+          const repeatKey = recurringKey(
+            "gongang",
+            selectedDate,
+            activeGongangSlot,
+            floor.id,
+          );
+
+          return {
+            key,
+            repeatKey,
+            label: floor.label,
+            reservation: reservations[key] ?? recurringReservations[repeatKey],
+          };
+        })
+      : karaokeSlots.map((slot) => {
+          const key = reservationKey("karaoke", selectedDate, slot.id);
+
+          return {
+            key,
+            repeatKey: "",
+            label: slot.label,
+            reservation: reservations[key],
+          };
+        });
+
+  // 주말 노래방 라벨만 "08:00–09:00"처럼 길다. 나머지는 좁게 잡아야 이름과 목적이 덜 잘린다.
+  const labelClassName =
+    mode === "karaoke" && weekend ? "w-28 tabular-nums" : "w-16";
+
   return (
-    <div className="mx-auto w-full max-w-5xl px-3 pb-6 md:px-0 md:pb-10">
-      <div className="space-y-3 md:space-y-5">
-        <h1 className="hidden text-2xl font-semibold md:block">
-          공강 · 노래방
-        </h1>
+    <div className="mx-auto w-full max-w-2xl px-4 pb-10 md:px-0">
+      <h1 className="mb-4 hidden text-2xl font-semibold md:block">
+        공강 · 노래방
+      </h1>
 
-        <nav
-          aria-label="공강 및 노래방"
-          className="grid grid-cols-2 rounded-xl bg-muted p-1"
-        >
-          <Link
-            to="/util/gongang"
-            className={cn(
-              "rounded-lg px-3 py-2 text-center text-sm font-semibold transition-colors",
-              mode === "gongang"
-                ? "bg-background shadow-sm"
-                : "text-muted-foreground",
-            )}
-          >
-            공강
-          </Link>
+      <ModeTabs mode={mode} />
 
-          <Link
-            to="/util/karaoke"
-            className={cn(
-              "rounded-lg px-3 py-2 text-center text-sm font-semibold transition-colors",
-              mode === "karaoke"
-                ? "bg-background shadow-sm"
-                : "text-muted-foreground",
-            )}
-          >
-            노래방
-          </Link>
-        </nav>
+      <p className="mt-4 px-1 text-xs font-medium text-muted-foreground tabular-nums">
+        {rangeDateFormatter.format(weekStart)} –{" "}
+        {rangeDateFormatter.format(weekEnd)}
+      </p>
 
-        <section className="rounded-xl border bg-card p-2">
-          <p className="px-1 pb-1.5 text-sm font-semibold tabular-nums">
-            {rangeDateFormatter.format(weekStart)} –{" "}
-            {rangeDateFormatter.format(weekEnd)}
-          </p>
+      <div className="mt-1">
+        <WeekStrip
+          dates={dates}
+          selectedDay={selectedDay}
+          onSelect={selectDate}
+        />
+      </div>
 
-          <div className="grid grid-cols-7 gap-1">
-            {dates.map((date, position) => {
-              const selected = position === selectedDay;
+      {mode === "gongang" ? (
+        <div className="mt-3">
+          <SlotTabs
+            slots={gongangSlots}
+            activeSlot={activeGongangSlot}
+            onSelect={(slot) => {
+              setSelectedSlot(slot);
+              setOpenKey(null);
+            }}
+          />
+        </div>
+      ) : null}
 
-              return (
-                <button
-                  key={dateKey(date)}
-                  type="button"
-                  aria-label={fullDateFormatter.format(date)}
-                  aria-pressed={selected}
-                  onClick={() => {
-                    setSelectedDay(position);
-
-                    setSelectedSlot(
-                      isWeekend(date)
-                        ? (WEEKEND_GONGANG_SLOTS[0]?.id ?? "")
-                        : (GONGANG_SLOTS[0]?.id ?? ""),
-                    );
-
-                    setOpenKey(null);
-                  }}
-                  className={cn(
-                    "flex min-w-0 touch-manipulation flex-col items-center rounded-lg px-1 py-2 transition-colors",
-                    selected
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                >
-                  <span className="text-[11px] font-medium sm:text-xs">
-                    {weekdayFormatter.format(date).replace(".", "")}
-                  </span>
-                  <span className="mt-0.5 text-sm font-semibold tabular-nums">
-                    {dayFormatter.format(date)}
-                  </span>
-                </button>
-              );
-            })}
+      <div className="mt-3 md:mt-4">
+        {loading ? (
+          <div className="flex justify-center py-16" aria-live="polite">
+            <Spinner aria-label="예약 불러오는 중" />
           </div>
-        </section>
-
-        {mode === "gongang" ? (
-          <>
-            {weekend ? (
-              <>
-                <div className="flex w-full items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label="이전 시간 보기"
-                    onClick={() => scrollWeekendSlots(-1)}
-                    className="hidden shrink-0 lg:inline-flex"
-                  >
-                    <ChevronLeftIcon />
-                  </Button>
-
-                  <div
-                    ref={weekendStripRef}
-                    className="flex min-w-0 flex-1 snap-x snap-mandatory [scrollbar-width:none] gap-1 overflow-x-auto scroll-smooth rounded-xl bg-muted p-1 [&::-webkit-scrollbar]:hidden"
-                  >
-                    {gongangSlots.map((slot) => (
-                      <button
-                        key={slot.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedSlot(slot.id);
-                          setOpenKey(null);
-                        }}
-                        className={cn(
-                          "shrink-0 snap-start rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap transition-colors",
-                          activeGongangSlot === slot.id
-                            ? "bg-background text-foreground shadow-sm"
-                            : "text-muted-foreground",
-                        )}
-                      >
-                        {slot.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label="다음 시간 보기"
-                    onClick={() => scrollWeekendSlots(1)}
-                    className="hidden shrink-0 lg:inline-flex"
-                  >
-                    <ChevronRightIcon />
-                  </Button>
-                </div>
-
-                <div>
-                  {gongangSlots
-                    .filter((slot) => slot.id === activeGongangSlot)
-                    .map((slot) => (
-                      <GongangSlot
-                        key={slot.id}
-                        slot={slot}
-                        date={selectedDate}
-                        reservations={reservations}
-                        recurringReservations={recurringReservations}
-                        drafts={drafts}
-                        openKey={openKey}
-                        onOpen={setOpenKey}
-                        onDraftChange={updateDraft}
-                        onClose={() => setOpenKey(null)}
-                        onSave={(key, repeatKey, draft) => {
-                          void saveReservation(key, repeatKey, draft);
-                        }}
-                        onCancel={(key, repeatKey, recurring) => {
-                          void cancelReservation(key, repeatKey, recurring);
-                        }}
-                      />
-                    ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="grid grid-cols-3 rounded-xl bg-muted p-1 lg:hidden">
-                  {GONGANG_SLOTS.map((slot) => (
-                    <button
-                      key={slot.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedSlot(slot.id);
-                        setOpenKey(null);
-                      }}
-                      className={cn(
-                        "rounded-lg px-2 py-2 text-sm font-semibold transition-colors",
-                        activeGongangSlot === slot.id
-                          ? "bg-background shadow-sm"
-                          : "text-muted-foreground",
-                      )}
-                    >
-                      {slot.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="lg:hidden">
-                  {GONGANG_SLOTS.filter(
-                    (slot) => slot.id === activeGongangSlot,
-                  ).map((slot) => (
-                    <GongangSlot
-                      key={slot.id}
-                      slot={slot}
-                      date={selectedDate}
-                      reservations={reservations}
-                      recurringReservations={recurringReservations}
-                      drafts={drafts}
-                      openKey={openKey}
-                      onOpen={setOpenKey}
-                      onDraftChange={updateDraft}
-                      onClose={() => setOpenKey(null)}
-                      onSave={(key, repeatKey, draft) => {
-                        void saveReservation(key, repeatKey, draft);
-                      }}
-                      onCancel={(key, repeatKey, recurring) => {
-                        void cancelReservation(key, repeatKey, recurring);
-                      }}
-                    />
-                  ))}
-                </div>
-
-                <div className="hidden gap-3 lg:grid lg:grid-cols-3">
-                  {GONGANG_SLOTS.map((slot) => (
-                    <GongangSlot
-                      key={slot.id}
-                      slot={slot}
-                      date={selectedDate}
-                      reservations={reservations}
-                      recurringReservations={recurringReservations}
-                      drafts={drafts}
-                      openKey={openKey}
-                      onOpen={setOpenKey}
-                      onDraftChange={updateDraft}
-                      onClose={() => setOpenKey(null)}
-                      onSave={(key, repeatKey, draft) => {
-                        void saveReservation(key, repeatKey, draft);
-                      }}
-                      onCancel={(key, repeatKey, recurring) => {
-                        void cancelReservation(key, repeatKey, recurring);
-                      }}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-          </>
         ) : (
-          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            {karaokeSlots.map((slot) => {
-              const key = reservationKey("karaoke", selectedDate, slot.id);
-              const reservation = reservations[key];
-              const draft = drafts[key] ?? emptyDraft();
-
-              return (
-                <section
-                  key={slot.id}
-                  className="rounded-xl border bg-card p-3"
-                >
-                  <div className="flex min-h-8 items-center gap-3">
-                    <h2 className="min-w-0 flex-1 text-sm font-semibold tabular-nums">
-                      {slot.label}
-                    </h2>
-
-                    {!reservation && openKey !== key ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setOpenKey(key)}
-                      >
-                        신청
-                      </Button>
-                    ) : null}
-                  </div>
-
-                  {reservation ? (
-                    <div className="mt-3">
-                      <ReservationInfo
-                        reservation={reservation}
-                        onCancel={() => {
-                          void cancelReservation(key, "", false);
-                        }}
-                      />
-                    </div>
-                  ) : openKey === key ? (
-                    <div className="mt-3">
-                      <ReservationEditor
-                        mode="karaoke"
-                        draft={draft}
-                        onChange={(next) => updateDraft(key, next)}
-                        onClose={() => setOpenKey(null)}
-                        onSave={() => {
-                          void saveReservation(key, "", draft);
-                        }}
-                      />
-                    </div>
-                  ) : null}
-                </section>
-              );
-            })}
+          <div className="divide-y overflow-hidden md:rounded-2xl md:border md:bg-card">
+            {rows.map((row) => (
+              <BookingRow
+                key={row.key}
+                mode={mode}
+                label={row.label}
+                labelClassName={labelClassName}
+                reservation={row.reservation}
+                draft={drafts[row.key] ?? emptyDraft()}
+                open={openKey === row.key}
+                onOpen={() => setOpenKey(row.key)}
+                onDraftChange={(draft) => updateDraft(row.key, draft)}
+                onClose={() => setOpenKey(null)}
+                onSave={() => {
+                  void saveReservation(
+                    row.key,
+                    row.repeatKey,
+                    drafts[row.key] ?? emptyDraft(),
+                  );
+                }}
+                onCancel={() => {
+                  void cancelReservation(
+                    row.key,
+                    row.repeatKey,
+                    row.reservation?.recurring ?? false,
+                  );
+                }}
+              />
+            ))}
           </div>
         )}
       </div>
