@@ -4,6 +4,10 @@ import { Link } from "react-router";
 
 import { useAppShell } from "~/features/app-shell";
 import {
+  canManageGongang,
+  loadGongangSchedule,
+} from "~/features/school-utilities/data/gongang-schedule";
+import {
   createUtilityReservation,
   deleteUtilityReservation,
   loadUtilityReservations,
@@ -40,6 +44,10 @@ interface Reservation {
 interface Draft {
   detail: string;
   recurring: boolean;
+}
+
+interface ManagerReservation {
+  detail: string;
 }
 
 const MODES = [
@@ -401,6 +409,7 @@ interface BookingRowProps {
   mode: UtilityMode;
   label: string;
   labelClassName: string;
+  managerReservation?: ManagerReservation;
   reservation?: Reservation;
   draft: Draft;
   open: boolean;
@@ -421,6 +430,7 @@ function BookingRow({
   mode,
   label,
   labelClassName,
+  managerReservation,
   reservation,
   draft,
   open,
@@ -430,6 +440,27 @@ function BookingRow({
   onSave,
   onCancel,
 }: BookingRowProps) {
+  if (managerReservation) {
+    return (
+      <div className="flex min-h-14 items-center gap-3 px-1 py-2 md:px-4">
+        <span className={cn("shrink-0 text-sm font-semibold", labelClassName)}>
+          {label}
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold">공강 관리자 선예약</p>
+          <p className="truncate text-sm text-muted-foreground">
+            {managerReservation.detail}
+          </p>
+        </div>
+
+        <span className="shrink-0 text-xs font-medium text-muted-foreground">
+          사용 불가
+        </span>
+      </div>
+    );
+  }
+
   if (reservation) {
     return (
       <div className="flex min-h-14 items-center gap-3 px-1 py-2 md:px-4">
@@ -536,21 +567,68 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
   const [recurringReservations, setRecurringReservations] = useState<
     Record<string, Reservation>
   >({});
+  const [managerReservations, setManagerReservations] = useState<
+    Record<string, ManagerReservation>
+  >({});
+  const [canManage, setCanManage] = useState(false);
 
   const dates = useMemo(() => getWeekDates(weekStart), [weekStart]);
   const selectedDate = dates[selectedDay] ?? weekStart;
   const weekEnd = dates[6] ?? weekStart;
 
   useEffect(() => {
+    if (mode !== "gongang") {
+      return;
+    }
+
     let cancelled = false;
 
-    void loadUtilityReservations(mode, dateKey(weekStart), dateKey(weekEnd))
-      .then((rows) => {
+    void canManageGongang(profile.id)
+      .then((allowed) => {
+        if (!cancelled) {
+          setCanManage(allowed);
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to check gongang manager permission", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, profile.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.all([
+      loadUtilityReservations(mode, dateKey(weekStart), dateKey(weekEnd)),
+      mode === "gongang"
+        ? loadGongangSchedule(dateKey(weekStart), dateKey(weekEnd))
+        : Promise.resolve([]),
+    ])
+      .then(([rows, scheduleEntries]) => {
         if (cancelled) return;
 
         const maps = buildReservationMaps(rows);
         setReservations(maps.direct);
         setRecurringReservations(maps.recurring);
+
+        const managerMap: Record<string, ManagerReservation> = {};
+
+        for (const entry of scheduleEntries) {
+          if (!entry.reserved) continue;
+
+          const date = new Date(`${entry.scheduleDate}T12:00:00`);
+
+          managerMap[
+            reservationKey("gongang", date, entry.slot, entry.location)
+          ] = {
+            detail: entry.detail ?? "공강 관리자 선예약",
+          };
+        }
+
+        setManagerReservations(managerMap);
       })
       .catch((error: unknown) => {
         console.error("Failed to load utility reservations", error);
@@ -710,6 +788,7 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
             key,
             repeatKey,
             label: floor.label,
+            managerReservation: managerReservations[key],
             reservation: reservations[key] ?? recurringReservations[repeatKey],
           };
         })
@@ -720,6 +799,7 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
             key,
             repeatKey: "",
             label: slot.label,
+            managerReservation: undefined,
             reservation: reservations[key],
           };
         });
@@ -735,6 +815,17 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
       </h1>
 
       <ModeTabs mode={mode} />
+
+      {mode === "gongang" && canManage ? (
+        <div className="mt-3 flex justify-end px-1">
+          <Link
+            to="/util/gongang/manage"
+            className="inline-flex min-h-9 items-center rounded-lg border px-3 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            다음 주 공강 선예약
+          </Link>
+        </div>
+      ) : null}
 
       <p className="mt-4 px-1 text-xs font-medium text-muted-foreground tabular-nums">
         {rangeDateFormatter.format(weekStart)} –{" "}
@@ -775,6 +866,7 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
                 mode={mode}
                 label={row.label}
                 labelClassName={labelClassName}
+                managerReservation={row.managerReservation}
                 reservation={row.reservation}
                 draft={drafts[row.key] ?? emptyDraft()}
                 open={openKey === row.key}
