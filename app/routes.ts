@@ -21,6 +21,7 @@ export default [
       route("menu/licenses", "routes/app/menu/licenses.tsx"),
       route("menu/meal", "routes/app/menu/meal.tsx"),
       route("util/gongang", "routes/app/util/gongang.tsx"),
+      route("util/gongang/manage", "routes/app/util/gongang-manage.tsx"),
       route("util/karaoke", "routes/app/util/karaoke.tsx"),
       route("groups", "routes/app/groups/index.tsx"),
       route("groups/discover", "routes/app/groups/discover.tsx"),

@@ -73,6 +73,47 @@ export type Database = {
           },
         ]
       }
+      gongang_schedule: {
+        Row: {
+          configured_by: number | null
+          created_at: string
+          detail: string | null
+          location: string
+          reserved: boolean
+          schedule_date: string
+          slot: string
+          updated_at: string
+        }
+        Insert: {
+          configured_by?: number | null
+          created_at?: string
+          detail?: string | null
+          location: string
+          reserved?: boolean
+          schedule_date: string
+          slot: string
+          updated_at?: string
+        }
+        Update: {
+          configured_by?: number | null
+          created_at?: string
+          detail?: string | null
+          location?: string
+          reserved?: boolean
+          schedule_date?: string
+          slot?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gongang_schedule_configured_by_fkey"
+            columns: ["configured_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_categories: {
         Row: {
           created_at: string
@@ -309,6 +350,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      permissions: {
+        Row: {
+          created_at: string
+          description: string | null
+          key: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          key: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          key?: string
+          name?: string
+        }
+        Relationships: []
       }
       post_attachments: {
         Row: {
@@ -602,6 +664,39 @@ export type Database = {
           sort_order?: number
         }
         Relationships: []
+      }
+      profile_permissions: {
+        Row: {
+          created_at: string
+          permission_key: string
+          profile_id: number
+        }
+        Insert: {
+          created_at?: string
+          permission_key: string
+          profile_id: number
+        }
+        Update: {
+          created_at?: string
+          permission_key?: string
+          profile_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_permissions_permission_key_fkey"
+            columns: ["permission_key"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "profile_permissions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
