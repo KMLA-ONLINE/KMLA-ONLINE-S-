@@ -1,3 +1,5 @@
+import { globSync } from "node:fs";
+
 import { defineConfig } from "vitest/config";
 
 // Deliberately does NOT include the `reactRouter()` Vite plugin: it builds a
@@ -5,19 +7,67 @@ import { defineConfig } from "vitest/config";
 // under Vitest. Unit tests import route modules and components directly and
 // wrap them with `createRoutesStub` from `react-router` when routing context
 // is needed. End-to-end coverage lives in Playwright instead.
+
+// Building a jsdom window costs about 1.3s per test file and dominates the run,
+// far outweighing the tests themselves. `model/`, `data/` and `shared/lib/` hold
+// pure logic that never touches the DOM, so they run in Node instead.
+const pureLayers = [
+  "test/**/model/**/*.{test,spec}.ts",
+  "test/**/data/**/*.{test,spec}.ts",
+  "test/shared/lib/**/*.{test,spec}.ts",
+];
+
+// Files inside those layers that read browser APIs directly and need jsdom
+// anyway. Add to this list rather than moving the test out of its layer.
+const domDependent = ["test/features/posts/model/view-preference.test.ts"];
+
+// Resolved once so both projects agree on the split. Globbing rather than
+// handing `pureLayers` to the jsdom project's `exclude` is deliberate: Vitest
+// applies `exclude` after `include` and supports no negation, so a `domDependent`
+// entry excluded by a `pureLayers` glob would be dropped by both projects.
+const nodeFiles = globSync(pureLayers)
+  .map((file) => file.replaceAll("\\", "/"))
+  .filter((file) => !domDependent.includes(file));
+
+const ignored = ["e2e/**", "node_modules/**", "build/**"];
+
 export default defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
   test: {
-    environment: "jsdom",
-    // Explicit imports instead of globals so Vitest's `expect` and Playwright's
-    // `expect` can coexist under a single tsconfig without clashing.
-    globals: false,
-    setupFiles: ["./test/setup.ts"],
-    include: ["test/**/*.{test,spec}.{ts,tsx}"],
-    exclude: ["e2e/**", "node_modules/**", "build/**"],
-    css: true,
+    // Forks — Vitest's default — pay a process spawn per test file, which on
+    // Windows costs about as much as the rest of the run combined.
+    pool: "threads",
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "node",
+          environment: "node",
+          pool: "threads",
+          // Explicit imports instead of globals so Vitest's `expect` and
+          // Playwright's `expect` can coexist under a single tsconfig.
+          globals: false,
+          setupFiles: ["./test/setup.node.ts"],
+          include: nodeFiles,
+          exclude: ignored,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "dom",
+          environment: "jsdom",
+          pool: "threads",
+          globals: false,
+          setupFiles: ["./test/setup.ts"],
+          include: ["test/**/*.{test,spec}.{ts,tsx}"],
+          exclude: [...ignored, ...nodeFiles],
+          css: true,
+        },
+      },
+    ],
     coverage: {
       provider: "v8",
       reportsDirectory: "./coverage",
