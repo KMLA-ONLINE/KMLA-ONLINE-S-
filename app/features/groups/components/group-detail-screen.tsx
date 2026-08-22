@@ -26,7 +26,6 @@ import {
   type GroupCategory,
   type GroupPostPage,
 } from "~/features/posts";
-import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 
@@ -45,8 +44,6 @@ export function GroupDetailScreen({
   group,
   profileId,
   isTeacher,
-  viewerName,
-  viewerAvatarUrl,
   categories = [],
   posts = { posts: [], nextCursor: null },
   memberPage,
@@ -56,8 +53,6 @@ export function GroupDetailScreen({
   group: GroupDetail;
   profileId: number;
   isTeacher: boolean;
-  viewerName?: string | null;
-  viewerAvatarUrl?: string | null;
   categories?: GroupCategory[];
   posts?: GroupPostPage;
   memberPage?: GroupMemberPage;
@@ -129,13 +124,7 @@ export function GroupDetailScreen({
         <div className="min-w-0 lg:order-1">
           {tab === "posts" ? (
             <div className="flex flex-col gap-3">
-              {canCreatePost ? (
-                <WritePostRow
-                  slug={group.slug}
-                  viewerName={viewerName}
-                  viewerAvatarUrl={viewerAvatarUrl}
-                />
-              ) : null}
+              {canCreatePost ? <WritePostRow slug={group.slug} /> : null}
               <GroupPostsPanel
                 key={posts.posts
                   .map((post) => `${post.post_id}:${post.is_pinned}`)
@@ -204,21 +193,16 @@ export function GroupDetailScreen({
  * `md:`부터 테두리 있는 카드)을 그대로 쓰는 것이 핵심이다 — 별개의 버튼으로 보이면 피드
  * 상단에 관련 없는 컨트롤이 하나 얹힌 것처럼 읽힌다.
  */
-function WritePostRow({
-  slug,
-  viewerName,
-  viewerAvatarUrl,
-}: {
-  slug: string;
-  viewerName?: string | null;
-  viewerAvatarUrl?: string | null;
-}) {
+function WritePostRow({ slug }: { slug: string }) {
   return (
     <Link
       to={`/groups/${slug}/posts/new`}
       className="group flex items-center gap-3 overflow-hidden rounded-none border-b-2 border-foreground/20 bg-card px-4 py-3 md:rounded-xl md:border md:border-border md:px-3 md:py-2.5"
     >
-      <UserAvatar src={viewerAvatarUrl} name={viewerName} className="size-9" />
+      <div
+        className="size-9 shrink-0 rounded-full border bg-muted"
+        aria-hidden="true"
+      />
       <span className="flex-1 rounded-full bg-muted px-4 py-2 text-sm text-muted-foreground transition-[filter] group-hover:brightness-95">
         글쓰기…
       </span>
