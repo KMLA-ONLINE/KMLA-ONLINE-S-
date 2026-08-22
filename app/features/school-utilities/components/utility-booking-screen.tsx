@@ -35,6 +35,7 @@ interface Slot {
 interface Reservation {
   id: number;
   applicantName: string;
+  applicantPubId: string;
   applicantCohort: number | null;
   avatarUrl: string | null;
   detail: string;
@@ -176,6 +177,7 @@ function reservationFromDb(row: DbReservation): Reservation {
   return {
     id: row.id,
     applicantName: row.applicantName,
+    applicantPubId: row.applicantPubId,
     applicantCohort: row.applicantCohort,
     avatarUrl: row.avatarUrl,
     detail: row.detail,
@@ -470,33 +472,39 @@ function BookingRow({
 
         {/* `sm`(24px)은 두 줄짜리 줄에서 작아 보이고 `default`(32px)는 과하다.
             `default` 기준 클래스만 tailwind-merge로 덮어써서 28px로 쓴다. */}
-        <UserAvatar
-          src={reservation.avatarUrl}
-          name={reservation.applicantName}
-          className="size-8 shrink-0"
-        />
+        <Link
+          to={`/profile/${reservation.applicantPubId}`}
+          aria-label={`${reservation.applicantName} 프로필`}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          <UserAvatar
+            src={reservation.avatarUrl}
+            name={reservation.applicantName}
+            className="size-8 shrink-0"
+          />
 
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <p className="truncate text-sm font-semibold">
-              {reservation.applicantCohort === null ? null : (
-                <span>{reservation.applicantCohort}기 </span>
-              )}
-              {reservation.applicantName}
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <p className="truncate text-sm font-semibold">
+                {reservation.applicantCohort === null ? null : (
+                  <span>{reservation.applicantCohort}기 </span>
+                )}
+                {reservation.applicantName}
+              </p>
+
+              {reservation.recurring ? (
+                <Repeat2Icon
+                  className="size-3.5 shrink-0 text-primary"
+                  aria-label="매주"
+                />
+              ) : null}
+            </div>
+
+            <p className="truncate text-sm text-muted-foreground">
+              {reservation.detail}
             </p>
-
-            {reservation.recurring ? (
-              <Repeat2Icon
-                className="size-3.5 shrink-0 text-primary"
-                aria-label="매주"
-              />
-            ) : null}
           </div>
-
-          <p className="truncate text-sm text-muted-foreground">
-            {reservation.detail}
-          </p>
-        </div>
+        </Link>
 
         <Button
           type="button"

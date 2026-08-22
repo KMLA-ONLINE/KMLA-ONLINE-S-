@@ -12,6 +12,7 @@ export interface UtilityReservation {
   detail: string;
   recurring: boolean;
   applicantName: string;
+  applicantPubId: string;
   /** 신청자 기수. 이름은 예약 행에 복사돼 있지만 기수는 프로필에서 읽어 온다. */
   applicantCohort: number | null;
   avatarUrl: string | null;
@@ -28,7 +29,7 @@ interface CreateUtilityReservationInput {
 }
 
 const SELECT_COLUMNS =
-  "id, profile_id, mode, reservation_date, slot, location, detail, recurring, applicant_name, avatar_path, profiles(cohort)" as const;
+  "id, profile_id, mode, reservation_date, slot, location, detail, recurring, applicant_name, avatar_path, profiles(cohort, pub_id)" as const;
 
 function toMode(value: string): UtilityMode {
   if (value === "gongang" || value === "karaoke") {
@@ -65,7 +66,10 @@ async function mapReservation(row: {
   recurring: boolean;
   applicant_name: string;
   avatar_path: string | null;
-  profiles: { cohort: number | null } | null;
+  profiles: {
+    cohort: number | null;
+    pub_id: string;
+  } | null;
 }): Promise<UtilityReservation> {
   return {
     id: row.id,
@@ -77,6 +81,7 @@ async function mapReservation(row: {
     detail: row.detail,
     recurring: row.recurring,
     applicantName: row.applicant_name,
+    applicantPubId: row.profiles?.pub_id ?? "",
     applicantCohort: row.profiles?.cohort ?? null,
     avatarUrl: await resolveAvatarUrl(row.avatar_path),
   };
