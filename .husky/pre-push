@@ -2,11 +2,5 @@
 # a type error usually lives in a file the commit did not touch.
 npm run typecheck
 
-# Only the tests reachable from what this branch changed. The full suite is not
-# skipped, just moved: quality.yml runs `npm run verify` on every push and pull
-# request to main, so nothing lands on main without a complete run.
-if git rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
-  npx vitest run --changed origin/main --passWithNoTests
-else
-  npm test
-fi
+# Run the full test suite before every push.
+npm test
