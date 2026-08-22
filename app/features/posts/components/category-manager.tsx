@@ -1,5 +1,5 @@
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon, Trash2Icon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 
 import type { GroupCategory } from "~/features/posts/model/types";
@@ -14,7 +14,9 @@ export function CategoryManager({
   groupId: string;
   categories: GroupCategory[];
 }) {
-  const fetcher = useFetcher<{ error?: string }>();
+  const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const submittedCreate = useRef(false);
   const [pendingChange, setPendingChange] = useState<{
     data: FormData;
     title: string;
@@ -23,6 +25,12 @@ export function CategoryManager({
     destructive?: boolean;
   } | null>(null);
   const pending = fetcher.state !== "idle";
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || !submittedCreate.current) return;
+    submittedCreate.current = false;
+    if (fetcher.data?.ok) queueMicrotask(() => setNewCategoryName(""));
+  }, [fetcher.data, fetcher.state]);
 
   const holdSubmit = (
     event: React.FormEvent<HTMLFormElement>,
@@ -63,6 +71,8 @@ export function CategoryManager({
         <input type="hidden" name="groupId" value={groupId} />
         <Input
           name="name"
+          value={newCategoryName}
+          onChange={(event) => setNewCategoryName(event.target.value)}
           maxLength={30}
           required
           aria-label="새 카테고리 이름"
@@ -183,6 +193,8 @@ export function CategoryManager({
           pending={pending}
           onCancel={() => setPendingChange(null)}
           onConfirm={() => {
+            submittedCreate.current =
+              pendingChange.data.get("intent") === "create-category";
             void fetcher.submit(pendingChange.data, { method: "post" });
             setPendingChange(null);
           }}
