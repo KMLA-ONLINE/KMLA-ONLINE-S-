@@ -241,4 +241,17 @@
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
+
+  html.image-viewer-open,
+  html.image-viewer-open body {
+    overflow: hidden;
+  }
+
+  html.image-viewer-open {
+    scrollbar-width: none;
+  }
+
+  html.image-viewer-open::-webkit-scrollbar {
+    display: none;
+  }
 }

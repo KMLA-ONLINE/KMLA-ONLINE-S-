@@ -10,7 +10,9 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
+  type Ref,
 } from "react";
 
 import { cn } from "~/shared/lib/utils";
@@ -33,6 +35,24 @@ const SWIPE_MAX_TRIGGER_DISTANCE = 80;
 const SWIPE_TRIGGER_RATIO = 0.2;
 const SWIPE_RUBBER_BAND = 0.25;
 const DRAG_CLICK_TOLERANCE = 6;
+const MAX_ZOOM = 4;
+const DOUBLE_TAP_ZOOM = 2;
+const DOUBLE_TAP_DELAY = 250;
+const CLICK_SUPPRESSION_TIME = 400;
+const MOBILE_MEDIA_QUERY = "(max-width: 639px)";
+
+interface Point {
+  x: number;
+  y: number;
+}
+
+interface ZoomState extends Point {
+  scale: number;
+}
+
+type GestureMode = "slide" | "pan" | "pinch" | null;
+
+const DEFAULT_ZOOM: ZoomState = { scale: 1, x: 0, y: 0 };
 
 function ControlButton({ className, ...props }: ComponentProps<"button">) {
   return (
@@ -42,11 +62,21 @@ function ControlButton({ className, ...props }: ComponentProps<"button">) {
 
 function Slide({
   image,
+  imageRef,
+  zoom,
+  isGestureActive,
   onBackdropClick,
+  onImageClick,
 }: {
   image?: ViewerImage;
+  imageRef?: Ref<HTMLImageElement>;
+  zoom?: ZoomState;
+  isGestureActive: boolean;
   onBackdropClick: () => void;
+  onImageClick: (event: ReactMouseEvent<HTMLImageElement>) => void;
 }) {
+  const imageZoom = zoom ?? DEFAULT_ZOOM;
+
   return (
     /* 배경 탭으로 닫는 것은 포인터 전용 편의다. 키보드 사용자에게는 헤더의 닫기 버튼과
        Esc가 있으므로 이 div에 키 핸들러나 role을 얹지 않는다 — 슬라이드 하나하나가
@@ -59,11 +89,21 @@ function Slide({
       {image ? (
         // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
         <img
+          ref={imageRef}
           src={image.src}
           alt={image.name}
           draggable={false}
-          className="max-h-full max-w-full object-contain select-none"
-          onClick={(event) => event.stopPropagation()}
+          className={cn(
+            "max-h-full max-w-full object-contain will-change-transform select-none sm:cursor-default",
+            imageZoom.scale > 1
+              ? "cursor-grab active:cursor-grabbing"
+              : "cursor-zoom-in",
+          )}
+          style={{
+            transform: `translate3d(${imageZoom.x}px, ${imageZoom.y}px, 0) scale(${imageZoom.scale})`,
+            transition: isGestureActive ? "none" : SLIDE_TRANSITION,
+          }}
+          onClick={onImageClick}
         />
       ) : null}
     </div>
@@ -89,7 +129,10 @@ function Filmstrip({
   }, [activeIndex]);
 
   return (
-    <div className="shrink-0 scrollbar-none overflow-x-auto">
+    <div
+      data-testid="image-viewer-filmstrip"
+      className="hidden shrink-0 scrollbar-none overflow-x-auto sm:block"
+    >
       <div className="mx-auto flex w-max gap-2 px-3 pt-3 pb-[calc(0.75rem+var(--app-safe-b))]">
         {images.map((image, index) => {
           const isActive = index === activeIndex;
@@ -144,9 +187,20 @@ export function ImageViewer({
   const popupRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
-  const dragStartRef = useRef<number | null>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const activePointersRef = useRef(new Map<number, Point>());
+  const gestureModeRef = useRef<GestureMode>(null);
+  const gestureStartRef = useRef<Point | null>(null);
   const dragBaseRef = useRef(0);
+  const panBaseRef = useRef<Point>({ x: 0, y: 0 });
+  const pinchStartRef = useRef<{
+    distance: number;
+    midpoint: Point;
+    zoom: ZoomState;
+  } | null>(null);
   const hasDraggedRef = useRef(false);
+  const suppressClicksUntilRef = useRef(0);
+  const pendingTapRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // pointermove는 연속 이벤트라 pointerup이 도착할 때까지 setState가 아직 커밋되지 않았을 수
   // 있다. 놓는 순간의 임계값 판정은 이 ref를 읽는다.
   const offsetRef = useRef(0);
@@ -154,9 +208,32 @@ export function ImageViewer({
   const [storedIndex, setStoredIndex] = useState(0);
   const [offset, setOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [isGestureActive, setIsGestureActive] = useState(false);
+  const [isChromeHidden, setIsChromeHidden] = useState(false);
+  const [zoom, setZoom] = useState<ZoomState>(DEFAULT_ZOOM);
+  const zoomRef = useRef(DEFAULT_ZOOM);
   const [renderedOpenImageId, setRenderedOpenImageId] = useState<string | null>(
     null,
   );
+
+  useEffect(
+    () => () => {
+      if (pendingTapRef.current !== null) clearTimeout(pendingTapRef.current);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+
+  useEffect(() => {
+    if (openImageId === null) return;
+
+    const root = document.documentElement;
+    root.classList.add("image-viewer-open");
+    return () => root.classList.remove("image-viewer-open");
+  }, [openImageId]);
 
   // 데스크톱에서 좌우 방향키로 넘긴다. Popup의 onKeyDown을 쓰지 않는 이유는 이 뷰어가
   // 게시물 상세 dialog 위에 열려 포커스가 여기까지 오지 않기 때문이고, capture 단계인
@@ -170,6 +247,8 @@ export function ImageViewer({
       event.preventDefault();
       offsetRef.current = 0;
       setOffset(0);
+      zoomRef.current = DEFAULT_ZOOM;
+      setZoom(DEFAULT_ZOOM);
       setStoredIndex((current) => {
         const clamped = Math.max(0, Math.min(current, images.length - 1));
         const next = event.key === "ArrowLeft" ? clamped - 1 : clamped + 1;
@@ -194,6 +273,8 @@ export function ImageViewer({
       ),
     );
     setOffset(0);
+    setZoom(DEFAULT_ZOOM);
+    setIsChromeHidden(false);
   }
 
   // 뷰어가 열려 있는 동안 첨부 목록이 바뀔 수 있다.
@@ -209,9 +290,83 @@ export function ImageViewer({
     setOffset(value);
   };
 
+  const setZoomState = (value: ZoomState) => {
+    zoomRef.current = value;
+    setZoom(value);
+  };
+
+  const resetZoom = () => setZoomState(DEFAULT_ZOOM);
+
   const goTo = (nextIndex: number) => {
     setDragOffset(0);
-    if (nextIndex >= 0 && nextIndex < images.length) setStoredIndex(nextIndex);
+    if (nextIndex >= 0 && nextIndex < images.length) {
+      resetZoom();
+      setStoredIndex(nextIndex);
+    }
+  };
+
+  const isMobileViewport = () =>
+    typeof window.matchMedia === "function"
+      ? window.matchMedia(MOBILE_MEDIA_QUERY).matches
+      : window.innerWidth < 640;
+
+  const clearPendingTap = () => {
+    if (pendingTapRef.current === null) return;
+    clearTimeout(pendingTapRef.current);
+    pendingTapRef.current = null;
+  };
+
+  const markDragged = () => {
+    hasDraggedRef.current = true;
+    suppressClicksUntilRef.current = Date.now() + CLICK_SUPPRESSION_TIME;
+    clearPendingTap();
+  };
+
+  const shouldSuppressClick = () => {
+    if (
+      !hasDraggedRef.current &&
+      Date.now() >= suppressClicksUntilRef.current
+    ) {
+      return false;
+    }
+
+    hasDraggedRef.current = false;
+    return true;
+  };
+
+  const clampZoom = (next: ZoomState): ZoomState => {
+    const scale = Math.max(1, Math.min(MAX_ZOOM, next.scale));
+    const viewport = viewportRef.current;
+    const image = imageRef.current;
+    if (scale === 1 || !viewport || !image) return DEFAULT_ZOOM;
+
+    const maxX = Math.max(
+      0,
+      (image.clientWidth * scale - viewport.clientWidth) / 2,
+    );
+    const maxY = Math.max(
+      0,
+      (image.clientHeight * scale - viewport.clientHeight) / 2,
+    );
+
+    return {
+      scale,
+      x: Math.max(-maxX, Math.min(maxX, next.x)),
+      y: Math.max(-maxY, Math.min(maxY, next.y)),
+    };
+  };
+
+  const getPointerPair = () => {
+    const [first, second] = Array.from(activePointersRef.current.values());
+    if (!first || !second) return null;
+
+    return {
+      distance: Math.hypot(second.x - first.x, second.y - first.y),
+      midpoint: {
+        x: (first.x + second.x) / 2,
+        y: (first.y + second.y) / 2,
+      },
+    };
   };
 
   /**
@@ -227,7 +382,9 @@ export function ImageViewer({
     // 변형이 없는 요소는 "none"으로 계산되는데 DOMMatrix가 이를 파싱하지 못한다. 그런 요소는
     // 어차피 이미 정지 상태다.
     const renderedTransform = getComputedStyle(track).transform;
-    if (renderedTransform === "none") return 0;
+    if (renderedTransform === "none" || typeof DOMMatrix === "undefined") {
+      return offsetRef.current;
+    }
 
     const { m41: renderedTranslateX } = new DOMMatrix(renderedTransform);
     return renderedTranslateX + index * viewportWidth;
@@ -244,9 +401,40 @@ export function ImageViewer({
       return;
     }
 
+    const point = { x: event.clientX, y: event.clientY };
+    activePointersRef.current.set(event.pointerId, point);
+
+    if (activePointersRef.current.size === 2 && isMobileViewport()) {
+      const pair = getPointerPair();
+      if (!pair || pair.distance === 0) return;
+
+      markDragged();
+      gestureModeRef.current = "pinch";
+      pinchStartRef.current = { ...pair, zoom: zoomRef.current };
+      setDragOffset(0);
+      setIsDragging(false);
+      setIsGestureActive(true);
+      setIsChromeHidden(true);
+      return;
+    }
+
+    if (activePointersRef.current.size > 1) {
+      markDragged();
+      return;
+    }
+
+    gestureStartRef.current = point;
+    setIsGestureActive(true);
+
+    if (zoomRef.current.scale > 1 && isMobileViewport()) {
+      gestureModeRef.current = "pan";
+      panBaseRef.current = { x: zoomRef.current.x, y: zoomRef.current.y };
+      return;
+    }
+
     const grabbedOffset = readRenderedOffset();
 
-    dragStartRef.current = event.clientX;
+    gestureModeRef.current = "slide";
     dragBaseRef.current = grabbedOffset;
     hasDraggedRef.current = false;
     setDragOffset(grabbedOffset);
@@ -254,17 +442,76 @@ export function ImageViewer({
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const dragStart = dragStartRef.current;
-    if (dragStart === null) return;
+    if (!activePointersRef.current.has(event.pointerId)) return;
+    activePointersRef.current.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+    });
 
-    const distance = event.clientX - dragStart;
-    if (Math.abs(distance) > DRAG_CLICK_TOLERANCE) hasDraggedRef.current = true;
+    if (gestureModeRef.current === "pinch") {
+      const start = pinchStartRef.current;
+      const pair = getPointerPair();
+      const viewport = viewportRef.current;
+      if (!start || !pair || !viewport || start.distance === 0) return;
+
+      event.preventDefault();
+      const viewportRect = viewport.getBoundingClientRect();
+      const scale = Math.max(
+        1,
+        Math.min(MAX_ZOOM, start.zoom.scale * (pair.distance / start.distance)),
+      );
+      const viewportCenter = {
+        x: viewportRect.left + viewport.clientWidth / 2,
+        y: viewportRect.top + viewport.clientHeight / 2,
+      };
+      const startMidpoint = {
+        x: start.midpoint.x - viewportCenter.x,
+        y: start.midpoint.y - viewportCenter.y,
+      };
+      const currentMidpoint = {
+        x: pair.midpoint.x - viewportCenter.x,
+        y: pair.midpoint.y - viewportCenter.y,
+      };
+      const scaleRatio = scale / start.zoom.scale;
+
+      setZoomState(
+        clampZoom({
+          scale,
+          x: currentMidpoint.x - (startMidpoint.x - start.zoom.x) * scaleRatio,
+          y: currentMidpoint.y - (startMidpoint.y - start.zoom.y) * scaleRatio,
+        }),
+      );
+      return;
+    }
+
+    const gestureStart = gestureStartRef.current;
+    if (!gestureStart) return;
+
+    const distanceX = event.clientX - gestureStart.x;
+    const distanceY = event.clientY - gestureStart.y;
+    if (Math.hypot(distanceX, distanceY) > DRAG_CLICK_TOLERANCE) {
+      markDragged();
+    }
+
+    if (gestureModeRef.current === "pan") {
+      event.preventDefault();
+      setZoomState(
+        clampZoom({
+          scale: zoomRef.current.scale,
+          x: panBaseRef.current.x + distanceX,
+          y: panBaseRef.current.y + distanceY,
+        }),
+      );
+      return;
+    }
+
+    if (gestureModeRef.current !== "slide") return;
 
     const viewportWidth = getViewportWidth();
     // 첫 장과 마지막 장의 정지 offset을 현재 index 기준으로 환산한 값.
     const firstSlideOffset = index * viewportWidth;
     const lastSlideOffset = (index - (images.length - 1)) * viewportWidth;
-    const draggedOffset = dragBaseRef.current + distance;
+    const draggedOffset = dragBaseRef.current + distanceX;
 
     if (draggedOffset > firstSlideOffset) {
       setDragOffset(
@@ -284,10 +531,48 @@ export function ImageViewer({
     setDragOffset(draggedOffset);
   };
 
-  const handlePointerUp = () => {
-    if (dragStartRef.current === null) return;
+  const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!activePointersRef.current.has(event.pointerId)) return;
+    activePointersRef.current.delete(event.pointerId);
 
-    dragStartRef.current = null;
+    if (gestureModeRef.current === "pinch") {
+      pinchStartRef.current = null;
+
+      if (activePointersRef.current.size >= 2) {
+        const pair = getPointerPair();
+        if (pair && pair.distance > 0) {
+          pinchStartRef.current = { ...pair, zoom: zoomRef.current };
+        }
+        return;
+      }
+
+      const remainingPointer = activePointersRef.current.values().next().value;
+      if (remainingPointer) {
+        gestureModeRef.current = "pan";
+        gestureStartRef.current = remainingPointer;
+        panBaseRef.current = {
+          x: zoomRef.current.x,
+          y: zoomRef.current.y,
+        };
+        return;
+      }
+
+      gestureModeRef.current = null;
+      gestureStartRef.current = null;
+      setIsGestureActive(false);
+      return;
+    }
+
+    if (activePointersRef.current.size > 0) return;
+
+    const gestureMode = gestureModeRef.current;
+    gestureModeRef.current = null;
+    gestureStartRef.current = null;
+    setIsGestureActive(false);
+
+    if (gestureMode === "pan") return;
+    if (gestureMode !== "slide") return;
+
     setIsDragging(false);
 
     const viewportWidth = getViewportWidth();
@@ -317,17 +602,48 @@ export function ImageViewer({
 
   // 스와이프는 손가락 아래에 있던 것에 대한 click으로 끝난다. 그걸 배경 탭으로 읽으면 안 된다.
   const handleBackdropClick = () => {
-    if (hasDraggedRef.current) {
-      hasDraggedRef.current = false;
-      return;
-    }
+    if (shouldSuppressClick()) return;
+    clearPendingTap();
     onClose();
   };
 
+  const handleImageClick = (event: ReactMouseEvent<HTMLImageElement>) => {
+    event.stopPropagation();
+    if (!isMobileViewport() || shouldSuppressClick()) return;
+
+    if (pendingTapRef.current !== null) {
+      clearPendingTap();
+
+      if (zoomRef.current.scale > 1) {
+        resetZoom();
+        return;
+      }
+
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const rect = viewport.getBoundingClientRect();
+      const x = event.clientX - rect.left - rect.width / 2;
+      const y = event.clientY - rect.top - rect.height / 2;
+      setZoomState(
+        clampZoom({
+          scale: DOUBLE_TAP_ZOOM,
+          x: x * (1 - DOUBLE_TAP_ZOOM),
+          y: y * (1 - DOUBLE_TAP_ZOOM),
+        }),
+      );
+      setIsChromeHidden(true);
+      return;
+    }
+
+    pendingTapRef.current = setTimeout(() => {
+      pendingTapRef.current = null;
+      setIsChromeHidden((hidden) => !hidden);
+    }, DOUBLE_TAP_DELAY);
+  };
+
   return (
-    /* `trap-focus`는 포커스만 가두고 스크롤 잠금은 하지 않는다. 이 뷰어는 게시물 상세
-       dialog 안에서 열리는데, 그 dialog가 이미 문서 스크롤을 잠갔다. 기본값(`true`)으로
-       두면 잠금이 두 번 걸리면서 스크롤바 폭 보정이 겹쳐 화면 전체가 밀린다. */
+    /* Base UI의 스크롤 잠금은 중첩 dialog에서 폭 보정이 겹치므로 사용하지 않는다. 대신
+       뷰어가 열린 동안 루트에 image-viewer-open을 붙여 스크롤과 스크롤바만 직접 막는다. */
     <Dialog.Root
       open
       modal="trap-focus"
@@ -354,7 +670,13 @@ export function ImageViewer({
         >
           <Dialog.Title className="sr-only">{activeImage.name}</Dialog.Title>
 
-          <header className="flex shrink-0 items-center gap-2 pt-[max(0.5rem,var(--app-safe-t))] pr-[max(0.5rem,var(--app-safe-r))] pb-2 pl-[max(0.5rem,var(--app-safe-l))] md:p-3">
+          <header
+            data-testid="image-viewer-header"
+            className={cn(
+              "shrink-0 items-center gap-2 pt-[max(0.5rem,var(--app-safe-t))] pr-[max(0.5rem,var(--app-safe-r))] pb-2 pl-[max(0.5rem,var(--app-safe-l))] md:p-3",
+              isChromeHidden ? "hidden sm:flex" : "flex",
+            )}
+          >
             {/* 파일 이름은 화면에 띄우지 않는다. 스크린리더용 제목과 저장 파일명에는 그대로 쓴다. */}
             <div className="min-w-0 flex-1 px-2">
               {images.length > 1 ? (
@@ -380,7 +702,8 @@ export function ImageViewer({
 
           <div
             ref={viewportRef}
-            className="relative min-h-0 flex-1 touch-pan-y overflow-hidden"
+            data-testid="image-viewer-viewport"
+            className="relative min-h-0 flex-1 touch-none overflow-hidden sm:touch-pan-y"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -400,7 +723,11 @@ export function ImageViewer({
                   // 양옆 한 장씩만 디코딩한다. 빈 슬롯도 트랙의 기하는 유지하므로 transform은
                   // 계속 100%의 정수배로 남는다.
                   image={Math.abs(slideIndex - index) <= 1 ? image : undefined}
+                  imageRef={slideIndex === index ? imageRef : undefined}
+                  zoom={slideIndex === index ? zoom : undefined}
+                  isGestureActive={isGestureActive}
                   onBackdropClick={handleBackdropClick}
+                  onImageClick={handleImageClick}
                 />
               ))}
             </div>
@@ -436,7 +763,7 @@ export function ImageViewer({
             // 한 장뿐이어도 필름스트립 높이를 비워둔다. 안 그러면 이미지 영역이 그만큼
             // 늘어나서, 여러 장짜리 게시물과 한 장짜리 게시물의 크기가 달라 보인다.
             <div
-              className="h-[calc(2.5rem+var(--app-safe-b))] shrink-0"
+              className="hidden h-[calc(2.5rem+var(--app-safe-b))] shrink-0 sm:block"
               aria-hidden="true"
             />
           )}
