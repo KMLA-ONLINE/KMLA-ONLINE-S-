@@ -38,6 +38,10 @@ describe("GroupPostCard", () => {
       "href",
       "/groups/group/posts/post-id",
     );
+    expect(screen.getByRole("link", { name: /댓글/ })).toHaveAttribute(
+      "href",
+      "/groups/group/posts/post-id?view=comments",
+    );
   });
 
   it("links identified and staff authors to their profile", () => {

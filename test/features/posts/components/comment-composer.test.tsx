@@ -171,11 +171,15 @@ describe("CommentComposer", () => {
     await vi.waitFor(() => expect(input).toHaveValue("다시 쓰는 중"));
   });
 
-  it("names the comment being replied to through its placeholder", () => {
-    renderComposer({ placeholder: "익명2님에게 답글 남기기…" });
+  it("shows and cancels the reply target above the shared composer", async () => {
+    const onCancelReply = vi.fn();
+    const { user } = renderComposer({
+      replyTarget: "익명2",
+      onCancelReply,
+    });
 
-    expect(
-      screen.getByPlaceholderText("익명2님에게 답글 남기기…"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("익명2")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "답글 대상 취소" }));
+    expect(onCancelReply).toHaveBeenCalled();
   });
 });

@@ -73,7 +73,7 @@ describe("ProfilePostCard", () => {
 
     expect(screen.getByRole("link", { name: "댓글 3개" })).toHaveAttribute(
       "href",
-      "/profile/jieun-29/posts/post-id",
+      "/profile/jieun-29/posts/post-id?view=comments",
     );
   });
 
