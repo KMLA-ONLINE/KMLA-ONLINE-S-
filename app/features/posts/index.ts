@@ -51,6 +51,7 @@ export {
   getPostErrorMessage,
 } from "~/features/posts/model/format";
 export { resolveIdentityOptions } from "~/features/posts/model/identity";
+export { shouldRevalidatePostDetail } from "~/features/posts/model/revalidation";
 export {
   COMMENT_MAX_LENGTH,
   normalizeCommentBody,

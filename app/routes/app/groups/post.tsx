@@ -10,6 +10,7 @@ import {
   listPostComments,
   resolveIdentityOptions,
   setGroupPostPinned,
+  shouldRevalidatePostDetail,
 } from "~/features/posts";
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
 import type { Route } from "./+types/post";
@@ -19,6 +20,8 @@ export const handle = defineAppChrome({
   bottomNav: "none",
   contentWidth: "5xl",
 });
+
+export const shouldRevalidate = shouldRevalidatePostDetail;
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   // 첨부는 `getGroupPost` 안에서 이어 부르므로, 댓글은 그 전체와 나란히 돈다.
