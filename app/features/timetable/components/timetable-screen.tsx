@@ -292,7 +292,9 @@ export function TimetableScreen() {
           }
         }}
       >
-        <DialogContent className="max-h-[88dvh] gap-4 overflow-y-auto rounded-2xl p-4">
+        {/* 닫기 버튼은 vendored dialog가 기본 padding(p-6)을 전제로 top-4에 박아 둔다.
+            여기는 p-4라 32px짜리 버튼이 14px짜리 제목보다 9px 아래로 처진다. */}
+        <DialogContent className="max-h-[88dvh] gap-4 overflow-y-auto rounded-2xl p-4 *:data-[slot=dialog-close]:top-2">
           <DialogHeader>
             <DialogTitle>{draft?.id ? "수업 수정" : "수업 추가"}</DialogTitle>
           </DialogHeader>
@@ -303,7 +305,7 @@ export function TimetableScreen() {
                 value={draft.name}
                 aria-label="과목명"
                 placeholder="과목명"
-                className="h-11 rounded-xl px-3 text-base font-medium"
+                className="h-10 rounded-md px-3 text-base font-medium"
                 onChange={(event) => {
                   setOverlap(false);
 
@@ -314,7 +316,7 @@ export function TimetableScreen() {
                 }}
               />
 
-              <div className="flex justify-between px-1">
+              <div className="grid grid-cols-5 justify-items-center gap-3 px-1">
                 {COLOR_DOTS.map((color, colorPosition) => (
                   <button
                     key={color}
@@ -360,7 +362,7 @@ export function TimetableScreen() {
 
               {overlap ? (
                 <p className="px-1 text-xs text-destructive">
-                  겹치는 수업이 있어
+                  시간상 겹치는 수업이 있습니다
                 </p>
               ) : null}
 

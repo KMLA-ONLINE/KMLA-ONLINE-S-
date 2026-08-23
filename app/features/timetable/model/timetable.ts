@@ -56,26 +56,41 @@ export const PERIODS = [
   { period: 8, start: "16:40" },
 ] as const;
 
+/**
+ * 빨주노초파남보 다음에 갈색과 회색. 인덱스가 그대로 저장되므로 순서를 바꾸면
+ * 기존 수업 색도 바뀐다.
+ *
+ * 배경은 전부 `-400`으로 맞추고 글씨는 검은색으로 고정한다. 흰 글씨는 amber처럼 밝은
+ * 계열에서 대비가 무너지지만, 검은 글씨는 이 명도대에서 어느 색이든 6:1 위로 나온다.
+ * 칩 색은 테마를 따라가지 않으므로 `text-foreground`가 아니라 리터럴 `text-black`이다.
+ *
+ * 갈색은 Tailwind 팔레트에 없다. `stone`은 회색과 구분이 안 돼서 나머지 `-400`과 명도를
+ * 맞춘 값을 직접 쓴다.
+ */
 export const COLORS = [
-  "bg-blue-500 text-white",
-  "bg-emerald-500 text-white",
-  "bg-violet-500 text-white",
-  "bg-orange-500 text-white",
-  "bg-rose-500 text-white",
-  "bg-cyan-500 text-white",
-  "bg-amber-500 text-white",
-  "bg-fuchsia-500 text-white",
+  "bg-rose-400 text-black",
+  "bg-orange-400 text-black",
+  "bg-amber-400 text-black",
+  "bg-emerald-400 text-black",
+  "bg-cyan-400 text-black",
+  "bg-blue-400 text-black",
+  "bg-violet-400 text-black",
+  "bg-fuchsia-400 text-black",
+  "bg-[#b5835a] text-black",
+  "bg-gray-400 text-black",
 ] as const;
 
 export const COLOR_DOTS = [
-  "bg-blue-500",
-  "bg-emerald-500",
-  "bg-violet-500",
-  "bg-orange-500",
-  "bg-rose-500",
-  "bg-cyan-500",
-  "bg-amber-500",
-  "bg-fuchsia-500",
+  "bg-rose-400",
+  "bg-orange-400",
+  "bg-amber-400",
+  "bg-emerald-400",
+  "bg-cyan-400",
+  "bg-blue-400",
+  "bg-violet-400",
+  "bg-fuchsia-400",
+  "bg-[#b5835a]",
+  "bg-gray-400",
 ] as const;
 
 export function createMeeting(day: Weekday = 0, start = 1): CourseMeeting {
