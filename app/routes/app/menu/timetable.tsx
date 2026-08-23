@@ -3,7 +3,7 @@ import { TimetableScreen } from "~/features/timetable";
 
 export const handle = defineAppChrome({
   header: "sticky",
-  bottomNav: "sticky",
+  bottomNav: "none",
   contentWidth: "5xl",
 });
 
