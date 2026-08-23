@@ -1,6 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 
+import { useAppShell } from "~/features/app-shell";
+import {
+  loadTimetableRecord,
+  saveTimetableRecord,
+  type StoredTimetableRecord,
+} from "~/features/timetable/data/timetable";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
@@ -37,7 +43,29 @@ interface CourseDraft {
   meetings: CourseMeeting[];
 }
 
-const STORAGE_KEY = "kmla-online:timetable:v2";
+type SemesterKey = "1-1" | "1-2" | "2-1" | "2-2" | "3-1" | "3-2";
+
+interface TimetableStorage {
+  activeSemester: SemesterKey;
+  semesters: Record<SemesterKey, TimetableCourse[]>;
+}
+
+const STORAGE_KEY = "kmla-online:timetable:v3";
+const LEGACY_STORAGE_KEY = "kmla-online:timetable:v2";
+
+const SEMESTERS = [
+  { id: "1-1", label: "1학년 1학기" },
+  { id: "1-2", label: "1학년 2학기" },
+  { id: "2-1", label: "2학년 1학기" },
+  { id: "2-2", label: "2학년 2학기" },
+  { id: "3-1", label: "3학년 1학기" },
+  { id: "3-2", label: "3학년 2학기" },
+] as const satisfies readonly {
+  id: SemesterKey;
+  label: string;
+}[];
+
+const DEFAULT_SEMESTER: SemesterKey = "1-1";
 
 const DAYS = ["월", "화", "수", "목", "금"] as const;
 
@@ -157,40 +185,124 @@ function isCourse(value: unknown): value is TimetableCourse {
   );
 }
 
-function loadCourses(): TimetableCourse[] {
-  if (typeof window === "undefined") {
+function isSemesterKey(value: unknown): value is SemesterKey {
+  return SEMESTERS.some((semester) => semester.id === value);
+}
+
+function emptySemesters(): Record<SemesterKey, TimetableCourse[]> {
+  return {
+    "1-1": [],
+    "1-2": [],
+    "2-1": [],
+    "2-2": [],
+    "3-1": [],
+    "3-2": [],
+  };
+}
+
+function readCourseArray(value: unknown): TimetableCourse[] {
+  if (!Array.isArray(value)) {
     return [];
+  }
+
+  return value.filter(isCourse);
+}
+
+function loadTimetable(): TimetableStorage {
+  const empty: TimetableStorage = {
+    activeSemester: DEFAULT_SEMESTER,
+    semesters: emptySemesters(),
+  };
+
+  if (typeof window === "undefined") {
+    return empty;
   }
 
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
 
-    if (!raw) {
-      return [];
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw);
+
+      if (parsed && typeof parsed === "object") {
+        const record = parsed as Record<string, unknown>;
+        const storedSemesters =
+          record.semesters && typeof record.semesters === "object"
+            ? (record.semesters as Record<string, unknown>)
+            : {};
+
+        const semesters = emptySemesters();
+
+        for (const semester of SEMESTERS) {
+          semesters[semester.id] = readCourseArray(
+            storedSemesters[semester.id],
+          );
+        }
+
+        return {
+          activeSemester: isSemesterKey(record.activeSemester)
+            ? record.activeSemester
+            : DEFAULT_SEMESTER,
+          semesters,
+        };
+      }
     }
 
-    const parsed: unknown = JSON.parse(raw);
+    const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
 
-    if (!Array.isArray(parsed)) {
-      return [];
+    if (legacyRaw) {
+      const legacy: unknown = JSON.parse(legacyRaw);
+      const semesters = emptySemesters();
+
+      semesters[DEFAULT_SEMESTER] = readCourseArray(legacy);
+
+      return {
+        activeSemester: DEFAULT_SEMESTER,
+        semesters,
+      };
     }
-
-    return parsed.filter(isCourse);
   } catch {
-    return [];
+    return empty;
   }
+
+  return empty;
 }
 
-function saveCourses(courses: TimetableCourse[]) {
+function saveTimetable(timetable: TimetableStorage) {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(courses));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(timetable));
   } catch {
     return;
   }
 }
 
+function timetableFromDb(record: StoredTimetableRecord): TimetableStorage {
+  const semesters = emptySemesters();
+
+  const stored =
+    record.semesters && typeof record.semesters === "object"
+      ? (record.semesters as Record<string, unknown>)
+      : {};
+
+  for (const semester of SEMESTERS) {
+    semesters[semester.id] = readCourseArray(stored[semester.id]);
+  }
+
+  return {
+    activeSemester: isSemesterKey(record.activeSemester)
+      ? record.activeSemester
+      : DEFAULT_SEMESTER,
+    semesters,
+  };
+}
+
 export function TimetableScreen() {
-  const [courses, setCourses] = useState<TimetableCourse[]>(loadCourses);
+  const { profile } = useAppShell();
+
+  const [timetable, setTimetable] = useState<TimetableStorage>(loadTimetable);
+
+  const activeSemester = timetable.activeSemester;
+  const courses = timetable.semesters[activeSemester];
 
   const [draft, setDraft] = useState<CourseDraft | null>(null);
 
@@ -198,9 +310,85 @@ export function TimetableScreen() {
 
   const today = getKoreaWeekday();
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncFromDb = async () => {
+      try {
+        const stored = await loadTimetableRecord(profile.id);
+
+        if (cancelled) {
+          return;
+        }
+
+        if (stored) {
+          const next = timetableFromDb(stored);
+
+          setTimetable(next);
+          saveTimetable(next);
+          return;
+        }
+
+        const local = loadTimetable();
+
+        await saveTimetableRecord(
+          profile.id,
+          local.activeSemester,
+          local.semesters,
+        );
+      } catch (error) {
+        console.error("Failed to sync timetable", error);
+      }
+    };
+
+    const refresh = () => {
+      void syncFromDb();
+    };
+
+    void syncFromDb();
+
+    window.addEventListener("focus", refresh);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", refresh);
+    };
+  }, [profile.id]);
+
+  const persistTimetable = (next: TimetableStorage) => {
+    setTimetable(next);
+    saveTimetable(next);
+
+    void saveTimetableRecord(
+      profile.id,
+      next.activeSemester,
+      next.semesters,
+    ).catch((error: unknown) => {
+      console.error("Failed to save timetable", error);
+    });
+  };
+
   const updateCourses = (next: TimetableCourse[]) => {
-    setCourses(next);
-    saveCourses(next);
+    const nextTimetable: TimetableStorage = {
+      ...timetable,
+      semesters: {
+        ...timetable.semesters,
+        [activeSemester]: next,
+      },
+    };
+
+    persistTimetable(nextTimetable);
+  };
+
+  const selectSemester = (semester: SemesterKey) => {
+    const nextTimetable: TimetableStorage = {
+      ...timetable,
+      activeSemester: semester,
+    };
+
+    persistTimetable(nextTimetable);
+    setDraft(null);
+    setOverlap(false);
   };
 
   const openNew = (day: Weekday, period: number) => {
@@ -355,9 +543,30 @@ export function TimetableScreen() {
 
   return (
     <>
-      <div className="w-full pb-24">
-        <div className="w-full overflow-hidden border-y bg-background">
-          <div className="grid min-h-[calc(100dvh-8rem)] grid-cols-[2.25rem_repeat(5,minmax(0,1fr))] grid-rows-[2.4rem_repeat(4,minmax(4.45rem,1fr))_0.7rem_repeat(4,minmax(4.45rem,1fr))]">
+      <div className="flex h-[calc(100dvh-var(--app-tabbar-h)-var(--app-safe-b)-var(--app-page-header-h)-var(--app-safe-t))] min-h-0 w-full flex-col overflow-hidden md:h-[calc(100dvh-var(--app-header-h)-3rem)]">
+        <div className="shrink-0 border-y bg-background px-3 py-2">
+          <NativeSelect
+            aria-label="학기"
+            value={activeSemester}
+            className="w-full"
+            onChange={(event) => {
+              const semester = event.target.value;
+
+              if (isSemesterKey(semester)) {
+                selectSemester(semester);
+              }
+            }}
+          >
+            {SEMESTERS.map((semester) => (
+              <NativeSelectOption key={semester.id} value={semester.id}>
+                {semester.label}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-hidden border-b bg-background">
+          <div className="grid h-full min-h-0 grid-cols-[2.25rem_repeat(5,minmax(0,1fr))] grid-rows-[2rem_repeat(4,minmax(0,1fr))_0.55rem_repeat(4,minmax(0,1fr))]">
             <div className="border-r border-b bg-muted/15" />
 
             {DAYS.map((day, dayPosition) => (
@@ -456,16 +665,6 @@ export function TimetableScreen() {
             )}
           </div>
         </div>
-
-        <Button
-          type="button"
-          size="icon-lg"
-          aria-label="수업 추가"
-          onClick={() => openNew(today ?? 0, 1)}
-          className="fixed right-4 bottom-20 z-30 size-12 rounded-full shadow-lg"
-        >
-          <PlusIcon className="size-5" />
-        </Button>
       </div>
 
       <Dialog
