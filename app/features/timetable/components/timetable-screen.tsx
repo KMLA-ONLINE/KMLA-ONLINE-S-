@@ -543,12 +543,12 @@ export function TimetableScreen() {
 
   return (
     <>
-      <div className="flex h-[calc(100dvh-var(--app-tabbar-h)-var(--app-safe-b)-var(--app-page-header-h)-var(--app-safe-t))] min-h-0 w-full flex-col overflow-hidden md:h-[calc(100dvh-var(--app-header-h)-3rem)]">
-        <div className="shrink-0 border-y bg-background px-3 py-2">
+      <div className="flex h-[calc(100dvh-var(--app-page-header-h)-var(--app-safe-t))] min-h-0 w-full flex-col overflow-hidden pb-[calc(1rem+var(--app-safe-b))] md:h-[calc(100dvh-var(--app-header-h)-3rem)] md:pb-0">
+        <div className="shrink-0 border-y bg-background px-3 py-2.5">
           <NativeSelect
             aria-label="학기"
             value={activeSemester}
-            className="w-full"
+            className="w-full [&>select]:h-10 [&>select]:rounded-xl [&>select]:bg-muted/20 [&>select]:font-medium"
             onChange={(event) => {
               const semester = event.target.value;
 
@@ -577,7 +577,7 @@ export function TimetableScreen() {
                   gridRow: 1,
                 }}
                 className={cn(
-                  "flex items-center justify-center border-r border-b text-[11px] font-semibold",
+                  "flex items-center justify-center border-r border-b text-xs font-semibold",
                   today === dayPosition
                     ? "bg-primary/[0.06] text-primary"
                     : "text-muted-foreground",
@@ -604,11 +604,11 @@ export function TimetableScreen() {
                 }}
                 className="flex flex-col items-center justify-center border-r border-b bg-muted/10"
               >
-                <span className="text-[11px] font-semibold tabular-nums">
+                <span className="text-xs font-semibold tabular-nums">
                   {period.period}
                 </span>
 
-                <span className="mt-1 text-[8px] leading-none text-muted-foreground tabular-nums">
+                <span className="mt-1 text-[9px] leading-none text-muted-foreground tabular-nums">
                   {period.start}
                 </span>
               </div>
@@ -626,7 +626,7 @@ export function TimetableScreen() {
                     gridRow: getGridRow(period.period),
                   }}
                   className={cn(
-                    "border-r border-b bg-background transition-colors active:bg-muted/70",
+                    "border-r border-b bg-background transition-colors hover:bg-muted/35 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset active:bg-muted/70",
                     today === dayPosition && "bg-primary/[0.012]",
                   )}
                 />
@@ -647,16 +647,16 @@ export function TimetableScreen() {
                     }`,
                   }}
                   className={cn(
-                    "z-10 overflow-hidden border border-background/20 p-1.5 text-center transition-[filter] active:brightness-90",
+                    "z-10 overflow-hidden border border-background/20 p-1.5 text-center transition-[filter] hover:brightness-[0.97] active:brightness-90",
                     COLORS[course.color % COLORS.length],
                   )}
                 >
-                  <span className="block text-[10px] leading-[1.25] font-semibold tracking-[-0.02em] break-words">
+                  <span className="block text-[11px] leading-[1.25] font-semibold tracking-[-0.02em] break-words">
                     {course.name}
                   </span>
 
                   {meeting.room ? (
-                    <span className="mt-1 block truncate text-[8px] font-medium text-white/75">
+                    <span className="mt-1 block truncate text-[9px] font-medium text-white/80">
                       {meeting.room}
                     </span>
                   ) : null}
