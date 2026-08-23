@@ -1,4 +1,4 @@
-import { MessagesSquareIcon, SearchIcon } from "lucide-react";
+import { MessagesSquareIcon, SearchIcon, UtensilsIcon } from "lucide-react";
 import { Link } from "react-router";
 
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
@@ -42,6 +42,15 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
         hideOnScroll
         actions={
           <>
+            <Button
+              variant="ghost"
+              size="icon"
+              nativeButton={false}
+              aria-label="급식"
+              render={<Link to="/menu/meal" />}
+            >
+              <UtensilsIcon />
+            </Button>
             <Button
               variant="ghost"
               size="icon"

@@ -57,7 +57,7 @@ export function normalizeGroupSearchInput(value: string): string {
 }
 
 export function hasMinimumGroupSearchLength(value: string): boolean {
-  return Array.from(normalizeGroupSearchInput(value)).length >= 2;
+  return Array.from(normalizeGroupSearchInput(value)).length >= 1;
 }
 
 export function getGroupErrorMessage(error: unknown): string {

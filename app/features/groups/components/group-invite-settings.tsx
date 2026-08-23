@@ -7,6 +7,7 @@ import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Input } from "~/shared/ui/input";
+import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 import { Spinner } from "~/shared/ui/spinner";
 
 /** 시간 단위. 기본이 하루인 것은 의도다 — 더 오래 열어 두려면 한 번 골라야 한다. */
@@ -117,19 +118,19 @@ export function InviteSettings({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <label className="grid flex-1 gap-1.5 text-sm font-medium">
             유효 기간
-            <select
+            <NativeSelect
               aria-label="유효 기간"
               value={hours}
               disabled={pending}
-              className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/50"
+              className="w-full [&_[data-slot=native-select]]:h-10 [&_[data-slot=native-select]]:rounded-lg"
               onChange={(event) => setHours(Number(event.currentTarget.value))}
             >
               {LIFETIME_OPTIONS.map(([value, label]) => (
-                <option key={value} value={value}>
+                <NativeSelectOption key={value} value={value}>
                   {label}
-                </option>
+                </NativeSelectOption>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           <Button
             type="button"

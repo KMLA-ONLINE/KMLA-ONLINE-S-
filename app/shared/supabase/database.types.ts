@@ -854,6 +854,7 @@ export type Database = {
           mode: string
           profile_id: number
           recurring: boolean
+          recurring_until: string | null
           reservation_date: string
           slot: string
         }
@@ -867,6 +868,7 @@ export type Database = {
           mode: string
           profile_id: number
           recurring?: boolean
+          recurring_until?: string | null
           reservation_date: string
           slot: string
         }
@@ -880,6 +882,7 @@ export type Database = {
           mode?: string
           profile_id?: number
           recurring?: boolean
+          recurring_until?: string | null
           reservation_date?: string
           slot?: string
         }
@@ -901,6 +904,10 @@ export type Database = {
       accept_group_invite: { Args: { p_token: string }; Returns: string }
       approve_group_join_request: {
         Args: { p_group_id: string; p_request_id: string }
+        Returns: undefined
+      }
+      cancel_utility_reservation: {
+        Args: { p_effective_date?: string; p_reservation_id: number }
         Returns: undefined
       }
       claim_group_media_cleanup: {
