@@ -73,6 +73,47 @@ export type Database = {
           },
         ]
       }
+      gongang_schedule: {
+        Row: {
+          configured_by: number | null
+          created_at: string
+          detail: string | null
+          location: string
+          reserved: boolean
+          schedule_date: string
+          slot: string
+          updated_at: string
+        }
+        Insert: {
+          configured_by?: number | null
+          created_at?: string
+          detail?: string | null
+          location: string
+          reserved?: boolean
+          schedule_date: string
+          slot: string
+          updated_at?: string
+        }
+        Update: {
+          configured_by?: number | null
+          created_at?: string
+          detail?: string | null
+          location?: string
+          reserved?: boolean
+          schedule_date?: string
+          slot?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gongang_schedule_configured_by_fkey"
+            columns: ["configured_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_categories: {
         Row: {
           created_at: string
@@ -309,6 +350,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      permissions: {
+        Row: {
+          created_at: string
+          description: string | null
+          key: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          key: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          key?: string
+          name?: string
+        }
+        Relationships: []
       }
       post_attachments: {
         Row: {
@@ -603,6 +665,39 @@ export type Database = {
         }
         Relationships: []
       }
+      profile_permissions: {
+        Row: {
+          created_at: string
+          permission_key: string
+          profile_id: number
+        }
+        Insert: {
+          created_at?: string
+          permission_key: string
+          profile_id: number
+        }
+        Update: {
+          created_at?: string
+          permission_key?: string
+          profile_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_permissions_permission_key_fkey"
+            columns: ["permission_key"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "profile_permissions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           academic_track:
@@ -719,6 +814,59 @@ export type Database = {
           },
         ]
       }
+      utility_reservations: {
+        Row: {
+          applicant_name: string
+          avatar_path: string | null
+          created_at: string
+          detail: string
+          id: number
+          location: string | null
+          mode: string
+          profile_id: number
+          recurring: boolean
+          recurring_until: string | null
+          reservation_date: string
+          slot: string
+        }
+        Insert: {
+          applicant_name: string
+          avatar_path?: string | null
+          created_at?: string
+          detail: string
+          id?: never
+          location?: string | null
+          mode: string
+          profile_id: number
+          recurring?: boolean
+          recurring_until?: string | null
+          reservation_date: string
+          slot: string
+        }
+        Update: {
+          applicant_name?: string
+          avatar_path?: string | null
+          created_at?: string
+          detail?: string
+          id?: never
+          location?: string | null
+          mode?: string
+          profile_id?: number
+          recurring?: boolean
+          recurring_until?: string | null
+          reservation_date?: string
+          slot?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "utility_reservations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -727,6 +875,10 @@ export type Database = {
       accept_group_invite: { Args: { p_token: string }; Returns: string }
       approve_group_join_request: {
         Args: { p_group_id: string; p_request_id: string }
+        Returns: undefined
+      }
+      cancel_utility_reservation: {
+        Args: { p_effective_date?: string; p_reservation_id: number }
         Returns: undefined
       }
       claim_group_media_cleanup: {

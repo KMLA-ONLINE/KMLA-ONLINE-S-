@@ -32,7 +32,7 @@ export function ScrollRegion({
         // 가로 축의 `visible`이 `auto`로 계산돼, 모바일에서 콘텐츠가 1px만 삐져나가도 페이지
         // 전체가 옆으로 끌린다. 가로 스크롤이 필요한 위젯은 자기 컨테이너를 직접 만든다.
         className={cn(
-          "min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain",
+          "min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain md:[scrollbar-gutter:stable_both-edges]",
           className,
         )}
       >
