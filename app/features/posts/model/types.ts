@@ -173,6 +173,6 @@ export interface CommentCursor {
 export interface PostCommentPage {
   /** 오래된 것부터 최신 순. 화면에 그리는 순서와 같다. */
   comments: PostComment[];
-  /** 이보다 더 오래된 댓글이 남아 있을 때의 커서. 없으면 스레드의 처음까지 불러온 것이다. */
-  olderCursor: CommentCursor | null;
+  /** 이보다 더 최신 댓글이 남아 있을 때의 커서. 없으면 스레드의 끝까지 불러온 것이다. */
+  nextCursor: CommentCursor | null;
 }

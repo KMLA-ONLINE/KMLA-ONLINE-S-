@@ -76,15 +76,15 @@ export function CommentItem({
   // 작성자, 반응과 메뉴는 전부 사라지고 자국만 남는다.
   if (comment.is_deleted) {
     return (
-      <div className="flex gap-2">
+      <div
+        id={commentDomId(comment.comment_id)}
+        className={cn(
+          "-mx-2 flex gap-2 rounded-xl px-2 py-1 transition-colors",
+          highlighted && "bg-primary/5",
+        )}
+      >
         <div className="size-8 shrink-0 rounded-full bg-muted/60" aria-hidden />
-        <p
-          id={commentDomId(comment.comment_id)}
-          className={cn(
-            "w-fit rounded-2xl bg-muted/60 px-3 py-2 text-sm text-muted-foreground italic transition-shadow",
-            highlighted && "ring-2 ring-ring",
-          )}
-        >
+        <p className="w-fit rounded-2xl bg-muted/60 px-3 py-2 text-sm text-muted-foreground italic">
           삭제된 댓글입니다
         </p>
       </div>
@@ -124,7 +124,13 @@ export function CommentItem({
   }
 
   return (
-    <div className="flex gap-2">
+    <div
+      id={commentDomId(comment.comment_id)}
+      className={cn(
+        "-mx-2 flex gap-2 rounded-xl px-2 py-1 transition-colors",
+        highlighted && "bg-primary/5",
+      )}
+    >
       {linksToProfile ? (
         <Link
           to={`/profile/${comment.author_pub_id}`}
@@ -148,13 +154,7 @@ export function CommentItem({
 
       <div className="flex min-w-0 flex-1 items-start gap-1">
         <div className="min-w-0 flex-1">
-          <div
-            id={commentDomId(comment.comment_id)}
-            className={cn(
-              "w-fit transition-shadow",
-              highlighted && "ring-2 ring-ring",
-            )}
-          >
+          <div className="w-fit">
             <div className="flex items-center gap-1.5">
               {linksToProfile ? (
                 <Link

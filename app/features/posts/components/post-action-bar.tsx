@@ -22,7 +22,8 @@ const ACTION_CLASS =
  * 반응 상태는 이 컴포넌트가 통째로 들고 있다. 카드와 상세가 각자 같은 배선을 반복할 이유가
  * 없고, 반응은 게시물 본문과 달리 route 데이터를 다시 읽지 않고 제자리에서 갱신된다.
  *
- * 댓글은 목록에서는 상세로 보내고(`commentTo`), 상세에서는 입력창으로 보낸다(`onComment`).
+ * 댓글은 목록에서는 댓글 진입 URL로 보내고(`commentTo`), 상세에서는 입력창으로 보낸다
+ * (`onComment`). 카드가 `view=comments`를 붙이면 모바일에서만 댓글 시트로 표현된다.
  */
 export function PostActionBar({
   postId,

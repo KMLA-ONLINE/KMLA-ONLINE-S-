@@ -54,8 +54,8 @@ export interface CommentViewer {
 }
 
 /**
- * 댓글 입력창. 하단 고정 입력과 각 댓글의 인라인 답글 입력이 같은 컴포넌트를 쓴다
- * (`className`으로 테두리와 여백만 바꾼다).
+ * 댓글 입력창. 하단 고정 댓글과 답글, 댓글 수정이 같은 컴포넌트를 쓴다. 답글 대상은 입력값에
+ * 넣지 않고 입력창 위에 따로 표시해 저장되는 평문과 대화 관계를 섞지 않는다.
  *
  * 왼쪽 아바타가 곧 작성 신원이다. 눌러 다음 신원으로 넘어가되 바꾸기 직전에 확인을 받는다.
  * 등록마다 확인을 띄우면 `Enter` 한 번으로 등록되는 흐름(기능 명세 §9.1)이 무너지고, 확인 없이
@@ -75,6 +75,8 @@ export function CommentComposer({
   pending = false,
   error,
   inputRef,
+  replyTarget,
+  onCancelReply,
   className = "border-t p-3",
 }: {
   viewer: CommentViewer;
@@ -96,6 +98,9 @@ export function CommentComposer({
   error?: string | null;
   /** 바깥에서 포커스를 주려면 넘긴다(상세의 댓글 아이콘). 안 넘기면 내부 ref를 쓴다. */
   inputRef?: RefObject<HTMLTextAreaElement | null>;
+  /** 하단 입력기가 답글 모드일 때 표시할 대상 이름. 본문에는 포함하지 않는다. */
+  replyTarget?: string;
+  onCancelReply?: () => void;
   className?: string;
 }) {
   const [draft, setDraft] = useState(initialValue);
@@ -155,7 +160,34 @@ export function CommentComposer({
 
   return (
     <>
-      <div className={cn("flex items-end gap-2", className)}>
+      {replyTarget ? (
+        <div className="flex items-center gap-2 border-t px-4 pt-2 text-xs text-muted-foreground">
+          <span className="min-w-0 flex-1 truncate">
+            <strong className="font-semibold text-foreground">
+              {replyTarget}
+            </strong>
+            님에게 답글
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label="답글 대상 취소"
+            className="shrink-0"
+            onClick={onCancelReply}
+          >
+            <XIcon />
+          </Button>
+        </div>
+      ) : null}
+
+      <div
+        className={cn(
+          "flex items-end gap-2",
+          className,
+          replyTarget && "border-t-0 pt-2",
+        )}
+      >
         {identities.length > 1 ? (
           <Tooltip>
             <TooltipTrigger

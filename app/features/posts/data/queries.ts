@@ -214,8 +214,8 @@ export async function getProfilePost(
 /**
  * 최상위 댓글 한 페이지.
  *
- * RPC는 최신부터 골라 오래된 순으로 돌려준다. 화면은 오래된→최신으로 그리고 "이전 댓글 더
- * 보기"가 위로 붙으므로, 한 건을 더 받아 초과분이 있으면 그 자리가 다음 커서가 된다.
+ * RPC는 오래된 댓글부터 화면 순서대로 돌려준다. 한 건을 더 받아 다음 페이지가 있는지만 확인하고,
+ * 현재 페이지의 마지막 댓글을 다음 커서로 쓴다.
  */
 export async function listPostComments(
   postId: string,
@@ -229,15 +229,14 @@ export async function listPostComments(
   });
   if (error) throw error;
   const rows = data ?? [];
-  // 초과분은 가장 오래된 한 건이다. 잘라내고 남은 첫 건이 다음에 이어 볼 지점이 된다.
-  const hasOlder = rows.length > POST_COMMENT_PAGE_SIZE;
-  const comments = hasOlder ? rows.slice(1) : rows;
-  const oldest = comments[0];
+  const hasMore = rows.length > POST_COMMENT_PAGE_SIZE;
+  const comments = hasMore ? rows.slice(0, POST_COMMENT_PAGE_SIZE) : rows;
+  const newest = comments.at(-1);
   return {
     comments,
-    olderCursor:
-      hasOlder && oldest
-        ? { createdAt: oldest.created_at, commentId: oldest.comment_id }
+    nextCursor:
+      hasMore && newest
+        ? { createdAt: newest.created_at, commentId: newest.comment_id }
         : null,
   };
 }
