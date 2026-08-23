@@ -11,6 +11,7 @@ export interface UtilityReservation {
   location: string | null;
   detail: string;
   recurring: boolean;
+  recurringUntil: string | null;
   applicantName: string;
   applicantPubId: string;
   /** 신청자 기수. 이름은 예약 행에 복사돼 있지만 기수는 프로필에서 읽어 온다. */
@@ -29,7 +30,7 @@ interface CreateUtilityReservationInput {
 }
 
 const SELECT_COLUMNS =
-  "id, profile_id, mode, reservation_date, slot, location, detail, recurring, applicant_name, avatar_path, profiles(cohort, pub_id)" as const;
+  "id, profile_id, mode, reservation_date, slot, location, detail, recurring, recurring_until, applicant_name, avatar_path, profiles(cohort, pub_id)" as const;
 
 function toMode(value: string): UtilityMode {
   if (value === "gongang" || value === "karaoke") {
@@ -64,6 +65,7 @@ async function mapReservation(row: {
   location: string | null;
   detail: string;
   recurring: boolean;
+  recurring_until: string | null;
   applicant_name: string;
   avatar_path: string | null;
   profiles: {
@@ -80,6 +82,7 @@ async function mapReservation(row: {
     location: row.location,
     detail: row.detail,
     recurring: row.recurring,
+    recurringUntil: row.recurring_until,
     applicantName: row.applicant_name,
     applicantPubId: row.profiles?.pub_id ?? "",
     applicantCohort: row.profiles?.cohort ?? null,
@@ -108,7 +111,8 @@ export async function loadUtilityReservations(
       .select(SELECT_COLUMNS)
       .eq("mode", mode)
       .eq("recurring", true)
-      .lte("reservation_date", weekEnd),
+      .lte("reservation_date", weekEnd)
+      .or(`recurring_until.is.null,recurring_until.gt.${weekStart}`),
   ]);
 
   if (directResult.error) {
@@ -153,19 +157,14 @@ export async function createUtilityReservation(
 
 export async function deleteUtilityReservation(
   reservationId: number,
+  effectiveDate?: string,
 ): Promise<void> {
-  const { data, error } = await getSupabase()
-    .from("utility_reservations")
-    .delete()
-    .eq("id", reservationId)
-    .select("id")
-    .maybeSingle();
+  const { error } = await getSupabase().rpc("cancel_utility_reservation", {
+    p_reservation_id: reservationId,
+    p_effective_date: effectiveDate ?? undefined,
+  });
 
   if (error) {
     throw error;
-  }
-
-  if (!data) {
-    throw new Error("예약을 취소할 수 없습니다.");
   }
 }

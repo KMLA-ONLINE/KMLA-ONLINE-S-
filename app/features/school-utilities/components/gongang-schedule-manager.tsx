@@ -7,6 +7,17 @@ import {
   loadGongangSchedule,
   saveGongangSchedule,
 } from "~/features/school-utilities/data/gongang-schedule";
+import {
+  loadUtilityReservations,
+  type UtilityReservation,
+} from "~/features/school-utilities/data/reservations";
+import {
+  addCalendarDays,
+  calendarDate,
+  calendarWeekday,
+  startOfKoreaWeek,
+  useKoreaToday,
+} from "~/features/school-utilities/model/korea-date";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
@@ -42,51 +53,34 @@ interface ScheduleDraft {
   detail: string;
 }
 
-function startOfDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-function addDays(date: Date, amount: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + amount);
-  return startOfDay(next);
-}
-
-function startOfWeek(date: Date) {
-  const day = date.getDay();
-  return addDays(date, day === 0 ? -6 : 1 - day);
-}
-
-function dateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
 function scheduleKey(date: string, slot: string, location: string) {
   return `${date}:${slot}:${location}`;
 }
 
 const weekdayFormatter = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "UTC",
   weekday: "short",
 });
 
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "UTC",
   month: "numeric",
   day: "numeric",
 });
 
 export function GongangScheduleManager() {
   const { profile } = useAppShell();
+  const today = useKoreaToday();
 
-  const nextWeekStart = useMemo(() => addDays(startOfWeek(new Date()), 7), []);
+  const nextWeekStart = useMemo(
+    () => addCalendarDays(startOfKoreaWeek(today), 7),
+    [today],
+  );
 
   const dates = useMemo(
     () =>
       Array.from({ length: 7 }, (_, position) =>
-        addDays(nextWeekStart, position),
+        addCalendarDays(nextWeekStart, position),
       ),
     [nextWeekStart],
   );
@@ -94,15 +88,27 @@ export function GongangScheduleManager() {
   const nextWeekEnd = dates[6] ?? nextWeekStart;
 
   const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [selectedDay, setSelectedDay] = useState(0);
+  const [selection, setSelection] = useState(() => ({
+    weekStart: nextWeekStart,
+    day: 0,
+  }));
+  const selectedDay = selection.weekStart === nextWeekStart ? selection.day : 0;
+  const setSelectedDay = (day: number) =>
+    setSelection({ weekStart: nextWeekStart, day });
   const [selectedSlot, setSelectedSlot] = useState("study-1");
   const [schedule, setSchedule] = useState<Record<string, ScheduleDraft>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [recurringConflicts, setRecurringConflicts] = useState<
+    Record<string, UtilityReservation>
+  >({});
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   const selectedDate = dates[selectedDay] ?? nextWeekStart;
-  const weekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
+  const selectedWeekday = calendarWeekday(selectedDate);
+  const weekend = selectedWeekday === 0 || selectedWeekday === 6;
 
   const slots = weekend
     ? [...HOURLY_SLOTS, ...NORMAL_SLOTS]
@@ -115,14 +121,19 @@ export function GongangScheduleManager() {
   useEffect(() => {
     let cancelled = false;
 
-    void Promise.all([
-      canManageGongang(profile.id),
-      loadGongangSchedule(dateKey(nextWeekStart), dateKey(nextWeekEnd)),
-    ])
-      .then(([canManage, entries]) => {
+    void (async () => {
+      try {
+        const canManage = await canManageGongang(profile.id);
         if (cancelled) return;
 
         setAllowed(canManage);
+        if (!canManage) return;
+
+        const [entries, reservations] = await Promise.all([
+          loadGongangSchedule(nextWeekStart, nextWeekEnd),
+          loadUtilityReservations("gongang", nextWeekStart, nextWeekEnd),
+        ]);
+        if (cancelled) return;
 
         const next: Record<string, ScheduleDraft> = {};
 
@@ -134,21 +145,65 @@ export function GongangScheduleManager() {
         }
 
         setSchedule(next);
-      })
-      .catch((loadError: unknown) => {
-        console.error("Failed to load gongang schedule", loadError);
 
-        if (!cancelled) {
-          setAllowed(false);
+        const conflicts: Record<string, UtilityReservation> = {};
+        for (const reservation of reservations) {
+          if (!reservation.recurring || !reservation.location) continue;
+
+          const occurrenceDate = dates.find(
+            (date) =>
+              calendarWeekday(date) ===
+                calendarWeekday(reservation.reservationDate) &&
+              date >= reservation.reservationDate &&
+              (reservation.recurringUntil === null ||
+                date < reservation.recurringUntil),
+          );
+
+          if (!occurrenceDate) continue;
+
+          conflicts[
+            scheduleKey(occurrenceDate, reservation.slot, reservation.location)
+          ] = reservation;
         }
-      });
+        setRecurringConflicts(conflicts);
+        setLoadError(null);
+      } catch (caughtError) {
+        console.error("Failed to load gongang schedule", caughtError);
+        if (!cancelled) {
+          setLoadError("공강 선예약 정보를 불러오지 못했습니다.");
+        }
+      }
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, [profile.id, nextWeekStart, nextWeekEnd]);
+  }, [profile.id, nextWeekStart, nextWeekEnd, dates, refreshVersion]);
+
+  useEffect(() => {
+    const refresh = () => setRefreshVersion((current) => current + 1);
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, []);
 
   if (allowed === null) {
+    if (loadError) {
+      return (
+        <div className="mx-auto w-full max-w-2xl px-4 py-10">
+          <p role="alert" className="text-sm text-destructive">
+            {loadError}
+          </p>
+          <Button
+            type="button"
+            className="mt-4"
+            onClick={() => setRefreshVersion((current) => current + 1)}
+          >
+            다시 시도
+          </Button>
+        </div>
+      );
+    }
+
     return (
       <div className="flex justify-center py-20">
         <Spinner aria-label="공강 설정 불러오는 중" />
@@ -172,7 +227,7 @@ export function GongangScheduleManager() {
   }
 
   const saveCurrentSlot = async () => {
-    const selectedDateKey = dateKey(selectedDate);
+    const selectedDateKey = selectedDate;
 
     const entries = FLOORS.map((floor) => {
       const key = scheduleKey(selectedDateKey, activeSlot, floor.id);
@@ -201,12 +256,48 @@ export function GongangScheduleManager() {
       return;
     }
 
+    const terminatingReservations = entries
+      .filter((entry) => entry.reserved)
+      .map(
+        (entry) =>
+          recurringConflicts[
+            scheduleKey(entry.scheduleDate, entry.slot, entry.location)
+          ],
+      )
+      .filter((reservation): reservation is UtilityReservation =>
+        Boolean(reservation),
+      );
+
+    if (
+      terminatingReservations.length > 0 &&
+      !window.confirm(
+        `${terminatingReservations
+          .map((reservation) => reservation.applicantName)
+          .join(
+            ", ",
+          )}의 장기 예약 ${terminatingReservations.length}건이 이 날짜부터 종료됩니다. 계속할까요?`,
+      )
+    ) {
+      return;
+    }
+
     setSaving(true);
     setMessage(null);
     setError(null);
 
     try {
       await saveGongangSchedule(entries);
+      setRecurringConflicts((current) => {
+        const next = { ...current };
+        for (const entry of entries) {
+          if (entry.reserved) {
+            delete next[
+              scheduleKey(entry.scheduleDate, entry.slot, entry.location)
+            ];
+          }
+        }
+        return next;
+      });
       setMessage("저장되었습니다.");
     } catch (saveError) {
       console.error("Failed to save gongang schedule", saveError);
@@ -234,7 +325,7 @@ export function GongangScheduleManager() {
       <div className="mt-5 grid grid-cols-7 gap-1">
         {dates.map((date, position) => (
           <button
-            key={dateKey(date)}
+            key={date}
             type="button"
             onClick={() => {
               setSelectedDay(position);
@@ -250,9 +341,11 @@ export function GongangScheduleManager() {
             )}
           >
             <span className="block text-xs">
-              {weekdayFormatter.format(date)}
+              {weekdayFormatter.format(calendarDate(date))}
             </span>
-            <span className="mt-1 block">{dateFormatter.format(date)}</span>
+            <span className="mt-1 block">
+              {dateFormatter.format(calendarDate(date))}
+            </span>
           </button>
         ))}
       </div>
@@ -281,7 +374,7 @@ export function GongangScheduleManager() {
 
       <div className="mt-4 divide-y overflow-hidden rounded-xl border">
         {FLOORS.map((floor) => {
-          const key = scheduleKey(dateKey(selectedDate), activeSlot, floor.id);
+          const key = scheduleKey(selectedDate, activeSlot, floor.id);
 
           const draft = schedule[key] ?? {
             reserved: false,
@@ -336,10 +429,33 @@ export function GongangScheduleManager() {
                   }}
                 />
               ) : null}
+
+              {recurringConflicts[key] ? (
+                <p className="mt-2 text-xs text-destructive">
+                  저장 시 {recurringConflicts[key].applicantName}의 장기 예약이
+                  종료됩니다.
+                </p>
+              ) : null}
             </div>
           );
         })}
       </div>
+
+      {loadError ? (
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p role="alert" className="text-sm text-destructive">
+            {loadError}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setRefreshVersion((current) => current + 1)}
+          >
+            다시 시도
+          </Button>
+        </div>
+      ) : null}
 
       {error ? (
         <p role="alert" className="mt-3 text-sm text-destructive">

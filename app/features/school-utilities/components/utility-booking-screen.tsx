@@ -13,6 +13,13 @@ import {
   loadUtilityReservations,
   type UtilityReservation as DbReservation,
 } from "~/features/school-utilities/data/reservations";
+import {
+  addCalendarDays,
+  calendarDate,
+  calendarWeekday,
+  startOfKoreaWeek,
+  useKoreaToday,
+} from "~/features/school-utilities/model/korea-date";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -34,12 +41,15 @@ interface Slot {
 
 interface Reservation {
   id: number;
+  profileId: number;
+  reservationDate: string;
   applicantName: string;
   applicantPubId: string;
   applicantCohort: number | null;
   avatarUrl: string | null;
   detail: string;
   recurring: boolean;
+  recurringUntil: string | null;
 }
 
 interface Draft {
@@ -98,72 +108,57 @@ const WEEKEND_GONGANG_SLOTS: Slot[] = [
 const RECURRING_FIELD_ID = "utility-recurring";
 
 const rangeDateFormatter = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "UTC",
   month: "numeric",
   day: "numeric",
 });
 
 const weekdayFormatter = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "UTC",
   weekday: "short",
 });
 
 const fullDateFormatter = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "UTC",
   month: "long",
   day: "numeric",
   weekday: "long",
 });
 
-function startOfDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+function getWeekDates(date: string) {
+  return Array.from({ length: 7 }, (_, position) =>
+    addCalendarDays(date, position),
+  );
 }
 
-function addDays(date: Date, amount: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + amount);
-  return startOfDay(next);
-}
-
-function startOfWeek(date: Date) {
-  const day = date.getDay();
-  return addDays(date, day === 0 ? -6 : 1 - day);
-}
-
-function getWeekDates(date: Date) {
-  return Array.from({ length: 7 }, (_, position) => addDays(date, position));
-}
-
-function dateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-function initialDay() {
-  const day = new Date().getDay();
+function initialDay(today: string) {
+  const day = calendarWeekday(today);
   return day === 0 ? 6 : day - 1;
 }
 
-function isWeekend(date: Date) {
-  return date.getDay() === 0 || date.getDay() === 6;
+function isWeekend(date: string) {
+  const day = calendarWeekday(date);
+  return day === 0 || day === 6;
 }
 
 function reservationKey(
   mode: UtilityMode,
-  date: Date,
+  date: string,
   slot: string,
   location?: string,
 ) {
-  return [mode, dateKey(date), slot, location].filter(Boolean).join(":");
+  return [mode, date, slot, location].filter(Boolean).join(":");
 }
 
 function recurringKey(
   mode: UtilityMode,
-  date: Date,
+  date: string,
   slot: string,
   location?: string,
 ) {
-  return [mode, date.getDay(), slot, location].filter(Boolean).join(":");
+  return [mode, calendarWeekday(date), slot, location]
+    .filter(Boolean)
+    .join(":");
 }
 
 function emptyDraft(): Draft {
@@ -176,12 +171,15 @@ function emptyDraft(): Draft {
 function reservationFromDb(row: DbReservation): Reservation {
   return {
     id: row.id,
+    profileId: row.profileId,
+    reservationDate: row.reservationDate,
     applicantName: row.applicantName,
     applicantPubId: row.applicantPubId,
     applicantCohort: row.applicantCohort,
     avatarUrl: row.avatarUrl,
     detail: row.detail,
     recurring: row.recurring,
+    recurringUntil: row.recurringUntil,
   };
 }
 
@@ -190,7 +188,7 @@ function buildReservationMaps(rows: DbReservation[]) {
   const recurring: Record<string, Reservation> = {};
 
   for (const row of rows) {
-    const date = new Date(`${row.reservationDate}T12:00:00`);
+    const date = row.reservationDate;
     const reservation = reservationFromDb(row);
 
     if (row.recurring) {
@@ -234,14 +232,13 @@ function ModeTabs({ mode }: { mode: UtilityMode }) {
 }
 
 interface WeekStripProps {
-  dates: Date[];
+  dates: string[];
   selectedDay: number;
-  onSelect: (position: number, date: Date) => void;
+  onSelect: (position: number, date: string) => void;
+  today: string;
 }
 
-function WeekStrip({ dates, selectedDay, onSelect }: WeekStripProps) {
-  const today = dateKey(new Date());
-
+function WeekStrip({ dates, selectedDay, onSelect, today }: WeekStripProps) {
   return (
     <div className="grid grid-cols-7">
       {dates.map((date, position) => {
@@ -249,9 +246,9 @@ function WeekStrip({ dates, selectedDay, onSelect }: WeekStripProps) {
 
         return (
           <button
-            key={dateKey(date)}
+            key={date}
             type="button"
-            aria-label={fullDateFormatter.format(date)}
+            aria-label={fullDateFormatter.format(calendarDate(date))}
             aria-pressed={selected}
             onClick={() => onSelect(position, date)}
             className="flex touch-manipulation flex-col items-center gap-1 rounded-xl py-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
@@ -262,17 +259,17 @@ function WeekStrip({ dates, selectedDay, onSelect }: WeekStripProps) {
                 selected ? "text-foreground" : "text-muted-foreground",
               )}
             >
-              {weekdayFormatter.format(date).replace(".", "")}
+              {weekdayFormatter.format(calendarDate(date)).replace(".", "")}
             </span>
 
             <span
               className={cn(
                 "flex size-9 items-center justify-center rounded-full text-sm font-semibold tabular-nums transition-colors",
                 selected && "bg-primary text-primary-foreground",
-                !selected && dateKey(date) === today && "text-primary",
+                !selected && date === today && "text-primary",
               )}
             >
-              {date.getDate()}
+              {calendarDate(date).getUTCDate()}
             </span>
           </button>
         );
@@ -327,6 +324,7 @@ interface ReservationEditorProps {
   onChange: (draft: Draft) => void;
   onClose: () => void;
   onSave: () => void;
+  saving: boolean;
 }
 
 /** 열린 줄이 그대로 입력 폼이 된다. 줄을 눌러서 연 입력이므로 커서를 바로 넣어 준다. */
@@ -338,6 +336,7 @@ function ReservationEditor({
   onChange,
   onClose,
   onSave,
+  saving,
 }: ReservationEditorProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -363,6 +362,7 @@ function ReservationEditor({
           value={draft.detail}
           aria-label={mode === "gongang" ? "목적" : "사용자 명단"}
           placeholder={mode === "gongang" ? "목적" : "사용자 명단"}
+          maxLength={200}
           onChange={(event) =>
             onChange({
               ...draft,
@@ -399,8 +399,12 @@ function ReservationEditor({
           취소
         </Button>
 
-        <Button type="submit" size="sm" disabled={!draft.detail.trim()}>
-          신청
+        <Button
+          type="submit"
+          size="sm"
+          disabled={saving || !draft.detail.trim()}
+        >
+          {saving ? "신청 중..." : "신청"}
         </Button>
       </div>
     </form>
@@ -420,6 +424,9 @@ interface BookingRowProps {
   onClose: () => void;
   onSave: () => void;
   onCancel: () => void;
+  saving: boolean;
+  canCancel: boolean;
+  canBook: boolean;
 }
 
 /**
@@ -441,6 +448,9 @@ function BookingRow({
   onClose,
   onSave,
   onCancel,
+  saving,
+  canCancel,
+  canBook,
 }: BookingRowProps) {
   if (managerReservation) {
     return (
@@ -506,16 +516,19 @@ function BookingRow({
           </div>
         </Link>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`${label} 예약 취소`}
-          className="shrink-0 text-muted-foreground"
-          onClick={onCancel}
-        >
-          <XIcon />
-        </Button>
+        {canCancel ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`${label} 예약 취소`}
+            className="shrink-0 text-muted-foreground"
+            disabled={saving}
+            onClick={onCancel}
+          >
+            <XIcon />
+          </Button>
+        ) : null}
       </div>
     );
   }
@@ -530,7 +543,19 @@ function BookingRow({
         onChange={onDraftChange}
         onClose={onClose}
         onSave={onSave}
+        saving={saving}
       />
+    );
+  }
+
+  if (!canBook) {
+    return (
+      <div className="flex min-h-14 items-center gap-3 px-1 py-2 md:px-4">
+        <span className={cn("shrink-0 text-sm font-semibold", labelClassName)}>
+          {label}
+        </span>
+        <span className="ml-auto text-sm text-muted-foreground">신청 마감</span>
+      </div>
     );
   }
 
@@ -556,10 +581,17 @@ function BookingRow({
 
 export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
   const { profile } = useAppShell();
-  const [weekStart] = useState(() => startOfWeek(new Date()));
-  const [selectedDay, setSelectedDay] = useState(initialDay);
+  const today = useKoreaToday();
+  const weekStart = useMemo(() => startOfKoreaWeek(today), [today]);
+  const [selection, setSelection] = useState(() => ({
+    weekStart,
+    day: initialDay(today),
+  }));
+  const selectedDay =
+    selection.weekStart === weekStart ? selection.day : initialDay(today);
+  const setSelectedDay = (day: number) => setSelection({ weekStart, day });
   const [selectedSlot, setSelectedSlot] = useState(() =>
-    isWeekend(new Date())
+    isWeekend(today)
       ? (WEEKEND_GONGANG_SLOTS[0]?.id ?? "")
       : (GONGANG_SLOTS[0]?.id ?? ""),
   );
@@ -568,7 +600,7 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
 
   // 주는 고정이고 mode는 route가 바뀌며 다시 mount되므로, 로딩은 mount 직후 한 번뿐이다.
-  const [loading, setLoading] = useState(true);
+  const [loadedRange, setLoadedRange] = useState<string | null>(null);
   const [reservations, setReservations] = useState<Record<string, Reservation>>(
     {},
   );
@@ -579,10 +611,20 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
     Record<string, ManagerReservation>
   >({});
   const [canManage, setCanManage] = useState(false);
+  const [mutationKey, setMutationKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   const dates = useMemo(() => getWeekDates(weekStart), [weekStart]);
   const selectedDate = dates[selectedDay] ?? weekStart;
   const weekEnd = dates[6] ?? weekStart;
+  const loading = loadedRange !== `${mode}:${weekStart}`;
+
+  useEffect(() => {
+    const refresh = () => setRefreshVersion((current) => current + 1);
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, []);
 
   useEffect(() => {
     if (mode !== "gongang") {
@@ -610,9 +652,9 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
     let cancelled = false;
 
     void Promise.all([
-      loadUtilityReservations(mode, dateKey(weekStart), dateKey(weekEnd)),
+      loadUtilityReservations(mode, weekStart, weekEnd),
       mode === "gongang"
-        ? loadGongangSchedule(dateKey(weekStart), dateKey(weekEnd))
+        ? loadGongangSchedule(weekStart, weekEnd)
         : Promise.resolve([]),
     ])
       .then(([rows, scheduleEntries]) => {
@@ -627,10 +669,13 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
         for (const entry of scheduleEntries) {
           if (!entry.reserved) continue;
 
-          const date = new Date(`${entry.scheduleDate}T12:00:00`);
-
           managerMap[
-            reservationKey("gongang", date, entry.slot, entry.location)
+            reservationKey(
+              "gongang",
+              entry.scheduleDate,
+              entry.slot,
+              entry.location,
+            )
           ] = {
             detail: entry.detail ?? "공강 관리자 선예약",
           };
@@ -644,13 +689,13 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
       .finally(() => {
         if (cancelled) return;
 
-        setLoading(false);
+        setLoadedRange(`${mode}:${weekStart}`);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [mode, weekStart, weekEnd]);
+  }, [mode, weekStart, weekEnd, refreshVersion]);
 
   const weekend = isWeekend(selectedDate);
 
@@ -677,7 +722,7 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
     draft: Draft,
   ) => {
     const detail = draft.detail.trim();
-    if (!detail) return;
+    if (!detail || mutationKey) return;
 
     const parts = key.split(":");
     const reservationDate = parts[1];
@@ -685,6 +730,9 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
     const location = parts[3] ?? null;
 
     if (!reservationDate || !slot) return;
+
+    setMutationKey(key);
+    setError(null);
 
     try {
       const created = await createUtilityReservation({
@@ -726,6 +774,10 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
       setOpenKey(null);
     } catch (error) {
       console.error("Failed to create utility reservation", error);
+      setError("다른 사용자가 먼저 신청했거나 신청할 수 없는 일정입니다.");
+      setRefreshVersion((current) => current + 1);
+    } finally {
+      setMutationKey(null);
     }
   };
 
@@ -738,10 +790,25 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
       ? recurringReservations[repeatKey]
       : reservations[key];
 
-    if (!reservation) return;
+    if (!reservation || mutationKey) return;
+
+    if (
+      recurring &&
+      !window.confirm(
+        "이 날짜부터 장기 예약이 종료됩니다. 이전 예약 기록은 유지됩니다.",
+      )
+    ) {
+      return;
+    }
+
+    setMutationKey(key);
+    setError(null);
 
     try {
-      await deleteUtilityReservation(reservation.id);
+      await deleteUtilityReservation(
+        reservation.id,
+        recurring ? selectedDate : undefined,
+      );
 
       if (recurring) {
         setRecurringReservations((current) => {
@@ -760,10 +827,14 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
       setOpenKey(null);
     } catch (error) {
       console.error("Failed to delete utility reservation", error);
+      setError("예약을 취소할 수 없습니다. 새로고침 후 다시 시도해주세요.");
+      setRefreshVersion((current) => current + 1);
+    } finally {
+      setMutationKey(null);
     }
   };
 
-  const selectDate = (position: number, date: Date) => {
+  const selectDate = (position: number, date: string) => {
     setSelectedDay(position);
 
     setSelectedSlot(
@@ -792,12 +863,21 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
             floor.id,
           );
 
+          const recurringReservation = recurringReservations[repeatKey];
+          const activeRecurringReservation =
+            recurringReservation &&
+            selectedDate >= recurringReservation.reservationDate &&
+            (recurringReservation.recurringUntil === null ||
+              selectedDate < recurringReservation.recurringUntil)
+              ? recurringReservation
+              : undefined;
+
           return {
             key,
             repeatKey,
             label: floor.label,
             managerReservation: managerReservations[key],
-            reservation: reservations[key] ?? recurringReservations[repeatKey],
+            reservation: reservations[key] ?? activeRecurringReservation,
           };
         })
       : karaokeSlots.map((slot) => {
@@ -836,8 +916,8 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
       ) : null}
 
       <p className="mt-4 px-1 text-xs font-medium text-muted-foreground tabular-nums">
-        {rangeDateFormatter.format(weekStart)} –{" "}
-        {rangeDateFormatter.format(weekEnd)}
+        {rangeDateFormatter.format(calendarDate(weekStart))} –{" "}
+        {rangeDateFormatter.format(calendarDate(weekEnd))}
       </p>
 
       <div className="mt-1">
@@ -845,6 +925,7 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
           dates={dates}
           selectedDay={selectedDay}
           onSelect={selectDate}
+          today={today}
         />
       </div>
 
@@ -862,6 +943,12 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
       ) : null}
 
       <div className="mt-3 md:mt-4">
+        {error ? (
+          <p role="alert" className="mb-3 px-1 text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
+
         {loading ? (
           <div className="flex justify-center py-16" aria-live="polite">
             <Spinner aria-label="예약 불러오는 중" />
@@ -895,6 +982,12 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
                     row.reservation?.recurring ?? false,
                   );
                 }}
+                saving={mutationKey === row.key}
+                canCancel={
+                  row.reservation?.profileId === profile.id &&
+                  (!row.reservation.recurring || selectedDate >= today)
+                }
+                canBook={selectedDate >= today}
               />
             ))}
           </div>
