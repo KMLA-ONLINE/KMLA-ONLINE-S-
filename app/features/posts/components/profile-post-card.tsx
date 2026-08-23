@@ -76,7 +76,7 @@ export function ProfilePostCard({
         sharePath={postPath}
         shareTitle={`${profilePostAuthorName(post)}님의 게시물`}
         commentCount={post.comment_count}
-        commentTo={postPath}
+        commentTo={`${postPath}?view=comments`}
         className="mt-1"
       />
     </article>

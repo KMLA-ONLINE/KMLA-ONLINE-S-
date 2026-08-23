@@ -23,7 +23,12 @@ import * as postNew from "~/routes/app/profile/post-new";
 import * as post from "~/routes/app/profile/post";
 
 function detailLoader(pubId: string, postId: string) {
-  return post.clientLoader({ params: { pubId, postId } } as never);
+  return post.clientLoader({
+    params: { pubId, postId },
+    request: new Request(
+      `https://kmla.online/profile/${pubId}/posts/${postId}`,
+    ),
+  } as never);
 }
 
 describe("profile post routes", () => {
@@ -41,7 +46,7 @@ describe("profile post routes", () => {
       post_id: "post-id",
       timeline_pub_id: "jieun-29",
     });
-    listPostComments.mockResolvedValue({ comments: [], olderCursor: null });
+    listPostComments.mockResolvedValue({ comments: [], nextCursor: null });
 
     await expect(detailLoader("jieun-29", "post-id")).resolves.toMatchObject({
       post: { post_id: "post-id" },
@@ -56,7 +61,7 @@ describe("profile post routes", () => {
       post_id: "post-id",
       timeline_pub_id: "jieun-29",
     });
-    listPostComments.mockResolvedValue({ comments: [], olderCursor: null });
+    listPostComments.mockResolvedValue({ comments: [], nextCursor: null });
 
     await expect(detailLoader("seomin-30", "post-id")).rejects.toMatchObject({
       status: 302,
@@ -65,7 +70,7 @@ describe("profile post routes", () => {
 
   it("404s a post the caller cannot read", async () => {
     getProfilePost.mockResolvedValue(null);
-    listPostComments.mockResolvedValue({ comments: [], olderCursor: null });
+    listPostComments.mockResolvedValue({ comments: [], nextCursor: null });
 
     await expect(detailLoader("jieun-29", "gone")).rejects.toMatchObject({
       status: 404,

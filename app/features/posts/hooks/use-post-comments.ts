@@ -25,6 +25,21 @@ function liveCount(replies: PostComment[]): number {
   return replies.filter((reply) => !reply.is_deleted).length;
 }
 
+function mergeComments(
+  current: PostComment[],
+  incoming: PostComment[],
+): PostComment[] {
+  const merged = new Map(
+    current.map((comment) => [comment.comment_id, comment]),
+  );
+  for (const comment of incoming) merged.set(comment.comment_id, comment);
+  return [...merged.values()].sort(
+    (left, right) =>
+      left.created_at.localeCompare(right.created_at) ||
+      left.comment_id.localeCompare(right.comment_id),
+  );
+}
+
 /**
  * 게시물 상세의 댓글 상태.
  *
@@ -36,7 +51,7 @@ function liveCount(replies: PostComment[]): number {
  */
 export function usePostComments(postId: string, initialPage: PostCommentPage) {
   const [comments, setComments] = useState(initialPage.comments);
-  const [olderCursor, setOlderCursor] = useState(initialPage.olderCursor);
+  const [nextCursor, setNextCursor] = useState(initialPage.nextCursor);
   const [replies, setReplies] = useState<Record<string, PostComment[]>>({});
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [countDelta, setCountDelta] = useState(0);
@@ -49,7 +64,7 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
   if (loadedPage !== initialPage) {
     setLoadedPage(initialPage);
     setComments(initialPage.comments);
-    setOlderCursor(initialPage.olderCursor);
+    setNextCursor(initialPage.nextCursor);
     setReplies({});
     setExpanded(new Set());
     setCountDelta(0);
@@ -82,14 +97,14 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
     return bundle;
   };
 
-  const loadOlder = async () => {
-    if (!olderCursor || loading) return;
+  const loadMore = async () => {
+    if (!nextCursor || loading) return;
     setLoading(true);
     setError(null);
     try {
-      const page = await listPostComments(postId, olderCursor);
-      setComments((current) => [...page.comments, ...current]);
-      setOlderCursor(page.olderCursor);
+      const page = await listPostComments(postId, nextCursor);
+      setComments((current) => mergeComments(current, page.comments));
+      setNextCursor(page.nextCursor);
     } catch (cause) {
       setError(getCommentErrorMessage(cause));
     } finally {
@@ -124,7 +139,7 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
       );
       setCountDelta((current) => current + 1);
       if (created.depth === 0) {
-        setComments((current) => [...current, created]);
+        setComments((current) => mergeComments(current, [created]));
         return created;
       }
       await refreshBundle(created.root_comment_id);
@@ -219,12 +234,12 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
     replies,
     expanded,
     countDelta,
-    hasOlder: olderCursor !== null,
+    hasMore: nextCursor !== null,
     loading,
     pending,
     error,
     clearError: () => setError(null),
-    loadOlder,
+    loadMore,
     toggleReplies,
     create,
     edit,

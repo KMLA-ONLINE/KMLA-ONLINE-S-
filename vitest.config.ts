@@ -36,6 +36,8 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   test: {
+    // 전체 병렬 실행 시 Windows의 jsdom 파일들이 CPU를 나눠 쓰며 5초를 간헐적으로 넘긴다.
+    testTimeout: 10_000,
     // Forks — Vitest's default — pay a process spawn per test file, which on
     // Windows costs about as much as the rest of the run combined.
     pool: "threads",

@@ -36,17 +36,14 @@ function renderThread(overrides: Partial<ThreadProps> = {}) {
     comments: [root],
     replies: {},
     expanded: new Set<string>(),
-    hasOlder: false,
+    hasMore: false,
     loading: false,
     pending: false,
     viewer: { name: "홍길동", avatarUrl: null },
-    identities: ["identified"],
-    identity: "identified",
-    onIdentityChange: vi.fn(),
     onReact: vi.fn(),
-    onLoadOlder: vi.fn(),
+    onLoadMore: vi.fn(),
     onToggleReplies: vi.fn(),
-    onSubmitReply: vi.fn().mockResolvedValue(postComment()),
+    onReply: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
     ...overrides,
@@ -98,31 +95,29 @@ describe("CommentThread", () => {
     ).toHaveLength(2);
   });
 
-  it("offers older comments above the list", async () => {
-    const onLoadOlder = vi.fn();
-    const { user } = renderThread({ hasOlder: true, onLoadOlder });
+  it("offers more comments below the list", async () => {
+    const onLoadMore = vi.fn();
+    const { user } = renderThread({ hasMore: true, onLoadMore });
 
-    await user.click(screen.getByRole("button", { name: "이전 댓글 더 보기" }));
-    expect(onLoadOlder).toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "댓글 더 보기" }));
+    expect(onLoadMore).toHaveBeenCalled();
   });
 
-  it("opens an inline composer under the comment being replied to", async () => {
-    const onSubmitReply = vi.fn().mockResolvedValue(postComment());
+  it("selects and highlights the comment being replied to", async () => {
+    const onReply = vi.fn();
     const { user } = renderThread({
       replies: { "root-id": [firstReply] },
       expanded: new Set(["root-id"]),
-      onSubmitReply,
+      onReply,
     });
 
     await user.click(screen.getAllByRole("button", { name: "답글" })[0]);
 
-    const input =
-      await screen.findByPlaceholderText("이한별님에게 답글 남기기…");
-    await user.type(input, "답글 본문{Enter}");
-
-    expect(onSubmitReply).toHaveBeenCalledWith(
+    expect(onReply).toHaveBeenCalledWith(
       expect.objectContaining({ comment_id: "root-id" }),
-      "답글 본문",
+    );
+    expect(screen.getByText("최상위 댓글").closest("[id]")).toHaveClass(
+      "bg-primary/5",
     );
   });
 

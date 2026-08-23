@@ -1,5 +1,12 @@
 import { XIcon } from "lucide-react";
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
+import { useSearchParams } from "react-router";
 
 import {
   CommentComposer,
@@ -14,6 +21,7 @@ import type {
   PostIdentity,
   ReactionSummary,
 } from "~/features/posts/model/types";
+import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -32,6 +40,11 @@ import {
  */
 const DETAIL_DIALOG_CLASS =
   "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-2xl";
+
+const COMMENT_SHEET_CLASS =
+  "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-auto max-md:bottom-0 max-md:left-0 max-md:h-[98svh] max-md:max-h-[98svh] max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-t-2xl max-md:rounded-b-none max-md:data-open:zoom-in-100 max-md:data-open:slide-in-from-bottom-4 max-md:data-closed:zoom-out-100 max-md:data-closed:slide-out-to-bottom-4 md:max-w-2xl";
+
+const DISMISS_DRAG_DISTANCE = 96;
 
 /**
  * 그룹 게시물과 개인 게시물 상세가 공유하는 껍데기.
@@ -75,10 +88,21 @@ export function PostDetailDialog({
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const thread = usePostComments(postId, comments);
   const [identity, setIdentity] = useState<PostIdentity>(identities[0]);
+  const [replyingTo, setReplyingTo] = useState<PostComment | null>(null);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const dragStart = useRef<{ pointerId: number; y: number } | null>(null);
+  const [searchParams] = useSearchParams();
+  const commentsOnly = searchParams.get("view") === "comments";
 
   // 본문 영역이 액션 바에서 부르는 핸들러다. JSX 안에서 즉석 클로저로 만들면 render 중에
   // ref를 읽는 것으로 잡힌다.
   const focusComposer = useCallback(() => composerRef.current?.focus(), []);
+
+  const startReply = (comment: PostComment) => {
+    setReplyingTo(comment);
+    requestAnimationFrame(() => composerRef.current?.focus());
+  };
 
   const submitComment = async (body: string) => {
     const created = await thread.create(body, identity, null);
@@ -91,27 +115,113 @@ export function PostDetailDialog({
     return created;
   };
 
-  const submitReply = (parent: PostComment, body: string) =>
-    thread.create(body, identity, parent.comment_id);
+  const submit = async (body: string) => {
+    if (!replyingTo) return submitComment(body);
+    const created = await thread.create(body, identity, replyingTo.comment_id);
+    if (created) setReplyingTo(null);
+    return created;
+  };
+
+  const replyTarget = replyingTo
+    ? replyingTo.author_name || replyingTo.author_label || "익명"
+    : undefined;
+
+  const startSheetDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (window.matchMedia("(min-width: 768px)").matches) return;
+    if ((event.target as Element).closest("button")) return;
+    dragStart.current = { pointerId: event.pointerId, y: event.clientY };
+    setDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const moveSheetDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const start = dragStart.current;
+    if (start?.pointerId !== event.pointerId) return;
+    setDragOffset(Math.max(0, event.clientY - start.y));
+  };
+
+  const finishSheetDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const start = dragStart.current;
+    if (start?.pointerId !== event.pointerId) return;
+    const distance = Math.max(0, event.clientY - start.y);
+    dragStart.current = null;
+    setDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    if (distance >= DISMISS_DRAG_DISTANCE) {
+      onClose();
+      return;
+    }
+    setDragOffset(0);
+  };
+
+  const cancelSheetDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragStart.current?.pointerId !== event.pointerId) return;
+    dragStart.current = null;
+    setDragging(false);
+    setDragOffset(0);
+  };
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent showCloseButton={false} className={DETAIL_DIALOG_CLASS}>
-        <DialogHeader className="relative flex-row items-center justify-center border-b p-3">
-          <DialogTitle className="text-base font-semibold">{title}</DialogTitle>
-          <DialogDescription className="sr-only">
-            게시물 상세와 댓글
-          </DialogDescription>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="닫기"
-            onClick={onClose}
-            className="absolute inset-y-0 right-3 my-auto text-muted-foreground"
-          >
-            <XIcon />
-          </Button>
-        </DialogHeader>
+      <DialogContent
+        showCloseButton={false}
+        className={cn(
+          commentsOnly ? COMMENT_SHEET_CLASS : DETAIL_DIALOG_CLASS,
+          commentsOnly &&
+            !dragging &&
+            "max-md:transition-transform max-md:duration-200",
+        )}
+        style={
+          commentsOnly && dragOffset > 0
+            ? { transform: `translateY(${dragOffset}px)` }
+            : undefined
+        }
+      >
+        <div
+          className={cn(
+            "shrink-0",
+            commentsOnly &&
+              "max-md:cursor-grab max-md:touch-none max-md:active:cursor-grabbing",
+          )}
+          onPointerDown={commentsOnly ? startSheetDrag : undefined}
+          onPointerMove={commentsOnly ? moveSheetDrag : undefined}
+          onPointerUp={commentsOnly ? finishSheetDrag : undefined}
+          onPointerCancel={commentsOnly ? cancelSheetDrag : undefined}
+        >
+          {commentsOnly ? (
+            <div
+              aria-hidden="true"
+              className="hidden h-5 items-center justify-center max-md:flex"
+            >
+              <span className="h-1 w-10 rounded-full bg-muted-foreground/35" />
+            </div>
+          ) : null}
+          <DialogHeader className="relative flex-row items-center justify-center border-b p-3">
+            <DialogTitle className="text-base font-semibold">
+              {commentsOnly ? (
+                <>
+                  <span className="md:hidden">댓글</span>
+                  <span className="max-md:hidden">{title}</span>
+                </>
+              ) : (
+                title
+              )}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              게시물 상세와 댓글
+            </DialogDescription>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="닫기"
+              onClick={onClose}
+              className="absolute inset-y-0 right-3 my-auto text-muted-foreground"
+            >
+              <XIcon />
+            </Button>
+          </DialogHeader>
+        </div>
 
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
           {error ? (
@@ -120,7 +230,7 @@ export function PostDetailDialog({
             </p>
           ) : null}
 
-          <article>
+          <article className={cn(commentsOnly && "max-md:hidden")}>
             {children}
 
             <PostActionBar
@@ -138,17 +248,15 @@ export function PostDetailDialog({
               comments={thread.comments}
               replies={thread.replies}
               expanded={thread.expanded}
-              hasOlder={thread.hasOlder}
+              hasMore={thread.hasMore}
               loading={thread.loading}
               pending={thread.pending}
               viewer={viewer}
-              identities={identities}
-              identity={identity}
-              onIdentityChange={setIdentity}
+              replyingToId={replyingTo?.comment_id}
               scrollRef={scrollRef}
-              onLoadOlder={thread.loadOlder}
+              onLoadMore={thread.loadMore}
               onToggleReplies={thread.toggleReplies}
-              onSubmitReply={submitReply}
+              onReply={startReply}
               onEdit={thread.edit}
               onReact={thread.react}
               onDelete={thread.remove}
@@ -161,10 +269,15 @@ export function PostDetailDialog({
           identities={identities}
           identity={identity}
           onIdentityChange={setIdentity}
-          onSubmit={submitComment}
+          onSubmit={submit}
           pending={thread.pending}
           error={thread.error}
           inputRef={composerRef}
+          replyTarget={replyTarget}
+          onCancelReply={() => {
+            setReplyingTo(null);
+            composerRef.current?.focus();
+          }}
         />
       </DialogContent>
     </Dialog>

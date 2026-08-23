@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(44);
+select plan(46);
 
 -- 시드에는 로그인 가능한 계정이 하나뿐이라 신원 정책과 운영 조치를 함께 볼 수 없다. 시드를
 -- 건드리지 않고 트랜잭션 안에서만 두 계정을 더 붙인다.
@@ -169,6 +169,58 @@ select is(
   ),
   '익명1',
   'the same participant keeps their number within a post'
+);
+
+-- 최상위 댓글은 오래된 페이지부터 시작해 커서 뒤의 최신 댓글로 이어진다.
+reset role;
+alter table public.post_comments disable trigger post_comments_prevent_immutable_changes;
+update public.post_comments
+set created_at = case id
+  when (select id from ids where name = 'root') then '2026-08-23 01:00:00+00'::timestamptz
+  when (select id from ids where name = 'anon_a') then '2026-08-23 02:00:00+00'::timestamptz
+  when (select id from ids where name = 'anon_a2') then '2026-08-23 03:00:00+00'::timestamptz
+  else created_at
+end
+where id in (
+  (select id from ids where name = 'root'),
+  (select id from ids where name = 'anon_a'),
+  (select id from ids where name = 'anon_a2')
+);
+alter table public.post_comments enable trigger post_comments_prevent_immutable_changes;
+set local role authenticated;
+
+select is(
+  (
+    select array_agg(body order by created_at, comment_id)
+    from public.list_post_comments(
+      '90000000-0000-0000-0000-000000000001', p_limit => 2
+    )
+  ),
+  array['실명 최상위 댓글', '익명으로 한마디']::text[],
+  'the first comment page starts with the oldest comments'
+);
+
+with first_page as (
+  select *
+  from public.list_post_comments(
+    '90000000-0000-0000-0000-000000000001', p_limit => 2
+  )
+), cursor_row as (
+  select * from first_page order by created_at desc, comment_id desc limit 1
+)
+select is(
+  (
+    select array_agg(next_page.body order by next_page.created_at, next_page.comment_id)
+    from cursor_row
+    cross join lateral public.list_post_comments(
+      '90000000-0000-0000-0000-000000000001',
+      cursor_row.created_at,
+      cursor_row.comment_id,
+      2
+    ) as next_page
+  ),
+  array['익명으로 또 한마디']::text[],
+  'the comment cursor continues toward newer comments without overlap'
 );
 
 -- 익명 게시물의 실제 작성자가 익명으로 달면 `글쓴이`다(기능 명세 §9.3).

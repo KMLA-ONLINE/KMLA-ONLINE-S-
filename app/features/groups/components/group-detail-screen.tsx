@@ -128,7 +128,7 @@ export function GroupDetailScreen({
       <div className="grid gap-6 py-3 md:py-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="min-w-0 lg:order-1">
           {tab === "posts" ? (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col md:gap-3">
               {canCreatePost ? (
                 <PostWriteRow
                   to={`/groups/${group.slug}/posts/new`}

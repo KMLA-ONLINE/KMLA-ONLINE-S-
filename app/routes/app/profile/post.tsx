@@ -16,7 +16,10 @@ export const handle = defineAppChrome({
   contentWidth: "5xl",
 });
 
-export async function clientLoader({ params }: Route.ClientLoaderArgs) {
+export async function clientLoader({
+  params,
+  request,
+}: Route.ClientLoaderArgs) {
   // 첨부는 `getProfilePost` 안에서 이어 부르므로, 댓글은 그 전체와 나란히 돈다.
   const [post, comments] = await Promise.all([
     getProfilePost(params.postId),
@@ -24,7 +27,10 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   ]);
   if (!post) throw new Response("게시물을 찾을 수 없습니다.", { status: 404 });
   if (post.timeline_pub_id !== params.pubId) {
-    throw redirect(`/profile/${post.timeline_pub_id}/posts/${post.post_id}`);
+    const search = new URL(request.url).search;
+    throw redirect(
+      `/profile/${post.timeline_pub_id}/posts/${post.post_id}${search}`,
+    );
   }
   return { post, comments };
 }
