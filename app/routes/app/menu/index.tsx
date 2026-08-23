@@ -8,6 +8,7 @@ import {
 import { Link } from "react-router";
 
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { LogoutButton } from "~/features/auth";
 import { UserAvatar } from "~/shared/components/user-avatar";
 
 export const handle = defineAppChrome({
@@ -52,16 +53,16 @@ export default function MenuPage() {
 
           <div className="divide-y overflow-hidden rounded-xl border bg-card">
             <Link
-              to="/menu/meal"
+              to="/util/gongang"
               className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
             >
-              <UtensilsIcon
+              <CalendarClockIcon
                 className="size-4.5 shrink-0 text-muted-foreground"
                 aria-hidden
               />
 
               <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                급식
+                공강 · 노래방
               </span>
 
               <ChevronRightIcon
@@ -90,16 +91,16 @@ export default function MenuPage() {
             </Link>
 
             <Link
-              to="/util/gongang"
+              to="/menu/meal"
               className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
             >
-              <CalendarClockIcon
+              <UtensilsIcon
                 className="size-4.5 shrink-0 text-muted-foreground"
                 aria-hidden
               />
 
               <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                공강 · 노래방
+                급식
               </span>
 
               <ChevronRightIcon
@@ -136,6 +137,8 @@ export default function MenuPage() {
             </Link>
           </div>
         </section>
+
+        <LogoutButton />
       </div>
     </>
   );

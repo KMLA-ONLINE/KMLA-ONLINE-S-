@@ -42,7 +42,7 @@ export const SEMESTERS = [
   label: string;
 }[];
 
-export const DEFAULT_SEMESTER: SemesterKey = "1-1";
+const DEFAULT_SEMESTER: SemesterKey = "1-1";
 
 export const DAYS = ["월", "화", "수", "목", "금"] as const;
 
@@ -181,7 +181,7 @@ export function isSemesterKey(value: unknown): value is SemesterKey {
   return SEMESTERS.some((semester) => semester.id === value);
 }
 
-export function emptySemesters(): Record<SemesterKey, TimetableCourse[]> {
+function emptySemesters(): Record<SemesterKey, TimetableCourse[]> {
   return {
     "1-1": [],
     "1-2": [],
@@ -192,7 +192,7 @@ export function emptySemesters(): Record<SemesterKey, TimetableCourse[]> {
   };
 }
 
-export function readCourseArray(value: unknown): TimetableCourse[] {
+function readCourseArray(value: unknown): TimetableCourse[] {
   if (!Array.isArray(value)) {
     return [];
   }

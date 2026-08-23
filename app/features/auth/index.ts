@@ -1,4 +1,5 @@
 export { AuthCard } from "~/features/auth/components/auth-card";
+export { LogoutButton } from "~/features/auth/components/logout-button";
 export { PasswordField } from "~/features/auth/components/password-field";
 export {
   resendSignupOtp,
