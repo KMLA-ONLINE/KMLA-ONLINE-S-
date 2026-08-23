@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { rpc, uploadPostAttachment } = vi.hoisted(() => ({
+const { hydratePostComments, rpc, uploadPostAttachment } = vi.hoisted(() => ({
+  hydratePostComments: vi.fn((comments: object[]) =>
+    Promise.resolve(
+      comments.map((comment: object) => ({ ...comment, images: [] })),
+    ),
+  ),
   rpc: vi.fn(),
   uploadPostAttachment: vi.fn(),
 }));
@@ -9,10 +14,14 @@ vi.mock("~/shared/supabase/client", () => ({
   getSupabase: () => ({ rpc }),
 }));
 vi.mock("~/features/posts/data/files", () => ({ uploadPostAttachment }));
+vi.mock("~/features/posts/data/queries", () => ({ hydratePostComments }));
 
 import {
   createGroupPostWithAttachments,
+  createCommentImageUploadSession,
+  createPostComment,
   createPostUploadSession,
+  updatePostComment,
 } from "~/features/posts/data/mutations";
 
 const values = {
@@ -143,5 +152,136 @@ describe("post attachment orchestration", () => {
         p_publish: true,
       }),
     );
+  });
+});
+
+describe("comment image orchestration", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    uploadPostAttachment.mockResolvedValue(undefined);
+    rpc.mockImplementation((name: string) => {
+      if (name === "prepare_comment_image")
+        return Promise.resolve({
+          data: {
+            id: "image-id",
+            object_path: "comments/post-id/image-id",
+            storage_bucket: "post-attachments",
+          },
+          error: null,
+        });
+      if (name === "create_post_comment")
+        return Promise.resolve({
+          data: [{ comment_id: "comment-id", post_id: "post-id" }],
+          error: null,
+        });
+      return Promise.resolve({ data: null, error: null });
+    });
+  });
+
+  it("uploads and finalizes before creating the comment", async () => {
+    await createPostComment(
+      "post-id",
+      "",
+      "identified",
+      null,
+      prepared,
+      createCommentImageUploadSession(),
+    );
+
+    expect(rpc.mock.calls.map((call) => call[0] as string)).toEqual([
+      "prepare_comment_image",
+      "finalize_comment_image",
+      "create_post_comment",
+    ]);
+    expect(uploadPostAttachment).toHaveBeenCalledWith(
+      "comments/post-id/image-id",
+      prepared.file,
+    );
+    expect(rpc).toHaveBeenLastCalledWith(
+      "create_post_comment",
+      expect.objectContaining({ p_body: "", p_image_id: "image-id" }),
+    );
+  });
+
+  it("does not report a committed comment as failed when image hydration fails", async () => {
+    hydratePostComments.mockRejectedValueOnce(new Error("signing failed"));
+
+    const created = await createPostComment(
+      "post-id",
+      "",
+      "identified",
+      null,
+      prepared,
+      createCommentImageUploadSession(),
+    );
+
+    expect(created.images).toEqual([]);
+    expect(
+      rpc.mock.calls.filter(([name]) => name === "create_post_comment"),
+    ).toHaveLength(1);
+  });
+
+  it("does not create a comment after upload failure and reuses preparation on retry", async () => {
+    const session = createCommentImageUploadSession();
+    uploadPostAttachment.mockRejectedValueOnce(new Error("offline"));
+    rpc.mockImplementationOnce(() =>
+      Promise.resolve({
+        data: {
+          id: "image-id",
+          object_path: "comments/post-id/image-id",
+          storage_bucket: "post-attachments",
+        },
+        error: null,
+      }),
+    );
+    rpc.mockImplementationOnce(() =>
+      Promise.resolve({ data: null, error: new Error("not uploaded") }),
+    );
+
+    await expect(
+      createPostComment(
+        "post-id",
+        "image",
+        "identified",
+        null,
+        prepared,
+        session,
+      ),
+    ).rejects.toThrow("offline");
+    expect(
+      rpc.mock.calls.filter(([name]) => name === "create_post_comment"),
+    ).toHaveLength(0);
+
+    await createPostComment(
+      "post-id",
+      "image",
+      "identified",
+      null,
+      prepared,
+      session,
+    );
+    expect(
+      rpc.mock.calls.filter(([name]) => name === "prepare_comment_image"),
+    ).toHaveLength(1);
+  });
+
+  it("passes an explicit flag to remove an image while updating", async () => {
+    rpc.mockImplementation((name: string) => {
+      if (name === "update_post_comment")
+        return Promise.resolve({
+          data: [{ comment_id: "comment-id", post_id: "post-id" }],
+          error: null,
+        });
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    await updatePostComment("comment-id", "updated", "post-id", null);
+
+    expect(rpc).toHaveBeenCalledWith("update_post_comment", {
+      p_comment_id: "comment-id",
+      p_body: "updated",
+      p_image_id: undefined,
+      p_remove_image: true,
+    });
   });
 });

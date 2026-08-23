@@ -47,9 +47,12 @@ export function countCommentGraphemes(value: string): number {
 }
 
 /** 등록 가능한 본문이면 `null`, 아니면 사용자에게 보여줄 이유를 돌려준다. */
-export function validateCommentBody(value: string): string | null {
+export function validateCommentBody(
+  value: string,
+  hasImage = false,
+): string | null {
   const normalized = normalizeCommentBody(value);
-  if (!normalized) return "댓글 내용을 입력해 주세요.";
+  if (!normalized && !hasImage) return "댓글 내용을 입력해 주세요.";
   if (countCommentGraphemes(normalized) > COMMENT_MAX_LENGTH)
     return `댓글은 ${COMMENT_MAX_LENGTH.toLocaleString("ko-KR")}자까지 쓸 수 있습니다.`;
   return null;

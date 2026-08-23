@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import {
   clearCommentReaction,
+  createCommentImageUploadSession,
   createPostComment,
   deletePostComment,
   setCommentReaction,
@@ -15,6 +16,7 @@ import { getCommentErrorMessage } from "~/features/posts/model/format";
 import { applyReactionLocally } from "~/features/posts/model/reactions";
 import type {
   PostComment,
+  CommentImageInput,
   PostCommentPage,
   PostIdentity,
   PostReaction,
@@ -50,6 +52,7 @@ function mergeComments(
  * 자손이 있는가"라는 서버 규칙이라, 클라이언트에서 흉내 내면 두 규칙이 갈라진다.
  */
 export function usePostComments(postId: string, initialPage: PostCommentPage) {
+  const [imageSession] = useState(createCommentImageUploadSession);
   const [comments, setComments] = useState(initialPage.comments);
   const [nextCursor, setNextCursor] = useState(initialPage.nextCursor);
   const [replies, setReplies] = useState<Record<string, PostComment[]>>({});
@@ -129,6 +132,7 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
     body: string,
     identity: PostIdentity,
     parentCommentId: string | null,
+    image?: CommentImageInput,
   ) =>
     run(async () => {
       const created = await createPostComment(
@@ -136,6 +140,8 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
         body,
         identity,
         parentCommentId,
+        image,
+        imageSession,
       );
       setCountDelta((current) => current + 1);
       if (created.depth === 0) {
@@ -147,9 +153,19 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
       return created;
     });
 
-  const edit = (comment: PostComment, body: string) =>
+  const edit = (
+    comment: PostComment,
+    body: string,
+    image?: CommentImageInput,
+  ) =>
     run(async () => {
-      const updated = await updatePostComment(comment.comment_id, body);
+      const updated = await updatePostComment(
+        comment.comment_id,
+        body,
+        comment.post_id,
+        image,
+        imageSession,
+      );
       const replace = (item: PostComment) =>
         item.comment_id === updated.comment_id
           ? { ...updated, reply_count: item.reply_count }

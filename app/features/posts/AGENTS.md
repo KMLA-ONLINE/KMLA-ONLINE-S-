@@ -68,9 +68,12 @@
 
 ## 직접 접근을 막은 테이블
 
-`post_comments`, `post_reactions`, `comment_reactions`에는 select grant조차 주지 않는다. 읽기도 쓰기도 definer RPC를 거친다.
+`post_comments`, `comment_images`, `post_reactions`, `comment_reactions`에는 select grant조차 주지 않는다. 읽기도 쓰기도 definer RPC를 거친다.
 
 - 댓글은 직접 select를 열면 tombstone 판정을 건너뛰고 삭제된 본문이 읽힌다.
+- 댓글 이미지는 공개 메타데이터와 `private.comment_image_uploaders`의 업로더를 분리한다. finalize는
+  아직 댓글에 붙이지 않으며, `create_post_comment` / `update_post_comment`가 같은 트랜잭션에서
+  claim해 `ready`로 바꾼 뒤에만 `list_comment_images`와 Storage 서명이 열린다.
 - 반응 행은 통째로 신원이라(누가·무엇을·언제) 표현용으로 떼어 낼 값이 없다. 직접 열면 익명 반응자의 `profile_id`가 그대로 읽힌다. 게시물·댓글처럼 `private` 테이블로 쪼개지 않은 이유도 같다 — 나눌 표현값이 없다.
 - `depth`와 `root_comment_id`가 실제 부모와 맞는지는 CHECK로 표현할 수 없다. 쓰기 경로가 `create_post_comment` 하나라는 전제 위에 서 있으므로 다른 insert 경로를 만들지 마라.
 
@@ -89,7 +92,7 @@
 
 ## 화면 공유
 
-- 상세 모달의 껍데기(머리, 스크롤 영역, 액션 바, 댓글 목록, 입력창)는 `PostDetailDialog` 하나다. 카드 댓글 링크의 `view=comments`는 모바일에서 같은 껍데기를 98svh 하단 댓글 시트로 바꾸며, 별도 댓글 상태를 만들지 않는다.
+- 상세 모달의 껍데기(머리, 스크롤 영역, 액션 바, 댓글 목록, 입력창)는 `PostDetailDialog` 하나다. 카드 댓글 링크의 `view=comments`는 모바일에서 같은 껍데기를 98ㄷㅇsvh 하단 댓글 시트로 바꾸며, 별도 댓글 상태를 만들지 않는다.
   두 종류가 다른 것은 본문 영역뿐이다. 액션 바까지 껍데기가 그리는 이유는 그것이 방금 쓴 댓글을
   더한 개수와 입력창 포커스를 필요로 하는데, 둘 다 껍데기만 알기 때문이다.
 - `PostMenu`의 고정 관련 props는 선택이다. 개인 게시물은 넘기지 않고, 그러면 항목 자체가 사라진다.

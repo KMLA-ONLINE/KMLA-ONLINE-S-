@@ -25,6 +25,9 @@ describe("countCommentGraphemes", () => {
 });
 
 describe("validateCommentBody", () => {
+  it("allows an empty body when the comment has an image", () => {
+    expect(validateCommentBody("", true)).toBeNull();
+  });
   it("rejects a blank body", () => {
     expect(validateCommentBody("   \n  ")).toBe("댓글 내용을 입력해 주세요.");
   });

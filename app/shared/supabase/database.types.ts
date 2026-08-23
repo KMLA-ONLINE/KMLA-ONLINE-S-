@@ -34,6 +34,78 @@ export type Database = {
   }
   public: {
     Tables: {
+      comment_images: {
+        Row: {
+          cleanup_lease_expires_at: string | null
+          cleanup_lease_id: string | null
+          comment_id: string | null
+          created_at: string
+          deleted_at: string | null
+          finalized_at: string | null
+          height: number
+          id: string
+          mime_type: string
+          object_path: string
+          post_id: string
+          ready_at: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["comment_image_status"]
+          storage_bucket: string
+          width: number
+        }
+        Insert: {
+          cleanup_lease_expires_at?: string | null
+          cleanup_lease_id?: string | null
+          comment_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          finalized_at?: string | null
+          height: number
+          id?: string
+          mime_type: string
+          object_path: string
+          post_id: string
+          ready_at?: string | null
+          size_bytes: number
+          status?: Database["public"]["Enums"]["comment_image_status"]
+          storage_bucket?: string
+          width: number
+        }
+        Update: {
+          cleanup_lease_expires_at?: string | null
+          cleanup_lease_id?: string | null
+          comment_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          finalized_at?: string | null
+          height?: number
+          id?: string
+          mime_type?: string
+          object_path?: string
+          post_id?: string
+          ready_at?: string | null
+          size_bytes?: number
+          status?: Database["public"]["Enums"]["comment_image_status"]
+          storage_bucket?: string
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_images_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "post_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_images_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comment_reactions: {
         Row: {
           comment_id: string
@@ -1027,6 +1099,7 @@ export type Database = {
         Args: {
           p_author_identity: Database["public"]["Enums"]["post_identity"]
           p_body: string
+          p_image_id?: string
           p_parent_comment_id?: string
           p_post_id: string
         }
@@ -1101,6 +1174,33 @@ export type Database = {
           slug: string
           sort_rank: number
         }[]
+      }
+      finalize_comment_image: {
+        Args: { p_image_id: string }
+        Returns: {
+          cleanup_lease_expires_at: string | null
+          cleanup_lease_id: string | null
+          comment_id: string | null
+          created_at: string
+          deleted_at: string | null
+          finalized_at: string | null
+          height: number
+          id: string
+          mime_type: string
+          object_path: string
+          post_id: string
+          ready_at: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["comment_image_status"]
+          storage_bucket: string
+          width: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "comment_images"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       finalize_group_media: { Args: { p_media_id: string }; Returns: string }
       finalize_post_attachment: {
@@ -1252,6 +1352,21 @@ export type Database = {
         Returns: {
           expires_at: string
           token: string
+        }[]
+      }
+      list_comment_images: {
+        Args: { p_comment_ids: string[] }
+        Returns: {
+          comment_id: string
+          height: number
+          image_id: string
+          mime_type: string
+          object_path: string
+          post_id: string
+          ready_at: string
+          size_bytes: number
+          storage_bucket: string
+          width: number
         }[]
       }
       list_comment_reactors: {
@@ -1461,6 +1576,39 @@ export type Database = {
           to: "group_categories"
           isOneToOne: false
           isSetofReturn: true
+        }
+      }
+      prepare_comment_image: {
+        Args: {
+          p_height: number
+          p_mime_type: string
+          p_post_id: string
+          p_size_bytes: number
+          p_width: number
+        }
+        Returns: {
+          cleanup_lease_expires_at: string | null
+          cleanup_lease_id: string | null
+          comment_id: string | null
+          created_at: string
+          deleted_at: string | null
+          finalized_at: string | null
+          height: number
+          id: string
+          mime_type: string
+          object_path: string
+          post_id: string
+          ready_at: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["comment_image_status"]
+          storage_bucket: string
+          width: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "comment_images"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       prepare_group_media: {
@@ -1857,7 +2005,12 @@ export type Database = {
         }
       }
       update_post_comment: {
-        Args: { p_body: string; p_comment_id: string }
+        Args: {
+          p_body: string
+          p_comment_id: string
+          p_image_id?: string
+          p_remove_image?: boolean
+        }
         Returns: {
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
@@ -1886,6 +2039,7 @@ export type Database = {
     }
     Enums: {
       app_role: "member" | "admin"
+      comment_image_status: "pending" | "finalized" | "ready" | "deleted"
       group_identity_policy:
         | "identified"
         | "optional_anonymous"
@@ -2037,6 +2191,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["member", "admin"],
+      comment_image_status: ["pending", "finalized", "ready", "deleted"],
       group_identity_policy: [
         "identified",
         "optional_anonymous",

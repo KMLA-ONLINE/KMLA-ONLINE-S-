@@ -21,6 +21,7 @@ export {
   updateProfilePostWithAttachments,
   createGroupPost,
   createPostComment,
+  createCommentImageUploadSession,
   deletePostComment,
   updatePostComment,
   createGroupPostWithAttachments,
@@ -67,6 +68,7 @@ export {
 } from "~/features/posts/model/validation";
 export {
   preparePostFiles,
+  prepareCommentImage,
   releasePostFile,
 } from "~/features/posts/model/attachments";
 export {
@@ -81,6 +83,8 @@ export {
 } from "~/features/posts/model/markdown";
 export type {
   CommentCursor,
+  CommentImage,
+  CommentImageInput,
   GroupCategory,
   GroupPost,
   GroupPostDetail,
@@ -95,6 +99,7 @@ export type {
   PostSaveProgress,
   PostVisibility,
   PreparedPostFile,
+  PreparedCommentImage,
   PostViewMode,
   ProfilePost,
   ProfilePostCursor,

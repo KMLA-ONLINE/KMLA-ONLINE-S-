@@ -15,6 +15,13 @@ interface GroupMediaCleanupItem {
   lease_id: string;
 }
 
+interface CommentImageCleanupItem {
+  image_id: string;
+  storage_bucket: string;
+  object_path: string;
+  lease_id: string;
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST")
     return new Response("Method not allowed", { status: 405 });
@@ -81,6 +88,32 @@ Deno.serve(async (request) => {
       "complete_group_media_cleanup",
       {
         p_media_id: item.media_id,
+        p_lease_id: item.lease_id,
+        p_object_deleted: objectDeleted,
+      },
+    );
+    if (objectDeleted && !completeError) removed += 1;
+    else failed += 1;
+  }
+
+  const { data: commentImageData, error: commentImageError } =
+    await supabase.rpc("claim_comment_image_cleanup", {
+      p_limit: 100,
+      p_lease_seconds: 300,
+    });
+  const commentImageItems = (commentImageData ??
+    []) as CommentImageCleanupItem[];
+  if (commentImageError) errors.push(commentImageError.message);
+  claimed += commentImageItems.length;
+  for (const item of commentImageItems) {
+    const { error: removeError } = await supabase.storage
+      .from(item.storage_bucket)
+      .remove([item.object_path]);
+    const objectDeleted = !removeError;
+    const { error: completeError } = await supabase.rpc(
+      "complete_comment_image_cleanup",
+      {
+        p_image_id: item.image_id,
         p_lease_id: item.lease_id,
         p_object_deleted: objectDeleted,
       },

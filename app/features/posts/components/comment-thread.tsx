@@ -5,7 +5,11 @@ import {
   CommentItem,
   commentDomId,
 } from "~/features/posts/components/comment-item";
-import type { PostComment, PostReaction } from "~/features/posts/model/types";
+import type {
+  CommentImageInput,
+  PostComment,
+  PostReaction,
+} from "~/features/posts/model/types";
 import { Spinner } from "~/shared/ui/spinner";
 
 /** 답글 최대 중첩 단계(기능 명세 §9.2). 이 깊이에 닿은 댓글에는 답글 버튼을 두지 않는다. */
@@ -43,7 +47,11 @@ export function CommentThread({
   onLoadMore: () => void | Promise<unknown>;
   onToggleReplies: (rootId: string) => void | Promise<unknown>;
   onReply: (comment: PostComment) => void;
-  onEdit: (comment: PostComment, body: string) => void | Promise<unknown>;
+  onEdit: (
+    comment: PostComment,
+    body: string,
+    image?: CommentImageInput,
+  ) => void | Promise<unknown>;
   onDelete: (comment: PostComment) => void | Promise<unknown>;
   onReact: (comment: PostComment, next: PostReaction | null) => void;
 }) {
@@ -97,7 +105,7 @@ export function CommentThread({
               highlighted={highlighted === comment.comment_id}
               pending={pending}
               onReply={() => startReply(comment)}
-              onEdit={(body) => onEdit(comment, body)}
+              onEdit={(body, image) => onEdit(comment, body, image)}
               onDelete={() => void onDelete(comment)}
               onReact={(next) => onReact(comment, next)}
             />
@@ -138,7 +146,7 @@ export function CommentThread({
                         reply.parent_comment_id &&
                         highlight(reply.parent_comment_id, true)
                       }
-                      onEdit={(body) => onEdit(reply, body)}
+                      onEdit={(body, image) => onEdit(reply, body, image)}
                       onDelete={() => void onDelete(reply)}
                       onReact={(next) => onReact(reply, next)}
                     />

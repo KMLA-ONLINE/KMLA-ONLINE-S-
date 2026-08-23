@@ -1,6 +1,17 @@
 import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { prepareCommentImage, releasePostFile } = vi.hoisted(() => ({
+  prepareCommentImage: vi.fn(),
+  releasePostFile: vi.fn(),
+}));
+
+vi.mock("~/features/posts/model/attachments", async (importActual) => ({
+  ...(await importActual()),
+  prepareCommentImage,
+  releasePostFile,
+}));
 
 import { CommentComposer } from "~/features/posts/components/comment-composer";
 import { COMMENT_MAX_LENGTH } from "~/features/posts/model/comment-text";
@@ -31,6 +42,17 @@ function renderComposer(overrides: Partial<ComposerProps> = {}) {
 }
 
 describe("CommentComposer", () => {
+  const preparedImage = {
+    key: "image-key",
+    file: new File(["webp"], "photo.webp", { type: "image/webp" }),
+    kind: "image" as const,
+    width: 100,
+    height: 80,
+    previewUrl: "blob:comment-image",
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
   it("submits on Enter and inserts a newline on Shift+Enter", async () => {
     const { user, onSubmit, input } = renderComposer();
 
@@ -181,5 +203,37 @@ describe("CommentComposer", () => {
     expect(screen.getByText("익명2")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "답글 대상 취소" }));
     expect(onCancelReply).toHaveBeenCalled();
+  });
+
+  it("allows an image-only comment and passes the prepared image", async () => {
+    prepareCommentImage.mockResolvedValue(preparedImage);
+    const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
+    const { user } = renderComposer({ onSubmit });
+    const source = new File(["png"], "source.png", { type: "image/png" });
+
+    await user.upload(screen.getByLabelText("댓글 이미지 선택"), source);
+    expect(
+      await screen.findByRole("img", { name: "댓글 이미지 미리보기" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "댓글 게시" }));
+
+    expect(onSubmit).toHaveBeenCalledWith("", preparedImage);
+  });
+
+  it("keeps the image draft when submission fails", async () => {
+    prepareCommentImage.mockResolvedValue(preparedImage);
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const { user } = renderComposer({ onSubmit });
+
+    await user.upload(
+      screen.getByLabelText("댓글 이미지 선택"),
+      new File(["png"], "source.png", { type: "image/png" }),
+    );
+    await user.click(screen.getByRole("button", { name: "댓글 게시" }));
+
+    expect(
+      await screen.findByRole("img", { name: "댓글 이미지 미리보기" }),
+    ).toBeInTheDocument();
+    expect(releasePostFile).not.toHaveBeenCalled();
   });
 });
