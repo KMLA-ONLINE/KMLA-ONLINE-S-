@@ -5,13 +5,13 @@ export interface CourseMeeting {
   day: Weekday;
   start: number;
   end: number;
-  room: string;
 }
 
 export interface TimetableCourse {
   id: string;
   name: string;
   color: number;
+  room: string;
   meetings: CourseMeeting[];
 }
 
@@ -19,6 +19,7 @@ export interface CourseDraft {
   id?: string;
   name: string;
   color: number;
+  room: string;
   meetings: CourseMeeting[];
 }
 
@@ -99,7 +100,6 @@ export function createMeeting(day: Weekday = 0, start = 1): CourseMeeting {
     day,
     start,
     end: start,
-    room: "",
   };
 }
 
@@ -156,8 +156,7 @@ function isMeeting(value: unknown): value is CourseMeeting {
     Number.isInteger(meeting.end) &&
     meeting.end >= meeting.start &&
     meeting.end <= 8 &&
-    !(meeting.start <= 4 && meeting.end >= 5) &&
-    typeof meeting.room === "string"
+    !(meeting.start <= 4 && meeting.end >= 5)
   );
 }
 
@@ -172,6 +171,7 @@ function isCourse(value: unknown): value is TimetableCourse {
     typeof course.id === "string" &&
     typeof course.name === "string" &&
     typeof course.color === "number" &&
+    typeof course.room === "string" &&
     Array.isArray(course.meetings) &&
     course.meetings.every(isMeeting)
   );

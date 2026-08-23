@@ -9,7 +9,6 @@ import {
 } from "~/features/timetable/model/timetable";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
-import { Input } from "~/shared/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 
 interface CourseMeetingFieldsProps {
@@ -19,7 +18,7 @@ interface CourseMeetingFieldsProps {
   onRemove: () => void;
 }
 
-/** 수업 편집 dialog 안의 시간 한 줄 — 요일, 시작·종료 교시, 교실. */
+/** 수업 편집 dialog 안의 시간 한 줄 — 요일과 시작·종료 교시. 장소는 수업이 하나만 갖는다. */
 export function CourseMeetingFields({
   meeting,
   canRemove,
@@ -110,18 +109,6 @@ export function CourseMeetingFields({
           ))}
         </NativeSelect>
       </div>
-
-      <Input
-        value={meeting.room}
-        aria-label="교실"
-        placeholder="교실"
-        className="mt-2 h-9 rounded-xl border-0 bg-background/70 shadow-none"
-        onChange={(event) =>
-          onChange({
-            room: event.target.value,
-          })
-        }
-      />
     </div>
   );
 }

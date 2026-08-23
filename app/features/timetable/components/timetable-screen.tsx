@@ -144,6 +144,7 @@ export function TimetableScreen() {
     setDraft({
       name: "",
       color: courses.length % COLORS.length,
+      room: "",
       meetings: [createMeeting(day, period)],
     });
   };
@@ -155,6 +156,7 @@ export function TimetableScreen() {
       id: course.id,
       name: course.name,
       color: course.color,
+      room: course.room,
       meetings: course.meetings.map((meeting) => ({
         ...meeting,
       })),
@@ -231,6 +233,7 @@ export function TimetableScreen() {
       id: draft.id ?? crypto.randomUUID(),
       name: draft.name.trim(),
       color: draft.color,
+      room: draft.room.trim(),
       meetings: draft.meetings,
     };
 
@@ -301,20 +304,35 @@ export function TimetableScreen() {
 
           {draft ? (
             <>
-              <Input
-                value={draft.name}
-                aria-label="과목명"
-                placeholder="과목명"
-                className="h-10 rounded-md px-3 text-base font-medium"
-                onChange={(event) => {
-                  setOverlap(false);
+              <div className="space-y-2">
+                <Input
+                  value={draft.name}
+                  aria-label="과목명"
+                  placeholder="과목명"
+                  className="h-10 rounded-md px-3 text-base font-medium"
+                  onChange={(event) => {
+                    setOverlap(false);
 
-                  setDraft({
-                    ...draft,
-                    name: event.target.value,
-                  });
-                }}
-              />
+                    setDraft({
+                      ...draft,
+                      name: event.target.value,
+                    });
+                  }}
+                />
+
+                <Input
+                  value={draft.room}
+                  aria-label="장소"
+                  placeholder="장소"
+                  className="h-10 rounded-md px-3 text-base"
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      room: event.target.value,
+                    })
+                  }
+                />
+              </div>
 
               <div className="grid grid-cols-5 justify-items-center gap-3 px-1">
                 {COLOR_DOTS.map((color, colorPosition) => (
