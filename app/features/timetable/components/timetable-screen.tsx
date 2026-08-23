@@ -2,11 +2,32 @@ import { useEffect, useState } from "react";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 
 import { useAppShell } from "~/features/app-shell";
+import { CourseMeetingFields } from "~/features/timetable/components/course-meeting-fields";
+import { TimetableGrid } from "~/features/timetable/components/timetable-grid";
 import {
   loadTimetableRecord,
   saveTimetableRecord,
-  type StoredTimetableRecord,
 } from "~/features/timetable/data/timetable";
+import {
+  COLORS,
+  COLOR_DOTS,
+  SEMESTERS,
+  createMeeting,
+  getKoreaWeekday,
+  hasScheduleConflict,
+  isSemesterKey,
+  timetableFromStored,
+  type CourseDraft,
+  type CourseMeeting,
+  type SemesterKey,
+  type TimetableCourse,
+  type TimetableStorage,
+  type Weekday,
+} from "~/features/timetable/model/timetable";
+import {
+  loadTimetable,
+  saveTimetable,
+} from "~/features/timetable/storage/timetable-storage";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
@@ -18,283 +39,6 @@ import {
 } from "~/shared/ui/dialog";
 import { Input } from "~/shared/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
-
-type Weekday = 0 | 1 | 2 | 3 | 4;
-
-interface CourseMeeting {
-  id: string;
-  day: Weekday;
-  start: number;
-  end: number;
-  room: string;
-}
-
-interface TimetableCourse {
-  id: string;
-  name: string;
-  color: number;
-  meetings: CourseMeeting[];
-}
-
-interface CourseDraft {
-  id?: string;
-  name: string;
-  color: number;
-  meetings: CourseMeeting[];
-}
-
-type SemesterKey = "1-1" | "1-2" | "2-1" | "2-2" | "3-1" | "3-2";
-
-interface TimetableStorage {
-  activeSemester: SemesterKey;
-  semesters: Record<SemesterKey, TimetableCourse[]>;
-}
-
-const STORAGE_KEY = "kmla-online:timetable:v3";
-const LEGACY_STORAGE_KEY = "kmla-online:timetable:v2";
-
-const SEMESTERS = [
-  { id: "1-1", label: "1학년 1학기" },
-  { id: "1-2", label: "1학년 2학기" },
-  { id: "2-1", label: "2학년 1학기" },
-  { id: "2-2", label: "2학년 2학기" },
-  { id: "3-1", label: "3학년 1학기" },
-  { id: "3-2", label: "3학년 2학기" },
-] as const satisfies readonly {
-  id: SemesterKey;
-  label: string;
-}[];
-
-const DEFAULT_SEMESTER: SemesterKey = "1-1";
-
-const DAYS = ["월", "화", "수", "목", "금"] as const;
-
-const PERIODS = [
-  { period: 1, start: "08:30" },
-  { period: 2, start: "09:30" },
-  { period: 3, start: "10:30" },
-  { period: 4, start: "11:30" },
-  { period: 5, start: "13:40" },
-  { period: 6, start: "14:40" },
-  { period: 7, start: "15:40" },
-  { period: 8, start: "16:40" },
-] as const;
-
-const COLORS = [
-  "bg-blue-500 text-white",
-  "bg-emerald-500 text-white",
-  "bg-violet-500 text-white",
-  "bg-orange-500 text-white",
-  "bg-rose-500 text-white",
-  "bg-cyan-500 text-white",
-  "bg-amber-500 text-white",
-  "bg-fuchsia-500 text-white",
-] as const;
-
-const COLOR_DOTS = [
-  "bg-blue-500",
-  "bg-emerald-500",
-  "bg-violet-500",
-  "bg-orange-500",
-  "bg-rose-500",
-  "bg-cyan-500",
-  "bg-amber-500",
-  "bg-fuchsia-500",
-] as const;
-
-function createMeeting(day: Weekday = 0, start = 1): CourseMeeting {
-  return {
-    id: crypto.randomUUID(),
-    day,
-    start,
-    end: start,
-    room: "",
-  };
-}
-
-function getGridRow(period: number) {
-  return period <= 4 ? period + 1 : period + 2;
-}
-
-function getAvailableEndPeriods(start: number) {
-  if (start <= 4) {
-    return PERIODS.filter(
-      (period) => period.period >= start && period.period <= 4,
-    );
-  }
-
-  return PERIODS.filter((period) => period.period >= start);
-}
-
-function getKoreaWeekday(): Weekday | null {
-  const weekday = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Seoul",
-    weekday: "short",
-  }).format(new Date());
-
-  const values: Record<string, Weekday> = {
-    Mon: 0,
-    Tue: 1,
-    Wed: 2,
-    Thu: 3,
-    Fri: 4,
-  };
-
-  return values[weekday] ?? null;
-}
-
-function isMeeting(value: unknown): value is CourseMeeting {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const meeting = value as Record<string, unknown>;
-
-  return (
-    typeof meeting.id === "string" &&
-    typeof meeting.day === "number" &&
-    Number.isInteger(meeting.day) &&
-    meeting.day >= 0 &&
-    meeting.day <= 4 &&
-    typeof meeting.start === "number" &&
-    Number.isInteger(meeting.start) &&
-    meeting.start >= 1 &&
-    meeting.start <= 8 &&
-    typeof meeting.end === "number" &&
-    Number.isInteger(meeting.end) &&
-    meeting.end >= meeting.start &&
-    meeting.end <= 8 &&
-    !(meeting.start <= 4 && meeting.end >= 5) &&
-    typeof meeting.room === "string"
-  );
-}
-
-function isCourse(value: unknown): value is TimetableCourse {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const course = value as Record<string, unknown>;
-
-  return (
-    typeof course.id === "string" &&
-    typeof course.name === "string" &&
-    typeof course.color === "number" &&
-    Array.isArray(course.meetings) &&
-    course.meetings.every(isMeeting)
-  );
-}
-
-function isSemesterKey(value: unknown): value is SemesterKey {
-  return SEMESTERS.some((semester) => semester.id === value);
-}
-
-function emptySemesters(): Record<SemesterKey, TimetableCourse[]> {
-  return {
-    "1-1": [],
-    "1-2": [],
-    "2-1": [],
-    "2-2": [],
-    "3-1": [],
-    "3-2": [],
-  };
-}
-
-function readCourseArray(value: unknown): TimetableCourse[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.filter(isCourse);
-}
-
-function loadTimetable(): TimetableStorage {
-  const empty: TimetableStorage = {
-    activeSemester: DEFAULT_SEMESTER,
-    semesters: emptySemesters(),
-  };
-
-  if (typeof window === "undefined") {
-    return empty;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-
-    if (raw) {
-      const parsed: unknown = JSON.parse(raw);
-
-      if (parsed && typeof parsed === "object") {
-        const record = parsed as Record<string, unknown>;
-        const storedSemesters =
-          record.semesters && typeof record.semesters === "object"
-            ? (record.semesters as Record<string, unknown>)
-            : {};
-
-        const semesters = emptySemesters();
-
-        for (const semester of SEMESTERS) {
-          semesters[semester.id] = readCourseArray(
-            storedSemesters[semester.id],
-          );
-        }
-
-        return {
-          activeSemester: isSemesterKey(record.activeSemester)
-            ? record.activeSemester
-            : DEFAULT_SEMESTER,
-          semesters,
-        };
-      }
-    }
-
-    const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
-
-    if (legacyRaw) {
-      const legacy: unknown = JSON.parse(legacyRaw);
-      const semesters = emptySemesters();
-
-      semesters[DEFAULT_SEMESTER] = readCourseArray(legacy);
-
-      return {
-        activeSemester: DEFAULT_SEMESTER,
-        semesters,
-      };
-    }
-  } catch {
-    return empty;
-  }
-
-  return empty;
-}
-
-function saveTimetable(timetable: TimetableStorage) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(timetable));
-  } catch {
-    return;
-  }
-}
-
-function timetableFromDb(record: StoredTimetableRecord): TimetableStorage {
-  const semesters = emptySemesters();
-
-  const stored =
-    record.semesters && typeof record.semesters === "object"
-      ? (record.semesters as Record<string, unknown>)
-      : {};
-
-  for (const semester of SEMESTERS) {
-    semesters[semester.id] = readCourseArray(stored[semester.id]);
-  }
-
-  return {
-    activeSemester: isSemesterKey(record.activeSemester)
-      ? record.activeSemester
-      : DEFAULT_SEMESTER,
-    semesters,
-  };
-}
 
 export function TimetableScreen() {
   const { profile } = useAppShell();
@@ -322,7 +66,10 @@ export function TimetableScreen() {
         }
 
         if (stored) {
-          const next = timetableFromDb(stored);
+          const next = timetableFromStored(
+            stored.activeSemester,
+            stored.semesters,
+          );
 
           setTimetable(next);
           saveTimetable(next);
@@ -470,48 +217,12 @@ export function TimetableScreen() {
     });
   };
 
-  const hasConflict = () => {
-    if (!draft) {
-      return false;
-    }
-
-    const meetings = draft.meetings;
-
-    const internalConflict = meetings.some((meeting, position) =>
-      meetings
-        .slice(position + 1)
-        .some(
-          (other) =>
-            other.day === meeting.day &&
-            other.start <= meeting.end &&
-            other.end >= meeting.start,
-        ),
-    );
-
-    if (internalConflict) {
-      return true;
-    }
-
-    return courses
-      .filter((course) => course.id !== draft.id)
-      .some((course) =>
-        course.meetings.some((existing) =>
-          meetings.some(
-            (meeting) =>
-              existing.day === meeting.day &&
-              existing.start <= meeting.end &&
-              existing.end >= meeting.start,
-          ),
-        ),
-      );
-  };
-
   const save = () => {
     if (!draft?.name.trim()) {
       return;
     }
 
-    if (hasConflict()) {
+    if (hasScheduleConflict(draft, courses)) {
       setOverlap(true);
       return;
     }
@@ -565,106 +276,12 @@ export function TimetableScreen() {
           </NativeSelect>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-hidden border-b bg-background">
-          <div className="grid h-full min-h-0 grid-cols-[2.25rem_repeat(5,minmax(0,1fr))] grid-rows-[2rem_repeat(4,minmax(0,1fr))_0.55rem_repeat(4,minmax(0,1fr))]">
-            <div className="border-r border-b bg-muted/15" />
-
-            {DAYS.map((day, dayPosition) => (
-              <div
-                key={day}
-                style={{
-                  gridColumn: dayPosition + 2,
-                  gridRow: 1,
-                }}
-                className={cn(
-                  "flex items-center justify-center border-r border-b text-xs font-semibold",
-                  today === dayPosition
-                    ? "bg-primary/[0.06] text-primary"
-                    : "text-muted-foreground",
-                )}
-              >
-                {day}
-              </div>
-            ))}
-
-            <div
-              style={{
-                gridColumn: "1 / -1",
-                gridRow: 6,
-              }}
-              className="border-y bg-muted/30"
-            />
-
-            {PERIODS.map((period) => (
-              <div
-                key={period.period}
-                style={{
-                  gridColumn: 1,
-                  gridRow: getGridRow(period.period),
-                }}
-                className="flex flex-col items-center justify-center border-r border-b bg-muted/10"
-              >
-                <span className="text-xs font-semibold tabular-nums">
-                  {period.period}
-                </span>
-
-                <span className="mt-1 text-[9px] leading-none text-muted-foreground tabular-nums">
-                  {period.start}
-                </span>
-              </div>
-            ))}
-
-            {DAYS.flatMap((_, dayPosition) =>
-              PERIODS.map((period) => (
-                <button
-                  key={`${dayPosition}-${period.period}`}
-                  type="button"
-                  aria-label={`${DAYS[dayPosition]}요일 ${period.period}교시 수업 추가`}
-                  onClick={() => openNew(dayPosition as Weekday, period.period)}
-                  style={{
-                    gridColumn: dayPosition + 2,
-                    gridRow: getGridRow(period.period),
-                  }}
-                  className={cn(
-                    "border-r border-b bg-background transition-colors hover:bg-muted/35 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset active:bg-muted/70",
-                    today === dayPosition && "bg-primary/[0.012]",
-                  )}
-                />
-              )),
-            )}
-
-            {courses.flatMap((course) =>
-              course.meetings.map((meeting) => (
-                <button
-                  key={meeting.id}
-                  type="button"
-                  aria-label={`${course.name} 수정`}
-                  onClick={() => openExisting(course)}
-                  style={{
-                    gridColumn: meeting.day + 2,
-                    gridRow: `${getGridRow(meeting.start)} / ${
-                      getGridRow(meeting.end) + 1
-                    }`,
-                  }}
-                  className={cn(
-                    "z-10 overflow-hidden border border-background/20 p-1.5 text-center transition-[filter] hover:brightness-[0.97] active:brightness-90",
-                    COLORS[course.color % COLORS.length],
-                  )}
-                >
-                  <span className="block text-[11px] leading-[1.25] font-semibold tracking-[-0.02em] break-words">
-                    {course.name}
-                  </span>
-
-                  {meeting.room ? (
-                    <span className="mt-1 block truncate text-[9px] font-medium text-white/80">
-                      {meeting.room}
-                    </span>
-                  ) : null}
-                </button>
-              )),
-            )}
-          </div>
-        </div>
+        <TimetableGrid
+          courses={courses}
+          today={today}
+          onAddCourse={openNew}
+          onSelectCourse={openExisting}
+        />
       </div>
 
       <Dialog
@@ -722,111 +339,13 @@ export function TimetableScreen() {
 
               <div className="space-y-2">
                 {draft.meetings.map((meeting) => (
-                  <div
+                  <CourseMeetingFields
                     key={meeting.id}
-                    className="rounded-2xl bg-muted/45 p-2.5"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="grid min-w-0 flex-1 grid-cols-5 gap-1 rounded-xl bg-background/70 p-1">
-                        {DAYS.map((day, dayPosition) => (
-                          <button
-                            key={day}
-                            type="button"
-                            aria-pressed={meeting.day === dayPosition}
-                            onClick={() =>
-                              updateMeeting(meeting.id, {
-                                day: dayPosition as Weekday,
-                              })
-                            }
-                            className={cn(
-                              "h-9 rounded-lg text-xs font-semibold",
-                              meeting.day === dayPosition
-                                ? "bg-foreground text-background shadow-sm"
-                                : "text-muted-foreground",
-                            )}
-                          >
-                            {day}
-                          </button>
-                        ))}
-                      </div>
-
-                      {draft.meetings.length > 1 ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="시간 삭제"
-                          onClick={() => removeMeeting(meeting.id)}
-                        >
-                          <Trash2Icon />
-                        </Button>
-                      ) : null}
-                    </div>
-
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <NativeSelect
-                        aria-label="시작 교시"
-                        value={meeting.start}
-                        className="w-full"
-                        onChange={(event) => {
-                          const start = Number(event.target.value);
-
-                          const currentEndValid =
-                            start <= 4
-                              ? meeting.end >= start && meeting.end <= 4
-                              : meeting.end >= start;
-
-                          updateMeeting(meeting.id, {
-                            start,
-                            end: currentEndValid ? meeting.end : start,
-                          });
-                        }}
-                      >
-                        {PERIODS.map((period) => (
-                          <NativeSelectOption
-                            key={period.period}
-                            value={period.period}
-                          >
-                            {period.period}
-                            교시
-                          </NativeSelectOption>
-                        ))}
-                      </NativeSelect>
-
-                      <NativeSelect
-                        aria-label="종료 교시"
-                        value={meeting.end}
-                        className="w-full"
-                        onChange={(event) =>
-                          updateMeeting(meeting.id, {
-                            end: Number(event.target.value),
-                          })
-                        }
-                      >
-                        {getAvailableEndPeriods(meeting.start).map((period) => (
-                          <NativeSelectOption
-                            key={period.period}
-                            value={period.period}
-                          >
-                            {period.period}
-                            교시
-                          </NativeSelectOption>
-                        ))}
-                      </NativeSelect>
-                    </div>
-
-                    <Input
-                      value={meeting.room}
-                      aria-label="교실"
-                      placeholder="교실"
-                      className="mt-2 h-9 rounded-xl border-0 bg-background/70 shadow-none"
-                      onChange={(event) =>
-                        updateMeeting(meeting.id, {
-                          room: event.target.value,
-                        })
-                      }
-                    />
-                  </div>
+                    meeting={meeting}
+                    canRemove={draft.meetings.length > 1}
+                    onChange={(patch) => updateMeeting(meeting.id, patch)}
+                    onRemove={() => removeMeeting(meeting.id)}
+                  />
                 ))}
 
                 <button
