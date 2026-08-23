@@ -1,5 +1,6 @@
 import {
   CalendarClockIcon,
+  CalendarDaysIcon,
   ChevronRightIcon,
   FileTextIcon,
   UtensilsIcon,
@@ -7,6 +8,7 @@ import {
 import { Link } from "react-router";
 
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { LogoutButton } from "~/features/auth";
 import { UserAvatar } from "~/shared/components/user-avatar";
 
 export const handle = defineAppChrome({
@@ -51,25 +53,6 @@ export default function MenuPage() {
 
           <div className="divide-y overflow-hidden rounded-xl border bg-card">
             <Link
-              to="/menu/meal"
-              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
-            >
-              <UtensilsIcon
-                className="size-4.5 shrink-0 text-muted-foreground"
-                aria-hidden
-              />
-
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                급식
-              </span>
-
-              <ChevronRightIcon
-                className="size-4 shrink-0 text-muted-foreground"
-                aria-hidden
-              />
-            </Link>
-
-            <Link
               to="/util/gongang"
               className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
             >
@@ -80,6 +63,44 @@ export default function MenuPage() {
 
               <span className="min-w-0 flex-1 truncate text-sm font-medium">
                 공강 · 노래방
+              </span>
+
+              <ChevronRightIcon
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+            </Link>
+
+            <Link
+              to="/menu/timetable"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
+            >
+              <CalendarDaysIcon
+                className="size-4.5 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                시간표
+              </span>
+
+              <ChevronRightIcon
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+            </Link>
+
+            <Link
+              to="/menu/meal"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
+            >
+              <UtensilsIcon
+                className="size-4.5 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                급식
               </span>
 
               <ChevronRightIcon
@@ -116,6 +137,8 @@ export default function MenuPage() {
             </Link>
           </div>
         </section>
+
+        <LogoutButton />
       </div>
     </>
   );

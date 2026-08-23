@@ -814,6 +814,35 @@ export type Database = {
           },
         ]
       }
+      user_timetables: {
+        Row: {
+          active_semester: string
+          profile_id: number
+          semesters: Json
+          updated_at: string
+        }
+        Insert: {
+          active_semester?: string
+          profile_id: number
+          semesters?: Json
+          updated_at?: string
+        }
+        Update: {
+          active_semester?: string
+          profile_id?: number
+          semesters?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_timetables_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       utility_reservations: {
         Row: {
           applicant_name: string
