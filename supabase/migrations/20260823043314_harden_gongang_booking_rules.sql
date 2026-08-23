@@ -139,18 +139,16 @@ begin
     new.recurring := false;
   end if;
 
-  if new.mode = 'gongang' then
-    korea_today := (now() at time zone 'Asia/Seoul')::date;
-    current_monday :=
-      korea_today - (extract(isodow from korea_today)::integer - 1);
+  korea_today := (now() at time zone 'Asia/Seoul')::date;
+  current_monday :=
+    korea_today - (extract(isodow from korea_today)::integer - 1);
 
-    if new.reservation_date < korea_today
-      or new.reservation_date < current_monday
-      or new.reservation_date > current_monday + 6
-    then
-      raise exception 'gongang reservations are limited to the current Korea week'
-        using errcode = '22023';
-    end if;
+  if new.reservation_date < korea_today
+    or new.reservation_date < current_monday
+    or new.reservation_date > current_monday + 6
+  then
+    raise exception 'utility reservations are limited to the current Korea week'
+      using errcode = '22023';
   end if;
 
   lock_key :=

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(26);
+select plan(30);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -97,7 +97,7 @@ select throws_ok(
     current_setting('test.korea_today')
   ),
   '22023',
-  'gongang reservations are limited to the current Korea week',
+  'utility reservations are limited to the current Korea week',
   'past dates are rejected'
 );
 select throws_ok(
@@ -108,7 +108,7 @@ select throws_ok(
     current_setting('test.next_occurrence')
   ),
   '22023',
-  'gongang reservations are limited to the current Korea week',
+  'utility reservations are limited to the current Korea week',
   'ordinary users cannot prebook next week'
 );
 select throws_ok(
@@ -301,6 +301,60 @@ select lives_ok(
     current_setting('test.korea_today')
   ),
   'an ended recurrence no longer blocks a new owner'
+);
+
+select set_config(
+  'test.karaoke_slot',
+  case
+    when extract(isodow from current_setting('test.korea_today')::date) between 1 and 5
+      then 'lunch'
+    else 'hour-8'
+  end,
+  true
+);
+
+select lives_ok(
+  format(
+    $sql$insert into public.utility_reservations
+      (profile_id, mode, reservation_date, slot, location, detail, recurring, applicant_name)
+      values (0, 'karaoke', %L, %L, 'floor_b1', '노래방 이용자', true, '')$sql$,
+    current_setting('test.korea_today'),
+    current_setting('test.karaoke_slot')
+  ),
+  'an accepted user can reserve karaoke in the current Korea week'
+);
+select is(
+  (
+    select location is null and recurring = false
+    from public.utility_reservations
+    where mode = 'karaoke'
+  ),
+  true,
+  'karaoke reservations are always one-time and have no gongang location'
+);
+select throws_ok(
+  format(
+    $sql$insert into public.utility_reservations
+      (profile_id, mode, reservation_date, slot, location, detail, recurring, applicant_name)
+      values (0, 'karaoke', %L::date - 1, %L, null, '지난 노래방', false, '')$sql$,
+    current_setting('test.korea_today'),
+    current_setting('test.karaoke_slot')
+  ),
+  '22023',
+  'utility reservations are limited to the current Korea week',
+  'karaoke rejects dates before today'
+);
+select throws_ok(
+  format(
+    $sql$insert into public.utility_reservations
+      (profile_id, mode, reservation_date, slot, location, detail, recurring, applicant_name)
+      values (0, 'karaoke', %L, %L, null, '차주 노래방', false, '')$sql$,
+    current_setting('test.next_occurrence'),
+    current_setting('test.karaoke_slot')
+  ),
+  '22023',
+  'utility reservations are limited to the current Korea week',
+  'karaoke rejects next-week prebooking'
 );
 
 select * from finish();
