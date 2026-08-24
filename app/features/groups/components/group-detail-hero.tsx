@@ -11,14 +11,12 @@ export function GroupDetailHero({
   isTeacher,
   onSelectMembers,
   onSelectSettings,
-  onSelectReports,
 }: {
   group: GroupDetail;
   profileId: number;
   isTeacher: boolean;
   onSelectMembers: () => void;
   onSelectSettings: () => void;
-  onSelectReports: () => void;
 }) {
   const isMember = group.membership_state === "member";
   const isPrivate = group.join_policy === "invite_only";
@@ -86,7 +84,6 @@ export function GroupDetailHero({
           profileId={profileId}
           isTeacher={isTeacher}
           onSelectSettings={onSelectSettings}
-          onSelectReports={onSelectReports}
         />
       </div>
     </section>

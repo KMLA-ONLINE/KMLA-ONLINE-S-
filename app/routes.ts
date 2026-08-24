@@ -28,7 +28,6 @@ export default [
       route("groups", "routes/app/groups/index.tsx"),
       route("groups/discover", "routes/app/groups/discover.tsx"),
       route("groups/member-page", "routes/app/groups/member-page.ts"),
-      route("groups/report-page", "routes/app/groups/report-page.ts"),
       route("clubs", "routes/app/clubs/index.tsx"),
       route("invite/:token", "routes/app/invite.tsx"),
       route("profile/:pubId", "routes/app/profile/detail.tsx", [

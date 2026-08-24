@@ -119,22 +119,9 @@ describe("GroupPostCard", () => {
     expect(screen.getByText("공지")).toBeInTheDocument();
   });
 
-  it("shows the overflow menu for another member's reportable post", () => {
+  it("hides the overflow menu when the viewer may do nothing", () => {
     stubOverflow(false);
     renderCard();
-
-    expect(
-      screen.getByRole("button", { name: "게시물 옵션" }),
-    ).toBeInTheDocument();
-  });
-
-  it("hides the overflow menu for own post when no other action is available", () => {
-    stubOverflow(false);
-    renderCard(
-      groupPost({
-        is_author: true,
-      }),
-    );
 
     expect(
       screen.queryByRole("button", { name: "게시물 옵션" }),
