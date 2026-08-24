@@ -99,8 +99,8 @@ export interface GroupMember {
   role: GroupMemberRole;
   joined_at: string;
   cohort: number | null;
-  pub_id: string | null;
-  name: string | null;
+  pub_id: string;
+  name: string;
   avatar_path: string | null;
 }
 
@@ -109,8 +109,8 @@ export interface GroupJoinRequest {
   request_id: string;
   requested_at: string;
   cohort: number | null;
-  pub_id: string | null;
-  name: string | null;
+  pub_id: string;
+  name: string;
   avatar_path: string | null;
 }
 

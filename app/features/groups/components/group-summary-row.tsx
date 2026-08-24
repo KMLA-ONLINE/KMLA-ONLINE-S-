@@ -9,7 +9,6 @@ import { Link, useFetcher } from "react-router";
 
 import { GroupAvatar } from "~/features/groups/components/group-avatar";
 import type { GroupHomeItem } from "~/features/groups/model/types";
-import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -112,9 +111,6 @@ export function GroupSummaryRow({
                 {group.name}
               </Link>
             </h3>
-            {group.identity_policy === "always_anonymous" ? (
-              <Badge variant="secondary">항상 익명</Badge>
-            ) : null}
           </div>
           <p className="flex items-center gap-1 truncate text-xs text-muted-foreground md:hidden">
             {group.pinned_at ? (

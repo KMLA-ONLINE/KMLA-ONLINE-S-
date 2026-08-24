@@ -80,7 +80,7 @@ describe("group detail management action", () => {
         name: "새 이름",
         description: "설명",
         joinPolicy: "request",
-        identityPolicy: "always_anonymous",
+        identityPolicy: "optional_anonymous",
         postingPolicy: "staff",
       }),
     );
@@ -89,7 +89,7 @@ describe("group detail management action", () => {
       name: "새 이름",
       description: "설명",
       joinPolicy: "request",
-      identityPolicy: "always_anonymous",
+      identityPolicy: "optional_anonymous",
       postingPolicy: "staff",
     });
   });

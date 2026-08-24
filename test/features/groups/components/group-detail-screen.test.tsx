@@ -115,7 +115,7 @@ describe("GroupDetailScreen", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows settings and an anonymized member directory to managers", () => {
+  it("shows settings and the member directory to managers", () => {
     const { unmount } = renderRoute(DetailHarness, {
       path: "/groups/:slug",
       initialEntries: ["/groups/test-group?tab=members"],
@@ -126,13 +126,12 @@ describe("GroupDetailScreen", () => {
     ).not.toBeInTheDocument();
     unmount();
 
-    const anonymousManager = {
+    const manager = {
       ...baseGroup,
-      identity_policy: "always_anonymous" as const,
       member_role: "manager" as const,
     };
 
-    renderRoute(() => <DetailHarness group={anonymousManager} />, {
+    renderRoute(() => <DetailHarness group={manager} />, {
       path: "/groups/:slug",
       initialEntries: ["/groups/test-group?tab=members"],
     });

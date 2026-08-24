@@ -110,21 +110,18 @@ export type Database = {
         Row: {
           comment_id: string
           created_at: string
-          is_anonymous: boolean
           profile_id: number
           reaction: Database["public"]["Enums"]["post_reaction"]
         }
         Insert: {
           comment_id: string
           created_at?: string
-          is_anonymous: boolean
           profile_id: number
           reaction: Database["public"]["Enums"]["post_reaction"]
         }
         Update: {
           comment_id?: string
           created_at?: string
-          is_anonymous?: boolean
           profile_id?: number
           reaction?: Database["public"]["Enums"]["post_reaction"]
         }
@@ -579,21 +576,18 @@ export type Database = {
       post_reactions: {
         Row: {
           created_at: string
-          is_anonymous: boolean
           post_id: string
           profile_id: number
           reaction: Database["public"]["Enums"]["post_reaction"]
         }
         Insert: {
           created_at?: string
-          is_anonymous: boolean
           post_id: string
           profile_id: number
           reaction: Database["public"]["Enums"]["post_reaction"]
         }
         Update: {
           created_at?: string
-          is_anonymous?: boolean
           post_id?: string
           profile_id?: number
           reaction?: Database["public"]["Enums"]["post_reaction"]
@@ -1465,7 +1459,6 @@ export type Database = {
       list_comment_reactors: {
         Args: { p_comment_id: string }
         Returns: {
-          anonymous_count: number
           reacted_at: string
           reaction: Database["public"]["Enums"]["post_reaction"]
           reactor_avatar_path: string
@@ -1617,7 +1610,6 @@ export type Database = {
       list_post_reactors: {
         Args: { p_post_id: string }
         Returns: {
-          anonymous_count: number
           reacted_at: string
           reaction: Database["public"]["Enums"]["post_reaction"]
           reactor_avatar_path: string
@@ -2129,10 +2121,7 @@ export type Database = {
     Enums: {
       app_role: "member" | "admin"
       comment_image_status: "pending" | "finalized" | "ready" | "deleted"
-      group_identity_policy:
-        | "identified"
-        | "optional_anonymous"
-        | "always_anonymous"
+      group_identity_policy: "identified" | "optional_anonymous"
       group_join_policy: "open" | "request" | "invite_only"
       group_kind: "official" | "unofficial"
       group_media_slot: "icon" | "cover"
@@ -2281,11 +2270,7 @@ export const Constants = {
     Enums: {
       app_role: ["member", "admin"],
       comment_image_status: ["pending", "finalized", "ready", "deleted"],
-      group_identity_policy: [
-        "identified",
-        "optional_anonymous",
-        "always_anonymous",
-      ],
+      group_identity_policy: ["identified", "optional_anonymous"],
       group_join_policy: ["open", "request", "invite_only"],
       group_kind: ["official", "unofficial"],
       group_media_slot: ["icon", "cover"],

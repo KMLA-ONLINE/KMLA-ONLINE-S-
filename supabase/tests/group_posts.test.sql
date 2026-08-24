@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(48);
+select plan(63);
 
 select ok(has_table_privilege('authenticated', 'public.posts', 'SELECT'), 'authenticated can select member-visible posts');
 select ok(not has_table_privilege('authenticated', 'public.posts', 'INSERT'), 'authenticated cannot insert posts directly');
@@ -9,6 +9,11 @@ select ok(not has_table_privilege('authenticated', 'public.posts', 'UPDATE'), 'a
 select ok(not has_table_privilege('authenticated', 'public.posts', 'DELETE'), 'authenticated cannot delete posts directly');
 select ok(not has_table_privilege('authenticated', 'private.post_authors', 'SELECT'), 'actual authors remain private');
 select ok(not has_function_privilege('anon', 'public.create_group_post(uuid,text,text,public.post_identity,uuid,boolean)', 'EXECUTE'), 'anonymous cannot call post creation');
+select ok(has_function_privilege('authenticated', 'public.create_group_post(uuid,text,text,public.post_identity,uuid,boolean)', 'EXECUTE'), 'authenticated can call post creation');
+select ok(not has_function_privilege('anon', 'public.publish_group_post(uuid)', 'EXECUTE'), 'anonymous cannot publish a draft');
+select ok(has_function_privilege('authenticated', 'public.publish_group_post(uuid)', 'EXECUTE'), 'authenticated can publish a draft');
+select ok(not has_function_privilege('anon', 'public.commit_group_post(uuid,text,text,uuid[],boolean,uuid)', 'EXECUTE'), 'anonymous cannot commit a draft');
+select ok(has_function_privilege('authenticated', 'public.commit_group_post(uuid,text,text,uuid[],boolean,uuid)', 'EXECUTE'), 'authenticated can commit a draft');
 select ok(not has_table_privilege('authenticated', 'public.group_categories', 'INSERT'), 'authenticated cannot insert categories directly');
 select ok(not has_table_privilege('authenticated', 'public.group_categories', 'UPDATE'), 'authenticated cannot update categories directly');
 select ok(not has_table_privilege('authenticated', 'public.group_categories', 'DELETE'), 'authenticated cannot delete categories directly');
@@ -63,10 +68,71 @@ select throws_ok(
   $$select public.create_group_post('20000000-0000-0000-0000-000000000001', '제목', '본문', 'staff', null)$$,
   '42501', 'group posting is restricted to staff', 'ordinary members cannot use staff identity'
 );
+select throws_ok(
+  $$select public.create_group_post('20000000-0000-0000-0000-000000000001', '익명 우회', '본문', 'anonymous', null)$$,
+  '42501', 'group posting is restricted to staff', 'posting policy is checked before identity policy'
+);
 
 select lives_ok(
   $$select public.create_group_post('20000000-0000-0000-0000-000000000002', '익명 글', '비공개 그룹 본문', 'anonymous', null)$$,
   'member can atomically create an allowed anonymous post'
+);
+select lives_ok(
+  $$select public.create_group_post('20000000-0000-0000-0000-000000000002', '익명 초안', '초안 본문', 'anonymous', null, false)$$,
+  'member can create an anonymous draft while the policy allows it'
+);
+reset role;
+update public.groups set identity_policy = 'identified'
+where id = '20000000-0000-0000-0000-000000000002';
+set local role authenticated;
+select throws_ok(
+  $$select public.create_group_post(
+      '20000000-0000-0000-0000-000000000002', '익명 생성 우회', '본문', 'anonymous', null
+    )$$,
+  '42501', 'anonymous posting is not allowed',
+  'identified groups reject anonymous post creation'
+);
+select lives_ok(
+  $$select public.create_group_post(
+      '20000000-0000-0000-0000-000000000002', '실명 글', '본문', 'identified', null
+    )$$,
+  'identified groups accept identified post creation'
+);
+select throws_ok(
+  $$select public.commit_group_post(
+      (select id from public.posts where title = '익명 초안'), '익명 초안', '초안 본문', '{}', true, null
+    )$$,
+  '42501', 'anonymous posting is not allowed',
+  'commit rechecks the current identity policy before publishing a draft'
+);
+select throws_ok(
+  $$select public.publish_group_post((select id from public.posts where title = '익명 초안'))$$,
+  '42501', 'anonymous posting is not allowed',
+  'the standalone publish path also rechecks the current identity policy'
+);
+reset role;
+update public.groups set identity_policy = 'optional_anonymous'
+where id = '20000000-0000-0000-0000-000000000002';
+update public.groups set posting_policy = 'members'
+where id = '20000000-0000-0000-0000-000000000001';
+set local role authenticated;
+select lives_ok(
+  $$select public.create_group_post(
+      '20000000-0000-0000-0000-000000000001', '정책 변경 초안', '초안 본문', 'identified', null, false
+    )$$,
+  'member can create a draft while member posting is allowed'
+);
+reset role;
+update public.groups set posting_policy = 'staff'
+where id = '20000000-0000-0000-0000-000000000001';
+set local role authenticated;
+select throws_ok(
+  $$select public.commit_group_post(
+      (select id from public.posts where title = '정책 변경 초안'),
+      '정책 변경 초안', '초안 본문', '{}', true, null
+    )$$,
+  '42501', 'group posting is restricted to staff',
+  'commit rechecks the current posting policy before publishing a draft'
 );
 select is(
   (select author_label from public.list_group_posts('20000000-0000-0000-0000-000000000002') where title = '익명 글'),
@@ -147,6 +213,29 @@ select lives_ok(
   $$select public.create_group_post('20000000-0000-0000-0000-000000000003', '운영진 글', '운영진 본문', 'staff', null)$$,
   'manager can post with the staff identity'
 );
+select lives_ok(
+  $$select public.create_group_post('20000000-0000-0000-0000-000000000003', '운영진 초안', '초안 본문', 'staff', null, false)$$,
+  'manager can create a staff draft'
+);
+reset role;
+update public.group_memberships
+set role = 'member'
+where group_id = '20000000-0000-0000-0000-000000000003'
+  and profile_id = (select id from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001');
+set local role authenticated;
+select throws_ok(
+  $$select public.commit_group_post(
+      (select id from public.posts where title = '운영진 초안'), '운영진 초안', '초안 본문', '{}', true, null
+    )$$,
+  '42501', 'staff identity is not allowed',
+  'commit rechecks the current member role before publishing a staff draft'
+);
+reset role;
+update public.group_memberships
+set role = 'manager'
+where group_id = '20000000-0000-0000-0000-000000000003'
+  and profile_id = (select id from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001');
+set local role authenticated;
 select is(
   (select author_label from public.get_group_post((select id from public.posts where title = '운영진 글'))),
   '운영진', 'staff response uses the staff label'

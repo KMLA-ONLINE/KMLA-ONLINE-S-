@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(59);
+select plan(58);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -147,8 +147,8 @@ select is(
     select count(*)
     from public.list_group_members('20000000-0000-0000-0000-000000000004', '박새벽')
   ),
-  0::bigint,
-  'always-anonymous roster does not search names'
+  1::bigint,
+  'optional-anonymous roster searches names'
 );
 select is(
   (
@@ -156,15 +156,15 @@ select is(
     from public.list_group_members('20000000-0000-0000-0000-000000000004', '24')
   ),
   1::bigint,
-  'always-anonymous roster searches cohorts'
+  'optional-anonymous roster searches cohorts'
 );
 select ok(
-  not exists (
+  exists (
     select 1
     from public.list_group_members('20000000-0000-0000-0000-000000000004')
-    where pub_id is not null or name is not null or avatar_path is not null
+    where pub_id = 'saebyeok-24' and name = '박새벽' and avatar_path is not null
   ),
-  'always-anonymous roster suppresses profile navigation and presentation fields'
+  'optional-anonymous roster exposes normal profile presentation fields'
 );
 select throws_ok(
   $$select * from public.list_group_join_requests('20000000-0000-0000-0000-000000000004')$$,
@@ -214,18 +214,17 @@ set local role authenticated;
 select ok(
   (
     select request_id is not null
-      and pub_id is null
-      and name is null
-      and avatar_path is null
+      and pub_id is not null
+      and name = '홍길동'
       and cohort = 29
     from public.list_group_join_requests('20000000-0000-0000-0000-000000000004')
   ),
-  'anonymous moderation returns only an opaque request id, cohort, and time'
+  'join request moderation exposes normal profile presentation fields'
 );
 select throws_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000004',
-    '기숙사 이야기', '', 'open', 'always_anonymous', 'members'
+    '기숙사 이야기', '', 'open', 'optional_anonymous', 'members'
   )$$,
   '55000',
   'pending join requests must be resolved first',
@@ -246,7 +245,7 @@ select is(
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000004',
-    '새 기숙사 이야기', '새 설명', 'open', 'always_anonymous', 'staff'
+    '새 기숙사 이야기', '새 설명', 'open', 'optional_anonymous', 'staff'
   )$$,
   'settings can change after requests are resolved'
 );
@@ -346,14 +345,14 @@ select is(
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000003',
-    '메이커스 랩', '익명 전환', 'open', 'always_anonymous', 'members'
+    '메이커스 랩', '실명 전용 전환', 'open', 'identified', 'members'
   )$$,
   'admin can change group settings'
 );
 select throws_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000003',
-    '메이커스 랩', '비공개 복귀', 'invite_only', 'always_anonymous', 'members'
+    '메이커스 랩', '비공개 복귀', 'invite_only', 'identified', 'members'
   )$$,
   '55000',
   'public groups cannot become private',
@@ -388,54 +387,34 @@ select throws_ok(
   'not even the owner can delete an official group'
 );
 
--- 재학생이 자동 가입하는 그룹이라 익명으로 바꾸는 순간 되돌릴 수 없다. 전환만 막고, 처음부터
--- 익명으로 만든 공식 그룹은 그대로 둔다.
-select throws_ok(
+select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000001',
-    '학교 공지', '익명 전환 시도', 'request', 'always_anonymous', 'staff'
+    '학교 공지', '선택 익명 전환', 'request', 'optional_anonymous', 'staff'
   )$$,
-  '55000', 'official groups cannot become anonymous',
-  'an official group cannot switch to always-anonymous'
+  'an official group can enable optional anonymity'
 );
-select ok(
-  not exists (
-    select 1
-    from public.list_group_members('20000000-0000-0000-0000-000000000003')
-    where pub_id is not null or name is not null or avatar_path is not null
+select is(
+  (select identity_policy from public.groups where id = '20000000-0000-0000-0000-000000000001'),
+  'optional_anonymous'::public.group_identity_policy,
+  'the official group keeps its optional-anonymous policy'
+);
+
+select lives_ok(
+  $$select * from public.update_group_settings(
+    '20000000-0000-0000-0000-000000000003',
+    '메이커스 랩', '선택 익명 복귀', 'open', 'optional_anonymous', 'members'
+  )$$,
+  'identity policy can change back to optional-anonymous'
+);
+select is(
+  (
+    select array_agg(enumlabel::text order by enumsortorder)
+    from pg_catalog.pg_enum
+    where enumtypid = 'public.group_identity_policy'::regtype
   ),
-  'changing to always anonymous immediately changes roster output'
-);
-
--- 명부가 현재 정책으로 판단되므로, 익명을 걷는 순간 익명을 전제로 가입한 멤버의 이름이
--- 한꺼번에 드러난다. 그 전환 자체를 막는다.
-select throws_ok(
-  $$select * from public.update_group_settings(
-    '20000000-0000-0000-0000-000000000003',
-    '메이커스 랩', '익명 해제 시도', 'open', 'optional_anonymous', 'members'
-  )$$,
-  '55000',
-  'anonymous groups cannot lift anonymity',
-  'a group with members cannot lift always-anonymous'
-);
-select lives_ok(
-  $$select * from public.update_group_settings(
-    '20000000-0000-0000-0000-000000000003',
-    '메이커스 랩', '나머지 설정은 그대로', 'open', 'always_anonymous', 'staff'
-  )$$,
-  'the lock only blocks the identity policy itself'
-);
-
--- 소유자 혼자면 지킬 약속을 한 상대가 아직 없다. 만들자마자 알아챈 실수는 되돌릴 수 있어야 한다.
-select public.create_group(
-  'unofficial', '혼자 만든 익명 그룹', '', 'solo-anon', 'open', 'always_anonymous', 'members'
-);
-select lives_ok(
-  $$select * from public.update_group_settings(
-    (select id from public.groups where slug = 'solo-anon'),
-    '혼자 만든 익명 그룹', '', 'open', 'optional_anonymous', 'members'
-  )$$,
-  'a group whose only member is its owner can still lift always-anonymous'
+  array['identified', 'optional_anonymous']::text[],
+  'group identity policy only exposes supported values'
 );
 
 reset role;
