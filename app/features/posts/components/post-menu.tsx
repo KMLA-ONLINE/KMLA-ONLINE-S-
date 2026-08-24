@@ -2,6 +2,7 @@ import { MoreHorizontalIcon } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 
+import { GroupPostReportDialog } from "~/features/posts/components/group-post-report-dialog";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -34,6 +35,8 @@ export function PostMenu({
   canEdit,
   canPin = false,
   canDelete,
+  canReport = false,
+  reportPostId,
   onPin,
   onDelete,
 }: {
@@ -42,14 +45,25 @@ export function PostMenu({
   canEdit: boolean;
   canPin?: boolean;
   canDelete: boolean;
+  canReport?: boolean;
+  reportPostId?: string;
   onPin?: () => void;
   onDelete: () => void;
 }) {
   // 확인 dialog는 menu 바깥에 둔다. menu가 닫히면서 자식이 언마운트되면 dialog도 같이
   // 사라지므로, 열림 상태만 여기서 들고 dialog는 형제로 그린다.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reported, setReported] = useState(false);
 
-  if (!canEdit && !canPin && !canDelete) return null;
+  if (
+    !canEdit &&
+    !canPin &&
+    !canDelete &&
+    !(canReport && reportPostId && !reported)
+  ) {
+    return null;
+  }
 
   return (
     <>
@@ -77,6 +91,12 @@ export function PostMenu({
               {isPinned ? "고정 해제" : "고정"}
             </DropdownMenuItem>
           ) : null}
+          {canReport && reportPostId && !reported ? (
+            <DropdownMenuItem onClick={() => setReportOpen(true)}>
+              신고
+            </DropdownMenuItem>
+          ) : null}
+
           {canDelete ? (
             <DropdownMenuItem
               variant="destructive"
@@ -87,6 +107,15 @@ export function PostMenu({
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {reportPostId ? (
+        <GroupPostReportDialog
+          postId={reportPostId}
+          open={reportOpen}
+          onOpenChange={setReportOpen}
+          onReported={() => setReported(true)}
+        />
+      ) : null}
 
       <Dialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
         <DialogContent showCloseButton={false} className="sm:max-w-md">

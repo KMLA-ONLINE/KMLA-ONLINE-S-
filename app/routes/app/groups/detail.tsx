@@ -23,6 +23,7 @@ import {
   transferGroupOwnership,
   updateGroupSettings,
 } from "~/features/groups";
+import { listGroupPostReportSummaries } from "~/features/posts/data/group-reports";
 import {
   createGroupCategory,
   deleteGroupCategory,
@@ -58,9 +59,13 @@ export async function clientLoader({
   const searchParams = new URL(request.url).searchParams;
   const memberTab = searchParams.get("tab") === "members";
   const settingsTab = searchParams.get("tab") === "settings";
+  const reportsTab = searchParams.get("tab") === "reports";
   const canModerate =
     group.member_role === "owner" || group.member_role === "admin";
-  const [categories, posts, memberPage, joinRequests, invite] =
+  const canCurate = canModerate || group.member_role === "manager";
+  const reportSort =
+    searchParams.get("reportSort") === "recent" ? "recent" : "count";
+  const [categories, posts, memberPage, joinRequests, invite, reportPage] =
     await Promise.all([
       listGroupCategories(group.group_id),
       listGroupPosts(group.group_id),
@@ -77,8 +82,19 @@ export async function clientLoader({
       settingsTab && canModerate && group.kind !== "official"
         ? getGroupInvite(group.group_id)
         : Promise.resolve(null),
+      reportsTab && canCurate
+        ? listGroupPostReportSummaries(group.group_id, reportSort)
+        : Promise.resolve(undefined),
     ]);
-  return { group, categories, posts, memberPage, joinRequests, invite };
+  return {
+    group,
+    categories,
+    posts,
+    memberPage,
+    joinRequests,
+    invite,
+    reportPage,
+  };
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
@@ -329,6 +345,7 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
         memberPage={loaderData.memberPage}
         joinRequests={loaderData.joinRequests}
         invite={loaderData.invite}
+        reportPage={loaderData.reportPage}
       />
       <Outlet />
     </>

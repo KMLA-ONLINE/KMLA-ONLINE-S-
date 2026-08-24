@@ -1503,6 +1503,50 @@ export type Database = {
           role: Database["public"]["Enums"]["group_member_role"]
         }[]
       }
+      list_group_post_report_descriptions: {
+        Args: {
+          p_before_created_at?: string
+          p_before_report_id?: number
+          p_group_id: string
+          p_limit?: number
+          p_post_id: string
+        }
+        Returns: {
+          created_at: string
+          description: string
+          reason: Database["public"]["Enums"]["group_post_report_reason"]
+          report_id: number
+        }[]
+      }
+      list_group_post_report_summaries: {
+        Args: {
+          p_cursor_latest_at?: string
+          p_cursor_post_id?: string
+          p_cursor_report_count?: number
+          p_group_id: string
+          p_limit?: number
+          p_sort?: string
+        }
+        Returns: {
+          abuse_count: number
+          author_avatar_path: string
+          author_identity: Database["public"]["Enums"]["post_identity"]
+          author_label: string
+          author_name: string
+          author_pub_id: string
+          body_preview: string
+          description_count: number
+          impersonation_count: number
+          latest_at: string
+          other_count: number
+          post_id: string
+          privacy_count: number
+          report_count: number
+          sexual_count: number
+          spam_count: number
+          title: string
+        }[]
+      }
       list_group_posts: {
         Args: {
           p_category_id?: string
@@ -1833,6 +1877,14 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      report_group_post: {
+        Args: {
+          p_description?: string
+          p_post_id: string
+          p_reason: Database["public"]["Enums"]["group_post_report_reason"]
+        }
+        Returns: undefined
+      }
       revoke_group_invite: { Args: { p_group_id: string }; Returns: undefined }
       search_group_posts: {
         Args: { p_group_id: string; p_limit?: number; p_query: string }
@@ -2138,6 +2190,13 @@ export type Database = {
       group_media_slot: "icon" | "cover"
       group_media_status: "pending" | "ready" | "deleted"
       group_member_role: "owner" | "admin" | "manager" | "member"
+      group_post_report_reason:
+        | "abuse"
+        | "sexual"
+        | "privacy"
+        | "impersonation"
+        | "spam"
+        | "other"
       group_posting_policy: "members" | "staff"
       post_attachment_status: "pending" | "ready" | "deleted"
       post_identity: "identified" | "anonymous" | "staff"
@@ -2291,6 +2350,14 @@ export const Constants = {
       group_media_slot: ["icon", "cover"],
       group_media_status: ["pending", "ready", "deleted"],
       group_member_role: ["owner", "admin", "manager", "member"],
+      group_post_report_reason: [
+        "abuse",
+        "sexual",
+        "privacy",
+        "impersonation",
+        "spam",
+        "other",
+      ],
       group_posting_policy: ["members", "staff"],
       post_attachment_status: ["pending", "ready", "deleted"],
       post_identity: ["identified", "anonymous", "staff"],
