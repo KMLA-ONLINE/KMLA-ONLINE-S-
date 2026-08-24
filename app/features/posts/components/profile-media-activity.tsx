@@ -83,7 +83,7 @@ export function ProfileMediaActivity({
           aria-label={`${label} 크게 보기`}
           onClick={openViewer}
           className={cn(
-            "flex w-full items-center justify-center overflow-hidden bg-muted focus:ring-0 focus:outline-none",
+            "flex w-full items-center justify-center overflow-hidden border-y border-border/60 bg-muted focus:ring-0 focus:outline-none",
             isAvatar ? "aspect-square" : "aspect-[3/1]",
             className,
           )}
