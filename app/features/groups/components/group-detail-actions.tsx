@@ -1,5 +1,4 @@
 import {
-  FlagIcon,
   LogOutIcon,
   MoreHorizontalIcon,
   PinIcon,
@@ -30,13 +29,11 @@ export function GroupDetailActions({
   profileId,
   isTeacher,
   onSelectSettings,
-  onSelectReports,
 }: {
   group: GroupDetail;
   profileId: number;
   isTeacher: boolean;
   onSelectSettings: () => void;
-  onSelectReports: () => void;
 }) {
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const pending = fetcher.state !== "idle";
@@ -114,10 +111,6 @@ export function GroupDetailActions({
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={onSelectSettings}>
                       그룹 설정
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={onSelectReports}>
-                      <FlagIcon />
-                      신고
                     </DropdownMenuItem>
                   </>
                 ) : null}
