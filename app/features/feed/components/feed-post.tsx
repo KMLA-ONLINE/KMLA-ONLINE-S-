@@ -1,4 +1,9 @@
-import { ChevronRightIcon, HeartIcon, MessageSquareIcon } from "lucide-react";
+import {
+  ChevronRightIcon,
+  HeartIcon,
+  MessageSquareIcon,
+  PinIcon,
+} from "lucide-react";
 import { Link } from "react-router";
 
 import type { FeedPost, GroupFeedPost } from "~/features/feed/model/types";
@@ -15,6 +20,7 @@ import { ProfileMediaActivity } from "~/features/posts/components/profile-media-
 import { ReactionEmoji } from "~/features/posts/components/reaction-emoji";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
 import { RelativeTime } from "~/shared/components/relative-time";
+import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 
 export function feedPostPath(post: FeedPost): string {
@@ -23,7 +29,7 @@ export function feedPostPath(post: FeedPost): string {
     : `/profile/${post.timeline_pub_id}/posts/${post.post_id}`;
 }
 
-function Author({ post }: { post: FeedPost }) {
+function AuthorAvatar({ post }: { post: FeedPost }) {
   const name = post.author_name ?? post.author_label;
   const avatar = (
     <PostAuthorAvatar
@@ -35,39 +41,59 @@ function Author({ post }: { post: FeedPost }) {
   );
 
   if (post.author_identity === "anonymous" || !post.author_pub_id) {
-    return (
-      <div className="contents">
-        {avatar}
-        <span className="truncate text-sm font-semibold">{name}</span>
-      </div>
-    );
+    return avatar;
   }
 
   return (
-    <>
-      <Link to={`/profile/${post.author_pub_id}`} aria-label={`${name} 프로필`}>
-        {avatar}
-      </Link>
-      <Link
-        to={`/profile/${post.author_pub_id}`}
-        className="truncate text-sm font-semibold hover:underline"
-      >
-        {name}
-      </Link>
-    </>
+    <Link to={`/profile/${post.author_pub_id}`} aria-label={`${name} 프로필`}>
+      {avatar}
+    </Link>
+  );
+}
+
+function AuthorName({ post }: { post: FeedPost }) {
+  const name = post.author_name ?? post.author_label;
+
+  if (post.author_identity === "anonymous" || !post.author_pub_id) {
+    return <span className="truncate text-sm font-semibold">{name}</span>;
+  }
+
+  return (
+    <Link
+      to={`/profile/${post.author_pub_id}`}
+      className="truncate text-sm font-semibold hover:underline"
+    >
+      {name}
+    </Link>
   );
 }
 
 function FeedPostHeader({ post }: { post: FeedPost }) {
   const ownTimeline =
     post.kind === "profile" && post.author_pub_id === post.timeline_pub_id;
+  const activityLabel =
+    post.kind === "profile" && post.activity_kind
+      ? post.activity_kind === "avatar_changed"
+        ? "프로필 사진을 바꾸었습니다."
+        : "프로필 커버를 바꾸었습니다."
+      : null;
 
   return (
-    <header className="flex items-start gap-3 px-4 pt-4 pb-3">
-      <Author post={post} />
-      <div className="-ml-2 min-w-0 flex-1">
+    <header
+      className={cn(
+        "flex items-start gap-3 px-4 pb-3",
+        post.kind === "group" && post.is_pinned ? "pt-2" : "pt-4",
+      )}
+    >
+      <AuthorAvatar post={post} />
+      <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
-          {post.kind === "profile" && !ownTimeline ? (
+          <AuthorName post={post} />
+          {activityLabel ? (
+            <span className="truncate text-sm text-muted-foreground">
+              님이 {activityLabel}
+            </span>
+          ) : post.kind === "profile" && !ownTimeline ? (
             <>
               <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
               <Link
@@ -78,14 +104,21 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
               </Link>
             </>
           ) : null}
-          {post.author_identity === "staff" ? (
+          {!activityLabel && post.author_identity === "staff" ? (
             <Badge variant="outline" className="shrink-0 text-muted-foreground">
               운영진
             </Badge>
           ) : null}
-          {post.is_author && post.author_identity !== "identified" ? (
+          {!activityLabel &&
+          post.is_author &&
+          post.author_identity !== "identified" ? (
             <Badge variant="secondary" className="shrink-0">
               나
+            </Badge>
+          ) : null}
+          {!activityLabel && post.kind === "group" && post.category_name ? (
+            <Badge variant="secondary" className="shrink-0">
+              {post.category_name}
             </Badge>
           ) : null}
         </div>
@@ -111,37 +144,28 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
 export function FeedPostCard({ post }: { post: FeedPost }) {
   const path = feedPostPath(post);
   const { images, files } = splitPostAttachments(post.attachments);
-  const activityLabel =
-    post.kind === "profile" && post.activity_kind
-      ? post.activity_kind === "avatar_changed"
-        ? "프로필 사진을 바꾸었습니다."
-        : "프로필 커버를 바꾸었습니다."
-      : null;
+  const isMediaActivity = post.kind === "profile" && post.activity_kind;
 
   return (
     <article className="overflow-hidden border-b-2 border-foreground/20 bg-card shadow-none md:rounded-xl md:border md:border-border md:shadow-sm">
+      {post.kind === "group" && post.is_pinned ? (
+        <div className="flex items-center gap-1.5 px-4 pt-3 text-xs font-semibold text-muted-foreground">
+          <PinIcon className="size-3.5 -rotate-45 fill-current" />
+          고정된 게시물
+        </div>
+      ) : null}
       <FeedPostHeader post={post} />
-      {activityLabel ? (
-        <>
-          <p className="px-4 pb-3 text-sm text-muted-foreground">
-            {post.author_name ?? "사용자"}님이 {activityLabel}
-          </p>
-          <ProfileMediaActivity post={post} />
-        </>
+      {isMediaActivity ? (
+        <ProfileMediaActivity post={post} />
       ) : (
         <>
           <div className="px-4">
             {post.kind === "group" ? (
-              <div className="mb-2 flex items-center gap-2">
-                <h2 className="min-w-0 text-xl font-semibold">
-                  <Link to={path} className="hover:underline">
-                    {post.title}
-                  </Link>
-                </h2>
-                {post.category_name ? (
-                  <Badge variant="secondary">{post.category_name}</Badge>
-                ) : null}
-              </div>
+              <h2 className="mb-2 text-xl font-semibold">
+                <Link to={path} className="hover:underline">
+                  {post.title}
+                </Link>
+              </h2>
             ) : null}
             <PostBodyClamp testId="feed-post-body">
               <PostMarkdown>{post.body}</PostMarkdown>
@@ -194,7 +218,23 @@ export function FeedPostRow({ post }: { post: FeedPost }) {
       to={path}
       className="flex w-full flex-col gap-1 px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
     >
-      <p className="line-clamp-1 text-sm font-medium sm:text-base">{text}</p>
+      <div className="flex items-center gap-2">
+        {post.kind === "group" && post.is_pinned ? (
+          <PinIcon
+            className="size-4 shrink-0 -rotate-45 fill-current text-muted-foreground"
+            aria-label="고정됨"
+          />
+        ) : null}
+        {post.kind === "group" && post.category_name ? (
+          <Badge
+            variant="outline"
+            className="shrink-0 font-normal text-muted-foreground"
+          >
+            {post.category_name}
+          </Badge>
+        ) : null}
+        <p className="line-clamp-1 text-sm font-medium sm:text-base">{text}</p>
+      </div>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="truncate">{author}</span>
         <ChevronRightIcon className="size-3 shrink-0" aria-hidden="true" />

@@ -39,6 +39,7 @@ const common = {
   top_reactions: ["like"] as const,
   my_reaction: null,
   is_author: false,
+  is_pinned: false,
 };
 
 describe("listFeedPosts", () => {
@@ -123,6 +124,7 @@ describe("listFeedPosts", () => {
     expect(page.posts[0]).toMatchObject({
       kind: "group",
       group_slug: "notice",
+      is_pinned: false,
       author_avatar_path: "signed-avatar",
       attachments: [{ signedUrl: "signed-attachment" }],
     });

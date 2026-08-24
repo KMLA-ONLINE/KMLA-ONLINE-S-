@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(33);
+select plan(34);
 
 select ok(
   has_function_privilege('authenticated', 'public.list_feed_posts(uuid)', 'execute'),
@@ -215,6 +215,10 @@ select
   statement_timestamp() - make_interval(secs => series.n * 10)
 from generate_series(1, 14) as series(n);
 
+update public.posts
+set pinned_at = statement_timestamp()
+where title = 'official feed 1';
+
 insert into private.post_authors (post_id, profile_id)
 select post.id, profile.id
 from public.posts as post
@@ -380,6 +384,13 @@ select ok(
       and author_name = '김관리' and author_label = '운영진'
   ),
   'staff posts expose the canonical author profile while retaining the staff label'
+);
+select ok(
+  exists (
+    select 1 from first_feed_page
+    where title = 'official feed 1' and is_pinned
+  ),
+  'feed output retains group post pinned state'
 );
 select ok(
   exists (

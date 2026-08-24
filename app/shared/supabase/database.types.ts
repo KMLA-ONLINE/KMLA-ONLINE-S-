@@ -1487,6 +1487,7 @@ export type Database = {
           group_name: string
           group_slug: string
           is_author: boolean
+          is_pinned: boolean
           kind: Database["public"]["Enums"]["post_kind"]
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           next_page_token: string
