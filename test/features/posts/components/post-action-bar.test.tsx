@@ -35,7 +35,6 @@ beforeEach(() => {
       reactor_name: "이한별",
       reactor_avatar_path: null,
       reacted_at: "2026-08-13T02:00:00Z",
-      anonymous_count: null,
     },
   ]);
 });

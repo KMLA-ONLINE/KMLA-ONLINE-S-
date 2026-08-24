@@ -225,8 +225,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
           joinPolicy !== "request" &&
           joinPolicy !== "invite_only") ||
         (identityPolicy !== "identified" &&
-          identityPolicy !== "optional_anonymous" &&
-          identityPolicy !== "always_anonymous") ||
+          identityPolicy !== "optional_anonymous") ||
         (postingPolicy !== "members" && postingPolicy !== "staff")
       )
         return data(

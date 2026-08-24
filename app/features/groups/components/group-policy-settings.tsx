@@ -33,18 +33,6 @@ function allowsPolicyChange(
   if (kind === "join" && next === "invite_only") {
     return group.join_policy === "invite_only";
   }
-  // 익명을 전제로 모인 그룹은 멤버가 있는 한 익명을 걷을 수 없다. 걷는 순간 멤버 명부의 이름이
-  // 한꺼번에 드러난다. 아직 혼자면 지킬 약속을 한 상대가 없으므로 열어 둔다.
-  if (kind === "identity" && next !== "always_anonymous") {
-    return (
-      group.identity_policy !== "always_anonymous" || group.member_count <= 1
-    );
-  }
-  // 공식 그룹은 재학생 전원이 자동 가입하므로 익명으로 바꾸는 순간 위 규칙에 걸려 영영 되돌릴
-  // 수 없다. 처음부터 익명으로 만든 공식 그룹은 현재 값이라 이 함수를 거치지 않는다.
-  if (kind === "identity" && next === "always_anonymous") {
-    return group.kind !== "official";
-  }
   return true;
 }
 
@@ -72,7 +60,6 @@ const POLICY = {
         "작성할 때 선택",
         "작성자가 실명 또는 익명을 선택할 수 있습니다.",
       ],
-      ["always_anonymous", "항상 익명", "모든 활동을 익명으로 표시합니다."],
     ],
   },
   posting: {

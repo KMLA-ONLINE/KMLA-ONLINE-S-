@@ -159,7 +159,6 @@ export function GroupDetailScreen({
             memberPage ? (
               <GroupMembersPanel
                 groupId={group.group_id}
-                identityPolicy={group.identity_policy}
                 viewerRole={group.member_role}
                 initialPage={memberPage}
                 memberCount={group.member_count}

@@ -2,7 +2,7 @@ import type { Database } from "~/shared/supabase/database.types";
 
 import type { PostIdentity } from "~/features/posts/model/types";
 
-type GroupIdentityPolicy = Database["public"]["Enums"]["group_identity_policy"];
+type GroupIdentityPolicy = "identified" | "optional_anonymous";
 type GroupMemberRole = Database["public"]["Enums"]["group_member_role"];
 
 /**
@@ -16,11 +16,9 @@ export function resolveIdentityOptions(
   memberRole: GroupMemberRole | null,
 ): PostIdentity[] {
   const identities: PostIdentity[] =
-    identityPolicy === "always_anonymous"
-      ? ["anonymous"]
-      : identityPolicy === "optional_anonymous"
-        ? ["identified", "anonymous"]
-        : ["identified"];
+    identityPolicy === "optional_anonymous"
+      ? ["identified", "anonymous"]
+      : ["identified"];
   if (memberRole && memberRole !== "member") identities.push("staff");
   return identities;
 }

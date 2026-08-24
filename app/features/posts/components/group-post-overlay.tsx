@@ -54,11 +54,8 @@ import { Input } from "~/shared/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 import { Spinner } from "~/shared/ui/spinner";
 
-export function needsPostIdentityConfirmation(
-  identity: PostIdentity,
-  alwaysAnonymous: boolean,
-): boolean {
-  return identity === "staff" || (identity === "anonymous" && !alwaysAnonymous);
+export function needsPostIdentityConfirmation(identity: PostIdentity): boolean {
+  return identity === "staff" || identity === "anonymous";
 }
 
 export function isPostDraftDirty({
@@ -95,7 +92,6 @@ export function GroupPostOverlay({
   categories = [],
   post,
   identities = ["identified"],
-  alwaysAnonymous = false,
   comments,
   viewer,
 }: {
@@ -106,7 +102,6 @@ export function GroupPostOverlay({
   categories?: GroupCategory[];
   post?: GroupPostDetail | null;
   identities?: PostIdentity[];
-  alwaysAnonymous?: boolean;
   /** 상세 모드에서만 쓴다. loader가 게시물과 함께 첫 페이지를 내려준다. */
   comments?: PostCommentPage;
   /** 상세 모드에서만 쓴다. 댓글 입력창 왼쪽 아바타에 들어간다. */
@@ -138,7 +133,6 @@ export function GroupPostOverlay({
         categories={categories}
         post={post}
         identities={identities}
-        alwaysAnonymous={alwaysAnonymous}
         onClose={close}
       />
     </div>
@@ -153,7 +147,6 @@ function PostEditor({
   categories,
   post,
   identities,
-  alwaysAnonymous,
   onClose,
 }: {
   mode: "create" | "edit";
@@ -163,7 +156,6 @@ function PostEditor({
   categories: GroupCategory[];
   post?: GroupPostDetail | null;
   identities: PostIdentity[];
-  alwaysAnonymous: boolean;
   onClose: () => void;
 }) {
   const navigate = useNavigate();
@@ -324,7 +316,7 @@ function PostEditor({
     if (hasPostFormErrors(nextErrors)) return setFormErrors(nextErrors);
     if (
       mode === "create" &&
-      needsPostIdentityConfirmation(nextValues.authorIdentity, alwaysAnonymous)
+      needsPostIdentityConfirmation(nextValues.authorIdentity)
     ) {
       setPendingIdentity(nextValues);
       return;

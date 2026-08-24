@@ -18,7 +18,6 @@ const JOIN_POLICIES = new Set<GroupJoinPolicy>([
 const IDENTITY_POLICIES = new Set<GroupIdentityPolicy>([
   "identified",
   "optional_anonymous",
-  "always_anonymous",
 ]);
 const POSTING_POLICIES = new Set<GroupPostingPolicy>(["members", "staff"]);
 

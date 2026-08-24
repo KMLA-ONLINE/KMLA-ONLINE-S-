@@ -6,7 +6,6 @@ import { GroupJoinRequestsPanel } from "~/features/groups/components/group-join-
 import { MemberRoleMenu } from "~/features/groups/components/group-member-role-menu";
 import { getGroupMemberRoleLabel } from "~/features/groups/model/format";
 import type {
-  GroupIdentityPolicy,
   GroupJoinRequest,
   GroupMember,
   GroupMemberPage,
@@ -24,14 +23,12 @@ const STAFF_ROLES = new Set<GroupMemberRole>(["owner", "admin", "manager"]);
 
 export function GroupMembersPanel({
   groupId,
-  identityPolicy,
   viewerRole,
   initialPage,
   memberCount,
   joinRequests = [],
 }: {
   groupId: string;
-  identityPolicy: GroupIdentityPolicy;
   viewerRole: GroupMemberRole | null;
   initialPage: GroupMemberPage;
   memberCount: number;
@@ -83,7 +80,6 @@ export function GroupMembersPanel({
     enabled: Boolean(nextCursor),
     pending: pageFetcher.state !== "idle",
   });
-  const anonymous = identityPolicy === "always_anonymous";
   const staff = members.filter((member) => STAFF_ROLES.has(member.role));
   const general = members.filter((member) => member.role === "member");
   const canManage = viewerRole === "owner" || viewerRole === "admin";
@@ -91,11 +87,7 @@ export function GroupMembersPanel({
   return (
     <div className="flex flex-col gap-3">
       {canManage ? (
-        <GroupJoinRequestsPanel
-          groupId={groupId}
-          requests={joinRequests}
-          anonymous={anonymous}
-        />
+        <GroupJoinRequestsPanel groupId={groupId} requests={joinRequests} />
       ) : null}
       <Card className="rounded-none border-0 shadow-none ring-0 md:rounded-xl md:border md:shadow-xs md:ring-1">
         <CardHeader>
@@ -120,7 +112,7 @@ export function GroupMembersPanel({
           >
             <div className="relative">
               <label htmlFor="group-member-search" className="sr-only">
-                {anonymous ? "기수 검색" : "이름 또는 기수 검색"}
+                이름 또는 기수 검색
               </label>
               <Input
                 id="group-member-search"
@@ -130,7 +122,7 @@ export function GroupMembersPanel({
                   setSearchError(null);
                 }}
                 className="pr-10"
-                placeholder={anonymous ? "기수 검색" : "이름 또는 기수 검색"}
+                placeholder="이름 또는 기수 검색"
               />
               <Button
                 type="submit"
@@ -153,14 +145,12 @@ export function GroupMembersPanel({
           <MemberSection
             title="운영진"
             members={staff}
-            anonymous={anonymous}
             groupId={groupId}
             viewerRole={viewerRole}
           />
           <MemberSection
             title="일반 멤버"
             members={general}
-            anonymous={anonymous}
             groupId={groupId}
             viewerRole={viewerRole}
           />
@@ -187,13 +177,11 @@ export function GroupMembersPanel({
 function MemberSection({
   title,
   members,
-  anonymous,
   groupId,
   viewerRole,
 }: {
   title: string;
   members: GroupMember[];
-  anonymous: boolean;
   groupId: string;
   viewerRole: GroupMemberRole | null;
 }) {
@@ -209,7 +197,6 @@ function MemberSection({
           <MemberRow
             key={member.membership_id}
             member={member}
-            anonymous={anonymous}
             groupId={groupId}
             viewerRole={viewerRole}
           />
@@ -221,28 +208,21 @@ function MemberSection({
 
 function MemberRow({
   member,
-  anonymous,
   groupId,
   viewerRole,
 }: {
   member: GroupMember;
-  anonymous: boolean;
   groupId: string;
   viewerRole: GroupMemberRole | null;
 }) {
-  const label = anonymous ? cohortLabel(member.cohort) : member.name;
   const content = (
     <>
-      {!anonymous ? (
-        <UserAvatar src={member.avatar_path} name={member.name} size="lg" />
-      ) : null}
+      <UserAvatar src={member.avatar_path} name={member.name} size="lg" />
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-medium">{label}</span>
-        {!anonymous ? (
-          <span className="block text-xs text-muted-foreground">
-            {cohortLabel(member.cohort)}
-          </span>
-        ) : null}
+        <span className="block truncate font-medium">{member.name}</span>
+        <span className="block text-xs text-muted-foreground">
+          {cohortLabel(member.cohort)}
+        </span>
       </span>
       <Badge variant="secondary">{getGroupMemberRoleLabel(member.role)}</Badge>
     </>
@@ -250,16 +230,12 @@ function MemberRow({
 
   return (
     <li className="flex min-h-16 items-center gap-3 py-2">
-      {!anonymous && member.pub_id !== null ? (
-        <Link
-          to={`/profile/${member.pub_id}`}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {content}
-        </Link>
-      ) : (
-        <div className="flex min-w-0 flex-1 items-center gap-3">{content}</div>
-      )}
+      <Link
+        to={`/profile/${member.pub_id}`}
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {content}
+      </Link>
       <MemberRoleMenu
         groupId={groupId}
         member={member}

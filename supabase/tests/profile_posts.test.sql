@@ -334,16 +334,15 @@ select is(
 );
 reset role;
 
--- 반응 행은 통째로 신원이라 클라이언트에 select grant가 없다. 익명 플래그는 여기서 직접 본다.
+-- 반응 행은 통째로 신원이라 클라이언트에 select grant가 없다.
 select is(
   (
     select count(*)
     from public.post_reactions as entry
     where entry.post_id = (select id from ids where name = 'guest')
-      and entry.is_anonymous
   ),
-  0::bigint,
-  'profile post reactions are always identified'
+  1::bigint,
+  'profile post reactions use the ordinary reaction row shape'
 );
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
