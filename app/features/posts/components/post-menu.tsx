@@ -92,7 +92,10 @@ export function PostMenu({
             </DropdownMenuItem>
           ) : null}
           {canReport && reportPostId && !reported ? (
-            <DropdownMenuItem onClick={() => setReportOpen(true)}>
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => setReportOpen(true)}
+            >
               신고
             </DropdownMenuItem>
           ) : null}

@@ -59,6 +59,14 @@ export async function reportGroupPost(
   if (error) throw error;
 }
 
+export async function dismissGroupPostReports(postId: string): Promise<void> {
+  const { error } = await getSupabase().rpc("dismiss_group_post_reports", {
+    p_post_id: postId,
+  });
+
+  if (error) throw error;
+}
+
 export async function listGroupPostReportSummaries(
   groupId: string,
   sort: GroupPostReportSort,

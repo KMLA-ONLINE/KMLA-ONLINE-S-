@@ -23,7 +23,10 @@ import {
   transferGroupOwnership,
   updateGroupSettings,
 } from "~/features/groups";
-import { listGroupPostReportSummaries } from "~/features/posts/data/group-reports";
+import {
+  dismissGroupPostReports,
+  listGroupPostReportSummaries,
+} from "~/features/posts/data/group-reports";
 import {
   createGroupCategory,
   deleteGroupCategory,
@@ -105,6 +108,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   const postIntent =
     intent === "pin-post" ||
     intent === "delete-post" ||
+    intent === "dismiss-report" ||
     intent === "create-category" ||
     intent === "rename-category" ||
     intent === "move-category-up" ||
@@ -136,6 +140,13 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
       if (typeof postId !== "string")
         return data({ error: "게시물을 찾을 수 없습니다." }, { status: 400 });
       await deleteGroupPost(postId);
+    } else if (intent === "dismiss-report") {
+      // 신고 무시는 신고 기록을 지우지 않는다. 무시 시점까지의 신고만 처리 완료로 표시하므로
+      // 이후 새 신고가 들어오면 목록에 다시 올라온다(기능 명세 §8.15).
+      const postId = formData.get("postId");
+      if (typeof postId !== "string")
+        return data({ error: "게시물을 찾을 수 없습니다." }, { status: 400 });
+      await dismissGroupPostReports(postId);
     } else if (intent === "create-category") {
       const rawName = formData.get("name");
       const name = typeof rawName === "string" ? rawName.trim() : "";

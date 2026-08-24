@@ -87,7 +87,7 @@ export function GroupPostReportDialog({
         if (!nextOpen) close();
       }}
     >
-      <DialogContent className="max-h-[90dvh] gap-1.5 overflow-y-auto rounded-md p-2.5 sm:max-w-md [&_[data-slot=dialog-close]]:top-1">
+      <DialogContent className="max-h-[90dvh] gap-2.5 overflow-y-auto rounded-md p-3 sm:max-w-md [&_[data-slot=dialog-close]]:top-1">
         <DialogHeader className="gap-0 pb-2.5">
           <DialogTitle>게시물 신고</DialogTitle>
         </DialogHeader>
@@ -150,13 +150,13 @@ export function GroupPostReportDialog({
             id="group-post-report-description"
             value={description}
             maxLength={300}
-            rows={2}
+            rows={4}
             placeholder="필요한 내용을 입력해 주세요."
             onChange={(event) => {
               setDescription(event.target.value);
               setError(null);
             }}
-            className="h-12 max-h-12 min-h-12 w-full resize-none rounded-sm bg-muted/30 px-3 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring/50"
+            className="h-24 max-h-24 min-h-24 w-full resize-none rounded-sm bg-muted/30 px-3 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring/50"
           />
 
           {error ? (

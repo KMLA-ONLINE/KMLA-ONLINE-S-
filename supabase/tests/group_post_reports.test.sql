@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(34);
 
 select ok(
   not has_table_privilege(
@@ -19,6 +19,24 @@ select ok(
     'EXECUTE'
   ),
   'anonymous users cannot report posts'
+);
+
+select ok(
+  not has_table_privilege(
+    'authenticated',
+    'private.group_post_report_dismissals',
+    'SELECT'
+  ),
+  'report dismissals are not directly readable'
+);
+
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.dismiss_group_post_reports(uuid)',
+    'EXECUTE'
+  ),
+  'anonymous users cannot dismiss reports'
 );
 
 select ok(
@@ -263,6 +281,15 @@ select is(
   'report description is returned without reporter identity'
 );
 
+select throws_ok(
+  $$select public.dismiss_group_post_reports(
+    '90000000-0000-0000-0000-000000000003'
+  )$$,
+  '42501',
+  null,
+  'managers cannot dismiss reports'
+);
+
 reset role;
 
 delete from public.group_join_requests
@@ -383,6 +410,105 @@ where group_id = '20000000-0000-0000-0000-000000000001'
 set local role authenticated;
 
 select lives_ok(
+  $$select public.dismiss_group_post_reports(
+    '90000000-0000-0000-0000-000000000003'
+  )$$,
+  'admin can dismiss the reports on a post'
+);
+
+select is(
+  (
+    select count(*)
+    from public.list_group_post_report_summaries(
+      '20000000-0000-0000-0000-000000000001'
+    )
+  ),
+  0::bigint,
+  'a dismissed post leaves the report list'
+);
+
+reset role;
+
+-- 무시는 신고 기록을 지우지 않으므로, 다시 나타나는지 보려면 무시 시각 이후에 도착한
+-- 신고가 필요하다. pgTAP 전체가 한 transaction이라 `now()`는 무시 시각과 같다.
+insert into private.group_post_reports (
+  post_id,
+  reporter_profile_id,
+  reason,
+  description,
+  created_at
+)
+values (
+  '90000000-0000-0000-0000-000000000003',
+  (select id from public.profiles where pub_id = 'pureum-23'),
+  'abuse',
+  '무시한 뒤 새로 들어온 신고',
+  now() + interval '1 second'
+);
+
+set local role authenticated;
+
+select is(
+  (
+    select report_count
+    from public.list_group_post_report_summaries(
+      '20000000-0000-0000-0000-000000000001'
+    )
+    where post_id = '90000000-0000-0000-0000-000000000003'
+  ),
+  1::bigint,
+  'a new report brings the post back counting only reports after the dismissal'
+);
+
+select is(
+  (
+    select dismissed_count
+    from public.list_group_post_report_summaries(
+      '20000000-0000-0000-0000-000000000001'
+    )
+    where post_id = '90000000-0000-0000-0000-000000000003'
+  ),
+  1::bigint,
+  'previously dismissed reports are counted separately'
+);
+
+select is(
+  (
+    select spam_count
+    from public.list_group_post_report_summaries(
+      '20000000-0000-0000-0000-000000000001'
+    )
+    where post_id = '90000000-0000-0000-0000-000000000003'
+  ),
+  0::bigint,
+  'dismissed reports drop out of the reason counts'
+);
+
+select is(
+  (
+    select description_count
+    from public.list_group_post_report_summaries(
+      '20000000-0000-0000-0000-000000000001'
+    )
+    where post_id = '90000000-0000-0000-0000-000000000003'
+  ),
+  1::bigint,
+  'dismissed reports drop out of the description count'
+);
+
+select is(
+  (
+    select description
+    from public.list_group_post_report_descriptions(
+      '20000000-0000-0000-0000-000000000001',
+      '90000000-0000-0000-0000-000000000003'
+    )
+  ),
+  '무시한 뒤 새로 들어온 신고',
+  'description list returns only reports newer than the dismissal'
+);
+
+select lives_ok(
   $$select public.delete_group_post(
     '90000000-0000-0000-0000-000000000003'
   )$$,
@@ -399,6 +525,16 @@ select is(
   ),
   0::bigint,
   'reports are removed when their post is deleted'
+);
+
+select is(
+  (
+    select count(*)
+    from private.group_post_report_dismissals
+    where post_id = '90000000-0000-0000-0000-000000000003'
+  ),
+  0::bigint,
+  'dismissals are removed when their post is deleted'
 );
 
 select * from finish();

@@ -182,7 +182,7 @@ export function GroupDetailScreen({
               groupId={group.group_id}
               slug={group.slug}
               initialPage={reportPage}
-              canDelete={canManage}
+              canModerate={canManage}
             />
           ) : (
             <EmptyTabCard

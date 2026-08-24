@@ -15,12 +15,12 @@ export function GroupPostReportsPanel({
   groupId,
   slug,
   initialPage,
-  canDelete,
+  canModerate,
 }: {
   groupId: string;
   slug: string;
   initialPage: GroupPostReportSummaryPage;
-  canDelete: boolean;
+  canModerate: boolean;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -28,7 +28,8 @@ export function GroupPostReportsPanel({
 
   const pageFetcher = useFetcher<GroupPostReportSummaryPage>();
 
-  const deleteFetcher = useFetcher<{
+  // 삭제와 무시는 같은 route action으로 가고 오류 표시도 한자리에서 하므로 fetcher를 공유한다.
+  const moderationFetcher = useFetcher<{
     error?: string;
     ok?: boolean;
   }>();
@@ -41,6 +42,9 @@ export function GroupPostReportsPanel({
   const processedData = useRef(pageFetcher.data);
 
   const [deleteTarget, setDeleteTarget] =
+    useState<GroupPostReportSummary | null>(null);
+
+  const [dismissTarget, setDismissTarget] =
     useState<GroupPostReportSummary | null>(null);
 
   useEffect(() => {
@@ -142,9 +146,9 @@ export function GroupPostReportsPanel({
         </div>
       </div>
 
-      {deleteFetcher.data?.error ? (
+      {moderationFetcher.data?.error ? (
         <p role="alert" className="px-4 text-xs text-destructive md:px-0">
-          {deleteFetcher.data.error}
+          {moderationFetcher.data.error}
         </p>
       ) : null}
 
@@ -159,7 +163,8 @@ export function GroupPostReportsPanel({
             report={report}
             groupId={groupId}
             slug={slug}
-            canDelete={canDelete}
+            canModerate={canModerate}
+            onDismiss={() => setDismissTarget(report)}
             onDelete={() => setDeleteTarget(report)}
           />
         ))
@@ -175,6 +180,26 @@ export function GroupPostReportsPanel({
         ) : null}
       </div>
 
+      {dismissTarget ? (
+        <ConfirmDialog
+          title="신고를 무시할까요?"
+          description="이 게시물은 신고 탭에서 사라집니다. 새로운 신고가 들어오면 다시 나타납니다."
+          confirmLabel="무시"
+          onCancel={() => setDismissTarget(null)}
+          onConfirm={() => {
+            void moderationFetcher.submit(
+              {
+                intent: "dismiss-report",
+                postId: dismissTarget.post_id,
+              },
+              { method: "post" },
+            );
+
+            setDismissTarget(null);
+          }}
+        />
+      ) : null}
+
       {deleteTarget ? (
         <ConfirmDialog
           title="게시물을 삭제할까요?"
@@ -183,7 +208,7 @@ export function GroupPostReportsPanel({
           destructive
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => {
-            void deleteFetcher.submit(
+            void moderationFetcher.submit(
               {
                 intent: "delete-post",
                 postId: deleteTarget.post_id,

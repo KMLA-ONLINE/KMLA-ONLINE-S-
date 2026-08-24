@@ -1,3 +1,4 @@
+import { ChevronDownIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 
@@ -71,14 +72,29 @@ export function GroupPostReportDescriptions({
 
   const descriptions = pages.flatMap((page) => page.descriptions);
 
+  // 토글과 펼친 목록을 형제로 내보낸다. 부모(신고 카드 footer)가 `flex flex-wrap`이므로
+  // 목록은 `order-last basis-full`로 다른 액션 아래 한 줄을 통째로 차지한다.
   return (
-    <div className="min-w-0">
-      <Button type="button" size="sm" variant="ghost" onClick={toggle}>
+    <>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="text-muted-foreground"
+        aria-expanded={open}
+        onClick={toggle}
+      >
         설명 {count}
+        <ChevronDownIcon
+          data-icon="inline-end"
+          className={
+            open ? "rotate-180 transition-transform" : "transition-transform"
+          }
+        />
       </Button>
 
       {open ? (
-        <div className="mt-1 w-[min(28rem,calc(100vw-2rem))] rounded-md bg-muted/40 p-2">
+        <div className="order-last mt-1 w-full basis-full rounded-md bg-muted/40 p-2">
           {descriptions.map((description) => (
             <div key={description.report_id} className="py-1.5">
               <div className="mb-0.5 flex items-center gap-1.5">
@@ -120,6 +136,6 @@ export function GroupPostReportDescriptions({
           ) : null}
         </div>
       ) : null}
-    </div>
+    </>
   );
 }

@@ -1263,6 +1263,10 @@ export type Database = {
           sort_rank: number
         }[]
       }
+      dismiss_group_post_reports: {
+        Args: { p_post_id: string }
+        Returns: undefined
+      }
       finalize_comment_image: {
         Args: { p_image_id: string }
         Returns: {
@@ -1529,6 +1533,7 @@ export type Database = {
           author_pub_id: string
           body_preview: string
           description_count: number
+          dismissed_count: number
           impersonation_count: number
           latest_at: string
           other_count: number
