@@ -50,10 +50,9 @@ test("그룹 홈, 찾기, 공개 상세가 실제 데이터로 이어진다", as
   await page.getByLabel("그룹 이름").fill("메");
   await expect(
     page.getByRole("button", { name: "그룹 검색", exact: true }),
-  ).toBeDisabled();
-  await page.getByLabel("그룹 이름").fill("메이");
+  ).toBeEnabled();
   await page.getByRole("button", { name: "그룹 검색", exact: true }).click();
-  await expect(page).toHaveURL(/\/groups\/discover\?q=%EB%A9%94%EC%9D%B4/);
+  await expect(page).toHaveURL(/\/groups\/discover\?q=%EB%A9%94/);
   await page.getByRole("link", { name: "메이커스 랩" }).click();
 
   await expect(page).toHaveURL(/\/groups\/makers-lab$/);
