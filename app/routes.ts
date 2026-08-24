@@ -16,11 +16,13 @@ export default [
   layout("routes/app/gate.tsx", [
     layout("routes/app/layout.tsx", [
       index("routes/app/home.tsx"),
+      route("feed/posts/:postId", "routes/app/feed/post-data.ts"),
       route("profile", "routes/app/profile/index.tsx"),
       route("noti", "routes/app/notifications.tsx"),
       route("menu", "routes/app/menu/index.tsx"),
       route("menu/licenses", "routes/app/menu/licenses.tsx"),
       route("menu/meal", "routes/app/menu/meal.tsx"),
+      route("menu/settings", "routes/app/menu/settings.tsx"),
       route("menu/timetable", "routes/app/menu/timetable.tsx"),
       route("util/gongang", "routes/app/util/gongang.tsx"),
       route("util/gongang/manage", "routes/app/util/gongang-manage.tsx"),

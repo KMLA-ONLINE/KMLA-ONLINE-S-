@@ -31,14 +31,19 @@ export function ProfilePostDetail({
   post,
   viewer,
   comments,
+  onClose,
+  action,
 }: {
   post: ProfilePost;
   /** 입력창 왼쪽 아바타에 쓰는 내 프로필. */
   viewer: CommentViewer;
   comments: PostCommentPage;
+  onClose?: () => void;
+  action?: string;
 }) {
   const fetcher = useFetcher<{ error?: string }>();
-  const close = useModalClose(`/profile/${post.timeline_pub_id}`);
+  const defaultClose = useModalClose(`/profile/${post.timeline_pub_id}`);
+  const close = onClose ?? defaultClose;
 
   const { images, files } = splitPostAttachments(post.attachments);
   const authorName = profilePostAuthorName(post);
@@ -74,7 +79,10 @@ export function ProfilePostDetail({
               canEdit={post.can_edit}
               canDelete={post.can_delete}
               onDelete={() =>
-                void fetcher.submit({ intent: "delete" }, { method: "post" })
+                void fetcher.submit(
+                  { intent: "delete" },
+                  { method: "post", action },
+                )
               }
             />
           }

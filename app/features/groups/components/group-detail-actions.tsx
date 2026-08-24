@@ -10,15 +10,13 @@ import { useFetcher } from "react-router";
 import { GroupConfirmDialog } from "~/features/groups/components/group-confirm-dialog";
 import { GroupMembershipAction } from "~/features/groups/components/group-membership-action";
 import type { GroupDetail } from "~/features/groups/model/types";
-import { GroupPostSearchDialog, usePostViewMode } from "~/features/posts";
+import { GroupPostSearchDialog } from "~/features/posts";
 import { Button } from "~/shared/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/shared/ui/dropdown-menu";
@@ -39,7 +37,6 @@ export function GroupDetailActions({
   const pending = fetcher.state !== "idle";
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [viewMode, setViewMode] = usePostViewMode();
   const isMember = group.membership_state === "member";
   const isPrivate = group.join_policy === "invite_only";
   const canCurate =
@@ -91,28 +88,10 @@ export function GroupDetailActions({
                 align="end"
                 className="w-auto whitespace-nowrap"
               >
-                <DropdownMenuGroup>
-                  <DropdownMenuRadioGroup
-                    value={viewMode}
-                    onValueChange={(value) =>
-                      setViewMode(value === "list" ? "list" : "card")
-                    }
-                  >
-                    <DropdownMenuRadioItem value="card">
-                      카드
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="list">
-                      목록
-                    </DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuGroup>
                 {canCurate ? (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={onSelectSettings}>
-                      그룹 설정
-                    </DropdownMenuItem>
-                  </>
+                  <DropdownMenuItem onClick={onSelectSettings}>
+                    그룹 설정
+                  </DropdownMenuItem>
                 ) : null}
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
