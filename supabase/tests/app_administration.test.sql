@@ -213,7 +213,7 @@ select lives_ok(
   'an unblocked user can edit and resubmit'
 );
 select is(
-  (select status from public.profiles where pub_id = 'blocked-user'),
+  (select status from public.get_my_profile()),
   'pending'::public.profile_status,
   'resubmission moves draft to pending'
 );
@@ -307,12 +307,12 @@ select is(
 );
 select lives_ok(
   $$select * from public.admin_set_app_admin(
-      (select id from public.profiles where auth_user_id = auth.uid()), false
+      private.current_profile_id(), false
     )$$,
   'self-demotion is allowed while another app admin remains'
 );
 select is(
-  (select role from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000098'),
+  (select role from public.get_my_profile()),
   'member'::public.app_role,
   'self-demotion changes the caller to member'
 );
@@ -332,20 +332,20 @@ select set_config(
 set local role authenticated;
 select throws_ok(
   $$select * from public.admin_set_app_admin(
-      (select id from public.profiles where auth_user_id = auth.uid()), false
+      private.current_profile_id(), false
     )$$,
   '55000', 'the final app administrator cannot be demoted',
   'the final app admin cannot self-demote'
 );
 select throws_ok(
   $$select * from public.admin_set_app_admin(
-      (select id from public.profiles where auth_user_id = auth.uid()), null
+      private.current_profile_id(), null
     )$$,
   '22023', 'enabled must not be null',
   'a null enabled flag cannot bypass final-admin protection'
 );
 select is(
-  (select role from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000004'),
+  (select role from public.get_my_profile()),
   'admin'::public.app_role,
   'a denied final-admin demotion leaves the role intact'
 );

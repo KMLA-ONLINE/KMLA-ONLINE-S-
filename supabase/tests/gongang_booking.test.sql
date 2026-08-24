@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(30);
+select plan(41);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -64,6 +64,22 @@ select ok(
 select ok(
   not has_function_privilege('anon', 'public.cancel_utility_reservation(bigint,date)', 'EXECUTE'),
   'anonymous clients cannot execute the cancellation RPC'
+);
+select ok(
+  has_sequence_privilege('authenticated', 'public.utility_reservations_id_seq', 'USAGE'),
+  'authenticated clients can generate reservation identities'
+);
+select ok(
+  not has_sequence_privilege('authenticated', 'public.utility_reservations_id_seq', 'SELECT'),
+  'authenticated clients cannot inspect the reservation sequence'
+);
+select ok(
+  not has_sequence_privilege('authenticated', 'public.utility_reservations_id_seq', 'UPDATE'),
+  'authenticated clients cannot alter the reservation sequence'
+);
+select ok(
+  not has_sequence_privilege('anon', 'public.utility_reservations_id_seq', 'USAGE'),
+  'anonymous clients cannot use the reservation sequence'
 );
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
@@ -301,6 +317,82 @@ select lives_ok(
     current_setting('test.korea_today')
   ),
   'an ended recurrence no longer blocks a new owner'
+);
+
+select lives_ok(
+  format(
+    $sql$insert into public.utility_reservations
+      (profile_id, mode, reservation_date, slot, location, detail, recurring, applicant_name)
+      values
+        (0, 'gongang', %1$L, 'study-1', 'floor_4', '일회 과거 취소', false, ''),
+        (0, 'gongang', %1$L, 'honjeong-end', 'floor_4', '일회 당일 취소', false, ''),
+        (0, 'gongang', %1$L, 'study-2', 'floor_4', '일회 미래 취소', false, '')$sql$,
+    current_setting('test.korea_today')
+  ),
+  'an owner can create one-time reservations for cancellation checks'
+);
+select set_config(
+  'test.past_one_time_id',
+  (select id::text from public.utility_reservations where detail = '일회 과거 취소'),
+  true
+);
+select set_config(
+  'test.current_one_time_id',
+  (select id::text from public.utility_reservations where detail = '일회 당일 취소'),
+  true
+);
+select set_config(
+  'test.future_one_time_id',
+  (select id::text from public.utility_reservations where detail = '일회 미래 취소'),
+  true
+);
+
+reset role;
+update public.utility_reservations
+set reservation_date = current_setting('test.korea_today')::date - 1
+where id = current_setting('test.past_one_time_id')::bigint;
+update public.utility_reservations
+set reservation_date = current_setting('test.korea_today')::date + 1
+where id = current_setting('test.future_one_time_id')::bigint;
+set local role authenticated;
+
+select throws_ok(
+  format(
+    $sql$select public.cancel_utility_reservation(%s)$sql$,
+    current_setting('test.past_one_time_id')
+  ),
+  '22023',
+  'past utility reservations cannot be cancelled',
+  'an owner cannot cancel a past one-time reservation'
+);
+select is(
+  (select count(*) from public.utility_reservations where id = current_setting('test.past_one_time_id')::bigint),
+  1::bigint,
+  'a rejected past cancellation preserves the one-time reservation'
+);
+select lives_ok(
+  format(
+    $sql$select public.cancel_utility_reservation(%s)$sql$,
+    current_setting('test.current_one_time_id')
+  ),
+  'an owner can cancel a current one-time reservation'
+);
+select is(
+  (select count(*) from public.utility_reservations where id = current_setting('test.current_one_time_id')::bigint),
+  0::bigint,
+  'current one-time cancellation deletes the reservation'
+);
+select lives_ok(
+  format(
+    $sql$select public.cancel_utility_reservation(%s)$sql$,
+    current_setting('test.future_one_time_id')
+  ),
+  'an owner can cancel a future one-time reservation'
+);
+select is(
+  (select count(*) from public.utility_reservations where id = current_setting('test.future_one_time_id')::bigint),
+  0::bigint,
+  'future one-time cancellation deletes the reservation'
 );
 
 select set_config(

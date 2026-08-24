@@ -812,9 +812,16 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
 
       if (recurring) {
         setRecurringReservations((current) => {
-          const next = { ...current };
-          delete next[repeatKey];
-          return next;
+          const currentReservation = current[repeatKey];
+          if (!currentReservation) return current;
+
+          return {
+            ...current,
+            [repeatKey]: {
+              ...currentReservation,
+              recurringUntil: selectedDate,
+            },
+          };
         });
       } else {
         setReservations((current) => {
@@ -985,7 +992,7 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
                 saving={mutationKey === row.key}
                 canCancel={
                   row.reservation?.profileId === profile.id &&
-                  (!row.reservation.recurring || selectedDate >= today)
+                  selectedDate >= today
                 }
                 canBook={selectedDate >= today}
               />

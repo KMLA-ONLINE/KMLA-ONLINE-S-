@@ -1322,6 +1322,31 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_accepted_profile: {
+        Args: { p_pub_id: string }
+        Returns: {
+          academic_track: Database["public"]["Enums"]["profile_academic_track"]
+          allow_timeline_posts: boolean
+          avatar_path: string
+          birthday: string
+          class_no: number
+          cohort: number
+          contact_email: string
+          cover_path: string
+          department: string
+          description: string
+          dorm_room: number
+          gender: Database["public"]["Enums"]["profile_gender"]
+          id: number
+          is_returning_student: boolean
+          name: string
+          phone_number: string
+          pub_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          student_number: string
+          type: Database["public"]["Enums"]["profile_type"]
+        }[]
+      }
       get_group_invite: {
         Args: { p_group_id: string }
         Returns: {

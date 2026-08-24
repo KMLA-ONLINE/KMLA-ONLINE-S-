@@ -46,7 +46,7 @@ npm run dev           # http://localhost:5173
 | `npm run e2e` / `e2e:ui`                     | Playwright (빌드 후 자동 서빙)                 |
 | `npm run db:start` / `db:stop` / `db:status` | 로컬 Supabase                                  |
 | `npm run db:reset`                           | 마이그레이션 + seed 재적용                     |
-| `npm run db:diff -- <name>`                  | 로컬 변경분을 마이그레이션 파일로 추출         |
+| `npm run db:diff -- <name>`                  | schemas 변경분으로 migration 초안 생성         |
 | `npm run db:types`                           | `app/shared/supabase/database.types.ts` 재생성 |
 | `npm run pwa:assets`                         | `public/logo.svg`에서 아이콘 일체 재생성       |
 | `npm run lint` / `lint:fix`                  | ESLint                                         |
