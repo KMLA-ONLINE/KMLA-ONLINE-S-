@@ -147,6 +147,8 @@ export function PostDetail({
             canEdit={post.can_edit}
             canPin={post.can_pin}
             canDelete={post.can_delete}
+            canReport={!post.is_author}
+            reportPostId={post.post_id}
             onPin={() =>
               submitIntent({
                 intent: "pin",

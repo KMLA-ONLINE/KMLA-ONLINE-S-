@@ -24,6 +24,10 @@ import {
   updateGroupSettings,
 } from "~/features/groups";
 import {
+  dismissGroupPostReports,
+  listGroupPostReportSummaries,
+} from "~/features/posts/data/group-reports";
+import {
   createGroupCategory,
   deleteGroupCategory,
   deleteGroupPost,
@@ -58,9 +62,13 @@ export async function clientLoader({
   const searchParams = new URL(request.url).searchParams;
   const memberTab = searchParams.get("tab") === "members";
   const settingsTab = searchParams.get("tab") === "settings";
+  const reportsTab = searchParams.get("tab") === "reports";
   const canModerate =
     group.member_role === "owner" || group.member_role === "admin";
-  const [categories, posts, memberPage, joinRequests, invite] =
+  const canCurate = canModerate || group.member_role === "manager";
+  const reportSort =
+    searchParams.get("reportSort") === "recent" ? "recent" : "count";
+  const [categories, posts, memberPage, joinRequests, invite, reportPage] =
     await Promise.all([
       listGroupCategories(group.group_id),
       listGroupPosts(group.group_id),
@@ -77,8 +85,19 @@ export async function clientLoader({
       settingsTab && canModerate && group.kind !== "official"
         ? getGroupInvite(group.group_id)
         : Promise.resolve(null),
+      reportsTab && canCurate
+        ? listGroupPostReportSummaries(group.group_id, reportSort)
+        : Promise.resolve(undefined),
     ]);
-  return { group, categories, posts, memberPage, joinRequests, invite };
+  return {
+    group,
+    categories,
+    posts,
+    memberPage,
+    joinRequests,
+    invite,
+    reportPage,
+  };
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
@@ -89,6 +108,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   const postIntent =
     intent === "pin-post" ||
     intent === "delete-post" ||
+    intent === "dismiss-report" ||
     intent === "create-category" ||
     intent === "rename-category" ||
     intent === "move-category-up" ||
@@ -120,6 +140,13 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
       if (typeof postId !== "string")
         return data({ error: "게시물을 찾을 수 없습니다." }, { status: 400 });
       await deleteGroupPost(postId);
+    } else if (intent === "dismiss-report") {
+      // 신고 무시는 신고 기록을 지우지 않는다. 무시 시점까지의 신고만 처리 완료로 표시하므로
+      // 이후 새 신고가 들어오면 목록에 다시 올라온다(기능 명세 §8.15).
+      const postId = formData.get("postId");
+      if (typeof postId !== "string")
+        return data({ error: "게시물을 찾을 수 없습니다." }, { status: 400 });
+      await dismissGroupPostReports(postId);
     } else if (intent === "create-category") {
       const rawName = formData.get("name");
       const name = typeof rawName === "string" ? rawName.trim() : "";
@@ -328,6 +355,7 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
         memberPage={loaderData.memberPage}
         joinRequests={loaderData.joinRequests}
         invite={loaderData.invite}
+        reportPage={loaderData.reportPage}
       />
       <Outlet />
     </>

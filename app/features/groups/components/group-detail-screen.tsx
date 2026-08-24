@@ -1,4 +1,5 @@
 import {
+  FlagIcon,
   Globe2Icon,
   LandmarkIcon,
   LockIcon,
@@ -21,6 +22,8 @@ import type {
   GroupJoinRequest,
   GroupMemberPage,
 } from "~/features/groups/model/types";
+import { GroupPostReportsPanel } from "~/features/posts/components/group-post-reports-panel";
+import type { GroupPostReportSummaryPage } from "~/features/posts/data/group-reports";
 import {
   GroupPostsPanel,
   PostWriteRow,
@@ -30,7 +33,7 @@ import {
 import { cn } from "~/shared/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 
-type GroupTab = "posts" | "members" | "settings";
+type GroupTab = "posts" | "members" | "settings" | "reports";
 
 const GROUP_TABS: {
   id: GroupTab;
@@ -39,6 +42,7 @@ const GROUP_TABS: {
   { id: "posts", label: "게시물" },
   { id: "members", label: "멤버" },
   { id: "settings", label: "그룹 설정" },
+  { id: "reports", label: "신고" },
 ];
 
 export function GroupDetailScreen({
@@ -52,6 +56,7 @@ export function GroupDetailScreen({
   memberPage,
   joinRequests = [],
   invite = null,
+  reportPage,
 }: {
   group: GroupDetail;
   profileId: number;
@@ -63,6 +68,7 @@ export function GroupDetailScreen({
   memberPage?: GroupMemberPage;
   joinRequests?: GroupJoinRequest[];
   invite?: GroupInvite | null;
+  reportPage?: GroupPostReportSummaryPage;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const isMember = group.membership_state === "member";
@@ -77,13 +83,15 @@ export function GroupDetailScreen({
   const requestedTab = searchParams.get("tab");
   const tab: GroupTab =
     (requestedTab === "members" && canViewMembers) ||
-    (requestedTab === "settings" && canCurate)
+    (requestedTab === "settings" && canCurate) ||
+    (requestedTab === "reports" && canCurate)
       ? requestedTab
       : "posts";
   const visibleTabs = GROUP_TABS.filter(
     (item) =>
       (item.id !== "members" || canViewMembers) &&
-      (item.id !== "settings" || canCurate),
+      (item.id !== "settings" || canCurate) &&
+      (item.id !== "reports" || canCurate),
   );
 
   const setTab = (nextTab: GroupTab) => {
@@ -101,6 +109,7 @@ export function GroupDetailScreen({
         isTeacher={isTeacher}
         onSelectMembers={() => setTab("members")}
         onSelectSettings={() => setTab("settings")}
+        onSelectReports={() => setTab("reports")}
       />
 
       <nav
@@ -162,11 +171,24 @@ export function GroupDetailScreen({
                 description="멤버 명부를 불러오는 중입니다."
               />
             )
-          ) : (
+          ) : tab === "settings" ? (
             <GroupSettings
               group={group}
               categories={categories}
               invite={invite}
+            />
+          ) : reportPage ? (
+            <GroupPostReportsPanel
+              groupId={group.group_id}
+              slug={group.slug}
+              initialPage={reportPage}
+              canModerate={canManage}
+            />
+          ) : (
+            <EmptyTabCard
+              icon={<FlagIcon aria-hidden />}
+              title="신고"
+              description="신고 목록을 불러오는 중입니다."
             />
           )}
         </div>

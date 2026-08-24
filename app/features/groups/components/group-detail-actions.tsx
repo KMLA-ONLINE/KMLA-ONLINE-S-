@@ -1,4 +1,5 @@
 import {
+  FlagIcon,
   LogOutIcon,
   MoreHorizontalIcon,
   PinIcon,
@@ -27,11 +28,13 @@ export function GroupDetailActions({
   profileId,
   isTeacher,
   onSelectSettings,
+  onSelectReports,
 }: {
   group: GroupDetail;
   profileId: number;
   isTeacher: boolean;
   onSelectSettings: () => void;
+  onSelectReports: () => void;
 }) {
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const pending = fetcher.state !== "idle";
@@ -89,9 +92,16 @@ export function GroupDetailActions({
                 className="w-auto whitespace-nowrap"
               >
                 {canCurate ? (
-                  <DropdownMenuItem onClick={onSelectSettings}>
-                    그룹 설정
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={onSelectSettings}>
+                      그룹 설정
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={onSelectReports}>
+                      <FlagIcon />
+                      신고
+                    </DropdownMenuItem>
+                  </>
                 ) : null}
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
