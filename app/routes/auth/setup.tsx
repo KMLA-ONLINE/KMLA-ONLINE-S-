@@ -63,7 +63,7 @@ export async function clientLoader() {
     return { email, profile: null, requiresOtp: true };
   }
 
-  if (state.profile && state.profile.status !== "rejected") {
+  if (state.profile && state.profile.status !== "draft") {
     const destination = getProfileDestination(state.profile);
     if (destination === "/login") await signOut();
     throw redirect(destination);
@@ -154,11 +154,11 @@ export default function SetupPage({
 
   return (
     <AuthCard
-      title={loaderData.profile ? "가입 정보 다시 제출" : "학교 프로필 설정"}
+      title={loaderData.profile ? "가입 정보 재제출" : "프로필 설정"}
       description={
         loaderData.profile
-          ? "거절된 내용을 확인하고 정보를 수정해 다시 제출해 주세요."
-          : "학교 구성원 확인에 필요한 정보입니다. 승인 전에는 커뮤니티 기능이 제한됩니다."
+          ? "입력한 정보를 확인하고 필요한 내용을 수정한 뒤 다시 제출해 주세요."
+          : "확인에 필요한 정보입니다. 승인 전에는 기능이 제한됩니다."
       }
       wide
     >

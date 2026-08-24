@@ -30,8 +30,9 @@ import type { Route } from "./+types/gate";
  * 통과시키는 일이 없다.
  */
 const GATE_REDIRECT = {
-  rejected: "/setup",
+  draft: "/setup",
   pending: "/pending",
+  blocked: "/blocked",
   withdrawn: "/login",
 } as const;
 

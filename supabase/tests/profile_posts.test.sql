@@ -554,7 +554,7 @@ reset role;
 -- 타임라인 당사자가 사라지면 그 타임라인의 글도 함께 사라진다. 목록은 공개 ID를 accepted로
 -- 찾으므로 원래 비지만, 직접 링크로 여는 경로가 따로 새지 않는지 본다.
 update public.profiles
-set status = 'rejected'
+set status = 'blocked'
 where auth_user_id = '10000000-0000-0000-0000-000000000001';
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);

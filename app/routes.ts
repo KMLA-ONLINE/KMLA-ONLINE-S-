@@ -10,6 +10,7 @@ export default [
   route("signup", "routes/auth/signup.tsx"),
   route("setup", "routes/auth/setup.tsx"),
   route("pending", "routes/auth/pending.tsx"),
+  route("blocked", "routes/auth/blocked.tsx"),
   route("logout", "routes/auth/logout.tsx"),
   route("theme", "routes/theme.tsx"),
   layout("routes/app/gate.tsx", [
@@ -42,7 +43,10 @@ export default [
         route("posts/:postId/edit", "routes/app/groups/post-edit.tsx"),
       ]),
       route("clubs/:clubId", "routes/app/clubs/detail.tsx"),
+      route("admin", "routes/app/admin/index.tsx"),
       route("admin/approvals", "routes/app/admin/approvals.tsx"),
+      route("admin/gongang-managers", "routes/app/admin/gongang-managers.tsx"),
+      route("admin/app-admins", "routes/app/admin/app-admins.tsx"),
     ]),
     layout("routes/messenger/layout.tsx", [
       route("messenger", "routes/messenger/index.tsx", [

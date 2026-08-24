@@ -177,6 +177,67 @@ on conflict (lower(pub_id)) do update set
   status = excluded.status,
   updated_at = now();
 
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change,
+  phone, phone_change, phone_change_token, email_change_token_current,
+  reauthentication_token, raw_app_meta_data, raw_user_meta_data, created_at,
+  updated_at
+)
+values (
+  '00000000-0000-0000-0000-000000000000',
+  '10000000-0000-0000-0000-000000000098',
+  'authenticated', 'authenticated', 'admin@kmla.hs.kr',
+  extensions.crypt('password123', extensions.gen_salt('bf')), now(),
+  '', '', '', '', null, '', '', '', '',
+  '{"provider":"email","providers":["email"]}', '{}', now(), now()
+)
+on conflict (id) do update set
+  email = excluded.email,
+  encrypted_password = excluded.encrypted_password,
+  email_confirmed_at = excluded.email_confirmed_at,
+  updated_at = now();
+
+insert into auth.identities (
+  provider_id, user_id, identity_data, provider, last_sign_in_at, created_at,
+  updated_at
+)
+values (
+  '10000000-0000-0000-0000-000000000098',
+  '10000000-0000-0000-0000-000000000098',
+  '{"sub":"10000000-0000-0000-0000-000000000098","email":"admin@kmla.hs.kr","email_verified":true}',
+  'email', now(), now(), now()
+)
+on conflict (provider_id, provider) do update set
+  identity_data = excluded.identity_data,
+  updated_at = now();
+
+update public.profiles
+set auth_user_id = '10000000-0000-0000-0000-000000000098'
+where pub_id = 'kim-admin';
+
+insert into public.profiles (
+  pub_id, name, type, student_number, cohort, gender, academic_track,
+  birthday, status, submitted_at, status_updated_at
+)
+values
+  (
+    'pending-user', '승인대기 학생', 'student', '260001', 31, 'female',
+    'domestic', '2009-02-01', 'pending', '2026-08-20 00:00:00+00',
+    '2026-08-20 00:00:00+00'
+  ),
+  (
+    'blocked-user', '차단 학생', 'student', '260002', 31, 'male',
+    'international', '2009-03-01', 'blocked', '2026-08-21 00:00:00+00',
+    '2026-08-22 00:00:00+00'
+  )
+on conflict (lower(pub_id)) do update set
+  name = excluded.name,
+  status = excluded.status,
+  submitted_at = excluded.submitted_at,
+  status_updated_at = excluded.status_updated_at,
+  updated_at = now();
+
 -- 교사 계정. 그룹을 검색할 수도 가입 요청을 넣을 수도 없어서 초대 링크가 유일한 가입
 -- 경로다. 그 경로를 실제로 눌러 볼 수 있도록 로그인 가능한 계정으로 둔다. 어떤 그룹에도
 -- 넣지 않는 것이 요점이다.
