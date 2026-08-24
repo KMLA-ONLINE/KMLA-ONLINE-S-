@@ -7,6 +7,7 @@ import {
   getProfilePost,
   listPostComments,
   ProfilePostDetail,
+  shouldRevalidatePostDetail,
 } from "~/features/posts";
 import type { Route } from "./+types/post";
 
@@ -15,6 +16,8 @@ export const handle = defineAppChrome({
   bottomNav: "none",
   contentWidth: "5xl",
 });
+
+export const shouldRevalidate = shouldRevalidatePostDetail;
 
 export async function clientLoader({
   params,

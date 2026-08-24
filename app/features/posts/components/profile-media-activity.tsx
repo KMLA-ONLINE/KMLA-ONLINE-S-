@@ -1,5 +1,9 @@
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 
+import {
+  imageDownloadName,
+  toAttachmentDownloadUrl,
+} from "~/features/posts/model/attachments";
 import type { ProfilePost } from "~/features/posts/model/types";
 import {
   ImageViewer,
@@ -28,13 +32,17 @@ export function ProfileMediaActivity({
   const label = isAvatar ? "프로필 사진" : "프로필 커버";
   const imageId = `profile-activity-${post.post_id}`;
   const imageName = `${profileName(post)}님이 변경한 ${label}`;
+  const downloadName = imageDownloadName(post.post_id);
   const viewerImages: ViewerImage[] = post.activity_media_url
     ? [
         {
           id: imageId,
           src: post.activity_media_url,
-          downloadSrc: post.activity_media_url,
-          name: imageName,
+          downloadSrc: toAttachmentDownloadUrl(
+            post.activity_media_url,
+            downloadName,
+          ),
+          name: downloadName,
         },
       ]
     : [];

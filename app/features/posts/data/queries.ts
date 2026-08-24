@@ -1,5 +1,6 @@
 import type {
   CommentCursor,
+  CommentImage,
   GroupCategory,
   GroupPostDetail,
   GroupPostPage,
@@ -20,6 +21,29 @@ import { getSupabase } from "~/shared/supabase/client";
 export const GROUP_POST_PAGE_SIZE = 12;
 export const PROFILE_POST_PAGE_SIZE = 12;
 export const POST_COMMENT_PAGE_SIZE = 20;
+
+export async function hydratePostComments(
+  comments: Omit<PostComment, "images">[],
+): Promise<PostComment[]> {
+  if (comments.length === 0) return [];
+  const { data, error } = await getSupabase().rpc("list_comment_images", {
+    p_comment_ids: comments.map((comment) => comment.comment_id),
+  });
+  if (error) throw error;
+  const rows = data ?? [];
+  const urls = await createPostAttachmentUrls(
+    rows.map((image) => image.object_path),
+  );
+  return comments.map((comment) => ({
+    ...comment,
+    images: rows
+      .filter((image) => image.comment_id === comment.comment_id)
+      .map((image): CommentImage => ({
+        ...image,
+        signedUrl: urls.get(image.object_path) ?? null,
+      })),
+  }));
+}
 
 async function attachFiles<T extends { post_id: string }>(
   posts: T[],
@@ -230,7 +254,9 @@ export async function listPostComments(
   if (error) throw error;
   const rows = data ?? [];
   const hasMore = rows.length > POST_COMMENT_PAGE_SIZE;
-  const comments = hasMore ? rows.slice(0, POST_COMMENT_PAGE_SIZE) : rows;
+  const comments = await hydratePostComments(
+    hasMore ? rows.slice(0, POST_COMMENT_PAGE_SIZE) : rows,
+  );
   const newest = comments.at(-1);
   return {
     comments,
@@ -249,7 +275,7 @@ export async function listPostCommentReplies(
     p_root_comment_id: rootCommentId,
   });
   if (error) throw error;
-  return data ?? [];
+  return hydratePostComments(data ?? []);
 }
 
 /**

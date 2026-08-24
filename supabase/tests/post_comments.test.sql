@@ -85,7 +85,7 @@ select throws_ok(
   $$select * from public.create_post_comment(
       '90000000-0000-0000-0000-000000000003', '   ', 'identified'
     )$$,
-  '22023', 'comment must contain between 1 and 5000 characters', 'blank comments are rejected'
+  '22023', 'comment requires a body or finalized image', 'blank comments are rejected'
 );
 select throws_ok(
   $$select * from public.create_post_comment(

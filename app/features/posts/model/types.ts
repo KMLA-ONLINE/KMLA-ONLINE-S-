@@ -147,6 +147,13 @@ export interface PreparedPostFile {
   previewUrl: string | null;
 }
 
+export interface PreparedCommentImage extends PreparedPostFile {
+  kind: "image";
+  width: number;
+  height: number;
+  previewUrl: string;
+}
+
 export type PostSaveProgress =
   | "creating"
   | "updating"
@@ -162,8 +169,26 @@ export type PostFormErrors = Partial<
 export type PostViewMode = "card" | "list";
 
 type PostCommentRow = Functions["list_post_comments"]["Returns"][number];
+export interface CommentImage {
+  image_id: string;
+  comment_id: string;
+  post_id: string;
+  storage_bucket: string;
+  object_path: string;
+  mime_type: string;
+  size_bytes: number;
+  width: number;
+  height: number;
+  ready_at: string;
+  signedUrl: string | null;
+}
+
 /** 목록, 답글 묶음, 방금 작성한 댓글이 모두 같은 행 모양을 쓴다. */
-export type PostComment = WithReactions<PostCommentRow>;
+export type PostComment = WithReactions<PostCommentRow> & {
+  images: CommentImage[];
+};
+
+export type CommentImageInput = CommentImage | PreparedCommentImage | null;
 
 export interface CommentCursor {
   createdAt: string;

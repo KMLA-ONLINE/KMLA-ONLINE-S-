@@ -21,6 +21,7 @@ export {
   updateProfilePostWithAttachments,
   createGroupPost,
   createPostComment,
+  createCommentImageUploadSession,
   deletePostComment,
   updatePostComment,
   createGroupPostWithAttachments,
@@ -50,6 +51,7 @@ export {
   getPostErrorMessage,
 } from "~/features/posts/model/format";
 export { resolveIdentityOptions } from "~/features/posts/model/identity";
+export { shouldRevalidatePostDetail } from "~/features/posts/model/revalidation";
 export {
   COMMENT_MAX_LENGTH,
   normalizeCommentBody,
@@ -67,6 +69,7 @@ export {
 } from "~/features/posts/model/validation";
 export {
   preparePostFiles,
+  prepareCommentImage,
   releasePostFile,
 } from "~/features/posts/model/attachments";
 export {
@@ -81,6 +84,8 @@ export {
 } from "~/features/posts/model/markdown";
 export type {
   CommentCursor,
+  CommentImage,
+  CommentImageInput,
   GroupCategory,
   GroupPost,
   GroupPostDetail,
@@ -95,6 +100,7 @@ export type {
   PostSaveProgress,
   PostVisibility,
   PreparedPostFile,
+  PreparedCommentImage,
   PostViewMode,
   ProfilePost,
   ProfilePostCursor,

@@ -104,8 +104,11 @@ export function PostDetailDialog({
     requestAnimationFrame(() => composerRef.current?.focus());
   };
 
-  const submitComment = async (body: string) => {
-    const created = await thread.create(body, identity, null);
+  const submitComment = async (
+    body: string,
+    image?: Parameters<typeof thread.create>[3],
+  ) => {
+    const created = await thread.create(body, identity, null, image);
     if (!created) return created;
     // 방금 쓴 댓글은 목록 맨 아래에 붙는다. 보이지 않는 곳에 등록되면 실패로 읽힌다.
     requestAnimationFrame(() => {
@@ -115,9 +118,17 @@ export function PostDetailDialog({
     return created;
   };
 
-  const submit = async (body: string) => {
-    if (!replyingTo) return submitComment(body);
-    const created = await thread.create(body, identity, replyingTo.comment_id);
+  const submit = async (
+    body: string,
+    image?: Parameters<typeof thread.create>[3],
+  ) => {
+    if (!replyingTo) return submitComment(body, image);
+    const created = await thread.create(
+      body,
+      identity,
+      replyingTo.comment_id,
+      image,
+    );
     if (created) setReplyingTo(null);
     return created;
   };
@@ -273,6 +284,7 @@ export function PostDetailDialog({
           pending={thread.pending}
           error={thread.error}
           inputRef={composerRef}
+          focusOnMount={commentsOnly}
           replyTarget={replyTarget}
           onCancelReply={() => {
             setReplyingTo(null);

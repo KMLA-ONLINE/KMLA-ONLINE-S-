@@ -1,8 +1,32 @@
-import type { PreparedPostFile } from "~/features/posts/model/types";
+import type {
+  PreparedCommentImage,
+  PreparedPostFile,
+} from "~/features/posts/model/types";
 import { validateSelectedFiles } from "~/features/posts/model/validation";
 import { compressImage } from "~/shared/lib/image/compress";
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+export async function prepareCommentImage(
+  source: File,
+): Promise<PreparedCommentImage> {
+  if (!IMAGE_TYPES.has(source.type))
+    throw new Error("JPEG, PNG, WebP 사진만 선택할 수 있습니다.");
+
+  const file = await compressImage(source, "photo");
+  const bitmap = await createImageBitmap(file);
+  const width = bitmap.width;
+  const height = bitmap.height;
+  bitmap.close();
+  return {
+    key: crypto.randomUUID(),
+    file,
+    kind: "image",
+    width,
+    height,
+    previewUrl: URL.createObjectURL(file),
+  };
+}
 
 export async function preparePostFiles(
   selected: File[],
@@ -58,6 +82,11 @@ export function toAttachmentDownloadUrl(
   const url = new URL(signedUrl);
   url.searchParams.set("download", filename);
   return url.toString();
+}
+
+/** 원본 이름을 노출하지 않고 이미지 UUID로 안정적인 다운로드 이름을 만든다. */
+export function imageDownloadName(imageId: string): string {
+  return `${imageId}.webp`;
 }
 
 export function releasePostFile(file: PreparedPostFile): void {

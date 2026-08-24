@@ -69,12 +69,12 @@ select ok(
 );
 select ok(
   has_function_privilege(
-    'authenticated', 'public.create_post_comment(uuid,text,public.post_identity,uuid)', 'EXECUTE'
+    'authenticated', 'public.create_post_comment(uuid,text,public.post_identity,uuid,uuid)', 'EXECUTE'
   ),
   'members can create comments'
 );
 select ok(
-  has_function_privilege('authenticated', 'public.update_post_comment(uuid,text)', 'EXECUTE'),
+  has_function_privilege('authenticated', 'public.update_post_comment(uuid,text,uuid,boolean)', 'EXECUTE'),
   'members can update comments'
 );
 select ok(
@@ -83,7 +83,7 @@ select ok(
 );
 select ok(
   not has_function_privilege(
-    'anon', 'public.create_post_comment(uuid,text,public.post_identity,uuid)', 'EXECUTE'
+    'anon', 'public.create_post_comment(uuid,text,public.post_identity,uuid,uuid)', 'EXECUTE'
   ),
   'anonymous visitors cannot create comments'
 );
@@ -141,9 +141,9 @@ select throws_ok(
     )
     values (
       '70000000-0000-0000-0000-0000000000ff', '90000000-0000-0000-0000-000000000001',
-      '70000000-0000-0000-0000-0000000000ff', 0, '', 'anonymous', 1
+      '70000000-0000-0000-0000-0000000000ff', 0, repeat('x', 5001), 'anonymous', 1
     )$$,
-  '23514', null, 'an empty comment body is rejected'
+  '23514', null, 'the table still rejects an overlong comment body'
 );
 select throws_ok(
   $$insert into public.post_comments (

@@ -1,16 +1,19 @@
 import type {
   GroupCategory,
+  CommentImageInput,
   PostAttachment,
   PostComment,
   PostFormValues,
   PostIdentity,
   PostReaction,
   PostSaveProgress,
+  PreparedCommentImage,
   PreparedPostFile,
   ProfilePostFormValues,
   ReactionSummary,
 } from "~/features/posts/model/types";
 import { uploadPostAttachment } from "~/features/posts/data/files";
+import { hydratePostComments } from "~/features/posts/data/queries";
 import { getSupabase } from "~/shared/supabase/client";
 
 export async function createGroupCategory(
@@ -90,6 +93,93 @@ export interface PostUploadSession {
 
 export function createPostUploadSession(): PostUploadSession {
   return { files: new Map() };
+}
+
+type PreparedCommentImageRow = Awaited<
+  ReturnType<typeof prepareCommentImageUpload>
+>;
+
+export interface CommentImageUploadSession {
+  files: Map<
+    string,
+    {
+      image: PreparedCommentImageRow;
+      uploaded: boolean;
+      finalized: boolean;
+    }
+  >;
+}
+
+export function createCommentImageUploadSession(): CommentImageUploadSession {
+  return { files: new Map() };
+}
+
+async function prepareCommentImageUpload(
+  postId: string,
+  item: PreparedCommentImage,
+) {
+  const { data, error } = await getSupabase().rpc("prepare_comment_image", {
+    p_post_id: postId,
+    p_mime_type: item.file.type,
+    p_size_bytes: item.file.size,
+    p_width: item.width,
+    p_height: item.height,
+  });
+  if (error) throw error;
+  return data;
+}
+
+async function uploadCommentImage(
+  postId: string,
+  item: PreparedCommentImage,
+  session: CommentImageUploadSession,
+): Promise<string> {
+  let state = session.files.get(item.key);
+  if (!state) {
+    state = {
+      image: await prepareCommentImageUpload(postId, item),
+      uploaded: false,
+      finalized: false,
+    };
+    session.files.set(item.key, state);
+  }
+  if (!state.uploaded) {
+    try {
+      await uploadPostAttachment(state.image.object_path, item.file);
+      state.uploaded = true;
+    } catch (uploadError) {
+      try {
+        const { error } = await getSupabase().rpc("finalize_comment_image", {
+          p_image_id: state.image.id,
+        });
+        if (error) throw error;
+        state.uploaded = true;
+        state.finalized = true;
+      } catch {
+        throw uploadError;
+      }
+    }
+  }
+  if (!state.finalized) {
+    const { error } = await getSupabase().rpc("finalize_comment_image", {
+      p_image_id: state.image.id,
+    });
+    if (error) throw error;
+    state.finalized = true;
+  }
+  return state.image.id;
+}
+
+async function hydrateCommittedComment(
+  comment: Omit<PostComment, "images">,
+): Promise<PostComment> {
+  try {
+    return (await hydratePostComments([comment]))[0];
+  } catch {
+    // The database commit already succeeded. Treat a follow-up metadata/signing
+    // failure as a temporary missing preview rather than inviting a duplicate retry.
+    return { ...comment, images: [] };
+  }
 }
 
 async function commitGroupPost(
@@ -401,31 +491,49 @@ export async function createPostComment(
   body: string,
   authorIdentity: PostIdentity,
   parentCommentId?: string | null,
+  image?: CommentImageInput,
+  session = createCommentImageUploadSession(),
 ): Promise<PostComment> {
+  const imageId =
+    image && "file" in image
+      ? await uploadCommentImage(postId, image, session)
+      : undefined;
   const { data, error } = await getSupabase().rpc("create_post_comment", {
     p_post_id: postId,
     p_body: body,
     p_author_identity: authorIdentity,
     p_parent_comment_id: parentCommentId ?? undefined,
+    p_image_id: imageId,
   });
   if (error) throw error;
   const comment = data?.[0];
   if (!comment) throw new Error("댓글을 저장하지 못했습니다.");
-  return comment;
+  return hydrateCommittedComment(comment);
 }
 
 export async function updatePostComment(
   commentId: string,
   body: string,
+  postId: string,
+  image: CommentImageInput | undefined,
+  session = createCommentImageUploadSession(),
 ): Promise<PostComment> {
+  const imageId =
+    image && "file" in image
+      ? await uploadCommentImage(postId, image, session)
+      : image && "image_id" in image
+        ? image.image_id
+        : undefined;
   const { data, error } = await getSupabase().rpc("update_post_comment", {
     p_comment_id: commentId,
     p_body: body,
+    p_image_id: imageId,
+    p_remove_image: image === null,
   });
   if (error) throw error;
   const comment = data?.[0];
   if (!comment) throw new Error("댓글을 수정하지 못했습니다.");
-  return comment;
+  return hydrateCommittedComment(comment);
 }
 
 export async function deletePostComment(commentId: string): Promise<void> {

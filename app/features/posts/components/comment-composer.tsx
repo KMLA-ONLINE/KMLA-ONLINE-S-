@@ -1,4 +1,9 @@
-import { ArrowLeftRightIcon, SendIcon, XIcon } from "lucide-react";
+import {
+  ArrowLeftRightIcon,
+  ImagePlusIcon,
+  SendIcon,
+  XIcon,
+} from "lucide-react";
 import { useEffect, useRef, useState, type RefObject } from "react";
 
 import {
@@ -11,7 +16,16 @@ import {
   normalizeCommentBody,
   validateCommentBody,
 } from "~/features/posts/model/comment-text";
-import type { PostIdentity } from "~/features/posts/model/types";
+import {
+  prepareCommentImage,
+  releasePostFile,
+} from "~/features/posts/model/attachments";
+import type {
+  CommentImage,
+  CommentImageInput,
+  PostIdentity,
+  PreparedCommentImage,
+} from "~/features/posts/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
@@ -77,6 +91,7 @@ export function CommentComposer({
   inputRef,
   replyTarget,
   onCancelReply,
+  initialImage,
   className = "border-t p-3",
 }: {
   viewer: CommentViewer;
@@ -85,7 +100,10 @@ export function CommentComposer({
   /** 선택지가 하나뿐이면 토글이 없으므로 불리지 않는다. */
   onIdentityChange?: (next: PostIdentity) => void;
   /** 성공하면 정본 행을, 실패하면 falsy를 돌려준다. falsy면 입력값을 되돌린다. */
-  onSubmit: (body: string) => void | Promise<unknown>;
+  onSubmit: (
+    body: string,
+    image?: CommentImageInput,
+  ) => void | Promise<unknown>;
   /** 주면 되돌리기 버튼이 붙는다. 수정처럼 도중에 그만둘 수 있어야 하는 곳에서 쓴다. */
   onCancel?: () => void;
   /** 수정처럼 기존 본문에서 시작하는 경우. 마운트할 때 한 번만 반영된다. */
@@ -101,9 +119,15 @@ export function CommentComposer({
   /** 하단 입력기가 답글 모드일 때 표시할 대상 이름. 본문에는 포함하지 않는다. */
   replyTarget?: string;
   onCancelReply?: () => void;
+  initialImage?: CommentImage;
   className?: string;
 }) {
   const [draft, setDraft] = useState(initialValue);
+  const [image, setImage] = useState<
+    CommentImage | PreparedCommentImage | null
+  >(initialImage ?? null);
+  const [imageRemoved, setImageRemoved] = useState(false);
+  const [processingImage, setProcessingImage] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [pendingIdentity, setPendingIdentity] = useState<PostIdentity | null>(
     null,
@@ -113,6 +137,15 @@ export function CommentComposer({
   const composing = useRef(false);
   const fallbackRef = useRef<HTMLTextAreaElement>(null);
   const input = inputRef ?? fallbackRef;
+  const fileInput = useRef<HTMLInputElement>(null);
+  const preparedImage = useRef<PreparedCommentImage | null>(null);
+
+  useEffect(
+    () => () => {
+      if (preparedImage.current) releasePostFile(preparedImage.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     // `autoFocus` 속성 대신 직접 부른다. 스크롤 영역 안에서 마운트되는 입력기라 브라우저가
@@ -135,13 +168,48 @@ export function CommentComposer({
 
   const length = countCommentGraphemes(draft);
   const overLimit = length > COMMENT_MAX_LENGTH;
-  const canSend = draft.trim() !== "" && !overLimit && !pending;
+  const canSend =
+    (draft.trim() !== "" || image !== null) &&
+    !overLimit &&
+    !pending &&
+    !processingImage;
   const nextIdentity =
     identities[(identities.indexOf(identity) + 1) % identities.length];
 
+  const selectImage = async (file: File | undefined) => {
+    if (!file || processingImage || pending) return;
+    setProcessingImage(true);
+    setLocalError(null);
+    try {
+      const prepared = await prepareCommentImage(file);
+      if (preparedImage.current) releasePostFile(preparedImage.current);
+      preparedImage.current = prepared;
+      setImage(prepared);
+      setImageRemoved(false);
+    } catch (cause) {
+      setLocalError(
+        cause instanceof Error
+          ? cause.message
+          : "이미지를 처리하지 못했습니다.",
+      );
+    } finally {
+      setProcessingImage(false);
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  };
+
+  const removeImage = () => {
+    if (preparedImage.current) {
+      releasePostFile(preparedImage.current);
+      preparedImage.current = null;
+    }
+    setImage(null);
+    setImageRemoved(Boolean(initialImage));
+  };
+
   const send = () => {
-    if (pending) return;
-    const reason = validateCommentBody(draft);
+    if (pending || processingImage) return;
+    const reason = validateCommentBody(draft, image !== null);
     if (reason) return setLocalError(reason);
     setLocalError(null);
     const body = normalizeCommentBody(draft);
@@ -149,10 +217,25 @@ export function CommentComposer({
     // 오류 문구만 남기고 쓴 글을 버리면 긴 댓글을 처음부터 다시 쓰는 수밖에 없다.
     const submitted = draft;
     setDraft("");
-    void Promise.resolve(onSubmit(body)).then((created) => {
+    const submittedImage: CommentImageInput | undefined = imageRemoved
+      ? null
+      : image === initialImage || (image === null && !initialImage)
+        ? undefined
+        : image;
+    void Promise.resolve(
+      submittedImage === undefined
+        ? onSubmit(body)
+        : onSubmit(body, submittedImage),
+    ).then((created) => {
       // 되돌리는 건 그 사이 아무것도 쓰지 않았을 때뿐이다. 새로 쓰고 있는 글을 덮으면 안 된다.
       if (!created)
         setDraft((current) => (current === "" ? submitted : current));
+      else {
+        if (preparedImage.current) releasePostFile(preparedImage.current);
+        preparedImage.current = null;
+        setImage(null);
+        setImageRemoved(false);
+      }
     });
   };
 
@@ -217,31 +300,102 @@ export function CommentComposer({
           />
         )}
 
-        <textarea
-          ref={input}
-          rows={1}
-          value={draft}
-          aria-label="댓글 입력"
-          placeholder={placeholder}
-          className="min-h-9 min-w-0 flex-1 resize-none overflow-y-hidden rounded-3xl bg-muted px-4 py-2 text-sm leading-5 outline-none placeholder:text-muted-foreground"
-          onChange={(event) => {
-            setDraft(event.target.value);
-            if (localError) setLocalError(null);
-          }}
-          onCompositionStart={() => (composing.current = true)}
-          onCompositionEnd={() => (composing.current = false)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape" && onCancel) {
+        <div
+          className="min-w-0 flex-1 rounded-3xl bg-muted"
+          onDragOver={(event) => {
+            if (event.dataTransfer.types.includes("Files"))
               event.preventDefault();
-              onCancel();
-              return;
-            }
-            if (event.key !== "Enter" || event.shiftKey) return;
-            if (composing.current || event.nativeEvent.isComposing) return;
-            event.preventDefault();
-            send();
           }}
-        />
+          onDrop={(event) => {
+            event.preventDefault();
+            void selectImage(event.dataTransfer.files[0]);
+          }}
+        >
+          {image ? (
+            <div className="relative mx-3 mt-3 w-fit">
+              {"file" in image || image.signedUrl ? (
+                <img
+                  src={
+                    "file" in image
+                      ? image.previewUrl
+                      : (image.signedUrl ?? undefined)
+                  }
+                  alt="댓글 이미지 미리보기"
+                  className="max-h-32 max-w-48 rounded-xl object-cover"
+                />
+              ) : (
+                <span className="block px-3 py-8 text-xs text-muted-foreground">
+                  이미지를 불러오지 못했습니다
+                </span>
+              )}
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="secondary"
+                aria-label="댓글 이미지 제거"
+                className="absolute -top-2 -right-2 rounded-full shadow-sm"
+                onClick={removeImage}
+              >
+                <XIcon />
+              </Button>
+            </div>
+          ) : null}
+          <div className="flex items-end">
+            <textarea
+              ref={input}
+              rows={1}
+              value={draft}
+              aria-label="댓글 입력"
+              placeholder={placeholder}
+              className="min-h-9 min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent px-4 py-2 text-sm leading-5 outline-none placeholder:text-muted-foreground"
+              onChange={(event) => {
+                setDraft(event.target.value);
+                if (localError) setLocalError(null);
+              }}
+              onPaste={(event) => {
+                const pasted = Array.from(event.clipboardData.items).find(
+                  (item) =>
+                    item.kind === "file" && item.type.startsWith("image/"),
+                );
+                if (!pasted) return;
+                event.preventDefault();
+                void selectImage(pasted.getAsFile() ?? undefined);
+              }}
+              onCompositionStart={() => (composing.current = true)}
+              onCompositionEnd={() => (composing.current = false)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && onCancel) {
+                  event.preventDefault();
+                  onCancel();
+                  return;
+                }
+                if (event.key !== "Enter" || event.shiftKey) return;
+                if (composing.current || event.nativeEvent.isComposing) return;
+                event.preventDefault();
+                send();
+              }}
+            />
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="sr-only"
+              aria-label="댓글 이미지 선택"
+              onChange={(event) => void selectImage(event.target.files?.[0])}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="댓글 이미지 추가"
+              disabled={pending || processingImage}
+              className="m-0.5 shrink-0 text-muted-foreground"
+              onClick={() => fileInput.current?.click()}
+            >
+              {processingImage ? <Spinner /> : <ImagePlusIcon />}
+            </Button>
+          </div>
+        </div>
 
         {onCancel ? (
           <Button

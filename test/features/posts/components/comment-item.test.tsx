@@ -77,6 +77,71 @@ describe("CommentItem", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("renders and downloads a comment image under its image UUID", async () => {
+    const { user } = renderItem({
+      comment: postComment({
+        images: [
+          {
+            image_id: "image-id",
+            comment_id: "comment-id",
+            post_id: "post-id",
+            storage_bucket: "post-attachments",
+            object_path: "comments/post-id/image-id",
+            mime_type: "image/webp",
+            size_bytes: 10,
+            width: 100,
+            height: 80,
+            ready_at: "2026-08-24T00:00:01Z",
+            signedUrl: "https://signed/image.webp",
+          },
+        ],
+      }),
+    });
+
+    expect(screen.getByRole("img", { name: "댓글 이미지" })).toHaveAttribute(
+      "src",
+      "https://signed/image.webp",
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "댓글 이미지 크게 보기" }),
+    );
+
+    const download = screen.getByRole("link", { name: "다운로드" });
+    expect(download).toHaveAttribute(
+      "href",
+      "https://signed/image.webp?download=image-id.webp",
+    );
+    expect(download).toHaveAttribute("download", "image-id.webp");
+  });
+
+  it("does not render an image on a deleted tombstone", () => {
+    renderItem({
+      comment: postComment({
+        is_deleted: true,
+        images: [
+          {
+            image_id: "image-id",
+            comment_id: "comment-id",
+            post_id: "post-id",
+            storage_bucket: "post-attachments",
+            object_path: "comments/post-id/image-id",
+            mime_type: "image/webp",
+            size_bytes: 10,
+            width: 100,
+            height: 80,
+            ready_at: "2026-08-24T00:00:01Z",
+            signedUrl: "https://signed/image.webp",
+          },
+        ],
+      }),
+    });
+
+    expect(
+      screen.queryByRole("img", { name: "댓글 이미지" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("hides the option menu when the viewer may neither edit nor delete", () => {
     renderItem();
 
@@ -122,6 +187,39 @@ describe("CommentItem", () => {
 
     expect(onEdit).not.toHaveBeenCalled();
     expect(screen.getByText("원래 본문")).toBeInTheDocument();
+  });
+
+  it("can remove an existing image while editing", async () => {
+    const onEdit = vi.fn();
+    const { user } = renderItem({
+      comment: postComment({
+        can_edit: true,
+        body: "사진 댓글",
+        images: [
+          {
+            image_id: "image-id",
+            comment_id: "comment-id",
+            post_id: "post-id",
+            storage_bucket: "post-attachments",
+            object_path: "comments/post-id/image-id",
+            mime_type: "image/webp",
+            size_bytes: 10,
+            width: 100,
+            height: 80,
+            ready_at: "2026-08-24T00:00:01Z",
+            signedUrl: "https://signed/image.webp",
+          },
+        ],
+      }),
+      onEdit,
+    });
+
+    await user.click(screen.getByRole("button", { name: "댓글 옵션" }));
+    await user.click(await screen.findByRole("menuitem", { name: "수정" }));
+    await user.click(screen.getByRole("button", { name: "댓글 이미지 제거" }));
+    await user.click(screen.getByRole("button", { name: "댓글 수정" }));
+
+    expect(onEdit).toHaveBeenCalledWith("사진 댓글", null);
   });
 
   it("confirms before deleting and warns when replies go with it", async () => {

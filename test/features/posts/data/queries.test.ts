@@ -14,6 +14,7 @@ vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 import {
   getProfilePost,
   listGroupPosts,
+  listPostComments,
   listProfilePosts,
   searchGroupPosts,
 } from "~/features/posts/data/queries";
@@ -34,6 +35,52 @@ describe("post queries", () => {
     ]);
     expect(from).not.toHaveBeenCalled();
     expect(createPostAttachmentUrls).not.toHaveBeenCalled();
+  });
+
+  it("hydrates a comment page with one batched image lookup and signing call", async () => {
+    const rpc = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: [
+          {
+            comment_id: "comment-1",
+            post_id: "post-id",
+            created_at: "2026-08-24T00:00:00Z",
+          },
+          {
+            comment_id: "comment-2",
+            post_id: "post-id",
+            created_at: "2026-08-24T00:01:00Z",
+          },
+        ],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            image_id: "image-2",
+            comment_id: "comment-2",
+            object_path: "comments/post-id/image-2",
+          },
+        ],
+        error: null,
+      });
+    createPostAttachmentUrls.mockResolvedValue(
+      new Map([["comments/post-id/image-2", "https://signed/image-2"]]),
+    );
+    getSupabase.mockReturnValue({ rpc });
+
+    const page = await listPostComments("post-id");
+
+    expect(rpc).toHaveBeenNthCalledWith(2, "list_comment_images", {
+      p_comment_ids: ["comment-1", "comment-2"],
+    });
+    expect(createPostAttachmentUrls).toHaveBeenCalledOnce();
+    expect(page.comments[0].images).toEqual([]);
+    expect(page.comments[1].images[0]).toMatchObject({
+      image_id: "image-2",
+      signedUrl: "https://signed/image-2",
+    });
   });
 
   it("propagates attachment metadata query failures", async () => {

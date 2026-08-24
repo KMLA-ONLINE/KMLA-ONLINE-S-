@@ -12,10 +12,15 @@ import {
 } from "~/features/posts/components/comment-reaction-button";
 import { ReactionListDialog } from "~/features/posts/components/reaction-list-dialog";
 import { CommentText } from "~/features/posts/components/comment-text";
+import { CommentImage } from "~/features/posts/components/comment-image";
 import { PostAuthorAvatar } from "~/features/posts/components/post-author-avatar";
 import { PostEditedMark } from "~/features/posts/components/post-edited-mark";
 import { useCommentReactors } from "~/features/posts/hooks/use-comment-reactors";
-import type { PostComment, PostReaction } from "~/features/posts/model/types";
+import type {
+  CommentImageInput,
+  PostComment,
+  PostReaction,
+} from "~/features/posts/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";
@@ -64,7 +69,7 @@ export function CommentItem({
   onReact: (next: PostReaction | null) => void;
   onJumpToParent?: () => void;
   /** 성공하면 정본 행을 돌려준다. falsy면 수정 입력창을 열어 둔다. */
-  onEdit: (body: string) => void | Promise<unknown>;
+  onEdit: (body: string, image?: CommentImageInput) => void | Promise<unknown>;
   onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -110,12 +115,15 @@ export function CommentItem({
         identities={[comment.author_identity]}
         identity={comment.author_identity}
         initialValue={comment.body}
+        initialImage={comment.images[0]}
         submitLabel="댓글 수정"
         pending={pending}
         onCancel={() => setEditing(false)}
-        onSubmit={async (body) => {
+        onSubmit={async (body, image) => {
           // 저장에 성공했을 때만 닫는다. 먼저 닫으면 실패한 수정본이 입력창과 함께 사라진다.
-          const updated = await onEdit(body);
+          const updated = await (image === undefined
+            ? onEdit(body)
+            : onEdit(body, image));
           if (updated) setEditing(false);
           return updated;
         }}
@@ -191,18 +199,23 @@ export function CommentItem({
               </span>
             </div>
 
-            <p className="text-sm wrap-break-word whitespace-pre-wrap">
-              {parentLabel ? (
-                <button
-                  type="button"
-                  className="mr-1 font-medium text-primary hover:underline"
-                  onClick={onJumpToParent}
-                >
-                  @{parentLabel}
-                </button>
-              ) : null}
-              <CommentText>{comment.body}</CommentText>
-            </p>
+            {comment.body || parentLabel ? (
+              <p className="text-sm wrap-break-word whitespace-pre-wrap">
+                {parentLabel ? (
+                  <button
+                    type="button"
+                    className="mr-1 font-medium text-primary hover:underline"
+                    onClick={onJumpToParent}
+                  >
+                    @{parentLabel}
+                  </button>
+                ) : null}
+                <CommentText>{comment.body}</CommentText>
+              </p>
+            ) : null}
+            {comment.images[0] ? (
+              <CommentImage image={comment.images[0]} />
+            ) : null}
           </div>
 
           <div className="my-1 flex items-center gap-3 text-xs text-muted-foreground">
