@@ -342,7 +342,7 @@ select is(
     where post_id = '91000000-0000-0000-0000-000000000004'
   ),
   null::text,
-  'always-anonymous report view exposes no profile id'
+  'anonymous report view exposes no profile id'
 );
 
 select is(
@@ -354,7 +354,7 @@ select is(
     where post_id = '91000000-0000-0000-0000-000000000004'
   ),
   null::text,
-  'always-anonymous report view exposes no author name'
+  'anonymous report view exposes no author name'
 );
 
 select is(
@@ -366,7 +366,7 @@ select is(
     where post_id = '91000000-0000-0000-0000-000000000004'
   ),
   null::text,
-  'always-anonymous report view exposes no author avatar'
+  'anonymous report view exposes no author avatar'
 );
 
 reset role;

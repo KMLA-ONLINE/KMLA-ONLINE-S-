@@ -247,33 +247,24 @@ begin
       post.author_identity,
 
       case
-        when group_record.identity_policy = 'always_anonymous'
-          or post.author_identity = 'anonymous'
+        when post.author_identity = 'anonymous'
           then null
         else author_profile.pub_id
       end as author_pub_id,
 
       case
-        when group_record.identity_policy = 'always_anonymous'
-          or post.author_identity = 'anonymous'
+        when post.author_identity = 'anonymous'
           then null
         else author_profile.name
       end as author_name,
 
       case
-        when group_record.identity_policy = 'always_anonymous'
-          or post.author_identity = 'anonymous'
+        when post.author_identity = 'anonymous'
           then null
         else author_profile.avatar_path
       end as author_avatar_path,
 
       case
-        when group_record.identity_policy = 'always_anonymous'
-          then case
-            when post.author_identity = 'staff'
-              then '운영진'
-            else '익명'
-          end
         when post.author_identity = 'anonymous'
           then '익명'
         when post.author_identity = 'staff'
@@ -294,9 +285,6 @@ begin
     from aggregated
     join public.posts as post
       on post.id = aggregated.post_id
-    join public.groups as group_record
-      on group_record.id = post.group_id
-
     left join private.post_authors as actual_author
       on actual_author.post_id = post.id
 
