@@ -15,11 +15,16 @@ interface ImageViewerLocationState {
   imageViewerPushed?: boolean;
 }
 
+type ProfileMediaActivityPost = Pick<
+  ProfilePost,
+  "activity_kind" | "activity_media_url" | "author_name" | "post_id"
+>;
+
 export function ProfileMediaActivity({
   post,
   className,
 }: {
-  post: ProfilePost;
+  post: ProfileMediaActivityPost;
   className?: string;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -114,6 +119,6 @@ export function ProfileMediaActivity({
   );
 }
 
-function profileName(post: ProfilePost): string {
+function profileName(post: ProfileMediaActivityPost): string {
   return post.author_name ?? "사용자";
 }

@@ -1466,6 +1466,41 @@ export type Database = {
           reactor_pub_id: string
         }[]
       }
+      list_feed_posts: {
+        Args: { p_page_token?: string }
+        Returns: {
+          activity_kind: Database["public"]["Enums"]["profile_media_activity_kind"]
+          activity_media_path: string
+          attachments: Json
+          author_avatar_path: string
+          author_identity: Database["public"]["Enums"]["post_identity"]
+          author_label: string
+          author_name: string
+          author_pub_id: string
+          body: string
+          category_name: string
+          comment_count: number
+          edited_at: string
+          feed_epoch: string
+          feed_position: number
+          group_id: string
+          group_name: string
+          group_slug: string
+          is_author: boolean
+          kind: Database["public"]["Enums"]["post_kind"]
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          next_page_token: string
+          post_id: string
+          published_at: string
+          rank_time: string
+          reaction_count: number
+          timeline_name: string
+          timeline_pub_id: string
+          title: string
+          top_reactions: Database["public"]["Enums"]["post_reaction"][]
+          visibility: Database["public"]["Enums"]["post_visibility"]
+        }[]
+      }
       list_group_join_requests: {
         Args: { p_group_id: string }
         Returns: {
