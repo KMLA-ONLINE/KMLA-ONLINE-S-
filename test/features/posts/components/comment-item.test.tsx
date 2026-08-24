@@ -77,8 +77,8 @@ describe("CommentItem", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders a comment image under its body", () => {
-    renderItem({
+  it("renders and downloads a comment image under its image UUID", async () => {
+    const { user } = renderItem({
       comment: postComment({
         images: [
           {
@@ -102,6 +102,17 @@ describe("CommentItem", () => {
       "src",
       "https://signed/image.webp",
     );
+
+    await user.click(
+      screen.getByRole("button", { name: "댓글 이미지 크게 보기" }),
+    );
+
+    const download = screen.getByRole("link", { name: "다운로드" });
+    expect(download).toHaveAttribute(
+      "href",
+      "https://signed/image.webp?download=image-id.webp",
+    );
+    expect(download).toHaveAttribute("download", "image-id.webp");
   });
 
   it("does not render an image on a deleted tombstone", () => {

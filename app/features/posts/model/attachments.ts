@@ -84,6 +84,11 @@ export function toAttachmentDownloadUrl(
   return url.toString();
 }
 
+/** 원본 이름을 노출하지 않고 이미지 UUID로 안정적인 다운로드 이름을 만든다. */
+export function imageDownloadName(imageId: string): string {
+  return `${imageId}.webp`;
+}
+
 export function releasePostFile(file: PreparedPostFile): void {
   if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
 }

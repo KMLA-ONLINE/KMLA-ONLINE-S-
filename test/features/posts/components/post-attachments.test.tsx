@@ -98,6 +98,26 @@ describe("PostImageGrid", () => {
       screen.getByText("이미지를 불러오지 못했습니다"),
     ).toBeInTheDocument();
   });
+
+  it("downloads an image under its attachment UUID", async () => {
+    const { user } = renderRoute(() => (
+      <PostImageGrid
+        images={[image("image-uuid")].map((item) => ({
+          ...item,
+          original_filename: "원본 사진.webp",
+        }))}
+      />
+    ));
+
+    await user.click(screen.getByRole("button", { name: /원본 사진.webp/ }));
+
+    const download = screen.getByRole("link", { name: "다운로드" });
+    expect(download).toHaveAttribute(
+      "href",
+      "https://example.com/file?download=image-uuid.webp",
+    );
+    expect(download).toHaveAttribute("download", "image-uuid.webp");
+  });
 });
 
 describe("PostFileList", () => {

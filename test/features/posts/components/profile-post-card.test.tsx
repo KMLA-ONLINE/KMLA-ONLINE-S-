@@ -156,9 +156,11 @@ describe("ProfilePostCard", () => {
     );
 
     expect(screen.getByRole("dialog")).toBeVisible();
-    expect(screen.getByRole("link", { name: "다운로드" })).toHaveAttribute(
+    const download = screen.getByRole("link", { name: "다운로드" });
+    expect(download).toHaveAttribute(
       "href",
-      "https://example.com/activity.webp",
+      "https://example.com/activity.webp?download=post-id.webp",
     );
+    expect(download).toHaveAttribute("download", "post-id.webp");
   });
 });

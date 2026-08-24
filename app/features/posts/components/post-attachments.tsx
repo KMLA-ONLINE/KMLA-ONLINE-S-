@@ -1,7 +1,10 @@
 import { DownloadIcon, FileIcon, FileTextIcon } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 
-import { toAttachmentDownloadUrl } from "~/features/posts/model/attachments";
+import {
+  imageDownloadName,
+  toAttachmentDownloadUrl,
+} from "~/features/posts/model/attachments";
 import { formatFileSize } from "~/features/posts/model/format";
 import type { PostAttachment } from "~/features/posts/model/types";
 import {
@@ -64,15 +67,15 @@ export function PostImageGrid({
   // 어긋나느니, 그리드에서만 깨진 타일로 보이는 편이 낫다.
   const viewerImages: ViewerImage[] = images
     .filter((item) => item.signedUrl !== null)
-    .map((item) => ({
-      id: item.attachment_id,
-      src: item.signedUrl!,
-      downloadSrc: toAttachmentDownloadUrl(
-        item.signedUrl!,
-        item.original_filename,
-      ),
-      name: item.original_filename,
-    }));
+    .map((item) => {
+      const downloadName = imageDownloadName(item.attachment_id);
+      return {
+        id: item.attachment_id,
+        src: item.signedUrl!,
+        downloadSrc: toAttachmentDownloadUrl(item.signedUrl!, downloadName),
+        name: downloadName,
+      };
+    });
 
   const requestedImageId = searchParams.get("image");
   // 카드 피드에는 게시물이 여럿이라 모두가 같은 search param을 본다. attachment_id는 전역

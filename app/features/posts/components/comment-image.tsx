@@ -1,6 +1,9 @@
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 
-import { toAttachmentDownloadUrl } from "~/features/posts/model/attachments";
+import {
+  imageDownloadName,
+  toAttachmentDownloadUrl,
+} from "~/features/posts/model/attachments";
 import type { CommentImage as CommentImageModel } from "~/features/posts/model/types";
 import { ImageViewer } from "~/shared/components/image-viewer";
 
@@ -8,20 +11,19 @@ interface ImageViewerLocationState {
   imageViewerPushed?: boolean;
 }
 
-const DOWNLOAD_NAME = "comment-image.webp";
-
 export function CommentImage({ image }: { image: CommentImageModel }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
   const open = searchParams.get("image") === image.image_id;
+  const downloadName = imageDownloadName(image.image_id);
   const viewerImages = image.signedUrl
     ? [
         {
           id: image.image_id,
           src: image.signedUrl,
-          downloadSrc: toAttachmentDownloadUrl(image.signedUrl, DOWNLOAD_NAME),
-          name: DOWNLOAD_NAME,
+          downloadSrc: toAttachmentDownloadUrl(image.signedUrl, downloadName),
+          name: downloadName,
         },
       ]
     : [];

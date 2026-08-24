@@ -1,9 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  imageDownloadName,
   prepareCommentImage,
   toAttachmentDownloadUrl,
 } from "~/features/posts/model/attachments";
+
+describe("imageDownloadName", () => {
+  it("uses the stable image UUID instead of an original filename", () => {
+    expect(imageDownloadName("550e8400-e29b-41d4-a716-446655440000")).toBe(
+      "550e8400-e29b-41d4-a716-446655440000.webp",
+    );
+  });
+});
 
 describe("toAttachmentDownloadUrl", () => {
   it("keeps the signing token and adds the download filename", () => {
