@@ -34,7 +34,12 @@ begin
   create type public.group_identity_policy as enum ('identified', 'optional_anonymous');
   alter table public.groups
     alter column identity_policy type public.group_identity_policy
-    using identity_policy::text::public.group_identity_policy;
+    using (
+      case identity_policy::text
+        when 'always_anonymous' then 'optional_anonymous'
+        else identity_policy::text
+      end
+    )::public.group_identity_policy;
   drop type public.group_identity_policy_old;
 
   foreach function_definition in array function_definitions loop
@@ -232,29 +237,31 @@ set search_path = ''
 as $$
 declare
   caller_profile_id bigint := private.current_profile_id();
-  group_record public.groups;
+  locked_group_id uuid;
+  group_identity_policy public.group_identity_policy;
+  group_posting_policy public.group_posting_policy;
   member_role public.group_member_role;
   created_post_id uuid;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
-  select group_data.* into group_record
+  select group_data.id, group_data.identity_policy, group_data.posting_policy,
+    membership.role
+  into locked_group_id, group_identity_policy, group_posting_policy, member_role
   from public.groups as group_data
   join public.group_memberships as membership
     on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
-  where group_data.id = p_group_id;
-  select membership.role into member_role
-  from public.group_memberships as membership
-  where membership.group_id = p_group_id and membership.profile_id = caller_profile_id;
-  if group_record.id is null then
+  where group_data.id = p_group_id
+  for share of group_data, membership;
+  if locked_group_id is null then
     raise exception 'group membership required' using errcode = '42501';
   end if;
-  if group_record.posting_policy = 'staff'
+  if group_posting_policy = 'staff'
     and member_role not in ('owner', 'admin', 'manager') then
     raise exception 'group posting is restricted to staff' using errcode = '42501';
   end if;
-  if p_author_identity = 'anonymous' and group_record.identity_policy = 'identified' then
+  if p_author_identity = 'anonymous' and group_identity_policy = 'identified' then
     raise exception 'anonymous posting is not allowed' using errcode = '42501';
   end if;
   if p_author_identity = 'staff' and member_role not in ('owner', 'admin', 'manager') then
@@ -287,6 +294,171 @@ begin
   insert into private.post_authors (post_id, profile_id)
   values (created_post_id, caller_profile_id);
   return created_post_id;
+end;
+$$;
+
+create or replace function public.publish_group_post(p_post_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  post_record public.posts;
+  target_group_id uuid;
+  locked_group_id uuid;
+  group_identity_policy public.group_identity_policy;
+  group_posting_policy public.group_posting_policy;
+  member_role public.group_member_role;
+begin
+  if auth.uid() is null or caller_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  select post.group_id into target_group_id
+  from public.posts as post
+  where post.id = p_post_id and post.kind = 'group' and post.deleted_at is null;
+  if target_group_id is null or not private.is_post_author(p_post_id) then
+    raise exception 'only the author can publish this post' using errcode = '42501';
+  end if;
+
+  select group_data.id, group_data.identity_policy, group_data.posting_policy,
+    membership.role
+  into locked_group_id, group_identity_policy, group_posting_policy, member_role
+  from public.groups as group_data
+  join public.group_memberships as membership
+    on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
+  where group_data.id = target_group_id and group_data.deleted_at is null
+  for share of group_data, membership;
+  if locked_group_id is null then
+    raise exception 'group membership required' using errcode = '42501';
+  end if;
+  select post.* into post_record
+  from public.posts as post
+  where post.id = p_post_id and post.kind = 'group'
+    and post.group_id = target_group_id and post.deleted_at is null
+  for update;
+  if post_record.id is null or not private.is_post_author(p_post_id) then
+    raise exception 'only the author can publish this post' using errcode = '42501';
+  end if;
+  if post_record.published_at is not null then
+    return p_post_id;
+  end if;
+  if group_posting_policy = 'staff'
+    and member_role not in ('owner', 'admin', 'manager') then
+    raise exception 'group posting is restricted to staff' using errcode = '42501';
+  end if;
+  if post_record.author_identity = 'anonymous'
+    and group_identity_policy = 'identified' then
+    raise exception 'anonymous posting is not allowed' using errcode = '42501';
+  end if;
+  if post_record.author_identity = 'staff'
+    and member_role not in ('owner', 'admin', 'manager') then
+    raise exception 'staff identity is not allowed' using errcode = '42501';
+  end if;
+  if exists (
+    select 1 from public.post_attachments
+    where post_id = p_post_id and status = 'pending'
+  ) then
+    raise exception 'pending attachments must be finalized or deleted' using errcode = '55000';
+  end if;
+  if nullif(btrim(post_record.body), '') is null and not exists (
+    select 1 from public.post_attachments
+    where post_id = p_post_id and status = 'ready'
+  ) then
+    raise exception 'published post requires a body or ready attachment' using errcode = '22023';
+  end if;
+
+  update public.posts set published_at = now() where id = p_post_id;
+  return p_post_id;
+end;
+$$;
+
+create or replace function public.commit_group_post(
+  p_post_id uuid,
+  p_title text,
+  p_body text,
+  p_attachment_ids uuid[],
+  p_publish boolean default false,
+  p_category_id uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  post_record public.posts;
+  target_group_id uuid;
+  locked_group_id uuid;
+  group_identity_policy public.group_identity_policy;
+  group_posting_policy public.group_posting_policy;
+  member_role public.group_member_role;
+begin
+  if auth.uid() is null or caller_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  select post.group_id into target_group_id
+  from public.posts as post
+  where post.id = p_post_id and post.kind = 'group' and post.deleted_at is null;
+  if target_group_id is null or not private.is_post_author(p_post_id) then
+    raise exception 'only the author can commit this post' using errcode = '42501';
+  end if;
+
+  select group_data.id, group_data.identity_policy, group_data.posting_policy,
+    membership.role
+  into locked_group_id, group_identity_policy, group_posting_policy, member_role
+  from public.groups as group_data
+  join public.group_memberships as membership
+    on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
+  where group_data.id = target_group_id and group_data.deleted_at is null
+  for share of group_data, membership;
+  if locked_group_id is null then
+    raise exception 'group membership required' using errcode = '42501';
+  end if;
+  select post.* into post_record
+  from public.posts as post
+  where post.id = p_post_id and post.kind = 'group'
+    and post.group_id = target_group_id and post.deleted_at is null
+  for update;
+  if post_record.id is null or not private.is_post_author(p_post_id) then
+    raise exception 'only the author can commit this post' using errcode = '42501';
+  end if;
+  if coalesce(p_publish, false) and post_record.published_at is not null then
+    raise exception 'post is already published' using errcode = '55000';
+  end if;
+  if coalesce(p_publish, false) then
+    if group_posting_policy = 'staff'
+      and member_role not in ('owner', 'admin', 'manager') then
+      raise exception 'group posting is restricted to staff' using errcode = '42501';
+    end if;
+    if post_record.author_identity = 'anonymous'
+      and group_identity_policy = 'identified' then
+      raise exception 'anonymous posting is not allowed' using errcode = '42501';
+    end if;
+    if post_record.author_identity = 'staff'
+      and member_role not in ('owner', 'admin', 'manager') then
+      raise exception 'staff identity is not allowed' using errcode = '42501';
+    end if;
+  end if;
+  if nullif(btrim(p_title), '') is null or char_length(btrim(p_title)) > 100 then
+    raise exception 'title must contain between 1 and 100 characters' using errcode = '22023';
+  end if;
+  if p_category_id is not null and not exists (
+    select 1 from public.group_categories as category
+    where category.id = p_category_id and category.group_id = post_record.group_id
+  ) then
+    raise exception 'category must belong to the group' using errcode = '22023';
+  end if;
+
+  perform private.apply_post_commit(p_post_id, p_body, p_attachment_ids);
+  update public.posts
+  set title = btrim(p_title), body = coalesce(p_body, ''), category_id = p_category_id,
+    published_at = case when coalesce(p_publish, false) then now() else published_at end,
+    edited_at = case when published_at is not null then now() else null end
+  where id = p_post_id;
+  return p_post_id;
 end;
 $$;
 
@@ -325,6 +497,13 @@ begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
+  perform 1
+  from public.posts as post
+  join public.groups as group_data on group_data.id = post.group_id
+  join public.group_memberships as membership
+    on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
+  where post.id = p_post_id and post.kind = 'group'
+  for share of group_data, membership;
   context := private.comment_post_context(p_post_id, caller_profile_id);
   if context.post_kind is null then
     raise exception 'post not found' using errcode = 'P0002';
@@ -434,6 +613,8 @@ $$;
 
 -- Reactions are ordinary identified activity. The private context helper now only
 -- validates that the caller can access the target post.
+delete from public.post_reactions where is_anonymous;
+delete from public.comment_reactions where is_anonymous;
 alter table public.post_reactions drop column is_anonymous;
 alter table public.comment_reactions drop column is_anonymous;
 
@@ -563,7 +744,7 @@ begin
   select entry.reaction, profile.pub_id, profile.name, profile.avatar_path,
     entry.created_at
   from public.post_reactions as entry
-  join public.profiles as profile on profile.id = entry.profile_id
+  left join public.profiles as profile on profile.id = entry.profile_id
     and profile.status = 'accepted' and profile.deleted_at is null
   where entry.post_id = p_post_id
   order by entry.created_at desc;
@@ -601,7 +782,7 @@ begin
   select entry.reaction, profile.pub_id, profile.name, profile.avatar_path,
     entry.created_at
   from public.comment_reactions as entry
-  join public.profiles as profile on profile.id = entry.profile_id
+  left join public.profiles as profile on profile.id = entry.profile_id
     and profile.status = 'accepted' and profile.deleted_at is null
   where entry.comment_id = p_comment_id
   order by entry.created_at desc;
@@ -609,3 +790,30 @@ end;
 $$;
 revoke all on function public.list_comment_reactors(uuid) from public, anon;
 grant execute on function public.list_comment_reactors(uuid) to authenticated;
+
+revoke all on function public.create_group_post(
+  uuid, text, text, public.post_identity, uuid, boolean
+) from public, anon;
+revoke all on function public.publish_group_post(uuid) from public, anon;
+revoke all on function public.commit_group_post(uuid, text, text, uuid[], boolean, uuid)
+  from public, anon;
+revoke all on function public.create_post_comment(
+  uuid, text, public.post_identity, uuid, uuid
+) from public, anon;
+revoke all on function public.set_post_reaction(uuid, public.post_reaction)
+  from public, anon;
+revoke all on function public.set_comment_reaction(uuid, public.post_reaction)
+  from public, anon;
+grant execute on function public.create_group_post(
+  uuid, text, text, public.post_identity, uuid, boolean
+) to authenticated;
+grant execute on function public.publish_group_post(uuid) to authenticated;
+grant execute on function public.commit_group_post(uuid, text, text, uuid[], boolean, uuid)
+  to authenticated;
+grant execute on function public.create_post_comment(
+  uuid, text, public.post_identity, uuid, uuid
+) to authenticated;
+grant execute on function public.set_post_reaction(uuid, public.post_reaction)
+  to authenticated;
+grant execute on function public.set_comment_reaction(uuid, public.post_reaction)
+  to authenticated;

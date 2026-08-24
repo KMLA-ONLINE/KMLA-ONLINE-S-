@@ -154,26 +154,37 @@ export function ReactionListDialog({
             </div>
           ) : shown.length > 0 ? (
             <ul className="flex flex-col">
-              {shown.map((row) => (
+              {shown.map((row, index) => (
                 <li
-                  key={row.reactor_pub_id}
+                  key={row.reactor_pub_id ?? `${row.reacted_at}-${index}`}
                   className="flex items-center gap-3 rounded-lg px-2 py-1.5"
                 >
-                  <Link
-                    to={`/profile/${row.reactor_pub_id}`}
-                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg hover:underline"
-                  >
-                    <ReactorAvatar reaction={row.reaction}>
-                      <UserAvatar
-                        src={row.reactor_avatar_path}
-                        name={row.reactor_name}
-                        size="lg"
-                      />
-                    </ReactorAvatar>
-                    <span className="truncate text-sm font-semibold">
-                      {row.reactor_name}
-                    </span>
-                  </Link>
+                  {row.reactor_pub_id && row.reactor_name ? (
+                    <Link
+                      to={`/profile/${row.reactor_pub_id}`}
+                      className="flex min-w-0 flex-1 items-center gap-3 rounded-lg hover:underline"
+                    >
+                      <ReactorAvatar reaction={row.reaction}>
+                        <UserAvatar
+                          src={row.reactor_avatar_path}
+                          name={row.reactor_name}
+                          size="lg"
+                        />
+                      </ReactorAvatar>
+                      <span className="truncate text-sm font-semibold">
+                        {row.reactor_name}
+                      </span>
+                    </Link>
+                  ) : (
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <ReactorAvatar reaction={row.reaction}>
+                        <UserAvatar src={null} name="탈퇴한 사용자" size="lg" />
+                      </ReactorAvatar>
+                      <span className="truncate text-sm font-semibold text-muted-foreground">
+                        탈퇴한 사용자
+                      </span>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

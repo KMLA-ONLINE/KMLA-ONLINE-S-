@@ -50,6 +50,22 @@ describe("ReactionListDialog", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps a withdrawn reactor in the total without linking a profile", () => {
+    renderDialog([
+      identified({
+        reactor_pub_id: null,
+        reactor_name: null,
+        reactor_avatar_path: null,
+      }),
+    ]);
+
+    expect(screen.getByText("탈퇴한 사용자")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole("tablist")).getByRole("tab", { name: "전체 1" }),
+    ).toBeInTheDocument();
+  });
+
   it("filters the list to one reaction kind", async () => {
     const { user } = renderDialog([
       identified(),

@@ -95,11 +95,11 @@ export type ProfilePostFormErrors = Partial<
   Record<"body" | "visibility" | "form", string>
 >;
 
-/** 반응자 목록의 개별 실명 행 (기능 명세 §10.3). */
+/** 반응자 목록의 개별 행. 탈퇴한 사용자의 표현 필드는 null이다. */
 export interface PostReactor {
   reaction: PostReaction;
-  reactor_pub_id: string;
-  reactor_name: string;
+  reactor_pub_id: string | null;
+  reactor_name: string | null;
   reactor_avatar_path: string | null;
   reacted_at: string;
 }

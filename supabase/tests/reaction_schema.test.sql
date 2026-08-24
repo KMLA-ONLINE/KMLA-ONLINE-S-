@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(18);
+select plan(32);
 
 select ok(
   (select relrowsecurity from pg_catalog.pg_class where oid = 'public.post_reactions'::regclass),
@@ -41,6 +41,14 @@ select ok(
   not has_table_privilege('authenticated', 'public.comment_reactions', 'INSERT'),
   'authenticated cannot insert comment reactions directly'
 );
+select ok(
+  not has_table_privilege('authenticated', 'public.comment_reactions', 'UPDATE'),
+  'authenticated cannot update comment reactions directly'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.comment_reactions', 'DELETE'),
+  'authenticated cannot delete comment reactions directly'
+);
 select hasnt_column(
   'public', 'post_reactions', 'is_anonymous',
   'post reactions do not store an anonymity flag'
@@ -75,6 +83,57 @@ select ok(
 select ok(
   has_function_privilege('authenticated', 'public.list_comment_reactors(uuid)', 'EXECUTE'),
   'the comment reactor list is callable by members'
+);
+select ok(
+  not has_function_privilege('anon', 'public.list_post_reactors(uuid)', 'EXECUTE'),
+  'anonymous visitors cannot call the post reactor list'
+);
+select ok(
+  not has_function_privilege('anon', 'public.list_comment_reactors(uuid)', 'EXECUTE'),
+  'anonymous visitors cannot call the comment reactor list'
+);
+select ok(
+  has_function_privilege('authenticated', 'public.set_post_reaction(uuid,public.post_reaction)', 'EXECUTE'),
+  'authenticated users can set post reactions'
+);
+select ok(
+  not has_function_privilege('anon', 'public.set_post_reaction(uuid,public.post_reaction)', 'EXECUTE'),
+  'anonymous visitors cannot set post reactions'
+);
+select ok(
+  has_function_privilege('authenticated', 'public.clear_post_reaction(uuid)', 'EXECUTE'),
+  'authenticated users can clear post reactions'
+);
+select ok(
+  not has_function_privilege('anon', 'public.clear_post_reaction(uuid)', 'EXECUTE'),
+  'anonymous visitors cannot clear post reactions'
+);
+select ok(
+  has_function_privilege('authenticated', 'public.set_comment_reaction(uuid,public.post_reaction)', 'EXECUTE'),
+  'authenticated users can set comment reactions'
+);
+select ok(
+  not has_function_privilege('anon', 'public.set_comment_reaction(uuid,public.post_reaction)', 'EXECUTE'),
+  'anonymous visitors cannot set comment reactions'
+);
+select ok(
+  has_function_privilege('authenticated', 'public.clear_comment_reaction(uuid)', 'EXECUTE'),
+  'authenticated users can clear comment reactions'
+);
+select ok(
+  not has_function_privilege('anon', 'public.clear_comment_reaction(uuid)', 'EXECUTE'),
+  'anonymous visitors cannot clear comment reactions'
+);
+select ok(
+  (select prosecdef from pg_catalog.pg_proc
+   where oid = 'public.list_post_reactors(uuid)'::regprocedure),
+  'the post reactor list is a definer function'
+);
+select is(
+  (select proconfig from pg_catalog.pg_proc
+   where oid = 'public.list_post_reactors(uuid)'::regprocedure),
+  array['search_path=""']::text[],
+  'the post reactor list has an empty search path'
 );
 select ok(
   pg_catalog.array_position((

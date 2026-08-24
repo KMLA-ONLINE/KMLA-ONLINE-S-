@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(31);
 
 -- 시드에는 로그인 가능한 계정이 하나뿐이라 여러 사람의 반응을 함께 볼 수 없다. 시드를 건드리지
 -- 않고 트랜잭션 안에서만 두 계정을 더 붙인다.
@@ -185,6 +185,27 @@ select ok(
   'reactors always expose normal profile presentation fields'
 );
 
+reset role;
+update public.profiles set deleted_at = now()
+where auth_user_id = '10000000-0000-0000-0000-000000000003';
+set local role authenticated;
+select is(
+  (select count(*)::integer from public.list_post_reactors(
+    '90000000-0000-0000-0000-000000000001'
+  )),
+  2, 'withdrawn reactors remain represented in the post reactor list'
+);
+select is(
+  (select count(*)::integer from public.list_post_reactors(
+    '90000000-0000-0000-0000-000000000001'
+  ) as reactor where reactor.reactor_pub_id is null and reactor.reactor_name is null),
+  1, 'a withdrawn post reactor no longer exposes profile presentation fields'
+);
+reset role;
+update public.profiles set deleted_at = null
+where auth_user_id = '10000000-0000-0000-0000-000000000003';
+set local role authenticated;
+
 -- 댓글 반응 (기능 명세 §10.2).
 select is(
   (
@@ -260,6 +281,28 @@ select is(
   array['love']::public.post_reaction[],
   'the comment summary reports the most used reaction'
 );
+
+reset role;
+update public.profiles set deleted_at = now()
+where auth_user_id = '10000000-0000-0000-0000-000000000003';
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
+set local role authenticated;
+select is(
+  (select count(*)::integer from public.list_comment_reactors(
+    'a0000000-0000-0000-0000-000000000007'
+  )),
+  2, 'withdrawn reactors remain represented in the comment reactor list'
+);
+select is(
+  (select count(*)::integer from public.list_comment_reactors(
+    'a0000000-0000-0000-0000-000000000007'
+  ) as reactor where reactor.reactor_pub_id is null and reactor.reactor_name is null),
+  1, 'a withdrawn comment reactor no longer exposes profile presentation fields'
+);
+reset role;
+update public.profiles set deleted_at = null
+where auth_user_id = '10000000-0000-0000-0000-000000000003';
+set local role authenticated;
 
 reset role;
 set local role anon;
