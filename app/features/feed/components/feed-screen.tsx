@@ -1,14 +1,25 @@
-import { useState } from "react";
-import { useFetcher, useRevalidator } from "react-router";
+import { useEffect, useState } from "react";
+import { useFetcher, useRevalidator, useSearchParams } from "react-router";
 
+import { useAppShell } from "~/features/app-shell";
 import {
   FeedPostCard,
   FeedPostRow,
 } from "~/features/feed/components/feed-post";
-import type { FeedPage, FeedPageResult } from "~/features/feed/model/types";
-import { usePostViewMode } from "~/features/posts";
+import type {
+  FeedPage,
+  FeedPageResult,
+  FeedPostDetailResult,
+} from "~/features/feed/model/types";
+import {
+  GroupPostOverlay,
+  ProfilePostDetail,
+  usePostViewMode,
+} from "~/features/posts";
 import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
+import { useModalClose } from "~/shared/hooks/use-modal-close";
 import { Button } from "~/shared/ui/button";
+import { Spinner } from "~/shared/ui/spinner";
 
 export function FeedScreen({
   initialPage,
@@ -18,8 +29,21 @@ export function FeedScreen({
   initialError: string | null;
 }) {
   const fetcher = useFetcher<FeedPageResult>();
+  const detailFetcher = useFetcher<FeedPostDetailResult>();
   const revalidator = useRevalidator();
+  const { profile } = useAppShell();
+  const [searchParams] = useSearchParams();
   const [viewMode] = usePostViewMode();
+  const closeDetail = useModalClose("/");
+  const activePostId = searchParams.get("post");
+  const activeKind = searchParams.get("kind");
+  const activeSource = searchParams.get("source");
+  const detailRequest =
+    activePostId &&
+    (activeKind === "group" || activeKind === "profile") &&
+    activeSource
+      ? `/feed/posts/${activePostId}?kind=${activeKind}&source=${encodeURIComponent(activeSource)}`
+      : null;
   const [storedState, setStoredState] = useState<{
     initialPage: FeedPage | null;
     additionalPages: FeedPage[];
@@ -33,6 +57,16 @@ export function FeedScreen({
     sessionExpired: false,
     processedData: null,
   });
+
+  useEffect(() => {
+    if (
+      detailRequest &&
+      detailFetcher.state === "idle" &&
+      detailFetcher.data?.requestedPostId !== activePostId
+    ) {
+      void detailFetcher.load(detailRequest);
+    }
+  }, [activePostId, detailFetcher, detailRequest]);
 
   let state = storedState;
   if (state.initialPage !== initialPage) {
@@ -81,6 +115,11 @@ export function FeedScreen({
     ).values(),
   );
   const pending = fetcher.state !== "idle";
+  const activeDetailResult =
+    activePostId && detailFetcher.data?.requestedPostId === activePostId
+      ? detailFetcher.data
+      : null;
+  const detail = activeDetailResult?.detail ?? null;
 
   function loadMore() {
     if (!nextPageToken || pending) return;
@@ -103,7 +142,7 @@ export function FeedScreen({
   }
 
   return (
-    <section className="flex min-w-0 flex-col py-3 md:py-0">
+    <section className="flex min-w-0 flex-col">
       {viewMode === "card" ? (
         <div className="flex flex-col md:gap-3">
           {posts.map((post) => (
@@ -146,6 +185,55 @@ export function FeedScreen({
         </p>
       ) : null}
       <div ref={sentinelRef} className="h-px" aria-hidden="true" />
+
+      {detail?.kind === "group" ? (
+        <GroupPostOverlay
+          mode="detail"
+          slug={detail.slug}
+          groupName={detail.groupName}
+          groupId={detail.groupId}
+          post={detail.post}
+          identities={detail.identities}
+          comments={detail.comments}
+          viewer={{ name: profile.name, avatarUrl: profile.avatar_url }}
+          onClose={closeDetail}
+          action={`/groups/${detail.slug}/posts/${detail.post.post_id}`}
+        />
+      ) : null}
+
+      {detail?.kind === "profile" ? (
+        <ProfilePostDetail
+          post={detail.post}
+          comments={detail.comments}
+          viewer={{ name: profile.name, avatarUrl: profile.avatar_url }}
+          onClose={closeDetail}
+          action={`/profile/${detail.post.timeline_pub_id}/posts/${detail.post.post_id}`}
+        />
+      ) : null}
+
+      {detailRequest && !detail ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="flex min-w-48 flex-col items-center gap-3 rounded-xl bg-background p-5 shadow-xl">
+            {activeDetailResult?.error ? (
+              <>
+                <p role="alert" className="text-sm text-muted-foreground">
+                  {activeDetailResult.error}
+                </p>
+                <Button type="button" variant="outline" onClick={closeDetail}>
+                  닫기
+                </Button>
+              </>
+            ) : (
+              <>
+                <Spinner />
+                <p className="text-sm text-muted-foreground">
+                  게시물을 불러오는 중입니다.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

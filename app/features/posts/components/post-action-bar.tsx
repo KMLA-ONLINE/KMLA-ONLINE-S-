@@ -86,6 +86,7 @@ export function PostActionBar({
         {commentTo ? (
           <Link
             to={commentTo}
+            preventScrollReset
             aria-label={commentLabel}
             className={ACTION_CLASS}
           >

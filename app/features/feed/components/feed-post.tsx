@@ -29,6 +29,16 @@ export function feedPostPath(post: FeedPost): string {
     : `/profile/${post.timeline_pub_id}/posts/${post.post_id}`;
 }
 
+function feedPostOverlayPath(post: FeedPost, comments = false): string {
+  const searchParams = new URLSearchParams({
+    post: post.post_id,
+    kind: post.kind,
+    source: post.kind === "group" ? post.group_slug : post.timeline_pub_id,
+  });
+  if (comments) searchParams.set("view", "comments");
+  return `/?${searchParams.toString()}`;
+}
+
 function AuthorAvatar({ post }: { post: FeedPost }) {
   const name = post.author_name ?? post.author_label;
   const avatar = (
@@ -143,6 +153,7 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
 
 export function FeedPostCard({ post }: { post: FeedPost }) {
   const path = feedPostPath(post);
+  const overlayPath = feedPostOverlayPath(post);
   const { images, files } = splitPostAttachments(post.attachments);
   const isMediaActivity = post.kind === "profile" && post.activity_kind;
 
@@ -162,7 +173,11 @@ export function FeedPostCard({ post }: { post: FeedPost }) {
           <div className="px-4">
             {post.kind === "group" ? (
               <h2 className="mb-2 text-xl font-semibold">
-                <Link to={path} className="hover:underline">
+                <Link
+                  to={overlayPath}
+                  preventScrollReset
+                  className="hover:underline"
+                >
                   {post.title}
                 </Link>
               </h2>
@@ -189,7 +204,7 @@ export function FeedPostCard({ post }: { post: FeedPost }) {
             : `${post.author_name ?? "사용자"}님의 게시물`
         }
         commentCount={post.comment_count}
-        commentTo={`${path}?view=comments`}
+        commentTo={feedPostOverlayPath(post, true)}
         className="mt-1"
       />
     </article>
@@ -201,7 +216,7 @@ function groupListTitle(post: GroupFeedPost) {
 }
 
 export function FeedPostRow({ post }: { post: FeedPost }) {
-  const path = feedPostPath(post);
+  const path = feedPostOverlayPath(post);
   const author = post.author_name ?? post.author_label;
   const target = post.kind === "group" ? post.group_name : post.timeline_name;
   const text =
@@ -216,6 +231,7 @@ export function FeedPostRow({ post }: { post: FeedPost }) {
   return (
     <Link
       to={path}
+      preventScrollReset
       className="flex w-full flex-col gap-1 px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
     >
       <div className="flex items-center gap-2">

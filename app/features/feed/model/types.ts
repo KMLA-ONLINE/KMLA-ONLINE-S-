@@ -1,4 +1,10 @@
-import type { PostAttachment } from "~/features/posts/model/types";
+import type {
+  GroupPostDetail,
+  PostAttachment,
+  PostCommentPage,
+  PostIdentity,
+  ProfilePost,
+} from "~/features/posts/model/types";
 import type { Database } from "~/shared/supabase/database.types";
 
 type FeedRow =
@@ -75,4 +81,26 @@ export interface FeedPageResult {
   pageToken: string | null;
   error: string | null;
   expired: boolean;
+}
+
+export type FeedPostDetail =
+  | {
+      kind: "group";
+      post: GroupPostDetail;
+      comments: PostCommentPage;
+      slug: string;
+      groupName: string;
+      groupId: string;
+      identities: PostIdentity[];
+    }
+  | {
+      kind: "profile";
+      post: ProfilePost;
+      comments: PostCommentPage;
+    };
+
+export interface FeedPostDetailResult {
+  requestedPostId: string;
+  detail: FeedPostDetail | null;
+  error: string | null;
 }

@@ -37,6 +37,14 @@ describe("FeedPostCard", () => {
     renderRoute(() => <FeedPostCard post={pinnedFeedPost()} />);
 
     const title = screen.getByRole("heading", { name: "중요 공지" });
+    expect(within(title).getByRole("link")).toHaveAttribute(
+      "href",
+      "/?post=post-id&kind=group&source=notice",
+    );
+    expect(screen.getByRole("link", { name: "댓글 0개" })).toHaveAttribute(
+      "href",
+      "/?post=post-id&kind=group&source=notice&view=comments",
+    );
     expect(screen.getByText("고정된 게시물")).toBeInTheDocument();
     expect(screen.getByText("필독")).toBeInTheDocument();
     expect(within(title).queryByText("필독")).not.toBeInTheDocument();

@@ -4,6 +4,7 @@ export type {
   FeedPage,
   FeedPageResult,
   FeedPost,
+  FeedPostDetailResult,
   GroupFeedPost,
   ProfileFeedPost,
 } from "~/features/feed/model/types";

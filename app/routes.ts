@@ -16,6 +16,7 @@ export default [
   layout("routes/app/gate.tsx", [
     layout("routes/app/layout.tsx", [
       index("routes/app/home.tsx"),
+      route("feed/posts/:postId", "routes/app/feed/post-data.ts"),
       route("profile", "routes/app/profile/index.tsx"),
       route("noti", "routes/app/notifications.tsx"),
       route("menu", "routes/app/menu/index.tsx"),
