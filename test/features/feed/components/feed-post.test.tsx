@@ -9,6 +9,7 @@ import { renderRoute } from "../../../router";
 function pinnedFeedPost(): GroupFeedPost {
   return {
     ...groupPost({
+      author_identity: "staff",
       category_name: "필독",
       is_pinned: true,
       title: "중요 공지",
@@ -31,7 +32,7 @@ function pinnedFeedPost(): GroupFeedPost {
 afterEach(() => vi.restoreAllMocks());
 
 describe("FeedPostCard", () => {
-  it("uses the established group post positions for pinned and category labels", () => {
+  it("keeps feed metadata out of the group post title", () => {
     vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(60);
     vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(66);
     renderRoute(() => <FeedPostCard post={pinnedFeedPost()} />);
@@ -46,7 +47,8 @@ describe("FeedPostCard", () => {
       "/?post=post-id&kind=group&source=notice&view=comments",
     );
     expect(screen.getByText("고정된 게시물")).toBeInTheDocument();
-    expect(screen.getByText("필독")).toBeInTheDocument();
+    expect(screen.queryByText("필독")).not.toBeInTheDocument();
+    expect(screen.queryByText("운영진")).not.toBeInTheDocument();
     expect(within(title).queryByText("필독")).not.toBeInTheDocument();
   });
 });

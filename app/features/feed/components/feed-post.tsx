@@ -46,7 +46,8 @@ function AuthorAvatar({ post }: { post: FeedPost }) {
       identity={post.author_identity}
       name={post.author_name}
       avatarPath={post.author_avatar_path}
-      size="lg"
+      size="default"
+      className="size-9"
     />
   );
 
@@ -61,17 +62,24 @@ function AuthorAvatar({ post }: { post: FeedPost }) {
   );
 }
 
-function AuthorName({ post }: { post: FeedPost }) {
+function AuthorName({
+  post,
+  compact = false,
+}: {
+  post: FeedPost;
+  compact?: boolean;
+}) {
   const name = post.author_name ?? post.author_label;
+  const className = cn("truncate font-semibold", !compact && "text-sm");
 
   if (post.author_identity === "anonymous" || !post.author_pub_id) {
-    return <span className="truncate text-sm font-semibold">{name}</span>;
+    return <span className={className}>{name}</span>;
   }
 
   return (
     <Link
       to={`/profile/${post.author_pub_id}`}
-      className="truncate text-sm font-semibold hover:underline"
+      className={cn(className, "hover:underline")}
     >
       {name}
     </Link>
@@ -91,14 +99,26 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
   return (
     <header
       className={cn(
-        "flex items-start gap-3 px-4 pb-3",
-        post.kind === "group" && post.is_pinned ? "pt-2" : "pt-4",
+        "flex gap-2 px-4 pb-3",
+        post.kind === "group" ? "items-center" : "items-start",
+        post.kind === "group" && post.is_pinned ? "pt-2" : "pt-3",
       )}
     >
       <AuthorAvatar post={post} />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
-          <AuthorName post={post} />
+          {post.kind === "group" ? (
+            <>
+              <Link
+                to={`/groups/${post.group_slug}`}
+                className="truncate text-sm font-semibold hover:underline"
+              >
+                {post.group_name}
+              </Link>
+            </>
+          ) : (
+            <AuthorName post={post} />
+          )}
           {activityLabel ? (
             <span className="truncate text-sm text-muted-foreground">
               님이 {activityLabel}
@@ -114,33 +134,24 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
               </Link>
             </>
           ) : null}
-          {!activityLabel && post.author_identity === "staff" ? (
-            <Badge variant="outline" className="shrink-0 text-muted-foreground">
-              운영진
-            </Badge>
-          ) : null}
           {!activityLabel &&
+          post.kind === "profile" &&
           post.is_author &&
           post.author_identity !== "identified" ? (
             <Badge variant="secondary" className="shrink-0">
               나
             </Badge>
           ) : null}
-          {!activityLabel && post.kind === "group" && post.category_name ? (
-            <Badge variant="secondary" className="shrink-0">
-              {post.category_name}
-            </Badge>
-          ) : null}
         </div>
         <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
           {post.kind === "group" ? (
             <>
-              <Link
-                to={`/groups/${post.group_slug}`}
-                className="hover:underline"
-              >
-                {post.group_name}
-              </Link>
+              <AuthorName post={post} compact />
+              {post.is_author && post.author_identity !== "identified" ? (
+                <Badge variant="secondary" className="shrink-0">
+                  나
+                </Badge>
+              ) : null}
               <span aria-hidden="true">·</span>
             </>
           ) : null}
@@ -240,14 +251,6 @@ export function FeedPostRow({ post }: { post: FeedPost }) {
             className="size-4 shrink-0 -rotate-45 fill-current text-muted-foreground"
             aria-label="고정됨"
           />
-        ) : null}
-        {post.kind === "group" && post.category_name ? (
-          <Badge
-            variant="outline"
-            className="shrink-0 font-normal text-muted-foreground"
-          >
-            {post.category_name}
-          </Badge>
         ) : null}
         <p className="line-clamp-1 text-sm font-medium sm:text-base">{text}</p>
       </div>
