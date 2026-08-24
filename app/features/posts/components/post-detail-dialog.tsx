@@ -284,6 +284,7 @@ export function PostDetailDialog({
           pending={thread.pending}
           error={thread.error}
           inputRef={composerRef}
+          focusOnMount={commentsOnly}
           replyTarget={replyTarget}
           onCancelReply={() => {
             setReplyingTo(null);
