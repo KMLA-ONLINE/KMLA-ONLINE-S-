@@ -8,11 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 export function GroupJoinRequestsPanel({
   groupId,
   requests,
-  anonymous,
 }: {
   groupId: string;
   requests: GroupJoinRequest[];
-  anonymous: boolean;
 }) {
   const fetcher = useFetcher<{ error?: string }>();
   const pending = fetcher.state !== "idle";
@@ -33,31 +31,21 @@ export function GroupJoinRequestsPanel({
               key={request.request_id}
               className="flex min-h-16 items-center gap-3 py-2"
             >
-              {!anonymous ? (
-                <UserAvatar
-                  src={request.avatar_path}
-                  name={request.name}
-                  size="lg"
-                />
-              ) : null}
+              <UserAvatar
+                src={request.avatar_path}
+                name={request.name}
+                size="lg"
+              />
               <div className="min-w-0 flex-1">
-                {!anonymous && request.pub_id !== null ? (
-                  <Link
-                    to={`/profile/${request.pub_id}`}
-                    className="font-medium hover:underline"
-                  >
-                    {request.name}
-                  </Link>
-                ) : (
-                  <span className="font-medium">
-                    {cohortLabel(request.cohort)}
-                  </span>
-                )}
-                {!anonymous ? (
-                  <p className="text-xs text-muted-foreground">
-                    {cohortLabel(request.cohort)}
-                  </p>
-                ) : null}
+                <Link
+                  to={`/profile/${request.pub_id}`}
+                  className="font-medium hover:underline"
+                >
+                  {request.name}
+                </Link>
+                <p className="text-xs text-muted-foreground">
+                  {cohortLabel(request.cohort)}
+                </p>
                 <p className="text-xs text-muted-foreground">
                   {formatDate(request.requested_at)} 요청
                 </p>

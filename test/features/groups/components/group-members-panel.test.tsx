@@ -21,7 +21,6 @@ function SearchTestScreen() {
     <>
       <GroupMembersPanel
         groupId="group-1"
-        identityPolicy="identified"
         viewerRole="member"
         initialPage={{ members: [member], nextCursor: null }}
         memberCount={1}
@@ -36,7 +35,6 @@ describe("GroupMembersPanel", () => {
     renderRoute(() => (
       <GroupMembersPanel
         groupId="group-1"
-        identityPolicy="identified"
         viewerRole="member"
         initialPage={{ members: [member], nextCursor: null }}
         memberCount={1}
@@ -48,27 +46,6 @@ describe("GroupMembersPanel", () => {
       "/profile/profile-public-id",
     );
     expect(screen.getByText("30기")).toBeInTheDocument();
-  });
-
-  it("renders always-anonymous rows with cohort only", () => {
-    renderRoute(() => (
-      <GroupMembersPanel
-        groupId="group-1"
-        identityPolicy="always_anonymous"
-        viewerRole="member"
-        initialPage={{
-          members: [{ ...member, name: null, pub_id: null }],
-          nextCursor: null,
-        }}
-        memberCount={1}
-      />
-    ));
-
-    expect(screen.getByText("30기")).toBeInTheDocument();
-    expect(screen.queryByText("홍길동")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
-    expect(screen.queryByAltText(/프로필 사진/)).not.toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "기수 검색" })).toBeVisible();
   });
 
   it("searches only after Enter with at least two characters", async () => {
@@ -87,14 +64,13 @@ describe("GroupMembersPanel", () => {
     );
   });
 
-  it("shows role controls and anonymized requests to an owner", async () => {
+  it("shows identified join requests and role controls to an owner", async () => {
     const { user } = renderRoute(() => (
       <GroupMembersPanel
         groupId="group-1"
-        identityPolicy="always_anonymous"
         viewerRole="owner"
         initialPage={{
-          members: [{ ...member, role: "admin", name: null, pub_id: null }],
+          members: [{ ...member, role: "admin" }],
           nextCursor: null,
         }}
         memberCount={1}
@@ -103,17 +79,20 @@ describe("GroupMembersPanel", () => {
             request_id: "request-1",
             requested_at: "2026-01-02T00:00:00Z",
             cohort: 31,
-            pub_id: null,
-            name: null,
+            pub_id: "joiner-public-id",
+            name: "김가입",
             avatar_path: null,
           },
         ]}
       />
     ));
 
-    expect(screen.getByText("31기")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "김가입" })).toHaveAttribute(
+      "href",
+      "/profile/joiner-public-id",
+    );
     expect(screen.getByRole("button", { name: "승인" })).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "30기 역할 관리" }));
+    await user.click(screen.getByRole("button", { name: "홍길동 역할 관리" }));
     await user.click(await screen.findByText("소유권 이전"));
     expect(screen.getByRole("dialog")).toHaveTextContent("그룹 소유권 이전");
   });
@@ -123,7 +102,6 @@ describe("GroupMembersPanel", () => {
     const { user } = renderRoute(() => (
       <GroupMembersPanel
         groupId="group-1"
-        identityPolicy="identified"
         viewerRole="owner"
         initialPage={{ members: [member], nextCursor: null }}
         memberCount={1}
@@ -147,7 +125,6 @@ describe("GroupMembersPanel", () => {
     renderRoute(() => (
       <GroupMembersPanel
         groupId="group-1"
-        identityPolicy="identified"
         viewerRole="admin"
         initialPage={{
           members: [{ ...member, role: "admin" }],
@@ -167,7 +144,6 @@ describe("GroupMembersPanel", () => {
     const { user } = renderRoute(() => (
       <GroupMembersPanel
         groupId="group-1"
-        identityPolicy="identified"
         viewerRole="admin"
         initialPage={{
           members: [{ ...member, role: "manager" }],
@@ -189,7 +165,6 @@ describe("GroupMembersPanel", () => {
     renderRoute(() => (
       <GroupMembersPanel
         groupId="group-1"
-        identityPolicy="identified"
         viewerRole="manager"
         initialPage={{ members: [member], nextCursor: null }}
         memberCount={1}

@@ -10,7 +10,6 @@ import {
 import type {
   CreateGroupErrors,
   CreateGroupValues,
-  GroupIdentityPolicy,
   GroupJoinPolicy,
   GroupKind,
 } from "~/features/groups/model/types";
@@ -54,9 +53,6 @@ export function GroupCreateForm({
   const [kind, setKind] = useState<GroupKind>(values.kind);
   const [joinPolicy, setJoinPolicy] = useState<GroupJoinPolicy>(
     values.joinPolicy,
-  );
-  const [identityPolicy, setIdentityPolicy] = useState<GroupIdentityPolicy>(
-    values.identityPolicy,
   );
   const customSlugAllowed = joinPolicy !== "invite_only";
   const formRef = useRef<HTMLFormElement>(null);
@@ -263,12 +259,7 @@ export function GroupCreateForm({
                 <NativeSelect
                   id="identity-policy"
                   name="identityPolicy"
-                  value={identityPolicy}
-                  onChange={(event) =>
-                    setIdentityPolicy(
-                      event.currentTarget.value as GroupIdentityPolicy,
-                    )
-                  }
+                  defaultValue={values.identityPolicy}
                   disabled={pending}
                   aria-invalid={Boolean(errors.identityPolicy)}
                 >
@@ -278,17 +269,7 @@ export function GroupCreateForm({
                   <NativeSelectOption value="optional_anonymous">
                     작성할 때 선택
                   </NativeSelectOption>
-                  <NativeSelectOption value="always_anonymous">
-                    항상 익명
-                  </NativeSelectOption>
                 </NativeSelect>
-                {identityPolicy === "always_anonymous" ? (
-                  // 되돌릴 수 없는 선택이라 고르는 순간 알려 준다. 나중에 걷으면 익명을 전제로
-                  // 가입한 멤버들의 이름이 명부에 한꺼번에 드러나므로 서버가 막는다.
-                  <FieldDescription className="text-destructive">
-                    멤버가 들어온 뒤에는 다른 신원 정책으로 바꿀 수 없습니다.
-                  </FieldDescription>
-                ) : null}
                 <FieldError>{errors.identityPolicy}</FieldError>
               </Field>
               <Field data-invalid={Boolean(errors.postingPolicy)}>

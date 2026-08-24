@@ -495,23 +495,22 @@ select throws_ok(
   'ordinary members cannot delete other comments'
 );
 
--- 항상 익명 그룹에서는 실명으로 댓글을 달 수 없다.
+-- 선택 익명 그룹에서는 댓글마다 신원을 고를 수 있다.
 insert into ids
 select 'anon_group_post', public.create_group_post(
   '20000000-0000-0000-0000-000000000004', '익명 그룹 글', '본문입니다', 'anonymous'
 );
-select throws_ok(
+select lives_ok(
   $$select * from public.create_post_comment(
       (select id from ids where name = 'anon_group_post'), '실명 시도', 'identified'
     )$$,
-  '42501', 'identified commenting is not allowed',
-  'always anonymous groups reject identified comments'
+  'optional-anonymous groups accept identified comments'
 );
 select lives_ok(
   $$select * from public.create_post_comment(
       (select id from ids where name = 'anon_group_post'), '익명으로 남깁니다', 'anonymous'
     )$$,
-  'always anonymous groups accept anonymous comments'
+  'optional-anonymous groups accept anonymous comments'
 );
 
 reset role;

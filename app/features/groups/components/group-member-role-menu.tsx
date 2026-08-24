@@ -155,13 +155,8 @@ export function MemberRoleMenu({
   );
 }
 
-function cohortLabel(cohort: number | null): string {
-  return cohort === null ? "기수 없음" : `${cohort}기`;
-}
-
-/** 항상 익명 그룹의 명부에는 이름이 없다. 그때는 기수가 그 사람을 가리키는 유일한 이름이다. */
 function displayName(member: GroupMember): string {
-  return member.name ?? cohortLabel(member.cohort);
+  return member.name;
 }
 
 /** 낮은 쪽이 약한 권한. 강등은 확인 버튼을 위험 동작으로 칠하려고 구분한다. */
@@ -180,8 +175,7 @@ function roleChangeDescription(
   member: GroupMember,
   next: GroupMemberRole,
 ): string {
-  // 익명 명부에는 이름이 없어 기수가 곧 호칭이다. "30기님"은 어색하므로 그대로 쓴다.
-  const who = member.name ? `${member.name}님` : cohortLabel(member.cohort);
+  const who = `${member.name}님`;
   // 역할 이름(소유자·관리자·매니저·멤버)이 모두 모음으로 끝나 조사는 항상 `로`다.
   const base = `${who}을 ${getGroupMemberRoleLabel(
     member.role,

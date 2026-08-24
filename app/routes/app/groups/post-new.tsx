@@ -48,7 +48,6 @@ export default function NewGroupPostPage() {
       groupId={group.group_id}
       categories={categories}
       identities={identities}
-      alwaysAnonymous={group.identity_policy === "always_anonymous"}
     />
   );
 }

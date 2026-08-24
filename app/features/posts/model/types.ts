@@ -95,27 +95,14 @@ export type ProfilePostFormErrors = Partial<
   Record<"body" | "visibility" | "form", string>
 >;
 
-type PostReactorRow = Functions["list_post_reactors"]["Returns"][number];
-/**
- * 반응자 목록의 한 줄 (기능 명세 §10.3).
- *
- * 익명 줄은 개인을 드러내지 않고 종류별 인원수만 담는다 — `reactor_pub_id`가 null이면 익명
- * 묶음이고 `anonymous_count`가 채워진다. 실명 줄은 그 반대다.
- */
-export type PostReactor = Omit<
-  PostReactorRow,
-  | "reactor_pub_id"
-  | "reactor_name"
-  | "reactor_avatar_path"
-  | "reacted_at"
-  | "anonymous_count"
-> & {
-  reactor_pub_id: string | null;
-  reactor_name: string | null;
+/** 반응자 목록의 개별 실명 행 (기능 명세 §10.3). */
+export interface PostReactor {
+  reaction: PostReaction;
+  reactor_pub_id: string;
+  reactor_name: string;
   reactor_avatar_path: string | null;
-  reacted_at: string | null;
-  anonymous_count: number | null;
-};
+  reacted_at: string;
+}
 export type GroupCategory =
   Database["public"]["Tables"]["group_categories"]["Row"];
 export type PostIdentity = Database["public"]["Enums"]["post_identity"];

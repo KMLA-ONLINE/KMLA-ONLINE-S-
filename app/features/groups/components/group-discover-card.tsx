@@ -8,7 +8,6 @@ import type {
   GroupJoinPolicy,
   GroupMembershipState,
 } from "~/features/groups/model/types";
-import { Badge } from "~/shared/ui/badge";
 
 export function GroupDiscoverCard({
   group,
@@ -64,9 +63,6 @@ export function GroupDiscoverCard({
             <UsersIcon aria-hidden className="size-3.5" />
             멤버 {group.member_count.toLocaleString("ko-KR")}명
           </p>
-          {group.identity_policy === "always_anonymous" ? (
-            <Badge variant="outline">익명</Badge>
-          ) : null}
         </div>
         <div className="mt-auto pt-4">
           <GroupMembershipAction

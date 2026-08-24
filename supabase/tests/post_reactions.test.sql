@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(27);
 
 -- 시드에는 로그인 가능한 계정이 하나뿐이라 여러 사람의 반응을 함께 볼 수 없다. 시드를 건드리지
 -- 않고 트랜잭션 안에서만 두 계정을 더 붙인다.
@@ -61,8 +61,8 @@ select throws_ok(
   '42501', 'group membership required', 'non-members cannot read the reactor list'
 );
 select throws_ok(
-  $$insert into public.post_reactions (post_id, profile_id, reaction, is_anonymous)
-    values ('90000000-0000-0000-0000-000000000003', 1, 'like', false)$$,
+  $$insert into public.post_reactions (post_id, profile_id, reaction)
+    values ('90000000-0000-0000-0000-000000000003', 1, 'like')$$,
   '42501', null, 'reactions cannot be written around the RPC'
 );
 
@@ -162,47 +162,28 @@ select is(
   '김관리', 'identified reactors are named'
 );
 
--- 익명 전용 그룹에서는 개인을 드러내지 않고 종류별 인원수만 내려간다(기능 명세 §10.3).
-reset role;
-update public.groups set identity_policy = 'always_anonymous' where slug = 'makers-lab';
-set local role authenticated;
+-- 반응은 그룹 신원 정책과 무관하게 각 사용자를 한 행으로 내려준다.
 select set_post_reaction('90000000-0000-0000-0000-000000000002', 'haha');
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
 select set_post_reaction('90000000-0000-0000-0000-000000000002', 'haha');
 
 select is(
   (
-    select reactor.anonymous_count from public.list_post_reactors(
+    select count(*)::integer from public.list_post_reactors(
+      '90000000-0000-0000-0000-000000000002'
+    )
+  ),
+  2, 'each reactor gets an individual row'
+);
+select ok(
+  (
+    select bool_and(reactor.reactor_pub_id is not null and reactor.reactor_name is not null)
+    from public.list_post_reactors(
       '90000000-0000-0000-0000-000000000002'
     ) as reactor
   ),
-  2, 'anonymous reactions collapse into a per-kind headcount'
+  'reactors always expose normal profile presentation fields'
 );
-select is(
-  (
-    select count(*)::integer from public.list_post_reactors(
-      '90000000-0000-0000-0000-000000000002'
-    ) as reactor where reactor.reactor_pub_id is not null
-  ),
-  0, 'anonymous reactors are never named'
-);
-
--- 정책이 바뀌어도 익명을 약속받고 눌렀던 반응은 그대로 익명이다.
-reset role;
-update public.groups set identity_policy = 'identified' where slug = 'makers-lab';
-set local role authenticated;
-select is(
-  (
-    select count(*)::integer from public.list_post_reactors(
-      '90000000-0000-0000-0000-000000000002'
-    ) as reactor where reactor.reactor_pub_id is not null
-  ),
-  0, 'a later policy change does not expose past anonymous reactions'
-);
-
-reset role;
-update public.groups set identity_policy = 'optional_anonymous' where slug = 'makers-lab';
-set local role authenticated;
 
 -- 댓글 반응 (기능 명세 §10.2).
 select is(

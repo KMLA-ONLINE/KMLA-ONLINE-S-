@@ -3,7 +3,6 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router";
 
 import { ReactionEmoji } from "~/features/posts/components/reaction-emoji";
-import { PostAnonymousAvatar } from "~/features/posts/components/post-author-avatar";
 import type { PostReaction, PostReactor } from "~/features/posts/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
@@ -50,8 +49,7 @@ function ReactionTab({
 /**
  * 게시물 반응 참여자 목록 (기능 명세 §10.3).
  *
- * 실명 반응자는 최근 반응순으로 한 줄씩, 익명 반응은 개인을 드러내지 않고 종류별 인원수 한 줄로
- * 접어 보여준다. 댓글에는 이 목록을 두지 않는다 — 명세가 게시물에만 요구한다.
+ * 반응자는 최근 반응순으로 한 줄씩 보여준다.
  *
  * 데스크톱은 가운데 모달, 모바일은 풀스크린이다(상세·작성 모달과 같은 패턴).
  */
@@ -77,8 +75,7 @@ export function ReactionListDialog({
   const { tabs, total } = useMemo(() => {
     const counts = new Map<PostReaction, number>();
     for (const row of reactors) {
-      const weight = row.anonymous_count ?? 1;
-      counts.set(row.reaction, (counts.get(row.reaction) ?? 0) + weight);
+      counts.set(row.reaction, (counts.get(row.reaction) ?? 0) + 1);
     }
     return {
       // 실제로 눌린 종류만 탭이 된다. 아무도 안 누른 종류의 빈 탭은 고를 이유가 없다.
@@ -94,9 +91,6 @@ export function ReactionListDialog({
         : reactors.filter((row) => row.reaction === activeReaction),
     [reactors, activeReaction],
   );
-  const anonymous = shown.filter((row) => row.anonymous_count !== null);
-  const identified = shown.filter((row) => row.anonymous_count === null);
-
   return (
     <Dialog
       open={open}
@@ -160,53 +154,26 @@ export function ReactionListDialog({
             </div>
           ) : shown.length > 0 ? (
             <ul className="flex flex-col">
-              {anonymous.map((row) => (
+              {shown.map((row) => (
                 <li
-                  key={`anonymous-${row.reaction}`}
+                  key={row.reactor_pub_id}
                   className="flex items-center gap-3 rounded-lg px-2 py-1.5"
                 >
-                  <ReactorAvatar reaction={row.reaction}>
-                    <PostAnonymousAvatar size="lg" />
-                  </ReactorAvatar>
-                  <span className="text-sm font-semibold">
-                    익명 {row.anonymous_count}명
-                  </span>
-                </li>
-              ))}
-              {identified.map((row) => (
-                <li
-                  key={
-                    row.reactor_pub_id ?? `${row.reaction}-${row.reacted_at}`
-                  }
-                  className="flex items-center gap-3 rounded-lg px-2 py-1.5"
-                >
-                  {row.reactor_pub_id ? (
-                    <Link
-                      to={`/profile/${row.reactor_pub_id}`}
-                      className="flex min-w-0 flex-1 items-center gap-3 rounded-lg hover:underline"
-                    >
-                      <ReactorAvatar reaction={row.reaction}>
-                        <UserAvatar
-                          src={row.reactor_avatar_path}
-                          name={row.reactor_name}
-                          size="lg"
-                        />
-                      </ReactorAvatar>
-                      <span className="truncate text-sm font-semibold">
-                        {row.reactor_name}
-                      </span>
-                    </Link>
-                  ) : (
-                    <>
-                      <ReactorAvatar reaction={row.reaction}>
-                        <UserAvatar src={null} name={null} size="lg" />
-                      </ReactorAvatar>
-                      {/* 탈퇴했거나 승인이 풀린 계정. 반응은 총계에 남으므로 줄도 남긴다. */}
-                      <span className="truncate text-sm font-semibold text-muted-foreground">
-                        탈퇴한 사용자
-                      </span>
-                    </>
-                  )}
+                  <Link
+                    to={`/profile/${row.reactor_pub_id}`}
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg hover:underline"
+                  >
+                    <ReactorAvatar reaction={row.reaction}>
+                      <UserAvatar
+                        src={row.reactor_avatar_path}
+                        name={row.reactor_name}
+                        size="lg"
+                      />
+                    </ReactorAvatar>
+                    <span className="truncate text-sm font-semibold">
+                      {row.reactor_name}
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>

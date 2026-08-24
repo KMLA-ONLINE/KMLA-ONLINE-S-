@@ -78,11 +78,6 @@ export function GroupDetailHero({
               `멤버 ${group.member_count.toLocaleString("ko-KR")}명`
             )}
           </p>
-          {group.identity_policy === "always_anonymous" ? (
-            <p className="mt-1 text-xs text-muted-foreground">
-              게시물과 댓글이 모두 익명으로 표시됩니다.
-            </p>
-          ) : null}
         </div>
         <GroupDetailActions
           group={group}

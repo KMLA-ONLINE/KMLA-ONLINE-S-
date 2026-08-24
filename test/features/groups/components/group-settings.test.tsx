@@ -60,44 +60,19 @@ describe("GroupSettings", () => {
     expect(screen.getByRole("dialog")).toHaveTextContent("게시물 작성 저장");
   });
 
-  it("locks the identity policy once an anonymous group has members", () => {
-    // 익명을 걷으면 멤버 명부의 이름이 한꺼번에 드러난다. 서버가 55000으로 막으므로 저장을
-    // 눌러야 실패를 알게 되는 선택지를 화면에도 남기지 않는다.
-    renderRoute(() => (
-      <GroupSettings
-        group={{
-          ...group,
-          identity_policy: "always_anonymous",
-          member_count: 4,
-        }}
-        categories={[]}
-      />
-    ));
-
-    expect(
-      screen.queryByRole("button", { name: "활동 신원 변경" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "게시물 작성 변경" }),
-    ).toBeVisible();
-  });
-
-  it("still lets a lone owner undo always-anonymous", async () => {
+  it("offers both supported identity policies", async () => {
     const { user } = renderRoute(() => (
-      <GroupSettings
-        group={{
-          ...group,
-          identity_policy: "always_anonymous",
-          member_count: 1,
-        }}
-        categories={[]}
-      />
+      <GroupSettings group={group} categories={[]} />
     ));
 
     await user.click(screen.getByRole("button", { name: "활동 신원 변경" }));
     const select = screen.getByRole("combobox", { name: "활동 신원" });
-    await user.selectOptions(select, "optional_anonymous");
-    expect(select).toHaveValue("optional_anonymous");
+    expect(
+      within(select).getByRole("option", { name: "실명만" }),
+    ).toBeVisible();
+    expect(
+      within(select).getByRole("option", { name: "작성할 때 선택" }),
+    ).toBeVisible();
   });
 
   it("warns when making a private group public", async () => {
@@ -161,20 +136,6 @@ describe("GroupSettings", () => {
     renderRoute(() => <GroupSettings group={group} categories={[]} />);
 
     expect(screen.getByRole("button", { name: "그룹 삭제" })).toBeVisible();
-  });
-
-  it("never offers to turn an official group anonymous", async () => {
-    // 재학생 전원이 자동 가입하므로 익명으로 바꾸는 순간 되돌릴 수 없게 된다.
-    const { user } = renderRoute(() => (
-      <GroupSettings group={{ ...group, kind: "official" }} categories={[]} />
-    ));
-
-    await user.click(screen.getByRole("button", { name: "활동 신원 변경" }));
-
-    expect(screen.getByRole("option", { name: "실명만" })).toBeInTheDocument();
-    expect(
-      screen.queryByRole("option", { name: "항상 익명" }),
-    ).not.toBeInTheDocument();
   });
 
   it("never offers to delete an official group", () => {
