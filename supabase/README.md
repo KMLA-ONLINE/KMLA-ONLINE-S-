@@ -1,6 +1,6 @@
 # Database workflow
 
-`schemas/` is the source of truth for DDL. `migrations/` is the deployment history. Start schema changes in the matching declarative file.
+`schemas/` is the source of truth for diff-supported DDL. `migrations/` is the deployment history and remains authoritative for the operations listed below that diff cannot represent reliably. Start schema changes in the matching declarative file.
 
 ## Schema layout
 
@@ -21,10 +21,10 @@ Files run in lexicographic order. Add new files with a number that follows their
 1. Edit `supabase/schemas/*.sql` to describe the final state.
 2. Generate a migration draft with `npm run db:diff -- <descriptive-name>`.
 3. Read the entire generated migration and correct it using the checklist below.
-4. Only after that review, apply it with `supabase migration up --local`.
+4. Only after that review, apply it with `npx supabase migration up --local`.
 5. Run `npm run db:reset`, `npm run test:db`, `npm run db:lint`, and `npm run db:advisors`.
 6. Regenerate types with `npm run db:types` and inspect the type diff.
-7. Run `supabase db diff` again. No output is expected, but a clean diff does not replace migration review.
+7. Run `npx supabase db diff` again. No output is expected, but a clean diff does not replace migration review.
 
 Never edit a deployed migration.
 
@@ -37,7 +37,7 @@ Schema files run in lexicographic order. `SET check_function_bodies = false` pos
 - A function signature that returns a table's composite type requires that table to exist first. For example, a function returning `public.group_categories` must run after `public.group_categories` is created.
 - A trigger requires its trigger function to exist. Put a cross-domain trigger no earlier than the file that defines its function, even when the trigger's table belongs to an earlier domain.
 
-After changing file boundaries or numbering, run `supabase db diff`; the shadow build tests dependency order.
+After changing file boundaries or numbering, run `npx supabase db diff`; the shadow build tests dependency order.
 
 ### Default privileges and missing revokes
 
@@ -94,8 +94,10 @@ Keep these operations in versioned migrations and review them separately:
 - View ownership and grants, security-invoker views, and materialized views
 - Schema privileges, comments, partitions, domains, and publication membership
 - Some policy alterations and grants derived from default privileges
-- Supabase Auth, Storage, Realtime, and local `config.toml` service settings
+- Supabase Auth, Storage, and Realtime service configuration
 
 Function bodies may contain DML; those bodies remain part of the declarative function definition. The rule above applies to DML executed by the migration itself.
+
+Keep local service settings in the versioned `supabase/config.toml`, not in database migrations.
 
 For a DML-only or cron-only change, create a migration with `supabase migration new <name>`. If a cleanup function is added, declare the function in its owning schema file, generate and review its DDL migration, then add the cron registration to that migration manually.

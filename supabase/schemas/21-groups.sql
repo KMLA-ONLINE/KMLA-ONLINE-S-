@@ -685,7 +685,7 @@ $$;
 ALTER FUNCTION "public"."delete_group"("p_group_id" "uuid") OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."discover_groups"("p_query" "text" DEFAULT ''::"text", "p_include_joined" boolean DEFAULT false, "p_after_rank" smallint DEFAULT NULL::smallint, "p_after_member_count" bigint DEFAULT NULL::bigint, "p_after_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 13) RETURNS TABLE("group_id" "uuid", "slug" "text", "name" "text", "description" "text", "join_policy" "public"."group_join_policy", "identity_policy" "public"."group_identity_policy", "icon_path" "text", "cover_path" "text", "member_count" bigint, "membership_state" "text", "member_role" "public"."group_member_role", "requested_at" timestamp with time zone, "sort_rank" smallint)
-    LANGUAGE "plpgsql" STABLE
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
@@ -1467,7 +1467,7 @@ ALTER TABLE "public"."groups" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "groups_select_visible" ON "public"."groups" FOR SELECT TO "authenticated" USING ((("deleted_at" IS NULL) AND (EXISTS ( SELECT 1
    FROM "public"."profiles" "profile"
-  WHERE (("profile"."auth_user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profile"."status" = 'accepted'::"public"."profile_status") AND ("profile"."deleted_at" IS NULL) AND ((("profile"."type" = ANY (ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type"])) AND (("groups"."kind" = 'official'::"public"."group_kind") OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND ("groups"."join_policy" <> 'invite_only'::"public"."group_join_policy")))) OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND "private"."is_group_member"("groups"."id"))))))));
+  WHERE (("profile"."id" = "private"."current_profile_id"()) AND ((("profile"."type" = ANY (ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type"])) AND (("groups"."kind" = 'official'::"public"."group_kind") OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND ("groups"."join_policy" <> 'invite_only'::"public"."group_join_policy")))) OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND "private"."is_group_member"("groups"."id"))))))));
 
 REVOKE ALL ON FUNCTION "private"."assert_group_invite_manager"("p_group_id" "uuid") FROM PUBLIC;
 

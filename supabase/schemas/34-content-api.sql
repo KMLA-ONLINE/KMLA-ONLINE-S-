@@ -230,12 +230,22 @@ begin
 
   select comment.post_id into target_post_id
   from public.post_comments as comment
-  where comment.id = p_comment_id and comment.deleted_at is null;
+  where comment.id = p_comment_id;
   if target_post_id is null then
     raise exception 'comment not found' using errcode = 'P0002';
   end if;
 
-  perform private.reaction_context(target_post_id, caller_profile_id);
+  perform private.lock_reaction_context(target_post_id, caller_profile_id);
+
+  perform 1
+  from public.post_comments as comment
+  where comment.id = p_comment_id
+    and comment.post_id = target_post_id
+    and comment.deleted_at is null
+  for update;
+  if not found then
+    raise exception 'comment not found' using errcode = 'P0002';
+  end if;
 
   delete from public.comment_reactions as target
   where target.comment_id = p_comment_id and target.profile_id = caller_profile_id;
@@ -257,7 +267,7 @@ begin
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
 
-  perform private.reaction_context(p_post_id, caller_profile_id);
+  perform private.lock_reaction_context(p_post_id, caller_profile_id);
 
   delete from public.post_reactions as target
   where target.post_id = p_post_id and target.profile_id = caller_profile_id;
@@ -565,6 +575,15 @@ begin
     on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
   where post.id = p_post_id and post.kind = 'group'
   for share of group_data, membership;
+  perform 1
+  from public.posts as post
+  where post.id = p_post_id
+    and post.published_at is not null
+    and post.deleted_at is null
+  for update;
+  if not found then
+    raise exception 'post not found' using errcode = 'P0002';
+  end if;
   context := private.comment_post_context(p_post_id, caller_profile_id);
   if context.post_kind is null then
     raise exception 'post not found' using errcode = 'P0002';
@@ -594,7 +613,8 @@ begin
   if p_parent_comment_id is not null then
     select parent.* into parent_record
     from public.post_comments as parent
-    where parent.id = p_parent_comment_id and parent.deleted_at is null;
+    where parent.id = p_parent_comment_id and parent.deleted_at is null
+    for update;
     if parent_record.id is null then
       raise exception 'parent comment not found' using errcode = 'P0002';
     end if;
@@ -845,6 +865,7 @@ CREATE OR REPLACE FUNCTION "public"."delete_post_comment"("p_comment_id" "uuid")
 declare
   caller_profile_id bigint := private.current_profile_id();
   comment_record public.post_comments;
+  target_post_id uuid;
   comment_group_id uuid;
   caller_role public.group_member_role;
 begin
@@ -852,9 +873,24 @@ begin
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
 
+  select comment.post_id into target_post_id
+  from public.post_comments as comment
+  where comment.id = p_comment_id;
+  if target_post_id is null then
+    raise exception 'comment not found' using errcode = 'P0002';
+  end if;
+
+  perform 1
+  from public.posts as post
+  where post.id = target_post_id
+  for update;
+
   select comment.* into comment_record
   from public.post_comments as comment
-  where comment.id = p_comment_id and comment.deleted_at is null;
+  where comment.id = p_comment_id
+    and comment.post_id = target_post_id
+    and comment.deleted_at is null
+  for update;
   if comment_record.id is null then
     raise exception 'comment not found' using errcode = 'P0002';
   end if;
@@ -878,6 +914,13 @@ begin
 
   if comment_record.depth = 0 then
     -- 최상위 댓글을 지우면 답글 묶음 전체가 사라진다(기능 명세 §9.4).
+    perform 1
+    from public.post_comments as comment
+    where comment.root_comment_id = p_comment_id
+      and comment.deleted_at is null
+    order by comment.id
+    for update;
+
     update public.post_comments as comment
     set deleted_at = now()
     where comment.root_comment_id = p_comment_id and comment.deleted_at is null;
@@ -1882,11 +1925,22 @@ begin
   end if;
   select comment.post_id into target_post_id
   from public.post_comments as comment
-  where comment.id = p_comment_id and comment.deleted_at is null;
+  where comment.id = p_comment_id;
   if target_post_id is null then
     raise exception 'comment not found' using errcode = 'P0002';
   end if;
-  perform private.reaction_context(target_post_id, caller_profile_id);
+  perform private.lock_reaction_context(target_post_id, caller_profile_id);
+
+  perform 1
+  from public.post_comments as comment
+  where comment.id = p_comment_id
+    and comment.post_id = target_post_id
+    and comment.deleted_at is null
+  for update;
+  if not found then
+    raise exception 'comment not found' using errcode = 'P0002';
+  end if;
+
   insert into public.comment_reactions as target (comment_id, profile_id, reaction)
   values (p_comment_id, caller_profile_id, p_reaction)
   on conflict (comment_id, profile_id) do update
@@ -1946,7 +2000,7 @@ begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
-  perform private.reaction_context(p_post_id, caller_profile_id);
+  perform private.lock_reaction_context(p_post_id, caller_profile_id);
   insert into public.post_reactions as target (post_id, profile_id, reaction)
   values (p_post_id, caller_profile_id, p_reaction)
   on conflict (post_id, profile_id) do update

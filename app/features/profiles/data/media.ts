@@ -74,7 +74,12 @@ export async function replaceProfileMedia(
   file: File,
 ): Promise<void> {
   const supabase = getSupabase();
-  const objectPath = `${profile.id}/${slot}/${crypto.randomUUID()}`;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user.id;
+
+  if (!userId) throw new Error("Authentication required.");
+
+  const objectPath = `${userId}/${slot}/${crypto.randomUUID()}`;
   const previousPath =
     slot === "avatar" ? profile.avatar_path : profile.cover_path;
 

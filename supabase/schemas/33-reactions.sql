@@ -115,6 +115,28 @@ $$;
 
 ALTER FUNCTION "private"."reaction_context"("p_post_id" "uuid", "p_caller_profile_id" bigint) OWNER TO "postgres";
 
+CREATE OR REPLACE FUNCTION "private"."lock_reaction_context"("p_post_id" "uuid", "p_caller_profile_id" bigint) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  perform 1
+  from public.posts as post
+  where post.id = p_post_id
+    and post.published_at is not null
+    and post.deleted_at is null
+  for update;
+
+  if not found then
+    raise exception 'post not found' using errcode = 'P0002';
+  end if;
+
+  perform private.reaction_context(p_post_id, p_caller_profile_id);
+end;
+$$;
+
+ALTER FUNCTION "private"."lock_reaction_context"("p_post_id" "uuid", "p_caller_profile_id" bigint) OWNER TO "postgres";
+
 CREATE TABLE IF NOT EXISTS "public"."comment_reactions" (
     "comment_id" "uuid" NOT NULL,
     "profile_id" bigint NOT NULL,
@@ -168,6 +190,8 @@ REVOKE ALL ON FUNCTION "private"."comment_reaction_summary"("p_comment_id" "uuid
 REVOKE ALL ON FUNCTION "private"."post_reaction_summary"("p_post_id" "uuid", "p_caller_profile_id" bigint) FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."reaction_context"("p_post_id" "uuid", "p_caller_profile_id" bigint) FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "private"."lock_reaction_context"("p_post_id" "uuid", "p_caller_profile_id" bigint) FROM PUBLIC;
 
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."comment_reactions" TO "service_role";
 

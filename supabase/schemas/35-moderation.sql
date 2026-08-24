@@ -29,6 +29,8 @@ $$;
 
 ALTER FUNCTION "private"."cleanup_group_post_reports"() OWNER TO "postgres";
 
+REVOKE ALL ON FUNCTION "private"."cleanup_group_post_reports"() FROM PUBLIC;
+
 CREATE OR REPLACE FUNCTION "public"."dismiss_group_post_reports"("p_post_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''

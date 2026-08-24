@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(32);
 
 -- 시드에는 로그인 가능한 계정이 하나뿐이라 여러 사람의 반응을 함께 볼 수 없다. 시드를 건드리지
 -- 않고 트랜잭션 안에서만 두 계정을 더 붙인다.
@@ -109,6 +109,23 @@ select is(
   ),
   null::public.post_reaction, 'clearing leaves nothing of my own'
 );
+
+reset role;
+update public.posts
+set deleted_at = statement_timestamp()
+where id = '90000000-0000-0000-0000-000000000003';
+set local role authenticated;
+select throws_ok(
+  $$select * from public.set_post_reaction(
+      '90000000-0000-0000-0000-000000000003', 'like'
+    )$$,
+  'P0002', 'post not found', 'already deleted posts reject new reactions'
+);
+reset role;
+update public.posts
+set deleted_at = null
+where id = '90000000-0000-0000-0000-000000000003';
+set local role authenticated;
 
 select throws_ok(
   $$select * from public.set_post_reaction(

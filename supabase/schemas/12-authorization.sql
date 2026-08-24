@@ -45,15 +45,11 @@ ALTER TABLE ONLY "public"."profile_permissions"
 
 ALTER TABLE "public"."permissions" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "permissions_select" ON "public"."permissions" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
-   FROM "public"."profiles" "profile"
-  WHERE (("profile"."auth_user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profile"."status" = 'accepted'::"public"."profile_status") AND ("profile"."deleted_at" IS NULL)))));
+CREATE POLICY "permissions_select" ON "public"."permissions" FOR SELECT TO "authenticated" USING (("private"."current_profile_id"() IS NOT NULL));
 
 ALTER TABLE "public"."profile_permissions" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "profile_permissions_select_own" ON "public"."profile_permissions" FOR SELECT TO "authenticated" USING (("profile_id" = ( SELECT "profile"."id"
-   FROM "public"."profiles" "profile"
-  WHERE (("profile"."auth_user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profile"."status" = 'accepted'::"public"."profile_status") AND ("profile"."deleted_at" IS NULL)))));
+CREATE POLICY "profile_permissions_select_own" ON "public"."profile_permissions" FOR SELECT TO "authenticated" USING (("profile_id" = "private"."current_profile_id"()));
 
 REVOKE ALL ON FUNCTION "private"."current_profile_id"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."current_profile_id"() TO "authenticated";

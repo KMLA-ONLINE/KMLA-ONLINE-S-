@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(39);
 
 select ok(
   has_function_privilege('authenticated', 'public.list_feed_posts(uuid)', 'execute'),
@@ -23,6 +23,28 @@ select ok(
     and (select relrowsecurity
       from pg_class where oid = 'private.post_reaction_count_events'::regclass),
   'private feed state has defense-in-depth RLS'
+);
+select is(
+  (
+    select pg_get_indexdef(index_class.oid)
+    from pg_class as index_class
+    join pg_namespace as index_schema on index_schema.oid = index_class.relnamespace
+    where index_schema.nspname = 'private'
+      and index_class.relname = 'feed_sessions_expiry_idx'
+  ),
+  'CREATE INDEX feed_sessions_expiry_idx ON private.feed_sessions USING btree (expires_at)',
+  'feed expiry cleanup has its required index'
+);
+select is(
+  (
+    select pg_get_indexdef(index_class.oid)
+    from pg_class as index_class
+    join pg_namespace as index_schema on index_schema.oid = index_class.relnamespace
+    where index_schema.nspname = 'private'
+      and index_class.relname = 'feed_sessions_profile_created_idx'
+  ),
+  'CREATE INDEX feed_sessions_profile_created_idx ON private.feed_sessions USING btree (profile_id, created_at DESC, id DESC)',
+  'per-profile session reuse and eviction have their required index'
 );
 
 select is(
@@ -85,6 +107,94 @@ values
     '10000000-0000-0000-0000-000000000072', 'feed-alumni-25', '25기 졸업생',
     'alumni', 25, 'male', 'domestic', 'accepted'
   );
+
+create temporary table feed_session_test_ids (name text primary key, id uuid not null);
+
+insert into feed_session_test_ids
+values (
+  'reuse_first',
+  private.create_feed_session(
+    (select id from public.profiles where pub_id = 'feed-alumni-29')
+  )
+);
+insert into feed_session_test_ids
+values (
+  'reuse_second',
+  private.create_feed_session(
+    (select id from public.profiles where pub_id = 'feed-alumni-29')
+  )
+);
+select is(
+  (select id from feed_session_test_ids where name = 'reuse_second'),
+  (select id from feed_session_test_ids where name = 'reuse_first'),
+  'feed session creation reuses a session created within five seconds'
+);
+
+create temporary table feed_cap_sessions (ordinal integer primary key, id uuid not null);
+insert into feed_cap_sessions (ordinal, id)
+select series.n,
+  ('71000000-0000-0000-0000-' || lpad(series.n::text, 12, '0'))::uuid
+from generate_series(1, 8) as series(n);
+
+insert into private.feed_sessions (id, profile_id, feed_epoch, created_at, expires_at)
+select cap.id, profile.id,
+  statement_timestamp() - interval '20 minutes',
+  statement_timestamp() - make_interval(mins => 20 - cap.ordinal),
+  statement_timestamp() + interval '1 hour'
+from feed_cap_sessions as cap
+cross join public.profiles as profile
+where profile.pub_id = 'feed-alumni-25';
+
+insert into private.feed_pages (token, session_id, after_position)
+values (
+  '72000000-0000-0000-0000-000000000001',
+  (select id from feed_cap_sessions where ordinal = 1),
+  0
+);
+insert into private.feed_session_posts (session_id, position, post_id, rank_time)
+values (
+  (select id from feed_cap_sessions where ordinal = 1),
+  1,
+  '90000000-0000-0000-0000-000000000001',
+  statement_timestamp()
+);
+insert into feed_session_test_ids
+values (
+  'cap_new',
+  private.create_feed_session(
+    (select id from public.profiles where pub_id = 'feed-alumni-25')
+  )
+);
+
+select ok(
+  (
+    select count(*) = 8
+    from private.feed_sessions as session
+    join public.profiles as profile on profile.id = session.profile_id
+    where profile.pub_id = 'feed-alumni-25'
+      and session.expires_at > statement_timestamp()
+  )
+    and not exists (
+      select 1 from private.feed_sessions
+      where id = (select id from feed_cap_sessions where ordinal = 1)
+    )
+    and exists (
+      select 1 from private.feed_sessions
+      where id = (select id from feed_session_test_ids where name = 'cap_new')
+    ),
+  'creating a ninth active session evicts the oldest and keeps the cap at eight'
+);
+select ok(
+  not exists (
+    select 1 from private.feed_pages
+    where session_id = (select id from feed_cap_sessions where ordinal = 1)
+  )
+    and not exists (
+      select 1 from private.feed_session_posts
+      where session_id = (select id from feed_cap_sessions where ordinal = 1)
+    ),
+  'evicting an old session cascades to its pages and ranked posts'
+);
 
 insert into public.group_memberships (group_id, profile_id)
 select '20000000-0000-0000-0000-000000000003', profile.id

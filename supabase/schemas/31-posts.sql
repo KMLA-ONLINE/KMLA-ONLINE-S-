@@ -301,6 +301,44 @@ $$;
 
 ALTER FUNCTION "private"."prevent_profile_activity_attachments"() OWNER TO "postgres";
 
+CREATE OR REPLACE FUNCTION "private"."validate_profile_activity_path"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  owner_auth_user_id uuid;
+  media_slot text;
+begin
+  if new.activity_kind is null then
+    return new;
+  end if;
+
+  select profile.auth_user_id
+  into owner_auth_user_id
+  from public.profiles as profile
+  where profile.id = new.timeline_profile_id;
+
+  media_slot := case new.activity_kind
+    when 'avatar_changed' then 'avatar'
+    when 'cover_changed' then 'cover'
+  end;
+
+  if owner_auth_user_id is null
+    or new.activity_media_path !~ (
+      '^' || owner_auth_user_id::text || '/' || media_slot
+      || '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    )
+  then
+    raise exception 'profile activity media path must belong to the timeline owner'
+      using errcode = '23514';
+  end if;
+
+  return new;
+end;
+$$;
+
+ALTER FUNCTION "private"."validate_profile_activity_path"() OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "public"."claim_post_attachment_cleanup"("p_limit" integer DEFAULT 100, "p_lease_seconds" integer DEFAULT 300) RETURNS TABLE("attachment_id" "uuid", "storage_bucket" "text", "object_path" "text", "lease_id" "uuid")
     LANGUAGE "sql"
     SET "search_path" TO ''
@@ -403,12 +441,12 @@ CREATE TABLE IF NOT EXISTS "public"."posts" (
     CONSTRAINT "posts_kind_shape" CHECK (((("kind" = 'group'::"public"."post_kind") AND ("group_id" IS NOT NULL) AND ("timeline_profile_id" IS NULL) AND ("title" IS NOT NULL) AND ("visibility" IS NULL)) OR (("kind" = 'profile'::"public"."post_kind") AND ("group_id" IS NULL) AND ("timeline_profile_id" IS NOT NULL) AND ("title" IS NULL) AND ("category_id" IS NULL) AND ("author_identity" = 'identified'::"public"."post_identity") AND ("visibility" IS NOT NULL) AND ("pinned_at" IS NULL)))),
     CONSTRAINT "posts_private_profile_owner" CHECK ((("kind" <> 'profile'::"public"."post_kind") OR ("visibility" <> 'private'::"public"."post_visibility") OR ("display_author_profile_id" = "timeline_profile_id"))),
     CONSTRAINT "posts_profile_activity_pair" CHECK ((("activity_kind" IS NULL) = ("activity_media_path" IS NULL))),
-    CONSTRAINT "posts_profile_activity_shape" CHECK ((("activity_kind" IS NULL) OR (("kind" = 'profile'::"public"."post_kind") AND ("timeline_profile_id" = "display_author_profile_id") AND ("visibility" = 'public'::"public"."post_visibility") AND ("body" = ''::"text") AND ("published_at" IS NOT NULL) AND ("activity_media_path" ~~ (((("timeline_profile_id")::"text" || '/'::"text") ||
+    CONSTRAINT "posts_profile_activity_shape" CHECK ((("activity_kind" IS NULL) OR (("kind" = 'profile'::"public"."post_kind") AND ("timeline_profile_id" = "display_author_profile_id") AND ("visibility" = 'public'::"public"."post_visibility") AND ("body" = ''::"text") AND ("published_at" IS NOT NULL) AND ("activity_media_path" ~ (('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/'::"text" ||
 CASE "activity_kind"
     WHEN 'avatar_changed'::"public"."profile_media_activity_kind" THEN 'avatar'::"text"
     WHEN 'cover_changed'::"public"."profile_media_activity_kind" THEN 'cover'::"text"
     ELSE NULL::"text"
-END) || '/%'::"text"))))),
+END) || '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::"text"))))),
     CONSTRAINT "posts_publication_timestamps" CHECK (((("published_at" IS NULL) OR ("published_at" >= "created_at")) AND (("edited_at" IS NULL) OR (("published_at" IS NOT NULL) AND ("edited_at" >= "published_at"))) AND (("deleted_at" IS NULL) OR ("published_at" IS NULL) OR ("deleted_at" >= "published_at")) AND (("pinned_at" IS NULL) OR (("published_at" IS NOT NULL) AND ("pinned_at" >= "published_at"))))),
     CONSTRAINT "posts_title_length" CHECK ((("title" IS NULL) OR (("char_length"("btrim"("title")) >= 1) AND ("char_length"("btrim"("title")) <= 100))))
 );
@@ -466,6 +504,8 @@ CREATE OR REPLACE TRIGGER "group_categories_set_updated_at" BEFORE UPDATE ON "pu
 CREATE OR REPLACE TRIGGER "post_attachments_prevent_profile_activity" BEFORE INSERT OR UPDATE OF "post_id" ON "public"."post_attachments" FOR EACH ROW EXECUTE FUNCTION "private"."prevent_profile_activity_attachments"();
 
 CREATE OR REPLACE TRIGGER "posts_prevent_immutable_changes" BEFORE UPDATE ON "public"."posts" FOR EACH ROW EXECUTE FUNCTION "private"."prevent_post_immutable_changes"();
+
+CREATE OR REPLACE TRIGGER "posts_validate_profile_activity_path" BEFORE INSERT ON "public"."posts" FOR EACH ROW EXECUTE FUNCTION "private"."validate_profile_activity_path"();
 
 ALTER TABLE ONLY "private"."post_authors"
     ADD CONSTRAINT "post_authors_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id") ON DELETE CASCADE;
@@ -526,6 +566,8 @@ GRANT ALL ON FUNCTION "private"."is_post_author"("p_post_id" "uuid") TO "authent
 REVOKE ALL ON FUNCTION "private"."prevent_post_immutable_changes"() FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."prevent_profile_activity_attachments"() FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "private"."validate_profile_activity_path"() FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "public"."claim_post_attachment_cleanup"("p_limit" integer, "p_lease_seconds" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."claim_post_attachment_cleanup"("p_limit" integer, "p_lease_seconds" integer) TO "service_role";

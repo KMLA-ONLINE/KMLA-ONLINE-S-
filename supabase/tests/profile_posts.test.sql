@@ -158,7 +158,7 @@ select is(
     select timeline_pub_id
     from public.get_profile_post((select id from ids where name = 'guest'))
   ),
-  (select pub_id from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001'),
+  (select pub_id from owners where name = 'timeline'),
   'the guest post names the timeline owner'
 );
 select is(

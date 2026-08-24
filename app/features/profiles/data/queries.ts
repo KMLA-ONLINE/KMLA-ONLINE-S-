@@ -1,9 +1,8 @@
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import type { AcceptedProfile } from "~/features/profiles/model/types";
 import { getSupabase } from "~/shared/supabase/client";
-import type { Database } from "~/shared/supabase/database.types";
 
-type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+type ProfileRow = Omit<AcceptedProfile, "avatar_url" | "cover_url">;
 
 async function hydrateProfile(row: ProfileRow): Promise<AcceptedProfile> {
   const mediaUrls = await createProfileMediaUrls([
@@ -23,18 +22,15 @@ async function hydrateProfile(row: ProfileRow): Promise<AcceptedProfile> {
 export async function loadAcceptedProfile(
   pubId: string,
 ): Promise<AcceptedProfile | null> {
-  const { data, error } = await getSupabase()
-    .from("profiles")
-    .select("*")
-    .eq("pub_id", pubId.toLowerCase())
-    .eq("status", "accepted")
-    .is("deleted_at", null)
-    .maybeSingle();
+  const { data, error } = await getSupabase().rpc("get_accepted_profile", {
+    p_pub_id: pubId,
+  });
 
   if (error) throw error;
-  if (!data) return null;
+  const profile = data?.[0];
+  if (!profile) return null;
 
-  return hydrateProfile(data);
+  return hydrateProfile(profile);
 }
 
 export async function loadMyEditableProfile(): Promise<AcceptedProfile | null> {

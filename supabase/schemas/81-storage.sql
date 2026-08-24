@@ -22,4 +22,4 @@ CREATE POLICY "profile_media_delete_own" ON "storage"."objects" FOR DELETE TO "a
 
 CREATE POLICY "profile_media_insert_own" ON "storage"."objects" FOR INSERT TO "authenticated" WITH CHECK ((("bucket_id" = 'profile-media'::"text") AND ("owner_id" = ( SELECT ("auth"."uid"())::"text" AS "uid")) AND "private"."is_own_profile_media_path"("name")));
 
-CREATE POLICY "profile_media_select_accepted" ON "storage"."objects" FOR SELECT TO "authenticated" USING ((("bucket_id" = 'profile-media'::"text") AND "private"."can_read_profile_media_path"("name")));
+CREATE POLICY "profile_media_select_accepted" ON "storage"."objects" FOR SELECT TO "authenticated" USING ((("bucket_id" = 'profile-media'::"text") AND "storage"."allow_any_operation"(ARRAY['object.get_authenticated_info'::"text", 'object.get_authenticated'::"text", 'object.sign'::"text", 'object.sign_many'::"text"]) AND "private"."can_read_profile_media_path"("name")));

@@ -131,16 +131,14 @@ CREATE OR REPLACE FUNCTION "private"."is_own_profile_media_path"("p_object_path"
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select exists (
+  select p_object_path ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/(avatar|cover)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  and split_part(p_object_path, '/', 1) = auth.uid()::text
+  and exists (
     select 1
     from public.profiles as profile
     where profile.auth_user_id = auth.uid()
       and profile.status = 'accepted'
       and profile.deleted_at is null
-      and (
-        p_object_path like profile.id::text || '/avatar/%'
-        or p_object_path like profile.id::text || '/cover/%'
-      )
   );
 $$;
 
@@ -182,7 +180,7 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     CONSTRAINT "profiles_cohort_range" CHECK ((("cohort" IS NULL) OR (("cohort" >= 1) AND ("cohort" <= 100)))),
     CONSTRAINT "profiles_contact_email_format" CHECK ((("contact_email" IS NULL) OR ("contact_email" ~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'::"text"))),
     CONSTRAINT "profiles_department_length" CHECK ((("department" IS NULL) OR (("char_length"("btrim"("department")) >= 1) AND ("char_length"("btrim"("department")) <= 100)))),
-    CONSTRAINT "profiles_description_length" CHECK ((("description" IS NULL) OR ("char_length"("description") <= 2000))),
+    CONSTRAINT "profiles_description_length" CHECK ((("description" IS NULL) OR ("char_length"("description") <= 500))),
     CONSTRAINT "profiles_dorm_room_range" CHECK ((("dorm_room" IS NULL) OR (("dorm_room" >= 101) AND ("dorm_room" <= 1008)))),
     CONSTRAINT "profiles_name_length" CHECK ((("char_length"("btrim"("name")) >= 1) AND ("char_length"("btrim"("name")) <= 50))),
     CONSTRAINT "profiles_phone_number_format" CHECK ((("phone_number" IS NULL) OR ("phone_number" ~ '^\+?[0-9 -]{8,20}$'::"text"))),
@@ -195,7 +193,7 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
 ALTER TABLE "public"."profiles" OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."get_my_profile"() RETURNS SETOF "public"."profiles"
-    LANGUAGE "sql" STABLE
+    LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
   select profile.*
@@ -205,6 +203,32 @@ CREATE OR REPLACE FUNCTION "public"."get_my_profile"() RETURNS SETOF "public"."p
 $$;
 
 ALTER FUNCTION "public"."get_my_profile"() OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."get_accepted_profile"("p_pub_id" "text") RETURNS TABLE("id" bigint, "pub_id" "text", "name" "text", "role" "public"."app_role", "type" "public"."profile_type", "student_number" "text", "class_no" smallint, "cohort" smallint, "gender" "public"."profile_gender", "academic_track" "public"."profile_academic_track", "phone_number" "text", "avatar_path" "text", "birthday" "date", "description" "text", "dorm_room" smallint, "allow_timeline_posts" boolean, "cover_path" "text", "contact_email" "text", "department" "text", "is_returning_student" boolean)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select
+    target.id, target.pub_id, target.name, target.role, target.type,
+    target.student_number, target.class_no, target.cohort, target.gender,
+    target.academic_track, target.phone_number, target.avatar_path,
+    target.birthday, target.description, target.dorm_room,
+    target.allow_timeline_posts, target.cover_path, target.contact_email,
+    target.department, target.is_returning_student
+  from public.profiles as target
+  where lower(target.pub_id) = lower(btrim(p_pub_id))
+    and target.status = 'accepted'
+    and target.deleted_at is null
+    and exists (
+      select 1
+      from public.profiles as viewer
+      where viewer.auth_user_id = auth.uid()
+        and viewer.status = 'accepted'
+        and viewer.deleted_at is null
+    );
+$$;
+
+ALTER FUNCTION "public"."get_accepted_profile"("p_pub_id" "text") OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."remove_my_profile_media"("p_slot" "text") RETURNS "public"."profiles"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -284,7 +308,8 @@ begin
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
 
-  if p_object_path not like current_profile.id::text || '/' || p_slot || '/%' then
+  if not private.is_own_profile_media_path(p_object_path)
+    or split_part(p_object_path, '/', 2) <> p_slot then
     raise exception 'invalid profile media path' using errcode = '22023';
   end if;
 
@@ -596,10 +621,14 @@ REVOKE ALL ON FUNCTION "private"."is_own_profile_media_path"("p_object_path" "te
 GRANT ALL ON FUNCTION "private"."is_own_profile_media_path"("p_object_path" "text") TO "authenticated";
 
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."profiles" TO "service_role";
-GRANT SELECT ON TABLE "public"."profiles" TO "authenticated";
+REVOKE SELECT ON TABLE "public"."profiles" FROM "authenticated";
+GRANT SELECT ("id", "pub_id", "name", "role", "type", "student_number", "class_no", "cohort", "gender", "academic_track", "phone_number", "avatar_path", "birthday", "description", "dorm_room", "allow_timeline_posts", "cover_path", "contact_email", "department", "is_returning_student") ON TABLE "public"."profiles" TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."get_my_profile"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_my_profile"() TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."get_accepted_profile"("p_pub_id" "text") FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."get_accepted_profile"("p_pub_id" "text") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."remove_my_profile_media"("p_slot" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."remove_my_profile_media"("p_slot" "text") TO "authenticated";
@@ -616,9 +645,8 @@ GRANT ALL ON FUNCTION "public"."update_my_profile"("p_name" "text", "p_descripti
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."profile_departments" TO "service_role";
 GRANT SELECT ON TABLE "public"."profile_departments" TO "authenticated";
 
-GRANT UPDATE ON SEQUENCE "public"."profiles_id_seq" TO "anon";
-GRANT UPDATE ON SEQUENCE "public"."profiles_id_seq" TO "authenticated";
-GRANT UPDATE ON SEQUENCE "public"."profiles_id_seq" TO "service_role";
+REVOKE ALL ON SEQUENCE "public"."profiles_id_seq" FROM "anon", "authenticated", "service_role";
+GRANT USAGE ON SEQUENCE "public"."profiles_id_seq" TO "service_role";
 
 REVOKE MAINTAIN, REFERENCES, TRIGGER, TRUNCATE ON TABLE "public"."profiles" FROM "anon", "authenticated";
 

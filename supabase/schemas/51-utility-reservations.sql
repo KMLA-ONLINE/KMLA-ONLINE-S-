@@ -111,7 +111,9 @@ CREATE OR REPLACE FUNCTION "private"."prepare_utility_reservation"() RETURNS "tr
     SET "search_path" TO ''
     AS $$
 declare
-  caller_profile public.profiles%rowtype;
+  caller_profile_id bigint;
+  caller_profile_name text;
+  caller_avatar_path text;
   korea_today date;
   current_monday date;
   first_manager_date date;
@@ -122,21 +124,19 @@ begin
       using errcode = '42501';
   end if;
 
-  select profile.*
-  into caller_profile
+  select profile.id, profile.name, profile.avatar_path
+  into caller_profile_id, caller_profile_name, caller_avatar_path
   from public.profiles as profile
-  where profile.auth_user_id = auth.uid()
-    and profile.status = 'accepted'
-    and profile.deleted_at is null;
+  where profile.id = private.current_profile_id();
 
   if not found then
     raise exception 'accepted profile required'
       using errcode = '42501';
   end if;
 
-  new.profile_id := caller_profile.id;
-  new.applicant_name := caller_profile.name;
-  new.avatar_path := caller_profile.avatar_path;
+  new.profile_id := caller_profile_id;
+  new.applicant_name := caller_profile_name;
+  new.avatar_path := caller_avatar_path;
   new.detail := btrim(new.detail);
   new.recurring_until := null;
 
@@ -286,13 +286,18 @@ begin
       using errcode = '42501';
   end if;
 
+  korea_today := (now() at time zone 'Asia/Seoul')::date;
+
   if reservation.recurring = false then
+    if reservation.reservation_date < korea_today then
+      raise exception 'past utility reservations cannot be cancelled'
+        using errcode = '22023';
+    end if;
+
     delete from public.utility_reservations
     where id = reservation.id;
     return;
   end if;
-
-  korea_today := (now() at time zone 'Asia/Seoul')::date;
 
   if p_effective_date is null
     or p_effective_date < korea_today
@@ -386,40 +391,26 @@ ALTER TABLE ONLY "public"."utility_reservations"
 ALTER TABLE "public"."gongang_schedule" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "gongang_schedule_delete_manager" ON "public"."gongang_schedule" FOR DELETE TO "authenticated" USING (((EXISTS ( SELECT 1
-   FROM ("public"."profiles" "profile"
-     JOIN "public"."profile_permissions" "permission" ON (("permission"."profile_id" = "profile"."id")))
-  WHERE (("profile"."auth_user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profile"."status" = 'accepted'::"public"."profile_status") AND ("profile"."deleted_at" IS NULL) AND ("permission"."permission_key" = 'gongang.manage'::"text")))) AND (("schedule_date" >= ((("now"() AT TIME ZONE 'Asia/Seoul'::"text"))::"date" + (8 - (EXTRACT(isodow FROM (("now"() AT TIME ZONE 'Asia/Seoul'::"text"))::"date"))::integer))) AND ("schedule_date" <= ((("now"() AT TIME ZONE 'Asia/Seoul'::"text"))::"date" + (14 - (EXTRACT(isodow FROM (("now"() AT TIME ZONE 'Asia/Seoul'::"text"))::"date"))::integer))))));
+   FROM "public"."profile_permissions" "permission"
+  WHERE (("permission"."profile_id" = "private"."current_profile_id"()) AND ("permission"."permission_key" = 'gongang.manage'::"text")))) AND (("schedule_date" >= ((("now"() AT TIME ZONE 'Asia/Seoul'::"text"))::"date" + (8 - (EXTRACT(isodow FROM (("now"() AT TIME ZONE 'Asia/Seoul'::"text"))::"date"))::integer))) AND ("schedule_date" <= ((("now"() AT TIME ZONE 'Asia/Seoul'::"text"))::"date" + (14 - (EXTRACT(isodow FROM (("now"() AT TIME ZONE 'Asia/Seoul'::"text"))::"date"))::integer))))));
 
 CREATE POLICY "gongang_schedule_insert_manager" ON "public"."gongang_schedule" FOR INSERT TO "authenticated" WITH CHECK ((EXISTS ( SELECT 1
-   FROM ("public"."profiles" "profile"
-     JOIN "public"."profile_permissions" "permission" ON (("permission"."profile_id" = "profile"."id")))
-  WHERE (("profile"."auth_user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profile"."status" = 'accepted'::"public"."profile_status") AND ("profile"."deleted_at" IS NULL) AND ("permission"."permission_key" = 'gongang.manage'::"text")))));
+   FROM "public"."profile_permissions" "permission"
+  WHERE (("permission"."profile_id" = "private"."current_profile_id"()) AND ("permission"."permission_key" = 'gongang.manage'::"text")))));
 
-CREATE POLICY "gongang_schedule_select" ON "public"."gongang_schedule" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
-   FROM "public"."profiles" "profile"
-  WHERE (("profile"."auth_user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profile"."status" = 'accepted'::"public"."profile_status") AND ("profile"."deleted_at" IS NULL)))));
+CREATE POLICY "gongang_schedule_select" ON "public"."gongang_schedule" FOR SELECT TO "authenticated" USING (("private"."current_profile_id"() IS NOT NULL));
 
 CREATE POLICY "gongang_schedule_update_manager" ON "public"."gongang_schedule" FOR UPDATE TO "authenticated" USING ((EXISTS ( SELECT 1
-   FROM ("public"."profiles" "profile"
-     JOIN "public"."profile_permissions" "permission" ON (("permission"."profile_id" = "profile"."id")))
-  WHERE (("profile"."auth_user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profile"."status" = 'accepted'::"public"."profile_status") AND ("profile"."deleted_at" IS NULL) AND ("permission"."permission_key" = 'gongang.manage'::"text"))))) WITH CHECK ((EXISTS ( SELECT 1
-   FROM ("public"."profiles" "profile"
-     JOIN "public"."profile_permissions" "permission" ON (("permission"."profile_id" = "profile"."id")))
-  WHERE (("profile"."auth_user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profile"."status" = 'accepted'::"public"."profile_status") AND ("profile"."deleted_at" IS NULL) AND ("permission"."permission_key" = 'gongang.manage'::"text")))));
+   FROM "public"."profile_permissions" "permission"
+  WHERE (("permission"."profile_id" = "private"."current_profile_id"()) AND ("permission"."permission_key" = 'gongang.manage'::"text"))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM "public"."profile_permissions" "permission"
+  WHERE (("permission"."profile_id" = "private"."current_profile_id"()) AND ("permission"."permission_key" = 'gongang.manage'::"text")))));
 
 ALTER TABLE "public"."utility_reservations" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "utility_reservations_delete_own" ON "public"."utility_reservations" FOR DELETE TO "authenticated" USING (("profile_id" = ( SELECT "profile"."id"
-   FROM "public"."profiles" "profile"
-  WHERE (("profile"."auth_user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profile"."deleted_at" IS NULL)))));
+CREATE POLICY "utility_reservations_insert" ON "public"."utility_reservations" FOR INSERT TO "authenticated" WITH CHECK (("profile_id" = "private"."current_profile_id"()));
 
-CREATE POLICY "utility_reservations_insert" ON "public"."utility_reservations" FOR INSERT TO "authenticated" WITH CHECK (("profile_id" = ( SELECT "profile"."id"
-   FROM "public"."profiles" "profile"
-  WHERE (("profile"."auth_user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profile"."status" = 'accepted'::"public"."profile_status") AND ("profile"."deleted_at" IS NULL)))));
-
-CREATE POLICY "utility_reservations_select" ON "public"."utility_reservations" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
-   FROM "public"."profiles" "profile"
-  WHERE (("profile"."auth_user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profile"."status" = 'accepted'::"public"."profile_status") AND ("profile"."deleted_at" IS NULL)))));
+CREATE POLICY "utility_reservations_select" ON "public"."utility_reservations" FOR SELECT TO "authenticated" USING (("private"."current_profile_id"() IS NOT NULL));
 
 REVOKE ALL ON FUNCTION "public"."cancel_utility_reservation"("p_reservation_id" bigint, "p_effective_date" "date") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."cancel_utility_reservation"("p_reservation_id" bigint, "p_effective_date" "date") TO "authenticated";
@@ -430,9 +421,8 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."gongang_schedule" TO "authe
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."utility_reservations" TO "service_role";
 GRANT SELECT,INSERT ON TABLE "public"."utility_reservations" TO "authenticated";
 
-GRANT UPDATE ON SEQUENCE "public"."utility_reservations_id_seq" TO "anon";
-GRANT ALL ON SEQUENCE "public"."utility_reservations_id_seq" TO "authenticated";
-GRANT UPDATE ON SEQUENCE "public"."utility_reservations_id_seq" TO "service_role";
+REVOKE ALL ON SEQUENCE "public"."utility_reservations_id_seq" FROM "anon", "authenticated", "service_role";
+GRANT USAGE ON SEQUENCE "public"."utility_reservations_id_seq" TO "authenticated", "service_role";
 
 REVOKE MAINTAIN, REFERENCES, TRIGGER, TRUNCATE ON TABLE "public"."utility_reservations" FROM "anon", "authenticated";
 

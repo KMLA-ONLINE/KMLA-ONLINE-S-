@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(46);
+select plan(48);
 
 -- 시드에는 로그인 가능한 계정이 하나뿐이라 신원 정책과 운영 조치를 함께 볼 수 없다. 시드를
 -- 건드리지 않고 트랜잭션 안에서만 두 계정을 더 붙인다.
@@ -117,11 +117,46 @@ reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
 set local role authenticated;
 
+reset role;
+update public.posts
+set deleted_at = statement_timestamp()
+where id = '90000000-0000-0000-0000-000000000001';
+set local role authenticated;
+select throws_ok(
+  $$select * from public.create_post_comment(
+      '90000000-0000-0000-0000-000000000001', '삭제된 글의 댓글', 'identified'
+    )$$,
+  'P0002', 'post not found', 'already deleted posts reject new comments'
+);
+reset role;
+update public.posts
+set deleted_at = null
+where id = '90000000-0000-0000-0000-000000000001';
+set local role authenticated;
+
 insert into ids
 select 'root', comment_id
 from public.create_post_comment(
   '90000000-0000-0000-0000-000000000001', '실명 최상위 댓글', 'identified'
 );
+
+reset role;
+update public.post_comments
+set deleted_at = statement_timestamp()
+where id = (select id from ids where name = 'root');
+set local role authenticated;
+select throws_ok(
+  $$select * from public.create_post_comment(
+      '90000000-0000-0000-0000-000000000001', '삭제된 댓글의 답글', 'identified',
+      (select id from ids where name = 'root')
+    )$$,
+  'P0002', 'parent comment not found', 'already deleted comments reject new replies'
+);
+reset role;
+update public.post_comments
+set deleted_at = null
+where id = (select id from ids where name = 'root');
+set local role authenticated;
 
 select is(
   (select author_label from public.list_post_comments('90000000-0000-0000-0000-000000000001')),

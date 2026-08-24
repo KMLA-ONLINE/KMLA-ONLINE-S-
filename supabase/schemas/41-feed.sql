@@ -123,7 +123,7 @@ CREATE OR REPLACE FUNCTION "private"."create_feed_session"("p_profile_id" bigint
     SET "search_path" TO ''
     AS $$
 declare
-  session_id uuid := gen_random_uuid();
+  session_id uuid;
   epoch timestamptz := statement_timestamp();
   candidate record;
   next_position integer := 1;
@@ -133,8 +133,38 @@ declare
   consecutive_count integer := 0;
   source_count integer;
 begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('feed-session:' || p_profile_id::text, 0)
+  );
+
   delete from private.feed_sessions
   where profile_id = p_profile_id and expires_at <= epoch;
+
+  select session.id into session_id
+  from private.feed_sessions as session
+  where session.profile_id = p_profile_id
+    and session.expires_at > epoch
+    and session.created_at >= epoch - interval '5 seconds'
+  order by session.created_at desc, session.id desc
+  limit 1;
+
+  if session_id is not null then
+    return session_id;
+  end if;
+
+  with excess as (
+    select session.id
+    from private.feed_sessions as session
+    where session.profile_id = p_profile_id
+      and session.expires_at > epoch
+    order by session.created_at desc, session.id desc
+    offset 7
+  )
+  delete from private.feed_sessions as session
+  using excess
+  where session.id = excess.id;
+
+  session_id := gen_random_uuid();
 
   insert into private.feed_sessions (id, profile_id, feed_epoch, expires_at)
   values (session_id, p_profile_id, epoch, epoch + interval '24 hours');
@@ -606,6 +636,10 @@ CREATE INDEX "feed_bump_events_rank_idx" ON "private"."feed_bump_events" USING "
 CREATE INDEX "feed_session_posts_post_idx" ON "private"."feed_session_posts" USING "btree" ("post_id");
 
 CREATE INDEX "feed_sessions_profile_expiry_idx" ON "private"."feed_sessions" USING "btree" ("profile_id", "expires_at");
+
+CREATE INDEX "feed_sessions_expiry_idx" ON "private"."feed_sessions" USING "btree" ("expires_at");
+
+CREATE INDEX "feed_sessions_profile_created_idx" ON "private"."feed_sessions" USING "btree" ("profile_id", "created_at" DESC, "id" DESC);
 
 CREATE INDEX "post_reaction_count_events_rank_idx" ON "private"."post_reaction_count_events" USING "btree" ("post_id", "occurred_at", "id");
 
