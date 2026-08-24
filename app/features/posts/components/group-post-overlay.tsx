@@ -94,6 +94,8 @@ export function GroupPostOverlay({
   identities = ["identified"],
   comments,
   viewer,
+  onClose,
+  action,
 }: {
   mode: "create" | "detail" | "edit";
   slug: string;
@@ -106,6 +108,8 @@ export function GroupPostOverlay({
   comments?: PostCommentPage;
   /** 상세 모드에서만 쓴다. 댓글 입력창 왼쪽 아바타에 들어간다. */
   viewer?: CommentViewer;
+  onClose?: () => void;
+  action?: string;
 }) {
   // 그룹으로 `navigate`하면 히스토리에 작성 화면이 남아서, 뒤로 가기를 누른 사용자가 방금
   // 버린 초안을 다시 마주하게 된다. 들어온 경로를 되감는 게 맞다.
@@ -119,6 +123,8 @@ export function GroupPostOverlay({
         viewer={viewer}
         identities={identities}
         comments={comments}
+        onClose={onClose}
+        action={action}
       />
     ) : null;
   }

@@ -15,11 +15,16 @@ interface ImageViewerLocationState {
   imageViewerPushed?: boolean;
 }
 
+type ProfileMediaActivityPost = Pick<
+  ProfilePost,
+  "activity_kind" | "activity_media_url" | "author_name" | "post_id"
+>;
+
 export function ProfileMediaActivity({
   post,
   className,
 }: {
-  post: ProfilePost;
+  post: ProfileMediaActivityPost;
   className?: string;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -78,7 +83,7 @@ export function ProfileMediaActivity({
           aria-label={`${label} 크게 보기`}
           onClick={openViewer}
           className={cn(
-            "flex w-full items-center justify-center overflow-hidden bg-muted focus:ring-0 focus:outline-none",
+            "flex w-full items-center justify-center overflow-hidden border-y border-border/60 bg-muted focus:ring-0 focus:outline-none",
             isAvatar ? "aspect-square" : "aspect-[3/1]",
             className,
           )}
@@ -114,6 +119,6 @@ export function ProfileMediaActivity({
   );
 }
 
-function profileName(post: ProfilePost): string {
+function profileName(post: ProfileMediaActivityPost): string {
   return post.author_name ?? "사용자";
 }

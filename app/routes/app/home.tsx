@@ -1,8 +1,9 @@
 import { MessagesSquareIcon, SearchIcon, UtensilsIcon } from "lucide-react";
 import { Link } from "react-router";
 
-import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { defineAppChrome, PageHeader } from "~/features/app-shell";
 import { FeedScreen, listFeedPosts } from "~/features/feed";
+import { getKoreaDate, getMealDay, HomeMealSummary } from "~/features/meal";
 import { Button } from "~/shared/ui/button";
 import type { Route } from "./+types/home";
 
@@ -19,20 +20,68 @@ import type { Route } from "./+types/home";
 export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "sticky",
+  contentWidth: "5xl",
 });
 
 // 첫 페이지는 로더가 await 한다. 이후 페이지는 useFetcher로 같은 clientLoader에 커서를 보낸다
 // (AGENTS.md의 "Loaders await their data" — 스트리밍 스켈레톤이 필요한 화면에서만 예외).
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
-  const before = new URL(request.url).searchParams.get("before");
-  const posts = await listFeedPosts(before ? Number(before) : undefined);
+  const pageToken = new URL(request.url).searchParams.get("pageToken");
+  const mealDayPromise = pageToken
+    ? Promise.resolve(null)
+    : getMealDay(getKoreaDate());
 
-  return { posts };
+  try {
+    const [page, mealDay] = await Promise.all([
+      listFeedPosts(pageToken),
+      mealDayPromise,
+    ]);
+
+    if (pageToken) {
+      return {
+        page,
+        pageToken,
+        error: null,
+        expired: false,
+        mealDay,
+      };
+    }
+
+    return {
+      page,
+      pageToken: null,
+      error: null,
+      expired: false,
+      mealDay,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "피드를 불러오지 못했습니다.";
+    const expired = pageToken !== null && /expired|not found/i.test(message);
+    const mealDay = await mealDayPromise;
+
+    if (pageToken) {
+      return {
+        page: null,
+        pageToken,
+        error: expired ? "피드가 만료되었습니다. 새로고침해 주세요." : message,
+        expired,
+        mealDay,
+      };
+    }
+
+    return {
+      page: null,
+      pageToken: null,
+      error: message,
+      expired: false,
+      mealDay,
+    };
+  }
 }
 
 export default function FeedPage({ loaderData }: Route.ComponentProps) {
-  const { profile } = useAppShell();
-  const { posts } = loaderData;
+  const { page, error, mealDay } = loaderData;
 
   return (
     <>
@@ -73,7 +122,10 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
         }
       />
 
-      <FeedScreen posts={posts} profileName={profile.name} />
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-4">
+        <FeedScreen initialPage={page} initialError={error} />
+        {mealDay ? <HomeMealSummary day={mealDay} /> : null}
+      </div>
     </>
   );
 }

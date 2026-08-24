@@ -3,6 +3,7 @@ import {
   CalendarDaysIcon,
   ChevronRightIcon,
   FileTextIcon,
+  SettingsIcon,
   ShieldCheckIcon,
   UtensilsIcon,
 } from "lucide-react";
@@ -104,6 +105,31 @@ export default function MenuPage() {
                 급식
               </span>
 
+              <ChevronRightIcon
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+            </Link>
+          </div>
+        </section>
+
+        <section className="flex flex-col gap-1.5">
+          <h2 className="px-1 text-xs font-semibold tracking-wide text-muted-foreground">
+            설정
+          </h2>
+
+          <div className="overflow-hidden rounded-xl border bg-card">
+            <Link
+              to="/menu/settings"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
+            >
+              <SettingsIcon
+                className="size-4.5 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                개인 설정
+              </span>
               <ChevronRightIcon
                 className="size-4 shrink-0 text-muted-foreground"
                 aria-hidden

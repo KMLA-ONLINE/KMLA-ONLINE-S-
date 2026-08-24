@@ -28,6 +28,8 @@ export function PostDetail({
   viewer,
   identities,
   comments,
+  onClose,
+  action,
 }: {
   post: GroupPostDetail;
   slug: string;
@@ -36,10 +38,13 @@ export function PostDetail({
   /** 이 그룹에서 댓글에 쓸 수 있는 작성 신원. 첫 항목이 기본값이다. */
   identities: PostIdentity[];
   comments: PostCommentPage;
+  onClose?: () => void;
+  action?: string;
 }) {
   const fetcher = useFetcher<{ error?: string }>();
   const { markVisited } = useVisitedPosts();
-  const close = useModalClose(`/groups/${slug}`);
+  const defaultClose = useModalClose(`/groups/${slug}`);
+  const close = onClose ?? defaultClose;
 
   const { images, files } = splitPostAttachments(post.attachments);
   const authorName = post.author_name || post.author_label;
@@ -48,7 +53,7 @@ export function PostDetail({
   useEffect(() => markVisited(post.post_id), [markVisited, post.post_id]);
 
   const submitIntent = (fields: Record<string, string>) =>
-    void fetcher.submit(fields, { method: "post" });
+    void fetcher.submit(fields, { method: "post", action });
 
   return (
     <PostDetailDialog
