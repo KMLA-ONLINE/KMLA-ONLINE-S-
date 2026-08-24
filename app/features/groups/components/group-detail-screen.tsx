@@ -183,7 +183,6 @@ export function GroupDetailScreen({
               slug={group.slug}
               initialPage={reportPage}
               canDelete={canManage}
-              alwaysAnonymous={group.identity_policy === "always_anonymous"}
             />
           ) : (
             <EmptyTabCard

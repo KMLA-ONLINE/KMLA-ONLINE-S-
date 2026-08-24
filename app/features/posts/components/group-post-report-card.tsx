@@ -16,14 +16,12 @@ export function GroupPostReportCard({
   report,
   groupId,
   slug,
-  alwaysAnonymous,
   canDelete,
   onDelete,
 }: {
   report: GroupPostReportSummary;
   groupId: string;
   slug: string;
-  alwaysAnonymous: boolean;
   canDelete: boolean;
   onDelete: () => void;
 }) {
@@ -41,7 +39,7 @@ export function GroupPostReportCard({
           </Link>
 
           <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-            {!alwaysAnonymous && report.author_pub_id && report.author_name ? (
+            {report.author_pub_id && report.author_name ? (
               <Link
                 to={`/profile/${report.author_pub_id}`}
                 className="flex min-w-0 items-center gap-1.5 hover:text-foreground"
@@ -58,7 +56,7 @@ export function GroupPostReportCard({
               <span className="truncate">{report.author_label}</span>
             )}
 
-            {report.author_identity === "staff" && !alwaysAnonymous ? (
+            {report.author_identity === "staff" ? (
               <Badge
                 variant="outline"
                 className="h-5 shrink-0 px-1.5 text-[10px] text-muted-foreground"

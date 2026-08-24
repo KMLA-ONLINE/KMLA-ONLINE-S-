@@ -16,13 +16,11 @@ export function GroupPostReportsPanel({
   slug,
   initialPage,
   canDelete,
-  alwaysAnonymous,
 }: {
   groupId: string;
   slug: string;
   initialPage: GroupPostReportSummaryPage;
   canDelete: boolean;
-  alwaysAnonymous: boolean;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -161,7 +159,6 @@ export function GroupPostReportsPanel({
             report={report}
             groupId={groupId}
             slug={slug}
-            alwaysAnonymous={alwaysAnonymous}
             canDelete={canDelete}
             onDelete={() => setDeleteTarget(report)}
           />
