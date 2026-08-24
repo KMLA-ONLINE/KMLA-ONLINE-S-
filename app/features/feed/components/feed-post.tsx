@@ -122,7 +122,7 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
             </Badge>
           ) : null}
         </div>
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
           {post.kind === "group" ? (
             <>
               <Link
