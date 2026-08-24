@@ -89,7 +89,7 @@ export default function LoginPage({ actionData }: Route.ComponentProps) {
   return (
     <AuthCard
       title="다시 만나서 반가워요"
-      description="학교 커뮤니티에 로그인해 소식과 이야기를 이어가세요."
+      description="로그인해 소식과 이야기를 이어가세요."
       footer={
         <p>
           아직 계정이 없나요?{" "}

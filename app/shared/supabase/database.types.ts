@@ -796,7 +796,6 @@ export type Database = {
           onboarding_completed_at: string
           phone_number: string | null
           pub_id: string
-          rejection_reason: string | null
           role: Database["public"]["Enums"]["app_role"]
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
@@ -831,7 +830,6 @@ export type Database = {
           onboarding_completed_at?: string
           phone_number?: string | null
           pub_id?: string
-          rejection_reason?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           status?: Database["public"]["Enums"]["profile_status"]
           status_updated_at?: string
@@ -866,7 +864,6 @@ export type Database = {
           onboarding_completed_at?: string
           phone_number?: string | null
           pub_id?: string
-          rejection_reason?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           status?: Database["public"]["Enums"]["profile_status"]
           status_updated_at?: string
@@ -974,6 +971,103 @@ export type Database = {
     }
     Functions: {
       accept_group_invite: { Args: { p_token: string }; Returns: string }
+      admin_list_accepted_users: {
+        Args: {
+          p_limit?: number
+          p_managers_only?: boolean
+          p_offset?: number
+          p_query?: string
+        }
+        Returns: {
+          cohort: number
+          department: string
+          has_gongang_manage: boolean
+          name: string
+          profile_id: number
+          profile_type: Database["public"]["Enums"]["profile_type"]
+          pub_id: string
+          total_count: number
+        }[]
+      }
+      admin_list_applications: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_status: Database["public"]["Enums"]["profile_status"]
+        }
+        Returns: {
+          academic_track: Database["public"]["Enums"]["profile_academic_track"]
+          birthday: string
+          class_no: number
+          cohort: number
+          department: string
+          description: string
+          dorm_room: number
+          gender: Database["public"]["Enums"]["profile_gender"]
+          is_returning_student: boolean
+          name: string
+          phone_number: string
+          profile_id: number
+          profile_type: Database["public"]["Enums"]["profile_type"]
+          pub_id: string
+          status_updated_at: string
+          student_number: string
+          submitted_at: string
+          total_count: number
+        }[]
+      }
+      admin_list_members: {
+        Args: {
+          p_admins_only?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_query?: string
+        }
+        Returns: {
+          cohort: number
+          department: string
+          is_app_admin: boolean
+          is_self: boolean
+          name: string
+          profile_id: number
+          profile_type: Database["public"]["Enums"]["profile_type"]
+          pub_id: string
+          total_count: number
+        }[]
+      }
+      admin_review_applications: {
+        Args: {
+          p_profile_ids: number[]
+          p_status: Database["public"]["Enums"]["profile_status"]
+        }
+        Returns: {
+          profile_id: number
+          status: Database["public"]["Enums"]["profile_status"]
+          status_updated_at: string
+        }[]
+      }
+      admin_set_app_admin: {
+        Args: { p_enabled: boolean; p_profile_id: number }
+        Returns: {
+          is_app_admin: boolean
+          profile_id: number
+        }[]
+      }
+      admin_set_gongang_manager: {
+        Args: { p_enabled: boolean; p_profile_id: number }
+        Returns: {
+          has_gongang_manage: boolean
+          profile_id: number
+        }[]
+      }
+      admin_unblock_application: {
+        Args: { p_profile_id: number }
+        Returns: {
+          profile_id: number
+          status: Database["public"]["Enums"]["profile_status"]
+          status_updated_at: string
+        }[]
+      }
       approve_group_join_request: {
         Args: { p_group_id: string; p_request_id: string }
         Returns: undefined
@@ -1306,7 +1400,6 @@ export type Database = {
           onboarding_completed_at: string
           phone_number: string | null
           pub_id: string
-          rejection_reason: string | null
           role: Database["public"]["Enums"]["app_role"]
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
@@ -1697,7 +1790,6 @@ export type Database = {
           onboarding_completed_at: string
           phone_number: string | null
           pub_id: string
-          rejection_reason: string | null
           role: Database["public"]["Enums"]["app_role"]
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
@@ -1807,7 +1899,6 @@ export type Database = {
           onboarding_completed_at: string
           phone_number: string | null
           pub_id: string
-          rejection_reason: string | null
           role: Database["public"]["Enums"]["app_role"]
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
@@ -1873,7 +1964,6 @@ export type Database = {
           onboarding_completed_at: string
           phone_number: string | null
           pub_id: string
-          rejection_reason: string | null
           role: Database["public"]["Enums"]["app_role"]
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
@@ -1987,7 +2077,6 @@ export type Database = {
           onboarding_completed_at: string
           phone_number: string | null
           pub_id: string
-          rejection_reason: string | null
           role: Database["public"]["Enums"]["app_role"]
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
@@ -2058,7 +2147,7 @@ export type Database = {
       profile_academic_track: "domestic" | "international"
       profile_gender: "male" | "female"
       profile_media_activity_kind: "avatar_changed" | "cover_changed"
-      profile_status: "pending" | "accepted" | "rejected" | "withdrawn"
+      profile_status: "draft" | "pending" | "accepted" | "blocked" | "withdrawn"
       profile_type: "student" | "alumni" | "teacher"
     }
     CompositeTypes: {
@@ -2211,7 +2300,7 @@ export const Constants = {
       profile_academic_track: ["domestic", "international"],
       profile_gender: ["male", "female"],
       profile_media_activity_kind: ["avatar_changed", "cover_changed"],
-      profile_status: ["pending", "accepted", "rejected", "withdrawn"],
+      profile_status: ["draft", "pending", "accepted", "blocked", "withdrawn"],
       profile_type: ["student", "alumni", "teacher"],
     },
   },

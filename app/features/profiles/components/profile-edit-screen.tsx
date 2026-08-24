@@ -135,10 +135,6 @@ function ProfileEditForm({
 
           {academicProfile ? (
             <section className="space-y-5 border-t pt-6">
-              <div>
-                <h2 className="font-semibold">학교 정보</h2>
-              </div>
-
               <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
                 <Field data-invalid={Boolean(errors.gender)}>
                   <FieldLabel htmlFor="profile-gender">성별</FieldLabel>
@@ -252,7 +248,7 @@ function ProfileEditForm({
                         pattern="(?:10[1-9]|1[1-9][0-9]|[2-9][0-9]{2}|100[0-8])"
                         maxLength={4}
                         defaultValue={values.dormRoom ?? ""}
-                        placeholder="예: 100"
+                        placeholder="예: 101"
                         aria-invalid={Boolean(errors.dormRoom)}
                         onInput={(event) => {
                           let value = event.currentTarget.value
@@ -277,10 +273,6 @@ function ProfileEditForm({
           ) : null}
 
           <section className="space-y-5 border-t pt-6">
-            <div>
-              <h2 className="font-semibold">기본 정보</h2>
-            </div>
-
             <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
               <Field data-invalid={Boolean(errors.birthday)}>
                 <FieldLabel htmlFor="profile-birthday">생일</FieldLabel>
@@ -297,7 +289,7 @@ function ProfileEditForm({
               </Field>
 
               <Field data-invalid={Boolean(errors.phoneNumber)}>
-                <FieldLabel htmlFor="profile-phone">전화번호</FieldLabel>
+                <FieldLabel htmlFor="profile-phone">전화번호(추천)</FieldLabel>
                 <Input
                   id="profile-phone"
                   name="phoneNumber"
