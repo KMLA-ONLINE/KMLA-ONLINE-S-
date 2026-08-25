@@ -15,6 +15,13 @@ import { Spinner } from "~/shared/ui/spinner";
 /** 답글 최대 중첩 단계(기능 명세 §9.2). 이 깊이에 닿은 댓글에는 답글 버튼을 두지 않는다. */
 const MAX_REPLY_DEPTH = 10;
 
+/**
+ * `@작성자` 칩으로 부모 댓글에 옮겨 온 뒤 표시가 남아 있는 시간.
+ *
+ * 답글 대상 표시는 이 타이머를 쓰지 않는다 — 그쪽은 `replyingToId`가 살아 있는 동안 계속
+ * 남아야 한다. 댓글을 쓰는 데 걸리는 시간은 몇 초로 정해 둘 수 있는 것이 아니고, 표시가
+ * 먼저 꺼지면 긴 답글을 쓰는 도중 누구에게 답하고 있었는지 화면에서 사라진다.
+ */
 const HIGHLIGHT_MS = 1600;
 
 export function CommentThread({
@@ -60,25 +67,20 @@ export function CommentThread({
 
   useEffect(() => () => clearTimeout(highlightTimer.current), []);
 
-  const highlight = (commentId: string, scroll: boolean) => {
+  const jumpTo = (commentId: string) => {
     const element = document.getElementById(commentDomId(commentId));
     if (
       !element ||
       (scrollRef?.current && !scrollRef.current.contains(element))
     )
       return;
-    if (scroll) element.scrollIntoView({ block: "center", behavior: "smooth" });
+    element.scrollIntoView({ block: "center", behavior: "smooth" });
     setHighlighted(commentId);
     clearTimeout(highlightTimer.current);
     highlightTimer.current = setTimeout(
       () => setHighlighted(null),
       HIGHLIGHT_MS,
     );
-  };
-
-  const startReply = (comment: PostComment) => {
-    highlight(comment.comment_id, false);
-    onReply(comment);
   };
 
   if (comments.length === 0 && !hasMore) {
@@ -104,7 +106,7 @@ export function CommentThread({
               replying={replyingToId === comment.comment_id}
               highlighted={highlighted === comment.comment_id}
               pending={pending}
-              onReply={() => startReply(comment)}
+              onReply={() => onReply(comment)}
               onEdit={(body, image) => onEdit(comment, body, image)}
               onDelete={() => void onDelete(comment)}
               onReact={(next) => onReact(comment, next)}
@@ -141,10 +143,10 @@ export function CommentThread({
                       replying={replyingToId === reply.comment_id}
                       highlighted={highlighted === reply.comment_id}
                       pending={pending}
-                      onReply={() => startReply(reply)}
+                      onReply={() => onReply(reply)}
                       onJumpToParent={() =>
                         reply.parent_comment_id &&
-                        highlight(reply.parent_comment_id, true)
+                        jumpTo(reply.parent_comment_id)
                       }
                       onEdit={(body, image) => onEdit(reply, body, image)}
                       onDelete={() => void onDelete(reply)}

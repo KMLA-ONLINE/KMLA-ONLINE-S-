@@ -1,15 +1,50 @@
 import { screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PostDetailDialog } from "~/features/posts/components/post-detail-dialog";
+import { postComment } from "../post-comment-fixture";
 import { renderRoute } from "../../../router";
 
-function Detail() {
+const originalInnerHeight = window.innerHeight;
+const originalVisualViewport = window.visualViewport;
+
+function stubVisualViewport(height: number, offsetTop = 0) {
+  Object.defineProperty(window, "innerHeight", {
+    configurable: true,
+    value: 800,
+  });
+  Object.defineProperty(window, "visualViewport", {
+    configurable: true,
+    value: Object.assign(new EventTarget(), {
+      height,
+      offsetTop,
+      scale: 1,
+    }),
+  });
+}
+
+afterEach(() => {
+  Object.defineProperty(window, "innerHeight", {
+    configurable: true,
+    value: originalInnerHeight,
+  });
+  Object.defineProperty(window, "visualViewport", {
+    configurable: true,
+    value: originalVisualViewport,
+  });
+});
+
+function Detail({ withComment = false }: { withComment?: boolean }) {
   return (
     <PostDetailDialog
       title="게시물"
       postId="post-id"
-      comments={{ comments: [], nextCursor: null }}
+      comments={{
+        comments: withComment
+          ? [postComment({ comment_id: "target", body: "답글 대상" })]
+          : [],
+        nextCursor: null,
+      }}
       viewer={{ name: "홍길동", avatarUrl: null }}
       identities={["identified"]}
       onClose={vi.fn()}
@@ -30,7 +65,24 @@ function Detail() {
 }
 
 describe("PostDetailDialog", () => {
-  it("focuses the composer when opened from a comment button", async () => {
+  it("does not focus the composer when opening the mobile comment sheet", async () => {
+    renderRoute(Detail, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id?view=comments"],
+    });
+
+    await waitFor(() => expect(screen.getByRole("dialog")).toHaveFocus());
+    expect(
+      screen.getByRole("textbox", { name: "댓글 입력" }),
+    ).not.toHaveFocus();
+  });
+
+  it("focuses the composer from a desktop comment button", async () => {
+    vi.spyOn(window, "matchMedia").mockReturnValue({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as MediaQueryList);
     renderRoute(Detail, {
       path: "/posts/:postId",
       initialEntries: ["/posts/post-id?view=comments"],
@@ -51,5 +103,65 @@ describe("PostDetailDialog", () => {
     expect(
       screen.getByRole("textbox", { name: "댓글 입력" }),
     ).not.toHaveFocus();
+  });
+
+  it("keeps the mobile comment sheet inside the visual viewport", async () => {
+    stubVisualViewport(500, 100);
+    renderRoute(Detail, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id?view=comments"],
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole("dialog")).toHaveStyle({
+        bottom: "200px",
+        maxHeight: "500px",
+      }),
+    );
+  });
+
+  it("scrolls only enough to reveal a reply target after resizing", async () => {
+    stubVisualViewport(500);
+    const { user } = renderRoute(() => <Detail withComment />, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id?view=comments"],
+    });
+    /* eslint-disable testing-library/no-node-access --
+       The behavior under test is the scroll relationship between the rendered
+       comment and the dialog's private overflow container. */
+    const target = document.getElementById("comment-target");
+    const container = target?.closest("section")?.parentElement;
+    /* eslint-enable testing-library/no-node-access */
+    expect(target).not.toBeNull();
+    expect(container).not.toBeNull();
+    if (!target || !container) return;
+
+    container.scrollTop = 100;
+    vi.spyOn(container, "getBoundingClientRect").mockReturnValue({
+      top: 0,
+      bottom: 300,
+    } as DOMRect);
+    vi.spyOn(target, "getBoundingClientRect").mockReturnValue({
+      top: 260,
+      bottom: 350,
+    } as DOMRect);
+
+    await user.click(screen.getByRole("button", { name: "답글" }));
+
+    await waitFor(() => expect(container.scrollTop).toBe(150));
+  });
+
+  it("does not refocus the composer when cancelling a reply", async () => {
+    const { user } = renderRoute(() => <Detail withComment />, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id?view=comments"],
+    });
+    const composer = screen.getByRole("textbox", { name: "댓글 입력" });
+
+    await user.click(screen.getByRole("button", { name: "답글" }));
+    await waitFor(() => expect(composer).toHaveFocus());
+    await user.click(screen.getByRole("button", { name: "답글 대상 취소" }));
+
+    expect(composer).not.toHaveFocus();
   });
 });

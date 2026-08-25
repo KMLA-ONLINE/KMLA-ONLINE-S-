@@ -103,7 +103,7 @@ describe("CommentThread", () => {
     expect(onLoadMore).toHaveBeenCalled();
   });
 
-  it("selects and highlights the comment being replied to", async () => {
+  it("selects the comment being replied to", async () => {
     const onReply = vi.fn();
     const { user } = renderThread({
       replies: { "root-id": [firstReply] },
@@ -116,7 +116,29 @@ describe("CommentThread", () => {
     expect(onReply).toHaveBeenCalledWith(
       expect.objectContaining({ comment_id: "root-id" }),
     );
+  });
+
+  // 표시가 타이머로 꺼지던 시절에는 긴 답글을 쓰는 도중 대상이 화면에서 사라졌다. 이제는
+  // `replyingToId`만 보므로, 답글 모드가 끝나기 전에는 얼마가 지나도 남아 있어야 한다.
+  it("marks the reply target for as long as the reply is being written", () => {
+    renderThread({
+      replies: { "root-id": [firstReply] },
+      expanded: new Set(["root-id"]),
+      replyingToId: "root-id",
+    });
+
     expect(screen.getByText("최상위 댓글").closest("[id]")).toHaveClass(
+      "bg-primary/5",
+    );
+    expect(screen.getByText("1단계 답글").closest("[id]")).not.toHaveClass(
+      "bg-primary/5",
+    );
+  });
+
+  it("drops the mark once the reply mode ends", () => {
+    renderThread({ replyingToId: null });
+
+    expect(screen.getByText("최상위 댓글").closest("[id]")).not.toHaveClass(
       "bg-primary/5",
     );
   });
