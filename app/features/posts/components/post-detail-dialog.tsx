@@ -323,10 +323,7 @@ export function PostDetailDialog({
           inputRef={composerRef}
           focusOnMount={commentsOnly}
           replyTarget={replyTarget}
-          onCancelReply={() => {
-            setReplyingTo(null);
-            composerRef.current?.focus();
-          }}
+          onCancelReply={() => setReplyingTo(null)}
         />
       </DialogContent>
     </Dialog>

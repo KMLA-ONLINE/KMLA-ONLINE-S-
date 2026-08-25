@@ -133,4 +133,18 @@ describe("PostDetailDialog", () => {
 
     await waitFor(() => expect(container.scrollTop).toBe(150));
   });
+
+  it("does not refocus the composer when cancelling a reply", async () => {
+    const { user } = renderRoute(() => <Detail withComment />, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id?view=comments"],
+    });
+    const composer = screen.getByRole("textbox", { name: "댓글 입력" });
+
+    await user.click(screen.getByRole("button", { name: "답글" }));
+    await waitFor(() => expect(composer).toHaveFocus());
+    await user.click(screen.getByRole("button", { name: "답글 대상 취소" }));
+
+    expect(composer).not.toHaveFocus();
+  });
 });
