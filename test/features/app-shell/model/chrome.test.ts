@@ -39,6 +39,7 @@ describe("app chrome", () => {
       header: "sticky",
       bottomNav: "sticky",
       contentWidth: "4xl",
+      pullToRefresh: false,
     });
   });
 

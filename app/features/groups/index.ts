@@ -5,6 +5,11 @@ export { GroupDiscoverScreen } from "~/features/groups/components/group-discover
 export { GroupHomeScreen } from "~/features/groups/components/group-home-screen";
 export { GroupInviteScreen } from "~/features/groups/components/group-invite-screen";
 export {
+  GROUP_CONTENT_STALE_TIME,
+  GROUP_STALE_TIME,
+  groupKeys,
+} from "~/features/groups/data/cache";
+export {
   acceptGroupInvite,
   approveGroupJoinRequest,
   cancelGroupJoinRequest,

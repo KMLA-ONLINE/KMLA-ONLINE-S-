@@ -5,10 +5,14 @@ export interface AppChromeConfig {
   header: ChromeMode;
   bottomNav: ChromeMode;
   contentWidth: AppContentWidth;
+  pullToRefresh: boolean;
 }
 
-type AppChromeDefinition = Omit<AppChromeConfig, "contentWidth"> &
-  Partial<Pick<AppChromeConfig, "contentWidth">>;
+type AppChromeDefinition = Omit<
+  AppChromeConfig,
+  "contentWidth" | "pullToRefresh"
+> &
+  Partial<Pick<AppChromeConfig, "contentWidth" | "pullToRefresh">>;
 
 export interface AppChromeHandle {
   chrome: AppChromeConfig;
@@ -18,6 +22,7 @@ export const DEFAULT_APP_CHROME: AppChromeConfig = {
   header: "sticky",
   bottomNav: "none",
   contentWidth: "4xl",
+  pullToRefresh: false,
 };
 
 export function defineAppChrome(chrome: AppChromeDefinition): AppChromeHandle {
@@ -25,6 +30,7 @@ export function defineAppChrome(chrome: AppChromeDefinition): AppChromeHandle {
     chrome: {
       ...chrome,
       contentWidth: chrome.contentWidth ?? DEFAULT_APP_CHROME.contentWidth,
+      pullToRefresh: chrome.pullToRefresh ?? false,
     },
   };
 }
@@ -54,7 +60,9 @@ function isAppChromeHandle(handle: unknown): handle is AppChromeHandle {
     "bottomNav" in chrome &&
     isChromeMode(chrome.bottomNav) &&
     "contentWidth" in chrome &&
-    isContentWidth(chrome.contentWidth)
+    isContentWidth(chrome.contentWidth) &&
+    "pullToRefresh" in chrome &&
+    typeof chrome.pullToRefresh === "boolean"
   );
 }
 

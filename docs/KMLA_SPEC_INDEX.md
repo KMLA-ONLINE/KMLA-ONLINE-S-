@@ -15,3 +15,4 @@
 - [홈 통합 피드 랭킹 설계](FEED_RANKING.md): 피드 후보, 6시간 랭킹, `#업`, 출처 제한 및 안정적인 페이지네이션을 정의한다.
 - [Supabase Storage 버킷 설계](STORAGE_BUCKETS.md): 기능 요구사항을 중복하지 않고 구현 및 Storage 세부 사항을 정의한다.
 - [콘텐츠 서식 및 이모지 설계](CONTENT_FORMATTING.md): 게시물 Markdown, 메시지 평문 입력기, 안전한 렌더링 및 Unicode 이모지 처리 방식을 정의한다.
+- [클라이언트 데이터 캐시 정책](DATA_CACHE_POLICY.md): 쿼리 키, 신선도, 보관 범위 및 mutation 무효화 규칙을 정의한다.

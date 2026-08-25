@@ -17,7 +17,7 @@ vi.mock("~/features/meal", async (importOriginal) => ({
   getMealDay: mocks.getMealDay,
 }));
 
-import { clientLoader } from "~/routes/app/home";
+import { clientLoader, shouldRevalidate } from "~/routes/app/home";
 
 const page = {
   posts: [],
@@ -76,5 +76,27 @@ describe("home feed loader", () => {
       expired: true,
       error: "피드가 만료되었습니다. 새로고침해 주세요.",
     });
+  });
+});
+
+describe("home feed revalidation", () => {
+  it("does not reload the feed for post overlay parameters", () => {
+    expect(
+      shouldRevalidate({
+        currentUrl: new URL("https://example.com/"),
+        nextUrl: new URL(
+          "https://example.com/?post=post-id&kind=group&source=feed",
+        ),
+      } as never),
+    ).toBe(false);
+  });
+
+  it("allows explicit same-url refreshes", () => {
+    expect(
+      shouldRevalidate({
+        currentUrl: new URL("https://example.com/"),
+        nextUrl: new URL("https://example.com/"),
+      } as never),
+    ).toBe(true);
   });
 });

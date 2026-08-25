@@ -1,10 +1,12 @@
 import { PlusIcon } from "lucide-react";
-import { data, Link } from "react-router";
+import { data, Link, type ShouldRevalidateFunctionArgs } from "react-router";
 
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import {
   cancelGroupJoinRequest,
   getGroupErrorMessage,
+  groupKeys,
+  GROUP_STALE_TIME,
   GroupHomeScreen,
   joinGroup,
   loadGroupHome,
@@ -13,14 +15,38 @@ import {
 } from "~/features/groups";
 import type { Route } from "./+types/index";
 import { Button } from "~/shared/ui/button";
+import { getQueryClient } from "~/shared/lib/query-client";
 
 export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "sticky",
+  pullToRefresh: true,
 });
 
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  formMethod,
+}: ShouldRevalidateFunctionArgs) {
+  if (formMethod && formMethod !== "GET") return true;
+  if (currentUrl.href === nextUrl.href) return true;
+  if (currentUrl.pathname !== nextUrl.pathname) return true;
+
+  const current = new URLSearchParams(currentUrl.searchParams);
+  const next = new URLSearchParams(nextUrl.searchParams);
+  current.delete("tab");
+  next.delete("tab");
+  return current.toString() !== next.toString();
+}
+
 export async function clientLoader() {
-  return { groups: await loadGroupHome() };
+  return {
+    groups: await getQueryClient().fetchQuery({
+      queryKey: groupKeys.home(),
+      queryFn: loadGroupHome,
+      staleTime: GROUP_STALE_TIME,
+    }),
+  };
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
@@ -49,6 +75,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     } else {
       return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
     }
+    await getQueryClient().invalidateQueries({ queryKey: groupKeys.all });
     return data({ ok: true });
   } catch (error) {
     return data({ error: getGroupErrorMessage(error) }, { status: 400 });

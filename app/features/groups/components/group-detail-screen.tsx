@@ -6,7 +6,7 @@ import {
   MessageSquareTextIcon,
   UsersIcon,
 } from "lucide-react";
-import { useSearchParams } from "react-router";
+import { useLocation, useNavigation, useSearchParams } from "react-router";
 
 import { GroupDetailHero } from "~/features/groups/components/group-detail-hero";
 import { GroupMembersPanel } from "~/features/groups/components/group-members-panel";
@@ -31,6 +31,7 @@ import {
   type GroupPostPage,
 } from "~/features/posts";
 import { cn } from "~/shared/lib/utils";
+import { useDelayedPending } from "~/shared/hooks/use-delayed-pending";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 
 type GroupTab = "posts" | "members" | "settings" | "reports";
@@ -71,6 +72,8 @@ export function GroupDetailScreen({
   reportPage?: GroupPostReportSummaryPage;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigation = useNavigation();
   const isMember = group.membership_state === "member";
   const isPrivate = group.join_policy === "invite_only";
   const VisibilityIcon = isPrivate ? LockIcon : Globe2Icon;
@@ -80,7 +83,16 @@ export function GroupDetailScreen({
   const canCreatePost =
     isMember && (group.posting_policy === "members" || canCurate);
   const canViewMembers = isMember;
-  const requestedTab = searchParams.get("tab");
+  const tabNavigationPending =
+    navigation.state === "loading" &&
+    navigation.location?.pathname === location.pathname &&
+    navigation.location.search !== location.search;
+  const showTabSkeleton = useDelayedPending(tabNavigationPending);
+  const visibleSearchParams =
+    showTabSkeleton && navigation.location
+      ? new URLSearchParams(navigation.location.search)
+      : searchParams;
+  const requestedTab = visibleSearchParams.get("tab");
   const tab: GroupTab =
     (requestedTab === "members" && canViewMembers) ||
     (requestedTab === "settings" && canCurate) ||
@@ -136,7 +148,9 @@ export function GroupDetailScreen({
 
       <div className="grid gap-6 py-3 md:py-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="min-w-0 lg:order-1">
-          {tab === "posts" ? (
+          {showTabSkeleton ? (
+            <GroupTabSkeleton tab={tab} />
+          ) : tab === "posts" ? (
             <div className="flex flex-col md:gap-3">
               {canCreatePost ? (
                 <PostWriteRow
@@ -217,6 +231,29 @@ export function GroupDetailScreen({
         </aside>
       </div>
     </div>
+  );
+}
+
+function GroupTabSkeleton({ tab }: { tab: GroupTab }) {
+  const rows = tab === "members" ? 6 : tab === "posts" ? 3 : 4;
+
+  return (
+    <section
+      aria-busy="true"
+      aria-label={`${GROUP_TABS.find((item) => item.id === tab)?.label ?? "그룹"} 탭을 불러오는 중`}
+      className="space-y-3 px-4 md:px-0"
+    >
+      {Array.from({ length: rows }, (_, index) => (
+        <div key={index} className="space-y-3 rounded-xl border bg-card p-4">
+          <div className="h-4 w-2/5 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+          <div className="h-3 w-full animate-pulse rounded bg-muted motion-reduce:animate-none" />
+          <div className="h-3 w-3/4 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+        </div>
+      ))}
+      <span className="sr-only" aria-live="polite">
+        그룹 탭 내용을 불러오는 중입니다.
+      </span>
+    </section>
   );
 }
 

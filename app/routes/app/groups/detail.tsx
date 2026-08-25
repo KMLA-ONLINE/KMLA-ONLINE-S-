@@ -7,6 +7,9 @@ import {
   deleteGroup,
   getGroupErrorMessage,
   getGroupInvite,
+  groupKeys,
+  GROUP_CONTENT_STALE_TIME,
+  GROUP_STALE_TIME,
   GroupDetailMobileHeader,
   GroupDetailScreen,
   issueGroupInvite,
@@ -39,11 +42,14 @@ import {
   updateGroupCategory,
 } from "~/features/posts";
 import type { Route } from "./+types/detail";
+import { feedKeys } from "~/features/feed";
+import { getQueryClient } from "~/shared/lib/query-client";
 
 export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "none",
   contentWidth: "5xl",
+  pullToRefresh: true,
 });
 
 /**
@@ -54,7 +60,12 @@ export async function clientLoader({
   params,
   request,
 }: Route.ClientLoaderArgs) {
-  const group = await loadGroupDetail(params.slug);
+  const queryClient = getQueryClient();
+  const group = await queryClient.fetchQuery({
+    queryKey: groupKeys.detail(params.slug),
+    queryFn: () => loadGroupDetail(params.slug),
+    staleTime: GROUP_STALE_TIME,
+  });
   if (!group) throw new Response("그룹을 찾을 수 없습니다.", { status: 404 });
   if (group.membership_state !== "member") {
     return { group, categories: [], posts: { posts: [], nextCursor: null } };
@@ -70,23 +81,48 @@ export async function clientLoader({
     searchParams.get("reportSort") === "recent" ? "recent" : "count";
   const [categories, posts, memberPage, joinRequests, invite, reportPage] =
     await Promise.all([
-      listGroupCategories(group.group_id),
-      listGroupPosts(group.group_id),
+      queryClient.fetchQuery({
+        queryKey: groupKeys.categories(group.group_id),
+        queryFn: () => listGroupCategories(group.group_id),
+        staleTime: GROUP_CONTENT_STALE_TIME,
+      }),
+      queryClient.fetchQuery({
+        queryKey: groupKeys.posts(group.group_id),
+        queryFn: () => listGroupPosts(group.group_id),
+        staleTime: GROUP_CONTENT_STALE_TIME,
+      }),
       memberTab
-        ? listGroupMembers(
-            group.group_id,
-            searchParams.get("memberQuery") ?? "",
-          )
+        ? queryClient.fetchQuery({
+            queryKey: groupKeys.members(
+              group.group_id,
+              searchParams.get("memberQuery") ?? "",
+            ),
+            queryFn: () =>
+              listGroupMembers(
+                group.group_id,
+                searchParams.get("memberQuery") ?? "",
+              ),
+          })
         : Promise.resolve(undefined),
       memberTab && canModerate
-        ? listGroupJoinRequests(group.group_id)
+        ? queryClient.fetchQuery({
+            queryKey: groupKeys.joinRequests(group.group_id),
+            queryFn: () => listGroupJoinRequests(group.group_id),
+          })
         : Promise.resolve([]),
       // 초대 링크는 설정 탭의 운영진에게만 보이고, 다른 사람이 부르면 서버가 42501로 막는다.
       settingsTab && canModerate && group.kind !== "official"
-        ? getGroupInvite(group.group_id)
+        ? queryClient.fetchQuery({
+            queryKey: groupKeys.invite(group.group_id),
+            queryFn: () => getGroupInvite(group.group_id),
+          })
         : Promise.resolve(null),
       reportsTab && canCurate
-        ? listGroupPostReportSummaries(group.group_id, reportSort)
+        ? queryClient.fetchQuery({
+            queryKey: groupKeys.reports(group.group_id, reportSort),
+            queryFn: () =>
+              listGroupPostReportSummaries(group.group_id, reportSort),
+          })
         : Promise.resolve(undefined),
     ]);
   return {
@@ -100,7 +136,10 @@ export async function clientLoader({
   };
 }
 
-export async function clientAction({ request }: Route.ClientActionArgs) {
+export async function clientAction({
+  params,
+  request,
+}: Route.ClientActionArgs) {
   const formData = await request.formData();
   const intent = formData.get("intent");
   const groupId = formData.get("groupId");
@@ -292,6 +331,10 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
       if (!(await leaveGroup(groupId, profileId))) {
         return data({ error: "이 그룹은 나갈 수 없습니다." }, { status: 400 });
       }
+      getQueryClient().removeQueries({
+        queryKey: groupKeys.detail(params.slug),
+      });
+      await getQueryClient().invalidateQueries({ queryKey: groupKeys.all });
       return redirect("/groups");
     } else if (intent === "issue-invite") {
       const hours = Number(formData.get("hours"));
@@ -315,9 +358,17 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
         return data({ error: "그룹을 찾을 수 없습니다." }, { status: 400 });
       // 삭제하는 순간 호출자도 멤버가 아니게 되므로 이 화면에 남아 있으면 재검증이 404가 된다.
       await deleteGroup(groupId);
+      getQueryClient().removeQueries({
+        queryKey: groupKeys.detail(params.slug),
+      });
+      await getQueryClient().invalidateQueries({ queryKey: groupKeys.all });
       return redirect("/groups");
     } else {
       return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
+    }
+    await getQueryClient().invalidateQueries({ queryKey: groupKeys.all });
+    if (postIntent) {
+      await getQueryClient().invalidateQueries({ queryKey: feedKeys.all });
     }
     return data({ ok: true });
   } catch (error) {

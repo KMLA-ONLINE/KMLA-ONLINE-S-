@@ -11,6 +11,7 @@ import {
 import type { Route } from "./+types/root";
 import { ErrorPage } from "~/shared/components/error-page";
 import { PwaPrompts } from "~/shared/components/pwa-prompts";
+import { QueryProvider } from "~/shared/components/query-provider";
 import { Toaster } from "~/shared/ui/sonner";
 import { TooltipProvider } from "~/shared/ui/tooltip";
 import "./app.css";
@@ -67,10 +68,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <>
+    <QueryProvider>
       <Outlet />
       <PwaPrompts />
-    </>
+    </QueryProvider>
   );
 }
 
