@@ -1,37 +1,43 @@
 import { describe, expect, it } from "vitest";
+import { useSearchParams } from "react-router";
 
 import { GroupDetailMobileHeader } from "~/features/groups/components/group-detail-mobile-header";
 import { renderRoute, screen } from "../../../router";
 
-describe("GroupDetailMobileHeader", () => {
-  it("opens group post search for members", async () => {
-    const { user } = renderRoute(() => (
+/** 헤더는 검색창을 그리지 않는다. URL만 열고, 검색창은 `GroupDetailScreen`이 하나 그린다. */
+function HeaderRoute({ canSearch }: { canSearch: boolean }) {
+  const [searchParams] = useSearchParams();
+
+  return (
+    <>
+      <output data-testid="search-open">
+        {searchParams.get("search") ?? ""}
+      </output>
       <GroupDetailMobileHeader
         name="테스트 그룹"
         iconPath={null}
-        groupId="group-1"
-        slug="test-group"
-        canSearch
+        canSearch={canSearch}
       />
-    ));
+    </>
+  );
+}
+
+describe("GroupDetailMobileHeader", () => {
+  it("opens group post search for members", async () => {
+    const { user } = renderRoute(() => <HeaderRoute canSearch />, {
+      path: "/groups/:slug",
+      initialEntries: ["/groups/test-group"],
+    });
 
     await user.click(screen.getByRole("button", { name: "게시물 검색" }));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(
-      screen.getByRole("textbox", { name: "게시물 검색어" }),
-    ).toBeVisible();
+    expect(screen.getByTestId("search-open")).toHaveTextContent("1");
   });
 
   it("hides search from non-members", () => {
-    renderRoute(() => (
-      <GroupDetailMobileHeader
-        name="테스트 그룹"
-        iconPath={null}
-        groupId="group-1"
-        slug="test-group"
-        canSearch={false}
-      />
-    ));
+    renderRoute(() => <HeaderRoute canSearch={false} />, {
+      path: "/groups/:slug",
+      initialEntries: ["/groups/test-group"],
+    });
 
     expect(
       screen.queryByRole("button", { name: "게시물 검색" }),

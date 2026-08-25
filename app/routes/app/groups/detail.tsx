@@ -1,4 +1,9 @@
-import { data, Outlet, redirect } from "react-router";
+import {
+  data,
+  Outlet,
+  redirect,
+  type ShouldRevalidateFunctionArgs,
+} from "react-router";
 
 import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import {
@@ -52,6 +57,30 @@ export const handle = defineAppChrome({
   contentWidth: "5xl",
   pullToRefresh: true,
 });
+
+/** 게시물 검색 오버레이의 URL 상태. loader가 읽지 않으므로 이것만 바뀌면 다시 읽을 것이 없다. */
+const SEARCH_OVERLAY_PARAMS = new Set(["search", "q"]);
+
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  formMethod,
+}: ShouldRevalidateFunctionArgs) {
+  if (formMethod && formMethod !== "GET") return true;
+  if (currentUrl.href === nextUrl.href) return true;
+  if (currentUrl.pathname !== nextUrl.pathname) return true;
+
+  const changedKeys = new Set([
+    ...currentUrl.searchParams.keys(),
+    ...nextUrl.searchParams.keys(),
+  ]);
+  return !Array.from(changedKeys).every(
+    (key) =>
+      SEARCH_OVERLAY_PARAMS.has(key) ||
+      currentUrl.searchParams.getAll(key).join("\0") ===
+        nextUrl.searchParams.getAll(key).join("\0"),
+  );
+}
 
 /**
  * `groups/:slug`. 게시물 상세(`posts/:postId`)를 자식으로 가지므로 `<Outlet />`을 그린다 —
@@ -397,8 +426,6 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
       <GroupDetailMobileHeader
         name={loaderData.group.name}
         iconPath={loaderData.group.icon_path}
-        groupId={loaderData.group.group_id}
-        slug={loaderData.group.slug}
         canSearch={loaderData.group.membership_state === "member"}
       />
       <GroupDetailScreen
