@@ -62,7 +62,9 @@ export function CommentItem({
   /** 수정 입력창의 아바타에 쓴다. */
   viewer: CommentViewer;
   canReply: boolean;
+  /** 이 댓글이 지금 입력창의 답글 대상이다. 답글 모드가 끝날 때까지 계속 표시된다. */
   replying?: boolean;
+  /** `@작성자` 칩으로 옮겨 온 직후의 일시적 표시. 잠시 뒤 스스로 꺼진다. */
   highlighted?: boolean;
   pending?: boolean;
   onReply: () => void;
@@ -85,7 +87,7 @@ export function CommentItem({
         id={commentDomId(comment.comment_id)}
         className={cn(
           "-mx-2 flex gap-2 rounded-xl px-2 py-1 transition-colors",
-          highlighted && "bg-primary/5",
+          (highlighted || replying) && "bg-primary/5",
         )}
       >
         <div className="size-8 shrink-0 rounded-full bg-muted/60" aria-hidden />
@@ -136,7 +138,7 @@ export function CommentItem({
       id={commentDomId(comment.comment_id)}
       className={cn(
         "-mx-2 flex gap-2 rounded-xl px-2 py-1 transition-colors",
-        highlighted && "bg-primary/5",
+        (highlighted || replying) && "bg-primary/5",
       )}
     >
       {linksToProfile ? (
