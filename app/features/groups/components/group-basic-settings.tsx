@@ -11,7 +11,7 @@ import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Field, FieldLabel } from "~/shared/ui/field";
-import { Input } from "~/shared/ui/input";
+import { TextField } from "~/shared/ui/text-field";
 import { Textarea } from "~/shared/ui/textarea";
 
 export function BasicInfoCard({ group }: { group: GroupDetail }) {
@@ -61,7 +61,7 @@ export function BasicInfoCard({ group }: { group: GroupDetail }) {
             <SettingsHidden group={group} omit="basic" />
             <Field>
               <FieldLabel htmlFor="group-name">그룹 이름</FieldLabel>
-              <Input
+              <TextField
                 id="group-name"
                 name="name"
                 defaultValue={group.name}

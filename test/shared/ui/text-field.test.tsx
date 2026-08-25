@@ -1,11 +1,11 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { SingleLineTextarea } from "~/shared/ui/single-line-textarea";
+import { TextField } from "~/shared/ui/text-field";
 
-describe("SingleLineTextarea", () => {
+describe("TextField", () => {
   it("uses one-row, non-multiline semantics", () => {
-    render(<SingleLineTextarea aria-label="한 줄 입력" />);
+    render(<TextField aria-label="한 줄 입력" />);
 
     const textarea = screen.getByRole("textbox", { name: "한 줄 입력" });
     expect(textarea).toHaveAttribute("rows", "1");
@@ -15,7 +15,7 @@ describe("SingleLineTextarea", () => {
   });
 
   it("prevents Enter from creating a new line", () => {
-    render(<SingleLineTextarea aria-label="한 줄 입력" />);
+    render(<TextField aria-label="한 줄 입력" />);
 
     const textarea = screen.getByRole("textbox", { name: "한 줄 입력" });
     expect(fireEvent.keyDown(textarea, { key: "Enter" })).toBe(false);
@@ -24,7 +24,7 @@ describe("SingleLineTextarea", () => {
   it("moves focus to the next control on Enter", () => {
     render(
       <>
-        <SingleLineTextarea aria-label="한 줄 입력" />
+        <TextField aria-label="한 줄 입력" />
         <input aria-label="다음 입력" />
       </>,
     );
@@ -38,7 +38,7 @@ describe("SingleLineTextarea", () => {
   });
 
   it("removes line breaks from changed values", () => {
-    render(<SingleLineTextarea aria-label="한 줄 입력" />);
+    render(<TextField aria-label="한 줄 입력" />);
 
     const textarea = screen.getByRole("textbox", { name: "한 줄 입력" });
     fireEvent.change(textarea, { target: { value: "first\nsecond" } });

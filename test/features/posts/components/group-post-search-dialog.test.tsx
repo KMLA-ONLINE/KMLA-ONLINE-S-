@@ -67,7 +67,7 @@ function renderSearch(entry = "/groups/group?search=1") {
 }
 
 const searchInput = () =>
-  screen.getByRole("textbox", { name: "게시물 검색어" });
+  screen.getByRole("searchbox", { name: "게시물 검색어" });
 
 describe("GroupPostSearchDialog", () => {
   beforeEach(() => {
@@ -160,7 +160,7 @@ describe("GroupPostSearchDialog", () => {
     await user.click(screen.getByRole("button", { name: "검색 열기" }));
 
     await user.type(
-      await screen.findByRole("textbox", { name: "게시물 검색어" }),
+      await screen.findByRole("searchbox", { name: "게시물 검색어" }),
       "첫 검색{Enter}",
     );
     await waitFor(() =>
@@ -202,7 +202,7 @@ describe("GroupPostSearchDialog", () => {
     const { user } = renderSearch("/groups/group");
     await user.click(screen.getByRole("button", { name: "검색 열기" }));
     await user.type(
-      await screen.findByRole("textbox", { name: "게시물 검색어" }),
+      await screen.findByRole("searchbox", { name: "게시물 검색어" }),
       "시험{Enter}",
     );
     await waitFor(() =>
@@ -216,7 +216,7 @@ describe("GroupPostSearchDialog", () => {
     await user.click(screen.getByRole("button", { name: "검색 열기" }));
 
     expect(
-      await screen.findByRole("textbox", { name: "게시물 검색어" }),
+      await screen.findByRole("searchbox", { name: "게시물 검색어" }),
     ).toHaveValue("");
     expect(screen.getByText("제목이나 내용으로 검색해 보세요.")).toBeVisible();
     expect(searchInput()).toHaveFocus();
@@ -227,7 +227,7 @@ describe("GroupPostSearchDialog", () => {
     await user.click(screen.getByRole("button", { name: "검색 열기" }));
 
     expect(
-      await screen.findByRole("textbox", { name: "게시물 검색어" }),
+      await screen.findByRole("searchbox", { name: "게시물 검색어" }),
     ).toHaveValue("");
     expect(searchGroupPosts).not.toHaveBeenCalled();
   });

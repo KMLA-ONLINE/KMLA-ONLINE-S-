@@ -49,7 +49,8 @@
 - Keep pgTAP tests under `supabase/tests/` and run them with `npm run test:db` against the reset local database; CI runs the same path.
 - Keep `supabase/seed.sql` idempotent and development-only.
 - Never hand-edit `app/shared/supabase/database.types.ts`; regenerate it with `npm run db:types` after schema changes.
-- `app/shared/ui/**` is registry-vendored shadcn code and is excluded from lint because regeneration overwrites it. Prefer composition outside that directory over local fixes there.
+- Registry-vendored shadcn code under `app/shared/ui/**` is excluded from lint because regeneration overwrites it. `app/shared/ui/text-field.tsx` is the maintained exception: it composes the vendored Textarea to avoid Android Chromium's system autofill accessory on generic single-line text fields.
+- Use `TextField` for generic one-line strings such as names, titles, and labels. Keep `Input` where native input semantics or browser validation matter: `email`, `password`, `tel`, `url`, `number`, date/time, file, explicit `pattern`, and actual `type="search"` fields. The local ESLint rule requires every production `Input` to declare that native type. Do not use unsupported autocomplete/name/readOnly heuristics to suppress the Android accessory.
 - The vendored shadcn style is `base-vega`, built on Base UI, not Radix. Compose with the `render` prop (`<Button render={<Link to="/" />}>`), not `asChild` — `asChild` does not exist on these components.
 - Do not use the shadcn `AlertDialog` component.
 

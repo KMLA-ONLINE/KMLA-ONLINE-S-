@@ -176,7 +176,8 @@ function SearchPanel({
               autoComplete="off"
               placeholder="게시물 검색"
               aria-label="게시물 검색어"
-              className="h-9 rounded-full border-0 bg-muted pl-9 shadow-none"
+              className="h-9 rounded-full border-0 bg-muted pl-9 shadow-none [&::-webkit-search-cancel-button]:appearance-none"
+              type="search"
             />
           </div>
         </form>

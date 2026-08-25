@@ -12,6 +12,7 @@ import { Checkbox } from "~/shared/ui/checkbox";
 import { Field, FieldError, FieldLabel } from "~/shared/ui/field";
 import { Input } from "~/shared/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
+import { TextField } from "~/shared/ui/text-field";
 import { Spinner } from "~/shared/ui/spinner";
 import { Textarea } from "~/shared/ui/textarea";
 
@@ -91,7 +92,7 @@ function ProfileEditForm({
               className="sm:col-span-2"
             >
               <FieldLabel htmlFor="profile-name">이름</FieldLabel>
-              <Input
+              <TextField
                 id="profile-name"
                 name="name"
                 defaultValue={values.name}

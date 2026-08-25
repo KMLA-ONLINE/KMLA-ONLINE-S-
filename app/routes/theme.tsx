@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Input } from "~/shared/ui/input";
-import { SingleLineTextarea } from "~/shared/ui/single-line-textarea";
+import { TextField } from "~/shared/ui/text-field";
 
 function TestCase({ children, title }: { children: ReactNode; title: string }) {
   return (
@@ -67,9 +67,9 @@ export default function Theme() {
             type="search"
           />
         </TestCase>
-        <TestCase title="SingleLineTextarea">
+        <TestCase title="TextField">
           <div className="flex flex-col gap-2">
-            <SingleLineTextarea aria-label="test textarea" placeholder="입력" />
+            <TextField aria-label="test textarea" placeholder="입력" />
             <Input
               aria-label="next test input"
               placeholder="다음 포커스 대상"

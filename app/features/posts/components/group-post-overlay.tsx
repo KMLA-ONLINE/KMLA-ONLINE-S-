@@ -50,8 +50,8 @@ import { useModalClose } from "~/shared/hooks/use-modal-close";
 import { cn } from "~/shared/lib/utils";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { Button } from "~/shared/ui/button";
-import { Input } from "~/shared/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
+import { TextField } from "~/shared/ui/text-field";
 import { Spinner } from "~/shared/ui/spinner";
 
 export function needsPostIdentityConfirmation(identity: PostIdentity): boolean {
@@ -476,7 +476,7 @@ function PostEditor({
               </div>
 
               <PostFormField error={formErrors?.title}>
-                <Input
+                <TextField
                   name="title"
                   defaultValue={initial.title}
                   maxLength={100}

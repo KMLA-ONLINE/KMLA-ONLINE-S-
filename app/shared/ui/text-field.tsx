@@ -29,7 +29,7 @@ function focusNextControl(control: HTMLTextAreaElement) {
   }
 }
 
-function SingleLineTextarea({
+function TextField({
   className,
   enterKeyHint = "next",
   onBeforeInput,
@@ -91,4 +91,4 @@ function SingleLineTextarea({
   );
 }
 
-export { SingleLineTextarea };
+export { TextField };

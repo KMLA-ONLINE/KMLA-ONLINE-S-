@@ -26,6 +26,7 @@ import {
 } from "~/shared/ui/field";
 import { Input } from "~/shared/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
+import { TextField } from "~/shared/ui/text-field";
 import { Spinner } from "~/shared/ui/spinner";
 import { Textarea } from "~/shared/ui/textarea";
 
@@ -154,7 +155,7 @@ export function GroupCreateForm({
             <FieldGroup>
               <Field data-invalid={Boolean(errors.name)}>
                 <FieldLabel htmlFor="group-name">그룹 이름</FieldLabel>
-                <Input
+                <TextField
                   id="group-name"
                   name="name"
                   defaultValue={values.name}
@@ -224,6 +225,7 @@ export function GroupCreateForm({
                     <Input
                       id="group-slug"
                       name="slug"
+                      type="text"
                       defaultValue={values.slug}
                       minLength={4}
                       maxLength={15}
