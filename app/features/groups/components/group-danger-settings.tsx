@@ -68,7 +68,7 @@ export function DangerSettings({ group }: { group: GroupDetail }) {
         open={open}
         onOpenChange={(next) => (next ? setOpen(true) : close())}
         title={group.name}
-        description={`멤버 ${group.member_count}명의 멤버십과 함께 이 그룹의 모든 게시물, 댓글, 반응, 첨부 파일이 사라집니다. 되돌릴 수 없습니다.`}
+        description={`멤버 ${group.member_count}명과 및 그룹의 모든 정보가 사라집니다. 되돌릴 수 없습니다.`}
         details={
           <Field>
             <FieldLabel htmlFor="group-deletion-phrase">

@@ -52,6 +52,19 @@ describe("PullToRefresh", () => {
     expect(onRefresh).not.toHaveBeenCalled();
   });
 
+  it("moves the indicator 50px below its resting position at maximum pull", () => {
+    const onRefresh = vi.fn().mockResolvedValue(undefined);
+    render(<Subject onRefresh={onRefresh} />);
+    const scroller = screen.getByTestId("scroller");
+
+    fireEvent.mouseDown(scroller, { button: 0, clientX: 20, clientY: 20 });
+    fireEvent.mouseMove(window, { clientX: 20, clientY: 220 });
+
+    expect(screen.getByTestId("pull-to-refresh-indicator")).toHaveStyle({
+      transform: "translateY(50px)",
+    });
+  });
+
   it("ignores gestures that begin in an input", () => {
     const onRefresh = vi.fn().mockResolvedValue(undefined);
 
