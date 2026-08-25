@@ -31,7 +31,7 @@ export function GroupCategoryChips({
     <div
       role="group"
       aria-label="카테고리"
-      className="no-scrollbar flex gap-2 overflow-x-auto px-4 md:px-0"
+      className="no-scrollbar flex gap-2 overflow-x-auto px-4 py-3 md:px-0 md:py-0"
     >
       <button
         type="button"
