@@ -7,6 +7,8 @@ import {
   cancelGroupJoinRequest,
   discoverGroups,
   getGroupErrorMessage,
+  groupKeys,
+  GROUP_STALE_TIME,
   type GroupDiscoveryCursor,
   GroupDiscoverScreen,
   hasMinimumGroupSearchLength,
@@ -15,11 +17,14 @@ import {
   requestGroupJoin,
 } from "~/features/groups";
 import { Button } from "~/shared/ui/button";
+import { getQueryClient } from "~/shared/lib/query-client";
+import { feedKeys } from "~/features/feed";
 import type { Route } from "./+types/discover";
 
 export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "sticky",
+  pullToRefresh: true,
 });
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
@@ -31,7 +36,11 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
   try {
     return {
-      page: await discoverGroups({ query, includeJoined, cursor }),
+      page: await getQueryClient().fetchQuery({
+        queryKey: groupKeys.discovery(query, includeJoined, cursor),
+        queryFn: () => discoverGroups({ query, includeJoined, cursor }),
+        staleTime: GROUP_STALE_TIME,
+      }),
       query,
       includeJoined,
     };
@@ -63,6 +72,13 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     else if (intent === "cancel-request")
       await cancelGroupJoinRequest(groupId, profileId);
     else return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
+    await Promise.all([
+      getQueryClient().invalidateQueries({ queryKey: groupKeys.all }),
+      getQueryClient().invalidateQueries({
+        queryKey: feedKeys.all,
+        refetchType: "none",
+      }),
+    ]);
     return data({ ok: true });
   } catch (error) {
     return data({ error: getGroupErrorMessage(error) }, { status: 400 });

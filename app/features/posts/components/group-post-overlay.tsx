@@ -96,6 +96,7 @@ export function GroupPostOverlay({
   viewer,
   onClose,
   action,
+  onSaved,
 }: {
   mode: "create" | "detail" | "edit";
   slug: string;
@@ -110,6 +111,7 @@ export function GroupPostOverlay({
   viewer?: CommentViewer;
   onClose?: () => void;
   action?: string;
+  onSaved?: () => Promise<void>;
 }) {
   // 그룹으로 `navigate`하면 히스토리에 작성 화면이 남아서, 뒤로 가기를 누른 사용자가 방금
   // 버린 초안을 다시 마주하게 된다. 들어온 경로를 되감는 게 맞다.
@@ -140,6 +142,7 @@ export function GroupPostOverlay({
         post={post}
         identities={identities}
         onClose={close}
+        onSaved={onSaved}
       />
     </div>
   );
@@ -154,6 +157,7 @@ function PostEditor({
   post,
   identities,
   onClose,
+  onSaved,
 }: {
   mode: "create" | "edit";
   slug: string;
@@ -163,6 +167,7 @@ function PostEditor({
   post?: GroupPostDetail | null;
   identities: PostIdentity[];
   onClose: () => void;
+  onSaved?: () => Promise<void>;
 }) {
   const navigate = useNavigate();
   const revalidator = useRevalidator();
@@ -291,6 +296,7 @@ function PostEditor({
               onProgress,
             );
       additions.forEach(releasePostFile);
+      await onSaved?.();
       await revalidator.revalidate();
       void navigate(`/groups/${slug}/posts/${postId}`, { replace: true });
     } catch (error) {

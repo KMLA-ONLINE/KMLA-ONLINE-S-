@@ -1,14 +1,26 @@
 import { useRef } from "react";
-import { Outlet, useMatches } from "react-router";
+import {
+  Outlet,
+  useLocation,
+  useMatches,
+  useNavigation,
+  useRevalidator,
+} from "react-router";
 
 import {
   AppHeader,
   AppSidebar,
   MobileTabBar,
+  NavigationSkeleton,
+  PullToRefresh,
   resolveAppChrome,
   ScrollRegion,
 } from "~/features/app-shell";
+import { feedKeys } from "~/features/feed";
+import { groupKeys } from "~/features/groups";
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
+import { useDelayedPending } from "~/shared/hooks/use-delayed-pending";
+import { getQueryClient } from "~/shared/lib/query-client";
 import { cn } from "~/shared/lib/utils";
 
 const CONTENT_WIDTH_CLASS = {
@@ -21,6 +33,9 @@ const CONTENT_WIDTH_CLASS = {
 
 export default function MainAppLayout() {
   const matches = useMatches();
+  const location = useLocation();
+  const navigation = useNavigation();
+  const revalidator = useRevalidator();
   const chrome = resolveAppChrome(matches);
   const scrollRef = useRef<HTMLElement>(null);
   const hidden = useHideOnScroll({
@@ -29,6 +44,27 @@ export default function MainAppLayout() {
       chrome.header === "hide-on-scroll" ||
       chrome.bottomNav === "hide-on-scroll",
   });
+  const pendingPathname = navigation.location?.pathname;
+  const groupDetailSearchNavigation =
+    navigation.state === "loading" &&
+    pendingPathname === location.pathname &&
+    /^\/groups\/[^/]+$/.test(location.pathname) &&
+    navigation.location.search !== location.search;
+  const navigationPending =
+    navigation.state === "loading" &&
+    Boolean(pendingPathname) &&
+    !groupDetailSearchNavigation;
+  const showNavigationSkeleton = useDelayedPending(navigationPending);
+  const skeletonPath = pendingPathname ?? location.pathname;
+
+  const refresh = async () => {
+    const queryClient = getQueryClient();
+    await queryClient.invalidateQueries({
+      queryKey: location.pathname === "/" ? feedKeys.all : groupKeys.all,
+      refetchType: "none",
+    });
+    await revalidator.revalidate();
+  };
 
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-background">
@@ -48,7 +84,12 @@ export default function MainAppLayout() {
       <div className="flex min-h-0 flex-1">
         <AppSidebar className="max-md:hidden" />
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <PullToRefresh
+            containerRef={scrollRef}
+            enabled={chrome.pullToRefresh}
+            onRefresh={refresh}
+          />
           <ScrollRegion scrollRef={scrollRef}>
             <div className="md:px-8">
               <div
@@ -59,7 +100,11 @@ export default function MainAppLayout() {
                   CONTENT_WIDTH_CLASS[chrome.contentWidth],
                 )}
               >
-                <Outlet />
+                {showNavigationSkeleton ? (
+                  <NavigationSkeleton pathname={skeletonPath} />
+                ) : (
+                  <Outlet />
+                )}
               </div>
             </div>
           </ScrollRegion>

@@ -14,6 +14,7 @@ import {
 } from "~/features/posts";
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
 import type { Route } from "./+types/post";
+import { invalidateSavedGroupPost } from "~/routes/app/groups/post-cache";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -48,6 +49,7 @@ export async function clientAction({
     }
     if (formData.get("intent") === "delete") {
       await deleteGroupPost(params.postId);
+      await invalidateSavedGroupPost(group.group_id);
       throw redirect(`/groups/${params.slug}`);
     }
     if (formData.get("intent") === "pin") {
@@ -55,6 +57,7 @@ export async function clientAction({
         params.postId,
         formData.get("pinned") === "true",
       );
+      await invalidateSavedGroupPost(group.group_id);
       return data({ ok: true });
     }
     return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });

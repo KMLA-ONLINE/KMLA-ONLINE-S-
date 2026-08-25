@@ -1,6 +1,7 @@
 import { defineAppChrome } from "~/features/app-shell";
 import { getProfilePost, ProfilePostEditor } from "~/features/posts";
 import type { Route } from "./+types/post-edit";
+import { invalidateSavedProfilePost } from "~/routes/app/profile/post-cache";
 
 export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
 
@@ -26,6 +27,7 @@ export default function EditProfilePostPage({
       // 공개 범위는 자기 타임라인 글에서만 고를 수 있다(기능 명세 §8.4).
       canChooseVisibility={post.author_pub_id === post.timeline_pub_id}
       post={post}
+      onSaved={invalidateSavedProfilePost}
     />
   );
 }

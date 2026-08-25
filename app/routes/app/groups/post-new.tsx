@@ -4,6 +4,7 @@ import { defineAppChrome } from "~/features/app-shell";
 import type { GroupDetail } from "~/features/groups";
 import { GroupPostOverlay, resolveIdentityOptions } from "~/features/posts";
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
+import { invalidateSavedGroupPost } from "~/routes/app/groups/post-cache";
 
 export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
 
@@ -48,6 +49,7 @@ export default function NewGroupPostPage() {
       groupId={group.group_id}
       categories={categories}
       identities={identities}
+      onSaved={() => invalidateSavedGroupPost(group.group_id)}
     />
   );
 }

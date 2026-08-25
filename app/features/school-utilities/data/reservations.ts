@@ -32,31 +32,7 @@ interface CreateUtilityReservationInput {
 const SELECT_COLUMNS =
   "id, profile_id, mode, reservation_date, slot, location, detail, recurring, recurring_until, applicant_name, avatar_path, profiles(cohort, pub_id)" as const;
 
-function toMode(value: string): UtilityMode {
-  if (value === "gongang" || value === "karaoke") {
-    return value;
-  }
-
-  throw new Error("Unknown utility reservation mode.");
-}
-
-async function resolveAvatarUrl(path: string | null): Promise<string | null> {
-  if (!path) return null;
-
-  if (/^https?:\/\//i.test(path)) {
-    return path;
-  }
-
-  const { data, error } = await getSupabase()
-    .storage.from("profile-media")
-    .createSignedUrl(path, 3600);
-
-  if (error) return null;
-
-  return data.signedUrl;
-}
-
-async function mapReservation(row: {
+interface ReservationRow {
   id: number;
   profile_id: number;
   mode: string;
@@ -72,7 +48,48 @@ async function mapReservation(row: {
     cohort: number | null;
     pub_id: string;
   } | null;
-}): Promise<UtilityReservation> {
+}
+
+function toMode(value: string): UtilityMode {
+  if (value === "gongang" || value === "karaoke") {
+    return value;
+  }
+
+  throw new Error("Unknown utility reservation mode.");
+}
+
+async function createAvatarUrls(rows: ReservationRow[]) {
+  const urls = new Map<string, string>();
+  const paths = [
+    ...new Set(
+      rows.flatMap((row) => {
+        const path = row.avatar_path;
+        if (!path) return [];
+        if (/^https?:\/\//i.test(path)) {
+          urls.set(path, path);
+          return [];
+        }
+        return [path];
+      }),
+    ),
+  ];
+  if (paths.length === 0) return urls;
+
+  const { data, error } = await getSupabase()
+    .storage.from("profile-media")
+    .createSignedUrls(paths, 3600);
+  if (error) return urls;
+
+  for (const item of data ?? []) {
+    if (item.path && item.signedUrl) urls.set(item.path, item.signedUrl);
+  }
+  return urls;
+}
+
+function mapReservation(
+  row: ReservationRow,
+  avatarUrls: ReadonlyMap<string, string>,
+): UtilityReservation {
   return {
     id: row.id,
     profileId: row.profile_id,
@@ -86,7 +103,9 @@ async function mapReservation(row: {
     applicantName: row.applicant_name,
     applicantPubId: row.profiles?.pub_id ?? "",
     applicantCohort: row.profiles?.cohort ?? null,
-    avatarUrl: await resolveAvatarUrl(row.avatar_path),
+    avatarUrl: row.avatar_path
+      ? (avatarUrls.get(row.avatar_path) ?? null)
+      : null,
   };
 }
 
@@ -124,8 +143,9 @@ export async function loadUtilityReservations(
   }
 
   const rows = [...(directResult.data ?? []), ...(recurringResult.data ?? [])];
+  const avatarUrls = await createAvatarUrls(rows);
 
-  return Promise.all(rows.map((row) => mapReservation(row)));
+  return rows.map((row) => mapReservation(row, avatarUrls));
 }
 
 export async function createUtilityReservation(
@@ -152,7 +172,8 @@ export async function createUtilityReservation(
     throw error;
   }
 
-  return mapReservation(data);
+  const avatarUrls = await createAvatarUrls([data]);
+  return mapReservation(data, avatarUrls);
 }
 
 export async function deleteUtilityReservation(

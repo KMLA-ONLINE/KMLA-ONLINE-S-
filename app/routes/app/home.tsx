@@ -1,10 +1,16 @@
 import { MessagesSquareIcon, SearchIcon, UtensilsIcon } from "lucide-react";
-import { Link } from "react-router";
+import { Link, type ShouldRevalidateFunctionArgs } from "react-router";
 
 import { defineAppChrome, PageHeader } from "~/features/app-shell";
-import { FeedScreen, listFeedPosts } from "~/features/feed";
+import {
+  FEED_STALE_TIME,
+  FeedScreen,
+  feedKeys,
+  listFeedPosts,
+} from "~/features/feed";
 import { getKoreaDate, getMealDay, HomeMealSummary } from "~/features/meal";
 import { Button } from "~/shared/ui/button";
+import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/home";
 
 /**
@@ -21,7 +27,31 @@ export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "sticky",
   contentWidth: "5xl",
+  pullToRefresh: true,
 });
+
+const FEED_UI_SEARCH_PARAMS = new Set(["post", "kind", "source", "view"]);
+
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  formMethod,
+}: ShouldRevalidateFunctionArgs) {
+  if (formMethod && formMethod !== "GET") return true;
+  if (currentUrl.href === nextUrl.href) return true;
+  if (currentUrl.pathname !== nextUrl.pathname) return true;
+
+  const changedKeys = new Set([
+    ...currentUrl.searchParams.keys(),
+    ...nextUrl.searchParams.keys(),
+  ]);
+  return !Array.from(changedKeys).every(
+    (key) =>
+      FEED_UI_SEARCH_PARAMS.has(key) ||
+      currentUrl.searchParams.getAll(key).join("\0") ===
+        nextUrl.searchParams.getAll(key).join("\0"),
+  );
+}
 
 // 첫 페이지는 로더가 await 한다. 이후 페이지는 useFetcher로 같은 clientLoader에 커서를 보낸다
 // (AGENTS.md의 "Loaders await their data" — 스트리밍 스켈레톤이 필요한 화면에서만 예외).
@@ -33,7 +63,11 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
   try {
     const [page, mealDay] = await Promise.all([
-      listFeedPosts(pageToken),
+      getQueryClient().fetchQuery({
+        queryKey: feedKeys.page(pageToken),
+        queryFn: () => listFeedPosts(pageToken),
+        staleTime: FEED_STALE_TIME,
+      }),
       mealDayPromise,
     ]);
 

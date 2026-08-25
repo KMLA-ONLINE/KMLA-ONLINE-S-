@@ -57,7 +57,8 @@ describe("GroupPostOverlay 저장 경로", () => {
   });
 
   it("폼 제출이 뮤테이션까지 닿는다", async () => {
-    const { user } = renderEditor();
+    const onSaved = vi.fn().mockResolvedValue(undefined);
+    const { user } = renderEditor({ onSaved });
 
     await user.type(screen.getByLabelText("제목"), "제목");
     await user.type(screen.getByLabelText("Markdown 본문"), "본문");
@@ -76,6 +77,7 @@ describe("GroupPostOverlay 저장 경로", () => {
         expect.anything(),
       ),
     );
+    await vi.waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
   });
 
   it("고를 수 없는 신원이 폼에 실려 와도 실명으로 떨어뜨린다", async () => {

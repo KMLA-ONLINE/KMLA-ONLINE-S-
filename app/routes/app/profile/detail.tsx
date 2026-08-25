@@ -8,6 +8,7 @@ import {
 } from "~/features/posts";
 import { loadAcceptedProfile, ProfileDetail } from "~/features/profiles";
 import type { Route } from "./+types/detail";
+import { invalidateSavedProfilePost } from "~/routes/app/profile/post-cache";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -52,6 +53,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     // 카드의 ⋯ 메뉴에서 지우는 경로. 게시물 상세 route에도 같은 삭제가 있지만 그쪽은 지운 뒤
     // 프로필로 redirect한다 — 여기서는 이미 프로필에 있으므로 revalidate로 충분하다.
     await deleteProfilePost(postId);
+    await invalidateSavedProfilePost();
     return data({ ok: true });
   } catch (error) {
     return data({ error: getPostErrorMessage(error) }, { status: 400 });

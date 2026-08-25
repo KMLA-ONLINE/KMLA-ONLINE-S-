@@ -4,10 +4,13 @@ import { defineAppChrome, PageHeader } from "~/features/app-shell";
 import {
   acceptGroupInvite,
   getGroupErrorMessage,
+  groupKeys,
   getGroupInvitePreview,
   GroupInviteScreen,
 } from "~/features/groups";
 import type { Route } from "./+types/invite";
+import { feedKeys } from "~/features/feed";
+import { getQueryClient } from "~/shared/lib/query-client";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -26,7 +29,15 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
 
 export async function clientAction({ params }: Route.ClientActionArgs) {
   try {
-    return redirect(`/groups/${await acceptGroupInvite(params.token)}`);
+    const slug = await acceptGroupInvite(params.token);
+    await Promise.all([
+      getQueryClient().invalidateQueries({ queryKey: groupKeys.all }),
+      getQueryClient().invalidateQueries({
+        queryKey: feedKeys.all,
+        refetchType: "none",
+      }),
+    ]);
+    return redirect(`/groups/${slug}`);
   } catch (error) {
     return data({ error: getGroupErrorMessage(error) }, { status: 400 });
   }

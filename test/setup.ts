@@ -5,9 +5,11 @@ import "@testing-library/jest-dom/vitest";
 // eslint-disable-next-line testing-library/no-manual-cleanup
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
+import { resetQueryClientForTests } from "~/shared/lib/query-client";
 
 afterEach(() => {
   cleanup();
+  resetQueryClientForTests();
   vi.restoreAllMocks();
 });
 

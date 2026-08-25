@@ -3,6 +3,7 @@ import { useRouteLoaderData } from "react-router";
 import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import { ProfilePostEditor } from "~/features/posts";
 import type { clientLoader as profileLoader } from "~/routes/app/profile/detail";
+import { invalidateSavedProfilePost } from "~/routes/app/profile/post-cache";
 
 export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
 
@@ -37,6 +38,7 @@ export default function NewProfilePostPage() {
       timelinePubId={timeline.pub_id}
       timelineName={timeline.name}
       canChooseVisibility={isOwnTimeline}
+      onSaved={invalidateSavedProfilePost}
     />
   );
 }
