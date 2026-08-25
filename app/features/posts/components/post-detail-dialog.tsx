@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
@@ -46,22 +47,22 @@ const DETAIL_DIALOG_CLASS =
   "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-2xl";
 
 const COMMENT_SHEET_CLASS =
-  "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-auto max-md:bottom-0 max-md:left-0 max-md:h-[98svh] max-md:max-h-[98svh] max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-t-2xl max-md:rounded-b-none max-md:data-open:zoom-in-100 max-md:data-open:slide-in-from-bottom-4 max-md:data-closed:zoom-out-100 max-md:data-closed:slide-out-to-bottom-4 md:max-w-2xl";
+  "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-[1025px]:top-auto max-[1025px]:bottom-0 max-[1025px]:h-[98svh] max-[1025px]:max-h-[98svh] max-[1025px]:rounded-t-2xl max-[1025px]:rounded-b-none max-[1025px]:translate-y-[var(--sheet-drag-offset,0px)] max-[1025px]:data-open:zoom-in-100 max-[1025px]:data-open:slide-in-from-bottom-4 max-[1025px]:data-closed:zoom-out-100 max-[1025px]:data-closed:slide-out-to-bottom-4 max-md:left-0 max-md:max-w-full max-md:translate-x-0 md:max-[1025px]:left-1/2 md:max-[1025px]:max-w-2xl md:max-[1025px]:-translate-x-1/2 min-[1025px]:max-w-2xl";
 
 const DISMISS_DRAG_DISTANCE = 96;
-const DESKTOP_QUERY = "(min-width: 768px)";
+const TABLET_SHEET_QUERY = "(max-width: 1024px) and (hover: none)";
 
-function subscribeToDesktopQuery(onChange: () => void) {
-  const query = window.matchMedia(DESKTOP_QUERY);
+function subscribeToTabletSheetQuery(onChange: () => void) {
+  const query = window.matchMedia(TABLET_SHEET_QUERY);
   query.addEventListener("change", onChange);
   return () => query.removeEventListener("change", onChange);
 }
 
-function isDesktopViewport() {
-  return window.matchMedia(DESKTOP_QUERY).matches;
+function isTabletSheetViewport() {
+  return window.matchMedia(TABLET_SHEET_QUERY).matches;
 }
 
-function getServerDesktopViewport() {
+function getServerTabletSheetViewport() {
   return false;
 }
 
@@ -113,12 +114,12 @@ export function PostDetailDialog({
   const dragStart = useRef<{ pointerId: number; y: number } | null>(null);
   const [searchParams] = useSearchParams();
   const commentsOnly = searchParams.get("view") === "comments";
-  const desktop = useSyncExternalStore(
-    subscribeToDesktopQuery,
-    isDesktopViewport,
-    getServerDesktopViewport,
+  const commentSheet = useSyncExternalStore(
+    subscribeToTabletSheetQuery,
+    isTabletSheetViewport,
+    getServerTabletSheetViewport,
   );
-  const keyboardViewport = useKeyboardViewport(commentsOnly);
+  const keyboardViewport = useKeyboardViewport(commentsOnly && commentSheet);
 
   useEffect(() => {
     if (!replyingTo || keyboardViewport.height === null) return;
@@ -185,7 +186,7 @@ export function PostDetailDialog({
     : undefined;
 
   const startSheetDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (window.matchMedia(DESKTOP_QUERY).matches) return;
+    if (!commentSheet) return;
     if ((event.target as Element).closest("button")) return;
     dragStart.current = { pointerId: event.pointerId, y: event.clientY };
     setDragging(true);
@@ -225,14 +226,14 @@ export function PostDetailDialog({
       <DialogContent
         showCloseButton={false}
         className={cn(
-          commentsOnly ? COMMENT_SHEET_CLASS : DETAIL_DIALOG_CLASS,
-          commentsOnly &&
+          commentSheet ? COMMENT_SHEET_CLASS : DETAIL_DIALOG_CLASS,
+          commentSheet &&
             !dragging &&
-            "max-md:transition-transform max-md:duration-200",
+            "max-[1025px]:transition-transform max-[1025px]:duration-200",
         )}
         style={
-          commentsOnly
-            ? {
+          commentSheet
+            ? ({
                 bottom:
                   keyboardViewport.bottomInset > 0
                     ? `${keyboardViewport.bottomInset}px`
@@ -241,37 +242,36 @@ export function PostDetailDialog({
                   keyboardViewport.height === null
                     ? undefined
                     : `${keyboardViewport.height}px`,
-                transform:
-                  dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
-              }
+                "--sheet-drag-offset": `${dragOffset}px`,
+              } as CSSProperties)
             : undefined
         }
       >
         <div
           className={cn(
             "shrink-0",
-            commentsOnly &&
-              "max-md:cursor-grab max-md:touch-none max-md:active:cursor-grabbing",
+            commentSheet &&
+              "max-[1025px]:cursor-grab max-[1025px]:touch-none max-[1025px]:active:cursor-grabbing",
           )}
-          onPointerDown={commentsOnly ? startSheetDrag : undefined}
-          onPointerMove={commentsOnly ? moveSheetDrag : undefined}
-          onPointerUp={commentsOnly ? finishSheetDrag : undefined}
-          onPointerCancel={commentsOnly ? cancelSheetDrag : undefined}
+          onPointerDown={commentSheet ? startSheetDrag : undefined}
+          onPointerMove={commentSheet ? moveSheetDrag : undefined}
+          onPointerUp={commentSheet ? finishSheetDrag : undefined}
+          onPointerCancel={commentSheet ? cancelSheetDrag : undefined}
         >
-          {commentsOnly ? (
+          {commentSheet ? (
             <div
               aria-hidden="true"
-              className="hidden h-5 items-center justify-center max-md:flex"
+              className="hidden h-5 items-center justify-center max-[1025px]:flex"
             >
               <span className="h-1 w-10 rounded-full bg-muted-foreground/35" />
             </div>
           ) : null}
           <DialogHeader className="relative flex-row items-center justify-center border-b p-3">
             <DialogTitle className="text-base font-semibold">
-              {commentsOnly ? (
+              {commentSheet ? (
                 <>
-                  <span className="md:hidden">댓글</span>
-                  <span className="max-md:hidden">{title}</span>
+                  <span className="min-[1025px]:hidden">댓글</span>
+                  <span className="max-[1025px]:hidden">{title}</span>
                 </>
               ) : (
                 title
@@ -299,7 +299,7 @@ export function PostDetailDialog({
             </p>
           ) : null}
 
-          <article className={cn(commentsOnly && "max-md:hidden")}>
+          <article className={cn(commentSheet && "max-[1025px]:hidden")}>
             {children}
 
             <PostActionBar
@@ -342,7 +342,7 @@ export function PostDetailDialog({
           pending={thread.pending}
           error={thread.error}
           inputRef={composerRef}
-          focusOnMount={commentsOnly && desktop}
+          focusOnMount={commentsOnly && !commentSheet}
           replyTarget={replyTarget}
           onCancelReply={() => setReplyingTo(null)}
         />
