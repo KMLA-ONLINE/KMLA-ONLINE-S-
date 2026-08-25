@@ -16,6 +16,7 @@ import {
   resolveAppChrome,
   ScrollRegion,
 } from "~/features/app-shell";
+import { isPostOverlayNavigation } from "~/features/app-shell/model/navigation";
 import { feedKeys } from "~/features/feed";
 import { groupKeys } from "~/features/groups";
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
@@ -50,10 +51,15 @@ export default function MainAppLayout() {
     pendingPathname === location.pathname &&
     /^\/groups\/[^/]+$/.test(location.pathname) &&
     navigation.location.search !== location.search;
+  const postOverlayNavigation =
+    navigation.state === "loading" &&
+    Boolean(pendingPathname) &&
+    isPostOverlayNavigation(location.pathname, pendingPathname ?? "");
   const navigationPending =
     navigation.state === "loading" &&
     Boolean(pendingPathname) &&
-    !groupDetailSearchNavigation;
+    !groupDetailSearchNavigation &&
+    !postOverlayNavigation;
   const showNavigationSkeleton = useDelayedPending(navigationPending);
   const skeletonPath = pendingPathname ?? location.pathname;
 

@@ -31,12 +31,23 @@ describe("shouldRevalidatePostDetail", () => {
     ).toBe(false);
   });
 
-  it("still revalidates for other query changes and mutations", () => {
+  it("does not reload detail data when switching to the comment sheet", () => {
     expect(
       shouldRevalidatePostDetail(
         args(
           "https://kmla.online/groups/test/posts/post-id",
           "https://kmla.online/groups/test/posts/post-id?view=comments",
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it("still revalidates for other query changes and mutations", () => {
+    expect(
+      shouldRevalidatePostDetail(
+        args(
+          "https://kmla.online/groups/test/posts/post-id",
+          "https://kmla.online/groups/test/posts/post-id?other=value",
         ),
       ),
     ).toBe(true);
