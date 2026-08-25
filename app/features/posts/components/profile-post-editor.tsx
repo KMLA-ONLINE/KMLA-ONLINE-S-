@@ -81,12 +81,14 @@ export function ProfilePostEditor({
   timelineName,
   canChooseVisibility,
   post,
+  onSaved,
 }: {
   mode: "create" | "edit";
   timelinePubId: string;
   timelineName: string;
   canChooseVisibility: boolean;
   post?: ProfilePost | null;
+  onSaved?: () => Promise<void>;
 }) {
   const navigate = useNavigate();
   const revalidator = useRevalidator();
@@ -206,6 +208,7 @@ export function ProfilePostEditor({
               onProgress,
             );
       additions.forEach(releasePostFile);
+      await onSaved?.();
       await revalidator.revalidate();
       void navigate(`/profile/${timelinePubId}/posts/${postId}`, {
         replace: true,

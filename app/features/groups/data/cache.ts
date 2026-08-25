@@ -1,4 +1,5 @@
 import type { GroupDiscoveryCursor } from "~/features/groups/model/types";
+import type { QueryKey } from "@tanstack/react-query";
 
 export const GROUP_STALE_TIME = 30_000;
 export const GROUP_CONTENT_STALE_TIME = 15_000;
@@ -25,3 +26,14 @@ export const groupKeys = {
   reports: (groupId: string, sort: "count" | "recent") =>
     [...groupKeys.all, "reports", groupId, sort] as const,
 };
+
+export function isGroupAccessQuery(
+  queryKey: QueryKey,
+  groupId: string,
+  slug: string,
+) {
+  return (
+    queryKey[0] === groupKeys.all[0] &&
+    (queryKey.includes(groupId) || queryKey.includes(slug))
+  );
+}

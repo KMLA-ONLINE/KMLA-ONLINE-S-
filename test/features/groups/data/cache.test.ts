@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { groupKeys } from "~/features/groups/data/cache";
+import { groupKeys, isGroupAccessQuery } from "~/features/groups/data/cache";
 
 describe("group query keys", () => {
   it("separates discovery filters and cursors", () => {
@@ -20,5 +20,20 @@ describe("group query keys", () => {
     expect(groupKeys.home()[0]).toBe("groups");
     expect(groupKeys.detail("slug")[0]).toBe("groups");
     expect(groupKeys.posts("group-id")[0]).toBe("groups");
+  });
+
+  it("identifies protected queries for one group", () => {
+    expect(
+      isGroupAccessQuery(groupKeys.posts("group-id"), "group-id", "slug"),
+    ).toBe(true);
+    expect(
+      isGroupAccessQuery(groupKeys.detail("slug"), "group-id", "slug"),
+    ).toBe(true);
+    expect(
+      isGroupAccessQuery(groupKeys.posts("other"), "group-id", "slug"),
+    ).toBe(false);
+    expect(isGroupAccessQuery(groupKeys.home(), "group-id", "slug")).toBe(
+      false,
+    );
   });
 });

@@ -13,6 +13,7 @@ import {
   GroupDetailMobileHeader,
   GroupDetailScreen,
   issueGroupInvite,
+  isGroupAccessQuery,
   joinGroup,
   leaveGroup,
   listGroupJoinRequests,
@@ -331,9 +332,7 @@ export async function clientAction({
       if (!(await leaveGroup(groupId, profileId))) {
         return data({ error: "이 그룹은 나갈 수 없습니다." }, { status: 400 });
       }
-      getQueryClient().removeQueries({
-        queryKey: groupKeys.detail(params.slug),
-      });
+      removeGroupAccessCache(groupId, params.slug);
       await getQueryClient().invalidateQueries({ queryKey: groupKeys.all });
       return redirect("/groups");
     } else if (intent === "issue-invite") {
@@ -358,18 +357,17 @@ export async function clientAction({
         return data({ error: "그룹을 찾을 수 없습니다." }, { status: 400 });
       // 삭제하는 순간 호출자도 멤버가 아니게 되므로 이 화면에 남아 있으면 재검증이 404가 된다.
       await deleteGroup(groupId);
-      getQueryClient().removeQueries({
-        queryKey: groupKeys.detail(params.slug),
-      });
+      removeGroupAccessCache(groupId, params.slug);
       await getQueryClient().invalidateQueries({ queryKey: groupKeys.all });
       return redirect("/groups");
     } else {
       return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
     }
     await getQueryClient().invalidateQueries({ queryKey: groupKeys.all });
-    if (postIntent) {
-      await getQueryClient().invalidateQueries({ queryKey: feedKeys.all });
-    }
+    await getQueryClient().invalidateQueries({
+      queryKey: feedKeys.all,
+      refetchType: "none",
+    });
     return data({ ok: true });
   } catch (error) {
     return data(
@@ -381,6 +379,14 @@ export async function clientAction({
       { status: 400 },
     );
   }
+}
+
+function removeGroupAccessCache(groupId: string, slug: string) {
+  const queryClient = getQueryClient();
+  queryClient.removeQueries({
+    predicate: (query) => isGroupAccessQuery(query.queryKey, groupId, slug),
+  });
+  queryClient.removeQueries({ queryKey: feedKeys.all });
 }
 
 export default function GroupPage({ loaderData }: Route.ComponentProps) {

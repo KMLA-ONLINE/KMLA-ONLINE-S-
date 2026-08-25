@@ -16,6 +16,7 @@ import {
 import type { Route } from "./+types/index";
 import { Button } from "~/shared/ui/button";
 import { getQueryClient } from "~/shared/lib/query-client";
+import { feedKeys } from "~/features/feed";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -75,7 +76,13 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     } else {
       return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
     }
-    await getQueryClient().invalidateQueries({ queryKey: groupKeys.all });
+    await Promise.all([
+      getQueryClient().invalidateQueries({ queryKey: groupKeys.all }),
+      getQueryClient().invalidateQueries({
+        queryKey: feedKeys.all,
+        refetchType: "none",
+      }),
+    ]);
     return data({ ok: true });
   } catch (error) {
     return data({ error: getGroupErrorMessage(error) }, { status: 400 });

@@ -7,6 +7,7 @@ import {
   removeGroupMedia,
   replaceGroupMedia,
 } from "~/features/groups/data/mutations";
+import { groupKeys } from "~/features/groups/data/cache";
 import type {
   GroupDetail,
   GroupMediaSlot,
@@ -15,6 +16,7 @@ import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { ImageCropper } from "~/shared/components/image-cropper";
 import { useImageCrop } from "~/shared/hooks/use-image-crop";
 import { compressImage } from "~/shared/lib/image/compress";
+import { getQueryClient } from "~/shared/lib/query-client";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Spinner } from "~/shared/ui/spinner";
@@ -95,6 +97,10 @@ function MediaField({
       const dimensions = { width: bitmap.width, height: bitmap.height };
       bitmap.close();
       await replaceGroupMedia(group.group_id, slot, file, dimensions);
+      await getQueryClient().invalidateQueries({
+        queryKey: groupKeys.all,
+        refetchType: "none",
+      });
       await revalidator.revalidate();
     } catch {
       setError("이미지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
@@ -120,6 +126,10 @@ function MediaField({
     setError(null);
     try {
       await removeGroupMedia(group.group_id, slot);
+      await getQueryClient().invalidateQueries({
+        queryKey: groupKeys.all,
+        refetchType: "none",
+      });
       await revalidator.revalidate();
     } catch {
       setError("이미지를 제거하지 못했습니다. 잠시 후 다시 시도해 주세요.");

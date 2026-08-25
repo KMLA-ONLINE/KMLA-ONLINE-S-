@@ -6,6 +6,7 @@ import {
   FeedPostCard,
   FeedPostRow,
 } from "~/features/feed/components/feed-post";
+import { feedKeys } from "~/features/feed/data/cache";
 import type {
   FeedPage,
   FeedPageResult,
@@ -18,6 +19,7 @@ import {
 } from "~/features/posts";
 import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
+import { getQueryClient } from "~/shared/lib/query-client";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 
@@ -136,9 +138,13 @@ export function FeedScreen({
     pending,
   });
 
-  function refresh() {
+  async function refresh() {
     setStoredState((current) => ({ ...current, loadError: null }));
-    void revalidator.revalidate();
+    await getQueryClient().invalidateQueries({
+      queryKey: feedKeys.all,
+      refetchType: "none",
+    });
+    await revalidator.revalidate();
   }
 
   return (
@@ -172,7 +178,9 @@ export function FeedScreen({
             type="button"
             variant="outline"
             size="sm"
-            onClick={initialPage && !sessionExpired ? loadMore : refresh}
+            onClick={
+              initialPage && !sessionExpired ? loadMore : () => void refresh()
+            }
           >
             {initialPage && !sessionExpired ? "다시 시도" : "새로고침"}
           </Button>

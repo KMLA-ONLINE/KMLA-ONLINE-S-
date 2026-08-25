@@ -4,6 +4,7 @@ import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import {
   createGroup,
   getGroupErrorMessage,
+  groupKeys,
   GroupCreateForm,
   hasGroupFormErrors,
   readCreateGroupForm,
@@ -11,6 +12,7 @@ import {
   type CreateGroupErrors,
 } from "~/features/groups";
 import type { Route } from "./+types/create";
+import { getQueryClient } from "~/shared/lib/query-client";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -28,6 +30,10 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
 
   try {
     const group = await createGroup(values);
+    await getQueryClient().invalidateQueries({
+      queryKey: groupKeys.all,
+      refetchType: "none",
+    });
     throw redirect(`/groups/${group.slug}`);
   } catch (error) {
     if (error instanceof Response) throw error;
