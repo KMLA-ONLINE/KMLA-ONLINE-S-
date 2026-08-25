@@ -1206,6 +1206,7 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          is_effective_feed_bump: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -1675,6 +1676,7 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          is_effective_feed_bump: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -1707,6 +1709,7 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          is_effective_feed_bump: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -2225,6 +2228,7 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          is_effective_feed_bump: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string

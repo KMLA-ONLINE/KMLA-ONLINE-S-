@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(39);
+select plan(43);
 
 select ok(
   has_function_privilege('authenticated', 'public.list_feed_posts(uuid)', 'execute'),
@@ -290,6 +290,40 @@ select is(
   (select id from bump_comments where name = 'first'),
   'the effective bump records its insertion-only source comment'
 );
+select ok(
+  (
+    select is_effective_feed_bump
+    from public.list_post_comments('90000000-0000-0000-0000-000000000003')
+    where comment_id = (select id from bump_comments where name = 'first')
+  ),
+  'the effective bump source is marked in comment reads'
+);
+select ok(
+  not (
+    select is_effective_feed_bump
+    from public.list_post_comments('90000000-0000-0000-0000-000000000003')
+    where comment_id = (select id from bump_comments where name = 'cooldown')
+  ),
+  'a cooldown #업 comment is not marked as effective'
+);
+set local role authenticated;
+select throws_ok(
+  $$select * from public.update_post_comment(
+    (select id from bump_comments where name = 'first'), '#업'
+  )$$,
+  '22023',
+  'effective #업 comments cannot be edited',
+  'the effective bump source cannot be edited'
+);
+select throws_ok(
+  $$select public.delete_post_comment(
+    (select id from bump_comments where name = 'first')
+  )$$,
+  '22023',
+  'effective #업 comments cannot be deleted',
+  'the effective bump source cannot be deleted'
+);
+reset role;
 select is(
   (
     select count(*)

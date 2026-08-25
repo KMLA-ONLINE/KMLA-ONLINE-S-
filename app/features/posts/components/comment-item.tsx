@@ -104,6 +104,7 @@ export function CommentItem({
   const parentLabel = comment.parent_comment_id
     ? comment.parent_author_label
     : null;
+  const isEffectiveFeedBump = comment.is_effective_feed_bump;
 
   // 수정은 답글 입력창을 그대로 쓴다. 화면에 입력기가 두 종류 있으면 같은 일을 하는데도
   // 다르게 생겨서, 한쪽만 고쳐지는 일이 반복된다. 신원은 작성 뒤 바꿀 수 없으므로 선택지를
@@ -212,7 +213,9 @@ export function CommentItem({
                     @{parentLabel}
                   </button>
                 ) : null}
-                <CommentText>{comment.body}</CommentText>
+                <span className={cn(isEffectiveFeedBump && "text-primary")}>
+                  <CommentText>{comment.body}</CommentText>
+                </span>
               </p>
             ) : null}
             {comment.images[0] ? (

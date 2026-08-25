@@ -47,6 +47,23 @@ describe("CommentItem", () => {
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
+  it("colors an effective #업 comment blue", () => {
+    renderItem({
+      comment: postComment({
+        body: "#업",
+        is_effective_feed_bump: true,
+      }),
+    });
+
+    expect(screen.getByText("#업")).toHaveClass("text-primary");
+  });
+
+  it("does not color an ineffective #업 comment", () => {
+    renderItem({ comment: postComment({ body: "#업" }) });
+
+    expect(screen.getByText("#업")).not.toHaveClass("text-primary");
+  });
+
   it("badges a staff byline while still showing the real author", () => {
     renderItem({
       comment: postComment({
