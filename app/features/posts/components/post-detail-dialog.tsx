@@ -1,6 +1,7 @@
 import { XIcon } from "lucide-react";
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -13,7 +14,9 @@ import {
   type CommentViewer,
 } from "~/features/posts/components/comment-composer";
 import { CommentThread } from "~/features/posts/components/comment-thread";
+import { commentDomId } from "~/features/posts/components/comment-item";
 import { PostActionBar } from "~/features/posts/components/post-action-bar";
+import { useKeyboardViewport } from "~/features/posts/hooks/use-keyboard-viewport";
 import { usePostComments } from "~/features/posts/hooks/use-post-comments";
 import type {
   PostComment,
@@ -94,6 +97,29 @@ export function PostDetailDialog({
   const dragStart = useRef<{ pointerId: number; y: number } | null>(null);
   const [searchParams] = useSearchParams();
   const commentsOnly = searchParams.get("view") === "comments";
+  const keyboardViewport = useKeyboardViewport(commentsOnly);
+
+  useEffect(() => {
+    if (!replyingTo || keyboardViewport.height === null) return;
+
+    const frame = requestAnimationFrame(() => {
+      const container = scrollRef.current;
+      const target = document.getElementById(
+        commentDomId(replyingTo.comment_id),
+      );
+      if (!container || !target || !container.contains(target)) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      if (targetRect.top < containerRect.top) {
+        container.scrollTop += targetRect.top - containerRect.top;
+      } else if (targetRect.bottom > containerRect.bottom) {
+        container.scrollTop += targetRect.bottom - containerRect.bottom;
+      }
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [keyboardViewport.bottomInset, keyboardViewport.height, replyingTo]);
 
   // 본문 영역이 액션 바에서 부르는 핸들러다. JSX 안에서 즉석 클로저로 만들면 render 중에
   // ref를 읽는 것으로 잡힌다.
@@ -184,8 +210,19 @@ export function PostDetailDialog({
             "max-md:transition-transform max-md:duration-200",
         )}
         style={
-          commentsOnly && dragOffset > 0
-            ? { transform: `translateY(${dragOffset}px)` }
+          commentsOnly
+            ? {
+                bottom:
+                  keyboardViewport.bottomInset > 0
+                    ? `${keyboardViewport.bottomInset}px`
+                    : undefined,
+                maxHeight:
+                  keyboardViewport.height === null
+                    ? undefined
+                    : `${keyboardViewport.height}px`,
+                transform:
+                  dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
+              }
             : undefined
         }
       >
