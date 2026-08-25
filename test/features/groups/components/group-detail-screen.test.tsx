@@ -48,6 +48,32 @@ function DetailHarness({
 }
 
 describe("GroupDetailScreen", () => {
+  it("does not show a separator before the only official group option", async () => {
+    const { user } = renderRoute(
+      () => <DetailHarness group={{ ...baseGroup, kind: "official" }} />,
+      {
+        path: "/groups/:slug",
+        initialEntries: ["/groups/test-group"],
+      },
+    );
+
+    await user.click(screen.getByRole("button", { name: "그룹 옵션" }));
+
+    expect(screen.queryByRole("separator")).not.toBeInTheDocument();
+  });
+
+  it("returns to posts when the mobile group name is selected", async () => {
+    const { user } = renderRoute(DetailHarness, {
+      path: "/groups/:slug",
+      initialEntries: ["/groups/test-group?tab=members"],
+    });
+
+    await user.click(screen.getByRole("button", { name: "테스트 그룹" }));
+
+    expect(screen.getByTestId("location-search")).toHaveTextContent("");
+    expect(screen.getByText("아직 게시물이 없습니다")).toBeInTheDocument();
+  });
+
   it("shows the post tab by default without repeating the member role", () => {
     renderRoute(DetailHarness, {
       path: "/groups/:slug",

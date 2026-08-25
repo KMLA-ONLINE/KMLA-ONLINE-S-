@@ -11,6 +11,7 @@ export { PostWriteRow } from "~/features/posts/components/post-write-row";
 export { ProfilePostDetail } from "~/features/posts/components/profile-post-detail";
 export { ProfilePostEditor } from "~/features/posts/components/profile-post-editor";
 export { ProfilePostsPanel } from "~/features/posts/components/profile-posts-panel";
+export { useGroupPostSearch } from "~/features/posts/hooks/use-group-post-search";
 export { usePostComments } from "~/features/posts/hooks/use-post-comments";
 export { usePostViewMode } from "~/features/posts/hooks/use-post-view-mode";
 export {

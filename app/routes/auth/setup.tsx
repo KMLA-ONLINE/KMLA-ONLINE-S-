@@ -38,6 +38,7 @@ import {
 } from "~/shared/ui/input-otp";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 import { Spinner } from "~/shared/ui/spinner";
+import { TextField } from "~/shared/ui/text-field";
 import type { Route } from "./+types/setup";
 
 const EMPTY_VALUES: ProfileFormValues = {
@@ -176,7 +177,7 @@ export default function SetupPage({
           <FieldGroup className="grid gap-5 sm:grid-cols-2">
             <Field data-invalid={Boolean(errors.name)}>
               <FieldLabel htmlFor="profile-name">이름</FieldLabel>
-              <Input
+              <TextField
                 id="profile-name"
                 name="name"
                 defaultValue={initialValues.name}
@@ -214,7 +215,7 @@ export default function SetupPage({
                 <FieldLabel htmlFor="student-number">
                   학번 {isAlumni ? "(선택)" : ""}
                 </FieldLabel>
-                <Input
+                <TextField
                   id="student-number"
                   name="studentNumber"
                   inputMode="numeric"

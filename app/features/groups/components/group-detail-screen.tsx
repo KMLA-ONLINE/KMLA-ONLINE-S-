@@ -25,6 +25,7 @@ import type {
 import { GroupPostReportsPanel } from "~/features/posts/components/group-post-reports-panel";
 import type { GroupPostReportSummaryPage } from "~/features/posts/data/group-reports";
 import {
+  GroupPostSearchDialog,
   GroupPostsPanel,
   PostWriteRow,
   type GroupCategory,
@@ -119,6 +120,7 @@ export function GroupDetailScreen({
         group={group}
         profileId={profileId}
         isTeacher={isTeacher}
+        onSelectPosts={() => setTab("posts")}
         onSelectMembers={() => setTab("members")}
         onSelectSettings={() => setTab("settings")}
         onSelectReports={() => setTab("reports")}
@@ -230,6 +232,12 @@ export function GroupDetailScreen({
           </div>
         </aside>
       </div>
+
+      {/* 검색 버튼은 모바일 헤더와 데스크톱 액션 두 곳에 있지만 검색창은 여기 하나뿐이다.
+          열림 상태가 URL에 있으므로 두 곳이 각자 그리면 같은 검색창이 두 장 열린다. */}
+      {isMember ? (
+        <GroupPostSearchDialog groupId={group.group_id} slug={group.slug} />
+      ) : null}
     </div>
   );
 }

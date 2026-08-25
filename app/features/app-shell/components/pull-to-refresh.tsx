@@ -184,6 +184,7 @@ export function PullToRefresh({
     >
       <div
         data-slot="pull-to-refresh-indicator"
+        data-testid="pull-to-refresh-indicator"
         data-state={refreshing ? "refreshing" : armed ? "armed" : "pulling"}
         className={cn(
           "flex h-9 items-center justify-center rounded-full border bg-background/95 text-sm font-medium text-muted-foreground shadow-md backdrop-blur transition-[width,opacity,transform] duration-150 motion-reduce:transition-none",
@@ -193,7 +194,7 @@ export function PullToRefresh({
         )}
         style={{
           transform: visible
-            ? `translateY(${refreshing ? 10 : Math.min(16, distance * 0.2)}px)`
+            ? `translateY(${refreshing ? 50 : Math.min(50, distance * 0.6)}px)`
             : undefined,
         }}
       >

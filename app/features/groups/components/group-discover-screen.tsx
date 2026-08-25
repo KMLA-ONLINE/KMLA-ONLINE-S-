@@ -155,10 +155,11 @@ export function GroupDiscoverScreen({
                 onKeyDown={(event) => {
                   if (event.key === "Escape") closeSearch();
                 }}
-                className="rounded-full pr-10 md:rounded-md"
+                className="rounded-full pr-10 md:rounded-md [&::-webkit-search-cancel-button]:appearance-none"
                 placeholder="그룹 이름을 입력…"
                 aria-label="그룹 이름"
                 autoComplete="off"
+                type="search"
               />
               <Button
                 type="submit"

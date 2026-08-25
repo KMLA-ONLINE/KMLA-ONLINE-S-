@@ -6,7 +6,7 @@ import type { GroupDetail } from "~/features/groups/model/types";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Field, FieldLabel } from "~/shared/ui/field";
-import { Input } from "~/shared/ui/input";
+import { TextField } from "~/shared/ui/text-field";
 
 /** 확인을 위해 그대로 옮겨 적어야 하는 문구. */
 function deletionPhrase(name: string): string {
@@ -68,14 +68,14 @@ export function DangerSettings({ group }: { group: GroupDetail }) {
         open={open}
         onOpenChange={(next) => (next ? setOpen(true) : close())}
         title={group.name}
-        description={`멤버 ${group.member_count}명의 멤버십과 함께 이 그룹의 모든 게시물, 댓글, 반응, 첨부 파일이 사라집니다. 되돌릴 수 없습니다.`}
+        description={`멤버 ${group.member_count}명과 및 그룹의 모든 정보가 사라집니다. 되돌릴 수 없습니다.`}
         details={
           <Field>
             <FieldLabel htmlFor="group-deletion-phrase">
               계속하려면 <code className="font-mono">{phrase}</code>를
               입력하세요
             </FieldLabel>
-            <Input
+            <TextField
               id="group-deletion-phrase"
               value={typed}
               autoComplete="off"

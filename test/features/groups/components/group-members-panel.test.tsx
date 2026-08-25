@@ -50,7 +50,9 @@ describe("GroupMembersPanel", () => {
 
   it("searches only after Enter with at least two characters", async () => {
     const { user } = renderRoute(() => <SearchTestScreen />);
-    const search = screen.getByRole("textbox", { name: "이름 또는 기수 검색" });
+    const search = screen.getByRole("searchbox", {
+      name: "이름 또는 기수 검색",
+    });
 
     await user.type(search, "홍");
     expect(screen.getByText("홍길동")).toBeVisible();

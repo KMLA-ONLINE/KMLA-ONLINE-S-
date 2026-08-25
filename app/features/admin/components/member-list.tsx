@@ -23,6 +23,8 @@ export function AdminSearch({
         minLength={2}
         placeholder="이름, 공개 ID 또는 기수"
         aria-label={label}
+        className="[&::-webkit-search-cancel-button]:appearance-none"
+        type="search"
       />
       <Button type="submit" variant="outline">
         검색

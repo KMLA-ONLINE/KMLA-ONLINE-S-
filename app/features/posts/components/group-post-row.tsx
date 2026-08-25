@@ -58,7 +58,10 @@ export function GroupPostRow({
           {post.author_name || post.author_label}
         </span>
         {post.author_identity === "staff" ? (
-          <Badge variant="outline" className="shrink-0 text-muted-foreground">
+          <Badge
+            variant="outline"
+            className="shrink-0 border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+          >
             운영진
           </Badge>
         ) : null}

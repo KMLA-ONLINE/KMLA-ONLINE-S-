@@ -121,8 +121,9 @@ export function GroupMembersPanel({
                   setQuery(event.target.value);
                   setSearchError(null);
                 }}
-                className="pr-10"
+                className="pr-10 [&::-webkit-search-cancel-button]:appearance-none"
                 placeholder="이름 또는 기수 검색"
+                type="search"
               />
               <Button
                 type="submit"

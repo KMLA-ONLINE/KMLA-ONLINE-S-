@@ -1,6 +1,6 @@
 import type { ShouldRevalidateFunctionArgs } from "react-router";
 
-/** 이미지 뷰어의 URL 상태만 바뀔 때 댓글 스레드의 로컬 상태를 유지한다. */
+/** 상세 안의 UI URL 상태만 바뀔 때 댓글 스레드의 로컬 상태를 유지한다. */
 export function shouldRevalidatePostDetail({
   currentUrl,
   nextUrl,
@@ -18,6 +18,8 @@ export function shouldRevalidatePostDetail({
   const nextSearch = new URLSearchParams(nextUrl.search);
   currentSearch.delete("image");
   nextSearch.delete("image");
+  currentSearch.delete("view");
+  nextSearch.delete("view");
 
   return currentSearch.toString() === nextSearch.toString()
     ? false

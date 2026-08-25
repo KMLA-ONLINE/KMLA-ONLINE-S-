@@ -506,6 +506,8 @@ export function ImageViewer({
     }
 
     if (gestureModeRef.current !== "slide") return;
+    // 탭 중의 미세한 손가락 흔들림은 슬라이드에 반영하지 않아 이미지가 잠깐 움직이지 않게 한다.
+    if (!hasDraggedRef.current) return;
 
     const viewportWidth = getViewportWidth();
     // 첫 장과 마지막 장의 정지 offset을 현재 index 기준으로 환산한 값.
@@ -673,8 +675,10 @@ export function ImageViewer({
           <header
             data-testid="image-viewer-header"
             className={cn(
-              "shrink-0 items-center gap-2 pt-[max(0.5rem,var(--app-safe-t))] pr-[max(0.5rem,var(--app-safe-r))] pb-2 pl-[max(0.5rem,var(--app-safe-l))] md:p-3",
-              isChromeHidden ? "hidden sm:flex" : "flex",
+              "absolute inset-x-0 top-0 z-10 flex items-center gap-2 pt-[max(0.5rem,var(--app-safe-t))] pr-[max(0.5rem,var(--app-safe-r))] pb-2 pl-[max(0.5rem,var(--app-safe-l))] transition-opacity duration-150 sm:static sm:z-auto sm:shrink-0 sm:transition-none md:p-3",
+              isChromeHidden
+                ? "pointer-events-none opacity-0 sm:pointer-events-auto sm:opacity-100"
+                : "opacity-100",
             )}
           >
             {/* 파일 이름은 화면에 띄우지 않는다. 스크린리더용 제목과 저장 파일명에는 그대로 쓴다. */}
@@ -711,6 +715,7 @@ export function ImageViewer({
           >
             <div
               ref={trackRef}
+              data-testid="image-viewer-track"
               className="flex h-full w-full"
               style={{
                 transform: `translateX(calc(${-index * 100}% + ${offset}px))`,

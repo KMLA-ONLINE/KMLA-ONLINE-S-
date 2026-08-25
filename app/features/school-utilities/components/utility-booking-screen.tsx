@@ -24,8 +24,8 @@ import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Checkbox } from "~/shared/ui/checkbox";
-import { Input } from "~/shared/ui/input";
 import { Label } from "~/shared/ui/label";
+import { TextField } from "~/shared/ui/text-field";
 import { Spinner } from "~/shared/ui/spinner";
 
 export type UtilityMode = "gongang" | "karaoke";
@@ -338,7 +338,7 @@ function ReservationEditor({
   onSave,
   saving,
 }: ReservationEditorProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -357,7 +357,7 @@ function ReservationEditor({
           {label}
         </span>
 
-        <Input
+        <TextField
           ref={inputRef}
           value={draft.detail}
           aria-label={mode === "gongang" ? "목적" : "사용자 명단"}
