@@ -114,6 +114,17 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Pretendard 한글은 모바일에서 Tailwind 기본 xs(12px)와 sm(14px)이 작게 읽힌다.
+ * 글꼴 토큰만 한 단계 미만으로 키워 셸 치수와 컨트롤 크기는 그대로 유지한다. */
+@media (max-width: 767px) {
+  :root {
+    --text-xs: 13px;
+    --text-xs--line-height: 16px;
+    --text-sm: 15px;
+    --text-sm--line-height: 20px;
+  }
+}
+
 :root,
 .light {
   --background: oklch(1 0 0);
