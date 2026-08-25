@@ -65,7 +65,24 @@ function Detail({ withComment = false }: { withComment?: boolean }) {
 }
 
 describe("PostDetailDialog", () => {
-  it("focuses the composer when opened from a comment button", async () => {
+  it("does not focus the composer when opening the mobile comment sheet", async () => {
+    renderRoute(Detail, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id?view=comments"],
+    });
+
+    await waitFor(() => expect(screen.getByRole("dialog")).toHaveFocus());
+    expect(
+      screen.getByRole("textbox", { name: "댓글 입력" }),
+    ).not.toHaveFocus();
+  });
+
+  it("focuses the composer from a desktop comment button", async () => {
+    vi.spyOn(window, "matchMedia").mockReturnValue({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as MediaQueryList);
     renderRoute(Detail, {
       path: "/posts/:postId",
       initialEntries: ["/posts/post-id?view=comments"],

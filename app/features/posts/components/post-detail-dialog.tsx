@@ -4,6 +4,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
@@ -48,6 +49,21 @@ const COMMENT_SHEET_CLASS =
   "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-auto max-md:bottom-0 max-md:left-0 max-md:h-[98svh] max-md:max-h-[98svh] max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-t-2xl max-md:rounded-b-none max-md:data-open:zoom-in-100 max-md:data-open:slide-in-from-bottom-4 max-md:data-closed:zoom-out-100 max-md:data-closed:slide-out-to-bottom-4 md:max-w-2xl";
 
 const DISMISS_DRAG_DISTANCE = 96;
+const DESKTOP_QUERY = "(min-width: 768px)";
+
+function subscribeToDesktopQuery(onChange: () => void) {
+  const query = window.matchMedia(DESKTOP_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function isDesktopViewport() {
+  return window.matchMedia(DESKTOP_QUERY).matches;
+}
+
+function getServerDesktopViewport() {
+  return false;
+}
 
 /**
  * 그룹 게시물과 개인 게시물 상세가 공유하는 껍데기.
@@ -97,6 +113,11 @@ export function PostDetailDialog({
   const dragStart = useRef<{ pointerId: number; y: number } | null>(null);
   const [searchParams] = useSearchParams();
   const commentsOnly = searchParams.get("view") === "comments";
+  const desktop = useSyncExternalStore(
+    subscribeToDesktopQuery,
+    isDesktopViewport,
+    getServerDesktopViewport,
+  );
   const keyboardViewport = useKeyboardViewport(commentsOnly);
 
   useEffect(() => {
@@ -164,7 +185,7 @@ export function PostDetailDialog({
     : undefined;
 
   const startSheetDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (window.matchMedia("(min-width: 768px)").matches) return;
+    if (window.matchMedia(DESKTOP_QUERY).matches) return;
     if ((event.target as Element).closest("button")) return;
     dragStart.current = { pointerId: event.pointerId, y: event.clientY };
     setDragging(true);
@@ -321,7 +342,7 @@ export function PostDetailDialog({
           pending={thread.pending}
           error={thread.error}
           inputRef={composerRef}
-          focusOnMount={commentsOnly}
+          focusOnMount={commentsOnly && desktop}
           replyTarget={replyTarget}
           onCancelReply={() => setReplyingTo(null)}
         />
