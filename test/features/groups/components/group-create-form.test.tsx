@@ -4,6 +4,54 @@ import { GroupCreateForm } from "~/features/groups/components/group-create-form"
 import { renderRoute, screen, within } from "../../../router";
 
 describe("GroupCreateForm", () => {
+  it("shows the address warning only when creating a public group", async () => {
+    const { user: privateUser, unmount } = renderRoute(() => (
+      <GroupCreateForm canCreateOfficial={false} pending={false} />
+    ));
+
+    await privateUser.type(
+      screen.getByRole("textbox", { name: "그룹 이름" }),
+      "비공개 그룹",
+    );
+    await privateUser.click(
+      screen.getByRole("button", { name: "그룹 만들기" }),
+    );
+
+    expect(screen.getByRole("dialog")).not.toHaveTextContent(
+      "그룹 주소는 후에 수정할 수 없습니다.",
+    );
+    expect(screen.getByRole("dialog")).not.toHaveTextContent(
+      "공개그룹으로 전환 후에는 비공개로 변경할 수 없습니다.",
+    );
+    unmount();
+
+    const { user: publicUser } = renderRoute(() => (
+      <GroupCreateForm
+        canCreateOfficial={false}
+        pending={false}
+        values={{
+          kind: "unofficial",
+          name: "",
+          description: "",
+          slug: "",
+          joinPolicy: "open",
+          identityPolicy: "optional_anonymous",
+          postingPolicy: "members",
+        }}
+      />
+    ));
+
+    await publicUser.type(
+      screen.getByRole("textbox", { name: "그룹 이름" }),
+      "공개 그룹",
+    );
+    await publicUser.click(screen.getByRole("button", { name: "그룹 만들기" }));
+
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "그룹 주소는 후에 수정할 수 없습니다.",
+    );
+  });
+
   it("offers identified and optional-anonymous activity", () => {
     renderRoute(() => (
       <GroupCreateForm canCreateOfficial={false} pending={false} />

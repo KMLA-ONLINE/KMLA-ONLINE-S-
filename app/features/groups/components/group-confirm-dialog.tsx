@@ -30,7 +30,7 @@ export function GroupConfirmDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  description: ReactNode;
+  description?: ReactNode;
   details?: ReactNode;
   confirmLabel: string;
   confirmVariant?: "default" | "destructive";
@@ -44,7 +44,9 @@ export function GroupConfirmDialog({
       <DialogContent className="max-w-xs" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          {description !== null && description !== undefined ? (
+            <DialogDescription>{description}</DialogDescription>
+          ) : null}
         </DialogHeader>
         {details}
         <DialogFooter>

@@ -94,7 +94,6 @@ export function GroupDetailActions({
               >
                 {canCurate ? (
                   <>
-                    <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={onSelectSettings}>
                       그룹 설정
                     </DropdownMenuItem>
@@ -104,7 +103,7 @@ export function GroupDetailActions({
                     </DropdownMenuItem>
                   </>
                 ) : null}
-                <DropdownMenuSeparator />
+                {canCurate ? <DropdownMenuSeparator /> : null}
                 <DropdownMenuGroup>
                   <DropdownMenuItem
                     disabled={pending}

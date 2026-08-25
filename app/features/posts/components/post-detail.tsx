@@ -121,7 +121,7 @@ export function PostDetail({
               {post.author_identity === "staff" ? (
                 <Badge
                   variant="outline"
-                  className="shrink-0 text-muted-foreground"
+                  className="shrink-0 border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300"
                 >
                   운영진
                 </Badge>

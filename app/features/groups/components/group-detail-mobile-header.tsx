@@ -55,6 +55,7 @@ export function GroupDetailMobileHeader({
           variant="ghost"
           size="icon-sm"
           aria-label="게시물 검색"
+          className="focus-visible:border-transparent focus-visible:ring-0"
           onClick={openSearch}
         >
           <SearchIcon aria-hidden="true" />

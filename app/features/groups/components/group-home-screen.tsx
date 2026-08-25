@@ -1,4 +1,5 @@
 import { ChevronRightIcon, CirclePlusIcon, SearchIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
 import { GroupSummaryRow } from "~/features/groups/components/group-summary-row";
@@ -7,6 +8,7 @@ import { Button } from "~/shared/ui/button";
 import { cn } from "~/shared/lib/utils";
 
 type GroupTab = "official" | "unofficial";
+const GROUP_HOME_TAB_STORAGE_KEY = "kmla-online:group-home-tab";
 
 export function GroupHomeScreen({
   groups,
@@ -18,10 +20,25 @@ export function GroupHomeScreen({
   profileId: number;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const [savedTab, setSavedTab] = useState<GroupTab>(() =>
+    typeof window !== "undefined" &&
+    sessionStorage.getItem(GROUP_HOME_TAB_STORAGE_KEY) === "unofficial"
+      ? "unofficial"
+      : "official",
+  );
   const tab: GroupTab =
-    searchParams.get("tab") === "unofficial" ? "unofficial" : "official";
+    requestedTab === "unofficial"
+      ? "unofficial"
+      : requestedTab === "official"
+        ? "official"
+        : savedTab;
   const officialGroups = groups.filter((group) => group.section === "official");
   const myGroups = groups.filter((group) => group.section === "mine");
+
+  useEffect(() => {
+    sessionStorage.setItem(GROUP_HOME_TAB_STORAGE_KEY, tab);
+  }, [tab]);
 
   if (isTeacher) {
     return (
@@ -47,6 +64,7 @@ export function GroupHomeScreen({
             key={item}
             type="button"
             onClick={() => {
+              setSavedTab(item);
               const next = new URLSearchParams(searchParams);
               if (item === "official") next.delete("tab");
               else next.set("tab", item);

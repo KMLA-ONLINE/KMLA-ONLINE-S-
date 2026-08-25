@@ -120,6 +120,7 @@ export function GroupDetailScreen({
         group={group}
         profileId={profileId}
         isTeacher={isTeacher}
+        onSelectPosts={() => setTab("posts")}
         onSelectMembers={() => setTab("members")}
         onSelectSettings={() => setTab("settings")}
         onSelectReports={() => setTab("reports")}

@@ -135,7 +135,7 @@ describe("ImageViewer", () => {
     );
   });
 
-  it("toggles the mobile chrome with a single image tap", () => {
+  it("toggles the mobile chrome without changing the image viewport layout", () => {
     vi.useFakeTimers();
     stubMobileViewport();
     renderViewer("a");
@@ -146,14 +146,44 @@ describe("ImageViewer", () => {
     act(() => {
       vi.advanceTimersByTime(250);
     });
-    expect(header).toHaveClass("hidden", "sm:flex");
+    expect(header).toHaveClass(
+      "absolute",
+      "pointer-events-none",
+      "opacity-0",
+      "sm:static",
+    );
+    expect(header).not.toHaveClass("hidden");
 
     fireEvent.click(image);
     act(() => {
       vi.advanceTimersByTime(250);
     });
-    expect(header).toHaveClass("flex");
-    expect(header).not.toHaveClass("hidden");
+    expect(header).toHaveClass("flex", "opacity-100");
+    expect(header).not.toHaveClass("pointer-events-none", "hidden");
+  });
+
+  it("does not shift slides for touch movement inside the tap tolerance", () => {
+    stubMobileViewport();
+    renderViewer("a");
+    const { viewport } = getGestureElements();
+    const track = screen.getByTestId("image-viewer-track");
+
+    fireEvent.pointerDown(viewport, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 200,
+      clientY: 300,
+    });
+    fireEvent.pointerMove(viewport, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 205,
+      clientY: 300,
+    });
+
+    expect(track).toHaveStyle({
+      transform: "translateX(calc(0% + 0px))",
+    });
   });
 
   it("zooms on a mobile double tap and resets when the image changes", () => {
