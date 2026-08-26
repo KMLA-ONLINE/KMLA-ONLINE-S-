@@ -1,4 +1,7 @@
-import type { ShouldRevalidateFunctionArgs } from "react-router";
+import type {
+  ShouldRevalidateFunction,
+  ShouldRevalidateFunctionArgs,
+} from "react-router";
 
 /**
  * loader가 읽지 않는 UI 전용 URL 상태. 이미지 뷰어(`image`)와 댓글 시트(`view`)는 안드로이드
@@ -7,10 +10,10 @@ import type { ShouldRevalidateFunctionArgs } from "react-router";
  * 목록 화면은 여기에 자기 오버레이 파라미터를 더해서 쓴다. 하나라도 빠지면 오버레이를 여닫는
  * 것만으로 loader가 다시 돌고, 그러면 무한 스크롤로 쌓은 페이지와 피드 세션이 통째로 버려진다.
  */
-export const POST_UI_SEARCH_PARAMS = ["image", "view"] as const;
+const POST_UI_SEARCH_PARAMS = ["image", "view"] as const;
 
 /** `ignoredKeys`를 뺀 나머지 검색 파라미터가 두 URL에서 같은가. 키 순서는 보지 않는다. */
-export function isUiOnlySearchChange(
+function isUiOnlySearchChange(
   currentUrl: URL,
   nextUrl: URL,
   ignoredKeys: Iterable<string>,
@@ -58,7 +61,7 @@ export function shouldRevalidatePostDetail({
  */
 export function createPostListRevalidation(
   extraUiParams: readonly string[] = [],
-): (args: ShouldRevalidateFunctionArgs) => boolean {
+): ShouldRevalidateFunction {
   const uiParams = [...POST_UI_SEARCH_PARAMS, ...extraUiParams];
 
   return ({ currentUrl, nextUrl, formMethod }) => {
