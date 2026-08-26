@@ -31,6 +31,7 @@ export interface GroupNotificationPreference {
 
 export type PushSupport =
   | { state: "unsupported" }
+  | { state: "unconfigured" }
   | { state: "ios-browser" }
   | {
       state: "available";

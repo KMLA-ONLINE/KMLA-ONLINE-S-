@@ -6,8 +6,10 @@ import { InstallPrompt } from "~/shared/components/install-prompt";
 import type { InstallPromptState } from "~/shared/hooks/use-install-prompt";
 
 const useInstallPrompt = vi.hoisted(() => vi.fn());
+const setPromptActive = vi.hoisted(() => vi.fn());
 
 vi.mock("~/shared/hooks/use-install-prompt", () => ({ useInstallPrompt }));
+vi.mock("~/shared/lib/prompt-coordinator", () => ({ setPromptActive }));
 
 /**
  * 잠금이 풀린 버튼을 돌려준다.
@@ -43,12 +45,29 @@ function renderWith(
     ...state,
   } satisfies InstallPromptState);
 
-  render(<InstallPrompt interactionLockMs={interactionLockMs} />);
+  const view = render(<InstallPrompt interactionLockMs={interactionLockMs} />);
 
-  return { dismiss, dismissForSession, install, markInstalled, neverShow };
+  return {
+    dismiss,
+    dismissForSession,
+    install,
+    markInstalled,
+    neverShow,
+    unmount: view.unmount,
+  };
 }
 
 describe("InstallPrompt", () => {
+  it("표시 중에는 다른 전역 안내가 겹치지 않도록 상태를 등록한다", async () => {
+    const { unmount } = renderWith({ mode: "install" });
+
+    await waitFor(() =>
+      expect(setPromptActive).toHaveBeenCalledWith("install", true),
+    );
+    unmount();
+    expect(setPromptActive).toHaveBeenLastCalledWith("install", false);
+  });
+
   it("install 모드에서는 설치 버튼을 눌러 브라우저 프롬프트를 띄운다", async () => {
     const { install } = renderWith({ mode: "install" });
 

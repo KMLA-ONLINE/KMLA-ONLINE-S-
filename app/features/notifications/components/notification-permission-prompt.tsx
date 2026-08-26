@@ -69,7 +69,8 @@ export function NotificationPermissionPrompt({
     try {
       await enableWebPush();
       dismiss();
-    } catch {
+    } catch (error) {
+      console.error("Failed to enable Web Push", error);
       toast.error("알림을 켜지 못했습니다. 알림 설정에서 다시 시도해 주세요.");
       setPending(false);
     }

@@ -34,6 +34,18 @@ npm run dev           # http://localhost:5173
 
 `db:start` 출력의 `API URL` / publishable key를 `.env.local`에 채워 넣습니다.
 
+Web Push를 로컬에서 확인하려면 `npm run web-push:keys`로 VAPID 키 쌍을 만든 뒤 같은
+공개 키를 브라우저와 Edge Function 양쪽에 설정합니다.
+
+- `.env.local`: `VITE_WEB_PUSH_VAPID_PUBLIC_KEY`
+- `supabase/functions/.env`: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+  `VAPID_SUBJECT=mailto:<개발용 이메일>`,
+  `NOTIFICATION_DISPATCH_SECRET=local-notification-dispatch-only`
+
+`supabase/functions/.env`는 `supabase start` 때 자동으로 로드되므로 파일을 만든 뒤에는
+로컬 스택을 재시작합니다. 두 `.env` 파일은 Git에서 제외되며, `VAPID_PRIVATE_KEY`는
+브라우저용 `.env.local`에 넣지 않습니다.
+
 ## 스크립트
 
 | 명령                                         | 설명                                           |
@@ -49,6 +61,7 @@ npm run dev           # http://localhost:5173
 | `npm run db:diff -- <name>`                  | schemas 변경분으로 migration 초안 생성         |
 | `npm run db:types`                           | `app/shared/supabase/database.types.ts` 재생성 |
 | `npm run pwa:assets`                         | `public/logo.svg`에서 아이콘 일체 재생성       |
+| `npm run web-push:keys`                      | 로컬 Web Push용 VAPID 키 쌍 생성               |
 | `npm run lint` / `lint:fix`                  | ESLint                                         |
 | `npm run format` / `format:check`            | Prettier                                       |
 | `npm run check`                              | lint + format + typecheck + test 일괄          |

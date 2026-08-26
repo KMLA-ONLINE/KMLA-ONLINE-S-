@@ -134,6 +134,11 @@ export function InstallPrompt({
   const [wasVisible, setWasVisible] = useState(visible);
   const [locked, setLocked] = useState(visible);
 
+  useEffect(() => {
+    setPromptActive("install", visible);
+    return () => setPromptActive("install", false);
+  }, [visible]);
+
   // 뜨는 순간에 잠근다. effect 안에서 setState 하지 않으려고 렌더 중에 맞춘다.
   if (wasVisible !== visible) {
     setWasVisible(visible);

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Edge-only JSR/npm modules are checked by Deno. */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.111.0";
 import nodemailer from "npm:nodemailer@7.0.6";
 import webpush from "npm:web-push@3.6.7";
 import {

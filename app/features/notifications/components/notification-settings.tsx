@@ -15,6 +15,7 @@ import type {
   NotificationPreferences,
   PushSupport,
 } from "~/features/notifications/model/types";
+import { Spinner } from "~/shared/ui/spinner";
 import { Switch } from "~/shared/ui/switch";
 import {
   Select,
@@ -94,11 +95,12 @@ function GroupPreferenceRow({
         >
           <SelectTrigger
             size="sm"
+            className="w-28"
             aria-label={`${preference.groupName} 알림 수준`}
           >
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent align="end" alignItemWithTrigger={false}>
             <SelectGroup>
               {Object.entries(GROUP_LEVEL_LABEL).map(([value, label]) => (
                 <SelectItem key={value} value={value}>
@@ -194,7 +196,8 @@ export function NotificationSettings({
           value: await enableWebPush(),
         });
       }
-    } catch {
+    } catch (error) {
+      console.error("Failed to update Web Push subscription", error);
       toast.error(
         "알림 설정을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.",
       );
@@ -223,26 +226,38 @@ export function NotificationSettings({
             </span>
             <div className="min-w-0 flex-1">
               <h2 className="font-semibold">이 기기의 Web Push</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {pushSupport.state === "ios-browser"
-                  ? "iPhone과 iPad에서는 홈 화면에 설치한 앱에서 알림을 켤 수 있습니다."
-                  : pushSupport.state === "unsupported"
-                    ? "이 브라우저에서는 Web Push를 사용할 수 없습니다."
-                    : pushSupport.permission === "denied"
-                      ? "브라우저에서 알림이 차단되어 있습니다. 브라우저 사이트 설정에서 허용해 주세요."
-                      : pushEnabled
-                        ? "이 기기에서 새 소식을 받을 수 있습니다."
-                        : "중요한 새 소식을 앱을 열지 않아도 받을 수 있습니다."}
+              <p
+                className="mt-1 text-sm text-muted-foreground"
+                aria-live="polite"
+              >
+                {pushPending
+                  ? "Web Push 설정을 변경하고 있습니다."
+                  : pushSupport.state === "ios-browser"
+                    ? "iPhone과 iPad에서는 홈 화면에 설치한 앱에서 알림을 켤 수 있습니다."
+                    : pushSupport.state === "unconfigured"
+                      ? "이 환경에는 Web Push 공개 키가 설정되지 않았습니다."
+                      : pushSupport.state === "unsupported"
+                        ? "이 브라우저에서는 Web Push를 사용할 수 없습니다."
+                        : pushSupport.permission === "denied"
+                          ? "브라우저에서 알림이 차단되어 있습니다. 브라우저 사이트 설정에서 허용해 주세요."
+                          : pushEnabled
+                            ? "이 기기에서 새 소식을 받을 수 있습니다."
+                            : "중요한 새 소식을 앱을 열지 않아도 받을 수 있습니다."}
               </p>
             </div>
             {pushSupport.state === "available" &&
             pushSupport.permission !== "denied" ? (
-              <Switch
-                aria-label="이 기기의 Web Push"
-                checked={pushEnabled}
-                disabled={pushPending}
-                onCheckedChange={() => void togglePush()}
-              />
+              <div className="flex min-w-8 items-center justify-end gap-2">
+                {pushPending ? (
+                  <Spinner aria-label="Web Push 설정 변경 중" />
+                ) : null}
+                <Switch
+                  aria-label="이 기기의 Web Push"
+                  checked={pushEnabled}
+                  disabled={pushPending}
+                  onCheckedChange={() => void togglePush()}
+                />
+              </div>
             ) : null}
           </div>
           {pushSupport.state === "ios-browser" ? (

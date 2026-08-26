@@ -2029,10 +2029,6 @@ export type Database = {
           visibility: Database["public"]["Enums"]["post_visibility"]
         }[]
       }
-      mark_all_my_notifications_read: { Args: never; Returns: number }
-      mark_my_notification_read: {
-        Args: { p_notification_id: string }
-        Returns: boolean
       list_today_absences: {
         Args: never
         Returns: {
@@ -2041,6 +2037,11 @@ export type Database = {
           pub_id: string
           reason: string
         }[]
+      }
+      mark_all_my_notifications_read: { Args: never; Returns: number }
+      mark_my_notification_read: {
+        Args: { p_notification_id: string }
+        Returns: boolean
       }
       move_group_category: {
         Args: { p_category_id: string; p_direction: number }
@@ -2281,6 +2282,7 @@ export type Database = {
         Args: { p_pinned: boolean; p_post_id: string }
         Returns: string
       }
+      set_my_absence: { Args: { p_reason: string }; Returns: undefined }
       set_my_group_notification_preferences: {
         Args: {
           p_group_id: string
@@ -2289,7 +2291,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      set_my_absence: { Args: { p_reason: string }; Returns: undefined }
       set_my_profile_media: {
         Args: { p_object_path: string; p_slot: string }
         Returns: {

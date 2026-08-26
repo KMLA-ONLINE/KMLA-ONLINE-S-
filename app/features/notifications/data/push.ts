@@ -37,6 +37,9 @@ export async function getPushSupport(): Promise<PushSupport> {
     return { state: "unsupported" };
   }
   if (isIOS() && !isStandalone()) return { state: "ios-browser" };
+  if (!import.meta.env.VITE_WEB_PUSH_VAPID_PUBLIC_KEY) {
+    return { state: "unconfigured" };
+  }
 
   const registration = await getRegistration();
   if (!registration) return { state: "unsupported" };
@@ -52,6 +55,9 @@ export async function enableWebPush(): Promise<PushSupport> {
   const initial = await getPushSupport();
   if (initial.state !== "available") return initial;
 
+  const vapidKey = import.meta.env.VITE_WEB_PUSH_VAPID_PUBLIC_KEY;
+  if (!vapidKey) throw new Error("Web Push public key is not configured");
+
   const permission =
     initial.permission === "default"
       ? await Notification.requestPermission()
@@ -59,9 +65,6 @@ export async function enableWebPush(): Promise<PushSupport> {
   if (permission !== "granted") {
     return { state: "available", permission, subscribed: false };
   }
-
-  const vapidKey = import.meta.env.VITE_WEB_PUSH_VAPID_PUBLIC_KEY;
-  if (!vapidKey) throw new Error("Web Push public key is not configured");
 
   const registration = await getRegistration();
   if (!registration) throw new Error("Service worker is not ready");
