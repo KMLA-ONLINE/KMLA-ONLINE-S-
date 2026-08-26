@@ -14,6 +14,7 @@ export { ProfilePostsPanel } from "~/features/posts/components/profile-posts-pan
 export { useGroupPostSearch } from "~/features/posts/hooks/use-group-post-search";
 export { usePostComments } from "~/features/posts/hooks/use-post-comments";
 export { usePostViewMode } from "~/features/posts/hooks/use-post-view-mode";
+export { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
 export {
   createGroupCategory,
   createProfilePost,
@@ -52,7 +53,10 @@ export {
   getPostErrorMessage,
 } from "~/features/posts/model/format";
 export { resolveIdentityOptions } from "~/features/posts/model/identity";
-export { shouldRevalidatePostDetail } from "~/features/posts/model/revalidation";
+export {
+  createPostListRevalidation,
+  shouldRevalidatePostDetail,
+} from "~/features/posts/model/revalidation";
 export {
   COMMENT_MAX_LENGTH,
   normalizeCommentBody,

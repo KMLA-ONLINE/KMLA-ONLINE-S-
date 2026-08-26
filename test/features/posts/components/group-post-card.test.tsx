@@ -44,6 +44,24 @@ describe("GroupPostCard", () => {
     );
   });
 
+  /**
+   * 운영진 명의는 이름을 가리지 않는다 — 배지가 이미 「운영진」이라고 밝히고 프로필도
+   * 그대로 걸린다. 그런 자리에 「나」까지 붙으면 알려주는 것 없이 잡음만 된다. 이름이
+   * 가려지는 익명에서만 내 글임을 알려 줄 값어치가 있다.
+   */
+  it("marks my own post as 나 only when the author is hidden", () => {
+    stubOverflow(false);
+    renderCard(groupPost({ author_identity: "staff", is_author: true }));
+    expect(screen.queryByText("나")).not.toBeInTheDocument();
+  });
+
+  it("keeps the 나 badge on my anonymous post", () => {
+    stubOverflow(false);
+    renderCard(groupPost({ author_identity: "anonymous", is_author: true }));
+
+    expect(screen.getByText("나")).toBeInTheDocument();
+  });
+
   it("links identified and staff authors to their profile", () => {
     stubOverflow(false);
     renderCard(

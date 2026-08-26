@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { Form, Link, useNavigation } from "react-router";
 
 import type {
@@ -9,7 +9,12 @@ import type {
 import { Button, buttonVariants } from "~/shared/ui/button";
 import { Card, CardContent } from "~/shared/ui/card";
 import { Checkbox } from "~/shared/ui/checkbox";
-import { Field, FieldError, FieldLabel } from "~/shared/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "~/shared/ui/field";
 import { Input } from "~/shared/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 import { TextField } from "~/shared/ui/text-field";
@@ -35,6 +40,24 @@ export function ProfileEditScreen({
         />
       </div>
     </main>
+  );
+}
+
+/**
+ * 필수 항목 별표.
+ *
+ * `FieldLabel`이 `flex gap-2`라 별표를 형제로 두면 8px 떨어져 붙는다. 라벨 글자와 한 span에
+ * 담아야 바로 뒤에 온다. 별표는 시각 전용이다 — 스크린리더에는 입력의 `required` 속성이
+ * 이미 필수라고 알린다.
+ */
+function RequiredLabel({ children }: { children: ReactNode }) {
+  return (
+    <span>
+      {children}
+      <span aria-hidden="true" className="ml-0.5 text-destructive">
+        *
+      </span>
+    </span>
   );
 }
 
@@ -91,7 +114,9 @@ function ProfileEditForm({
               data-invalid={Boolean(errors.name)}
               className="sm:col-span-2"
             >
-              <FieldLabel htmlFor="profile-name">이름</FieldLabel>
+              <FieldLabel htmlFor="profile-name">
+                <RequiredLabel>이름</RequiredLabel>
+              </FieldLabel>
               <TextField
                 id="profile-name"
                 name="name"
@@ -119,26 +144,15 @@ function ProfileEditForm({
               />
               <FieldError>{errors.description}</FieldError>
             </Field>
-
-            <Field orientation="horizontal" className="sm:col-span-2">
-              <Checkbox
-                id="profile-timeline-posts"
-                name="allowTimelinePosts"
-                defaultChecked={values.allowTimelinePosts}
-              />
-              <div>
-                <FieldLabel htmlFor="profile-timeline-posts">
-                  다른 사용자의 내 타임라인 게시물 작성 허용
-                </FieldLabel>
-              </div>
-            </Field>
           </div>
 
           {academicProfile ? (
             <section className="space-y-5 border-t pt-6">
               <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
                 <Field data-invalid={Boolean(errors.gender)}>
-                  <FieldLabel htmlFor="profile-gender">성별</FieldLabel>
+                  <FieldLabel htmlFor="profile-gender">
+                    <RequiredLabel>성별</RequiredLabel>
+                  </FieldLabel>
                   <NativeSelect
                     id="profile-gender"
                     name="gender"
@@ -154,7 +168,9 @@ function ProfileEditForm({
                 </Field>
 
                 <Field data-invalid={Boolean(errors.academicTrack)}>
-                  <FieldLabel htmlFor="profile-track">계열</FieldLabel>
+                  <FieldLabel htmlFor="profile-track">
+                    <RequiredLabel>계열</RequiredLabel>
+                  </FieldLabel>
                   <NativeSelect
                     id="profile-track"
                     name="academicTrack"
@@ -276,7 +292,13 @@ function ProfileEditForm({
           <section className="space-y-5 border-t pt-6">
             <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
               <Field data-invalid={Boolean(errors.birthday)}>
-                <FieldLabel htmlFor="profile-birthday">생일</FieldLabel>
+                <FieldLabel htmlFor="profile-birthday">
+                  {profile.type === "student" ? (
+                    <RequiredLabel>생일</RequiredLabel>
+                  ) : (
+                    "생일"
+                  )}
+                </FieldLabel>
                 <Input
                   id="profile-birthday"
                   name="birthday"
@@ -344,6 +366,19 @@ function ProfileEditForm({
                 <FieldError>{errors.contactEmail}</FieldError>
               </Field>
 
+              <Field orientation="horizontal" className="sm:col-span-2">
+                <Checkbox
+                  id="profile-timeline-posts"
+                  name="allowTimelinePosts"
+                  defaultChecked={values.allowTimelinePosts}
+                />
+                <div>
+                  <FieldLabel htmlFor="profile-timeline-posts">
+                    다른 사용자의 내 타임라인 게시물 작성 허용(추천)
+                  </FieldLabel>
+                </div>
+              </Field>
+
               {profile.type === "student" ? (
                 <Field className="sm:col-span-2">
                   <div className="flex items-center justify-between gap-4 py-1">
@@ -361,6 +396,7 @@ function ProfileEditForm({
                       role="switch"
                       data-state={values.isReturningStudent ? "on" : "off"}
                       aria-checked={values.isReturningStudent}
+                      aria-describedby="profile-returning-description"
                       className="group inline-flex shrink-0 items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       onClick={(event) => {
                         const button = event.currentTarget;
@@ -383,6 +419,11 @@ function ProfileEditForm({
                       </span>
                     </button>
                   </div>
+
+                  <FieldDescription id="profile-returning-description">
+                    몇가지 설정이 이 값을 따릅니다. 실제와 다르면 놓치는 글 등이
+                    생길 수 있습니다.
+                  </FieldDescription>
                 </Field>
               ) : null}
             </div>

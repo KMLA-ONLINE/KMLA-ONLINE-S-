@@ -27,12 +27,14 @@ export function GroupDetailActions({
   group,
   profileId,
   isTeacher,
+  canAccessSettings,
   onSelectSettings,
   onSelectReports,
 }: {
   group: GroupDetail;
   profileId: number;
   isTeacher: boolean;
+  canAccessSettings: boolean;
   onSelectSettings: () => void;
   onSelectReports: () => void;
 }) {
@@ -74,7 +76,7 @@ export function GroupDetailActions({
               <SearchIcon aria-hidden="true" />
             </Button>
           ) : null}
-          {isMember ? (
+          {isMember || canAccessSettings ? (
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -92,48 +94,54 @@ export function GroupDetailActions({
                 align="end"
                 className="w-auto whitespace-nowrap"
               >
+                {canAccessSettings ? (
+                  <DropdownMenuItem onClick={onSelectSettings}>
+                    그룹 설정
+                  </DropdownMenuItem>
+                ) : null}
                 {canCurate ? (
                   <>
-                    <DropdownMenuItem onClick={onSelectSettings}>
-                      그룹 설정
-                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={onSelectReports}>
                       <FlagIcon />
                       신고
                     </DropdownMenuItem>
                   </>
                 ) : null}
-                {canCurate ? <DropdownMenuSeparator /> : null}
-                <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    disabled={pending}
-                    onClick={() =>
-                      void fetcher.submit(
-                        {
-                          intent: "pin",
-                          groupId: group.group_id,
-                          profileId: String(profileId),
-                          pinned: group.pinned_at ? "false" : "true",
-                        },
-                        { method: "post" },
-                      )
-                    }
-                  >
-                    <PinIcon />
-                    {group.pinned_at ? "고정 해제" : "내 그룹에 고정"}
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-                {canLeave ? (
+                {canCurate && isMember ? <DropdownMenuSeparator /> : null}
+                {isMember ? (
                   <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      variant="destructive"
-                      disabled={pending}
-                      onClick={() => setLeaveOpen(true)}
-                    >
-                      <LogOutIcon />
-                      그룹 탈퇴
-                    </DropdownMenuItem>
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem
+                        disabled={pending}
+                        onClick={() =>
+                          void fetcher.submit(
+                            {
+                              intent: "pin",
+                              groupId: group.group_id,
+                              profileId: String(profileId),
+                              pinned: group.pinned_at ? "false" : "true",
+                            },
+                            { method: "post" },
+                          )
+                        }
+                      >
+                        <PinIcon />
+                        {group.pinned_at ? "고정 해제" : "내 그룹에 고정"}
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                    {canLeave ? (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          disabled={pending}
+                          onClick={() => setLeaveOpen(true)}
+                        >
+                          <LogOutIcon />
+                          그룹 탈퇴
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
                   </>
                 ) : null}
               </DropdownMenuContent>

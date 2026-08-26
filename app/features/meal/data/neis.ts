@@ -1,3 +1,5 @@
+import { getKoreaDateIso } from "~/shared/lib/korea-date";
+
 const NEIS_MEAL_URL = "https://open.neis.go.kr/hub/mealServiceDietInfo";
 
 const EDUCATION_OFFICE_CODE = "K10";
@@ -109,17 +111,7 @@ function readRows(payload: unknown): NeisMealRow[] {
 }
 
 export function getKoreaDate(now = new Date()) {
-  const parts = new Intl.DateTimeFormat("en", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(now);
-
-  const read = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? "";
-
-  return `${read("year")}${read("month")}${read("day")}`;
+  return getKoreaDateIso(now).replaceAll("-", "");
 }
 
 export function getKoreaHour(now = new Date()) {

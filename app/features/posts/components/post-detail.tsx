@@ -126,7 +126,7 @@ export function PostDetail({
                   운영진
                 </Badge>
               ) : null}
-              {post.is_author && post.author_identity !== "identified" ? (
+              {post.is_author && post.author_identity === "anonymous" ? (
                 <Badge variant="secondary" className="shrink-0">
                   나
                 </Badge>
@@ -137,7 +137,7 @@ export function PostDetail({
                 </Badge>
               ) : null}
             </div>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
               <RelativeTime value={post.published_at} />
             </div>
           </div>

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 
-const DESKTOP_QUERY = "(min-width: 768px)";
 const MIN_KEYBOARD_INSET = 60;
 
 export interface KeyboardViewport {
@@ -13,18 +12,17 @@ const DEFAULT_VIEWPORT: KeyboardViewport = {
   height: null,
 };
 
-/** 모바일 댓글 시트를 현재 visual viewport 안에 가둔다. */
+/** 열린 댓글 시트를 현재 visual viewport 안에 가둔다. */
 export function useKeyboardViewport(enabled: boolean): KeyboardViewport {
   const [viewport, setViewport] = useState(DEFAULT_VIEWPORT);
 
   useEffect(() => {
     if (!enabled) return;
 
-    const desktop = window.matchMedia(DESKTOP_QUERY);
     const visualViewport = window.visualViewport;
 
     const measure = () => {
-      if (desktop.matches || visualViewport?.scale !== 1) {
+      if (visualViewport?.scale !== 1) {
         setViewport(DEFAULT_VIEWPORT);
         return;
       }
@@ -47,13 +45,11 @@ export function useKeyboardViewport(enabled: boolean): KeyboardViewport {
     };
 
     measure();
-    desktop.addEventListener("change", measure);
     visualViewport?.addEventListener("resize", measure);
     visualViewport?.addEventListener("scroll", measure);
     window.addEventListener("resize", measure);
 
     return () => {
-      desktop.removeEventListener("change", measure);
       visualViewport?.removeEventListener("resize", measure);
       visualViewport?.removeEventListener("scroll", measure);
       window.removeEventListener("resize", measure);

@@ -67,7 +67,7 @@
 
 ## Build and Verification
 
-- `npm run check` is lint, format check, React Router type generation plus TypeScript, then unit tests. `npm run verify` adds `npm run build` and is what CI runs in `.github/workflows/quality.yml`; use it before handing work off, because only the build proves `scripts/build-sw.mjs` still generates the service worker against real output.
+- `npm run check` is lint, format check, React Router type generation plus TypeScript, then unit tests. `npm run verify` adds `npm run build` and is what CI runs in `.github/workflows/quality.yml`; use it as the one-shot CI-equivalent check. If `npm run check` has already passed after the last source edit, run `npm run build` rather than repeating it through `verify` before handoff, because only the build proves `scripts/build-sw.mjs` still generates the service worker against real output.
 - `npm run check:fast` is typecheck plus unit tests, for the edit loop. It is not a substitute for `npm run check` before handing work off — it skips lint and format entirely.
 - ESLint and Prettier run with `--cache`. The cache keys on file content, so editing a file still re-checks it; a stale cache cannot hide a new error. `.eslintcache` is gitignored and CI starts cold, so CI results are unaffected.
 - Keep all Vitest unit, component, and route tests under `test/`, mirroring the relevant `app/` area; keep Playwright tests under `e2e/`. Run one unit file with `npx vitest run test/routes/theme.test.tsx`, or one area with `npm test -- test/features/posts`. `npm run test:watch` reruns only what an edit affects.

@@ -91,15 +91,10 @@ describe("useKeyboardViewport", () => {
     expect(result.current).toEqual({ bottomInset: 0, height: null });
   });
 
-  it("does nothing on desktop", () => {
-    vi.spyOn(window, "matchMedia").mockReturnValue({
-      matches: true,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    } as unknown as MediaQueryList);
+  it("does nothing while disabled", () => {
     visualViewport.height = 500;
 
-    const { result } = renderHook(() => useKeyboardViewport(true));
+    const { result } = renderHook(() => useKeyboardViewport(false));
 
     expect(result.current).toEqual({ bottomInset: 0, height: null });
   });

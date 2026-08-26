@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   hasErrors,
   validateEmail,
+  validateOtpCode,
   validatePassword,
+  validatePasswordConfirm,
   validateProfileForm,
 } from "~/features/auth/model/validation";
 import type { ProfileFormValues } from "~/features/auth/model/types";
@@ -26,9 +28,21 @@ describe("auth validation", () => {
   it("validates account credentials", () => {
     expect(validateEmail("invalid")).toBeDefined();
     expect(validateEmail("student@kmla.hs.kr")).toBeUndefined();
-    expect(validatePassword("12345")).toBeDefined();
-    expect(validatePassword("123456")).toBeUndefined();
+    expect(validatePassword("1234567")).toBeDefined();
+    expect(validatePassword("12345678")).toBeUndefined();
     expect(hasErrors({ email: undefined, password: undefined })).toBe(false);
+  });
+
+  it("requires a matching, non-empty password confirmation", () => {
+    expect(validatePasswordConfirm("12345678", "")).toBeDefined();
+    expect(validatePasswordConfirm("12345678", "1234567")).toBeDefined();
+    expect(validatePasswordConfirm("12345678", "12345678")).toBeUndefined();
+  });
+
+  it("accepts only six digits as an OTP", () => {
+    expect(validateOtpCode("12345")).toBeDefined();
+    expect(validateOtpCode("12345a")).toBeDefined();
+    expect(validateOtpCode("123456")).toBeUndefined();
   });
 
   it("accepts a complete student profile", () => {

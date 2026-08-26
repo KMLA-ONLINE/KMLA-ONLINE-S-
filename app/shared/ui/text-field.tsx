@@ -29,6 +29,19 @@ function focusNextControl(control: HTMLTextAreaElement) {
   }
 }
 
+/**
+ * `input`은 글자를 내용 상자 안에서 세로 가운데에 놓지만, `textarea`는 첫 줄을 위쪽에
+ * 붙인다. 그래서 줄 높이를 내용 상자 높이와 같게 잡아야 `Input`과 나란히 놓았을 때 글자
+ * 높이가 맞는다.
+ *
+ *   h-9 36px − 테두리 2px − py-1 8px = 26px
+ *
+ * 그냥 두면 `md:text-sm`(줄 높이 20px)에서 글자가 3px 위로 뜬다. 고정값인 이유는 이
+ * 컴포넌트가 높이를 `h-9 max-h-9 min-h-9`로 잠그기 때문이다 — 높이나 안쪽 여백을 바꾸면
+ * 이 값도 같이 바꿔야 한다.
+ */
+const LINE_HEIGHT = "leading-[26px]";
+
 function TextField({
   className,
   enterKeyHint = "next",
@@ -43,6 +56,7 @@ function TextField({
       aria-multiline={false}
       className={cn(
         "[field-sizing:fixed] h-9 max-h-9 min-h-9 resize-none [scrollbar-width:none] overflow-x-auto overflow-y-hidden py-1 whitespace-nowrap [&::-webkit-scrollbar]:hidden",
+        LINE_HEIGHT,
         className,
       )}
       enterKeyHint={enterKeyHint}
