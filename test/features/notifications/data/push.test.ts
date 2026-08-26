@@ -62,6 +62,35 @@ describe("Web Push configuration", () => {
     expect(getRegistration).not.toHaveBeenCalled();
   });
 
+  it("waits for an active worker instead of one still installing", async () => {
+    vi.stubEnv("PROD", true);
+    vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", VALID_VAPID_KEY);
+    // `subscribe()` throws AbortError on this one, so it must not be used.
+    const installing = {
+      active: null,
+      pushManager: { getSubscription: vi.fn() },
+    };
+    const activated = {
+      active: {},
+      pushManager: { getSubscription: vi.fn().mockResolvedValue(null) },
+    };
+    getRegistration.mockResolvedValue(installing);
+    vi.stubGlobal("navigator", {
+      maxTouchPoints: 0,
+      platform: "Win32",
+      serviceWorker: { getRegistration, ready: Promise.resolve(activated) },
+      userAgent: "test",
+    });
+
+    await expect(getPushSupport()).resolves.toEqual({
+      state: "available",
+      permission: "default",
+      subscribed: false,
+    });
+    expect(activated.pushManager.getSubscription).toHaveBeenCalled();
+    expect(installing.pushManager.getSubscription).not.toHaveBeenCalled();
+  });
+
   it("stops waiting for a worker that never becomes ready", async () => {
     vi.useFakeTimers();
     vi.stubEnv("PROD", true);

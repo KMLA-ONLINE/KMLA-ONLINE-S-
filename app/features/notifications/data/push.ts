@@ -46,7 +46,11 @@ const REGISTRATION_READY_TIMEOUT_MS = 5000;
 
 async function getRegistration(): Promise<ServiceWorkerRegistration | null> {
   const registration = await navigator.serviceWorker.getRegistration("/");
-  if (registration || !import.meta.env.PROD) return registration ?? null;
+  // `pushManager.subscribe()` rejects with AbortError unless the registration
+  // has an *active* worker, and `getRegistration` resolves as soon as one is
+  // merely installing. Only `ready` guarantees an activated worker.
+  if (registration?.active) return registration;
+  if (!import.meta.env.PROD) return null;
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
