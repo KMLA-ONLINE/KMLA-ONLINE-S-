@@ -877,6 +877,35 @@ export type Database = {
           },
         ]
       }
+      student_absences: {
+        Row: {
+          created_at: string
+          id: number
+          profile_id: number
+          reason: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          profile_id: number
+          reason: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          profile_id?: number
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_absences_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_timetables: {
         Row: {
           active_semester: string
@@ -1756,6 +1785,15 @@ export type Database = {
           visibility: Database["public"]["Enums"]["post_visibility"]
         }[]
       }
+      list_today_absences: {
+        Args: never
+        Returns: {
+          avatar_path: string
+          name: string
+          pub_id: string
+          reason: string
+        }[]
+      }
       move_group_category: {
         Args: { p_category_id: string; p_direction: number }
         Returns: {
@@ -1982,6 +2020,7 @@ export type Database = {
         Args: { p_pinned: boolean; p_post_id: string }
         Returns: string
       }
+      set_my_absence: { Args: { p_reason: string }; Returns: undefined }
       set_my_profile_media: {
         Args: { p_object_path: string; p_slot: string }
         Returns: {

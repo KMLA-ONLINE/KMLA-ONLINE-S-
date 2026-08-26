@@ -1,7 +1,9 @@
 import { MessagesSquareIcon, SearchIcon, UtensilsIcon } from "lucide-react";
 import { Link, type ShouldRevalidateFunctionArgs } from "react-router";
 
-import { defineAppChrome, PageHeader } from "~/features/app-shell";
+import { AbsenceRail } from "~/features/absences/components/absence-rail";
+import { listTodayAbsences } from "~/features/absences/data/queries";
+import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import {
   FEED_STALE_TIME,
   FeedScreen,
@@ -61,14 +63,19 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     ? Promise.resolve(null)
     : getMealDay(getKoreaDate());
 
+  const absencePromise = pageToken
+    ? Promise.resolve([])
+    : listTodayAbsences().catch(() => []);
+
   try {
-    const [page, mealDay] = await Promise.all([
+    const [page, mealDay, absences] = await Promise.all([
       getQueryClient().fetchQuery({
         queryKey: feedKeys.page(pageToken),
         queryFn: () => listFeedPosts(pageToken),
         staleTime: FEED_STALE_TIME,
       }),
       mealDayPromise,
+      absencePromise,
     ]);
 
     if (pageToken) {
@@ -78,6 +85,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
         error: null,
         expired: false,
         mealDay,
+        absences,
       };
     }
 
@@ -87,12 +95,16 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
       error: null,
       expired: false,
       mealDay,
+      absences,
     };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "피드를 불러오지 못했습니다.";
     const expired = pageToken !== null && /expired|not found/i.test(message);
-    const mealDay = await mealDayPromise;
+    const [mealDay, absences] = await Promise.all([
+      mealDayPromise,
+      absencePromise,
+    ]);
 
     if (pageToken) {
       return {
@@ -101,6 +113,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
         error: expired ? "피드가 만료되었습니다. 새로고침해 주세요." : message,
         expired,
         mealDay,
+        absences,
       };
     }
 
@@ -110,12 +123,14 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
       error: message,
       expired: false,
       mealDay,
+      absences,
     };
   }
 }
 
 export default function FeedPage({ loaderData }: Route.ComponentProps) {
-  const { page, error, mealDay } = loaderData;
+  const { page, error, mealDay, absences } = loaderData;
+  const { profile } = useAppShell();
 
   return (
     <>
@@ -157,7 +172,21 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
       />
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-4">
-        <FeedScreen initialPage={page} initialError={error} />
+        <div className="min-w-0">
+          {profile.type === "student" ? (
+            <AbsenceRail
+              initialItems={absences}
+              viewer={{
+                pubId: profile.pub_id,
+                name: profile.name,
+                avatarUrl: profile.avatar_url,
+              }}
+            />
+          ) : null}
+
+          <FeedScreen initialPage={page} initialError={error} />
+        </div>
+
         {mealDay ? <HomeMealSummary day={mealDay} /> : null}
       </div>
     </>
