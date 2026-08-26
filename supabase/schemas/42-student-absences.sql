@@ -133,3 +133,46 @@ revoke all on function public.list_today_absences()
 
 grant execute on function public.list_today_absences()
   to authenticated;
+
+create function public.delete_my_absence()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint;
+  kst_date date;
+  day_start timestamptz;
+  day_end timestamptz;
+begin
+  select profile.id
+  into caller_profile_id
+  from public.profiles as profile
+  where profile.auth_user_id = auth.uid()
+    and profile.status = 'accepted'
+    and profile.deleted_at is null
+    and profile.type = 'student'
+    and profile.cohort is not null;
+
+  if caller_profile_id is null then
+    raise exception 'student profile required'
+      using errcode = '42501';
+  end if;
+
+  kst_date := (now() at time zone 'Asia/Seoul')::date;
+  day_start := kst_date::timestamp at time zone 'Asia/Seoul';
+  day_end := (kst_date + 1)::timestamp at time zone 'Asia/Seoul';
+
+  delete from public.student_absences
+  where profile_id = caller_profile_id
+    and created_at >= day_start
+    and created_at < day_end;
+end;
+$$;
+
+revoke all on function public.delete_my_absence()
+  from public, anon;
+
+grant execute on function public.delete_my_absence()
+  to authenticated;

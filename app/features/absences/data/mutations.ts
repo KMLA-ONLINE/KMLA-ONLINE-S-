@@ -7,3 +7,9 @@ export async function setMyAbsence(reason: string): Promise<void> {
 
   if (error) throw error;
 }
+
+export async function deleteMyAbsence(): Promise<void> {
+  const { error } = await getSupabase().rpc("delete_my_absence");
+
+  if (error) throw error;
+}

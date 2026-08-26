@@ -2,6 +2,7 @@ import {
   CalendarClockIcon,
   CalendarDaysIcon,
   ChevronRightIcon,
+  ClipboardListIcon,
   FileTextIcon,
   SettingsIcon,
   ShieldCheckIcon,
@@ -72,6 +73,27 @@ export default function MenuPage() {
                 aria-hidden
               />
             </Link>
+
+            {profile.type === "student" ? (
+              <Link
+                to="/menu/absence"
+                className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
+              >
+                <ClipboardListIcon
+                  className="size-4.5 shrink-0 text-muted-foreground"
+                  aria-hidden
+                />
+
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  공결 & 병결
+                </span>
+
+                <ChevronRightIcon
+                  className="size-4 shrink-0 text-muted-foreground"
+                  aria-hidden
+                />
+              </Link>
+            ) : null}
 
             <Link
               to="/menu/timetable"

@@ -173,15 +173,8 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-4">
         <div className="min-w-0">
-          {profile.type === "student" ? (
-            <AbsenceRail
-              initialItems={absences}
-              viewer={{
-                pubId: profile.pub_id,
-                name: profile.name,
-                avatarUrl: profile.avatar_url,
-              }}
-            />
+          {profile.type === "student" && absences.length > 0 ? (
+            <AbsenceRail initialItems={absences} viewerPubId={profile.pub_id} />
           ) : null}
 
           <FeedScreen initialPage={page} initialError={error} />

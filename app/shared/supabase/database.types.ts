@@ -1258,6 +1258,7 @@ export type Database = {
         Returns: undefined
       }
       delete_group_post: { Args: { p_post_id: string }; Returns: undefined }
+      delete_my_absence: { Args: never; Returns: undefined }
       delete_post_attachment: {
         Args: { p_attachment_id: string }
         Returns: undefined
