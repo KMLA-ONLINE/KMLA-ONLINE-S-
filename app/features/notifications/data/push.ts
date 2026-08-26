@@ -22,6 +22,23 @@ function decodeVapidKey(value: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(raw, (character) => character.charCodeAt(0));
 }
 
+/**
+ * A misconfigured deploy has to read as "unconfigured" rather than throw out of
+ * `atob` or `subscribe()`. An applicationServerKey is an uncompressed P-256
+ * point, so anything that is not 65 bytes starting with 0x04 cannot work.
+ */
+function readVapidKey(): Uint8Array<ArrayBuffer> | null {
+  const value = import.meta.env.VITE_WEB_PUSH_VAPID_PUBLIC_KEY?.trim();
+  if (!value) return null;
+
+  try {
+    const key = decodeVapidKey(value);
+    return key.length === 65 && key[0] === 0x04 ? key : null;
+  } catch {
+    return null;
+  }
+}
+
 // `serviceWorker.ready` never settles when registration fails outright, which a
 // browser with workers blocked will do. Without a bound the settings
 // clientLoader would stay pending forever with nothing to show the user.
@@ -53,9 +70,7 @@ export async function getPushSupport(): Promise<PushSupport> {
     return { state: "unsupported" };
   }
   if (isIOS() && !isStandalone()) return { state: "ios-browser" };
-  if (!import.meta.env.VITE_WEB_PUSH_VAPID_PUBLIC_KEY) {
-    return { state: "unconfigured" };
-  }
+  if (!readVapidKey()) return { state: "unconfigured" };
 
   const registration = await getRegistration();
   if (!registration) return { state: "unsupported" };
@@ -71,7 +86,7 @@ export async function enableWebPush(): Promise<PushSupport> {
   const initial = await getPushSupport();
   if (initial.state !== "available") return initial;
 
-  const vapidKey = import.meta.env.VITE_WEB_PUSH_VAPID_PUBLIC_KEY;
+  const vapidKey = readVapidKey();
   if (!vapidKey) throw new Error("Web Push public key is not configured");
 
   const permission =
@@ -88,7 +103,7 @@ export async function enableWebPush(): Promise<PushSupport> {
     (await registration.pushManager.getSubscription()) ??
     (await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: decodeVapidKey(vapidKey),
+      applicationServerKey: vapidKey,
     }));
   const json = subscription.toJSON();
   if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) {

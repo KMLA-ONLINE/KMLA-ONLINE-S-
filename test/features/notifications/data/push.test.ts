@@ -6,6 +6,10 @@ import {
 } from "~/features/notifications/data/push";
 
 describe("Web Push configuration", () => {
+  // 0x04 followed by 64 bytes: the shape `subscribe()` requires of an
+  // applicationServerKey.
+  const VALID_VAPID_KEY =
+    "BAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8";
   const getRegistration = vi.fn();
   const requestPermission = vi.fn();
 
@@ -46,10 +50,22 @@ describe("Web Push configuration", () => {
     expect(requestPermission).not.toHaveBeenCalled();
   });
 
+  it.each([
+    // The placeholder from supabase/functions/.env.example: pads to three "="
+    // and used to throw InvalidCharacterError straight out of atob.
+    ["a placeholder that is not base64", "replace-with-vapid-public-key"],
+    ["valid base64 that is not a P-256 point", "dGVzdA"],
+  ])("treats %s as unconfigured", async (_label, value) => {
+    vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", value);
+
+    await expect(getPushSupport()).resolves.toEqual({ state: "unconfigured" });
+    expect(getRegistration).not.toHaveBeenCalled();
+  });
+
   it("stops waiting for a worker that never becomes ready", async () => {
     vi.useFakeTimers();
     vi.stubEnv("PROD", true);
-    vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", "test-key");
+    vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", VALID_VAPID_KEY);
     getRegistration.mockResolvedValue(undefined);
     vi.stubGlobal("navigator", {
       maxTouchPoints: 0,
