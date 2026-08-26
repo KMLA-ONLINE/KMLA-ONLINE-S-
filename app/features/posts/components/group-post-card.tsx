@@ -99,7 +99,7 @@ export function GroupPostCard({
               </Badge>
             ) : null}
           </div>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
             <RelativeTime value={post.published_at} />
           </div>
         </div>

@@ -102,7 +102,7 @@ describe("InstallPrompt", () => {
     expect(
       screen.getByRole("heading", { name: /Chrome에서 열어/ }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/다른 브라우저로 열기/)).toBeInTheDocument();
+    expect(screen.getByText(/외부 브라우저에서 열기/)).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "설치하기" }),
     ).not.toBeInTheDocument();

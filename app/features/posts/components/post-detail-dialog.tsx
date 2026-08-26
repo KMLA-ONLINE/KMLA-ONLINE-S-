@@ -114,12 +114,19 @@ export function PostDetailDialog({
   const dragStart = useRef<{ pointerId: number; y: number } | null>(null);
   const [searchParams] = useSearchParams();
   const commentsOnly = searchParams.get("view") === "comments";
-  const commentSheet = useSyncExternalStore(
+  const sheetViewport = useSyncExternalStore(
     subscribeToTabletSheetQuery,
     isTabletSheetViewport,
     getServerTabletSheetViewport,
   );
-  const keyboardViewport = useKeyboardViewport(commentsOnly && commentSheet);
+  /**
+   * 바텀 시트로 그릴 것인가.
+   *
+   * 뷰포트만으로 정하면 안 된다 — 게시물을 열었을 뿐인데 본문이 숨겨진 댓글 서랍이 뜬다.
+   * 댓글만 보러 들어왔다는 의도(`?view=comments`)가 함께 있어야 한다.
+   */
+  const commentSheet = commentsOnly && sheetViewport;
+  const keyboardViewport = useKeyboardViewport(commentSheet);
 
   useEffect(() => {
     if (!replyingTo || keyboardViewport.height === null) return;
@@ -342,7 +349,7 @@ export function PostDetailDialog({
           pending={thread.pending}
           error={thread.error}
           inputRef={composerRef}
-          focusOnMount={commentsOnly && !commentSheet}
+          focusOnMount={commentsOnly && !sheetViewport}
           replyTarget={replyTarget}
           onCancelReply={() => setReplyingTo(null)}
         />

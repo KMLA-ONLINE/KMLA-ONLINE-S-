@@ -101,6 +101,25 @@ describe("PostDetailDialog", () => {
     );
   });
 
+  /**
+   * 회귀: 시트 여부를 뷰포트만으로 정하던 때에는, 글을 쓰고 상세로 이동하기만 해도 본문이
+   * 숨겨진 댓글 서랍이 떴다. 댓글만 보러 왔다는 의도가 함께 있어야 시트다.
+   */
+  it("opens the post itself as a detail modal on a tablet viewport", () => {
+    stubTabletSheetViewport(true);
+    renderRoute(Detail, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id"],
+    });
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveClass("max-md:h-svh");
+    expect(dialog).not.toHaveClass("max-[1025px]:bottom-0");
+    // 시트에서는 머리글이 제목 대신 「댓글」이 된다.
+    expect(screen.queryByText("댓글")).not.toBeInTheDocument();
+    expect(screen.getByText("게시물 본문")).toBeInTheDocument();
+  });
+
   it("keeps a computer comment button as a focused detail modal", async () => {
     stubTabletSheetViewport(false);
     renderRoute(Detail, {
