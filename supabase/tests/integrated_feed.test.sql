@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(39);
+select plan(53);
 
 select ok(
   has_function_privilege('authenticated', 'public.list_feed_posts(uuid)', 'execute'),
@@ -49,32 +49,55 @@ select is(
 
 select is(
   private.feed_rank_time(
-    '2026-08-24 11:00:00+00', null, '2026-08-24 12:00:00+00', 1, 1, false
+    '2026-08-24 11:00:00+00', null, '2026-08-24 12:00:00+00', 1, 1, false, false
   ),
   '2026-08-24 11:12:00+00'::timestamptz,
   'the immutable rank helper applies four and eight minute activity weights'
 );
 select is(
   private.feed_rank_time(
-    '2026-08-24 06:00:00+00', null, '2026-08-24 12:00:00+00', 20, 20, false
+    '2026-08-24 06:00:00+00', null, '2026-08-24 12:00:00+00', 20, 20, false, false
   ),
   '2026-08-24 06:00:00+00'::timestamptz,
   'activity stops affecting rank at six hours'
 );
 select is(
   private.feed_rank_time(
+    '2026-08-21 11:00:00+00', '2026-08-24 11:30:00+00',
+    '2026-08-24 12:00:00+00', 0, 0, false, false
+  ),
+  '2026-08-24 11:30:00+00'::timestamptz,
+  'an effective bump lifts a post that is past the activity window'
+);
+select is(
+  private.feed_rank_time(
     '2026-08-24 11:00:00+00', '2026-08-24 11:30:00+00',
-    '2026-08-24 12:00:00+00', 20, 20, false
+    '2026-08-24 12:00:00+00', 1, 1, false, false
   ),
   '2026-08-24 11:30:00+00'::timestamptz,
   'an effective bump replaces rather than restarts activity ranking'
 );
 select is(
   private.feed_rank_time(
-    '2026-08-24 11:00:00+00', null, '2026-08-24 12:00:00+00', 0, 0, true
+    '2026-08-24 11:00:00+00', '2026-08-24 11:30:00+00',
+    '2026-08-24 12:00:00+00', 20, 20, false, false
+  ),
+  '2026-08-24 11:33:20+00'::timestamptz,
+  'an effective bump never ranks a post below its own activity boost'
+);
+select is(
+  private.feed_rank_time(
+    '2026-08-24 11:00:00+00', null, '2026-08-24 12:00:00+00', 0, 0, true, false
   ),
   '2026-08-24 10:00:00+00'::timestamptz,
   'recent cross-timeline posts receive the one hour adjustment'
+);
+select is(
+  private.feed_rank_time(
+    '2026-08-24 11:00:00+00', null, '2026-08-24 12:00:00+00', 0, 0, false, true
+  ),
+  '2026-08-24 10:50:00+00'::timestamptz,
+  'recent profile media activities receive the ten minute adjustment'
 );
 
 insert into auth.users (
@@ -93,19 +116,37 @@ values
     '00000000-0000-0000-0000-000000000000',
     '10000000-0000-0000-0000-000000000072', 'authenticated', 'authenticated',
     'alumni25@kmla.hs.kr', '', now(), '', '', '', '', '', '', '', '', '{}', '{}', now(), now()
+  ),
+  (
+    '00000000-0000-0000-0000-000000000000',
+    '10000000-0000-0000-0000-000000000073', 'authenticated', 'authenticated',
+    'returning29@kmla.hs.kr', '', now(), '', '', '', '', '', '', '', '', '{}', '{}', now(), now()
   );
 
 insert into public.profiles (
-  auth_user_id, pub_id, name, type, cohort, gender, academic_track, status
+  auth_user_id, pub_id, name, type, student_number, cohort, gender, academic_track,
+  birthday, status, is_returning_student
 )
 values
   (
     '10000000-0000-0000-0000-000000000071', 'feed-alumni-29', '29기 졸업생',
-    'alumni', 29, 'female', 'domestic', 'accepted'
+    'alumni', null, 29, 'female', 'domestic', null, 'accepted', false
   ),
   (
     '10000000-0000-0000-0000-000000000072', 'feed-alumni-25', '25기 졸업생',
-    'alumni', 25, 'male', 'domestic', 'accepted'
+    'alumni', null, 25, 'male', 'domestic', null, 'accepted', false
+  ),
+  (
+    '10000000-0000-0000-0000-000000000073', 'returning-29', '29기 복학생',
+    'student', 260003, 29, 'male', 'domestic', '2008-03-01', 'accepted', true
+  ),
+  (
+    null, 'viewer-30', '30기 학생',
+    'student', 260004, 30, 'male', 'domestic', '2007-03-01', 'accepted', false
+  ),
+  (
+    null, 'feed-alumni-29m', '29기 남성 졸업생',
+    'alumni', null, 29, 'male', 'domestic', null, 'accepted', false
   );
 
 create temporary table feed_session_test_ids (name text primary key, id uuid not null);
@@ -290,6 +331,40 @@ select is(
   (select id from bump_comments where name = 'first'),
   'the effective bump records its insertion-only source comment'
 );
+select ok(
+  (
+    select is_effective_feed_bump
+    from public.list_post_comments('90000000-0000-0000-0000-000000000003')
+    where comment_id = (select id from bump_comments where name = 'first')
+  ),
+  'the effective bump source is marked in comment reads'
+);
+select ok(
+  not (
+    select is_effective_feed_bump
+    from public.list_post_comments('90000000-0000-0000-0000-000000000003')
+    where comment_id = (select id from bump_comments where name = 'cooldown')
+  ),
+  'a cooldown #업 comment is not marked as effective'
+);
+set local role authenticated;
+select throws_ok(
+  $$select * from public.update_post_comment(
+    (select id from bump_comments where name = 'first'), '#업'
+  )$$,
+  '22023',
+  'effective #업 comments cannot be edited',
+  'the effective bump source cannot be edited'
+);
+select throws_ok(
+  $$select public.delete_post_comment(
+    (select id from bump_comments where name = 'first')
+  )$$,
+  '22023',
+  'effective #업 comments cannot be deleted',
+  'the effective bump source cannot be deleted'
+);
+reset role;
 select is(
   (
     select count(*)
@@ -395,6 +470,46 @@ from public.posts as post
 cross join public.profiles as profile
 where post.body = 'cross timeline candidate' and profile.pub_id = 'hanbyeol-25';
 
+create temporary table profile_media_feed_posts (
+  name text primary key,
+  id uuid not null
+);
+
+with media_spec (name, profile_pub_id, activity_kind) as (
+  values
+    ('same-cohort-avatar', 'returning-29', 'avatar_changed'::public.profile_media_activity_kind),
+    ('same-cohort-cover', 'returning-29', 'cover_changed'::public.profile_media_activity_kind),
+    ('different-gender-avatar', 'feed-alumni-29', 'avatar_changed'::public.profile_media_activity_kind),
+    ('different-cohort-avatar', 'feed-alumni-25', 'avatar_changed'::public.profile_media_activity_kind),
+    ('teacher-avatar', 'jung-teacher', 'avatar_changed'::public.profile_media_activity_kind)
+), created as (
+  insert into public.posts (
+    id, kind, body, timeline_profile_id, author_identity, display_author_profile_id,
+    visibility, created_at, published_at, activity_kind, activity_media_path
+  )
+  select
+    gen_random_uuid(), 'profile', '', profile.id, 'identified', profile.id,
+    'public', statement_timestamp() - interval '3 minutes',
+    statement_timestamp() - interval '3 minutes', spec.activity_kind,
+    profile.auth_user_id::text || '/' || case spec.activity_kind
+      when 'avatar_changed' then 'avatar' else 'cover' end || '/' || gen_random_uuid()
+  from media_spec as spec
+  join public.profiles as profile on profile.pub_id = spec.profile_pub_id
+  returning id, timeline_profile_id, activity_kind
+)
+insert into profile_media_feed_posts (name, id)
+select spec.name, created.id
+from created
+join public.profiles as profile on profile.id = created.timeline_profile_id
+join media_spec as spec
+  on spec.profile_pub_id = profile.pub_id
+  and spec.activity_kind = created.activity_kind;
+
+insert into private.post_authors (post_id, profile_id)
+select media_post.id, post.timeline_profile_id
+from profile_media_feed_posts as media_post
+join public.posts as post on post.id = media_post.id;
+
 insert into public.post_attachments (
   id, post_id, object_path, original_filename, position, mime_type, size_bytes,
   width, height, status, ready_at
@@ -416,9 +531,16 @@ select ok(
 select ok(
   private.can_access_feed_post(
     (select id from public.posts where body = 'cross timeline candidate'),
-    (select id from public.profiles where pub_id = 'feed-alumni-29')
+    (select id from public.profiles where pub_id = 'feed-alumni-29m')
   ),
   'an alumnus sees 생탐 when their cohort overlaps an accepted student cohort'
+);
+select ok(
+  not private.can_access_feed_post(
+    (select id from public.posts where body = 'cross timeline candidate'),
+    (select id from public.profiles where pub_id = 'feed-alumni-29')
+  ),
+  'an overlapping cohort of a different gender does not see 생탐'
 );
 select ok(
   not private.can_access_feed_post(
@@ -426,6 +548,53 @@ select ok(
     (select id from public.profiles where pub_id = 'feed-alumni-25')
   ),
   'an alumnus without a currently accepted student cohort does not see 생탐'
+);
+select ok(
+  private.can_access_feed_post(
+    (select id from profile_media_feed_posts where name = 'same-cohort-avatar'),
+    (select id from public.profiles
+      where auth_user_id = '10000000-0000-0000-0000-000000000001')
+  ),
+  'a same-cohort and same-gender viewer sees an avatar activity'
+);
+select ok(
+  private.can_access_feed_post(
+    (select id from profile_media_feed_posts where name = 'same-cohort-cover'),
+    (select id from public.profiles
+      where auth_user_id = '10000000-0000-0000-0000-000000000001')
+  ),
+  'a same-cohort and same-gender viewer sees a cover activity'
+);
+select ok(
+  not private.can_access_feed_post(
+    (select id from profile_media_feed_posts where name = 'different-gender-avatar'),
+    (select id from public.profiles
+      where auth_user_id = '10000000-0000-0000-0000-000000000001')
+  ),
+  'a viewer does not see a profile media activity from a different gender'
+);
+select ok(
+  not private.can_access_feed_post(
+    (select id from profile_media_feed_posts where name = 'different-cohort-avatar'),
+    (select id from public.profiles
+      where auth_user_id = '10000000-0000-0000-0000-000000000001')
+  ),
+  'a viewer does not see a profile media activity from a different cohort'
+);
+select ok(
+  not private.can_access_feed_post(
+    (select id from profile_media_feed_posts where name = 'same-cohort-avatar'),
+    (select id from public.profiles where pub_id = 'viewer-30')
+  ),
+  'a returning student profile media activity does not expand to the next cohort'
+);
+select ok(
+  private.can_access_feed_post(
+    (select id from profile_media_feed_posts where name = 'teacher-avatar'),
+    (select id from public.profiles
+      where auth_user_id = '10000000-0000-0000-0000-000000000001')
+  ),
+  'a teacher profile media activity is visible to every viewer'
 );
 
 set local role anon;

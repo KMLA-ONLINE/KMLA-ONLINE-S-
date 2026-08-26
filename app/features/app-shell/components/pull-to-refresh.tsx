@@ -133,14 +133,6 @@ export function PullToRefresh({
       );
       if (touch) move(touch.clientX, touch.clientY, event);
     };
-    const onMouseDown = (event: MouseEvent) => {
-      if (event.button !== 0) return;
-      begin(event.clientX, event.clientY, event.target, null);
-    };
-    const onMouseMove = (event: MouseEvent) => {
-      if (gestureRef.current.touchId !== null) return;
-      move(event.clientX, event.clientY, event);
-    };
     const onClick = (event: MouseEvent) => {
       if (!suppressClickRef.current) return;
       suppressClickRef.current = false;
@@ -152,20 +144,14 @@ export function PullToRefresh({
     container.addEventListener("touchmove", onTouchMove, { passive: false });
     container.addEventListener("touchend", finish);
     container.addEventListener("touchcancel", finish);
-    container.addEventListener("mousedown", onMouseDown);
     container.addEventListener("click", onClick, true);
-    window.addEventListener("mousemove", onMouseMove, { passive: false });
-    window.addEventListener("mouseup", finish);
 
     return () => {
       container.removeEventListener("touchstart", onTouchStart);
       container.removeEventListener("touchmove", onTouchMove);
       container.removeEventListener("touchend", finish);
       container.removeEventListener("touchcancel", finish);
-      container.removeEventListener("mousedown", onMouseDown);
       container.removeEventListener("click", onClick, true);
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", finish);
     };
   }, [containerRef, enabled, refreshing]);
 
@@ -184,6 +170,7 @@ export function PullToRefresh({
     >
       <div
         data-slot="pull-to-refresh-indicator"
+        data-testid="pull-to-refresh-indicator"
         data-state={refreshing ? "refreshing" : armed ? "armed" : "pulling"}
         className={cn(
           "flex h-9 items-center justify-center rounded-full border bg-background/95 text-sm font-medium text-muted-foreground shadow-md backdrop-blur transition-[width,opacity,transform] duration-150 motion-reduce:transition-none",
@@ -193,7 +180,7 @@ export function PullToRefresh({
         )}
         style={{
           transform: visible
-            ? `translateY(${refreshing ? 10 : Math.min(16, distance * 0.2)}px)`
+            ? `translateY(${refreshing ? 50 : Math.min(50, distance * 0.6)}px)`
             : undefined,
         }}
       >

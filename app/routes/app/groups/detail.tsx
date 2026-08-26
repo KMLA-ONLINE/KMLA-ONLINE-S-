@@ -33,6 +33,7 @@ import {
 } from "~/features/posts/data/group-reports";
 import {
   createGroupCategory,
+  createPostListRevalidation,
   deleteGroupCategory,
   deleteGroupPost,
   getPostErrorMessage,
@@ -52,6 +53,9 @@ export const handle = defineAppChrome({
   contentWidth: "5xl",
   pullToRefresh: true,
 });
+
+/** 게시물 검색 오버레이의 URL 상태. loader가 읽지 않으므로 이것만 바뀌면 다시 읽을 것이 없다. */
+export const shouldRevalidate = createPostListRevalidation(["search", "q"]);
 
 /**
  * `groups/:slug`. 게시물 상세(`posts/:postId`)를 자식으로 가지므로 `<Outlet />`을 그린다 —
@@ -397,8 +401,6 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
       <GroupDetailMobileHeader
         name={loaderData.group.name}
         iconPath={loaderData.group.icon_path}
-        groupId={loaderData.group.group_id}
-        slug={loaderData.group.slug}
         canSearch={loaderData.group.membership_state === "member"}
       />
       <GroupDetailScreen
@@ -407,6 +409,7 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
         viewerName={profile.name}
         viewerAvatarUrl={profile.avatar_url}
         isTeacher={profile.type === "teacher"}
+        canDeleteOfficial={profile.role === "admin"}
         categories={loaderData.categories}
         posts={loaderData.posts}
         memberPage={loaderData.memberPage}

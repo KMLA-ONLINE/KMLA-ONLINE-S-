@@ -6,7 +6,7 @@ import type { GroupDetail } from "~/features/groups/model/types";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Field, FieldLabel } from "~/shared/ui/field";
-import { Input } from "~/shared/ui/input";
+import { TextField } from "~/shared/ui/text-field";
 
 /** 확인을 위해 그대로 옮겨 적어야 하는 문구. */
 function deletionPhrase(name: string): string {
@@ -16,20 +16,30 @@ function deletionPhrase(name: string): string {
 /**
  * 그룹 삭제.
  *
- * 비공식 그룹의 소유자에게만 보인다. 관리자에게도 열어 주면 소유자가 모르는 사이에 그룹이
- * 사라지고, 공식 그룹은 승인된 재학생이 자동으로 가입하는 학교의 공간이라 한 사람의 결정으로
- * 없앨 수 없다(사용자가 공식 그룹에서 나갈 수 없는 것과 같은 이유다).
+ * 비공식 그룹은 소유자에게만, 공식 그룹은 앱 관리자에게만 보인다. 공식 그룹은 승인된 재학생이
+ * 자동으로 가입하는 학교의 공간이므로, 일반 그룹 운영 권한과 분리된 앱 관리자만 지울 수 있다.
  *
  * 확인은 그룹 이름을 그대로 옮겨 적게 한다. `삭제` 버튼을 한 번 더 누르는 확인은 결국 습관이
  * 되지만, 옮겨 적는 동안에는 어느 그룹을 지우는지 눈으로 확인할 수밖에 없다.
  */
-export function DangerSettings({ group }: { group: GroupDetail }) {
+export function DangerSettings({
+  group,
+  canDeleteOfficial,
+}: {
+  group: GroupDetail;
+  canDeleteOfficial: boolean;
+}) {
   const fetcher = useFetcher<{ error?: string }>();
   const [open, setOpen] = useState(false);
+  const [officialConfirmOpen, setOfficialConfirmOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const pending = fetcher.state !== "idle";
 
-  if (group.member_role !== "owner" || group.kind === "official") return null;
+  const canDelete =
+    group.kind === "official"
+      ? canDeleteOfficial
+      : group.member_role === "owner";
+  if (!canDelete) return null;
 
   const phrase = deletionPhrase(group.name);
 
@@ -37,6 +47,15 @@ export function DangerSettings({ group }: { group: GroupDetail }) {
     setOpen(false);
     setTyped("");
   };
+
+  function submitDeletion() {
+    close();
+    setOfficialConfirmOpen(false);
+    void fetcher.submit(
+      { intent: "delete-group", groupId: group.group_id },
+      { method: "post" },
+    );
+  }
 
   return (
     <Card className="rounded-none border-x-0 border-destructive/40 md:rounded-xl md:border">
@@ -68,14 +87,14 @@ export function DangerSettings({ group }: { group: GroupDetail }) {
         open={open}
         onOpenChange={(next) => (next ? setOpen(true) : close())}
         title={group.name}
-        description={`멤버 ${group.member_count}명의 멤버십과 함께 이 그룹의 모든 게시물, 댓글, 반응, 첨부 파일이 사라집니다. 되돌릴 수 없습니다.`}
+        description={`멤버 ${group.member_count}명과 및 그룹의 모든 정보가 사라집니다. 되돌릴 수 없습니다.`}
         details={
           <Field>
             <FieldLabel htmlFor="group-deletion-phrase">
               계속하려면 <code className="font-mono">{phrase}</code>를
               입력하세요
             </FieldLabel>
-            <Input
+            <TextField
               id="group-deletion-phrase"
               value={typed}
               autoComplete="off"
@@ -89,12 +108,24 @@ export function DangerSettings({ group }: { group: GroupDetail }) {
         confirmDisabled={typed.trim() !== phrase}
         pending={pending}
         onConfirm={() => {
-          close();
-          void fetcher.submit(
-            { intent: "delete-group", groupId: group.group_id },
-            { method: "post" },
-          );
+          if (group.kind === "official") {
+            setOpen(false);
+            setOfficialConfirmOpen(true);
+          } else submitDeletion();
         }}
+      />
+      <GroupConfirmDialog
+        open={officialConfirmOpen}
+        onOpenChange={(next) => {
+          setOfficialConfirmOpen(next);
+          if (!next) close();
+        }}
+        title={`'${group.name}' *공식 그룹*을 삭제할까요?`}
+        description="이 작업은 되돌릴 수 없습니다."
+        confirmLabel="공식 그룹 삭제"
+        confirmVariant="destructive"
+        pending={pending}
+        onConfirm={submitDeletion}
       />
     </Card>
   );

@@ -7,6 +7,7 @@ import {
   useRevalidator,
 } from "react-router";
 
+import { absenceKeys } from "~/features/absences/data/cache";
 import {
   AppHeader,
   AppSidebar,
@@ -16,6 +17,7 @@ import {
   resolveAppChrome,
   ScrollRegion,
 } from "~/features/app-shell";
+import { isPostOverlayNavigation } from "~/features/app-shell/model/navigation";
 import { feedKeys } from "~/features/feed";
 import { groupKeys } from "~/features/groups";
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
@@ -50,19 +52,30 @@ export default function MainAppLayout() {
     pendingPathname === location.pathname &&
     /^\/groups\/[^/]+$/.test(location.pathname) &&
     navigation.location.search !== location.search;
+  const postOverlayNavigation =
+    navigation.state === "loading" &&
+    Boolean(pendingPathname) &&
+    isPostOverlayNavigation(location.pathname, pendingPathname ?? "");
   const navigationPending =
     navigation.state === "loading" &&
     Boolean(pendingPathname) &&
-    !groupDetailSearchNavigation;
+    !groupDetailSearchNavigation &&
+    !postOverlayNavigation;
   const showNavigationSkeleton = useDelayedPending(navigationPending);
   const skeletonPath = pendingPathname ?? location.pathname;
 
   const refresh = async () => {
     const queryClient = getQueryClient();
-    await queryClient.invalidateQueries({
-      queryKey: location.pathname === "/" ? feedKeys.all : groupKeys.all,
-      refetchType: "none",
-    });
+    const staleKeys =
+      location.pathname === "/"
+        ? [feedKeys.all, absenceKeys.all]
+        : [groupKeys.all];
+
+    await Promise.all(
+      staleKeys.map((queryKey) =>
+        queryClient.invalidateQueries({ queryKey, refetchType: "none" }),
+      ),
+    );
     await revalidator.revalidate();
   };
 

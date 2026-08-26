@@ -6,8 +6,11 @@ import { cn } from "~/shared/lib/utils";
  * 접힌 본문의 최대 높이. `line-clamp`를 쓰지 않는 이유는 본문이 여러 블록(문단, 제목)으로
  * 이루어져 있어서다 — `-webkit-line-clamp`는 한 덩어리의 인라인 흐름만 자르므로 문단이
  * 두 개면 첫 문단만 잘리고 나머지는 그대로 나온다.
+ *
+ * 값은 `.post-typography`의 줄 높이에 묶여 있다(24px × 3줄). 본문 크기를 바꾸면 여기도
+ * 같이 바꿔야 한다 — 안 그러면 마지막 줄이 반쯤 잘려 보인다.
  */
-const COLLAPSED_BODY_CLASS = "max-h-[66px] overflow-hidden";
+const COLLAPSED_BODY_CLASS = "max-h-[72px] overflow-hidden";
 
 /**
  * 피드 카드의 본문 접기. 그룹 카드와 프로필 타임라인 카드가 함께 쓴다.

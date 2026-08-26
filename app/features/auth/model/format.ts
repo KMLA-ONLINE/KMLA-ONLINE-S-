@@ -25,6 +25,21 @@ export function getAuthErrorMessage(error: unknown): string {
   if (code === "over_email_send_rate_limit") {
     return "인증 메일을 너무 자주 요청했습니다. 잠시 후 다시 시도해 주세요.";
   }
+  if (code === "over_request_rate_limit") {
+    return "요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.";
+  }
+  if (code === "reauthentication_needed") {
+    return "본인 확인이 필요합니다. 인증 코드를 다시 받아 주세요.";
+  }
+  if (code === "reauthentication_not_valid") {
+    return "인증 코드가 올바르지 않습니다. 메일을 다시 확인해 주세요.";
+  }
+  if (code === "same_password") {
+    return "지금 쓰고 있는 비밀번호와 다른 비밀번호를 입력해 주세요.";
+  }
+  if (code === "weak_password") {
+    return "비밀번호가 너무 단순합니다. 다른 비밀번호를 입력해 주세요.";
+  }
 
   return "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }

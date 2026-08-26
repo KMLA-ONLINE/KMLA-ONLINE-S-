@@ -1037,6 +1037,35 @@ export type Database = {
           },
         ]
       }
+      student_absences: {
+        Row: {
+          created_at: string
+          id: number
+          profile_id: number
+          reason: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          profile_id: number
+          reason: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          profile_id?: number
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_absences_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_timetables: {
         Row: {
           active_semester: string
@@ -1392,6 +1421,7 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          is_effective_feed_bump: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -1415,6 +1445,7 @@ export type Database = {
         Returns: undefined
       }
       delete_group_post: { Args: { p_post_id: string }; Returns: undefined }
+      delete_my_absence: { Args: never; Returns: undefined }
       delete_post_attachment: {
         Args: { p_attachment_id: string }
         Returns: undefined
@@ -1673,6 +1704,17 @@ export type Database = {
           token: string
         }[]
       }
+      list_birthdays: {
+        Args: { p_reference_date: string; p_scope?: string }
+        Returns: {
+          avatar_path: string
+          birthday_date: string
+          birthday_day: number
+          birthday_month: number
+          name: string
+          pub_id: string
+        }[]
+      }
       list_comment_images: {
         Args: { p_comment_ids: string[] }
         Returns: {
@@ -1904,6 +1946,7 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          is_effective_feed_bump: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -1936,6 +1979,7 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          is_effective_feed_bump: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -1989,6 +2033,14 @@ export type Database = {
       mark_my_notification_read: {
         Args: { p_notification_id: string }
         Returns: boolean
+      list_today_absences: {
+        Args: never
+        Returns: {
+          avatar_path: string
+          name: string
+          pub_id: string
+          reason: string
+        }[]
       }
       move_group_category: {
         Args: { p_category_id: string; p_direction: number }
@@ -2237,6 +2289,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_my_absence: { Args: { p_reason: string }; Returns: undefined }
       set_my_profile_media: {
         Args: { p_object_path: string; p_slot: string }
         Returns: {
@@ -2494,6 +2547,7 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          is_effective_feed_bump: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string

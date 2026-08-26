@@ -44,7 +44,7 @@ $$;
 
 ALTER FUNCTION "private"."comment_post_context"("p_post_id" "uuid", "p_caller_profile_id" bigint, OUT "is_visible" boolean, OUT "post_kind" "public"."post_kind", OUT "caller_role" "public"."group_member_role", OUT "identity_policy" "public"."group_identity_policy", OUT "post_author_identity" "public"."post_identity") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "private"."read_post_comments"("p_comment_ids" "uuid"[], "p_caller_profile_id" bigint, "p_caller_role" "public"."group_member_role") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
+CREATE OR REPLACE FUNCTION "private"."read_post_comments"("p_comment_ids" "uuid"[], "p_caller_profile_id" bigint, "p_caller_role" "public"."group_member_role") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -78,9 +78,15 @@ CREATE OR REPLACE FUNCTION "private"."read_post_comments"("p_comment_ids" "uuid"
     comment.created_at,
     comment.edited_at,
     comment.deleted_at is not null,
-    comment.deleted_at is null and author.profile_id = p_caller_profile_id,
-    comment.deleted_at is null and author.profile_id = p_caller_profile_id,
+    feed_bump.comment_id is not null,
     comment.deleted_at is null
+      and feed_bump.comment_id is null
+      and author.profile_id = p_caller_profile_id,
+    comment.deleted_at is null
+      and feed_bump.comment_id is null
+      and author.profile_id = p_caller_profile_id,
+    comment.deleted_at is null
+      and feed_bump.comment_id is null
       and (
         author.profile_id = p_caller_profile_id
         or coalesce(p_caller_role in ('owner', 'admin'), false)
@@ -112,6 +118,8 @@ CREATE OR REPLACE FUNCTION "private"."read_post_comments"("p_comment_ids" "uuid"
     end
   from public.post_comments as comment
   join private.comment_authors as author on author.comment_id = comment.id
+  left join private.feed_bump_events as feed_bump
+    on feed_bump.comment_id = comment.id
   left join public.profiles as profile
     on (
       (comment.author_identity = 'identified' and profile.id = comment.display_author_profile_id)
@@ -549,7 +557,7 @@ $$;
 
 ALTER FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid" DEFAULT NULL::"uuid", "p_image_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
+CREATE OR REPLACE FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid" DEFAULT NULL::"uuid", "p_image_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -922,6 +930,13 @@ begin
   ) and coalesce(caller_role, 'member') not in ('owner', 'admin') then
     raise exception 'only the author or a group moderator can delete a comment'
       using errcode = '42501';
+  end if;
+  if exists (
+    select 1
+    from private.feed_bump_events as bump
+    where bump.comment_id = p_comment_id
+  ) then
+    raise exception 'effective #업 comments cannot be deleted' using errcode = '22023';
   end if;
 
   select author.profile_id into author_profile_id
@@ -1401,7 +1416,7 @@ $$;
 
 ALTER FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_post_comment_replies"("p_root_comment_id" "uuid") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
+CREATE OR REPLACE FUNCTION "public"."list_post_comment_replies"("p_root_comment_id" "uuid") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1464,7 +1479,7 @@ $$;
 
 ALTER FUNCTION "public"."list_post_comment_replies"("p_root_comment_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_post_comments"("p_post_id" "uuid", "p_cursor_created_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_comment_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 20) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
+CREATE OR REPLACE FUNCTION "public"."list_post_comments"("p_post_id" "uuid", "p_cursor_created_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_comment_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 20) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -2140,7 +2155,7 @@ $$;
 
 ALTER FUNCTION "public"."update_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_category_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid" DEFAULT NULL::"uuid", "p_remove_image" boolean DEFAULT false) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
+CREATE OR REPLACE FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid" DEFAULT NULL::"uuid", "p_remove_image" boolean DEFAULT false) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -2169,6 +2184,13 @@ begin
     where author.comment_id = p_comment_id and author.profile_id = caller_profile_id
   ) then
     raise exception 'only the author can edit a comment' using errcode = '42501';
+  end if;
+  if exists (
+    select 1
+    from private.feed_bump_events as bump
+    where bump.comment_id = p_comment_id
+  ) then
+    raise exception 'effective #업 comments cannot be edited' using errcode = '22023';
   end if;
 
   context := private.comment_post_context(comment_record.post_id, caller_profile_id);

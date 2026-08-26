@@ -6,8 +6,8 @@ import type { GroupDetail, GroupInvite } from "~/features/groups/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
-import { Input } from "~/shared/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
+import { TextField } from "~/shared/ui/text-field";
 import { Spinner } from "~/shared/ui/spinner";
 
 /** 시간 단위. 기본이 하루인 것은 의도다 — 더 오래 열어 두려면 한 번 골라야 한다. */
@@ -88,7 +88,7 @@ export function InviteSettings({
         {invite ? (
           <div className="flex flex-col gap-2">
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Input
+              <TextField
                 readOnly
                 value={inviteUrl(invite.token)}
                 aria-label="초대 링크"

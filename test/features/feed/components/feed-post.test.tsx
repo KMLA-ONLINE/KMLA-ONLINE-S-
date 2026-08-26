@@ -1,7 +1,10 @@
 import { screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { FeedPostCard } from "~/features/feed/components/feed-post";
+import {
+  FeedPostCard,
+  FeedPostRow,
+} from "~/features/feed/components/feed-post";
 import type { GroupFeedPost } from "~/features/feed/model/types";
 import { groupPost } from "../../posts/group-post-fixture";
 import { renderRoute } from "../../../router";
@@ -50,5 +53,20 @@ describe("FeedPostCard", () => {
     expect(screen.queryByText("필독")).not.toBeInTheDocument();
     expect(screen.queryByText("운영진")).not.toBeInTheDocument();
     expect(within(title).queryByText("필독")).not.toBeInTheDocument();
+  });
+});
+
+describe("FeedPostRow", () => {
+  it("dims a visited row and reports the visit", async () => {
+    const onVisit = vi.fn();
+    const { user } = renderRoute(() => (
+      <FeedPostRow post={pinnedFeedPost()} isVisited onVisit={onVisit} />
+    ));
+
+    const link = screen.getByRole("link");
+    expect(link).toHaveClass("bg-muted/45");
+
+    await user.click(link);
+    expect(onVisit).toHaveBeenCalledOnce();
   });
 });

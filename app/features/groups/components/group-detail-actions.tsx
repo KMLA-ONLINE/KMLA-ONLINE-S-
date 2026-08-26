@@ -11,7 +11,7 @@ import { useFetcher } from "react-router";
 import { GroupConfirmDialog } from "~/features/groups/components/group-confirm-dialog";
 import { GroupMembershipAction } from "~/features/groups/components/group-membership-action";
 import type { GroupDetail } from "~/features/groups/model/types";
-import { GroupPostSearchDialog } from "~/features/posts";
+import { useGroupPostSearch } from "~/features/posts";
 import { Button } from "~/shared/ui/button";
 import {
   DropdownMenu,
@@ -27,19 +27,22 @@ export function GroupDetailActions({
   group,
   profileId,
   isTeacher,
+  canAccessSettings,
   onSelectSettings,
   onSelectReports,
 }: {
   group: GroupDetail;
   profileId: number;
   isTeacher: boolean;
+  canAccessSettings: boolean;
   onSelectSettings: () => void;
   onSelectReports: () => void;
 }) {
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const pending = fetcher.state !== "idle";
   const [leaveOpen, setLeaveOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
+  // 검색창은 `GroupDetailScreen`이 하나만 그린다. 여기서는 URL만 연다.
+  const { openSearch } = useGroupPostSearch();
   const isMember = group.membership_state === "member";
   const isPrivate = group.join_policy === "invite_only";
   const canCurate =
@@ -68,12 +71,12 @@ export function GroupDetailActions({
               size="icon-sm"
               aria-label="게시물 검색"
               className="hidden md:inline-flex"
-              onClick={() => setSearchOpen(true)}
+              onClick={openSearch}
             >
               <SearchIcon aria-hidden="true" />
             </Button>
           ) : null}
-          {isMember ? (
+          {isMember || canAccessSettings ? (
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -91,49 +94,54 @@ export function GroupDetailActions({
                 align="end"
                 className="w-auto whitespace-nowrap"
               >
+                {canAccessSettings ? (
+                  <DropdownMenuItem onClick={onSelectSettings}>
+                    그룹 설정
+                  </DropdownMenuItem>
+                ) : null}
                 {canCurate ? (
                   <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={onSelectSettings}>
-                      그룹 설정
-                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={onSelectReports}>
                       <FlagIcon />
                       신고
                     </DropdownMenuItem>
                   </>
                 ) : null}
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    disabled={pending}
-                    onClick={() =>
-                      void fetcher.submit(
-                        {
-                          intent: "pin",
-                          groupId: group.group_id,
-                          profileId: String(profileId),
-                          pinned: group.pinned_at ? "false" : "true",
-                        },
-                        { method: "post" },
-                      )
-                    }
-                  >
-                    <PinIcon />
-                    {group.pinned_at ? "고정 해제" : "내 그룹에 고정"}
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-                {canLeave ? (
+                {canCurate && isMember ? <DropdownMenuSeparator /> : null}
+                {isMember ? (
                   <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      variant="destructive"
-                      disabled={pending}
-                      onClick={() => setLeaveOpen(true)}
-                    >
-                      <LogOutIcon />
-                      그룹 탈퇴
-                    </DropdownMenuItem>
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem
+                        disabled={pending}
+                        onClick={() =>
+                          void fetcher.submit(
+                            {
+                              intent: "pin",
+                              groupId: group.group_id,
+                              profileId: String(profileId),
+                              pinned: group.pinned_at ? "false" : "true",
+                            },
+                            { method: "post" },
+                          )
+                        }
+                      >
+                        <PinIcon />
+                        {group.pinned_at ? "고정 해제" : "내 그룹에 고정"}
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                    {canLeave ? (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          disabled={pending}
+                          onClick={() => setLeaveOpen(true)}
+                        >
+                          <LogOutIcon />
+                          그룹 탈퇴
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
                   </>
                 ) : null}
               </DropdownMenuContent>
@@ -172,13 +180,6 @@ export function GroupDetailActions({
             { method: "post" },
           );
         }}
-      />
-
-      <GroupPostSearchDialog
-        open={searchOpen}
-        onOpenChange={setSearchOpen}
-        groupId={group.group_id}
-        slug={group.slug}
       />
     </>
   );

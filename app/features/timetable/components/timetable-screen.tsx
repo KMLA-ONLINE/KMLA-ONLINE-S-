@@ -37,7 +37,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/shared/ui/dialog";
-import { Input } from "~/shared/ui/input";
+import { TextField } from "~/shared/ui/text-field";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 
 export function TimetableScreen() {
@@ -305,11 +305,11 @@ export function TimetableScreen() {
           {draft ? (
             <>
               <div className="space-y-2">
-                <Input
+                <TextField
                   value={draft.name}
                   aria-label="과목명"
                   placeholder="과목명"
-                  className="h-10 rounded-md px-3 text-base font-medium"
+                  className="rounded-md px-3 text-base font-medium"
                   onChange={(event) => {
                     setOverlap(false);
 
@@ -320,11 +320,11 @@ export function TimetableScreen() {
                   }}
                 />
 
-                <Input
+                <TextField
                   value={draft.room}
                   aria-label="장소"
                   placeholder="장소"
-                  className="h-10 rounded-md px-3 text-base"
+                  className="rounded-md px-3 text-base"
                   onChange={(event) =>
                     setDraft({
                       ...draft,

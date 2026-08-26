@@ -27,9 +27,11 @@ const baseGroup: GroupDetail = {
 function DetailHarness({
   group = baseGroup,
   isTeacher = false,
+  canDeleteOfficial = false,
 }: {
   group?: GroupDetail;
   isTeacher?: boolean;
+  canDeleteOfficial?: boolean;
 }) {
   const location = useLocation();
 
@@ -42,12 +44,39 @@ function DetailHarness({
         viewerName="홍길동"
         viewerAvatarUrl={null}
         isTeacher={isTeacher}
+        canDeleteOfficial={canDeleteOfficial}
       />
     </>
   );
 }
 
 describe("GroupDetailScreen", () => {
+  it("does not show a separator before the only official group option", async () => {
+    const { user } = renderRoute(
+      () => <DetailHarness group={{ ...baseGroup, kind: "official" }} />,
+      {
+        path: "/groups/:slug",
+        initialEntries: ["/groups/test-group"],
+      },
+    );
+
+    await user.click(screen.getByRole("button", { name: "그룹 옵션" }));
+
+    expect(screen.queryByRole("separator")).not.toBeInTheDocument();
+  });
+
+  it("returns to posts when the mobile group name is selected", async () => {
+    const { user } = renderRoute(DetailHarness, {
+      path: "/groups/:slug",
+      initialEntries: ["/groups/test-group?tab=members"],
+    });
+
+    await user.click(screen.getByRole("button", { name: "테스트 그룹" }));
+
+    expect(screen.getByTestId("location-search")).toHaveTextContent("");
+    expect(screen.getByText("아직 게시물이 없습니다")).toBeInTheDocument();
+  });
+
   it("shows the post tab by default without repeating the member role", () => {
     renderRoute(DetailHarness, {
       path: "/groups/:slug",
@@ -97,6 +126,30 @@ describe("GroupDetailScreen", () => {
     expect(
       screen.queryByRole("button", { name: "그룹 가입" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("opens official-group settings for an app administrator without membership", () => {
+    renderRoute(
+      () => (
+        <DetailHarness
+          group={{
+            ...baseGroup,
+            kind: "official",
+            membership_state: "none",
+            member_role: null,
+          }}
+          canDeleteOfficial
+        />
+      ),
+      {
+        path: "/groups/:slug",
+        initialEntries: ["/groups/test-group?tab=settings"],
+      },
+    );
+
+    expect(screen.getByRole("button", { name: "그룹 삭제" })).toBeVisible();
+    expect(screen.getByText("앱 관리자")).toBeVisible();
+    expect(screen.queryByText("게시물 카테고리")).not.toBeInTheDocument();
   });
 
   it("stores the selected member tab in the URL", async () => {

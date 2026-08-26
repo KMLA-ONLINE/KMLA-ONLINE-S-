@@ -34,7 +34,7 @@ export function AppSidebar({ className }: { className?: string }) {
           // 포커스가 그대로 남아서, `focus-within`이면 마우스가 나가도 펼친 채로 굳는다.
           // `:focus-visible`은 브라우저가 키보드 이동일 때만 켜므로 Tab 접근성은 그대로 살고
           // 마우스 클릭으로는 켜지지 않는다.
-          "hover:w-[var(--app-sidebar-w)] hover:border-border has-[:focus-visible]:w-[var(--app-sidebar-w)] has-[:focus-visible]:border-border",
+          "has-[:focus-visible]:w-[var(--app-sidebar-w)] has-[:focus-visible]:border-border [@media(hover:hover)]:hover:w-[var(--app-sidebar-w)] [@media(hover:hover)]:hover:border-border",
           "motion-reduce:transition-none",
         )}
       >
@@ -82,7 +82,7 @@ export function AppSidebar({ className }: { className?: string }) {
                       }
                     />
                   </span>
-                  <span className="overflow-hidden text-sm whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100 group-has-[:focus-visible]/sidebar:opacity-100 motion-reduce:transition-none">
+                  <span className="overflow-hidden text-sm whitespace-nowrap opacity-0 transition-opacity duration-200 group-has-[:focus-visible]/sidebar:opacity-100 motion-reduce:transition-none [@media(hover:hover)]:group-hover/sidebar:opacity-100">
                     {item.label}
                   </span>
                 </NavLink>
@@ -91,7 +91,7 @@ export function AppSidebar({ className }: { className?: string }) {
           })}
         </ul>
 
-        <p className="mt-auto overflow-hidden p-3 text-xs whitespace-nowrap text-muted-foreground opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
+        <p className="mt-auto overflow-hidden p-3 text-xs whitespace-nowrap text-muted-foreground opacity-0 transition-opacity duration-200 [@media(hover:hover)]:group-hover/sidebar:opacity-100">
           © {new Date().getFullYear()} from Dept. of SW &amp; Tech
         </p>
       </nav>

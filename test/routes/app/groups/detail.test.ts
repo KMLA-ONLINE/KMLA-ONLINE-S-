@@ -14,7 +14,7 @@ vi.mock("~/features/groups", async (importOriginal) => ({
   ...mutations,
 }));
 
-import { clientAction } from "~/routes/app/groups/detail";
+import { clientAction, shouldRevalidate } from "~/routes/app/groups/detail";
 
 function action(body: URLSearchParams) {
   return clientAction({
@@ -126,5 +126,36 @@ describe("group detail management action", () => {
 
     expect(result).toMatchObject({ init: { status: 400 } });
     expect(mutations.updateGroupSettings).not.toHaveBeenCalled();
+  });
+});
+
+describe("group detail revalidation", () => {
+  it("does not reload the group when only the search overlay opens", () => {
+    expect(
+      shouldRevalidate({
+        currentUrl: new URL("https://example.com/groups/test?tab=members"),
+        nextUrl: new URL(
+          "https://example.com/groups/test?tab=members&search=1&q=%EC%8B%9C%ED%97%98",
+        ),
+      } as never),
+    ).toBe(false);
+  });
+
+  it("does not reload the group when an image viewer opens", () => {
+    expect(
+      shouldRevalidate({
+        currentUrl: new URL("https://example.com/groups/test"),
+        nextUrl: new URL("https://example.com/groups/test?image=attachment-id"),
+      } as never),
+    ).toBe(false);
+  });
+
+  it("reloads when a tab the loader reads changes", () => {
+    expect(
+      shouldRevalidate({
+        currentUrl: new URL("https://example.com/groups/test?search=1"),
+        nextUrl: new URL("https://example.com/groups/test?tab=members"),
+      } as never),
+    ).toBe(true);
   });
 });

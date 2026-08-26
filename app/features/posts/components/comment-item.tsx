@@ -91,7 +91,7 @@ export function CommentItem({
         )}
       >
         <div className="size-8 shrink-0 rounded-full bg-muted/60" aria-hidden />
-        <p className="w-fit rounded-2xl bg-muted/60 px-3 py-2 text-sm text-muted-foreground italic">
+        <p className="w-fit rounded-2xl bg-muted/60 px-3 py-2 text-base leading-6 text-muted-foreground italic">
           삭제된 댓글입니다
         </p>
       </div>
@@ -104,6 +104,7 @@ export function CommentItem({
   const parentLabel = comment.parent_comment_id
     ? comment.parent_author_label
     : null;
+  const isEffectiveFeedBump = comment.is_effective_feed_bump;
 
   // 수정은 답글 입력창을 그대로 쓴다. 화면에 입력기가 두 종류 있으면 같은 일을 하는데도
   // 다르게 생겨서, 한쪽만 고쳐지는 일이 반복된다. 신원은 작성 뒤 바꿀 수 없으므로 선택지를
@@ -184,7 +185,7 @@ export function CommentItem({
                   운영진
                 </Badge>
               ) : null}
-              {comment.is_author && comment.author_identity !== "identified" ? (
+              {comment.is_author && comment.author_identity === "anonymous" ? (
                 <Badge variant="secondary" className="shrink-0">
                   나
                 </Badge>
@@ -202,7 +203,7 @@ export function CommentItem({
             </div>
 
             {comment.body || parentLabel ? (
-              <p className="text-sm wrap-break-word whitespace-pre-wrap">
+              <p className="text-base leading-6 wrap-break-word break-keep whitespace-pre-wrap">
                 {parentLabel ? (
                   <button
                     type="button"
@@ -212,7 +213,9 @@ export function CommentItem({
                     @{parentLabel}
                   </button>
                 ) : null}
-                <CommentText>{comment.body}</CommentText>
+                <span className={cn(isEffectiveFeedBump && "text-primary")}>
+                  <CommentText>{comment.body}</CommentText>
+                </span>
               </p>
             ) : null}
             {comment.images[0] ? (

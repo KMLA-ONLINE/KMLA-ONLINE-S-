@@ -644,7 +644,11 @@ begin
     raise exception 'group not found' using errcode = 'P0002';
   end if;
 
-  if not exists (
+  -- 공식 그룹은 일반 그룹 운영 권한과 분리한다. 앱 관리자는 소유자·멤버십과 무관하게 학교
+  -- 공간을 정리할 수 있지만, 비공식 그룹은 계속 소유자만 지운다.
+  if target_group.kind = 'official' then
+    perform private.require_app_admin();
+  elsif not exists (
     select 1
     from public.group_memberships as membership
     where membership.group_id = p_group_id
@@ -652,12 +656,6 @@ begin
       and membership.role = 'owner'
   ) then
     raise exception 'group owner required' using errcode = '42501';
-  end if;
-
-  -- 공식 그룹은 소유자도 지울 수 없다. 승인된 재학생이 자동으로 가입하는 학교의 공간이라
-  -- 한 사람의 결정으로 사라져서는 안 된다. 사용자가 공식 그룹에서 나갈 수 없는 것과 같은 이유다.
-  if target_group.kind = 'official' then
-    raise exception 'official groups cannot be deleted' using errcode = '55000';
   end if;
 
   update public.groups
@@ -1501,8 +1499,8 @@ CREATE POLICY "group_memberships_update_own" ON "public"."group_memberships" FOR
 ALTER TABLE "public"."groups" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "groups_select_visible" ON "public"."groups" FOR SELECT TO "authenticated" USING ((("deleted_at" IS NULL) AND (EXISTS ( SELECT 1
-   FROM "public"."profiles" "profile"
-  WHERE (("profile"."id" = "private"."current_profile_id"()) AND ((("profile"."type" = ANY (ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type"])) AND (("groups"."kind" = 'official'::"public"."group_kind") OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND ("groups"."join_policy" <> 'invite_only'::"public"."group_join_policy")))) OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND "private"."is_group_member"("groups"."id"))))))));
+    FROM "public"."profiles" "profile"
+   WHERE (("profile"."id" = "private"."current_profile_id"()) AND ((("profile"."role" = 'admin'::"public"."app_role") AND ("groups"."kind" = 'official'::"public"."group_kind")) OR (("profile"."type" = ANY (ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type"])) AND (("groups"."kind" = 'official'::"public"."group_kind") OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND ("groups"."join_policy" <> 'invite_only'::"public"."group_join_policy")))) OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND "private"."is_group_member"("groups"."id"))))))));
 
 REVOKE ALL ON FUNCTION "private"."assert_group_invite_manager"("p_group_id" "uuid") FROM PUBLIC;
 

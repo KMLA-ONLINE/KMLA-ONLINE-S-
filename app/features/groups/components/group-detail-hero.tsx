@@ -9,6 +9,8 @@ export function GroupDetailHero({
   group,
   profileId,
   isTeacher,
+  canAccessSettings,
+  onSelectPosts,
   onSelectMembers,
   onSelectSettings,
   onSelectReports,
@@ -16,6 +18,8 @@ export function GroupDetailHero({
   group: GroupDetail;
   profileId: number;
   isTeacher: boolean;
+  canAccessSettings: boolean;
+  onSelectPosts: () => void;
   onSelectMembers: () => void;
   onSelectSettings: () => void;
   onSelectReports: () => void;
@@ -47,7 +51,16 @@ export function GroupDetailHero({
         />
         <div className="min-w-0 flex-1 pt-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-2xl font-bold">{group.name}</h1>
+            <h1 className="truncate text-2xl font-bold">
+              <button
+                type="button"
+                className="inline-block max-w-full truncate text-left align-bottom md:hidden"
+                onClick={onSelectPosts}
+              >
+                {group.name}
+              </button>
+              <span className="hidden truncate md:block">{group.name}</span>
+            </h1>
             {group.kind === "official" ? (
               <Tooltip>
                 <TooltipTrigger
@@ -85,6 +98,7 @@ export function GroupDetailHero({
           group={group}
           profileId={profileId}
           isTeacher={isTeacher}
+          canAccessSettings={canAccessSettings}
           onSelectSettings={onSelectSettings}
           onSelectReports={onSelectReports}
         />

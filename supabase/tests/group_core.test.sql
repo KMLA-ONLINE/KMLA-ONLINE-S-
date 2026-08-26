@@ -470,14 +470,14 @@ set local role authenticated;
 
 select is(
   (select count(*) from public.groups),
-  3::bigint,
-  'teacher sees only joined unofficial groups'
+  5::bigint,
+  'teacher app admin sees official groups and joined unofficial groups'
 );
 
 select is(
   (select count(*) from public.groups where kind = 'official'),
-  0::bigint,
-  'teacher cannot see official groups'
+  2::bigint,
+  'teacher app admin can see official groups'
 );
 
 select throws_ok(

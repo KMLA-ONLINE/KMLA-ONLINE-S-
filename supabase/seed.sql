@@ -131,6 +131,106 @@ on conflict (auth_user_id) do update set
   status = excluded.status,
   updated_at = now();
 
+-- 추가 테스트용 29기 학생 계정
+insert into auth.users (
+  instance_id,
+  id,
+  aud,
+  role,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  confirmation_token,
+  recovery_token,
+  email_change_token_new,
+  email_change,
+  phone,
+  phone_change,
+  phone_change_token,
+  email_change_token_current,
+  reauthentication_token,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  created_at,
+  updated_at
+)
+values (
+  '00000000-0000-0000-0000-000000000000',
+  '10000000-0000-0000-0000-000000000100',
+  'authenticated',
+  'authenticated',
+  'student2@kmla.hs.kr',
+  extensions.crypt('password123', extensions.gen_salt('bf')),
+  now(),
+  '',
+  '',
+  '',
+  '',
+  null,
+  '',
+  '',
+  '',
+  '',
+  '{"provider":"email","providers":["email"]}',
+  '{}',
+  now(),
+  now()
+)
+on conflict (id) do update set
+  email = excluded.email,
+  encrypted_password = excluded.encrypted_password,
+  email_confirmed_at = excluded.email_confirmed_at,
+  updated_at = now();
+
+insert into auth.identities (
+  provider_id,
+  user_id,
+  identity_data,
+  provider,
+  last_sign_in_at,
+  created_at,
+  updated_at
+)
+values (
+  '10000000-0000-0000-0000-000000000100',
+  '10000000-0000-0000-0000-000000000100',
+  '{"sub":"10000000-0000-0000-0000-000000000100","email":"student2@kmla.hs.kr","email_verified":true}',
+  'email',
+  now(),
+  now(),
+  now()
+)
+on conflict (provider_id, provider) do update set
+  identity_data = excluded.identity_data,
+  updated_at = now();
+
+insert into public.profiles (
+  auth_user_id,
+  name,
+  type,
+  student_number,
+  cohort,
+  gender,
+  academic_track,
+  birthday,
+  status
+)
+values (
+  '10000000-0000-0000-0000-000000000100',
+  '김민준',
+  'student',
+  '240002',
+  29,
+  'male',
+  'domestic',
+  '2007-05-17',
+  'accepted'
+)
+on conflict (auth_user_id) do update set
+  name = excluded.name,
+  status = excluded.status,
+  updated_at = now();
+
 insert into public.profiles (
   pub_id,
   name,

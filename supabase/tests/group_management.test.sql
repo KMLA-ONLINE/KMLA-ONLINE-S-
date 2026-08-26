@@ -415,13 +415,19 @@ select is(
 );
 
 -- 정책은 바꿀 수 있어도 그룹 자체를 없앨 수는 없다. 승인된 재학생이 자동으로 가입하는 공간이
--- 한 사람의 결정으로 사라지면 안 된다.
+-- 일반 그룹 운영 권한으로 사라지면 안 된다.
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000004', true);
+set local role authenticated;
 select throws_ok(
   $$select public.delete_group('20000000-0000-0000-0000-000000000001')$$,
-  '55000', 'official groups cannot be deleted',
-  'not even the owner can delete an official group'
+  '42501', 'app administrator required',
+  'a non-admin cannot delete an official group'
 );
 
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
+set local role authenticated;
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000001',
@@ -605,6 +611,65 @@ select ok(
     where id = '20000000-0000-0000-0000-000000000005'
   ),
   'the group row survives as a tombstone so storage cleanup still has its targets'
+);
+
+reset role;
+insert into public.groups (
+  id, slug, slug_is_custom, kind, name, description, join_policy,
+  identity_policy, posting_policy, created_by
+)
+values (
+  '50000000-0000-0000-0000-000000000006',
+  'teacher-admin',
+  true,
+  'official',
+  '교사 관리자 삭제 그룹',
+  '',
+  'open',
+  'identified',
+  'staff',
+  (select id from public.profiles where pub_id = 'kim-admin')
+);
+update public.profiles
+set role = 'admin',
+  type = 'teacher',
+  cohort = null,
+  gender = null,
+  academic_track = null
+where auth_user_id = '10000000-0000-0000-0000-000000000005';
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000005', true);
+set local role authenticated;
+select is(
+  (select count(*) from public.groups where id = '50000000-0000-0000-0000-000000000006'),
+  1::bigint,
+  'a teacher app admin can read an official group without membership'
+);
+select is(
+  (
+    select count(*)
+    from public.group_memberships
+    where group_id = '50000000-0000-0000-0000-000000000006'
+      and profile_id = private.current_profile_id()
+  ),
+  0::bigint,
+  'the teacher app admin is not a member of the official group'
+);
+select lives_ok(
+  $$select public.delete_group('50000000-0000-0000-0000-000000000006')$$,
+  'a non-owner teacher app admin can delete an official group'
+);
+reset role;
+select is(
+  (select count(*) from public.group_memberships where group_id = '50000000-0000-0000-0000-000000000006'),
+  0::bigint,
+  'admin deletion removes every official-group membership'
+);
+select ok(
+  (
+    select deleted_at is not null from public.groups
+    where id = '50000000-0000-0000-0000-000000000006'
+  ),
+  'admin deletion leaves the official group as a storage-cleanup tombstone'
 );
 
 select * from finish();

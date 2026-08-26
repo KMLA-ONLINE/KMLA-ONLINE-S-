@@ -1,7 +1,13 @@
 import { MessagesSquareIcon, SearchIcon, UtensilsIcon } from "lucide-react";
-import { Link, type ShouldRevalidateFunctionArgs } from "react-router";
+import { Link } from "react-router";
 
-import { defineAppChrome, PageHeader } from "~/features/app-shell";
+import { AbsenceRail } from "~/features/absences/components/absence-rail";
+import {
+  ABSENCE_STALE_TIME,
+  absenceKeys,
+} from "~/features/absences/data/cache";
+import { listTodayAbsences } from "~/features/absences/data/queries";
+import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import {
   FEED_STALE_TIME,
   FeedScreen,
@@ -9,8 +15,17 @@ import {
   listFeedPosts,
 } from "~/features/feed";
 import { getKoreaDate, getMealDay, HomeMealSummary } from "~/features/meal";
-import { Button } from "~/shared/ui/button";
+import {
+  BIRTHDAY_GC_TIME,
+  BIRTHDAY_STALE_TIME,
+  birthdayKeys,
+  HomeBirthdaySummary,
+  listBirthdays,
+} from "~/features/profiles";
+import { createPostListRevalidation } from "~/features/posts";
 import { getQueryClient } from "~/shared/lib/query-client";
+import { getKoreaDateIso } from "~/shared/lib/korea-date";
+import { Button } from "~/shared/ui/button";
 import type { Route } from "./+types/home";
 
 /**
@@ -30,45 +45,59 @@ export const handle = defineAppChrome({
   pullToRefresh: true,
 });
 
-const FEED_UI_SEARCH_PARAMS = new Set(["post", "kind", "source", "view"]);
-
-export function shouldRevalidate({
-  currentUrl,
-  nextUrl,
-  formMethod,
-}: ShouldRevalidateFunctionArgs) {
-  if (formMethod && formMethod !== "GET") return true;
-  if (currentUrl.href === nextUrl.href) return true;
-  if (currentUrl.pathname !== nextUrl.pathname) return true;
-
-  const changedKeys = new Set([
-    ...currentUrl.searchParams.keys(),
-    ...nextUrl.searchParams.keys(),
-  ]);
-  return !Array.from(changedKeys).every(
-    (key) =>
-      FEED_UI_SEARCH_PARAMS.has(key) ||
-      currentUrl.searchParams.getAll(key).join("\0") ===
-        nextUrl.searchParams.getAll(key).join("\0"),
-  );
-}
+/**
+ * `post`·`kind`·`source`는 게시물 상세 오버레이의 URL 상태이고, loader가 읽지 않는다. 이미지
+ * 뷰어와 댓글 시트는 공용 규칙이 이미 무시한다.
+ *
+ * 피드에서는 이게 특히 비싸다. 첫 페이지를 다시 읽으면 `list_feed_posts`가 새 세션을 열어
+ * `feedEpoch`가 바뀌고, `FeedScreen`이 무한 스크롤로 쌓아 둔 페이지를 전부 버린다.
+ */
+export const shouldRevalidate = createPostListRevalidation([
+  "post",
+  "kind",
+  "source",
+]);
 
 // 첫 페이지는 로더가 await 한다. 이후 페이지는 useFetcher로 같은 clientLoader에 커서를 보낸다
 // (AGENTS.md의 "Loaders await their data" — 스트리밍 스켈레톤이 필요한 화면에서만 예외).
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const pageToken = new URL(request.url).searchParams.get("pageToken");
+  const queryClient = getQueryClient();
+  const referenceDate = getKoreaDateIso();
   const mealDayPromise = pageToken
     ? Promise.resolve(null)
     : getMealDay(getKoreaDate());
+  const birthdaysPromise = pageToken
+    ? Promise.resolve(null)
+    : queryClient
+        .fetchQuery({
+          queryKey: birthdayKeys.today(referenceDate),
+          queryFn: () => listBirthdays(referenceDate, "today"),
+          staleTime: BIRTHDAY_STALE_TIME,
+          gcTime: BIRTHDAY_GC_TIME,
+        })
+        .catch(() => null);
+
+  const absencePromise = pageToken
+    ? Promise.resolve([])
+    : queryClient
+        .fetchQuery({
+          queryKey: absenceKeys.today(referenceDate),
+          queryFn: listTodayAbsences,
+          staleTime: ABSENCE_STALE_TIME,
+        })
+        .catch(() => []);
 
   try {
-    const [page, mealDay] = await Promise.all([
-      getQueryClient().fetchQuery({
+    const [page, mealDay, birthdays, absences] = await Promise.all([
+      queryClient.fetchQuery({
         queryKey: feedKeys.page(pageToken),
         queryFn: () => listFeedPosts(pageToken),
         staleTime: FEED_STALE_TIME,
       }),
       mealDayPromise,
+      birthdaysPromise,
+      absencePromise,
     ]);
 
     if (pageToken) {
@@ -78,6 +107,8 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
         error: null,
         expired: false,
         mealDay,
+        birthdays,
+        absences,
       };
     }
 
@@ -87,12 +118,18 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
       error: null,
       expired: false,
       mealDay,
+      birthdays,
+      absences,
     };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "피드를 불러오지 못했습니다.";
     const expired = pageToken !== null && /expired|not found/i.test(message);
-    const mealDay = await mealDayPromise;
+    const [mealDay, birthdays, absences] = await Promise.all([
+      mealDayPromise,
+      birthdaysPromise,
+      absencePromise,
+    ]);
 
     if (pageToken) {
       return {
@@ -101,6 +138,8 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
         error: expired ? "피드가 만료되었습니다. 새로고침해 주세요." : message,
         expired,
         mealDay,
+        birthdays,
+        absences,
       };
     }
 
@@ -110,12 +149,15 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
       error: message,
       expired: false,
       mealDay,
+      birthdays,
+      absences,
     };
   }
 }
 
 export default function FeedPage({ loaderData }: Route.ComponentProps) {
-  const { page, error, mealDay } = loaderData;
+  const { page, error, mealDay, birthdays, absences } = loaderData;
+  const { profile } = useAppShell();
 
   return (
     <>
@@ -157,8 +199,20 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
       />
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-4">
-        <FeedScreen initialPage={page} initialError={error} />
-        {mealDay ? <HomeMealSummary day={mealDay} /> : null}
+        <div className="min-w-0">
+          {profile.type === "student" && absences.length > 0 ? (
+            <AbsenceRail initialItems={absences} viewerPubId={profile.pub_id} />
+          ) : null}
+
+          <FeedScreen initialPage={page} initialError={error} />
+        </div>
+
+        {mealDay || birthdays ? (
+          <aside className="hidden space-y-3 self-start lg:block">
+            {birthdays ? <HomeBirthdaySummary birthdays={birthdays} /> : null}
+            {mealDay ? <HomeMealSummary day={mealDay} /> : null}
+          </aside>
+        ) : null}
       </div>
     </>
   );

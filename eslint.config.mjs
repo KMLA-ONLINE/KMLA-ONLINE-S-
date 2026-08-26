@@ -9,6 +9,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import testingLibrary from "eslint-plugin-testing-library";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+import requireTextField from "./eslint-rules/require-text-field.mjs";
 
 export default defineConfig([
   globalIgnores([
@@ -137,6 +138,20 @@ export default defineConfig([
           ],
         },
       ],
+    },
+  },
+  {
+    files: ["app/**/*.{ts,tsx}"],
+    ignores: ["app/routes/theme.tsx"],
+    plugins: {
+      local: {
+        rules: {
+          "require-text-field": requireTextField,
+        },
+      },
+    },
+    rules: {
+      "local/require-text-field": "error",
     },
   },
 

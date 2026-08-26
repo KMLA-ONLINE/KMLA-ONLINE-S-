@@ -51,8 +51,12 @@ const COUNTER_THRESHOLD = COMMENT_MAX_LENGTH - 500;
 /**
  * 입력 높이 상한. shadcn `Textarea`의 `field-sizing-content`는 글자마다 레이아웃을 다시
  * 계산해서 긴 댓글에서 눈에 띄게 밀린다. 메신저 입력기처럼 직접 재는 편이 가볍다.
+ *
+ * 다섯 줄까지 보이고 그 뒤로 스크롤한다 — 줄 높이 24px × 5 + 안쪽 여백 12px = 132px에
+ * 여유를 둔 값이다. 여섯 줄(156px)에는 닿지 않아야 한다. 본문 글자 크기나 `py-1.5`를
+ * 바꾸면 이 값도 같이 봐야 한다.
  */
-const MAX_HEIGHT = 120;
+const MAX_HEIGHT = 140;
 
 function resize(element: HTMLTextAreaElement) {
   element.style.height = "0px";
@@ -347,7 +351,7 @@ export function CommentComposer({
               value={draft}
               aria-label="댓글 입력"
               placeholder={placeholder}
-              className="min-h-9 min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent px-4 py-2 text-sm leading-5 outline-none placeholder:text-muted-foreground"
+              className="min-h-9 min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent px-4 py-1.5 text-base leading-6 outline-none placeholder:text-muted-foreground"
               onChange={(event) => {
                 setDraft(event.target.value);
                 if (localError) setLocalError(null);

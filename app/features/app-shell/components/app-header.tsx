@@ -39,7 +39,11 @@ export function AppHeader({ className }: { className?: string }) {
 
       <div className="relative w-full max-w-xl">
         <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input className="h-9 pl-9" placeholder="그룹 · 게시물 · 사람 검색" />
+        <Input
+          className="h-9 pl-9 [&::-webkit-search-cancel-button]:appearance-none"
+          placeholder="그룹 · 게시물 · 사람 검색"
+          type="search"
+        />
       </div>
 
       <div className="flex flex-1 basis-0 items-center justify-end gap-2">

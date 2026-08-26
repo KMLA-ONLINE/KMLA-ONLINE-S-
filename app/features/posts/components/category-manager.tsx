@@ -5,7 +5,7 @@ import { useFetcher } from "react-router";
 import type { GroupCategory } from "~/features/posts/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { Button } from "~/shared/ui/button";
-import { Input } from "~/shared/ui/input";
+import { TextField } from "~/shared/ui/text-field";
 
 export function CategoryManager({
   groupId,
@@ -69,7 +69,7 @@ export function CategoryManager({
       >
         <input type="hidden" name="intent" value="create-category" />
         <input type="hidden" name="groupId" value={groupId} />
-        <Input
+        <TextField
           name="name"
           value={newCategoryName}
           onChange={(event) => setNewCategoryName(event.target.value)}
@@ -122,7 +122,7 @@ export function CategoryManager({
           >
             <input type="hidden" name="categoryId" value={category.id} />
             <input type="hidden" name="position" value={category.position} />
-            <Input
+            <TextField
               name="name"
               defaultValue={category.name}
               maxLength={30}

@@ -14,6 +14,8 @@ import {
   unblockApplication,
 } from "~/features/admin";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { birthdayKeys } from "~/features/profiles";
+import { getQueryClient } from "~/shared/lib/query-client";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -61,6 +63,7 @@ export async function clientAction({ request }: ClientActionFunctionArgs) {
     } else if (intent === "unblock" && ids.length === 1)
       await unblockApplication(ids[0]);
     else return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
+    await getQueryClient().invalidateQueries({ queryKey: birthdayKeys.all });
     return data({ ok: true });
   } catch (error) {
     if (isAdminAccessError(error)) throw redirect("/");

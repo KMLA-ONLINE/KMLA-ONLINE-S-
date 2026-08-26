@@ -36,6 +36,15 @@ export type AcceptedProfile = Pick<
 
 export type EditableProfile = AcceptedProfile;
 
+type BirthdayRow =
+  Database["public"]["Functions"]["list_birthdays"]["Returns"][number];
+
+export type BirthdayScope = "today" | "month";
+
+export type BirthdayProfile = BirthdayRow & {
+  avatar_url: string | null;
+};
+
 export interface ProfileEditValues {
   name: string;
   description: string;

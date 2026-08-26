@@ -25,6 +25,7 @@ import type {
 import { GroupPostReportsPanel } from "~/features/posts/components/group-post-reports-panel";
 import type { GroupPostReportSummaryPage } from "~/features/posts/data/group-reports";
 import {
+  GroupPostSearchDialog,
   GroupPostsPanel,
   PostWriteRow,
   type GroupCategory,
@@ -52,6 +53,7 @@ export function GroupDetailScreen({
   viewerName,
   viewerAvatarUrl,
   isTeacher,
+  canDeleteOfficial = false,
   categories = [],
   posts = { posts: [], nextCursor: null },
   memberPage,
@@ -64,6 +66,7 @@ export function GroupDetailScreen({
   viewerName: string | null;
   viewerAvatarUrl: string | null;
   isTeacher: boolean;
+  canDeleteOfficial?: boolean;
   categories?: GroupCategory[];
   posts?: GroupPostPage;
   memberPage?: GroupMemberPage;
@@ -80,6 +83,8 @@ export function GroupDetailScreen({
   const canManage =
     group.member_role === "owner" || group.member_role === "admin";
   const canCurate = canManage || group.member_role === "manager";
+  const canAccessSettings =
+    canCurate || (canDeleteOfficial && group.kind === "official");
   const canCreatePost =
     isMember && (group.posting_policy === "members" || canCurate);
   const canViewMembers = isMember;
@@ -95,14 +100,14 @@ export function GroupDetailScreen({
   const requestedTab = visibleSearchParams.get("tab");
   const tab: GroupTab =
     (requestedTab === "members" && canViewMembers) ||
-    (requestedTab === "settings" && canCurate) ||
+    (requestedTab === "settings" && canAccessSettings) ||
     (requestedTab === "reports" && canCurate)
       ? requestedTab
       : "posts";
   const visibleTabs = GROUP_TABS.filter(
     (item) =>
       (item.id !== "members" || canViewMembers) &&
-      (item.id !== "settings" || canCurate) &&
+      (item.id !== "settings" || canAccessSettings) &&
       (item.id !== "reports" || canCurate),
   );
 
@@ -119,6 +124,8 @@ export function GroupDetailScreen({
         group={group}
         profileId={profileId}
         isTeacher={isTeacher}
+        canAccessSettings={canAccessSettings}
+        onSelectPosts={() => setTab("posts")}
         onSelectMembers={() => setTab("members")}
         onSelectSettings={() => setTab("settings")}
         onSelectReports={() => setTab("reports")}
@@ -190,6 +197,7 @@ export function GroupDetailScreen({
               group={group}
               categories={categories}
               invite={invite}
+              canDeleteOfficial={canDeleteOfficial}
             />
           ) : reportPage ? (
             <GroupPostReportsPanel
@@ -230,6 +238,12 @@ export function GroupDetailScreen({
           </div>
         </aside>
       </div>
+
+      {/* 검색 버튼은 모바일 헤더와 데스크톱 액션 두 곳에 있지만 검색창은 여기 하나뿐이다.
+          열림 상태가 URL에 있으므로 두 곳이 각자 그리면 같은 검색창이 두 장 열린다. */}
+      {isMember ? (
+        <GroupPostSearchDialog groupId={group.group_id} slug={group.slug} />
+      ) : null}
     </div>
   );
 }

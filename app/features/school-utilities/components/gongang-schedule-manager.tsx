@@ -20,7 +20,7 @@ import {
 } from "~/features/school-utilities/model/korea-date";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
-import { Input } from "~/shared/ui/input";
+import { TextField } from "~/shared/ui/text-field";
 import { Spinner } from "~/shared/ui/spinner";
 
 const FLOORS = [
@@ -410,7 +410,7 @@ export function GongangScheduleManager() {
               </label>
 
               {draft.reserved ? (
-                <Input
+                <TextField
                   value={draft.detail}
                   placeholder="사용 목적"
                   maxLength={200}

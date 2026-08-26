@@ -26,6 +26,7 @@ import {
 } from "~/shared/ui/field";
 import { Input } from "~/shared/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
+import { TextField } from "~/shared/ui/text-field";
 import { Spinner } from "~/shared/ui/spinner";
 import { Textarea } from "~/shared/ui/textarea";
 
@@ -58,6 +59,7 @@ export function GroupCreateForm({
   const formRef = useRef<HTMLFormElement>(null);
   const confirmedRef = useRef(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [officialConfirmOpen, setOfficialConfirmOpen] = useState(false);
   const [confirmName, setConfirmName] = useState("");
 
   /**
@@ -77,8 +79,17 @@ export function GroupCreateForm({
   }
 
   function confirmCreate() {
-    confirmedRef.current = true;
     setConfirmOpen(false);
+    if (kind === "official") {
+      setOfficialConfirmOpen(true);
+      return;
+    }
+
+    submitCreate();
+  }
+
+  function submitCreate() {
+    confirmedRef.current = true;
     formRef.current?.requestSubmit();
   }
 
@@ -154,7 +165,7 @@ export function GroupCreateForm({
             <FieldGroup>
               <Field data-invalid={Boolean(errors.name)}>
                 <FieldLabel htmlFor="group-name">그룹 이름</FieldLabel>
-                <Input
+                <TextField
                   id="group-name"
                   name="name"
                   defaultValue={values.name}
@@ -224,6 +235,7 @@ export function GroupCreateForm({
                     <Input
                       id="group-slug"
                       name="slug"
+                      type="text"
                       defaultValue={values.slug}
                       minLength={4}
                       maxLength={15}
@@ -313,11 +325,11 @@ export function GroupCreateForm({
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title={`'${confirmName}' 그룹을 만들까요?`}
-        description={`그룹 주소는 후에 수정할 수 없습니다.${
-          joinPolicy === "invite_only"
-            ? " 공개 전환 후에는 비공개로 변경할 수 없습니다."
-            : " 공개 그룹은 만든 뒤 비공개로 변경할 수 없습니다."
-        }`}
+        description={
+          customSlugAllowed
+            ? "그룹 주소는 후에 수정할 수 없습니다. 공개 그룹은 만든 뒤 비공개로 변경할 수 없습니다."
+            : null
+        }
         details={
           <dl className="flex flex-col gap-1 text-sm">
             <SummaryRow label="종류">{getGroupKindLabel(kind)}</SummaryRow>
@@ -329,6 +341,18 @@ export function GroupCreateForm({
         confirmLabel="만들기"
         pending={pending}
         onConfirm={confirmCreate}
+      />
+      <GroupConfirmDialog
+        open={officialConfirmOpen}
+        onOpenChange={setOfficialConfirmOpen}
+        title={`'${confirmName}' 공식 그룹을 만들까요?`}
+        description="승인된 모든 재학생이 자동으로 가입합니다. 공식 그룹은 앱 관리자만 삭제할 수 있습니다."
+        confirmLabel="공식 그룹 만들기"
+        pending={pending}
+        onConfirm={() => {
+          setOfficialConfirmOpen(false);
+          submitCreate();
+        }}
       />
     </div>
   );
