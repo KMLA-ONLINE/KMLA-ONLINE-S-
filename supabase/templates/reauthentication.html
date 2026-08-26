@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+  <body
+    style="
+      margin: 0;
+      background: #f5f7fb;
+      font-family: sans-serif;
+      color: #172033;
+    "
+  >
+    <div
+      style="
+        max-width: 480px;
+        margin: 40px auto;
+        padding: 32px;
+        background: #ffffff;
+        border-radius: 16px;
+      "
+    >
+      <p style="margin: 0 0 8px; color: #2563eb; font-weight: 700">
+        KMLA Online
+      </p>
+      <h1 style="margin: 0 0 16px; font-size: 22px">본인 확인이 필요해요</h1>
+      <p style="margin: 0 0 24px; line-height: 1.6">
+        비밀번호 변경 페이지에 아래 6자리 코드를 입력해 주세요.
+      </p>
+      <p
+        style="
+          margin: 0;
+          font-size: 32px;
+          font-weight: 700;
+          letter-spacing: 8px;
+        "
+      >
+        {{ .Token }}
+      </p>
+      <p style="margin: 24px 0 0; color: #667085; font-size: 13px">
+        이 코드를 요청하지 않았다면 이 메일을 무시해 주세요. 비밀번호는 그대로
+        유지됩니다.
+      </p>
+    </div>
+  </body>
+</html>

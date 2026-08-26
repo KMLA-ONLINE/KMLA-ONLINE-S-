@@ -8,6 +8,7 @@ import {
 export default [
   route("login", "routes/auth/login.tsx"),
   route("signup", "routes/auth/signup.tsx"),
+  route("forgot-password", "routes/auth/forgot-password.tsx"),
   route("setup", "routes/auth/setup.tsx"),
   route("pending", "routes/auth/pending.tsx"),
   route("blocked", "routes/auth/blocked.tsx"),
@@ -23,6 +24,7 @@ export default [
       route("menu/licenses", "routes/app/menu/licenses.tsx"),
       route("menu/birthdays", "routes/app/menu/birthdays.tsx"),
       route("menu/meal", "routes/app/menu/meal.tsx"),
+      route("menu/password", "routes/app/menu/password.tsx"),
       route("menu/settings", "routes/app/menu/settings.tsx"),
       route("menu/settings/lab", "routes/app/menu/settings-lab.tsx"),
       route("menu/timetable", "routes/app/menu/timetable.tsx"),

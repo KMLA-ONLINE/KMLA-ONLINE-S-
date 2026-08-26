@@ -91,15 +91,26 @@ export default function LoginPage({ actionData }: Route.ComponentProps) {
       title="다시 만나서 반가워요"
       description="로그인해 소식과 이야기를 이어가세요."
       footer={
-        <p>
-          아직 계정이 없나요?{" "}
-          <Link
-            to="/signup"
-            className="font-medium text-primary hover:underline"
-          >
-            회원가입
-          </Link>
-        </p>
+        <div className="flex flex-col items-center gap-1">
+          <p>
+            아직 계정이 없나요?{" "}
+            <Link
+              to="/signup"
+              className="font-medium text-primary hover:underline"
+            >
+              회원가입
+            </Link>
+          </p>
+          <p>
+            비밀번호가 기억나지 않나요?{" "}
+            <Link
+              to="/forgot-password"
+              className="font-medium text-primary hover:underline"
+            >
+              비밀번호 찾기
+            </Link>
+          </p>
+        </div>
       }
     >
       <Form method="post" className="flex flex-col gap-6">
