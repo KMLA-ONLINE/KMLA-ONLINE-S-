@@ -226,7 +226,15 @@ function groupListTitle(post: GroupFeedPost) {
   return post.title;
 }
 
-export function FeedPostRow({ post }: { post: FeedPost }) {
+export function FeedPostRow({
+  post,
+  isVisited,
+  onVisit,
+}: {
+  post: FeedPost;
+  isVisited: boolean;
+  onVisit: () => void;
+}) {
   const path = feedPostOverlayPath(post);
   const author = post.author_name ?? post.author_label;
   const target = post.kind === "group" ? post.group_name : post.timeline_name;
@@ -243,7 +251,11 @@ export function FeedPostRow({ post }: { post: FeedPost }) {
     <Link
       to={path}
       preventScrollReset
-      className="flex w-full flex-col gap-1 px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
+      onClick={onVisit}
+      className={cn(
+        "flex w-full flex-col gap-1 px-3 py-2.5 text-left transition-colors hover:bg-muted/60",
+        isVisited && "bg-muted/45 hover:bg-muted/60",
+      )}
     >
       <div className="flex items-center gap-2">
         {post.kind === "group" && post.is_pinned ? (

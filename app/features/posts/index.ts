@@ -14,6 +14,7 @@ export { ProfilePostsPanel } from "~/features/posts/components/profile-posts-pan
 export { useGroupPostSearch } from "~/features/posts/hooks/use-group-post-search";
 export { usePostComments } from "~/features/posts/hooks/use-post-comments";
 export { usePostViewMode } from "~/features/posts/hooks/use-post-view-mode";
+export { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
 export {
   createGroupCategory,
   createProfilePost,
