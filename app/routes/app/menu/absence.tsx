@@ -1,8 +1,14 @@
 import { Navigate } from "react-router";
 
 import { AbsenceEditor } from "~/features/absences/components/absence-editor";
+import {
+  ABSENCE_STALE_TIME,
+  absenceKeys,
+} from "~/features/absences/data/cache";
 import { listTodayAbsences } from "~/features/absences/data/queries";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { getKoreaDateIso } from "~/shared/lib/korea-date";
+import { getQueryClient } from "~/shared/lib/query-client";
 
 import type { Route } from "./+types/absence";
 
@@ -13,7 +19,13 @@ export const handle = defineAppChrome({
 
 export async function clientLoader() {
   return {
-    absences: await listTodayAbsences().catch(() => []),
+    absences: await getQueryClient()
+      .fetchQuery({
+        queryKey: absenceKeys.today(getKoreaDateIso()),
+        queryFn: listTodayAbsences,
+        staleTime: ABSENCE_STALE_TIME,
+      })
+      .catch(() => []),
   };
 }
 

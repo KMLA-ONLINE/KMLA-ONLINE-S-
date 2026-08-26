@@ -2,6 +2,10 @@ import { MessagesSquareIcon, SearchIcon, UtensilsIcon } from "lucide-react";
 import { Link } from "react-router";
 
 import { AbsenceRail } from "~/features/absences/components/absence-rail";
+import {
+  ABSENCE_STALE_TIME,
+  absenceKeys,
+} from "~/features/absences/data/cache";
 import { listTodayAbsences } from "~/features/absences/data/queries";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import {
@@ -59,7 +63,7 @@ export const shouldRevalidate = createPostListRevalidation([
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const pageToken = new URL(request.url).searchParams.get("pageToken");
   const queryClient = getQueryClient();
-  const birthdayReferenceDate = getKoreaDateIso();
+  const referenceDate = getKoreaDateIso();
   const mealDayPromise = pageToken
     ? Promise.resolve(null)
     : getMealDay(getKoreaDate());
@@ -67,8 +71,8 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     ? Promise.resolve(null)
     : queryClient
         .fetchQuery({
-          queryKey: birthdayKeys.today(birthdayReferenceDate),
-          queryFn: () => listBirthdays(birthdayReferenceDate, "today"),
+          queryKey: birthdayKeys.today(referenceDate),
+          queryFn: () => listBirthdays(referenceDate, "today"),
           staleTime: BIRTHDAY_STALE_TIME,
           gcTime: BIRTHDAY_GC_TIME,
         })
@@ -76,7 +80,13 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
   const absencePromise = pageToken
     ? Promise.resolve([])
-    : listTodayAbsences().catch(() => []);
+    : queryClient
+        .fetchQuery({
+          queryKey: absenceKeys.today(referenceDate),
+          queryFn: listTodayAbsences,
+          staleTime: ABSENCE_STALE_TIME,
+        })
+        .catch(() => []);
 
   try {
     const [page, mealDay, birthdays, absences] = await Promise.all([

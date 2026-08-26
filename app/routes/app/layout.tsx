@@ -7,6 +7,7 @@ import {
   useRevalidator,
 } from "react-router";
 
+import { absenceKeys } from "~/features/absences/data/cache";
 import {
   AppHeader,
   AppSidebar,
@@ -65,10 +66,16 @@ export default function MainAppLayout() {
 
   const refresh = async () => {
     const queryClient = getQueryClient();
-    await queryClient.invalidateQueries({
-      queryKey: location.pathname === "/" ? feedKeys.all : groupKeys.all,
-      refetchType: "none",
-    });
+    const staleKeys =
+      location.pathname === "/"
+        ? [feedKeys.all, absenceKeys.all]
+        : [groupKeys.all];
+
+    await Promise.all(
+      staleKeys.map((queryKey) =>
+        queryClient.invalidateQueries({ queryKey, refetchType: "none" }),
+      ),
+    );
     await revalidator.revalidate();
   };
 

@@ -4,10 +4,16 @@ import { Link } from "react-router";
 
 import { AbsenceEditor } from "~/features/absences/components/absence-editor";
 import {
+  ABSENCE_STALE_TIME,
+  absenceKeys,
+} from "~/features/absences/data/cache";
+import {
   listTodayAbsences,
   type AbsenceItem,
 } from "~/features/absences/data/queries";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { getKoreaDateIso } from "~/shared/lib/korea-date";
+import { getQueryClient } from "~/shared/lib/query-client";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -34,7 +40,14 @@ export function AbsenceRail({
   if (items.length === 0) return null;
 
   async function refreshAfterEdit() {
-    setUpdatedItems(await listTodayAbsences());
+    // AbsenceEditor가 이미 캐시를 버렸으므로 여기서는 새로 받아 캐시를 다시 채운다.
+    setUpdatedItems(
+      await getQueryClient().fetchQuery({
+        queryKey: absenceKeys.today(getKoreaDateIso()),
+        queryFn: listTodayAbsences,
+        staleTime: ABSENCE_STALE_TIME,
+      }),
+    );
     setEditOpen(false);
   }
 
@@ -57,7 +70,7 @@ export function AbsenceRail({
           </Link>
         </div>
 
-        <div className="[scrollbar-width:none] overflow-x-auto pb-2 [·::-webkit-scrollbar]:hidden">
+        <div className="[scrollbar-width:none] overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden">
           <div className="flex w-max gap-3 px-4">
             {items.map((item) => {
               const isMine = item.pubId === viewerPubId;

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 
+import { absenceKeys } from "~/features/absences/data/cache";
 import {
   deleteMyAbsence,
   setMyAbsence,
@@ -10,6 +11,7 @@ import {
   isAbsenceReasonValid,
   normalizeAbsenceReason,
 } from "~/features/absences/model/absence";
+import { getQueryClient } from "~/shared/lib/query-client";
 import { Button } from "~/shared/ui/button";
 import { Textarea } from "~/shared/ui/textarea";
 
@@ -30,6 +32,12 @@ export function AbsenceEditor({
   const editing = initialReason !== null;
 
   async function finish() {
+    // 저장·삭제 직후 홈 레일이 예전 목록을 그리지 않도록 캐시를 먼저 버린다.
+    await getQueryClient().invalidateQueries({
+      queryKey: absenceKeys.all,
+      refetchType: "none",
+    });
+
     if (onSaved) {
       await onSaved();
     } else {
