@@ -22,10 +22,26 @@ function decodeVapidKey(value: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(raw, (character) => character.charCodeAt(0));
 }
 
+// `serviceWorker.ready` never settles when registration fails outright, which a
+// browser with workers blocked will do. Without a bound the settings
+// clientLoader would stay pending forever with nothing to show the user.
+const REGISTRATION_READY_TIMEOUT_MS = 5000;
+
 async function getRegistration(): Promise<ServiceWorkerRegistration | null> {
   const registration = await navigator.serviceWorker.getRegistration("/");
   if (registration || !import.meta.env.PROD) return registration ?? null;
-  return navigator.serviceWorker.ready;
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), REGISTRATION_READY_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function getPushSupport(): Promise<PushSupport> {

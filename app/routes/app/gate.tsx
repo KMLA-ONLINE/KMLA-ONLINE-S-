@@ -88,7 +88,7 @@ export default function Shell({ loaderData }: Route.ComponentProps) {
   return (
     <AppShellProvider value={loaderData}>
       <Outlet />
-      <NotificationSync />
+      <NotificationSync profileId={loaderData.profile.id} />
       <NotificationPermissionPrompt
         key={loaderData.profile.id}
         profileId={loaderData.profile.id}
