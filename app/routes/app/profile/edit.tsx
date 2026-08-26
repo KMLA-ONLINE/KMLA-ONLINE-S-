@@ -2,6 +2,7 @@ import { data, redirect } from "react-router";
 
 import { defineAppChrome, PageHeader } from "~/features/app-shell";
 import {
+  birthdayKeys,
   loadMyEditableProfile,
   loadProfileDepartments,
   ProfileEditScreen,
@@ -9,6 +10,7 @@ import {
   updateMyProfile,
   validateProfileEdit,
 } from "~/features/profiles";
+import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/edit";
 
 export const handle = defineAppChrome({
@@ -53,6 +55,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
 
   try {
     await updateMyProfile(values);
+    await getQueryClient().invalidateQueries({ queryKey: birthdayKeys.all });
   } catch {
     return data(
       {

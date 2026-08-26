@@ -1,5 +1,9 @@
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
-import type { AcceptedProfile } from "~/features/profiles/model/types";
+import type {
+  AcceptedProfile,
+  BirthdayProfile,
+  BirthdayScope,
+} from "~/features/profiles/model/types";
 import { getSupabase } from "~/shared/supabase/client";
 
 type ProfileRow = Omit<AcceptedProfile, "avatar_url" | "cover_url">;
@@ -54,4 +58,25 @@ export async function loadProfileDepartments(): Promise<string[]> {
   if (error) throw error;
 
   return (data ?? []).map((department) => department.name);
+}
+
+export async function listBirthdays(
+  referenceDate: string,
+  scope: BirthdayScope,
+): Promise<BirthdayProfile[]> {
+  const { data, error } = await getSupabase().rpc("list_birthdays", {
+    p_reference_date: referenceDate,
+    p_scope: scope,
+  });
+  if (error) throw error;
+
+  const birthdays = data ?? [];
+  const avatarUrls = await createProfileMediaUrls(
+    birthdays.map((birthday) => birthday.avatar_path),
+  );
+
+  return birthdays.map((birthday) => ({
+    ...birthday,
+    avatar_url: avatarUrls.get(birthday.avatar_path) ?? null,
+  }));
 }

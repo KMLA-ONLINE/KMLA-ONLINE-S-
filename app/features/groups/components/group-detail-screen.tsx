@@ -53,6 +53,7 @@ export function GroupDetailScreen({
   viewerName,
   viewerAvatarUrl,
   isTeacher,
+  canDeleteOfficial = false,
   categories = [],
   posts = { posts: [], nextCursor: null },
   memberPage,
@@ -65,6 +66,7 @@ export function GroupDetailScreen({
   viewerName: string | null;
   viewerAvatarUrl: string | null;
   isTeacher: boolean;
+  canDeleteOfficial?: boolean;
   categories?: GroupCategory[];
   posts?: GroupPostPage;
   memberPage?: GroupMemberPage;
@@ -81,6 +83,8 @@ export function GroupDetailScreen({
   const canManage =
     group.member_role === "owner" || group.member_role === "admin";
   const canCurate = canManage || group.member_role === "manager";
+  const canAccessSettings =
+    canCurate || (canDeleteOfficial && group.kind === "official");
   const canCreatePost =
     isMember && (group.posting_policy === "members" || canCurate);
   const canViewMembers = isMember;
@@ -96,14 +100,14 @@ export function GroupDetailScreen({
   const requestedTab = visibleSearchParams.get("tab");
   const tab: GroupTab =
     (requestedTab === "members" && canViewMembers) ||
-    (requestedTab === "settings" && canCurate) ||
+    (requestedTab === "settings" && canAccessSettings) ||
     (requestedTab === "reports" && canCurate)
       ? requestedTab
       : "posts";
   const visibleTabs = GROUP_TABS.filter(
     (item) =>
       (item.id !== "members" || canViewMembers) &&
-      (item.id !== "settings" || canCurate) &&
+      (item.id !== "settings" || canAccessSettings) &&
       (item.id !== "reports" || canCurate),
   );
 
@@ -120,6 +124,7 @@ export function GroupDetailScreen({
         group={group}
         profileId={profileId}
         isTeacher={isTeacher}
+        canAccessSettings={canAccessSettings}
         onSelectPosts={() => setTab("posts")}
         onSelectMembers={() => setTab("members")}
         onSelectSettings={() => setTab("settings")}
@@ -192,6 +197,7 @@ export function GroupDetailScreen({
               group={group}
               categories={categories}
               invite={invite}
+              canDeleteOfficial={canDeleteOfficial}
             />
           ) : reportPage ? (
             <GroupPostReportsPanel

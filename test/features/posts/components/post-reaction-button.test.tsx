@@ -65,6 +65,18 @@ describe("PostReactionButton", () => {
     ).toBeInTheDocument();
   });
 
+  it("suppresses the iOS touch callout on reaction controls", () => {
+    renderButton();
+    const trigger = screen.getByRole("button", { name: "반응 남기기" });
+
+    expect(trigger).toHaveClass("[-webkit-touch-callout:none]");
+
+    press(trigger, 400);
+    expect(
+      screen.getByRole("button", { name: "웃겨요 반응 남기기" }),
+    ).toHaveClass("[-webkit-touch-callout:none]");
+  });
+
   it("picks a specific reaction from the picker", () => {
     const { onSelect } = renderButton();
 

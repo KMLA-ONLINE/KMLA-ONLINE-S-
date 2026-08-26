@@ -12,6 +12,7 @@ import {
   signUp,
   validateEmail,
   validatePassword,
+  validatePasswordConfirm,
 } from "~/features/auth";
 import { Button } from "~/shared/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "~/shared/ui/field";
@@ -39,10 +40,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   const errors = {
     email: validateEmail(email),
     password: validatePassword(password),
-    passwordConfirm:
-      password !== passwordConfirm
-        ? "비밀번호가 일치하지 않습니다."
-        : undefined,
+    passwordConfirm: validatePasswordConfirm(password, passwordConfirm),
   };
 
   if (hasErrors(errors)) {

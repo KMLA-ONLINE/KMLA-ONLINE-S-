@@ -19,7 +19,19 @@ export function validateEmail(email: string): string | undefined {
 
 export function validatePassword(password: string): string | undefined {
   if (!password) return "비밀번호를 입력해 주세요.";
-  if (password.length < 6) return "비밀번호는 6자 이상이어야 합니다.";
+  if (password.length < 8) return "비밀번호는 8자 이상이어야 합니다.";
+}
+
+export function validatePasswordConfirm(
+  password: string,
+  confirm: string,
+): string | undefined {
+  if (!confirm) return "비밀번호를 한 번 더 입력해 주세요.";
+  if (password !== confirm) return "비밀번호가 일치하지 않습니다.";
+}
+
+export function validateOtpCode(otp: string): string | undefined {
+  if (!/^\d{6}$/.test(otp)) return "이메일로 받은 숫자 6자리를 입력해 주세요.";
 }
 
 export function readProfileForm(formData: FormData): ProfileFormValues {
@@ -99,9 +111,7 @@ export function validateProfileForm(
     if (!values.academicTrack) errors.academicTrack = "계열을 선택해 주세요.";
   }
 
-  if (requireOtp && !/^\d{6}$/.test(values.otp)) {
-    errors.otp = "이메일로 받은 숫자 6자리를 입력해 주세요.";
-  }
+  if (requireOtp) errors.otp = validateOtpCode(values.otp);
 
   return Object.fromEntries(
     Object.entries(errors).filter(([, message]) => Boolean(message)),

@@ -9,6 +9,7 @@ export function GroupDetailHero({
   group,
   profileId,
   isTeacher,
+  canAccessSettings,
   onSelectPosts,
   onSelectMembers,
   onSelectSettings,
@@ -17,6 +18,7 @@ export function GroupDetailHero({
   group: GroupDetail;
   profileId: number;
   isTeacher: boolean;
+  canAccessSettings: boolean;
   onSelectPosts: () => void;
   onSelectMembers: () => void;
   onSelectSettings: () => void;
@@ -96,6 +98,7 @@ export function GroupDetailHero({
           group={group}
           profileId={profileId}
           isTeacher={isTeacher}
+          canAccessSettings={canAccessSettings}
           onSelectSettings={onSelectSettings}
           onSelectReports={onSelectReports}
         />

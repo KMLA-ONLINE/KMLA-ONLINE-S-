@@ -65,7 +65,7 @@ export function GroupPostRow({
             운영진
           </Badge>
         ) : null}
-        {post.is_author && post.author_identity !== "identified" ? (
+        {post.is_author && post.author_identity === "anonymous" ? (
           <Badge variant="secondary" className="shrink-0">
             나
           </Badge>

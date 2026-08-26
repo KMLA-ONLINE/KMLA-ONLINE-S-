@@ -16,6 +16,7 @@ import {
   GroupPostOverlay,
   ProfilePostDetail,
   usePostViewMode,
+  useVisitedPosts,
 } from "~/features/posts";
 import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
@@ -36,6 +37,7 @@ export function FeedScreen({
   const { profile } = useAppShell();
   const [searchParams] = useSearchParams();
   const [viewMode] = usePostViewMode();
+  const { visited, markVisited } = useVisitedPosts();
   const closeDetail = useModalClose("/");
   const activePostId = searchParams.get("post");
   const activeKind = searchParams.get("kind");
@@ -159,7 +161,11 @@ export function FeedScreen({
         <ul className="flex flex-col divide-y divide-border/70 bg-card md:rounded-xl md:border">
           {posts.map((post) => (
             <li key={post.post_id}>
-              <FeedPostRow post={post} />
+              <FeedPostRow
+                post={post}
+                isVisited={visited.has(post.post_id)}
+                onVisit={() => markVisited(post.post_id)}
+              />
             </li>
           ))}
         </ul>

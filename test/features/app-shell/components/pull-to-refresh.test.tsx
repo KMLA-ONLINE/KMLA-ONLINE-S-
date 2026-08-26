@@ -10,6 +10,24 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PullToRefresh } from "~/features/app-shell/components/pull-to-refresh";
 
+const TOUCH_ID = 1;
+
+function beginPull(scroller: HTMLElement) {
+  fireEvent.touchStart(scroller, {
+    touches: [{ identifier: TOUCH_ID, clientX: 20, clientY: 20 }],
+  });
+}
+
+function movePull(scroller: HTMLElement, clientY: number) {
+  fireEvent.touchMove(scroller, {
+    touches: [{ identifier: TOUCH_ID, clientX: 20, clientY }],
+  });
+}
+
+function finishPull(scroller: HTMLElement) {
+  fireEvent.touchEnd(scroller);
+}
+
 function Subject({ onRefresh }: { onRefresh: () => Promise<void> }) {
   const ref = useRef<HTMLDivElement>(null);
   return (
@@ -23,7 +41,19 @@ function Subject({ onRefresh }: { onRefresh: () => Promise<void> }) {
 describe("PullToRefresh", () => {
   afterEach(() => vi.useRealTimers());
 
-  it("refreshes after a downward mouse drag at the top", async () => {
+  it("refreshes after a downward touch drag at the top", async () => {
+    const onRefresh = vi.fn().mockResolvedValue(undefined);
+    render(<Subject onRefresh={onRefresh} />);
+    const scroller = screen.getByTestId("scroller");
+
+    beginPull(scroller);
+    movePull(scroller, 180);
+    finishPull(scroller);
+
+    await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not refresh after a mouse drag", () => {
     const onRefresh = vi.fn().mockResolvedValue(undefined);
     render(<Subject onRefresh={onRefresh} />);
     const scroller = screen.getByTestId("scroller");
@@ -32,7 +62,7 @@ describe("PullToRefresh", () => {
     fireEvent.mouseMove(window, { clientX: 20, clientY: 180 });
     fireEvent.mouseUp(window);
 
-    await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
+    expect(onRefresh).not.toHaveBeenCalled();
   });
 
   it("does not start while the container is scrolled", () => {
@@ -45,9 +75,9 @@ describe("PullToRefresh", () => {
       writable: true,
     });
 
-    fireEvent.mouseDown(scroller, { button: 0, clientX: 20, clientY: 20 });
-    fireEvent.mouseMove(window, { clientX: 20, clientY: 200 });
-    fireEvent.mouseUp(window);
+    beginPull(scroller);
+    movePull(scroller, 200);
+    finishPull(scroller);
 
     expect(onRefresh).not.toHaveBeenCalled();
   });
@@ -57,8 +87,8 @@ describe("PullToRefresh", () => {
     render(<Subject onRefresh={onRefresh} />);
     const scroller = screen.getByTestId("scroller");
 
-    fireEvent.mouseDown(scroller, { button: 0, clientX: 20, clientY: 20 });
-    fireEvent.mouseMove(window, { clientX: 20, clientY: 220 });
+    beginPull(scroller);
+    movePull(scroller, 220);
 
     expect(screen.getByTestId("pull-to-refresh-indicator")).toHaveStyle({
       transform: "translateY(50px)",
@@ -80,9 +110,9 @@ describe("PullToRefresh", () => {
 
     render(<InputSubject />);
     const input = screen.getByLabelText("search");
-    fireEvent.mouseDown(input, { button: 0, clientX: 20, clientY: 20 });
-    fireEvent.mouseMove(window, { clientX: 20, clientY: 200 });
-    fireEvent.mouseUp(window);
+    beginPull(input);
+    movePull(input, 200);
+    finishPull(input);
 
     expect(onRefresh).not.toHaveBeenCalled();
   });
@@ -93,9 +123,9 @@ describe("PullToRefresh", () => {
     render(<Subject onRefresh={onRefresh} />);
     const scroller = screen.getByTestId("scroller");
 
-    fireEvent.mouseDown(scroller, { button: 0, clientX: 20, clientY: 20 });
-    fireEvent.mouseMove(window, { clientX: 20, clientY: 180 });
-    fireEvent.mouseUp(window);
+    beginPull(scroller);
+    movePull(scroller, 180);
+    finishPull(scroller);
 
     expect(screen.getByText("새로고침 중")).toBeVisible();
     const status = screen.getByRole("status");

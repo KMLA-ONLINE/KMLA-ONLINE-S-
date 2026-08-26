@@ -3,10 +3,14 @@ export { LogoutButton } from "~/features/auth/components/logout-button";
 export { PasswordField } from "~/features/auth/components/password-field";
 export {
   resendSignupOtp,
+  sendPasswordChangeOtp,
+  sendPasswordResetOtp,
   signIn,
   signOut,
   signUp,
   submitProfile,
+  updatePassword,
+  verifyPasswordResetOtp,
   verifySignupOtp,
 } from "~/features/auth/data/mutations";
 export { loadAuthState } from "~/features/auth/data/queries";
@@ -17,7 +21,9 @@ export {
   readFormText,
   readProfileForm,
   validateEmail,
+  validateOtpCode,
   validatePassword,
+  validatePasswordConfirm,
   validateProfileForm,
 } from "~/features/auth/model/validation";
 export { getProfileDestination } from "~/features/auth/model/navigation";

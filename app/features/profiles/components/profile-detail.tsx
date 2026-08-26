@@ -9,14 +9,16 @@ import {
   PhoneIcon,
   UserRoundIcon,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { ProfilePostsPanel, type ProfilePostPage } from "~/features/posts";
 import { ProfileMediaEditor } from "~/features/profiles/components/profile-media-editor";
 import type { AcceptedProfile } from "~/features/profiles/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
-import { buttonVariants } from "~/shared/ui/button";
+import { cn } from "~/shared/lib/utils";
+import { Badge } from "~/shared/ui/badge";
+import { Button, buttonVariants } from "~/shared/ui/button";
 import { Card, CardContent } from "~/shared/ui/card";
 
 const TRACK_LABELS: Record<
@@ -51,6 +53,56 @@ function formatCohort(profile: AcceptedProfile) {
     profile.cohort + (profile.is_returning_student ? 0.5 : 0);
 
   return `${displayedCohort}기`;
+}
+
+function ProfileDescription({ description }: { description: string }) {
+  const descriptionRef = useRef<HTMLParagraphElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [isTruncated, setIsTruncated] = useState(false);
+
+  useEffect(() => {
+    if (expanded) return;
+
+    const element = descriptionRef.current;
+    if (!element) return;
+
+    const updateTruncation = () => {
+      setIsTruncated(element.scrollHeight > element.clientHeight);
+    };
+
+    updateTruncation();
+    if (typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(updateTruncation);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [description, expanded]);
+
+  return (
+    <div className="mt-3 max-w-3xl sm:mt-5">
+      <p
+        ref={descriptionRef}
+        className={cn(
+          "text-sm leading-5.5 whitespace-pre-wrap sm:text-base sm:leading-6",
+          !expanded && "line-clamp-3",
+        )}
+      >
+        {description}
+      </p>
+      {isTruncated ? (
+        <Button
+          type="button"
+          variant="link"
+          size="sm"
+          className="mt-1 h-auto px-0 py-0"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? "접기" : "더보기"}
+        </Button>
+      ) : null}
+    </div>
+  );
 }
 
 export function ProfileDetail({
@@ -182,9 +234,12 @@ export function ProfileDetail({
 
               {/* name / summary */}
               <div className="min-w-0 pt-2.5 sm:pt-4">
-                <h1 className="min-w-0 truncate text-[1.35rem] leading-tight font-semibold tracking-tight sm:text-3xl">
-                  {profile.name}
-                </h1>
+                <div className="flex min-w-0 items-center gap-2">
+                  <h1 className="min-w-0 truncate text-[1.35rem] leading-tight font-semibold tracking-tight sm:text-3xl">
+                    {profile.name}
+                  </h1>
+                  {profile.role === "admin" ? <Badge>관리자</Badge> : null}
+                </div>
 
                 {schoolSummary.length > 0 ? (
                   <p className="mt-1 text-[13px] leading-5 text-muted-foreground sm:mt-1.5 sm:text-sm">
@@ -214,9 +269,7 @@ export function ProfileDetail({
             </div>
 
             {profile.description ? (
-              <p className="mt-3 max-w-3xl text-sm leading-5.5 whitespace-pre-wrap sm:mt-5 sm:text-base sm:leading-6">
-                {profile.description}
-              </p>
+              <ProfileDescription description={profile.description} />
             ) : null}
           </div>
         </section>

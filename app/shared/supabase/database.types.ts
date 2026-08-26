@@ -1206,6 +1206,7 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          is_effective_feed_bump: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -1470,6 +1471,17 @@ export type Database = {
           token: string
         }[]
       }
+      list_birthdays: {
+        Args: { p_reference_date: string; p_scope?: string }
+        Returns: {
+          avatar_path: string
+          birthday_date: string
+          birthday_day: number
+          birthday_month: number
+          name: string
+          pub_id: string
+        }[]
+      }
       list_comment_images: {
         Args: { p_comment_ids: string[] }
         Returns: {
@@ -1675,6 +1687,7 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          is_effective_feed_bump: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -1707,6 +1720,7 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          is_effective_feed_bump: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -2225,6 +2239,7 @@ export type Database = {
           edited_at: string
           is_author: boolean
           is_deleted: boolean
+          is_effective_feed_bump: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string

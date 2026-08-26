@@ -59,6 +59,7 @@ export function GroupCreateForm({
   const formRef = useRef<HTMLFormElement>(null);
   const confirmedRef = useRef(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [officialConfirmOpen, setOfficialConfirmOpen] = useState(false);
   const [confirmName, setConfirmName] = useState("");
 
   /**
@@ -78,8 +79,17 @@ export function GroupCreateForm({
   }
 
   function confirmCreate() {
-    confirmedRef.current = true;
     setConfirmOpen(false);
+    if (kind === "official") {
+      setOfficialConfirmOpen(true);
+      return;
+    }
+
+    submitCreate();
+  }
+
+  function submitCreate() {
+    confirmedRef.current = true;
     formRef.current?.requestSubmit();
   }
 
@@ -331,6 +341,18 @@ export function GroupCreateForm({
         confirmLabel="만들기"
         pending={pending}
         onConfirm={confirmCreate}
+      />
+      <GroupConfirmDialog
+        open={officialConfirmOpen}
+        onOpenChange={setOfficialConfirmOpen}
+        title={`'${confirmName}' 공식 그룹을 만들까요?`}
+        description="승인된 모든 재학생이 자동으로 가입합니다. 공식 그룹은 앱 관리자만 삭제할 수 있습니다."
+        confirmLabel="공식 그룹 만들기"
+        pending={pending}
+        onConfirm={() => {
+          setOfficialConfirmOpen(false);
+          submitCreate();
+        }}
       />
     </div>
   );

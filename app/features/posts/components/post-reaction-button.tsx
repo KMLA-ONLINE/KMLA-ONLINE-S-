@@ -100,7 +100,7 @@ export function PostReactionButton({
         aria-label={mine ? `${reactionLabel(mine)} 취소` : "반응 남기기"}
         aria-pressed={mine !== null}
         className={cn(
-          "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors select-none hover:bg-muted",
+          "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors select-none [-webkit-touch-callout:none] hover:bg-muted",
           mine
             ? "font-medium text-primary"
             : "text-muted-foreground hover:text-foreground",

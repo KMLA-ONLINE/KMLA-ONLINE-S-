@@ -16,6 +16,7 @@ export function postComment(overrides: Partial<PostComment> = {}): PostComment {
     edited_at: null as unknown as string,
     is_author: false,
     is_deleted: false,
+    is_effective_feed_bump: false,
     images: [],
     parent_author_label: null as unknown as string,
     parent_comment_id: null as unknown as string,

@@ -23,7 +23,16 @@ function stubVisualViewport(height: number, offsetTop = 0) {
   });
 }
 
+function stubTabletSheetViewport(matches: boolean) {
+  vi.spyOn(window, "matchMedia").mockReturnValue({
+    matches,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  } as unknown as MediaQueryList);
+}
+
 afterEach(() => {
+  vi.restoreAllMocks();
   Object.defineProperty(window, "innerHeight", {
     configurable: true,
     value: originalInnerHeight,
@@ -65,7 +74,8 @@ function Detail({ withComment = false }: { withComment?: boolean }) {
 }
 
 describe("PostDetailDialog", () => {
-  it("does not focus the composer when opening the mobile comment sheet", async () => {
+  it("does not focus the composer when opening a comment sheet", async () => {
+    stubTabletSheetViewport(true);
     renderRoute(Detail, {
       path: "/posts/:postId",
       initialEntries: ["/posts/post-id?view=comments"],
@@ -77,12 +87,41 @@ describe("PostDetailDialog", () => {
     ).not.toHaveFocus();
   });
 
-  it("focuses the composer from a desktop comment button", async () => {
-    vi.spyOn(window, "matchMedia").mockReturnValue({
-      matches: true,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    } as unknown as MediaQueryList);
+  it("uses a centered bottom sheet through the tablet breakpoint", () => {
+    stubTabletSheetViewport(true);
+    renderRoute(Detail, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id?view=comments"],
+    });
+
+    expect(screen.getByRole("dialog")).toHaveClass(
+      "max-[1025px]:bottom-0",
+      "md:max-[1025px]:left-1/2",
+      "md:max-[1025px]:-translate-x-1/2",
+    );
+  });
+
+  /**
+   * 회귀: 시트 여부를 뷰포트만으로 정하던 때에는, 글을 쓰고 상세로 이동하기만 해도 본문이
+   * 숨겨진 댓글 서랍이 떴다. 댓글만 보러 왔다는 의도가 함께 있어야 시트다.
+   */
+  it("opens the post itself as a detail modal on a tablet viewport", () => {
+    stubTabletSheetViewport(true);
+    renderRoute(Detail, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id"],
+    });
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveClass("max-md:h-svh");
+    expect(dialog).not.toHaveClass("max-[1025px]:bottom-0");
+    // 시트에서는 머리글이 제목 대신 「댓글」이 된다.
+    expect(screen.queryByText("댓글")).not.toBeInTheDocument();
+    expect(screen.getByText("게시물 본문")).toBeInTheDocument();
+  });
+
+  it("keeps a computer comment button as a focused detail modal", async () => {
+    stubTabletSheetViewport(false);
     renderRoute(Detail, {
       path: "/posts/:postId",
       initialEntries: ["/posts/post-id?view=comments"],
@@ -106,6 +145,7 @@ describe("PostDetailDialog", () => {
   });
 
   it("keeps the mobile comment sheet inside the visual viewport", async () => {
+    stubTabletSheetViewport(true);
     stubVisualViewport(500, 100);
     renderRoute(Detail, {
       path: "/posts/:postId",
@@ -121,6 +161,7 @@ describe("PostDetailDialog", () => {
   });
 
   it("scrolls only enough to reveal a reply target after resizing", async () => {
+    stubTabletSheetViewport(true);
     stubVisualViewport(500);
     const { user } = renderRoute(() => <Detail withComment />, {
       path: "/posts/:postId",

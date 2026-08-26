@@ -1,8 +1,10 @@
 import {
   CalendarClockIcon,
   CalendarDaysIcon,
+  CakeIcon,
   ChevronRightIcon,
   FileTextIcon,
+  KeyRoundIcon,
   SettingsIcon,
   ShieldCheckIcon,
   UtensilsIcon,
@@ -110,6 +112,25 @@ export default function MenuPage() {
                 aria-hidden
               />
             </Link>
+
+            <Link
+              to="/menu/birthdays"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
+            >
+              <CakeIcon
+                className="size-4.5 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                생일
+              </span>
+
+              <ChevronRightIcon
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+            </Link>
           </div>
         </section>
 
@@ -118,7 +139,24 @@ export default function MenuPage() {
             설정
           </h2>
 
-          <div className="overflow-hidden rounded-xl border bg-card">
+          <div className="divide-y overflow-hidden rounded-xl border bg-card">
+            <Link
+              to="/menu/password"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
+            >
+              <KeyRoundIcon
+                className="size-4.5 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                비밀번호 변경
+              </span>
+              <ChevronRightIcon
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+            </Link>
+
             <Link
               to="/menu/settings"
               className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"

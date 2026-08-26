@@ -26,7 +26,7 @@ export function QuickReactionBar({
           type="button"
           aria-label={`${type.label} 반응 남기기`}
           aria-pressed={current === type.key}
-          className="flex size-10 shrink-0 origin-bottom items-center justify-center rounded-full text-2xl transition-[transform,background-color] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:-translate-y-0.5 hover:scale-125 focus-visible:-translate-y-1.5 focus-visible:scale-125 focus-visible:outline-none"
+          className="flex size-10 shrink-0 origin-bottom items-center justify-center rounded-full text-2xl transition-[transform,background-color] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] [-webkit-touch-callout:none] hover:-translate-y-0.5 hover:scale-125 focus-visible:-translate-y-1.5 focus-visible:scale-125 focus-visible:outline-none"
           onClick={() => onSelect(type.key)}
         >
           <ReactionEmoji reaction={type.key} />

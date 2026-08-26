@@ -309,7 +309,7 @@ export function TimetableScreen() {
                   value={draft.name}
                   aria-label="과목명"
                   placeholder="과목명"
-                  className="h-10 rounded-md px-3 text-base font-medium"
+                  className="rounded-md px-3 text-base font-medium"
                   onChange={(event) => {
                     setOverlap(false);
 
@@ -324,7 +324,7 @@ export function TimetableScreen() {
                   value={draft.room}
                   aria-label="장소"
                   placeholder="장소"
-                  className="h-10 rounded-md px-3 text-base"
+                  className="rounded-md px-3 text-base"
                   onChange={(event) =>
                     setDraft({
                       ...draft,
