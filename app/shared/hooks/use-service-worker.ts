@@ -34,7 +34,11 @@ export function useServiceWorker(reload = reloadPage) {
       const { Workbox } = await import("workbox-window");
       if (cancelled) return;
 
-      const wb = new Workbox("/sw.js", { scope: "/" });
+      const wb = new Workbox("/sw.js", {
+        scope: "/",
+        // Always revalidate imported Push handlers as part of an SW update.
+        updateViaCache: "none",
+      });
       wbRef.current = wb;
 
       wb.addEventListener("waiting", () => {

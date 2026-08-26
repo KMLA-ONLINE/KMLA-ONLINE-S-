@@ -20,11 +20,12 @@ import { Input } from "~/shared/ui/input";
 import { Spinner } from "~/shared/ui/spinner";
 import type { Route } from "./+types/login";
 
-export async function clientLoader() {
+export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const state = await loadAuthState();
   if (!state) return null;
 
-  const destination = getProfileDestination(state.profile);
+  const next = new URL(request.url).searchParams.get("next");
+  const destination = getProfileDestination(state.profile, next);
   if (destination === "/login") {
     await signOut();
     return null;
@@ -33,6 +34,7 @@ export async function clientLoader() {
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
+  const next = new URL(request.url).searchParams.get("next");
   const formData = await request.formData();
   const email = readFormText(formData, "email");
   const password = readFormText(formData, "password");
@@ -50,7 +52,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     const state = await loadAuthState();
     if (!state) throw new Error("Missing session after sign-in");
 
-    const destination = getProfileDestination(state.profile);
+    const destination = getProfileDestination(state.profile, next);
     if (destination === "/login") {
       await signOut();
       return data(

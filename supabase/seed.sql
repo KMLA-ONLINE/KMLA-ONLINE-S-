@@ -21,6 +21,17 @@ where not exists (
   where name = 'post_attachment_cleanup_secret'
 );
 
+select vault.create_secret(
+  'local-notification-dispatch-only',
+  'notification_dispatch_secret',
+  'Development-only notification dispatcher secret'
+)
+where not exists (
+  select 1
+  from vault.decrypted_secrets
+  where name = 'notification_dispatch_secret'
+);
+
 insert into auth.users (
   instance_id,
   id,

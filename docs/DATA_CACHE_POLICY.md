@@ -33,6 +33,8 @@ RLS가 항상 최종 데이터 및 권한의 기준이며, 클라이언트 캐�
 ["groups", "join-requests", groupId]
 ["groups", "invite", groupId]
 ["groups", "reports", groupId, sort]
+["notifications", "page", beforeLastActivityAt, beforeId]
+["notifications", "preferences"]
 ```
 
 기능 루트 키인 `["feed"]`, `["groups"]`는 하위 데이터를 한꺼번에 stale 처리해야 할 때만 사용한다.
@@ -47,6 +49,7 @@ RLS가 항상 최종 데이터 및 권한의 기준이며, 클라이언트 캐�
 | 그룹 게시물·카테고리       |      15초 | 작성·수정·고정 mutation 후 즉시 무효화한다.                        |
 | 멤버·가입 요청·신고·초대   |       0초 | 권한과 운영 상태 변화에 민감하다.                                  |
 | 관리자·예약 등 미도입 영역 |       0초 | 별도 검토 전에는 기존 fresh-on-load 동작을 유지한다.               |
+| 알림함·알림 설정           |       0초 | Realtime과 focus 복귀 시 라우트를 즉시 재검증한다.                 |
 
 사용되지 않는 캐시의 기본 `gcTime`은 10분이다. 브라우저를 새로 열면 모든 쿼리 캐시는 비어 있다.
 Supabase가 피드 첫 페이지 요청을 5초 동안 중복 방지하는 규칙은 이 정책과 별개로 유지된다.
@@ -72,6 +75,15 @@ Storage signed URL은 쿼리 캐시와 별도로 사용자 ID와 object path를 
 - 게시물·카테고리 변경: 해당 그룹의 게시물·카테고리·상세와 피드를 무효화한다.
 - 그룹 삭제 또는 접근 상실: 해당 그룹의 상세·게시물·멤버·신고 데이터를 즉시 제거하고 그룹 홈과
   탐색을 무효화한다.
+
+### 알림
+
+- 첫 페이지와 설정은 route loader snapshot을 사용하며 보호된 알림 데이터를 영속 저장하지 않는다.
+- 이전 페이지는 `(last_activity_at, id)` 커서로 현재 알림함 화면에만 병합하고 화면을 벗어나면 폐기한다.
+- 개별·전체 읽음 처리, 알림 Realtime 변경과 창 focus 복귀는 알림함과 셸의 최근 24시간 badge를 함께
+  재검증한다.
+- Web Push 구독 정보는 브라우저 Push API와 서버 RPC에서 확인하며 endpoint와 key를 클라이언트 캐시에
+  저장하지 않는다. 권한 안내를 처리했는지 여부만 기기·계정별 versioned localStorage key로 저장한다.
 
 ## 5. 라우터와의 역할 분리
 

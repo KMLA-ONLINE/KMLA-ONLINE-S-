@@ -13,7 +13,7 @@ export {
   verifyPasswordResetOtp,
   verifySignupOtp,
 } from "~/features/auth/data/mutations";
-export { loadAuthState } from "~/features/auth/data/queries";
+export { hasActiveSession, loadAuthState } from "~/features/auth/data/queries";
 export { getAuthErrorMessage } from "~/features/auth/model/format";
 export { getPendingSignupEmail } from "~/features/auth/storage/pending-signup";
 export {
@@ -26,7 +26,10 @@ export {
   validatePasswordConfirm,
   validateProfileForm,
 } from "~/features/auth/model/validation";
-export { getProfileDestination } from "~/features/auth/model/navigation";
+export {
+  getProfileDestination,
+  sanitizeLoginNext,
+} from "~/features/auth/model/navigation";
 export type {
   AuthProfile,
   AuthState,

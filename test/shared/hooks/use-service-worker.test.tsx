@@ -12,6 +12,7 @@ const workboxMock = vi.hoisted(() => ({
   instances: [] as {
     listeners: Map<string, EventListener[]>;
     messageSkipWaiting: () => void;
+    options: RegistrationOptions;
   }[],
 }));
 
@@ -19,8 +20,10 @@ vi.mock("workbox-window", () => ({
   Workbox: class {
     listeners = new Map<string, EventListener[]>();
     messageSkipWaiting = vi.fn();
+    options: RegistrationOptions;
 
-    constructor() {
+    constructor(_scriptUrl: string, options: RegistrationOptions) {
+      this.options = options;
       workboxMock.instances.push(this);
     }
 
@@ -81,7 +84,9 @@ describe("useServiceWorker", () => {
   });
 
   it("첫 설치에서 새로고침하지 않고 오프라인 준비 상태를 유지한다", async () => {
-    const { emit, reload, result } = await setupHook();
+    const { emit, reload, result, workbox } = await setupHook();
+
+    expect(workbox.options).toEqual({ scope: "/", updateViaCache: "none" });
 
     emit("activated", { isUpdate: false });
     emit("controlling", { isUpdate: false });

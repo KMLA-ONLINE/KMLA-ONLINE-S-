@@ -27,6 +27,7 @@
     "e2e:ui": "playwright test --ui",
     "e2e:install": "playwright install --with-deps",
     "pwa:assets": "pwa-assets-generator",
+    "web-push:keys": "node scripts/generate-vapid-keys.mjs",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:status": "supabase status",

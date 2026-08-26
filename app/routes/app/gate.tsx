@@ -10,6 +10,8 @@ import {
   type ShellData,
 } from "~/features/app-shell";
 import type { Route } from "./+types/gate";
+import { NotificationPermissionPrompt } from "~/features/notifications/components/notification-permission-prompt";
+import { NotificationSync } from "~/features/notifications/components/notification-sync";
 
 /**
  * 로그인한 사용자가 보는 모든 화면의 바깥 껍데기.
@@ -86,6 +88,11 @@ export default function Shell({ loaderData }: Route.ComponentProps) {
   return (
     <AppShellProvider value={loaderData}>
       <Outlet />
+      <NotificationSync profileId={loaderData.profile.id} />
+      <NotificationPermissionPrompt
+        key={loaderData.profile.id}
+        profileId={loaderData.profile.id}
+      />
     </AppShellProvider>
   );
 }

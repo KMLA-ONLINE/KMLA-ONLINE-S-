@@ -1,5 +1,10 @@
 import { InstallPrompt } from "~/shared/components/install-prompt";
 import { useServiceWorker } from "~/shared/hooks/use-service-worker";
+import { useEffect } from "react";
+import {
+  setPromptActive,
+  usePromptActive,
+} from "~/shared/lib/prompt-coordinator";
 
 /**
  * 루트에서 렌더하는 PWA 안내 두 가지를 한자리에 모은다.
@@ -20,6 +25,12 @@ export function PwaPrompts() {
     dismissOfflineReady,
   } = useServiceWorker();
   const showServiceWorkerPrompt = updateReady || offlineReady;
+  const notificationPromptActive = usePromptActive("notification");
+
+  useEffect(() => {
+    setPromptActive("service-worker", showServiceWorkerPrompt);
+    return () => setPromptActive("service-worker", false);
+  }, [showServiceWorkerPrompt]);
 
   return (
     <>
@@ -57,7 +68,9 @@ export function PwaPrompts() {
           )}
         </div>
       )}
-      <InstallPrompt blocked={showServiceWorkerPrompt} />
+      <InstallPrompt
+        blocked={showServiceWorkerPrompt || notificationPromptActive}
+      />
     </>
   );
 }

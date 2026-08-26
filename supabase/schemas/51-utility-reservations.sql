@@ -11,6 +11,7 @@ declare
   next_monday date;
   next_sunday date;
   lock_key bigint;
+  preempted record;
 begin
   select profile.id
   into caller_profile_id
@@ -85,19 +86,30 @@ begin
   end if;
 
   if new.reserved then
-    update public.utility_reservations as reservation
-    set recurring_until = new.schedule_date
-    where reservation.mode = 'gongang'
-      and reservation.recurring = true
-      and reservation.slot = new.slot
-      and reservation.location = new.location
-      and reservation.reservation_date <= new.schedule_date
-      and (
-        reservation.recurring_until is null
-        or reservation.recurring_until > new.schedule_date
-      )
-      and extract(dow from reservation.reservation_date)
-        = extract(dow from new.schedule_date);
+    for preempted in
+      update public.utility_reservations as reservation
+      set recurring_until = new.schedule_date
+      where reservation.mode = 'gongang'
+        and reservation.recurring = true
+        and reservation.slot = new.slot
+        and reservation.location = new.location
+        and reservation.reservation_date <= new.schedule_date
+        and (
+          reservation.recurring_until is null
+          or reservation.recurring_until > new.schedule_date
+        )
+        and extract(dow from reservation.reservation_date)
+          = extract(dow from new.schedule_date)
+      returning reservation.id, reservation.profile_id
+    loop
+      perform private.emit_notification(
+        'gongang-preempted:' || preempted.id::text || ':' || new.schedule_date::text,
+        preempted.profile_id, 'gongang_preempted', 'high', 'school', 'staff',
+        caller_profile_id, '운영진', null,
+        '관리자 선예약으로 장기 공강 예약이 종료되었습니다.',
+        null, null, null, null, preempted.id
+      );
+    end loop;
   end if;
 
   return new;

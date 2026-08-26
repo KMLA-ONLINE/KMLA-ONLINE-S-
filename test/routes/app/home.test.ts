@@ -2,9 +2,19 @@ import { RouterContextProvider } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  hasActiveSession: vi.fn(),
   listFeedPosts: vi.fn(),
   getMealDay: vi.fn(),
   listBirthdays: vi.fn(),
+  listTodayAbsences: vi.fn(),
+}));
+
+vi.mock("~/features/auth", () => ({
+  hasActiveSession: mocks.hasActiveSession,
+}));
+
+vi.mock("~/features/absences/data/queries", () => ({
+  listTodayAbsences: mocks.listTodayAbsences,
 }));
 
 vi.mock("~/features/feed", async (importOriginal) => ({
@@ -53,6 +63,8 @@ function load(query = "") {
 describe("home feed loader", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.hasActiveSession.mockResolvedValue(true);
+    mocks.listTodayAbsences.mockResolvedValue([]);
     mocks.listFeedPosts.mockResolvedValue(page);
     mocks.getMealDay.mockResolvedValue(mealDay);
     mocks.listBirthdays.mockResolvedValue(birthdays);
@@ -79,6 +91,26 @@ describe("home feed loader", () => {
       pageToken: token,
       mealDay: null,
       birthdays: null,
+    });
+  });
+
+  // 게이트와 병렬로 도는 로더다. 세션이 없을 때 요청을 띄우면 authenticated 전용 RPC가
+  // 익명으로 나가고, PostgREST가 401을 돌려주며 콘솔을 더럽힌다.
+  it("issues no request when there is no session", async () => {
+    mocks.hasActiveSession.mockResolvedValue(false);
+
+    const result = await load();
+
+    expect(mocks.listFeedPosts).not.toHaveBeenCalled();
+    expect(mocks.listBirthdays).not.toHaveBeenCalled();
+    expect(mocks.listTodayAbsences).not.toHaveBeenCalled();
+    expect(mocks.getMealDay).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      page: null,
+      mealDay: null,
+      birthdays: null,
+      absences: [],
+      error: null,
     });
   });
 

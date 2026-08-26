@@ -315,6 +315,8 @@ export type Database = {
           group_id: string
           id: string
           joined_at: string
+          new_post_push_enabled: boolean
+          notification_level: Database["public"]["Enums"]["group_notification_level"]
           pinned_at: string | null
           profile_id: number
           role: Database["public"]["Enums"]["group_member_role"]
@@ -323,6 +325,8 @@ export type Database = {
           group_id: string
           id?: string
           joined_at?: string
+          new_post_push_enabled?: boolean
+          notification_level?: Database["public"]["Enums"]["group_notification_level"]
           pinned_at?: string | null
           profile_id: number
           role?: Database["public"]["Enums"]["group_member_role"]
@@ -331,6 +335,8 @@ export type Database = {
           group_id?: string
           id?: string
           joined_at?: string
+          new_post_push_enabled?: boolean
+          notification_level?: Database["public"]["Enums"]["group_notification_level"]
           pinned_at?: string | null
           profile_id?: number
           role?: Database["public"]["Enums"]["group_member_role"]
@@ -414,6 +420,160 @@ export type Database = {
           {
             foreignKeyName: "groups_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_preferences: {
+        Row: {
+          account_push_enabled: boolean
+          content_push_enabled: boolean
+          group_push_enabled: boolean
+          profile_id: number
+          school_push_enabled: boolean
+          timeline_push_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          account_push_enabled?: boolean
+          content_push_enabled?: boolean
+          group_push_enabled?: boolean
+          profile_id: number
+          school_push_enabled?: boolean
+          timeline_push_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          account_push_enabled?: boolean
+          content_push_enabled?: boolean
+          group_push_enabled?: boolean
+          profile_id?: number
+          school_push_enabled?: boolean
+          timeline_push_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          actor_avatar_path: string | null
+          actor_count: number
+          actor_display_name: string | null
+          actor_identity: Database["public"]["Enums"]["notification_actor_identity"]
+          actor_profile_id: number | null
+          category: Database["public"]["Enums"]["notification_category"]
+          comment_id: string | null
+          created_at: string
+          group_id: string | null
+          id: string
+          importance: Database["public"]["Enums"]["notification_importance"]
+          kind: Database["public"]["Enums"]["notification_kind"]
+          last_activity_at: string
+          post_id: string | null
+          read_at: string | null
+          recipient_profile_id: number
+          reservation_id: number | null
+          target_profile_id: number | null
+          title: string
+        }
+        Insert: {
+          actor_avatar_path?: string | null
+          actor_count?: number
+          actor_display_name?: string | null
+          actor_identity: Database["public"]["Enums"]["notification_actor_identity"]
+          actor_profile_id?: number | null
+          category: Database["public"]["Enums"]["notification_category"]
+          comment_id?: string | null
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          importance: Database["public"]["Enums"]["notification_importance"]
+          kind: Database["public"]["Enums"]["notification_kind"]
+          last_activity_at?: string
+          post_id?: string | null
+          read_at?: string | null
+          recipient_profile_id: number
+          reservation_id?: number | null
+          target_profile_id?: number | null
+          title: string
+        }
+        Update: {
+          actor_avatar_path?: string | null
+          actor_count?: number
+          actor_display_name?: string | null
+          actor_identity?: Database["public"]["Enums"]["notification_actor_identity"]
+          actor_profile_id?: number | null
+          category?: Database["public"]["Enums"]["notification_category"]
+          comment_id?: string | null
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          importance?: Database["public"]["Enums"]["notification_importance"]
+          kind?: Database["public"]["Enums"]["notification_kind"]
+          last_activity_at?: string
+          post_id?: string | null
+          read_at?: string | null
+          recipient_profile_id?: number
+          reservation_id?: number | null
+          target_profile_id?: number | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_actor_profile_id_fkey"
+            columns: ["actor_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "post_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_recipient_profile_id_fkey"
+            columns: ["recipient_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: false
+            referencedRelation: "utility_reservations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_target_profile_id_fkey"
+            columns: ["target_profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1107,6 +1267,22 @@ export type Database = {
           object_path: string
         }[]
       }
+      claim_notification_deliveries: {
+        Args: { p_lease_seconds?: number; p_limit?: number }
+        Returns: {
+          auth: string
+          body: string
+          channel: "web_push" | "email"
+          delivery_id: string
+          endpoint: string
+          lease_id: string
+          notification_id: string
+          p256dh: string
+          recipient_email: string
+          tag: string
+          title: string
+        }[]
+      }
       claim_post_attachment_cleanup: {
         Args: { p_lease_seconds?: number; p_limit?: number }
         Returns: {
@@ -1158,6 +1334,16 @@ export type Database = {
           p_lease_id: string
           p_media_id: string
           p_object_deleted: boolean
+        }
+        Returns: boolean
+      }
+      complete_notification_delivery: {
+        Args: {
+          p_delivery_id: string
+          p_error_code?: string
+          p_lease_id: string
+          p_outcome: string
+          p_status_code?: number
         }
         Returns: boolean
       }
@@ -1427,6 +1613,16 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      get_my_notification_preferences: {
+        Args: never
+        Returns: {
+          account_push_enabled: boolean
+          content_push_enabled: boolean
+          group_push_enabled: boolean
+          school_push_enabled: boolean
+          timeline_push_enabled: boolean
+        }[]
+      }
       get_my_profile: {
         Args: never
         Returns: {
@@ -1469,6 +1665,13 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_my_recent_unread_notification_count: { Args: never; Returns: number }
+      get_my_web_push_status: {
+        Args: { p_endpoint: string }
+        Returns: {
+          subscribed: boolean
+        }[]
       }
       get_profile_post: {
         Args: { p_post_id: string }
@@ -1682,6 +1885,32 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      list_my_notifications: {
+        Args: {
+          p_before_id?: string
+          p_before_last_activity_at?: string
+          p_limit?: number
+        }
+        Returns: {
+          actor_avatar_path: string
+          actor_count: number
+          actor_display_name: string
+          actor_identity: Database["public"]["Enums"]["notification_actor_identity"]
+          category: Database["public"]["Enums"]["notification_category"]
+          comment_id: string
+          created_at: string
+          group_id: string
+          id: string
+          importance: Database["public"]["Enums"]["notification_importance"]
+          kind: Database["public"]["Enums"]["notification_kind"]
+          last_activity_at: string
+          post_id: string
+          read_at: string
+          reservation_id: number
+          target_profile_id: number
+          title: string
+        }[]
+      }
       list_post_attachments: {
         Args: { p_post_id: string }
         Returns: {
@@ -1809,6 +2038,11 @@ export type Database = {
           reason: string
         }[]
       }
+      mark_all_my_notifications_read: { Args: never; Returns: number }
+      mark_my_notification_read: {
+        Args: { p_notification_id: string }
+        Returns: boolean
+      }
       move_group_category: {
         Args: { p_category_id: string; p_direction: number }
         Returns: {
@@ -1907,6 +2141,15 @@ export type Database = {
         }
       }
       publish_group_post: { Args: { p_post_id: string }; Returns: string }
+      register_my_web_push_subscription: {
+        Args: {
+          p_auth: string
+          p_endpoint: string
+          p_expiration_time?: number
+          p_p256dh: string
+        }
+        Returns: undefined
+      }
       reject_group_join_request: {
         Args: { p_group_id: string; p_request_id: string }
         Returns: undefined
@@ -1996,6 +2239,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      resolve_my_notification_destination: {
+        Args: { p_notification_id: string }
+        Returns: string
+      }
       revoke_group_invite: { Args: { p_group_id: string }; Returns: undefined }
       search_group_posts: {
         Args: { p_group_id: string; p_limit?: number; p_query: string }
@@ -2036,6 +2283,14 @@ export type Database = {
         Returns: string
       }
       set_my_absence: { Args: { p_reason: string }; Returns: undefined }
+      set_my_group_notification_preferences: {
+        Args: {
+          p_group_id: string
+          p_new_post_push_enabled: boolean
+          p_notification_level: Database["public"]["Enums"]["group_notification_level"]
+        }
+        Returns: undefined
+      }
       set_my_profile_media: {
         Args: { p_object_path: string; p_slot: string }
         Returns: {
@@ -2148,6 +2403,10 @@ export type Database = {
         Args: { p_group_id: string; p_target_membership_id: string }
         Returns: undefined
       }
+      unregister_my_web_push_subscription: {
+        Args: { p_endpoint: string }
+        Returns: boolean
+      }
       update_group_category: {
         Args: { p_category_id: string; p_name: string; p_position: number }
         Returns: {
@@ -2199,6 +2458,16 @@ export type Database = {
           posting_policy: Database["public"]["Enums"]["group_posting_policy"]
           updated_at: string
         }[]
+      }
+      update_my_notification_preferences: {
+        Args: {
+          p_account_push_enabled: boolean
+          p_content_push_enabled: boolean
+          p_group_push_enabled: boolean
+          p_school_push_enabled: boolean
+          p_timeline_push_enabled: boolean
+        }
+        Returns: undefined
       }
       update_my_profile: {
         Args: {
@@ -2300,6 +2569,7 @@ export type Database = {
       group_media_slot: "icon" | "cover"
       group_media_status: "pending" | "ready" | "deleted"
       group_member_role: "owner" | "admin" | "manager" | "member"
+      group_notification_level: "none" | "direct" | "all"
       group_post_report_reason:
         | "abuse"
         | "sexual"
@@ -2308,6 +2578,46 @@ export type Database = {
         | "spam"
         | "other"
       group_posting_policy: "members" | "staff"
+      notification_actor_identity:
+        | "identified"
+        | "anonymous"
+        | "staff"
+        | "system"
+      notification_category:
+        | "content"
+        | "timeline"
+        | "group"
+        | "account"
+        | "school"
+        | "moderation"
+      notification_importance: "low" | "normal" | "high"
+      notification_kind:
+        | "post_commented"
+        | "comment_replied"
+        | "post_reacted"
+        | "comment_reacted"
+        | "timeline_posted"
+        | "timeline_post_deleted"
+        | "group_posted"
+        | "group_join_requested"
+        | "group_join_approved"
+        | "group_join_rejected"
+        | "group_role_changed"
+        | "group_ownership_transferred"
+        | "official_group_joined"
+        | "group_policy_changed"
+        | "group_deleted"
+        | "post_moderated"
+        | "comment_moderated"
+        | "application_submitted"
+        | "account_approved"
+        | "account_blocked"
+        | "account_unblocked"
+        | "app_admin_granted"
+        | "app_admin_revoked"
+        | "gongang_manager_granted"
+        | "gongang_manager_revoked"
+        | "gongang_preempted"
       post_attachment_status: "pending" | "ready" | "deleted"
       post_identity: "identified" | "anonymous" | "staff"
       post_kind: "group" | "profile"
@@ -2456,6 +2766,7 @@ export const Constants = {
       group_media_slot: ["icon", "cover"],
       group_media_status: ["pending", "ready", "deleted"],
       group_member_role: ["owner", "admin", "manager", "member"],
+      group_notification_level: ["none", "direct", "all"],
       group_post_report_reason: [
         "abuse",
         "sexual",
@@ -2465,6 +2776,49 @@ export const Constants = {
         "other",
       ],
       group_posting_policy: ["members", "staff"],
+      notification_actor_identity: [
+        "identified",
+        "anonymous",
+        "staff",
+        "system",
+      ],
+      notification_category: [
+        "content",
+        "timeline",
+        "group",
+        "account",
+        "school",
+        "moderation",
+      ],
+      notification_importance: ["low", "normal", "high"],
+      notification_kind: [
+        "post_commented",
+        "comment_replied",
+        "post_reacted",
+        "comment_reacted",
+        "timeline_posted",
+        "timeline_post_deleted",
+        "group_posted",
+        "group_join_requested",
+        "group_join_approved",
+        "group_join_rejected",
+        "group_role_changed",
+        "group_ownership_transferred",
+        "official_group_joined",
+        "group_policy_changed",
+        "group_deleted",
+        "post_moderated",
+        "comment_moderated",
+        "application_submitted",
+        "account_approved",
+        "account_blocked",
+        "account_unblocked",
+        "app_admin_granted",
+        "app_admin_revoked",
+        "gongang_manager_granted",
+        "gongang_manager_revoked",
+        "gongang_preempted",
+      ],
       post_attachment_status: ["pending", "ready", "deleted"],
       post_identity: ["identified", "anonymous", "staff"],
       post_kind: ["group", "profile"],

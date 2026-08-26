@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(63);
+select plan(65);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -39,6 +39,16 @@ where pub_id in (
   'hanbyeol-25',
   'saebyeok-24',
   'pureum-23'
+);
+
+insert into private.web_push_subscriptions (
+  profile_id, endpoint, p256dh, auth, created_at
+) values (
+  (select id from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001'),
+  'https://push.example.test/group-join-result',
+  'BNcRdreALRFXTkA0bP8M5bq6fP6w6uLqFhKxqv2QdA',
+  'dGVzdC1hdXRoLWtleQ',
+  now() - interval '1 hour'
 );
 
 update public.group_memberships as membership
@@ -242,6 +252,31 @@ select is(
   0::bigint,
   'rejection consumes the request'
 );
+reset role;
+select is(
+  (
+    select count(*)
+    from public.notifications
+    where kind = 'group_join_rejected'
+      and recipient_profile_id = (
+        select id from public.profiles
+        where auth_user_id = '10000000-0000-0000-0000-000000000001'
+      )
+  ),
+  1::bigint,
+  'rejection creates an in-app notification for the requester'
+);
+set local role service_role;
+select is(
+  (
+    select count(*)
+    from public.claim_notification_deliveries(200, 60)
+    where title = '그룹 가입 요청이 거절되었습니다.'
+  ),
+  1::bigint,
+  'rejection Push remains deliverable when the requester is not a group member'
+);
+set local role authenticated;
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000004',

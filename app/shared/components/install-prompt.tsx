@@ -10,6 +10,7 @@ import { useEffect, useState, type ComponentType } from "react";
 
 import { useInstallPrompt } from "~/shared/hooks/use-install-prompt";
 import type { InstallMode } from "~/shared/lib/install-platform";
+import { setPromptActive } from "~/shared/lib/prompt-coordinator";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -132,6 +133,11 @@ export function InstallPrompt({
   const visible = open && !blocked;
   const [wasVisible, setWasVisible] = useState(visible);
   const [locked, setLocked] = useState(visible);
+
+  useEffect(() => {
+    setPromptActive("install", visible);
+    return () => setPromptActive("install", false);
+  }, [visible]);
 
   // 뜨는 순간에 잠근다. effect 안에서 setState 하지 않으려고 렌더 중에 맞춘다.
   if (wasVisible !== visible) {
