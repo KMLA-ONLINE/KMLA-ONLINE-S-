@@ -91,6 +91,16 @@ describe("home feed revalidation", () => {
     ).toBe(false);
   });
 
+  // 다시 읽으면 `listFeedPosts(null)`이 새 세션을 열고, 쌓아 둔 페이지가 전부 버려진다.
+  it("does not open a new feed session when an image viewer opens", () => {
+    expect(
+      shouldRevalidate({
+        currentUrl: new URL("https://example.com/"),
+        nextUrl: new URL("https://example.com/?image=profile-activity-post-id"),
+      } as never),
+    ).toBe(false);
+  });
+
   it("allows explicit same-url refreshes", () => {
     expect(
       shouldRevalidate({

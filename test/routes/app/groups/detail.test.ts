@@ -141,6 +141,15 @@ describe("group detail revalidation", () => {
     ).toBe(false);
   });
 
+  it("does not reload the group when an image viewer opens", () => {
+    expect(
+      shouldRevalidate({
+        currentUrl: new URL("https://example.com/groups/test"),
+        nextUrl: new URL("https://example.com/groups/test?image=attachment-id"),
+      } as never),
+    ).toBe(false);
+  });
+
   it("reloads when a tab the loader reads changes", () => {
     expect(
       shouldRevalidate({

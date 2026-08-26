@@ -1,5 +1,5 @@
 import { MessagesSquareIcon, SearchIcon, UtensilsIcon } from "lucide-react";
-import { Link, type ShouldRevalidateFunctionArgs } from "react-router";
+import { Link } from "react-router";
 
 import { defineAppChrome, PageHeader } from "~/features/app-shell";
 import {
@@ -9,6 +9,7 @@ import {
   listFeedPosts,
 } from "~/features/feed";
 import { getKoreaDate, getMealDay, HomeMealSummary } from "~/features/meal";
+import { createPostListRevalidation } from "~/features/posts";
 import { Button } from "~/shared/ui/button";
 import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/home";
@@ -30,28 +31,15 @@ export const handle = defineAppChrome({
   pullToRefresh: true,
 });
 
-const FEED_UI_SEARCH_PARAMS = new Set(["post", "kind", "source", "view"]);
-
-export function shouldRevalidate({
-  currentUrl,
-  nextUrl,
-  formMethod,
-}: ShouldRevalidateFunctionArgs) {
-  if (formMethod && formMethod !== "GET") return true;
-  if (currentUrl.href === nextUrl.href) return true;
-  if (currentUrl.pathname !== nextUrl.pathname) return true;
-
-  const changedKeys = new Set([
-    ...currentUrl.searchParams.keys(),
-    ...nextUrl.searchParams.keys(),
-  ]);
-  return !Array.from(changedKeys).every(
-    (key) =>
-      FEED_UI_SEARCH_PARAMS.has(key) ||
-      currentUrl.searchParams.getAll(key).join("\0") ===
-        nextUrl.searchParams.getAll(key).join("\0"),
-  );
-}
+/**
+ * 게시물 상세 오버레이의 URL 상태. 이미지 뷰어는 공용 목록 규칙이 이미 무시한다 — 여기서
+ * 다시 읽으면 새 피드 세션이 열리면서 무한 스크롤로 쌓은 페이지가 전부 버려진다.
+ */
+export const shouldRevalidate = createPostListRevalidation([
+  "post",
+  "kind",
+  "source",
+]);
 
 // 첫 페이지는 로더가 await 한다. 이후 페이지는 useFetcher로 같은 clientLoader에 커서를 보낸다
 // (AGENTS.md의 "Loaders await their data" — 스트리밍 스켈레톤이 필요한 화면에서만 예외).
