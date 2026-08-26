@@ -22,8 +22,13 @@ export async function signIn(email: string, password: string): Promise<void> {
   } catch {
     // Local unsubscribe is attempted even when the server cleanup fails.
   }
+  // scope는 반드시 local이다. 기본값 global은 이 계정의 refresh token을 전부 폐기해서,
+  // 로그인 한 번이 다른 기기와 설치된 PWA의 세션까지 끊어 버린다. 여기서 정리하려는 것은
+  // 이 브라우저에 남은 이전 세션뿐이다.
   if (session) {
-    const { error: signOutError } = await supabase.auth.signOut();
+    const { error: signOutError } = await supabase.auth.signOut({
+      scope: "local",
+    });
     if (signOutError) throw signOutError;
   }
 

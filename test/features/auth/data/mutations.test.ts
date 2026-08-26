@@ -69,4 +69,17 @@ describe("auth mutations", () => {
       signInWithPassword.mock.invocationCallOrder[0],
     );
   });
+
+  // 기본값 global은 계정의 refresh token을 전부 폐기해 다른 기기와 설치된 PWA까지
+  // 로그아웃시킨다. 정리 대상은 이 브라우저에 남은 세션뿐이다.
+  it("leaves other devices signed in when clearing the previous session", async () => {
+    getSession.mockResolvedValue({
+      data: { session: { user: { id: "old" } } },
+      error: null,
+    });
+
+    await signIn("next@kmla.hs.kr", "password");
+
+    expect(signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
 });

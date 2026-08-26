@@ -8,6 +8,7 @@ import {
 } from "~/features/absences/data/cache";
 import { listTodayAbsences } from "~/features/absences/data/queries";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { hasActiveSession } from "~/features/auth";
 import {
   FEED_STALE_TIME,
   FeedScreen,
@@ -62,6 +63,22 @@ export const shouldRevalidate = createPostListRevalidation([
 // (AGENTS.md의 "Loaders await their data" — 스트리밍 스켈레톤이 필요한 화면에서만 예외).
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const pageToken = new URL(request.url).searchParams.get("pageToken");
+
+  // 게이트와 이 로더는 병렬로 돈다. 세션이 없으면 게이트가 /login으로 보내므로 아래 값은
+  // 렌더되지 않지만, 그 전에 요청을 띄우면 인증 전용 RPC 세 개가 익명으로 나가 401이 된다.
+  // 인증은 게이트가 판정하고, 여기서는 요청을 보내지 않는 것까지만 한다.
+  if (!(await hasActiveSession())) {
+    return {
+      page: null,
+      pageToken,
+      error: null,
+      expired: false,
+      mealDay: null,
+      birthdays: null,
+      absences: [],
+    };
+  }
+
   const queryClient = getQueryClient();
   const referenceDate = getKoreaDateIso();
   const mealDayPromise = pageToken
