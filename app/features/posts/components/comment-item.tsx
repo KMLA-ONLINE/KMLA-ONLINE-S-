@@ -91,7 +91,7 @@ export function CommentItem({
         )}
       >
         <div className="size-8 shrink-0 rounded-full bg-muted/60" aria-hidden />
-        <p className="w-fit rounded-2xl bg-muted/60 px-3 py-2 text-sm text-muted-foreground italic">
+        <p className="w-fit rounded-2xl bg-muted/60 px-3 py-2 text-base leading-6 text-muted-foreground italic">
           삭제된 댓글입니다
         </p>
       </div>
@@ -185,7 +185,7 @@ export function CommentItem({
                   운영진
                 </Badge>
               ) : null}
-              {comment.is_author && comment.author_identity !== "identified" ? (
+              {comment.is_author && comment.author_identity === "anonymous" ? (
                 <Badge variant="secondary" className="shrink-0">
                   나
                 </Badge>
@@ -203,7 +203,7 @@ export function CommentItem({
             </div>
 
             {comment.body || parentLabel ? (
-              <p className="text-sm wrap-break-word whitespace-pre-wrap">
+              <p className="text-base leading-6 wrap-break-word break-keep whitespace-pre-wrap">
                 {parentLabel ? (
                   <button
                     type="button"

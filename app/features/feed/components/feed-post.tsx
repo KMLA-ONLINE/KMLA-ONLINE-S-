@@ -137,7 +137,7 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
           {!activityLabel &&
           post.kind === "profile" &&
           post.is_author &&
-          post.author_identity !== "identified" ? (
+          post.author_identity === "anonymous" ? (
             <Badge variant="secondary" className="shrink-0">
               나
             </Badge>
@@ -147,7 +147,7 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
           {post.kind === "group" ? (
             <>
               <AuthorName post={post} compact />
-              {post.is_author && post.author_identity !== "identified" ? (
+              {post.is_author && post.author_identity === "anonymous" ? (
                 <Badge variant="secondary" className="shrink-0">
                   나
                 </Badge>
