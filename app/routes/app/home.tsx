@@ -1,7 +1,13 @@
 import { MessagesSquareIcon, SearchIcon, UtensilsIcon } from "lucide-react";
 import { Link } from "react-router";
 
-import { defineAppChrome, PageHeader } from "~/features/app-shell";
+import { AbsenceRail } from "~/features/absences/components/absence-rail";
+import {
+  ABSENCE_STALE_TIME,
+  absenceKeys,
+} from "~/features/absences/data/cache";
+import { listTodayAbsences } from "~/features/absences/data/queries";
+import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import {
   FEED_STALE_TIME,
   FeedScreen,
@@ -57,7 +63,7 @@ export const shouldRevalidate = createPostListRevalidation([
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const pageToken = new URL(request.url).searchParams.get("pageToken");
   const queryClient = getQueryClient();
-  const birthdayReferenceDate = getKoreaDateIso();
+  const referenceDate = getKoreaDateIso();
   const mealDayPromise = pageToken
     ? Promise.resolve(null)
     : getMealDay(getKoreaDate());
@@ -65,15 +71,25 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     ? Promise.resolve(null)
     : queryClient
         .fetchQuery({
-          queryKey: birthdayKeys.today(birthdayReferenceDate),
-          queryFn: () => listBirthdays(birthdayReferenceDate, "today"),
+          queryKey: birthdayKeys.today(referenceDate),
+          queryFn: () => listBirthdays(referenceDate, "today"),
           staleTime: BIRTHDAY_STALE_TIME,
           gcTime: BIRTHDAY_GC_TIME,
         })
         .catch(() => null);
 
+  const absencePromise = pageToken
+    ? Promise.resolve([])
+    : queryClient
+        .fetchQuery({
+          queryKey: absenceKeys.today(referenceDate),
+          queryFn: listTodayAbsences,
+          staleTime: ABSENCE_STALE_TIME,
+        })
+        .catch(() => []);
+
   try {
-    const [page, mealDay, birthdays] = await Promise.all([
+    const [page, mealDay, birthdays, absences] = await Promise.all([
       queryClient.fetchQuery({
         queryKey: feedKeys.page(pageToken),
         queryFn: () => listFeedPosts(pageToken),
@@ -81,6 +97,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
       }),
       mealDayPromise,
       birthdaysPromise,
+      absencePromise,
     ]);
 
     if (pageToken) {
@@ -91,6 +108,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
         expired: false,
         mealDay,
         birthdays,
+        absences,
       };
     }
 
@@ -101,14 +119,16 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
       expired: false,
       mealDay,
       birthdays,
+      absences,
     };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "피드를 불러오지 못했습니다.";
     const expired = pageToken !== null && /expired|not found/i.test(message);
-    const [mealDay, birthdays] = await Promise.all([
+    const [mealDay, birthdays, absences] = await Promise.all([
       mealDayPromise,
       birthdaysPromise,
+      absencePromise,
     ]);
 
     if (pageToken) {
@@ -119,6 +139,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
         expired,
         mealDay,
         birthdays,
+        absences,
       };
     }
 
@@ -129,12 +150,14 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
       expired: false,
       mealDay,
       birthdays,
+      absences,
     };
   }
 }
 
 export default function FeedPage({ loaderData }: Route.ComponentProps) {
-  const { page, error, mealDay, birthdays } = loaderData;
+  const { page, error, mealDay, birthdays, absences } = loaderData;
+  const { profile } = useAppShell();
 
   return (
     <>
@@ -176,7 +199,14 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
       />
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-4">
-        <FeedScreen initialPage={page} initialError={error} />
+        <div className="min-w-0">
+          {profile.type === "student" && absences.length > 0 ? (
+            <AbsenceRail initialItems={absences} viewerPubId={profile.pub_id} />
+          ) : null}
+
+          <FeedScreen initialPage={page} initialError={error} />
+        </div>
+
         {mealDay || birthdays ? (
           <aside className="hidden space-y-3 self-start lg:block">
             {birthdays ? <HomeBirthdaySummary birthdays={birthdays} /> : null}

@@ -3,6 +3,7 @@ import {
   CalendarDaysIcon,
   CakeIcon,
   ChevronRightIcon,
+  ClipboardListIcon,
   FileTextIcon,
   KeyRoundIcon,
   SettingsIcon,
@@ -75,24 +76,26 @@ export default function MenuPage() {
               />
             </Link>
 
-            <Link
-              to="/menu/timetable"
-              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
-            >
-              <CalendarDaysIcon
-                className="size-4.5 shrink-0 text-muted-foreground"
-                aria-hidden
-              />
+            {profile.type === "student" ? (
+              <Link
+                to="/menu/absence"
+                className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
+              >
+                <ClipboardListIcon
+                  className="size-4.5 shrink-0 text-muted-foreground"
+                  aria-hidden
+                />
 
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                시간표
-              </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  공결 & 병결
+                </span>
 
-              <ChevronRightIcon
-                className="size-4 shrink-0 text-muted-foreground"
-                aria-hidden
-              />
-            </Link>
+                <ChevronRightIcon
+                  className="size-4 shrink-0 text-muted-foreground"
+                  aria-hidden
+                />
+              </Link>
+            ) : null}
 
             <Link
               to="/menu/meal"
@@ -105,6 +108,33 @@ export default function MenuPage() {
 
               <span className="min-w-0 flex-1 truncate text-sm font-medium">
                 급식
+              </span>
+
+              <ChevronRightIcon
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+            </Link>
+          </div>
+        </section>
+
+        <section className="flex flex-col gap-1.5">
+          <h2 className="px-1 text-xs font-semibold tracking-wide text-muted-foreground">
+            일정
+          </h2>
+
+          <div className="divide-y overflow-hidden rounded-xl border bg-card">
+            <Link
+              to="/menu/timetable"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
+            >
+              <CalendarDaysIcon
+                className="size-4.5 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                시간표
               </span>
 
               <ChevronRightIcon
