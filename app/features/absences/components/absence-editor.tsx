@@ -57,7 +57,7 @@ export function AbsenceEditor({
   async function remove() {
     if (!editing || pending) return;
 
-    if (!window.confirm("공결 & 병결 기록을 삭제할까요?")) {
+    if (!window.confirm("공결 · 병결 기록을 삭제할까요?")) {
       return;
     }
 
