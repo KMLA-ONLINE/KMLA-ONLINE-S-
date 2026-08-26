@@ -1,6 +1,7 @@
 import {
   CalendarClockIcon,
   CalendarDaysIcon,
+  CakeIcon,
   ChevronRightIcon,
   FileTextIcon,
   SettingsIcon,
@@ -103,6 +104,25 @@ export default function MenuPage() {
 
               <span className="min-w-0 flex-1 truncate text-sm font-medium">
                 급식
+              </span>
+
+              <ChevronRightIcon
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+            </Link>
+
+            <Link
+              to="/menu/birthdays"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
+            >
+              <CakeIcon
+                className="size-4.5 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                생일
               </span>
 
               <ChevronRightIcon

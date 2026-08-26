@@ -9,9 +9,17 @@ import {
   listFeedPosts,
 } from "~/features/feed";
 import { getKoreaDate, getMealDay, HomeMealSummary } from "~/features/meal";
+import {
+  BIRTHDAY_GC_TIME,
+  BIRTHDAY_STALE_TIME,
+  birthdayKeys,
+  HomeBirthdaySummary,
+  listBirthdays,
+} from "~/features/profiles";
 import { createPostListRevalidation } from "~/features/posts";
-import { Button } from "~/shared/ui/button";
 import { getQueryClient } from "~/shared/lib/query-client";
+import { getKoreaDateIso } from "~/shared/lib/korea-date";
+import { Button } from "~/shared/ui/button";
 import type { Route } from "./+types/home";
 
 /**
@@ -48,18 +56,31 @@ export const shouldRevalidate = createPostListRevalidation([
 // (AGENTS.md의 "Loaders await their data" — 스트리밍 스켈레톤이 필요한 화면에서만 예외).
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const pageToken = new URL(request.url).searchParams.get("pageToken");
+  const queryClient = getQueryClient();
+  const birthdayReferenceDate = getKoreaDateIso();
   const mealDayPromise = pageToken
     ? Promise.resolve(null)
     : getMealDay(getKoreaDate());
+  const birthdaysPromise = pageToken
+    ? Promise.resolve(null)
+    : queryClient
+        .fetchQuery({
+          queryKey: birthdayKeys.today(birthdayReferenceDate),
+          queryFn: () => listBirthdays(birthdayReferenceDate, "today"),
+          staleTime: BIRTHDAY_STALE_TIME,
+          gcTime: BIRTHDAY_GC_TIME,
+        })
+        .catch(() => null);
 
   try {
-    const [page, mealDay] = await Promise.all([
-      getQueryClient().fetchQuery({
+    const [page, mealDay, birthdays] = await Promise.all([
+      queryClient.fetchQuery({
         queryKey: feedKeys.page(pageToken),
         queryFn: () => listFeedPosts(pageToken),
         staleTime: FEED_STALE_TIME,
       }),
       mealDayPromise,
+      birthdaysPromise,
     ]);
 
     if (pageToken) {
@@ -69,6 +90,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
         error: null,
         expired: false,
         mealDay,
+        birthdays,
       };
     }
 
@@ -78,12 +100,16 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
       error: null,
       expired: false,
       mealDay,
+      birthdays,
     };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "피드를 불러오지 못했습니다.";
     const expired = pageToken !== null && /expired|not found/i.test(message);
-    const mealDay = await mealDayPromise;
+    const [mealDay, birthdays] = await Promise.all([
+      mealDayPromise,
+      birthdaysPromise,
+    ]);
 
     if (pageToken) {
       return {
@@ -92,6 +118,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
         error: expired ? "피드가 만료되었습니다. 새로고침해 주세요." : message,
         expired,
         mealDay,
+        birthdays,
       };
     }
 
@@ -101,12 +128,13 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
       error: message,
       expired: false,
       mealDay,
+      birthdays,
     };
   }
 }
 
 export default function FeedPage({ loaderData }: Route.ComponentProps) {
-  const { page, error, mealDay } = loaderData;
+  const { page, error, mealDay, birthdays } = loaderData;
 
   return (
     <>
@@ -149,7 +177,12 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-4">
         <FeedScreen initialPage={page} initialError={error} />
-        {mealDay ? <HomeMealSummary day={mealDay} /> : null}
+        {mealDay || birthdays ? (
+          <aside className="hidden space-y-3 self-start lg:block">
+            {birthdays ? <HomeBirthdaySummary birthdays={birthdays} /> : null}
+            {mealDay ? <HomeMealSummary day={mealDay} /> : null}
+          </aside>
+        ) : null}
       </div>
     </>
   );

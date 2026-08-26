@@ -7,7 +7,7 @@ export function HomeMealSummary({ day }: { day: MealDay }) {
   const meal = day.meals.find((item) => item.label === getDefaultMeal());
 
   return (
-    <aside className="hidden self-start lg:block">
+    <section>
       <Link
         to="/menu/meal"
         className="mb-3 flex items-center justify-between rounded-xl border bg-card px-4 py-3 transition-colors hover:bg-muted/40"
@@ -37,6 +37,6 @@ export function HomeMealSummary({ day }: { day: MealDay }) {
           </p>
         )}
       </div>
-    </aside>
+    </section>
   );
 }

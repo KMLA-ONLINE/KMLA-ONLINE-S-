@@ -1471,6 +1471,17 @@ export type Database = {
           token: string
         }[]
       }
+      list_birthdays: {
+        Args: { p_reference_date: string; p_scope?: string }
+        Returns: {
+          avatar_path: string
+          birthday_date: string
+          birthday_day: number
+          birthday_month: number
+          name: string
+          pub_id: string
+        }[]
+      }
       list_comment_images: {
         Args: { p_comment_ids: string[] }
         Returns: {

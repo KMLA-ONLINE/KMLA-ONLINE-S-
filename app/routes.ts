@@ -21,6 +21,7 @@ export default [
       route("noti", "routes/app/notifications.tsx"),
       route("menu", "routes/app/menu/index.tsx"),
       route("menu/licenses", "routes/app/menu/licenses.tsx"),
+      route("menu/birthdays", "routes/app/menu/birthdays.tsx"),
       route("menu/meal", "routes/app/menu/meal.tsx"),
       route("menu/settings", "routes/app/menu/settings.tsx"),
       route("menu/settings/lab", "routes/app/menu/settings-lab.tsx"),

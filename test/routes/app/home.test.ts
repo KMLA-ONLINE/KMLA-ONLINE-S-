@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   listFeedPosts: vi.fn(),
   getMealDay: vi.fn(),
+  listBirthdays: vi.fn(),
 }));
 
 vi.mock("~/features/feed", async (importOriginal) => ({
@@ -17,6 +18,15 @@ vi.mock("~/features/meal", async (importOriginal) => ({
   getMealDay: mocks.getMealDay,
 }));
 
+vi.mock("~/features/profiles", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  listBirthdays: mocks.listBirthdays,
+}));
+
+vi.mock("~/shared/lib/korea-date", () => ({
+  getKoreaDateIso: () => "2026-08-24",
+}));
+
 import { clientLoader, shouldRevalidate } from "~/routes/app/home";
 
 const page = {
@@ -25,6 +35,7 @@ const page = {
   nextPageToken: null,
 };
 const mealDay = { date: "20260824", meals: [], unavailable: false };
+const birthdays = [];
 
 function load(query = "") {
   const url = `https://example.com/${query}`;
@@ -43,6 +54,7 @@ describe("home feed loader", () => {
     vi.clearAllMocks();
     mocks.listFeedPosts.mockResolvedValue(page);
     mocks.getMealDay.mockResolvedValue(mealDay);
+    mocks.listBirthdays.mockResolvedValue(birthdays);
   });
 
   it("loads the first feed page and today's meal independently", async () => {
@@ -50,7 +62,8 @@ describe("home feed loader", () => {
 
     expect(mocks.listFeedPosts).toHaveBeenCalledWith(null);
     expect(mocks.getMealDay).toHaveBeenCalledWith("20260824");
-    expect(result).toMatchObject({ page, mealDay, error: null });
+    expect(mocks.listBirthdays).toHaveBeenCalledWith("2026-08-24", "today");
+    expect(result).toMatchObject({ page, mealDay, birthdays, error: null });
   });
 
   it("loads only the feed for an opaque pagination token", async () => {
@@ -59,7 +72,13 @@ describe("home feed loader", () => {
 
     expect(mocks.listFeedPosts).toHaveBeenCalledWith(token);
     expect(mocks.getMealDay).not.toHaveBeenCalled();
-    expect(result).toMatchObject({ page, pageToken: token, mealDay: null });
+    expect(mocks.listBirthdays).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      page,
+      pageToken: token,
+      mealDay: null,
+      birthdays: null,
+    });
   });
 
   it("turns an expired token into a refreshable pagination result", async () => {
