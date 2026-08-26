@@ -36,11 +36,7 @@ export function AuthCard({
           <div className="absolute -top-28 -right-24 size-72 rounded-full bg-primary-foreground/10" />
           <div className="absolute -bottom-40 -left-20 size-96 rounded-full border border-primary-foreground/15" />
           <div className="relative flex items-center gap-3">
-            <img
-              src="/logo.svg"
-              alt=""
-              className="size-10 rounded-xl bg-white p-1.5"
-            />
+            <img src="/logo.svg" alt="" className="size-10 rounded-xl" />
             <span className="font-semibold tracking-wide">KMLA Online</span>
           </div>
           <div className="relative max-w-sm">
