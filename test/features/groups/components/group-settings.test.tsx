@@ -243,15 +243,12 @@ describe("GroupSettings", () => {
     expect(screen.getByLabelText("그룹 이름")).toHaveValue("변경한 이름");
   });
 
-  it("keeps policy edits open on failure and closes them on success", async () => {
-    let succeeds = false;
+  it("keeps policy edits open when saving fails", async () => {
     const { user } = renderSettings(
       {},
       {
         action: () =>
-          succeeds
-            ? data({ ok: true })
-            : data({ error: "정책을 저장하지 못했습니다." }, { status: 400 }),
+          data({ error: "정책을 저장하지 못했습니다." }, { status: 400 }),
       },
     );
 
@@ -268,8 +265,16 @@ describe("GroupSettings", () => {
     expect(screen.getByRole("combobox", { name: "게시물 작성" })).toHaveValue(
       "staff",
     );
+  });
 
-    succeeds = true;
+  it("closes policy edits once saving succeeds", async () => {
+    const { user } = renderSettings({}, { action: () => data({ ok: true }) });
+
+    await user.click(screen.getByRole("button", { name: "게시물 작성 변경" }));
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "게시물 작성" }),
+      "staff",
+    );
     await save(user);
 
     // 저장에 성공하면 편집 폼이 닫히고 '변경' 버튼이 돌아온다.
