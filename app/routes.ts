@@ -12,6 +12,7 @@ export default [
   route("pending", "routes/auth/pending.tsx"),
   route("blocked", "routes/auth/blocked.tsx"),
   route("logout", "routes/auth/logout.tsx"),
+  route("noti/open/:notificationId", "routes/notification-open.tsx"),
   route("theme", "routes/theme.tsx"),
   layout("routes/app/gate.tsx", [
     layout("routes/app/layout.tsx", [
@@ -19,6 +20,7 @@ export default [
       route("feed/posts/:postId", "routes/app/feed/post-data.ts"),
       route("profile", "routes/app/profile/index.tsx"),
       route("noti", "routes/app/notifications.tsx"),
+      route("noti/settings", "routes/app/notification-settings.tsx"),
       route("menu", "routes/app/menu/index.tsx"),
       route("menu/licenses", "routes/app/menu/licenses.tsx"),
       route("menu/meal", "routes/app/menu/meal.tsx"),

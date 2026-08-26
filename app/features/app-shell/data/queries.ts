@@ -36,6 +36,14 @@ export async function loadShellData(): Promise<ShellLoadData | null> {
     return { email: session.user.email ?? "", profile: null, badges: {} };
   }
 
+  const [avatarUrl, notificationCount] = await Promise.all([
+    resolveProfileAvatar(profile.avatar_path),
+    profile.status === "accepted"
+      ? supabase.rpc("get_my_recent_unread_notification_count")
+      : Promise.resolve({ data: 0, error: null }),
+  ]);
+  if (notificationCount.error) throw notificationCount.error;
+
   const shellProfile: ShellData["profile"] = {
     id: profile.id,
     pub_id: profile.pub_id,
@@ -43,12 +51,12 @@ export async function loadShellData(): Promise<ShellLoadData | null> {
     role: profile.role,
     type: profile.type,
     status: profile.status,
-    avatar_url: await resolveProfileAvatar(profile.avatar_path),
+    avatar_url: avatarUrl,
   };
 
   return {
     email: session.user.email ?? "",
     profile: shellProfile,
-    badges: {},
+    badges: { "/noti": notificationCount.data ?? 0 },
   };
 }

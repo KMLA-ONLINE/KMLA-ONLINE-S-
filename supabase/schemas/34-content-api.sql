@@ -793,6 +793,7 @@ declare
   caller_profile_id bigint := private.current_profile_id();
   post_record public.posts;
   caller_role public.group_member_role;
+  author_profile_id bigint;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -810,11 +811,21 @@ begin
   if caller_role not in ('owner', 'admin') and not private.is_post_author(p_post_id) then
     raise exception 'post deletion is not allowed' using errcode = '42501';
   end if;
+  select author.profile_id into author_profile_id
+  from private.post_authors as author where author.post_id = p_post_id;
   update public.posts set deleted_at = now(), pinned_at = null where id = p_post_id;
   update public.post_attachments
   set status = 'deleted', deleted_at = now(), cleanup_lease_id = null,
     cleanup_lease_expires_at = null
   where post_id = p_post_id and status <> 'deleted';
+  if caller_profile_id <> author_profile_id then
+    perform private.emit_notification(
+      'post-moderated:' || p_post_id::text,
+      author_profile_id, 'post_moderated', 'high', 'moderation', 'staff',
+      caller_profile_id, '운영진', null, '게시물이 운영자에 의해 삭제되었습니다.',
+      post_record.group_id
+    );
+  end if;
 end;
 $$;
 
@@ -868,6 +879,7 @@ declare
   target_post_id uuid;
   comment_group_id uuid;
   caller_role public.group_member_role;
+  author_profile_id bigint;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -912,6 +924,9 @@ begin
       using errcode = '42501';
   end if;
 
+  select author.profile_id into author_profile_id
+  from private.comment_authors as author where author.comment_id = p_comment_id;
+
   if comment_record.depth = 0 then
     -- 최상위 댓글을 지우면 답글 묶음 전체가 사라진다(기능 명세 §9.4).
     perform 1
@@ -929,6 +944,14 @@ begin
     set deleted_at = now()
     where comment.id = p_comment_id;
   end if;
+  if caller_profile_id <> author_profile_id then
+    perform private.emit_notification(
+      'comment-moderated:' || p_comment_id::text,
+      author_profile_id, 'comment_moderated', 'high', 'moderation', 'staff',
+      caller_profile_id, '운영진', null, '댓글이 운영자에 의해 삭제되었습니다.',
+      comment_group_id, target_post_id
+    );
+  end if;
 end;
 $$;
 
@@ -941,6 +964,8 @@ CREATE OR REPLACE FUNCTION "public"."delete_profile_post"("p_post_id" "uuid") RE
 declare
   caller_profile_id bigint := private.current_profile_id();
   post_record public.posts;
+  author_profile_id bigint;
+  caller_profile public.profiles;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -957,11 +982,26 @@ begin
     raise exception 'post deletion is not allowed' using errcode = '42501';
   end if;
 
+  select author.profile_id into author_profile_id
+  from private.post_authors as author where author.post_id = p_post_id;
+  select profile.* into caller_profile
+  from public.profiles as profile where profile.id = caller_profile_id;
+
   update public.posts set deleted_at = now() where id = p_post_id;
   update public.post_attachments
   set status = 'deleted', deleted_at = now(), cleanup_lease_id = null,
     cleanup_lease_expires_at = null
   where post_id = p_post_id and status <> 'deleted';
+  if caller_profile_id = post_record.timeline_profile_id
+    and caller_profile_id <> author_profile_id then
+    perform private.emit_notification(
+      'timeline-post-deleted:' || p_post_id::text,
+      author_profile_id, 'timeline_post_deleted', 'normal', 'timeline', 'identified',
+      caller_profile_id, caller_profile.name, caller_profile.avatar_path,
+      '타임라인 게시물이 삭제되었습니다.',
+      null, null, null, post_record.timeline_profile_id
+    );
+  end if;
 end;
 $$;
 

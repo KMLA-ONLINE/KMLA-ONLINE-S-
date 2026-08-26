@@ -16,4 +16,5 @@
 - [Supabase Storage 버킷 설계](STORAGE_BUCKETS.md): 기능 요구사항을 중복하지 않고 구현 및 Storage 세부 사항을 정의한다.
 - [콘텐츠 서식 및 이모지 설계](CONTENT_FORMATTING.md): 게시물 Markdown, 메시지 평문 입력기, 안전한 렌더링 및 Unicode 이모지 처리 방식을 정의한다.
 - [알림 수동 인수 테스트](NOTIFICATION_MANUAL_TESTING.md): 실제 브라우저, 운영체제, 설치형 PWA, Push Service 및 이메일 제공자를 거쳐 확인할 수동 테스트를 정의한다.
+- [알림 및 Web Push 기술 설계](NOTIFICATION_TECHNICAL_DESIGN.md): 알림 데이터, 구독, outbox, 전달 worker, 서비스 워커 및 보안 경계를 정의한다.
 - [클라이언트 데이터 캐시 정책](DATA_CACHE_POLICY.md): 쿼리 키, 신선도, 보관 범위 및 mutation 무효화 규칙을 정의한다.

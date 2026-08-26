@@ -20,7 +20,10 @@ export {
   validatePassword,
   validateProfileForm,
 } from "~/features/auth/model/validation";
-export { getProfileDestination } from "~/features/auth/model/navigation";
+export {
+  getProfileDestination,
+  sanitizeLoginNext,
+} from "~/features/auth/model/navigation";
 export type {
   AuthProfile,
   AuthState,

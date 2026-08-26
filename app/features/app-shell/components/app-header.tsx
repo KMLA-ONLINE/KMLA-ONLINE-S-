@@ -2,6 +2,7 @@ import { BellIcon, MessagesSquareIcon, SearchIcon } from "lucide-react";
 import { Link } from "react-router";
 
 import { useAppShell } from "~/features/app-shell/context/app-shell-context";
+import { NavBadge } from "~/features/app-shell/components/nav-badge";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
@@ -15,7 +16,8 @@ import { cn } from "~/shared/lib/utils";
  * 없어지고, safe-area 상단도 여기서만 처리한다.
  */
 export function AppHeader({ className }: { className?: string }) {
-  const { profile } = useAppShell();
+  const { profile, badges } = useAppShell();
+  const notificationCount = badges["/noti"] ?? 0;
 
   return (
     <header
@@ -54,10 +56,16 @@ export function AppHeader({ className }: { className?: string }) {
           variant="ghost"
           size="icon"
           nativeButton={false}
-          aria-label="알림"
+          aria-label={
+            notificationCount > 0
+              ? `알림 (안 읽음 ${notificationCount}개)`
+              : "알림"
+          }
           render={<Link to="/noti" />}
+          className="relative"
         >
           <BellIcon />
+          <NavBadge count={notificationCount} className="ring-background" />
         </Button>
         <Link to="/profile" aria-label="내 프로필">
           <UserAvatar src={profile.avatar_url} name={profile.name} />

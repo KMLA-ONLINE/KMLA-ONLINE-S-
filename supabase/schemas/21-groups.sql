@@ -517,6 +517,12 @@ begin
   insert into public.group_memberships (group_id, profile_id, role)
   values (p_group_id, requested_profile_id, 'member')
   on conflict on constraint group_memberships_pkey do nothing;
+
+  perform private.emit_notification(
+    'group-join-approved:' || p_request_id::text,
+    requested_profile_id, 'group_join_approved', 'normal', 'group', 'staff',
+    caller_profile_id, '운영진', null, '그룹 가입 요청이 승인되었습니다.', p_group_id
+  );
 end;
 $$;
 
@@ -1044,6 +1050,7 @@ CREATE OR REPLACE FUNCTION "public"."reject_group_join_request"("p_group_id" "uu
     AS $$
 declare
   caller_profile_id bigint := private.current_profile_id();
+  requested_profile_id bigint;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'group administrator required' using errcode = '42501';
@@ -1063,11 +1070,18 @@ begin
 
   delete from public.group_join_requests as join_request
   where join_request.group_id = p_group_id
-    and join_request.id = p_request_id;
+    and join_request.id = p_request_id
+  returning join_request.profile_id into requested_profile_id;
 
   if not found then
     raise exception 'join request not found' using errcode = 'P0002';
   end if;
+
+  perform private.emit_notification(
+    'group-join-rejected:' || p_request_id::text,
+    requested_profile_id, 'group_join_rejected', 'normal', 'group', 'staff',
+    caller_profile_id, '운영진', null, '그룹 가입 요청이 거절되었습니다.', p_group_id
+  );
 end;
 $$;
 
@@ -1124,6 +1138,7 @@ declare
   caller_profile_id bigint := private.current_profile_id();
   owner_membership_id uuid;
   target_role public.group_member_role;
+  target_profile_id bigint;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'group owner required' using errcode = '42501';
@@ -1139,8 +1154,8 @@ begin
     and membership.role = 'owner'
   for update;
 
-  select membership.role
-  into target_role
+  select membership.role, membership.profile_id
+  into target_role, target_profile_id
   from public.group_memberships as membership
   where membership.group_id = p_group_id
     and membership.id = p_target_membership_id
@@ -1158,6 +1173,17 @@ begin
   update public.group_memberships
   set role = 'owner'
   where id = p_target_membership_id;
+
+  perform private.emit_notification(
+    'group-ownership:' || p_group_id::text || ':' || txid_current()::text || ':new',
+    target_profile_id, 'group_ownership_transferred', 'high', 'group', 'staff',
+    caller_profile_id, '운영진', null, '그룹 소유권을 이전받았습니다.', p_group_id
+  );
+  perform private.emit_notification(
+    'group-ownership:' || p_group_id::text || ':' || txid_current()::text || ':old',
+    caller_profile_id, 'group_ownership_transferred', 'high', 'group', 'staff',
+    target_profile_id, '운영진', null, '그룹 소유권이 이전되었습니다.', p_group_id
+  );
 end;
 $$;
 
@@ -1171,6 +1197,7 @@ declare
   caller_profile_id bigint := private.current_profile_id();
   caller_role public.group_member_role;
   target_role public.group_member_role;
+  target_profile_id bigint;
 begin
   if auth.uid() is null or caller_profile_id is null or p_role = 'owner' then
     raise exception 'role change is not allowed' using errcode = '42501';
@@ -1183,8 +1210,8 @@ begin
     and membership.profile_id = caller_profile_id
   for update;
 
-  select membership.role
-  into target_role
+  select membership.role, membership.profile_id
+  into target_role, target_profile_id
   from public.group_memberships as membership
   where membership.group_id = p_group_id
     and membership.id = p_membership_id
@@ -1206,6 +1233,14 @@ begin
   set role = p_role
   where group_id = p_group_id
     and id = p_membership_id;
+
+  if target_role is distinct from p_role then
+    perform private.emit_notification(
+      'group-role:' || p_membership_id::text || ':' || txid_current()::text,
+      target_profile_id, 'group_role_changed', 'normal', 'group', 'staff',
+      caller_profile_id, '운영진', null, '그룹 역할이 변경되었습니다.', p_group_id
+    );
+  end if;
 end;
 $$;
 

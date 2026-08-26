@@ -6,10 +6,11 @@ import {
   ShareIcon,
   SquarePlusIcon,
 } from "lucide-react";
-import type { ComponentType } from "react";
+import { useEffect, type ComponentType } from "react";
 
 import { useInstallPrompt } from "~/shared/hooks/use-install-prompt";
 import type { InstallMode } from "~/shared/lib/install-platform";
+import { setPromptActive } from "~/shared/lib/prompt-coordinator";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -99,6 +100,11 @@ export function InstallPrompt({ blocked = false }: { blocked?: boolean }) {
     neverShow,
     markInstalled,
   } = useInstallPrompt();
+
+  useEffect(() => {
+    setPromptActive("install", open && !blocked);
+    return () => setPromptActive("install", false);
+  }, [blocked, open]);
 
   if (!mode) return null;
 

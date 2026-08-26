@@ -76,6 +76,20 @@ test("PWA manifest is served and installable", async ({ page, request }) => {
   expect(json.icons.some((icon) => icon.sizes === "512x512")).toBeTruthy();
 });
 
+test("service worker imports a revalidated Push companion", async ({
+  request,
+}) => {
+  const [serviceWorker, pushWorker] = await Promise.all([
+    request.get("/sw.js"),
+    request.get("/push-sw.js"),
+  ]);
+
+  expect(serviceWorker.ok()).toBeTruthy();
+  expect(await serviceWorker.text()).toContain("/push-sw.js");
+  expect(pushWorker.ok()).toBeTruthy();
+  expect(pushWorker.headers()["cache-control"]).toMatch(/no-cache|max-age=0/);
+});
+
 test("첫 서비스 워커 설치는 현재 페이지를 새로고침하지 않는다", async ({
   page,
 }) => {

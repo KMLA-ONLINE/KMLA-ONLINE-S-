@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { AuthProfile, AuthState } from "~/features/auth";
-import { getProfileDestination } from "~/features/auth";
+import { getProfileDestination, sanitizeLoginNext } from "~/features/auth";
 import BlockedPage from "~/routes/auth/blocked";
 import LoginPage from "~/routes/auth/login";
 import SetupPage from "~/routes/auth/setup";
@@ -64,6 +64,26 @@ describe("auth routes", () => {
     expect(getProfileDestination({ status: "withdrawn" } as AuthProfile)).toBe(
       "/login",
     );
+  });
+
+  it("restores only safe app-relative login destinations for accepted users", () => {
+    expect(sanitizeLoginNext("/noti/open/notification-id")).toBe(
+      "/noti/open/notification-id",
+    );
+    expect(sanitizeLoginNext("//evil.example/path")).toBeNull();
+    expect(sanitizeLoginNext("https://evil.example/path")).toBeNull();
+    expect(
+      getProfileDestination(
+        { status: "accepted" } as AuthProfile,
+        "/noti/open/notification-id",
+      ),
+    ).toBe("/noti/open/notification-id");
+    expect(
+      getProfileDestination(
+        { status: "pending" } as AuthProfile,
+        "/noti/open/notification-id",
+      ),
+    ).toBe("/pending");
   });
 
   it("prefills a draft profile for review and resubmission", () => {
