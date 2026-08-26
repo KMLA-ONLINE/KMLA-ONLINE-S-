@@ -169,7 +169,7 @@ describe("GroupSettings", () => {
 
     const officialConfirmation = screen.getByRole("dialog");
     expect(officialConfirmation).toHaveTextContent(
-      "자동 가입된 재학생과 모든 콘텐츠가 영구 삭제됩니다.",
+      "이 작업은 되돌릴 수 없습니다.",
     );
     expect(
       within(officialConfirmation).getByRole("button", {
