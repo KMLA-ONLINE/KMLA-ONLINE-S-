@@ -27,6 +27,7 @@ vi.mock("~/shared/lib/korea-date", () => ({
   getKoreaDateIso: () => "2026-08-24",
 }));
 
+import type { BirthdayProfile } from "~/features/profiles";
 import { clientLoader, shouldRevalidate } from "~/routes/app/home";
 
 const page = {
@@ -35,7 +36,7 @@ const page = {
   nextPageToken: null,
 };
 const mealDay = { date: "20260824", meals: [], unavailable: false };
-const birthdays = [];
+const birthdays: BirthdayProfile[] = [];
 
 function load(query = "") {
   const url = `https://example.com/${query}`;
