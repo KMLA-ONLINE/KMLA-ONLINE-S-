@@ -409,6 +409,7 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
         viewerName={profile.name}
         viewerAvatarUrl={profile.avatar_url}
         isTeacher={profile.type === "teacher"}
+        canDeleteOfficial={profile.role === "admin"}
         categories={loaderData.categories}
         posts={loaderData.posts}
         memberPage={loaderData.memberPage}

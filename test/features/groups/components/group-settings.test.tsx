@@ -138,8 +138,7 @@ describe("GroupSettings", () => {
     expect(screen.getByRole("button", { name: "그룹 삭제" })).toBeVisible();
   });
 
-  it("never offers to delete an official group", () => {
-    // 승인된 재학생이 자동으로 가입하는 공간이라 한 사람의 결정으로 사라지면 안 된다.
+  it("offers official-group deletion only to app administrators", () => {
     renderRoute(() => (
       <GroupSettings group={{ ...group, kind: "official" }} categories={[]} />
     ));
@@ -147,6 +146,36 @@ describe("GroupSettings", () => {
     expect(
       screen.queryByRole("button", { name: "그룹 삭제" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("requires a second confirmation before deleting an official group", async () => {
+    const { user } = renderRoute(() => (
+      <GroupSettings
+        group={{ ...group, kind: "official", member_role: "member" }}
+        categories={[]}
+        canDeleteOfficial
+      />
+    ));
+
+    await user.click(screen.getByRole("button", { name: "그룹 삭제" }));
+    const firstConfirmation = screen.getByRole("dialog");
+    await user.type(
+      within(firstConfirmation).getByLabelText(/group\/테스트 그룹/),
+      "group/테스트 그룹",
+    );
+    await user.click(
+      within(firstConfirmation).getByRole("button", { name: "영구 삭제" }),
+    );
+
+    const officialConfirmation = screen.getByRole("dialog");
+    expect(officialConfirmation).toHaveTextContent(
+      "자동 가입된 재학생과 모든 콘텐츠가 영구 삭제됩니다.",
+    );
+    expect(
+      within(officialConfirmation).getByRole("button", {
+        name: "공식 그룹 삭제",
+      }),
+    ).toBeVisible();
   });
 
   it("holds the deletion until the group name is typed back", async () => {
