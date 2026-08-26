@@ -13,6 +13,10 @@ CREATE OR REPLACE FUNCTION "private"."can_access_feed_post"("p_post_id" "uuid", 
       on timeline.id = post.timeline_profile_id
       and timeline.status = 'accepted'
       and timeline.deleted_at is null
+    left join public.profiles as viewer
+      on viewer.id = p_profile_id
+      and viewer.status = 'accepted'
+      and viewer.deleted_at is null
     where post.id = p_post_id
       and post.published_at is not null
       and post.deleted_at is null
@@ -34,8 +38,22 @@ CREATE OR REPLACE FUNCTION "private"."can_access_feed_post"("p_post_id" "uuid", 
           and timeline.id is not null
           and (
             author.profile_id = post.timeline_profile_id
-            or private.feed_profile_cohorts(p_profile_id)
-              && private.feed_profile_cohorts(post.timeline_profile_id)
+            or (
+              (
+                private.feed_profile_cohorts(p_profile_id)
+                  && private.feed_profile_cohorts(post.timeline_profile_id)
+              )
+              and viewer.gender = timeline.gender
+            )
+          )
+          and (
+            post.activity_kind is null
+            or post.timeline_profile_id = p_profile_id
+            or timeline.type = 'teacher'
+            or (
+              viewer.cohort = timeline.cohort
+              and viewer.gender = timeline.gender
+            )
           )
         )
       )
@@ -199,7 +217,8 @@ begin
         epoch,
         coalesce(reaction.total, 0),
         coalesce(comment.total, 0),
-        post.kind = 'profile' and author.profile_id <> post.timeline_profile_id
+        post.kind = 'profile' and author.profile_id <> post.timeline_profile_id,
+        post.activity_kind is not null
       ) as rank_time,
       case post.kind when 'group' then 'group' else 'profile' end as source_type,
       case post.kind
@@ -219,8 +238,7 @@ begin
       select coalesce(sum(event.delta), 0)::integer as total
       from private.post_reaction_count_events as event
       where event.post_id = post.id and event.occurred_at <= epoch
-    ) as reaction on bump.effective_at is null
-      and post.published_at > epoch - interval '6 hours'
+    ) as reaction on post.published_at > epoch - interval '6 hours'
     left join lateral (
       select count(*)::integer as total
       from public.post_comments as entry
@@ -231,8 +249,7 @@ begin
         and entry.created_at <= epoch
         and btrim(entry.body) <> '#업'
         and comment_author.profile_id <> author.profile_id
-    ) as comment on bump.effective_at is null
-      and post.published_at > epoch - interval '6 hours'
+    ) as comment on post.published_at > epoch - interval '6 hours'
     where post.published_at is not null
       and post.published_at <= epoch
       and post.deleted_at is null
@@ -326,32 +343,42 @@ $$;
 
 ALTER FUNCTION "private"."feed_profile_cohorts"("p_profile_id" bigint) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "private"."feed_rank_time"("p_published_at" timestamp with time zone, "p_bumped_at" timestamp with time zone, "p_feed_epoch" timestamp with time zone, "p_reaction_count" integer, "p_ranking_comment_count" integer, "p_is_cross_timeline" boolean) RETURNS timestamp with time zone
+CREATE OR REPLACE FUNCTION "private"."feed_rank_time"("p_published_at" timestamp with time zone, "p_bumped_at" timestamp with time zone, "p_feed_epoch" timestamp with time zone, "p_reaction_count" integer, "p_ranking_comment_count" integer, "p_is_cross_timeline" boolean, "p_is_profile_media_activity" boolean) RETURNS timestamp with time zone
     LANGUAGE "sql" IMMUTABLE PARALLEL SAFE
     SET "search_path" TO ''
     AS $$
-  select case
-    when p_bumped_at is not null then p_bumped_at
-    when p_published_at <= p_feed_epoch
-      and p_published_at > p_feed_epoch - interval '6 hours' then
-      p_published_at
-      + make_interval(secs => least(
-          (greatest(coalesce(p_reaction_count, 0), 0) * 4
-            + greatest(coalesce(p_ranking_comment_count, 0), 0) * 8) * 60.0,
-          greatest(
-            0.0,
-            2400.0 * (
-              1.0 - extract(epoch from (p_feed_epoch - p_published_at)) / 21600.0
-            )
-          )
-        ))
-      - case when coalesce(p_is_cross_timeline, false)
-          then interval '1 hour' else interval '0' end
-    else p_published_at
-  end;
+  select greatest(
+    p_bumped_at,
+    (
+      case
+        when p_published_at <= p_feed_epoch
+          and p_published_at > p_feed_epoch - interval '6 hours' then
+          p_published_at
+          + make_interval(secs => least(
+              (greatest(coalesce(p_reaction_count, 0), 0) * 4
+                + greatest(coalesce(p_ranking_comment_count, 0), 0) * 8) * 60.0,
+              greatest(
+                0.0,
+                2400.0 * (
+                  1.0 - extract(epoch from (p_feed_epoch - p_published_at)) / 21600.0
+                )
+              )
+            ))
+          - case when coalesce(p_is_cross_timeline, false)
+              then interval '1 hour' else interval '0' end
+        else p_published_at
+      end
+    ) - case
+      when coalesce(p_is_profile_media_activity, false)
+        and p_published_at <= p_feed_epoch
+        and p_published_at > p_feed_epoch - interval '6 hours'
+        then interval '10 minutes'
+      else interval '0'
+    end
+  );
 $$;
 
-ALTER FUNCTION "private"."feed_rank_time"("p_published_at" timestamp with time zone, "p_bumped_at" timestamp with time zone, "p_feed_epoch" timestamp with time zone, "p_reaction_count" integer, "p_ranking_comment_count" integer, "p_is_cross_timeline" boolean) OWNER TO "postgres";
+ALTER FUNCTION "private"."feed_rank_time"("p_published_at" timestamp with time zone, "p_bumped_at" timestamp with time zone, "p_feed_epoch" timestamp with time zone, "p_reaction_count" integer, "p_ranking_comment_count" integer, "p_is_cross_timeline" boolean, "p_is_profile_media_activity" boolean) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "private"."reject_feed_event_mutation"() RETURNS "trigger"
     LANGUAGE "plpgsql"
@@ -704,7 +731,7 @@ REVOKE ALL ON FUNCTION "private"."create_feed_session"("p_profile_id" bigint) FR
 
 REVOKE ALL ON FUNCTION "private"."feed_profile_cohorts"("p_profile_id" bigint) FROM PUBLIC;
 
-REVOKE ALL ON FUNCTION "private"."feed_rank_time"("p_published_at" timestamp with time zone, "p_bumped_at" timestamp with time zone, "p_feed_epoch" timestamp with time zone, "p_reaction_count" integer, "p_ranking_comment_count" integer, "p_is_cross_timeline" boolean) FROM PUBLIC;
+REVOKE ALL ON FUNCTION "private"."feed_rank_time"("p_published_at" timestamp with time zone, "p_bumped_at" timestamp with time zone, "p_feed_epoch" timestamp with time zone, "p_reaction_count" integer, "p_ranking_comment_count" integer, "p_is_cross_timeline" boolean, "p_is_profile_media_activity" boolean) FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."reject_feed_event_mutation"() FROM PUBLIC;
 
