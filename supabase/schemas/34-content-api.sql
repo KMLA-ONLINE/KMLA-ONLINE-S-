@@ -827,10 +827,15 @@ begin
     cleanup_lease_expires_at = null
   where post_id = p_post_id and status <> 'deleted';
   if caller_profile_id <> author_profile_id then
+    -- 어느 글이 사라졌는지 제목으로 말해준다. 삭제된 게시물은 열어볼 수 없으므로 알림이
+    -- 대상을 밝히지 않으면 작성자는 무엇이 지워졌는지 영영 알 수 없다. 제목은 작성자
+    -- 본인이 쓴 값이고 새 그룹 게시물 알림이 이미 같은 값을 그대로 싣는다. 본문은 싣지
+    -- 않는다 -- 알림 제목은 잠금 화면 Push 본문이 되므로 원문이 나가서는 안 된다.
     perform private.emit_notification(
       'post-moderated:' || p_post_id::text,
       author_profile_id, 'post_moderated', 'high', 'moderation', 'staff',
-      caller_profile_id, '운영진', null, '게시물이 운영자에 의해 삭제되었습니다.',
+      caller_profile_id, '운영진', null,
+      '“' || post_record.title || '” 게시물이 운영자에 의해 삭제되었습니다.',
       post_record.group_id
     );
   end if;
@@ -886,6 +891,7 @@ declare
   comment_record public.post_comments;
   target_post_id uuid;
   comment_group_id uuid;
+  comment_post_title text;
   caller_role public.group_member_role;
   author_profile_id bigint;
 begin
@@ -915,7 +921,7 @@ begin
     raise exception 'comment not found' using errcode = 'P0002';
   end if;
 
-  select post.group_id into comment_group_id
+  select post.group_id, post.title into comment_group_id, comment_post_title
   from public.posts as post
   where post.id = comment_record.post_id;
 
@@ -960,10 +966,18 @@ begin
     where comment.id = p_comment_id;
   end if;
   if caller_profile_id <> author_profile_id then
+    -- 댓글 원문은 싣지 않는다(기능 명세 §14.8). 대신 댓글이 달려 있던 게시물의 제목으로
+    -- 어느 댓글이었는지 짚어준다. 제목은 원문이 아니고 작성자가 이미 읽을 수 있던 값이다.
+    -- 프로필 타임라인 글은 제목이 없어서 예전 문장으로 떨어진다.
     perform private.emit_notification(
       'comment-moderated:' || p_comment_id::text,
       author_profile_id, 'comment_moderated', 'high', 'moderation', 'staff',
-      caller_profile_id, '운영진', null, '댓글이 운영자에 의해 삭제되었습니다.',
+      caller_profile_id, '운영진', null,
+      case when comment_post_title is null
+        then '댓글이 운영자에 의해 삭제되었습니다.'
+        else '“' || comment_post_title
+          || '” 게시물에 남긴 내 댓글이 운영자에 의해 삭제되었습니다.'
+      end,
       comment_group_id, target_post_id
     );
   end if;

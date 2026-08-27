@@ -1903,6 +1903,7 @@ export type Database = {
           comment_id: string
           created_at: string
           group_id: string
+          group_name: string
           id: string
           importance: Database["public"]["Enums"]["notification_importance"]
           kind: Database["public"]["Enums"]["notification_kind"]

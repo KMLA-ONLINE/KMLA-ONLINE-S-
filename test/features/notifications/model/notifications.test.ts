@@ -19,6 +19,7 @@ function notification(id: string, lastActivityAt: string): NotificationItem {
     comment_id: "",
     created_at: lastActivityAt,
     group_id: "",
+    group_name: "",
     id,
     importance: "normal",
     kind: "post_commented",

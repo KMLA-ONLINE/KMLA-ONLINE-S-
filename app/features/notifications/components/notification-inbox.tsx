@@ -32,12 +32,25 @@ function actorName(item: NotificationItem): string {
   return item.actor_display_name || "탈퇴한 사용자";
 }
 
+/** 이름·그룹·시간을 잇는 가운뎃점. 눈으로 훑을 때만 필요하므로 낭독에서는 뺀다. */
+function MetaDot() {
+  return (
+    <span aria-hidden="true" className="shrink-0 text-xs text-muted-foreground">
+      ·
+    </span>
+  );
+}
+
 /**
- * 한 행은 두 줄이다: 누가·언제 / 무슨 일이.
+ * 한 행은 누가·어디서·언제 한 줄과 무슨 일이 최대 세 줄, 합쳐서 네 줄까지다.
  *
  * `title`은 DB가 만든 완결된 문장("내 게시물에 새 댓글이 등록되었습니다.")이라 이름 뒤에
- * 그대로 이어 붙이면 조사가 어긋난다. 그래서 이름과 문장은 위아래로 나누고, 시간만 이름 옆에
- * 붙여 세 번째 줄을 없앤다.
+ * 그대로 이어 붙이면 조사가 어긋난다. 그래서 이름과 문장은 위아래로 나누고, 시간은 이름 옆에
+ * 붙여 첫 줄에서 함께 끝낸다.
+ *
+ * 그룹 이름이 첫 줄에 함께 서는 이유는 새 그룹 게시물 알림 때문이다. 그 알림의 `title`은
+ * 게시물 제목 그대로여서, 그룹을 말해주지 않으면 어디에 올라온 글인지 알 수가 없다.
+ * 그룹과 무관한 알림(계정·학교 부가 기능)은 `group_name`이 비어 있어 이 자리가 사라진다.
  */
 function NotificationRow({
   item,
@@ -53,6 +66,8 @@ function NotificationRow({
     readFetcher.formData?.get("notificationId") !== item.id;
   const name = actorName(item);
   const others = item.actor_count > 1 ? ` 외 ${item.actor_count - 1}명` : "";
+  // 생성 타입은 RPC의 모든 열을 non-null로 적지만, 그룹과 무관한 알림은 실제로 비어서 온다.
+  const groupName = item.group_name || null;
 
   return (
     <Link
@@ -82,12 +97,18 @@ function NotificationRow({
               </span>
             ) : null}
           </span>
-          <span
-            aria-hidden="true"
-            className="shrink-0 text-xs text-muted-foreground"
-          >
-            ·
-          </span>
+          {groupName ? (
+            <>
+              <MetaDot />
+              {/* 가운뎃점은 낭독에서 빠지므로, 이름과 그룹이 "박새벽 메이커스 랩"처럼 한
+                  덩어리로 읽히지 않게 여기서만 관계를 말해준다. */}
+              <span className="sr-only">그룹 </span>
+              <span className="min-w-0 truncate text-xs text-muted-foreground">
+                {groupName}
+              </span>
+            </>
+          ) : null}
+          <MetaDot />
           <RelativeTime
             value={item.last_activity_at}
             className="shrink-0 text-xs text-muted-foreground"
@@ -99,11 +120,13 @@ function NotificationRow({
           ) : null}
         </span>
 
-        {/* 한 줄로 자른다. 두 줄 높이가 아바타 높이와 맞아떨어져야 목록이 고르게 흐르고,
+        {/* 세 줄까지 흐르게 두어 한 행이 최대 네 줄에서 끝난다. 그룹 새 게시물 알림의
+            제목은 사용자가 쓴 게시물 제목(최대 160자)이라 한 줄로 자르면 대부분 잘려나가고,
+            그렇다고 끝까지 풀어두면 긴 제목 하나가 목록을 통째로 밀어낸다.
             잘린 뒷부분은 눌러서 들어간 상세 화면이 그대로 들고 있다. */}
         <span
           className={cn(
-            "mt-0.5 truncate text-sm",
+            "mt-0.5 line-clamp-3 text-sm break-keep",
             unread ? "text-foreground" : "text-muted-foreground",
           )}
         >

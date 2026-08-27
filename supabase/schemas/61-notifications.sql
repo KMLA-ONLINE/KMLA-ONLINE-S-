@@ -487,6 +487,7 @@ create or replace function public.list_my_notifications(
   actor_avatar_path text,
   actor_count integer,
   group_id uuid,
+  group_name text,
   post_id uuid,
   comment_id uuid,
   target_profile_id bigint,
@@ -512,16 +513,27 @@ begin
     raise exception 'notification cursor must be complete' using errcode = '22023';
   end if;
 
+  -- 알림함 한 행은 "어디서 온 소식인가"를 말해야 한다. 특히 그룹 새 게시물 알림의 제목은
+  -- 게시물 제목 그대로라서, 그룹 이름이 없으면 어느 그룹 글인지 알 방법이 없다.
+  -- 이미 recipient 본인의 알림만 돌려주고 그 행이 group_id를 들고 있으므로 이름을 함께
+  -- 내보내도 새로 드러나는 정보는 없다.
+  --
+  -- 그룹 삭제는 deleted_at을 세우는 soft delete라서 삭제된 그룹의 알림도 이름을 그대로
+  -- 들고 온다. 그래야 "그룹이 영구 삭제되었습니다"가 어느 그룹인지 말할 수 있다. 이름이
+  -- 비는 경우는 애초에 그룹과 무관한 알림뿐이다.
   return query
   select notification.id, notification.kind, notification.importance,
     notification.category, notification.actor_identity,
     notification.actor_display_name, notification.actor_avatar_path,
-    notification.actor_count, notification.group_id, notification.post_id,
+    notification.actor_count, notification.group_id, notification_group.name,
+    notification.post_id,
     notification.comment_id, notification.target_profile_id,
     notification.reservation_id,
     notification.title, notification.created_at, notification.last_activity_at,
     notification.read_at
   from public.notifications as notification
+  left join public.groups as notification_group
+    on notification_group.id = notification.group_id
   where notification.recipient_profile_id = caller_profile_id
     and (
       p_before_last_activity_at is null

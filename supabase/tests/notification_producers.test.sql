@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(11);
+select plan(17);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -185,6 +185,75 @@ select is(
   ),
   (now() at time zone 'Asia/Seoul')::date + 7,
   'preemption notification is committed with the reservation cutoff'
+);
+
+-- 알림함이 "어느 그룹 소식인가"를 말할 수 있는지 확인한다. 그룹 게시물에 달린 댓글과 반응은
+-- 게시물의 그룹을 물려받고, 프로필 타임라인 글은 그룹이 없으므로 이름 자리가 비어야 한다.
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000004', true);
+set local role authenticated;
+insert into producer_ids values (
+  'timeline_post',
+  public.create_profile_post('kim-admin', 'public')
+);
+select public.commit_profile_post(
+  (select id from producer_ids where name = 'timeline_post'),
+  '타임라인 알림 글', '{}'::uuid[], true
+);
+reset role;
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
+set local role authenticated;
+select is(
+  (select notification.group_name
+   from public.list_my_notifications(null, null, 50) as notification
+   where notification.kind = 'post_commented'),
+  '메이커스 랩',
+  'a comment on a group post names the group it came from'
+);
+select is(
+  (select notification.group_name
+   from public.list_my_notifications(null, null, 50) as notification
+   where notification.kind = 'post_reacted'),
+  '메이커스 랩',
+  'a reaction on a group post names the group it came from'
+);
+select is(
+  (select notification.group_name
+   from public.list_my_notifications(null, null, 50) as notification
+   where notification.kind = 'timeline_posted'),
+  null::text,
+  'a profile timeline post carries no group name'
+);
+reset role;
+
+-- 운영 조치 알림은 "무엇이 삭제되었는지"를 말해야 한다. 삭제된 대상은 다시 열어볼 수 없어서
+-- 알림이 대상을 밝히지 않으면 작성자는 영영 알 수 없다. 다만 댓글 원문은 싣지 않는다
+-- (기능 명세 §14.8) -- 알림 제목이 곧 잠금 화면 Push 본문이 되기 때문이다.
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
+set local role authenticated;
+select public.delete_group_post((select id from producer_ids where name = 'group_post'));
+select public.delete_post_comment((select id from producer_ids where name = 'comment'));
+reset role;
+
+select is(
+  (select title from public.notifications
+   where kind = 'post_moderated'
+     and recipient_profile_id = (select id from public.profiles where pub_id = 'hanbyeol-25')),
+  '“알림 그룹 글” 게시물이 운영자에 의해 삭제되었습니다.',
+  'post moderation names the post that was removed'
+);
+select is(
+  (select title from public.notifications
+   where kind = 'comment_moderated'
+     and recipient_profile_id = (select id from public.profiles where pub_id = 'hanbyeol-25')),
+  '“이번 주 프로젝트 일정” 게시물에 남긴 내 댓글이 운영자에 의해 삭제되었습니다.',
+  'comment moderation names the post the removed comment was on'
+);
+select ok(
+  (select title not like '%알림 댓글%' from public.notifications
+   where kind = 'comment_moderated'
+     and recipient_profile_id = (select id from public.profiles where pub_id = 'hanbyeol-25')),
+  'comment moderation never carries the deleted comment text'
 );
 
 select * from finish();
