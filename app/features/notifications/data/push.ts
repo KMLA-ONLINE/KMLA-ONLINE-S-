@@ -79,10 +79,18 @@ export async function getPushSupport(): Promise<PushSupport> {
   const registration = await getRegistration();
   if (!registration) return { state: "unsupported" };
   const subscription = await registration.pushManager.getSubscription();
+  let subscribed = false;
+  if (subscription) {
+    const { data, error } = await getSupabase().rpc("get_my_web_push_status", {
+      p_endpoint: subscription.endpoint,
+    });
+    if (error) throw error;
+    subscribed = data?.[0]?.subscribed === true;
+  }
   return {
     state: "available",
     permission: Notification.permission,
-    subscribed: subscription !== null,
+    subscribed,
   };
 }
 

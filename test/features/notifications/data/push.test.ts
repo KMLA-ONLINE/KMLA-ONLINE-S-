@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const { getSupabase, rpc } = vi.hoisted(() => ({
+  getSupabase: vi.fn(),
+  rpc: vi.fn(),
+}));
+
+vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
+
 import {
   enableWebPush,
   getPushSupport,
@@ -14,6 +21,11 @@ describe("Web Push configuration", () => {
   const requestPermission = vi.fn();
 
   beforeEach(() => {
+    getSupabase.mockReset();
+    rpc.mockReset();
+    getRegistration.mockReset();
+    requestPermission.mockReset();
+    getSupabase.mockReturnValue({ rpc });
     vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", "");
     const notification = {
       permission: "default",
@@ -89,6 +101,90 @@ describe("Web Push configuration", () => {
     });
     expect(activated.pushManager.getSubscription).toHaveBeenCalled();
     expect(installing.pushManager.getSubscription).not.toHaveBeenCalled();
+  });
+
+  it("reports a browser subscription only when it is registered for the account", async () => {
+    vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", VALID_VAPID_KEY);
+    const subscription = { endpoint: "https://push.example/subscription" };
+    getRegistration.mockResolvedValue({
+      active: {},
+      pushManager: { getSubscription: vi.fn().mockResolvedValue(subscription) },
+    });
+    rpc.mockResolvedValue({ data: [{ subscribed: true }], error: null });
+
+    await expect(getPushSupport()).resolves.toEqual({
+      state: "available",
+      permission: "default",
+      subscribed: true,
+    });
+    expect(rpc).toHaveBeenCalledWith("get_my_web_push_status", {
+      p_endpoint: subscription.endpoint,
+    });
+  });
+
+  it("reports a browser subscription missing from the account as disabled", async () => {
+    vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", VALID_VAPID_KEY);
+    getRegistration.mockResolvedValue({
+      active: {},
+      pushManager: {
+        getSubscription: vi
+          .fn()
+          .mockResolvedValue({ endpoint: "https://push.example/orphaned" }),
+      },
+    });
+    rpc.mockResolvedValue({ data: [{ subscribed: false }], error: null });
+
+    await expect(getPushSupport()).resolves.toEqual({
+      state: "available",
+      permission: "default",
+      subscribed: false,
+    });
+  });
+
+  it("re-registers an existing browser subscription missing from the account", async () => {
+    vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", VALID_VAPID_KEY);
+    const notification = {
+      permission: "granted",
+      requestPermission,
+    };
+    vi.stubGlobal("window", {
+      Notification: notification,
+      PushManager,
+    });
+    vi.stubGlobal("Notification", notification);
+    const subscription = {
+      endpoint: "https://push.example/orphaned",
+      expirationTime: null,
+      toJSON: () => ({
+        endpoint: "https://push.example/orphaned",
+        keys: { auth: "auth", p256dh: "p256dh" },
+      }),
+    };
+    getRegistration.mockResolvedValue({
+      active: {},
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(subscription),
+      },
+    });
+    rpc
+      .mockResolvedValueOnce({ data: [{ subscribed: false }], error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+
+    await expect(enableWebPush()).resolves.toEqual({
+      state: "available",
+      permission: "granted",
+      subscribed: true,
+    });
+    expect(rpc).toHaveBeenNthCalledWith(
+      2,
+      "register_my_web_push_subscription",
+      {
+        p_auth: "auth",
+        p_endpoint: subscription.endpoint,
+        p_expiration_time: undefined,
+        p_p256dh: "p256dh",
+      },
+    );
   });
 
   it("stops waiting for a worker that never becomes ready", async () => {
