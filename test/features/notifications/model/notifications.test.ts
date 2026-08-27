@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getDefaultGroupNotificationLevel,
   getNotificationCursor,
   groupNotifications,
+  isDefaultGroupNotificationPreference,
   sanitizeNotificationDestination,
 } from "~/features/notifications";
 import type { NotificationItem } from "~/features/notifications";
@@ -71,5 +73,64 @@ describe("notification destination safety", () => {
     "",
   ])("rejects unsafe destination %s", (destination) => {
     expect(sanitizeNotificationDestination(destination)).toBe("/noti");
+  });
+});
+
+describe("group notification defaults", () => {
+  it("uses all for official groups and direct for unofficial groups", () => {
+    expect(getDefaultGroupNotificationLevel("official")).toBe("all");
+    expect(getDefaultGroupNotificationLevel("unofficial")).toBe("direct");
+  });
+
+  it("treats a group as default only when both fields match", () => {
+    const base = { groupId: "g", groupName: "그룹" } as const;
+
+    expect(
+      isDefaultGroupNotificationPreference({
+        ...base,
+        groupKind: "official",
+        level: "all",
+        contentPushEnabled: true,
+        newPostPushEnabled: false,
+      }),
+    ).toBe(true);
+    expect(
+      isDefaultGroupNotificationPreference({
+        ...base,
+        groupKind: "unofficial",
+        level: "direct",
+        contentPushEnabled: true,
+        newPostPushEnabled: false,
+      }),
+    ).toBe(true);
+
+    // 수준은 기본값이어도 새 게시물 Push를 켰다면 사용자가 손댄 그룹이다.
+    expect(
+      isDefaultGroupNotificationPreference({
+        ...base,
+        groupKind: "official",
+        level: "all",
+        contentPushEnabled: true,
+        newPostPushEnabled: true,
+      }),
+    ).toBe(false);
+    expect(
+      isDefaultGroupNotificationPreference({
+        ...base,
+        groupKind: "unofficial",
+        level: "none",
+        contentPushEnabled: false,
+        newPostPushEnabled: false,
+      }),
+    ).toBe(false);
+    expect(
+      isDefaultGroupNotificationPreference({
+        ...base,
+        groupKind: "unofficial",
+        level: "direct",
+        contentPushEnabled: false,
+        newPostPushEnabled: false,
+      }),
+    ).toBe(false);
   });
 });

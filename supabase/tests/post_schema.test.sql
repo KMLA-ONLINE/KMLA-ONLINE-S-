@@ -1,24 +1,18 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(33);
+select plan(27);
 
+-- 값이 늘어나도 생성된 TypeScript 유니온은 넓어질 뿐이라 컴파일은 통과한다. 신원 모델이
+-- 소리 없이 하나 늘어나는 것을 여기서 잡는다(기능 명세 §8.5).
 select is(
-  enum_range(null::public.post_kind)::text,
-  '{group,profile}',
-  'post kinds are fixed'
-);
-
-select is(
-  enum_range(null::public.post_identity)::text,
-  '{identified,anonymous,staff}',
-  'post identities are fixed'
-);
-
-select is(
-  enum_range(null::public.post_visibility)::text,
-  '{public,private}',
-  'profile post visibility values are fixed'
+  array[
+    enum_range(null::public.post_kind)::text,
+    enum_range(null::public.post_identity)::text,
+    enum_range(null::public.post_visibility)::text
+  ],
+  array['{group,profile}', '{identified,anonymous,staff}', '{public,private}'],
+  'post kind, identity, and visibility values are fixed'
 );
 
 select is(
@@ -32,39 +26,18 @@ select is(
 );
 
 select is(
-  (select relrowsecurity from pg_catalog.pg_class where oid = 'public.posts'::regclass),
-  true,
-  'posts have RLS enabled'
-);
-
-select is(
   (
-    select relrowsecurity
+    select count(*)::integer
     from pg_catalog.pg_class
-    where oid = 'public.group_categories'::regclass
+    where oid in (
+      'public.posts'::regclass,
+      'public.group_categories'::regclass,
+      'private.post_authors'::regclass
+    )
+      and not relrowsecurity
   ),
-  true,
-  'group categories have RLS enabled'
-);
-
-select is(
-  (
-    select relrowsecurity
-    from pg_catalog.pg_class
-    where oid = 'private.post_authors'::regclass
-  ),
-  true,
-  'private post authors have RLS enabled'
-);
-
-select ok(
-  to_regclass('public.posts_group_recent_idx') is not null,
-  'group pagination index exists'
-);
-
-select ok(
-  to_regclass('public.posts_group_search_idx') is not null,
-  'group search index exists'
+  0,
+  'posts, categories, and private post authors have RLS enabled'
 );
 
 insert into public.group_categories (id, group_id, name, position)

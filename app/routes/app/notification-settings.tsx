@@ -41,12 +41,21 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
         { status: 400 },
       );
     }
-    await updateGroupNotificationPreferences(
-      groupId,
-      level,
-      level === "all" && formData.get("newPostPushEnabled") === "true",
-    );
-    return { saved: true };
+    try {
+      await updateGroupNotificationPreferences(
+        groupId,
+        level,
+        level !== "none" && formData.get("contentPushEnabled") === "true",
+        level === "all" && formData.get("newPostPushEnabled") === "true",
+      );
+      return { saved: true };
+    } catch (error) {
+      console.error("Failed to update group notification preferences", error);
+      return data(
+        { error: "그룹 알림 설정을 저장하지 못했습니다." },
+        { status: 503 },
+      );
+    }
   }
 
   if (formData.get("intent") !== "preferences") {
@@ -62,8 +71,13 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
       "timeline_push_enabled",
     ].map((key) => [key, formData.get(key) === "true"]),
   ) as unknown as NotificationPreferences;
-  await updateNotificationPreferences(preferences);
-  return { saved: true };
+  try {
+    await updateNotificationPreferences(preferences);
+    return { saved: true };
+  } catch (error) {
+    console.error("Failed to update notification preferences", error);
+    return data({ error: "알림 설정을 저장하지 못했습니다." }, { status: 503 });
+  }
 }
 
 export default function NotificationSettingsRoute({

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(32);
 
 select ok(
   (select relrowsecurity from pg_class where oid = 'public.notifications'::regclass),
@@ -30,6 +30,14 @@ select ok(
 select ok(
   not has_function_privilege('anon', 'public.list_my_notifications(timestamptz,uuid,integer)', 'EXECUTE'),
   'anonymous clients cannot list notifications'
+);
+select ok(
+  has_function_privilege('service_role', 'public.prepare_notification_delivery(uuid,uuid)', 'EXECUTE'),
+  'the delivery worker can run the final authorization check'
+);
+select ok(
+  not has_function_privilege('authenticated', 'public.prepare_notification_delivery(uuid,uuid)', 'EXECUTE'),
+  'clients cannot prepare leased delivery work'
 );
 
 insert into auth.users (
@@ -138,32 +146,51 @@ select is(
 
 select lives_ok(
   $$select public.set_my_group_notification_preferences(
-      '20000000-0000-0000-0000-000000000003', 'all', true
+      '20000000-0000-0000-0000-000000000003', 'all', false, true
     )$$,
   'a member can update group notification preferences'
 );
 select is(
-  (select row(notification_level, new_post_push_enabled)::text
+  (select row(notification_level, content_push_enabled, new_post_push_enabled)::text
    from public.group_memberships
    where group_id = '20000000-0000-0000-0000-000000000003'
      and profile_id = private.current_profile_id()),
-  '(all,t)',
-  'group preferences are stored on membership'
+  '(all,f,t)',
+  'inbox and group Push preferences are stored independently'
 );
 select lives_ok(
   $$select public.set_my_group_notification_preferences(
-      '20000000-0000-0000-0000-000000000003', 'none', true
+      '20000000-0000-0000-0000-000000000003', 'none', true, true
     )$$,
   'a member can disable ordinary group content notifications'
 );
 select is(
-  (select notification_level
+  (select row(notification_level, content_push_enabled, new_post_push_enabled)::text
    from public.group_memberships
    where group_id = '20000000-0000-0000-0000-000000000003'
      and profile_id = private.current_profile_id()),
-  'none'::public.group_notification_level,
-  'the none group notification level round trips through the public API'
+  '(none,f,f)',
+  'the RPC disables both Push settings when the inbox level is none'
 );
+
+reset role;
+select throws_ok(
+  $$update public.group_memberships
+    set content_push_enabled = true
+    where group_id = '20000000-0000-0000-0000-000000000003'
+      and profile_id = (select id from public.profiles where pub_id = 'hanbyeol-25')$$,
+  '23514', null,
+  'group content Push cannot be enabled when inbox notifications are disabled'
+);
+select throws_ok(
+  $$update public.group_memberships
+    set new_post_push_enabled = true
+    where group_id = '20000000-0000-0000-0000-000000000003'
+      and profile_id = (select id from public.profiles where pub_id = 'hanbyeol-25')$$,
+  '23514', null,
+  'new post Push cannot be enabled without all inbox notifications'
+);
+set local role authenticated;
 
 select lives_ok(
   $$select public.register_my_web_push_subscription(

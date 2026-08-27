@@ -141,9 +141,10 @@ describe("profile timeline action", () => {
 describe("profile detail revalidation", () => {
   /**
    * 회귀: 이 route에는 규칙 자체가 없어서, 타임라인 게시물의 이미지를 여는 것만으로 프로필과
-   * 타임라인 RPC가 다시 나가고 "더 보기"로 쌓은 페이지가 첫 장으로 되감겼다.
+   * 타임라인 RPC가 다시 나가고 "더 보기"로 쌓은 페이지가 첫 장으로 되감겼다. 규칙의 내용은
+   * `createPostListRevalidation`의 테스트가 확인하므로, 여기서는 규칙이 걸려 있다는 것만 본다.
    */
-  it("does not reload the timeline when an image viewer opens and closes", () => {
+  it("has a list rule at all", () => {
     expect(
       shouldRevalidate({
         currentUrl: new URL("https://example.com/profile/jieun-29"),
@@ -152,30 +153,5 @@ describe("profile detail revalidation", () => {
         ),
       } as never),
     ).toBe(false);
-    expect(
-      shouldRevalidate({
-        currentUrl: new URL(
-          "https://example.com/profile/jieun-29?image=attachment-id",
-        ),
-        nextUrl: new URL("https://example.com/profile/jieun-29"),
-      } as never),
-    ).toBe(false);
-  });
-
-  // 게시물을 쓰거나 지운 뒤에는 타임라인이 바뀐다.
-  it("reloads after a mutation and for explicit refreshes", () => {
-    expect(
-      shouldRevalidate({
-        currentUrl: new URL("https://example.com/profile/jieun-29"),
-        nextUrl: new URL("https://example.com/profile/jieun-29?image=photo"),
-        formMethod: "POST",
-      } as never),
-    ).toBe(true);
-    expect(
-      shouldRevalidate({
-        currentUrl: new URL("https://example.com/profile/jieun-29"),
-        nextUrl: new URL("https://example.com/profile/jieun-29"),
-      } as never),
-    ).toBe(true);
   });
 });

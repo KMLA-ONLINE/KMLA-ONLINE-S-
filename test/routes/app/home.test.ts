@@ -131,8 +131,13 @@ describe("home feed loader", () => {
   });
 });
 
+/**
+ * 규칙 자체는 `createPostListRevalidation`의 테스트가 전부 확인한다. 이 route에만 있는
+ * 사실은 넘긴 오버레이 파라미터 목록 하나뿐이라, 여기서는 그것만 고정한다 — 하나라도 빠지면
+ * 게시물 오버레이를 여는 것만으로 `listFeedPosts(null)`이 새 피드 세션을 연다.
+ */
 describe("home feed revalidation", () => {
-  it("does not reload the feed for post overlay parameters", () => {
+  it("treats the post overlay parameters as UI-only", () => {
     expect(
       shouldRevalidate({
         currentUrl: new URL("https://example.com/"),
@@ -141,24 +146,5 @@ describe("home feed revalidation", () => {
         ),
       } as never),
     ).toBe(false);
-  });
-
-  // 다시 읽으면 `listFeedPosts(null)`이 새 세션을 열고, 쌓아 둔 페이지가 전부 버려진다.
-  it("does not open a new feed session when an image viewer opens", () => {
-    expect(
-      shouldRevalidate({
-        currentUrl: new URL("https://example.com/"),
-        nextUrl: new URL("https://example.com/?image=profile-activity-post-id"),
-      } as never),
-    ).toBe(false);
-  });
-
-  it("allows explicit same-url refreshes", () => {
-    expect(
-      shouldRevalidate({
-        currentUrl: new URL("https://example.com/"),
-        nextUrl: new URL("https://example.com/"),
-      } as never),
-    ).toBe(true);
   });
 });

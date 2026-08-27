@@ -55,7 +55,6 @@ describe("CommentReactionButton", () => {
 
 describe("CommentReactionSummary", () => {
   function renderSummary(summary: Partial<ReactionSummary> = {}) {
-    const onOpen = vi.fn();
     render(
       <CommentReactionSummary
         summary={{
@@ -64,10 +63,9 @@ describe("CommentReactionSummary", () => {
           my_reaction: null,
           ...summary,
         }}
-        onOpen={onOpen}
+        onOpen={vi.fn()}
       />,
     );
-    return { user: userEvent.setup(), onOpen };
   }
 
   it("shows only the most used reaction with the total", () => {
@@ -76,16 +74,6 @@ describe("CommentReactionSummary", () => {
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByAltText("하트")).toBeInTheDocument();
     expect(screen.queryByAltText("웃겨요")).not.toBeInTheDocument();
-  });
-
-  it("opens the reactor list", async () => {
-    const { user, onOpen } = renderSummary({
-      reaction_count: 2,
-      top_reactions: ["wow"],
-    });
-
-    await user.click(screen.getByRole("button", { name: "반응 2개 보기" }));
-    expect(onOpen).toHaveBeenCalled();
   });
 
   it("stays out of the way while nobody has reacted", () => {

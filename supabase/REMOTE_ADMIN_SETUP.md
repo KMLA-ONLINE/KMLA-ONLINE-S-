@@ -16,7 +16,7 @@
 
 ## 2. 앱 관리자 프로필 생성
 
-Dashboard의 **SQL Editor**에서 아래 SQL의 네 값을 실제 정보로 바꾼 뒤 한 번만 실행한다.
+Dashboard의 **SQL Editor**에서 아래 SQL의 값을 실제 정보로 바꾼 뒤 한 번만 실행한다.
 `admin-email@example.com`은 1단계에서 만든 Auth 사용자의 이메일과 정확히 같아야 한다.
 
 ```sql
@@ -50,7 +50,7 @@ begin
     status
   ) values (
     target_user_id,
-    'replace-with-public-id',
+    'first-admin',
     '관리자 이름',
     'admin',
     'alumni',

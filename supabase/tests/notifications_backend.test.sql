@@ -1,7 +1,26 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(19);
+select plan(21);
+
+select is(
+  (
+    select count(*)
+    from cron.job
+    where jobname = 'dispatch-notifications-every-30-seconds'
+  ),
+  1::bigint,
+  'exactly one notification dispatcher cron job is scheduled'
+);
+select is(
+  (
+    select schedule
+    from cron.job
+    where jobname = 'dispatch-notifications-every-30-seconds'
+  ),
+  '30 seconds',
+  'the notification dispatcher runs every 30 seconds'
+);
 
 select ok(
   not has_function_privilege(
@@ -122,13 +141,18 @@ select ok(
   (select lease_id is not null from claimed_delivery),
   'a claim returns an opaque lease token'
 );
+reset role;
+update private.notification_delivery_outbox
+set lease_expires_at = now() - interval '1 second'
+where id = '72000000-0000-0000-0000-000000000001';
+set local role service_role;
 select ok(
   public.complete_notification_delivery(
     '72000000-0000-0000-0000-000000000001',
     (select lease_id from claimed_delivery),
     'retry', 503, 'push_unavailable'
   ),
-  'the active lease can record a retry'
+  'the lease owner can record a result after transport outlives the lease'
 );
 reset role;
 select is(

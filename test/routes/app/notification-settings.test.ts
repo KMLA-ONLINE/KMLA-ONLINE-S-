@@ -74,6 +74,7 @@ describe("notification settings route", () => {
           intent: "group-preferences",
           groupId: "11111111-1111-4111-8111-111111111111",
           level: "all",
+          contentPushEnabled: "false",
           newPostPushEnabled: "true",
         }),
       }),
@@ -82,7 +83,56 @@ describe("notification settings route", () => {
     expect(mocks.updateGroupNotificationPreferences).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       "all",
+      false,
       true,
     );
+  });
+
+  it("turns group Push off when the inbox level is none", async () => {
+    await clientAction({
+      request: new Request("https://example.com/noti/settings", {
+        method: "POST",
+        body: new URLSearchParams({
+          intent: "group-preferences",
+          groupId: "11111111-1111-4111-8111-111111111111",
+          level: "none",
+          contentPushEnabled: "true",
+          newPostPushEnabled: "true",
+        }),
+      }),
+    } as never);
+
+    expect(mocks.updateGroupNotificationPreferences).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      "none",
+      false,
+      false,
+    );
+  });
+
+  it("returns a recoverable error when a preference update fails", async () => {
+    mocks.updateNotificationPreferences.mockRejectedValueOnce(
+      new Error("network unavailable"),
+    );
+
+    // 던지면 화면이 에러 바운더리로 떨어진다. 저장 실패는 다시 눌러 볼 수 있어야 한다.
+    await expect(
+      clientAction({
+        request: new Request("https://example.com/noti/settings", {
+          method: "POST",
+          body: new URLSearchParams({
+            intent: "preferences",
+            account_push_enabled: "true",
+            content_push_enabled: "true",
+            group_push_enabled: "true",
+            school_push_enabled: "true",
+            timeline_push_enabled: "true",
+          }),
+        }),
+      } as never),
+    ).resolves.toMatchObject({
+      data: { error: "알림 설정을 저장하지 못했습니다." },
+      init: { status: 503 },
+    });
   });
 });

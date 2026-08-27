@@ -34,15 +34,6 @@ function renderMenu(role: ProfileRole) {
 }
 
 describe("menu route", () => {
-  it("links to the birthday list", () => {
-    renderMenu("member");
-
-    expect(screen.getByRole("link", { name: "생일" })).toHaveAttribute(
-      "href",
-      "/menu/birthdays",
-    );
-  });
-
   it("shows one admin shortcut for an admin", () => {
     renderMenu("admin");
 
@@ -52,9 +43,13 @@ describe("menu route", () => {
     expect(links[0]).toHaveAttribute("href", "/admin");
   });
 
-  it("does not show the admin shortcut for a member", () => {
+  it("keeps the admin shortcut away from a member", () => {
     renderMenu("member");
 
+    expect(screen.getByRole("link", { name: "생일" })).toHaveAttribute(
+      "href",
+      "/menu/birthdays",
+    );
     expect(
       screen.queryByRole("heading", { name: "관리자" }),
     ).not.toBeInTheDocument();

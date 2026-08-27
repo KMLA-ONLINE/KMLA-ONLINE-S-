@@ -8,7 +8,7 @@ create temporary table cleanup_claims (
   lease_id uuid
 );
 grant select, insert on cleanup_claims to service_role;
-select plan(42);
+select plan(40);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -30,9 +30,15 @@ where auth_user_id = '10000000-0000-0000-0000-000000000002';
 select is(enum_range(null::public.post_attachment_status)::text, '{pending,ready,deleted}', 'attachment states are fixed');
 select ok((select relrowsecurity from pg_class where oid = 'public.post_attachments'::regclass), 'attachment metadata has RLS');
 select ok(has_table_privilege('authenticated', 'public.post_attachments', 'SELECT'), 'metadata is readable through RLS');
-select ok(not has_table_privilege('authenticated', 'public.post_attachments', 'INSERT'), 'metadata cannot be inserted directly');
-select ok(not has_table_privilege('authenticated', 'public.post_attachments', 'UPDATE'), 'metadata cannot be updated directly');
-select ok(not has_table_privilege('authenticated', 'public.post_attachments', 'DELETE'), 'metadata cannot be deleted directly');
+select is(
+  (
+    select count(*)::integer
+    from (values ('INSERT'), ('UPDATE'), ('DELETE')) as verb(privilege)
+    where has_table_privilege('authenticated', 'public.post_attachments', verb.privilege)
+  ),
+  0,
+  'attachment metadata is written only through the definer RPCs'
+);
 select ok(not has_function_privilege('anon', 'public.prepare_post_attachment(uuid,text,text,bigint,integer,integer)', 'EXECUTE'), 'anon cannot prepare uploads');
 select ok(has_function_privilege('service_role', 'private.claim_post_attachment_cleanup(integer,integer)', 'EXECUTE'), 'service role can claim cleanup work');
 select ok(not has_function_privilege('authenticated', 'private.claim_post_attachment_cleanup(integer,integer)', 'EXECUTE'), 'clients cannot claim cleanup work');

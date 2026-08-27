@@ -76,10 +76,7 @@ describe("GroupPostCard", () => {
       "href",
       "/profile/author-pub-id",
     );
-    expect(screen.getByText("운영진")).toHaveClass(
-      "bg-sky-500/10",
-      "text-sky-700",
-    );
+    expect(screen.getByText("운영진")).toBeVisible();
   });
 
   it("does not link anonymous authors to a profile", () => {

@@ -78,23 +78,55 @@ export async function getRecentUnreadNotificationCount(): Promise<number> {
   return data;
 }
 
+const GROUP_PREFERENCE_COLUMNS =
+  "group_id, notification_level, content_push_enabled, new_post_push_enabled, groups!inner(name, kind)";
+
 export async function listMyGroupNotificationPreferences(): Promise<
   GroupNotificationPreference[]
 > {
   const { data, error } = await getSupabase()
     .from("group_memberships")
-    .select(
-      "group_id, notification_level, new_post_push_enabled, groups!inner(name)",
-    )
+    .select(GROUP_PREFERENCE_COLUMNS)
     .order("joined_at", { ascending: false });
   if (error) throw error;
 
   return data.map((item) => ({
     groupId: item.group_id,
     groupName: item.groups.name,
+    groupKind: item.groups.kind,
     level: item.notification_level,
+    contentPushEnabled: item.content_push_enabled,
     newPostPushEnabled: item.new_post_push_enabled,
   }));
+}
+
+/**
+ * 그룹 화면의 알림 다이얼로그가 열릴 때만 읽는 한 그룹치 설정.
+ *
+ * 그룹 상세 loader에 얹지 않는 이유는 이 값을 그리는 화면이 없기 때문이다 — 다이얼로그를
+ * 열지 않는 대다수 방문에서 매번 한 번씩 더 왕복할 이유가 없다.
+ *
+ * 멤버가 아니면 행이 없고, 그때는 `null`을 돌려준다.
+ */
+export async function getMyGroupNotificationPreference(
+  groupId: string,
+): Promise<GroupNotificationPreference | null> {
+  const { data, error } = await getSupabase()
+    .from("group_memberships")
+    .select(GROUP_PREFERENCE_COLUMNS)
+    .eq("group_id", groupId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  return {
+    groupId: data.group_id,
+    groupName: data.groups.name,
+    groupKind: data.groups.kind,
+    level: data.notification_level,
+    contentPushEnabled: data.content_push_enabled,
+    newPostPushEnabled: data.new_post_push_enabled,
+  };
 }
 
 export async function resolveNotificationDestination(

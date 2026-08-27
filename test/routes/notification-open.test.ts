@@ -24,28 +24,34 @@ function load(notificationId = "notification-id") {
   });
 }
 
+/**
+ * loader는 `Location`을 실어 Response를 던진다. 잡은 뒤에만 단정하면 리다이렉트가 사라졌을 때
+ * 단정식이 한 번도 돌지 않고 통과하므로, 여기서 "던지지 않았다"를 실패로 바꿔 둔다.
+ */
+async function redirectLocation(notificationId?: string): Promise<string> {
+  try {
+    await load(notificationId);
+  } catch (thrown) {
+    expect(thrown).toBeInstanceOf(Response);
+    return (thrown as Response).headers.get("Location") ?? "";
+  }
+  throw new Error("Expected the loader to redirect");
+}
+
 describe("notification open route", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("redirects an authenticated user only to a safe resolved path", async () => {
     mocks.resolveNotificationDestination.mockResolvedValue("//evil.example");
 
-    await expect(load()).rejects.toMatchObject({
-      status: 302,
-      headers: expect.objectContaining({}),
-    });
-    await load().catch((response: Response) => {
-      expect(response.headers.get("Location")).toBe("/noti");
-    });
+    await expect(redirectLocation()).resolves.toBe("/noti");
   });
 
   it("preserves only the fixed resolver path when authentication is missing", async () => {
     mocks.resolveNotificationDestination.mockResolvedValue(null);
 
-    await load("id with spaces").catch((response: Response) => {
-      expect(response.headers.get("Location")).toBe(
-        "/login?next=%2Fnoti%2Fopen%2Fid%2520with%2520spaces",
-      );
-    });
+    await expect(redirectLocation("id with spaces")).resolves.toBe(
+      "/login?next=%2Fnoti%2Fopen%2Fid%2520with%2520spaces",
+    );
   });
 });

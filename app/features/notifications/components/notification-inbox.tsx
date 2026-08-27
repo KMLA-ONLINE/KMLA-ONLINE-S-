@@ -3,29 +3,26 @@ import { useState } from "react";
 import { Link, useFetcher } from "react-router";
 
 import { PageHeader } from "~/features/app-shell";
+import { NotificationAvatar } from "~/features/notifications/components/notification-avatar";
 import { groupNotifications } from "~/features/notifications/model/notifications";
 import type {
   NotificationItem,
   NotificationPage,
 } from "~/features/notifications/model/types";
-import { UserAvatar } from "~/shared/components/user-avatar";
+import { RelativeTime } from "~/shared/components/relative-time";
 import { Button } from "~/shared/ui/button";
-import { Empty, EmptyDescription, EmptyMedia } from "~/shared/ui/empty";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "~/shared/ui/empty";
+import { Spinner } from "~/shared/ui/spinner";
 import { cn } from "~/shared/lib/utils";
 
-function formatActivityTime(value: string): string {
-  const date = new Date(value);
-  const now = new Date();
-  if (date.toDateString() === now.toDateString()) {
-    return new Intl.DateTimeFormat("ko-KR", {
-      hour: "numeric",
-      minute: "2-digit",
-    }).format(date);
-  }
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "short",
-    day: "numeric",
-  }).format(date);
+function isRead(item: NotificationItem): boolean {
+  return Boolean(item.read_at);
 }
 
 function actorName(item: NotificationItem): string {
@@ -35,18 +32,32 @@ function actorName(item: NotificationItem): string {
   return item.actor_display_name || "탈퇴한 사용자";
 }
 
-function NotificationRow({ item }: { item: NotificationItem }) {
+/**
+ * 한 행은 세 줄이다: 누가 / 무슨 일이 / 언제.
+ *
+ * `title`은 DB가 만든 완결된 문장("내 게시물에 새 댓글이 등록되었습니다.")이라 이름 뒤에
+ * 그대로 이어 붙이면 조사가 어긋난다. 그래서 이름과 문장을 한 줄에 섞지 않고 위아래로 나눈다.
+ */
+function NotificationRow({
+  item,
+  forceRead,
+}: {
+  item: NotificationItem;
+  forceRead: boolean;
+}) {
   const readFetcher = useFetcher();
-  const optimisticRead =
-    (item.read_at !== "" && item.read_at !== null) ||
-    readFetcher.formData?.get("notificationId") === item.id;
+  const unread =
+    !forceRead &&
+    !isRead(item) &&
+    readFetcher.formData?.get("notificationId") !== item.id;
   const name = actorName(item);
+  const others = item.actor_count > 1 ? ` 외 ${item.actor_count - 1}명` : "";
 
   return (
     <Link
       to={`/noti/open/${encodeURIComponent(item.id)}`}
       onClick={() => {
-        if (!optimisticRead) {
+        if (unread) {
           void readFetcher.submit(
             { intent: "mark-one", notificationId: item.id },
             { method: "post", action: "/noti" },
@@ -54,31 +65,43 @@ function NotificationRow({ item }: { item: NotificationItem }) {
         }
       }}
       className={cn(
-        "relative flex gap-3 px-4 py-3.5 transition-colors hover:bg-muted/60",
-        !optimisticRead && "bg-primary/5",
+        "flex gap-3 px-4 py-3 transition-colors outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
+        unread && "bg-primary/5 hover:bg-primary/10",
       )}
     >
-      <UserAvatar
-        src={item.actor_avatar_url}
-        name={name}
-        className="mt-0.5 size-10 shrink-0"
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm leading-5">
-          <strong className="font-semibold">{name}</strong>{" "}
-          {item.actor_count > 1 ? `외 ${item.actor_count - 1}명 ` : ""}
+      <NotificationAvatar item={item} name={name} />
+
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex items-start gap-2">
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+            {name}
+            {others ? (
+              <span className="font-normal text-muted-foreground">
+                {others}
+              </span>
+            ) : null}
+          </span>
+          {unread ? (
+            <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary">
+              <span className="sr-only">읽지 않음</span>
+            </span>
+          ) : null}
+        </span>
+
+        <span
+          className={cn(
+            "mt-0.5 text-sm break-keep",
+            unread ? "text-foreground" : "text-muted-foreground",
+          )}
+        >
           {item.title}
         </span>
-        <span className="mt-1 block text-xs text-muted-foreground">
-          {formatActivityTime(item.last_activity_at)}
-        </span>
-      </span>
-      {!optimisticRead ? (
-        <span
-          aria-label="읽지 않음"
-          className="mt-2 size-2 shrink-0 rounded-full bg-primary"
+
+        <RelativeTime
+          value={item.last_activity_at}
+          className="mt-1 text-xs text-muted-foreground"
         />
-      ) : null}
+      </span>
     </Link>
   );
 }
@@ -86,21 +109,25 @@ function NotificationRow({ item }: { item: NotificationItem }) {
 function NotificationGroup({
   title,
   items,
+  forceRead,
 }: {
   title: string;
   items: NotificationItem[];
+  forceRead: boolean;
 }) {
   if (items.length === 0) return null;
   return (
     <section>
-      <h2 className="border-b bg-muted/30 px-4 py-2 text-xs font-semibold tracking-wide text-muted-foreground">
+      <h2 className="px-4 pb-2 text-xs font-semibold tracking-wide text-muted-foreground md:px-1">
         {title}
       </h2>
-      <div className="divide-y">
+      <ul className="divide-y border-y bg-card md:overflow-hidden md:rounded-xl md:border">
         {items.map((item) => (
-          <NotificationRow key={item.id} item={item} />
+          <li key={item.id}>
+            <NotificationRow item={item} forceRead={forceRead} />
+          </li>
         ))}
-      </div>
+      </ul>
     </section>
   );
 }
@@ -147,9 +174,11 @@ export function NotificationInbox({
   const nextCursor = pages.at(-1)?.nextCursor ?? null;
   const groups = groupNotifications(items);
 
+  // 제출 중과 그 뒤 revalidation까지가 idle이 아닌 구간이다. 그동안 행을 미리 읽음으로
+  // 그려야 "모두 읽음"을 누른 순간 목록 전체가 함께 가라앉는다.
   const markAllPending = markAllFetcher.state !== "idle";
-  const allRead =
-    markAllPending || items.every((item) => Boolean(item.read_at));
+  const allLoadedRead = items.every(isRead);
+  const loadingMore = pageFetcher.state !== "idle";
 
   return (
     <>
@@ -168,36 +197,69 @@ export function NotificationInbox({
           </Button>
         }
       />
-      <div className="mx-auto w-full max-w-2xl md:overflow-hidden md:rounded-xl md:border md:bg-card">
-        <div className="flex items-center justify-between border-b px-4 py-2.5">
-          <h1 className="hidden text-lg font-semibold md:block">알림</h1>
-          <markAllFetcher.Form method="post" action="/noti" className="ml-auto">
-            <input type="hidden" name="intent" value="mark-all" />
-            <Button type="submit" variant="ghost" size="sm" disabled={allRead}>
-              <CheckCheckIcon /> 모두 읽음
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 pb-4">
+        <div className="flex items-center gap-2 px-4 pt-1 md:px-1 md:pt-0">
+          <h1 className="hidden text-2xl font-semibold md:block">알림</h1>
+          <div className="ml-auto flex items-center gap-1">
+            <markAllFetcher.Form method="post" action="/noti">
+              <input type="hidden" name="intent" value="mark-all" />
+              <Button
+                type="submit"
+                variant="ghost"
+                size="sm"
+                disabled={markAllPending || allLoadedRead}
+              >
+                <CheckCheckIcon /> 모두 읽음
+              </Button>
+            </markAllFetcher.Form>
+            {/* 모바일은 PageHeader가 같은 링크를 이미 들고 있다. 데스크톱에서는 그 헤더가
+                숨겨지므로 여기에도 두지 않으면 설정으로 갈 길이 사라진다. */}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              nativeButton={false}
+              aria-label="알림 설정"
+              className="hidden md:inline-flex"
+              render={<Link to="/noti/settings" />}
+            >
+              <SettingsIcon />
             </Button>
-          </markAllFetcher.Form>
+          </div>
         </div>
 
         {items.length === 0 ? (
           <Empty className="border-0 py-20">
-            <EmptyMedia variant="icon">
-              <BellIcon />
-            </EmptyMedia>
-            <EmptyDescription>새 알림이 없습니다.</EmptyDescription>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <BellIcon />
+              </EmptyMedia>
+              <EmptyTitle>새 알림이 없습니다</EmptyTitle>
+              <EmptyDescription>
+                댓글·반응과 그룹 소식이 도착하면 여기에 모입니다.
+              </EmptyDescription>
+            </EmptyHeader>
           </Empty>
         ) : (
           <>
-            <NotificationGroup title="최근 24시간" items={groups.recent} />
-            <NotificationGroup title="이전 알림" items={groups.older} />
+            <NotificationGroup
+              title="최근 24시간"
+              items={groups.recent}
+              forceRead={markAllPending}
+            />
+            <NotificationGroup
+              title="이전 알림"
+              items={groups.older}
+              forceRead={markAllPending}
+            />
           </>
         )}
 
         {nextCursor ? (
-          <div className="border-t p-4 text-center">
+          <div className="px-4 md:px-1">
             <Button
               variant="outline"
-              disabled={pageFetcher.state !== "idle"}
+              className="w-full"
+              disabled={loadingMore}
               onClick={() => {
                 const search = new URLSearchParams({
                   beforeId: nextCursor.beforeId,
@@ -206,9 +268,13 @@ export function NotificationInbox({
                 void pageFetcher.load(`/noti?${search}`);
               }}
             >
-              {pageFetcher.state === "loading"
-                ? "불러오는 중"
-                : "이전 알림 더 보기"}
+              {loadingMore ? (
+                <>
+                  <Spinner /> 불러오는 중
+                </>
+              ) : (
+                "이전 알림 더 보기"
+              )}
             </Button>
           </div>
         ) : null}

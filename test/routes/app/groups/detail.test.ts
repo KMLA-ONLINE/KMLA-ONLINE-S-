@@ -129,8 +129,13 @@ describe("group detail management action", () => {
   });
 });
 
+/**
+ * 규칙 자체는 `createPostListRevalidation`의 테스트가 확인한다. 이 route에만 있는 사실은
+ * 검색 오버레이 파라미터(`search`, `q`)만 UI 전용으로 넘겼다는 것이라, 여기서는 그 목록이
+ * 맞는지만 본다 — loader가 읽는 `tab`은 그 목록에 없어야 한다.
+ */
 describe("group detail revalidation", () => {
-  it("does not reload the group when only the search overlay opens", () => {
+  it("ignores only the search overlay parameters", () => {
     expect(
       shouldRevalidate({
         currentUrl: new URL("https://example.com/groups/test?tab=members"),
@@ -139,18 +144,6 @@ describe("group detail revalidation", () => {
         ),
       } as never),
     ).toBe(false);
-  });
-
-  it("does not reload the group when an image viewer opens", () => {
-    expect(
-      shouldRevalidate({
-        currentUrl: new URL("https://example.com/groups/test"),
-        nextUrl: new URL("https://example.com/groups/test?image=attachment-id"),
-      } as never),
-    ).toBe(false);
-  });
-
-  it("reloads when a tab the loader reads changes", () => {
     expect(
       shouldRevalidate({
         currentUrl: new URL("https://example.com/groups/test?search=1"),

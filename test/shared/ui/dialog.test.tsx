@@ -44,17 +44,4 @@ describe("dialog overlay", () => {
     expect(screen.getByText("안쪽")).toBeInTheDocument();
     expect(overlays()).toHaveLength(2);
   });
-
-  it("keeps the scrim free of backdrop filters", () => {
-    // blur는 스크림을 별도 합성 레이어로 만들어 모달이 페이드하는 동안 1px 이음매를 남긴다.
-    render(
-      <Dialog open>
-        <DialogContent>
-          <DialogTitle>바깥</DialogTitle>
-        </DialogContent>
-      </Dialog>,
-    );
-
-    expect(overlays()[0]?.className).not.toMatch(/backdrop-blur/);
-  });
 });

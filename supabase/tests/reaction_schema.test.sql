@@ -1,54 +1,40 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(32);
+select plan(12);
 
-select ok(
-  (select relrowsecurity from pg_catalog.pg_class where oid = 'public.post_reactions'::regclass),
-  'post reactions have RLS enabled'
-);
-select ok(
+-- 이 파일은 반응 테이블의 경계만 본다. 반응 RPC들의 grant는 `post_reactions`가 실제로
+-- 호출해 보며 증명하므로 여기서 다시 나열하지 않는다 — 같은 사실을 두 번 적으면 한쪽만
+-- 고쳐지는 일이 생긴다(`post_schema` 끝의 같은 주석 참고).
+
+select is(
   (
-    select relrowsecurity
+    select count(*)::integer
     from pg_catalog.pg_class
-    where oid = 'public.comment_reactions'::regclass
+    where oid in (
+      'public.post_reactions'::regclass, 'public.comment_reactions'::regclass
+    )
+      and not relrowsecurity
   ),
-  'comment reactions have RLS enabled'
+  0,
+  'both reaction tables have RLS enabled'
 );
 
--- 반응 행은 통째로 신원이다. 읽기는 접근 권한을 확인하는 RPC로만 제공한다.
-select ok(
-  not has_table_privilege('authenticated', 'public.post_reactions', 'SELECT'),
-  'post reactions are only readable through definer RPCs'
+-- 반응 행은 통째로 신원이다. 읽기도 쓰기도 접근 권한을 확인하는 RPC로만 제공한다.
+-- 동사를 하나씩 적는 대신 한자리에서 세면 새 권한이 새로 붙어도 여기서 걸린다.
+select is(
+  (
+    select count(*)::integer
+    from (values
+      ('public.post_reactions'), ('public.comment_reactions')
+    ) as reaction_table(name),
+    (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')) as verb(privilege)
+    where has_table_privilege('authenticated', reaction_table.name, verb.privilege)
+  ),
+  0,
+  'reaction rows are reachable only through the definer RPCs'
 );
-select ok(
-  not has_table_privilege('authenticated', 'public.post_reactions', 'INSERT'),
-  'authenticated cannot insert post reactions directly'
-);
-select ok(
-  not has_table_privilege('authenticated', 'public.post_reactions', 'UPDATE'),
-  'authenticated cannot update post reactions directly'
-);
-select ok(
-  not has_table_privilege('authenticated', 'public.post_reactions', 'DELETE'),
-  'authenticated cannot delete post reactions directly'
-);
-select ok(
-  not has_table_privilege('authenticated', 'public.comment_reactions', 'SELECT'),
-  'comment reactions are only readable through definer RPCs'
-);
-select ok(
-  not has_table_privilege('authenticated', 'public.comment_reactions', 'INSERT'),
-  'authenticated cannot insert comment reactions directly'
-);
-select ok(
-  not has_table_privilege('authenticated', 'public.comment_reactions', 'UPDATE'),
-  'authenticated cannot update comment reactions directly'
-);
-select ok(
-  not has_table_privilege('authenticated', 'public.comment_reactions', 'DELETE'),
-  'authenticated cannot delete comment reactions directly'
-);
+
 select hasnt_column(
   'public', 'post_reactions', 'is_anonymous',
   'post reactions do not store an anonymity flag'
@@ -58,72 +44,42 @@ select hasnt_column(
   'comment reactions do not store an anonymity flag'
 );
 
--- 호출자를 인자로 받는 헬퍼라 클라이언트가 직접 부르면 남의 `my_reaction`을 읽을 수 있다.
-select ok(
-  not has_function_privilege(
-    'authenticated', 'private.post_reaction_summary(uuid, bigint)', 'EXECUTE'
+-- 호출자를 인자로 받는 헬퍼라 클라이언트가 직접 부르면 남의 `my_reaction`을 읽거나 권한을
+-- 사칭할 수 있다.
+select is(
+  (
+    select count(*)::integer
+    from (values
+      ('private.post_reaction_summary(uuid, bigint)'),
+      ('private.comment_reaction_summary(uuid, bigint)'),
+      ('private.reaction_context(uuid, bigint)')
+    ) as helper(signature)
+    where has_function_privilege('authenticated', helper.signature, 'EXECUTE')
   ),
-  'the post reaction summary helper is not callable by clients'
-);
-select ok(
-  not has_function_privilege(
-    'authenticated', 'private.comment_reaction_summary(uuid, bigint)', 'EXECUTE'
-  ),
-  'the comment reaction summary helper is not callable by clients'
-);
-select ok(
-  not has_function_privilege(
-    'authenticated', 'private.reaction_context(uuid, bigint)', 'EXECUTE'
-  ),
-  'the reaction context helper is not callable by clients'
+  0,
+  'the caller-argument reaction helpers are not callable by clients'
 );
 
--- 반환 모양이 바뀌어 다시 만들어진 읽기 RPC들의 grant는 `comment_schema`가 한자리에서 센다.
--- 어느 마이그레이션이 다시 만들었든 확인할 것은 지금 DB의 상태 하나뿐이다.
-select ok(
-  has_function_privilege('authenticated', 'public.list_comment_reactors(uuid)', 'EXECUTE'),
-  'the comment reactor list is callable by members'
+-- `anon`에게는 어디에서도 grant하지 않지만, 반응 RPC는 definer라 한 번 새면 전부 샌다.
+-- 이름으로 훑으므로 오버로드가 늘어도 따라온다.
+select is(
+  (
+    select count(*)::integer
+    from pg_catalog.pg_proc as reaction_function
+    join pg_catalog.pg_namespace as schema
+      on schema.oid = reaction_function.pronamespace
+    where schema.nspname = 'public'
+      and reaction_function.proname in (
+        'list_post_reactors', 'list_comment_reactors',
+        'set_post_reaction', 'clear_post_reaction',
+        'set_comment_reaction', 'clear_comment_reaction'
+      )
+      and has_function_privilege('anon', reaction_function.oid, 'EXECUTE')
+  ),
+  0,
+  'anonymous visitors cannot call any reaction RPC'
 );
-select ok(
-  not has_function_privilege('anon', 'public.list_post_reactors(uuid)', 'EXECUTE'),
-  'anonymous visitors cannot call the post reactor list'
-);
-select ok(
-  not has_function_privilege('anon', 'public.list_comment_reactors(uuid)', 'EXECUTE'),
-  'anonymous visitors cannot call the comment reactor list'
-);
-select ok(
-  has_function_privilege('authenticated', 'public.set_post_reaction(uuid,public.post_reaction)', 'EXECUTE'),
-  'authenticated users can set post reactions'
-);
-select ok(
-  not has_function_privilege('anon', 'public.set_post_reaction(uuid,public.post_reaction)', 'EXECUTE'),
-  'anonymous visitors cannot set post reactions'
-);
-select ok(
-  has_function_privilege('authenticated', 'public.clear_post_reaction(uuid)', 'EXECUTE'),
-  'authenticated users can clear post reactions'
-);
-select ok(
-  not has_function_privilege('anon', 'public.clear_post_reaction(uuid)', 'EXECUTE'),
-  'anonymous visitors cannot clear post reactions'
-);
-select ok(
-  has_function_privilege('authenticated', 'public.set_comment_reaction(uuid,public.post_reaction)', 'EXECUTE'),
-  'authenticated users can set comment reactions'
-);
-select ok(
-  not has_function_privilege('anon', 'public.set_comment_reaction(uuid,public.post_reaction)', 'EXECUTE'),
-  'anonymous visitors cannot set comment reactions'
-);
-select ok(
-  has_function_privilege('authenticated', 'public.clear_comment_reaction(uuid)', 'EXECUTE'),
-  'authenticated users can clear comment reactions'
-);
-select ok(
-  not has_function_privilege('anon', 'public.clear_comment_reaction(uuid)', 'EXECUTE'),
-  'anonymous visitors cannot clear comment reactions'
-);
+
 select ok(
   (select prosecdef from pg_catalog.pg_proc
    where oid = 'public.list_post_reactors(uuid)'::regprocedure),

@@ -66,8 +66,14 @@ badge, 목록 구분과 30일 보존은 `last_activity_at`을 기준으로 한�
 
 ### 3.3 그룹 설정
 
-`public.group_memberships`에 `notification_level`과 `new_post_push_enabled`를 둔다. 공식 그룹은 `all`,
-비공식 그룹은 `direct`가 기본값이다. 새 게시물 Push는 낮음 중요도이므로 별도로 켠 경우에만 보낸다.
+`public.group_memberships`에 앱 알림함 범위를 정하는 `notification_level`, 직접 관련 활동의 Web Push를
+정하는 `content_push_enabled`, 새 게시물 Web Push를 정하는 `new_post_push_enabled`를 둔다. 공식 그룹은
+`all`, 비공식 그룹은 `direct`가 기본값이며 직접 관련 활동 Push는 기본 활성화한다. 새 게시물 Push는
+낮음 중요도이므로 별도로 켠 경우에만 보낸다.
+
+Web Push는 인앱 알림에서 파생되는 보조 채널이므로 Push만 단독으로 받는 조합은 만들지 않는다.
+`notification_level = none`이면 두 그룹 Push 설정을 끄고, `direct`이면 새 게시물 Push를 끈다. 이 규칙은
+공개 RPC와 데이터베이스 제약조건에서 함께 강제한다.
 
 ### 3.4 기기별 Push 구독
 
@@ -129,6 +135,11 @@ Push 발송 직전에 기기 상태, 최신 유형·그룹 설정과 현재 대�
 
 Supabase Cron이 30초마다 `pg_net`으로 `dispatch-notifications` Edge Function을 호출한다. worker는 전용
 shared secret을 검증하고 service role로 bounded batch를 처리한다.
+
+worker는 delivery를 lease한 뒤 각 항목을 외부 서비스로 보내기 직전에
+`prepare_notification_delivery`로 lease 소유권, 최신 설정과 대상 접근 권한을 다시 확인한다. 다른
+dispatcher는 만료되지 않은 lease를 suppress하거나 가져가지 않는다. 최종 확인에서 더 이상 전달할 수
+없는 항목은 외부 호출 없이 suppress한다.
 
 - Web Push 2xx는 성공 처리한다.
 - 404와 410은 subscription을 폐기한다.
