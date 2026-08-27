@@ -1,9 +1,8 @@
-import { MessagesSquareIcon, SearchIcon } from "lucide-react";
+import { SearchIcon } from "lucide-react";
 import { Link } from "react-router";
 
 import { useAppShell } from "~/features/app-shell/context/app-shell-context";
 import { UserAvatar } from "~/shared/components/user-avatar";
-import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
 import { cn } from "~/shared/lib/utils";
 
@@ -44,16 +43,7 @@ export function AppHeader({ className }: { className?: string }) {
         />
       </div>
 
-      <div className="flex flex-1 basis-0 items-center justify-end gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          nativeButton={false}
-          aria-label="메시지"
-          render={<Link to="/messenger" />}
-        >
-          <MessagesSquareIcon />
-        </Button>
+      <div className="flex flex-1 basis-0 items-center justify-end">
         <Link to="/profile" aria-label="내 프로필">
           <UserAvatar src={profile.avatar_url} name={profile.name} />
         </Link>

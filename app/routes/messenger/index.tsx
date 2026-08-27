@@ -1,6 +1,11 @@
 import { Outlet, useParams } from "react-router";
 
-import { MessagingScreen } from "~/features/messaging";
+import { listConversations, MessagingScreen } from "~/features/messaging";
+import type { Route } from "./+types/index";
+
+export async function clientLoader() {
+  return { conversations: await listConversations() };
+}
 
 /**
  * 별도 메신저 레이아웃 아래에서 **스크롤은 이 라우트가 직접 소유한다**. 방 목록과 대화창이
@@ -9,11 +14,15 @@ import { MessagingScreen } from "~/features/messaging";
  * 모바일에서는 방을 열면 목록이 사라지고 대화창이 전체를 차지한다(URL이 곧 화면 상태라
  * 뒤로가기가 그대로 동작한다). 데스크톱에서는 둘이 나란히 있다.
  */
-export default function MessengerPage() {
+export default function MessengerPage({ loaderData }: Route.ComponentProps) {
   const { roomId } = useParams();
 
   return (
-    <MessagingScreen hasRoom={Boolean(roomId)}>
+    <MessagingScreen
+      conversations={loaderData.conversations}
+      selectedRoomId={roomId}
+      hasRoom={Boolean(roomId)}
+    >
       <Outlet />
     </MessagingScreen>
   );
