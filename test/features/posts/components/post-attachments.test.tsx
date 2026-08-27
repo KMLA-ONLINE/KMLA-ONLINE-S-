@@ -48,6 +48,9 @@ describe("splitPostAttachments", () => {
   });
 });
 
+const gridRatio = () =>
+  Number.parseFloat(screen.getByTestId("post-image-grid").style.aspectRatio);
+
 describe("PostImageGrid", () => {
   it("rules a single image top and bottom only", () => {
     const { unmount } = renderRoute(() => (
@@ -61,6 +64,46 @@ describe("PostImageGrid", () => {
     renderRoute(() => <PostImageGrid images={[image("a"), image("b")]} />);
 
     expect(screen.getByTestId("post-image-grid")).not.toHaveClass("border-y");
+  });
+
+  it("shows a single image at its own aspect ratio", () => {
+    renderRoute(() => (
+      <PostImageGrid
+        images={[{ ...image("portrait"), width: 900, height: 1200 }]}
+      />
+    ));
+
+    // 3:4 세로 사진. 16:9로 못 박으면 세로의 절반 넘게 잘린다.
+    // 값을 숫자로 읽는 이유: jsdom이 `aspect-ratio`를 `"0.75 / 1"`로 정규화해 돌려준다.
+    expect(gridRatio()).toBeCloseTo(0.75);
+  });
+
+  it("clamps a single image so one photo cannot swallow the feed", () => {
+    const { unmount } = renderRoute(() => (
+      <PostImageGrid
+        images={[{ ...image("screenshot"), width: 1080, height: 1920 }]}
+      />
+    ));
+
+    // 9:16 캡처를 그대로 두면 카드 폭의 1.78배 높이가 된다. 3:4에서 끊는다.
+    expect(gridRatio()).toBeCloseTo(0.75);
+
+    unmount();
+    renderRoute(() => (
+      <PostImageGrid
+        images={[{ ...image("panorama"), width: 2100, height: 900 }]}
+      />
+    ));
+
+    expect(gridRatio()).toBeCloseTo(16 / 9);
+  });
+
+  it("falls back to 16:9 when the attachment was never measured", () => {
+    renderRoute(() => <PostImageGrid images={[image("unmeasured")]} />);
+
+    const grid = screen.getByTestId("post-image-grid");
+    expect(grid).toHaveClass("aspect-video");
+    expect(grid).toHaveStyle({ aspectRatio: "" });
   });
 
   it("renders every image up to the tile limit", () => {
