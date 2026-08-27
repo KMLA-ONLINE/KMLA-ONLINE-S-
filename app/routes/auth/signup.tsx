@@ -1,5 +1,12 @@
 import { CheckIcon } from "lucide-react";
-import { data, Form, Link, redirect, useNavigation } from "react-router";
+import {
+  data,
+  Form,
+  Link,
+  redirect,
+  useNavigation,
+  useSubmit,
+} from "react-router";
 
 import {
   AuthCard,
@@ -326,8 +333,28 @@ export default function SignupPage({
   actionData,
 }: Route.ComponentProps) {
   const navigation = useNavigation();
+  const submit = useSubmit();
   const pending = navigation.state === "submitting";
   const result: SignupState = actionData ?? initialState(loaderData.draft);
+
+  /**
+   * 보조 동작은 submit 버튼이 아니라 button + 프로그램 제출로 보낸다.
+   *
+   * Enter와 모바일 키보드의 '이동'은 폼의 기본 버튼 — tree order상 첫 submit 버튼 — 을
+   * 누른다. 재발송이나 이전이 그 자리에 있으면 코드를 다 입력하고 이동을 눌렀을 때 제출
+   * 대신 그쪽이 실행된다. 보이는 순서를 건드리지 않고 기본 버튼만 제자리로 돌려놓는다.
+   */
+  function submitIntent(
+    event: React.MouseEvent<HTMLButtonElement>,
+    intent: string,
+  ) {
+    const form = event.currentTarget.form;
+    if (!form) return;
+
+    const formData = new FormData(form);
+    formData.set("intent", intent);
+    void submit(formData, { method: "post" });
+  }
   const { step, email, password, values } = result;
   const errors = result.errors ?? {};
 
@@ -423,12 +450,10 @@ export default function SignupPage({
             </FieldDescription>
             <div className="flex gap-3">
               <Button
-                type="submit"
-                name="intent"
-                value="back"
+                type="button"
                 variant="outline"
                 size="lg"
-                formNoValidate
+                onClick={(event) => submitIntent(event, "back")}
                 disabled={pending}
               >
                 이전
@@ -468,12 +493,10 @@ export default function SignupPage({
                   disabled={pending}
                 />
                 <Button
-                  type="submit"
-                  name="intent"
-                  value="resend"
+                  type="button"
                   variant="link"
                   className="w-fit px-0"
-                  formNoValidate
+                  onClick={(event) => submitIntent(event, "resend")}
                   disabled={pending}
                 >
                   인증 코드 다시 보내기
@@ -492,12 +515,10 @@ export default function SignupPage({
               가입 신청 제출
             </Button>
             <Button
-              type="submit"
-              name="intent"
-              value="restart"
+              type="button"
               variant="link"
               className="w-fit self-center px-0 text-muted-foreground"
-              formNoValidate
+              onClick={(event) => submitIntent(event, "restart")}
               disabled={pending}
             >
               다른 이메일로 다시 시작하기

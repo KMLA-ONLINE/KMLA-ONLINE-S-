@@ -1,4 +1,11 @@
-import { data, Form, Link, redirect, useNavigation } from "react-router";
+import {
+  data,
+  Form,
+  Link,
+  redirect,
+  useNavigation,
+  useSubmit,
+} from "react-router";
 
 import {
   AuthCard,
@@ -116,10 +123,25 @@ export default function ForgotPasswordPage({
   actionData,
 }: Route.ComponentProps) {
   const navigation = useNavigation();
+  const submit = useSubmit();
   const pending = navigation.state === "submitting";
   const result = actionData as ForgotPasswordActionData | undefined;
   const step = result?.step ?? "request";
   const errors = result?.errors ?? {};
+
+  /**
+   * 재발송은 submit 버튼이면 안 된다. Enter와 모바일 키보드의 '이동'은 폼의 기본 버튼 —
+   * tree order상 첫 submit 버튼 — 을 누르는데, 그게 재발송이면 코드를 입력하고 이동을
+   * 눌렀을 때 재설정 대신 새 코드가 날아가 방금 입력한 코드가 무효가 된다.
+   */
+  function resend(event: React.MouseEvent<HTMLButtonElement>) {
+    const form = event.currentTarget.form;
+    if (!form) return;
+
+    const formData = new FormData(form);
+    formData.set("intent", "resend");
+    void submit(formData, { method: "post" });
+  }
 
   return (
     <AuthCard
@@ -174,12 +196,10 @@ export default function ForgotPasswordPage({
               <input type="hidden" name="email" value={result?.email} />
               <OtpField id="forgot-otp" error={errors.otp} disabled={pending} />
               <Button
-                type="submit"
-                name="intent"
-                value="resend"
+                type="button"
                 variant="link"
                 className="w-fit px-0"
-                formNoValidate
+                onClick={resend}
                 disabled={pending}
               >
                 인증 코드 다시 보내기
