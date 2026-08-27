@@ -62,6 +62,7 @@ export function PostDetail({
       comments={comments}
       viewer={viewer}
       identities={identities}
+      postAuthorPubId={post.author_pub_id}
       error={fetcher.data?.error}
       onClose={close}
       actionBar={{

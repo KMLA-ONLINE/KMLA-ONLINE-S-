@@ -32,6 +32,7 @@ export function CommentThread({
   loading,
   pending,
   viewer,
+  postAuthorPubId,
   replyingToId,
   scrollRef,
   onLoadMore,
@@ -48,6 +49,8 @@ export function CommentThread({
   loading: boolean;
   pending: boolean;
   viewer: CommentViewer;
+  /** 게시물 작성자의 `pub_id`. 익명 게시물에서는 없다. */
+  postAuthorPubId?: string | null;
   replyingToId?: string | null;
   /** 상세 모달의 스크롤 영역. 부모 댓글 이동 대상을 현재 모달 안으로 제한한다. */
   scrollRef?: RefObject<HTMLElement | null>;
@@ -67,14 +70,44 @@ export function CommentThread({
 
   useEffect(() => () => clearTimeout(highlightTimer.current), []);
 
+  /**
+   * 이 댓글을 쓴 사람이 게시물 작성자인가.
+   *
+   * 익명 댓글과 익명 게시물은 RPC가 `author_pub_id`를 지워 내려보내므로 여기서 참이 될 수
+   * 없다. 그래도 구멍은 아니다 — 익명 게시물에 글쓴이가 익명으로 단 댓글은 서버가 이미
+   * `글쓴이` 라벨로 밝힌다. 비교로 익명이 벗겨지지 않는 것도 같은 이유다.
+   */
+  const isPostAuthor = (comment: PostComment) =>
+    Boolean(postAuthorPubId) && comment.author_pub_id === postAuthorPubId;
+
   const jumpTo = (commentId: string) => {
     const element = document.getElementById(commentDomId(commentId));
-    if (
-      !element ||
-      (scrollRef?.current && !scrollRef.current.contains(element))
-    )
-      return;
-    element.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (!element) return;
+
+    const container = scrollRef?.current;
+    if (container && !container.contains(element)) return;
+
+    if (container) {
+      /*
+        `scrollIntoView`는 스크롤 조상을 전부 훑고 모바일에서는 visual viewport까지 민다.
+        댓글 시트의 높이와 위치가 거기에 묶여 있어서(`use-keyboard-viewport`), 부모 댓글로
+        옮겨 왔을 뿐인데 시트가 통째로 끌려온다. 컨테이너 안에서만 움직이면 옮겨 가는 동작은
+        그대로고 바깥은 가만히 있는다.
+      */
+      const containerRect = container.getBoundingClientRect();
+      const elementRect = element.getBoundingClientRect();
+      const toCenter =
+        elementRect.top -
+        containerRect.top -
+        (containerRect.height - elementRect.height) / 2;
+      container.scrollTo({
+        top: container.scrollTop + toCenter,
+        behavior: "smooth",
+      });
+    } else {
+      element.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+
     setHighlighted(commentId);
     clearTimeout(highlightTimer.current);
     highlightTimer.current = setTimeout(
@@ -103,6 +136,7 @@ export function CommentThread({
               comment={comment}
               viewer={viewer}
               canReply
+              isPostAuthor={isPostAuthor(comment)}
               replying={replyingToId === comment.comment_id}
               highlighted={highlighted === comment.comment_id}
               pending={pending}
@@ -140,6 +174,7 @@ export function CommentThread({
                       comment={reply}
                       viewer={viewer}
                       canReply={reply.depth < MAX_REPLY_DEPTH}
+                      isPostAuthor={isPostAuthor(reply)}
                       replying={replyingToId === reply.comment_id}
                       highlighted={highlighted === reply.comment_id}
                       pending={pending}
