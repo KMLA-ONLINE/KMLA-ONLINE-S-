@@ -41,10 +41,10 @@ export function AuthCard({
           </div>
           <div className="relative max-w-sm">
             <p className="text-3xl leading-tight font-semibold text-balance">
-              학교의 오늘을 잇는 가장 가까운 공간
+              KMLA Online
             </p>
             <p className="mt-4 text-sm leading-6 text-primary-foreground/75">
-              재학생, 졸업생, 교사가 소식과 이야기를 안전하게 나눕니다.
+              민족사관고등학교 커뮤니티
             </p>
           </div>
           <p className="relative text-xs text-primary-foreground/60">

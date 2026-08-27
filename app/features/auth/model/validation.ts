@@ -46,7 +46,6 @@ export function readProfileForm(formData: FormData): ProfileFormValues {
     phoneNumber: readFormText(formData, "phoneNumber"),
     birthday: readFormText(formData, "birthday"),
     dormRoom: readFormText(formData, "dormRoom"),
-    otp: readFormText(formData, "otp"),
   };
 }
 
@@ -63,10 +62,7 @@ function validateOptionalNumber(
   }
 }
 
-export function validateProfileForm(
-  values: ProfileFormValues,
-  requireOtp: boolean,
-): FieldErrors {
+export function validateProfileForm(values: ProfileFormValues): FieldErrors {
   const errors: FieldErrors = {};
 
   if (!values.name || values.name.length > 50) {
@@ -88,14 +84,9 @@ export function validateProfileForm(
     errors.phoneNumber = "전화번호 형식을 확인해 주세요.";
   }
 
-  errors.classNo = validateOptionalNumber(values.classNo, "반", 1, 20);
+  // 반과 기숙사 방은 이 폼이 입력받지 않고 기존 값을 실어 나르기만 한다. 화면에 없는
+  // 항목의 오류는 사용자가 고칠 방법이 없으므로 여기서 검사하지 않는다.
   errors.cohort = validateOptionalNumber(values.cohort, "기수", 1, 100);
-  errors.dormRoom = validateOptionalNumber(
-    values.dormRoom,
-    "기숙사 방",
-    1,
-    999,
-  );
 
   if (values.type === "student") {
     if (!values.studentNumber) errors.studentNumber = "학번을 입력해 주세요.";
@@ -110,8 +101,6 @@ export function validateProfileForm(
     if (!values.gender) errors.gender = "성별을 선택해 주세요.";
     if (!values.academicTrack) errors.academicTrack = "계열을 선택해 주세요.";
   }
-
-  if (requireOtp) errors.otp = validateOtpCode(values.otp);
 
   return Object.fromEntries(
     Object.entries(errors).filter(([, message]) => Boolean(message)),
