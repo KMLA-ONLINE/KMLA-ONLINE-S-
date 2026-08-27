@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(30);
+select plan(32);
 
 select ok(
   (select relrowsecurity from pg_class where oid = 'public.notifications'::regclass),
@@ -30,6 +30,14 @@ select ok(
 select ok(
   not has_function_privilege('anon', 'public.list_my_notifications(timestamptz,uuid,integer)', 'EXECUTE'),
   'anonymous clients cannot list notifications'
+);
+select ok(
+  has_function_privilege('service_role', 'public.prepare_notification_delivery(uuid,uuid)', 'EXECUTE'),
+  'the delivery worker can run the final authorization check'
+);
+select ok(
+  not has_function_privilege('authenticated', 'public.prepare_notification_delivery(uuid,uuid)', 'EXECUTE'),
+  'clients cannot prepare leased delivery work'
 );
 
 insert into auth.users (

@@ -29,6 +29,7 @@ function dependencies(items: Delivery[]) {
   const deps: DispatchDependencies = {
     expectedSecret: "dispatch-secret",
     claim: () => Promise.resolve(items),
+    prepare: () => Promise.resolve(true),
     complete: (result) => {
       completions.push(result);
       return Promise.resolve(true);
@@ -70,6 +71,37 @@ Deno.test(
       tag: "notification:33333333-3333-4333-8333-333333333333",
     });
     assertFalse("endpoint" in payloads[0]);
+  },
+);
+
+Deno.test(
+  "dispatcher suppresses a delivery that fails the final authorization check",
+  async () => {
+    const { deps, completions, payloads } = dependencies([delivery()]);
+    deps.prepare = () => Promise.resolve(false);
+    let pushCalls = 0;
+    deps.sendPush = () => {
+      pushCalls += 1;
+      return Promise.resolve({ status: 201 });
+    };
+
+    const response = await createDispatchHandler(deps)(
+      new Request("http://localhost", {
+        method: "POST",
+        headers: { "x-dispatch-secret": "dispatch-secret" },
+      }),
+    );
+
+    assertEquals(await response.json(), {
+      claimed: 1,
+      sent: 0,
+      suppressed: 1,
+      retry: 0,
+      dead: 0,
+    });
+    assertEquals(pushCalls, 0);
+    assertEquals(completions, []);
+    assertEquals(payloads, []);
   },
 );
 

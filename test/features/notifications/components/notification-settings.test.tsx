@@ -59,6 +59,10 @@ describe("NotificationSettings", () => {
     expect(
       screen.getByRole("status", { name: "Web Push 설정 변경 중" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "댓글 · 답글" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
 
     await act(async () => {
       finishEnable?.({
@@ -206,6 +210,35 @@ describe("NotificationSettings", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText("받도록 설정한 알림은 앱 알림함에서 확인합니다."),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps mandatory moderation Push in the summary", () => {
+    renderRoute(() => (
+      <NotificationSettings
+        initialPreferences={{
+          account_push_enabled: false,
+          content_push_enabled: false,
+          group_push_enabled: false,
+          school_push_enabled: false,
+          timeline_push_enabled: false,
+        }}
+        initialPushSupport={{
+          state: "available",
+          permission: "granted",
+          subscribed: true,
+        }}
+        groupPreferences={[]}
+      />
+    ));
+
+    expect(
+      screen.getByText("이 기기로 운영 조치 Push만 받습니다."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "운영 조치는 유형별 설정과 관계없이 전달됩니다. 가입 승인·차단 Push는 ‘계정 · 권한’ 설정을 따르며, 이메일과 앱 알림함은 계속 전달됩니다.",
+      ),
     ).toBeInTheDocument();
   });
 });

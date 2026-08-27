@@ -10,7 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useFetchers } from "react-router";
 import { toast } from "sonner";
 
 import { PageHeader } from "~/features/app-shell";
@@ -78,6 +78,10 @@ const PREFERENCE_ROWS = [
 ])[];
 
 type PushTone = "on" | "off" | "blocked";
+interface SettingsActionResult {
+  saved?: boolean;
+  error?: string;
+}
 
 /**
  * Web Push 상태 하나를 배지 문구·설명·색으로 한 번에 푼다.
@@ -165,8 +169,8 @@ function summarizeDelivery(
 
   if (enabled.length === 0) {
     return {
-      headline: "이 기기로 오는 Push가 없습니다.",
-      detail: "유형을 모두 꺼 두어 앱 알림함에서만 확인합니다.",
+      headline: "이 기기로 운영 조치 Push만 받습니다.",
+      detail: "그 밖의 알림은 앱 알림함에서 확인합니다.",
     };
   }
 
@@ -226,10 +230,12 @@ function SettingsSection({
 
 function GroupPreferenceRow({
   preference,
+  disabled,
 }: {
   preference: GroupNotificationPreference;
+  disabled: boolean;
 }) {
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<SettingsActionResult>();
   const submittedLevel = fetcher.formData?.get("level");
   const level =
     submittedLevel === "none" ||
@@ -273,9 +279,14 @@ function GroupPreferenceRow({
         level={level}
         contentPushEnabled={contentPushEnabled}
         newPostPushEnabled={newPostPushEnabled}
-        pending={fetcher.state !== "idle"}
+        pending={disabled || fetcher.state !== "idle"}
         onChange={save}
       />
+      {fetcher.data?.error ? (
+        <p role="alert" className="mt-2 text-xs text-destructive">
+          {fetcher.data.error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -294,7 +305,8 @@ export function NotificationSettings({
     value: initialPushSupport,
   });
   const [pushPending, setPushPending] = useState(false);
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<SettingsActionResult>();
+  const activeFetchers = useFetchers();
 
   // 화면에 들어온 순간 "기본값이 아니던" 그룹을 기억한다. 여기서 다시 기본값으로 돌려도
   // 행이 발밑에서 사라지지 않아야 방금 무엇을 바꿨는지 확인할 수 있다.
@@ -374,6 +386,13 @@ export function NotificationSettings({
 
   const pushEnabled =
     pushSupport.state === "available" && pushSupport.subscribed;
+  const preferencePending = activeFetchers.some(
+    (item) =>
+      item.state !== "idle" &&
+      (item.formData?.get("intent") === "preferences" ||
+        item.formData?.get("intent") === "group-preferences"),
+  );
+  const settingsPending = pushPending || preferencePending;
   const push = describePush(pushSupport, pushPending);
   const summary = summarizeDelivery(pushEnabled, preferences);
   const adjustedGroups = groupPreferences.filter(
@@ -437,7 +456,7 @@ export function NotificationSettings({
                 <Switch
                   aria-label="이 기기의 Web Push"
                   checked={pushEnabled}
-                  disabled={pushPending}
+                  disabled={settingsPending}
                   onCheckedChange={() => void togglePush()}
                 />
               </div>
@@ -465,7 +484,7 @@ export function NotificationSettings({
           title="유형별 Push"
           scope="모든 기기"
           description="이 기기 Push가 켜져 있을 때 어떤 유형을 보낼지 고릅니다."
-          footnote="운영 조치와 가입 승인·차단 같은 계정 알림은 이 설정과 관계없이 전달됩니다."
+          footnote="운영 조치는 유형별 설정과 관계없이 전달됩니다. 가입 승인·차단 Push는 ‘계정 · 권한’ 설정을 따르며, 이메일과 앱 알림함은 계속 전달됩니다."
         >
           {PREFERENCE_ROWS.map(([key, Icon, title, description]) => (
             <div key={key} className="flex items-center gap-3 px-4 py-3">
@@ -485,13 +504,18 @@ export function NotificationSettings({
               <Switch
                 aria-label={title}
                 checked={preferences[key]}
-                disabled={fetcher.state !== "idle"}
+                disabled={settingsPending}
                 onCheckedChange={(checked) =>
                   savePreferences({ ...preferences, [key]: checked })
                 }
               />
             </div>
           ))}
+          {fetcher.data?.error ? (
+            <p role="alert" className="px-4 py-3 text-xs text-destructive">
+              {fetcher.data.error}
+            </p>
+          ) : null}
         </SettingsSection>
 
         <SettingsSection
@@ -505,6 +529,7 @@ export function NotificationSettings({
               <GroupPreferenceRow
                 key={preference.groupId}
                 preference={preference}
+                disabled={settingsPending}
               />
             ))
           ) : (

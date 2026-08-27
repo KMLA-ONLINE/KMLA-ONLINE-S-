@@ -136,6 +136,11 @@ Push 발송 직전에 기기 상태, 최신 유형·그룹 설정과 현재 대�
 Supabase Cron이 30초마다 `pg_net`으로 `dispatch-notifications` Edge Function을 호출한다. worker는 전용
 shared secret을 검증하고 service role로 bounded batch를 처리한다.
 
+worker는 delivery를 lease한 뒤 각 항목을 외부 서비스로 보내기 직전에
+`prepare_notification_delivery`로 lease 소유권, 최신 설정과 대상 접근 권한을 다시 확인한다. 다른
+dispatcher는 만료되지 않은 lease를 suppress하거나 가져가지 않는다. 최종 확인에서 더 이상 전달할 수
+없는 항목은 외부 호출 없이 suppress한다.
+
 - Web Push 2xx는 성공 처리한다.
 - 404와 410은 subscription을 폐기한다.
 - 429와 5xx는 제한된 exponential backoff로 재시도한다.

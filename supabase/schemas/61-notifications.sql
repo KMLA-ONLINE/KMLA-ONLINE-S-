@@ -252,6 +252,63 @@ as $$
 $$;
 alter function private.notification_push_allowed(public.notifications, timestamptz, timestamptz) owner to postgres;
 
+create or replace function private.notification_delivery_allowed(
+  p_delivery private.notification_delivery_outbox
+) returns boolean
+language sql stable security definer
+set search_path = ''
+as $$
+  select p_delivery.channel = 'email'
+    or exists (
+      select 1
+      from public.notifications as notification
+      join private.web_push_subscriptions as subscription
+        on subscription.id = p_delivery.subscription_id
+      where notification.id = p_delivery.notification_id
+        and subscription.profile_id = p_delivery.recipient_profile_id
+        and private.notification_push_allowed(
+          notification, subscription.created_at, subscription.expiration_time
+        )
+        and (
+          notification.category = 'moderation'
+          or notification.kind in (
+            'group_deleted', 'group_join_rejected',
+            'account_approved', 'account_blocked', 'account_unblocked'
+          )
+          or (
+            notification.post_id is not null
+            and exists (
+              select 1
+              from public.posts as post
+              where post.id = notification.post_id
+                and post.deleted_at is null
+                and (
+                  (post.kind = 'group' and exists (
+                    select 1 from public.group_memberships as membership
+                    where membership.group_id = post.group_id
+                      and membership.profile_id = p_delivery.recipient_profile_id
+                  ))
+                  or (post.kind = 'profile' and post.visibility = 'public')
+                )
+            )
+          )
+          or (
+            notification.post_id is null
+            and notification.group_id is not null
+            and exists (
+              select 1 from public.group_memberships as membership
+              join public.groups as group_record on group_record.id = membership.group_id
+              where membership.group_id = notification.group_id
+                and membership.profile_id = p_delivery.recipient_profile_id
+                and group_record.deleted_at is null
+            )
+          )
+          or (notification.post_id is null and notification.group_id is null)
+        )
+    );
+$$;
+alter function private.notification_delivery_allowed(private.notification_delivery_outbox) owner to postgres;
+
 create or replace function private.enqueue_notification_push(
   p_notification_id uuid
 ) returns integer
@@ -797,55 +854,12 @@ begin
     lease_id = null, lease_expires_at = null,
     last_error_code = 'no_longer_deliverable'
   where delivery.channel = 'web_push'
-    and delivery.status in ('pending', 'leased')
+    and (
+      delivery.status = 'pending'
+      or (delivery.status = 'leased' and delivery.lease_expires_at <= now())
+    )
     and delivery.available_at <= now()
-    and not exists (
-      select 1
-      from public.notifications as notification
-      join private.web_push_subscriptions as subscription
-        on subscription.id = delivery.subscription_id
-      where notification.id = delivery.notification_id
-        and subscription.profile_id = delivery.recipient_profile_id
-        and private.notification_push_allowed(
-          notification, subscription.created_at, subscription.expiration_time
-        )
-        and (
-          notification.category = 'moderation'
-          or notification.kind in (
-            'group_deleted', 'group_join_rejected',
-            'account_approved', 'account_blocked', 'account_unblocked'
-          )
-          or (
-            notification.post_id is not null
-            and exists (
-              select 1
-              from public.posts as post
-              where post.id = notification.post_id
-                and post.deleted_at is null
-                and (
-                  (post.kind = 'group' and exists (
-                    select 1 from public.group_memberships as membership
-                    where membership.group_id = post.group_id
-                      and membership.profile_id = delivery.recipient_profile_id
-                  ))
-                  or (post.kind = 'profile' and post.visibility = 'public')
-                )
-            )
-          )
-          or (
-            notification.post_id is null
-            and notification.group_id is not null
-            and exists (
-              select 1 from public.group_memberships as membership
-              join public.groups as group_record on group_record.id = membership.group_id
-              where membership.group_id = notification.group_id
-                and membership.profile_id = delivery.recipient_profile_id
-                and group_record.deleted_at is null
-            )
-          )
-          or (notification.post_id is null and notification.group_id is null)
-        )
-    );
+    and not private.notification_delivery_allowed(delivery);
   update private.notification_delivery_outbox as delivery
   set status = 'dead', completed_at = now(),
     lease_id = null, lease_expires_at = null,
@@ -901,6 +915,42 @@ begin
 end;
 $$;
 alter function public.claim_notification_deliveries(integer, integer) owner to postgres;
+
+create or replace function public.prepare_notification_delivery(
+  p_delivery_id uuid,
+  p_lease_id uuid
+) returns boolean
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  target private.notification_delivery_outbox;
+begin
+  select delivery.* into target
+  from private.notification_delivery_outbox as delivery
+  where delivery.id = p_delivery_id
+    and delivery.status = 'leased'
+    and delivery.lease_id = p_lease_id
+    and delivery.lease_expires_at > now()
+  for update;
+
+  if target.id is null then return false; end if;
+  if private.notification_delivery_allowed(target) then return true; end if;
+
+  update private.notification_delivery_outbox
+  set status = 'suppressed', completed_at = now(),
+    lease_id = null, lease_expires_at = null,
+    last_error_code = 'no_longer_deliverable'
+  where id = target.id;
+
+  insert into private.notification_delivery_attempts (
+    delivery_id, outcome, error_code
+  ) values (target.id, 'suppressed', 'no_longer_deliverable');
+
+  return false;
+end;
+$$;
+alter function public.prepare_notification_delivery(uuid, uuid) owner to postgres;
 
 create or replace function public.complete_notification_delivery(
   p_delivery_id uuid,
@@ -1402,6 +1452,7 @@ create policy notification_delivery_attempts_deny_client on private.notification
 using (false) with check (false);
 
 revoke all on function private.notification_push_allowed(public.notifications, timestamptz, timestamptz) from public;
+revoke all on function private.notification_delivery_allowed(private.notification_delivery_outbox) from public;
 revoke all on function private.enqueue_notification_push(uuid) from public;
 revoke all on function private.enqueue_notification_email(uuid, text) from public;
 revoke all on function private.emit_notification(
@@ -1445,6 +1496,8 @@ revoke all on function public.resolve_my_notification_destination(uuid) from pub
 grant execute on function public.resolve_my_notification_destination(uuid) to authenticated;
 revoke all on function public.claim_notification_deliveries(integer, integer) from public;
 grant execute on function public.claim_notification_deliveries(integer, integer) to service_role;
+revoke all on function public.prepare_notification_delivery(uuid, uuid) from public;
+grant execute on function public.prepare_notification_delivery(uuid, uuid) to service_role;
 revoke all on function public.complete_notification_delivery(uuid, uuid, text, integer, text) from public;
 grant execute on function public.complete_notification_delivery(uuid, uuid, text, integer, text) to service_role;
 

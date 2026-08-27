@@ -27,6 +27,7 @@ interface TransportResponse {
 export interface DispatchDependencies {
   expectedSecret: string;
   claim: () => Promise<Delivery[]>;
+  prepare: (delivery: Delivery) => Promise<boolean>;
   complete: (result: DeliveryResult) => Promise<boolean>;
   sendPush: (delivery: Delivery, payload: string) => Promise<TransportResponse>;
   sendEmail: (delivery: Delivery) => Promise<TransportResponse>;
@@ -58,8 +59,24 @@ export function createDispatchHandler(deps: DispatchDependencies) {
       return Response.json({ error: "claim_failed" }, { status: 500 });
     }
 
-    const totals = { claimed: deliveries.length, sent: 0, retry: 0, dead: 0 };
+    const totals = {
+      claimed: deliveries.length,
+      sent: 0,
+      suppressed: 0,
+      retry: 0,
+      dead: 0,
+    };
     for (const delivery of deliveries) {
+      try {
+        if (!(await deps.prepare(delivery))) {
+          totals.suppressed += 1;
+          continue;
+        }
+      } catch {
+        totals.retry += 1;
+        continue;
+      }
+
       let result: DeliveryResult;
       try {
         const response =

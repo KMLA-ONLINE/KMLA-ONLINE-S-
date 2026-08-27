@@ -200,6 +200,12 @@ export function GroupNotificationDialog({
   } | null>(null);
   const [pending, setPending] = useState(false);
 
+  const changeOpen = (nextOpen: boolean) => {
+    if (pending) return;
+    if (!nextOpen) setLoaded(null);
+    onOpenChange(nextOpen);
+  };
+
   useEffect(() => {
     if (!open) return;
 
@@ -212,6 +218,7 @@ export function GroupNotificationDialog({
         console.error("Failed to load group notification preference", error);
         if (active) {
           toast.error("알림 설정을 불러오지 못했습니다.");
+          setLoaded(null);
           onOpenChange(false);
         }
       });
@@ -262,7 +269,7 @@ export function GroupNotificationDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>알림 설정</DialogTitle>
@@ -300,7 +307,8 @@ export function GroupNotificationDialog({
           <Button
             type="button"
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            disabled={pending}
+            onClick={() => changeOpen(false)}
           >
             닫기
           </Button>

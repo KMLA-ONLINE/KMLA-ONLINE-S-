@@ -177,9 +177,7 @@ export function NotificationInbox({
   // 제출 중과 그 뒤 revalidation까지가 idle이 아닌 구간이다. 그동안 행을 미리 읽음으로
   // 그려야 "모두 읽음"을 누른 순간 목록 전체가 함께 가라앉는다.
   const markAllPending = markAllFetcher.state !== "idle";
-  const unreadCount = markAllPending
-    ? 0
-    : items.filter((item) => !isRead(item)).length;
+  const allLoadedRead = items.every(isRead);
   const loadingMore = pageFetcher.state !== "idle";
 
   return (
@@ -202,12 +200,6 @@ export function NotificationInbox({
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 pb-4">
         <div className="flex items-center gap-2 px-4 pt-1 md:px-1 md:pt-0">
           <h1 className="hidden text-2xl font-semibold md:block">알림</h1>
-          {unreadCount > 0 ? (
-            <span className="text-sm text-muted-foreground">
-              읽지 않음 {unreadCount}개
-            </span>
-          ) : null}
-
           <div className="ml-auto flex items-center gap-1">
             <markAllFetcher.Form method="post" action="/noti">
               <input type="hidden" name="intent" value="mark-all" />
@@ -215,7 +207,7 @@ export function NotificationInbox({
                 type="submit"
                 variant="ghost"
                 size="sm"
-                disabled={unreadCount === 0}
+                disabled={markAllPending || allLoadedRead}
               >
                 <CheckCheckIcon /> 모두 읽음
               </Button>

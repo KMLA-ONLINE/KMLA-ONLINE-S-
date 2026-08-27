@@ -109,4 +109,26 @@ describe("notification settings route", () => {
       false,
     );
   });
+
+  it("returns a recoverable error when a preference update fails", async () => {
+    mocks.updateNotificationPreferences.mockRejectedValueOnce(
+      new Error("network unavailable"),
+    );
+
+    await expect(
+      clientAction({
+        request: new Request("https://example.com/noti/settings", {
+          method: "POST",
+          body: new URLSearchParams({
+            intent: "preferences",
+            account_push_enabled: "true",
+            content_push_enabled: "true",
+            group_push_enabled: "true",
+            school_push_enabled: "true",
+            timeline_push_enabled: "true",
+          }),
+        }),
+      } as never),
+    ).resolves.toBeDefined();
+  });
 });

@@ -2109,6 +2109,10 @@ export type Database = {
           object_path: string
         }[]
       }
+      prepare_notification_delivery: {
+        Args: { p_delivery_id: string; p_lease_id: string }
+        Returns: boolean
+      }
       prepare_post_attachment: {
         Args: {
           p_height?: number

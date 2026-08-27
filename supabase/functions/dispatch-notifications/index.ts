@@ -50,6 +50,15 @@ async function complete(result: DeliveryResult): Promise<boolean> {
   return Boolean(data);
 }
 
+async function prepare(delivery: Delivery): Promise<boolean> {
+  const { data, error } = await supabase.rpc("prepare_notification_delivery", {
+    p_delivery_id: delivery.delivery_id,
+    p_lease_id: delivery.lease_id,
+  });
+  if (error) throw error;
+  return Boolean(data);
+}
+
 async function sendPush(delivery: Delivery, payload: string) {
   if (!vapidSubject || !vapidPublicKey || !vapidPrivateKey) {
     throw new Error("missing_vapid_configuration");
@@ -113,6 +122,7 @@ Deno.serve(
   createDispatchHandler({
     expectedSecret: dispatchSecret,
     claim,
+    prepare,
     complete,
     sendPush,
     sendEmail,
