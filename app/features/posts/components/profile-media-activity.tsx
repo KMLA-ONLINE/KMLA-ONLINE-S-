@@ -1,5 +1,3 @@
-import { useLocation, useNavigate, useSearchParams } from "react-router";
-
 import {
   imageDownloadName,
   toAttachmentDownloadUrl,
@@ -9,11 +7,8 @@ import {
   ImageViewer,
   type ViewerImage,
 } from "~/shared/components/image-viewer";
+import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
 import { cn } from "~/shared/lib/utils";
-
-interface ImageViewerLocationState {
-  imageViewerPushed?: boolean;
-}
 
 type ProfileMediaActivityPost = Pick<
   ProfilePost,
@@ -27,16 +22,7 @@ export function ProfileMediaActivity({
   post: ProfileMediaActivityPost;
   className?: string;
 }) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  if (!post.activity_kind) return null;
-
-  const isAvatar = post.activity_kind === "avatar_changed";
-  const label = isAvatar ? "프로필 사진" : "프로필 커버";
   const imageId = `profile-activity-${post.post_id}`;
-  const imageName = `${profileName(post)}님이 변경한 ${label}`;
   const downloadName = imageDownloadName(post.post_id);
   const viewerImages: ViewerImage[] = post.activity_media_url
     ? [
@@ -51,28 +37,13 @@ export function ProfileMediaActivity({
         },
       ]
     : [];
-  const openImageId = searchParams.get("image") === imageId ? imageId : null;
+  const viewer = useImageViewerParam(viewerImages);
 
-  const openViewer = () => {
-    const next = new URLSearchParams(searchParams);
-    next.set("image", imageId);
-    void setSearchParams(next, {
-      preventScrollReset: true,
-      state: { imageViewerPushed: true } satisfies ImageViewerLocationState,
-    });
-  };
+  if (!post.activity_kind) return null;
 
-  const closeViewer = () => {
-    const state = location.state as ImageViewerLocationState | null;
-    if (state?.imageViewerPushed) {
-      void navigate(-1);
-      return;
-    }
-
-    const next = new URLSearchParams(searchParams);
-    next.delete("image");
-    void setSearchParams(next, { replace: true, preventScrollReset: true });
-  };
+  const isAvatar = post.activity_kind === "avatar_changed";
+  const label = isAvatar ? "프로필 사진" : "프로필 커버";
+  const imageName = `${profileName(post)}님이 변경한 ${label}`;
 
   return (
     <>
@@ -81,7 +52,7 @@ export function ProfileMediaActivity({
           type="button"
           data-testid="profile-media-activity"
           aria-label={`${label} 크게 보기`}
-          onClick={openViewer}
+          onClick={() => viewer.open(imageId)}
           className={cn(
             "flex w-full items-center justify-center overflow-hidden border-y border-border/60 bg-muted focus:ring-0 focus:outline-none",
             isAvatar ? "aspect-square" : "aspect-[3/1]",
@@ -112,8 +83,8 @@ export function ProfileMediaActivity({
 
       <ImageViewer
         images={viewerImages}
-        openImageId={openImageId}
-        onClose={closeViewer}
+        openImageId={viewer.openImageId}
+        onClose={viewer.close}
       />
     </>
   );

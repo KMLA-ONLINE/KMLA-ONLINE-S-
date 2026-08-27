@@ -1,4 +1,4 @@
-import { data, Form, Link, redirect, useNavigation } from "react-router";
+import { data, Form, Link, replace, useNavigation } from "react-router";
 import { useState } from "react";
 
 import {
@@ -20,6 +20,12 @@ import { Input } from "~/shared/ui/input";
 import { Spinner } from "~/shared/ui/spinner";
 import type { Route } from "./+types/login";
 
+/**
+ * 로그인 화면은 통과한 뒤 history에 남지 않는다. 남겨 두면 뒤로가기가 여기로 돌아오고, 그때는
+ * 이미 세션이 있으므로 이 loader가 다시 앞으로 밀어내 사용자가 갇힌다. 알림 링크처럼 로그인을
+ * 거쳐 목적지로 가는 경로에서 "돌아갈 내역이 있는지"를 정확히 세려면 중간 화면이 남지 않아야
+ * 한다는 점도 같다.
+ */
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const state = await loadAuthState();
   if (!state) return null;
@@ -30,7 +36,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     await signOut();
     return null;
   }
-  throw redirect(destination);
+  throw replace(destination);
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
@@ -60,7 +66,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
         { status: 403 },
       );
     }
-    throw redirect(destination);
+    throw replace(destination);
   } catch (error) {
     if (error instanceof Response) throw error;
     return data(

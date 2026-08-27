@@ -7,24 +7,31 @@ import type {
 } from "~/features/notifications/model/types";
 
 export const NOTIFICATION_PAGE_SIZE = 20;
-const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
+const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function groupNotifications(
   items: NotificationItem[],
   now = new Date(),
 ) {
-  const threshold = now.getTime() - RECENT_WINDOW_MS;
-  const recent: NotificationItem[] = [];
+  const sixHourThreshold = now.getTime() - SIX_HOURS_MS;
+  const dayThreshold = now.getTime() - DAY_MS;
+  const recentSixHours: NotificationItem[] = [];
+  const recentDay: NotificationItem[] = [];
   const older: NotificationItem[] = [];
 
   for (const item of items) {
-    (new Date(item.last_activity_at).getTime() > threshold
-      ? recent
-      : older
-    ).push(item);
+    const lastActivityAt = new Date(item.last_activity_at).getTime();
+    if (lastActivityAt > sixHourThreshold) {
+      recentSixHours.push(item);
+    } else if (lastActivityAt > dayThreshold) {
+      recentDay.push(item);
+    } else {
+      older.push(item);
+    }
   }
 
-  return { recent, older };
+  return { recentSixHours, recentDay, older };
 }
 
 /**

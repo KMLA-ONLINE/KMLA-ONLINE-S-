@@ -41,7 +41,7 @@ import type { Route } from "./+types/home";
 
 export const handle = defineAppChrome({
   header: "sticky",
-  bottomNav: "sticky",
+  bottomNav: "hide-on-scroll",
   contentWidth: "5xl",
   pullToRefresh: true,
 });

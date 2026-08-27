@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(32);
+select plan(34);
 
 select ok(
   (select relrowsecurity from pg_class where oid = 'public.notifications'::regclass),
@@ -226,6 +226,36 @@ select ok(
     'https://push.example.test/subscription/one'
   )),
   'push status becomes false after unregistering'
+);
+
+-- 알림함 한 행이 "어느 그룹 소식인가"를 말하려면 이름이 목록 RPC에서 나와야 한다.
+-- 그룹이 없는 계정 알림은 이름 자리를 비운 채로 같은 페이지에 섞여 나온다.
+reset role;
+insert into public.notifications (
+  id, recipient_profile_id, kind, importance, category, actor_identity,
+  actor_profile_id, actor_display_name, group_id, title, created_at, last_activity_at
+)
+values (
+  '70000000-0000-0000-0000-000000000003',
+  (select id from public.profiles where pub_id = 'hanbyeol-25'),
+  'account_approved', 'high', 'account', 'staff',
+  null, '운영진', null, '가입이 승인되었습니다.', now(), now()
+);
+set local role authenticated;
+
+select is(
+  (select notification.group_name
+   from public.list_my_notifications(null, null, 20) as notification
+   where notification.id = '70000000-0000-0000-0000-000000000001'),
+  '메이커스 랩',
+  'the list RPC names the group a notification came from'
+);
+select is(
+  (select notification.group_name
+   from public.list_my_notifications(null, null, 20) as notification
+   where notification.id = '70000000-0000-0000-0000-000000000003'),
+  null::text,
+  'a notification with no group carries no group name'
 );
 
 reset role;

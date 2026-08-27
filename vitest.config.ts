@@ -30,7 +30,10 @@ const pureLayers = [
 //
 // The globs above deliberately cover `.ts` only: a route test that renders needs
 // JSX, so it is a `.tsx` file and lands in the jsdom project on its extension.
-const domDependent = ["test/features/posts/model/view-preference.test.ts"];
+const domDependent = [
+  "test/features/posts/model/view-preference.test.ts",
+  "test/routes/notification-open.test.ts",
+];
 
 // Resolved once so both projects agree on the split. Globbing rather than
 // handing `pureLayers` to the jsdom project's `exclude` is deliberate: Vitest

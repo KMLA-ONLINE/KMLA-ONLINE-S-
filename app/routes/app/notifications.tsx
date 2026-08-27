@@ -11,9 +11,12 @@ import { NotificationInbox } from "~/features/notifications/components/notificat
 import type { NotificationCursor } from "~/features/notifications";
 import type { Route } from "./+types/notifications";
 
+// 헤더와 탭바를 고정으로 둔다. 자동 숨김은 숨길 때 둘의 자리를 음수 마진으로 반납해
+// 스크롤 영역 높이를 바꾸는데, 목록이 길어 끝까지 내려가면 브라우저가 그만큼 scrollTop을
+// 되돌리고 그 보정이 다시 "위로 올림"으로 읽혀 숨김과 표시가 무한히 뒤집힌다 — 헤더가 떨린다.
 export const handle = defineAppChrome({
-  header: "hide-on-scroll",
-  bottomNav: "hide-on-scroll",
+  header: "sticky",
+  bottomNav: "sticky",
   pullToRefresh: true,
 });
 
