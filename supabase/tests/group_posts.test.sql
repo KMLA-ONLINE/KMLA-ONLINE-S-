@@ -1,24 +1,41 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(63);
+select plan(51);
+
+-- 아래 RPC들을 authenticated가 부를 수 있다는 사실은 이 파일이 실제로 호출해 보며 증명한다.
+-- 여기서는 반대쪽 — 직접 쓰기와 익명 접근이 닫혀 있는지 — 만 한자리에서 센다.
 
 select ok(has_table_privilege('authenticated', 'public.posts', 'SELECT'), 'authenticated can select member-visible posts');
-select ok(not has_table_privilege('authenticated', 'public.posts', 'INSERT'), 'authenticated cannot insert posts directly');
-select ok(not has_table_privilege('authenticated', 'public.posts', 'UPDATE'), 'authenticated cannot update posts directly');
-select ok(not has_table_privilege('authenticated', 'public.posts', 'DELETE'), 'authenticated cannot delete posts directly');
-select ok(not has_table_privilege('authenticated', 'private.post_authors', 'SELECT'), 'actual authors remain private');
-select ok(not has_function_privilege('anon', 'public.create_group_post(uuid,text,text,public.post_identity,uuid,boolean)', 'EXECUTE'), 'anonymous cannot call post creation');
-select ok(has_function_privilege('authenticated', 'public.create_group_post(uuid,text,text,public.post_identity,uuid,boolean)', 'EXECUTE'), 'authenticated can call post creation');
-select ok(not has_function_privilege('anon', 'public.publish_group_post(uuid)', 'EXECUTE'), 'anonymous cannot publish a draft');
-select ok(has_function_privilege('authenticated', 'public.publish_group_post(uuid)', 'EXECUTE'), 'authenticated can publish a draft');
-select ok(not has_function_privilege('anon', 'public.commit_group_post(uuid,text,text,uuid[],boolean,uuid)', 'EXECUTE'), 'anonymous cannot commit a draft');
-select ok(has_function_privilege('authenticated', 'public.commit_group_post(uuid,text,text,uuid[],boolean,uuid)', 'EXECUTE'), 'authenticated can commit a draft');
-select ok(not has_table_privilege('authenticated', 'public.group_categories', 'INSERT'), 'authenticated cannot insert categories directly');
-select ok(not has_table_privilege('authenticated', 'public.group_categories', 'UPDATE'), 'authenticated cannot update categories directly');
-select ok(not has_table_privilege('authenticated', 'public.group_categories', 'DELETE'), 'authenticated cannot delete categories directly');
+select is(
+  (
+    select count(*)::integer
+    from (values ('public.posts'), ('public.group_categories')) as target(name),
+    (values ('INSERT'), ('UPDATE'), ('DELETE')) as verb(privilege)
+    where has_table_privilege('authenticated', target.name, verb.privilege)
+  ),
+  0,
+  'posts and categories are written only through the definer RPCs'
+);
+-- 테이블 UPDATE가 없어도 컬럼 단위로 새어 나갈 수 있다. 고정 상태는 운영진 판정을 지나야 한다.
 select ok(not has_column_privilege('authenticated', 'public.posts', 'pinned_at', 'UPDATE'), 'authenticated cannot update pinned state directly');
-select ok(not has_function_privilege('anon', 'public.move_group_category(uuid,smallint)', 'EXECUTE'), 'anonymous cannot move categories');
+-- 그룹 게시물 RPC는 전부 definer라 `anon`에게 한 번 새면 비공개 그룹 본문까지 샌다.
+-- 이름으로 훑으므로 오버로드가 늘어도 따라온다.
+select is(
+  (
+    select count(*)::integer
+    from pg_catalog.pg_proc as post_function
+    join pg_catalog.pg_namespace as schema on schema.oid = post_function.pronamespace
+    where schema.nspname = 'public'
+      and post_function.proname in (
+        'create_group_post', 'publish_group_post', 'commit_group_post',
+        'move_group_category'
+      )
+      and has_function_privilege('anon', post_function.oid, 'EXECUTE')
+  ),
+  0,
+  'anonymous visitors cannot call any group post RPC'
+);
 select ok(to_regprocedure('private.group_post_access(uuid)') is null, 'per-row private post access helper is removed');
 
 set local role anon;
