@@ -116,7 +116,7 @@ test("첫 서비스 워커 설치는 현재 페이지를 새로고침하지 않�
   ).toBe("1");
 });
 
-test("회원가입 후 OTP로 프로필을 제출한다", async ({
+test("정보를 모두 입력한 뒤 마지막 단계에서 OTP로 가입을 마친다", async ({
   page,
   request,
 }, testInfo) => {
@@ -126,12 +126,15 @@ test("회원가입 후 OTP로 프로필을 제출한다", async ({
   await page.getByLabel("이메일").fill(email);
   await page.getByLabel("비밀번호", { exact: true }).fill("password123");
   await page.getByLabel("비밀번호 확인", { exact: true }).fill("password123");
-  await page.getByRole("button", { name: "계정 만들기" }).click();
-  await expect(page).toHaveURL(/\/setup$/);
+  await page.getByRole("button", { name: "다음" }).click();
 
   await page.getByLabel("이름").fill("가입 테스트");
   await page.getByLabel("사용자 유형").selectOption("teacher");
-  await page.getByLabel("전화번호 (선택)").fill("010-1234-5678");
+  await page.getByLabel("전화번호 (추천)").fill("010-1234-5678");
+
+  // 코드는 이 버튼을 누르는 순간 발송된다. 메일함 폴링이 그 뒤에 오는 이유다.
+  await page.getByRole("button", { name: "인증 코드 받기" }).click();
+  await expect(page.getByLabel("인증 코드")).toBeVisible();
 
   let token = "";
   await expect

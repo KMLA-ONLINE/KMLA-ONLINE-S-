@@ -1,8 +1,5 @@
 import { getSupabase } from "~/shared/supabase/client";
-import {
-  clearPendingSignupEmail,
-  setPendingSignupEmail,
-} from "~/features/auth/storage/pending-signup";
+import { clearSignupDraft } from "~/features/auth/storage/pending-signup";
 import type { ProfileFormValues } from "~/features/auth/model/types";
 import { disconnectWebPushForLogout } from "~/features/notifications";
 
@@ -39,10 +36,15 @@ export async function signIn(email: string, password: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * 계정을 만들고 확인 코드를 보낸다. 두 가지가 한 번의 호출로 같이 일어난다.
+ *
+ * 그래서 가입 마법사는 이메일 인증 단계로 넘어가는 그 순간에만 이걸 부른다. 앞 단계에서
+ * 미리 부르면 사용자가 코드를 입력할 때쯤 코드가 이미 늙어 있다.
+ */
 export async function signUp(email: string, password: string): Promise<void> {
   const { error } = await getSupabase().auth.signUp({ email, password });
   if (error) throw error;
-  setPendingSignupEmail(email);
 }
 
 export async function verifySignupOtp(
@@ -130,7 +132,7 @@ export async function submitProfile(values: ProfileFormValues): Promise<void> {
   });
 
   if (error) throw error;
-  clearPendingSignupEmail();
+  clearSignupDraft();
 }
 
 export async function signOut(): Promise<void> {
@@ -142,5 +144,5 @@ export async function signOut(): Promise<void> {
   const { error } = await getSupabase().auth.signOut();
 
   if (error) throw error;
-  clearPendingSignupEmail();
+  clearSignupDraft();
 }

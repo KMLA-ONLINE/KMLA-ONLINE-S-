@@ -1,12 +1,16 @@
 import type { ComponentType } from "react";
 import { describe, expect, it } from "vitest";
 
-import type { AuthProfile, AuthState } from "~/features/auth";
+import type {
+  AuthProfile,
+  AuthState,
+  ProfileFormValues,
+} from "~/features/auth";
 import { getProfileDestination, sanitizeLoginNext } from "~/features/auth";
 import BlockedPage from "~/routes/auth/blocked";
 import LoginPage from "~/routes/auth/login";
 import SetupPage from "~/routes/auth/setup";
-import SignupPage from "~/routes/auth/signup";
+import SignupPage, { clientAction as signupAction } from "~/routes/auth/signup";
 import { renderRoute, screen } from "../router";
 
 const draftProfile = {
@@ -23,6 +27,33 @@ const draftProfile = {
   type: "student",
 } as AuthProfile;
 
+const draftValues: ProfileFormValues = {
+  academicTrack: "international",
+  birthday: "2009-03-01",
+  classNo: "2",
+  cohort: "31",
+  dormRoom: "304",
+  gender: "female",
+  name: "홍길동",
+  phoneNumber: "010-1234-5678",
+  studentNumber: "260001",
+  type: "student",
+};
+
+/** `clientAction` expects the framework's arg shape; the stub only supplies a request. */
+const signupStubAction = ({ request }: { request: Request }) =>
+  (signupAction as (args: { request: Request }) => unknown)({ request });
+
+/**
+ * Enter와 모바일 키보드의 '이동'이 누르는 버튼. HTML은 tree order상 첫 submit 버튼을
+ * 폼의 기본 버튼으로 삼으므로, 보조 동작이 submit이면 그쪽이 대신 실행된다.
+ */
+function defaultButtons() {
+  return screen
+    .getAllByRole("button")
+    .filter((button) => (button as HTMLButtonElement).type === "submit");
+}
+
 describe("auth routes", () => {
   it("renders login controls and toggles password visibility", async () => {
     const { user } = renderRoute(LoginPage, { path: "/login" });
@@ -37,14 +68,62 @@ describe("auth routes", () => {
     expect(password).toHaveAttribute("type", "text");
   });
 
-  it("renders signup credential fields", () => {
-    renderRoute(SignupPage, { path: "/signup" });
+  it("renders signup credential fields", async () => {
+    renderRoute(SignupPage as ComponentType<any>, {
+      path: "/signup",
+      loader: () => ({ draft: null }),
+    });
 
     expect(
-      screen.getByRole("heading", { name: "KMLA Online 시작하기" }),
+      await screen.findByRole("heading", { name: "KMLA Online 시작하기" }),
     ).toBeVisible();
     expect(screen.getByLabelText("이메일")).toBeRequired();
     expect(screen.getByLabelText("비밀번호 확인")).toBeRequired();
+  });
+
+  it("collects the profile before asking for a verification code", async () => {
+    const { user } = renderRoute(SignupPage as ComponentType<any>, {
+      path: "/signup",
+      loader: () => ({ draft: null }),
+      action: signupStubAction,
+    });
+
+    await user.type(
+      await screen.findByLabelText("이메일"),
+      "student@kmla.hs.kr",
+    );
+    await user.type(screen.getByLabelText("비밀번호"), "password123");
+    await user.type(screen.getByLabelText("비밀번호 확인"), "password123");
+    await user.click(screen.getByRole("button", { name: "다음" }));
+
+    // 프로필 단계에서는 아직 계정도 코드도 만들어지지 않는다.
+    expect(await screen.findByLabelText("이름")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "인증 코드 받기" }),
+    ).toBeVisible();
+    expect(screen.queryByLabelText("인증 코드")).not.toBeInTheDocument();
+
+    // '이전'이 기본 버튼이면 프로필 칸에서 Enter를 눌렀을 때 단계가 되감긴다.
+    expect(defaultButtons()).toHaveLength(1);
+    expect(defaultButtons()[0]).toHaveAccessibleName("인증 코드 받기");
+  });
+
+  it("keeps submission as the default button on the verification step", async () => {
+    renderRoute(SignupPage as ComponentType<any>, {
+      path: "/signup",
+      loader: () => ({
+        draft: { email: "student@kmla.hs.kr", values: draftValues },
+      }),
+    });
+
+    expect(await screen.findByLabelText("인증 코드")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "인증 코드 다시 보내기" }),
+    ).toBeVisible();
+
+    // 코드를 입력하고 '이동'을 눌렀을 때 재발송이 아니라 제출이 실행되어야 한다.
+    expect(defaultButtons()).toHaveLength(1);
+    expect(defaultButtons()[0]).toHaveAccessibleName("가입 신청 제출");
   });
 
   it("routes every profile state to its auth destination", () => {
@@ -95,7 +174,7 @@ describe("auth routes", () => {
           loaderData={{
             email: "student@kmla.hs.kr",
             profile: draftProfile,
-            requiresOtp: false,
+            values: draftValues,
           }}
         />
       ),
@@ -110,6 +189,7 @@ describe("auth routes", () => {
       ),
     ).toBeVisible();
     expect(screen.queryByText(/거절/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("인증 코드")).not.toBeInTheDocument();
   });
 
   it("shows blocked external-member guidance and account actions", () => {

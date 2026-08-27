@@ -49,6 +49,7 @@ export function CommentItem({
   comment,
   viewer,
   canReply,
+  isPostAuthor = false,
   replying = false,
   highlighted = false,
   pending = false,
@@ -62,6 +63,8 @@ export function CommentItem({
   /** 수정 입력창의 아바타에 쓴다. */
   viewer: CommentViewer;
   canReply: boolean;
+  /** 게시물을 쓴 사람이 단 댓글이다. 판정은 목록이 한다 — 여기서는 배지만 붙인다. */
+  isPostAuthor?: boolean;
   /** 이 댓글이 지금 입력창의 답글 대상이다. 답글 모드가 끝날 때까지 계속 표시된다. */
   replying?: boolean;
   /** `@작성자` 칩으로 옮겨 온 직후의 일시적 표시. 잠시 뒤 스스로 꺼진다. */
@@ -184,6 +187,15 @@ export function CommentItem({
                 >
                   운영진
                 </Badge>
+              ) : null}
+              {/*
+                배지가 아니라 글자다. 누를 수 없는 표시에 배지를 쓰면 hover에서 배경이
+                깔려 눌리는 것처럼 보인다. 이름 옆에 파란 글자로 붙이는 편이 조용하다.
+              */}
+              {isPostAuthor ? (
+                <span className="shrink-0 text-xs font-medium text-primary">
+                  작성자
+                </span>
               ) : null}
               {comment.is_author && comment.author_identity === "anonymous" ? (
                 <Badge variant="secondary" className="shrink-0">

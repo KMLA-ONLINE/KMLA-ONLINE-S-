@@ -78,6 +78,18 @@ describe("CommentItem", () => {
     expect(screen.getByText("운영진")).toBeInTheDocument();
   });
 
+  it("badges the comment the post author wrote", () => {
+    renderItem({ isPostAuthor: true });
+
+    expect(screen.getByText("작성자")).toHaveClass("text-primary");
+  });
+
+  it("leaves everyone else's comment unbadged", () => {
+    renderItem();
+
+    expect(screen.queryByText("작성자")).not.toBeInTheDocument();
+  });
+
   it("renders a tombstone without author or body", () => {
     renderItem({
       comment: postComment({

@@ -1,6 +1,8 @@
 export { AuthCard } from "~/features/auth/components/auth-card";
 export { LogoutButton } from "~/features/auth/components/logout-button";
+export { OtpField } from "~/features/auth/components/otp-field";
 export { PasswordField } from "~/features/auth/components/password-field";
+export { ProfileFields } from "~/features/auth/components/profile-fields";
 export {
   resendSignupOtp,
   sendPasswordChangeOtp,
@@ -15,7 +17,11 @@ export {
 } from "~/features/auth/data/mutations";
 export { hasActiveSession, loadAuthState } from "~/features/auth/data/queries";
 export { getAuthErrorMessage } from "~/features/auth/model/format";
-export { getPendingSignupEmail } from "~/features/auth/storage/pending-signup";
+export {
+  clearSignupDraft,
+  getSignupDraft,
+  saveSignupDraft,
+} from "~/features/auth/storage/pending-signup";
 export {
   hasErrors,
   readFormText,
@@ -36,3 +42,4 @@ export type {
   FieldErrors,
   ProfileFormValues,
 } from "~/features/auth/model/types";
+export type { SignupDraft } from "~/features/auth/storage/pending-signup";
