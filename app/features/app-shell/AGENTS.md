@@ -8,7 +8,7 @@
 - `app/routes.ts`가 인증 게이트 아래에 일반 앱과 메신저 layout branch를 명시한다.
 - 일반 앱 route는 typed `handle.chrome`으로 전역 헤더와 모바일 하단 nav를 설정한다.
 - 일반 앱의 데스크톱 콘텐츠 폭도 `handle.chrome.contentWidth`가 소유한다. 기본은 `5xl`이고 폼처럼 좁은 폭이 필요한 route만 명시적으로 override한다.
-- 메신저 layout은 데스크톱 전역 헤더를 유지하지만 사이드바와 하단 nav를 렌더하지 않는다.
+- 메신저 layout은 데스크톱 전역 헤더와 사이드바를 유지한다. 모바일 하단 nav는 대화 목록에서 표시하고 대화방에서는 숨긴다.
 - 인증/승인 게이트는 `app/routes/app/gate.tsx` 한 곳에만 둔다.
 - 셸 loader는 mutation 이후와 명시적 revalidation 때만 다시 실행한다.
 - 모바일 전역 헤더는 없다. 각 page route가 `PageHeader`를 조립하며 이는 `handle.chrome` 설정과 무관하다.

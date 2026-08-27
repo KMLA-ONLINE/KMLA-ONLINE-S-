@@ -1,16 +1,20 @@
-import { PageHeader } from "~/features/app-shell";
-import { RoomScreen } from "~/features/messaging";
+import { loadConversation, RoomScreen } from "~/features/messaging";
+import type { Route } from "./+types/room";
+
+export async function clientLoader({ params }: Route.ClientLoaderArgs) {
+  const conversation = await loadConversation(params.roomId);
+  if (!conversation) {
+    throw new Response("대화를 찾을 수 없습니다.", { status: 404 });
+  }
+  return { conversation };
+}
 
 /**
  * `messenger/:roomId`. 대화 목록만 스크롤하고 입력창은 바닥에 붙어 있다. 일반 앱의 공통
  * 스크롤 컨테이너와 분리된 메신저 레이아웃이 이 배치를 보장한다.
  */
-export default function MessengerRoomPage() {
-  return (
-    <>
-      {/* 모바일에서만 보인다. 데스크톱은 오른쪽 패널에 방 제목이 따로 붙는다. */}
-      <PageHeader title="대화" back="/messenger" />
-      <RoomScreen />
-    </>
-  );
+export default function MessengerRoomPage({
+  loaderData,
+}: Route.ComponentProps) {
+  return <RoomScreen conversation={loaderData.conversation} />;
 }

@@ -219,7 +219,7 @@ describe("GroupPostSearchDialog", () => {
       await screen.findByRole("searchbox", { name: "게시물 검색어" }),
     ).toHaveValue("");
     expect(screen.getByText("제목이나 내용으로 검색해 보세요.")).toBeVisible();
-    expect(searchInput()).toHaveFocus();
+    await waitFor(() => expect(searchInput()).toHaveFocus());
   });
 
   it("opens with an empty query even when the last search is still in the URL", async () => {
