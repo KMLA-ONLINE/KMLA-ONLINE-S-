@@ -21,7 +21,6 @@ const STUDENT: ProfileFormValues = {
   phoneNumber: "010-1234-5678",
   birthday: "2007-01-01",
   dormRoom: "301",
-  otp: "123456",
 };
 
 describe("auth validation", () => {
@@ -46,42 +45,33 @@ describe("auth validation", () => {
   });
 
   it("accepts a complete student profile", () => {
-    expect(validateProfileForm(STUDENT, true)).toEqual({});
+    expect(validateProfileForm(STUDENT)).toEqual({});
   });
 
-  it("requires student academic fields and a six-digit OTP", () => {
-    const errors = validateProfileForm(
-      {
-        ...STUDENT,
-        studentNumber: "24A001",
-        academicTrack: "",
-        otp: "123",
-      },
-      true,
-    );
+  it("requires student academic fields", () => {
+    const errors = validateProfileForm({
+      ...STUDENT,
+      studentNumber: "24A001",
+      academicTrack: "",
+    });
 
     expect(errors.studentNumber).toMatch(/숫자 6자리/);
     expect(errors.academicTrack).toBeDefined();
-    expect(errors.otp).toBeDefined();
     expect(hasErrors(errors)).toBe(true);
   });
 
   it("does not require academic fields for teachers", () => {
-    const errors = validateProfileForm(
-      {
-        ...STUDENT,
-        type: "teacher",
-        studentNumber: "",
-        classNo: "",
-        cohort: "",
-        gender: "",
-        academicTrack: "",
-        birthday: "",
-        dormRoom: "",
-        otp: "",
-      },
-      false,
-    );
+    const errors = validateProfileForm({
+      ...STUDENT,
+      type: "teacher",
+      studentNumber: "",
+      classNo: "",
+      cohort: "",
+      gender: "",
+      academicTrack: "",
+      birthday: "",
+      dormRoom: "",
+    });
 
     expect(errors).toEqual({});
   });

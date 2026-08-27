@@ -1,12 +1,16 @@
 import type { ComponentType } from "react";
 import { describe, expect, it } from "vitest";
 
-import type { AuthProfile, AuthState } from "~/features/auth";
+import type {
+  AuthProfile,
+  AuthState,
+  ProfileFormValues,
+} from "~/features/auth";
 import { getProfileDestination, sanitizeLoginNext } from "~/features/auth";
 import BlockedPage from "~/routes/auth/blocked";
 import LoginPage from "~/routes/auth/login";
 import SetupPage from "~/routes/auth/setup";
-import SignupPage from "~/routes/auth/signup";
+import SignupPage, { clientAction as signupAction } from "~/routes/auth/signup";
 import { renderRoute, screen } from "../router";
 
 const draftProfile = {
@@ -23,6 +27,23 @@ const draftProfile = {
   type: "student",
 } as AuthProfile;
 
+const draftValues: ProfileFormValues = {
+  academicTrack: "international",
+  birthday: "2009-03-01",
+  classNo: "2",
+  cohort: "31",
+  dormRoom: "304",
+  gender: "female",
+  name: "홍길동",
+  phoneNumber: "010-1234-5678",
+  studentNumber: "260001",
+  type: "student",
+};
+
+/** `clientAction` expects the framework's arg shape; the stub only supplies a request. */
+const signupStubAction = ({ request }: { request: Request }) =>
+  (signupAction as (args: { request: Request }) => unknown)({ request });
+
 describe("auth routes", () => {
   it("renders login controls and toggles password visibility", async () => {
     const { user } = renderRoute(LoginPage, { path: "/login" });
@@ -37,14 +58,40 @@ describe("auth routes", () => {
     expect(password).toHaveAttribute("type", "text");
   });
 
-  it("renders signup credential fields", () => {
-    renderRoute(SignupPage, { path: "/signup" });
+  it("renders signup credential fields", async () => {
+    renderRoute(SignupPage as ComponentType<any>, {
+      path: "/signup",
+      loader: () => ({ draft: null }),
+    });
 
     expect(
-      screen.getByRole("heading", { name: "KMLA Online 시작하기" }),
+      await screen.findByRole("heading", { name: "KMLA Online 시작하기" }),
     ).toBeVisible();
     expect(screen.getByLabelText("이메일")).toBeRequired();
     expect(screen.getByLabelText("비밀번호 확인")).toBeRequired();
+  });
+
+  it("collects the profile before asking for a verification code", async () => {
+    const { user } = renderRoute(SignupPage as ComponentType<any>, {
+      path: "/signup",
+      loader: () => ({ draft: null }),
+      action: signupStubAction,
+    });
+
+    await user.type(
+      await screen.findByLabelText("이메일"),
+      "student@kmla.hs.kr",
+    );
+    await user.type(screen.getByLabelText("비밀번호"), "password123");
+    await user.type(screen.getByLabelText("비밀번호 확인"), "password123");
+    await user.click(screen.getByRole("button", { name: "다음" }));
+
+    // 프로필 단계에서는 아직 계정도 코드도 만들어지지 않는다.
+    expect(await screen.findByLabelText("이름")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "인증 코드 받기" }),
+    ).toBeVisible();
+    expect(screen.queryByLabelText("인증 코드")).not.toBeInTheDocument();
   });
 
   it("routes every profile state to its auth destination", () => {
@@ -95,7 +142,7 @@ describe("auth routes", () => {
           loaderData={{
             email: "student@kmla.hs.kr",
             profile: draftProfile,
-            requiresOtp: false,
+            values: draftValues,
           }}
         />
       ),
@@ -110,6 +157,7 @@ describe("auth routes", () => {
       ),
     ).toBeVisible();
     expect(screen.queryByText(/거절/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("인증 코드")).not.toBeInTheDocument();
   });
 
   it("shows blocked external-member guidance and account actions", () => {

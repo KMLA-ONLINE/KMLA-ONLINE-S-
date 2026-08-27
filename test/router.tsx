@@ -17,6 +17,8 @@ type RenderRouteOptions = RoutesTestStubProps &
      * error boundary.
      */
     action?: StubRoutes[number]["action"];
+    /** Loader for the route under test. Pass a `clientLoader` through here. */
+    loader?: StubRoutes[number]["loader"];
   };
 
 /**
@@ -32,6 +34,7 @@ export function renderRoute(
     routes = [],
     path = "/",
     action,
+    loader,
     initialEntries,
     initialIndex,
     hydrationData,
@@ -39,7 +42,10 @@ export function renderRoute(
     ...renderOptions
   }: RenderRouteOptions = {},
 ) {
-  const Stub = createRoutesStub([{ path, Component, action }, ...routes]);
+  const Stub = createRoutesStub([
+    { path, Component, action, loader },
+    ...routes,
+  ]);
 
   return {
     user: userEvent.setup(),

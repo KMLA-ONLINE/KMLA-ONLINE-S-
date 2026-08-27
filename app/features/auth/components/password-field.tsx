@@ -10,6 +10,7 @@ export function PasswordField({
   name,
   label,
   autoComplete,
+  defaultValue,
   error,
   disabled,
 }: {
@@ -17,6 +18,7 @@ export function PasswordField({
   name: string;
   label: string;
   autoComplete: string;
+  defaultValue?: string;
   error?: string;
   disabled?: boolean;
 }) {
@@ -31,6 +33,7 @@ export function PasswordField({
           name={name}
           type={visible ? "text" : "password"}
           autoComplete={autoComplete}
+          defaultValue={defaultValue}
           aria-invalid={Boolean(error)}
           disabled={disabled}
           required

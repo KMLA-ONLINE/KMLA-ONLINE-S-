@@ -1,4 +1,3 @@
-import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { data, Form, Link, redirect, useNavigation } from "react-router";
 
 import {
@@ -7,6 +6,7 @@ import {
   getProfileDestination,
   hasErrors,
   loadAuthState,
+  OtpField,
   PasswordField,
   readFormText,
   sendPasswordResetOtp,
@@ -26,12 +26,6 @@ import {
   FieldLabel,
 } from "~/shared/ui/field";
 import { Input } from "~/shared/ui/input";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSeparator,
-  InputOTPSlot,
-} from "~/shared/ui/input-otp";
 import { Spinner } from "~/shared/ui/spinner";
 import type { Route } from "./+types/forgot-password";
 
@@ -178,48 +172,7 @@ export default function ForgotPasswordPage({
           ) : (
             <>
               <input type="hidden" name="email" value={result?.email} />
-              <Field data-invalid={Boolean(errors.otp)}>
-                <FieldLabel htmlFor="forgot-otp">인증 코드</FieldLabel>
-                <InputOTP
-                  id="forgot-otp"
-                  name="otp"
-                  maxLength={6}
-                  pattern={REGEXP_ONLY_DIGITS}
-                  disabled={pending}
-                  aria-invalid={Boolean(errors.otp)}
-                >
-                  <InputOTPGroup>
-                    <InputOTPSlot
-                      index={0}
-                      aria-invalid={Boolean(errors.otp)}
-                    />
-                    <InputOTPSlot
-                      index={1}
-                      aria-invalid={Boolean(errors.otp)}
-                    />
-                    <InputOTPSlot
-                      index={2}
-                      aria-invalid={Boolean(errors.otp)}
-                    />
-                  </InputOTPGroup>
-                  <InputOTPSeparator />
-                  <InputOTPGroup>
-                    <InputOTPSlot
-                      index={3}
-                      aria-invalid={Boolean(errors.otp)}
-                    />
-                    <InputOTPSlot
-                      index={4}
-                      aria-invalid={Boolean(errors.otp)}
-                    />
-                    <InputOTPSlot
-                      index={5}
-                      aria-invalid={Boolean(errors.otp)}
-                    />
-                  </InputOTPGroup>
-                </InputOTP>
-                <FieldError>{errors.otp}</FieldError>
-              </Field>
+              <OtpField id="forgot-otp" error={errors.otp} disabled={pending} />
               <Button
                 type="submit"
                 name="intent"
