@@ -55,7 +55,7 @@ const PREFERENCE_ROWS = [
   [
     "group_push_enabled",
     UsersIcon,
-    "그룹 소식",
+    "그룹 운영 소식",
     "가입 요청과 승인, 역할과 그룹 정책 변경",
   ],
   [
@@ -157,7 +157,7 @@ function summarizeDelivery(
   if (!pushEnabled) {
     return {
       headline: "이 기기로 오는 Push가 없습니다.",
-      detail: "모든 알림은 앱 알림함에만 쌓입니다.",
+      detail: "받도록 설정한 알림은 앱 알림함에서 확인합니다.",
     };
   }
 
@@ -166,7 +166,7 @@ function summarizeDelivery(
   if (enabled.length === 0) {
     return {
       headline: "이 기기로 오는 Push가 없습니다.",
-      detail: "유형을 모두 꺼 두어 알림은 앱 알림함에만 쌓입니다.",
+      detail: "유형을 모두 꺼 두어 앱 알림함에서만 확인합니다.",
     };
   }
 
@@ -240,9 +240,13 @@ function GroupPreferenceRow({
   const newPostPushEnabled = fetcher.formData
     ? fetcher.formData.get("newPostPushEnabled") === "true"
     : preference.newPostPushEnabled;
+  const contentPushEnabled = fetcher.formData
+    ? fetcher.formData.get("contentPushEnabled") === "true"
+    : preference.contentPushEnabled;
 
   const save = (
     nextLevel: GroupNotificationLevel,
+    nextContentPushEnabled: boolean,
     nextNewPostPushEnabled: boolean,
   ) => {
     void fetcher.submit(
@@ -250,6 +254,7 @@ function GroupPreferenceRow({
         intent: "group-preferences",
         groupId: preference.groupId,
         level: nextLevel,
+        contentPushEnabled: String(nextContentPushEnabled),
         newPostPushEnabled: String(nextNewPostPushEnabled),
       },
       { method: "post" },
@@ -266,6 +271,7 @@ function GroupPreferenceRow({
         }
         groupName={preference.groupName}
         level={level}
+        contentPushEnabled={contentPushEnabled}
         newPostPushEnabled={newPostPushEnabled}
         pending={fetcher.state !== "idle"}
         onChange={save}
@@ -492,7 +498,7 @@ export function NotificationSettings({
           title="그룹별 알림"
           scope="모든 기기"
           description="기본값을 바꾼 그룹만 모아 둡니다. 그룹 화면의 ⋯ 메뉴에서 그룹마다 바꿀 수 있습니다."
-          footnote="‘없음’으로 둔 그룹의 콘텐츠 활동은 Push뿐 아니라 앱 알림함에도 쌓이지 않습니다."
+          footnote="앱 알림함과 Push를 따로 고릅니다. ‘없음’으로 둔 그룹은 Push도 받을 수 없습니다."
         >
           {adjustedGroups.length > 0 ? (
             adjustedGroups.map((preference) => (

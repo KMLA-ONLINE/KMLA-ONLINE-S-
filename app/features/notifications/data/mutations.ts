@@ -39,6 +39,7 @@ export async function updateNotificationPreferences(
 export async function updateGroupNotificationPreferences(
   groupId: string,
   level: GroupNotificationLevel,
+  contentPushEnabled: boolean,
   newPostPushEnabled: boolean,
 ): Promise<void> {
   const { error } = await getSupabase().rpc(
@@ -46,6 +47,7 @@ export async function updateGroupNotificationPreferences(
     {
       p_group_id: groupId,
       p_notification_level: level,
+      p_content_push_enabled: contentPushEnabled,
       p_new_post_push_enabled: newPostPushEnabled,
     },
   );

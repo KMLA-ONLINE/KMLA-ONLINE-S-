@@ -47,6 +47,7 @@ export function isDefaultGroupNotificationPreference(
   return (
     preference.level ===
       getDefaultGroupNotificationLevel(preference.groupKind) &&
+    preference.contentPushEnabled &&
     !preference.newPostPushEnabled
   );
 }

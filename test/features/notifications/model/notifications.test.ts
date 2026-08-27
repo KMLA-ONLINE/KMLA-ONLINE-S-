@@ -90,6 +90,7 @@ describe("group notification defaults", () => {
         ...base,
         groupKind: "official",
         level: "all",
+        contentPushEnabled: true,
         newPostPushEnabled: false,
       }),
     ).toBe(true);
@@ -98,6 +99,7 @@ describe("group notification defaults", () => {
         ...base,
         groupKind: "unofficial",
         level: "direct",
+        contentPushEnabled: true,
         newPostPushEnabled: false,
       }),
     ).toBe(true);
@@ -108,6 +110,7 @@ describe("group notification defaults", () => {
         ...base,
         groupKind: "official",
         level: "all",
+        contentPushEnabled: true,
         newPostPushEnabled: true,
       }),
     ).toBe(false);
@@ -116,6 +119,16 @@ describe("group notification defaults", () => {
         ...base,
         groupKind: "unofficial",
         level: "none",
+        contentPushEnabled: false,
+        newPostPushEnabled: false,
+      }),
+    ).toBe(false);
+    expect(
+      isDefaultGroupNotificationPreference({
+        ...base,
+        groupKind: "unofficial",
+        level: "direct",
+        contentPushEnabled: false,
         newPostPushEnabled: false,
       }),
     ).toBe(false);

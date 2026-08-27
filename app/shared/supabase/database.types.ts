@@ -312,6 +312,7 @@ export type Database = {
       }
       group_memberships: {
         Row: {
+          content_push_enabled: boolean
           group_id: string
           id: string
           joined_at: string
@@ -322,6 +323,7 @@ export type Database = {
           role: Database["public"]["Enums"]["group_member_role"]
         }
         Insert: {
+          content_push_enabled?: boolean
           group_id: string
           id?: string
           joined_at?: string
@@ -332,6 +334,7 @@ export type Database = {
           role?: Database["public"]["Enums"]["group_member_role"]
         }
         Update: {
+          content_push_enabled?: boolean
           group_id?: string
           id?: string
           joined_at?: string
@@ -2285,6 +2288,7 @@ export type Database = {
       set_my_absence: { Args: { p_reason: string }; Returns: undefined }
       set_my_group_notification_preferences: {
         Args: {
+          p_content_push_enabled: boolean
           p_group_id: string
           p_new_post_push_enabled: boolean
           p_notification_level: Database["public"]["Enums"]["group_notification_level"]

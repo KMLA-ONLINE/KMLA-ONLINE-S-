@@ -87,6 +87,7 @@ describe("NotificationSettings", () => {
             // 공식 그룹의 기본값은 `all`이라 `direct`는 사용자가 바꾼 상태다.
             groupKind: "official",
             level: "direct",
+            contentPushEnabled: true,
             newPostPushEnabled: false,
           },
         ]}
@@ -111,6 +112,7 @@ describe("NotificationSettings", () => {
             groupName: "기본값 공식 그룹",
             groupKind: "official",
             level: "all",
+            contentPushEnabled: true,
             newPostPushEnabled: false,
           },
           {
@@ -118,6 +120,7 @@ describe("NotificationSettings", () => {
             groupName: "기본값 비공식 그룹",
             groupKind: "unofficial",
             level: "direct",
+            contentPushEnabled: true,
             newPostPushEnabled: false,
           },
           {
@@ -125,6 +128,7 @@ describe("NotificationSettings", () => {
             groupName: "직접 바꾼 그룹",
             groupKind: "unofficial",
             level: "none",
+            contentPushEnabled: false,
             newPostPushEnabled: false,
           },
         ]}
@@ -134,6 +138,35 @@ describe("NotificationSettings", () => {
     expect(screen.getByText("직접 바꾼 그룹")).toBeInTheDocument();
     expect(screen.queryByText("기본값 공식 그룹")).not.toBeInTheDocument();
     expect(screen.queryByText("기본값 비공식 그룹")).not.toBeInTheDocument();
+  });
+
+  it("shows inbox and group Push controls independently", () => {
+    renderRoute(() => (
+      <NotificationSettings
+        initialPreferences={preferences}
+        initialPushSupport={{ state: "unsupported" }}
+        groupPreferences={[
+          {
+            groupId: "11111111-1111-4111-8111-111111111111",
+            groupName: "채널 분리 그룹",
+            groupKind: "official",
+            level: "all",
+            contentPushEnabled: false,
+            newPostPushEnabled: true,
+          },
+        ]}
+      />
+    ));
+
+    expect(
+      screen.getByRole("combobox", { name: "채널 분리 그룹 알림 수준" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("switch", { name: "채널 분리 그룹 관련 활동 Push" }),
+    ).not.toBeChecked();
+    expect(
+      screen.getByRole("switch", { name: "채널 분리 그룹 새 게시물 Push" }),
+    ).toBeChecked();
   });
 
   it("summarizes what the current settings actually deliver", () => {
@@ -151,7 +184,7 @@ describe("NotificationSettings", () => {
 
     expect(
       screen.getByText(
-        "이 기기로 받는 알림 — 댓글 · 답글, 그룹 소식, 계정 · 권한, 학교 기능",
+        "이 기기로 받는 알림 — 댓글 · 답글, 그룹 운영 소식, 계정 · 권한, 학교 기능",
       ),
     ).toBeInTheDocument();
     expect(
@@ -172,7 +205,7 @@ describe("NotificationSettings", () => {
       screen.getByText("이 기기로 오는 Push가 없습니다."),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("모든 알림은 앱 알림함에만 쌓입니다."),
+      screen.getByText("받도록 설정한 알림은 앱 알림함에서 확인합니다."),
     ).toBeInTheDocument();
   });
 });

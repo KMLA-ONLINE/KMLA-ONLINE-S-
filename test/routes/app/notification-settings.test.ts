@@ -74,6 +74,7 @@ describe("notification settings route", () => {
           intent: "group-preferences",
           groupId: "11111111-1111-4111-8111-111111111111",
           level: "all",
+          contentPushEnabled: "false",
           newPostPushEnabled: "true",
         }),
       }),
@@ -82,7 +83,30 @@ describe("notification settings route", () => {
     expect(mocks.updateGroupNotificationPreferences).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       "all",
+      false,
       true,
+    );
+  });
+
+  it("turns group Push off when the inbox level is none", async () => {
+    await clientAction({
+      request: new Request("https://example.com/noti/settings", {
+        method: "POST",
+        body: new URLSearchParams({
+          intent: "group-preferences",
+          groupId: "11111111-1111-4111-8111-111111111111",
+          level: "none",
+          contentPushEnabled: "true",
+          newPostPushEnabled: "true",
+        }),
+      }),
+    } as never);
+
+    expect(mocks.updateGroupNotificationPreferences).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      "none",
+      false,
+      false,
     );
   });
 });

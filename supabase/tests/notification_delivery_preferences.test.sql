@@ -61,7 +61,7 @@ select is(
 set local role authenticated;
 select public.update_my_notification_preferences(true, true, false, true, true);
 select public.set_my_group_notification_preferences(
-  '20000000-0000-0000-0000-000000000003', 'none', false
+  '20000000-0000-0000-0000-000000000003', 'none', false, false
 );
 reset role;
 select private.emit_notification(
@@ -92,7 +92,7 @@ reset role;
 set local role authenticated;
 select public.update_my_notification_preferences(true, true, true, true, true);
 select public.set_my_group_notification_preferences(
-  '20000000-0000-0000-0000-000000000003', 'all', true
+  '20000000-0000-0000-0000-000000000003', 'all', true, true
 );
 reset role;
 select private.emit_notification(
@@ -106,14 +106,14 @@ select private.emit_notification(
 );
 set local role authenticated;
 select public.set_my_group_notification_preferences(
-  '20000000-0000-0000-0000-000000000003', 'none', true
+  '20000000-0000-0000-0000-000000000003', 'all', false, true
 );
 reset role;
 set local role service_role;
 select is(
   (select count(*) from public.claim_notification_deliveries(10, 60)),
   0::bigint,
-  'claim re-evaluates the group level after enqueue'
+  'claim re-evaluates the group content Push setting after enqueue'
 );
 reset role;
 select is(
@@ -121,12 +121,12 @@ select is(
     select id from public.notifications where title = '그룹 콘텐츠 알림'
   )),
   'suppressed'::private.notification_delivery_status,
-  'the none level suppresses unsent ordinary group content'
+  'a group Push opt-out suppresses delivery without changing the inbox level'
 );
 
 set local role authenticated;
 select public.set_my_group_notification_preferences(
-  '20000000-0000-0000-0000-000000000003', 'all', true
+  '20000000-0000-0000-0000-000000000003', 'all', true, true
 );
 reset role;
 select private.emit_notification(
@@ -140,7 +140,7 @@ select private.emit_notification(
 );
 set local role authenticated;
 select public.set_my_group_notification_preferences(
-  '20000000-0000-0000-0000-000000000003', 'all', false
+  '20000000-0000-0000-0000-000000000003', 'all', true, false
 );
 reset role;
 set local role service_role;
@@ -160,7 +160,7 @@ select is(
 
 set local role authenticated;
 select public.set_my_group_notification_preferences(
-  '20000000-0000-0000-0000-000000000003', 'all', true
+  '20000000-0000-0000-0000-000000000003', 'all', true, true
 );
 reset role;
 select private.emit_notification(

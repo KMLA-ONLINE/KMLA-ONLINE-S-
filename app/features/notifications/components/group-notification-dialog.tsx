@@ -57,7 +57,7 @@ const GROUP_LEVEL_LABEL: Record<GroupNotificationLevel, string> = {
 };
 
 /**
- * 그룹 하나의 알림 수준과 새 게시물 Push. 알림 설정 화면의 행과 그룹 화면의 다이얼로그가
+ * 그룹 하나의 앱 알림함 수준과 두 Push 설정. 알림 설정 화면의 행과 그룹 화면의 다이얼로그가
  * 같은 컨트롤을 그려야 해서 한 곳에 둔다.
  *
  * 저장은 하지 않는다 — 부르는 쪽이 fetcher를 쓸지 직접 mutation을 부를지 정한다.
@@ -66,6 +66,7 @@ export function GroupNotificationFields({
   label,
   groupName,
   level,
+  contentPushEnabled,
   newPostPushEnabled,
   pending,
   onChange,
@@ -74,10 +75,12 @@ export function GroupNotificationFields({
   label: ReactNode;
   groupName: string;
   level: GroupNotificationLevel;
+  contentPushEnabled: boolean;
   newPostPushEnabled: boolean;
   pending: boolean;
   onChange: (
     level: GroupNotificationLevel,
+    contentPushEnabled: boolean,
     newPostPushEnabled: boolean,
   ) => void;
 }) {
@@ -93,7 +96,11 @@ export function GroupNotificationFields({
             if (value !== "none" && value !== "direct" && value !== "all") {
               return;
             }
-            onChange(value, value === "all" ? newPostPushEnabled : false);
+            onChange(
+              value,
+              value === "none" ? false : contentPushEnabled,
+              value === "all" ? newPostPushEnabled : false,
+            );
           }}
         >
           <SelectTrigger
@@ -124,8 +131,25 @@ export function GroupNotificationFields({
         </Select>
       </div>
 
-      {/* '전체'가 아니면 이 스위치는 어차피 꺼진 값으로 저장된다. 늘 비활성 상태로 깔아
-          두면 회색 줄만 쌓이므로, 실제로 켤 수 있을 때만 꺼낸다. */}
+      <div className="flex items-center justify-between gap-4 border-t pt-3">
+        <div className="min-w-0">
+          <p className="text-sm">관련 활동 Push</p>
+          <p className="text-xs text-muted-foreground">
+            {level === "none"
+              ? "앱 알림함을 켜야 사용할 수 있습니다."
+              : "내 게시물의 댓글처럼 나와 관련된 활동을 알립니다."}
+          </p>
+        </div>
+        <Switch
+          aria-label={`${groupName} 관련 활동 Push`}
+          checked={contentPushEnabled}
+          disabled={pending || level === "none"}
+          onCheckedChange={(checked) =>
+            onChange(level, checked, newPostPushEnabled)
+          }
+        />
+      </div>
+
       {level === "all" ? (
         <div className="flex items-center justify-between gap-4 border-t pt-3">
           <div className="min-w-0">
@@ -138,7 +162,9 @@ export function GroupNotificationFields({
             aria-label={`${groupName} 새 게시물 Push`}
             checked={newPostPushEnabled}
             disabled={pending}
-            onCheckedChange={(checked) => onChange(level, checked)}
+            onCheckedChange={(checked) =>
+              onChange(level, contentPushEnabled, checked)
+            }
           />
         </div>
       ) : null}
@@ -199,16 +225,30 @@ export function GroupNotificationDialog({
   const loading = current === null;
   const preference = current?.preference ?? null;
 
-  const save = (level: GroupNotificationLevel, newPostPushEnabled: boolean) => {
+  const save = (
+    level: GroupNotificationLevel,
+    contentPushEnabled: boolean,
+    newPostPushEnabled: boolean,
+  ) => {
     if (!preference) return;
     const previous = preference;
 
     setLoaded({
       groupId,
-      preference: { ...preference, level, newPostPushEnabled },
+      preference: {
+        ...preference,
+        level,
+        contentPushEnabled,
+        newPostPushEnabled,
+      },
     });
     setPending(true);
-    updateGroupNotificationPreferences(groupId, level, newPostPushEnabled)
+    updateGroupNotificationPreferences(
+      groupId,
+      level,
+      contentPushEnabled,
+      newPostPushEnabled,
+    )
       .catch((error: unknown) => {
         console.error("Failed to save group notification preference", error);
         toast.error(
@@ -238,9 +278,10 @@ export function GroupNotificationDialog({
         ) : preference ? (
           <>
             <GroupNotificationFields
-              label={<p className="text-sm font-medium">알림 수준</p>}
+              label={<p className="text-sm font-medium">앱 알림함</p>}
               groupName={groupName}
               level={preference.level}
+              contentPushEnabled={preference.contentPushEnabled}
               newPostPushEnabled={preference.newPostPushEnabled}
               pending={pending}
               onChange={save}

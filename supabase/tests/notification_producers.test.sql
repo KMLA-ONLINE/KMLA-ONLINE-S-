@@ -71,7 +71,7 @@ select is(
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
 set local role authenticated;
 select public.set_my_group_notification_preferences(
-  '20000000-0000-0000-0000-000000000003', 'none', false
+  '20000000-0000-0000-0000-000000000003', 'none', false, false
 );
 reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000004', true);

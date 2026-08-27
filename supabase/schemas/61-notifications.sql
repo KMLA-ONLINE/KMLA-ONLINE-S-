@@ -107,7 +107,12 @@ alter table public.notification_preferences owner to postgres;
 
 alter table public.group_memberships
   add column notification_level public.group_notification_level not null default 'direct',
-  add column new_post_push_enabled boolean not null default false;
+  add column content_push_enabled boolean not null default true,
+  add column new_post_push_enabled boolean not null default false,
+  add constraint group_memberships_content_push_requires_in_app
+    check (not content_push_enabled or notification_level <> 'none'),
+  add constraint group_memberships_new_post_push_requires_all
+    check (not new_post_push_enabled or notification_level = 'all');
 
 create table private.web_push_subscriptions (
   id uuid primary key default gen_random_uuid(),
@@ -227,6 +232,7 @@ as $$
         where membership.group_id = p_notification.group_id
           and membership.profile_id = p_notification.recipient_profile_id
           and membership.notification_level <> 'none'
+          and membership.content_push_enabled
       )
     )
     and (
@@ -601,6 +607,7 @@ alter function public.update_my_notification_preferences(boolean, boolean, boole
 create or replace function public.set_my_group_notification_preferences(
   p_group_id uuid,
   p_notification_level public.group_notification_level,
+  p_content_push_enabled boolean,
   p_new_post_push_enabled boolean
 ) returns void
 language plpgsql security definer
@@ -610,19 +617,22 @@ begin
   if auth.uid() is null or private.current_profile_id() is null then
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
-  if p_notification_level is null or p_new_post_push_enabled is null then
+  if p_notification_level is null
+    or p_content_push_enabled is null
+    or p_new_post_push_enabled is null then
     raise exception 'group notification preferences must not be null' using errcode = '22023';
   end if;
   update public.group_memberships
   set notification_level = p_notification_level,
-    new_post_push_enabled = p_new_post_push_enabled
+    content_push_enabled = p_notification_level <> 'none' and p_content_push_enabled,
+    new_post_push_enabled = p_notification_level = 'all' and p_new_post_push_enabled
   where group_id = p_group_id and profile_id = private.current_profile_id();
   if not found then
     raise exception 'group membership required' using errcode = '42501';
   end if;
 end;
 $$;
-alter function public.set_my_group_notification_preferences(uuid, public.group_notification_level, boolean) owner to postgres;
+alter function public.set_my_group_notification_preferences(uuid, public.group_notification_level, boolean, boolean) owner to postgres;
 
 create or replace function public.register_my_web_push_subscription(
   p_endpoint text,
@@ -1423,8 +1433,8 @@ revoke all on function public.get_my_notification_preferences() from public;
 grant execute on function public.get_my_notification_preferences() to authenticated;
 revoke all on function public.update_my_notification_preferences(boolean, boolean, boolean, boolean, boolean) from public;
 grant execute on function public.update_my_notification_preferences(boolean, boolean, boolean, boolean, boolean) to authenticated;
-revoke all on function public.set_my_group_notification_preferences(uuid, public.group_notification_level, boolean) from public;
-grant execute on function public.set_my_group_notification_preferences(uuid, public.group_notification_level, boolean) to authenticated;
+revoke all on function public.set_my_group_notification_preferences(uuid, public.group_notification_level, boolean, boolean) from public;
+grant execute on function public.set_my_group_notification_preferences(uuid, public.group_notification_level, boolean, boolean) to authenticated;
 revoke all on function public.register_my_web_push_subscription(text, text, text, double precision) from public;
 grant execute on function public.register_my_web_push_subscription(text, text, text, double precision) to authenticated;
 revoke all on function public.unregister_my_web_push_subscription(text) from public;

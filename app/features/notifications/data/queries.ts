@@ -79,7 +79,7 @@ export async function getRecentUnreadNotificationCount(): Promise<number> {
 }
 
 const GROUP_PREFERENCE_COLUMNS =
-  "group_id, notification_level, new_post_push_enabled, groups!inner(name, kind)";
+  "group_id, notification_level, content_push_enabled, new_post_push_enabled, groups!inner(name, kind)";
 
 export async function listMyGroupNotificationPreferences(): Promise<
   GroupNotificationPreference[]
@@ -95,6 +95,7 @@ export async function listMyGroupNotificationPreferences(): Promise<
     groupName: item.groups.name,
     groupKind: item.groups.kind,
     level: item.notification_level,
+    contentPushEnabled: item.content_push_enabled,
     newPostPushEnabled: item.new_post_push_enabled,
   }));
 }
@@ -123,6 +124,7 @@ export async function getMyGroupNotificationPreference(
     groupName: data.groups.name,
     groupKind: data.groups.kind,
     level: data.notification_level,
+    contentPushEnabled: data.content_push_enabled,
     newPostPushEnabled: data.new_post_push_enabled,
   };
 }

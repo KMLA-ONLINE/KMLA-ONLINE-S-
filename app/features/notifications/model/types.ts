@@ -37,6 +37,7 @@ export interface GroupNotificationPreference {
   groupName: string;
   groupKind: GroupNotificationGroupKind;
   level: GroupNotificationLevel;
+  contentPushEnabled: boolean;
   newPostPushEnabled: boolean;
 }
 

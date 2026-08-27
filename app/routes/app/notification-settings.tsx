@@ -44,6 +44,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     await updateGroupNotificationPreferences(
       groupId,
       level,
+      level !== "none" && formData.get("contentPushEnabled") === "true",
       level === "all" && formData.get("newPostPushEnabled") === "true",
     );
     return { saved: true };
