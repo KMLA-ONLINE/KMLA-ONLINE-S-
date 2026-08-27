@@ -156,3 +156,26 @@ Deno.test(
     assertEquals(completions[0]?.outcome, "sent");
   },
 );
+
+Deno.test(
+  "dispatcher reports a retry when the database rejects lease completion",
+  async () => {
+    const { deps } = dependencies([delivery()]);
+    deps.complete = () => Promise.resolve(false);
+
+    const response = await createDispatchHandler(deps)(
+      new Request("http://localhost", {
+        method: "POST",
+        headers: { "x-dispatch-secret": "dispatch-secret" },
+      }),
+    );
+
+    assertEquals(await response.json(), {
+      claimed: 1,
+      sent: 0,
+      suppressed: 0,
+      retry: 1,
+      dead: 0,
+    });
+  },
+);

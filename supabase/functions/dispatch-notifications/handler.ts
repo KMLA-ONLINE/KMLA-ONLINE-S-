@@ -110,7 +110,7 @@ export function createDispatchHandler(deps: DispatchDependencies) {
       }
 
       try {
-        await deps.complete(result);
+        if (!(await deps.complete(result))) result.outcome = "retry";
       } catch {
         result.outcome = "retry";
       }

@@ -84,8 +84,7 @@ export async function getPushSupport(): Promise<PushSupport> {
     const { data, error } = await getSupabase().rpc("get_my_web_push_status", {
       p_endpoint: subscription.endpoint,
     });
-    if (error) throw error;
-    subscribed = data?.[0]?.subscribed === true;
+    if (!error) subscribed = data?.[0]?.subscribed === true;
   }
   return {
     state: "available",

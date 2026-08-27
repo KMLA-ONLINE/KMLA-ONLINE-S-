@@ -971,7 +971,7 @@ begin
   select delivery.* into target
   from private.notification_delivery_outbox as delivery
   where delivery.id = p_delivery_id and delivery.status = 'leased'
-    and delivery.lease_id = p_lease_id and delivery.lease_expires_at > now()
+    and delivery.lease_id = p_lease_id
   for update;
   if target.id is null then return false; end if;
 

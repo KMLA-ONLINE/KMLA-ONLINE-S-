@@ -141,6 +141,25 @@ describe("Web Push configuration", () => {
     });
   });
 
+  it("keeps settings available when account subscription status cannot be loaded", async () => {
+    vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", VALID_VAPID_KEY);
+    getRegistration.mockResolvedValue({
+      active: {},
+      pushManager: {
+        getSubscription: vi
+          .fn()
+          .mockResolvedValue({ endpoint: "https://push.example/unavailable" }),
+      },
+    });
+    rpc.mockResolvedValue({ data: null, error: new Error("network error") });
+
+    await expect(getPushSupport()).resolves.toEqual({
+      state: "available",
+      permission: "default",
+      subscribed: false,
+    });
+  });
+
   it("re-registers an existing browser subscription missing from the account", async () => {
     vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", VALID_VAPID_KEY);
     const notification = {
