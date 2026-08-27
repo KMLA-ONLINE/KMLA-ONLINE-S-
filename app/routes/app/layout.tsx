@@ -103,7 +103,13 @@ export default function MainAppLayout() {
             enabled={chrome.pullToRefresh}
             onRefresh={refresh}
           />
-          <ScrollRegion scrollRef={scrollRef}>
+          <ScrollRegion
+            scrollRef={scrollRef}
+            className={cn(
+              chrome.bottomNav === "hide-on-scroll" &&
+                "max-md:pb-[calc(var(--app-tabbar-h)+var(--app-safe-b))]",
+            )}
+          >
             <div className="md:px-8">
               <div
                 data-slot="app-content"
@@ -127,10 +133,10 @@ export default function MainAppLayout() {
               className={cn(
                 "md:hidden",
                 chrome.bottomNav === "hide-on-scroll" &&
-                  "transition-[margin,transform] duration-200 ease-out focus-within:mb-0 focus-within:translate-y-0 motion-reduce:transition-none",
+                  "absolute inset-x-0 bottom-0 transition-transform duration-200 ease-out focus-within:translate-y-0 motion-reduce:transition-none",
                 chrome.bottomNav === "hide-on-scroll" &&
                   hidden &&
-                  "max-md:-mb-[calc(var(--app-tabbar-h)+var(--app-safe-b))] max-md:translate-y-full",
+                  "max-md:translate-y-full",
               )}
             />
           )}

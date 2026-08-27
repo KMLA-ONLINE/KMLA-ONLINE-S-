@@ -1,4 +1,9 @@
-import { RouterContextProvider } from "react-router";
+import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  createRoutesStub,
+  RouterContextProvider,
+  useNavigate,
+} from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -10,7 +15,9 @@ vi.mock("~/features/notifications", async (importOriginal) => ({
   resolveNotificationDestination: mocks.resolveNotificationDestination,
 }));
 
-import { clientLoader } from "~/routes/notification-open";
+import NotificationOpenRoute, {
+  clientLoader,
+} from "~/routes/notification-open";
 
 function load(notificationId = "notification-id") {
   const url = `https://example.com/noti/open/${notificationId}`;
@@ -81,7 +88,7 @@ describe("notification open route", () => {
   it("redirects an authenticated user only to a safe resolved path", async () => {
     mocks.resolveNotificationDestination.mockResolvedValue("//evil.example");
 
-    await expect(redirectLocation()).resolves.toBe("/noti");
+    await expect(load()).resolves.toEqual({ target: "/noti" });
   });
 
   it("preserves only the fixed resolver path when authentication is missing", async () => {
@@ -92,24 +99,41 @@ describe("notification open route", () => {
     );
   });
 
-  /**
-   * resolver가 history에 남으면 뒤로가기가 이 loader를 다시 돌려 목적지로 되돌려 보낸다.
-   * 어느 갈래로 빠지든 자기 entry를 갈아치워야 한다.
-   */
-  it("never leaves its own entry behind", async () => {
-    mocks.resolveNotificationDestination.mockResolvedValue("/groups/study");
-    expect(replaces(await redirection())).toBe(true);
-
+  it("replaces its own entry when authentication is missing", async () => {
     mocks.resolveNotificationDestination.mockResolvedValue(null);
     expect(replaces(await redirection())).toBe(true);
   });
 
-  it("keeps the existing history when the app was already open", async () => {
-    mocks.resolveNotificationDestination.mockResolvedValue(
-      "/groups/study/posts/post-id",
+  it("returns to the inbox after closing a post opened from the inbox", async () => {
+    function Post() {
+      const navigate = useNavigate();
+      return <button onClick={() => void navigate(-1)}>게시물 닫기</button>;
+    }
+    const Stub = createRoutesStub([
+      { path: "/noti", Component: () => <p>알림함</p> },
+      {
+        path: "/noti/open/:notificationId",
+        Component: NotificationOpenRoute,
+        loader: () => ({ target: "/groups/study/posts/post-id" }),
+      },
+      { path: "/groups/study/posts/post-id", Component: Post },
+    ]);
+
+    render(
+      <Stub
+        initialEntries={[
+          "/noti",
+          {
+            pathname: "/noti/open/notification-id",
+            state: { fromNotificationInbox: true },
+          },
+        ]}
+        initialIndex={1}
+      />,
     );
 
-    expect(replaces(await redirection())).toBe(true);
+    fireEvent.click(await screen.findByRole("button", { name: "게시물 닫기" }));
+    expect(await screen.findByText("알림함")).toBeVisible();
     expect(seeded.replaced).toEqual([]);
     expect(seeded.pushed).toEqual([]);
   });
@@ -120,17 +144,22 @@ describe("notification open route", () => {
    */
   it("seeds the destination's own place when there is nothing to go back to", async () => {
     setBackEntry(false);
-    mocks.resolveNotificationDestination.mockResolvedValue(
-      "/groups/study/posts/post-id",
-    );
+    const Stub = createRoutesStub([
+      {
+        path: "/noti/open/:notificationId",
+        Component: NotificationOpenRoute,
+        loader: () => ({ target: "/groups/study/posts/post-id" }),
+      },
+      {
+        path: "/groups/study/posts/post-id",
+        Component: () => <p>게시물</p>,
+      },
+    ]);
 
-    const response = await redirection();
+    render(<Stub initialEntries={["/noti/open/notification-id"]} />);
 
-    expect(response.headers.get("Location")).toBe(
-      "/groups/study/posts/post-id",
-    );
+    expect(await screen.findByText("게시물")).toBeVisible();
     // 깔아 둔 마지막 entry 위로 얹어야 하므로 이 갈래만 push다.
-    expect(replaces(response)).toBe(false);
     expect(seeded.replaced).toEqual(["/"]);
     expect(seeded.pushed).toEqual(["/groups", "/groups/study"]);
   });

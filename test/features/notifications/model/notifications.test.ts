@@ -33,13 +33,24 @@ function notification(id: string, lastActivityAt: string): NotificationItem {
 }
 
 describe("notification list model", () => {
-  it("groups by the last activity timestamp at the exact 24 hour boundary", () => {
+  it("groups by the last activity timestamp at the 6 and 24 hour boundaries", () => {
     const now = new Date("2026-08-26T12:00:00.000Z");
-    const recent = notification("recent", "2026-08-25T12:00:00.001Z");
+    const recentSixHours = notification(
+      "recent-six-hours",
+      "2026-08-26T06:00:00.001Z",
+    );
+    const sixHoursOld = notification(
+      "six-hours-old",
+      "2026-08-26T06:00:00.000Z",
+    );
+    const recentDay = notification("recent-day", "2026-08-25T12:00:00.001Z");
     const older = notification("older", "2026-08-25T12:00:00.000Z");
 
-    expect(groupNotifications([recent, older], now)).toEqual({
-      recent: [recent],
+    expect(
+      groupNotifications([recentSixHours, sixHoursOld, recentDay, older], now),
+    ).toEqual({
+      recentSixHours: [recentSixHours],
+      recentDay: [sixHoursOld, recentDay],
       older: [older],
     });
   });

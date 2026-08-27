@@ -72,6 +72,7 @@ function NotificationRow({
   return (
     <Link
       to={`/noti/open/${encodeURIComponent(item.id)}`}
+      state={{ fromNotificationInbox: true }}
       onClick={() => {
         if (unread) {
           void readFetcher.submit(
@@ -214,8 +215,8 @@ export function NotificationInbox({
   return (
     <>
       <PageHeader
-        title="알림"
         hideOnScroll
+        title="알림"
         actions={
           <Button
             variant="ghost"
@@ -228,11 +229,15 @@ export function NotificationInbox({
           </Button>
         }
       />
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 pb-4">
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
         <div className="flex items-center gap-2 px-4 pt-1 md:px-1 md:pt-0">
           <h1 className="hidden text-2xl font-semibold md:block">알림</h1>
           <div className="ml-auto flex items-center gap-1">
-            <markAllFetcher.Form method="post" action="/noti">
+            <markAllFetcher.Form
+              method="post"
+              action="/noti"
+              className="hidden md:block"
+            >
               <input type="hidden" name="intent" value="mark-all" />
               <Button
                 type="submit"
@@ -273,8 +278,13 @@ export function NotificationInbox({
         ) : (
           <>
             <NotificationGroup
+              title="최근 6시간"
+              items={groups.recentSixHours}
+              forceRead={markAllPending}
+            />
+            <NotificationGroup
               title="최근 24시간"
-              items={groups.recent}
+              items={groups.recentDay}
               forceRead={markAllPending}
             />
             <NotificationGroup
