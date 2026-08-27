@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { CommentThread } from "~/features/posts/components/comment-thread";
@@ -31,8 +32,8 @@ const deepReply = postComment({
   body: "4단계 답글",
 });
 
-function renderThread(overrides: Partial<ThreadProps> = {}) {
-  const props: ThreadProps = {
+function threadProps(overrides: Partial<ThreadProps> = {}): ThreadProps {
+  return {
     comments: [root],
     replies: {},
     expanded: new Set<string>(),
@@ -48,6 +49,10 @@ function renderThread(overrides: Partial<ThreadProps> = {}) {
     onDelete: vi.fn(),
     ...overrides,
   };
+}
+
+function renderThread(overrides: Partial<ThreadProps> = {}) {
+  const props = threadProps(overrides);
   return { ...renderRoute(() => <CommentThread {...props} />), props };
 }
 
@@ -141,6 +146,87 @@ describe("CommentThread", () => {
     expect(screen.getByText("최상위 댓글").closest("[id]")).not.toHaveClass(
       "bg-primary/5",
     );
+  });
+
+  it("marks the comment the post author wrote", () => {
+    renderThread({ postAuthorPubId: "hanbyeol-25" });
+
+    expect(screen.getByText("작성자")).toBeInTheDocument();
+  });
+
+  it("leaves another member's comment unmarked", () => {
+    renderThread({ postAuthorPubId: "someone-else" });
+
+    expect(screen.queryByText("작성자")).not.toBeInTheDocument();
+  });
+
+  /**
+   * 익명 댓글과 익명 게시물은 둘 다 `author_pub_id`가 비어서 내려온다. 비교만 하면 두 빈
+   * 값이 맞아떨어져 아무 익명 댓글에나 작성자 표시가 붙는다 — 익명이 통째로 벗겨진다.
+   * (익명 게시물의 글쓴이는 서버가 `글쓴이` 라벨로 따로 밝힌다.)
+   */
+  it("never marks an anonymous comment on an anonymous post", () => {
+    renderThread({
+      comments: [
+        postComment({
+          author_identity: "anonymous",
+          author_label: "익명2",
+          author_name: null as unknown as string,
+          author_pub_id: null as unknown as string,
+        }),
+      ],
+      postAuthorPubId: null,
+    });
+
+    expect(screen.queryByText("작성자")).not.toBeInTheDocument();
+  });
+
+  /**
+   * 회귀: `scrollIntoView`는 스크롤 조상을 전부 훑고 모바일에서는 visual viewport까지
+   * 밀어서, 부모 댓글로 옮겨 왔을 뿐인데 댓글 시트가 통째로 끌려왔다.
+   */
+  it("moves to the parent inside the comment container only", async () => {
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView");
+    const scrollRef: RefObject<HTMLElement | null> = { current: null };
+    const props = threadProps({
+      replies: { "root-id": [firstReply] },
+      expanded: new Set(["root-id"]),
+      scrollRef,
+    });
+
+    const { user } = renderRoute(() => (
+      <div
+        ref={(node) => {
+          scrollRef.current = node;
+        }}
+      >
+        <CommentThread {...props} />
+      </div>
+    ));
+
+    // 이동의 결과는 부모 댓글과, 목록이 벗어나지 말아야 할 컨테이너 사이의 관계다.
+    const container = scrollRef.current;
+    const target = document.getElementById("comment-root-id");
+    expect(container).not.toBeNull();
+    expect(target).not.toBeNull();
+    if (!container || !target) return;
+
+    container.scrollTop = 100;
+    const scrollTo = vi.spyOn(container, "scrollTo");
+    vi.spyOn(container, "getBoundingClientRect").mockReturnValue({
+      top: 0,
+      height: 300,
+    } as DOMRect);
+    vi.spyOn(target, "getBoundingClientRect").mockReturnValue({
+      top: 260,
+      height: 90,
+    } as DOMRect);
+
+    await user.click(screen.getByRole("button", { name: "@이한별" }));
+
+    // 260 − (300 − 90) / 2 = 155만큼 더 내려가면 부모가 가운데에 온다.
+    expect(scrollTo).toHaveBeenCalledWith({ top: 255, behavior: "smooth" });
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
   it("does not offer a reply on a comment at the deepest level", () => {

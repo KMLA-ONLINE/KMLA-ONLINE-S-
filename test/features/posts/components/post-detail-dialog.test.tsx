@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PostDetailDialog } from "~/features/posts/components/post-detail-dialog";
@@ -43,7 +43,13 @@ afterEach(() => {
   });
 });
 
-function Detail({ withComment = false }: { withComment?: boolean }) {
+function Detail({
+  withComment = false,
+  onClose = vi.fn(),
+}: {
+  withComment?: boolean;
+  onClose?: () => void;
+}) {
   return (
     <PostDetailDialog
       title="게시물"
@@ -56,7 +62,7 @@ function Detail({ withComment = false }: { withComment?: boolean }) {
       }}
       viewer={{ name: "홍길동", avatarUrl: null }}
       identities={["identified"]}
-      onClose={vi.fn()}
+      onClose={onClose}
       actionBar={{
         reaction: {
           reaction_count: 0,
@@ -71,6 +77,34 @@ function Detail({ withComment = false }: { withComment?: boolean }) {
       <p>게시물 본문</p>
     </PostDetailDialog>
   );
+}
+
+/** 댓글이 놓인 스크롤 영역. 모달이 안에 감춰 두고 있어 역할로는 잡히지 않는다. */
+function commentList() {
+  /* eslint-disable testing-library/no-node-access --
+     The dialog's overflow container is private; the drag behavior lives on it. */
+  const list = document
+    .getElementById("comment-target")
+    ?.closest("section")?.parentElement;
+  /* eslint-enable testing-library/no-node-access */
+  if (!list) throw new Error("comment list container is missing");
+  return list;
+}
+
+/**
+ * 손가락으로 아래로 당기기.
+ *
+ * 포인터가 아니라 터치인 것이 요점이다. 스크롤 영역 위의 세로 손짓은 브라우저가 가져가서
+ * 포인터 이벤트를 끊어 버리므로, 목록에서 시트를 닫는 손짓은 터치로만 잡힌다.
+ */
+function pullDown(element: HTMLElement, distance: number) {
+  fireEvent.touchStart(element, {
+    touches: [{ identifier: 1, clientX: 20, clientY: 20 }],
+  });
+  fireEvent.touchMove(element, {
+    touches: [{ identifier: 1, clientX: 20, clientY: 20 + distance }],
+  });
+  fireEvent.touchEnd(element);
 }
 
 describe("PostDetailDialog", () => {
@@ -190,6 +224,57 @@ describe("PostDetailDialog", () => {
     await user.click(screen.getByRole("button", { name: "답글" }));
 
     await waitFor(() => expect(container.scrollTop).toBe(150));
+  });
+
+  /**
+   * 머리글만 끌 수 있던 때에는, 댓글을 다 읽고 목록을 맨 위로 올린 사람이 시트를 닫으려면
+   * 손가락을 머리글까지 다시 가져가야 했다. 이어서 아래로 당기는 손짓으로도 닫힌다.
+   */
+  it("closes the comment sheet when the list is dragged down from its top", () => {
+    stubTabletSheetViewport(true);
+    const onClose = vi.fn();
+    renderRoute(() => <Detail withComment onClose={onClose} />, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id?view=comments"],
+    });
+    const list = commentList();
+
+    pullDown(list, 160);
+
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("keeps the sheet open when the same drag starts mid-list", () => {
+    stubTabletSheetViewport(true);
+    const onClose = vi.fn();
+    renderRoute(() => <Detail withComment onClose={onClose} />, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id?view=comments"],
+    });
+    const list = commentList();
+    // 목록이 내려가 있으면 같은 손짓이 스크롤이다.
+    Object.defineProperty(list, "scrollTop", {
+      configurable: true,
+      value: 40,
+      writable: true,
+    });
+
+    pullDown(list, 160);
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("leaves the drag alone on a computer detail modal", () => {
+    stubTabletSheetViewport(false);
+    const onClose = vi.fn();
+    renderRoute(() => <Detail withComment onClose={onClose} />, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id?view=comments"],
+    });
+
+    pullDown(commentList(), 160);
+
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("does not refocus the composer when cancelling a reply", async () => {

@@ -37,6 +37,18 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
 
+if (!Element.prototype.scrollTo) {
+  Element.prototype.scrollTo = () => {};
+}
+
+// 포인터 캡처도 마찬가지다. 바텀 시트를 끌어 닫는 손짓은 손가락이 목록 밖으로 나가도
+// 이어져야 해서 캡처를 잡는데, 없으면 첫 pointerdown에서 죽는다.
+if (!Element.prototype.setPointerCapture) {
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
+  Element.prototype.hasPointerCapture = () => false;
+}
+
 if (!globalThis.ResizeObserver) {
   globalThis.ResizeObserver = class {
     observe() {}

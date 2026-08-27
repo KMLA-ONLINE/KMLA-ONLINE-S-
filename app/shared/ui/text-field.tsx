@@ -39,6 +39,10 @@ function focusNextControl(control: HTMLTextAreaElement) {
  * 그냥 두면 `md:text-sm`(줄 높이 20px)에서 글자가 3px 위로 뜬다. 고정값인 이유는 이
  * 컴포넌트가 높이를 `h-9 max-h-9 min-h-9`로 잠그기 때문이다 — 높이나 안쪽 여백을 바꾸면
  * 이 값도 같이 바꿔야 한다.
+ *
+ * `className`보다 **뒤에** 두어야 한다. `cn`은 tailwind-merge이고, 거기서 글자 크기는
+ * 줄 높이와 충돌하는 것으로 다뤄져 뒤에 오는 `text-*` 하나가 앞의 `leading-*`을 지운다.
+ * 앞에 두면 `text-base`를 넘기는 호출부에서만 조용히 중앙 정렬이 풀린다.
  */
 const LINE_HEIGHT = "leading-[26px]";
 
@@ -56,8 +60,8 @@ function TextField({
       aria-multiline={false}
       className={cn(
         "[field-sizing:fixed] h-9 max-h-9 min-h-9 resize-none [scrollbar-width:none] overflow-x-auto overflow-y-hidden py-1 whitespace-nowrap [&::-webkit-scrollbar]:hidden",
-        LINE_HEIGHT,
         className,
+        LINE_HEIGHT,
       )}
       enterKeyHint={enterKeyHint}
       onBeforeInput={(event) => {

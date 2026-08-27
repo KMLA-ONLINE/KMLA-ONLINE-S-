@@ -2,6 +2,7 @@ import { XIcon } from "lucide-react";
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useRef,
   useState,
   useSyncExternalStore,
@@ -50,6 +51,8 @@ const COMMENT_SHEET_CLASS =
   "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-[1025px]:top-auto max-[1025px]:bottom-0 max-[1025px]:h-[98svh] max-[1025px]:max-h-[98svh] max-[1025px]:rounded-t-2xl max-[1025px]:rounded-b-none max-[1025px]:translate-y-[var(--sheet-drag-offset,0px)] max-[1025px]:data-open:zoom-in-100 max-[1025px]:data-open:slide-in-from-bottom-4 max-[1025px]:data-closed:zoom-out-100 max-[1025px]:data-closed:slide-out-to-bottom-4 max-md:left-0 max-md:max-w-full max-md:translate-x-0 md:max-[1025px]:left-1/2 md:max-[1025px]:max-w-2xl md:max-[1025px]:-translate-x-1/2 min-[1025px]:max-w-2xl";
 
 const DISMISS_DRAG_DISTANCE = 96;
+/** 목록에서 시작한 손짓을 당기기로 볼 최소 거리. 그 전에는 브라우저의 스크롤로 둔다. */
+const PULL_START_SLOP = 6;
 const TABLET_SHEET_QUERY = "(max-width: 1024px) and (hover: none)";
 
 function subscribeToTabletSheetQuery(onChange: () => void) {
@@ -79,6 +82,7 @@ export function PostDetailDialog({
   comments,
   viewer,
   identities,
+  postAuthorPubId,
   error,
   onClose,
   actionBar,
@@ -92,6 +96,8 @@ export function PostDetailDialog({
   viewer: CommentViewer;
   /** 이 게시물에 댓글로 쓸 수 있는 작성 신원. 첫 항목이 기본값이다. */
   identities: PostIdentity[];
+  /** 게시물 작성자의 `pub_id`. 댓글 목록이 작성자 배지를 붙이는 데 쓴다. */
+  postAuthorPubId?: string | null;
   error?: string | null;
   onClose: () => void;
   /** 본문 아래 액션 바. 댓글 수는 서버가 준 값만 넘기면 된다 — 방금 쓴 댓글은 여기서 더한다. */
@@ -105,6 +111,18 @@ export function PostDetailDialog({
   children: ReactNode;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  /**
+   * 스크롤 영역은 ref로도 잡고 상태로도 잡는다.
+   *
+   * 모달 본문은 포털이 나중에 붙여서, 이 컴포넌트의 첫 effect가 도는 시점에는 ref가 아직
+   * 비어 있다. 손짓 리스너를 거기에 걸려면 노드가 생겼다는 사실이 effect를 다시 돌게 해야
+   * 한다 — ref만으로는 아무 일도 일어나지 않는다.
+   */
+  const [listElement, setListElement] = useState<HTMLDivElement | null>(null);
+  const attachList = useCallback((node: HTMLDivElement | null) => {
+    scrollRef.current = node;
+    setListElement(node);
+  }, []);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const thread = usePostComments(postId, comments);
   const [identity, setIdentity] = useState<PostIdentity>(identities[0]);
@@ -194,7 +212,9 @@ export function PostDetailDialog({
 
   const startSheetDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!commentSheet) return;
-    if ((event.target as Element).closest("button")) return;
+    // 누를 것 위에서 시작한 손짓은 시트가 가로채지 않는다. 96px을 넘겨 시트가 닫히는
+    // 순간에도 클릭은 그대로 발생해서, 닫히면서 프로필로 넘어가는 일이 생긴다.
+    if ((event.target as Element).closest("a, button")) return;
     dragStart.current = { pointerId: event.pointerId, y: event.clientY };
     setDragging(true);
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -227,6 +247,84 @@ export function PostDetailDialog({
     setDragging(false);
     setDragOffset(0);
   };
+
+  /**
+   * 댓글 목록을 맨 위까지 올린 뒤 이어서 아래로 당겨도 시트를 닫는다.
+   *
+   * 머리글만 끌 수 있으면, 댓글을 다 읽고 목록을 끝까지 올린 사람이 닫으려고 손가락을
+   * 위로 다시 가져가야 한다. 이어서 당기는 쪽이 자연스럽다.
+   *
+   * 포인터 이벤트로는 안 된다. 스크롤 영역 위의 세로 손짓은 브라우저가 스크롤로 가져가면서
+   * `pointercancel`로 끊어 버려서, 머리글에서 쓰는 핸들러를 그대로 붙여도 아무 일도 일어나지
+   * 않는다. `touchmove`를 passive가 아닌 채로 듣고 직접 `preventDefault`를 불러야 손짓이
+   * 우리에게 남는다 — 목록 맨 위에서 아래로 당기기라는 같은 문제를 푸는 `PullToRefresh`가
+   * 같은 이유로 같은 방식을 쓴다. 덤으로 `preventDefault`는 뒤따르는 클릭까지 막아 주므로,
+   * 링크나 버튼 위에서 당기기 시작해도 닫히면서 그쪽으로 넘어가지 않는다.
+   */
+  const closeSheet = useEffectEvent(onClose);
+
+  useEffect(() => {
+    const container = listElement;
+    if (!commentSheet || !container) return;
+
+    let pull: { touchId: number; startY: number; distance: number } | null =
+      null;
+
+    const start = (event: TouchEvent) => {
+      // 맨 위에 붙어 있을 때만 받는다. 중간에서는 같은 손짓이 스크롤이다.
+      if (event.touches.length !== 1 || container.scrollTop > 0) return;
+      const touch = event.touches[0];
+      pull = { touchId: touch.identifier, startY: touch.clientY, distance: 0 };
+    };
+
+    const move = (event: TouchEvent) => {
+      if (!pull) return;
+      const touch = Array.from(event.touches).find(
+        (candidate) => candidate.identifier === pull?.touchId,
+      );
+      if (!touch) return;
+
+      const distance = touch.clientY - pull.startY;
+      // 위로 밀었거나 목록이 다시 내려갔으면 평범한 스크롤이다. 손짓을 브라우저에 돌려준다.
+      if (distance <= 0 || container.scrollTop > 0) {
+        pull = null;
+        setDragging(false);
+        setDragOffset(0);
+        return;
+      }
+      if (distance < PULL_START_SLOP) return;
+
+      event.preventDefault();
+      pull.distance = distance;
+      setDragging(true);
+      setDragOffset(distance);
+    };
+
+    const finish = () => {
+      const distance = pull?.distance ?? 0;
+      pull = null;
+      if (distance === 0) return;
+
+      setDragging(false);
+      if (distance >= DISMISS_DRAG_DISTANCE) {
+        closeSheet();
+        return;
+      }
+      setDragOffset(0);
+    };
+
+    container.addEventListener("touchstart", start, { passive: true });
+    container.addEventListener("touchmove", move, { passive: false });
+    container.addEventListener("touchend", finish);
+    container.addEventListener("touchcancel", finish);
+
+    return () => {
+      container.removeEventListener("touchstart", start);
+      container.removeEventListener("touchmove", move);
+      container.removeEventListener("touchend", finish);
+      container.removeEventListener("touchcancel", finish);
+    };
+  }, [commentSheet, listElement]);
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -299,7 +397,15 @@ export function PostDetailDialog({
           </DialogHeader>
         </div>
 
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+        <div
+          ref={attachList}
+          className={cn(
+            "min-h-0 flex-1 overflow-y-auto",
+            // overscroll-contain: 맨 위에서 더 당길 때 브라우저의 고무줄과 새로고침
+            // 제스처가 손짓을 가져가지 않도록 이 영역에 가둔다.
+            commentSheet && "overscroll-contain",
+          )}
+        >
           {error ? (
             <p role="alert" className="border-b p-3 text-sm text-destructive">
               {error}
@@ -328,6 +434,7 @@ export function PostDetailDialog({
               loading={thread.loading}
               pending={thread.pending}
               viewer={viewer}
+              postAuthorPubId={postAuthorPubId}
               replyingToId={replyingTo?.comment_id}
               scrollRef={scrollRef}
               onLoadMore={thread.loadMore}
