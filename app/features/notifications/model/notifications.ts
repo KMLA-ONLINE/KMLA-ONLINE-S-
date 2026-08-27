@@ -1,4 +1,7 @@
 import type {
+  GroupNotificationLevel,
+  GroupNotificationGroupKind,
+  GroupNotificationPreference,
   NotificationCursor,
   NotificationItem,
 } from "~/features/notifications/model/types";
@@ -22,6 +25,30 @@ export function groupNotifications(
   }
 
   return { recent, older };
+}
+
+/**
+ * 새로 가입할 때 서버가 넣어 주는 기본 알림 수준(기술 설계 §3.3). 공식 그룹은 전체 소식을
+ * 받고 비공식 그룹은 나와 직접 관련된 활동만 받는다.
+ */
+export function getDefaultGroupNotificationLevel(
+  kind: GroupNotificationGroupKind,
+): GroupNotificationLevel {
+  return kind === "official" ? "all" : "direct";
+}
+
+/**
+ * 손대지 않은 그룹인지. 알림 설정 화면은 이 값이 `false`인 그룹만 나열한다 — 가입한 그룹을
+ * 전부 늘어놓으면 목록이 길기만 하고, 정작 사용자가 바꾼 그룹이 그 안에 묻힌다.
+ */
+export function isDefaultGroupNotificationPreference(
+  preference: GroupNotificationPreference,
+): boolean {
+  return (
+    preference.level ===
+      getDefaultGroupNotificationLevel(preference.groupKind) &&
+    !preference.newPostPushEnabled
+  );
 }
 
 export function getNotificationCursor(

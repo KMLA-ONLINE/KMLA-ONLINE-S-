@@ -1,4 +1,5 @@
 export {
+  getMyGroupNotificationPreference,
   getNotificationPreferences,
   getRecentUnreadNotificationCount,
   listMyGroupNotificationPreferences,
@@ -20,13 +21,16 @@ export {
 } from "~/features/notifications/data/push";
 export { subscribeToNotifications } from "~/features/notifications/data/subscriptions";
 export {
+  getDefaultGroupNotificationLevel,
   getNotificationCursor,
   groupNotifications,
+  isDefaultGroupNotificationPreference,
   NOTIFICATION_PAGE_SIZE,
   sanitizeNotificationDestination,
 } from "~/features/notifications/model/notifications";
 export type {
   NotificationCursor,
+  GroupNotificationGroupKind,
   GroupNotificationLevel,
   GroupNotificationPreference,
   NotificationItem,

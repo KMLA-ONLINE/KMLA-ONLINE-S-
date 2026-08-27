@@ -84,6 +84,8 @@ describe("NotificationSettings", () => {
           {
             groupId: "11111111-1111-4111-8111-111111111111",
             groupName: "긴 이름의 테스트 그룹",
+            // 공식 그룹의 기본값은 `all`이라 `direct`는 사용자가 바꾼 상태다.
+            groupKind: "official",
             level: "direct",
             newPostPushEnabled: false,
           },
@@ -96,5 +98,81 @@ describe("NotificationSettings", () => {
         name: "긴 이름의 테스트 그룹 알림 수준",
       }),
     ).toHaveClass("w-28");
+  });
+
+  it("lists only groups whose notification settings differ from the default", () => {
+    renderRoute(() => (
+      <NotificationSettings
+        initialPreferences={preferences}
+        initialPushSupport={{ state: "unsupported" }}
+        groupPreferences={[
+          {
+            groupId: "11111111-1111-4111-8111-111111111111",
+            groupName: "기본값 공식 그룹",
+            groupKind: "official",
+            level: "all",
+            newPostPushEnabled: false,
+          },
+          {
+            groupId: "22222222-2222-4222-8222-222222222222",
+            groupName: "기본값 비공식 그룹",
+            groupKind: "unofficial",
+            level: "direct",
+            newPostPushEnabled: false,
+          },
+          {
+            groupId: "33333333-3333-4333-8333-333333333333",
+            groupName: "직접 바꾼 그룹",
+            groupKind: "unofficial",
+            level: "none",
+            newPostPushEnabled: false,
+          },
+        ]}
+      />
+    ));
+
+    expect(screen.getByText("직접 바꾼 그룹")).toBeInTheDocument();
+    expect(screen.queryByText("기본값 공식 그룹")).not.toBeInTheDocument();
+    expect(screen.queryByText("기본값 비공식 그룹")).not.toBeInTheDocument();
+  });
+
+  it("summarizes what the current settings actually deliver", () => {
+    renderRoute(() => (
+      <NotificationSettings
+        initialPreferences={{ ...preferences, timeline_push_enabled: false }}
+        initialPushSupport={{
+          state: "available",
+          permission: "granted",
+          subscribed: true,
+        }}
+        groupPreferences={[]}
+      />
+    ));
+
+    expect(
+      screen.getByText(
+        "이 기기로 받는 알림 — 댓글 · 답글, 그룹 소식, 계정 · 권한, 학교 기능",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("그 밖의 알림은 앱 알림함에서만 확인합니다."),
+    ).toBeInTheDocument();
+  });
+
+  it("says everything stays in the inbox when this device has no push", () => {
+    renderRoute(() => (
+      <NotificationSettings
+        initialPreferences={preferences}
+        initialPushSupport={{ state: "unsupported" }}
+        groupPreferences={[]}
+      />
+    ));
+
+    expect(
+      screen.getByText("이 기기로 오는 Push가 없습니다."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("모든 알림은 앱 알림함에만 쌓입니다."),
+    ).toBeInTheDocument();
   });
 });

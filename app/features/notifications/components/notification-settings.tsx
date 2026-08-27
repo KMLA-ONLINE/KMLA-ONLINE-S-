@@ -1,48 +1,228 @@
-import { BellOffIcon, BellRingIcon, SmartphoneIcon } from "lucide-react";
+import {
+  BellOffIcon,
+  BellRingIcon,
+  CalendarClockIcon,
+  MessageCircleIcon,
+  PenLineIcon,
+  ShieldCheckIcon,
+  SmartphoneIcon,
+  UsersIcon,
+  type LucideIcon,
+} from "lucide-react";
 import { useState } from "react";
 import { useFetcher } from "react-router";
 import { toast } from "sonner";
 
 import { PageHeader } from "~/features/app-shell";
+import { GroupNotificationFields } from "~/features/notifications/components/group-notification-dialog";
 import {
   disableWebPush,
   enableWebPush,
   getPushSupport,
 } from "~/features/notifications/data/push";
+import { isDefaultGroupNotificationPreference } from "~/features/notifications/model/notifications";
 import type {
   GroupNotificationLevel,
   GroupNotificationPreference,
   NotificationPreferences,
   PushSupport,
 } from "~/features/notifications/model/types";
+import { Badge } from "~/shared/ui/badge";
 import { Spinner } from "~/shared/ui/spinner";
 import { Switch } from "~/shared/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/shared/ui/select";
+import { cn } from "~/shared/lib/utils";
 
+/**
+ * 유형 행. 아이콘은 알림함의 종류 배지와 같은 어휘를 써서, 이 스위치가 실제로 어떤 알림을
+ * 막는지 두 화면을 오가며 이어 붙일 수 있게 한다.
+ *
+ * 설명은 "무슨 분류인가"가 아니라 "어떤 사건이 오는가"를 적는다. 끄기 전에 알고 싶은 것은
+ * 분류 이름이 아니라 놓치게 될 사건이다.
+ */
 const PREFERENCE_ROWS = [
-  ["content_push_enabled", "댓글 · 답글", "내 콘텐츠와 관련된 새 활동"],
-  ["timeline_push_enabled", "타임라인", "내 타임라인의 게시물 활동"],
-  ["group_push_enabled", "그룹", "가입, 역할과 그룹 운영 소식"],
-  ["account_push_enabled", "계정 · 권한", "승인과 계정 권한 변경"],
-  ["school_push_enabled", "학교 기능", "예약과 학교 기능 소식"],
+  [
+    "content_push_enabled",
+    MessageCircleIcon,
+    "댓글 · 답글",
+    "내 게시물에 달린 댓글, 내 댓글에 달린 답글",
+  ],
+  [
+    "timeline_push_enabled",
+    PenLineIcon,
+    "내 타임라인",
+    "다른 사람이 내 타임라인에 남긴 게시물",
+  ],
+  [
+    "group_push_enabled",
+    UsersIcon,
+    "그룹 소식",
+    "가입 요청과 승인, 역할과 그룹 정책 변경",
+  ],
+  [
+    "account_push_enabled",
+    ShieldCheckIcon,
+    "계정 · 권한",
+    "가입 승인과 관리 권한 변경",
+  ],
+  [
+    "school_push_enabled",
+    CalendarClockIcon,
+    "학교 기능",
+    "공강 예약 등 학교 부가 기능 소식",
+  ],
 ] as const satisfies readonly (readonly [
   keyof NotificationPreferences,
+  LucideIcon,
   string,
   string,
 ])[];
 
-const GROUP_LEVEL_LABEL: Record<GroupNotificationLevel, string> = {
-  none: "없음",
-  direct: "직접 관련",
-  all: "전체",
-};
+type PushTone = "on" | "off" | "blocked";
+
+/**
+ * Web Push 상태 하나를 배지 문구·설명·색으로 한 번에 푼다.
+ *
+ * 상태가 여섯 갈래(미지원, 키 없음, iOS 브라우저, 차단, 꺼짐, 켜짐)라 JSX 안에서 삼항으로
+ * 엮으면 어느 가지가 어떤 화면을 그리는지 읽히지 않는다. 분기는 여기 한 곳에만 둔다.
+ */
+function describePush(
+  support: PushSupport,
+  pending: boolean,
+): { label: string; tone: PushTone; message: string } {
+  if (pending) {
+    return {
+      label: "변경 중",
+      tone: "off",
+      message: "Web Push 설정을 변경하고 있습니다.",
+    };
+  }
+
+  switch (support.state) {
+    case "ios-browser":
+      return {
+        label: "설치 필요",
+        tone: "off",
+        message:
+          "iPhone과 iPad에서는 홈 화면에 설치한 앱에서 알림을 켤 수 있습니다.",
+      };
+    case "unconfigured":
+      return {
+        label: "사용 불가",
+        tone: "off",
+        message: "이 환경에는 Web Push 공개 키가 설정되지 않았습니다.",
+      };
+    case "unsupported":
+      return {
+        label: "사용 불가",
+        tone: "off",
+        message: "이 브라우저에서는 Web Push를 사용할 수 없습니다.",
+      };
+    default:
+      if (support.permission === "denied") {
+        return {
+          label: "차단됨",
+          tone: "blocked",
+          message:
+            "브라우저에서 알림이 차단되어 있습니다. 브라우저 사이트 설정에서 허용해 주세요.",
+        };
+      }
+      return support.subscribed
+        ? {
+            label: "켜짐",
+            tone: "on",
+            message: "이 기기에서 새 소식을 받을 수 있습니다.",
+          }
+        : {
+            label: "꺼짐",
+            tone: "off",
+            message: "중요한 새 소식을 앱을 열지 않아도 받을 수 있습니다.",
+          };
+  }
+}
+
+/**
+ * 지금 설정이 실제로 무엇을 뜻하는지 한 문장으로 돌려준다.
+ *
+ * 규칙을 설명하는 대신 결과를 보여주는 쪽을 택했다. 우선순위 체인(권한 → 기기 → 유형 →
+ * 그룹)을 글로 가르치면 읽어야 이해되지만, 결과 문장은 스위치를 만지는 동안 같이 바뀌므로
+ * "이거 끄면 어떻게 되지?"를 눌러 보고 확인할 수 있다.
+ *
+ * 목록을 "받습니다" 앞에 두지 않고 대시 뒤에 두는 것은 조사 때문이다 — 마지막 항목에 따라
+ * 을/를이 갈리는데, 항목이 설정에 따라 바뀌므로 문장으로 이으면 반드시 어색해진다.
+ */
+function summarizeDelivery(
+  pushEnabled: boolean,
+  preferences: NotificationPreferences,
+): { headline: string; detail: string } {
+  if (!pushEnabled) {
+    return {
+      headline: "이 기기로 오는 Push가 없습니다.",
+      detail: "모든 알림은 앱 알림함에만 쌓입니다.",
+    };
+  }
+
+  const enabled = PREFERENCE_ROWS.filter(([key]) => preferences[key]);
+
+  if (enabled.length === 0) {
+    return {
+      headline: "이 기기로 오는 Push가 없습니다.",
+      detail: "유형을 모두 꺼 두어 알림은 앱 알림함에만 쌓입니다.",
+    };
+  }
+
+  if (enabled.length === PREFERENCE_ROWS.length) {
+    return {
+      headline: "이 기기로 받는 알림 — 모든 유형",
+      detail: "반응(좋아요 등)은 Push 없이 앱 알림함에만 표시됩니다.",
+    };
+  }
+
+  return {
+    headline: `이 기기로 받는 알림 — ${enabled.map(([, , title]) => title).join(", ")}`,
+    detail: "그 밖의 알림은 앱 알림함에서만 확인합니다.",
+  };
+}
+
+function SettingsSection({
+  title,
+  scope,
+  description,
+  footnote,
+  children,
+}: {
+  title: string;
+  scope: string;
+  description: string;
+  footnote?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <div className="mb-2 px-1">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold">{title}</h2>
+          {/* 어떤 설정이 이 기기에만 적용되고 어떤 것이 계정 전체에 적용되는지는 화면
+              어디에도 드러나지 않던 정보다. 섹션마다 한 번씩 붙여 둔다. */}
+          <Badge
+            variant="outline"
+            className="font-normal text-muted-foreground"
+          >
+            {scope}
+          </Badge>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+      </div>
+
+      <div className="divide-y overflow-hidden rounded-xl border bg-card">
+        {children}
+      </div>
+
+      {footnote ? (
+        <p className="px-1 pt-2 text-xs text-muted-foreground">{footnote}</p>
+      ) : null}
+    </section>
+  );
+}
 
 function GroupPreferenceRow({
   preference,
@@ -60,7 +240,6 @@ function GroupPreferenceRow({
   const newPostPushEnabled = fetcher.formData
     ? fetcher.formData.get("newPostPushEnabled") === "true"
     : preference.newPostPushEnabled;
-  const pending = fetcher.state !== "idle";
 
   const save = (
     nextLevel: GroupNotificationLevel,
@@ -78,53 +257,19 @@ function GroupPreferenceRow({
   };
 
   return (
-    <div className="flex flex-col gap-3 px-4 py-3">
-      <div className="flex items-center justify-between gap-4">
-        <p className="min-w-0 truncate text-sm font-medium">
-          {preference.groupName}
-        </p>
-        <Select
-          value={level}
-          disabled={pending}
-          onValueChange={(value) => {
-            if (value !== "none" && value !== "direct" && value !== "all") {
-              return;
-            }
-            save(value, value === "all" ? newPostPushEnabled : false);
-          }}
-        >
-          <SelectTrigger
-            size="sm"
-            className="w-28"
-            aria-label={`${preference.groupName} 알림 수준`}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent align="end" alignItemWithTrigger={false}>
-            <SelectGroup>
-              {Object.entries(GROUP_LEVEL_LABEL).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm">새 게시물 Push</p>
-          <p className="text-xs text-muted-foreground">
-            전체 알림을 선택한 그룹에서만 사용할 수 있습니다.
+    <div className="px-4 py-3">
+      <GroupNotificationFields
+        label={
+          <p className="min-w-0 truncate text-sm font-medium">
+            {preference.groupName}
           </p>
-        </div>
-        <Switch
-          aria-label={`${preference.groupName} 새 게시물 Push`}
-          checked={level === "all" && newPostPushEnabled}
-          disabled={pending || level !== "all"}
-          onCheckedChange={(checked) => save(level, checked)}
-        />
-      </div>
+        }
+        groupName={preference.groupName}
+        level={level}
+        newPostPushEnabled={newPostPushEnabled}
+        pending={fetcher.state !== "idle"}
+        onChange={save}
+      />
     </div>
   );
 }
@@ -144,6 +289,17 @@ export function NotificationSettings({
   });
   const [pushPending, setPushPending] = useState(false);
   const fetcher = useFetcher();
+
+  // 화면에 들어온 순간 "기본값이 아니던" 그룹을 기억한다. 여기서 다시 기본값으로 돌려도
+  // 행이 발밑에서 사라지지 않아야 방금 무엇을 바꿨는지 확인할 수 있다.
+  const [pinnedGroupIds] = useState(
+    () =>
+      new Set(
+        groupPreferences
+          .filter((item) => !isDefaultGroupNotificationPreference(item))
+          .map((item) => item.groupId),
+      ),
+  );
 
   let currentPushState = pushState;
   if (currentPushState.source !== initialPushSupport) {
@@ -212,6 +368,13 @@ export function NotificationSettings({
 
   const pushEnabled =
     pushSupport.state === "available" && pushSupport.subscribed;
+  const push = describePush(pushSupport, pushPending);
+  const summary = summarizeDelivery(pushEnabled, preferences);
+  const adjustedGroups = groupPreferences.filter(
+    (item) =>
+      pinnedGroupIds.has(item.groupId) ||
+      !isDefaultGroupNotificationPreference(item),
+  );
 
   return (
     <>
@@ -219,32 +382,46 @@ export function NotificationSettings({
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
         <h1 className="hidden text-2xl font-semibold md:block">알림 설정</h1>
 
+        {/* 기기 Push는 취향이 아니라 연결 상태다. 다른 스위치와 나란한 섹션으로 두면
+            "유형 중 하나"처럼 읽히므로, 현재 상태 요약과 묶어 화면 맨 위에 세운다. */}
         <section className="overflow-hidden rounded-xl border bg-card">
           <div className="flex items-start gap-3 p-4">
-            <span className="rounded-lg bg-primary/10 p-2 text-primary">
+            <span
+              className={cn(
+                "flex size-10 shrink-0 items-center justify-center rounded-xl",
+                pushEnabled
+                  ? "bg-primary/10 text-primary"
+                  : push.tone === "blocked"
+                    ? "bg-destructive/10 text-destructive"
+                    : "bg-muted text-muted-foreground",
+              )}
+            >
               {pushEnabled ? <BellRingIcon /> : <BellOffIcon />}
             </span>
+
             <div className="min-w-0 flex-1">
-              <h2 className="font-semibold">이 기기의 Web Push</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-semibold">이 기기의 Web Push</h2>
+                <Badge
+                  variant={
+                    push.tone === "on"
+                      ? "default"
+                      : push.tone === "blocked"
+                        ? "destructive"
+                        : "secondary"
+                  }
+                >
+                  {push.label}
+                </Badge>
+              </div>
               <p
                 className="mt-1 text-sm text-muted-foreground"
                 aria-live="polite"
               >
-                {pushPending
-                  ? "Web Push 설정을 변경하고 있습니다."
-                  : pushSupport.state === "ios-browser"
-                    ? "iPhone과 iPad에서는 홈 화면에 설치한 앱에서 알림을 켤 수 있습니다."
-                    : pushSupport.state === "unconfigured"
-                      ? "이 환경에는 Web Push 공개 키가 설정되지 않았습니다."
-                      : pushSupport.state === "unsupported"
-                        ? "이 브라우저에서는 Web Push를 사용할 수 없습니다."
-                        : pushSupport.permission === "denied"
-                          ? "브라우저에서 알림이 차단되어 있습니다. 브라우저 사이트 설정에서 허용해 주세요."
-                          : pushEnabled
-                            ? "이 기기에서 새 소식을 받을 수 있습니다."
-                            : "중요한 새 소식을 앱을 열지 않아도 받을 수 있습니다."}
+                {push.message}
               </p>
             </div>
+
             {pushSupport.state === "available" &&
             pushSupport.permission !== "denied" ? (
               <div className="flex min-w-8 items-center justify-end gap-2">
@@ -260,6 +437,15 @@ export function NotificationSettings({
               </div>
             ) : null}
           </div>
+
+          {/* 아래 스위치를 만지면 이 두 줄이 같이 바뀐다. 규칙을 외우는 대신 결과를 본다. */}
+          <div className="border-t bg-muted/30 px-4 py-3">
+            <p className="text-sm font-medium">{summary.headline}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {summary.detail}
+            </p>
+          </div>
+
           {pushSupport.state === "ios-browser" ? (
             <div className="flex gap-2 border-t bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
               <SmartphoneIcon className="mt-0.5 size-4 shrink-0" />
@@ -269,49 +455,58 @@ export function NotificationSettings({
           ) : null}
         </section>
 
-        <section>
-          <h2 className="mb-2 px-1 text-xs font-semibold tracking-wide text-muted-foreground">
-            유형별 Web Push
-          </h2>
-          <div className="divide-y overflow-hidden rounded-xl border bg-card">
-            {PREFERENCE_ROWS.map(([key, title, description]) => (
-              <div key={key} className="flex items-center gap-4 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{title}</p>
-                  <p className="text-xs text-muted-foreground">{description}</p>
-                </div>
-                <Switch
-                  aria-label={title}
-                  checked={preferences[key]}
-                  disabled={fetcher.state !== "idle"}
-                  onCheckedChange={(checked) =>
-                    savePreferences({ ...preferences, [key]: checked })
-                  }
-                />
+        <SettingsSection
+          title="유형별 Push"
+          scope="모든 기기"
+          description="이 기기 Push가 켜져 있을 때 어떤 유형을 보낼지 고릅니다."
+          footnote="운영 조치와 가입 승인·차단 같은 계정 알림은 이 설정과 관계없이 전달됩니다."
+        >
+          {PREFERENCE_ROWS.map(([key, Icon, title, description]) => (
+            <div key={key} className="flex items-center gap-3 px-4 py-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                <Icon className="size-4.5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">{title}</p>
+                <p className="text-xs text-muted-foreground">{description}</p>
+                {/* 끈 뒤에만 말한다. 다섯 줄에 미리 깔아 두면 아무도 읽지 않는다. */}
+                {!preferences[key] ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    앱 알림함에서는 계속 확인할 수 있습니다.
+                  </p>
+                ) : null}
               </div>
-            ))}
-          </div>
-          <p className="px-1 pt-2 text-xs text-muted-foreground">
-            운영 조치는 이 기기의 Web Push가 켜져 있는 동안 항상 전달됩니다.
-            반응 알림은 앱 안에서만 표시됩니다.
-          </p>
-        </section>
-
-        {groupPreferences.length > 0 ? (
-          <section>
-            <h2 className="mb-2 px-1 text-xs font-semibold tracking-wide text-muted-foreground">
-              그룹별 알림
-            </h2>
-            <div className="divide-y overflow-hidden rounded-xl border bg-card">
-              {groupPreferences.map((preference) => (
-                <GroupPreferenceRow
-                  key={preference.groupId}
-                  preference={preference}
-                />
-              ))}
+              <Switch
+                aria-label={title}
+                checked={preferences[key]}
+                disabled={fetcher.state !== "idle"}
+                onCheckedChange={(checked) =>
+                  savePreferences({ ...preferences, [key]: checked })
+                }
+              />
             </div>
-          </section>
-        ) : null}
+          ))}
+        </SettingsSection>
+
+        <SettingsSection
+          title="그룹별 알림"
+          scope="모든 기기"
+          description="기본값을 바꾼 그룹만 모아 둡니다. 그룹 화면의 ⋯ 메뉴에서 그룹마다 바꿀 수 있습니다."
+          footnote="‘없음’으로 둔 그룹의 콘텐츠 활동은 Push뿐 아니라 앱 알림함에도 쌓이지 않습니다."
+        >
+          {adjustedGroups.length > 0 ? (
+            adjustedGroups.map((preference) => (
+              <GroupPreferenceRow
+                key={preference.groupId}
+                preference={preference}
+              />
+            ))
+          ) : (
+            <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+              모든 그룹이 기본 설정입니다.
+            </p>
+          )}
+        </SettingsSection>
       </div>
     </>
   );

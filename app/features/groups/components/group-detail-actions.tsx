@@ -1,4 +1,5 @@
 import {
+  BellIcon,
   FlagIcon,
   LogOutIcon,
   MoreHorizontalIcon,
@@ -11,6 +12,7 @@ import { useFetcher } from "react-router";
 import { GroupConfirmDialog } from "~/features/groups/components/group-confirm-dialog";
 import { GroupMembershipAction } from "~/features/groups/components/group-membership-action";
 import type { GroupDetail } from "~/features/groups/model/types";
+import { GroupNotificationDialog } from "~/features/notifications/components/group-notification-dialog";
 import { useGroupPostSearch } from "~/features/posts";
 import { Button } from "~/shared/ui/button";
 import {
@@ -41,6 +43,7 @@ export function GroupDetailActions({
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const pending = fetcher.state !== "idle";
   const [leaveOpen, setLeaveOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
   // 검색창은 `GroupDetailScreen`이 하나만 그린다. 여기서는 URL만 연다.
   const { openSearch } = useGroupPostSearch();
   const isMember = group.membership_state === "member";
@@ -111,6 +114,14 @@ export function GroupDetailActions({
                 {isMember ? (
                   <>
                     <DropdownMenuGroup>
+                      {/* 알림 수준을 바꾸고 싶어지는 순간은 이 그룹을 보고 있을 때다.
+                          알림 설정 화면까지 가서 목록에서 이름을 찾게 하지 않는다. */}
+                      <DropdownMenuItem
+                        onClick={() => setNotificationOpen(true)}
+                      >
+                        <BellIcon />
+                        알림 설정
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         disabled={pending}
                         onClick={() =>
@@ -154,6 +165,13 @@ export function GroupDetailActions({
           </p>
         ) : null}
       </div>
+
+      <GroupNotificationDialog
+        groupId={group.group_id}
+        groupName={group.name}
+        open={notificationOpen}
+        onOpenChange={setNotificationOpen}
+      />
 
       <GroupConfirmDialog
         open={leaveOpen}
