@@ -21,7 +21,7 @@ const birthdays = [
 ] satisfies BirthdayProfile[];
 
 describe("birthday components", () => {
-  it("renders today's birthday profiles above the meal summary destination", () => {
+  it("sends the home summary to the profile and to the full list", () => {
     renderRoute(() => <HomeBirthdaySummary birthdays={birthdays} />);
 
     expect(screen.getByRole("heading", { name: "오늘의 생일" })).toBeVisible();
@@ -43,19 +43,6 @@ describe("birthday components", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("lists birthday profiles in date order with a profile destination", () => {
-    renderRoute(() => (
-      <BirthdayListScreen birthdays={birthdays} referenceDate="2026-08-26" />
-    ));
-
-    expect(screen.getByRole("heading", { name: "오늘" })).toBeVisible();
-    expect(screen.getByText("8월 26일")).toBeVisible();
-    expect(screen.getByRole("link", { name: /이한별/ })).toHaveAttribute(
-      "href",
-      "/profile/hanbyeol-25",
-    );
-  });
-
   it("splits the range into today, upcoming, and past sections", () => {
     renderRoute(() => (
       <BirthdayListScreen
@@ -68,12 +55,19 @@ describe("birthday components", () => {
       />
     ));
 
+    expect(screen.getByRole("heading", { name: "오늘" })).toBeVisible();
     expect(
       screen.getByRole("heading", { name: "다가오는 생일" }),
     ).toBeVisible();
     expect(screen.getByRole("heading", { name: "지난 생일" })).toBeVisible();
+    expect(screen.getByText("8월 26일")).toBeVisible();
     expect(screen.getByText("내일")).toBeVisible();
     expect(screen.getByText("3일 전")).toBeVisible();
+    expect(
+      screen
+        .getAllByRole("link", { name: /이한별/ })
+        .map((link) => link.getAttribute("href")),
+    ).toContain("/profile/hanbyeol-25");
   });
 
   it("shows an empty state when the date range has no birthdays", () => {

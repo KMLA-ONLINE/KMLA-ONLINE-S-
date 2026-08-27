@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { CategoryManager } from "~/features/posts/components/category-manager";
-import { renderRoute, screen, waitFor } from "../../../router";
+import { renderRoute, screen, waitFor, within } from "../../../router";
 
 const categories = [
   {
@@ -57,13 +57,29 @@ describe("CategoryManager", () => {
     );
   });
 
-  it("confirms before deleting a category", async () => {
-    const { user } = renderManager();
+  // 되돌릴 수 없는 쪽이라 확인 뒤 실제로 제출까지 닿는지 본다. 다이얼로그가 떴다는 것만
+  // 확인하면 확인 버튼이 아무것도 하지 않아도 초록불이 켜진다.
+  it("deletes only after the confirmation is accepted", async () => {
+    const submitted = vi.fn();
+    const { user } = renderManager({
+      action: async ({ request }) => {
+        submitted((await request.formData()).get("intent"));
+        return null;
+      },
+    });
 
     await user.click(screen.getByRole("button", { name: "공지 삭제" }));
-
     expect(await screen.findByRole("dialog")).toHaveTextContent(
       "카테고리 삭제",
+    );
+    expect(submitted).not.toHaveBeenCalled();
+
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "삭제" }),
+    );
+
+    await waitFor(() =>
+      expect(submitted).toHaveBeenCalledWith("delete-category"),
     );
   });
 

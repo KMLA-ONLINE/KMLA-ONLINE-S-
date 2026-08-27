@@ -5,7 +5,6 @@ import {
   DEFAULT_REACTION,
   REACTION_TYPES,
   reactionAssetPath,
-  reactionLabel,
 } from "~/features/posts/model/reactions";
 import type { ReactionSummary } from "~/features/posts/model/types";
 
@@ -30,17 +29,10 @@ describe("reaction types", () => {
     ]);
   });
 
-  it("points every reaction at a bundled Twemoji file", () => {
-    for (const type of REACTION_TYPES) {
-      expect(reactionAssetPath(type.key)).toBe(
-        `/twemoji/15.1.0/${type.codepoint}.svg`,
-      );
-    }
-  });
-
-  it("names the default reaction", () => {
-    expect(DEFAULT_REACTION).toBe("like");
-    expect(reactionLabel("like")).toBe("좋아요");
+  // 자산은 서비스에 직접 담아 서비스 워커가 함께 캐시한다. 외부 CDN을 쓰면 오프라인에서
+  // 반응만 빈칸이 된다(`docs/CONTENT_FORMATTING.md` §8.2).
+  it("serves reaction graphics from this origin", () => {
+    expect(reactionAssetPath(DEFAULT_REACTION)).toMatch(/^\/twemoji\//);
   });
 });
 

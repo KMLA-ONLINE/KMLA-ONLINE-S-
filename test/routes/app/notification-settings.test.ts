@@ -115,6 +115,7 @@ describe("notification settings route", () => {
       new Error("network unavailable"),
     );
 
+    // 던지면 화면이 에러 바운더리로 떨어진다. 저장 실패는 다시 눌러 볼 수 있어야 한다.
     await expect(
       clientAction({
         request: new Request("https://example.com/noti/settings", {
@@ -129,6 +130,9 @@ describe("notification settings route", () => {
           }),
         }),
       } as never),
-    ).resolves.toBeDefined();
+    ).resolves.toMatchObject({
+      data: { error: "알림 설정을 저장하지 못했습니다." },
+      init: { status: 503 },
+    });
   });
 });

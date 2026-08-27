@@ -11,14 +11,25 @@ import { defineConfig } from "vitest/config";
 // Building a jsdom window costs about 1.3s per test file and dominates the run,
 // far outweighing the tests themselves. `model/`, `data/` and `shared/lib/` hold
 // pure logic that never touches the DOM, so they run in Node instead.
+//
+// Route modules are the other half: a `clientLoader`/`clientAction` test calls a
+// function and asserts on what it returned, so the whole `test/routes/**` tree is
+// pure too unless it renders. The few route tests that do render are listed in
+// `domDependent` below.
 const pureLayers = [
   "test/**/model/**/*.{test,spec}.ts",
   "test/**/data/**/*.{test,spec}.ts",
   "test/shared/lib/**/*.{test,spec}.ts",
+  "test/routes/**/*.{test,spec}.ts",
+  "test/eslint/**/*.{test,spec}.ts",
+  "test/shared/service-worker/**/*.{test,spec}.ts",
 ];
 
 // Files inside those layers that read browser APIs directly and need jsdom
 // anyway. Add to this list rather than moving the test out of its layer.
+//
+// The globs above deliberately cover `.ts` only: a route test that renders needs
+// JSX, so it is a `.tsx` file and lands in the jsdom project on its extension.
 const domDependent = ["test/features/posts/model/view-preference.test.ts"];
 
 // Resolved once so both projects agree on the split. Globbing rather than

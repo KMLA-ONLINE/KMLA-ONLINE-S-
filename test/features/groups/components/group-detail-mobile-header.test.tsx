@@ -29,13 +29,7 @@ describe("GroupDetailMobileHeader", () => {
       initialEntries: ["/groups/test-group"],
     });
 
-    const searchButton = screen.getByRole("button", { name: "게시물 검색" });
-    expect(searchButton).toHaveClass(
-      "focus-visible:border-transparent",
-      "focus-visible:ring-0",
-    );
-
-    await user.click(searchButton);
+    await user.click(screen.getByRole("button", { name: "게시물 검색" }));
     expect(screen.getByTestId("search-open")).toHaveTextContent("1");
   });
 

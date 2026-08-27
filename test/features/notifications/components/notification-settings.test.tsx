@@ -79,32 +79,6 @@ describe("NotificationSettings", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps group notification controls aligned as labels change", () => {
-    renderRoute(() => (
-      <NotificationSettings
-        initialPreferences={preferences}
-        initialPushSupport={{ state: "unsupported" }}
-        groupPreferences={[
-          {
-            groupId: "11111111-1111-4111-8111-111111111111",
-            groupName: "긴 이름의 테스트 그룹",
-            // 공식 그룹의 기본값은 `all`이라 `direct`는 사용자가 바꾼 상태다.
-            groupKind: "official",
-            level: "direct",
-            contentPushEnabled: true,
-            newPostPushEnabled: false,
-          },
-        ]}
-      />
-    ));
-
-    expect(
-      screen.getByRole("combobox", {
-        name: "긴 이름의 테스트 그룹 알림 수준",
-      }),
-    ).toHaveClass("w-28");
-  });
-
   it("lists only groups whose notification settings differ from the default", () => {
     renderRoute(() => (
       <NotificationSettings

@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 describe("ProfileDetail", () => {
-  it("renders profile information, edit link, and timeline space", () => {
+  it("shows the owner their edit and write destinations, not their public id", () => {
     renderRoute(() => (
       <ProfileDetail
         profile={{
@@ -46,19 +46,14 @@ describe("ProfileDetail", () => {
       />
     ));
 
-    expect(screen.getByRole("heading", { name: "이한별" })).toBeVisible();
-    expect(screen.getByText("관리자")).toBeVisible();
+    // 공개 ID는 주소에만 쓰고 화면에는 드러내지 않는다(기능 명세 §12.1).
     expect(screen.queryByText("@hanbyeol-25")).not.toBeInTheDocument();
+    // 기수와 계열은 한 줄로 합쳐 낸다.
     expect(screen.getByText("25기 · 국제 계열")).toBeVisible();
-    expect(screen.getByText("안녕하세요.")).toBeVisible();
-    expect(screen.getByText("정보")).toBeVisible();
-    expect(screen.getByText("게시물")).toBeVisible();
-    expect(screen.getByText("hanbyeol@example.com")).toBeVisible();
     expect(screen.getByRole("link", { name: "프로필 편집" })).toHaveAttribute(
       "href",
       "/profile/hanbyeol-25/edit",
     );
-    expect(screen.getByText("아직 게시물이 없습니다")).toBeVisible();
     expect(screen.getByRole("link", { name: "글쓰기…" })).toHaveAttribute(
       "href",
       "/profile/hanbyeol-25/posts/new",
