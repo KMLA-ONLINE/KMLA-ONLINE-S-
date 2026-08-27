@@ -46,6 +46,19 @@ function focusNextControl(control: HTMLTextAreaElement) {
  */
 const LINE_HEIGHT = "leading-[26px]";
 
+/**
+ * 한 줄 입력. 높이를 잠그고 넘치는 글자는 가로로 흘리는 `textarea`다.
+ *
+ * `field-sizing-fixed`는 `Textarea`의 `field-sizing-content`를 지우려는 것인데, 반드시 이
+ * 유틸리티 이름으로 적어야 한다. `[field-sizing:fixed]`처럼 임의 속성으로 쓰면
+ * tailwind-merge가 임의 속성과 유틸리티를 서로 다른 그룹으로 봐서 둘 다 남기고, 생성된
+ * CSS에서는 뒤에 오는 `field-sizing-content`가 이긴다. 그러면 이 필드는 `whitespace-nowrap`인
+ * 내용 길이만큼 넓어지려 들어서 — min-content 폭이 곧 글자 전체 폭이 된다 — 필드를 담은
+ * grid/flex 칸을 밀어내고, 게시물 제목처럼 긴 값이 들어오면 바깥 레이아웃 폭까지 함께 늘어난다.
+ *
+ * `min-w-0`은 그 기여를 0으로 잘라 두는 안전장치다. 폭은 부모 칸에 맞춰지고, 넘치는 글자는
+ * 이미 있는 가로 스크롤이 받는다.
+ */
 function TextField({
   className,
   enterKeyHint = "next",
@@ -59,7 +72,7 @@ function TextField({
       {...props}
       aria-multiline={false}
       className={cn(
-        "[field-sizing:fixed] h-9 max-h-9 min-h-9 resize-none [scrollbar-width:none] overflow-x-auto overflow-y-hidden py-1 whitespace-nowrap [&::-webkit-scrollbar]:hidden",
+        "field-sizing-fixed h-9 max-h-9 min-h-9 min-w-0 resize-none [scrollbar-width:none] overflow-x-auto overflow-y-hidden py-1 whitespace-nowrap [&::-webkit-scrollbar]:hidden",
         className,
         LINE_HEIGHT,
       )}
