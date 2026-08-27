@@ -12,6 +12,13 @@ alter table public.student_absences enable row level security;
 revoke all on table public.student_absences
   from public, anon, authenticated;
 
+create policy "student_absences_deny_direct_access"
+on public.student_absences
+for all
+to public
+using (false)
+with check (false);
+
 create function public.set_my_absence(p_reason text)
 returns void
 language plpgsql

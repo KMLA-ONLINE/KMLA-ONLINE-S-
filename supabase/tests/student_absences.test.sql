@@ -2,7 +2,22 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(15);
+select plan(16);
+
+select ok(
+  exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'student_absences'
+      and policyname = 'student_absences_deny_direct_access'
+      and roles = array['public']::name[]
+      and cmd = 'ALL'
+      and qual = 'false'
+      and with_check = 'false'
+  ),
+  'absence rows have an explicit deny-all RLS policy'
+);
 
 select ok(
   not has_table_privilege(
