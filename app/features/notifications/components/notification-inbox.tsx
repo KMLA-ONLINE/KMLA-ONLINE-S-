@@ -33,10 +33,11 @@ function actorName(item: NotificationItem): string {
 }
 
 /**
- * 한 행은 세 줄이다: 누가 / 무슨 일이 / 언제.
+ * 한 행은 두 줄이다: 누가·언제 / 무슨 일이.
  *
  * `title`은 DB가 만든 완결된 문장("내 게시물에 새 댓글이 등록되었습니다.")이라 이름 뒤에
- * 그대로 이어 붙이면 조사가 어긋난다. 그래서 이름과 문장을 한 줄에 섞지 않고 위아래로 나눈다.
+ * 그대로 이어 붙이면 조사가 어긋난다. 그래서 이름과 문장은 위아래로 나누고, 시간만 이름 옆에
+ * 붙여 세 번째 줄을 없앤다.
  */
 function NotificationRow({
   item,
@@ -71,9 +72,9 @@ function NotificationRow({
     >
       <NotificationAvatar item={item} name={name} />
 
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="flex items-start gap-2">
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+      <span className="flex min-w-0 flex-1 flex-col justify-center">
+        <span className="flex items-center gap-1.5">
+          <span className="min-w-0 truncate text-sm font-semibold">
             {name}
             {others ? (
               <span className="font-normal text-muted-foreground">
@@ -81,26 +82,33 @@ function NotificationRow({
               </span>
             ) : null}
           </span>
+          <span
+            aria-hidden="true"
+            className="shrink-0 text-xs text-muted-foreground"
+          >
+            ·
+          </span>
+          <RelativeTime
+            value={item.last_activity_at}
+            className="shrink-0 text-xs text-muted-foreground"
+          />
           {unread ? (
-            <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary">
+            <span className="ml-auto size-2 shrink-0 rounded-full bg-primary">
               <span className="sr-only">읽지 않음</span>
             </span>
           ) : null}
         </span>
 
+        {/* 한 줄로 자른다. 두 줄 높이가 아바타 높이와 맞아떨어져야 목록이 고르게 흐르고,
+            잘린 뒷부분은 눌러서 들어간 상세 화면이 그대로 들고 있다. */}
         <span
           className={cn(
-            "mt-0.5 text-sm break-keep",
+            "mt-0.5 truncate text-sm",
             unread ? "text-foreground" : "text-muted-foreground",
           )}
         >
           {item.title}
         </span>
-
-        <RelativeTime
-          value={item.last_activity_at}
-          className="mt-1 text-xs text-muted-foreground"
-        />
       </span>
     </Link>
   );
