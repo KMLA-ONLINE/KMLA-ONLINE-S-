@@ -9,6 +9,9 @@ import type {
   NotificationPage,
   NotificationPreferences,
 } from "~/features/notifications/model/types";
+// 배럴이 아니라 모듈을 직접 가져온다. `~/features/auth`는 자기 mutations를 통해 이 feature를
+// 다시 참조하므로 배럴로 들어가면 순환이 된다.
+import { readLiveSession } from "~/features/auth/data/queries";
 import { getSupabase } from "~/shared/supabase/client";
 
 export async function listNotifications(
@@ -133,11 +136,7 @@ export async function resolveNotificationDestination(
   notificationId: string,
 ): Promise<string | null> {
   const supabase = getSupabase();
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
-  if (sessionError) throw sessionError;
+  const session = await readLiveSession();
   if (!session) return null;
 
   if (

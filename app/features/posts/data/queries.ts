@@ -187,7 +187,7 @@ export async function getGroupPost(
 }
 
 /**
- * 프로필 타임라인 한 페이지 (기능 명세 §12.4).
+ * 프로필 타임라인 한 페이지.
  *
  * 그룹 목록과 같은 방식으로 한 건을 더 받아 다음 커서를 정한다. 고정 게시물이 없으므로
  * 커서는 `(published_at, post_id)` 두 값이면 충분하다.
@@ -279,7 +279,7 @@ export async function listPostCommentReplies(
 }
 
 /**
- * 반응 참여자 목록 (기능 명세 §10.3). 요약을 누를 때만 부른다 — 목록 화면에서 게시물마다
+ * 반응 참여자 목록. 요약을 누를 때만 부른다 — 목록 화면에서 게시물마다
  * 미리 받으면 반응 하나 보자고 페이지 전체가 무거워진다.
  */
 export async function listPostReactors(postId: string): Promise<PostReactor[]> {

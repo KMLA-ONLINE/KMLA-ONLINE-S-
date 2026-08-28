@@ -11,6 +11,9 @@
 - Before implementing or changing a product feature, start at `docs/KMLA_SPEC_INDEX.md` and follow its links to the relevant domain specification and technical design documents.
 - If the required behavior is ambiguous or unspecified, ask the user before implementation rather than deciding it implicitly.
 - When a user decision changes or adds product behavior, update the relevant functional specification or technical design document as part of the same change.
+- Specification chapter numbers (`§8.4`) are identifiers that code comments cite. Append new sections at the end of their chapter. Renumbering is allowed only after finding every reference to the affected numbers (`grep -rn "§17" docs/ app/`) and fixing them in the same commit; otherwise leave the number retired and use a new one. Spec files are named by domain, so splitting or moving a file never shifts a number.
+- Cite a `§` in code only where the spec is the sole justification for a constant or an invariant. Do not decorate a doc-comment title with a section number that adds nothing.
+- A specification section that describes unbuilt behavior carries a `> **상태**: 미구현` line directly under its heading.
 
 ## Source Layout
 
