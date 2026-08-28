@@ -12,7 +12,7 @@ import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 
 /**
- * 프로필 타임라인 (기능 명세 §12.4).
+ * 프로필 타임라인.
  *
  * "더 보기"는 route를 재검증하지 않고 `data/queries`를 직접 부른다 — 목록을 훑는 동작이라
  * URL에 남길 이유가 없고, loader를 다시 돌리면 프로필 머리까지 함께 깜빡인다. 반대로 삭제는

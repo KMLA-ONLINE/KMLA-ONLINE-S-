@@ -18,7 +18,7 @@ export type PostAttachment = Omit<
 export type PostReaction = Database["public"]["Enums"]["post_reaction"];
 
 /**
- * 게시물이나 댓글 하나의 반응 상태 (기능 명세 §10.1).
+ * 게시물이나 댓글 하나의 반응 상태.
  *
  * `my_reaction`은 반응하지 않았으면 null이다. 생성기가 RPC의 `returns table` 컬럼을 전부
  * not null로 적어 내려서 직접 고쳐 준다 — 이 필드는 "안 눌렀다"가 기본 상태라 거짓 타입을
@@ -46,7 +46,7 @@ export type ProfileMediaActivityKind =
 
 type ProfilePostRow = Functions["list_profile_posts"]["Returns"][number];
 /**
- * 프로필 타임라인의 개인 게시물 (기능 명세 §8.4, §12.4).
+ * 프로필 타임라인의 개인 게시물.
  *
  * 목록과 상세가 같은 RPC 투영(`private.read_profile_posts`)을 쓰므로 한 타입이 둘을 모두
  * 받는다. 그룹 게시물과 달리 제목·카테고리·작성 신원·고정이 없고, 대신 타임라인 당사자와

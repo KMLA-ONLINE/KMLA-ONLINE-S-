@@ -38,7 +38,6 @@ export default [
       route("groups/discover", "routes/app/groups/discover.tsx"),
       route("groups/member-page", "routes/app/groups/member-page.ts"),
       route("groups/report-page", "routes/app/groups/report-page.ts"),
-      route("clubs", "routes/app/clubs/index.tsx"),
       route("invite/:token", "routes/app/invite.tsx"),
       route("profile/:pubId", "routes/app/profile/detail.tsx", [
         route("posts/new", "routes/app/profile/post-new.tsx"),
@@ -52,7 +51,6 @@ export default [
         route("posts/:postId", "routes/app/groups/post.tsx"),
         route("posts/:postId/edit", "routes/app/groups/post-edit.tsx"),
       ]),
-      route("clubs/:clubId", "routes/app/clubs/detail.tsx"),
       route("admin", "routes/app/admin/index.tsx"),
       route("admin/approvals", "routes/app/admin/approvals.tsx"),
       route("admin/gongang-managers", "routes/app/admin/gongang-managers.tsx"),

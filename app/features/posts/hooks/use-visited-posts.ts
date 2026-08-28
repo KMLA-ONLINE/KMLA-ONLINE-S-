@@ -8,7 +8,7 @@ import {
 } from "~/features/posts/model/visited-posts";
 
 /**
- * 목록 보기에서 이미 열어본 게시물을 흐리게 그리기 위한 상태(기능 명세 §6.2).
+ * 목록 보기에서 이미 열어본 게시물을 흐리게 그리기 위한 상태.
  *
  * `usePostViewMode`와 같은 store 방식이다. `useSyncExternalStore`의 snapshot은 참조가
  * 안정되어야 하므로 — 매번 `JSON.parse`로 새 배열을 만들면 무한 루프가 된다 —

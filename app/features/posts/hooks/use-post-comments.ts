@@ -210,7 +210,7 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
     });
 
   /**
-   * 댓글 반응 (기능 명세 §10.2). 게시물 반응과 같은 이유로 화면이 먼저 움직이고 정본이 덮는다.
+   * 댓글 반응. 게시물 반응과 같은 이유로 화면이 먼저 움직이고 정본이 덮는다.
    *
    * `run`을 쓰지 않는다 — 반응은 실패해도 되돌리면 그만이라 입력창까지 잠글 일이 아니다.
    */

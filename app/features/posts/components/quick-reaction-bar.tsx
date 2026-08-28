@@ -6,7 +6,7 @@ import type { PostReaction } from "~/features/posts/model/types";
 import { cn } from "~/shared/lib/utils";
 
 /**
- * 반응 종류를 고르는 한 줄. 게시물 버튼과 댓글 버튼이 같은 줄을 쓴다(기능 명세 §10.1).
+ * 반응 종류를 고르는 한 줄. 게시물 버튼과 댓글 버튼이 같은 줄을 쓴다.
  *
  * 이미 고른 반응에는 `aria-pressed`만 준다. 눌린 모양을 따로 그리지 않는 건, 이 줄을 여는
  * 버튼 자체가 지금 고른 반응을 이미 보여주고 있기 때문이다.
