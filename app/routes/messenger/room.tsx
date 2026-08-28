@@ -16,5 +16,10 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
 export default function MessengerRoomPage({
   loaderData,
 }: Route.ComponentProps) {
-  return <RoomScreen conversation={loaderData.conversation} />;
+  return (
+    <RoomScreen
+      key={loaderData.conversation.id}
+      conversation={loaderData.conversation}
+    />
+  );
 }

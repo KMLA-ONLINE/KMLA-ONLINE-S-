@@ -25,10 +25,14 @@ export function ConversationDetails({
   conversation,
   className,
   onMobileBack,
+  pinnedCount,
+  onOpenPinnedMessages,
 }: {
   conversation: Conversation;
   className?: string;
   onMobileBack: () => void;
+  pinnedCount: number;
+  onOpenPinnedMessages: () => void;
 }) {
   return (
     <aside
@@ -71,7 +75,12 @@ export function ConversationDetails({
 
         <div className="flex flex-col gap-1">
           <DetailSection title="대화 정보" defaultOpen>
-            <DetailRow icon={PinIcon} label="고정된 메시지" value="1" />
+            <DetailRow
+              icon={PinIcon}
+              label="고정된 메시지"
+              value={String(pinnedCount)}
+              onClick={onOpenPinnedMessages}
+            />
             <DetailRow icon={LockKeyholeIcon} label="메시지 암호화 안내" />
           </DetailSection>
 
@@ -182,16 +191,19 @@ function DetailRow({
   label,
   value,
   destructive = false,
+  onClick,
 }: {
   icon: LucideIcon;
   label: string;
   value?: string;
   destructive?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <button
       type="button"
-      disabled
+      disabled={!onClick}
+      onClick={onClick}
       className={cn(
         "flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm disabled:opacity-100",
         destructive && "text-destructive",

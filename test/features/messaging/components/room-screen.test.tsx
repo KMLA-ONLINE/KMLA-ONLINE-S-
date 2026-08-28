@@ -1,3 +1,5 @@
+/* eslint-disable testing-library/no-node-access */
+import { fireEvent } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { RoomScreen } from "~/features/messaging/components/room-screen";
@@ -127,6 +129,133 @@ describe("RoomScreen", () => {
     await user.click(await screen.findByRole("menuitem", { name: "고정" }));
     expect(within(ownMessage).getByText("고정됨")).toBeInTheDocument();
     expect(screen.getAllByText("고마워요 🙌")).toHaveLength(2);
+  });
+
+  it("두 진입점에서 고정 메시지 목록을 열고 원문 이동과 고정 해제를 제공한다", async () => {
+    const conversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+    const conversationWithPinnedMetadata = {
+      ...conversation!,
+      messages: conversation!.messages.map((message) => {
+        if (message.id === "m4") return { ...message, pinned: true };
+        if (message.id === "m5") {
+          return { ...message, reactions: [{ emoji: "👍", count: 3 }] };
+        }
+        return message;
+      }),
+    };
+
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversationWithPinnedMetadata} />,
+      { path: "/messenger/student-council" },
+    );
+
+    await user.click(screen.getByRole("button", { name: "고정 메시지" }));
+    let dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "고정된 메시지" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText("2026년 8월 28일 금요일"),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText("최민준")).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("img", { name: "최민준 프로필 사진" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText("오후 3:25")).toBeInTheDocument();
+    expect(within(dialog).queryByText("고정됨")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("3명 읽음")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("👍 3")).not.toBeInTheDocument();
+
+    const linkedMessage = within(dialog)
+      .getByRole("link", { name: "https://www.kmlaonline.net" })
+      .closest("article")!;
+    await user.click(
+      within(linkedMessage).getByRole("button", { name: "채팅에서 보기" }),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("link", { name: "https://www.kmlaonline.net" })
+        .closest("article"),
+    ).toHaveClass("ring-2", "ring-primary");
+
+    await user.click(screen.getByRole("button", { name: /고정된 메시지\s*2/ }));
+    dialog = screen.getByRole("dialog");
+    const linkedPinnedMessage = within(dialog)
+      .getByRole("link", { name: "https://www.kmlaonline.net" })
+      .closest("article")!;
+    await user.click(
+      within(linkedPinnedMessage).getByRole("button", { name: "고정 취소" }),
+    );
+    const ownPinnedMessage = within(dialog)
+      .getByText(
+        "확인했습니다! 2층 체험 부스 동선만 조금 넓히면 좋을 것 같아요.",
+      )
+      .closest("article")!;
+    await user.click(
+      within(ownPinnedMessage).getByRole("button", { name: "고정 취소" }),
+    );
+
+    expect(within(dialog).getByText("고정된 메시지가 없습니다")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "고정 메시지" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("메시지를 입력해 전송하고 빈 입력에서는 좋아요를 보낸다", async () => {
+    const conversation = await loadConversation("hyunwoo");
+    expect(conversation).not.toBeNull();
+
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      {
+        path: "/messenger/hyunwoo",
+      },
+    );
+    const input = screen.getByRole("textbox", { name: "메시지 입력" });
+    const likeButton = screen.getByRole("button", { name: "좋아요 보내기" });
+
+    await user.type(input, "첫 줄{Shift>}{Enter}{/Shift}둘째 줄");
+    expect(
+      await screen.findByRole("button", { name: "메시지 보내기" }),
+    ).toBeEnabled();
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(
+      screen.getAllByRole("article", { name: "내 메시지" }).at(-1),
+    ).toHaveTextContent(/첫 줄\s*둘째 줄/);
+    expect(screen.getByRole("button", { name: "좋아요 보내기" })).toBeEnabled();
+    await user.click(likeButton);
+    expect(screen.getByText("👍")).toBeInTheDocument();
+  });
+
+  it("IME 조합 중 Enter는 전송하지 않고 모바일에서도 파일 버튼을 노출한다", async () => {
+    const conversation = await loadConversation("hyunwoo");
+    expect(conversation).not.toBeNull();
+
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/hyunwoo",
+    });
+    const input = screen.getByRole("textbox", { name: "메시지 입력" });
+    const fileButton = screen.getByRole("button", {
+      name: "파일 첨부 기능 준비 중",
+    });
+
+    expect(fileButton).not.toHaveClass("hidden");
+    fireEvent.change(input, { target: { value: "안녕하세" } });
+    expect(
+      await screen.findByRole("button", { name: "메시지 보내기" }),
+    ).toBeEnabled();
+    fireEvent.compositionStart(input);
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    expect(screen.getAllByRole("article")).toHaveLength(3);
+
+    fireEvent.compositionEnd(input);
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(
+      screen.getAllByRole("article", { name: "내 메시지" }).at(-1),
+    ).toHaveTextContent("안녕하세");
   });
 
   it("넓은 화면의 대화 상세 패널을 접고 다시 펼친다", async () => {
