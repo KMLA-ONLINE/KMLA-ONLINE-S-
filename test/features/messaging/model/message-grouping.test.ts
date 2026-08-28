@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   canConnectMessages,
+  dayLabelFor,
   hasVisibleMessageReaction,
+  nextMessageDayLabel,
 } from "~/features/messaging/model/message-grouping";
 import type { ConversationMessage } from "~/features/messaging/model/types";
 
@@ -61,5 +63,14 @@ describe("message grouping", () => {
     expect(hasVisibleMessageReaction(previous)).toBe(true);
     expect(canConnectMessages(previous, next, true)).toBe(false);
     expect(hasVisibleMessageReaction(next, "love")).toBe(true);
+  });
+
+  it("마지막 메시지와 날짜가 바뀌면 새 날짜 구분선을 만든다", () => {
+    const yesterday = new Date(2026, 7, 28, 23, 59);
+    const today = new Date(2026, 7, 29, 0, 1);
+    const messages = [message({ dayLabel: dayLabelFor(yesterday) })];
+
+    expect(nextMessageDayLabel(messages, yesterday)).toBeUndefined();
+    expect(nextMessageDayLabel(messages, today)).toBe(dayLabelFor(today));
   });
 });

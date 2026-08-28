@@ -25,6 +25,7 @@ import {
 import { PinnedMessagesDialog } from "~/features/messaging/components/pinned-messages-dialog";
 import {
   canConnectMessages,
+  nextMessageDayLabel,
   hasVisibleMessageReaction,
 } from "~/features/messaging/model/message-grouping";
 import type {
@@ -120,6 +121,7 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
   }
 
   function sendMessage(body: string) {
+    const sentAt = new Date();
     scrollToBottomAfterSend.current = true;
     setMessages((current) => [
       ...current,
@@ -130,7 +132,8 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
         sentAt: new Intl.DateTimeFormat("ko-KR", {
           hour: "numeric",
           minute: "2-digit",
-        }).format(new Date()),
+        }).format(sentAt),
+        dayLabel: nextMessageDayLabel(current, sentAt),
         readBy: [],
       },
     ]);
