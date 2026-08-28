@@ -58,9 +58,9 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
     Record<string, boolean>
   >({});
   const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
-  const pinnedMessage = conversation.messages.find(
-    (message) => pinnedOverrides[message.id] ?? message.pinned,
-  );
+  const pinnedMessage = [...conversation.messages]
+    .reverse()
+    .find((message) => pinnedOverrides[message.id] ?? message.pinned);
   const pinnedMessageAuthor = pinnedMessage?.senderId
     ? (conversation.participants.find(({ id }) => id === pinnedMessage.senderId)
         ?.name ?? "알 수 없는 사용자")
@@ -111,9 +111,6 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
             <h1 className="truncate text-sm font-semibold md:text-base">
               {conversation.name}
             </h1>
-            <p className="truncate text-xs text-muted-foreground">
-              {conversation.subtitle}
-            </p>
           </div>
           <Button
             variant="ghost"
@@ -333,9 +330,14 @@ function MessageRow({
         )}
       >
         {!isOwn && ((isGroup && startsGroup) || isPinned) ? (
-          <span className="mb-1 ml-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="mb-1 ml-2 flex items-center gap-1 text-xs text-muted-foreground">
             <span>{sender?.name ?? "알 수 없는 사용자"}</span>
-            {isPinned ? <span>고정됨</span> : null}
+            {isPinned ? (
+              <>
+                <span aria-hidden>·</span>
+                <span>고정됨</span>
+              </>
+            ) : null}
           </span>
         ) : null}
         {isOwn && isPinned ? (
@@ -488,7 +490,11 @@ function MessageActions({
         >
           <EllipsisIcon aria-hidden />
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="center">
+        <DropdownMenuContent
+          side="top"
+          align="center"
+          className="shadow-sm duration-0 data-open:animate-none data-closed:animate-none"
+        >
           <DropdownMenuGroup>
             <DropdownMenuItem
               onClick={() => void navigator.clipboard.writeText(message.body)}

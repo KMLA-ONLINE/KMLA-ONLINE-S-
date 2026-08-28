@@ -8,6 +8,7 @@ describe("RoomScreen", () => {
   it("그룹 대화의 메시지와 대표 상태를 표시한다", async () => {
     const conversation = await loadConversation("student-council");
     expect(conversation).not.toBeNull();
+    conversation!.messages.at(-1)!.pinned = true;
 
     renderRoute(() => <RoomScreen conversation={conversation!} />, {
       path: "/messenger/student-council",
@@ -17,11 +18,9 @@ describe("RoomScreen", () => {
       screen.getByRole("heading", { name: "학생회 기획부", level: 1 }),
     ).toBeInTheDocument();
     const pinnedBanner = screen.getByLabelText("고정 메시지");
-    expect(within(pinnedBanner).getByText("최민준")).toBeInTheDocument();
+    expect(within(pinnedBanner).getByText("박서현")).toBeInTheDocument();
     expect(
-      within(pinnedBanner).getByText(
-        "관련 자료는 여기에도 정리해 두었어요. https://www.kmlaonline.net",
-      ),
+      within(pinnedBanner).getByText("내일 점심시간에 최종 확인할게요!"),
     ).toBeInTheDocument();
     expect(
       within(pinnedBanner).queryByText("고정된 메시지"),
@@ -41,8 +40,14 @@ describe("RoomScreen", () => {
     const pinnedMessage = screen
       .getByRole("link", { name: "https://www.kmlaonline.net" })
       .closest("article")!;
-    expect(within(pinnedMessage).getByText("최민준")).toBeInTheDocument();
-    expect(within(pinnedMessage).getByText("고정됨")).toBeInTheDocument();
+    const pinnedLabel =
+      within(pinnedMessage).getByText("고정됨").parentElement!;
+    expect(pinnedLabel).toHaveTextContent("최민준·고정됨");
+    expect(pinnedLabel).toHaveClass("gap-1");
+
+    expect(screen.queryByText("4명 · 2명 활동 중")).not.toBeInTheDocument();
+    expect(screen.queryByText("활동 중")).not.toBeInTheDocument();
+    expect(screen.getByText("대화 멤버 4명")).toBeInTheDocument();
 
     const ownBubble = screen.getByText(
       "확인했습니다! 2층 체험 부스 동선만 조금 넓히면 좋을 것 같아요.",
@@ -103,9 +108,16 @@ describe("RoomScreen", () => {
     await user.click(
       within(message).getByRole("button", { name: "메시지 기타 작업" }),
     );
+    expect(await screen.findByRole("menu")).toHaveClass(
+      "duration-0",
+      "shadow-sm",
+      "data-open:animate-none",
+      "data-closed:animate-none",
+    );
     expect(await screen.findByRole("menuitem", { name: "복사" })).toBeVisible();
     await user.click(screen.getByRole("menuitem", { name: "고정" }));
-    expect(screen.getAllByText(body)).toHaveLength(2);
+    expect(screen.getAllByText(body)).toHaveLength(1);
+    expect(screen.getByLabelText("고정 메시지")).not.toHaveTextContent(body);
     expect(within(message).getByText("고정됨")).toBeInTheDocument();
 
     const ownMessage = screen.getByText("고마워요 🙌").closest("article")!;
@@ -114,6 +126,7 @@ describe("RoomScreen", () => {
     );
     await user.click(await screen.findByRole("menuitem", { name: "고정" }));
     expect(within(ownMessage).getByText("고정됨")).toBeInTheDocument();
+    expect(screen.getAllByText("고마워요 🙌")).toHaveLength(2);
   });
 
   it("넓은 화면의 대화 상세 패널을 접고 다시 펼친다", async () => {
@@ -128,6 +141,7 @@ describe("RoomScreen", () => {
     expect(
       screen.getByRole("button", { name: "프로필 기능 준비 중" }),
     ).toBeDisabled();
+    expect(screen.queryByText("현재 활동 중")).not.toBeInTheDocument();
 
     const closeButton = screen.getByRole("button", { name: "대화 정보 닫기" });
     expect(closeButton).toHaveAttribute("aria-pressed", "true");

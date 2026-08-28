@@ -54,14 +54,9 @@ export function ConversationDetails({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-[calc(1rem+var(--app-safe-b))]">
         <section className="flex flex-col items-center gap-2 px-3 py-6 text-center">
           <ConversationAvatar conversation={conversation} size="lg" />
-          <div className="mt-1 max-w-full">
-            <h2 className="truncate text-xl font-semibold">
-              {conversation.name}
-            </h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {conversation.subtitle}
-            </p>
-          </div>
+          <h2 className="mt-1 max-w-full truncate text-xl font-semibold">
+            {conversation.name}
+          </h2>
           <div className="mt-3 flex items-start justify-center gap-5">
             {conversation.type === "direct" ? (
               <DetailQuickAction icon={UserRoundIcon} label="프로필" />
@@ -100,11 +95,6 @@ export function ConversationDetails({
                         ? `${participant.name} (나)`
                         : participant.name}
                     </span>
-                    {participant.active ? (
-                      <span className="size-2.5 rounded-full bg-primary">
-                        <span className="sr-only">활동 중</span>
-                      </span>
-                    ) : null}
                   </div>
                 ))}
               </div>

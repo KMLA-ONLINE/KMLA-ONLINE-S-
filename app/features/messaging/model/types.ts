@@ -2,7 +2,6 @@ export interface MessageParticipant {
   id: string;
   name: string;
   avatarUrl: string | null;
-  active?: boolean;
 }
 
 export interface MessageReaction {
@@ -34,7 +33,6 @@ export interface ConversationSummary {
 }
 
 export interface Conversation extends ConversationSummary {
-  subtitle: string;
   messages: ConversationMessage[];
   sharedMediaCount: number;
   sharedFileCount: number;
