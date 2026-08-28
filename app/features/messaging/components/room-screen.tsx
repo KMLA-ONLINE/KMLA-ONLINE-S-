@@ -300,20 +300,20 @@ function ComposerShell() {
         <Button
           variant="ghost"
           size="icon"
-          className="rounded-full"
+          className="mb-0.5 rounded-full"
           aria-label="사진 첨부 기능 준비 중"
           disabled
         >
-          <ImagePlusIcon aria-hidden />
+          <ImagePlusIcon aria-hidden className="size-5" />
         </Button>
         <Button
           variant="ghost"
           size="icon"
-          className="hidden rounded-full sm:inline-flex"
+          className="mb-0.5 hidden rounded-full sm:inline-flex"
           aria-label="파일 첨부 기능 준비 중"
           disabled
         >
-          <FilePlus2Icon aria-hidden />
+          <FilePlus2Icon aria-hidden className="size-5" />
         </Button>
         <div
           aria-label="메시지 입력 기능 준비 중"
@@ -325,11 +325,11 @@ function ComposerShell() {
         <Button
           variant="ghost"
           size="icon"
-          className="rounded-full text-primary"
+          className="mb-0.5 rounded-full text-primary"
           aria-label="좋아요 보내기 기능 준비 중"
           disabled
         >
-          <ThumbsUpIcon aria-hidden />
+          <ThumbsUpIcon aria-hidden className="size-5" />
         </Button>
       </div>
       <p className="sr-only">
