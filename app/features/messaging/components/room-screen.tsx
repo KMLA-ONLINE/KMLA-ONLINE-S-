@@ -108,7 +108,7 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
         className={cn(
           compactDetailsOpen ? "flex xl:hidden" : "hidden",
           compactDetailsOpen &&
-            "md:absolute md:inset-y-0 md:right-0 md:shadow-xl",
+            "md:absolute md:inset-y-0 md:right-0 md:shadow-xl xl:static xl:shadow-none",
           desktopDetailsOpen ? "xl:flex" : "xl:hidden",
         )}
       />
