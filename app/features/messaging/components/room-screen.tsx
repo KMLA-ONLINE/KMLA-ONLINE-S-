@@ -136,7 +136,7 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
           compactDetailsOpen ? "hidden xl:flex" : "flex",
         )}
       >
-        <header className="flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 border-b bg-background/95 px-2 pt-[var(--app-safe-t)] backdrop-blur md:h-16 md:px-4 md:pt-0">
+        <header className="flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 bg-background/95 px-2 pt-[var(--app-safe-t)] backdrop-blur md:h-16 md:px-4 md:pt-0">
           <Button
             variant="ghost"
             size="icon"
@@ -188,7 +188,7 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
           <button
             type="button"
             aria-label="고정 메시지"
-            className="flex min-h-14 shrink-0 items-center gap-3 border-b bg-muted/40 px-4 py-2.5 text-left hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+            className="flex min-h-14 shrink-0 items-center gap-3 border-t border-b bg-muted/40 px-4 py-2.5 text-left hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
             onClick={() => setPinnedDialogOpen(true)}
           >
             <PinIcon aria-hidden className="size-4 shrink-0 text-primary" />
@@ -486,7 +486,7 @@ function ComposerShell({
   }
 
   return (
-    <footer className="shrink-0 border-t bg-background px-2 pt-2 pb-[calc(0.5rem+var(--app-safe-b))] md:px-3 md:pb-3">
+    <footer className="shrink-0 bg-background px-2 pt-2 pb-[calc(0.5rem+var(--app-safe-b))] md:px-3 md:pb-3">
       {replyTarget ? (
         <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 border-l-2 border-primary px-3 py-1">
           <div className="min-w-0 flex-1">

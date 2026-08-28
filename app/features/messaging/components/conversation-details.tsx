@@ -205,7 +205,7 @@ function DetailRow({
       disabled={!onClick}
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm disabled:opacity-100",
+        "flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm hover:bg-muted/70 disabled:opacity-100",
         destructive && "text-destructive",
       )}
     >
