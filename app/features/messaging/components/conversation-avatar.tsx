@@ -2,7 +2,7 @@ import { UsersIcon } from "lucide-react";
 
 import type { ConversationSummary } from "~/features/messaging/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
-import { Avatar, AvatarFallback, AvatarGroup } from "~/shared/ui/avatar";
+import { Avatar, AvatarFallback } from "~/shared/ui/avatar";
 import { cn } from "~/shared/lib/utils";
 
 export function ConversationAvatar({
@@ -30,28 +30,35 @@ export function ConversationAvatar({
     .slice(0, 2);
 
   return (
-    <AvatarGroup
+    <div
       className={cn(
-        size === "lg" ? "w-20" : "w-12",
-        "justify-center",
+        size === "lg" ? "size-20" : "size-12",
+        "relative shrink-0",
         className,
       )}
     >
-      {others.map((participant) => (
+      {others.map((participant, index) => (
         <UserAvatar
           key={participant.id}
           src={participant.avatarUrl}
           name={participant.name}
-          className={size === "lg" ? "size-14" : "size-9"}
+          className={cn(
+            "absolute size-2/3 ring-2 ring-background",
+            others.length === 1
+              ? "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+              : index === 0
+                ? "top-0 right-0"
+                : "bottom-0 left-0 z-10",
+          )}
         />
       ))}
       {others.length === 0 ? (
-        <Avatar className={size === "lg" ? "size-20" : "size-12"}>
+        <Avatar className="size-full">
           <AvatarFallback>
             <UsersIcon aria-hidden />
           </AvatarFallback>
         </Avatar>
       ) : null}
-    </AvatarGroup>
+    </div>
   );
 }
