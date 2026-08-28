@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { RoomScreen } from "~/features/messaging/components/room-screen";
 import { loadConversation } from "~/features/messaging/data/queries";
-import { renderRoute, screen } from "../../../router";
+import { renderRoute, screen, within } from "../../../router";
 
 describe("RoomScreen", () => {
   it("그룹 대화의 메시지와 대표 상태를 표시한다", async () => {
@@ -20,8 +20,86 @@ describe("RoomScreen", () => {
     expect(
       screen.getByRole("link", { name: "https://www.kmlaonline.net" }),
     ).toHaveAttribute("href", "https://www.kmlaonline.net");
-    expect(screen.getByText("읽음 3")).toBeInTheDocument();
+    expect(screen.getByLabelText("3명 읽음")).toHaveTextContent("3");
+    expect(screen.queryByText("읽음 3")).not.toBeInTheDocument();
     expect(screen.getByText("👍 3")).toBeInTheDocument();
+
+    const pinnedMessage = screen
+      .getByRole("link", { name: "https://www.kmlaonline.net" })
+      .closest("article")!;
+    expect(within(pinnedMessage).getByText("최민준")).toBeInTheDocument();
+    expect(within(pinnedMessage).getByText("고정됨")).toBeInTheDocument();
+
+    const ownBubble = screen.getByText(
+      "확인했습니다! 2층 체험 부스 동선만 조금 넓히면 좋을 것 같아요.",
+    );
+    expect(within(ownBubble).getByText("오후 3:18")).toBeInTheDocument();
+  });
+
+  it("메시지 반응을 로컬에서 선택하고 제거한다", async () => {
+    const conversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+    const message = screen.getByText("고마워요 🙌").closest("article")!;
+
+    const reactionButton = within(message).getByRole("button", {
+      name: "메시지에 반응",
+    });
+    expect(reactionButton).toHaveClass("size-8");
+    expect(reactionButton.parentElement).not.toHaveClass(
+      "border",
+      "bg-background",
+      "shadow-sm",
+    );
+    expect(reactionButton.parentElement?.parentElement).toHaveClass(
+      "items-center",
+    );
+
+    await user.click(reactionButton);
+    await user.click(screen.getByRole("button", { name: "하트 반응 남기기" }));
+    expect(within(message).getByText("❤️ 1")).toBeInTheDocument();
+
+    await user.click(reactionButton);
+    await user.click(screen.getByRole("button", { name: "하트 반응 남기기" }));
+    expect(within(message).queryByText("❤️ 1")).not.toBeInTheDocument();
+  });
+
+  it("답장 대상을 표시하고 기타 메뉴에서 메시지를 고정한다", async () => {
+    const conversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+    const body = "축제 부스 배치 초안 확인했어요?";
+    const message = screen.getByText(body).closest("article")!;
+
+    await user.click(
+      within(message).getByRole("button", { name: "메시지에 답장" }),
+    );
+    expect(screen.getByText("박서현에게 답장")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "답장 취소" }));
+    expect(screen.queryByText("박서현에게 답장")).not.toBeInTheDocument();
+
+    await user.click(
+      within(message).getByRole("button", { name: "메시지 기타 작업" }),
+    );
+    expect(await screen.findByRole("menuitem", { name: "복사" })).toBeVisible();
+    await user.click(screen.getByRole("menuitem", { name: "고정" }));
+    expect(screen.getAllByText(body)).toHaveLength(2);
+    expect(within(message).getByText("고정됨")).toBeInTheDocument();
+
+    const ownMessage = screen.getByText("고마워요 🙌").closest("article")!;
+    await user.click(
+      within(ownMessage).getByRole("button", { name: "메시지 기타 작업" }),
+    );
+    await user.click(await screen.findByRole("menuitem", { name: "고정" }));
+    expect(within(ownMessage).getByText("고정됨")).toBeInTheDocument();
   });
 
   it("넓은 화면의 대화 상세 패널을 접고 다시 펼친다", async () => {

@@ -1,12 +1,16 @@
 import {
+  CopyIcon,
+  EllipsisIcon,
   FilePlus2Icon,
   ChevronLeftIcon,
   ImagePlusIcon,
   InfoIcon,
   PinIcon,
+  ReplyIcon,
   SearchIcon,
   SmileIcon,
   ThumbsUpIcon,
+  XIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
@@ -18,15 +22,66 @@ import type {
   ConversationMessage,
   MessageParticipant,
 } from "~/features/messaging/model/types";
+import {
+  QuickReactionBar,
+  ReactionPickerSurface,
+} from "~/features/posts/components/quick-reaction-bar";
+import type { PostReaction } from "~/features/posts/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/shared/ui/dropdown-menu";
 import { cn } from "~/shared/lib/utils";
+
+const MESSAGE_REACTION_EMOJI = {
+  like: "👍",
+  love: "❤️",
+  haha: "😆",
+  wow: "😮",
+  sad: "😢",
+  angry: "😠",
+} satisfies Record<PostReaction, string>;
 
 export function RoomScreen({ conversation }: { conversation: Conversation }) {
   const [desktopDetailsOpen, setDesktopDetailsOpen] = useState(true);
   const [compactDetailsOpen, setCompactDetailsOpen] = useState(false);
-  const pinnedMessage = conversation.messages.find(({ pinned }) => pinned);
+  const [selectedReactions, setSelectedReactions] = useState<
+    Record<string, PostReaction | null>
+  >({});
+  const [pinnedOverrides, setPinnedOverrides] = useState<
+    Record<string, boolean>
+  >({});
+  const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
+  const pinnedMessage = conversation.messages.find(
+    (message) => pinnedOverrides[message.id] ?? message.pinned,
+  );
+  const replyTarget = conversation.messages.find(
+    ({ id }) => id === replyTargetId,
+  );
+  const replyAuthor = replyTarget?.senderId
+    ? (conversation.participants.find(({ id }) => id === replyTarget.senderId)
+        ?.name ?? "알 수 없는 사용자")
+    : null;
+
+  function selectReaction(messageId: string, reaction: PostReaction) {
+    setSelectedReactions((current) => ({
+      ...current,
+      [messageId]: current[messageId] === reaction ? null : reaction,
+    }));
+  }
+
+  function togglePinned(message: ConversationMessage) {
+    setPinnedOverrides((current) => ({
+      ...current,
+      [message.id]: !(current[message.id] ?? message.pinned ?? false),
+    }));
+  }
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -98,8 +153,19 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
           </div>
         ) : null}
 
-        <MessageThread conversation={conversation} />
-        <ComposerShell />
+        <MessageThread
+          conversation={conversation}
+          selectedReactions={selectedReactions}
+          pinnedOverrides={pinnedOverrides}
+          onSelectReaction={selectReaction}
+          onReply={(message) => setReplyTargetId(message.id)}
+          onTogglePinned={togglePinned}
+        />
+        <ComposerShell
+          replyTarget={replyTarget}
+          replyAuthor={replyAuthor}
+          onCancelReply={() => setReplyTargetId(null)}
+        />
       </section>
 
       <ConversationDetails
@@ -116,7 +182,21 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
   );
 }
 
-function MessageThread({ conversation }: { conversation: Conversation }) {
+function MessageThread({
+  conversation,
+  selectedReactions,
+  pinnedOverrides,
+  onSelectReaction,
+  onReply,
+  onTogglePinned,
+}: {
+  conversation: Conversation;
+  selectedReactions: Record<string, PostReaction | null>;
+  pinnedOverrides: Record<string, boolean>;
+  onSelectReaction: (messageId: string, reaction: PostReaction) => void;
+  onReply: (message: ConversationMessage) => void;
+  onTogglePinned: (message: ConversationMessage) => void;
+}) {
   const participantById = new Map(
     conversation.participants.map((participant) => [
       participant.id,
@@ -161,6 +241,15 @@ function MessageThread({ conversation }: { conversation: Conversation }) {
                   isGroup={conversation.type === "group"}
                   startsGroup={startsGroup}
                   endsGroup={endsGroup}
+                  selectedReaction={selectedReactions[message.id]}
+                  isPinned={
+                    pinnedOverrides[message.id] ?? message.pinned ?? false
+                  }
+                  onSelectReaction={(reaction) =>
+                    onSelectReaction(message.id, reaction)
+                  }
+                  onReply={() => onReply(message)}
+                  onTogglePinned={() => onTogglePinned(message)}
                 />
               )}
             </div>
@@ -178,6 +267,11 @@ function MessageRow({
   isGroup,
   startsGroup,
   endsGroup,
+  selectedReaction,
+  isPinned,
+  onSelectReaction,
+  onReply,
+  onTogglePinned,
 }: {
   message: ConversationMessage;
   sender?: MessageParticipant;
@@ -185,12 +279,25 @@ function MessageRow({
   isGroup: boolean;
   startsGroup: boolean;
   endsGroup: boolean;
+  selectedReaction?: PostReaction | null;
+  isPinned: boolean;
+  onSelectReaction: (reaction: PostReaction) => void;
+  onReply: () => void;
+  onTogglePinned: () => void;
 }) {
+  const reactions = new Map(
+    message.reactions?.map(({ emoji, count }) => [emoji, count]) ?? [],
+  );
+  if (selectedReaction) {
+    const emoji = MESSAGE_REACTION_EMOJI[selectedReaction];
+    reactions.set(emoji, (reactions.get(emoji) ?? 0) + 1);
+  }
+
   return (
     <article
       aria-label={`${isOwn ? "내" : (sender?.name ?? "상대방")} 메시지`}
       className={cn(
-        "flex items-end gap-2",
+        "group/message flex items-end gap-2",
         isOwn ? "justify-end" : "justify-start",
         startsGroup && "mt-3",
       )}
@@ -214,13 +321,37 @@ function MessageRow({
           isOwn ? "items-end" : "items-start",
         )}
       >
-        {!isOwn && isGroup && startsGroup ? (
-          <span className="mb-1 ml-2 text-xs text-muted-foreground">
-            {sender?.name ?? "알 수 없는 사용자"}
+        {!isOwn && ((isGroup && startsGroup) || isPinned) ? (
+          <span className="mb-1 ml-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span>{sender?.name ?? "알 수 없는 사용자"}</span>
+            {isPinned ? <span>고정됨</span> : null}
           </span>
         ) : null}
-        <div className="flex items-end gap-1.5">
-          {isOwn && endsGroup ? <MessageMeta message={message} /> : null}
+        {isOwn && isPinned ? (
+          <span className="mr-2 mb-1 text-xs text-muted-foreground">
+            고정됨
+          </span>
+        ) : null}
+        <div className="flex min-w-0 items-center gap-1.5">
+          {isOwn ? (
+            <MessageActions
+              isOwn
+              message={message}
+              selectedReaction={selectedReaction}
+              isPinned={isPinned}
+              onSelectReaction={onSelectReaction}
+              onReply={onReply}
+              onTogglePinned={onTogglePinned}
+            />
+          ) : null}
+          {isOwn && message.readBy?.length ? (
+            <span
+              aria-label={`${message.readBy.length}명 읽음`}
+              className="mb-0.5 shrink-0 self-end text-[11px] leading-4 font-medium text-primary"
+            >
+              {message.readBy.length}
+            </span>
+          ) : null}
           <div className="relative">
             <div
               className={cn(
@@ -235,8 +366,18 @@ function MessageRow({
               )}
             >
               <MessageBody body={message.body} isOwn={isOwn} />
+              <time
+                className={cn(
+                  "mt-1 block text-right text-[10px] leading-none",
+                  isOwn
+                    ? "text-primary-foreground/75"
+                    : "text-muted-foreground",
+                )}
+              >
+                {message.sentAt}
+              </time>
             </div>
-            {message.reactions?.length ? (
+            {reactions.size ? (
               <Badge
                 variant="secondary"
                 className={cn(
@@ -244,29 +385,114 @@ function MessageRow({
                   isOwn ? "right-1" : "left-1",
                 )}
               >
-                {message.reactions.map((reaction) => (
-                  <span key={reaction.emoji}>
-                    {reaction.emoji} {reaction.count}
+                {[...reactions].map(([emoji, count]) => (
+                  <span key={emoji}>
+                    {emoji} {count}
                   </span>
                 ))}
               </Badge>
             ) : null}
           </div>
-          {!isOwn && endsGroup ? <MessageMeta message={message} /> : null}
+          {!isOwn ? (
+            <MessageActions
+              isOwn={false}
+              message={message}
+              selectedReaction={selectedReaction}
+              isPinned={isPinned}
+              onSelectReaction={onSelectReaction}
+              onReply={onReply}
+              onTogglePinned={onTogglePinned}
+            />
+          ) : null}
         </div>
       </div>
     </article>
   );
 }
 
-function MessageMeta({ message }: { message: ConversationMessage }) {
+function MessageActions({
+  isOwn,
+  message,
+  selectedReaction,
+  isPinned,
+  onSelectReaction,
+  onReply,
+  onTogglePinned,
+}: {
+  isOwn: boolean;
+  message: ConversationMessage;
+  selectedReaction?: PostReaction | null;
+  isPinned: boolean;
+  onSelectReaction: (reaction: PostReaction) => void;
+  onReply: () => void;
+  onTogglePinned: () => void;
+}) {
+  const [reactionOpen, setReactionOpen] = useState(false);
+
   return (
-    <span className="mb-0.5 flex shrink-0 flex-col items-end text-[11px] leading-4 text-muted-foreground">
-      {message.readBy?.length ? (
-        <span>읽음 {message.readBy.length}</span>
+    <div className="relative flex shrink-0 items-center opacity-100 transition-opacity [@media(hover:hover)]:pointer-events-none [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within/message:pointer-events-auto [@media(hover:hover)]:group-focus-within/message:opacity-100 [@media(hover:hover)]:group-hover/message:pointer-events-auto [@media(hover:hover)]:group-hover/message:opacity-100">
+      {reactionOpen ? (
+        <ReactionPickerSurface
+          onDismiss={() => setReactionOpen(false)}
+          className={cn("mb-2", !isOwn && "right-0 left-auto")}
+        >
+          <QuickReactionBar
+            current={selectedReaction}
+            onSelect={(reaction) => {
+              setReactionOpen(false);
+              onSelectReaction(reaction);
+            }}
+          />
+        </ReactionPickerSurface>
       ) : null}
-      <span>{message.sentAt}</span>
-    </span>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="rounded-full text-muted-foreground"
+        aria-label="메시지에 반응"
+        aria-expanded={reactionOpen}
+        onClick={() => setReactionOpen((open) => !open)}
+      >
+        <SmileIcon aria-hidden />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="rounded-full text-muted-foreground"
+        aria-label="메시지에 답장"
+        onClick={onReply}
+      >
+        <ReplyIcon aria-hidden />
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-full text-muted-foreground"
+              aria-label="메시지 기타 작업"
+            />
+          }
+        >
+          <EllipsisIcon aria-hidden />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="center">
+          <DropdownMenuGroup>
+            <DropdownMenuItem
+              onClick={() => void navigator.clipboard.writeText(message.body)}
+            >
+              <CopyIcon aria-hidden />
+              복사
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onTogglePinned}>
+              <PinIcon aria-hidden />
+              {isPinned ? "고정 해제" : "고정"}
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 
@@ -293,9 +519,38 @@ function MessageBody({ body, isOwn }: { body: string; isOwn: boolean }) {
   );
 }
 
-function ComposerShell() {
+function ComposerShell({
+  replyTarget,
+  replyAuthor,
+  onCancelReply,
+}: {
+  replyTarget?: ConversationMessage;
+  replyAuthor: string | null;
+  onCancelReply: () => void;
+}) {
   return (
     <footer className="shrink-0 border-t bg-background px-2 pt-2 pb-[calc(0.5rem+var(--app-safe-b))] md:px-3 md:pb-3">
+      {replyTarget ? (
+        <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 border-l-2 border-primary px-3 py-1">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-primary">
+              {replyAuthor ?? "알 수 없는 사용자"}에게 답장
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {replyTarget.body}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="rounded-full"
+            aria-label="답장 취소"
+            onClick={onCancelReply}
+          >
+            <XIcon aria-hidden />
+          </Button>
+        </div>
+      ) : null}
       <div className="mx-auto flex max-w-3xl items-end gap-1.5">
         <Button
           variant="ghost"
