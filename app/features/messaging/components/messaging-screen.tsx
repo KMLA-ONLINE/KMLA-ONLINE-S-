@@ -98,25 +98,27 @@ export function MessagingScreen({
                     <ConversationAvatar conversation={conversation} />
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="flex min-w-0 items-center gap-1.5">
-                        <span
-                          className={cn(
-                            "min-w-0 flex-1 truncate text-sm",
-                            conversation.unreadCount > 0 && "font-semibold",
-                          )}
-                        >
-                          {conversation.name}
+                        <span className="flex min-w-0 flex-1 items-center gap-1">
+                          <span
+                            className={cn(
+                              "min-w-0 truncate text-sm",
+                              conversation.unreadCount > 0 && "font-semibold",
+                            )}
+                          >
+                            {conversation.name}
+                          </span>
+                          {conversation.muted ? (
+                            <BellOffIcon
+                              aria-label="알림 꺼짐"
+                              className="size-3.5 shrink-0 text-muted-foreground"
+                            />
+                          ) : null}
                         </span>
                         <span className="shrink-0 text-xs text-muted-foreground">
                           {conversation.lastActivityLabel}
                         </span>
                       </span>
                       <span className="flex min-w-0 items-center gap-1.5">
-                        {conversation.muted ? (
-                          <BellOffIcon
-                            aria-label="알림 꺼짐"
-                            className="size-3.5 shrink-0 text-muted-foreground"
-                          />
-                        ) : null}
                         <span
                           className={cn(
                             "min-w-0 flex-1 truncate text-sm text-muted-foreground",

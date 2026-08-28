@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { MessagingScreen } from "~/features/messaging/components/messaging-screen";
 import { listConversations } from "~/features/messaging/data/queries";
-import { renderRoute, screen } from "../../../router";
+import { renderRoute, screen, within } from "../../../router";
 
 describe("MessagingScreen", () => {
   it("대화 목록을 검색하고 현재 대화를 표시한다", async () => {
@@ -64,5 +64,28 @@ describe("MessagingScreen", () => {
       await screen.findByText("대화를 찾지 못했습니다"),
     ).toBeInTheDocument();
     expect(screen.getByText("대화를 선택하세요")).toBeInTheDocument();
+  });
+
+  it("알림 꺼짐 상태를 대화 이름 옆에 표시한다", async () => {
+    const conversations = await listConversations();
+
+    renderRoute(
+      () => (
+        <MessagingScreen conversations={conversations} hasRoom={false}>
+          {null}
+        </MessagingScreen>
+      ),
+      { path: "/messenger" },
+    );
+
+    const conversationLink = screen.getByRole("link", {
+      name: /과학전람회 준비/,
+    });
+    const mutedIcon = within(conversationLink).getByLabelText("알림 꺼짐");
+
+    expect(mutedIcon.parentElement).toHaveTextContent("과학전람회 준비");
+    expect(mutedIcon.parentElement).not.toHaveTextContent(
+      "은재: 실험 결과 파일 올렸습니다",
+    );
   });
 });

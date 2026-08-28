@@ -61,6 +61,10 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
   const pinnedMessage = conversation.messages.find(
     (message) => pinnedOverrides[message.id] ?? message.pinned,
   );
+  const pinnedMessageAuthor = pinnedMessage?.senderId
+    ? (conversation.participants.find(({ id }) => id === pinnedMessage.senderId)
+        ?.name ?? "알 수 없는 사용자")
+    : null;
   const replyTarget = conversation.messages.find(
     ({ id }) => id === replyTargetId,
   );
@@ -144,12 +148,19 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
         </header>
 
         {pinnedMessage ? (
-          <div className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-4 py-2">
+          <div
+            aria-label="고정 메시지"
+            className="flex min-h-14 shrink-0 items-center gap-3 border-b bg-muted/40 px-4 py-2.5"
+          >
             <PinIcon aria-hidden className="size-4 shrink-0 text-primary" />
-            <span className="min-w-0 flex-1 truncate text-xs">
-              <strong className="mr-1 font-semibold">고정된 메시지</strong>
-              {pinnedMessage.body}
-            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-semibold">
+                {pinnedMessageAuthor ?? "알 수 없는 사용자"}
+              </p>
+              <p className="truncate text-sm text-muted-foreground">
+                {pinnedMessage.body}
+              </p>
+            </div>
           </div>
         ) : null}
 
@@ -224,7 +235,7 @@ function MessageThread({
             <div key={message.id}>
               {message.dayLabel ? (
                 <div className="my-4 flex items-center justify-center">
-                  <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {message.dayLabel}
                   </span>
                 </div>

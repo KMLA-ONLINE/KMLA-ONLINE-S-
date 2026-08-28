@@ -16,13 +16,27 @@ describe("RoomScreen", () => {
     expect(
       screen.getByRole("heading", { name: "학생회 기획부", level: 1 }),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("고정된 메시지").length).toBeGreaterThan(0);
+    const pinnedBanner = screen.getByLabelText("고정 메시지");
+    expect(within(pinnedBanner).getByText("최민준")).toBeInTheDocument();
+    expect(
+      within(pinnedBanner).getByText(
+        "관련 자료는 여기에도 정리해 두었어요. https://www.kmlaonline.net",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(pinnedBanner).queryByText("고정된 메시지"),
+    ).not.toBeInTheDocument();
+    const dayLabel = screen.getByText("2026년 8월 28일 금요일");
+    expect(dayLabel).not.toHaveClass("rounded-full", "bg-muted");
     expect(
       screen.getByRole("link", { name: "https://www.kmlaonline.net" }),
     ).toHaveAttribute("href", "https://www.kmlaonline.net");
     expect(screen.getByLabelText("3명 읽음")).toHaveTextContent("3");
     expect(screen.queryByText("읽음 3")).not.toBeInTheDocument();
     expect(screen.getByText("👍 3")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "프로필 기능 준비 중" }),
+    ).not.toBeInTheDocument();
 
     const pinnedMessage = screen
       .getByRole("link", { name: "https://www.kmlaonline.net" })
@@ -110,6 +124,10 @@ describe("RoomScreen", () => {
       () => <RoomScreen conversation={conversation!} />,
       { path: "/messenger/hyunwoo" },
     );
+
+    expect(
+      screen.getByRole("button", { name: "프로필 기능 준비 중" }),
+    ).toBeDisabled();
 
     const closeButton = screen.getByRole("button", { name: "대화 정보 닫기" });
     expect(closeButton).toHaveAttribute("aria-pressed", "true");

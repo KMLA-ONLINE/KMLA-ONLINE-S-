@@ -9,6 +9,7 @@ import {
   LogOutIcon,
   PinIcon,
   SearchIcon,
+  UserRoundIcon,
   UserPlusIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -62,6 +63,9 @@ export function ConversationDetails({
             </p>
           </div>
           <div className="mt-3 flex items-start justify-center gap-5">
+            {conversation.type === "direct" ? (
+              <DetailQuickAction icon={UserRoundIcon} label="프로필" />
+            ) : null}
             <DetailQuickAction icon={BellIcon} label="알림" />
             <DetailQuickAction icon={SearchIcon} label="검색" />
             {conversation.type === "group" ? (
