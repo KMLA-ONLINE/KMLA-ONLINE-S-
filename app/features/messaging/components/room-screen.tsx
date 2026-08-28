@@ -13,7 +13,7 @@ import {
   ThumbsUpIcon,
   XIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
@@ -63,6 +63,8 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
     Record<string, PostReaction | null>
   >({});
   const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
+  const messageThreadRef = useRef<HTMLDivElement>(null);
+  const scrollToBottomAfterSend = useRef(false);
   const pinnedMessages = messages.filter((message) => message.pinned);
   const pinnedMessage = pinnedMessages.at(-1);
   const pinnedMessageAuthor = pinnedMessage?.senderId
@@ -83,6 +85,13 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
     );
     return () => window.clearTimeout(timeout);
   }, [highlightedMessageId]);
+
+  useEffect(() => {
+    if (!scrollToBottomAfterSend.current) return;
+    const messageThread = messageThreadRef.current;
+    if (messageThread) messageThread.scrollTop = messageThread.scrollHeight;
+    scrollToBottomAfterSend.current = false;
+  }, [messages]);
 
   function selectReaction(messageId: string, reaction: PostReaction) {
     setSelectedReactions((current) => ({
@@ -111,6 +120,7 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
   }
 
   function sendMessage(body: string) {
+    scrollToBottomAfterSend.current = true;
     setMessages((current) => [
       ...current,
       {
@@ -208,6 +218,7 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
           messages={messages}
           selectedReactions={selectedReactions}
           highlightedMessageId={highlightedMessageId}
+          messageThreadRef={messageThreadRef}
           onSelectReaction={selectReaction}
           onReply={(message) => setReplyTargetId(message.id)}
           onTogglePinned={togglePinned}
@@ -250,6 +261,7 @@ function MessageThread({
   messages,
   selectedReactions,
   highlightedMessageId,
+  messageThreadRef,
   onSelectReaction,
   onReply,
   onTogglePinned,
@@ -258,6 +270,7 @@ function MessageThread({
   messages: ConversationMessage[];
   selectedReactions: Record<string, PostReaction | null>;
   highlightedMessageId: string | null;
+  messageThreadRef: RefObject<HTMLDivElement | null>;
   onSelectReaction: (messageId: string, reaction: PostReaction) => void;
   onReply: (message: ConversationMessage) => void;
   onTogglePinned: (message: ConversationMessage) => void;
@@ -270,7 +283,10 @@ function MessageThread({
   );
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 md:px-5">
+    <div
+      ref={messageThreadRef}
+      className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 md:px-5"
+    >
       <div className="mx-auto flex min-h-full max-w-3xl flex-col justify-end gap-0.5">
         {messages.map((message, index) => {
           const previous = messages[index - 1];
@@ -427,12 +443,13 @@ function MessageActions({
       >
         <DropdownMenuGroup>
           <DropdownMenuItem
+            className="cursor-pointer"
             onClick={() => void navigator.clipboard.writeText(message.body)}
           >
             <CopyIcon aria-hidden />
             복사
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={onTogglePinned}>
+          <DropdownMenuItem className="cursor-pointer" onClick={onTogglePinned}>
             <PinIcon aria-hidden />
             {isPinned ? "고정 해제" : "고정"}
           </DropdownMenuItem>

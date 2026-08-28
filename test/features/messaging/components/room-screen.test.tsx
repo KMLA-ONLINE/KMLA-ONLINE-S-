@@ -77,6 +77,7 @@ describe("RoomScreen", () => {
       "확인했습니다! 2층 체험 부스 동선만 조금 넓히면 좋을 것 같아요.",
     );
     expect(within(ownBubble).getByText("오후 3:18")).toBeInTheDocument();
+    expect(ownBubble).toHaveClass("[overflow-wrap:anywhere]");
 
     const firstConnectedMessage = screen
       .getByText("축제 부스 배치 초안 확인했어요?")
@@ -167,7 +168,12 @@ describe("RoomScreen", () => {
       "data-open:animate-none",
       "data-closed:animate-none",
     );
-    expect(await screen.findByRole("menuitem", { name: "복사" })).toBeVisible();
+    expect(await screen.findByRole("menuitem", { name: "복사" })).toHaveClass(
+      "cursor-pointer",
+    );
+    expect(screen.getByRole("menuitem", { name: "고정" })).toHaveClass(
+      "cursor-pointer",
+    );
     await user.click(screen.getByRole("menuitem", { name: "고정" }));
     expect(screen.getAllByText(body)).toHaveLength(1);
     expect(screen.getByLabelText("고정 메시지")).not.toHaveTextContent(body);
@@ -290,6 +296,13 @@ describe("RoomScreen", () => {
     );
     const input = screen.getByRole("textbox", { name: "메시지 입력" });
     const likeButton = screen.getByRole("button", { name: "좋아요 보내기" });
+    const messageThread = screen
+      .getByRole("region", { name: "이현우 대화" })
+      .querySelector(".overflow-y-auto")!;
+    Object.defineProperty(messageThread, "scrollHeight", {
+      configurable: true,
+      value: 500,
+    });
 
     await user.type(input, "첫 줄{Shift>}{Enter}{/Shift}둘째 줄");
     expect(
@@ -300,6 +313,7 @@ describe("RoomScreen", () => {
     expect(
       screen.getAllByRole("article", { name: "내 메시지" }).at(-1),
     ).toHaveTextContent(/첫 줄\s*둘째 줄/);
+    expect(messageThread.scrollTop).toBe(500);
     expect(screen.getByRole("button", { name: "좋아요 보내기" })).toBeEnabled();
     await user.click(likeButton);
     const sentLike = screen.getByLabelText("좋아요");

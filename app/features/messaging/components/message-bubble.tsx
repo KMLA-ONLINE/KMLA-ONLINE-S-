@@ -44,7 +44,7 @@ export function MessageBubble({
         className={cn(
           isEmojiOnly
             ? "px-1 py-0.5 text-4xl leading-none"
-            : "rounded-2xl px-3.5 py-2 text-sm break-words break-keep whitespace-pre-wrap",
+            : "rounded-2xl px-3.5 py-2 text-sm [overflow-wrap:anywhere] break-keep whitespace-pre-wrap",
           !isEmojiOnly &&
             (isOwn
               ? "bg-primary text-primary-foreground"

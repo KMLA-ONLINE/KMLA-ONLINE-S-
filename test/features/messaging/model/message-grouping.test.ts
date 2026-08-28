@@ -34,7 +34,7 @@ describe("message grouping", () => {
     ).toBe(false);
   });
 
-  it("날짜와 시스템 메시지에서 연결을 끊는다", () => {
+  it("날짜, 시스템 및 고정된 메시지에서 연결을 끊는다", () => {
     const previous = message({ id: "previous" });
 
     expect(
@@ -45,6 +45,9 @@ describe("message grouping", () => {
     ).toBe(false);
     expect(
       canConnectMessages(previous, message({ id: "next", system: true })),
+    ).toBe(false);
+    expect(
+      canConnectMessages(previous, message({ id: "next", pinned: true })),
     ).toBe(false);
   });
 

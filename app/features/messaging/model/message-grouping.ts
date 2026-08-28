@@ -23,6 +23,7 @@ export function canConnectMessages(
     previous.senderId === next.senderId &&
     previous.sentAt === next.sentAt &&
     !next.dayLabel &&
+    !next.pinned &&
     !previousHasReaction
   );
 }
