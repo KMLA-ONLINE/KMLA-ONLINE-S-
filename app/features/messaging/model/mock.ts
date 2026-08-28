@@ -44,7 +44,7 @@ export const mockConversations: Conversation[] = [
         senderId: "seo",
         body: "수정할 부분 있으면 오늘 안에 알려주세요.",
         sentAt: "오후 3:12",
-        reactions: [{ emoji: "👍", count: 3 }],
+        reactions: [{ reaction: "like", count: 3 }],
       },
       {
         id: "m4",

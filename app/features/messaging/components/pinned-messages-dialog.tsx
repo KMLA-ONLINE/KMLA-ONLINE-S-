@@ -88,6 +88,28 @@ export function PinnedMessagesDialog({
                   : undefined;
                 const isOwn = message.senderId === "viewer";
                 const previousDayLabel = pinnedMessages[index - 1]?.dayLabel;
+                const viewAction = (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="rounded-full text-muted-foreground"
+                    aria-label="채팅에서 보기"
+                    onClick={() => onViewMessage(message.id)}
+                  >
+                    <LocateFixedIcon aria-hidden />
+                  </Button>
+                );
+                const unpinAction = (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="rounded-full text-muted-foreground"
+                    aria-label="고정 취소"
+                    onClick={() => onUnpin(message)}
+                  >
+                    <PinOffIcon aria-hidden />
+                  </Button>
+                );
 
                 return (
                   <div key={message.id}>
@@ -109,24 +131,17 @@ export function PinnedMessagesDialog({
                       showReactions={false}
                       actionRail={
                         <MessageActionRail>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="rounded-full text-muted-foreground"
-                            aria-label="채팅에서 보기"
-                            onClick={() => onViewMessage(message.id)}
-                          >
-                            <LocateFixedIcon aria-hidden />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="rounded-full text-muted-foreground"
-                            aria-label="고정 취소"
-                            onClick={() => onUnpin(message)}
-                          >
-                            <PinOffIcon aria-hidden />
-                          </Button>
+                          {isOwn ? (
+                            <>
+                              {unpinAction}
+                              {viewAction}
+                            </>
+                          ) : (
+                            <>
+                              {viewAction}
+                              {unpinAction}
+                            </>
+                          )}
                         </MessageActionRail>
                       }
                     />

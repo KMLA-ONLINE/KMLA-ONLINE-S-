@@ -1,3 +1,5 @@
+import type { PostReaction } from "~/features/posts/model/types";
+
 export interface MessageParticipant {
   id: string;
   name: string;
@@ -5,7 +7,7 @@ export interface MessageParticipant {
 }
 
 export interface MessageReaction {
-  emoji: string;
+  reaction: PostReaction;
   count: number;
 }
 

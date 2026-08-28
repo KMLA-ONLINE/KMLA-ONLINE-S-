@@ -25,6 +25,7 @@ export function MessageRow({
   unreadParticipantCount = 0,
   showUnreadCount = true,
   showReactions = true,
+  showTimestamp = true,
 }: {
   message: ConversationMessage;
   sender?: MessageParticipant;
@@ -41,6 +42,7 @@ export function MessageRow({
   unreadParticipantCount?: number;
   showUnreadCount?: boolean;
   showReactions?: boolean;
+  showTimestamp?: boolean;
 }) {
   return (
     <article
@@ -106,6 +108,7 @@ export function MessageRow({
             endsGroup={endsGroup}
             selectedReaction={selectedReaction}
             showReactions={showReactions}
+            showTimestamp={showTimestamp}
           />
           {!isOwn ? actionRail : null}
         </div>

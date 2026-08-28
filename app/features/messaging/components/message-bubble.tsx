@@ -1,16 +1,11 @@
-import type { PostReaction } from "~/features/posts/model/types";
+import { ThumbsUpIcon } from "lucide-react";
+
+import { getEmojiOnlyMessageGraphemes } from "~/features/messaging/model/message-text";
 import type { ConversationMessage } from "~/features/messaging/model/types";
+import { ReactionEmoji } from "~/features/posts/components/reaction-emoji";
+import type { PostReaction } from "~/features/posts/model/types";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
-
-const MESSAGE_REACTION_EMOJI = {
-  like: "👍",
-  love: "❤️",
-  haha: "😆",
-  wow: "😮",
-  sad: "😢",
-  angry: "😠",
-} satisfies Record<PostReaction, string>;
 
 export function MessageBubble({
   message,
@@ -19,6 +14,7 @@ export function MessageBubble({
   endsGroup = true,
   selectedReaction,
   showReactions = true,
+  showTimestamp = true,
 }: {
   message: ConversationMessage;
   isOwn: boolean;
@@ -26,56 +22,100 @@ export function MessageBubble({
   endsGroup?: boolean;
   selectedReaction?: PostReaction | null;
   showReactions?: boolean;
+  showTimestamp?: boolean;
 }) {
   const reactions = new Map(
-    message.reactions?.map(({ emoji, count }) => [emoji, count]) ?? [],
+    message.reactions?.map(({ reaction, count }) => [reaction, count]) ?? [],
   );
   if (selectedReaction) {
-    const emoji = MESSAGE_REACTION_EMOJI[selectedReaction];
-    reactions.set(emoji, (reactions.get(emoji) ?? 0) + 1);
+    reactions.set(selectedReaction, (reactions.get(selectedReaction) ?? 0) + 1);
   }
+  const emojiGraphemes = getEmojiOnlyMessageGraphemes(message.body);
+  const isEmojiOnly = emojiGraphemes !== null;
+  const hasReactions = showReactions && reactions.size > 0;
+  const reactionCount = [...reactions.values()].reduce(
+    (total, count) => total + count,
+    0,
+  );
 
   return (
-    <div className="relative min-w-0">
+    <div className={cn("relative min-w-0", hasReactions && "mb-4")}>
       <div
         className={cn(
-          "rounded-2xl px-3.5 py-2 text-sm break-words break-keep whitespace-pre-wrap",
-          isOwn
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted text-foreground",
-          !startsGroup && isOwn && "rounded-tr-md",
-          !startsGroup && !isOwn && "rounded-tl-md",
-          !endsGroup && isOwn && "rounded-br-md",
-          !endsGroup && !isOwn && "rounded-bl-md",
+          isEmojiOnly
+            ? "px-1 py-0.5 text-4xl leading-none"
+            : "rounded-2xl px-3.5 py-2 text-sm break-words break-keep whitespace-pre-wrap",
+          !isEmojiOnly &&
+            (isOwn
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-foreground"),
+          !isEmojiOnly && !startsGroup && isOwn && "rounded-tr-md",
+          !isEmojiOnly && !startsGroup && !isOwn && "rounded-tl-md",
+          !isEmojiOnly && !endsGroup && isOwn && "rounded-br-md",
+          !isEmojiOnly && !endsGroup && !isOwn && "rounded-bl-md",
         )}
       >
-        <MessageBody body={message.body} isOwn={isOwn} />
-        <time
-          className={cn(
-            "mt-1 block text-right text-[10px] leading-none",
-            isOwn ? "text-primary-foreground/75" : "text-muted-foreground",
-          )}
-        >
-          {message.sentAt}
-        </time>
+        {isEmojiOnly ? (
+          <EmojiOnlyMessageBody graphemes={emojiGraphemes} />
+        ) : (
+          <MessageBody body={message.body} isOwn={isOwn} />
+        )}
+        {showTimestamp ? (
+          <time
+            className={cn(
+              "mt-1 block text-right text-[10px] leading-none",
+              !isEmojiOnly && isOwn
+                ? "text-primary-foreground/75"
+                : "text-muted-foreground",
+            )}
+          >
+            {message.sentAt}
+          </time>
+        ) : null}
       </div>
-      {showReactions && reactions.size ? (
+      {hasReactions ? (
         <Badge
           variant="secondary"
           className={cn(
-            "absolute -bottom-3 h-6 gap-1 rounded-full border border-background px-1.5 shadow-sm",
-            isOwn ? "right-1" : "left-1",
+            "absolute top-full h-6 -translate-y-2 gap-1 rounded-full border-2 border-background px-1.5 text-[13px] shadow-none",
+            isOwn ? "left-1" : "right-1",
           )}
         >
-          {[...reactions].map(([emoji, count]) => (
-            <span key={emoji}>
-              {emoji} {count}
+          {[...reactions].map(([reaction]) => (
+            <span key={reaction} className="flex items-center">
+              <ReactionEmoji
+                reaction={reaction}
+                labelled
+                className="size-[13px]"
+              />
             </span>
           ))}
+          {reactionCount > 1 ? (
+            <span
+              className={cn(
+                "font-normal",
+                isOwn ? "text-primary-foreground/75" : "text-muted-foreground",
+              )}
+            >
+              {reactionCount}
+            </span>
+          ) : null}
         </Badge>
       ) : null}
     </div>
   );
+}
+
+function EmojiOnlyMessageBody({ graphemes }: { graphemes: string[] }) {
+  if (graphemes.length === 1 && graphemes[0] === "👍") {
+    return (
+      <span aria-label="좋아요" className="inline-flex text-primary">
+        <ThumbsUpIcon aria-hidden className="size-[1em]" />
+      </span>
+    );
+  }
+
+  return <>{graphemes.join("")}</>;
 }
 
 const URL_PATTERN = /(https?:\/\/[^\s]+)/g;

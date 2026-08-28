@@ -23,6 +23,10 @@ import {
   MessageRow,
 } from "~/features/messaging/components/message-row";
 import { PinnedMessagesDialog } from "~/features/messaging/components/pinned-messages-dialog";
+import {
+  canConnectMessages,
+  hasVisibleMessageReaction,
+} from "~/features/messaging/model/message-grouping";
 import type {
   Conversation,
   ConversationMessage,
@@ -271,12 +275,21 @@ function MessageThread({
         {messages.map((message, index) => {
           const previous = messages[index - 1];
           const next = messages[index + 1];
-          const startsGroup = message.system
-            ? true
-            : previous?.senderId !== message.senderId;
-          const endsGroup = message.system
-            ? true
-            : next?.senderId !== message.senderId;
+          const startsGroup = !canConnectMessages(
+            previous,
+            message,
+            previous
+              ? hasVisibleMessageReaction(
+                  previous,
+                  selectedReactions[previous.id],
+                )
+              : false,
+          );
+          const endsGroup = !canConnectMessages(
+            message,
+            next,
+            hasVisibleMessageReaction(message, selectedReactions[message.id]),
+          );
           const sender = message.senderId
             ? participantById.get(message.senderId)
             : undefined;
@@ -308,6 +321,7 @@ function MessageThread({
                   )}
                   startsGroup={startsGroup}
                   endsGroup={endsGroup}
+                  showTimestamp={endsGroup}
                   selectedReaction={selectedReactions[message.id]}
                   isPinned={message.pinned ?? false}
                   highlighted={highlightedMessageId === message.id}
@@ -353,13 +367,12 @@ function MessageActions({
   onTogglePinned: () => void;
 }) {
   const [reactionOpen, setReactionOpen] = useState(false);
-
-  return (
-    <MessageActionRail>
+  const reactionAction = (
+    <div className="relative flex shrink-0">
       {reactionOpen ? (
         <ReactionPickerSurface
           onDismiss={() => setReactionOpen(false)}
-          className={cn("mb-2", !isOwn && "right-0 left-auto")}
+          className="left-1/2 mb-2 -translate-x-1/2"
         >
           <QuickReactionBar
             current={selectedReaction}
@@ -380,47 +393,69 @@ function MessageActions({
       >
         <SmileIcon aria-hidden />
       </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="rounded-full text-muted-foreground"
-        aria-label="메시지에 답장"
-        onClick={onReply}
+    </div>
+  );
+  const replyAction = (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      className="rounded-full text-muted-foreground"
+      aria-label="메시지에 답장"
+      onClick={onReply}
+    >
+      <ReplyIcon aria-hidden />
+    </Button>
+  );
+  const moreAction = (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="rounded-full text-muted-foreground"
+            aria-label="메시지 기타 작업"
+          />
+        }
       >
-        <ReplyIcon aria-hidden />
-      </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="rounded-full text-muted-foreground"
-              aria-label="메시지 기타 작업"
-            />
-          }
-        >
-          <EllipsisIcon aria-hidden />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          side="top"
-          align="center"
-          className="shadow-sm duration-0 data-open:animate-none data-closed:animate-none"
-        >
-          <DropdownMenuGroup>
-            <DropdownMenuItem
-              onClick={() => void navigator.clipboard.writeText(message.body)}
-            >
-              <CopyIcon aria-hidden />
-              복사
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onTogglePinned}>
-              <PinIcon aria-hidden />
-              {isPinned ? "고정 해제" : "고정"}
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        <EllipsisIcon aria-hidden />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side="top"
+        align="center"
+        className="shadow-sm duration-0 data-open:animate-none data-closed:animate-none"
+      >
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            onClick={() => void navigator.clipboard.writeText(message.body)}
+          >
+            <CopyIcon aria-hidden />
+            복사
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onTogglePinned}>
+            <PinIcon aria-hidden />
+            {isPinned ? "고정 해제" : "고정"}
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  return (
+    <MessageActionRail>
+      {isOwn ? (
+        <>
+          {moreAction}
+          {replyAction}
+          {reactionAction}
+        </>
+      ) : (
+        <>
+          {reactionAction}
+          {replyAction}
+          {moreAction}
+        </>
+      )}
     </MessageActionRail>
   );
 }
