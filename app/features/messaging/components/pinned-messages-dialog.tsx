@@ -105,7 +105,7 @@ export function PinnedMessagesDialog({
                       isGroup={isGroup}
                       isPinned
                       showPinnedLabel={false}
-                      showReadCount={false}
+                      showUnreadCount={false}
                       showReactions={false}
                       actionRail={
                         <MessageActionRail>

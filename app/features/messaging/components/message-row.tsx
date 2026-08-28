@@ -22,7 +22,8 @@ export function MessageRow({
   elementId,
   actionRail,
   showPinnedLabel = true,
-  showReadCount = true,
+  unreadParticipantCount = 0,
+  showUnreadCount = true,
   showReactions = true,
 }: {
   message: ConversationMessage;
@@ -37,7 +38,8 @@ export function MessageRow({
   elementId?: string;
   actionRail?: ReactNode;
   showPinnedLabel?: boolean;
-  showReadCount?: boolean;
+  unreadParticipantCount?: number;
+  showUnreadCount?: boolean;
   showReactions?: boolean;
 }) {
   return (
@@ -89,12 +91,12 @@ export function MessageRow({
         ) : null}
         <div className="flex min-w-0 items-center gap-1.5">
           {isOwn ? actionRail : null}
-          {isOwn && showReadCount && message.readBy?.length ? (
+          {isOwn && showUnreadCount && unreadParticipantCount > 0 ? (
             <span
-              aria-label={`${message.readBy.length}명 읽음`}
+              aria-label={`${unreadParticipantCount}명 안 읽음`}
               className="mb-0.5 shrink-0 self-end text-[11px] leading-4 font-medium text-primary"
             >
-              {message.readBy.length}
+              {unreadParticipantCount}
             </span>
           ) : null}
           <MessageBubble

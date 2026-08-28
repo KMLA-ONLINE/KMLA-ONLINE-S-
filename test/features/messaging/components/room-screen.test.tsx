@@ -32,8 +32,8 @@ describe("RoomScreen", () => {
     expect(
       screen.getByRole("link", { name: "https://www.kmlaonline.net" }),
     ).toHaveAttribute("href", "https://www.kmlaonline.net");
-    expect(screen.getByLabelText("3명 읽음")).toHaveTextContent("3");
-    expect(screen.queryByText("읽음 3")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("2명 안 읽음")).toHaveTextContent("2");
+    expect(screen.queryByText("안 읽음 2")).not.toBeInTheDocument();
     expect(screen.getByText("👍 3")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "프로필 기능 준비 중" }),
@@ -230,7 +230,7 @@ describe("RoomScreen", () => {
     expect(screen.getByText("👍")).toBeInTheDocument();
   });
 
-  it("IME 조합 중 Enter는 전송하지 않고 모바일에서도 파일 버튼을 노출한다", async () => {
+  it("IME 조합 중 Enter는 전송하지 않고 모바일에서 이모지 버튼을 숨긴다", async () => {
     const conversation = await loadConversation("hyunwoo");
     expect(conversation).not.toBeNull();
 
@@ -241,8 +241,13 @@ describe("RoomScreen", () => {
     const fileButton = screen.getByRole("button", {
       name: "파일 첨부 기능 준비 중",
     });
+    const emojiButton = screen.getByRole("button", {
+      name: "이모지 선택 기능 준비 중",
+    });
 
     expect(fileButton).not.toHaveClass("hidden");
+    expect(emojiButton).toHaveClass("hidden", "md:inline-flex");
+    expect(emojiButton.querySelector("svg")).toHaveClass("size-5");
     fireEvent.change(input, { target: { value: "안녕하세" } });
     expect(
       await screen.findByRole("button", { name: "메시지 보내기" }),

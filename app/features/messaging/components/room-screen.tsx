@@ -300,6 +300,12 @@ function MessageThread({
                   sender={sender}
                   isOwn={message.senderId === "viewer"}
                   isGroup={conversation.type === "group"}
+                  unreadParticipantCount={Math.max(
+                    0,
+                    conversation.participants.length -
+                      1 -
+                      (message.readBy?.length ?? 0),
+                  )}
                   startsGroup={startsGroup}
                   endsGroup={endsGroup}
                   selectedReaction={selectedReactions[message.id]}
@@ -507,11 +513,11 @@ function ComposerShell({
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="-m-1 shrink-0 rounded-full text-primary"
+            className="-m-1 hidden shrink-0 rounded-full text-primary md:inline-flex"
             aria-label="이모지 선택 기능 준비 중"
             disabled
           >
-            <SmileIcon aria-hidden />
+            <SmileIcon aria-hidden className="size-5" />
           </Button>
         </div>
         <Button
