@@ -954,6 +954,7 @@ export type Database = {
           phone_number: string | null
           pub_id: string
           role: Database["public"]["Enums"]["app_role"]
+          search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
           status_updated_by: number | null
@@ -988,6 +989,7 @@ export type Database = {
           phone_number?: string | null
           pub_id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          search_name?: string | null
           status?: Database["public"]["Enums"]["profile_status"]
           status_updated_at?: string
           status_updated_by?: number | null
@@ -1022,6 +1024,7 @@ export type Database = {
           phone_number?: string | null
           pub_id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          search_name?: string | null
           status?: Database["public"]["Enums"]["profile_status"]
           status_updated_at?: string
           status_updated_by?: number | null
@@ -1654,6 +1657,7 @@ export type Database = {
           phone_number: string | null
           pub_id: string
           role: Database["public"]["Enums"]["app_role"]
+          search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
           status_updated_by: number | null
@@ -2197,6 +2201,7 @@ export type Database = {
           phone_number: string | null
           pub_id: string
           role: Database["public"]["Enums"]["app_role"]
+          search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
           status_updated_by: number | null
@@ -2252,6 +2257,16 @@ export type Database = {
         Returns: string
       }
       revoke_group_invite: { Args: { p_group_id: string }; Returns: undefined }
+      search_directory: {
+        Args: { p_query?: string }
+        Returns: {
+          avatar_path: string
+          result_id: string
+          result_kind: string
+          result_name: string
+          sort_rank: number
+        }[]
+      }
       search_group_posts: {
         Args: { p_group_id: string; p_limit?: number; p_query: string }
         Returns: {
@@ -2328,6 +2343,7 @@ export type Database = {
           phone_number: string | null
           pub_id: string
           role: Database["public"]["Enums"]["app_role"]
+          search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
           status_updated_by: number | null
@@ -2393,6 +2409,7 @@ export type Database = {
           phone_number: string | null
           pub_id: string
           role: Database["public"]["Enums"]["app_role"]
+          search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
           status_updated_by: number | null
@@ -2520,6 +2537,7 @@ export type Database = {
           phone_number: string | null
           pub_id: string
           role: Database["public"]["Enums"]["app_role"]
+          search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
           status_updated_by: number | null
