@@ -1,6 +1,9 @@
 import { ThumbsUpIcon } from "lucide-react";
 
-import { getEmojiOnlyMessageGraphemes } from "~/features/messaging/model/message-text";
+import {
+  getEmojiOnlyMessageGraphemes,
+  parseMessageText,
+} from "~/features/messaging/model/message-text";
 import type { ConversationMessage } from "~/features/messaging/model/types";
 import { ReactionEmoji } from "~/features/posts/components/reaction-emoji";
 import type { PostReaction } from "~/features/posts/model/types";
@@ -152,14 +155,12 @@ function EmojiOnlyMessageBody({ graphemes }: { graphemes: string[] }) {
   return <>{graphemes.join("")}</>;
 }
 
-const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
-
 function MessageBody({ body, isOwn }: { body: string; isOwn: boolean }) {
-  return body.split(URL_PATTERN).map((part, index) =>
-    part.startsWith("http://") || part.startsWith("https://") ? (
+  return parseMessageText(body).map((segment, index) =>
+    segment.type === "link" ? (
       <a
-        key={`${part}-${index}`}
-        href={part}
+        key={`${segment.value}-${index}`}
+        href={segment.value}
         target="_blank"
         rel="noreferrer"
         className={cn(
@@ -167,10 +168,10 @@ function MessageBody({ body, isOwn }: { body: string; isOwn: boolean }) {
           isOwn ? "text-primary-foreground" : "text-primary",
         )}
       >
-        {part}
+        {segment.value}
       </a>
     ) : (
-      part
+      segment.value
     ),
   );
 }

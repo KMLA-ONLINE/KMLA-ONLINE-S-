@@ -30,10 +30,10 @@ if (!existsSync(pushWorker)) {
 const { count, size, warnings } = await generateSW({
   globDirectory: clientDir,
   swDest: resolve(clientDir, "sw.js"),
-  // Fonts are deliberately absent: Pretendard ships every Hangul glyph in one
-  // ~750 kB file, which would more than double what a first-time visitor has to
-  // download before the app is installable. They are runtime-cached instead
-  // (see below), so the first render may fall back to a system font once.
+  // Fonts are deliberately absent: the local Pretendard variable font is about
+  // 2 MB, which would more than double what a first-time visitor downloads
+  // before the app is installable. It is runtime-cached instead (see below),
+  // so the first render may fall back to a system font once.
   globPatterns: ["**/*.{html,js,css,ico,png,svg,webmanifest}"],
   // sw.js registers itself; the Vite manifest is a build artifact.
   // Promotional screenshots are only needed when the browser expands its
