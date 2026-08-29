@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "auth_user_id" "uuid",
     "pub_id" "text" DEFAULT "private"."generate_profile_pub_id"() NOT NULL,
     "name" "text" NOT NULL,
+    "search_name" "text" GENERATED ALWAYS AS ("lower"("regexp_replace"("btrim"("name"), '[[:space:]]+'::"text", ''::"text", 'g'::"text"))) STORED,
     "anonymous_username" "text",
     "role" "public"."app_role" DEFAULT 'member'::"public"."app_role" NOT NULL,
     "type" "public"."profile_type" NOT NULL,
@@ -688,6 +689,8 @@ CREATE INDEX "profiles_accepted_students_idx" ON "public"."profiles" USING "btre
 CREATE INDEX "profiles_active_student_cohort_idx" ON "public"."profiles" USING "btree" ("cohort") WHERE (("type" = 'student'::"public"."profile_type") AND ("status" = 'accepted'::"public"."profile_status") AND ("deleted_at" IS NULL));
 
 CREATE UNIQUE INDEX "profiles_pub_id_case_insensitive_key" ON "public"."profiles" USING "btree" ("lower"("pub_id"));
+
+CREATE INDEX "profiles_search_name_trgm_idx" ON "public"."profiles" USING "gin" ("search_name" "extensions"."gin_trgm_ops") WHERE (("status" = 'accepted'::"public"."profile_status") AND ("deleted_at" IS NULL));
 
 CREATE INDEX "profiles_status_idx" ON "public"."profiles" USING "btree" ("status") WHERE ("deleted_at" IS NULL);
 
