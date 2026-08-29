@@ -396,7 +396,7 @@ export function NotificationSettings({
 
   return (
     <>
-      <PageHeader title="알림 설정" back="/menu" />
+      <PageHeader title="알림 설정" back="/menu/settings" />
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
         <h1 className="hidden text-2xl font-semibold md:block">알림 설정</h1>
 
