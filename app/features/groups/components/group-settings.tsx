@@ -61,7 +61,6 @@ export function GroupSettings({
         </>
       ) : null}
 
-      {/* 되돌릴 수 없는 동작이라 맨 아래에 따로 둔다. */}
       <DangerSettings group={group} canDeleteOfficial={canDeleteOfficial} />
     </div>
   );

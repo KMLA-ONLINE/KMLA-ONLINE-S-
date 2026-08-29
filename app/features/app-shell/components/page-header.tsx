@@ -8,9 +8,7 @@ import { cn } from "~/shared/lib/utils";
 
 interface PageHeaderProps {
   title: ReactNode;
-  /** 뒤로가기 버튼. 드릴인 화면(그룹 상세, 프로필)에서 쓴다. */
   back?: boolean | string;
-  /** 오른쪽 액션 슬롯. 검색·더보기 등. */
   actions?: ReactNode;
   /** 아래로 읽으면 숨긴다. 기본은 고정이고, 긴 목록에서만 켠다. 효과는 모바일에서만 보인다. */
   hideOnScroll?: boolean;

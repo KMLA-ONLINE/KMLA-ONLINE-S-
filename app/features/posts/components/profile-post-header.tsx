@@ -31,7 +31,6 @@ export function ProfilePostHeader({
   menu,
 }: {
   post: ProfilePost;
-  /** 카드는 본문이 이어지므로 위로 붙이고, 상세는 한 줄뿐이라 가운데 맞춘다. */
   align?: "start" | "center";
   menu?: ReactNode;
 }) {

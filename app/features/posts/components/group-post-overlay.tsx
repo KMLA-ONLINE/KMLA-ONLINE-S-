@@ -105,9 +105,7 @@ export function GroupPostOverlay({
   categories?: GroupCategory[];
   post?: GroupPostDetail | null;
   identities?: PostIdentity[];
-  /** 상세 모드에서만 쓴다. loader가 게시물과 함께 첫 페이지를 내려준다. */
   comments?: PostCommentPage;
-  /** 상세 모드에서만 쓴다. 댓글 입력창 왼쪽 아바타에 들어간다. */
   viewer?: CommentViewer;
   onClose?: () => void;
   action?: string;

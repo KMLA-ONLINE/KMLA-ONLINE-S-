@@ -278,7 +278,6 @@ export function ProfileDetail({
     <main className="px-3 pb-4 md:px-0 md:pb-10">
       <div className="w-full space-y-2 md:space-y-6">
         <section className="-mx-3 overflow-hidden bg-background sm:mx-0 sm:rounded-2xl sm:border">
-          {/* cover */}
           <div
             data-testid="profile-cover"
             className="relative aspect-[3/1] w-full overflow-hidden bg-[#F3F4F7]"
@@ -301,7 +300,6 @@ export function ProfileDetail({
             ) : null}
           </div>
 
-          {/* profile identity */}
           <div className="bg-background px-3 pb-2 sm:px-8 sm:pt-7 sm:pb-7">
             {/* grid가 아니라 줄바꿈하는 flex다. grid에서는 편집 버튼이 아바타가 차지한
                 암묵적 row 뒤에 놓여서, 버튼 위 여백이 아바타 높이에 묶여버린다 —
@@ -319,7 +317,6 @@ export function ProfileDetail({
                 span 덕분에 1행 높이를 아바타가 아니라 이름 블록이 정하고, 그래서 소개글이
                 학년·계열 바로 아래에 붙는다. */}
             <div className="flex flex-wrap items-start gap-x-3 sm:grid sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-rows-[auto_1fr] sm:gap-x-7">
-              {/* avatar */}
               <div className="relative z-10 -mt-5 w-fit shrink-0 rounded-full border-[3px] border-background bg-background sm:col-start-1 sm:row-span-2 sm:row-start-1 sm:mt-0 sm:border-0">
                 <div className="relative">
                   <UserAvatar
@@ -338,7 +335,6 @@ export function ProfileDetail({
                 </div>
               </div>
 
-              {/* name / summary */}
               <div className="min-w-0 flex-1 pt-2.5 sm:col-start-2 sm:row-start-1 sm:pt-1">
                 <div className="flex min-w-0 items-center gap-2">
                   <h1 className="min-w-0 truncate text-[1.35rem] leading-tight font-semibold tracking-tight sm:text-3xl">
@@ -354,10 +350,6 @@ export function ProfileDetail({
                 ) : null}
               </div>
 
-              {/* edit button
-                  mobile: `order-1`로 소개글 뒤까지 밀고 `basis-full`로 자기 줄을 차지한다
-                  desktop: 3열 1행, 이름 오른쪽
-                  absolute/translate 사용하지 않음 */}
               {isOwnProfile ? (
                 <Link
                   to={`/profile/${profile.pub_id}/edit`}
@@ -380,7 +372,6 @@ export function ProfileDetail({
           </div>
         </section>
 
-        {/* content */}
         <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start">
           <section className="min-w-0 space-y-1.5 sm:space-y-2">
             <h2 className="px-0.5 text-[17px] font-semibold tracking-tight sm:px-1 sm:text-xl">
@@ -388,8 +379,6 @@ export function ProfileDetail({
             </h2>
 
             <Card className="-mx-3 h-fit gap-0 rounded-none border-x-0 py-0 shadow-none sm:mx-0 sm:rounded-xl sm:border sm:shadow-sm">
-              {/* 구분선 없이 여백만으로 나눈다. 묶음 안은 좁게, 묶음 사이는 넓게 둬서
-                  선을 그리지 않고도 세 덩어리로 읽히게 한다. */}
               <CardContent className="px-3 py-2.5 sm:px-6 sm:py-5">
                 <div className="flex flex-col gap-5 sm:gap-6">
                   {visibleFactGroups.map((group, index) => (

@@ -8,7 +8,6 @@ import { RoomScreen } from "~/features/messaging";
 export default function MessengerRoomPage() {
   return (
     <>
-      {/* 모바일에서만 보인다. 데스크톱은 오른쪽 패널에 방 제목이 따로 붙는다. */}
       <PageHeader title="대화" back="/messenger" />
       <RoomScreen />
     </>

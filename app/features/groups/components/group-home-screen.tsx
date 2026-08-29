@@ -122,10 +122,6 @@ function ScreenHeader({ actionLabel }: { actionLabel: string | null }) {
   );
 }
 
-/**
- * 탐색으로 나가는 유일한 문. 새 그룹 찾기는 이 화면에서 드문 동선이라 목록 위가 아니라
- * 아래에 둔다 — 내 그룹을 다 지나친 사람만 만나면 된다.
- */
 function DiscoverEntry() {
   return (
     <Link

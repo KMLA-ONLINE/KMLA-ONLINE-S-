@@ -174,10 +174,6 @@ function ProfileEditForm({
             </div>
           ) : null}
 
-          {/*
-            학기마다 손대는 값이 맨 위에 온다. 이름과 생일은 몇 년에 한 번 바뀔까 말까
-            하면서도 예전에는 이 자리를 차지하고 있었다.
-          */}
           <div className="grid gap-4 sm:grid-cols-4 sm:gap-5">
             <Field
               data-invalid={Boolean(errors.description)}

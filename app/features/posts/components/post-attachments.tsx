@@ -64,7 +64,6 @@ function singleImageRatio(image: PostAttachment): number | null {
   );
 }
 
-/** 3장일 때 첫 장이 왼쪽 전체, 5장 이상일 때 윗줄 2장이 절반씩. */
 function tileClass(count: number, index: number): string {
   if (count === 3 && index === 0) return "row-span-2";
   if (count >= 5) return index < 2 ? "col-span-3" : "col-span-2";
