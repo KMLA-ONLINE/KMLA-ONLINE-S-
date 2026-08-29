@@ -1185,21 +1185,13 @@ export type Database = {
           p_status: Database["public"]["Enums"]["profile_status"]
         }
         Returns: {
-          academic_track: Database["public"]["Enums"]["profile_academic_track"]
           birthday: string
-          class_no: number
           cohort: number
-          department: string
-          description: string
-          dorm_room: number
           gender: Database["public"]["Enums"]["profile_gender"]
           is_returning_student: boolean
           name: string
-          phone_number: string
           profile_id: number
           profile_type: Database["public"]["Enums"]["profile_type"]
-          pub_id: string
-          status_updated_at: string
           student_number: string
           submitted_at: string
           total_count: number
