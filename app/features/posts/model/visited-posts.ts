@@ -1,4 +1,5 @@
-export const VISITED_POSTS_STORAGE_KEY = "kmla-online:visited-posts:v1";
+// 계정이 바뀌면 버려야 하는 값이라 키 자체는 `user-scoped-storage`가 소유한다.
+import { VISITED_POSTS_STORAGE_KEY } from "~/shared/lib/user-scoped-storage";
 
 /**
  * 무한정 쌓이면 목록 하나 그리자고 수 MB짜리 JSON을 파싱하게 된다. 오래된 쪽부터 버린다 —
