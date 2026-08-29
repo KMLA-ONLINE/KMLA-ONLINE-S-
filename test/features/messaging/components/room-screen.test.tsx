@@ -32,6 +32,18 @@ describe("RoomScreen", () => {
     expect(
       screen.getByRole("link", { name: "https://www.kmlaonline.net" }),
     ).toHaveAttribute("href", "https://www.kmlaonline.net");
+    expect(
+      screen.getByText("수정할 부분 있으면 오늘 안에 알려주세요."),
+    ).toHaveClass("text-[15px]");
+    const senderAvatar = within(
+      screen
+        .getByText("수정할 부분 있으면 오늘 안에 알려주세요.")
+        .closest("article")!,
+    )
+      .getByRole("img", { name: "박서현 프로필 사진" })
+      .closest('[data-slot="avatar"]');
+    expect(senderAvatar).toHaveAttribute("data-size", "default");
+    expect(senderAvatar).toHaveClass("size-7");
     expect(screen.getByLabelText("2명 안 읽음")).toHaveTextContent("2");
     expect(screen.queryByText("안 읽음 2")).not.toBeInTheDocument();
     const reactedMessage = screen
@@ -419,12 +431,12 @@ describe("RoomScreen", () => {
     const sentLike = screen.getByLabelText("좋아요");
     expect(sentLike.querySelector("svg")).toHaveClass("size-[1em]");
     const sentLikeSurface = sentLike.parentElement!;
-    expect(sentLikeSurface).toHaveClass("text-4xl");
+    expect(sentLikeSurface).toHaveClass("text-5xl");
     expect(sentLikeSurface).not.toHaveClass("rounded-2xl", "bg-primary");
 
     await user.type(input, "😀😃😄😁😆");
     await user.click(screen.getByRole("button", { name: "메시지 보내기" }));
-    expect(screen.getByText("😀😃😄😁😆")).toHaveClass("text-4xl");
+    expect(screen.getByText("😀😃😄😁😆")).toHaveClass("text-5xl");
 
     await user.type(input, "😀😃😄😁😆😅");
     await user.click(screen.getByRole("button", { name: "메시지 보내기" }));
@@ -432,6 +444,39 @@ describe("RoomScreen", () => {
       "rounded-2xl",
       "bg-primary",
     );
+  });
+
+  it("작성 중 첨부 아이콘을 접고 화살표, 입력 비움 및 전송으로 복원한다", async () => {
+    const conversation = await loadConversation("hyunwoo");
+    expect(conversation).not.toBeNull();
+
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/hyunwoo" },
+    );
+    const input = screen.getByRole("textbox", { name: "메시지 입력" });
+    const attachmentActions = screen.getByRole("button", {
+      name: "파일 첨부 기능 준비 중",
+    }).parentElement!;
+
+    await user.type(input, "안녕하세요");
+    expect(attachmentActions).toHaveClass("w-0", "opacity-0");
+    expect(
+      screen.getByRole("button", { name: "첨부 메뉴 펼치기" }),
+    ).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "첨부 메뉴 펼치기" }));
+    expect(attachmentActions).toHaveClass("w-[5.5rem]", "opacity-100");
+    expect(
+      screen.queryByRole("button", { name: "첨부 메뉴 펼치기" }),
+    ).not.toBeInTheDocument();
+
+    await user.clear(input);
+    expect(attachmentActions).toHaveClass("w-[5.5rem]", "opacity-100");
+
+    await user.type(input, "전송할 메시지");
+    await user.click(screen.getByRole("button", { name: "메시지 보내기" }));
+    expect(attachmentActions).toHaveClass("w-[5.5rem]", "opacity-100");
   });
 
   it("IME 조합 중 Enter는 전송하지 않고 모바일에서 이모지 버튼을 숨긴다", async () => {

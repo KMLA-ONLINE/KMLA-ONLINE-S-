@@ -90,11 +90,11 @@ export function MessageRow({
           <UserAvatar
             src={sender?.avatarUrl}
             name={sender?.name}
-            size="sm"
-            className="mb-0.5"
+            size="default"
+            className="mb-0.5 size-7"
           />
         ) : (
-          <span className="w-6 shrink-0" aria-hidden />
+          <span className="w-7 shrink-0" aria-hidden />
         )
       ) : null}
 

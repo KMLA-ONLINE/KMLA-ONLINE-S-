@@ -1,10 +1,11 @@
 import {
   CopyIcon,
   EllipsisIcon,
-  FilePlus2Icon,
   ChevronLeftIcon,
-  ImagePlusIcon,
+  ChevronRightIcon,
+  ImageIcon,
   InfoIcon,
+  PaperclipIcon,
   PinIcon,
   ReplyIcon,
   SearchIcon,
@@ -150,7 +151,7 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
           compactDetailsOpen ? "hidden xl:flex" : "flex",
         )}
       >
-        <header className="flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 bg-background/95 px-2 pt-[var(--app-safe-t)] backdrop-blur md:h-16 md:px-4 md:pt-0">
+        <header className="z-10 flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 bg-background/95 px-2 pt-[var(--app-safe-t)] shadow-sm backdrop-blur md:h-16 md:px-4 md:pt-0">
           <Button
             variant="ghost"
             size="icon"
@@ -512,17 +513,28 @@ function ComposerShell({
   onSend: (body: string) => void;
 }) {
   const [draft, setDraft] = useState("");
+  const [attachmentActionsExpanded, setAttachmentActionsExpanded] =
+    useState(false);
   const composing = useRef(false);
   const normalizedDraft = normalizeMessageBody(draft);
   const hasDraft = normalizedDraft.trim() !== "";
   const draftLength = countMessageGraphemes(normalizedDraft);
   const overLimit = draftLength > MESSAGE_MAX_LENGTH;
+  const attachmentActionsCollapsed = hasDraft && !attachmentActionsExpanded;
 
   function sendDraft(): boolean {
     if (!hasDraft || overLimit) return false;
     onSend(normalizedDraft);
     setDraft("");
+    setAttachmentActionsExpanded(false);
     return true;
+  }
+
+  function changeDraft(value: string) {
+    setDraft(value);
+    if (normalizeMessageBody(value).trim() === "") {
+      setAttachmentActionsExpanded(false);
+    }
   }
 
   return (
@@ -549,24 +561,45 @@ function ComposerShell({
         </div>
       ) : null}
       <div className="mx-auto flex max-w-3xl items-end gap-1.5">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="mb-0.5 rounded-full"
-          aria-label="사진 첨부 기능 준비 중"
-          disabled
+        <div
+          aria-hidden={attachmentActionsCollapsed}
+          className={cn(
+            "flex shrink-0 items-end gap-1.5 transition-[width,opacity] duration-200 ease-out motion-reduce:transition-none",
+            attachmentActionsCollapsed
+              ? "w-0 overflow-hidden opacity-0"
+              : "w-[5.5rem] opacity-100",
+          )}
         >
-          <ImagePlusIcon aria-hidden className="size-5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="mb-0.5 rounded-full"
-          aria-label="파일 첨부 기능 준비 중"
-          disabled
-        >
-          <FilePlus2Icon aria-hidden className="size-5" />
-        </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="mb-0.5 rounded-full"
+            aria-label="사진 첨부 기능 준비 중"
+            disabled
+          >
+            <ImageIcon aria-hidden className="size-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="mb-0.5 rounded-full"
+            aria-label="파일 첨부 기능 준비 중"
+            disabled
+          >
+            <PaperclipIcon aria-hidden className="size-5" />
+          </Button>
+        </div>
+        {attachmentActionsCollapsed ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="mb-0.5 shrink-0 rounded-full"
+            aria-label="첨부 메뉴 펼치기"
+            onClick={() => setAttachmentActionsExpanded(true)}
+          >
+            <ChevronRightIcon aria-hidden className="size-5" />
+          </Button>
+        ) : null}
         <div className="flex min-h-10 min-w-0 flex-1 items-end gap-2 rounded-3xl bg-muted py-2 pr-3 pl-4">
           <textarea
             rows={1}
@@ -574,7 +607,7 @@ function ComposerShell({
             aria-label="메시지 입력"
             placeholder="메시지 입력"
             className="field-sizing-content max-h-32 min-h-6 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground md:text-sm"
-            onChange={(event) => setDraft(event.currentTarget.value)}
+            onChange={(event) => changeDraft(event.currentTarget.value)}
             onCompositionStart={() => (composing.current = true)}
             onCompositionEnd={() => (composing.current = false)}
             onKeyDown={(event) => {

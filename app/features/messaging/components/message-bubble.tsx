@@ -57,8 +57,8 @@ export function MessageBubble({
         className={cn(
           replyTarget ? "w-full" : "w-fit max-w-full",
           isEmojiOnly
-            ? "px-1 py-0.5 text-4xl leading-none"
-            : "rounded-2xl px-3.5 py-2 text-sm [overflow-wrap:anywhere] break-keep whitespace-pre-wrap",
+            ? "px-1 py-0.5 text-5xl leading-none"
+            : "rounded-2xl px-3.5 py-2 text-[15px] [overflow-wrap:anywhere] break-keep whitespace-pre-wrap",
           !isEmojiOnly &&
             (isOwn
               ? "bg-primary text-primary-foreground"
