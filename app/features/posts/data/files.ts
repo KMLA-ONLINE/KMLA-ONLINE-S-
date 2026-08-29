@@ -1,4 +1,5 @@
 import { createSignedUrls } from "~/shared/supabase/signed-urls";
+import { STORAGE_UPLOAD_CACHE_CONTROL } from "~/shared/supabase/storage";
 import { getSupabase } from "~/shared/supabase/client";
 
 const BUCKET = "post-attachments";
@@ -11,6 +12,7 @@ export async function uploadPostAttachment(
     .storage.from(BUCKET)
     .upload(path, file, {
       contentType: file.type || "application/octet-stream",
+      cacheControl: STORAGE_UPLOAD_CACHE_CONTROL,
       upsert: false,
     });
   if (error) throw error;

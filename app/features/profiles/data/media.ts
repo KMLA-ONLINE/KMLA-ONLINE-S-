@@ -4,6 +4,7 @@ import type {
 } from "~/features/profiles/model/types";
 import { getSupabase } from "~/shared/supabase/client";
 import { createSignedUrls } from "~/shared/supabase/signed-urls";
+import { STORAGE_UPLOAD_CACHE_CONTROL } from "~/shared/supabase/storage";
 
 const BUCKET = "profile-media";
 
@@ -52,6 +53,7 @@ export async function replaceProfileMedia(
     .from(BUCKET)
     .upload(objectPath, file, {
       contentType: "image/webp",
+      cacheControl: STORAGE_UPLOAD_CACHE_CONTROL,
       upsert: false,
     });
 
