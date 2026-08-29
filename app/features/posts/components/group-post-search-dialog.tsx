@@ -174,7 +174,7 @@ function SearchPanel({
                 setComposing(false);
               }}
               autoComplete="off"
-              placeholder="게시물 검색"
+              placeholder="제목, 내용, 작성자 검색"
               aria-label="게시물 검색어"
               className="h-9 rounded-full border-0 bg-muted pl-9 shadow-none [&::-webkit-search-cancel-button]:appearance-none"
               type="search"
@@ -184,7 +184,7 @@ function SearchPanel({
         {/* 검색창 자체가 헤더라서 보이는 제목은 없다. 낭독기에는 따로 알려준다. */}
         <DialogTitle className="sr-only">게시물 검색</DialogTitle>
         <DialogDescription className="sr-only">
-          이 그룹의 게시물을 제목과 본문으로 검색합니다.
+          이 그룹의 게시물을 제목, 본문 또는 작성자 이름으로 검색합니다.
         </DialogDescription>
       </DialogHeader>
 
@@ -199,7 +199,7 @@ function SearchPanel({
           </p>
         ) : !current ? (
           <p className="p-8 text-center text-sm text-muted-foreground">
-            제목이나 내용으로 검색해 보세요.
+            제목, 내용 또는 작성자 이름으로 검색해 보세요.
           </p>
         ) : current.results.length === 0 ? (
           <p className="p-8 text-center text-sm text-muted-foreground">
