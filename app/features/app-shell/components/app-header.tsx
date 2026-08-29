@@ -1,10 +1,10 @@
-import { MessagesSquareIcon, SearchIcon } from "lucide-react";
+import { MessagesSquareIcon } from "lucide-react";
 import { Link } from "react-router";
 
 import { useAppShell } from "~/features/app-shell/context/app-shell-context";
+import { GlobalSearchDropdown } from "~/features/search";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { Button } from "~/shared/ui/button";
-import { Input } from "~/shared/ui/input";
 import { cn } from "~/shared/lib/utils";
 
 /**
@@ -35,14 +35,7 @@ export function AppHeader({ className }: { className?: string }) {
         </Link>
       </div>
 
-      <div className="relative w-full max-w-xl">
-        <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          className="h-9 pl-9 [&::-webkit-search-cancel-button]:appearance-none"
-          placeholder="그룹 · 게시물 · 사람 검색"
-          type="search"
-        />
-      </div>
+      <GlobalSearchDropdown />
 
       <div className="flex flex-1 basis-0 items-center justify-end gap-2">
         <Button
