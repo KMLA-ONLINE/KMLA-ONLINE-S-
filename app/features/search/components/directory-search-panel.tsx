@@ -21,7 +21,9 @@ export function DirectorySearchPanel({
   loading: boolean;
   result: DirectorySearchResult | null;
   error: string | null;
-  onNavigate: () => void;
+  /** 데스크톱 드롭다운은 결과를 눌렀을 때 패널을 닫아야 하지만, 모바일 전체화면
+   * dialog는 페이지 이동만으로 자연히 unmount되므로 넘길 필요가 없다. */
+  onNavigate?: () => void;
 }) {
   const recentActive = query === "";
   const recentEntries = useRecentSearchEntries(recentActive);
@@ -33,7 +35,7 @@ export function DirectorySearchPanel({
       name: item.name,
       avatarPath: item.avatarPath,
     });
-    onNavigate();
+    onNavigate?.();
   }
 
   if (recentActive) {
@@ -57,7 +59,7 @@ export function DirectorySearchPanel({
                 ? `/profile/${entry.id}`
                 : `/groups/${entry.id}`
             }
-            onClick={() => onNavigate()}
+            onClick={() => onNavigate?.()}
             className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-muted"
           >
             {entry.kind === "profile" ? (
