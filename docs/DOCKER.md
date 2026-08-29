@@ -70,7 +70,7 @@ supabase login
 ### 5.2 프로젝트 연결
 
 ```bash
-supabase link --ref <project id>
+supabase link --project-ref <project id>
 ```
 
 [supabase.com](https://) project에 들어가서 project id를 복붙합니다.
