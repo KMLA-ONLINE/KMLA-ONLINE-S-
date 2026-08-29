@@ -88,4 +88,20 @@ describe("MessagingScreen", () => {
       "은재: 실험 결과 파일 올렸습니다",
     );
   });
+
+  it("읽지 않은 메시지 유무와 관계없이 대화 이름을 같은 굵기로 표시한다", async () => {
+    const conversations = await listConversations();
+
+    renderRoute(
+      () => (
+        <MessagingScreen conversations={conversations} hasRoom={false}>
+          {null}
+        </MessagingScreen>
+      ),
+      { path: "/messenger" },
+    );
+
+    expect(screen.getByText("학생회 기획부")).toHaveClass("font-medium");
+    expect(screen.getByText("과학전람회 준비")).toHaveClass("font-medium");
+  });
 });
