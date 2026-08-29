@@ -86,8 +86,15 @@ export function FeedScreen() {
       : new Map<string, FeedPost>();
   const posts = rawPosts.map((post) => hydratedPosts.get(post.post_id) ?? post);
 
+  /**
+   * 지금 화면에 걸린 세션. 서명이 날아가는 사이 피드가 리셋될 수 있어서, resolve 시점에
+   * 클로저의 epoch가 아직 유효한지 이걸로 확인한다.
+   */
+  const liveFeedEpoch = useRef(feedEpoch);
+
   // 세션이 바뀌면 이전 세션에서 채운 미디어는 버린다.
   useEffect(() => {
+    liveFeedEpoch.current = feedEpoch;
     hydratedPostIds.current.clear();
   }, [feedEpoch]);
 
@@ -99,6 +106,10 @@ export function FeedScreen() {
     if (unhydrated.length === 0) return;
     unhydrated.forEach((post) => hydratedPostIds.current.add(post.post_id));
     void hydrateFeedPostMedia(unhydrated).then((hydrated) => {
+      // 이 결과는 이미 지나간 세션의 것이다. 지금 세션이 채워 둔 걸 덮어쓰면, 그 글들은
+      // `hydratedPostIds`에 이미 올라가 있어 다시 시도되지도 않는다.
+      if (liveFeedEpoch.current !== feedEpoch) return;
+
       setHydratedState((current) => {
         const next =
           current.feedEpoch === feedEpoch

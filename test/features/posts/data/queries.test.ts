@@ -13,6 +13,7 @@ vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 
 import {
   getProfilePost,
+  hydrateGroupPostMedia,
   listGroupPosts,
   listPostComments,
   listProfilePosts,
@@ -250,5 +251,41 @@ describe("post queries", () => {
     expect(createPostAttachmentUrls).not.toHaveBeenCalled();
     expect(createProfileMediaUrls).not.toHaveBeenCalled();
     expect(page.posts[0].attachments[0].signedUrl).toBeNull();
+  });
+  /**
+   * 서명은 실패할 수 있다(만료된 세션, 지워진 객체, 배치 중 일부 거절). 그때 원시 object
+   * path가 남으면 `<img src>`가 상대 경로로 나가 깨진 이미지가 된다. 피드 쪽은 이미 null로
+   * 떨어뜨리고 있어서, 그룹 게시물도 같아야 이니셜 아바타로 대체된다.
+   */
+  it("drops an avatar path that Storage did not sign", async () => {
+    createPostAttachmentUrls.mockResolvedValue(new Map());
+    createProfileMediaUrls.mockResolvedValue(new Map());
+
+    const [post] = await hydrateGroupPostMedia([
+      {
+        post_id: "post-id",
+        author_avatar_path: "profiles/avatar.webp",
+        attachments: [],
+      },
+    ] as never);
+
+    expect(post?.author_avatar_path).toBeNull();
+  });
+
+  it("keeps the signed avatar URL when signing succeeds", async () => {
+    createPostAttachmentUrls.mockResolvedValue(new Map());
+    createProfileMediaUrls.mockResolvedValue(
+      new Map([["profiles/avatar.webp", "https://signed.example/avatar"]]),
+    );
+
+    const [post] = await hydrateGroupPostMedia([
+      {
+        post_id: "post-id",
+        author_avatar_path: "profiles/avatar.webp",
+        attachments: [],
+      },
+    ] as never);
+
+    expect(post?.author_avatar_path).toBe("https://signed.example/avatar");
   });
 });

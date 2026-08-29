@@ -41,12 +41,23 @@ export interface ReactionSummary {
 
 type WithReactions<Row> = Omit<Row, keyof ReactionSummary> & ReactionSummary;
 
-export type GroupPost = WithReactions<GroupPostRow> & {
+/**
+ * `author_avatar_path`는 서명에 실패하거나 계정이 사라지면 null이다. 생성기가 RPC의
+ * `returns table` 컬럼을 전부 not null로 적어 내려서 `ProfilePost`와 같게 고쳐 준다 —
+ * 거짓 타입을 두면 서명 실패 때 원시 object path를 그대로 `<img src>`에 흘리게 된다.
+ */
+export type GroupPost = WithReactions<
+  Omit<GroupPostRow, "author_avatar_path">
+> & {
+  author_avatar_path: string | null;
   attachments: PostAttachment[];
 };
 // 검색 결과에는 댓글 수와 반응을 표시하지 않으므로(기능 명세 §8.9) 목록과 반환 모양이 다르다.
 export type GroupPostSearchResult = GroupPostSearchRow;
-export type GroupPostDetail = WithReactions<GroupPostDetailRow> & {
+export type GroupPostDetail = WithReactions<
+  Omit<GroupPostDetailRow, "author_avatar_path">
+> & {
+  author_avatar_path: string | null;
   attachments: PostAttachment[];
 };
 export type PostVisibility = Database["public"]["Enums"]["post_visibility"];

@@ -204,9 +204,11 @@ export async function hydrateGroupPostMedia(
 
   return posts.map((post) => ({
     ...post,
+    // 서명에 실패하면 null이다. 원시 object path를 남기면 <img src>가 상대 경로로 나가
+    // 깨진 이미지가 되고, null이어야 이니셜 아바타로 떨어진다.
     author_avatar_path: post.author_avatar_path
-      ? (profileUrls.get(post.author_avatar_path) ?? post.author_avatar_path)
-      : post.author_avatar_path,
+      ? (profileUrls.get(post.author_avatar_path) ?? null)
+      : null,
     attachments: post.attachments.map((attachment) => ({
       ...attachment,
       signedUrl: attachmentUrls.get(attachment.object_path) ?? null,
