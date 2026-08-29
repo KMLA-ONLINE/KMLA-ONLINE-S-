@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, type PointerEvent, type ReactNode } from "react";
 
 import { MessageBubble } from "~/features/messaging/components/message-bubble";
 import type {
@@ -26,6 +26,10 @@ export function MessageRow({
   showUnreadCount = true,
   showReactions = true,
   showTimestamp = true,
+  replyTarget,
+  replyTargetAuthor,
+  onViewReply,
+  onReply,
 }: {
   message: ConversationMessage;
   sender?: MessageParticipant;
@@ -43,7 +47,29 @@ export function MessageRow({
   showUnreadCount?: boolean;
   showReactions?: boolean;
   showTimestamp?: boolean;
+  replyTarget?: ConversationMessage;
+  replyTargetAuthor?: string;
+  onViewReply?: () => void;
+  onReply?: () => void;
 }) {
+  const replySwipeStart = useRef<{ x: number; y: number } | null>(null);
+
+  function startReplySwipe(event: PointerEvent<HTMLElement>) {
+    if (event.pointerType !== "touch" || !onReply || message.deleted) return;
+    replySwipeStart.current = { x: event.clientX, y: event.clientY };
+  }
+
+  function finishReplySwipe(event: PointerEvent<HTMLElement>) {
+    const swipeStart = replySwipeStart.current;
+    replySwipeStart.current = null;
+    if (!swipeStart || event.pointerType !== "touch") return;
+
+    const horizontalDistance = event.clientX - swipeStart.x;
+    const verticalDistance = Math.abs(event.clientY - swipeStart.y);
+    if (horizontalDistance >= 48 && horizontalDistance > verticalDistance)
+      onReply?.();
+  }
+
   return (
     <article
       id={elementId}
@@ -55,6 +81,9 @@ export function MessageRow({
         highlighted &&
           "ring-2 ring-primary ring-offset-4 ring-offset-background",
       )}
+      onPointerDown={startReplySwipe}
+      onPointerUp={finishReplySwipe}
+      onPointerCancel={() => (replySwipeStart.current = null)}
     >
       {!isOwn ? (
         endsGroup ? (
@@ -71,7 +100,8 @@ export function MessageRow({
 
       <div
         className={cn(
-          "flex max-w-[78%] flex-col",
+          "flex min-w-0 flex-col",
+          replyTarget ? "w-[78%]" : "max-w-[78%]",
           isOwn ? "items-end" : "items-start",
         )}
       >
@@ -91,7 +121,12 @@ export function MessageRow({
             고정됨
           </span>
         ) : null}
-        <div className="flex min-w-0 items-center gap-1.5">
+        <div
+          className={cn(
+            "flex min-w-0 items-center gap-1.5",
+            replyTarget && "w-full",
+          )}
+        >
           {isOwn ? actionRail : null}
           {isOwn && showUnreadCount && unreadParticipantCount > 0 ? (
             <span
@@ -109,6 +144,9 @@ export function MessageRow({
             selectedReaction={selectedReaction}
             showReactions={showReactions}
             showTimestamp={showTimestamp}
+            replyTarget={replyTarget}
+            replyTargetAuthor={replyTargetAuthor}
+            onViewReply={onViewReply}
           />
           {!isOwn ? actionRail : null}
         </div>

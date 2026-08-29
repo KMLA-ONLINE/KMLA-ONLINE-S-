@@ -69,6 +69,20 @@ export const mockConversations: Conversation[] = [
       },
       {
         id: "m7",
+        senderId: "min",
+        body: "삭제된 메시지입니다",
+        sentAt: "오후 3:32",
+        deleted: true,
+      },
+      {
+        id: "m8",
+        senderId: "seo",
+        body: "자료는 내일 다시 공유할게요.",
+        sentAt: "오후 3:34",
+        replyToMessageId: "m7",
+      },
+      {
+        id: "m9",
         senderId: "seo",
         body: "내일 점심시간에 최종 확인할게요!",
         sentAt: "오후 3:36",

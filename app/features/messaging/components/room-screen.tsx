@@ -134,6 +134,7 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
           minute: "2-digit",
         }).format(sentAt),
         dayLabel: nextMessageDayLabel(current, sentAt),
+        replyToMessageId: replyTargetId ?? undefined,
         readBy: [],
       },
     ]);
@@ -223,8 +224,11 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
           highlightedMessageId={highlightedMessageId}
           messageThreadRef={messageThreadRef}
           onSelectReaction={selectReaction}
-          onReply={(message) => setReplyTargetId(message.id)}
+          onReply={(message) => {
+            if (!message.deleted) setReplyTargetId(message.id);
+          }}
           onTogglePinned={togglePinned}
+          onViewMessage={viewMessage}
         />
         <ComposerShell
           replyTarget={replyTarget}
@@ -268,6 +272,7 @@ function MessageThread({
   onSelectReaction,
   onReply,
   onTogglePinned,
+  onViewMessage,
 }: {
   conversation: Conversation;
   messages: ConversationMessage[];
@@ -277,6 +282,7 @@ function MessageThread({
   onSelectReaction: (messageId: string, reaction: PostReaction) => void;
   onReply: (message: ConversationMessage) => void;
   onTogglePinned: (message: ConversationMessage) => void;
+  onViewMessage: (messageId: string) => void;
 }) {
   const participantById = new Map(
     conversation.participants.map((participant) => [
@@ -312,6 +318,12 @@ function MessageThread({
           const sender = message.senderId
             ? participantById.get(message.senderId)
             : undefined;
+          const replyTarget = message.replyToMessageId
+            ? messages.find(({ id }) => id === message.replyToMessageId)
+            : undefined;
+          const replyTargetAuthor = replyTarget?.senderId
+            ? participantById.get(replyTarget.senderId)?.name
+            : undefined;
 
           return (
             <div key={message.id}>
@@ -345,6 +357,14 @@ function MessageThread({
                   isPinned={message.pinned ?? false}
                   highlighted={highlightedMessageId === message.id}
                   elementId={`message-${message.id}`}
+                  replyTarget={replyTarget}
+                  replyTargetAuthor={replyTargetAuthor}
+                  onViewReply={
+                    replyTarget
+                      ? () => onViewMessage(replyTarget.id)
+                      : undefined
+                  }
+                  onReply={message.deleted ? undefined : () => onReply(message)}
                   actionRail={
                     <MessageActions
                       isOwn={message.senderId === "viewer"}
@@ -466,13 +486,13 @@ function MessageActions({
       {isOwn ? (
         <>
           {moreAction}
-          {replyAction}
+          {!message.deleted ? replyAction : null}
           {reactionAction}
         </>
       ) : (
         <>
           {reactionAction}
-          {replyAction}
+          {!message.deleted ? replyAction : null}
           {moreAction}
         </>
       )}

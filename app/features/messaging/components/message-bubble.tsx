@@ -15,6 +15,9 @@ export function MessageBubble({
   selectedReaction,
   showReactions = true,
   showTimestamp = true,
+  replyTarget,
+  replyTargetAuthor,
+  onViewReply,
 }: {
   message: ConversationMessage;
   isOwn: boolean;
@@ -23,6 +26,9 @@ export function MessageBubble({
   selectedReaction?: PostReaction | null;
   showReactions?: boolean;
   showTimestamp?: boolean;
+  replyTarget?: ConversationMessage;
+  replyTargetAuthor?: string;
+  onViewReply?: () => void;
 }) {
   const reactions = new Map(
     message.reactions?.map(({ reaction, count }) => [reaction, count]) ?? [],
@@ -30,7 +36,8 @@ export function MessageBubble({
   if (selectedReaction) {
     reactions.set(selectedReaction, (reactions.get(selectedReaction) ?? 0) + 1);
   }
-  const emojiGraphemes = getEmojiOnlyMessageGraphemes(message.body);
+  const messageBody = message.deleted ? "삭제된 메시지입니다" : message.body;
+  const emojiGraphemes = getEmojiOnlyMessageGraphemes(messageBody);
   const isEmojiOnly = emojiGraphemes !== null;
   const hasReactions = showReactions && reactions.size > 0;
   const reactionCount = [...reactions.values()].reduce(
@@ -39,9 +46,16 @@ export function MessageBubble({
   );
 
   return (
-    <div className={cn("relative min-w-0", hasReactions && "mb-4")}>
+    <div
+      className={cn(
+        "relative max-w-full min-w-0",
+        replyTarget && "flex-1",
+        hasReactions && "mb-4",
+      )}
+    >
       <div
         className={cn(
+          replyTarget ? "w-full" : "w-fit max-w-full",
           isEmojiOnly
             ? "px-1 py-0.5 text-4xl leading-none"
             : "rounded-2xl px-3.5 py-2 text-sm [overflow-wrap:anywhere] break-keep whitespace-pre-wrap",
@@ -55,10 +69,30 @@ export function MessageBubble({
           !isEmojiOnly && !endsGroup && !isOwn && "rounded-bl-md",
         )}
       >
+        {replyTarget && onViewReply ? (
+          <button
+            type="button"
+            aria-label={`${replyTargetAuthor ?? "알 수 없는 사용자"}의 원문 메시지 보기`}
+            className={cn(
+              "mb-1.5 block w-full max-w-full min-w-0 border-l-2 pl-2 text-left text-xs leading-4",
+              isOwn && !isEmojiOnly
+                ? "border-primary-foreground/50 text-primary-foreground/85 hover:bg-primary-foreground/10"
+                : "border-primary text-muted-foreground hover:bg-background/60",
+            )}
+            onClick={onViewReply}
+          >
+            <span className="block truncate font-semibold">
+              {replyTargetAuthor ?? "알 수 없는 사용자"}
+            </span>
+            <span className="block truncate">
+              {replyTarget.deleted ? "삭제된 메시지입니다" : replyTarget.body}
+            </span>
+          </button>
+        ) : null}
         {isEmojiOnly ? (
           <EmojiOnlyMessageBody graphemes={emojiGraphemes} />
         ) : (
-          <MessageBody body={message.body} isOwn={isOwn} />
+          <MessageBody body={messageBody} isOwn={isOwn} />
         )}
         {showTimestamp ? (
           <time

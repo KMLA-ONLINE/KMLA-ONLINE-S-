@@ -188,6 +188,106 @@ describe("RoomScreen", () => {
     expect(screen.getAllByText("고마워요 🙌")).toHaveLength(2);
   });
 
+  it("답장을 전송하고 인용 원문으로 이동하며 삭제된 원문을 표시한다", async () => {
+    const conversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+    const originalBody = "축제 부스 배치 초안 확인했어요?".repeat(20);
+    conversation!.messages.find(({ id }) => id === "m2")!.body = originalBody;
+
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+    const originalMessage = document.getElementById("message-m2")!;
+
+    await user.click(
+      within(originalMessage).getByRole("button", { name: "메시지에 답장" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "메시지 입력" }),
+      "확인했어요.",
+    );
+    await user.click(screen.getByRole("button", { name: "메시지 보내기" }));
+
+    const sentReply = screen
+      .getAllByRole("article", { name: "내 메시지" })
+      .at(-1)!;
+    expect(sentReply.firstElementChild).toHaveClass("w-[78%]");
+    const replyQuote = within(sentReply).getByRole("button", {
+      name: "박서현의 원문 메시지 보기",
+    });
+    expect(replyQuote).toHaveTextContent(originalBody);
+    expect(replyQuote).toHaveClass("w-full", "min-w-0", "max-w-full");
+    expect(replyQuote.lastElementChild).toHaveClass("truncate");
+    expect(replyQuote.parentElement).toHaveClass("w-full");
+    expect(replyQuote.parentElement?.parentElement).toHaveClass(
+      "flex-1",
+      "min-w-0",
+    );
+    await user.click(replyQuote);
+    expect(originalMessage).toHaveClass("ring-2", "ring-primary");
+
+    await user.click(
+      within(originalMessage).getByRole("button", { name: "메시지에 답장" }),
+    );
+    await user.click(screen.getByRole("button", { name: "좋아요 보내기" }));
+    const emojiReply = screen
+      .getAllByRole("article", { name: "내 메시지" })
+      .at(-1)!;
+    expect(
+      within(emojiReply).getByRole("button", {
+        name: "박서현의 원문 메시지 보기",
+      }),
+    ).toHaveClass("border-primary", "text-muted-foreground");
+
+    const deletedOriginal = screen
+      .getAllByRole("article", { name: "최민준 메시지" })
+      .find((message) => within(message).queryByText("삭제된 메시지입니다"))!;
+    expect(
+      within(deletedOriginal).queryByRole("button", { name: "메시지에 답장" }),
+    ).not.toBeInTheDocument();
+    const deletedReply = screen
+      .getAllByRole("article", { name: "박서현 메시지" })
+      .find((message) =>
+        within(message).queryByRole("button", {
+          name: "최민준의 원문 메시지 보기",
+        }),
+      )!;
+    await user.click(
+      within(deletedReply).getByRole("button", {
+        name: "최민준의 원문 메시지 보기",
+      }),
+    );
+    expect(deletedOriginal).toHaveClass("ring-2", "ring-primary");
+  });
+
+  it("모바일 가로 스와이프로 답장을 시작한다", async () => {
+    const conversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/student-council",
+    });
+    const message = screen
+      .getByText("축제 부스 배치 초안 확인했어요?")
+      .closest("article")!;
+
+    fireEvent.pointerDown(message, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 20,
+      clientY: 100,
+    });
+    fireEvent.pointerUp(message, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 72,
+      clientY: 104,
+    });
+
+    expect(screen.getByText("박서현에게 답장")).toBeInTheDocument();
+  });
+
   it("두 진입점에서 고정 메시지 목록을 열고 원문 이동과 고정 해제를 제공한다", async () => {
     const conversation = await loadConversation("student-council");
     expect(conversation).not.toBeNull();

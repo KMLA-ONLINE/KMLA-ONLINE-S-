@@ -17,6 +17,8 @@ export interface ConversationMessage {
   body: string;
   sentAt: string;
   dayLabel?: string;
+  replyToMessageId?: string;
+  deleted?: boolean;
   reactions?: MessageReaction[];
   readBy?: string[];
   pinned?: boolean;
