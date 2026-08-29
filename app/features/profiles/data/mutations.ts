@@ -5,6 +5,7 @@ import type {
   ProfileGender,
   ProfileType,
 } from "~/features/profiles/model/types";
+import { readDateField } from "~/shared/lib/date-field";
 import { getSupabase } from "~/shared/supabase/client";
 
 function readString(formData: FormData, key: string): string {
@@ -34,7 +35,7 @@ export function readProfileEditForm(formData: FormData): ProfileEditValues {
   return {
     name: readString(formData, "name"),
     description: readString(formData, "description"),
-    birthday: readString(formData, "birthday"),
+    birthday: readDateField(formData, "birthday"),
     phoneNumber: readString(formData, "phoneNumber"),
     contactEmail: readString(formData, "contactEmail"),
     gender: readGender(formData),

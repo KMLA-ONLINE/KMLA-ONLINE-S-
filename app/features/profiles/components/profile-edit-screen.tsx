@@ -9,6 +9,7 @@ import type {
 import { Button, buttonVariants } from "~/shared/ui/button";
 import { Card, CardContent } from "~/shared/ui/card";
 import { Checkbox } from "~/shared/ui/checkbox";
+import { DateSelect } from "~/shared/ui/date-select";
 import {
   Field,
   FieldDescription,
@@ -299,11 +300,9 @@ function ProfileEditForm({
                     "생일"
                   )}
                 </FieldLabel>
-                <Input
+                <DateSelect
                   id="profile-birthday"
                   name="birthday"
-                  type="date"
-                  min="1900-01-01"
                   defaultValue={values.birthday}
                   required={profile.type === "student"}
                   aria-invalid={Boolean(errors.birthday)}
