@@ -321,6 +321,7 @@ function MessageThread({
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const scrollingToBottom = useRef(false);
   const previousScrollTop = useRef(0);
+  const contextPortalRef = useRef<HTMLDivElement>(null);
   const participantById = new Map(
     conversation.participants.map((participant) => [
       participant.id,
@@ -366,7 +367,7 @@ function MessageThread({
   }
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div className="relative isolate flex min-h-0 flex-1 flex-col">
       <div
         ref={messageThreadRef}
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 md:px-5"
@@ -438,6 +439,8 @@ function MessageThread({
                     isPinned={message.pinned ?? false}
                     highlighted={highlightedMessageId === message.id}
                     elementId={`message-${message.id}`}
+                    contextViewportRef={messageThreadRef}
+                    contextPortalRef={contextPortalRef}
                     replyTarget={replyTarget}
                     replyTargetAuthor={replyTargetAuthor}
                     onViewReply={
@@ -448,6 +451,30 @@ function MessageThread({
                     onReply={
                       message.deleted ? undefined : () => onReply(message)
                     }
+                    onSelectReaction={(reaction) =>
+                      onSelectReaction(message.id, reaction)
+                    }
+                    contextActions={[
+                      ...(message.deleted
+                        ? []
+                        : [
+                            {
+                              label: "답장",
+                              icon: <ReplyIcon aria-hidden />,
+                              onSelect: () => onReply(message),
+                            },
+                          ]),
+                      {
+                        label: "복사",
+                        icon: <CopyIcon aria-hidden />,
+                        onSelect: () => void copyMessageText(message.body),
+                      },
+                      {
+                        label: message.pinned ? "고정 해제" : "고정",
+                        icon: <PinIcon aria-hidden />,
+                        onSelect: () => onTogglePinned(message),
+                      },
+                    ]}
                     actionRail={
                       <MessageActions
                         isOwn={message.senderId === "viewer"}
@@ -479,6 +506,11 @@ function MessageThread({
           <ChevronDownIcon aria-hidden className="size-5" />
         </Button>
       ) : null}
+      <div
+        ref={contextPortalRef}
+        data-slot="message-context-portal"
+        className="contents"
+      />
     </div>
   );
 }

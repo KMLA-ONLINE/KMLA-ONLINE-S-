@@ -1,4 +1,5 @@
 import { LocateFixedIcon, PinOffIcon, XIcon } from "lucide-react";
+import { useRef } from "react";
 
 import {
   MessageActionRail,
@@ -50,6 +51,8 @@ export function PinnedMessagesDialog({
   onViewMessage: (messageId: string) => void;
   onUnpin: (message: ConversationMessage) => void;
 }) {
+  const messageViewportRef = useRef<HTMLDivElement>(null);
+  const contextPortalRef = useRef<HTMLDivElement>(null);
   const participantById = new Map(
     participants.map((participant) => [participant.id, participant]),
   );
@@ -79,7 +82,10 @@ export function PinnedMessagesDialog({
           </Button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2 sm:px-6">
+        <div
+          ref={messageViewportRef}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2 sm:px-6"
+        >
           {pinnedMessages.length ? (
             <div className="mx-auto flex max-w-3xl flex-col gap-0.5">
               {pinnedMessages.map(({ message, dayLabel }, index) => {
@@ -129,6 +135,20 @@ export function PinnedMessagesDialog({
                       showPinnedLabel={false}
                       showUnreadCount={false}
                       showReactions={false}
+                      contextViewportRef={messageViewportRef}
+                      contextPortalRef={contextPortalRef}
+                      contextActions={[
+                        {
+                          label: "채팅에서 보기",
+                          icon: <LocateFixedIcon aria-hidden />,
+                          onSelect: () => onViewMessage(message.id),
+                        },
+                        {
+                          label: "고정 취소",
+                          icon: <PinOffIcon aria-hidden />,
+                          onSelect: () => onUnpin(message),
+                        },
+                      ]}
                       actionRail={
                         <MessageActionRail>
                           {isOwn ? (
@@ -155,6 +175,11 @@ export function PinnedMessagesDialog({
             </p>
           )}
         </div>
+        <div
+          ref={contextPortalRef}
+          data-slot="message-context-portal"
+          className="contents"
+        />
       </DialogContent>
     </Dialog>
   );

@@ -1,11 +1,13 @@
 /* eslint-disable testing-library/no-node-access */
-import { fireEvent } from "@testing-library/react";
+import { act, fireEvent } from "@testing-library/react";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RoomScreen } from "~/features/messaging/components/room-screen";
 import { loadConversation } from "~/features/messaging/data/queries";
 import { renderRoute, screen, within } from "../../../router";
+
+afterEach(() => vi.useRealTimers());
 
 function ControlledRoomScreen({
   conversation,
@@ -266,7 +268,7 @@ describe("RoomScreen", () => {
     const sentReply = screen
       .getAllByRole("article", { name: "내 메시지" })
       .at(-1)!;
-    expect(sentReply.firstElementChild).toHaveClass("w-[78%]");
+    expect(sentReply.firstElementChild).toHaveClass("w-[88%]", "md:w-[78%]");
     const replyQuote = within(sentReply).getByRole("button", {
       name: "박서현의 원문 메시지 보기",
     });
@@ -340,6 +342,160 @@ describe("RoomScreen", () => {
     });
 
     expect(screen.getByText("박서현에게 답장")).toBeInTheDocument();
+  });
+
+  it("모바일 롱프레스로 반응과 메시지 작업을 표시한다", async () => {
+    vi.useFakeTimers();
+    const conversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/student-council",
+    });
+    const message = screen
+      .getByText("축제 부스 배치 초안 확인했어요?")
+      .closest("article")!;
+    const actionRail = within(message).getByRole("button", {
+      name: "메시지에 반응",
+    }).parentElement?.parentElement;
+    const messageViewport = screen
+      .getByRole("region", { name: "학생회 기획부 대화" })
+      .querySelector(".overflow-y-auto")!;
+    const messageSurface = message.children[1].lastElementChild!;
+    vi.spyOn(message, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 20, y: 600, width: 320, height: 50 }),
+    );
+    vi.spyOn(messageSurface, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 48, y: 600, width: 220, height: 50 }),
+    );
+    vi.spyOn(messageViewport, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 100, width: 360, height: 600 }),
+    );
+    expect(actionRail).toHaveClass("hidden", "[@media(hover:hover)]:flex");
+    expect(message.children[1]).toHaveClass("max-w-[88%]", "md:max-w-[78%]");
+
+    fireEvent.touchStart(message, {
+      touches: [{ clientX: 120, clientY: 200 }],
+    });
+    act(() => void vi.advanceTimersByTime(500));
+
+    const backdrop = document.querySelector(
+      '[data-slot="message-context-backdrop"]',
+    );
+    expect(backdrop).toHaveClass("z-40", "bg-background/90");
+    expect(
+      backdrop?.closest('[data-slot="message-context-portal"]'),
+    ).toBeInTheDocument();
+    expect(message).toHaveClass(
+      "z-50",
+      "duration-200",
+      "[@media(hover:none)]:select-none",
+      "motion-reduce:transition-none",
+    );
+    expect(message).toHaveStyle({
+      transform: "translate3d(0, -225px, 0)",
+    });
+    expect(screen.getByRole("menu")).toHaveClass(
+      "duration-0",
+      "data-open:animate-none",
+      "data-closed:animate-none",
+    );
+    expect(
+      screen.getByRole("button", { name: "하트 반응 남기기" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "답장" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "복사" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "고정" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "답장" }).parentElement,
+    ).toHaveClass(
+      "absolute",
+      "top-[calc(100%+var(--message-context-height)+1rem)]",
+    );
+    expect(screen.getByRole("menu")).toHaveStyle({
+      "--message-context-height": "50px",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "하트 반응 남기기" }));
+    expect(
+      within(message).getByRole("img", { name: "하트" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(message).not.toHaveClass("z-50");
+    expect(message).toHaveStyle({ transform: "translate3d(0, 0px, 0)" });
+  });
+
+  it("짧거나 이동한 모바일 터치에서는 메시지 작업을 열지 않는다", async () => {
+    vi.useFakeTimers();
+    const conversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/student-council",
+    });
+    const message = screen
+      .getByText("축제 부스 배치 초안 확인했어요?")
+      .closest("article")!;
+
+    fireEvent.touchStart(message, {
+      touches: [{ clientX: 120, clientY: 200 }],
+    });
+    act(() => void vi.advanceTimersByTime(300));
+    fireEvent.touchEnd(message);
+    act(() => void vi.advanceTimersByTime(500));
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    fireEvent.touchStart(message, {
+      touches: [{ clientX: 120, clientY: 200 }],
+    });
+    fireEvent.touchMove(message, {
+      touches: [{ clientX: 135, clientY: 200 }],
+    });
+    act(() => void vi.advanceTimersByTime(500));
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("롱프레스 직후의 지연된 터치 click에도 중앙 위치를 유지한다", async () => {
+    vi.useFakeTimers();
+    const conversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/student-council",
+    });
+    const message = screen
+      .getByText("축제 부스 배치 초안 확인했어요?")
+      .closest("article")!;
+    const messageViewport = screen
+      .getByRole("region", { name: "학생회 기획부 대화" })
+      .querySelector(".overflow-y-auto")!;
+    const messageSurface = message.children[1].lastElementChild!;
+    const messageRect = vi
+      .spyOn(message, "getBoundingClientRect")
+      .mockReturnValue(
+        DOMRect.fromRect({ x: 20, y: 600, width: 320, height: 50 }),
+      );
+    vi.spyOn(messageSurface, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 48, y: 600, width: 220, height: 50 }),
+    );
+    vi.spyOn(messageViewport, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 100, width: 360, height: 600 }),
+    );
+
+    fireEvent.touchStart(message, {
+      touches: [{ clientX: 120, clientY: 200 }],
+    });
+    act(() => void vi.advanceTimersByTime(500));
+    fireEvent.touchEnd(message);
+    fireEvent.click(message, { pointerType: "touch" });
+    fireEvent.contextMenu(message, { clientX: 120, clientY: 200 });
+
+    expect(messageRect).toHaveBeenCalledTimes(1);
+    expect(message).toHaveClass("z-50");
+    expect(message).toHaveStyle({
+      transform: "translate3d(0, -225px, 0)",
+    });
+    expect(screen.getByRole("menu")).toBeInTheDocument();
   });
 
   it("두 진입점에서 고정 메시지 목록을 열고 원문 이동과 고정 해제를 제공한다", async () => {
