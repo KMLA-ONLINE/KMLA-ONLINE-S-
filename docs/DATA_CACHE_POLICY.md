@@ -35,6 +35,7 @@ RLS가 항상 최종 데이터 및 권한의 기준이며, 클라이언트 캐�
 ["groups", "reports", groupId, sort]
 ["notifications", "page", beforeLastActivityAt, beforeId]
 ["notifications", "preferences"]
+["signed-url", bucket, userId, objectPath]
 ```
 
 기능 루트 키인 `["feed"]`, `["groups"]`는 하위 데이터를 한꺼번에 stale 처리해야 할 때만 사용한다.
@@ -54,11 +55,18 @@ RLS가 항상 최종 데이터 및 권한의 기준이며, 클라이언트 캐�
 사용되지 않는 캐시의 기본 `gcTime`은 10분이다. 브라우저를 새로 열면 모든 쿼리 캐시는 비어 있다.
 Supabase가 피드 첫 페이지 요청을 5초 동안 중복 방지하는 규칙은 이 정책과 별개로 유지된다.
 
-Storage signed URL은 쿼리 캐시와 별도로 사용자 ID와 object path를 키로 삼아 메모리에만 보관한다.
-그룹·프로필 미디어와 게시물 첨부는 60분짜리 URL을 발급하고 만료 5분 전인 55분까지만 재사용한다.
-동일 사용자와 object path의 서명 요청이 동시에 들어오면 진행 중인 Promise를 공유한다. 게시물 목록
+Storage signed URL도 같은 쿼리 캐시에 산다. 키는 `["signed-url", bucket, userId, objectPath]`이고
+`staleTime`과 `gcTime`은 모두 55분이다. 60분짜리 URL을 발급하고 만료 5분 전까지만 재사용한다는
+뜻이며, 기본 `gcTime`(10분)을 그대로 두면 화면을 잠깐 벗어난 사이 아직 45분 남은 URL을 버리게
+되므로 반드시 함께 늘린다.
+
+캐시가 하나로 합쳐지면서 사용자 전환 시 `queryClient.clear()`가 signed URL까지 함께 버린다.
+키에 `userId`를 남겨 두는 것은 그 auth 이벤트가 도착하기 전 구간에 대한 이중 방어다.
+
+같은 tick에 요청된 경로는 버킷별로 모아 `createSignedUrls` 한 번으로 서명한다. 서명에 실패한
+경로는 결과 Map에서 빠지고 캐시에도 남지 않으므로 다음 호출에서 다시 시도한다. 게시물 목록
 보기는 이미지와 파일을 렌더링하지 않으므로 signed URL을 미리 발급하지 않고, 카드 보기로 바꾸거나
-상세를 열 때 현재 페이지의 경로를 배치로 서명한다.
+상세를 열 때 현재 페이지의 경로를 서명한다.
 
 ## 4. 무효화 규칙
 
@@ -102,7 +110,9 @@ Storage signed URL은 쿼리 캐시와 별도로 사용자 ID와 object path를 
 ## 6. 보안 및 점검 목록
 
 - 쿼리 키에 비밀번호, 초대 토큰, signed URL 등 비밀 값을 넣지 않는다.
-- signed URL은 메모리에만 두고 인증 사용자별로 격리하며 만료 전에 폐기한다.
+- signed URL은 메모리 쿼리 캐시에만 두고 키의 `userId`로 격리하며, 사용자 전환 시 `queryClient.clear()`로
+  함께 폐기한다. 별도의 모듈 수준 Map을 새로 만들지 않는다 — 그 Map은 `clear()`가 닿지 않아
+  로그아웃 뒤에도 유효한 URL이 남는다.
 - 사용자 A에서 로그아웃한 뒤 같은 탭에서 사용자 B로 로그인해도 A의 데이터가 첫 화면에 나타나지
   않는지 테스트한다.
 - 그룹 탈퇴·삭제·권한 회수 뒤 접근 불가능한 상세 캐시를 즉시 제거하는지 테스트한다.

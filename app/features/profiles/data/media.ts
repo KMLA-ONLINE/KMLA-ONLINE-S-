@@ -3,82 +3,31 @@ import type {
   ProfileMediaSlot,
 } from "~/features/profiles/model/types";
 import { getSupabase } from "~/shared/supabase/client";
+import { createSignedUrls } from "~/shared/supabase/signed-urls";
 
 const BUCKET = "profile-media";
-const SIGNED_URL_CACHE_MS = 55 * 60 * 1000;
 
-interface SignedUrlCacheEntry {
-  url: string;
-  expiresAt: number;
-}
-
-const signedUrlCache = new Map<string, SignedUrlCacheEntry>();
-const pendingSignedUrls = new Map<string, Promise<string | null>>();
-
+/**
+ * 신입생 임시 아바타처럼 Storage 밖에 있는 이미지는 경로가 아니라 이미 완성된 URL이다.
+ * 서명 대상에서 빼고 그대로 돌려준다.
+ */
 function isExternalUrl(path: string): boolean {
   return /^https?:\/\//i.test(path);
 }
 
 export async function createProfileMediaUrls(
-  paths: (string | null)[],
+  paths: readonly (string | null | undefined)[],
 ): Promise<Map<string, string>> {
   const uniquePaths = [
     ...new Set(paths.filter((path): path is string => Boolean(path))),
   ];
-  const urls = new Map<string, string>();
+  const urls = await createSignedUrls(
+    BUCKET,
+    uniquePaths.filter((path) => !isExternalUrl(path)),
+  );
 
   for (const path of uniquePaths) {
     if (isExternalUrl(path)) urls.set(path, path);
-  }
-
-  const storagePaths = uniquePaths.filter((path) => !isExternalUrl(path));
-  if (storagePaths.length === 0) return urls;
-
-  const supabase = getSupabase();
-  const { data: sessionData } = await supabase.auth.getSession();
-  const userId = sessionData.session?.user.id;
-  const now = Date.now();
-  const missingPaths: string[] = [];
-  const pending: [string, Promise<string | null>][] = [];
-
-  for (const path of storagePaths) {
-    const key = userId ? `${userId}:${path}` : path;
-    const cached = userId ? signedUrlCache.get(key) : undefined;
-    if (cached && cached.expiresAt > now) urls.set(path, cached.url);
-    else {
-      if (cached) signedUrlCache.delete(key);
-      const existing = pendingSignedUrls.get(key);
-      if (existing) pending.push([path, existing]);
-      else missingPaths.push(path);
-    }
-  }
-
-  if (missingPaths.length > 0) {
-    const request = supabase.storage
-      .from(BUCKET)
-      .createSignedUrls(missingPaths, 3600);
-    for (const path of missingPaths) {
-      const key = userId ? `${userId}:${path}` : path;
-      const promise = request
-        .then(({ data, error }) => {
-          if (error) return null;
-          return data?.find((item) => item.path === path)?.signedUrl ?? null;
-        })
-        .finally(() => pendingSignedUrls.delete(key));
-      pendingSignedUrls.set(key, promise);
-      pending.push([path, promise]);
-    }
-  }
-
-  for (const [path, promise] of pending) {
-    const url = await promise;
-    if (!url) continue;
-    urls.set(path, url);
-    if (userId)
-      signedUrlCache.set(`${userId}:${path}`, {
-        url,
-        expiresAt: now + SIGNED_URL_CACHE_MS,
-      });
   }
 
   return urls;
