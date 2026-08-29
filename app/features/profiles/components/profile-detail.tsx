@@ -79,12 +79,12 @@ function ProfileDescription({ description }: { description: string }) {
   }, [description, expanded]);
 
   return (
-    <div className="mt-3 max-w-3xl sm:mt-5">
+    <div className="mt-3 max-w-3xl basis-full sm:mt-5 md:ml-1">
       <p
         ref={descriptionRef}
         className={cn(
           "text-sm leading-5.5 whitespace-pre-wrap sm:text-base sm:leading-6",
-          !expanded && "line-clamp-3",
+          !expanded && "line-clamp-2",
         )}
       >
         {description}
@@ -211,10 +211,16 @@ export function ProfileDetail({
           </div>
 
           {/* profile identity */}
-          <div className="bg-background px-3 pb-2.5 sm:px-8 sm:pb-7">
-            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-0.5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-5 sm:gap-y-3">
+          <div className="bg-background px-3 pb-2 sm:px-8 sm:pb-7">
+            {/* grid가 아니라 줄바꿈하는 flex다. grid에서는 편집 버튼이 아바타가 차지한
+                암묵적 row 뒤에 놓여서, 버튼 위 여백이 아바타 높이에 묶여버린다 —
+                모바일에서 버튼이 아바타에 딱 붙어 답답해 보이던 이유다. flex에서는
+                버튼이 자기 줄로 흘러가므로 위 여백을 버튼이 직접 정한다.
+                소개글도 같은 흐름에 태운다 — `basis-full`이라 항상 자기 줄을 얻고,
+                모바일에서는 `order`로 편집 버튼보다 위에 놓인다. */}
+            <div className="flex flex-wrap items-start gap-x-3 sm:gap-x-7">
               {/* avatar */}
-              <div className="relative z-10 row-span-2 -mt-9 w-fit shrink-0 rounded-full border-[3px] border-background bg-background shadow-sm sm:row-span-1 sm:-mt-14 sm:border-4">
+              <div className="relative z-10 -mt-5 w-fit shrink-0 rounded-full border-[3px] border-background bg-background shadow-sm sm:-mt-14 sm:border-4">
                 <div className="relative">
                   <UserAvatar
                     src={profile.avatar_url}
@@ -233,7 +239,7 @@ export function ProfileDetail({
               </div>
 
               {/* name / summary */}
-              <div className="min-w-0 pt-2.5 sm:pt-4">
+              <div className="min-w-0 flex-1 pt-2.5 sm:pt-4">
                 <div className="flex min-w-0 items-center gap-2">
                   <h1 className="min-w-0 truncate text-[1.35rem] leading-tight font-semibold tracking-tight sm:text-3xl">
                     {profile.name}
@@ -249,8 +255,8 @@ export function ProfileDetail({
               </div>
 
               {/* edit button
-                  mobile: 이름 오른쪽 영역 아래
-                  desktop: 동일 row 우측
+                  mobile: `order-1`로 소개글 뒤까지 밀고 `basis-full`로 자기 줄을 차지한다
+                  desktop: DOM 순서 그대로 이름 오른쪽 같은 줄
                   absolute/translate 사용하지 않음 */}
               {isOwnProfile ? (
                 <Link
@@ -259,18 +265,18 @@ export function ProfileDetail({
                     variant: "default",
                     size: "sm",
                     className:
-                      "col-span-2 mt-1 h-10 w-full justify-center sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:mt-4 sm:h-auto sm:w-auto sm:self-start sm:py-2",
+                      "order-1 mt-5 h-10 w-full basis-full justify-center sm:order-none sm:mt-4 sm:h-auto sm:w-auto sm:shrink-0 sm:basis-auto sm:self-start sm:py-2",
                   })}
                 >
                   <PencilIcon />
                   프로필 편집
                 </Link>
               ) : null}
-            </div>
 
-            {profile.description ? (
-              <ProfileDescription description={profile.description} />
-            ) : null}
+              {profile.description ? (
+                <ProfileDescription description={profile.description} />
+              ) : null}
+            </div>
           </div>
         </section>
 
