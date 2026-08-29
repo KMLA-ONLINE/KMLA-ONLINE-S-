@@ -1,12 +1,19 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 
+import {
+  GROUP_CONTENT_STALE_TIME,
+  groupKeys,
+} from "~/features/groups/data/cache";
 import { GroupCategoryChips } from "~/features/posts/components/group-category-chips";
 import {
   GroupPostFeed,
   GroupPostFeedEmpty,
 } from "~/features/posts/components/group-post-feed";
-import { listGroupPosts } from "~/features/posts/data/queries";
+import {
+  hydrateGroupPostMedia,
+  listGroupPosts,
+} from "~/features/posts/data/queries";
 import { usePostViewMode } from "~/features/posts/hooks/use-post-view-mode";
 import type {
   GroupCategory,
@@ -15,6 +22,7 @@ import type {
 } from "~/features/posts/model/types";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
+import { getQueryClient } from "~/shared/lib/query-client";
 
 /**
  * 그룹 게시물 목록.
@@ -43,6 +51,7 @@ export function GroupPostsPanel({
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
   const loadingMore = useRef(false);
+  const hydratedPostIds = useRef(new Set<string>());
   const [loadedInitialPage, setLoadedInitialPage] = useState(initialPage);
 
   // loader가 새 첫 페이지를 내려주면(고정·삭제 뒤 재검증) 그 페이지는 카테고리를 거치지 않은
@@ -56,7 +65,23 @@ export function GroupPostsPanel({
 
   useEffect(() => {
     requestId.current += 1;
+    hydratedPostIds.current.clear();
   }, [initialPage]);
+
+  useEffect(() => {
+    if (viewMode !== "card") return;
+    const unhydrated = posts.filter(
+      (post) => !hydratedPostIds.current.has(post.post_id),
+    );
+    if (unhydrated.length === 0) return;
+    unhydrated.forEach((post) => hydratedPostIds.current.add(post.post_id));
+    void hydrateGroupPostMedia(unhydrated).then((hydrated) => {
+      const byId = new Map(hydrated.map((post) => [post.post_id, post]));
+      setPosts((current) =>
+        current.map((post) => byId.get(post.post_id) ?? post),
+      );
+    });
+  }, [posts, viewMode]);
 
   const selectCategory = async (nextCategoryId: string | null) => {
     const currentRequest = ++requestId.current;
@@ -65,10 +90,17 @@ export function GroupPostsPanel({
     setLoading(true);
     setError(null);
     try {
-      const page = await listGroupPosts(groupId, {
-        categoryId: nextCategoryId,
+      const page = await getQueryClient().fetchQuery({
+        queryKey: groupKeys.posts(groupId, nextCategoryId, null),
+        queryFn: () =>
+          listGroupPosts(groupId, {
+            categoryId: nextCategoryId,
+            hydrateMedia: viewMode === "card",
+          }),
+        staleTime: GROUP_CONTENT_STALE_TIME,
       });
       if (currentRequest !== requestId.current) return;
+      hydratedPostIds.current.clear();
       startTransition(() => {
         setPosts(page.posts);
         setCursor(page.nextCursor);
@@ -88,7 +120,16 @@ export function GroupPostsPanel({
     setLoading(true);
     setError(null);
     try {
-      const page = await listGroupPosts(groupId, { categoryId, cursor });
+      const page = await getQueryClient().fetchQuery({
+        queryKey: groupKeys.posts(groupId, categoryId, cursor),
+        queryFn: () =>
+          listGroupPosts(groupId, {
+            categoryId,
+            cursor,
+            hydrateMedia: viewMode === "card",
+          }),
+        staleTime: GROUP_CONTENT_STALE_TIME,
+      });
       if (currentRequest !== requestId.current) return;
       startTransition(() => {
         setPosts((current) => [...current, ...page.posts]);
@@ -107,6 +148,7 @@ export function GroupPostsPanel({
     void mutationFetcher.submit(
       {
         intent: "pin-post",
+        groupId,
         postId: post.post_id,
         pinned: String(!post.is_pinned),
       },
@@ -115,7 +157,7 @@ export function GroupPostsPanel({
 
   const remove = (post: GroupPost) =>
     void mutationFetcher.submit(
-      { intent: "delete-post", postId: post.post_id },
+      { intent: "delete-post", groupId, postId: post.post_id },
       { method: "post" },
     );
 

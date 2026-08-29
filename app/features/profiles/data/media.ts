@@ -3,66 +3,31 @@ import type {
   ProfileMediaSlot,
 } from "~/features/profiles/model/types";
 import { getSupabase } from "~/shared/supabase/client";
+import { createSignedUrls } from "~/shared/supabase/signed-urls";
 
 const BUCKET = "profile-media";
-const SIGNED_URL_CACHE_MS = 55 * 60 * 1000;
 
-interface SignedUrlCacheEntry {
-  url: string;
-  expiresAt: number;
-}
-
-const signedUrlCache = new Map<string, SignedUrlCacheEntry>();
-
+/**
+ * 신입생 임시 아바타처럼 Storage 밖에 있는 이미지는 경로가 아니라 이미 완성된 URL이다.
+ * 서명 대상에서 빼고 그대로 돌려준다.
+ */
 function isExternalUrl(path: string): boolean {
   return /^https?:\/\//i.test(path);
 }
 
 export async function createProfileMediaUrls(
-  paths: (string | null)[],
+  paths: readonly (string | null | undefined)[],
 ): Promise<Map<string, string>> {
   const uniquePaths = [
     ...new Set(paths.filter((path): path is string => Boolean(path))),
   ];
-  const urls = new Map<string, string>();
+  const urls = await createSignedUrls(
+    BUCKET,
+    uniquePaths.filter((path) => !isExternalUrl(path)),
+  );
 
   for (const path of uniquePaths) {
     if (isExternalUrl(path)) urls.set(path, path);
-  }
-
-  const storagePaths = uniquePaths.filter((path) => !isExternalUrl(path));
-  if (storagePaths.length === 0) return urls;
-
-  const supabase = getSupabase();
-  const { data: sessionData } = await supabase.auth.getSession();
-  const userId = sessionData.session?.user.id;
-  const now = Date.now();
-  const missingPaths: string[] = [];
-
-  for (const path of storagePaths) {
-    const cached = userId ? signedUrlCache.get(`${userId}:${path}`) : undefined;
-    if (cached && cached.expiresAt > now) urls.set(path, cached.url);
-    else missingPaths.push(path);
-  }
-
-  if (missingPaths.length === 0) return urls;
-
-  const { data, error } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrls(missingPaths, 3600);
-
-  if (error) return urls;
-
-  for (const item of data ?? []) {
-    if (!item.path || !item.signedUrl) continue;
-    urls.set(item.path, item.signedUrl);
-
-    if (userId) {
-      signedUrlCache.set(`${userId}:${item.path}`, {
-        url: item.signedUrl,
-        expiresAt: now + SIGNED_URL_CACHE_MS,
-      });
-    }
   }
 
   return urls;

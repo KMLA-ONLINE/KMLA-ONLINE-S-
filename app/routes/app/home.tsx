@@ -9,12 +9,7 @@ import {
 import { listTodayAbsences } from "~/features/absences/data/queries";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import { hasActiveSession } from "~/features/auth";
-import {
-  FEED_STALE_TIME,
-  FeedScreen,
-  feedKeys,
-  listFeedPosts,
-} from "~/features/feed";
+import { FeedScreen, feedQuery } from "~/features/feed";
 import { getKoreaDate, getMealDay, HomeMealSummary } from "~/features/meal";
 import {
   BIRTHDAY_GC_TIME,
@@ -59,121 +54,46 @@ export const shouldRevalidate = createPostListRevalidation([
   "source",
 ]);
 
-// 첫 페이지는 로더가 await 한다. 이후 페이지는 useFetcher로 같은 clientLoader에 커서를 보낸다
-// (AGENTS.md의 "Loaders await their data" — 스트리밍 스켈레톤이 필요한 화면에서만 예외).
-export async function clientLoader({ request }: Route.ClientLoaderArgs) {
-  const pageToken = new URL(request.url).searchParams.get("pageToken");
-
+// 로더는 화면이 읽을 캐시를 데우는 일만 한다. 피드 자체는 `FeedScreen`이 무한 쿼리로
+// 구독하므로 여기서 loaderData로 넘기지 않는다 — 넘기면 같은 데이터의 진실 소스가 둘이 된다.
+export async function clientLoader() {
   // 게이트와 이 로더는 병렬로 돈다. 세션이 없으면 게이트가 /login으로 보내므로 아래 값은
   // 렌더되지 않지만, 그 전에 요청을 띄우면 인증 전용 RPC 세 개가 익명으로 나가 401이 된다.
   // 인증은 게이트가 판정하고, 여기서는 요청을 보내지 않는 것까지만 한다.
   if (!(await hasActiveSession())) {
-    return {
-      page: null,
-      pageToken,
-      error: null,
-      expired: false,
-      mealDay: null,
-      birthdays: null,
-      absences: [],
-    };
+    return { mealDay: null, birthdays: null, absences: [] };
   }
 
   const queryClient = getQueryClient();
   const referenceDate = getKoreaDateIso();
-  const mealDayPromise = pageToken
-    ? Promise.resolve(null)
-    : getMealDay(getKoreaDate());
-  const birthdaysPromise = pageToken
-    ? Promise.resolve(null)
-    : queryClient
-        .fetchQuery({
-          queryKey: birthdayKeys.today(referenceDate),
-          queryFn: () => listBirthdays(referenceDate, "today"),
-          staleTime: BIRTHDAY_STALE_TIME,
-          gcTime: BIRTHDAY_GC_TIME,
-        })
-        .catch(() => null);
 
-  const absencePromise = pageToken
-    ? Promise.resolve([])
-    : queryClient
-        .fetchQuery({
-          queryKey: absenceKeys.today(referenceDate),
-          queryFn: listTodayAbsences,
-          staleTime: ABSENCE_STALE_TIME,
-        })
-        .catch(() => []);
+  const [mealDay, birthdays, absences] = await Promise.all([
+    getMealDay(getKoreaDate()).catch(() => null),
+    queryClient
+      .query({
+        queryKey: birthdayKeys.today(referenceDate),
+        queryFn: () => listBirthdays(referenceDate, "today"),
+        staleTime: BIRTHDAY_STALE_TIME,
+        gcTime: BIRTHDAY_GC_TIME,
+      })
+      .catch(() => null),
+    queryClient
+      .query({
+        queryKey: absenceKeys.today(referenceDate),
+        queryFn: listTodayAbsences,
+        staleTime: ABSENCE_STALE_TIME,
+      })
+      .catch(() => []),
+    // 캐시에 이미 세션이 있으면 그대로 쓴다. 뒤로 가기로 돌아왔을 때 쌓아 둔 페이지를
+    // 유지하려는 것이고, 갱신은 당겨서 새로고침처럼 명시적인 경로가 맡는다.
+    queryClient.ensureInfiniteQueryData(feedQuery()).catch(() => null),
+  ]);
 
-  try {
-    const [page, mealDay, birthdays, absences] = await Promise.all([
-      queryClient.fetchQuery({
-        queryKey: feedKeys.page(pageToken),
-        queryFn: () => listFeedPosts(pageToken),
-        staleTime: FEED_STALE_TIME,
-      }),
-      mealDayPromise,
-      birthdaysPromise,
-      absencePromise,
-    ]);
-
-    if (pageToken) {
-      return {
-        page,
-        pageToken,
-        error: null,
-        expired: false,
-        mealDay,
-        birthdays,
-        absences,
-      };
-    }
-
-    return {
-      page,
-      pageToken: null,
-      error: null,
-      expired: false,
-      mealDay,
-      birthdays,
-      absences,
-    };
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "피드를 불러오지 못했습니다.";
-    const expired = pageToken !== null && /expired|not found/i.test(message);
-    const [mealDay, birthdays, absences] = await Promise.all([
-      mealDayPromise,
-      birthdaysPromise,
-      absencePromise,
-    ]);
-
-    if (pageToken) {
-      return {
-        page: null,
-        pageToken,
-        error: expired ? "피드가 만료되었습니다. 새로고침해 주세요." : message,
-        expired,
-        mealDay,
-        birthdays,
-        absences,
-      };
-    }
-
-    return {
-      page: null,
-      pageToken: null,
-      error: message,
-      expired: false,
-      mealDay,
-      birthdays,
-      absences,
-    };
-  }
+  return { mealDay, birthdays, absences };
 }
 
 export default function FeedPage({ loaderData }: Route.ComponentProps) {
-  const { page, error, mealDay, birthdays, absences } = loaderData;
+  const { mealDay, birthdays, absences } = loaderData;
   const { profile } = useAppShell();
 
   return (
@@ -221,7 +141,7 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
             <AbsenceRail initialItems={absences} viewerPubId={profile.pub_id} />
           ) : null}
 
-          <FeedScreen initialPage={page} initialError={error} />
+          <FeedScreen />
         </div>
 
         {mealDay || birthdays ? (

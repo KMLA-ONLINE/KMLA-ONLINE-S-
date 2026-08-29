@@ -61,7 +61,6 @@ export function AuthCard({
           >
             <CardHeader className="text-center sm:text-left">
               <div className="mb-3 flex items-center justify-center gap-2 md:hidden">
-                <img src="/logo.svg" alt="" className="size-8" />
                 <span className="font-semibold">KMLA Online</span>
               </div>
               <CardTitle>

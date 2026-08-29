@@ -18,7 +18,7 @@ import {
 } from "~/features/groups";
 import { Button } from "~/shared/ui/button";
 import { getQueryClient } from "~/shared/lib/query-client";
-import { feedKeys } from "~/features/feed";
+import { resetFeed } from "~/features/feed";
 import type { Route } from "./+types/discover";
 
 export const handle = defineAppChrome({
@@ -72,13 +72,27 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     else if (intent === "cancel-request")
       await cancelGroupJoinRequest(groupId, profileId);
     else return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
-    await Promise.all([
-      getQueryClient().invalidateQueries({ queryKey: groupKeys.all }),
-      getQueryClient().invalidateQueries({
-        queryKey: feedKeys.all,
+    const queryClient = getQueryClient();
+    const tasks = [
+      queryClient.invalidateQueries({
+        queryKey: groupKeys.home(),
         refetchType: "none",
       }),
-    ]);
+      queryClient.invalidateQueries({
+        queryKey: groupKeys.discoveries(),
+        refetchType: "none",
+      }),
+      queryClient.invalidateQueries({
+        queryKey: groupKeys.details(),
+        refetchType: "none",
+      }),
+      queryClient.invalidateQueries({
+        queryKey: groupKeys.memberLists(groupId),
+        refetchType: "none",
+      }),
+    ];
+    if (intent === "join") tasks.push(resetFeed(queryClient));
+    await Promise.all(tasks);
     return data({ ok: true });
   } catch (error) {
     return data({ error: getGroupErrorMessage(error) }, { status: 400 });

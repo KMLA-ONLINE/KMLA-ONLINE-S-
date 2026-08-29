@@ -549,10 +549,7 @@ begin
           'mime_type', attachment.mime_type,
           'size_bytes', attachment.size_bytes,
           'width', attachment.width,
-          'height', attachment.height,
-          'status', attachment.status,
-          'created_at', attachment.created_at,
-          'ready_at', attachment.ready_at
+          'height', attachment.height
         ) order by attachment.position, attachment.id
       ),
       '[]'::jsonb
