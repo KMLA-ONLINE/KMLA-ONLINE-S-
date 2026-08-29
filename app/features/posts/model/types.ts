@@ -6,13 +6,22 @@ type GroupPostRow = Functions["list_group_posts"]["Returns"][number];
 type GroupPostDetailRow = Functions["get_group_post"]["Returns"][number];
 type GroupPostSearchRow = Functions["search_group_posts"]["Returns"][number];
 type PostAttachmentRow = Functions["list_post_attachments"]["Returns"][number];
-export type PostAttachment = Omit<
+export type PostAttachment = Pick<
   PostAttachmentRow,
-  "height" | "width" | "ready_at"
+  | "attachment_id"
+  | "post_id"
+  | "storage_bucket"
+  | "object_path"
+  | "original_filename"
+  | "position"
+  | "mime_type"
+  | "size_bytes"
 > & {
   height: number | null;
   width: number | null;
-  ready_at: string | null;
+  status?: PostAttachmentRow["status"];
+  created_at?: PostAttachmentRow["created_at"];
+  ready_at?: PostAttachmentRow["ready_at"] | null;
   signedUrl: string | null;
 };
 export type PostReaction = Database["public"]["Enums"]["post_reaction"];

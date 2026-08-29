@@ -19,8 +19,7 @@ function readAttachments(value: Json, postId: string): PostAttachment[] {
       typeof item.storage_bucket !== "string" ||
       typeof item.mime_type !== "string" ||
       typeof item.position !== "number" ||
-      typeof item.size_bytes !== "number" ||
-      typeof item.created_at !== "string"
+      typeof item.size_bytes !== "number"
     ) {
       return [];
     }
@@ -37,9 +36,6 @@ function readAttachments(value: Json, postId: string): PostAttachment[] {
         size_bytes: item.size_bytes,
         width: typeof item.width === "number" ? item.width : null,
         height: typeof item.height === "number" ? item.height : null,
-        status: "ready" as const,
-        created_at: item.created_at,
-        ready_at: typeof item.ready_at === "string" ? item.ready_at : null,
         signedUrl: null,
       },
     ];
@@ -48,6 +44,7 @@ function readAttachments(value: Json, postId: string): PostAttachment[] {
 
 export async function listFeedPosts(
   pageToken: string | null = null,
+  hydrateMedia = true,
 ): Promise<FeedPage> {
   const { data, error } = await getSupabase().rpc("list_feed_posts", {
     p_page_token: pageToken ?? undefined,
@@ -59,37 +56,14 @@ export async function listFeedPosts(
     ...row,
     attachments: readAttachments(row.attachments, row.post_id),
   }));
-  const [attachmentUrls, profileUrls] = await Promise.all([
-    createPostAttachmentUrls(
-      withAttachments.flatMap((post) =>
-        post.attachments.map((attachment) => attachment.object_path),
-      ),
-    ),
-    createProfileMediaUrls(
-      withAttachments.flatMap((post) => [
-        post.author_avatar_path,
-        post.activity_media_path,
-      ]),
-    ),
-  ]);
-
   const posts = withAttachments.flatMap((row): FeedPost[] => {
     const common = {
       ...row,
       author_name: row.author_name ?? null,
       author_pub_id: row.author_pub_id ?? null,
-      author_avatar_path: row.author_avatar_path
-        ? (profileUrls.get(row.author_avatar_path) ?? null)
-        : null,
       edited_at: row.edited_at ?? null,
       my_reaction: row.my_reaction ?? null,
-      activity_media_url: row.activity_media_path
-        ? (profileUrls.get(row.activity_media_path) ?? null)
-        : null,
-      attachments: row.attachments.map((attachment) => ({
-        ...attachment,
-        signedUrl: attachmentUrls.get(attachment.object_path) ?? null,
-      })),
+      activity_media_url: null,
     };
 
     if (
@@ -146,8 +120,50 @@ export async function listFeedPosts(
   });
 
   return {
-    posts,
+    posts: hydrateMedia ? await hydrateFeedPostMedia(posts) : posts,
     feedEpoch: rows[0]?.feed_epoch ?? null,
     nextPageToken: rows[0]?.next_page_token ?? null,
   };
+}
+
+export async function hydrateFeedPostMedia(
+  posts: FeedPost[],
+): Promise<FeedPost[]> {
+  const [attachmentUrls, profileUrls] = await Promise.all([
+    createPostAttachmentUrls(
+      posts.flatMap((post) =>
+        post.attachments.map((attachment) => attachment.object_path),
+      ),
+    ),
+    createProfileMediaUrls(
+      posts.flatMap((post) => [
+        post.author_avatar_path,
+        post.activity_media_path,
+      ]),
+    ),
+  ]);
+
+  return posts.map((post): FeedPost => {
+    const authorAvatarUrl = post.author_avatar_path
+      ? (profileUrls.get(post.author_avatar_path) ?? null)
+      : null;
+    const attachments = post.attachments.map((attachment) => ({
+      ...attachment,
+      signedUrl: attachmentUrls.get(attachment.object_path) ?? null,
+    }));
+    if (post.kind === "group")
+      return {
+        ...post,
+        author_avatar_path: authorAvatarUrl,
+        attachments,
+      };
+    return {
+      ...post,
+      author_avatar_path: authorAvatarUrl,
+      attachments,
+      activity_media_url: post.activity_media_path
+        ? (profileUrls.get(post.activity_media_path) ?? null)
+        : null,
+    };
+  });
 }

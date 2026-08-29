@@ -28,7 +28,7 @@ RLS가 항상 최종 데이터 및 권한의 기준이며, 클라이언트 캐�
 ["groups", "discovery", query, includeJoined, cursor]
 ["groups", "detail", slug]
 ["groups", "categories", groupId]
-["groups", "posts", groupId]
+["groups", "posts", groupId, { categoryId, cursor }]
 ["groups", "members", groupId, query]
 ["groups", "join-requests", groupId]
 ["groups", "invite", groupId]
@@ -56,6 +56,9 @@ Supabase가 피드 첫 페이지 요청을 5초 동안 중복 방지하는 규�
 
 Storage signed URL은 쿼리 캐시와 별도로 사용자 ID와 object path를 키로 삼아 메모리에만 보관한다.
 그룹·프로필 미디어와 게시물 첨부는 60분짜리 URL을 발급하고 만료 5분 전인 55분까지만 재사용한다.
+동일 사용자와 object path의 서명 요청이 동시에 들어오면 진행 중인 Promise를 공유한다. 게시물 목록
+보기는 이미지와 파일을 렌더링하지 않으므로 signed URL을 미리 발급하지 않고, 카드 보기로 바꾸거나
+상세를 열 때 현재 페이지의 경로를 배치로 서명한다.
 
 ## 4. 무효화 규칙
 
@@ -89,6 +92,8 @@ Storage signed URL은 쿼리 캐시와 별도로 사용자 ID와 object path를 
 
 - React Router는 URL, redirect, route error, action 이후 화면 재검증을 소유한다.
 - TanStack Query는 키 기반 중복 제거, stale 시간, 메모리 보관과 기능 단위 무효화를 소유한다.
+- 그룹 게시물의 카테고리 첫 페이지와 커서 후속 페이지도 같은 15초 정책을 사용하며, 카테고리와
+  커서를 쿼리 키에 포함한다.
 - loader는 QueryClient에서 데이터를 읽어 route component에 snapshot으로 전달한다. 캐시 무효화 후
   현재 loaderData도 바뀌어야 하면 React Router revalidation을 함께 사용한다.
 - `shouldRevalidate`는 `post`, `tab`처럼 서버 데이터와 무관한 URL 상태 변경만 억제한다. 캐시를

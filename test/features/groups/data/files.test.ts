@@ -60,4 +60,18 @@ describe("group media signed URLs", () => {
     expect(secondUser.get("group/icon/object")).toBe("user-2-url");
     expect(createSignedUrls).toHaveBeenCalledTimes(2);
   });
+
+  it("coalesces concurrent signing for the same object", async () => {
+    createSignedUrls.mockResolvedValue({
+      data: [{ path: "group/icon/object", signedUrl: "signed-url" }],
+      error: null,
+    });
+
+    await Promise.all([
+      createGroupMediaUrls(["group/icon/object"]),
+      createGroupMediaUrls(["group/icon/object"]),
+    ]);
+
+    expect(createSignedUrls).toHaveBeenCalledOnce();
+  });
 });

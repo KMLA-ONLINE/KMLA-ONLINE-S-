@@ -1,4 +1,9 @@
-import { data, Outlet, redirect } from "react-router";
+import {
+  data,
+  Outlet,
+  redirect,
+  type ShouldRevalidateFunctionArgs,
+} from "react-router";
 
 import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import {
@@ -43,6 +48,7 @@ import {
   setGroupPostPinned,
   updateGroupCategory,
 } from "~/features/posts";
+import { readPostViewMode } from "~/features/posts/model/view-preference";
 import type { Route } from "./+types/detail";
 import { feedKeys } from "~/features/feed";
 import { getQueryClient } from "~/shared/lib/query-client";
@@ -55,7 +61,20 @@ export const handle = defineAppChrome({
 });
 
 /** 게시물 검색 오버레이의 URL 상태. loader가 읽지 않으므로 이것만 바뀌면 다시 읽을 것이 없다. */
-export const shouldRevalidate = createPostListRevalidation(["search", "q"]);
+const shouldRevalidateList = createPostListRevalidation(["search", "q"]);
+const GROUP_PATH_PATTERN = /^\/groups\/[^/]+/;
+
+export function shouldRevalidate(args: ShouldRevalidateFunctionArgs) {
+  const groupPath = GROUP_PATH_PATTERN.exec(args.currentUrl.pathname)?.[0];
+  const isDetailTransition =
+    groupPath !== undefined &&
+    args.formMethod === undefined &&
+    ((args.currentUrl.pathname === groupPath &&
+      args.nextUrl.pathname.startsWith(`${groupPath}/posts/`)) ||
+      (args.nextUrl.pathname === groupPath &&
+        args.currentUrl.pathname.startsWith(`${groupPath}/posts/`)));
+  return isDetailTransition ? false : shouldRevalidateList(args);
+}
 
 /**
  * `groups/:slug`. 게시물 상세(`posts/:postId`)를 자식으로 가지므로 `<Outlet />`을 그린다 —
@@ -75,10 +94,17 @@ export async function clientLoader({
   if (group.membership_state !== "member") {
     return { group, categories: [], posts: { posts: [], nextCursor: null } };
   }
-  const searchParams = new URL(request.url).searchParams;
+  const url = new URL(request.url);
+  const searchParams = url.searchParams;
   const memberTab = searchParams.get("tab") === "members";
   const settingsTab = searchParams.get("tab") === "settings";
   const reportsTab = searchParams.get("tab") === "reports";
+  const directPostDetail =
+    url.pathname.startsWith(`/groups/${params.slug}/posts/`) &&
+    !url.pathname.endsWith("/posts/new") &&
+    !url.pathname.endsWith("/edit");
+  const postsTab =
+    !memberTab && !settingsTab && !reportsTab && !directPostDetail;
   const canModerate =
     group.member_role === "owner" || group.member_role === "admin";
   const canCurate = canModerate || group.member_role === "manager";
@@ -86,16 +112,23 @@ export async function clientLoader({
     searchParams.get("reportSort") === "recent" ? "recent" : "count";
   const [categories, posts, memberPage, joinRequests, invite, reportPage] =
     await Promise.all([
-      queryClient.fetchQuery({
-        queryKey: groupKeys.categories(group.group_id),
-        queryFn: () => listGroupCategories(group.group_id),
-        staleTime: GROUP_CONTENT_STALE_TIME,
-      }),
-      queryClient.fetchQuery({
-        queryKey: groupKeys.posts(group.group_id),
-        queryFn: () => listGroupPosts(group.group_id),
-        staleTime: GROUP_CONTENT_STALE_TIME,
-      }),
+      postsTab || settingsTab
+        ? queryClient.fetchQuery({
+            queryKey: groupKeys.categories(group.group_id),
+            queryFn: () => listGroupCategories(group.group_id),
+            staleTime: GROUP_CONTENT_STALE_TIME,
+          })
+        : Promise.resolve([]),
+      postsTab
+        ? queryClient.fetchQuery({
+            queryKey: groupKeys.posts(group.group_id, null, null),
+            queryFn: () =>
+              listGroupPosts(group.group_id, {
+                hydrateMedia: readPostViewMode() === "card",
+              }),
+            staleTime: GROUP_CONTENT_STALE_TIME,
+          })
+        : Promise.resolve({ posts: [], nextCursor: null }),
       memberTab
         ? queryClient.fetchQuery({
             queryKey: groupKeys.members(
@@ -165,7 +198,7 @@ export async function clientAction({
     intent === "cancel-request" ||
     intent === "leave";
   if (
-    (!postIntent && typeof groupId !== "string") ||
+    typeof groupId !== "string" ||
     (profileIntent && !Number.isSafeInteger(profileId))
   ) {
     return data({ error: "그룹을 찾을 수 없습니다." }, { status: 400 });
@@ -367,11 +400,7 @@ export async function clientAction({
     } else {
       return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
     }
-    await getQueryClient().invalidateQueries({ queryKey: groupKeys.all });
-    await getQueryClient().invalidateQueries({
-      queryKey: feedKeys.all,
-      refetchType: "none",
-    });
+    await invalidateGroupMutation(intent, groupId, params.slug);
     return data({ ok: true });
   } catch (error) {
     return data(
@@ -383,6 +412,86 @@ export async function clientAction({
       { status: 400 },
     );
   }
+}
+
+async function invalidateGroupMutation(
+  intent: FormDataEntryValue | null,
+  groupId: string,
+  slug: string,
+) {
+  const queryClient = getQueryClient();
+  const invalidate = (queryKey: readonly unknown[]) =>
+    queryClient.invalidateQueries({ queryKey, refetchType: "none" });
+  const tasks: Promise<void>[] = [];
+
+  if (
+    intent === "pin-post" ||
+    intent === "delete-post" ||
+    intent === "dismiss-report"
+  ) {
+    tasks.push(
+      invalidate(groupKeys.postPages(groupId)),
+      invalidate(groupKeys.detail(slug)),
+      invalidate(feedKeys.page(null)),
+    );
+    if (intent === "dismiss-report" || intent === "delete-post")
+      tasks.push(invalidate([...groupKeys.all, "reports", groupId]));
+  } else if (
+    intent === "create-category" ||
+    intent === "rename-category" ||
+    intent === "move-category-up" ||
+    intent === "move-category-down" ||
+    intent === "delete-category"
+  ) {
+    tasks.push(
+      invalidate(groupKeys.categories(groupId)),
+      invalidate(groupKeys.postPages(groupId)),
+      invalidate(groupKeys.detail(slug)),
+      invalidate(feedKeys.page(null)),
+    );
+  } else if (intent === "pin") {
+    tasks.push(
+      invalidate(groupKeys.home()),
+      invalidate(groupKeys.detail(slug)),
+    );
+  } else if (
+    intent === "join" ||
+    intent === "request" ||
+    intent === "cancel-request"
+  ) {
+    tasks.push(
+      invalidate(groupKeys.home()),
+      invalidate(groupKeys.discoveries()),
+      invalidate(groupKeys.detail(slug)),
+      invalidate(groupKeys.memberLists(groupId)),
+    );
+    if (intent === "join") tasks.push(invalidate(feedKeys.all));
+  } else if (
+    intent === "approve-join-request" ||
+    intent === "reject-join-request" ||
+    intent === "set-member-role" ||
+    intent === "transfer-ownership"
+  ) {
+    tasks.push(
+      invalidate(groupKeys.detail(slug)),
+      invalidate(groupKeys.memberLists(groupId)),
+      invalidate(groupKeys.joinRequests(groupId)),
+      invalidate(groupKeys.home()),
+    );
+  } else if (intent === "update-settings") {
+    tasks.push(
+      invalidate(groupKeys.detail(slug)),
+      invalidate(groupKeys.home()),
+      invalidate(groupKeys.discoveries()),
+    );
+  } else if (intent === "issue-invite" || intent === "revoke-invite") {
+    tasks.push(
+      invalidate(groupKeys.invite(groupId)),
+      invalidate(groupKeys.detail(slug)),
+    );
+  }
+
+  await Promise.all(tasks);
 }
 
 function removeGroupAccessCache(groupId: string, slug: string) {

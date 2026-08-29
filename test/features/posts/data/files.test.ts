@@ -61,4 +61,20 @@ describe("post attachment signed URLs", () => {
     expect(secondUser.get("post/file")).toBe("user-2-url");
     expect(createSignedUrls).toHaveBeenCalledTimes(2);
   });
+
+  it("coalesces concurrent signing for the same path", async () => {
+    createSignedUrls.mockResolvedValue({
+      data: [{ path: "post/file", signedUrl: "signed-url" }],
+      error: null,
+    });
+
+    const [first, second] = await Promise.all([
+      createPostAttachmentUrls(["post/file"]),
+      createPostAttachmentUrls(["post/file"]),
+    ]);
+
+    expect(first.get("post/file")).toBe("signed-url");
+    expect(second.get("post/file")).toBe("signed-url");
+    expect(createSignedUrls).toHaveBeenCalledOnce();
+  });
 });

@@ -9,6 +9,7 @@ interface SignedUrlCacheEntry {
 }
 
 const signedUrlCache = new Map<string, SignedUrlCacheEntry>();
+const pendingSignedUrls = new Map<string, Promise<string | null>>();
 
 export async function uploadGroupMedia(
   path: string,
@@ -37,33 +38,51 @@ export async function createGroupMediaUrls(
   const now = Date.now();
   const urls = new Map<string, string>();
   const missingPaths: string[] = [];
+  const pending: [string, Promise<string | null>][] = [];
 
   for (const path of uniquePaths) {
-    const cached = userId ? signedUrlCache.get(`${userId}:${path}`) : undefined;
+    const key = userId ? `${userId}:${path}` : path;
+    const cached = userId ? signedUrlCache.get(key) : undefined;
     if (cached && cached.expiresAt > now) urls.set(path, cached.url);
-    else missingPaths.push(path);
+    else {
+      if (cached) signedUrlCache.delete(key);
+      const existing = pendingSignedUrls.get(key);
+      if (existing) pending.push([path, existing]);
+      else missingPaths.push(path);
+    }
   }
 
-  if (missingPaths.length === 0) return urls;
+  if (missingPaths.length > 0) {
+    const request = supabase.storage
+      .from(BUCKET)
+      .createSignedUrls(missingPaths, 3600);
+    for (const path of missingPaths) {
+      const key = userId ? `${userId}:${path}` : path;
+      const promise = request
+        .then(({ data, error }) => {
+          if (error) return null;
+          return data?.find((item) => item.path === path)?.signedUrl ?? null;
+        })
+        .finally(() => pendingSignedUrls.delete(key));
+      pendingSignedUrls.set(key, promise);
+      pending.push([path, promise]);
+    }
+  }
 
-  const { data, error } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrls(missingPaths, 3600);
-  if (error) return urls;
-
-  for (const item of data ?? []) {
-    if (!item.signedUrl || !item.path) continue;
-    urls.set(item.path, item.signedUrl);
-    if (userId) {
-      signedUrlCache.set(`${userId}:${item.path}`, {
-        url: item.signedUrl,
+  for (const [path, promise] of pending) {
+    const url = await promise;
+    if (!url) continue;
+    urls.set(path, url);
+    if (userId)
+      signedUrlCache.set(`${userId}:${path}`, {
+        url,
         expiresAt: now + SIGNED_URL_CACHE_MS,
       });
-    }
   }
   return urls;
 }
 
 export function resetGroupMediaUrlCacheForTests(): void {
   signedUrlCache.clear();
+  pendingSignedUrls.clear();
 }

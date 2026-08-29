@@ -24,6 +24,7 @@ import {
   listBirthdays,
 } from "~/features/profiles";
 import { createPostListRevalidation } from "~/features/posts";
+import { readPostViewMode } from "~/features/posts/model/view-preference";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { getKoreaDateIso } from "~/shared/lib/korea-date";
 import { Button } from "~/shared/ui/button";
@@ -94,7 +95,6 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
           gcTime: BIRTHDAY_GC_TIME,
         })
         .catch(() => null);
-
   const absencePromise = pageToken
     ? Promise.resolve([])
     : queryClient
@@ -109,7 +109,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     const [page, mealDay, birthdays, absences] = await Promise.all([
       queryClient.fetchQuery({
         queryKey: feedKeys.page(pageToken),
-        queryFn: () => listFeedPosts(pageToken),
+        queryFn: () => listFeedPosts(pageToken, readPostViewMode() === "card"),
         staleTime: FEED_STALE_TIME,
       }),
       mealDayPromise,

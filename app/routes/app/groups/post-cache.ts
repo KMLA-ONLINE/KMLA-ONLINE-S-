@@ -6,11 +6,11 @@ export async function invalidateSavedGroupPost(groupId: string) {
   const queryClient = getQueryClient();
   await Promise.all([
     queryClient.invalidateQueries({
-      queryKey: groupKeys.posts(groupId),
+      queryKey: groupKeys.postPages(groupId),
       refetchType: "none",
     }),
     queryClient.invalidateQueries({
-      queryKey: feedKeys.all,
+      queryKey: feedKeys.page(null),
       refetchType: "none",
     }),
   ]);

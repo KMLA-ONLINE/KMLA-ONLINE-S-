@@ -47,12 +47,13 @@ export async function hydratePostComments(
 
 async function attachFiles<T extends { post_id: string }>(
   posts: T[],
+  signUrls = true,
 ): Promise<(T & { attachments: PostAttachment[] })[]> {
   if (posts.length === 0) return [];
   const { data, error } = await getSupabase()
     .from("post_attachments")
     .select(
-      "id,post_id,storage_bucket,object_path,original_filename,position,mime_type,size_bytes,width,height,status,created_at,ready_at",
+      "id,post_id,storage_bucket,object_path,original_filename,position,mime_type,size_bytes,width,height",
     )
     .in(
       "post_id",
@@ -61,16 +62,26 @@ async function attachFiles<T extends { post_id: string }>(
     .eq("status", "ready")
     .order("position");
   if (error) throw error;
-  const urls = await createPostAttachmentUrls(
-    (data ?? []).map((item) => item.object_path),
-  );
+  const urls = signUrls
+    ? await createPostAttachmentUrls(
+        (data ?? []).map((item) => item.object_path),
+      )
+    : new Map<string, string>();
   return posts.map((post) => ({
     ...post,
     attachments: (data ?? [])
       .filter((item) => item.post_id === post.post_id)
       .map((item) => ({
-        ...item,
         attachment_id: item.id,
+        post_id: item.post_id,
+        storage_bucket: item.storage_bucket,
+        object_path: item.object_path,
+        original_filename: item.original_filename,
+        position: item.position,
+        mime_type: item.mime_type,
+        size_bytes: item.size_bytes,
+        width: item.width,
+        height: item.height,
         signedUrl: urls.get(item.object_path) ?? null,
       })),
   }));
@@ -112,7 +123,16 @@ export async function listPostAttachments(
     rows.map((item) => item.object_path),
   );
   return rows.map((item) => ({
-    ...item,
+    attachment_id: item.attachment_id,
+    post_id: item.post_id,
+    storage_bucket: item.storage_bucket,
+    object_path: item.object_path,
+    original_filename: item.original_filename,
+    position: item.position,
+    mime_type: item.mime_type,
+    size_bytes: item.size_bytes,
+    width: item.width ?? null,
+    height: item.height ?? null,
     signedUrl: urls.get(item.object_path) ?? null,
   }));
 }
@@ -132,7 +152,11 @@ export async function listGroupCategories(
 
 export async function listGroupPosts(
   groupId: string,
-  options: { categoryId?: string | null; cursor?: PostCursor | null } = {},
+  options: {
+    categoryId?: string | null;
+    cursor?: PostCursor | null;
+    hydrateMedia?: boolean;
+  } = {},
 ): Promise<GroupPostPage> {
   const { data, error } = await getSupabase().rpc("list_group_posts", {
     p_group_id: groupId,
@@ -144,7 +168,14 @@ export async function listGroupPosts(
   });
   if (error) throw error;
   const rows = data ?? [];
-  const posts = await attachFiles(rows.slice(0, GROUP_POST_PAGE_SIZE));
+  const postsWithFiles = await attachFiles(
+    rows.slice(0, GROUP_POST_PAGE_SIZE),
+    false,
+  );
+  const posts =
+    options.hydrateMedia === false
+      ? postsWithFiles
+      : await hydrateGroupPostMedia(postsWithFiles);
   const last = posts.at(-1);
   return {
     posts,
@@ -157,6 +188,30 @@ export async function listGroupPosts(
           }
         : null,
   };
+}
+
+export async function hydrateGroupPostMedia(
+  posts: GroupPostPage["posts"],
+): Promise<GroupPostPage["posts"]> {
+  const [attachmentUrls, profileUrls] = await Promise.all([
+    createPostAttachmentUrls(
+      posts.flatMap((post) =>
+        post.attachments.map((attachment) => attachment.object_path),
+      ),
+    ),
+    createProfileMediaUrls(posts.map((post) => post.author_avatar_path)),
+  ]);
+
+  return posts.map((post) => ({
+    ...post,
+    author_avatar_path: post.author_avatar_path
+      ? (profileUrls.get(post.author_avatar_path) ?? post.author_avatar_path)
+      : post.author_avatar_path,
+    attachments: post.attachments.map((attachment) => ({
+      ...attachment,
+      signedUrl: attachmentUrls.get(attachment.object_path) ?? null,
+    })),
+  }));
 }
 
 export async function searchGroupPosts(
@@ -183,7 +238,10 @@ export async function getGroupPost(
   if (error) throw error;
   const post = data?.[0];
   if (!post) return null;
-  return { ...post, attachments: await listPostAttachments(postId) };
+  const [hydrated] = await hydrateGroupPostMedia([
+    { ...post, attachments: await listPostAttachments(postId) },
+  ]);
+  return hydrated;
 }
 
 /**

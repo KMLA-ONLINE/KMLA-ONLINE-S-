@@ -37,8 +37,8 @@ vi.mock("~/shared/lib/korea-date", () => ({
   getKoreaDateIso: () => "2026-08-24",
 }));
 
-import type { BirthdayProfile } from "~/features/profiles";
 import { clientLoader, shouldRevalidate } from "~/routes/app/home";
+import type { BirthdayProfile } from "~/features/profiles";
 
 const page = {
   posts: [],
@@ -73,7 +73,7 @@ describe("home feed loader", () => {
   it("loads the first feed page and today's meal independently", async () => {
     const result = await load();
 
-    expect(mocks.listFeedPosts).toHaveBeenCalledWith(null);
+    expect(mocks.listFeedPosts).toHaveBeenCalledWith(null, true);
     expect(mocks.getMealDay).toHaveBeenCalledWith("20260824");
     expect(mocks.listBirthdays).toHaveBeenCalledWith("2026-08-24", "today");
     expect(result).toMatchObject({ page, mealDay, birthdays, error: null });
@@ -83,7 +83,7 @@ describe("home feed loader", () => {
     const token = "20000000-0000-0000-0000-000000000001";
     const result = await load(`?pageToken=${token}`);
 
-    expect(mocks.listFeedPosts).toHaveBeenCalledWith(token);
+    expect(mocks.listFeedPosts).toHaveBeenCalledWith(token, true);
     expect(mocks.getMealDay).not.toHaveBeenCalled();
     expect(mocks.listBirthdays).not.toHaveBeenCalled();
     expect(result).toMatchObject({

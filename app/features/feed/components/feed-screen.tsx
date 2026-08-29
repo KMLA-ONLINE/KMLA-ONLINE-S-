@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFetcher, useRevalidator, useSearchParams } from "react-router";
 
 import { useAppShell } from "~/features/app-shell";
@@ -7,6 +7,7 @@ import {
   FeedPostRow,
 } from "~/features/feed/components/feed-post";
 import { feedKeys } from "~/features/feed/data/cache";
+import { hydrateFeedPostMedia } from "~/features/feed/data/queries";
 import type {
   FeedPage,
   FeedPageResult,
@@ -37,6 +38,11 @@ export function FeedScreen({
   const { profile } = useAppShell();
   const [searchParams] = useSearchParams();
   const [viewMode] = usePostViewMode();
+  const hydratedPostIds = useRef(new Set<string>());
+  const [hydratedState, setHydratedState] = useState(() => ({
+    initialPage,
+    posts: new Map<string, FeedPage["posts"][number]>(),
+  }));
   const { visited, markVisited } = useVisitedPosts();
   const closeDetail = useModalClose("/");
   const activePostId = searchParams.get("post");
@@ -113,11 +119,39 @@ export function FeedScreen({
 
   const { loadError, sessionExpired } = state;
 
-  const posts = Array.from(
+  const rawPosts = Array.from(
     new Map(
       pages.flatMap((page) => page.posts).map((post) => [post.post_id, post]),
     ).values(),
   );
+  const hydratedPosts =
+    hydratedState.initialPage === initialPage
+      ? hydratedState.posts
+      : new Map<string, FeedPage["posts"][number]>();
+  const posts = rawPosts.map((post) => hydratedPosts.get(post.post_id) ?? post);
+
+  useEffect(() => {
+    hydratedPostIds.current.clear();
+  }, [initialPage]);
+
+  useEffect(() => {
+    if (viewMode !== "card") return;
+    const unhydrated = rawPosts.filter(
+      (post) => !hydratedPostIds.current.has(post.post_id),
+    );
+    if (unhydrated.length === 0) return;
+    unhydrated.forEach((post) => hydratedPostIds.current.add(post.post_id));
+    void hydrateFeedPostMedia(unhydrated).then((hydrated) => {
+      setHydratedState((current) => {
+        const next =
+          current.initialPage === initialPage
+            ? new Map(current.posts)
+            : new Map<string, FeedPage["posts"][number]>();
+        hydrated.forEach((post) => next.set(post.post_id, post));
+        return { initialPage, posts: next };
+      });
+    });
+  }, [initialPage, rawPosts, viewMode]);
   const pending = fetcher.state !== "idle";
   const activeDetailResult =
     activePostId && detailFetcher.data?.requestedPostId === activePostId

@@ -19,18 +19,26 @@ describe("group query keys", () => {
   it("keeps every group query under the common root", () => {
     expect(groupKeys.home()[0]).toBe("groups");
     expect(groupKeys.detail("slug")[0]).toBe("groups");
-    expect(groupKeys.posts("group-id")[0]).toBe("groups");
+    expect(groupKeys.posts("group-id", null, null)[0]).toBe("groups");
   });
 
   it("identifies protected queries for one group", () => {
     expect(
-      isGroupAccessQuery(groupKeys.posts("group-id"), "group-id", "slug"),
+      isGroupAccessQuery(
+        groupKeys.posts("group-id", null, null),
+        "group-id",
+        "slug",
+      ),
     ).toBe(true);
     expect(
       isGroupAccessQuery(groupKeys.detail("slug"), "group-id", "slug"),
     ).toBe(true);
     expect(
-      isGroupAccessQuery(groupKeys.posts("other"), "group-id", "slug"),
+      isGroupAccessQuery(
+        groupKeys.posts("other", null, null),
+        "group-id",
+        "slug",
+      ),
     ).toBe(false);
     expect(isGroupAccessQuery(groupKeys.home(), "group-id", "slug")).toBe(
       false,

@@ -31,7 +31,18 @@ export async function clientAction({ params }: Route.ClientActionArgs) {
   try {
     const slug = await acceptGroupInvite(params.token);
     await Promise.all([
-      getQueryClient().invalidateQueries({ queryKey: groupKeys.all }),
+      getQueryClient().invalidateQueries({
+        queryKey: groupKeys.home(),
+        refetchType: "none",
+      }),
+      getQueryClient().invalidateQueries({
+        queryKey: groupKeys.discoveries(),
+        refetchType: "none",
+      }),
+      getQueryClient().invalidateQueries({
+        queryKey: groupKeys.details(),
+        refetchType: "none",
+      }),
       getQueryClient().invalidateQueries({
         queryKey: feedKeys.all,
         refetchType: "none",

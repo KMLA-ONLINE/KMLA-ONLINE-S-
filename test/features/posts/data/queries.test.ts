@@ -205,4 +205,50 @@ describe("post queries", () => {
       isPinned: true,
     });
   });
+
+  it("does not sign group post media for list-mode reads", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          post_id: "post-1",
+          published_at: "2026-08-13T00:00:00Z",
+          is_pinned: false,
+          author_avatar_path: "avatars/author",
+        },
+      ],
+      error: null,
+    });
+    const query = {
+      select: vi.fn(),
+      in: vi.fn(),
+      eq: vi.fn(),
+      order: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: "attachment-1",
+            post_id: "post-1",
+            storage_bucket: "post-attachments",
+            object_path: "post-1/attachment-1",
+            original_filename: "photo.webp",
+            position: 0,
+            mime_type: "image/webp",
+            size_bytes: 100,
+            width: 100,
+            height: 100,
+          },
+        ],
+        error: null,
+      }),
+    };
+    query.select.mockReturnValue(query);
+    query.in.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    getSupabase.mockReturnValue({ rpc, from: vi.fn().mockReturnValue(query) });
+
+    const page = await listGroupPosts("group-id", { hydrateMedia: false });
+
+    expect(createPostAttachmentUrls).not.toHaveBeenCalled();
+    expect(createProfileMediaUrls).not.toHaveBeenCalled();
+    expect(page.posts[0].attachments[0].signedUrl).toBeNull();
+  });
 });

@@ -38,6 +38,7 @@ export {
 export type { PostUploadSession } from "~/features/posts/data/mutations";
 export {
   getGroupPost,
+  hydrateGroupPostMedia,
   getProfilePost,
   listProfilePosts,
   listGroupCategories,

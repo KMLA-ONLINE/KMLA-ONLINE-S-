@@ -149,6 +149,50 @@ describe("listFeedPosts", () => {
     expect(mocks.createProfileMediaUrls).toHaveBeenCalledWith([]);
   });
 
+  it("keeps object paths unsigned when media hydration is disabled", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...common,
+          kind: "group",
+          title: "목록 글",
+          group_id: "30000000-0000-0000-0000-000000000001",
+          group_slug: "notice",
+          group_name: "공지",
+          category_name: null,
+          timeline_pub_id: null,
+          timeline_name: null,
+          activity_kind: null,
+          activity_media_path: null,
+          visibility: null,
+          attachments: [
+            {
+              attachment_id: "40000000-0000-0000-0000-000000000001",
+              storage_bucket: "post-attachments",
+              object_path: "posts/photo.webp",
+              original_filename: "photo.webp",
+              position: 0,
+              mime_type: "image/webp",
+              size_bytes: 100,
+              width: 100,
+              height: 100,
+            },
+          ],
+        },
+      ],
+      error: null,
+    });
+
+    const page = await listFeedPosts(null, false);
+
+    expect(mocks.createPostAttachmentUrls).not.toHaveBeenCalled();
+    expect(mocks.createProfileMediaUrls).not.toHaveBeenCalled();
+    expect(page.posts[0]).toMatchObject({
+      author_avatar_path: "avatars/test.webp",
+      attachments: [{ signedUrl: null }],
+    });
+  });
+
   it("propagates RPC failures", async () => {
     const error = new Error("feed failed");
     mocks.rpc.mockResolvedValue({ data: null, error });

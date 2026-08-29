@@ -1,7 +1,7 @@
 import { data, redirect, useRouteLoaderData } from "react-router";
 
 import { defineAppChrome, useAppShell } from "~/features/app-shell";
-import { loadGroupDetail } from "~/features/groups";
+import { groupKeys } from "~/features/groups";
 import {
   deleteGroupPost,
   getGroupPost,
@@ -15,6 +15,7 @@ import {
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
 import type { Route } from "./+types/post";
 import { invalidateSavedGroupPost } from "~/routes/app/groups/post-cache";
+import { getQueryClient } from "~/shared/lib/query-client";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -40,16 +41,12 @@ export async function clientAction({
 }: Route.ClientActionArgs) {
   const formData = await request.formData();
   try {
-    const [group, post] = await Promise.all([
-      loadGroupDetail(params.slug),
-      getGroupPost(params.postId),
-    ]);
-    if (!group || post?.group_id !== group.group_id) {
-      return data({ error: "게시물을 찾을 수 없습니다." }, { status: 404 });
-    }
+    const group = getQueryClient().getQueryData<{
+      group_id: string;
+    }>(groupKeys.detail(params.slug));
     if (formData.get("intent") === "delete") {
       await deleteGroupPost(params.postId);
-      await invalidateSavedGroupPost(group.group_id);
+      if (group) await invalidateSavedGroupPost(group.group_id);
       throw redirect(`/groups/${params.slug}`);
     }
     if (formData.get("intent") === "pin") {
@@ -57,7 +54,7 @@ export async function clientAction({
         params.postId,
         formData.get("pinned") === "true",
       );
-      await invalidateSavedGroupPost(group.group_id);
+      if (group) await invalidateSavedGroupPost(group.group_id);
       return data({ ok: true });
     }
     return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
