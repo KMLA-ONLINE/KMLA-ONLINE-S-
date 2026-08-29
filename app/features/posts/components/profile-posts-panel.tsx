@@ -8,6 +8,7 @@ import type {
   ProfilePost,
   ProfilePostPage,
 } from "~/features/posts/model/types";
+import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 
@@ -81,6 +82,10 @@ export function ProfilePostsPanel({
       if (currentRequest === requestId.current) setLoading(false);
     }
   };
+  const sentinelRef = useInfiniteScroll(() => void loadMore(), {
+    enabled: Boolean(cursor) && !error,
+    pending: loading,
+  });
 
   const remove = (post: ProfilePost) =>
     void mutationFetcher.submit(
@@ -130,17 +135,23 @@ export function ProfilePostsPanel({
         </div>
       )}
 
-      {cursor ? (
+      {cursor && error ? (
         <div className="flex justify-center py-2">
-          <Button
-            variant="outline"
-            disabled={loading}
-            onClick={() => void loadMore()}
-          >
-            {loading ? <Spinner /> : null} 이전 게시물 더 보기
+          <Button variant="outline" onClick={() => void loadMore()}>
+            다시 시도
           </Button>
         </div>
       ) : null}
+
+      {cursor && loading ? (
+        <div
+          role="status"
+          className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground"
+        >
+          <Spinner /> 이전 게시물을 불러오는 중입니다.
+        </div>
+      ) : null}
+      <div ref={sentinelRef} className="h-px" aria-hidden="true" />
     </section>
   );
 }

@@ -1,12 +1,19 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listProfilePosts } = vi.hoisted(() => ({
+const { infiniteScroll, listProfilePosts } = vi.hoisted(() => ({
+  infiniteScroll: { loadMore: null as (() => void) | null },
   listProfilePosts: vi.fn(),
 }));
 
 vi.mock("~/features/posts/data/queries", () => ({ listProfilePosts }));
+vi.mock("~/shared/hooks/use-infinite-scroll", () => ({
+  useInfiniteScroll: (loadMore: () => void) => {
+    infiniteScroll.loadMore = loadMore;
+    return () => undefined;
+  },
+}));
 vi.mock("~/features/posts/components/profile-post-card", () => ({
   ProfilePostCard: ({ post }: { post: { post_id: string } }) => (
     <div>{post.post_id}</div>
@@ -35,7 +42,10 @@ function renderPanel(
 }
 
 describe("ProfilePostsPanel", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    infiniteScroll.loadMore = null;
+  });
 
   it("offers the write row when the timeline accepts posts", () => {
     renderPanel();
@@ -87,16 +97,14 @@ describe("ProfilePostsPanel", () => {
       posts: [profilePost({ post_id: "older" })],
       nextCursor: null,
     });
-    const { user } = renderPanel({
+    renderPanel({
       initialPage: {
         posts: [profilePost({ post_id: "newest" })],
         nextCursor: { publishedAt: "2026-08-18T00:00:00Z", postId: "newest" },
       },
     });
 
-    await user.click(
-      screen.getByRole("button", { name: /이전 게시물 더 보기/ }),
-    );
+    act(() => infiniteScroll.loadMore?.());
 
     await waitFor(() => expect(screen.getByText("older")).toBeVisible());
     expect(screen.getByText("newest")).toBeVisible();
@@ -152,9 +160,7 @@ describe("ProfilePostsPanel", () => {
 
     const { user } = renderRoute(RevalidationHarness);
 
-    await user.click(
-      screen.getByRole("button", { name: /이전 게시물 더 보기/ }),
-    );
+    act(() => infiniteScroll.loadMore?.());
     await user.click(screen.getByRole("button", { name: "재검증" }));
     deliver({ posts: [profilePost({ post_id: "stale" })], nextCursor: null });
 
@@ -165,20 +171,19 @@ describe("ProfilePostsPanel", () => {
 
   it("reports a failed page load without losing what is on screen", async () => {
     listProfilePosts.mockRejectedValue(new Error("network"));
-    const { user } = renderPanel({
+    renderPanel({
       initialPage: {
         posts: [profilePost({ post_id: "newest" })],
         nextCursor: { publishedAt: "2026-08-18T00:00:00Z", postId: "newest" },
       },
     });
 
-    await user.click(
-      screen.getByRole("button", { name: /이전 게시물 더 보기/ }),
-    );
+    act(() => infiniteScroll.loadMore?.());
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "이전 게시물을 불러오지 못했습니다.",
     );
     expect(screen.getByText("newest")).toBeVisible();
+    expect(screen.getByRole("button", { name: "다시 시도" })).toBeVisible();
   });
 });
