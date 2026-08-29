@@ -176,11 +176,107 @@ describe("ProfileDetail", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "더보기" })).toBeVisible();
     });
-    expect(descriptionElement).toHaveClass("line-clamp-3");
+    expect(descriptionElement).toHaveClass("line-clamp-2");
 
     await user.click(screen.getByRole("button", { name: "더보기" }));
 
-    expect(descriptionElement).not.toHaveClass("line-clamp-3");
+    expect(descriptionElement).not.toHaveClass("line-clamp-2");
+    expect(screen.getByRole("button", { name: "접기" })).toBeVisible();
+  });
+
+  it("masks contact details until each one is revealed", async () => {
+    const { user } = renderRoute(() => (
+      <ProfileDetail
+        profile={{
+          id: 25,
+          pub_id: "hanbyeol-25",
+          name: "이한별",
+          type: "alumni",
+          role: "member",
+          cohort: 25,
+          academic_track: "international",
+          avatar_path: null,
+          avatar_url: null,
+          cover_path: null,
+          cover_url: null,
+          description: null,
+          birthday: null,
+          class_no: null,
+          dorm_room: null,
+          department: null,
+          gender: null,
+          phone_number: "010-1234-5678",
+          contact_email: "hanbyeol@example.com",
+          student_number: null,
+          allow_timeline_posts: true,
+          is_returning_student: false,
+        }}
+        isOwnProfile={false}
+        viewerName="김관리"
+        viewerAvatarUrl={null}
+        posts={{ posts: [], nextCursor: null }}
+      />
+    ));
+
+    // 값은 응답에 그대로 있지만 한눈에 읽히지는 않는다(기능 명세 §12.1).
+    expect(screen.queryByText("010-1234-5678")).not.toBeInTheDocument();
+    expect(screen.getByText("•••-••••-5678")).toBeVisible();
+    expect(screen.getByText("ha•••@example.com")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "전화번호 보기" }));
+
+    expect(screen.getByRole("link", { name: "010-1234-5678" })).toHaveAttribute(
+      "href",
+      "tel:01012345678",
+    );
+    // 한 항목을 열어도 다른 항목은 가려진 채로 남는다.
+    expect(screen.getByRole("button", { name: "이메일 보기" })).toBeVisible();
+  });
+
+  it("collapses every fact group after the first on narrow screens", async () => {
+    const { user } = renderRoute(() => (
+      <ProfileDetail
+        profile={{
+          id: 25,
+          pub_id: "hanbyeol-25",
+          name: "이한별",
+          type: "student",
+          role: "member",
+          cohort: 25,
+          academic_track: "international",
+          avatar_path: null,
+          avatar_url: null,
+          cover_path: null,
+          cover_url: null,
+          description: null,
+          birthday: null,
+          class_no: 3,
+          dorm_room: null,
+          department: null,
+          gender: null,
+          phone_number: "010-1234-5678",
+          contact_email: null,
+          student_number: "20250101",
+          allow_timeline_posts: true,
+          is_returning_student: false,
+        }}
+        isOwnProfile={false}
+        viewerName="김관리"
+        viewerAvatarUrl={null}
+        posts={{ posts: [], nextCursor: null }}
+      />
+    ));
+
+    // 첫 묶음은 항상 남고 나머지만 접힌다(기능 명세 §12.1).
+    expect(screen.getByRole("group", { name: "학적 정보" })).not.toHaveClass(
+      "hidden",
+    );
+    const contact = screen.getByRole("group", { name: "연락처" });
+    expect(contact).toHaveClass("hidden");
+
+    await user.click(screen.getByRole("button", { name: "정보 더 보기" }));
+
+    expect(contact).not.toHaveClass("hidden");
     expect(screen.getByRole("button", { name: "접기" })).toBeVisible();
   });
 });

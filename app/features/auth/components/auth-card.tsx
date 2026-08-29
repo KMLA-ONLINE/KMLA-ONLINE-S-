@@ -30,7 +30,7 @@ export function AuthCard({
   wide?: boolean;
 }) {
   return (
-    <main className="min-h-dvh bg-muted/40 p-4 sm:p-6">
+    <main className="min-h-dvh bg-muted/40 p-4">
       <div className="mx-auto grid min-h-[calc(100dvh-2rem)] max-w-5xl overflow-hidden rounded-3xl bg-background shadow-sm ring-1 ring-foreground/10 sm:min-h-[calc(100dvh-3rem)] md:grid-cols-[0.9fr_1.1fr]">
         <section className="relative hidden overflow-hidden bg-primary p-10 text-primary-foreground md:flex md:flex-col md:justify-between">
           <div className="absolute -top-28 -right-24 size-72 rounded-full bg-primary-foreground/10" />

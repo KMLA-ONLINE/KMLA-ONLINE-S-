@@ -89,7 +89,10 @@ export function ProfilePostsPanel({
     );
 
   return (
-    <section aria-label="타임라인 게시물" className="flex flex-col gap-2.5">
+    <section
+      aria-label="타임라인 게시물"
+      className="flex flex-col gap-0 sm:gap-2.5"
+    >
       {canWrite ? (
         <PostWriteRow
           to={`/profile/${timelinePubId}/posts/new`}
