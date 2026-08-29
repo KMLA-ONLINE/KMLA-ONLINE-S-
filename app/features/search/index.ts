@@ -15,7 +15,6 @@ export {
 export {
   addRecentSearchEntry,
   readRecentSearchEntries,
-  RECENT_SEARCH_STORAGE_KEY,
   type RecentSearchEntry,
 } from "~/features/search/model/recent-searches";
 export type {

@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   addRecentSearchEntry,
   readRecentSearchEntries,
-  RECENT_SEARCH_STORAGE_KEY,
 } from "~/features/search/model/recent-searches";
+import { RECENT_SEARCH_STORAGE_KEY } from "~/shared/lib/user-scoped-storage";
 
 describe("recent search entries", () => {
   beforeEach(() => {
