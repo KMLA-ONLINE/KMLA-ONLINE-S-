@@ -26,7 +26,7 @@ import {
 import { Input } from "~/shared/ui/input";
 
 const DIALOG_CLASS =
-  "flex h-svh w-full max-w-full flex-col gap-0 overflow-hidden rounded-none bg-background p-0 ring-0 top-0 left-0 translate-x-0 translate-y-0";
+  "flex h-svh w-full max-w-full sm:max-w-full flex-col gap-0 overflow-hidden rounded-none bg-background p-0 ring-0 top-0 left-0 translate-x-0 translate-y-0";
 
 interface SettledSearch {
   query: string;
