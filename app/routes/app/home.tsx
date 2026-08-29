@@ -24,6 +24,10 @@ import {
   listBirthdays,
 } from "~/features/profiles";
 import { createPostListRevalidation } from "~/features/posts";
+import {
+  GlobalSearchDialog,
+  useDirectorySearchDialog,
+} from "~/features/search";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { getKoreaDateIso } from "~/shared/lib/korea-date";
 import { Button } from "~/shared/ui/button";
@@ -175,6 +179,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 export default function FeedPage({ loaderData }: Route.ComponentProps) {
   const { page, error, mealDay, birthdays, absences } = loaderData;
   const { profile } = useAppShell();
+  const { openSearch: openDirectorySearch } = useDirectorySearchDialog();
 
   return (
     <>
@@ -196,9 +201,8 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
             <Button
               variant="ghost"
               size="icon"
-              nativeButton={false}
               aria-label="검색"
-              render={<Link to="/groups/discover" />}
+              onClick={openDirectorySearch}
             >
               <SearchIcon />
             </Button>
@@ -214,6 +218,7 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
           </>
         }
       />
+      <GlobalSearchDialog />
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-4">
         <div className="min-w-0">
