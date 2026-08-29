@@ -12,6 +12,7 @@ import {
   FieldLegend,
   FieldSet,
 } from "~/shared/ui/field";
+import { DateSelect } from "~/shared/ui/date-select";
 import { Input } from "~/shared/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 import { TextField } from "~/shared/ui/text-field";
@@ -156,10 +157,9 @@ export function ProfileFields({
               <FieldLabel htmlFor="birthday">
                 생년월일 {isAlumni ? "(선택)" : ""}
               </FieldLabel>
-              <Input
+              <DateSelect
                 id="birthday"
                 name="birthday"
-                type="date"
                 defaultValue={values.birthday}
                 aria-invalid={Boolean(errors.birthday)}
                 disabled={disabled}

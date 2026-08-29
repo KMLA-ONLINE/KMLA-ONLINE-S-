@@ -3,9 +3,9 @@ import { useCallback, useSyncExternalStore } from "react";
 import {
   appendVisitedPost,
   readVisitedPosts,
-  VISITED_POSTS_STORAGE_KEY,
   writeVisitedPosts,
 } from "~/features/posts/model/visited-posts";
+import { VISITED_POSTS_STORAGE_KEY } from "~/shared/lib/user-scoped-storage";
 
 /**
  * 목록 보기에서 이미 열어본 게시물을 흐리게 그리기 위한 상태.

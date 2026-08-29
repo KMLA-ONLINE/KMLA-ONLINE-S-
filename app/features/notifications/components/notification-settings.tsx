@@ -32,13 +32,6 @@ import { Spinner } from "~/shared/ui/spinner";
 import { Switch } from "~/shared/ui/switch";
 import { cn } from "~/shared/lib/utils";
 
-/**
- * 유형 행. 아이콘은 알림함의 종류 배지와 같은 어휘를 써서, 이 스위치가 실제로 어떤 알림을
- * 막는지 두 화면을 오가며 이어 붙일 수 있게 한다.
- *
- * 설명은 "무슨 분류인가"가 아니라 "어떤 사건이 오는가"를 적는다. 끄기 전에 알고 싶은 것은
- * 분류 이름이 아니라 놓치게 될 사건이다.
- */
 const PREFERENCE_ROWS = [
   [
     "content_push_enabled",
@@ -407,8 +400,6 @@ export function NotificationSettings({
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
         <h1 className="hidden text-2xl font-semibold md:block">알림 설정</h1>
 
-        {/* 기기 Push는 취향이 아니라 연결 상태다. 다른 스위치와 나란한 섹션으로 두면
-            "유형 중 하나"처럼 읽히므로, 현재 상태 요약과 묶어 화면 맨 위에 세운다. */}
         <section className="overflow-hidden rounded-xl border bg-card">
           <div className="flex items-start gap-3 p-4">
             <span
@@ -463,7 +454,6 @@ export function NotificationSettings({
             ) : null}
           </div>
 
-          {/* 아래 스위치를 만지면 이 두 줄이 같이 바뀐다. 규칙을 외우는 대신 결과를 본다. */}
           <div className="border-t bg-muted/30 px-4 py-3">
             <p className="text-sm font-medium">{summary.headline}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
@@ -494,7 +484,6 @@ export function NotificationSettings({
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{title}</p>
                 <p className="text-xs text-muted-foreground">{description}</p>
-                {/* 끈 뒤에만 말한다. 다섯 줄에 미리 깔아 두면 아무도 읽지 않는다. */}
                 {!preferences[key] ? (
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     앱 알림함에서는 계속 확인할 수 있습니다.

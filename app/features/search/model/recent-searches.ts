@@ -1,4 +1,5 @@
-export const RECENT_SEARCH_STORAGE_KEY = "kmla-online:search-recent:v1";
+// 계정이 바뀌면 버려야 하는 값이라 키 자체는 `user-scoped-storage`가 소유한다.
+import { RECENT_SEARCH_STORAGE_KEY } from "~/shared/lib/user-scoped-storage";
 
 const MAX_RECENT = 10;
 

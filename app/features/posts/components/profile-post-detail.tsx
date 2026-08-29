@@ -35,7 +35,6 @@ export function ProfilePostDetail({
   action,
 }: {
   post: ProfilePost;
-  /** 입력창 왼쪽 아바타에 쓰는 내 프로필. */
   viewer: CommentViewer;
   comments: PostCommentPage;
   onClose?: () => void;
@@ -95,7 +94,6 @@ export function ProfilePostDetail({
           <>
             <PostMarkdown>{post.body}</PostMarkdown>
 
-            {/* 카드와 달리 모달은 콘텐츠에 `p-4` 여백이 있으므로 그리드도 모서리를 둥글린다. */}
             <PostImageGrid
               images={images}
               className="overflow-hidden rounded-lg"

@@ -60,7 +60,6 @@ export function CommentItem({
   onDelete,
 }: {
   comment: PostComment;
-  /** 수정 입력창의 아바타에 쓴다. */
   viewer: CommentViewer;
   canReply: boolean;
   /** 게시물을 쓴 사람이 단 댓글이다. 판정은 목록이 한다 — 여기서는 배지만 붙인다. */

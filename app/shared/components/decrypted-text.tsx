@@ -46,7 +46,6 @@ interface DecryptedTextProps {
   parentClassName?: string;
 }
 
-/** 확정할 인덱스 순서. */
 function revealOrder(
   length: number,
   direction: NonNullable<DecryptedTextProps["revealDirection"]>,

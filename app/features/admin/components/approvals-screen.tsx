@@ -240,15 +240,9 @@ function ApplicationCard({
     ["사용자 유형", formatProfileType(application.profile_type)],
     ["재입학", application.is_returning_student],
     ["기수", application.cohort],
-    ["반", application.class_no],
-    ["계열", application.academic_track],
-    ["부서", application.department],
     ["학번", application.student_number],
     ["성별", application.gender],
     ["생일", application.birthday],
-    ["전화번호", application.phone_number],
-    ["기숙사 방", application.dorm_room],
-    ["자기소개", application.description],
   ];
   return (
     <Card className="rounded-none md:rounded-xl">
@@ -264,8 +258,7 @@ function ApplicationCard({
           <div className="min-w-0 flex-1">
             <CardTitle>{application.name}</CardTitle>
             <p className="text-xs text-muted-foreground">
-              @{application.pub_id} · 신청{" "}
-              {formatDateTime(application.submitted_at)}
+              신청 {formatDateTime(application.submitted_at)}
             </p>
           </div>
           <div className="ml-auto flex w-full justify-end gap-2 sm:w-auto">
@@ -276,10 +269,7 @@ function ApplicationCard({
       <CardContent>
         <dl className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
           {fields.map(([label, value]) => (
-            <div
-              key={label}
-              className={label === "자기소개" ? "col-span-full" : ""}
-            >
+            <div key={label}>
               <dt className="text-xs text-muted-foreground">{label}</dt>
               <dd className="mt-0.5 break-words">
                 {formatApplicationField(value)}

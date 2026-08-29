@@ -3,13 +3,6 @@ import { GroupPostRow } from "~/features/posts/components/group-post-row";
 import { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
 import type { GroupPost, PostViewMode } from "~/features/posts/model/types";
 
-/**
- * 카드/목록 두 렌즈로 같은 게시물 배열을 그린다.
- *
- * 모바일에서 카드 사이에 gap이 없는 것은 의도다 — 카드가 화면 좌우에 붙어 있으므로 간격
- * 대신 카드 자신의 아래 테두리가 구분선 역할을 한다. `md:` 이상에서 카드가 떨어져 나오면
- * 그때 간격을 준다.
- */
 export function GroupPostFeed({
   posts,
   slug,

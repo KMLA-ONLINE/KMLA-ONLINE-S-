@@ -92,7 +92,6 @@ export function PostDetailDialog({
   title: string;
   postId: string;
   comments: PostCommentPage;
-  /** 입력창 왼쪽 아바타에 쓰는 내 프로필. */
   viewer: CommentViewer;
   /** 이 게시물에 댓글로 쓸 수 있는 작성 신원. 첫 항목이 기본값이다. */
   identities: PostIdentity[];

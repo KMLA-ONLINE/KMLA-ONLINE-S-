@@ -55,7 +55,7 @@ describe("compressImage", () => {
     await compressImage(file, "photo");
     expect(compress).toHaveBeenLastCalledWith(
       file,
-      expect.objectContaining({ maxWidthOrHeight: 3072, initialQuality: 0.85 }),
+      expect.objectContaining({ maxWidthOrHeight: 3072, initialQuality: 0.9 }),
     );
 
     await compressImage(file, "banner");

@@ -103,7 +103,6 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      {/* 긴 목록에서는 페이지 헤더만 별도로 자동 숨김한다. */}
       <PageHeader
         title="KMLA Online"
         hideOnScroll

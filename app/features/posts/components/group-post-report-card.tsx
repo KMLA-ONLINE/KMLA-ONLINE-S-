@@ -106,7 +106,6 @@ export function GroupPostReportCard({
         </div>
       </div>
 
-      {/* 설명 목록이 `basis-full`로 아래 줄에 펼쳐지므로 `flex-wrap`을 유지한다. */}
       <footer className="flex flex-wrap items-center gap-1 px-3 pb-2.5 md:px-4">
         {report.description_count > 0 ? (
           <GroupPostReportDescriptions

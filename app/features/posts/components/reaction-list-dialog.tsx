@@ -15,10 +15,6 @@ import {
 } from "~/shared/ui/dialog";
 import { Spinner } from "~/shared/ui/spinner";
 
-/**
- * 상단 필터 탭 한 칸. `-mb-px`로 버튼의 아래 테두리를 헤더의 `border-b` 위에 겹쳐, 활성 밑줄이
- * 구분선에 딱 붙게 한다.
- */
 function ReactionTab({
   active,
   onClick,
@@ -199,7 +195,6 @@ export function ReactionListDialog({
   );
 }
 
-/** 아바타 오른쪽 아래에 어떤 반응을 눌렀는지 작게 붙인다. */
 function ReactorAvatar({
   reaction,
   children,

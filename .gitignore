@@ -31,3 +31,6 @@
 
 # Vercel
 /.vercel/
+
+# Docs
+**.local.md

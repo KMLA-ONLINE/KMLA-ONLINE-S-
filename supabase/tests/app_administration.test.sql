@@ -98,8 +98,8 @@ reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000098', true);
 set local role authenticated;
 select is(
-  (select pub_id from public.admin_list_applications('pending', 50, 0) limit 1),
-  'pending-user',
+  (select name from public.admin_list_applications('pending', 50, 0) limit 1),
+  '승인대기 학생',
   'pending applications are listed oldest first'
 );
 select is(

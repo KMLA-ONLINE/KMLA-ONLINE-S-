@@ -311,7 +311,6 @@ function StepIndicator({ current }: { current: SignupStep }) {
 
 const PROFILE_FIELDS = Object.keys(EMPTY_VALUES) as (keyof ProfileFormValues)[];
 
-/** 계정 단계에서 프로필 입력값을 잃지 않게 그대로 실어 나른다. */
 function HiddenProfileValues({ values }: { values: ProfileFormValues }) {
   return (
     <>

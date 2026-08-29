@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(51);
+select plan(54);
 
 -- 아래 RPC들을 authenticated가 부를 수 있다는 사실은 이 파일이 실제로 호출해 보며 증명한다.
 -- 여기서는 반대쪽 — 직접 쓰기와 익명 접근이 닫혀 있는지 — 만 한자리에서 센다.
@@ -284,6 +284,18 @@ select is(
 select is(
   (select count(*) from public.search_group_posts('20000000-0000-0000-0000-000000000003', '프로 젝트', 100)),
   1::bigint, 'search ignores whitespace and clamps its maximum limit'
+);
+select is(
+  (select count(*) from public.search_group_posts('20000000-0000-0000-0000-000000000003', '김 관리', 50)),
+  1::bigint, 'search matches a visible identified author name and ignores whitespace'
+);
+select is(
+  (select count(*) from public.search_group_posts('20000000-0000-0000-0000-000000000001', '김관리', 50)),
+  1::bigint, 'search matches the visible author name of a staff post'
+);
+select is(
+  (select count(*) from public.search_group_posts('20000000-0000-0000-0000-000000000003', '이한별', 50)),
+  0::bigint, 'search does not expose an anonymous post through its actual author name'
 );
 
 select lives_ok(

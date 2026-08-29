@@ -1,10 +1,13 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { hydrateGroupPostMedia, listGroupPosts } = vi.hoisted(() => ({
-  hydrateGroupPostMedia: vi.fn((posts: unknown) => Promise.resolve(posts)),
-  listGroupPosts: vi.fn(),
-}));
+const { hydrateGroupPostMedia, infiniteScroll, listGroupPosts } = vi.hoisted(
+  () => ({
+    hydrateGroupPostMedia: vi.fn((posts: unknown) => Promise.resolve(posts)),
+    infiniteScroll: { loadMore: null as (() => void) | null },
+    listGroupPosts: vi.fn(),
+  }),
+);
 
 vi.mock("~/features/posts/data/queries", () => ({
   hydrateGroupPostMedia,
@@ -12,6 +15,12 @@ vi.mock("~/features/posts/data/queries", () => ({
 }));
 vi.mock("~/features/posts/hooks/use-post-view-mode", () => ({
   usePostViewMode: () => ["card"],
+}));
+vi.mock("~/shared/hooks/use-infinite-scroll", () => ({
+  useInfiniteScroll: (loadMore: () => void) => {
+    infiniteScroll.loadMore = loadMore;
+    return () => undefined;
+  },
 }));
 vi.mock("~/features/posts/components/group-post-feed", () => ({
   GroupPostFeed: ({ posts }: { posts: { title: string }[] }) => (
@@ -43,7 +52,10 @@ const categories = [
 ];
 
 describe("GroupPostsPanel", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    infiniteScroll.loadMore = null;
+  });
 
   it("ignores an older category response", async () => {
     let resolveFirst!: (value: any) => void;
@@ -78,7 +90,7 @@ describe("GroupPostsPanel", () => {
     expect(screen.getByText("새 결과")).toBeVisible();
   });
 
-  it("deduplicates load-more calls before React updates disabled state", async () => {
+  it("deduplicates infinite-scroll calls before React updates pending state", async () => {
     let resolve!: (value: any) => void;
     listGroupPosts.mockImplementation(
       () => new Promise((next) => (resolve = next)),
@@ -98,12 +110,14 @@ describe("GroupPostsPanel", () => {
         }}
       />
     ));
-    const button = screen.getByRole("button", { name: "이전 게시물 더 보기" });
-
-    button.click();
-    button.click();
+    act(() => {
+      infiniteScroll.loadMore?.();
+      infiniteScroll.loadMore?.();
+    });
     expect(listGroupPosts).toHaveBeenCalledTimes(1);
     resolve({ posts: [], nextCursor: null });
-    await waitFor(() => expect(button).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByRole("status")).not.toBeInTheDocument(),
+    );
   });
 });

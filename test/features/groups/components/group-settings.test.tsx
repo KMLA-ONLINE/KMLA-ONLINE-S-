@@ -24,7 +24,6 @@ const group: GroupDetail = {
   pinned_at: null,
 };
 
-/** 삭제 확인 칸에 그대로 옮겨 적어야 하는 문구. */
 const DELETION_PHRASE = `group/${group.name}`;
 
 type StubAction = Parameters<typeof createRoutesStub>[0][number]["action"];

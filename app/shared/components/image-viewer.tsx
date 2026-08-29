@@ -737,7 +737,6 @@ export function ImageViewer({
               ))}
             </div>
 
-            {/* 터치 기기는 스와이프로 넘긴다. 거기서 화살표는 이미지를 가리기만 한다. */}
             <div className="absolute inset-y-0 left-2 hidden items-center sm:left-4 sm:flex">
               <ControlButton
                 aria-label="이전 이미지"

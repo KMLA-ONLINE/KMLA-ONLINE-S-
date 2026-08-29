@@ -284,7 +284,6 @@ interface SlotTabsProps {
   onSelect: (slot: string) => void;
 }
 
-/** 평일은 3개, 주말은 14개다. 모바일은 가로 스크롤, 데스크톱은 줄바꿈으로 전부 보여준다. */
 function SlotTabs({ slots, activeSlot, onSelect }: SlotTabsProps) {
   return (
     <div

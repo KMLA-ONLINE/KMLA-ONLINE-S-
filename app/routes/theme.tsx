@@ -34,7 +34,6 @@ export default function Theme() {
         </TestCase>
         <TestCase title="hidden text/password decoys, then name=real-username">
           <div>
-            {/* Hidden decoys test whether Chromium fills the first credential-like fields. */}
             <input style={{ display: "none" }} type="text" />
             <input style={{ display: "none" }} type="password" />
             <input

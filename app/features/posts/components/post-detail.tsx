@@ -33,7 +33,6 @@ export function PostDetail({
 }: {
   post: GroupPostDetail;
   slug: string;
-  /** 입력창 왼쪽 아바타에 쓰는 내 프로필. */
   viewer: CommentViewer;
   /** 이 그룹에서 댓글에 쓸 수 있는 작성 신원. 첫 항목이 기본값이다. */
   identities: PostIdentity[];
@@ -165,7 +164,6 @@ export function PostDetail({
           <PostMarkdown>{post.body}</PostMarkdown>
         </div>
 
-        {/* 카드와 달리 모달은 콘텐츠에 `p-4` 여백이 있으므로 그리드도 모서리를 둥글린다. */}
         <PostImageGrid images={images} className="overflow-hidden rounded-lg" />
         <PostFileList files={files} />
       </div>

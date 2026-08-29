@@ -1973,7 +1973,10 @@ begin
   where post.group_id = p_group_id and post.kind = 'group'
     and post.published_at is not null and post.deleted_at is null
     and nullif(normalized_query, '') is not null
-    and post.search_text like '%' || normalized_query || '%'
+    and (
+      post.search_text like '%' || normalized_query || '%'
+      or profile.search_name like '%' || normalized_query || '%'
+    )
   order by post.published_at desc, post.id desc
   limit least(greatest(coalesce(p_limit, 50), 1), 50);
 end;

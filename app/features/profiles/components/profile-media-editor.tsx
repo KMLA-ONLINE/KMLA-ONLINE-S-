@@ -127,6 +127,27 @@ export function ProfileMediaEditor({
           }}
         />
 
+        {/* 데스크톱에서는 아바타 자체가 버튼이다. 배지를 숨긴 대신 hover 시 살짝 어두워지는
+            것으로 누를 수 있다는 걸 알린다. 터치에는 hover가 없어 이 힌트가 통하지 않으므로
+            모바일은 배지를 그대로 둔다 — 두 트리거는 `sm:`을 사이에 두고 한 번에 하나만
+            렌더되므로 같은 `aria-label`이 겹쳐 노출되지 않는다. */}
+        {isAvatar ? (
+          <button
+            type="button"
+            disabled={pending}
+            aria-label="프로필 사진 변경"
+            onClick={handleEditorClick}
+            className={cn(
+              "pointer-events-auto absolute inset-0 hidden place-items-center rounded-full transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:grid",
+              pending
+                ? "bg-black/40"
+                : "cursor-pointer bg-black/0 hover:bg-black/25",
+            )}
+          >
+            {pending ? <Spinner className="size-6 text-white" /> : null}
+          </button>
+        ) : null}
+
         <Button
           type="button"
           variant="outline"
@@ -134,7 +155,11 @@ export function ProfileMediaEditor({
           disabled={pending}
           aria-label={isAvatar ? "프로필 사진 변경" : "커버 사진 변경"}
           onClick={handleEditorClick}
-          className="rounded-full bg-background shadow-sm ring-2 ring-background"
+          className={cn(
+            "pointer-events-auto rounded-full bg-background shadow-sm ring-2 ring-background",
+            // 아바타 배지는 이제 `inset-0`인 root 안에서 스스로 자리를 잡는다.
+            isAvatar && "absolute right-0 bottom-0 sm:hidden",
+          )}
         >
           {pending ? <Spinner /> : <ImageIcon aria-hidden="true" />}
         </Button>

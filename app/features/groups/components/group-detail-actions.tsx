@@ -114,8 +114,6 @@ export function GroupDetailActions({
                 {isMember ? (
                   <>
                     <DropdownMenuGroup>
-                      {/* 알림 수준을 바꾸고 싶어지는 순간은 이 그룹을 보고 있을 때다.
-                          알림 설정 화면까지 가서 목록에서 이름을 찾게 하지 않는다. */}
                       <DropdownMenuItem
                         onClick={() => setNotificationOpen(true)}
                       >

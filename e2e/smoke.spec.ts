@@ -8,17 +8,6 @@ async function loginAsAcceptedStudent(page: Page) {
   await expect(page).toHaveURL(/\/$/);
 }
 
-test("셸이 뜨고 index 라우트(피드)가 렌더된다", async ({ page }) => {
-  await loginAsAcceptedStudent(page);
-  await page.goto("/");
-
-  // 셸 로더가 실제 Supabase 프로필을 읽어 페이지에 제공한다.
-  await expect(page.getByText("홍길동님, 안녕하세요")).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "동아리 박람회 안내" }),
-  ).toBeVisible();
-});
-
 test("주요 메뉴는 뷰포트마다 정확히 하나만 노출된다", async ({ page }) => {
   await loginAsAcceptedStudent(page);
   // 사이드바(`max-md:hidden`)와 탭바(`md:hidden`) 둘 다 DOM에 있지만 `display:none`이

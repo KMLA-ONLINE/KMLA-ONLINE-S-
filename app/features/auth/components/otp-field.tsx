@@ -14,7 +14,6 @@ const GROUPS = [
   [3, 4, 5],
 ];
 
-/** 이메일로 받은 6자리 코드 입력란. 가입 인증과 비밀번호 재설정이 같은 모양을 쓴다. */
 export function OtpField({
   id,
   label = "인증 코드",
