@@ -1,5 +1,6 @@
 import { ContextMenu } from "@base-ui/react/context-menu";
 import {
+  useEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -183,6 +184,67 @@ export function MessageRow({
     event.preventDefault();
     event.stopPropagation();
   }
+
+  useEffect(() => {
+    if (!contextMenuOpen) return;
+
+    const row = rowRef.current;
+    const visualViewport = window.visualViewport;
+    let animationFrame = 0;
+
+    function updateAnchor() {
+      const currentRow = rowRef.current;
+      const bubble = bubbleRef.current;
+      if (!currentRow || !bubble) return;
+
+      const rowRect = currentRow.getBoundingClientRect();
+      const bubbleRect = bubble.getBoundingClientRect();
+      const nextAnchor = {
+        x: bubbleRect.left,
+        y: rowRect.top,
+        width: bubbleRect.width,
+        height: rowRect.height,
+      };
+
+      setContextMenuLayout((current) => {
+        if (!current) return current;
+        const anchor = current.anchor;
+        if (
+          anchor.x === nextAnchor.x &&
+          anchor.y === nextAnchor.y &&
+          anchor.width === nextAnchor.width &&
+          anchor.height === nextAnchor.height
+        ) {
+          return current;
+        }
+        return { ...current, anchor: nextAnchor };
+      });
+    }
+
+    function scheduleAnchorUpdate() {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(updateAnchor);
+    }
+
+    function handleTransitionEnd(event: TransitionEvent) {
+      if (event.target === row && event.propertyName === "transform") {
+        scheduleAnchorUpdate();
+      }
+    }
+
+    visualViewport?.addEventListener("resize", scheduleAnchorUpdate);
+    visualViewport?.addEventListener("scroll", scheduleAnchorUpdate);
+    window.addEventListener("resize", scheduleAnchorUpdate);
+    row?.addEventListener("transitionend", handleTransitionEnd);
+
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      visualViewport?.removeEventListener("resize", scheduleAnchorUpdate);
+      visualViewport?.removeEventListener("scroll", scheduleAnchorUpdate);
+      window.removeEventListener("resize", scheduleAnchorUpdate);
+      row?.removeEventListener("transitionend", handleTransitionEnd);
+    };
+  }, [contextMenuOpen]);
 
   const contextMenuAnchor = contextMenuLayout
     ? {

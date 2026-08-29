@@ -7,7 +7,15 @@ import { RoomScreen } from "~/features/messaging/components/room-screen";
 import { loadConversation } from "~/features/messaging/data/queries";
 import { renderRoute, screen, within } from "../../../router";
 
-afterEach(() => vi.useRealTimers());
+const originalVisualViewport = window.visualViewport;
+
+afterEach(() => {
+  vi.useRealTimers();
+  Object.defineProperty(window, "visualViewport", {
+    configurable: true,
+    value: originalVisualViewport,
+  });
+});
 
 function ControlledRoomScreen({
   conversation,
@@ -509,6 +517,66 @@ describe("RoomScreen", () => {
       transform: "translate3d(0, -225px, 0)",
     });
     expect(screen.getByRole("menu")).toBeInTheDocument();
+  });
+
+  it("키보드가 닫혀 visual viewport가 바뀌면 작업 위치를 다시 측정한다", async () => {
+    vi.useFakeTimers();
+    const visualViewport = new EventTarget();
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: visualViewport,
+    });
+    const conversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/student-council",
+    });
+    const message = screen
+      .getByText("축제 부스 배치 초안 확인했어요?")
+      .closest("article")!;
+    const messageViewport = screen
+      .getByRole("region", { name: "학생회 기획부 대화" })
+      .querySelector(".overflow-y-auto")!;
+    const messageSurface = message.children[1].lastElementChild!;
+    const messageRect = vi
+      .spyOn(message, "getBoundingClientRect")
+      .mockReturnValue(
+        DOMRect.fromRect({ x: 20, y: 600, width: 320, height: 50 }),
+      );
+    const messageSurfaceRect = vi
+      .spyOn(messageSurface, "getBoundingClientRect")
+      .mockReturnValue(
+        DOMRect.fromRect({ x: 48, y: 600, width: 220, height: 50 }),
+      );
+    vi.spyOn(messageViewport, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 100, width: 360, height: 300 }),
+    );
+
+    fireEvent.touchStart(message, {
+      touches: [{ clientX: 120, clientY: 200 }],
+    });
+    act(() => void vi.advanceTimersByTime(500));
+    expect(screen.getByRole("menu")).toHaveStyle({
+      "--message-context-height": "50px",
+    });
+
+    messageRect.mockReturnValue(
+      DOMRect.fromRect({ x: 20, y: 325, width: 320, height: 60 }),
+    );
+    messageSurfaceRect.mockReturnValue(
+      DOMRect.fromRect({ x: 48, y: 325, width: 220, height: 60 }),
+    );
+    act(() => {
+      visualViewport.dispatchEvent(new Event("resize"));
+      vi.advanceTimersByTime(16);
+    });
+
+    expect(messageRect).toHaveBeenCalledTimes(2);
+    expect(messageSurfaceRect).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("menu")).toHaveStyle({
+      "--message-context-height": "60px",
+    });
   });
 
   it("롱프레스 손가락의 스크림 click을 막고 다음 스크림 탭으로 닫는다", async () => {
