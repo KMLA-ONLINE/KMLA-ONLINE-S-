@@ -1,6 +1,5 @@
 import { globSync } from "node:fs";
 import { defineConfig } from "vitest/config";
-import tsconfigPaths from "vite-tsconfig-paths";
 
 const pureLayers = [
   "test/**/model/**/*.{test,spec}.ts",
@@ -25,12 +24,12 @@ const nodeFiles = globSync(pureLayers)
 const ignored = ["e2e/**", "node_modules/**", "build/**"];
 
 export default defineConfig({
-  plugins: [tsconfigPaths()],
+  resolve: {
+    tsconfigPaths: true,
+  },
   test: {
     testTimeout: 10_000,
     css: false,
-
-    // [수정된 부분] Vitest 버전에 맞는 올바른 pool 설정 문법입니다.
     pool: "vmThreads",
 
     projects: [
