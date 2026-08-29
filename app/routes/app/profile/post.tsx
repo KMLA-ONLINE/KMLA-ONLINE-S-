@@ -10,7 +10,7 @@ import {
   shouldRevalidatePostDetail,
 } from "~/features/posts";
 import type { Route } from "./+types/post";
-import { invalidateSavedProfilePost } from "~/routes/app/profile/post-cache";
+import { invalidateDeletedProfilePost } from "~/routes/app/profile/post-cache";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -49,7 +49,7 @@ export async function clientAction({
   }
   try {
     await deleteProfilePost(params.postId);
-    await invalidateSavedProfilePost();
+    invalidateDeletedProfilePost(params.postId);
     throw redirect(`/profile/${params.pubId}`);
   } catch (error) {
     if (error instanceof Response) throw error;

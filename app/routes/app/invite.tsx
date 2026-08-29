@@ -9,7 +9,7 @@ import {
   GroupInviteScreen,
 } from "~/features/groups";
 import type { Route } from "./+types/invite";
-import { feedKeys } from "~/features/feed";
+import { resetFeed } from "~/features/feed";
 import { getQueryClient } from "~/shared/lib/query-client";
 
 export const handle = defineAppChrome({
@@ -43,10 +43,7 @@ export async function clientAction({ params }: Route.ClientActionArgs) {
         queryKey: groupKeys.details(),
         refetchType: "none",
       }),
-      getQueryClient().invalidateQueries({
-        queryKey: feedKeys.all,
-        refetchType: "none",
-      }),
+      resetFeed(getQueryClient()),
     ]);
     return redirect(`/groups/${slug}`);
   } catch (error) {

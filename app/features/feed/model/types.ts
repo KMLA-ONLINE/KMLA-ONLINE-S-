@@ -76,13 +76,6 @@ export interface FeedPage {
   nextPageToken: string | null;
 }
 
-export interface FeedPageResult {
-  page: FeedPage | null;
-  pageToken: string | null;
-  error: string | null;
-  expired: boolean;
-}
-
 export type FeedPostDetail =
   | {
       kind: "group";

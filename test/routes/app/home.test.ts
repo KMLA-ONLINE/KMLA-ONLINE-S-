@@ -1,4 +1,3 @@
-import { RouterContextProvider } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -17,7 +16,8 @@ vi.mock("~/features/absences/data/queries", () => ({
   listTodayAbsences: mocks.listTodayAbsences,
 }));
 
-vi.mock("~/features/feed", async (importOriginal) => ({
+// `feedQuery`의 queryFn이 배럴이 아니라 이 모듈에서 직접 가져다 쓴다.
+vi.mock("~/features/feed/data/queries", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   listFeedPosts: mocks.listFeedPosts,
 }));
@@ -38,7 +38,12 @@ vi.mock("~/shared/lib/korea-date", () => ({
 }));
 
 import { clientLoader, shouldRevalidate } from "~/routes/app/home";
+import { feedKeys } from "~/features/feed";
 import type { BirthdayProfile } from "~/features/profiles";
+import {
+  getQueryClient,
+  resetQueryClientForTests,
+} from "~/shared/lib/query-client";
 
 const page = {
   posts: [],
@@ -48,21 +53,15 @@ const page = {
 const mealDay = { date: "20260824", meals: [], unavailable: false };
 const birthdays: BirthdayProfile[] = [];
 
-function load(query = "") {
-  const url = `https://example.com/${query}`;
-  return clientLoader({
-    params: {},
-    context: new RouterContextProvider(),
-    request: new Request(url),
-    url: new URL(url),
-    pattern: "/",
-    serverLoader: () => Promise.resolve(undefined),
-  });
+// 커서가 URL에서 캐시로 옮겨가면서 이 로더는 인자를 받지 않는다.
+function load() {
+  return clientLoader();
 }
 
 describe("home feed loader", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetQueryClientForTests();
     mocks.hasActiveSession.mockResolvedValue(true);
     mocks.listTodayAbsences.mockResolvedValue([]);
     mocks.listFeedPosts.mockResolvedValue(page);
@@ -70,28 +69,30 @@ describe("home feed loader", () => {
     mocks.listBirthdays.mockResolvedValue(birthdays);
   });
 
-  it("loads the first feed page and today's meal independently", async () => {
+  // 피드는 화면이 무한 쿼리로 구독한다. 로더는 캐시를 데우기만 하고 loaderData로 넘기지
+  // 않는다 — 넘기면 같은 데이터의 진실 소스가 둘이 된다.
+  it("warms the feed cache and loads today's meal independently", async () => {
     const result = await load();
 
     expect(mocks.listFeedPosts).toHaveBeenCalledWith(null, true);
     expect(mocks.getMealDay).toHaveBeenCalledWith("20260824");
     expect(mocks.listBirthdays).toHaveBeenCalledWith("2026-08-24", "today");
-    expect(result).toMatchObject({ page, mealDay, birthdays, error: null });
+    expect(result).toMatchObject({ mealDay, birthdays });
+    expect(result).not.toHaveProperty("page");
+    expect(getQueryClient().getQueryData(feedKeys.list())).toMatchObject({
+      pages: [page],
+    });
   });
 
-  it("loads only the feed for an opaque pagination token", async () => {
-    const token = "20000000-0000-0000-0000-000000000001";
-    const result = await load(`?pageToken=${token}`);
+  // 뒤로 가기로 돌아왔을 때 쌓아 둔 페이지를 유지하기 위한 것이다. 여기서 다시 읽으면
+  // 무한 쿼리가 모든 페이지를 다시 읽고, 새 feedEpoch가 목록을 통째로 갈아치운다.
+  it("reuses an existing feed session instead of refetching", async () => {
+    await load();
+    mocks.listFeedPosts.mockClear();
 
-    expect(mocks.listFeedPosts).toHaveBeenCalledWith(token, true);
-    expect(mocks.getMealDay).not.toHaveBeenCalled();
-    expect(mocks.listBirthdays).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      page,
-      pageToken: token,
-      mealDay: null,
-      birthdays: null,
-    });
+    await load();
+
+    expect(mocks.listFeedPosts).not.toHaveBeenCalled();
   });
 
   // 게이트와 병렬로 도는 로더다. 세션이 없을 때 요청을 띄우면 authenticated 전용 RPC가
@@ -106,27 +107,9 @@ describe("home feed loader", () => {
     expect(mocks.listTodayAbsences).not.toHaveBeenCalled();
     expect(mocks.getMealDay).not.toHaveBeenCalled();
     expect(result).toMatchObject({
-      page: null,
       mealDay: null,
       birthdays: null,
       absences: [],
-      error: null,
-    });
-  });
-
-  it("turns an expired token into a refreshable pagination result", async () => {
-    mocks.listFeedPosts.mockRejectedValue(
-      new Error("feed page not found or expired"),
-    );
-
-    const result = await load(
-      "?pageToken=20000000-0000-0000-0000-000000000001",
-    );
-
-    expect(result).toMatchObject({
-      page: null,
-      expired: true,
-      error: "피드가 만료되었습니다. 새로고침해 주세요.",
     });
   });
 });

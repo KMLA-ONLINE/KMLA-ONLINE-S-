@@ -16,7 +16,7 @@ import {
 import type { Route } from "./+types/index";
 import { Button } from "~/shared/ui/button";
 import { getQueryClient } from "~/shared/lib/query-client";
-import { feedKeys } from "~/features/feed";
+import { resetFeed } from "~/features/feed";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -99,13 +99,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
         }),
       );
     }
-    if (intent === "join")
-      tasks.push(
-        queryClient.invalidateQueries({
-          queryKey: feedKeys.all,
-          refetchType: "none",
-        }),
-      );
+    if (intent === "join") tasks.push(resetFeed(queryClient));
     await Promise.all(tasks);
     return data({ ok: true });
   } catch (error) {

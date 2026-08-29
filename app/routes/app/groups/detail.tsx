@@ -50,7 +50,7 @@ import {
 } from "~/features/posts";
 import { readPostViewMode } from "~/features/posts/model/view-preference";
 import type { Route } from "./+types/detail";
-import { feedKeys } from "~/features/feed";
+import { feedKeys, removeFeedPost, resetFeed } from "~/features/feed";
 import { getQueryClient } from "~/shared/lib/query-client";
 
 export const handle = defineAppChrome({
@@ -395,7 +395,7 @@ export async function clientAction({
     } else {
       return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
     }
-    await invalidateGroupMutation(intent, groupId, params.slug);
+    await invalidateGroupMutation(intent, groupId, params.slug, formData);
     return data({ ok: true });
   } catch (error) {
     return data(
@@ -413,6 +413,7 @@ async function invalidateGroupMutation(
   intent: FormDataEntryValue | null,
   groupId: string,
   slug: string,
+  formData: FormData,
 ) {
   const queryClient = getQueryClient();
   const invalidate = (queryKey: readonly unknown[]) =>
@@ -427,8 +428,13 @@ async function invalidateGroupMutation(
     tasks.push(
       invalidate(groupKeys.postPages(groupId)),
       invalidate(groupKeys.detail(slug)),
-      invalidate(feedKeys.page(null)),
     );
+    // 고정과 신고 처리는 그룹 안의 상태만 바꾼다. 삭제만 피드에 영향이 있고, 그것도 랭킹
+    // 재계산이 아니라 그 글 하나를 덜어내는 일이다.
+    if (intent === "delete-post") {
+      const postId = formData.get("postId");
+      if (typeof postId === "string") removeFeedPost(queryClient, postId);
+    }
     if (intent === "dismiss-report" || intent === "delete-post")
       tasks.push(invalidate([...groupKeys.all, "reports", groupId]));
   } else if (
@@ -439,10 +445,10 @@ async function invalidateGroupMutation(
     intent === "delete-category"
   ) {
     tasks.push(
+      // 카테고리는 그룹 안의 분류일 뿐이라 전역 피드 랭킹과 무관하다.
       invalidate(groupKeys.categories(groupId)),
       invalidate(groupKeys.postPages(groupId)),
       invalidate(groupKeys.detail(slug)),
-      invalidate(feedKeys.page(null)),
     );
   } else if (intent === "pin") {
     tasks.push(
@@ -460,7 +466,7 @@ async function invalidateGroupMutation(
       invalidate(groupKeys.detail(slug)),
       invalidate(groupKeys.memberLists(groupId)),
     );
-    if (intent === "join") tasks.push(invalidate(feedKeys.all));
+    if (intent === "join") tasks.push(resetFeed(queryClient));
   } else if (
     intent === "approve-join-request" ||
     intent === "reject-join-request" ||
