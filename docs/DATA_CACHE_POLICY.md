@@ -35,6 +35,7 @@ RLS가 항상 최종 데이터 및 권한의 기준이며, 클라이언트 캐�
 ["groups", "reports", groupId, sort]
 ["notifications", "page", beforeLastActivityAt, beforeId]
 ["notifications", "preferences"]
+["search", "directory", query]
 ```
 
 기능 루트 키인 `["feed"]`, `["groups"]`는 하위 데이터를 한꺼번에 stale 처리해야 할 때만 사용한다.
@@ -50,6 +51,7 @@ RLS가 항상 최종 데이터 및 권한의 기준이며, 클라이언트 캐�
 | 멤버·가입 요청·신고·초대   |       0초 | 권한과 운영 상태 변화에 민감하다.                                  |
 | 관리자·예약 등 미도입 영역 |       0초 | 별도 검토 전에는 기존 fresh-on-load 동작을 유지한다.               |
 | 알림함·알림 설정           |       0초 | Realtime과 focus 복귀 시 라우트를 즉시 재검증한다.                 |
+| 전역 검색 결과             |       0초 | 매 검색이 사용자의 명시적 제출이라 재사용보다 최신성이 우선한다.   |
 
 사용되지 않는 캐시의 기본 `gcTime`은 10분이다. 브라우저를 새로 열면 모든 쿼리 캐시는 비어 있다.
 Supabase가 피드 첫 페이지 요청을 5초 동안 중복 방지하는 규칙은 이 정책과 별개로 유지된다.
