@@ -1,7 +1,7 @@
 import { data, redirect, useRouteLoaderData } from "react-router";
 
 import { defineAppChrome, useAppShell } from "~/features/app-shell";
-import { loadGroupDetail } from "~/features/groups";
+import { groupKeys, loadGroupDetail } from "~/features/groups";
 import {
   deleteGroupPost,
   getGroupPost,
@@ -14,7 +14,11 @@ import {
 } from "~/features/posts";
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
 import type { Route } from "./+types/post";
-import { invalidateSavedGroupPost } from "~/routes/app/groups/post-cache";
+import {
+  invalidateDeletedGroupPost,
+  invalidateGroupPostOrder,
+} from "~/routes/app/groups/post-cache";
+import { getQueryClient } from "~/shared/lib/query-client";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -40,16 +44,18 @@ export async function clientAction({
 }: Route.ClientActionArgs) {
   const formData = await request.formData();
   try {
-    const [group, post] = await Promise.all([
-      loadGroupDetail(params.slug),
-      getGroupPost(params.postId),
-    ]);
-    if (!group || post?.group_id !== group.group_id) {
-      return data({ error: "게시물을 찾을 수 없습니다." }, { status: 404 });
+    // 보통은 부모 라우트 로더가 채워 둔 캐시로 끝난다. 비어 있을 때 무효화를 건너뛰면
+    // 목록이 조용히 낡으므로, 그때만 한 번 읽는다.
+    const group =
+      getQueryClient().getQueryData<{ group_id: string }>(
+        groupKeys.detail(params.slug),
+      ) ?? (await loadGroupDetail(params.slug));
+    if (!group) {
+      return data({ error: "그룹을 찾을 수 없습니다." }, { status: 404 });
     }
     if (formData.get("intent") === "delete") {
       await deleteGroupPost(params.postId);
-      await invalidateSavedGroupPost(group.group_id);
+      await invalidateDeletedGroupPost(group.group_id, params.postId);
       throw redirect(`/groups/${params.slug}`);
     }
     if (formData.get("intent") === "pin") {
@@ -57,7 +63,7 @@ export async function clientAction({
         params.postId,
         formData.get("pinned") === "true",
       );
-      await invalidateSavedGroupPost(group.group_id);
+      await invalidateGroupPostOrder(group.group_id);
       return data({ ok: true });
     }
     return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });

@@ -103,13 +103,11 @@ export async function loadGroupHome(): Promise<GroupHomeItem[]> {
     );
 
   const items = [...official, ...mine];
-  const urls = await createGroupMediaUrls(
-    items.flatMap((item) => [item.icon_path, item.cover_path]),
-  );
+  const urls = await createGroupMediaUrls(items.map((item) => item.icon_path));
   return items.map((item) => ({
     ...item,
     icon_path: item.icon_path ? (urls.get(item.icon_path) ?? null) : null,
-    cover_path: item.cover_path ? (urls.get(item.cover_path) ?? null) : null,
+    cover_path: null,
   }));
 }
 

@@ -190,6 +190,7 @@ export function GroupPostReportsPanel({
             void moderationFetcher.submit(
               {
                 intent: "dismiss-report",
+                groupId,
                 postId: dismissTarget.post_id,
               },
               { method: "post" },
@@ -211,6 +212,7 @@ export function GroupPostReportsPanel({
             void moderationFetcher.submit(
               {
                 intent: "delete-post",
+                groupId,
                 postId: deleteTarget.post_id,
               },
               { method: "post" },

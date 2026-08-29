@@ -1,4 +1,5 @@
 import type { GroupDiscoveryCursor } from "~/features/groups/model/types";
+import type { PostCursor } from "~/features/posts/model/types";
 import type { QueryKey } from "@tanstack/react-query";
 
 export const GROUP_STALE_TIME = 30_000;
@@ -17,9 +18,16 @@ export const groupKeys = {
   detail: (slug: string) => [...groupKeys.details(), slug] as const,
   categories: (groupId: string) =>
     [...groupKeys.all, "categories", groupId] as const,
-  posts: (groupId: string) => [...groupKeys.all, "posts", groupId] as const,
+  postPages: (groupId: string) => [...groupKeys.all, "posts", groupId] as const,
+  posts: (
+    groupId: string,
+    categoryId: string | null,
+    cursor: PostCursor | null,
+  ) => [...groupKeys.postPages(groupId), { categoryId, cursor }] as const,
+  memberLists: (groupId: string) =>
+    [...groupKeys.all, "members", groupId] as const,
   members: (groupId: string, query: string) =>
-    [...groupKeys.all, "members", groupId, query] as const,
+    [...groupKeys.memberLists(groupId), query] as const,
   joinRequests: (groupId: string) =>
     [...groupKeys.all, "join-requests", groupId] as const,
   invite: (groupId: string) => [...groupKeys.all, "invite", groupId] as const,

@@ -1,64 +1,59 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createSignedUrls, getSession } = vi.hoisted(() => ({
+const { createSignedUrls, from, upload } = vi.hoisted(() => ({
   createSignedUrls: vi.fn(),
-  getSession: vi.fn(),
+  from: vi.fn(),
+  upload: vi.fn(),
 }));
 
 vi.mock("~/shared/supabase/client", () => ({
   getSupabase: () => ({
-    auth: { getSession },
-    storage: { from: () => ({ createSignedUrls }) },
+    auth: {
+      getSession: () =>
+        Promise.resolve({ data: { session: { user: { id: "user-1" } } } }),
+    },
+    storage: { from },
   }),
 }));
 
 import {
   createPostAttachmentUrls,
-  resetPostAttachmentUrlCacheForTests,
+  uploadPostAttachment,
 } from "~/features/posts/data/files";
+import { resetSignedUrlCacheForTests } from "~/shared/supabase/signed-urls";
 
-describe("post attachment signed URLs", () => {
+// 서명 자체의 계약(캐시·배치·사용자 격리)은 test/shared/supabase/signed-urls.test.ts가
+// 검증한다. 여기서는 이 모듈이 자기 버킷을 쓰는지만 본다.
+describe("post attachment files", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resetPostAttachmentUrlCacheForTests();
-    getSession.mockResolvedValue({
-      data: { session: { user: { id: "user-1" } } },
-    });
+    resetSignedUrlCacheForTests();
+    from.mockReturnValue({ createSignedUrls, upload });
+    createSignedUrls.mockImplementation((paths: string[]) =>
+      Promise.resolve({
+        data: paths.map((path) => ({ path, signedUrl: `signed:${path}` })),
+        error: null,
+      }),
+    );
+    upload.mockResolvedValue({ error: null });
   });
 
-  it("deduplicates paths and reuses signed URLs", async () => {
-    createSignedUrls.mockResolvedValue({
-      data: [{ path: "post/file", signedUrl: "signed-url" }],
-      error: null,
-    });
+  it("signs against the post-attachments bucket", async () => {
+    const urls = await createPostAttachmentUrls(["post/file"]);
 
-    const first = await createPostAttachmentUrls(["post/file", "post/file"]);
-    const second = await createPostAttachmentUrls(["post/file"]);
-
-    expect(first.get("post/file")).toBe("signed-url");
-    expect(second.get("post/file")).toBe("signed-url");
-    expect(createSignedUrls).toHaveBeenCalledOnce();
-    expect(createSignedUrls).toHaveBeenCalledWith(["post/file"], 3600);
+    expect(from).toHaveBeenCalledWith("post-attachments");
+    expect(urls.get("post/file")).toBe("signed:post/file");
   });
 
-  it("does not share signed URLs between users", async () => {
-    createSignedUrls
-      .mockResolvedValueOnce({
-        data: [{ path: "post/file", signedUrl: "user-1-url" }],
-        error: null,
-      })
-      .mockResolvedValueOnce({
-        data: [{ path: "post/file", signedUrl: "user-2-url" }],
-        error: null,
-      });
+  it("uploads to the post-attachments bucket with the file's own type", async () => {
+    const file = new File(["x"], "note.pdf", { type: "application/pdf" });
 
-    await createPostAttachmentUrls(["post/file"]);
-    getSession.mockResolvedValue({
-      data: { session: { user: { id: "user-2" } } },
+    await uploadPostAttachment("post/file", file);
+
+    expect(from).toHaveBeenCalledWith("post-attachments");
+    expect(upload).toHaveBeenCalledWith("post/file", file, {
+      contentType: "application/pdf",
+      upsert: false,
     });
-    const secondUser = await createPostAttachmentUrls(["post/file"]);
-
-    expect(secondUser.get("post/file")).toBe("user-2-url");
-    expect(createSignedUrls).toHaveBeenCalledTimes(2);
   });
 });

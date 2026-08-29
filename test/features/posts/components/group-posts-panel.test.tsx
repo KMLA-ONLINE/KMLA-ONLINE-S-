@@ -1,9 +1,15 @@
 import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listGroupPosts } = vi.hoisted(() => ({ listGroupPosts: vi.fn() }));
+const { hydrateGroupPostMedia, listGroupPosts } = vi.hoisted(() => ({
+  hydrateGroupPostMedia: vi.fn((posts: unknown) => Promise.resolve(posts)),
+  listGroupPosts: vi.fn(),
+}));
 
-vi.mock("~/features/posts/data/queries", () => ({ listGroupPosts }));
+vi.mock("~/features/posts/data/queries", () => ({
+  hydrateGroupPostMedia,
+  listGroupPosts,
+}));
 vi.mock("~/features/posts/hooks/use-post-view-mode", () => ({
   usePostViewMode: () => ["card"],
 }));

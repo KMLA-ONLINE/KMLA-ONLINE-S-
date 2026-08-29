@@ -1,63 +1,58 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createSignedUrls, getSession } = vi.hoisted(() => ({
+const { createSignedUrls, from, upload } = vi.hoisted(() => ({
   createSignedUrls: vi.fn(),
-  getSession: vi.fn(),
+  from: vi.fn(),
+  upload: vi.fn(),
 }));
 
 vi.mock("~/shared/supabase/client", () => ({
   getSupabase: () => ({
-    auth: { getSession },
-    storage: { from: () => ({ createSignedUrls }) },
+    auth: {
+      getSession: () =>
+        Promise.resolve({ data: { session: { user: { id: "user-1" } } } }),
+    },
+    storage: { from },
   }),
 }));
 
 import {
   createGroupMediaUrls,
-  resetGroupMediaUrlCacheForTests,
+  uploadGroupMedia,
 } from "~/features/groups/data/files";
+import { resetSignedUrlCacheForTests } from "~/shared/supabase/signed-urls";
 
-describe("group media signed URLs", () => {
+// 서명 자체의 계약은 test/shared/supabase/signed-urls.test.ts가 검증한다.
+describe("group media files", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resetGroupMediaUrlCacheForTests();
-    getSession.mockResolvedValue({
-      data: { session: { user: { id: "user-1" } } },
-    });
+    resetSignedUrlCacheForTests();
+    from.mockReturnValue({ createSignedUrls, upload });
+    createSignedUrls.mockImplementation((paths: string[]) =>
+      Promise.resolve({
+        data: paths.map((path) => ({ path, signedUrl: `signed:${path}` })),
+        error: null,
+      }),
+    );
+    upload.mockResolvedValue({ error: null });
   });
 
-  it("reuses the same URL for repeated reads of an unchanged object path", async () => {
-    createSignedUrls.mockResolvedValue({
-      data: [{ path: "group/icon/object", signedUrl: "signed-url-1" }],
-      error: null,
-    });
+  it("signs against the group-media bucket and skips empty slots", async () => {
+    const urls = await createGroupMediaUrls(["group/icon", null]);
 
-    const first = await createGroupMediaUrls(["group/icon/object"]);
-    const second = await createGroupMediaUrls(["group/icon/object"]);
-
-    expect(first.get("group/icon/object")).toBe("signed-url-1");
-    expect(second.get("group/icon/object")).toBe("signed-url-1");
-    expect(createSignedUrls).toHaveBeenCalledTimes(1);
+    expect(from).toHaveBeenCalledWith("group-media");
+    expect(urls.get("group/icon")).toBe("signed:group/icon");
+    expect(urls.size).toBe(1);
   });
 
-  it("does not share bearer URLs between signed-in users", async () => {
-    createSignedUrls
-      .mockResolvedValueOnce({
-        data: [{ path: "group/icon/object", signedUrl: "user-1-url" }],
-        error: null,
-      })
-      .mockResolvedValueOnce({
-        data: [{ path: "group/icon/object", signedUrl: "user-2-url" }],
-        error: null,
-      });
+  it("uploads group media as webp", async () => {
+    const file = new File(["x"], "icon.webp", { type: "image/webp" });
 
-    await createGroupMediaUrls(["group/icon/object"]);
-    getSession.mockResolvedValue({
-      data: { session: { user: { id: "user-2" } } },
+    await uploadGroupMedia("group/icon", file);
+
+    expect(upload).toHaveBeenCalledWith("group/icon", file, {
+      contentType: "image/webp",
+      upsert: false,
     });
-    const secondUser = await createGroupMediaUrls(["group/icon/object"]);
-
-    expect(secondUser.get("group/icon/object")).toBe("user-2-url");
-    expect(createSignedUrls).toHaveBeenCalledTimes(2);
   });
 });
