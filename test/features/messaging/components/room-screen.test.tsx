@@ -416,7 +416,20 @@ describe("RoomScreen", () => {
       "--message-context-height": "50px",
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "하트 반응 남기기" }));
+    const replyItem = screen.getByRole("menuitem", { name: "답장" });
+    const heartReaction = screen.getByRole("button", {
+      name: "하트 반응 남기기",
+    });
+    fireEvent.touchEnd(message);
+    fireEvent.click(replyItem, { pointerType: "touch" });
+    expect(screen.queryByText("박서현에게 답장")).not.toBeInTheDocument();
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+
+    fireEvent.touchStart(heartReaction, {
+      touches: [{ clientX: 120, clientY: 200 }],
+    });
+    fireEvent.touchEnd(heartReaction);
+    fireEvent.click(heartReaction, { pointerType: "touch" });
     expect(
       within(message).getByRole("img", { name: "하트" }),
     ).toBeInTheDocument();

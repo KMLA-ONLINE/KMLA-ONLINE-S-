@@ -89,6 +89,8 @@ export function MessageRow({
   const [contextMenuLayout, setContextMenuLayout] =
     useState<ContextMenuLayout | null>(null);
   const contextMenuOpenRef = useRef(false);
+  const contextTouchActiveRef = useRef(false);
+  const contextActionsReadyRef = useRef(false);
   const rowRef = useRef<HTMLElement>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
   const replySwipeStart = useRef<{ x: number; y: number } | null>(null);
@@ -114,10 +116,12 @@ export function MessageRow({
     contextMenuOpenRef.current = open;
 
     if (open) {
+      contextActionsReadyRef.current = !contextTouchActiveRef.current;
       const row = rowRef.current;
       const bubble = bubbleRef.current;
       if (!row || !bubble) {
         contextMenuOpenRef.current = false;
+        contextActionsReadyRef.current = false;
         return;
       }
 
@@ -163,6 +167,8 @@ export function MessageRow({
         },
         translateY,
       });
+    } else {
+      contextActionsReadyRef.current = false;
     }
     setContextMenuOpen(open);
   }
@@ -196,6 +202,9 @@ export function MessageRow({
       onPointerDown={startReplySwipe}
       onPointerUp={finishReplySwipe}
       onPointerCancel={() => (replySwipeStart.current = null)}
+      onTouchStart={() => (contextTouchActiveRef.current = true)}
+      onTouchEnd={() => (contextTouchActiveRef.current = false)}
+      onTouchCancel={() => (contextTouchActiveRef.current = false)}
     >
       {!isOwn ? (
         endsGroup ? (
@@ -292,6 +301,17 @@ export function MessageRow({
           <ContextMenu.Popup
             data-slot="message-context-menu"
             className="relative w-max max-w-[calc(100vw-2rem)] duration-0 outline-none data-open:animate-none data-closed:animate-none"
+            onTouchStartCapture={() => {
+              contextActionsReadyRef.current = true;
+            }}
+            onKeyDownCapture={() => {
+              contextActionsReadyRef.current = true;
+            }}
+            onClickCapture={(event) => {
+              if (contextActionsReadyRef.current) return;
+              event.preventDefault();
+              event.stopPropagation();
+            }}
             style={
               {
                 "--message-context-height": `${contextMenuLayout?.anchor.height ?? 0}px`,
