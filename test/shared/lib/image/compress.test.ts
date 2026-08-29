@@ -35,7 +35,7 @@ describe("compressImage", () => {
       file,
       expect.objectContaining({
         maxWidthOrHeight: 512,
-        initialQuality: 0.85,
+        initialQuality: 0.9,
         fileType: "image/webp",
         preserveExif: false,
         alwaysKeepResolution: false,
@@ -55,13 +55,13 @@ describe("compressImage", () => {
     await compressImage(file, "photo");
     expect(compress).toHaveBeenLastCalledWith(
       file,
-      expect.objectContaining({ maxWidthOrHeight: 3072, initialQuality: 0.85 }),
+      expect.objectContaining({ maxWidthOrHeight: 3072, initialQuality: 0.9 }),
     );
 
     await compressImage(file, "banner");
     expect(compress).toHaveBeenLastCalledWith(
       file,
-      expect.objectContaining({ maxWidthOrHeight: 2400, initialQuality: 0.85 }),
+      expect.objectContaining({ maxWidthOrHeight: 2400, initialQuality: 0.9 }),
     );
   });
 
