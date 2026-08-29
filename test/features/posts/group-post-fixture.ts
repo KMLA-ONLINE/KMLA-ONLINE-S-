@@ -3,7 +3,7 @@ import type { GroupPost } from "~/features/posts/model/types";
 export function groupPost(overrides: Partial<GroupPost> = {}): GroupPost {
   return {
     attachments: [],
-    author_avatar_path: null as unknown as string,
+    author_avatar_path: null,
     author_identity: "identified",
     author_label: "익명",
     author_name: "김서민",
