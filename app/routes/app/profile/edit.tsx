@@ -6,6 +6,7 @@ import {
   loadMyEditableProfile,
   loadProfileDepartments,
   ProfileEditScreen,
+  readProfileEditFailure,
   readProfileEditForm,
   updateMyProfile,
   validateProfileEdit,
@@ -53,22 +54,22 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     return data({ values, errors }, { status: 400 });
   }
 
+  let pubId: string;
+
   try {
-    await updateMyProfile(values);
+    // 공개 ID를 바꿨다면 저장 전의 주소는 이미 없는 주소다. RPC가 돌려준 값으로만 옮긴다.
+    pubId = await updateMyProfile(values);
     await getQueryClient().invalidateQueries({ queryKey: birthdayKeys.all });
-  } catch {
+  } catch (error) {
     return data(
+      { values, errors: readProfileEditFailure(error) },
       {
-        values,
-        errors: {
-          form: "프로필을 저장하지 못했습니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.",
-        },
+        status: 400,
       },
-      { status: 400 },
     );
   }
 
-  throw redirect(`/profile/${profile.pub_id}`);
+  throw redirect(`/profile/${pubId}`);
 }
 
 export default function ProfileEditPage({

@@ -39,6 +39,7 @@ const student: EditableProfile = {
 
 /** 화면이 실제로 내보내는 칸 이름. 생일은 년/월/일 세 칸으로 나간다. */
 const SUBMITTED_FIELDS: Record<string, string> = {
+  pubId: student.pub_id,
   name: student.name,
   description: "",
   birthdayYear: "2009",
@@ -87,13 +88,31 @@ describe("ProfileEditScreen", () => {
 
     // 값은 요약 줄로 계속 보인다. 뒤로 미룬 것은 확인이 아니라 편집이다.
     expect(
-      screen.getByText("이한별 · 2009년 3월 1일 · 여성 · 국제 계열"),
+      screen.getByText(
+        "@hanbyeol-26 · 이한별 · 2009년 3월 1일 · 여성 · 국제 계열",
+      ),
     ).toBeVisible();
     expect(screen.getByLabelText(/이름/)).not.toBeVisible();
+    expect(screen.getByLabelText(/slug/)).not.toBeVisible();
 
     // 학기마다 고치는 값은 접지 않는다.
     expect(screen.getByLabelText("반")).toBeVisible();
     expect(screen.getByLabelText("기숙사 방")).toBeVisible();
+  });
+
+  /**
+   * slug는 프로필 주소라 되돌릴 수 없는 값이 아니지만, 예약어나 이미 쓰이는 값은 저장이
+   * 거절된다. 그 오류가 접힌 칸 안에 있으면 아무도 못 본다(기능 명세 §12.2).
+   */
+  it("opens the identity section when the slug is rejected", () => {
+    const actionData = submit({ pubId: "admin" });
+
+    expect(actionData.errors?.pubId).toBeDefined();
+
+    renderScreen(actionData);
+
+    expect(screen.getByLabelText(/slug/)).toBeVisible();
+    expect(screen.getByText(String(actionData.errors?.pubId))).toBeVisible();
   });
 
   it("opens the identity section when a submission is rejected inside it", () => {

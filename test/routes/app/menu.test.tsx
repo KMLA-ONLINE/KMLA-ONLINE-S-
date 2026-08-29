@@ -8,7 +8,10 @@ import {
 import MenuPage from "~/routes/app/menu";
 import { renderRoute, screen } from "../../router";
 
-function renderMenu(role: ProfileRole) {
+function renderMenu(
+  role: ProfileRole,
+  type: ShellData["profile"]["type"] = "student",
+) {
   const shell = {
     email: "student@kmla.hs.kr",
     profile: {
@@ -16,7 +19,7 @@ function renderMenu(role: ProfileRole) {
       pub_id: "student",
       name: "홍길동",
       role,
-      type: "student",
+      type,
       status: "accepted",
       avatar_url: null,
     },
@@ -37,7 +40,6 @@ describe("menu route", () => {
   it("shows one admin shortcut for an admin", () => {
     renderMenu("admin");
 
-    expect(screen.getByRole("heading", { name: "관리자" })).toBeVisible();
     const links = screen.getAllByRole("link", { name: "관리자 페이지" });
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveAttribute("href", "/admin");
@@ -51,10 +53,38 @@ describe("menu route", () => {
       "/menu/birthdays",
     );
     expect(
-      screen.queryByRole("heading", { name: "관리자" }),
+      screen.queryByRole("link", { name: "관리자 페이지" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens every setting through one row instead of listing them", () => {
+    renderMenu("member");
+
+    expect(screen.getByRole("link", { name: "설정" })).toHaveAttribute(
+      "href",
+      "/menu/settings",
+    );
+    expect(
+      screen.queryByRole("link", { name: "비밀번호 변경" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("link", { name: "관리자 페이지" }),
+      screen.queryByRole("link", { name: "알림 설정" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers the absence shortcut to students only", () => {
+    const { unmount } = renderMenu("member");
+
+    expect(screen.getByRole("link", { name: "공결 & 병결" })).toHaveAttribute(
+      "href",
+      "/menu/absence",
+    );
+
+    unmount();
+    renderMenu("member", "teacher");
+
+    expect(
+      screen.queryByRole("link", { name: "공결 & 병결" }),
     ).not.toBeInTheDocument();
   });
 });

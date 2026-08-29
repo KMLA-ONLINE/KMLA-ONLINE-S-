@@ -2502,6 +2502,7 @@ export type Database = {
           p_is_returning_student?: boolean
           p_name: string
           p_phone_number?: string
+          p_pub_id?: string
         }
         Returns: {
           academic_track:

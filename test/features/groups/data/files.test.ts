@@ -52,6 +52,7 @@ describe("group media files", () => {
 
     expect(upload).toHaveBeenCalledWith("group/icon", file, {
       contentType: "image/webp",
+      cacheControl: "31536000",
       upsert: false,
     });
   });

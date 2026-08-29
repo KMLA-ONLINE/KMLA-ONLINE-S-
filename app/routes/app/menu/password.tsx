@@ -113,7 +113,7 @@ export default function MenuPasswordPage({ actionData }: Route.ComponentProps) {
 
   return (
     <>
-      <PageHeader title="비밀번호 변경" back="/menu" />
+      <PageHeader title="비밀번호 변경" back="/menu/settings" />
 
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
         <h1 className="hidden text-2xl font-semibold md:block">

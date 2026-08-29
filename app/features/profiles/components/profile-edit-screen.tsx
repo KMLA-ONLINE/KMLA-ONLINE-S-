@@ -81,6 +81,7 @@ function SectionTitle({ children }: { children: ReactNode }) {
 
 function initialValues(profile: EditableProfile): ProfileEditValues {
   return {
+    pubId: profile.pub_id,
     name: profile.name,
     description: profile.description ?? "",
     birthday: profile.birthday ?? "",
@@ -110,6 +111,7 @@ function formatBirthday(value: string): string {
  */
 function identitySummary(values: ProfileEditValues): string {
   return [
+    `@${values.pubId}`,
     values.name,
     formatBirthday(values.birthday),
     values.gender ? GENDER_LABELS[values.gender] : "",
@@ -138,6 +140,7 @@ function ProfileEditForm({
   const identityRef = useRef<HTMLDetailsElement>(null);
 
   const identityHasError = [
+    errors.pubId,
     errors.name,
     errors.birthday,
     errors.gender,
@@ -437,6 +440,48 @@ function ProfileEditForm({
             </summary>
 
             <div className="grid gap-4 pt-5 sm:grid-cols-2 sm:gap-5">
+              <Field
+                data-invalid={Boolean(errors.pubId)}
+                className="sm:col-span-2"
+              >
+                <FieldLabel htmlFor="profile-slug">
+                  <RequiredLabel>slug</RequiredLabel>
+                </FieldLabel>
+                <div className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="shrink-0 text-sm text-muted-foreground"
+                  >
+                    /profile/
+                  </span>
+                  <Input
+                    id="profile-slug"
+                    name="pubId"
+                    type="text"
+                    inputMode="url"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    pattern="[a-z0-9][a-z0-9-]{3,13}[a-z0-9]"
+                    maxLength={15}
+                    required
+                    defaultValue={values.pubId}
+                    aria-invalid={Boolean(errors.pubId)}
+                    aria-describedby="profile-slug-description"
+                    onInput={(event) => {
+                      event.currentTarget.value = event.currentTarget.value
+                        .toLowerCase()
+                        .replace(/[^a-z0-9-]/g, "");
+                    }}
+                  />
+                </div>
+                <FieldDescription id="profile-slug-description">
+                  프로필 주소에 쓰는 이름입니다. 영문 소문자, 숫자, 하이픈
+                  5~15자.
+                </FieldDescription>
+                <FieldError>{errors.pubId}</FieldError>
+              </Field>
+
               <Field
                 data-invalid={Boolean(errors.name)}
                 className="sm:col-span-2"
