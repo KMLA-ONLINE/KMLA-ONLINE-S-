@@ -134,6 +134,36 @@ Storage signed URL도 같은 쿼리 캐시에 산다. 키는 `["signed-url", buc
   함께 폐기한다. 별도의 모듈 수준 Map을 새로 만들지 않는다 — 그 Map은 `clear()`가 닿지 않아
   로그아웃 뒤에도 유효한 URL이 남는다.
 - 사용자 A에서 로그아웃한 뒤 같은 탭에서 사용자 B로 로그인해도 A의 데이터가 첫 화면에 나타나지 않는지 테스트한다.
+- A가 로그아웃하지 않고 탭만 닫은 뒤 B가 같은 기기에서 로그인하는 경로도 함께 확인한다. §7의 계정 키가
+  남아 있으면 시간표는 표시에 그치지 않고 B의 DB row에 A의 값이 저장된다.
 - 그룹 탈퇴·삭제·권한 회수 뒤 접근 불가능한 상세 캐시를 즉시 제거하는지 테스트한다.
 - 새 mutation을 추가할 때 이 문서의 무효화 규칙과 해당 query-key 테스트를 함께 갱신한다.
 - 캐시 적용 범위를 새 기능으로 넓힐 때 staleTime과 mutation 영향을 먼저 이 문서에 기록한다.
+
+## 7. 브라우저 저장소
+
+`localStorage`에는 성격이 다른 두 가지가 들어간다. 하나는 계정과 무관하게 남아야 하는 기기 취향이고,
+다른 하나는 그 계정의 데이터다. 새 키를 추가할 때 어느 쪽인지 먼저 정하고 아래 표에 적는다.
+
+계정 데이터는 `app/shared/lib/user-scoped-storage.ts`가 키를 소유하고, 저장소에 적힌 주인이
+현재 로그인 사용자와 다를 때 함께 비운다. `QueryProvider`가 auth 상태 변화마다
+`syncUserScopedStorage()`를 부르므로 로그아웃, 계정 전환, 로그아웃 없이 탭만 닫고 다른 사람이
+로그인하는 경로가 모두 덮인다. 기능 코드가 직접 지우지 않는다.
+
+| 키                                               | 구분 | 비고                                                              |
+| ------------------------------------------------ | ---- | ----------------------------------------------------------------- |
+| `kmla-online:timetable:v1`                       | 계정 | DB의 `user_timetables`가 진짜 저장소이고 이 값은 첫 페인트 캐시다 |
+| `kmla-online:visited-posts:v1`                   | 계정 | 열어본 게시물 id                                                  |
+| `kmla-online:search-recent:v1`                   | 계정 | 검색한 사람·그룹 이름이 들어 있다                                 |
+| `kmla-online:storage-owner:v1`                   | 계정 | 위 값들의 현재 주인. 로그아웃 때 함께 지운다                      |
+| `kmla-online:posts-view:v1`                      | 기기 | 카드/목록 보기                                                    |
+| `kmla-online:experimental-features:v1`           | 기기 | 실험 기능 토글                                                    |
+| `kmla-online:pwa-install-preference`             | 기기 | 지우면 로그아웃할 때마다 설치 안내가 다시 뜬다                    |
+| `kmla-online:notification-prompt:v1:<profileId>` | 계정 | 키에 profileId가 있어 이미 격리되어 있다                          |
+
+계정 데이터를 지울 때는 같은 탭에도 합성 `storage` 이벤트로 알린다. `storage`는 값을 바꾼 탭에는
+오지 않으므로, 알리지 않으면 `useVisitedPosts`의 모듈 수준 snapshot처럼 값을 캐시해 둔 store가
+이전 사용자의 값을 그대로 들고 남는다.
+
+Supabase 세션(`sb-*-auth-token`)은 `signOut()`이 직접 지운다. 회원가입 초안은 `sessionStorage`에
+두며 `signOut()`의 `clearSignupDraft()`가 함께 비운다.
