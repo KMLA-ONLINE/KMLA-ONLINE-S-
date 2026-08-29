@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(34);
 
 select is(
   (select public from storage.buckets where id = 'profile-media'),
@@ -25,7 +25,7 @@ select ok(
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean,boolean)',
+    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean,boolean,text)',
     'EXECUTE'
   ),
   'authenticated users can edit their profile through the RPC'
@@ -33,7 +33,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'anon',
-    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean,boolean)',
+    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean,boolean,text)',
     'EXECUTE'
   ),
   'anonymous users cannot edit profiles'
@@ -56,6 +56,15 @@ select set_config(
   'test.profile_id',
   (
     select id::text
+    from public.profiles
+    where auth_user_id = '10000000-0000-0000-0000-000000000001'
+  ),
+  true
+);
+select set_config(
+  'test.original_pub_id',
+  (
+    select pub_id
     from public.profiles
     where auth_user_id = '10000000-0000-0000-0000-000000000001'
   ),
@@ -95,6 +104,14 @@ select is(
   ),
   '홍길동 수정',
   'profile name is updated'
+);
+select is(
+  (
+    select pub_id
+    from public.get_my_profile()
+  ),
+  current_setting('test.original_pub_id'),
+  'omitting the public id leaves the profile address alone'
 );
 select is(
   (
@@ -261,6 +278,66 @@ select is(
   ),
   null::text,
   'avatar path is cleared'
+);
+
+-- 공개 ID 편집 (기능 명세 §12.2).
+select lives_ok(
+  $$select public.update_my_profile(
+      p_name => '홍길동 수정',
+      p_birthday => '2007-01-01'::date,
+      p_gender => 'male'::public.profile_gender,
+      p_cohort => 30::smallint,
+      p_academic_track => 'domestic'::public.profile_academic_track,
+      p_pub_id => '  HongGil-30  '
+    )$$,
+  'accepted user can change their own public id'
+);
+select is(
+  (
+    select pub_id
+    from public.get_my_profile()
+  ),
+  'honggil-30',
+  'the new public id is trimmed and folded to lower case'
+);
+select throws_ok(
+  $$select public.update_my_profile(
+      p_name => '홍길동 수정',
+      p_birthday => '2007-01-01'::date,
+      p_gender => 'male'::public.profile_gender,
+      p_cohort => 30::smallint,
+      p_academic_track => 'domestic'::public.profile_academic_track,
+      p_pub_id => 'KIM-admin'
+    )$$,
+  '23505',
+  null,
+  'a public id another profile already holds is rejected regardless of case'
+);
+select throws_ok(
+  $$select public.update_my_profile(
+      p_name => '홍길동 수정',
+      p_birthday => '2007-01-01'::date,
+      p_gender => 'male'::public.profile_gender,
+      p_cohort => 30::smallint,
+      p_academic_track => 'domestic'::public.profile_academic_track,
+      p_pub_id => 'admin'
+    )$$,
+  '23514',
+  null,
+  'reserved public ids stay unavailable to profile editing'
+);
+select throws_ok(
+  $$select public.update_my_profile(
+      p_name => '홍길동 수정',
+      p_birthday => '2007-01-01'::date,
+      p_gender => 'male'::public.profile_gender,
+      p_cohort => 30::smallint,
+      p_academic_track => 'domestic'::public.profile_academic_track,
+      p_pub_id => 'ab'
+    )$$,
+  '23514',
+  null,
+  'a public id shorter than five characters is rejected'
 );
 
 reset role;

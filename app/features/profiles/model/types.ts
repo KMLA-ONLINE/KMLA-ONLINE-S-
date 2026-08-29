@@ -46,6 +46,7 @@ export type BirthdayProfile = BirthdayRow & {
 };
 
 export interface ProfileEditValues {
+  pubId: string;
   name: string;
   description: string;
   birthday: string;

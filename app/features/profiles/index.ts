@@ -8,6 +8,7 @@ export {
   birthdayKeys,
 } from "~/features/profiles/data/cache";
 export {
+  readProfileEditFailure,
   readProfileEditForm,
   updateMyProfile,
   validateProfileEdit,
