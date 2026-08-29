@@ -3,6 +3,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent,
   type PointerEvent,
   type ReactNode,
   type RefObject,
@@ -90,7 +91,7 @@ export function MessageRow({
     useState<ContextMenuLayout | null>(null);
   const contextMenuOpenRef = useRef(false);
   const contextTouchActiveRef = useRef(false);
-  const contextActionsReadyRef = useRef(false);
+  const contextInteractionReadyRef = useRef(false);
   const rowRef = useRef<HTMLElement>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
   const replySwipeStart = useRef<{ x: number; y: number } | null>(null);
@@ -116,12 +117,12 @@ export function MessageRow({
     contextMenuOpenRef.current = open;
 
     if (open) {
-      contextActionsReadyRef.current = !contextTouchActiveRef.current;
+      contextInteractionReadyRef.current = !contextTouchActiveRef.current;
       const row = rowRef.current;
       const bubble = bubbleRef.current;
       if (!row || !bubble) {
         contextMenuOpenRef.current = false;
-        contextActionsReadyRef.current = false;
+        contextInteractionReadyRef.current = false;
         return;
       }
 
@@ -168,9 +169,19 @@ export function MessageRow({
         translateY,
       });
     } else {
-      contextActionsReadyRef.current = false;
+      contextInteractionReadyRef.current = false;
     }
     setContextMenuOpen(open);
+  }
+
+  function armContextInteraction() {
+    contextInteractionReadyRef.current = true;
+  }
+
+  function blockOpeningTouchClick(event: MouseEvent<HTMLElement>) {
+    if (contextInteractionReadyRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   const contextMenuAnchor = contextMenuLayout
@@ -288,6 +299,9 @@ export function MessageRow({
         <ContextMenu.Backdrop
           data-slot="message-context-backdrop"
           className="fixed inset-0 z-40 bg-background/90 duration-0 data-open:animate-none data-closed:animate-none"
+          onTouchStartCapture={armContextInteraction}
+          onClickCapture={blockOpeningTouchClick}
+          onClick={() => changeContextMenuOpen(false)}
         />
         <ContextMenu.Positioner
           anchor={contextMenuAnchor}
@@ -301,17 +315,9 @@ export function MessageRow({
           <ContextMenu.Popup
             data-slot="message-context-menu"
             className="relative w-max max-w-[calc(100vw-2rem)] duration-0 outline-none data-open:animate-none data-closed:animate-none"
-            onTouchStartCapture={() => {
-              contextActionsReadyRef.current = true;
-            }}
-            onKeyDownCapture={() => {
-              contextActionsReadyRef.current = true;
-            }}
-            onClickCapture={(event) => {
-              if (contextActionsReadyRef.current) return;
-              event.preventDefault();
-              event.stopPropagation();
-            }}
+            onTouchStartCapture={armContextInteraction}
+            onKeyDownCapture={armContextInteraction}
+            onClickCapture={blockOpeningTouchClick}
             style={
               {
                 "--message-context-height": `${contextMenuLayout?.anchor.height ?? 0}px`,

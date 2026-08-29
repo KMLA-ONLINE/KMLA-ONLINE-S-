@@ -511,6 +511,57 @@ describe("RoomScreen", () => {
     expect(screen.getByRole("menu")).toBeInTheDocument();
   });
 
+  it("롱프레스 손가락의 스크림 click을 막고 다음 스크림 탭으로 닫는다", async () => {
+    vi.useFakeTimers();
+    const conversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/student-council",
+    });
+    const message = screen
+      .getByText("축제 부스 배치 초안 확인했어요?")
+      .closest("article")!;
+    const messageViewport = screen
+      .getByRole("region", { name: "학생회 기획부 대화" })
+      .querySelector(".overflow-y-auto")!;
+    const messageSurface = message.children[1].lastElementChild!;
+    vi.spyOn(message, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 20, y: 600, width: 320, height: 50 }),
+    );
+    vi.spyOn(messageSurface, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 48, y: 600, width: 220, height: 50 }),
+    );
+    vi.spyOn(messageViewport, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 100, width: 360, height: 600 }),
+    );
+
+    fireEvent.touchStart(message, {
+      touches: [{ clientX: 120, clientY: 200 }],
+    });
+    act(() => void vi.advanceTimersByTime(500));
+    const backdrop = document.querySelector(
+      '[data-slot="message-context-backdrop"]',
+    )!;
+
+    fireEvent.touchEnd(message);
+    fireEvent.click(backdrop, { pointerType: "touch" });
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(message).toHaveClass("z-50");
+    expect(message).toHaveStyle({
+      transform: "translate3d(0, -225px, 0)",
+    });
+
+    fireEvent.touchStart(backdrop, {
+      touches: [{ clientX: 16, clientY: 16 }],
+    });
+    fireEvent.touchEnd(backdrop);
+    fireEvent.click(backdrop, { pointerType: "touch" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(message).not.toHaveClass("z-50");
+    expect(message).toHaveStyle({ transform: "translate3d(0, 0px, 0)" });
+  });
+
   it("두 진입점에서 고정 메시지 목록을 열고 원문 이동과 고정 해제를 제공한다", async () => {
     const conversation = await loadConversation("student-council");
     expect(conversation).not.toBeNull();
