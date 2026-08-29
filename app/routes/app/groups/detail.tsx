@@ -99,12 +99,7 @@ export async function clientLoader({
   const memberTab = searchParams.get("tab") === "members";
   const settingsTab = searchParams.get("tab") === "settings";
   const reportsTab = searchParams.get("tab") === "reports";
-  const directPostDetail =
-    url.pathname.startsWith(`/groups/${params.slug}/posts/`) &&
-    !url.pathname.endsWith("/posts/new") &&
-    !url.pathname.endsWith("/edit");
-  const postsTab =
-    !memberTab && !settingsTab && !reportsTab && !directPostDetail;
+  const postsTab = !memberTab && !settingsTab && !reportsTab;
   const canModerate =
     group.member_role === "owner" || group.member_role === "admin";
   const canCurate = canModerate || group.member_role === "manager";
