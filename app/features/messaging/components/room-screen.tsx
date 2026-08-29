@@ -27,6 +27,7 @@ import { Link } from "react-router";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
 import { ConversationDetails } from "~/features/messaging/components/conversation-details";
+import { copyMessageText } from "~/features/messaging/components/copy-message";
 import {
   MessageActionRail,
   MessageRow,
@@ -184,6 +185,7 @@ export function RoomScreen({
             size="icon"
             className="rounded-full md:hidden"
             aria-label="대화 목록으로 돌아가기"
+            nativeButton={false}
             render={<Link to="/messenger" />}
           >
             <ChevronLeftIcon aria-hidden />
@@ -499,6 +501,7 @@ function MessageActions({
   onTogglePinned: () => void;
 }) {
   const [reactionOpen, setReactionOpen] = useState(false);
+
   const reactionAction = (
     <div className="relative flex shrink-0">
       {reactionOpen ? (
@@ -560,7 +563,7 @@ function MessageActions({
         <DropdownMenuGroup>
           <DropdownMenuItem
             className="cursor-pointer"
-            onClick={() => void navigator.clipboard.writeText(message.body)}
+            onClick={() => void copyMessageText(message.body)}
           >
             <CopyIcon aria-hidden />
             복사
