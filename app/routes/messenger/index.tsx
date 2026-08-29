@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Outlet, useParams } from "react-router";
 
 import { listConversations, MessagingScreen } from "~/features/messaging";
@@ -16,6 +17,7 @@ export async function clientLoader() {
  */
 export default function MessengerPage({ loaderData }: Route.ComponentProps) {
   const { roomId } = useParams();
+  const [desktopDetailsOpen, setDesktopDetailsOpen] = useState(true);
 
   return (
     <MessagingScreen
@@ -23,7 +25,7 @@ export default function MessengerPage({ loaderData }: Route.ComponentProps) {
       selectedRoomId={roomId}
       hasRoom={Boolean(roomId)}
     >
-      <Outlet />
+      <Outlet context={{ desktopDetailsOpen, setDesktopDetailsOpen }} />
     </MessagingScreen>
   );
 }

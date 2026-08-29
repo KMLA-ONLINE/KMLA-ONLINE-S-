@@ -1,10 +1,49 @@
 /* eslint-disable testing-library/no-node-access */
 import { fireEvent } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { useState } from "react";
+import { describe, expect, it, vi } from "vitest";
 
 import { RoomScreen } from "~/features/messaging/components/room-screen";
 import { loadConversation } from "~/features/messaging/data/queries";
 import { renderRoute, screen, within } from "../../../router";
+
+function ControlledRoomScreen({
+  conversation,
+}: {
+  conversation: Parameters<typeof RoomScreen>[0]["conversation"];
+}) {
+  const [desktopDetailsOpen, setDesktopDetailsOpen] = useState(true);
+
+  return (
+    <RoomScreen
+      conversation={conversation}
+      desktopDetailsOpen={desktopDetailsOpen}
+      onDesktopDetailsOpenChange={setDesktopDetailsOpen}
+    />
+  );
+}
+
+function SwitchableRoomScreen({
+  conversation,
+  nextConversation,
+}: {
+  conversation: Parameters<typeof RoomScreen>[0]["conversation"];
+  nextConversation: Parameters<typeof RoomScreen>[0]["conversation"];
+}) {
+  const [activeConversation, setActiveConversation] = useState(conversation);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setActiveConversation(nextConversation)}
+      >
+        대화 변경
+      </button>
+      <RoomScreen conversation={activeConversation} />
+    </>
+  );
+}
 
 describe("RoomScreen", () => {
   it("그룹 대화의 메시지와 대표 상태를 표시한다", async () => {
@@ -84,6 +123,9 @@ describe("RoomScreen", () => {
     expect(screen.queryByText("4명 · 2명 활동 중")).not.toBeInTheDocument();
     expect(screen.queryByText("활동 중")).not.toBeInTheDocument();
     expect(screen.getByText("대화 멤버 4명")).toBeInTheDocument();
+    expect(screen.getByText("대화 멤버 4명").closest("summary")).toHaveClass(
+      "select-none",
+    );
 
     const ownBubble = screen.getByText(
       "확인했습니다! 2층 체험 부스 동선만 조금 넓히면 좋을 것 같아요.",
@@ -446,12 +488,70 @@ describe("RoomScreen", () => {
     );
   });
 
+  it("대화방을 열면 맨 아래로 이동하고 위로 스크롤하면 하단 이동 버튼을 표시한다", async () => {
+    const conversation = await loadConversation("hyunwoo");
+    const nextConversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+    expect(nextConversation).not.toBeNull();
+
+    const { user } = renderRoute(
+      () => (
+        <SwitchableRoomScreen
+          conversation={conversation!}
+          nextConversation={nextConversation!}
+        />
+      ),
+      { path: "/messenger/hyunwoo" },
+    );
+    const messageThread = screen
+      .getByRole("region", { name: "이현우 대화" })
+      .querySelector(".overflow-y-auto")!;
+    Object.defineProperties(messageThread, {
+      clientHeight: { configurable: true, value: 100 },
+      scrollHeight: { configurable: true, value: 500 },
+      scrollTop: { configurable: true, writable: true, value: 0 },
+    });
+    const scrollTo = vi.fn();
+    Object.defineProperty(messageThread, "scrollTo", {
+      configurable: true,
+      value: scrollTo,
+    });
+
+    await user.click(screen.getByRole("button", { name: "대화 변경" }));
+    expect(messageThread.scrollTop).toBe(500);
+    expect(messageThread.firstElementChild).toHaveClass("justify-start");
+    expect(messageThread.firstElementChild).not.toHaveClass("justify-end");
+
+    messageThread.scrollTop = 150;
+    fireEvent.scroll(messageThread);
+    const scrollToBottomButton = screen.getByRole("button", {
+      name: "맨 아래로 이동",
+    });
+    expect(scrollToBottomButton).toHaveClass(
+      "bottom-4",
+      "left-1/2",
+      "-translate-x-1/2",
+      "z-10",
+      "border-border",
+      "bg-background/95",
+      "shadow-md",
+    );
+    expect(scrollToBottomButton.querySelector("svg")).toHaveClass("size-5");
+    await user.click(scrollToBottomButton);
+    fireEvent.scroll(messageThread);
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 500, behavior: "smooth" });
+    expect(
+      screen.queryByRole("button", { name: "맨 아래로 이동" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("작성 중 첨부 아이콘을 접고 화살표, 입력 비움 및 전송으로 복원한다", async () => {
     const conversation = await loadConversation("hyunwoo");
     expect(conversation).not.toBeNull();
 
     const { user } = renderRoute(
-      () => <RoomScreen conversation={conversation!} />,
+      () => <ControlledRoomScreen conversation={conversation!} />,
       { path: "/messenger/hyunwoo" },
     );
     const input = screen.getByRole("textbox", { name: "메시지 입력" });
@@ -517,7 +617,7 @@ describe("RoomScreen", () => {
     expect(conversation).not.toBeNull();
 
     const { user } = renderRoute(
-      () => <RoomScreen conversation={conversation!} />,
+      () => <ControlledRoomScreen conversation={conversation!} />,
       { path: "/messenger/hyunwoo" },
     );
 
@@ -535,6 +635,10 @@ describe("RoomScreen", () => {
       pressed: false,
     });
     expect(openButton).toHaveAttribute("aria-pressed", "false");
+    expect(
+      screen.getByText("좋아, 도서관 앞에서 보자").closest("article")
+        ?.parentElement?.parentElement,
+    ).toHaveClass("xl:max-w-none");
 
     await user.click(openButton);
     expect(

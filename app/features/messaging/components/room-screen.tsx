@@ -1,4 +1,5 @@
 import {
+  ChevronDownIcon,
   CopyIcon,
   EllipsisIcon,
   ChevronLeftIcon,
@@ -14,7 +15,14 @@ import {
   ThumbsUpIcon,
   XIcon,
 } from "lucide-react";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import {
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link } from "react-router";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
@@ -53,8 +61,22 @@ import {
 } from "~/shared/ui/dropdown-menu";
 import { cn } from "~/shared/lib/utils";
 
-export function RoomScreen({ conversation }: { conversation: Conversation }) {
-  const [desktopDetailsOpen, setDesktopDetailsOpen] = useState(true);
+export interface DesktopDetailsContext {
+  desktopDetailsOpen: boolean;
+  setDesktopDetailsOpen: Dispatch<SetStateAction<boolean>>;
+}
+
+const BOTTOM_SCROLL_BUTTON_THRESHOLD = 200;
+
+export function RoomScreen({
+  conversation,
+  desktopDetailsOpen = true,
+  onDesktopDetailsOpenChange,
+}: {
+  conversation: Conversation;
+  desktopDetailsOpen?: boolean;
+  onDesktopDetailsOpenChange?: (open: boolean) => void;
+}) {
   const [compactDetailsOpen, setCompactDetailsOpen] = useState(false);
   const [pinnedDialogOpen, setPinnedDialogOpen] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<
@@ -87,6 +109,11 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
     );
     return () => window.clearTimeout(timeout);
   }, [highlightedMessageId]);
+
+  useEffect(() => {
+    const messageThread = messageThreadRef.current;
+    if (messageThread) messageThread.scrollTop = messageThread.scrollHeight;
+  }, [conversation.id]);
 
   useEffect(() => {
     if (!scrollToBottomAfterSend.current) return;
@@ -193,7 +220,7 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
               desktopDetailsOpen ? "대화 정보 닫기" : "대화 정보 열기"
             }
             aria-pressed={desktopDetailsOpen}
-            onClick={() => setDesktopDetailsOpen((open) => !open)}
+            onClick={() => onDesktopDetailsOpenChange?.(!desktopDetailsOpen)}
           >
             <InfoIcon aria-hidden />
           </Button>
@@ -224,6 +251,7 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
           selectedReactions={selectedReactions}
           highlightedMessageId={highlightedMessageId}
           messageThreadRef={messageThreadRef}
+          desktopDetailsOpen={desktopDetailsOpen}
           onSelectReaction={selectReaction}
           onReply={(message) => {
             if (!message.deleted) setReplyTargetId(message.id);
@@ -236,6 +264,7 @@ export function RoomScreen({ conversation }: { conversation: Conversation }) {
           replyAuthor={replyAuthor}
           onCancelReply={() => setReplyTargetId(null)}
           onSend={sendMessage}
+          desktopDetailsOpen={desktopDetailsOpen}
         />
       </section>
 
@@ -270,6 +299,7 @@ function MessageThread({
   selectedReactions,
   highlightedMessageId,
   messageThreadRef,
+  desktopDetailsOpen,
   onSelectReaction,
   onReply,
   onTogglePinned,
@@ -280,11 +310,15 @@ function MessageThread({
   selectedReactions: Record<string, PostReaction | null>;
   highlightedMessageId: string | null;
   messageThreadRef: RefObject<HTMLDivElement | null>;
+  desktopDetailsOpen: boolean;
   onSelectReaction: (messageId: string, reaction: PostReaction) => void;
   onReply: (message: ConversationMessage) => void;
   onTogglePinned: (message: ConversationMessage) => void;
   onViewMessage: (messageId: string) => void;
 }) {
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const scrollingToBottom = useRef(false);
+  const previousScrollTop = useRef(0);
   const participantById = new Map(
     conversation.participants.map((participant) => [
       participant.id,
@@ -292,99 +326,157 @@ function MessageThread({
     ]),
   );
 
-  return (
-    <div
-      ref={messageThreadRef}
-      className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 md:px-5"
-    >
-      <div className="mx-auto flex min-h-full max-w-3xl flex-col justify-end gap-0.5">
-        {messages.map((message, index) => {
-          const previous = messages[index - 1];
-          const next = messages[index + 1];
-          const startsGroup = !canConnectMessages(
-            previous,
-            message,
-            previous
-              ? hasVisibleMessageReaction(
-                  previous,
-                  selectedReactions[previous.id],
-                )
-              : false,
-          );
-          const endsGroup = !canConnectMessages(
-            message,
-            next,
-            hasVisibleMessageReaction(message, selectedReactions[message.id]),
-          );
-          const sender = message.senderId
-            ? participantById.get(message.senderId)
-            : undefined;
-          const replyTarget = message.replyToMessageId
-            ? messages.find(({ id }) => id === message.replyToMessageId)
-            : undefined;
-          const replyTargetAuthor = replyTarget?.senderId
-            ? participantById.get(replyTarget.senderId)?.name
-            : undefined;
+  function updateScrollToBottomVisibility() {
+    const messageThread = messageThreadRef.current;
+    if (!messageThread) return;
+    const distanceFromBottom =
+      messageThread.scrollHeight -
+      messageThread.clientHeight -
+      messageThread.scrollTop;
 
-          return (
-            <div key={message.id}>
-              {message.dayLabel ? (
-                <div className="my-4 flex items-center justify-center">
-                  <span className="text-xs text-muted-foreground">
-                    {message.dayLabel}
-                  </span>
-                </div>
-              ) : null}
-              {message.system ? (
-                <p className="my-3 text-center text-xs text-muted-foreground">
-                  {message.body}
-                </p>
-              ) : (
-                <MessageRow
-                  message={message}
-                  sender={sender}
-                  isOwn={message.senderId === "viewer"}
-                  isGroup={conversation.type === "group"}
-                  unreadParticipantCount={Math.max(
-                    0,
-                    conversation.participants.length -
-                      1 -
-                      (message.readBy?.length ?? 0),
-                  )}
-                  startsGroup={startsGroup}
-                  endsGroup={endsGroup}
-                  showTimestamp={endsGroup}
-                  selectedReaction={selectedReactions[message.id]}
-                  isPinned={message.pinned ?? false}
-                  highlighted={highlightedMessageId === message.id}
-                  elementId={`message-${message.id}`}
-                  replyTarget={replyTarget}
-                  replyTargetAuthor={replyTargetAuthor}
-                  onViewReply={
-                    replyTarget
-                      ? () => onViewMessage(replyTarget.id)
-                      : undefined
-                  }
-                  onReply={message.deleted ? undefined : () => onReply(message)}
-                  actionRail={
-                    <MessageActions
-                      isOwn={message.senderId === "viewer"}
-                      message={message}
-                      selectedReaction={selectedReactions[message.id]}
-                      isPinned={message.pinned ?? false}
-                      onSelectReaction={(reaction) =>
-                        onSelectReaction(message.id, reaction)
-                      }
-                      onReply={() => onReply(message)}
-                      onTogglePinned={() => onTogglePinned(message)}
-                    />
-                  }
-                />
-              )}
-            </div>
-          );
-        })}
+    if (scrollingToBottom.current) {
+      if (
+        messageThread.scrollTop < previousScrollTop.current ||
+        distanceFromBottom <= BOTTOM_SCROLL_BUTTON_THRESHOLD
+      ) {
+        scrollingToBottom.current = false;
+        setShowScrollToBottom(
+          distanceFromBottom > BOTTOM_SCROLL_BUTTON_THRESHOLD,
+        );
+      }
+      previousScrollTop.current = messageThread.scrollTop;
+      return;
+    }
+
+    setShowScrollToBottom(distanceFromBottom > BOTTOM_SCROLL_BUTTON_THRESHOLD);
+  }
+
+  function scrollToBottom() {
+    const messageThread = messageThreadRef.current;
+    if (!messageThread) return;
+    scrollingToBottom.current = true;
+    previousScrollTop.current = messageThread.scrollTop;
+    messageThread.scrollTo({
+      top: messageThread.scrollHeight,
+      behavior: "smooth",
+    });
+    setShowScrollToBottom(false);
+  }
+
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        ref={messageThreadRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 md:px-5"
+        onScroll={updateScrollToBottomVisibility}
+      >
+        <div
+          className={cn(
+            "mx-auto flex min-h-full max-w-3xl flex-col justify-start gap-0.5",
+            !desktopDetailsOpen && "xl:max-w-none",
+          )}
+        >
+          {messages.map((message, index) => {
+            const previous = messages[index - 1];
+            const next = messages[index + 1];
+            const startsGroup = !canConnectMessages(
+              previous,
+              message,
+              previous
+                ? hasVisibleMessageReaction(
+                    previous,
+                    selectedReactions[previous.id],
+                  )
+                : false,
+            );
+            const endsGroup = !canConnectMessages(
+              message,
+              next,
+              hasVisibleMessageReaction(message, selectedReactions[message.id]),
+            );
+            const sender = message.senderId
+              ? participantById.get(message.senderId)
+              : undefined;
+            const replyTarget = message.replyToMessageId
+              ? messages.find(({ id }) => id === message.replyToMessageId)
+              : undefined;
+            const replyTargetAuthor = replyTarget?.senderId
+              ? participantById.get(replyTarget.senderId)?.name
+              : undefined;
+
+            return (
+              <div key={message.id}>
+                {message.dayLabel ? (
+                  <div className="my-4 flex items-center justify-center">
+                    <span className="text-xs text-muted-foreground">
+                      {message.dayLabel}
+                    </span>
+                  </div>
+                ) : null}
+                {message.system ? (
+                  <p className="my-3 text-center text-xs text-muted-foreground">
+                    {message.body}
+                  </p>
+                ) : (
+                  <MessageRow
+                    message={message}
+                    sender={sender}
+                    isOwn={message.senderId === "viewer"}
+                    isGroup={conversation.type === "group"}
+                    unreadParticipantCount={Math.max(
+                      0,
+                      conversation.participants.length -
+                        1 -
+                        (message.readBy?.length ?? 0),
+                    )}
+                    startsGroup={startsGroup}
+                    endsGroup={endsGroup}
+                    showTimestamp={endsGroup}
+                    selectedReaction={selectedReactions[message.id]}
+                    isPinned={message.pinned ?? false}
+                    highlighted={highlightedMessageId === message.id}
+                    elementId={`message-${message.id}`}
+                    replyTarget={replyTarget}
+                    replyTargetAuthor={replyTargetAuthor}
+                    onViewReply={
+                      replyTarget
+                        ? () => onViewMessage(replyTarget.id)
+                        : undefined
+                    }
+                    onReply={
+                      message.deleted ? undefined : () => onReply(message)
+                    }
+                    actionRail={
+                      <MessageActions
+                        isOwn={message.senderId === "viewer"}
+                        message={message}
+                        selectedReaction={selectedReactions[message.id]}
+                        isPinned={message.pinned ?? false}
+                        onSelectReaction={(reaction) =>
+                          onSelectReaction(message.id, reaction)
+                        }
+                        onReply={() => onReply(message)}
+                        onTogglePinned={() => onTogglePinned(message)}
+                      />
+                    }
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
+      {showScrollToBottom ? (
+        <Button
+          variant="secondary"
+          size="icon"
+          className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border-border bg-background/95 shadow-md backdrop-blur"
+          aria-label="맨 아래로 이동"
+          onClick={scrollToBottom}
+        >
+          <ChevronDownIcon aria-hidden className="size-5" />
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -506,11 +598,13 @@ function ComposerShell({
   replyAuthor,
   onCancelReply,
   onSend,
+  desktopDetailsOpen,
 }: {
   replyTarget?: ConversationMessage;
   replyAuthor: string | null;
   onCancelReply: () => void;
   onSend: (body: string) => void;
+  desktopDetailsOpen: boolean;
 }) {
   const [draft, setDraft] = useState("");
   const [attachmentActionsExpanded, setAttachmentActionsExpanded] =
@@ -540,7 +634,12 @@ function ComposerShell({
   return (
     <footer className="shrink-0 bg-background px-2 pt-2 pb-[calc(0.5rem+var(--app-safe-b))] md:px-3 md:pb-3">
       {replyTarget ? (
-        <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 border-l-2 border-primary px-3 py-1">
+        <div
+          className={cn(
+            "mx-auto mb-2 flex max-w-3xl items-center gap-2 border-l-2 border-primary px-3 py-1",
+            !desktopDetailsOpen && "xl:max-w-none",
+          )}
+        >
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-primary">
               {replyAuthor ?? "알 수 없는 사용자"}에게 답장
@@ -560,7 +659,12 @@ function ComposerShell({
           </Button>
         </div>
       ) : null}
-      <div className="mx-auto flex max-w-3xl items-end gap-1.5">
+      <div
+        className={cn(
+          "mx-auto flex max-w-3xl items-end gap-1.5",
+          !desktopDetailsOpen && "xl:max-w-none",
+        )}
+      >
         <div
           aria-hidden={attachmentActionsCollapsed}
           className={cn(
@@ -649,7 +753,10 @@ function ComposerShell({
       {overLimit ? (
         <p
           role="alert"
-          className="mx-auto mt-1 max-w-3xl px-3 text-xs text-destructive"
+          className={cn(
+            "mx-auto mt-1 max-w-3xl px-3 text-xs text-destructive",
+            !desktopDetailsOpen && "xl:max-w-none",
+          )}
         >
           메시지는 {MESSAGE_MAX_LENGTH.toLocaleString("ko-KR")}자까지 쓸 수
           있습니다. ({draftLength.toLocaleString("ko-KR")})

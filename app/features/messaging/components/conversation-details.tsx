@@ -174,7 +174,7 @@ function DetailSection({
 }) {
   return (
     <details className="group rounded-xl" open={defaultOpen || undefined}>
-      <summary className="flex cursor-pointer list-none items-center rounded-lg px-3 py-3 text-sm font-semibold outline-none hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center rounded-lg px-3 py-3 text-sm font-semibold outline-none select-none hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
         <span className="min-w-0 flex-1 truncate">{title}</span>
         <ChevronDownIcon
           aria-hidden

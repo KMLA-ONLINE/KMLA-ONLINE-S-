@@ -1,4 +1,10 @@
-import { loadConversation, RoomScreen } from "~/features/messaging";
+import { useOutletContext } from "react-router";
+
+import {
+  loadConversation,
+  RoomScreen,
+  type DesktopDetailsContext,
+} from "~/features/messaging";
 import type { Route } from "./+types/room";
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
@@ -16,10 +22,15 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
 export default function MessengerRoomPage({
   loaderData,
 }: Route.ComponentProps) {
+  const { desktopDetailsOpen, setDesktopDetailsOpen } =
+    useOutletContext<DesktopDetailsContext>();
+
   return (
     <RoomScreen
       key={loaderData.conversation.id}
       conversation={loaderData.conversation}
+      desktopDetailsOpen={desktopDetailsOpen}
+      onDesktopDetailsOpenChange={setDesktopDetailsOpen}
     />
   );
 }
