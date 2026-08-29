@@ -54,7 +54,7 @@ begin
     '관리자 이름',
     'admin',
     'alumni',
-    30,
+    1,
     'male',
     'domestic',
     'accepted'
