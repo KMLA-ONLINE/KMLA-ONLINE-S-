@@ -276,18 +276,27 @@ describe("RoomScreen", () => {
     const sentReply = screen
       .getAllByRole("article", { name: "내 메시지" })
       .at(-1)!;
-    expect(sentReply.firstElementChild).toHaveClass("w-[88%]", "md:w-[78%]");
+    expect(sentReply).toHaveClass("w-full");
+    expect(sentReply.firstElementChild).toHaveClass(
+      "max-w-[88%]",
+      "md:max-w-[78%]",
+    );
+    expect(sentReply.firstElementChild?.lastElementChild).toHaveClass("w-full");
+    expect(sentReply.firstElementChild).not.toHaveClass(
+      "w-[88%]",
+      "md:w-[78%]",
+    );
     const replyQuote = within(sentReply).getByRole("button", {
       name: "박서현의 원문 메시지 보기",
     });
+    expect(replyQuote.parentElement).toHaveClass("w-full");
+    expect(replyQuote.parentElement?.parentElement).toHaveClass(
+      "w-fit",
+      "max-w-full",
+    );
     expect(replyQuote).toHaveTextContent(originalBody);
     expect(replyQuote).toHaveClass("w-full", "min-w-0", "max-w-full");
     expect(replyQuote.lastElementChild).toHaveClass("truncate");
-    expect(replyQuote.parentElement).toHaveClass("w-full");
-    expect(replyQuote.parentElement?.parentElement).toHaveClass(
-      "flex-1",
-      "min-w-0",
-    );
     await user.click(replyQuote);
     expect(originalMessage).toHaveClass("ring-2", "ring-primary");
 
@@ -370,6 +379,8 @@ describe("RoomScreen", () => {
       .getByRole("region", { name: "학생회 기획부 대화" })
       .querySelector(".overflow-y-auto")!;
     const messageSurface = message.children[1].lastElementChild!;
+    const composer = screen.getByRole("textbox", { name: "메시지 입력" });
+    const blurComposer = vi.spyOn(composer, "blur");
     vi.spyOn(message, "getBoundingClientRect").mockReturnValue(
       DOMRect.fromRect({ x: 20, y: 600, width: 320, height: 50 }),
     );
@@ -382,11 +393,13 @@ describe("RoomScreen", () => {
     expect(actionRail).toHaveClass("hidden", "[@media(hover:hover)]:flex");
     expect(message.children[1]).toHaveClass("max-w-[88%]", "md:max-w-[78%]");
 
+    composer.focus();
     fireEvent.touchStart(message, {
       touches: [{ clientX: 120, clientY: 200 }],
     });
     act(() => void vi.advanceTimersByTime(500));
 
+    expect(blurComposer).toHaveBeenCalledOnce();
     const backdrop = document.querySelector(
       '[data-slot="message-context-backdrop"]',
     );
@@ -444,6 +457,50 @@ describe("RoomScreen", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     expect(message).not.toHaveClass("z-50");
     expect(message).toHaveStyle({ transform: "translate3d(0, 0px, 0)" });
+  });
+
+  it("화면보다 긴 메시지의 롱프레스 작업을 대화 영역 안에 배치한다", async () => {
+    vi.useFakeTimers();
+    const conversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/student-council",
+    });
+    const message = screen
+      .getByText("축제 부스 배치 초안 확인했어요?")
+      .closest("article")!;
+    const messageViewport = screen
+      .getByRole("region", { name: "학생회 기획부 대화" })
+      .querySelector(".overflow-y-auto")!;
+    const messageSurface = message.children[1].lastElementChild!;
+    vi.spyOn(message, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 20, y: 600, width: 320, height: 900 }),
+    );
+    vi.spyOn(messageSurface, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 48, y: 600, width: 220, height: 900 }),
+    );
+    vi.spyOn(messageViewport, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 100, width: 360, height: 600 }),
+    );
+
+    fireEvent.touchStart(message, {
+      touches: [{ clientX: 120, clientY: 200 }],
+    });
+    act(() => void vi.advanceTimersByTime(500));
+
+    expect(message).toHaveStyle({
+      transform: "translate3d(0, -650px, 0)",
+    });
+    expect(screen.getByRole("menu")).toHaveStyle({
+      "--message-context-height": "378px",
+    });
+    expect(
+      screen.getByRole("button", { name: "하트 반응 남기기" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "답장" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "복사" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "고정" })).toBeInTheDocument();
   });
 
   it("짧거나 이동한 모바일 터치에서는 메시지 작업을 열지 않는다", async () => {

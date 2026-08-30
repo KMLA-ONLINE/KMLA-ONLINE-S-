@@ -29,6 +29,7 @@ export interface MessageContextAction {
 interface ContextMenuLayout {
   anchor: { x: number; y: number; width: number; height: number };
   translateY: number;
+  constrainedToViewport: boolean;
 }
 
 const CONTEXT_MENU_EDGE_GAP = 16;
@@ -118,6 +119,11 @@ export function MessageRow({
     contextMenuOpenRef.current = open;
 
     if (open) {
+      // The modal menu hides its background from assistive technology, so a
+      // focused composer must leave that background before it opens.
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
       contextInteractionReadyRef.current = !contextTouchActiveRef.current;
       const row = rowRef.current;
       const bubble = bubbleRef.current;
@@ -144,6 +150,14 @@ export function MessageRow({
         : 0;
       const rowHalfHeight = rowRect.height / 2;
       const viewportCenter = viewportRect.top + viewportRect.height / 2;
+      const availableMessageHeight = Math.max(
+        0,
+        viewportRect.height -
+          CONTEXT_MENU_EDGE_GAP * 2 -
+          reactionSpace -
+          actionSpace,
+      );
+      const constrainedToViewport = rowRect.height > availableMessageHeight;
       const minimumCenter =
         viewportRect.top +
         CONTEXT_MENU_EDGE_GAP +
@@ -155,7 +169,7 @@ export function MessageRow({
         actionSpace -
         rowHalfHeight;
       const targetCenter =
-        minimumCenter <= maximumCenter
+        !constrainedToViewport && minimumCenter <= maximumCenter
           ? Math.min(Math.max(viewportCenter, minimumCenter), maximumCenter)
           : viewportCenter;
       const translateY = targetCenter - (rowRect.top + rowHalfHeight);
@@ -163,11 +177,16 @@ export function MessageRow({
       setContextMenuLayout({
         anchor: {
           x: bubbleRect.left,
-          y: rowRect.top + translateY,
+          y: constrainedToViewport
+            ? viewportRect.top + CONTEXT_MENU_EDGE_GAP + reactionSpace
+            : rowRect.top + translateY,
           width: bubbleRect.width,
-          height: rowRect.height,
+          height: constrainedToViewport
+            ? availableMessageHeight
+            : rowRect.height,
         },
         translateY,
+        constrainedToViewport,
       });
     } else {
       contextInteractionReadyRef.current = false;
@@ -199,11 +218,34 @@ export function MessageRow({
 
       const rowRect = currentRow.getBoundingClientRect();
       const bubbleRect = bubble.getBoundingClientRect();
+      const viewportRect =
+        contextViewportRef?.current?.getBoundingClientRect() ??
+        DOMRect.fromRect({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        });
+      const reactionSpace = onSelectReaction
+        ? REACTION_BAR_HEIGHT + CONTEXT_MENU_SURFACE_GAP
+        : 0;
+      const actionSpace = contextActions?.length
+        ? contextActions.length * CONTEXT_ACTION_HEIGHT +
+          CONTEXT_MENU_SURFACE_GAP
+        : 0;
+      const availableMessageHeight = Math.max(
+        0,
+        viewportRect.height -
+          CONTEXT_MENU_EDGE_GAP * 2 -
+          reactionSpace -
+          actionSpace,
+      );
+      const constrainedToViewport = rowRect.height > availableMessageHeight;
       const nextAnchor = {
         x: bubbleRect.left,
-        y: rowRect.top,
+        y: constrainedToViewport
+          ? viewportRect.top + CONTEXT_MENU_EDGE_GAP + reactionSpace
+          : rowRect.top,
         width: bubbleRect.width,
-        height: rowRect.height,
+        height: constrainedToViewport ? availableMessageHeight : rowRect.height,
       };
 
       setContextMenuLayout((current) => {
@@ -213,11 +255,16 @@ export function MessageRow({
           anchor.x === nextAnchor.x &&
           anchor.y === nextAnchor.y &&
           anchor.width === nextAnchor.width &&
-          anchor.height === nextAnchor.height
+          anchor.height === nextAnchor.height &&
+          current.constrainedToViewport === constrainedToViewport
         ) {
           return current;
         }
-        return { ...current, anchor: nextAnchor };
+        return {
+          ...current,
+          anchor: nextAnchor,
+          constrainedToViewport,
+        };
       });
     }
 
@@ -244,7 +291,12 @@ export function MessageRow({
       window.removeEventListener("resize", scheduleAnchorUpdate);
       row?.removeEventListener("transitionend", handleTransitionEnd);
     };
-  }, [contextMenuOpen]);
+  }, [
+    contextActions?.length,
+    contextMenuOpen,
+    contextViewportRef,
+    onSelectReaction,
+  ]);
 
   const contextMenuAnchor = contextMenuLayout
     ? {
@@ -258,7 +310,7 @@ export function MessageRow({
       id={elementId}
       aria-label={`${isOwn ? "내" : (sender?.name ?? "상대방")} 메시지`}
       className={cn(
-        "group/message flex items-end gap-2 rounded-2xl transition-[transform,box-shadow] duration-200 ease-out motion-reduce:transition-none [@media(hover:none)]:select-none",
+        "group/message flex w-full items-end gap-2 rounded-2xl transition-[transform,box-shadow] duration-200 ease-out motion-reduce:transition-none [@media(hover:none)]:select-none",
         isOwn ? "justify-end" : "justify-start",
         startsGroup && "mt-3",
         contextMenuOpen && "relative z-50",
@@ -295,7 +347,7 @@ export function MessageRow({
       <div
         className={cn(
           "flex min-w-0 flex-col",
-          replyTarget ? "w-[88%] md:w-[78%]" : "max-w-[88%] md:max-w-[78%]",
+          "max-w-[88%] md:max-w-[78%]",
           isOwn ? "items-end" : "items-start",
         )}
       >
@@ -317,10 +369,7 @@ export function MessageRow({
         ) : null}
         <div
           ref={bubbleRef}
-          className={cn(
-            "flex min-w-0 items-center gap-1.5",
-            replyTarget && "w-full",
-          )}
+          className={cn("flex w-full min-w-0 items-center gap-1.5")}
         >
           {isOwn ? actionRail : null}
           {isOwn && showUnreadCount && unreadParticipantCount > 0 ? (

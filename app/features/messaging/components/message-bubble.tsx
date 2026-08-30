@@ -51,14 +51,13 @@ export function MessageBubble({
   return (
     <div
       className={cn(
-        "relative max-w-full min-w-0",
-        replyTarget && "flex-1",
+        "relative w-fit max-w-full min-w-0",
         hasReactions && "mb-4",
       )}
     >
       <div
         className={cn(
-          replyTarget ? "w-full" : "w-fit max-w-full",
+          "w-full",
           isEmojiOnly
             ? "px-1 py-0.5 text-5xl leading-none"
             : "rounded-2xl px-3.5 py-2 text-[15px] [overflow-wrap:anywhere] break-keep whitespace-pre-wrap",
