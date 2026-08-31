@@ -28,6 +28,44 @@ Files run in lexicographic order. Add new files with a number that follows their
 
 Never edit a deployed migration.
 
+## Remote projects
+
+`trftjcieogrewqptgidd` (dev, Vercel Preview) and `nvgtzkylunpefdvonioo` (prod, Production). Dev first, prod after it is checked in the deployed app.
+
+`db push` has no `--project-ref`; the link is the target. `db:diff:dev` and `db:push:dev` re-link to dev first. Prod has no script — link, push, and link back:
+
+```bash
+npx supabase link --project-ref nvgtzkylunpefdvonioo
+npx supabase db push --linked
+npm run link:dev
+```
+
+Never `--include-seed` a remote push (`seed.sql` inserts into `auth.users`), and never `supabase config push` (`config.toml` holds the local `site_url`).
+
+## Remote project secrets
+
+Migrations do not carry these. Set them per project before scheduled work functions.
+
+**Vault.** `seed.sql` covers the local stack only. Elsewhere the cron helpers read `vault.decrypted_secrets` and return `null` when a name is missing.
+
+| Name                             | Read by                                   |
+| -------------------------------- | ----------------------------------------- |
+| `project_url`                    | both helpers, as the `net.http_post` base |
+| `notification_dispatch_secret`   | `private.invoke_notification_dispatch`    |
+| `post_attachment_cleanup_secret` | `private.invoke_post_attachment_cleanup`  |
+
+```sql
+select vault.create_secret('https://<ref>.supabase.co', 'project_url', '');
+```
+
+Rotate with `vault.update_secret` — `create_secret` fails on an existing name. There is no dual-secret window, so dispatch 401s until both sides match; cron retries.
+
+**Edge Function.** Copy `.env.example` to `.env.<environment>.local`; `npm run fn:secrets:dev`, or `npx supabase secrets set --project-ref <ref> --env-file …` for prod. Values are per project.
+
+Each Vault name pairs with the function variable of the same meaning — `notification_dispatch_secret` with `NOTIFICATION_DISPATCH_SECRET`, `post_attachment_cleanup_secret` with `POST_ATTACHMENT_CLEANUP_SECRET`. The handler compares with `!==`, so a mismatch 401s every cron call and reports nothing.
+
+**Auth URL configuration.** Dashboard, per project.
+
 ## Observed declarative-schema gotchas
 
 ### Cross-file dependencies
