@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
-export type PromptSource = "service-worker" | "install" | "notification";
+export type PromptSource =
+  "offline" | "service-worker" | "install" | "notification";
 
 const active = new Set<PromptSource>();
 const listeners = new Set<() => void>();

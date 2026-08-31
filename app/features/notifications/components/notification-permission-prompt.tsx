@@ -32,9 +32,12 @@ export function NotificationPermissionPrompt({
   const [eligible, setEligible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [pending, setPending] = useState(false);
+  const offlinePromptActive = usePromptActive("offline");
   const serviceWorkerPromptActive = usePromptActive("service-worker");
   const installPromptActive = usePromptActive("install");
-  const blocked = serviceWorkerPromptActive || installPromptActive;
+  // 연결이 없으면 구독 등록이 서버에 닿지 못한다. 물어봐야 실패시킬 뿐이라 미룬다.
+  const blocked =
+    offlinePromptActive || serviceWorkerPromptActive || installPromptActive;
   const open = eligible && !blocked && !dismissed;
 
   useEffect(() => {
