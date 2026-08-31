@@ -13,6 +13,8 @@ export function getPostErrorMessage(error: unknown): string {
     return "이 게시물을 삭제할 권한이 없습니다.";
   if (message.includes("requires a body or ready attachment"))
     return "본문 또는 첨부 파일을 추가해 주세요.";
+  if (message.includes("anonymous activity is restricted"))
+    return "이 그룹에서는 현재 익명 활동이 제한되어 있습니다.";
 
   if (candidate.code === "42501") return "이 작업을 수행할 권한이 없습니다.";
   if (candidate.code === "23505")
@@ -75,10 +77,32 @@ export function getCommentErrorMessage(error: unknown): string {
     return "이 댓글을 수정하거나 삭제할 권한이 없습니다.";
   if (message.includes("parent comment"))
     return "답글을 달 댓글을 찾을 수 없습니다.";
+  if (message.includes("anonymous activity is restricted"))
+    return "이 그룹에서는 현재 익명 활동이 제한되어 있습니다.";
 
   if (candidate.code === "42501") return "이 작업을 수행할 권한이 없습니다.";
   if (candidate.code === "P0002") return "댓글을 찾을 수 없습니다.";
   if (candidate.code === "23514" || candidate.code === "22023")
     return "댓글 내용을 다시 확인해 주세요.";
   return "댓글을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+}
+
+export function getAnonymousActivityRestrictionErrorMessage(
+  error: unknown,
+): string {
+  const message =
+    error && typeof error === "object" && "message" in error
+      ? String(error.message)
+      : "";
+  if (message.includes("restriction already active"))
+    return "이미 익명 활동이 차단된 사용자입니다.";
+  if (
+    message.includes("restriction already cancelled") ||
+    message.includes("restriction is expired") ||
+    message.includes("restriction not found")
+  )
+    return "이미 해제되었거나 만료된 익명 활동 차단입니다.";
+  if (message.includes("cannot moderate own"))
+    return "본인의 익명 활동은 차단할 수 없습니다.";
+  return getPostErrorMessage(error);
 }

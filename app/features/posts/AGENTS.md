@@ -1,9 +1,7 @@
-d
-
 # posts feature
 
 그룹 게시물과 개인 게시물, 그리고 둘의 댓글·반응·첨부를 소유한다. 기능 요구는
-`docs/functional-spec/03-posts-and-interactions.md`(게시물)와 `04-profiles.md`(타임라인),
+`docs/functional-spec/posts.md`(게시물)와 `profiles.md`(타임라인),
 본문 형식은 `docs/CONTENT_FORMATTING.md`에 있다. 여기에는 코드만 읽어서는 **왜 그런지** 알 수 없는
 불변식만 적는다.
 
@@ -66,6 +64,9 @@ d
 - 신원 판정의 경계는 RPC 안이다. 클라이언트의 `resolveIdentityOptions()`는 선택지를 그리기 위한 것이고, 게시물과 댓글이 같은 규칙을 쓰므로 화면마다 다시 계산하지 않는다.
 - 익명 번호는 게시물 단위이며 원본은 `private.post_anonymous_aliases`에만 있다. 클라이언트에 열어 주면 번호로 같은 사용자를 여러 게시물에 걸쳐 이을 수 있다.
 - `글쓴이`는 **게시물 자체가 익명일 때만** 붙인다. 실명 게시물의 작성자에게 붙이면 실명과 익명 댓글이 연결돼 익명 선택이 무너진다.
+- 그룹 익명 활동 제한은 `private.group_anonymous_activity_restrictions`에 멤버십과 별도로 남는다. 운영 RPC는 대상 프로필 ID를 받지 않고 현재 공개 중인 익명 게시물·댓글의 private author에서만 대상을 찾는다.
+- 운영자용 게시물·댓글 응답은 `can_moderate_anonymous`, `anonymous_author_restricted`와 활성 제한의 만료 시각만 공개한다. 실제 작성자 ID나 제한 대상 목록을 추가하지 마라.
+- 익명 게시·댓글 쓰기는 같은 그룹/대상의 advisory lock 아래 활성 제한을 검사한다. 즉시 게시, 두 초안 게시 경로와 댓글 경로 중 하나라도 빠뜨리면 제재와 작성이 경합할 때 우회된다.
 
 ## 직접 접근을 막은 테이블
 

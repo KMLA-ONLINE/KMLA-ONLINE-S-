@@ -47,6 +47,32 @@ describe("CommentItem", () => {
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
+  it("shows the remaining scheduled restriction in the cancellation flow", async () => {
+    const { user } = renderItem({
+      comment: postComment({
+        author_identity: "anonymous",
+        author_label: "익명2",
+        author_name: null as unknown as string,
+        author_pub_id: null as unknown as string,
+        can_moderate_anonymous: true,
+        anonymous_author_restricted: true,
+        anonymous_author_restriction_expires_at: new Date(
+          Date.now() + 3 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+      }),
+    });
+
+    await user.click(screen.getByRole("button", { name: "댓글 옵션" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "익명 차단 해제" }),
+    );
+    await user.click(screen.getByRole("button", { name: "차단 해제" }));
+
+    expect(
+      screen.getByText("앞으로 3일 동안 익명 활동이 차단될 예정이었습니다."),
+    ).toBeInTheDocument();
+  });
+
   it("colors an effective #업 comment blue", () => {
     renderItem({
       comment: postComment({

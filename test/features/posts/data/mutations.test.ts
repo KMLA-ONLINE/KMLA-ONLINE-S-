@@ -22,7 +22,39 @@ import {
   createPostComment,
   createPostUploadSession,
   updatePostComment,
+  restrictGroupAnonymousActivity,
+  cancelGroupAnonymousActivityRestriction,
 } from "~/features/posts/data/mutations";
+
+describe("anonymous activity restriction mutations", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("uses only the public source kind and source id", async () => {
+    rpc.mockResolvedValueOnce({
+      data: [{ restriction_id: "restriction-id", expires_at: "expires" }],
+      error: null,
+    });
+    await restrictGroupAnonymousActivity(
+      "comment",
+      "comment-id",
+      "제한 사유입니다",
+      30,
+    );
+    expect(rpc).toHaveBeenCalledWith("restrict_group_anonymous_activity", {
+      p_source_kind: "comment",
+      p_source_id: "comment-id",
+      p_reason: "제한 사유입니다",
+      p_duration_days: 30,
+    });
+
+    rpc.mockResolvedValueOnce({ data: null, error: null });
+    await cancelGroupAnonymousActivityRestriction("comment", "comment-id");
+    expect(rpc).toHaveBeenLastCalledWith(
+      "cancel_group_anonymous_activity_restriction",
+      { p_source_kind: "comment", p_source_id: "comment-id" },
+    );
+  });
+});
 
 const values = {
   title: "제목",

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 
 import { GroupPostReportDialog } from "~/features/posts/components/group-post-report-dialog";
+import { AnonymousActivityRestrictionDialog } from "~/features/posts/components/anonymous-activity-restriction-dialog";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -39,6 +40,10 @@ export function PostMenu({
   reportPostId,
   onPin,
   onDelete,
+  canModerateAnonymous = false,
+  anonymousAuthorRestricted = false,
+  anonymousAuthorRestrictionExpiresAt = null,
+  anonymousSourceId,
 }: {
   editTo: string;
   isPinned?: boolean;
@@ -49,18 +54,29 @@ export function PostMenu({
   reportPostId?: string;
   onPin?: () => void;
   onDelete: () => void;
+  canModerateAnonymous?: boolean;
+  anonymousAuthorRestricted?: boolean;
+  anonymousAuthorRestrictionExpiresAt?: string | null;
+  anonymousSourceId?: string;
 }) {
   // 확인 dialog는 menu 바깥에 둔다. menu가 닫히면서 자식이 언마운트되면 dialog도 같이
   // 사라지므로, 열림 상태만 여기서 들고 dialog는 형제로 그린다.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reported, setReported] = useState(false);
+  const [restrictionOpen, setRestrictionOpen] = useState(false);
+  const [restricted, setRestricted] = useState(anonymousAuthorRestricted);
+  const [restrictionExpiresAt, setRestrictionExpiresAt] = useState(
+    anonymousAuthorRestrictionExpiresAt,
+  );
+  const canRestrict = canModerateAnonymous && Boolean(anonymousSourceId);
 
   if (
     !canEdit &&
     !canPin &&
     !canDelete &&
-    !(canReport && reportPostId && !reported)
+    !(canReport && reportPostId && !reported) &&
+    !canRestrict
   ) {
     return null;
   }
@@ -99,6 +115,11 @@ export function PostMenu({
               신고
             </DropdownMenuItem>
           ) : null}
+          {canRestrict ? (
+            <DropdownMenuItem onClick={() => setRestrictionOpen(true)}>
+              {restricted ? "익명 차단 해제" : "익명 활동 차단"}
+            </DropdownMenuItem>
+          ) : null}
 
           {canDelete ? (
             <DropdownMenuItem
@@ -117,6 +138,20 @@ export function PostMenu({
           open={reportOpen}
           onOpenChange={setReportOpen}
           onReported={() => setReported(true)}
+        />
+      ) : null}
+      {anonymousSourceId ? (
+        <AnonymousActivityRestrictionDialog
+          open={restrictionOpen}
+          sourceKind="post"
+          sourceId={anonymousSourceId}
+          restricted={restricted}
+          restrictionExpiresAt={restrictionExpiresAt}
+          onOpenChange={setRestrictionOpen}
+          onRestrictedChange={(nextRestricted, expiresAt) => {
+            setRestricted(nextRestricted);
+            setRestrictionExpiresAt(expiresAt);
+          }}
         />
       ) : null}
 

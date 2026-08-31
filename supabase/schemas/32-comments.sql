@@ -275,6 +275,29 @@ CREATE TABLE IF NOT EXISTS "private"."post_anonymous_aliases" (
 
 ALTER TABLE "private"."post_anonymous_aliases" OWNER TO "postgres";
 
+CREATE TABLE IF NOT EXISTS "private"."group_anonymous_activity_restrictions" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "group_id" "uuid" NOT NULL,
+    "profile_id" bigint NOT NULL,
+    "reason" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "expires_at" timestamp with time zone NOT NULL,
+    "restricted_by_profile_id" bigint,
+    "source_kind" "text" NOT NULL,
+    "source_post_id" "uuid",
+    "source_comment_id" "uuid",
+    "ended_at" timestamp with time zone,
+    "cancelled_at" timestamp with time zone,
+    "cancelled_by_profile_id" bigint,
+    CONSTRAINT "group_anonymous_restrictions_reason" CHECK (("reason" = "btrim"("reason")) AND ("char_length"("reason") >= 5) AND ("char_length"("reason") <= 300)),
+    CONSTRAINT "group_anonymous_restrictions_duration" CHECK (("expires_at" > "created_at") AND ("expires_at" <= ("created_at" + '180 days'::interval))),
+    CONSTRAINT "group_anonymous_restrictions_source_kind" CHECK (("source_kind" = ANY (ARRAY['post'::"text", 'comment'::"text"]))),
+    CONSTRAINT "group_anonymous_restrictions_source_shape" CHECK ((("source_post_id" IS NULL) AND ("source_comment_id" IS NULL)) OR (("source_kind" = 'post'::"text") AND ("source_post_id" IS NOT NULL) AND ("source_comment_id" IS NULL)) OR (("source_kind" = 'comment'::"text") AND ("source_post_id" IS NULL) AND ("source_comment_id" IS NOT NULL))),
+    CONSTRAINT "group_anonymous_restrictions_end_shape" CHECK ((("ended_at" IS NULL) AND ("cancelled_at" IS NULL) AND ("cancelled_by_profile_id" IS NULL)) OR (("ended_at" = "expires_at") AND ("cancelled_at" IS NULL) AND ("cancelled_by_profile_id" IS NULL)) OR (("ended_at" = "cancelled_at") AND ("cancelled_at" IS NOT NULL)))
+);
+
+ALTER TABLE "private"."group_anonymous_activity_restrictions" OWNER TO "postgres";
+
 CREATE TABLE IF NOT EXISTS "public"."post_comments" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "post_id" "uuid" NOT NULL,
@@ -310,6 +333,9 @@ ALTER TABLE ONLY "private"."post_anonymous_aliases"
 ALTER TABLE ONLY "private"."post_anonymous_aliases"
     ADD CONSTRAINT "post_anonymous_aliases_pkey" PRIMARY KEY ("post_id", "profile_id");
 
+ALTER TABLE ONLY "private"."group_anonymous_activity_restrictions"
+    ADD CONSTRAINT "group_anonymous_activity_restrictions_pkey" PRIMARY KEY ("id");
+
 ALTER TABLE ONLY "public"."comment_images"
     ADD CONSTRAINT "comment_images_pkey" PRIMARY KEY ("id");
 
@@ -334,6 +360,10 @@ CREATE INDEX "post_comments_live_child_idx" ON "public"."post_comments" USING "b
 CREATE INDEX "post_comments_thread_idx" ON "public"."post_comments" USING "btree" ("root_comment_id", "created_at", "id");
 
 CREATE INDEX "post_comments_top_level_idx" ON "public"."post_comments" USING "btree" ("post_id", "created_at" DESC, "id" DESC) WHERE (("depth" = 0) AND ("deleted_at" IS NULL));
+
+CREATE UNIQUE INDEX "group_anonymous_restrictions_active_idx" ON "private"."group_anonymous_activity_restrictions" USING "btree" ("group_id", "profile_id") WHERE ("ended_at" IS NULL);
+
+CREATE INDEX "group_anonymous_restrictions_profile_idx" ON "private"."group_anonymous_activity_restrictions" USING "btree" ("profile_id", "group_id", "expires_at" DESC);
 
 CREATE OR REPLACE TRIGGER "post_comments_prevent_immutable_changes" BEFORE UPDATE ON "public"."post_comments" FOR EACH ROW EXECUTE FUNCTION "private"."prevent_comment_immutable_changes"();
 
@@ -360,6 +390,24 @@ ALTER TABLE ONLY "private"."post_anonymous_aliases"
 
 ALTER TABLE ONLY "private"."post_anonymous_aliases"
     ADD CONSTRAINT "post_anonymous_aliases_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id");
+
+ALTER TABLE ONLY "private"."group_anonymous_activity_restrictions"
+    ADD CONSTRAINT "group_anonymous_restrictions_group_id_fkey" FOREIGN KEY ("group_id") REFERENCES "public"."groups"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "private"."group_anonymous_activity_restrictions"
+    ADD CONSTRAINT "group_anonymous_restrictions_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "private"."group_anonymous_activity_restrictions"
+    ADD CONSTRAINT "group_anonymous_restrictions_restricted_by_fkey" FOREIGN KEY ("restricted_by_profile_id") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
+
+ALTER TABLE ONLY "private"."group_anonymous_activity_restrictions"
+    ADD CONSTRAINT "group_anonymous_restrictions_cancelled_by_fkey" FOREIGN KEY ("cancelled_by_profile_id") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
+
+ALTER TABLE ONLY "private"."group_anonymous_activity_restrictions"
+    ADD CONSTRAINT "group_anonymous_restrictions_source_post_fkey" FOREIGN KEY ("source_post_id") REFERENCES "public"."posts"("id") ON DELETE SET NULL;
+
+ALTER TABLE ONLY "private"."group_anonymous_activity_restrictions"
+    ADD CONSTRAINT "group_anonymous_restrictions_source_comment_fkey" FOREIGN KEY ("source_comment_id") REFERENCES "public"."post_comments"("id") ON DELETE SET NULL;
 
 ALTER TABLE ONLY "public"."comment_images"
     ADD CONSTRAINT "comment_images_comment_id_fkey" FOREIGN KEY ("comment_id") REFERENCES "public"."post_comments"("id") ON DELETE CASCADE;
@@ -388,6 +436,10 @@ ALTER TABLE "private"."post_anonymous_aliases" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "post_anonymous_aliases_deny_client_access" ON "private"."post_anonymous_aliases" USING (false) WITH CHECK (false);
 
+ALTER TABLE "private"."group_anonymous_activity_restrictions" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "group_anonymous_restrictions_deny_client_access" ON "private"."group_anonymous_activity_restrictions" USING (false) WITH CHECK (false);
+
 ALTER TABLE "public"."comment_images" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "comment_images_deny_client_access" ON "public"."comment_images" USING (false) WITH CHECK (false);
@@ -395,6 +447,47 @@ CREATE POLICY "comment_images_deny_client_access" ON "public"."comment_images" U
 ALTER TABLE "public"."post_comments" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "post_comments_deny_client_access" ON "public"."post_comments" USING (false) WITH CHECK (false);
+
+CREATE OR REPLACE FUNCTION "private"."group_anonymous_activity_restricted"("p_group_id" "uuid", "p_profile_id" bigint) RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select exists (
+    select 1
+    from private.group_anonymous_activity_restrictions as restriction
+    where restriction.group_id = p_group_id
+      and restriction.profile_id = p_profile_id
+      and restriction.ended_at is null
+      and restriction.expires_at > now()
+  );
+$$;
+
+ALTER FUNCTION "private"."group_anonymous_activity_restricted"("p_group_id" "uuid", "p_profile_id" bigint) OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "private"."lock_group_anonymous_activity_target"("p_group_id" "uuid", "p_profile_id" bigint) RETURNS "void"
+    LANGUAGE "sql" VOLATILE
+    SET "search_path" TO ''
+    AS $$
+  select pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_group_id::text || ':' || p_profile_id::text, 0)
+  );
+$$;
+
+ALTER FUNCTION "private"."lock_group_anonymous_activity_target"("p_group_id" "uuid", "p_profile_id" bigint) OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "private"."assert_group_anonymous_activity_allowed"("p_group_id" "uuid", "p_profile_id" bigint) RETURNS "void"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if private.group_anonymous_activity_restricted(p_group_id, p_profile_id) then
+    raise exception 'anonymous activity is restricted'
+      using errcode = '42501';
+  end if;
+end;
+$$;
+
+ALTER FUNCTION "private"."assert_group_anonymous_activity_allowed"("p_group_id" "uuid", "p_profile_id" bigint) OWNER TO "postgres";
 
 REVOKE ALL ON FUNCTION "private"."can_read_comment_image_object"("p_storage_bucket" "text", "p_object_path" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."can_read_comment_image_object"("p_storage_bucket" "text", "p_object_path" "text") TO "authenticated";
@@ -420,6 +513,12 @@ REVOKE ALL ON FUNCTION "private"."sync_post_comment_count"() FROM PUBLIC;
 REVOKE ALL ON FUNCTION "private"."tombstone_comment_images"() FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."tombstone_post_comment_images"() FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "private"."group_anonymous_activity_restricted"("p_group_id" "uuid", "p_profile_id" bigint) FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "private"."lock_group_anonymous_activity_target"("p_group_id" "uuid", "p_profile_id" bigint) FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "private"."assert_group_anonymous_activity_allowed"("p_group_id" "uuid", "p_profile_id" bigint) FROM PUBLIC;
 
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."comment_images" TO "service_role";
 

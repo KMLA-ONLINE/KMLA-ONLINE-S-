@@ -21,11 +21,13 @@ import { commentDomId } from "~/features/posts/components/comment-item";
 import { PostActionBar } from "~/features/posts/components/post-action-bar";
 import { useKeyboardViewport } from "~/features/posts/hooks/use-keyboard-viewport";
 import { usePostComments } from "~/features/posts/hooks/use-post-comments";
+import { formatPostDate } from "~/features/posts/model/format";
 import type {
   PostComment,
   PostCommentPage,
   PostIdentity,
   ReactionSummary,
+  AnonymousActivityRestriction,
 } from "~/features/posts/model/types";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -87,6 +89,7 @@ export function PostDetailDialog({
   onClose,
   actionBar,
   children,
+  anonymousActivityRestriction,
 }: {
   /** 모달 머리에 적는 제목. 낭독기에는 이것이 게시물의 이름이 된다. */
   title: string;
@@ -108,6 +111,7 @@ export function PostDetailDialog({
   };
   /** 게시물 본문 영역. 종류마다 다른 유일한 부분이다. */
   children: ReactNode;
+  anonymousActivityRestriction?: AnonymousActivityRestriction | null;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   /**
@@ -446,6 +450,14 @@ export function PostDetailDialog({
           </section>
         </div>
 
+        {anonymousActivityRestriction ? (
+          <p className="border-t px-4 pt-2 text-xs text-muted-foreground">
+            익명 활동이 제한되어 있습니다. 사유:{" "}
+            {anonymousActivityRestriction.reason}
+            {" · "}만료:{" "}
+            {formatPostDate(anonymousActivityRestriction.expires_at)}
+          </p>
+        ) : null}
         <CommentComposer
           viewer={viewer}
           identities={identities}

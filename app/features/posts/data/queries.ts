@@ -5,6 +5,7 @@ import type {
   GroupPostDetail,
   GroupPostPage,
   GroupPostSearchResult,
+  AnonymousActivityRestriction,
   PostComment,
   PostCommentPage,
   PostCursor,
@@ -21,6 +22,17 @@ import { getSupabase } from "~/shared/supabase/client";
 export const GROUP_POST_PAGE_SIZE = 12;
 export const PROFILE_POST_PAGE_SIZE = 12;
 export const POST_COMMENT_PAGE_SIZE = 20;
+
+export async function getMyGroupAnonymousActivityRestriction(
+  groupId: string,
+): Promise<AnonymousActivityRestriction | null> {
+  const { data, error } = await getSupabase().rpc(
+    "get_my_group_anonymous_activity_restriction",
+    { p_group_id: groupId },
+  );
+  if (error) throw error;
+  return data?.[0] ?? null;
+}
 
 export async function hydratePostComments(
   comments: Omit<PostComment, "images">[],

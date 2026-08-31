@@ -24,12 +24,14 @@ import type {
 } from "~/features/groups/model/types";
 import { GroupPostReportsPanel } from "~/features/posts/components/group-post-reports-panel";
 import type { GroupPostReportSummaryPage } from "~/features/posts/data/group-reports";
+import { formatPostDate } from "~/features/posts/model/format";
 import {
   GroupPostSearchDialog,
   GroupPostsPanel,
   PostWriteRow,
   type GroupCategory,
   type GroupPostPage,
+  type AnonymousActivityRestriction,
 } from "~/features/posts";
 import { cn } from "~/shared/lib/utils";
 import { useDelayedPending } from "~/shared/hooks/use-delayed-pending";
@@ -60,6 +62,7 @@ export function GroupDetailScreen({
   joinRequests = [],
   invite = null,
   reportPage,
+  anonymousActivityRestriction = null,
 }: {
   group: GroupDetail;
   profileId: number;
@@ -73,6 +76,7 @@ export function GroupDetailScreen({
   joinRequests?: GroupJoinRequest[];
   invite?: GroupInvite | null;
   reportPage?: GroupPostReportSummaryPage;
+  anonymousActivityRestriction?: AnonymousActivityRestriction | null;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
@@ -160,11 +164,21 @@ export function GroupDetailScreen({
           ) : tab === "posts" ? (
             <div className="flex flex-col md:gap-3">
               {canCreatePost ? (
-                <PostWriteRow
-                  to={`/groups/${group.slug}/posts/new`}
-                  viewerName={viewerName}
-                  viewerAvatarUrl={viewerAvatarUrl}
-                />
+                <>
+                  <PostWriteRow
+                    to={`/groups/${group.slug}/posts/new`}
+                    viewerName={viewerName}
+                    viewerAvatarUrl={viewerAvatarUrl}
+                  />
+                  {anonymousActivityRestriction ? (
+                    <p className="px-4 text-sm text-muted-foreground md:px-1">
+                      익명 활동이 제한되어 있습니다. 사유:{" "}
+                      {anonymousActivityRestriction.reason}
+                      {" · "}만료:{" "}
+                      {formatPostDate(anonymousActivityRestriction.expires_at)}
+                    </p>
+                  ) : null}
+                </>
               ) : null}
               <GroupPostsPanel
                 key={posts.posts

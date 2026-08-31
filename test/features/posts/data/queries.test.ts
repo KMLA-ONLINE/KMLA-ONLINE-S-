@@ -13,6 +13,7 @@ vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 
 import {
   getProfilePost,
+  getMyGroupAnonymousActivityRestriction,
   hydrateGroupPostMedia,
   listGroupPosts,
   listPostComments,
@@ -22,6 +23,25 @@ import {
 
 describe("post queries", () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it("loads only the caller's active anonymous activity restriction", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{ reason: "운영 방해", expires_at: "2026-09-01T00:00:00Z" }],
+      error: null,
+    });
+    getSupabase.mockReturnValue({ rpc });
+
+    await expect(
+      getMyGroupAnonymousActivityRestriction("group-id"),
+    ).resolves.toEqual({
+      reason: "운영 방해",
+      expires_at: "2026-09-01T00:00:00Z",
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      "get_my_group_anonymous_activity_restriction",
+      { p_group_id: "group-id" },
+    );
+  });
 
   it("does not load or sign attachments for search results", async () => {
     const rpc = vi.fn().mockResolvedValue({

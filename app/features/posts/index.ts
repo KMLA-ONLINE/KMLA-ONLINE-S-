@@ -17,6 +17,7 @@ export { usePostViewMode } from "~/features/posts/hooks/use-post-view-mode";
 export { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
 export {
   createGroupCategory,
+  cancelGroupAnonymousActivityRestriction,
   createProfilePost,
   createProfilePostWithAttachments,
   deleteProfilePost,
@@ -34,10 +35,12 @@ export {
   setGroupPostPinned,
   updateGroupCategory,
   updateGroupPostWithAttachments,
+  restrictGroupAnonymousActivity,
 } from "~/features/posts/data/mutations";
 export type { PostUploadSession } from "~/features/posts/data/mutations";
 export {
   getGroupPost,
+  getMyGroupAnonymousActivityRestriction,
   hydrateGroupPostMedia,
   getProfilePost,
   listProfilePosts,
@@ -52,6 +55,7 @@ export {
   formatPostDate,
   getCommentErrorMessage,
   getPostErrorMessage,
+  getAnonymousActivityRestrictionErrorMessage,
 } from "~/features/posts/model/format";
 export { resolveIdentityOptions } from "~/features/posts/model/identity";
 export {
@@ -90,6 +94,8 @@ export {
 } from "~/features/posts/model/markdown";
 export type {
   CommentCursor,
+  AnonymousActivityRestriction,
+  AnonymousActivitySourceKind,
   CommentImage,
   CommentImageInput,
   GroupCategory,

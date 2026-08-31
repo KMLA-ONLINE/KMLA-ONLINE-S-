@@ -10,6 +10,7 @@ const mutations = vi.hoisted(() => ({
   loadGroupDetail: vi.fn(),
   listGroupCategories: vi.fn(),
   listGroupPosts: vi.fn(),
+  getMyGroupAnonymousActivityRestriction: vi.fn(),
 }));
 
 vi.mock("~/features/groups", async (importOriginal) => ({
@@ -21,6 +22,8 @@ vi.mock("~/features/posts", async (importOriginal) => ({
   ...(await importOriginal()),
   listGroupCategories: mutations.listGroupCategories,
   listGroupPosts: mutations.listGroupPosts,
+  getMyGroupAnonymousActivityRestriction:
+    mutations.getMyGroupAnonymousActivityRestriction,
 }));
 
 import { groupKeys } from "~/features/groups";
@@ -184,6 +187,7 @@ describe("group detail loader", () => {
     getQueryClient().clear();
     mutations.loadGroupDetail.mockResolvedValue(group);
     mutations.listGroupCategories.mockResolvedValue([]);
+    mutations.getMyGroupAnonymousActivityRestriction.mockResolvedValue(null);
   });
 
   it("loads the background post list for a direct post detail", async () => {
@@ -196,6 +200,28 @@ describe("group detail loader", () => {
       hydrateMedia: expect.any(Boolean),
     });
     expect(result.posts).toBe(page);
+  });
+
+  it("loads my active restriction alongside optional-anonymous group content", async () => {
+    mutations.loadGroupDetail.mockResolvedValue({
+      ...group,
+      identity_policy: "optional_anonymous",
+    });
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    const restriction = {
+      reason: "반복적인 익명 괴롭힘",
+      expires_at: "2026-09-07T00:00:00Z",
+    };
+    mutations.getMyGroupAnonymousActivityRestriction.mockResolvedValue(
+      restriction,
+    );
+
+    const result = await load("/groups/test");
+
+    expect(
+      mutations.getMyGroupAnonymousActivityRestriction,
+    ).toHaveBeenCalledWith("group-id");
+    expect(result.anonymousActivityRestriction).toBe(restriction);
   });
 
   it("returns a refreshed post list while a detail modal is open", async () => {

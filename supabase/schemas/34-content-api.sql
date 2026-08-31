@@ -44,7 +44,7 @@ $$;
 
 ALTER FUNCTION "private"."comment_post_context"("p_post_id" "uuid", "p_caller_profile_id" bigint, OUT "is_visible" boolean, OUT "post_kind" "public"."post_kind", OUT "caller_role" "public"."group_member_role", OUT "identity_policy" "public"."group_identity_policy", OUT "post_author_identity" "public"."post_identity") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "private"."read_post_comments"("p_comment_ids" "uuid"[], "p_caller_profile_id" bigint, "p_caller_role" "public"."group_member_role") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
+CREATE OR REPLACE FUNCTION "private"."read_post_comments"("p_comment_ids" "uuid"[], "p_caller_profile_id" bigint, "p_caller_role" "public"."group_member_role") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone)
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -115,8 +115,15 @@ CREATE OR REPLACE FUNCTION "private"."read_post_comments"("p_comment_ids" "uuid"
       then private.comment_author_label(
         parent.author_identity, parent.anon_alias_number, parent_profile.name
       )
-    end
+    end,
+    comment.deleted_at is null
+      and comment.author_identity = 'anonymous'
+      and author.profile_id <> p_caller_profile_id
+      and coalesce(p_caller_role in ('owner', 'admin'), false),
+    active_restriction.expires_at is not null,
+    active_restriction.expires_at
   from public.post_comments as comment
+  join public.posts as comment_post on comment_post.id = comment.post_id
   join private.comment_authors as author on author.comment_id = comment.id
   left join private.feed_bump_events as feed_bump
     on feed_bump.comment_id = comment.id
@@ -129,6 +136,19 @@ CREATE OR REPLACE FUNCTION "private"."read_post_comments"("p_comment_ids" "uuid"
     and profile.deleted_at is null
   left join public.comment_reactions as mine
     on mine.comment_id = comment.id and mine.profile_id = p_caller_profile_id
+  left join lateral (
+    select restriction.expires_at
+    from private.group_anonymous_activity_restrictions as restriction
+    where restriction.group_id = comment_post.group_id
+      and restriction.profile_id = author.profile_id
+      and restriction.ended_at is null
+      and restriction.expires_at > now()
+    order by restriction.created_at desc, restriction.id desc
+    limit 1
+  ) as active_restriction on comment.deleted_at is null
+    and comment.author_identity = 'anonymous'
+    and author.profile_id <> p_caller_profile_id
+    and coalesce(p_caller_role in ('owner', 'admin'), false)
   left join lateral (
     select
       coalesce(sum(tally.n)::integer, 0) as total,
@@ -294,6 +314,7 @@ declare
   caller_profile_id bigint := private.current_profile_id();
   post_record public.posts;
   target_group_id uuid;
+  target_author_identity public.post_identity;
   locked_group_id uuid;
   group_identity_policy public.group_identity_policy;
   group_posting_policy public.group_posting_policy;
@@ -302,11 +323,16 @@ begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
-  select post.group_id into target_group_id
+  select post.group_id, post.author_identity into target_group_id, target_author_identity
   from public.posts as post
   where post.id = p_post_id and post.kind = 'group' and post.deleted_at is null;
   if target_group_id is null or not private.is_post_author(p_post_id) then
     raise exception 'only the author can commit this post' using errcode = '42501';
+  end if;
+  if coalesce(p_publish, false) and target_author_identity = 'anonymous' then
+    perform private.lock_group_anonymous_activity_target(
+      target_group_id, caller_profile_id
+    );
   end if;
 
   select group_data.id, group_data.identity_policy, group_data.posting_policy,
@@ -339,6 +365,11 @@ begin
     if post_record.author_identity = 'anonymous'
       and group_identity_policy = 'identified' then
       raise exception 'anonymous posting is not allowed' using errcode = '42501';
+    end if;
+    if post_record.author_identity = 'anonymous' then
+      perform private.assert_group_anonymous_activity_allowed(
+        target_group_id, caller_profile_id
+      );
     end if;
     if post_record.author_identity = 'staff'
       and member_role not in ('owner', 'admin', 'manager') then
@@ -504,6 +535,11 @@ begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
+  if p_author_identity = 'anonymous' then
+    perform private.lock_group_anonymous_activity_target(
+      p_group_id, caller_profile_id
+    );
+  end if;
   select group_data.id, group_data.identity_policy, group_data.posting_policy,
     membership.role
   into locked_group_id, group_identity_policy, group_posting_policy, member_role
@@ -521,6 +557,11 @@ begin
   end if;
   if p_author_identity = 'anonymous' and group_identity_policy = 'identified' then
     raise exception 'anonymous posting is not allowed' using errcode = '42501';
+  end if;
+  if p_author_identity = 'anonymous' then
+    perform private.assert_group_anonymous_activity_allowed(
+      p_group_id, caller_profile_id
+    );
   end if;
   if p_author_identity = 'staff' and member_role not in ('owner', 'admin', 'manager') then
     raise exception 'staff identity is not allowed' using errcode = '42501';
@@ -557,7 +598,193 @@ $$;
 
 ALTER FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid" DEFAULT NULL::"uuid", "p_image_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
+CREATE OR REPLACE FUNCTION "public"."restrict_group_anonymous_activity"("p_source_kind" "text", "p_source_id" "uuid", "p_reason" "text", "p_duration_days" integer) RETURNS TABLE("restriction_id" "uuid", "expires_at" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  target_group_id uuid;
+  target_profile_id bigint;
+  caller_role public.group_member_role;
+  created_restriction_id uuid;
+  restriction_expires_at timestamptz;
+  trimmed_reason text := btrim(coalesce(p_reason, ''));
+begin
+  if auth.uid() is null or caller_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  if p_source_kind not in ('post', 'comment') or p_source_id is null then
+    raise exception 'invalid anonymous moderation source' using errcode = '22023';
+  end if;
+  if char_length(trimmed_reason) not between 5 and 300 then
+    raise exception 'reason must contain between 5 and 300 characters' using errcode = '22023';
+  end if;
+  if p_duration_days is null or p_duration_days not between 1 and 180 then
+    raise exception 'duration days must be an integer between 1 and 180' using errcode = '22023';
+  end if;
+
+  if p_source_kind = 'post' then
+    select post.group_id, author.profile_id into target_group_id, target_profile_id
+    from public.posts as post
+    join public.groups as group_record on group_record.id = post.group_id and group_record.deleted_at is null
+    join private.post_authors as author on author.post_id = post.id
+    where post.id = p_source_id and post.kind = 'group'
+      and post.author_identity = 'anonymous'
+      and post.published_at is not null and post.deleted_at is null;
+  else
+    select post.group_id, author.profile_id into target_group_id, target_profile_id
+    from public.post_comments as comment
+    join public.posts as post on post.id = comment.post_id and post.kind = 'group'
+      and post.published_at is not null and post.deleted_at is null
+    join public.groups as group_record on group_record.id = post.group_id and group_record.deleted_at is null
+    join private.comment_authors as author on author.comment_id = comment.id
+    where comment.id = p_source_id and comment.author_identity = 'anonymous'
+      and comment.deleted_at is null;
+  end if;
+  if target_profile_id is null then
+    raise exception 'anonymous moderation source not found' using errcode = 'P0002';
+  end if;
+
+  select membership.role into caller_role
+  from public.group_memberships as membership
+  where membership.group_id = target_group_id and membership.profile_id = caller_profile_id;
+  if caller_role not in ('owner', 'admin') then
+    raise exception 'group anonymous moderation is not allowed' using errcode = '42501';
+  end if;
+  if target_profile_id = caller_profile_id then
+    raise exception 'cannot moderate own anonymous activity' using errcode = '42501';
+  end if;
+
+  perform private.lock_group_anonymous_activity_target(target_group_id, target_profile_id);
+  perform 1 from public.group_memberships as membership
+  where membership.group_id = target_group_id and membership.profile_id = target_profile_id
+  for update;
+  update private.group_anonymous_activity_restrictions as restriction
+  set ended_at = restriction.expires_at
+  where restriction.group_id = target_group_id and restriction.profile_id = target_profile_id
+    and restriction.ended_at is null and restriction.expires_at <= now();
+  if exists (
+    select 1 from private.group_anonymous_activity_restrictions as restriction
+    where restriction.group_id = target_group_id and restriction.profile_id = target_profile_id
+      and restriction.ended_at is null and restriction.expires_at > now()
+  ) then
+    raise exception 'anonymous activity restriction already active' using errcode = '55000';
+  end if;
+
+  restriction_expires_at := now() + make_interval(days => p_duration_days);
+  insert into private.group_anonymous_activity_restrictions (
+    group_id, profile_id, reason, expires_at, restricted_by_profile_id,
+    source_kind, source_post_id, source_comment_id
+  ) values (
+    target_group_id, target_profile_id, trimmed_reason, restriction_expires_at,
+    caller_profile_id, p_source_kind,
+    case when p_source_kind = 'post' then p_source_id end,
+    case when p_source_kind = 'comment' then p_source_id end
+  ) returning id into created_restriction_id;
+  return query select created_restriction_id, restriction_expires_at;
+end;
+$$;
+
+ALTER FUNCTION "public"."restrict_group_anonymous_activity"("p_source_kind" "text", "p_source_id" "uuid", "p_reason" "text", "p_duration_days" integer) OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."cancel_group_anonymous_activity_restriction"("p_source_kind" "text", "p_source_id" "uuid") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  target_group_id uuid;
+  target_profile_id bigint;
+  caller_role public.group_member_role;
+  target_restriction private.group_anonymous_activity_restrictions;
+begin
+  if auth.uid() is null or caller_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  if p_source_kind not in ('post', 'comment') or p_source_id is null then
+    raise exception 'invalid anonymous moderation source' using errcode = '22023';
+  end if;
+  if p_source_kind = 'post' then
+    select post.group_id, author.profile_id into target_group_id, target_profile_id
+    from public.posts as post
+    join public.groups as group_record on group_record.id = post.group_id and group_record.deleted_at is null
+    join private.post_authors as author on author.post_id = post.id
+    where post.id = p_source_id and post.kind = 'group'
+      and post.author_identity = 'anonymous'
+      and post.published_at is not null and post.deleted_at is null;
+  else
+    select post.group_id, author.profile_id into target_group_id, target_profile_id
+    from public.post_comments as comment
+    join public.posts as post on post.id = comment.post_id and post.kind = 'group'
+      and post.published_at is not null and post.deleted_at is null
+    join public.groups as group_record on group_record.id = post.group_id and group_record.deleted_at is null
+    join private.comment_authors as author on author.comment_id = comment.id
+    where comment.id = p_source_id and comment.author_identity = 'anonymous'
+      and comment.deleted_at is null;
+  end if;
+  if target_profile_id is null then
+    raise exception 'anonymous moderation source not found' using errcode = 'P0002';
+  end if;
+
+  select membership.role into caller_role
+  from public.group_memberships as membership
+  where membership.group_id = target_group_id and membership.profile_id = caller_profile_id;
+  if caller_role not in ('owner', 'admin') then
+    raise exception 'group anonymous moderation is not allowed' using errcode = '42501';
+  end if;
+  if target_profile_id = caller_profile_id then
+    raise exception 'cannot moderate own anonymous activity' using errcode = '42501';
+  end if;
+
+  perform private.lock_group_anonymous_activity_target(target_group_id, target_profile_id);
+  perform 1 from public.group_memberships as membership
+  where membership.group_id = target_group_id and membership.profile_id = target_profile_id
+  for update;
+  select restriction.* into target_restriction
+  from private.group_anonymous_activity_restrictions as restriction
+  where restriction.group_id = target_group_id and restriction.profile_id = target_profile_id
+  order by restriction.created_at desc, restriction.id desc limit 1 for update;
+  if target_restriction.id is null then
+    raise exception 'anonymous activity restriction not found' using errcode = 'P0002';
+  end if;
+  if target_restriction.cancelled_at is not null then
+    raise exception 'anonymous activity restriction already cancelled' using errcode = '55000';
+  end if;
+  if target_restriction.ended_at is not null or target_restriction.expires_at <= now() then
+    raise exception 'anonymous activity restriction is expired' using errcode = '55000';
+  end if;
+  update private.group_anonymous_activity_restrictions
+  set ended_at = now(), cancelled_at = now(), cancelled_by_profile_id = caller_profile_id
+  where id = target_restriction.id;
+  return target_restriction.id;
+end;
+$$;
+
+ALTER FUNCTION "public"."cancel_group_anonymous_activity_restriction"("p_source_kind" "text", "p_source_id" "uuid") OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."get_my_group_anonymous_activity_restriction"("p_group_id" "uuid") RETURNS TABLE("reason" "text", "expires_at" timestamp with time zone)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+begin
+  if auth.uid() is null or caller_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  return query
+  select restriction.reason, restriction.expires_at
+  from private.group_anonymous_activity_restrictions as restriction
+  where restriction.group_id = p_group_id and restriction.profile_id = caller_profile_id
+    and restriction.ended_at is null and restriction.expires_at > now()
+  order by restriction.created_at desc, restriction.id desc limit 1;
+end;
+$$;
+
+ALTER FUNCTION "public"."get_my_group_anonymous_activity_restriction"("p_group_id" "uuid") OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid" DEFAULT NULL::"uuid", "p_image_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -571,10 +798,21 @@ declare
   new_depth smallint := 0;
   new_root_id uuid;
   new_alias smallint;
+  target_group_id uuid;
   trimmed_body text := btrim(coalesce(p_body, ''));
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  if p_author_identity = 'anonymous' then
+    select post.group_id into target_group_id
+    from public.posts as post
+    where post.id = p_post_id and post.kind = 'group';
+    if target_group_id is not null then
+      perform private.lock_group_anonymous_activity_target(
+        target_group_id, caller_profile_id
+      );
+    end if;
   end if;
   perform 1
   from public.posts as post
@@ -606,6 +844,11 @@ begin
   else
     if p_author_identity = 'anonymous' and context.identity_policy = 'identified' then
       raise exception 'anonymous commenting is not allowed' using errcode = '42501';
+    end if;
+    if p_author_identity = 'anonymous' then
+      perform private.assert_group_anonymous_activity_allowed(
+        target_group_id, caller_profile_id
+      );
     end if;
     if p_author_identity = 'staff'
       and context.caller_role not in ('owner', 'admin', 'manager') then
@@ -1139,7 +1382,7 @@ $$;
 
 ALTER FUNCTION "public"."finalize_post_attachment"("p_attachment_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."get_group_post"("p_post_id" "uuid") RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean)
+CREATE OR REPLACE FUNCTION "public"."get_group_post"("p_post_id" "uuid") RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean, "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1186,7 +1429,11 @@ begin
     author.profile_id = caller_profile_id,
     author.profile_id = caller_profile_id,
     author.profile_id = caller_profile_id or caller_role in ('owner', 'admin'),
-    caller_role in ('owner', 'admin', 'manager')
+    caller_role in ('owner', 'admin', 'manager'),
+    post.author_identity = 'anonymous' and author.profile_id <> caller_profile_id
+      and caller_role in ('owner', 'admin'),
+    active_restriction.expires_at is not null,
+    active_restriction.expires_at
   from public.posts as post
   join private.post_authors as author on author.post_id = post.id
   left join public.group_categories as category on category.id = post.category_id
@@ -1199,6 +1446,18 @@ begin
     and profile.deleted_at is null
   left join public.post_reactions as mine
     on mine.post_id = post.id and mine.profile_id = caller_profile_id
+  left join lateral (
+    select restriction.expires_at
+    from private.group_anonymous_activity_restrictions as restriction
+    where restriction.group_id = post.group_id
+      and restriction.profile_id = author.profile_id
+      and restriction.ended_at is null
+      and restriction.expires_at > now()
+    order by restriction.created_at desc, restriction.id desc
+    limit 1
+  ) as active_restriction on post.author_identity = 'anonymous'
+    and author.profile_id <> caller_profile_id
+    and caller_role in ('owner', 'admin')
   left join lateral (
     select
       coalesce(sum(tally.n)::integer, 0) as total,
@@ -1309,7 +1568,7 @@ $$;
 
 ALTER FUNCTION "public"."list_comment_reactors"("p_comment_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_cursor_published_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_post_id" "uuid" DEFAULT NULL::"uuid", "p_cursor_is_pinned" boolean DEFAULT NULL::boolean, "p_limit" integer DEFAULT 20) RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean)
+CREATE OR REPLACE FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_cursor_published_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_post_id" "uuid" DEFAULT NULL::"uuid", "p_cursor_is_pinned" boolean DEFAULT NULL::boolean, "p_limit" integer DEFAULT 20) RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean, "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1352,7 +1611,11 @@ begin
     author.profile_id = caller_profile_id,
     author.profile_id = caller_profile_id,
     author.profile_id = caller_profile_id or caller_role in ('owner', 'admin'),
-    caller_role in ('owner', 'admin', 'manager')
+    caller_role in ('owner', 'admin', 'manager'),
+    post.author_identity = 'anonymous' and author.profile_id <> caller_profile_id
+      and caller_role in ('owner', 'admin'),
+    active_restriction.expires_at is not null,
+    active_restriction.expires_at
   from public.posts as post
   join private.post_authors as author on author.post_id = post.id
   left join public.group_categories as category on category.id = post.category_id
@@ -1365,6 +1628,18 @@ begin
     and profile.deleted_at is null
   left join public.post_reactions as mine
     on mine.post_id = post.id and mine.profile_id = caller_profile_id
+  left join lateral (
+    select restriction.expires_at
+    from private.group_anonymous_activity_restrictions as restriction
+    where restriction.group_id = post.group_id
+      and restriction.profile_id = author.profile_id
+      and restriction.ended_at is null
+      and restriction.expires_at > now()
+    order by restriction.created_at desc, restriction.id desc
+    limit 1
+  ) as active_restriction on post.author_identity = 'anonymous'
+    and author.profile_id <> caller_profile_id
+    and caller_role in ('owner', 'admin')
   left join lateral (
     select
       coalesce(sum(tally.n)::integer, 0) as total,
@@ -1430,7 +1705,7 @@ $$;
 
 ALTER FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_post_comment_replies"("p_root_comment_id" "uuid") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
+CREATE OR REPLACE FUNCTION "public"."list_post_comment_replies"("p_root_comment_id" "uuid") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1493,7 +1768,7 @@ $$;
 
 ALTER FUNCTION "public"."list_post_comment_replies"("p_root_comment_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_post_comments"("p_post_id" "uuid", "p_cursor_created_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_comment_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 20) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
+CREATE OR REPLACE FUNCTION "public"."list_post_comments"("p_post_id" "uuid", "p_cursor_created_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_comment_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 20) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1818,6 +2093,15 @@ begin
   if target_group_id is null or not private.is_post_author(p_post_id) then
     raise exception 'only the author can publish this post' using errcode = '42501';
   end if;
+  select post.* into post_record
+  from public.posts as post
+  where post.id = p_post_id and post.kind = 'group'
+    and post.group_id = target_group_id and post.deleted_at is null;
+  if post_record.author_identity = 'anonymous' then
+    perform private.lock_group_anonymous_activity_target(
+      target_group_id, caller_profile_id
+    );
+  end if;
 
   select group_data.id, group_data.identity_policy, group_data.posting_policy,
     membership.role
@@ -1848,6 +2132,11 @@ begin
   if post_record.author_identity = 'anonymous'
     and group_identity_policy = 'identified' then
     raise exception 'anonymous posting is not allowed' using errcode = '42501';
+  end if;
+  if post_record.author_identity = 'anonymous' then
+    perform private.assert_group_anonymous_activity_allowed(
+      target_group_id, caller_profile_id
+    );
   end if;
   if post_record.author_identity = 'staff'
     and member_role not in ('owner', 'admin', 'manager') then
@@ -2172,7 +2461,7 @@ $$;
 
 ALTER FUNCTION "public"."update_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_category_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid" DEFAULT NULL::"uuid", "p_remove_image" boolean DEFAULT false) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
+CREATE OR REPLACE FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid" DEFAULT NULL::"uuid", "p_remove_image" boolean DEFAULT false) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -2303,6 +2592,15 @@ GRANT ALL ON FUNCTION "public"."create_group_category"("p_group_id" "uuid", "p_n
 
 REVOKE ALL ON FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean) TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."restrict_group_anonymous_activity"("p_source_kind" "text", "p_source_id" "uuid", "p_reason" "text", "p_duration_days" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."restrict_group_anonymous_activity"("p_source_kind" "text", "p_source_id" "uuid", "p_reason" "text", "p_duration_days" integer) TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."cancel_group_anonymous_activity_restriction"("p_source_kind" "text", "p_source_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."cancel_group_anonymous_activity_restriction"("p_source_kind" "text", "p_source_id" "uuid") TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."get_my_group_anonymous_activity_restriction"("p_group_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_my_group_anonymous_activity_restriction"("p_group_id" "uuid") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid", "p_image_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid", "p_image_id" "uuid") TO "authenticated";
