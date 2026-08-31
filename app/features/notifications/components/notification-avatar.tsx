@@ -23,7 +23,8 @@ export function NotificationAvatar({
   if (item.actor_identity === "system") {
     return (
       <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-muted">
-        <img src="/logo.svg" alt="" className="size-6" />
+        {/* 24px라 글자 있는 logo.svg는 읽히지 않는다. */}
+        <img src="/logo-notext.svg" alt="" className="size-6" />
       </span>
     );
   }
