@@ -19,7 +19,14 @@ import "./app.css";
 export const links: Route.LinksFunction = () => [
   { rel: "manifest", href: "/manifest.webmanifest" },
   { rel: "icon", href: "/favicon.ico", sizes: "48x48" },
-  { rel: "icon", href: "/logo.svg", sizes: "any", type: "image/svg+xml" },
+  // 탭 아이콘은 16-32px로 그려진다. 글자 있는 logo.svg를 쓰면 "KMLA"가 뭉개지므로
+  // 글자 없는 마크를 쓴다 — 같은 이유로 favicon.ico도 글자 없는 버전이다.
+  {
+    rel: "icon",
+    href: "/logo-notext.svg",
+    sizes: "any",
+    type: "image/svg+xml",
+  },
   { rel: "apple-touch-icon", href: "/apple-touch-icon-180x180.png" },
 ];
 

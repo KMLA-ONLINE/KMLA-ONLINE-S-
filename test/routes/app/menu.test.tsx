@@ -72,6 +72,19 @@ describe("menu route", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("reaches the help and update pages from the menu", () => {
+    renderMenu("member");
+
+    expect(screen.getByRole("link", { name: "도움말" })).toHaveAttribute(
+      "href",
+      "/support",
+    );
+    expect(screen.getByRole("link", { name: "업데이트 기록" })).toHaveAttribute(
+      "href",
+      "/update",
+    );
+  });
+
   it("offers the absence shortcut to students only", () => {
     const { unmount } = renderMenu("member");
 
