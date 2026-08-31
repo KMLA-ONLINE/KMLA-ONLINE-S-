@@ -11,6 +11,7 @@ import type {
   PreparedPostFile,
   ProfilePostFormValues,
   ReactionSummary,
+  AnonymousActivitySourceKind,
 } from "~/features/posts/model/types";
 import { uploadPostAttachment } from "~/features/posts/data/files";
 import { hydratePostComments } from "~/features/posts/data/queries";
@@ -60,6 +61,38 @@ export async function deleteGroupCategory(categoryId: string): Promise<void> {
   const { error } = await getSupabase().rpc("delete_group_category", {
     p_category_id: categoryId,
   });
+  if (error) throw error;
+}
+
+export async function restrictGroupAnonymousActivity(
+  sourceKind: AnonymousActivitySourceKind,
+  sourceId: string,
+  reason: string,
+  durationDays: number,
+) {
+  const { data, error } = await getSupabase().rpc(
+    "restrict_group_anonymous_activity",
+    {
+      p_source_kind: sourceKind,
+      p_source_id: sourceId,
+      p_reason: reason,
+      p_duration_days: durationDays,
+    },
+  );
+  if (error) throw error;
+  const restriction = data?.[0];
+  if (!restriction) throw new Error("익명 활동을 차단하지 못했습니다.");
+  return restriction;
+}
+
+export async function cancelGroupAnonymousActivityRestriction(
+  sourceKind: AnonymousActivitySourceKind,
+  sourceId: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc(
+    "cancel_group_anonymous_activity_restriction",
+    { p_source_kind: sourceKind, p_source_id: sourceId },
+  );
   if (error) throw error;
 }
 

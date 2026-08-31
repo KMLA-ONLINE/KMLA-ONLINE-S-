@@ -477,6 +477,7 @@ export type Database = {
           category: Database["public"]["Enums"]["notification_category"]
           comment_id: string | null
           created_at: string
+          detail: string | null
           group_id: string | null
           id: string
           importance: Database["public"]["Enums"]["notification_importance"]
@@ -486,6 +487,7 @@ export type Database = {
           read_at: string | null
           recipient_profile_id: number
           reservation_id: number | null
+          restriction_expires_at: string | null
           target_profile_id: number | null
           title: string
         }
@@ -498,6 +500,7 @@ export type Database = {
           category: Database["public"]["Enums"]["notification_category"]
           comment_id?: string | null
           created_at?: string
+          detail?: string | null
           group_id?: string | null
           id?: string
           importance: Database["public"]["Enums"]["notification_importance"]
@@ -507,6 +510,7 @@ export type Database = {
           read_at?: string | null
           recipient_profile_id: number
           reservation_id?: number | null
+          restriction_expires_at?: string | null
           target_profile_id?: number | null
           title: string
         }
@@ -519,6 +523,7 @@ export type Database = {
           category?: Database["public"]["Enums"]["notification_category"]
           comment_id?: string | null
           created_at?: string
+          detail?: string | null
           group_id?: string | null
           id?: string
           importance?: Database["public"]["Enums"]["notification_importance"]
@@ -528,6 +533,7 @@ export type Database = {
           read_at?: string | null
           recipient_profile_id?: number
           reservation_id?: number | null
+          restriction_expires_at?: string | null
           target_profile_id?: number | null
           title?: string
         }
@@ -1253,6 +1259,10 @@ export type Database = {
         Args: { p_group_id: string; p_request_id: string }
         Returns: undefined
       }
+      cancel_group_anonymous_activity_restriction: {
+        Args: { p_source_id: string; p_source_kind: string }
+        Returns: string
+      }
       cancel_utility_reservation: {
         Args: { p_effective_date?: string; p_reservation_id: number }
         Returns: undefined
@@ -1405,6 +1415,7 @@ export type Database = {
           p_post_id: string
         }
         Returns: {
+          anonymous_author_restricted: boolean
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -1413,6 +1424,7 @@ export type Database = {
           body: string
           can_delete: boolean
           can_edit: boolean
+          can_moderate_anonymous: boolean
           comment_id: string
           created_at: string
           depth: number
@@ -1587,6 +1599,7 @@ export type Database = {
       get_group_post: {
         Args: { p_post_id: string }
         Returns: {
+          anonymous_author_restricted: boolean
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -1595,6 +1608,7 @@ export type Database = {
           body: string
           can_delete: boolean
           can_edit: boolean
+          can_moderate_anonymous: boolean
           can_pin: boolean
           category_id: string
           category_name: string
@@ -1609,6 +1623,13 @@ export type Database = {
           reaction_count: number
           title: string
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
+        }[]
+      }
+      get_my_group_anonymous_activity_restriction: {
+        Args: { p_group_id: string }
+        Returns: {
+          expires_at: string
+          reason: string
         }[]
       }
       get_my_notification_preferences: {
@@ -1860,6 +1881,7 @@ export type Database = {
           p_limit?: number
         }
         Returns: {
+          anonymous_author_restricted: boolean
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -1868,6 +1890,7 @@ export type Database = {
           body: string
           can_delete: boolean
           can_edit: boolean
+          can_moderate_anonymous: boolean
           can_pin: boolean
           category_id: string
           category_name: string
@@ -1898,6 +1921,7 @@ export type Database = {
           category: Database["public"]["Enums"]["notification_category"]
           comment_id: string
           created_at: string
+          detail: string
           group_id: string
           group_name: string
           id: string
@@ -1907,6 +1931,7 @@ export type Database = {
           post_id: string
           read_at: string
           reservation_id: number
+          restriction_expires_at: string
           target_profile_id: number
           title: string
         }[]
@@ -1932,6 +1957,7 @@ export type Database = {
       list_post_comment_replies: {
         Args: { p_root_comment_id: string }
         Returns: {
+          anonymous_author_restricted: boolean
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -1940,6 +1966,7 @@ export type Database = {
           body: string
           can_delete: boolean
           can_edit: boolean
+          can_moderate_anonymous: boolean
           comment_id: string
           created_at: string
           depth: number
@@ -1965,6 +1992,7 @@ export type Database = {
           p_post_id: string
         }
         Returns: {
+          anonymous_author_restricted: boolean
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -1973,6 +2001,7 @@ export type Database = {
           body: string
           can_delete: boolean
           can_edit: boolean
+          can_moderate_anonymous: boolean
           comment_id: string
           created_at: string
           depth: number
@@ -2247,6 +2276,18 @@ export type Database = {
       resolve_my_notification_destination: {
         Args: { p_notification_id: string }
         Returns: string
+      }
+      restrict_group_anonymous_activity: {
+        Args: {
+          p_duration_days: number
+          p_reason: string
+          p_source_id: string
+          p_source_kind: string
+        }
+        Returns: {
+          expires_at: string
+          restriction_id: string
+        }[]
       }
       revoke_group_invite: { Args: { p_group_id: string }; Returns: undefined }
       search_directory: {
@@ -2554,6 +2595,7 @@ export type Database = {
           p_remove_image?: boolean
         }
         Returns: {
+          anonymous_author_restricted: boolean
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -2562,6 +2604,7 @@ export type Database = {
           body: string
           can_delete: boolean
           can_edit: boolean
+          can_moderate_anonymous: boolean
           comment_id: string
           created_at: string
           depth: number
@@ -2629,6 +2672,7 @@ export type Database = {
         | "group_deleted"
         | "post_moderated"
         | "comment_moderated"
+        | "anonymous_activity_restricted"
         | "application_submitted"
         | "account_approved"
         | "account_blocked"
@@ -2829,6 +2873,7 @@ export const Constants = {
         "group_deleted",
         "post_moderated",
         "comment_moderated",
+        "anonymous_activity_restricted",
         "application_submitted",
         "account_approved",
         "account_blocked",

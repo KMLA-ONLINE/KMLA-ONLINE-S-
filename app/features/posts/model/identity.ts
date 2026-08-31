@@ -14,9 +14,10 @@ type GroupMemberRole = Database["public"]["Enums"]["group_member_role"];
 export function resolveIdentityOptions(
   identityPolicy: GroupIdentityPolicy,
   memberRole: GroupMemberRole | null,
+  anonymousRestricted = false,
 ): PostIdentity[] {
   const identities: PostIdentity[] =
-    identityPolicy === "optional_anonymous"
+    identityPolicy === "optional_anonymous" && !anonymousRestricted
       ? ["identified", "anonymous"]
       : ["identified"];
   if (memberRole && memberRole !== "member") identities.push("staff");

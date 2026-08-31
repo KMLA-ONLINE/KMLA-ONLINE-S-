@@ -111,6 +111,11 @@ export function GroupPostCard({
           canDelete={post.can_delete}
           canReport={!post.is_author}
           reportPostId={post.post_id}
+          canModerateAnonymous={
+            post.author_identity === "anonymous" && post.can_moderate_anonymous
+          }
+          anonymousAuthorRestricted={post.anonymous_author_restricted}
+          anonymousSourceId={post.post_id}
           onPin={onPin}
           onDelete={onDelete}
         />

@@ -40,6 +40,7 @@ export default function NewGroupPostPage() {
   const identities = resolveIdentityOptions(
     group.identity_policy,
     group.member_role,
+    Boolean(parent.anonymousActivityRestriction),
   );
   return (
     <GroupPostOverlay
@@ -49,6 +50,7 @@ export default function NewGroupPostPage() {
       groupId={group.group_id}
       categories={categories}
       identities={identities}
+      anonymousActivityRestriction={parent.anonymousActivityRestriction}
       onSaved={() => invalidateSavedGroupPost(group.group_id)}
     />
   );

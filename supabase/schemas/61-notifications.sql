@@ -31,6 +31,7 @@ create type public.notification_kind as enum (
   'group_deleted',
   'post_moderated',
   'comment_moderated',
+  'anonymous_activity_restricted',
   'application_submitted',
   'account_approved',
   'account_blocked',
@@ -71,6 +72,8 @@ create table public.notifications (
   target_profile_id bigint references public.profiles(id) on delete set null,
   reservation_id bigint references public.utility_reservations(id) on delete set null,
   title text not null,
+  detail text,
+  restriction_expires_at timestamptz,
   created_at timestamptz not null default now(),
   last_activity_at timestamptz not null default now(),
   read_at timestamptz,
@@ -81,6 +84,12 @@ create table public.notifications (
   ),
   constraint notifications_title_length check (
     char_length(btrim(title)) between 1 and 160
+  ),
+  constraint notifications_detail_length check (
+    detail is null or (detail = btrim(detail) and char_length(detail) >= 1 and char_length(detail) <= 300)
+  ),
+  constraint notifications_restriction_shape check (
+    restriction_expires_at is null or kind = 'anonymous_activity_restricted'
   ),
   constraint notifications_activity_order check (
     last_activity_at >= created_at and (read_at is null or read_at >= created_at)
@@ -493,6 +502,8 @@ create or replace function public.list_my_notifications(
   target_profile_id bigint,
   reservation_id bigint,
   title text,
+  detail text,
+  restriction_expires_at timestamptz,
   created_at timestamptz,
   last_activity_at timestamptz,
   read_at timestamptz
@@ -529,7 +540,8 @@ begin
     notification.post_id,
     notification.comment_id, notification.target_profile_id,
     notification.reservation_id,
-    notification.title, notification.created_at, notification.last_activity_at,
+    notification.title, notification.detail, notification.restriction_expires_at,
+    notification.created_at, notification.last_activity_at,
     notification.read_at
   from public.notifications as notification
   left join public.groups as notification_group
@@ -916,6 +928,7 @@ begin
       when 'account_approved' then '가입이 승인되었습니다.'
       when 'account_blocked' then '가입이 차단되었습니다.'
       when 'account_unblocked' then '차단이 해제되었습니다.'
+      when 'anonymous_activity_restricted' then '그룹 익명 활동이 제한되었습니다.'
       else '새 알림이 있습니다.'
     end,
     'notification:' || notification.id::text
@@ -1410,6 +1423,28 @@ end;
 $$;
 alter function private.notify_profile_permission_changed() owner to postgres;
 
+create or replace function private.notify_group_anonymous_activity_restricted()
+returns trigger
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  notification_id uuid;
+begin
+  notification_id := private.emit_notification(
+    'anonymous-activity-restricted:' || new.id::text,
+    new.profile_id, 'anonymous_activity_restricted', 'high', 'moderation',
+    'staff', new.restricted_by_profile_id, '운영진', null,
+    '그룹 익명 활동이 제한되었습니다.', new.group_id
+  );
+  update public.notifications
+  set detail = new.reason, restriction_expires_at = new.expires_at
+  where id = notification_id;
+  return new;
+end;
+$$;
+alter function private.notify_group_anonymous_activity_restricted() owner to postgres;
+
 create trigger group_memberships_prepare_notification_preferences
 before insert on public.group_memberships
 for each row execute function private.prepare_group_notification_preferences();
@@ -1440,6 +1475,9 @@ for each row execute function private.notify_profile_changed();
 create trigger profile_permissions_notify_changed
 after insert or delete on public.profile_permissions
 for each row execute function private.notify_profile_permission_changed();
+create trigger group_anonymous_activity_restrictions_notify_created
+after insert on private.group_anonymous_activity_restrictions
+for each row execute function private.notify_group_anonymous_activity_restricted();
 
 alter table public.notifications enable row level security;
 create policy notifications_select_own on public.notifications
@@ -1483,6 +1521,7 @@ revoke all on function private.notify_official_group_joined() from public;
 revoke all on function private.notify_group_changed() from public;
 revoke all on function private.notify_profile_changed() from public;
 revoke all on function private.notify_profile_permission_changed() from public;
+revoke all on function private.notify_group_anonymous_activity_restricted() from public;
 
 revoke all on function public.list_my_notifications(timestamptz, uuid, integer) from public;
 grant execute on function public.list_my_notifications(timestamptz, uuid, integer) to authenticated;

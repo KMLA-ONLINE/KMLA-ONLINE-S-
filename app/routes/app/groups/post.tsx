@@ -94,7 +94,9 @@ export default function GroupPostPage({ loaderData }: Route.ComponentProps) {
       identities={resolveIdentityOptions(
         parent.group.identity_policy,
         parent.group.member_role,
+        Boolean(parent.anonymousActivityRestriction),
       )}
+      anonymousActivityRestriction={parent.anonymousActivityRestriction}
       comments={loaderData.comments}
       viewer={{ name: profile.name, avatarUrl: profile.avatar_url }}
     />

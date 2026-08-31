@@ -16,6 +16,7 @@ import type {
   GroupPostDetail,
   PostCommentPage,
   PostIdentity,
+  AnonymousActivityRestriction,
 } from "~/features/posts/model/types";
 import { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
 import { RelativeTime } from "~/shared/components/relative-time";
@@ -30,6 +31,7 @@ export function PostDetail({
   comments,
   onClose,
   action,
+  anonymousActivityRestriction,
 }: {
   post: GroupPostDetail;
   slug: string;
@@ -39,6 +41,7 @@ export function PostDetail({
   comments: PostCommentPage;
   onClose?: () => void;
   action?: string;
+  anonymousActivityRestriction?: AnonymousActivityRestriction | null;
 }) {
   const fetcher = useFetcher<{ error?: string }>();
   const { markVisited } = useVisitedPosts();
@@ -63,6 +66,7 @@ export function PostDetail({
       identities={identities}
       postAuthorPubId={post.author_pub_id}
       error={fetcher.data?.error}
+      anonymousActivityRestriction={anonymousActivityRestriction}
       onClose={close}
       actionBar={{
         reaction: {
@@ -149,6 +153,12 @@ export function PostDetail({
             canDelete={post.can_delete}
             canReport={!post.is_author}
             reportPostId={post.post_id}
+            canModerateAnonymous={
+              post.author_identity === "anonymous" &&
+              post.can_moderate_anonymous
+            }
+            anonymousAuthorRestricted={post.anonymous_author_restricted}
+            anonymousSourceId={post.post_id}
             onPin={() =>
               submitIntent({
                 intent: "pin",

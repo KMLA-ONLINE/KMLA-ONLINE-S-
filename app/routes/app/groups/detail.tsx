@@ -42,6 +42,7 @@ import {
   deleteGroupCategory,
   deleteGroupPost,
   getPostErrorMessage,
+  getMyGroupAnonymousActivityRestriction,
   listGroupCategories,
   listGroupPosts,
   moveGroupCategory,
@@ -92,7 +93,12 @@ export async function clientLoader({
   });
   if (!group) throw new Response("그룹을 찾을 수 없습니다.", { status: 404 });
   if (group.membership_state !== "member") {
-    return { group, categories: [], posts: { posts: [], nextCursor: null } };
+    return {
+      group,
+      categories: [],
+      posts: { posts: [], nextCursor: null },
+      anonymousActivityRestriction: null,
+    };
   }
   const url = new URL(request.url);
   const searchParams = url.searchParams;
@@ -105,59 +111,69 @@ export async function clientLoader({
   const canCurate = canModerate || group.member_role === "manager";
   const reportSort =
     searchParams.get("reportSort") === "recent" ? "recent" : "count";
-  const [categories, posts, memberPage, joinRequests, invite, reportPage] =
-    await Promise.all([
-      postsTab || settingsTab
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.categories(group.group_id),
-            queryFn: () => listGroupCategories(group.group_id),
-            staleTime: GROUP_CONTENT_STALE_TIME,
-          })
-        : Promise.resolve([]),
-      postsTab
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.posts(group.group_id, null, null),
-            queryFn: () =>
-              listGroupPosts(group.group_id, {
-                hydrateMedia: readPostViewMode() === "card",
-              }),
-            staleTime: GROUP_CONTENT_STALE_TIME,
-          })
-        : Promise.resolve({ posts: [], nextCursor: null }),
-      memberTab
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.members(
+  const [
+    categories,
+    posts,
+    memberPage,
+    joinRequests,
+    invite,
+    reportPage,
+    anonymousActivityRestriction,
+  ] = await Promise.all([
+    postsTab || settingsTab
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.categories(group.group_id),
+          queryFn: () => listGroupCategories(group.group_id),
+          staleTime: GROUP_CONTENT_STALE_TIME,
+        })
+      : Promise.resolve([]),
+    postsTab
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.posts(group.group_id, null, null),
+          queryFn: () =>
+            listGroupPosts(group.group_id, {
+              hydrateMedia: readPostViewMode() === "card",
+            }),
+          staleTime: GROUP_CONTENT_STALE_TIME,
+        })
+      : Promise.resolve({ posts: [], nextCursor: null }),
+    memberTab
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.members(
+            group.group_id,
+            searchParams.get("memberQuery") ?? "",
+          ),
+          queryFn: () =>
+            listGroupMembers(
               group.group_id,
               searchParams.get("memberQuery") ?? "",
             ),
-            queryFn: () =>
-              listGroupMembers(
-                group.group_id,
-                searchParams.get("memberQuery") ?? "",
-              ),
-          })
-        : Promise.resolve(undefined),
-      memberTab && canModerate
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.joinRequests(group.group_id),
-            queryFn: () => listGroupJoinRequests(group.group_id),
-          })
-        : Promise.resolve([]),
-      // 초대 링크는 설정 탭의 운영진에게만 보이고, 다른 사람이 부르면 서버가 42501로 막는다.
-      settingsTab && canModerate && group.kind !== "official"
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.invite(group.group_id),
-            queryFn: () => getGroupInvite(group.group_id),
-          })
-        : Promise.resolve(null),
-      reportsTab && canCurate
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.reports(group.group_id, reportSort),
-            queryFn: () =>
-              listGroupPostReportSummaries(group.group_id, reportSort),
-          })
-        : Promise.resolve(undefined),
-    ]);
+        })
+      : Promise.resolve(undefined),
+    memberTab && canModerate
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.joinRequests(group.group_id),
+          queryFn: () => listGroupJoinRequests(group.group_id),
+        })
+      : Promise.resolve([]),
+    // 초대 링크는 설정 탭의 운영진에게만 보이고, 다른 사람이 부르면 서버가 42501로 막는다.
+    settingsTab && canModerate && group.kind !== "official"
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.invite(group.group_id),
+          queryFn: () => getGroupInvite(group.group_id),
+        })
+      : Promise.resolve(null),
+    reportsTab && canCurate
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.reports(group.group_id, reportSort),
+          queryFn: () =>
+            listGroupPostReportSummaries(group.group_id, reportSort),
+        })
+      : Promise.resolve(undefined),
+    group.identity_policy === "optional_anonymous"
+      ? getMyGroupAnonymousActivityRestriction(group.group_id)
+      : Promise.resolve(null),
+  ]);
   return {
     group,
     categories,
@@ -166,6 +182,7 @@ export async function clientLoader({
     joinRequests,
     invite,
     reportPage,
+    anonymousActivityRestriction,
   };
 }
 
@@ -526,6 +543,7 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
         joinRequests={loaderData.joinRequests}
         invite={loaderData.invite}
         reportPage={loaderData.reportPage}
+        anonymousActivityRestriction={loaderData.anonymousActivityRestriction}
       />
       <Outlet />
     </>

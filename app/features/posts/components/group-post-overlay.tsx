@@ -24,6 +24,10 @@ import {
 } from "~/features/posts/model/attachments";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
 import {
+  formatPostDate,
+  getPostErrorMessage,
+} from "~/features/posts/model/format";
+import {
   PostAttachmentEditor,
   PostFormField,
 } from "~/features/posts/components/post-attachment-editor";
@@ -39,6 +43,7 @@ import type {
   PostIdentity,
   PostSaveProgress,
   PreparedPostFile,
+  AnonymousActivityRestriction,
 } from "~/features/posts/model/types";
 import {
   hasPostFormErrors,
@@ -97,6 +102,7 @@ export function GroupPostOverlay({
   onClose,
   action,
   onSaved,
+  anonymousActivityRestriction,
 }: {
   mode: "create" | "detail" | "edit";
   slug: string;
@@ -110,6 +116,7 @@ export function GroupPostOverlay({
   onClose?: () => void;
   action?: string;
   onSaved?: () => Promise<void>;
+  anonymousActivityRestriction?: AnonymousActivityRestriction | null;
 }) {
   // 그룹으로 `navigate`하면 히스토리에 작성 화면이 남아서, 뒤로 가기를 누른 사용자가 방금
   // 버린 초안을 다시 마주하게 된다. 들어온 경로를 되감는 게 맞다.
@@ -125,6 +132,7 @@ export function GroupPostOverlay({
         comments={comments}
         onClose={onClose}
         action={action}
+        anonymousActivityRestriction={anonymousActivityRestriction}
       />
     ) : null;
   }
@@ -141,6 +149,7 @@ export function GroupPostOverlay({
         identities={identities}
         onClose={close}
         onSaved={onSaved}
+        anonymousActivityRestriction={anonymousActivityRestriction}
       />
     </div>
   );
@@ -156,6 +165,7 @@ function PostEditor({
   identities,
   onClose,
   onSaved,
+  anonymousActivityRestriction,
 }: {
   mode: "create" | "edit";
   slug: string;
@@ -166,6 +176,7 @@ function PostEditor({
   identities: PostIdentity[];
   onClose: () => void;
   onSaved?: () => Promise<void>;
+  anonymousActivityRestriction?: AnonymousActivityRestriction | null;
 }) {
   const navigate = useNavigate();
   const revalidator = useRevalidator();
@@ -299,10 +310,7 @@ function PostEditor({
       void navigate(`/groups/${slug}/posts/${postId}`, { replace: true });
     } catch (error) {
       setFormErrors({
-        form:
-          error instanceof Error
-            ? error.message
-            : "게시물을 저장하지 못했습니다. 다시 시도해 주세요.",
+        form: getPostErrorMessage(error),
       });
       setSaving(false);
       setProgress(null);
@@ -423,6 +431,14 @@ function PostEditor({
         */}
         <main className="min-h-0 flex-1 [scrollbar-gutter:stable_both-edges] overflow-y-auto md:bg-muted/40">
           <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-5 sm:px-6 sm:py-8 md:border-x md:bg-background md:shadow-sm">
+            {mode === "create" && anonymousActivityRestriction ? (
+              <p className="mb-4 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+                익명 활동이 제한되어 있습니다. 사유:{" "}
+                {anonymousActivityRestriction.reason}
+                {" · "}만료:{" "}
+                {formatPostDate(anonymousActivityRestriction.expires_at)}
+              </p>
+            ) : null}
             <div className="grid gap-2">
               <div
                 className={cn(

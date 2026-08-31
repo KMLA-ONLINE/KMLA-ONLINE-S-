@@ -18,6 +18,7 @@ function notification(id: string, lastActivityAt: string): NotificationItem {
     category: "content",
     comment_id: "",
     created_at: lastActivityAt,
+    detail: "",
     group_id: "",
     group_name: "",
     id,
@@ -27,6 +28,7 @@ function notification(id: string, lastActivityAt: string): NotificationItem {
     post_id: "post-id",
     read_at: "",
     reservation_id: 0,
+    restriction_expires_at: "",
     target_profile_id: 0,
     title: "게시물에 댓글을 남겼습니다.",
   };

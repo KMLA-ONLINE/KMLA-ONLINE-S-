@@ -126,6 +126,9 @@ export interface PostReactor {
 export type GroupCategory =
   Database["public"]["Tables"]["group_categories"]["Row"];
 export type PostIdentity = Database["public"]["Enums"]["post_identity"];
+export type AnonymousActivityRestriction =
+  Database["public"]["Functions"]["get_my_group_anonymous_activity_restriction"]["Returns"][number];
+export type AnonymousActivitySourceKind = "post" | "comment";
 
 export interface PostCursor {
   publishedAt: string;

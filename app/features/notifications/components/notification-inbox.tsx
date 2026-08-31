@@ -32,6 +32,13 @@ function actorName(item: NotificationItem): string {
   return item.actor_display_name || "탈퇴한 사용자";
 }
 
+function formatRestrictionExpiry(value: string): string {
+  return new Intl.DateTimeFormat("ko-KR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
 /** 이름·그룹·시간을 잇는 가운뎃점. 눈으로 훑을 때만 필요하므로 낭독에서는 뺀다. */
 function MetaDot() {
   return (
@@ -133,6 +140,16 @@ function NotificationRow({
         >
           {item.title}
         </span>
+        {item.kind === "anonymous_activity_restricted" ? (
+          <span className="mt-1 line-clamp-2 text-xs break-words text-muted-foreground">
+            {item.detail
+              ? `사유: ${item.detail}`
+              : "사유가 기록되지 않았습니다."}
+            {item.restriction_expires_at
+              ? ` · 만료: ${formatRestrictionExpiry(item.restriction_expires_at)}`
+              : ""}
+          </span>
+        ) : null}
       </span>
     </Link>
   );

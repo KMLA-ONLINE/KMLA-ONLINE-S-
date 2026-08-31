@@ -11,6 +11,7 @@ import {
   CommentReactionSummary,
 } from "~/features/posts/components/comment-reaction-button";
 import { ReactionListDialog } from "~/features/posts/components/reaction-list-dialog";
+import { AnonymousActivityRestrictionDialog } from "~/features/posts/components/anonymous-activity-restriction-dialog";
 import { CommentText } from "~/features/posts/components/comment-text";
 import { CommentImage } from "~/features/posts/components/comment-image";
 import { PostAuthorAvatar } from "~/features/posts/components/post-author-avatar";
@@ -79,6 +80,10 @@ export function CommentItem({
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [reactorsOpen, setReactorsOpen] = useState(false);
+  const [restrictionOpen, setRestrictionOpen] = useState(false);
+  const [restricted, setRestricted] = useState(
+    comment.anonymous_author_restricted,
+  );
   const reactors = useCommentReactors(comment.comment_id);
 
   // 삭제된 댓글은 답글이 살아 있는 동안만 자리를 지킨다(없애면 답글 사슬이 끊긴다). 본문과
@@ -274,7 +279,10 @@ export function CommentItem({
           />
         </div>
 
-        {comment.can_edit || comment.can_delete ? (
+        {comment.can_edit ||
+        comment.can_delete ||
+        (comment.author_identity === "anonymous" &&
+          comment.can_moderate_anonymous) ? (
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -292,6 +300,12 @@ export function CommentItem({
               {comment.can_edit ? (
                 <DropdownMenuItem onClick={() => setEditing(true)}>
                   수정
+                </DropdownMenuItem>
+              ) : null}
+              {comment.author_identity === "anonymous" &&
+              comment.can_moderate_anonymous ? (
+                <DropdownMenuItem onClick={() => setRestrictionOpen(true)}>
+                  {restricted ? "익명 활동 차단 취소" : "익명 활동 차단"}
                 </DropdownMenuItem>
               ) : null}
               {comment.can_delete ? (
@@ -322,6 +336,16 @@ export function CommentItem({
             setConfirmingDelete(false);
             onDelete();
           }}
+        />
+      ) : null}
+      {comment.author_identity === "anonymous" ? (
+        <AnonymousActivityRestrictionDialog
+          open={restrictionOpen}
+          sourceKind="comment"
+          sourceId={comment.comment_id}
+          restricted={restricted}
+          onOpenChange={setRestrictionOpen}
+          onRestrictedChange={setRestricted}
         />
       ) : null}
     </div>
