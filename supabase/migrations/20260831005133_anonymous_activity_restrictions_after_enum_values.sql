@@ -370,31 +370,32 @@ CREATE FUNCTION public.create_post_comment (
   p_image_id          uuid                 DEFAULT NULL::uuid
 )
   RETURNS TABLE (
-    comment_id                  uuid,
-    post_id                     uuid,
-    parent_comment_id           uuid,
-    root_comment_id             uuid,
-    depth                       smallint,
-    body                        text,
-    author_identity             public.post_identity,
-    author_pub_id               text,
-    author_name                 text,
-    author_avatar_path          text,
-    author_label                text,
-    created_at                  timestamp with time zone,
-    edited_at                   timestamp with time zone,
-    is_deleted                  boolean,
-    is_effective_feed_bump      boolean,
-    is_author                   boolean,
-    can_edit                    boolean,
-    can_delete                  boolean,
-    reply_count                 integer,
-    reaction_count              integer,
-    top_reactions               public.post_reaction[],
-    my_reaction                 public.post_reaction,
-    parent_author_label         text,
-    can_moderate_anonymous      boolean,
-    anonymous_author_restricted boolean
+    comment_id                              uuid,
+    post_id                                 uuid,
+    parent_comment_id                       uuid,
+    root_comment_id                         uuid,
+    depth                                   smallint,
+    body                                    text,
+    author_identity                         public.post_identity,
+    author_pub_id                           text,
+    author_name                             text,
+    author_avatar_path                      text,
+    author_label                            text,
+    created_at                              timestamp with time zone,
+    edited_at                               timestamp with time zone,
+    is_deleted                              boolean,
+    is_effective_feed_bump                  boolean,
+    is_author                               boolean,
+    can_edit                                boolean,
+    can_delete                              boolean,
+    reply_count                             integer,
+    reaction_count                          integer,
+    top_reactions                           public.post_reaction[],
+    my_reaction                             public.post_reaction,
+    parent_author_label                     text,
+    can_moderate_anonymous                  boolean,
+    anonymous_author_restricted             boolean,
+    anonymous_author_restriction_expires_at timestamp with time zone
   )
   LANGUAGE plpgsql
   SECURITY DEFINER
@@ -563,30 +564,31 @@ CREATE FUNCTION public.get_group_post (
   p_post_id uuid
 )
   RETURNS TABLE (
-    post_id                     uuid,
-    group_id                    uuid,
-    category_id                 uuid,
-    category_name               text,
-    title                       text,
-    body                        text,
-    author_identity             public.post_identity,
-    author_pub_id               text,
-    author_name                 text,
-    author_avatar_path          text,
-    author_label                text,
-    is_pinned                   boolean,
-    published_at                timestamp with time zone,
-    edited_at                   timestamp with time zone,
-    comment_count               integer,
-    reaction_count              integer,
-    top_reactions               public.post_reaction[],
-    my_reaction                 public.post_reaction,
-    is_author                   boolean,
-    can_edit                    boolean,
-    can_delete                  boolean,
-    can_pin                     boolean,
-    can_moderate_anonymous      boolean,
-    anonymous_author_restricted boolean
+    post_id                                 uuid,
+    group_id                                uuid,
+    category_id                             uuid,
+    category_name                           text,
+    title                                   text,
+    body                                    text,
+    author_identity                         public.post_identity,
+    author_pub_id                           text,
+    author_name                             text,
+    author_avatar_path                      text,
+    author_label                            text,
+    is_pinned                               boolean,
+    published_at                            timestamp with time zone,
+    edited_at                               timestamp with time zone,
+    comment_count                           integer,
+    reaction_count                          integer,
+    top_reactions                           public.post_reaction[],
+    my_reaction                             public.post_reaction,
+    is_author                               boolean,
+    can_edit                                boolean,
+    can_delete                              boolean,
+    can_pin                                 boolean,
+    can_moderate_anonymous                  boolean,
+    anonymous_author_restricted             boolean,
+    anonymous_author_restriction_expires_at timestamp with time zone
   )
   LANGUAGE plpgsql
   STABLE
@@ -639,9 +641,8 @@ begin
     caller_role in ('owner', 'admin', 'manager'),
     post.author_identity = 'anonymous' and author.profile_id <> caller_profile_id
       and caller_role in ('owner', 'admin'),
-    post.author_identity = 'anonymous' and author.profile_id <> caller_profile_id
-      and caller_role in ('owner', 'admin')
-      and private.group_anonymous_activity_restricted(post.group_id, author.profile_id)
+    active_restriction.expires_at is not null,
+    active_restriction.expires_at
   from public.posts as post
   join private.post_authors as author on author.post_id = post.id
   left join public.group_categories as category on category.id = post.category_id
@@ -654,6 +655,18 @@ begin
     and profile.deleted_at is null
   left join public.post_reactions as mine
     on mine.post_id = post.id and mine.profile_id = caller_profile_id
+  left join lateral (
+    select restriction.expires_at
+    from private.group_anonymous_activity_restrictions as restriction
+    where restriction.group_id = post.group_id
+      and restriction.profile_id = author.profile_id
+      and restriction.ended_at is null
+      and restriction.expires_at > now()
+    order by restriction.created_at desc, restriction.id desc
+    limit 1
+  ) as active_restriction on post.author_identity = 'anonymous'
+    and author.profile_id <> caller_profile_id
+    and caller_role in ('owner', 'admin')
   left join lateral (
     select
       coalesce(sum(tally.n)::integer, 0) as total,
@@ -721,30 +734,31 @@ CREATE FUNCTION public.list_group_posts (
   p_limit               integer                  DEFAULT 20
 )
   RETURNS TABLE (
-    post_id                     uuid,
-    group_id                    uuid,
-    category_id                 uuid,
-    category_name               text,
-    title                       text,
-    body                        text,
-    author_identity             public.post_identity,
-    author_pub_id               text,
-    author_name                 text,
-    author_avatar_path          text,
-    author_label                text,
-    is_pinned                   boolean,
-    published_at                timestamp with time zone,
-    edited_at                   timestamp with time zone,
-    comment_count               integer,
-    reaction_count              integer,
-    top_reactions               public.post_reaction[],
-    my_reaction                 public.post_reaction,
-    is_author                   boolean,
-    can_edit                    boolean,
-    can_delete                  boolean,
-    can_pin                     boolean,
-    can_moderate_anonymous      boolean,
-    anonymous_author_restricted boolean
+    post_id                                 uuid,
+    group_id                                uuid,
+    category_id                             uuid,
+    category_name                           text,
+    title                                   text,
+    body                                    text,
+    author_identity                         public.post_identity,
+    author_pub_id                           text,
+    author_name                             text,
+    author_avatar_path                      text,
+    author_label                            text,
+    is_pinned                               boolean,
+    published_at                            timestamp with time zone,
+    edited_at                               timestamp with time zone,
+    comment_count                           integer,
+    reaction_count                          integer,
+    top_reactions                           public.post_reaction[],
+    my_reaction                             public.post_reaction,
+    is_author                               boolean,
+    can_edit                                boolean,
+    can_delete                              boolean,
+    can_pin                                 boolean,
+    can_moderate_anonymous                  boolean,
+    anonymous_author_restricted             boolean,
+    anonymous_author_restriction_expires_at timestamp with time zone
   )
   LANGUAGE plpgsql
   STABLE
@@ -793,9 +807,8 @@ begin
     caller_role in ('owner', 'admin', 'manager'),
     post.author_identity = 'anonymous' and author.profile_id <> caller_profile_id
       and caller_role in ('owner', 'admin'),
-    post.author_identity = 'anonymous' and author.profile_id <> caller_profile_id
-      and caller_role in ('owner', 'admin')
-      and private.group_anonymous_activity_restricted(post.group_id, author.profile_id)
+    active_restriction.expires_at is not null,
+    active_restriction.expires_at
   from public.posts as post
   join private.post_authors as author on author.post_id = post.id
   left join public.group_categories as category on category.id = post.category_id
@@ -808,6 +821,18 @@ begin
     and profile.deleted_at is null
   left join public.post_reactions as mine
     on mine.post_id = post.id and mine.profile_id = caller_profile_id
+  left join lateral (
+    select restriction.expires_at
+    from private.group_anonymous_activity_restrictions as restriction
+    where restriction.group_id = post.group_id
+      and restriction.profile_id = author.profile_id
+      and restriction.ended_at is null
+      and restriction.expires_at > now()
+    order by restriction.created_at desc, restriction.id desc
+    limit 1
+  ) as active_restriction on post.author_identity = 'anonymous'
+    and author.profile_id <> caller_profile_id
+    and caller_role in ('owner', 'admin')
   left join lateral (
     select
       coalesce(sum(tally.n)::integer, 0) as total,
@@ -942,31 +967,32 @@ CREATE FUNCTION public.list_post_comment_replies (
   p_root_comment_id uuid
 )
   RETURNS TABLE (
-    comment_id                  uuid,
-    post_id                     uuid,
-    parent_comment_id           uuid,
-    root_comment_id             uuid,
-    depth                       smallint,
-    body                        text,
-    author_identity             public.post_identity,
-    author_pub_id               text,
-    author_name                 text,
-    author_avatar_path          text,
-    author_label                text,
-    created_at                  timestamp with time zone,
-    edited_at                   timestamp with time zone,
-    is_deleted                  boolean,
-    is_effective_feed_bump      boolean,
-    is_author                   boolean,
-    can_edit                    boolean,
-    can_delete                  boolean,
-    reply_count                 integer,
-    reaction_count              integer,
-    top_reactions               public.post_reaction[],
-    my_reaction                 public.post_reaction,
-    parent_author_label         text,
-    can_moderate_anonymous      boolean,
-    anonymous_author_restricted boolean
+    comment_id                              uuid,
+    post_id                                 uuid,
+    parent_comment_id                       uuid,
+    root_comment_id                         uuid,
+    depth                                   smallint,
+    body                                    text,
+    author_identity                         public.post_identity,
+    author_pub_id                           text,
+    author_name                             text,
+    author_avatar_path                      text,
+    author_label                            text,
+    created_at                              timestamp with time zone,
+    edited_at                               timestamp with time zone,
+    is_deleted                              boolean,
+    is_effective_feed_bump                  boolean,
+    is_author                               boolean,
+    can_edit                                boolean,
+    can_delete                              boolean,
+    reply_count                             integer,
+    reaction_count                          integer,
+    top_reactions                           public.post_reaction[],
+    my_reaction                             public.post_reaction,
+    parent_author_label                     text,
+    can_moderate_anonymous                  boolean,
+    anonymous_author_restricted             boolean,
+    anonymous_author_restriction_expires_at timestamp with time zone
   )
   LANGUAGE plpgsql
   STABLE
@@ -1041,31 +1067,32 @@ CREATE FUNCTION public.list_post_comments (
   p_limit             integer                  DEFAULT 20
 )
   RETURNS TABLE (
-    comment_id                  uuid,
-    post_id                     uuid,
-    parent_comment_id           uuid,
-    root_comment_id             uuid,
-    depth                       smallint,
-    body                        text,
-    author_identity             public.post_identity,
-    author_pub_id               text,
-    author_name                 text,
-    author_avatar_path          text,
-    author_label                text,
-    created_at                  timestamp with time zone,
-    edited_at                   timestamp with time zone,
-    is_deleted                  boolean,
-    is_effective_feed_bump      boolean,
-    is_author                   boolean,
-    can_edit                    boolean,
-    can_delete                  boolean,
-    reply_count                 integer,
-    reaction_count              integer,
-    top_reactions               public.post_reaction[],
-    my_reaction                 public.post_reaction,
-    parent_author_label         text,
-    can_moderate_anonymous      boolean,
-    anonymous_author_restricted boolean
+    comment_id                              uuid,
+    post_id                                 uuid,
+    parent_comment_id                       uuid,
+    root_comment_id                         uuid,
+    depth                                   smallint,
+    body                                    text,
+    author_identity                         public.post_identity,
+    author_pub_id                           text,
+    author_name                             text,
+    author_avatar_path                      text,
+    author_label                            text,
+    created_at                              timestamp with time zone,
+    edited_at                               timestamp with time zone,
+    is_deleted                              boolean,
+    is_effective_feed_bump                  boolean,
+    is_author                               boolean,
+    can_edit                                boolean,
+    can_delete                              boolean,
+    reply_count                             integer,
+    reaction_count                          integer,
+    top_reactions                           public.post_reaction[],
+    my_reaction                             public.post_reaction,
+    parent_author_label                     text,
+    can_moderate_anonymous                  boolean,
+    anonymous_author_restricted             boolean,
+    anonymous_author_restriction_expires_at timestamp with time zone
   )
   LANGUAGE plpgsql
   STABLE
@@ -1320,31 +1347,32 @@ CREATE FUNCTION public.update_post_comment (
   p_remove_image boolean DEFAULT false
 )
   RETURNS TABLE (
-    comment_id                  uuid,
-    post_id                     uuid,
-    parent_comment_id           uuid,
-    root_comment_id             uuid,
-    depth                       smallint,
-    body                        text,
-    author_identity             public.post_identity,
-    author_pub_id               text,
-    author_name                 text,
-    author_avatar_path          text,
-    author_label                text,
-    created_at                  timestamp with time zone,
-    edited_at                   timestamp with time zone,
-    is_deleted                  boolean,
-    is_effective_feed_bump      boolean,
-    is_author                   boolean,
-    can_edit                    boolean,
-    can_delete                  boolean,
-    reply_count                 integer,
-    reaction_count              integer,
-    top_reactions               public.post_reaction[],
-    my_reaction                 public.post_reaction,
-    parent_author_label         text,
-    can_moderate_anonymous      boolean,
-    anonymous_author_restricted boolean
+    comment_id                              uuid,
+    post_id                                 uuid,
+    parent_comment_id                       uuid,
+    root_comment_id                         uuid,
+    depth                                   smallint,
+    body                                    text,
+    author_identity                         public.post_identity,
+    author_pub_id                           text,
+    author_name                             text,
+    author_avatar_path                      text,
+    author_label                            text,
+    created_at                              timestamp with time zone,
+    edited_at                               timestamp with time zone,
+    is_deleted                              boolean,
+    is_effective_feed_bump                  boolean,
+    is_author                               boolean,
+    can_edit                                boolean,
+    can_delete                              boolean,
+    reply_count                             integer,
+    reaction_count                          integer,
+    top_reactions                           public.post_reaction[],
+    my_reaction                             public.post_reaction,
+    parent_author_label                     text,
+    can_moderate_anonymous                  boolean,
+    anonymous_author_restricted             boolean,
+    anonymous_author_restriction_expires_at timestamp with time zone
   )
   LANGUAGE plpgsql
   SECURITY DEFINER

@@ -108,31 +108,32 @@ CREATE FUNCTION private.read_post_comments (
   p_caller_role       public.group_member_role
 )
   RETURNS TABLE (
-    comment_id                  uuid,
-    post_id                     uuid,
-    parent_comment_id           uuid,
-    root_comment_id             uuid,
-    depth                       smallint,
-    body                        text,
-    author_identity             public.post_identity,
-    author_pub_id               text,
-    author_name                 text,
-    author_avatar_path          text,
-    author_label                text,
-    created_at                  timestamp with time zone,
-    edited_at                   timestamp with time zone,
-    is_deleted                  boolean,
-    is_effective_feed_bump      boolean,
-    is_author                   boolean,
-    can_edit                    boolean,
-    can_delete                  boolean,
-    reply_count                 integer,
-    reaction_count              integer,
-    top_reactions               public.post_reaction[],
-    my_reaction                 public.post_reaction,
-    parent_author_label         text,
-    can_moderate_anonymous      boolean,
-    anonymous_author_restricted boolean
+    comment_id                              uuid,
+    post_id                                 uuid,
+    parent_comment_id                       uuid,
+    root_comment_id                         uuid,
+    depth                                   smallint,
+    body                                    text,
+    author_identity                         public.post_identity,
+    author_pub_id                           text,
+    author_name                             text,
+    author_avatar_path                      text,
+    author_label                            text,
+    created_at                              timestamp with time zone,
+    edited_at                               timestamp with time zone,
+    is_deleted                              boolean,
+    is_effective_feed_bump                  boolean,
+    is_author                               boolean,
+    can_edit                                boolean,
+    can_delete                              boolean,
+    reply_count                             integer,
+    reaction_count                          integer,
+    top_reactions                           public.post_reaction[],
+    my_reaction                             public.post_reaction,
+    parent_author_label                     text,
+    can_moderate_anonymous                  boolean,
+    anonymous_author_restricted             boolean,
+    anonymous_author_restriction_expires_at timestamp with time zone
   )
   LANGUAGE sql
   STABLE
@@ -211,13 +212,8 @@ CREATE FUNCTION private.read_post_comments (
       and comment.author_identity = 'anonymous'
       and author.profile_id <> p_caller_profile_id
       and coalesce(p_caller_role in ('owner', 'admin'), false),
-    comment.deleted_at is null
-      and comment.author_identity = 'anonymous'
-      and author.profile_id <> p_caller_profile_id
-      and coalesce(p_caller_role in ('owner', 'admin'), false)
-      and private.group_anonymous_activity_restricted(
-        comment_post.group_id, author.profile_id
-      )
+    active_restriction.expires_at is not null,
+    active_restriction.expires_at
   from public.post_comments as comment
   join public.posts as comment_post on comment_post.id = comment.post_id
   join private.comment_authors as author on author.comment_id = comment.id
@@ -232,6 +228,19 @@ CREATE FUNCTION private.read_post_comments (
     and profile.deleted_at is null
   left join public.comment_reactions as mine
     on mine.comment_id = comment.id and mine.profile_id = p_caller_profile_id
+  left join lateral (
+    select restriction.expires_at
+    from private.group_anonymous_activity_restrictions as restriction
+    where restriction.group_id = comment_post.group_id
+      and restriction.profile_id = author.profile_id
+      and restriction.ended_at is null
+      and restriction.expires_at > now()
+    order by restriction.created_at desc, restriction.id desc
+    limit 1
+  ) as active_restriction on comment.deleted_at is null
+    and comment.author_identity = 'anonymous'
+    and author.profile_id <> p_caller_profile_id
+    and coalesce(p_caller_role in ('owner', 'admin'), false)
   left join lateral (
     select
       coalesce(sum(tally.n)::integer, 0) as total,
