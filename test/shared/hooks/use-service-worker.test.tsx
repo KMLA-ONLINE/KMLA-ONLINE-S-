@@ -13,6 +13,7 @@ const workboxMock = vi.hoisted(() => ({
     listeners: Map<string, EventListener[]>;
     messageSkipWaiting: () => void;
     options: RegistrationOptions;
+    update: () => Promise<void>;
   }[],
 }));
 
@@ -34,6 +35,7 @@ vi.mock("workbox-window", () => ({
     }
 
     register = vi.fn(() => Promise.resolve(undefined));
+    update = vi.fn(() => Promise.resolve());
   },
 }));
 
@@ -41,6 +43,13 @@ const serviceWorkerDescriptor = Object.getOwnPropertyDescriptor(
   navigator,
   "serviceWorker",
 );
+
+/** 훅이 `Date.now()`로 쓰로틀을 재기 때문에 시계를 고정해 두고 앞으로 감는다. */
+const STARTED_AT = 1_800_000_000_000;
+const PAST_THROTTLE_MS = 6 * 60 * 1000;
+
+/** 훅의 `APPLY_UPDATE_TIMEOUT_MS`와 같은 값. 바뀌면 이쪽도 따라와야 한다. */
+const APPLY_UPDATE_TIMEOUT_MS = 5000;
 
 async function setupHook() {
   const reload = vi.fn();
@@ -50,6 +59,10 @@ async function setupHook() {
 
   const workbox = workboxMock.instances[0];
   if (!workbox) throw new Error("Workbox was not created");
+
+  // 업데이트 확인 리스너는 `register()`가 끝난 뒤에 붙는다. 매크로태스크를 한 번
+  // 흘려보내 그 지점을 지나게 한다. 여기서 바뀌는 상태는 없어 act가 필요 없다.
+  await new Promise((resolve) => setTimeout(resolve, 0));
 
   const emit = (type: string, event: WorkboxEvent = {}) => {
     act(() => {
@@ -71,7 +84,9 @@ describe("useServiceWorker", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
+    Reflect.deleteProperty(document, "visibilityState");
     if (serviceWorkerDescriptor) {
       Object.defineProperty(
         navigator,
@@ -135,5 +150,77 @@ describe("useServiceWorker", () => {
 
     expect(workbox.messageSkipWaiting).toHaveBeenCalledOnce();
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("적용이 응답 없이 멈추면 새로고침으로 빠져나온다", async () => {
+    const { emit, reload, result } = await setupHook();
+
+    emit("waiting", { isUpdate: true });
+
+    vi.useFakeTimers();
+    act(() => result.current.applyUpdate());
+    expect(reload).not.toHaveBeenCalled();
+
+    act(() => void vi.advanceTimersByTime(APPLY_UPDATE_TIMEOUT_MS));
+
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("제때 적용되면 예비 새로고침을 취소한다", async () => {
+    const { emit, reload, result } = await setupHook();
+
+    emit("waiting", { isUpdate: true });
+
+    vi.useFakeTimers();
+    act(() => result.current.applyUpdate());
+    emit("controlling", { isUpdate: true });
+
+    expect(reload).toHaveBeenCalledOnce();
+
+    act(() => void vi.advanceTimersByTime(APPLY_UPDATE_TIMEOUT_MS * 2));
+
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("탭이 다시 보이면 새 빌드가 나왔는지 확인한다", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(STARTED_AT);
+    const { workbox } = await setupHook();
+
+    // 등록이 방금 sw.js를 받아왔으므로 곧바로 돌아온 탭은 다시 묻지 않는다.
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(workbox.update).not.toHaveBeenCalled();
+
+    now.mockReturnValue(STARTED_AT + PAST_THROTTLE_MS);
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(workbox.update).toHaveBeenCalledOnce();
+
+    // 앱을 짧게 오가는 동안 확인이 매번 나가지는 않는다.
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(workbox.update).toHaveBeenCalledOnce();
+  });
+
+  it("숨어 있는 탭에서는 확인하지 않는다", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(STARTED_AT);
+    const { workbox } = await setupHook();
+
+    now.mockReturnValue(STARTED_AT + PAST_THROTTLE_MS);
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    expect(workbox.update).not.toHaveBeenCalled();
+  });
+
+  it("언마운트한 뒤에는 확인을 멈춘다", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(STARTED_AT);
+    const { unmount, workbox } = await setupHook();
+
+    unmount();
+    now.mockReturnValue(STARTED_AT + PAST_THROTTLE_MS);
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    expect(workbox.update).not.toHaveBeenCalled();
   });
 });

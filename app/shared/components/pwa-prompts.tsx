@@ -1,5 +1,6 @@
 import { InstallPrompt } from "~/shared/components/install-prompt";
 import { useServiceWorker } from "~/shared/hooks/use-service-worker";
+import { useStaleChunkRecovery } from "~/shared/hooks/use-stale-chunk-recovery";
 import { useEffect } from "react";
 import {
   setPromptActive,
@@ -14,8 +15,13 @@ import {
  *
  * 둘을 한 컴포넌트에 둔 이유는 배너가 떠 있는 동안 설치 모달을 미뤄야 하기 때문이다.
  * 서비스 워커 상태를 아는 곳이 여기뿐이라 `blocked`를 여기서 내려 준다.
+ *
+ * 화면을 그리지 않는 청크 복구도 여기서 켠다. 배포와 서비스 워커가 얽힌 같은 문제를
+ * 다루는 데다, 루트에 단 한 번만 마운트되는 컴포넌트가 여기이기 때문이다.
  */
 export function PwaPrompts() {
+  useStaleChunkRecovery();
+
   const {
     updateReady,
     offlineReady,
