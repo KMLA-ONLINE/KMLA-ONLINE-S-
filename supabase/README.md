@@ -34,12 +34,6 @@ Never edit a deployed migration.
 
 `db push` has no `--project-ref`; the link is the target. `db:diff:dev` and `db:push:dev` re-link to dev first. Prod has no script — link, push, and link back:
 
-```bash
-npx supabase link --project-ref nvgtzkylunpefdvonioo
-npx supabase db push --linked
-npm run link:dev
-```
-
 Never `--include-seed` a remote push (`seed.sql` inserts into `auth.users`), and never `supabase config push` (`config.toml` holds the local `site_url`).
 
 ## Remote project secrets
@@ -51,7 +45,7 @@ Migrations do not carry these. Set them per project before scheduled work functi
 | Name                             | Read by                                   |
 | -------------------------------- | ----------------------------------------- |
 | `project_url`                    | both helpers, as the `net.http_post` base |
-| `notification_dispatch_secret`   | `private.invoke_notification_dispatch`    |
+| `notification_dispatch_secret`   | `private.invoke_notification_dispatcher`  |
 | `post_attachment_cleanup_secret` | `private.invoke_post_attachment_cleanup`  |
 
 ```sql
