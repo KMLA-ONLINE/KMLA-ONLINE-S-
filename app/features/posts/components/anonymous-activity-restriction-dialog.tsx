@@ -25,6 +25,7 @@ export function AnonymousActivityRestrictionDialog({
   sourceKind,
   sourceId,
   restricted,
+  restrictionExpiresAt,
   onOpenChange,
   onRestrictedChange,
 }: {
@@ -32,14 +33,16 @@ export function AnonymousActivityRestrictionDialog({
   sourceKind: AnonymousActivitySourceKind;
   sourceId: string;
   restricted: boolean;
+  restrictionExpiresAt: string | null;
   onOpenChange: (open: boolean) => void;
-  onRestrictedChange: (restricted: boolean) => void;
+  onRestrictedChange: (restricted: boolean, expiresAt: string | null) => void;
 }) {
   const [reason, setReason] = useState("");
   const [durationDays, setDurationDays] = useState("1");
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [remainingDays, setRemainingDays] = useState<number | null>(null);
 
   const close = () => {
     if (pending) return;
@@ -80,17 +83,29 @@ export function AnonymousActivityRestrictionDialog({
     setDurationDays(String(Math.min(180, Math.max(1, Math.trunc(days)))));
   };
 
+  const prepareCancellation = () => {
+    const remainingMilliseconds = restrictionExpiresAt
+      ? Date.parse(restrictionExpiresAt) - Date.now()
+      : 0;
+    setRemainingDays(
+      remainingMilliseconds > 0
+        ? Math.ceil(remainingMilliseconds / (24 * 60 * 60 * 1000))
+        : null,
+    );
+    setConfirming(true);
+  };
+
   const restrict = async () => {
     setPending(true);
     setError(null);
     try {
-      await restrictGroupAnonymousActivity(
+      const restriction = await restrictGroupAnonymousActivity(
         sourceKind,
         sourceId,
         reason,
         Number(durationDays),
       );
-      onRestrictedChange(true);
+      onRestrictedChange(true, restriction.expires_at);
       onOpenChange(false);
       setConfirming(false);
       setReason("");
@@ -100,7 +115,7 @@ export function AnonymousActivityRestrictionDialog({
       setError(message);
       setConfirming(false);
       if (message === "이미 익명 활동이 차단된 사용자입니다.")
-        onRestrictedChange(true);
+        onRestrictedChange(true, restrictionExpiresAt);
     } finally {
       setPending(false);
     }
@@ -111,7 +126,7 @@ export function AnonymousActivityRestrictionDialog({
     setError(null);
     try {
       await cancelGroupAnonymousActivityRestriction(sourceKind, sourceId);
-      onRestrictedChange(false);
+      onRestrictedChange(false, null);
       onOpenChange(false);
       setConfirming(false);
     } catch (cause) {
@@ -119,7 +134,7 @@ export function AnonymousActivityRestrictionDialog({
       setError(message);
       setConfirming(false);
       if (message === "이미 해제되었거나 만료된 익명 활동 차단입니다.")
-        onRestrictedChange(false);
+        onRestrictedChange(false, null);
     } finally {
       setPending(false);
     }
@@ -152,9 +167,9 @@ export function AnonymousActivityRestrictionDialog({
                 type="button"
                 variant="destructive"
                 disabled={pending}
-                onClick={() => setConfirming(true)}
+                onClick={prepareCancellation}
               >
-                {pending ? <Spinner /> : null} 차단 취소
+                {pending ? <Spinner /> : null} 차단 해제
               </Button>
             </DialogFooter>
           ) : (
@@ -223,13 +238,21 @@ export function AnonymousActivityRestrictionDialog({
       {confirming ? (
         <ConfirmDialog
           title={
-            restricted
-              ? "익명 활동 차단을 취소할까요?"
-              : "익명 활동을 차단할까요?"
+            restricted ? "익명 차단을 해제할까요?" : "익명 활동을 차단할까요?"
           }
           description={
             restricted ? (
-              "이 사용자는 다시 익명 게시물과 댓글을 작성할 수 있습니다."
+              <span className="grid gap-2">
+                {remainingDays ? (
+                  <span>
+                    앞으로 {remainingDays}일 동안 익명 활동이 차단될
+                    예정이었습니다.
+                  </span>
+                ) : null}
+                <span>
+                  취소하면 다시 익명 게시물과 댓글을 작성할 수 있습니다.
+                </span>
+              </span>
             ) : (
               <span className="grid gap-2">
                 <span>
@@ -239,7 +262,7 @@ export function AnonymousActivityRestrictionDialog({
               </span>
             )
           }
-          confirmLabel={restricted ? "차단 취소" : "차단"}
+          confirmLabel={restricted ? "차단 해제" : "차단"}
           destructive
           pending={pending}
           onCancel={() => !pending && setConfirming(false)}

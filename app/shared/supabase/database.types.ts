@@ -1416,6 +1416,7 @@ export type Database = {
         }
         Returns: {
           anonymous_author_restricted: boolean
+          anonymous_author_restriction_expires_at: string
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -1600,6 +1601,7 @@ export type Database = {
         Args: { p_post_id: string }
         Returns: {
           anonymous_author_restricted: boolean
+          anonymous_author_restriction_expires_at: string
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -1882,6 +1884,7 @@ export type Database = {
         }
         Returns: {
           anonymous_author_restricted: boolean
+          anonymous_author_restriction_expires_at: string
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -1958,6 +1961,7 @@ export type Database = {
         Args: { p_root_comment_id: string }
         Returns: {
           anonymous_author_restricted: boolean
+          anonymous_author_restriction_expires_at: string
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -1993,6 +1997,7 @@ export type Database = {
         }
         Returns: {
           anonymous_author_restricted: boolean
+          anonymous_author_restriction_expires_at: string
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -2596,6 +2601,7 @@ export type Database = {
         }
         Returns: {
           anonymous_author_restricted: boolean
+          anonymous_author_restriction_expires_at: string
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string

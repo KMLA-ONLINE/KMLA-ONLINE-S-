@@ -84,6 +84,9 @@ export function CommentItem({
   const [restricted, setRestricted] = useState(
     comment.anonymous_author_restricted,
   );
+  const [restrictionExpiresAt, setRestrictionExpiresAt] = useState(
+    comment.anonymous_author_restriction_expires_at,
+  );
   const reactors = useCommentReactors(comment.comment_id);
 
   // 삭제된 댓글은 답글이 살아 있는 동안만 자리를 지킨다(없애면 답글 사슬이 끊긴다). 본문과
@@ -305,7 +308,7 @@ export function CommentItem({
               {comment.author_identity === "anonymous" &&
               comment.can_moderate_anonymous ? (
                 <DropdownMenuItem onClick={() => setRestrictionOpen(true)}>
-                  {restricted ? "익명 활동 차단 취소" : "익명 활동 차단"}
+                  {restricted ? "익명 차단 해제" : "익명 활동 차단"}
                 </DropdownMenuItem>
               ) : null}
               {comment.can_delete ? (
@@ -344,8 +347,12 @@ export function CommentItem({
           sourceKind="comment"
           sourceId={comment.comment_id}
           restricted={restricted}
+          restrictionExpiresAt={restrictionExpiresAt}
           onOpenChange={setRestrictionOpen}
-          onRestrictedChange={setRestricted}
+          onRestrictedChange={(nextRestricted, expiresAt) => {
+            setRestricted(nextRestricted);
+            setRestrictionExpiresAt(expiresAt);
+          }}
         />
       ) : null}
     </div>

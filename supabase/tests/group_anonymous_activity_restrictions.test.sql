@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(42);
+select plan(45);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -204,18 +204,43 @@ select ok(
    where notification.kind = 'anonymous_activity_restricted'),
   'the in-app notification carries the canonical expiry'
 );
+select set_config(
+  'test.restriction_expires_at',
+  (select expires_at::text
+   from private.group_anonymous_activity_restrictions
+   where ended_at is null),
+  true
+);
 
 set local role authenticated;
 select ok(
   (select can_moderate_anonymous and anonymous_author_restricted
+     and anonymous_author_restriction_expires_at
+       = current_setting('test.restriction_expires_at')::timestamptz
    from public.get_group_post('90000000-0000-0000-0000-000000000002')),
-  'post detail exposes only safe moderation booleans'
+  'post detail exposes the active restriction expiry without an identity'
+);
+select ok(
+  (select anonymous_author_restriction_expires_at
+     = current_setting('test.restriction_expires_at')::timestamptz
+   from public.list_group_posts('20000000-0000-0000-0000-000000000003')
+   where post_id = '90000000-0000-0000-0000-000000000002'),
+  'post lists expose the same active restriction expiry'
 );
 select ok(
   (select can_moderate_anonymous and anonymous_author_restricted
+     and anonymous_author_restriction_expires_at
+       = current_setting('test.restriction_expires_at')::timestamptz
    from public.list_post_comment_replies('a0000000-0000-0000-0000-000000000001')
    where comment_id = 'a0000000-0000-0000-0000-000000000002'),
-  'shared reply rows expose the same safe moderation booleans'
+  'shared reply rows expose the same active restriction expiry'
+);
+select ok(
+  (select anonymous_author_restriction_expires_at
+     = current_setting('test.restriction_expires_at')::timestamptz
+   from public.list_post_comments('90000000-0000-0000-0000-000000000002')
+   where comment_id = (select id from restriction_ids where name = 'target_comment')),
+  'top-level comment rows expose the same active restriction expiry'
 );
 reset role;
 
@@ -228,6 +253,12 @@ select is(
   )),
   '반복적인 익명 규칙 위반',
   'the target can read only their own active reason and expiry'
+);
+select is(
+  (select anonymous_author_restriction_expires_at
+   from public.get_group_post('90000000-0000-0000-0000-000000000002')),
+  null::timestamptz,
+  'the anonymous author cannot read a moderator-only restriction expiry'
 );
 select is(
   (select detail from public.list_my_notifications(null, null, 20)

@@ -42,6 +42,7 @@ export function PostMenu({
   onDelete,
   canModerateAnonymous = false,
   anonymousAuthorRestricted = false,
+  anonymousAuthorRestrictionExpiresAt = null,
   anonymousSourceId,
 }: {
   editTo: string;
@@ -55,6 +56,7 @@ export function PostMenu({
   onDelete: () => void;
   canModerateAnonymous?: boolean;
   anonymousAuthorRestricted?: boolean;
+  anonymousAuthorRestrictionExpiresAt?: string | null;
   anonymousSourceId?: string;
 }) {
   // 확인 dialog는 menu 바깥에 둔다. menu가 닫히면서 자식이 언마운트되면 dialog도 같이
@@ -64,6 +66,9 @@ export function PostMenu({
   const [reported, setReported] = useState(false);
   const [restrictionOpen, setRestrictionOpen] = useState(false);
   const [restricted, setRestricted] = useState(anonymousAuthorRestricted);
+  const [restrictionExpiresAt, setRestrictionExpiresAt] = useState(
+    anonymousAuthorRestrictionExpiresAt,
+  );
   const canRestrict = canModerateAnonymous && Boolean(anonymousSourceId);
 
   if (
@@ -112,7 +117,7 @@ export function PostMenu({
           ) : null}
           {canRestrict ? (
             <DropdownMenuItem onClick={() => setRestrictionOpen(true)}>
-              {restricted ? "익명 활동 차단 취소" : "익명 활동 차단"}
+              {restricted ? "익명 차단 해제" : "익명 활동 차단"}
             </DropdownMenuItem>
           ) : null}
 
@@ -141,8 +146,12 @@ export function PostMenu({
           sourceKind="post"
           sourceId={anonymousSourceId}
           restricted={restricted}
+          restrictionExpiresAt={restrictionExpiresAt}
           onOpenChange={setRestrictionOpen}
-          onRestrictedChange={setRestricted}
+          onRestrictedChange={(nextRestricted, expiresAt) => {
+            setRestricted(nextRestricted);
+            setRestrictionExpiresAt(expiresAt);
+          }}
         />
       ) : null}
 

@@ -158,6 +158,9 @@ export function PostDetail({
               post.can_moderate_anonymous
             }
             anonymousAuthorRestricted={post.anonymous_author_restricted}
+            anonymousAuthorRestrictionExpiresAt={
+              post.anonymous_author_restriction_expires_at
+            }
             anonymousSourceId={post.post_id}
             onPin={() =>
               submitIntent({

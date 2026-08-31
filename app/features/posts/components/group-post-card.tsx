@@ -115,6 +115,9 @@ export function GroupPostCard({
             post.author_identity === "anonymous" && post.can_moderate_anonymous
           }
           anonymousAuthorRestricted={post.anonymous_author_restricted}
+          anonymousAuthorRestrictionExpiresAt={
+            post.anonymous_author_restriction_expires_at
+          }
           anonymousSourceId={post.post_id}
           onPin={onPin}
           onDelete={onDelete}

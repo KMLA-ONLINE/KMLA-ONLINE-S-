@@ -14,6 +14,9 @@ import { PostMenu } from "~/features/posts/components/post-menu";
 import { renderRoute, screen, waitFor } from "../../../router";
 
 function renderMenu(restricted = false) {
+  const restrictionExpiresAt = restricted
+    ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    : null;
   return renderRoute(() => (
     <PostMenu
       editTo="/edit"
@@ -21,6 +24,7 @@ function renderMenu(restricted = false) {
       canDelete={false}
       canModerateAnonymous
       anonymousAuthorRestricted={restricted}
+      anonymousAuthorRestrictionExpiresAt={restrictionExpiresAt}
       anonymousSourceId="post-id"
       onDelete={vi.fn()}
     />
@@ -89,7 +93,7 @@ describe("PostMenu anonymous activity moderation", () => {
     await user.click(screen.getByRole("button", { name: "게시물 옵션" }));
     await user.click(
       await screen.findByRole("menuitem", {
-        name: "익명 활동 차단 취소",
+        name: "익명 차단 해제",
       }),
     );
 
@@ -97,11 +101,12 @@ describe("PostMenu anonymous activity moderation", () => {
     expect(
       mutations.cancelGroupAnonymousActivityRestriction,
     ).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "차단 취소" }));
+    await user.click(screen.getByRole("button", { name: "차단 해제" }));
+    expect(screen.getByText("익명 차단을 해제할까요?")).toBeInTheDocument();
     expect(
-      screen.getByText("익명 활동 차단을 취소할까요?"),
+      screen.getByText("앞으로 7일 동안 익명 활동이 차단될 예정이었습니다."),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "차단 취소" }));
+    await user.click(screen.getByRole("button", { name: "차단 해제" }));
 
     await waitFor(() =>
       expect(
@@ -128,7 +133,7 @@ describe("PostMenu anonymous activity moderation", () => {
       await screen.findByText("이미 익명 활동이 차단된 사용자입니다."),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "차단 취소" }),
+      screen.getByRole("button", { name: "차단 해제" }),
     ).toBeInTheDocument();
   });
 });

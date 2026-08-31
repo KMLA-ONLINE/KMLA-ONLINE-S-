@@ -10,6 +10,7 @@ export function groupPost(overrides: Partial<GroupPost> = {}): GroupPost {
     author_pub_id: "author-pub-id",
     body: "본문",
     anonymous_author_restricted: false,
+    anonymous_author_restriction_expires_at: null,
     can_delete: false,
     can_edit: false,
     can_pin: false,

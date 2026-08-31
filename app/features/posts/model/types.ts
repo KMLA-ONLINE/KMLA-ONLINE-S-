@@ -47,17 +47,25 @@ type WithReactions<Row> = Omit<Row, keyof ReactionSummary> & ReactionSummary;
  * 거짓 타입을 두면 서명 실패 때 원시 object path를 그대로 `<img src>`에 흘리게 된다.
  */
 export type GroupPost = WithReactions<
-  Omit<GroupPostRow, "author_avatar_path">
+  Omit<
+    GroupPostRow,
+    "author_avatar_path" | "anonymous_author_restriction_expires_at"
+  >
 > & {
   author_avatar_path: string | null;
+  anonymous_author_restriction_expires_at: string | null;
   attachments: PostAttachment[];
 };
 // 검색 결과에는 댓글 수와 반응을 표시하지 않으므로(기능 명세 §8.9) 목록과 반환 모양이 다르다.
 export type GroupPostSearchResult = GroupPostSearchRow;
 export type GroupPostDetail = WithReactions<
-  Omit<GroupPostDetailRow, "author_avatar_path">
+  Omit<
+    GroupPostDetailRow,
+    "author_avatar_path" | "anonymous_author_restriction_expires_at"
+  >
 > & {
   author_avatar_path: string | null;
+  anonymous_author_restriction_expires_at: string | null;
   attachments: PostAttachment[];
 };
 export type PostVisibility = Database["public"]["Enums"]["post_visibility"];
@@ -194,7 +202,10 @@ export interface CommentImage {
 }
 
 /** 목록, 답글 묶음, 방금 작성한 댓글이 모두 같은 행 모양을 쓴다. */
-export type PostComment = WithReactions<PostCommentRow> & {
+export type PostComment = WithReactions<
+  Omit<PostCommentRow, "anonymous_author_restriction_expires_at">
+> & {
+  anonymous_author_restriction_expires_at: string | null;
   images: CommentImage[];
 };
 
