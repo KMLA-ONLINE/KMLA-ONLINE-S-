@@ -3,9 +3,11 @@ import {
   CalendarClockIcon,
   CalendarDaysIcon,
   ChevronRightIcon,
+  CircleQuestionMarkIcon,
   ClipboardListIcon,
   SettingsIcon,
   ShieldCheckIcon,
+  SparklesIcon,
   UtensilsIcon,
 } from "lucide-react";
 import type { ComponentType } from "react";
@@ -114,6 +116,18 @@ export default function MenuPage() {
               icon={ShieldCheckIcon}
             />
           ) : null}
+        </div>
+
+        {/* 내 것을 바꾸는 설정과 달리 이 둘은 서비스에 대해 읽는 화면이고, 여는 빈도도
+            훨씬 낮다. 이 화면의 위계가 빈도이므로 설정 카드에 섞지 않고 한 층 아래 둔다. */}
+        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+          <ListLinkRow
+            to="/support"
+            label="도움말"
+            icon={CircleQuestionMarkIcon}
+          />
+
+          <ListLinkRow to="/update" label="업데이트 기록" icon={SparklesIcon} />
         </div>
 
         {/* 로그아웃은 이동이 아니라 동작이라 목록 카드에서 떼어 따로 앉힌다. */}

@@ -12,20 +12,20 @@
 
 ## 도메인별 명세
 
-| 장    | 문서                                                               | 내용                                                |
-| ----- | ------------------------------------------------------------------ | --------------------------------------------------- |
-| §1–5  | [계정 및 온보딩](functional-spec/accounts.md)                      | 서비스 개요, 권한 체계, 내비게이션, 인증, 가입 승인 |
-| §6    | [홈 통합 피드](functional-spec/feed.md)                            | 피드 구성과 정렬,`#업`, 보기 방식, 홈 위젯          |
-| §7    | [그룹](functional-spec/groups.md)                                  | 그룹 종류, 가입 정책, 초대, 멤버와 역할, 그룹 설정  |
-| §8–11 | [게시물 및 상호작용](functional-spec/posts.md)                     | 게시물, 댓글과 답글, 반응, 익명 활동 관리           |
-| §12   | [프로필](functional-spec/profiles.md)                              | 프로필 열람과 편집, 프로필 타임라인                 |
-| §13   | [메시지](functional-spec/messaging.md)                             | 1:1 및 그룹 메시지 ·**미구현**, 화면 골격만 있음    |
-| §14   | [알림](functional-spec/notifications.md)                           | 알림함, 중요도와 전달 채널, 알림 종류별 정책        |
-| §15   | [메뉴 및 개인 설정](functional-spec/settings.md)                   | 메뉴 홈, 알림 설정, 실험실, 오픈소스 라이선스       |
-| §16   | [앱 관리자](functional-spec/admin.md)                              | 가입 심사, 앱 관리자 임명, 권한 기반 기능 관리자    |
-| §17   | [학교 부가 기능](functional-spec/school-features.md)               | 공강·노래방 예약, 급식, 생일, 공결·병결, 시간표     |
-| §18   | [콘텐츠 및 미디어 공통 규칙](functional-spec/content-and-media.md) | 이미지 처리, 파일 접근, 콘텐츠 보존, 이미지 뷰어    |
-| —     | [용어집](functional-spec/glossary.md)                              | 명세와 코드에서 쓰는 도메인 용어                    |
+| 장    | 문서                                                               | 내용                                                        |
+| ----- | ------------------------------------------------------------------ | ----------------------------------------------------------- |
+| §1–5  | [계정 및 온보딩](functional-spec/accounts.md)                      | 서비스 개요, 권한 체계, 내비게이션, 인증, 가입 승인         |
+| §6    | [홈 통합 피드](functional-spec/feed.md)                            | 피드 구성과 정렬,`#업`, 보기 방식, 홈 위젯                  |
+| §7    | [그룹](functional-spec/groups.md)                                  | 그룹 종류, 가입 정책, 초대, 멤버와 역할, 그룹 설정          |
+| §8–11 | [게시물 및 상호작용](functional-spec/posts.md)                     | 게시물, 댓글과 답글, 반응, 익명 활동 관리                   |
+| §12   | [프로필](functional-spec/profiles.md)                              | 프로필 열람과 편집, 프로필 타임라인                         |
+| §13   | [메시지](functional-spec/messaging.md)                             | 1:1 및 그룹 메시지 ·**미구현**, 화면 골격만 있음            |
+| §14   | [알림](functional-spec/notifications.md)                           | 알림함, 중요도와 전달 채널, 알림 종류별 정책                |
+| §15   | [메뉴 및 개인 설정](functional-spec/settings.md)                   | 메뉴 홈, 알림 설정, 실험실, 라이선스, 도움말, 업데이트 기록 |
+| §16   | [앱 관리자](functional-spec/admin.md)                              | 가입 심사, 앱 관리자 임명, 권한 기반 기능 관리자            |
+| §17   | [학교 부가 기능](functional-spec/school-features.md)               | 공강·노래방 예약, 급식, 생일, 공결·병결, 시간표             |
+| §18   | [콘텐츠 및 미디어 공통 규칙](functional-spec/content-and-media.md) | 이미지 처리, 파일 접근, 콘텐츠 보존, 이미지 뷰어            |
+| —     | [용어집](functional-spec/glossary.md)                              | 명세와 코드에서 쓰는 도메인 용어                            |
 
 ## 관련 기술 설계
 
