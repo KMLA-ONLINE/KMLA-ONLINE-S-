@@ -36,7 +36,7 @@ export function AnonymousActivityRestrictionDialog({
   onRestrictedChange: (restricted: boolean) => void;
 }) {
   const [reason, setReason] = useState("");
-  const [durationDays, setDurationDays] = useState("7");
+  const [durationDays, setDurationDays] = useState("1");
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +69,17 @@ export function AnonymousActivityRestrictionDialog({
     setConfirming(true);
   };
 
+  const changeDuration = (value: string) => {
+    if (value === "") {
+      setDurationDays("");
+      return;
+    }
+
+    const days = Number(value);
+    if (!Number.isFinite(days)) return;
+    setDurationDays(String(Math.min(180, Math.max(1, Math.trunc(days)))));
+  };
+
   const restrict = async () => {
     setPending(true);
     setError(null);
@@ -83,7 +94,7 @@ export function AnonymousActivityRestrictionDialog({
       onOpenChange(false);
       setConfirming(false);
       setReason("");
-      setDurationDays("7");
+      setDurationDays("1");
     } catch (cause) {
       const message = getAnonymousActivityRestrictionErrorMessage(cause);
       setError(message);
@@ -128,7 +139,7 @@ export function AnonymousActivityRestrictionDialog({
             <DialogDescription>
               {restricted
                 ? "이 작성자는 이미 이 그룹에서 익명 활동이 차단되어 있습니다."
-                : "실제 작성자 정보는 공개되지 않으며, 이 익명 콘텐츠의 작성자에게만 적용됩니다."}
+                : "작성자에게만 사유가 공개됩니다."}
             </DialogDescription>
           </DialogHeader>
 
@@ -148,13 +159,24 @@ export function AnonymousActivityRestrictionDialog({
             </DialogFooter>
           ) : (
             <form className="grid gap-4" onSubmit={prepareRestriction}>
-              <label
-                htmlFor="anonymous-restriction-reason"
-                className="grid gap-1.5 text-sm font-medium"
-              >
-                사유
+              <div className="grid gap-1.5">
+                <div className="flex items-center justify-between">
+                  <label
+                    htmlFor="anonymous-restriction-reason"
+                    className="text-sm font-medium"
+                  >
+                    사유
+                  </label>
+                  <span
+                    id="anonymous-restriction-reason-count"
+                    className="text-xs text-muted-foreground tabular-nums"
+                  >
+                    {Array.from(reason).length}/300
+                  </span>
+                </div>
                 <Textarea
                   id="anonymous-restriction-reason"
+                  aria-describedby="anonymous-restriction-reason-count"
                   value={reason}
                   minLength={5}
                   maxLength={300}
@@ -163,7 +185,7 @@ export function AnonymousActivityRestrictionDialog({
                   placeholder="차단 사유를 입력하세요."
                   onChange={(event) => setReason(event.target.value)}
                 />
-              </label>
+              </div>
               <label
                 htmlFor="anonymous-restriction-duration"
                 className="grid gap-1.5 text-sm font-medium"
@@ -177,7 +199,8 @@ export function AnonymousActivityRestrictionDialog({
                   max={180}
                   step={1}
                   required
-                  onChange={(event) => setDurationDays(event.target.value)}
+                  onChange={(event) => changeDuration(event.target.value)}
+                  onBlur={() => durationDays === "" && setDurationDays("1")}
                 />
               </label>
               <DialogFooter>

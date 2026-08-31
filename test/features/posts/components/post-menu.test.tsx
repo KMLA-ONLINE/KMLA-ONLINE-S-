@@ -46,7 +46,12 @@ describe("PostMenu anonymous activity moderation", () => {
       await screen.findByRole("menuitem", { name: "익명 활동 차단" }),
     );
 
+    const durationInput = screen.getByLabelText("기간(일)");
+    expect(durationInput).toHaveValue(1);
+    expect(screen.getByText("0/300")).toBeInTheDocument();
+
     await user.type(screen.getByLabelText("사유"), "짧음");
+    expect(screen.getByText("2/300")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "다음" }));
     expect(screen.getByRole("alert")).toHaveTextContent(
       "사유를 5자 이상 입력해 주세요.",
@@ -54,8 +59,14 @@ describe("PostMenu anonymous activity moderation", () => {
 
     await user.clear(screen.getByLabelText("사유"));
     await user.type(screen.getByLabelText("사유"), "반복적인 익명 괴롭힘");
-    await user.clear(screen.getByLabelText("기간(일)"));
-    await user.type(screen.getByLabelText("기간(일)"), "14");
+    await user.clear(durationInput);
+    await user.type(durationInput, "181");
+    expect(durationInput).toHaveValue(180);
+    await user.clear(durationInput);
+    await user.type(durationInput, "0");
+    expect(durationInput).toHaveValue(1);
+    await user.clear(durationInput);
+    await user.type(durationInput, "14");
     await user.click(screen.getByRole("button", { name: "다음" }));
 
     expect(mutations.restrictGroupAnonymousActivity).not.toHaveBeenCalled();
