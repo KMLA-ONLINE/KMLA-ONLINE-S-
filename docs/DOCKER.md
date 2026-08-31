@@ -57,23 +57,55 @@ supabase start
 
 ## 5. 원격 프로젝트 연결
 
-로컬에서 작업한 내용을 프로덕션 DB와 비교하려면 remote 프로젝트를 연결해야 합니다.
-
-### 5.1 로그인
+dev(`trftjcieogrewqptgidd`)는 Vercel Preview, prod(`nvgtzkylunpefdvonioo`)는 Production을 받칩니다.
 
 ```bash
 supabase login
+npm run link:dev
 ```
 
-브라우저가 열리면 토큰을 복사해서 터미널에 붙여넣습니다.
+링크는 dev에 둡니다. 첫 링크 시 DB 비밀번호를 묻고, 비워도 됩니다 (`SUPABASE_DB_PASSWORD`).
 
-### 5.2 프로젝트 연결
+### 5.1 dev
+
+`db:*`는 실행 전에 dev로 다시 링크하므로 현재 링크 상태와 무관합니다.
 
 ```bash
-supabase link --project-ref <project id>
+npm run db:diff:dev      # 드리프트 확인
+npm run db:push:dev
+npm run fn:secrets:dev
+npm run fn:deploy:dev
 ```
 
-[supabase.com](https://) project에 들어가서 project id를 복붙합니다.
+### 5.2 prod
+
+스크립트를 두지 않았습니다. dev에서 확인한 뒤 손으로 칩니다.
+
+```bash
+npx supabase link --project-ref nvgtzkylunpefdvonioo
+npx supabase db push --linked
+npm run link:dev
+```
+
+```bash
+npx supabase secrets set --project-ref nvgtzkylunpefdvonioo --env-file supabase/.env.prod.local
+npx supabase functions deploy --project-ref nvgtzkylunpefdvonioo
+```
+
+`db push`에 `--project-ref`가 없어 링크가 곧 대상입니다. 마지막 `link:dev`를 빼먹지 마세요.
+
+> ⚠️ 원격 push에 `--include-seed` 금지 (`seed.sql`은 `auth.users`에 직접 insert),
+> `supabase config push` 금지 (`config.toml`의 `site_url`이 로컬 값).
+
+### 5.3 원격 프로젝트를 새로 만들었을 때
+
+마이그레이션이 담지 않는 것 세 가지를 따로 채웁니다.
+
+1. Edge Function 시크릿 — `supabase/.env.example` 참고
+2. Vault 시크릿 — `supabase/README.md`의 "Remote project secrets"
+3. Auth URL 설정 — Dashboard
+
+그 다음 `supabase/REMOTE_ADMIN_SETUP.md`.
 
 ---
 
@@ -94,7 +126,9 @@ supabase status
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | remote anon key             | `supabase status`의 local anon key         |
 | (필요시) service_role key       | remote secret               | `supabase status`의 local service_role key |
 
-> 배포 환경에서는 remote 값을 사용해야 하므로, 환경 변수는 반드시 `.env` 파일로 분리해서 관리하세요.
+> 로컬 `.env.local`은 항상 로컬 스택을 가리킵니다. 원격 값은 여기 넣지 않습니다 —
+> 배포 환경의 값은 Vercel의 Production / Preview 환경변수로 관리합니다. `README.md`의
+> "환경 (prod / dev)" 참고.
 
 변경 후 컨테이너를 재시작합니다:
 

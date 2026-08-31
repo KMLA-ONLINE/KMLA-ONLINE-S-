@@ -175,7 +175,42 @@ E2E 워크플로는 러너에서 `supabase start`로 로컬 스택을 띄운 뒤
 `@vercel/react-router` preset은 사용하지 않습니다 — peer가 아직 `@react-router/dev: 7`에 묶여 있고,
 SPA 모드에서 그 preset의 이점(라우트별 함수 설정, 번들 스플리팅)은 모두 SSR용이라 해당 사항이 없습니다.
 
-Vercel 프로젝트 환경변수에 `VITE_SUPABASE_URL`과 `VITE_SUPABASE_PUBLISHABLE_KEY`를 등록해야 합니다.
+## 환경 (prod / dev)
+
+원격 Supabase 프로젝트는 둘입니다.
+
+| Vercel 스코프 | 브랜치      | Supabase               |
+| ------------- | ----------- | ---------------------- |
+| Production    | `main`      | `nvgtzkylunpefdvonioo` |
+| Preview       | `dev` 및 PR | `trftjcieogrewqptgidd` |
+
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_WEB_PUSH_VAPID_PUBLIC_KEY`를
+두 스코프에 각각 등록합니다. 빌드 타임에 인라인되므로 값을 바꾸면 재배포해야 하고,
+`env.ts`가 지연 평가라 누락돼도 빌드는 통과합니다.
+
+Preview는 `dev` 브랜치에 고정 도메인을 할당해서 씁니다 (PWA·푸시 구독·Auth 리다이렉트가
+origin에 묶임).
+
+dev 배포는 스크립트로 합니다. `db:*`는 실행 전에 dev로 다시 링크합니다.
+
+```bash
+npm run db:diff:dev      # 드리프트 확인
+npm run db:push:dev
+npm run fn:secrets:dev   # supabase/.env.dev.local
+npm run fn:deploy:dev
+```
+
+prod 스크립트는 두지 않았습니다. dev에서 확인한 뒤 손으로 칩니다.
+
+```bash
+npx supabase link --project-ref nvgtzkylunpefdvonioo
+npx supabase db push --linked
+npm run link:dev
+```
+
+`db push`에 `--project-ref`가 없어 링크가 곧 대상입니다. 마지막 줄을 빼먹지 마세요.
+
+CI는 로컬 스택만 씁니다. `.env.local`도 그대로 둡니다.
 
 ## 알려진 제약
 
