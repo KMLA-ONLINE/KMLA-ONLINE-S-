@@ -156,61 +156,7 @@ $$;
 
 ALTER FUNCTION "private"."can_upload_group_media"("p_object_path" "text") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "private"."claim_group_media_cleanup"("p_limit" integer DEFAULT 100, "p_lease_seconds" integer DEFAULT 300) RETURNS TABLE("media_id" "uuid", "object_path" "text", "lease_id" "uuid")
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-begin
-  if p_limit not between 1 and 500 or p_lease_seconds not between 30 and 3600 then
-    raise exception 'invalid cleanup lease parameters' using errcode = '22023';
-  end if;
-  return query
-  with candidates as (
-    select media.id
-    from public.group_media_objects as media
-    where (
-        (media.status = 'pending' and media.created_at <= now() - interval '48 hours')
-        or media.status = 'deleted'
-      )
-      and (media.cleanup_lease_expires_at is null or media.cleanup_lease_expires_at <= now())
-    order by media.created_at, media.id
-    for update skip locked
-    limit p_limit
-  ), claimed as (
-    update public.group_media_objects as media
-    set cleanup_lease_id = gen_random_uuid(),
-      cleanup_lease_expires_at = now() + make_interval(secs => p_lease_seconds)
-    from candidates
-    where media.id = candidates.id
-    returning media.id, media.object_path, media.cleanup_lease_id
-  )
-  select claimed.id, claimed.object_path, claimed.cleanup_lease_id from claimed;
-end;
-$$;
 
-ALTER FUNCTION "private"."claim_group_media_cleanup"("p_limit" integer, "p_lease_seconds" integer) OWNER TO "postgres";
-
-CREATE OR REPLACE FUNCTION "private"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) RETURNS boolean
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-begin
-  if coalesce(p_object_deleted, false) then
-    delete from public.group_media_objects
-    where id = p_media_id
-      and cleanup_lease_id = p_lease_id
-      and cleanup_lease_expires_at > now()
-      and (status = 'deleted' or (status = 'pending' and created_at <= now() - interval '48 hours'));
-  else
-    update public.group_media_objects
-    set cleanup_lease_id = null, cleanup_lease_expires_at = null
-    where id = p_media_id and cleanup_lease_id = p_lease_id;
-  end if;
-  return found;
-end;
-$$;
-
-ALTER FUNCTION "private"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "private"."initialize_group_memberships"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -528,28 +474,7 @@ $$;
 
 ALTER FUNCTION "public"."approve_group_join_request"("p_group_id" "uuid", "p_request_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."claim_group_media_cleanup"("p_limit" integer DEFAULT 100, "p_lease_seconds" integer DEFAULT 300) RETURNS TABLE("media_id" "uuid", "object_path" "text", "lease_id" "uuid")
-    LANGUAGE "sql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-  select *
-  from private.claim_group_media_cleanup(p_limit, p_lease_seconds);
-$$;
 
-ALTER FUNCTION "public"."claim_group_media_cleanup"("p_limit" integer, "p_lease_seconds" integer) OWNER TO "postgres";
-
-CREATE OR REPLACE FUNCTION "public"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) RETURNS boolean
-    LANGUAGE "sql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-  select private.complete_group_media_cleanup(
-    p_media_id,
-    p_lease_id,
-    p_object_deleted
-  );
-$$;
-
-ALTER FUNCTION "public"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text" DEFAULT ''::"text", "p_slug" "text" DEFAULT NULL::"text", "p_join_policy" "public"."group_join_policy" DEFAULT NULL::"public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy" DEFAULT 'optional_anonymous'::"public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy" DEFAULT 'members'::"public"."group_posting_policy") RETURNS TABLE("group_id" "uuid", "slug" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -664,13 +589,11 @@ begin
 
   -- 저장소를 돌려받는다. 청소 워커가 집어 갈 수 있게 tombstone만 찍고 객체는 건드리지 않는다.
   update public.group_media_objects
-  set status = 'deleted', deleted_at = now(),
-    cleanup_lease_id = null, cleanup_lease_expires_at = null
+  set status = 'deleted', deleted_at = now()
   where group_id = p_group_id and status <> 'deleted';
 
   update public.post_attachments as attachment
-  set status = 'deleted', deleted_at = now(),
-    cleanup_lease_id = null, cleanup_lease_expires_at = null
+  set status = 'deleted', deleted_at = now()
   where attachment.status <> 'deleted'
     and exists (
       select 1 from public.posts as post
@@ -1323,9 +1246,6 @@ CREATE TABLE IF NOT EXISTS "public"."group_media_objects" (
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "ready_at" timestamp with time zone,
     "deleted_at" timestamp with time zone,
-    "cleanup_lease_id" "uuid",
-    "cleanup_lease_expires_at" timestamp with time zone,
-    CONSTRAINT "group_media_cleanup_lease_check" CHECK ((("cleanup_lease_id" IS NULL) = ("cleanup_lease_expires_at" IS NULL))),
     CONSTRAINT "group_media_dimensions_check" CHECK (((("slot" = 'icon'::"public"."group_media_slot") AND ("width" = "height") AND (("width" >= 1) AND ("width" <= 512))) OR (("slot" = 'cover'::"public"."group_media_slot") AND ("width" = ("height" * 4)) AND (("width" >= 4) AND ("width" <= 2400))))),
     CONSTRAINT "group_media_path_check" CHECK (("object_path" = ((((("group_id")::"text" || '/'::"text") || ("slot")::"text") || '/'::"text") || ("id")::"text"))),
     CONSTRAINT "group_media_size_check" CHECK ((("size_bytes" >= 1) AND ("size_bytes" <=
@@ -1513,11 +1433,7 @@ GRANT ALL ON FUNCTION "private"."can_read_group_media"("p_object_path" "text") T
 REVOKE ALL ON FUNCTION "private"."can_upload_group_media"("p_object_path" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."can_upload_group_media"("p_object_path" "text") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "private"."claim_group_media_cleanup"("p_limit" integer, "p_lease_seconds" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."claim_group_media_cleanup"("p_limit" integer, "p_lease_seconds" integer) TO "service_role";
 
-REVOKE ALL ON FUNCTION "private"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) TO "service_role";
 
 REVOKE ALL ON FUNCTION "private"."initialize_group_memberships"() FROM PUBLIC;
 
@@ -1540,11 +1456,7 @@ GRANT ALL ON FUNCTION "public"."accept_group_invite"("p_token" "text") TO "authe
 REVOKE ALL ON FUNCTION "public"."approve_group_join_request"("p_group_id" "uuid", "p_request_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."approve_group_join_request"("p_group_id" "uuid", "p_request_id" "uuid") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."claim_group_media_cleanup"("p_limit" integer, "p_lease_seconds" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."claim_group_media_cleanup"("p_limit" integer, "p_lease_seconds" integer) TO "service_role";
 
-REVOKE ALL ON FUNCTION "public"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) TO "service_role";
 
 REVOKE ALL ON FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") TO "authenticated";

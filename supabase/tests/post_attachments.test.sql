@@ -2,13 +2,13 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 create temporary table cleanup_claims (
-  attachment_id uuid,
-  storage_bucket text,
+  id uuid,
+  bucket text,
   object_path text,
   lease_id uuid
 );
 grant select, insert on cleanup_claims to service_role;
-select plan(40);
+select plan(42);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -40,8 +40,8 @@ select is(
   'attachment metadata is written only through the definer RPCs'
 );
 select ok(not has_function_privilege('anon', 'public.prepare_post_attachment(uuid,text,text,bigint,integer,integer)', 'EXECUTE'), 'anon cannot prepare uploads');
-select ok(has_function_privilege('service_role', 'private.claim_post_attachment_cleanup(integer,integer)', 'EXECUTE'), 'service role can claim cleanup work');
-select ok(not has_function_privilege('authenticated', 'private.claim_post_attachment_cleanup(integer,integer)', 'EXECUTE'), 'clients cannot claim cleanup work');
+select ok(has_function_privilege('service_role', 'private.claim_storage_cleanup(integer,integer)', 'EXECUTE'), 'service role can claim cleanup work');
+select ok(not has_function_privilege('authenticated', 'private.claim_storage_cleanup(integer,integer)', 'EXECUTE'), 'clients cannot claim cleanup work');
 select is((select public from storage.buckets where id = 'post-attachments'), false, 'attachment bucket is private');
 select is((select file_size_limit from storage.buckets where id = 'post-attachments'), 31457280::bigint, 'bucket limit is 30 MiB');
 select is((select allowed_mime_types from storage.buckets where id = 'post-attachments'), null::text[], 'bucket permits every MIME type');
@@ -177,32 +177,45 @@ select lives_ok(
 reset role;
 select is((select count(*) from public.post_attachments where status = 'deleted'), 2::bigint, 'post deletion tombstones every attachment');
 
+-- 정리는 두 단계다. 하루 한 번 SQL이 수명을 다한 행을 큐로 옮기고, 워커가 큐를 드레인한다.
+select is(
+  private.enqueue_storage_cleanup(),
+  2::bigint,
+  'the daily pass moves both tombstoned attachments into the queue'
+);
+select is(
+  (select count(*) from public.post_attachments where status = 'deleted'),
+  0::bigint,
+  'the source rows leave with the same statement that queues their objects'
+);
+
 select set_config('request.jwt.claim.role', 'service_role', true);
 set local role service_role;
-do $$
-begin
-  insert into cleanup_claims
-  select * from private.claim_post_attachment_cleanup(10, 300);
-end;
-$$;
-select is((select count(*) from cleanup_claims), 2::bigint, 'cleanup worker leases tombstoned metadata');
-select ok(
-  private.complete_post_attachment_cleanup(
-    (select attachment_id from cleanup_claims order by attachment_id limit 1),
-    (select lease_id from cleanup_claims order by attachment_id limit 1),
-    false
+insert into cleanup_claims
+select * from public.claim_storage_cleanup(10, 300);
+select is((select count(*) from cleanup_claims), 2::bigint, 'the worker leases the queued objects');
+select is(
+  public.complete_storage_cleanup(
+    (select lease_id from cleanup_claims limit 1),
+    (select array_agg(id) from cleanup_claims),
+    '{}'::uuid[],
+    'storage unavailable'
   ),
-  'failed object deletion releases its lease without deleting metadata'
+  1,
+  'the queued object that no longer exists in Storage completes anyway'
 );
-select ok(
-  private.complete_post_attachment_cleanup(
-    (select attachment_id from cleanup_claims order by attachment_id desc limit 1),
-    (select lease_id from cleanup_claims order by attachment_id desc limit 1),
-    true
-  ),
-  'successful object deletion completes cleanup metadata'
+select is(
+  (select count(*) from storage.objects where bucket_id = 'post-attachments'),
+  1::bigint,
+  'the cleanup RPCs never touch Storage object metadata themselves'
 );
-select is((select count(*) from storage.objects where bucket_id = 'post-attachments'), 1::bigint, 'cleanup RPC never deletes Storage object metadata');
+
+reset role;
+select is(
+  (select count(*) from private.storage_cleanup_queue),
+  1::bigint,
+  'the object that is still in Storage stays queued for the next run'
+);
 
 reset role;
 select * from finish();

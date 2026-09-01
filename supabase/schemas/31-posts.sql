@@ -82,8 +82,7 @@ begin
   end if;
 
   update public.post_attachments
-  set status = 'deleted', deleted_at = now(), cleanup_lease_id = null,
-    cleanup_lease_expires_at = null
+  set status = 'deleted', deleted_at = now()
   where post_id = p_post_id
     and status <> 'deleted'
     and not (id = any(coalesce(p_attachment_ids, '{}'::uuid[])));
@@ -129,105 +128,8 @@ $$;
 
 ALTER FUNCTION "private"."can_read_post"("p_post_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "private"."claim_post_attachment_cleanup"("p_limit" integer DEFAULT 100, "p_lease_seconds" integer DEFAULT 300) RETURNS TABLE("attachment_id" "uuid", "storage_bucket" "text", "object_path" "text", "lease_id" "uuid")
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-begin
-  if p_limit not between 1 and 500 or p_lease_seconds not between 30 and 3600 then
-    raise exception 'invalid cleanup lease parameters' using errcode = '22023';
-  end if;
-  return query
-  with candidates as (
-    select item.id
-    from public.post_attachments as item
-    where (
-        (item.status = 'pending' and item.created_at <= now() - interval '48 hours')
-        or item.status = 'deleted'
-      )
-      and (
-        item.cleanup_lease_expires_at is null
-        or item.cleanup_lease_expires_at <= now()
-      )
-    order by item.created_at, item.id
-    for update skip locked
-    limit p_limit
-  ), claimed as (
-    update public.post_attachments as item
-    set cleanup_lease_id = gen_random_uuid(),
-      cleanup_lease_expires_at = now() + make_interval(secs => p_lease_seconds)
-    from candidates
-    where item.id = candidates.id
-    returning item.id, item.storage_bucket, item.object_path, item.cleanup_lease_id
-  )
-  select claimed.id, claimed.storage_bucket, claimed.object_path, claimed.cleanup_lease_id
-  from claimed;
-end;
-$$;
 
-ALTER FUNCTION "private"."claim_post_attachment_cleanup"("p_limit" integer, "p_lease_seconds" integer) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "private"."complete_post_attachment_cleanup"("p_attachment_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) RETURNS boolean
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-begin
-  if coalesce(p_object_deleted, false) then
-    delete from public.post_attachments
-    where id = p_attachment_id
-      and cleanup_lease_id = p_lease_id
-      and cleanup_lease_expires_at > now()
-      and (
-        status = 'deleted'
-        or (status = 'pending' and created_at <= now() - interval '48 hours')
-      );
-  else
-    update public.post_attachments
-    set cleanup_lease_id = null, cleanup_lease_expires_at = null
-    where id = p_attachment_id and cleanup_lease_id = p_lease_id;
-  end if;
-  return found;
-end;
-$$;
-
-ALTER FUNCTION "private"."complete_post_attachment_cleanup"("p_attachment_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) OWNER TO "postgres";
-
-CREATE OR REPLACE FUNCTION "private"."invoke_post_attachment_cleanup"() RETURNS bigint
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-declare
-  project_url text;
-  cleanup_secret text;
-  request_id bigint;
-begin
-  select decrypted_secret into project_url
-  from vault.decrypted_secrets
-  where name = 'project_url';
-
-  select decrypted_secret into cleanup_secret
-  from vault.decrypted_secrets
-  where name = 'post_attachment_cleanup_secret';
-
-  if project_url is null or cleanup_secret is null then
-    return null;
-  end if;
-
-  select net.http_post(
-    url := project_url || '/functions/v1/cleanup-post-attachments',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'x-cleanup-secret', cleanup_secret
-    ),
-    body := '{}'::jsonb,
-    timeout_milliseconds := 60000
-  ) into request_id;
-
-  return request_id;
-end;
-$$;
-
-ALTER FUNCTION "private"."invoke_post_attachment_cleanup"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "private"."is_post_author"("p_post_id" "uuid") RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
@@ -339,28 +241,7 @@ $$;
 
 ALTER FUNCTION "private"."validate_profile_activity_path"() OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."claim_post_attachment_cleanup"("p_limit" integer DEFAULT 100, "p_lease_seconds" integer DEFAULT 300) RETURNS TABLE("attachment_id" "uuid", "storage_bucket" "text", "object_path" "text", "lease_id" "uuid")
-    LANGUAGE "sql"
-    SET "search_path" TO ''
-    AS $$
-  select *
-  from private.claim_post_attachment_cleanup(p_limit, p_lease_seconds);
-$$;
 
-ALTER FUNCTION "public"."claim_post_attachment_cleanup"("p_limit" integer, "p_lease_seconds" integer) OWNER TO "postgres";
-
-CREATE OR REPLACE FUNCTION "public"."complete_post_attachment_cleanup"("p_attachment_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) RETURNS boolean
-    LANGUAGE "sql"
-    SET "search_path" TO ''
-    AS $$
-  select private.complete_post_attachment_cleanup(
-    p_attachment_id,
-    p_lease_id,
-    p_object_deleted
-  );
-$$;
-
-ALTER FUNCTION "public"."complete_post_attachment_cleanup"("p_attachment_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."group_categories" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
@@ -390,10 +271,7 @@ CREATE TABLE IF NOT EXISTS "public"."post_attachments" (
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "ready_at" timestamp with time zone,
     "deleted_at" timestamp with time zone,
-    "cleanup_lease_id" "uuid",
-    "cleanup_lease_expires_at" timestamp with time zone,
     CONSTRAINT "post_attachments_bucket_check" CHECK (("storage_bucket" = 'post-attachments'::"text")),
-    CONSTRAINT "post_attachments_cleanup_lease_check" CHECK ((("cleanup_lease_id" IS NULL) = ("cleanup_lease_expires_at" IS NULL))),
     CONSTRAINT "post_attachments_dimensions_check" CHECK (("width" IS NULL AND "height" IS NULL) OR ("width" BETWEEN 1 AND 100000 AND "height" BETWEEN 1 AND 100000)),
     CONSTRAINT "post_attachments_filename_check" CHECK ((("char_length"("btrim"("original_filename")) >= 1) AND ("char_length"("btrim"("original_filename")) <= 255))),
     CONSTRAINT "post_attachments_mime_check" CHECK ((("char_length"("btrim"("mime_type")) >= 1) AND ("char_length"("btrim"("mime_type")) <= 255))),
@@ -552,13 +430,8 @@ REVOKE ALL ON FUNCTION "private"."apply_post_commit"("p_post_id" "uuid", "p_body
 REVOKE ALL ON FUNCTION "private"."can_read_post"("p_post_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."can_read_post"("p_post_id" "uuid") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "private"."claim_post_attachment_cleanup"("p_limit" integer, "p_lease_seconds" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."claim_post_attachment_cleanup"("p_limit" integer, "p_lease_seconds" integer) TO "service_role";
 
-REVOKE ALL ON FUNCTION "private"."complete_post_attachment_cleanup"("p_attachment_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."complete_post_attachment_cleanup"("p_attachment_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) TO "service_role";
 
-REVOKE ALL ON FUNCTION "private"."invoke_post_attachment_cleanup"() FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."is_post_author"("p_post_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."is_post_author"("p_post_id" "uuid") TO "authenticated";
@@ -569,11 +442,7 @@ REVOKE ALL ON FUNCTION "private"."prevent_profile_activity_attachments"() FROM P
 
 REVOKE ALL ON FUNCTION "private"."validate_profile_activity_path"() FROM PUBLIC;
 
-REVOKE ALL ON FUNCTION "public"."claim_post_attachment_cleanup"("p_limit" integer, "p_lease_seconds" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."claim_post_attachment_cleanup"("p_limit" integer, "p_lease_seconds" integer) TO "service_role";
 
-REVOKE ALL ON FUNCTION "public"."complete_post_attachment_cleanup"("p_attachment_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."complete_post_attachment_cleanup"("p_attachment_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) TO "service_role";
 
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."group_categories" TO "service_role";
 GRANT SELECT ON TABLE "public"."group_categories" TO "authenticated";

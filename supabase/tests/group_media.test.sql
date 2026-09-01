@@ -8,10 +8,10 @@ select is((select file_size_limit from storage.buckets where id = 'group-media')
 select is((select allowed_mime_types from storage.buckets where id = 'group-media'), array['image/webp']::text[], 'group media bucket accepts only WebP');
 select ok(not has_table_privilege('authenticated', 'public.group_media_objects', 'SELECT'), 'group media metadata is not browser-readable');
 select ok(not has_function_privilege('anon', 'public.prepare_group_media(uuid,public.group_media_slot,bigint,integer,integer)', 'EXECUTE'), 'anonymous users cannot prepare group media');
-select ok(has_function_privilege('service_role', 'public.claim_group_media_cleanup(integer,integer)', 'EXECUTE'), 'service role can claim group media cleanup');
-select ok(not has_function_privilege('authenticated', 'public.claim_group_media_cleanup(integer,integer)', 'EXECUTE'), 'authenticated users cannot claim group media cleanup');
-select ok(has_function_privilege('service_role', 'public.complete_group_media_cleanup(uuid,uuid,boolean)', 'EXECUTE'), 'service role can complete group media cleanup');
-select ok(not has_function_privilege('authenticated', 'public.complete_group_media_cleanup(uuid,uuid,boolean)', 'EXECUTE'), 'authenticated users cannot complete group media cleanup');
+select ok(has_function_privilege('service_role', 'public.claim_storage_cleanup(integer,integer)', 'EXECUTE'), 'service role can claim storage cleanup');
+select ok(not has_function_privilege('authenticated', 'public.claim_storage_cleanup(integer,integer)', 'EXECUTE'), 'authenticated users cannot claim storage cleanup');
+select ok(has_function_privilege('service_role', 'public.complete_storage_cleanup(uuid,uuid[],uuid[],text)', 'EXECUTE'), 'service role can complete storage cleanup');
+select ok(not has_function_privilege('authenticated', 'public.complete_storage_cleanup(uuid,uuid[],uuid[],text)', 'EXECUTE'), 'authenticated users cannot complete storage cleanup');
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 set local role authenticated;

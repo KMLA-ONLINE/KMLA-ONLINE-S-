@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(35);
 
 select is(
   (select public from storage.buckets where id = 'profile-media'),
@@ -41,10 +41,25 @@ select ok(
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.set_my_profile_media(text,text)',
+    'public.prepare_profile_media(public.profile_media_slot,bigint,integer,integer)',
+    'EXECUTE'
+  ),
+  'authenticated users can reserve a profile media upload'
+);
+select ok(
+  has_function_privilege(
+    'authenticated',
+    'public.finalize_profile_media(uuid)',
     'EXECUTE'
   ),
   'authenticated users can connect uploaded profile media'
+);
+select ok(
+  not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects' and cmd = 'DELETE'
+  ),
+  'no bucket lets a client delete objects directly'
 );
 
 select set_config(
@@ -70,11 +85,7 @@ select set_config(
   ),
   true
 );
-select set_config(
-  'test.profile_media_path',
-  '10000000-0000-0000-0000-000000000001/avatar/30000000-0000-0000-0000-000000000001',
-  true
-);
+select set_config('test.unused', '', true);
 
 set local role authenticated;
 
@@ -138,6 +149,32 @@ select is(
   'timeline posting preference is updated'
 );
 
+-- prepare -> upload -> finalize. 업로드는 prepare가 만든 `pending` 행이 가리키는 경로에만
+-- 허용되므로 경로를 지어내는 업로드는 여기서 막힌다.
+create temporary table prepared_media as
+select * from public.prepare_profile_media('avatar', 4, 100, 100);
+select set_config(
+  'test.profile_media_path',
+  (select object_path from prepared_media),
+  true
+);
+select set_config(
+  'test.profile_media_id',
+  (select media_id::text from prepared_media),
+  true
+);
+select throws_ok(
+  $$insert into storage.objects (bucket_id, name, owner_id, metadata)
+    values (
+      'profile-media',
+      '10000000-0000-0000-0000-000000000001/avatar/30000000-0000-0000-0000-000000000003',
+      '10000000-0000-0000-0000-000000000001',
+      '{"size":4,"mimetype":"image/webp"}'::jsonb
+    )$$,
+  '42501',
+  null,
+  'uploads without a prepared row are rejected'
+);
 select lives_ok(
   $$insert into storage.objects (bucket_id, name, owner_id, metadata)
     values (
@@ -146,36 +183,11 @@ select lives_ok(
       '10000000-0000-0000-0000-000000000001',
       '{"size":4,"mimetype":"image/webp"}'::jsonb
     )$$,
-  'owner can upload media at their strict user UUID and object UUID path'
-);
-select throws_ok(
-  $$insert into storage.objects (bucket_id, name, owner_id, metadata)
-    values (
-      'profile-media',
-      current_setting('test.profile_id') || '/avatar/30000000-0000-0000-0000-000000000003',
-      '10000000-0000-0000-0000-000000000001',
-      '{"size":4,"mimetype":"image/webp"}'::jsonb
-    )$$,
-  '42501',
-  null,
-  'new uploads reject legacy numeric profile paths'
-);
-select throws_ok(
-  $$insert into storage.objects (bucket_id, name, owner_id, metadata)
-    values (
-      'profile-media',
-      '10000000-0000-0000-0000-000000000001/avatar/30000000-0000-0000-0000-000000000004.webp',
-      '10000000-0000-0000-0000-000000000001',
-      '{"size":4,"mimetype":"image/webp"}'::jsonb
-    )$$,
-  '42501',
-  null,
-  'new uploads require an extensionless object UUID'
+  'owner can upload at the prepared path'
 );
 select lives_ok(
-  $$select public.set_my_profile_media(
-      'avatar',
-      current_setting('test.profile_media_path')
+  $$select public.finalize_profile_media(
+      current_setting('test.profile_media_id')::uuid
     )$$,
   'owner can connect uploaded avatar'
 );
@@ -186,6 +198,14 @@ select is(
   ),
   current_setting('test.profile_media_path'),
   'avatar path is connected to profile'
+);
+select throws_ok(
+  $$select public.finalize_profile_media(
+      current_setting('test.profile_media_id')::uuid
+    )$$,
+  '55000',
+  null,
+  'a media object can only be finalized once'
 );
 select set_config('storage.operation', 'storage.object.sign', true);
 select is(
@@ -249,13 +269,6 @@ select is(
   true,
   'profile media activities can be deleted by their author'
 );
-select lives_ok(
-  $$select public.set_my_profile_media(
-      'avatar',
-      current_setting('test.profile_media_path')
-    )$$,
-  'retrying the same media connection succeeds'
-);
 select is(
   (
     select count(*)::integer
@@ -265,7 +278,7 @@ select is(
     where activity_kind = 'avatar_changed'
   ),
   1,
-  'retrying the same media connection does not duplicate the activity'
+  'connecting media creates exactly one activity'
 );
 select lives_ok(
   $$select public.remove_my_profile_media('avatar')$$,

@@ -2,6 +2,7 @@ import type {
   AcceptedUser,
   AdminApplication,
   AdminMember,
+  StorageCleanupStatus,
 } from "~/features/admin/model/types";
 import { getSupabase } from "~/shared/supabase/client";
 
@@ -52,4 +53,12 @@ export async function listAdminMembers(
   });
   if (error) throw error;
   return data ?? [];
+}
+
+export async function getStorageCleanupStatus(): Promise<StorageCleanupStatus | null> {
+  const { data, error } = await getSupabase().rpc(
+    "admin_storage_cleanup_status",
+  );
+  if (error) throw error;
+  return data?.[0] ?? null;
 }

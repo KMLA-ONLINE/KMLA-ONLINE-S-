@@ -57,6 +57,7 @@ export default [
       route("admin/approvals", "routes/app/admin/approvals.tsx"),
       route("admin/gongang-managers", "routes/app/admin/gongang-managers.tsx"),
       route("admin/app-admins", "routes/app/admin/app-admins.tsx"),
+      route("admin/storage-cleanup", "routes/app/admin/storage-cleanup.tsx"),
     ]),
     layout("routes/messenger/layout.tsx", [
       route("messenger", "routes/messenger/index.tsx", [

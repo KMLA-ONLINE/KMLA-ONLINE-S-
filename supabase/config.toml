@@ -416,7 +416,7 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-[functions.cleanup-post-attachments]
+[functions.cleanup-storage-objects]
 verify_jwt = false
 
 [functions.dispatch-notifications]

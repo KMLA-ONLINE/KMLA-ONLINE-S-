@@ -42,11 +42,11 @@ Migrations do not carry these. Set them per project before scheduled work functi
 
 **Vault.** `seed.sql` covers the local stack only. Elsewhere the cron helpers read `vault.decrypted_secrets` and return `null` when a name is missing.
 
-| Name                             | Read by                                   |
-| -------------------------------- | ----------------------------------------- |
-| `project_url`                    | both helpers, as the `net.http_post` base |
-| `notification_dispatch_secret`   | `private.invoke_notification_dispatcher`  |
-| `post_attachment_cleanup_secret` | `private.invoke_post_attachment_cleanup`  |
+| Name                           | Read by                                   |
+| ------------------------------ | ----------------------------------------- |
+| `project_url`                  | both helpers, as the `net.http_post` base |
+| `notification_dispatch_secret` | `private.invoke_notification_dispatcher`  |
+| `storage_cleanup_secret`       | `private.invoke_storage_cleanup`          |
 
 ```sql
 select vault.create_secret('https://<ref>.supabase.co', 'project_url', '');
@@ -54,9 +54,11 @@ select vault.create_secret('https://<ref>.supabase.co', 'project_url', '');
 
 Rotate with `vault.update_secret` — `create_secret` fails on an existing name. There is no dual-secret window, so dispatch 401s until both sides match; cron retries.
 
+`invoke_storage_cleanup` raises when either name is missing rather than returning `null`, so a misconfigured project shows up as a failed `cron.job_run_details` row and as a warning on `/admin/storage-cleanup`. The notification dispatcher still returns `null` on a missing secret.
+
 **Edge Function.** Copy `.env.example` to `.env.<environment>.local`; `npm run fn:secrets:dev`, or `npx supabase secrets set --project-ref <ref> --env-file …` for prod. Values are per project.
 
-Each Vault name pairs with the function variable of the same meaning — `notification_dispatch_secret` with `NOTIFICATION_DISPATCH_SECRET`, `post_attachment_cleanup_secret` with `POST_ATTACHMENT_CLEANUP_SECRET`. The handler compares with `!==`, so a mismatch 401s every cron call and reports nothing.
+Each Vault name pairs with the function variable of the same meaning — `notification_dispatch_secret` with `NOTIFICATION_DISPATCH_SECRET`, `storage_cleanup_secret` with `STORAGE_CLEANUP_SECRET`. The handler compares with `!==`, so a mismatch 401s every cron call; `/admin/storage-cleanup` surfaces that as a failed last run.
 
 **Auth URL configuration.** Dashboard, per project.
 

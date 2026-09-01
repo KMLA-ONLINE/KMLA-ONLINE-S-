@@ -1,7 +1,4 @@
-import type {
-  AcceptedProfile,
-  ProfileMediaSlot,
-} from "~/features/profiles/model/types";
+import type { ProfileMediaSlot } from "~/features/profiles/model/types";
 import { getSupabase } from "~/shared/supabase/client";
 import { createSignedUrls } from "~/shared/supabase/signed-urls";
 import { STORAGE_UPLOAD_CACHE_CONTROL } from "~/shared/supabase/storage";
@@ -34,61 +31,48 @@ export async function createProfileMediaUrls(
   return urls;
 }
 
+/**
+ * 교체하고 남은 이전 이미지는 클라이언트가 지우지 않는다. 프로필 슬롯에서 내려와도 그 이미지를
+ * 만든 변경 활동 게시물이 계속 참조하고, 그 게시물이 삭제된 뒤에야 지울 수 있기 때문이다.
+ * 판단과 삭제는 모두 `private.enqueue_storage_cleanup()`과 정리 큐가 맡는다.
+ */
 export async function replaceProfileMedia(
-  profile: AcceptedProfile,
   slot: ProfileMediaSlot,
   file: File,
+  dimensions: { width: number; height: number },
 ): Promise<void> {
   const supabase = getSupabase();
-  const { data: sessionData } = await supabase.auth.getSession();
-  const userId = sessionData.session?.user.id;
-
-  if (!userId) throw new Error("Authentication required.");
-
-  const objectPath = `${userId}/${slot}/${crypto.randomUUID()}`;
-  const previousPath =
-    slot === "avatar" ? profile.avatar_path : profile.cover_path;
+  const { data, error } = await supabase.rpc("prepare_profile_media", {
+    p_slot: slot,
+    p_size_bytes: file.size,
+    p_width: dimensions.width,
+    p_height: dimensions.height,
+  });
+  if (error) throw error;
+  const prepared = data?.[0];
+  if (!prepared) throw new Error("Profile media upload was not prepared");
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
-    .upload(objectPath, file, {
+    .upload(prepared.object_path, file, {
       contentType: "image/webp",
       cacheControl: STORAGE_UPLOAD_CACHE_CONTROL,
       upsert: false,
     });
-
   if (uploadError) throw uploadError;
 
-  const { error: connectError } = await supabase.rpc("set_my_profile_media", {
-    p_slot: slot,
-    p_object_path: objectPath,
-  });
-
-  if (connectError) {
-    await supabase.storage.from(BUCKET).remove([objectPath]);
-    throw connectError;
-  }
-
-  // Storage RLS가 현재 프로필과 살아 있는 활동 게시물의 스냅샷은 보존한다.
-  if (previousPath && !isExternalUrl(previousPath)) {
-    await supabase.storage.from(BUCKET).remove([previousPath]);
-  }
+  const { error: finalizeError } = await supabase.rpc(
+    "finalize_profile_media",
+    { p_media_id: prepared.media_id },
+  );
+  if (finalizeError) throw finalizeError;
 }
 
 export async function removeProfileMedia(
-  profile: AcceptedProfile,
   slot: ProfileMediaSlot,
 ): Promise<void> {
-  const supabase = getSupabase();
-  const previousPath =
-    slot === "avatar" ? profile.avatar_path : profile.cover_path;
-
-  const { error } = await supabase.rpc("remove_my_profile_media", {
+  const { error } = await getSupabase().rpc("remove_my_profile_media", {
     p_slot: slot,
   });
   if (error) throw error;
-
-  if (previousPath && !isExternalUrl(previousPath)) {
-    await supabase.storage.from(BUCKET).remove([previousPath]);
-  }
 }

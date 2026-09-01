@@ -34,15 +34,8 @@ create temporary table image_ids (
   object_path text
 );
 create temporary table comment_ids (name text primary key, id uuid);
-create temporary table cleanup_claims (
-  image_id uuid,
-  storage_bucket text,
-  object_path text,
-  lease_id uuid
-);
 grant select, insert on image_ids, comment_ids to authenticated;
 grant select on image_ids, comment_ids to service_role;
-grant select, insert on cleanup_claims to service_role;
 
 select is(
   enum_range(null::public.comment_image_status)::text,
@@ -74,11 +67,11 @@ select ok(
   'accepted clients can use the safe batch metadata RPC'
 );
 select ok(
-  has_function_privilege('service_role', 'private.claim_comment_image_cleanup(integer,integer)', 'EXECUTE'),
+  has_function_privilege('service_role', 'private.claim_storage_cleanup(integer,integer)', 'EXECUTE'),
   'only the cleanup worker is granted leases'
 );
 select ok(
-  not has_function_privilege('authenticated', 'private.claim_comment_image_cleanup(integer,integer)', 'EXECUTE'),
+  not has_function_privilege('authenticated', 'private.claim_storage_cleanup(integer,integer)', 'EXECUTE'),
   'clients cannot claim cleanup leases'
 );
 
@@ -292,33 +285,28 @@ select is(
 );
 
 reset role;
-select set_config('request.jwt.claim.role', 'service_role', true);
-set local role service_role;
-insert into cleanup_claims
-select * from private.claim_comment_image_cleanup(100, 300);
+select is(
+  private.enqueue_storage_cleanup() > 0,
+  true,
+  'the daily pass moves tombstoned comment images into the cleanup queue'
+);
 select ok(
   exists (
-    select 1 from cleanup_claims
-    where image_id = (select id from image_ids where name = 'first')
+    select 1
+    from private.storage_cleanup_queue as queue
+    where queue.object_path = (
+        select object_path from image_ids where name = 'first'
+      )
+      and queue.reason = 'comment_image'
+      and not queue.dry_run
   ),
-  'cleanup leases a tombstoned comment image'
+  'the queued row carries the object path the worker needs'
 );
-select ok(
-  private.complete_comment_image_cleanup(
-    (select image_id from cleanup_claims
-      where image_id = (select id from image_ids where name = 'first')),
-    (select lease_id from cleanup_claims
-      where image_id = (select id from image_ids where name = 'first')),
-    true
-  ),
-  'cleanup completion removes leased metadata'
-);
-reset role;
 select is(
   (select count(*) from public.comment_images
     where id = (select id from image_ids where name = 'first')),
   0::bigint,
-  'completed cleanup removes the public metadata and private uploader row by cascade'
+  'enqueueing removes the public metadata and private uploader row by cascade'
 );
 
 select * from finish();

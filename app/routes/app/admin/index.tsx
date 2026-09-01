@@ -1,4 +1,9 @@
-import { ShieldCheckIcon, UserCheckIcon, UsersIcon } from "lucide-react";
+import {
+  HardDriveIcon,
+  ShieldCheckIcon,
+  UserCheckIcon,
+  UsersIcon,
+} from "lucide-react";
 import { Link, redirect } from "react-router";
 
 import { assertAppAdmin, isAdminAccessError } from "~/features/admin";
@@ -35,6 +40,12 @@ const links = [
     title: "앱 관리자",
     description: "앱 관리자 명단, 임명 및 강등",
     icon: UsersIcon,
+  },
+  {
+    to: "/admin/storage-cleanup",
+    title: "파일 정리",
+    description: "고아 파일 정리 상태와 실패 확인",
+    icon: HardDriveIcon,
   },
 ];
 
