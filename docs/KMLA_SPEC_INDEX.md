@@ -23,7 +23,7 @@
 | §14   | [알림](functional-spec/notifications.md)                           | 알림함, 중요도와 전달 채널, 알림 종류별 정책                |
 | §15   | [메뉴 및 개인 설정](functional-spec/settings.md)                   | 메뉴 홈, 알림 설정, 실험실, 라이선스, 도움말, 업데이트 기록 |
 | §16   | [앱 관리자](functional-spec/admin.md)                              | 가입 심사, 앱 관리자 임명, 권한 기반 기능 관리자            |
-| §17   | [학교 부가 기능](functional-spec/school-features.md)               | 공강·노래방 예약, 급식, 생일, 공결·병결, 시간표             |
+| §17   | [학교 부가 기능](functional-spec/school-features.md)               | 공강·노래방 예약, 급식, 생일, 스토리, 시간표                |
 | §18   | [콘텐츠 및 미디어 공통 규칙](functional-spec/content-and-media.md) | 이미지 처리, 파일 접근, 콘텐츠 보존, 이미지 뷰어            |
 | —     | [용어집](functional-spec/glossary.md)                              | 명세와 코드에서 쓰는 도메인 용어                            |
 

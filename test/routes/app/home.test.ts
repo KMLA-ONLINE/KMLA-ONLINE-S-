@@ -5,15 +5,15 @@ const mocks = vi.hoisted(() => ({
   listFeedPosts: vi.fn(),
   getMealDay: vi.fn(),
   listBirthdays: vi.fn(),
-  listTodayAbsences: vi.fn(),
+  listTodayStories: vi.fn(),
 }));
 
 vi.mock("~/features/auth", () => ({
   hasActiveSession: mocks.hasActiveSession,
 }));
 
-vi.mock("~/features/absences/data/queries", () => ({
-  listTodayAbsences: mocks.listTodayAbsences,
+vi.mock("~/features/stories/data/queries", () => ({
+  listTodayStories: mocks.listTodayStories,
 }));
 
 // `feedQuery`의 queryFn이 배럴이 아니라 이 모듈에서 직접 가져다 쓴다.
@@ -63,7 +63,7 @@ describe("home feed loader", () => {
     vi.clearAllMocks();
     resetQueryClientForTests();
     mocks.hasActiveSession.mockResolvedValue(true);
-    mocks.listTodayAbsences.mockResolvedValue([]);
+    mocks.listTodayStories.mockResolvedValue([]);
     mocks.listFeedPosts.mockResolvedValue(page);
     mocks.getMealDay.mockResolvedValue(mealDay);
     mocks.listBirthdays.mockResolvedValue(birthdays);
@@ -104,12 +104,12 @@ describe("home feed loader", () => {
 
     expect(mocks.listFeedPosts).not.toHaveBeenCalled();
     expect(mocks.listBirthdays).not.toHaveBeenCalled();
-    expect(mocks.listTodayAbsences).not.toHaveBeenCalled();
+    expect(mocks.listTodayStories).not.toHaveBeenCalled();
     expect(mocks.getMealDay).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       mealDay: null,
       birthdays: null,
-      absences: [],
+      stories: [],
     });
   });
 });
