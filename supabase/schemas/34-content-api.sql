@@ -1066,8 +1066,7 @@ begin
   from private.post_authors as author where author.post_id = p_post_id;
   update public.posts set deleted_at = now(), pinned_at = null where id = p_post_id;
   update public.post_attachments
-  set status = 'deleted', deleted_at = now(), cleanup_lease_id = null,
-    cleanup_lease_expires_at = null
+  set status = 'deleted', deleted_at = now()
   where post_id = p_post_id and status <> 'deleted';
   if caller_profile_id <> author_profile_id then
     -- 어느 글이 사라졌는지 제목으로 말해준다. 삭제된 게시물은 열어볼 수 없으므로 알림이
@@ -1116,8 +1115,7 @@ begin
   end if;
   if attachment.status <> 'deleted' then
     update public.post_attachments
-    set status = 'deleted', deleted_at = now(), cleanup_lease_id = null,
-      cleanup_lease_expires_at = null
+    set status = 'deleted', deleted_at = now()
     where id = p_attachment_id;
   end if;
 end;
@@ -1261,8 +1259,7 @@ begin
 
   update public.posts set deleted_at = now() where id = p_post_id;
   update public.post_attachments
-  set status = 'deleted', deleted_at = now(), cleanup_lease_id = null,
-    cleanup_lease_expires_at = null
+  set status = 'deleted', deleted_at = now()
   where post_id = p_post_id and status <> 'deleted';
   if caller_profile_id = post_record.timeline_profile_id
     and caller_profile_id <> author_profile_id then
@@ -2541,8 +2538,7 @@ begin
 
   if image_changed and current_image.id is not null then
     update public.comment_images
-    set status = 'deleted', deleted_at = now(), cleanup_lease_id = null,
-      cleanup_lease_expires_at = null
+    set status = 'deleted', deleted_at = now()
     where id = current_image.id;
   end if;
   if p_image_id is not null and image_changed then

@@ -29,6 +29,23 @@ CREATE TYPE "public"."profile_media_activity_kind" AS ENUM (
 
 ALTER TYPE "public"."profile_media_activity_kind" OWNER TO "postgres";
 
+CREATE TYPE "public"."profile_media_slot" AS ENUM (
+    'avatar',
+    'cover'
+);
+
+ALTER TYPE "public"."profile_media_slot" OWNER TO "postgres";
+
+-- 그룹 미디어와 달리 `deleted` 상태가 없다. 프로필 이미지는 슬롯에서 내려와도 변경 활동
+-- 게시물이 계속 참조하므로, 지울 수 있는 시점은 상태가 아니라 참조 유무로 판단한다.
+-- `private.enqueue_storage_cleanup()`이 그 판단을 하고 행을 정리 큐로 옮긴다.
+CREATE TYPE "public"."profile_media_status" AS ENUM (
+    'pending',
+    'ready'
+);
+
+ALTER TYPE "public"."profile_media_status" OWNER TO "postgres";
+
 CREATE TYPE "public"."profile_status" AS ENUM (
     'draft',
     'pending',
@@ -46,26 +63,6 @@ CREATE TYPE "public"."profile_type" AS ENUM (
 );
 
 ALTER TYPE "public"."profile_type" OWNER TO "postgres";
-
-CREATE OR REPLACE FUNCTION "private"."can_delete_own_profile_media_path"("p_object_path" "text") RETURNS boolean
-    LANGUAGE "sql" STABLE SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-  select private.is_own_profile_media_path(p_object_path)
-    and not exists (
-      select 1
-      from public.profiles as profile
-      where p_object_path in (profile.avatar_path, profile.cover_path)
-    )
-    and not exists (
-      select 1
-      from public.posts as post
-      where post.activity_media_path = p_object_path
-        and post.deleted_at is null
-    );
-$$;
-
-ALTER FUNCTION "private"."can_delete_own_profile_media_path"("p_object_path" "text") OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "private"."can_read_profile_media_path"("p_object_path" "text") RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
@@ -103,6 +100,27 @@ $$;
 
 ALTER FUNCTION "private"."can_read_profile_media_path"("p_object_path" "text") OWNER TO "postgres";
 
+-- 업로드는 자기 UUID 경로라는 이유만으로 허용되지 않고, 미리 만들어 둔 `pending` 행이 가리키는
+-- 정확한 경로에만 허용된다. 경로 모양만 검사하던 이전 정책은 승인 사용자가 회수되지 않는 파일을
+-- 무제한으로 올릴 수 있게 두었다.
+CREATE OR REPLACE FUNCTION "private"."can_upload_profile_media"("p_object_path" "text") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select exists (
+    select 1
+    from public.profile_media_objects as media
+    join public.profiles as profile on profile.id = media.profile_id
+    where media.object_path = p_object_path
+      and media.status = 'pending'
+      and profile.auth_user_id = auth.uid()
+      and profile.status = 'accepted'
+      and profile.deleted_at is null
+  );
+$$;
+
+ALTER FUNCTION "private"."can_upload_profile_media"("p_object_path" "text") OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "private"."generate_profile_pub_id"() RETURNS "text"
     LANGUAGE "plpgsql"
     SET "search_path" TO ''
@@ -126,23 +144,6 @@ end;
 $$;
 
 ALTER FUNCTION "private"."generate_profile_pub_id"() OWNER TO "postgres";
-
-CREATE OR REPLACE FUNCTION "private"."is_own_profile_media_path"("p_object_path" "text") RETURNS boolean
-    LANGUAGE "sql" STABLE SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-  select p_object_path ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/(avatar|cover)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-  and split_part(p_object_path, '/', 1) = auth.uid()::text
-  and exists (
-    select 1
-    from public.profiles as profile
-    where profile.auth_user_id = auth.uid()
-      and profile.status = 'accepted'
-      and profile.deleted_at is null
-  );
-$$;
-
-ALTER FUNCTION "private"."is_own_profile_media_path"("p_object_path" "text") OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "id" bigint NOT NULL,
@@ -380,29 +381,75 @@ $$;
 
 ALTER FUNCTION "public"."remove_my_profile_media"("p_slot" "text") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."set_my_profile_media"("p_slot" "text", "p_object_path" "text") RETURNS "public"."profiles"
+CREATE OR REPLACE FUNCTION "public"."prepare_profile_media"("p_slot" "public"."profile_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) RETURNS TABLE("media_id" "uuid", "object_path" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
   caller_id uuid := auth.uid();
+  owner_profile_id bigint;
+  created_id uuid := gen_random_uuid();
+begin
+  select profile.id
+  into owner_profile_id
+  from public.profiles as profile
+  where profile.auth_user_id = caller_id
+    and profile.status = 'accepted'
+    and profile.deleted_at is null;
+
+  if owner_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+
+  insert into public.profile_media_objects (
+    id, profile_id, auth_user_id, slot, object_path, size_bytes, width, height
+  ) values (
+    created_id,
+    owner_profile_id,
+    caller_id,
+    p_slot,
+    caller_id::text || '/' || p_slot::text || '/' || created_id::text,
+    p_size_bytes,
+    p_width,
+    p_height
+  );
+
+  return query select created_id,
+    caller_id::text || '/' || p_slot::text || '/' || created_id::text;
+end;
+$$;
+
+ALTER FUNCTION "public"."prepare_profile_media"("p_slot" "public"."profile_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."finalize_profile_media"("p_media_id" "uuid") RETURNS "public"."profiles"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_id uuid := auth.uid();
+  media public.profile_media_objects;
+  object_record storage.objects;
   current_profile public.profiles;
   updated_profile public.profiles;
   activity_post_id uuid := gen_random_uuid();
   activity_kind public.profile_media_activity_kind;
 begin
-  if caller_id is null then
-    raise exception 'authentication required' using errcode = '42501';
-  end if;
+  select item.* into media
+  from public.profile_media_objects as item
+  where item.id = p_media_id
+  for update;
 
-  if p_slot not in ('avatar', 'cover') then
-    raise exception 'invalid profile media slot' using errcode = '22023';
+  if media.id is null or media.auth_user_id is distinct from caller_id then
+    raise exception 'profile media owner required' using errcode = '42501';
+  end if;
+  if media.status <> 'pending' then
+    raise exception 'profile media is not pending' using errcode = '55000';
   end if;
 
   select profile.*
   into current_profile
   from public.profiles as profile
-  where profile.auth_user_id = caller_id
+  where profile.id = media.profile_id
     and profile.status = 'accepted'
     and profile.deleted_at is null
   for update;
@@ -411,36 +458,36 @@ begin
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
 
-  if not private.is_own_profile_media_path(p_object_path)
-    or split_part(p_object_path, '/', 2) <> p_slot then
-    raise exception 'invalid profile media path' using errcode = '22023';
+  select object.* into object_record
+  from storage.objects as object
+  where object.bucket_id = 'profile-media'
+    and object.name = media.object_path;
+
+  if object_record.id is null then
+    raise exception 'uploaded object not found' using errcode = 'P0002';
+  end if;
+  if object_record.owner_id is distinct from caller_id::text then
+    raise exception 'uploaded object owner does not match' using errcode = '42501';
+  end if;
+  if nullif(object_record.metadata ->> 'size', '')::bigint is distinct from media.size_bytes
+    or object_record.metadata ->> 'mimetype' is distinct from 'image/webp' then
+    raise exception 'uploaded object metadata does not match' using errcode = '22023';
   end if;
 
-  if not exists (
-    select 1
-    from storage.objects as object
-    where object.bucket_id = 'profile-media'
-      and object.name = p_object_path
-      and object.owner_id = caller_id::text
-  ) then
-    raise exception 'uploaded profile media required' using errcode = '22023';
-  end if;
+  update public.profile_media_objects
+  set status = 'ready', ready_at = now()
+  where id = media.id;
 
-  if (p_slot = 'avatar' and current_profile.avatar_path = p_object_path)
-    or (p_slot = 'cover' and current_profile.cover_path = p_object_path) then
-    return current_profile;
-  end if;
-
-  if p_slot = 'avatar' then
+  if media.slot = 'avatar' then
     activity_kind := 'avatar_changed';
     update public.profiles
-    set avatar_path = p_object_path
+    set avatar_path = media.object_path
     where id = current_profile.id
     returning * into updated_profile;
   else
     activity_kind := 'cover_changed';
     update public.profiles
-    set cover_path = p_object_path
+    set cover_path = media.object_path
     where id = current_profile.id
     returning * into updated_profile;
   end if;
@@ -466,7 +513,7 @@ begin
     'public',
     now(),
     activity_kind,
-    p_object_path
+    media.object_path
   );
 
   insert into private.post_authors (post_id, profile_id)
@@ -476,7 +523,7 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "public"."set_my_profile_media"("p_slot" "text", "p_object_path" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."finalize_profile_media"("p_media_id" "uuid") OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."submit_my_profile"("p_name" "text", "p_type" "public"."profile_type", "p_student_number" "text" DEFAULT NULL::"text", "p_class_no" smallint DEFAULT NULL::smallint, "p_cohort" smallint DEFAULT NULL::smallint, "p_gender" "public"."profile_gender" DEFAULT NULL::"public"."profile_gender", "p_academic_track" "public"."profile_academic_track" DEFAULT NULL::"public"."profile_academic_track", "p_phone_number" "text" DEFAULT NULL::"text", "p_birthday" "date" DEFAULT NULL::"date", "p_dorm_room" smallint DEFAULT NULL::smallint) RETURNS "public"."profiles"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -669,6 +716,30 @@ $$;
 
 ALTER FUNCTION "public"."update_my_profile"("p_name" "text", "p_description" "text", "p_birthday" "date", "p_phone_number" "text", "p_contact_email" "text", "p_gender" "public"."profile_gender", "p_cohort" smallint, "p_academic_track" "public"."profile_academic_track", "p_department" "text", "p_class_no" smallint, "p_dorm_room" smallint, "p_allow_timeline_posts" boolean, "p_is_returning_student" boolean, "p_pub_id" "text") OWNER TO "postgres";
 
+CREATE TABLE IF NOT EXISTS "public"."profile_media_objects" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "profile_id" bigint NOT NULL,
+    "auth_user_id" "uuid" NOT NULL,
+    "slot" "public"."profile_media_slot" NOT NULL,
+    "object_path" "text" NOT NULL,
+    "size_bytes" bigint NOT NULL,
+    "width" integer NOT NULL,
+    "height" integer NOT NULL,
+    "status" "public"."profile_media_status" DEFAULT 'pending'::"public"."profile_media_status" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "ready_at" timestamp with time zone,
+    CONSTRAINT "profile_media_dimensions_check" CHECK ((((("slot" = 'avatar'::"public"."profile_media_slot") AND ("width" = "height") AND ("width" >= 1) AND ("width" <= 512))) OR (("slot" = 'cover'::"public"."profile_media_slot") AND ("width" >= 3) AND ("width" <= 2400) AND ("width" >= ("height" * 2))))),
+    CONSTRAINT "profile_media_path_check" CHECK (("object_path" = (((("auth_user_id")::"text" || '/'::"text") || ("slot")::"text") || '/'::"text") || ("id")::"text")),
+    CONSTRAINT "profile_media_size_check" CHECK ((("size_bytes" >= 1) AND ("size_bytes" <=
+CASE "slot"
+    WHEN 'avatar'::"public"."profile_media_slot" THEN 1048576
+    ELSE 4194304
+END))),
+    CONSTRAINT "profile_media_status_timestamps_check" CHECK (((("status" = 'pending'::"public"."profile_media_status") AND ("ready_at" IS NULL)) OR (("status" = 'ready'::"public"."profile_media_status") AND ("ready_at" IS NOT NULL))))
+);
+
+ALTER TABLE "public"."profile_media_objects" OWNER TO "postgres";
+
 CREATE TABLE IF NOT EXISTS "public"."profile_departments" (
     "name" "text" NOT NULL,
     "sort_order" smallint NOT NULL,
@@ -687,6 +758,12 @@ ALTER TABLE "public"."profiles" ALTER COLUMN "id" ADD GENERATED ALWAYS AS IDENTI
     NO MAXVALUE
     CACHE 1
 );
+
+ALTER TABLE ONLY "public"."profile_media_objects"
+    ADD CONSTRAINT "profile_media_objects_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."profile_media_objects"
+    ADD CONSTRAINT "profile_media_objects_object_path_key" UNIQUE ("object_path");
 
 ALTER TABLE ONLY "public"."profile_departments"
     ADD CONSTRAINT "profile_departments_pkey" PRIMARY KEY ("name");
@@ -720,6 +797,15 @@ ALTER TABLE ONLY "public"."profiles"
 ALTER TABLE ONLY "public"."profiles"
     ADD CONSTRAINT "profiles_status_updated_by_fkey" FOREIGN KEY ("status_updated_by") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
 
+ALTER TABLE ONLY "public"."profile_media_objects"
+    ADD CONSTRAINT "profile_media_objects_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+
+-- 정리 큐로 옮길 후보를 훑는 인덱스. `ready` 행은 참조가 끊긴 순간부터 대상이 되므로 상태로
+-- 좁히지 않고 생성 순서만 유지한다.
+CREATE INDEX "profile_media_objects_cleanup_idx" ON "public"."profile_media_objects" USING "btree" ("created_at", "id");
+
+ALTER TABLE "public"."profile_media_objects" ENABLE ROW LEVEL SECURITY;
+
 ALTER TABLE "public"."profile_departments" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "profile_departments_select_active" ON "public"."profile_departments" FOR SELECT TO "authenticated" USING ("is_active");
@@ -730,16 +816,13 @@ CREATE POLICY "profiles_select_accepted" ON "public"."profiles" FOR SELECT TO "a
 
 CREATE POLICY "profiles_select_own" ON "public"."profiles" FOR SELECT TO "authenticated" USING (((( SELECT "auth"."uid"() AS "uid") = "auth_user_id") AND ("deleted_at" IS NULL)));
 
-REVOKE ALL ON FUNCTION "private"."can_delete_own_profile_media_path"("p_object_path" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."can_delete_own_profile_media_path"("p_object_path" "text") TO "authenticated";
-
 REVOKE ALL ON FUNCTION "private"."can_read_profile_media_path"("p_object_path" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."can_read_profile_media_path"("p_object_path" "text") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "private"."generate_profile_pub_id"() FROM PUBLIC;
 
-REVOKE ALL ON FUNCTION "private"."is_own_profile_media_path"("p_object_path" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."is_own_profile_media_path"("p_object_path" "text") TO "authenticated";
+REVOKE ALL ON FUNCTION "private"."can_upload_profile_media"("p_object_path" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."can_upload_profile_media"("p_object_path" "text") TO "authenticated";
 
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."profiles" TO "service_role";
 REVOKE SELECT ON TABLE "public"."profiles" FROM "authenticated";
@@ -757,8 +840,11 @@ GRANT EXECUTE ON FUNCTION "public"."list_birthdays"("p_reference_date" "date", "
 REVOKE ALL ON FUNCTION "public"."remove_my_profile_media"("p_slot" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."remove_my_profile_media"("p_slot" "text") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."set_my_profile_media"("p_slot" "text", "p_object_path" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."set_my_profile_media"("p_slot" "text", "p_object_path" "text") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."prepare_profile_media"("p_slot" "public"."profile_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."prepare_profile_media"("p_slot" "public"."profile_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."finalize_profile_media"("p_media_id" "uuid") FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."finalize_profile_media"("p_media_id" "uuid") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."submit_my_profile"("p_name" "text", "p_type" "public"."profile_type", "p_student_number" "text", "p_class_no" smallint, "p_cohort" smallint, "p_gender" "public"."profile_gender", "p_academic_track" "public"."profile_academic_track", "p_phone_number" "text", "p_birthday" "date", "p_dorm_room" smallint) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."submit_my_profile"("p_name" "text", "p_type" "public"."profile_type", "p_student_number" "text", "p_class_no" smallint, "p_cohort" smallint, "p_gender" "public"."profile_gender", "p_academic_track" "public"."profile_academic_track", "p_phone_number" "text", "p_birthday" "date", "p_dorm_room" smallint) TO "authenticated";
@@ -773,5 +859,11 @@ REVOKE ALL ON SEQUENCE "public"."profiles_id_seq" FROM "anon", "authenticated", 
 GRANT USAGE ON SEQUENCE "public"."profiles_id_seq" TO "service_role";
 
 REVOKE MAINTAIN, REFERENCES, TRIGGER, TRUNCATE ON TABLE "public"."profiles" FROM "anon", "authenticated";
+
+-- 클라이언트는 이 테이블을 직접 읽거나 쓰지 않는다. prepare/finalize RPC와 Storage 정책이
+-- 유일한 통로다.
+REVOKE MAINTAIN, REFERENCES, TRIGGER, TRUNCATE ON TABLE "public"."profile_media_objects" FROM "anon", "authenticated";
+REVOKE ALL ON TABLE "public"."profile_media_objects" FROM "anon", "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."profile_media_objects" TO "service_role";
 
 REVOKE MAINTAIN, REFERENCES, TRIGGER, TRUNCATE ON TABLE "public"."profile_departments" FROM "anon", "authenticated";

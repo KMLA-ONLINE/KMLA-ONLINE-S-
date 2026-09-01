@@ -11,14 +11,14 @@ where not exists (
 );
 
 select vault.create_secret(
-  'local-post-attachment-cleanup-only',
-  'post_attachment_cleanup_secret',
-  'Development-only cleanup function secret'
+  'local-storage-cleanup-only',
+  'storage_cleanup_secret',
+  'Development-only storage cleanup function secret'
 )
 where not exists (
   select 1
   from vault.decrypted_secrets
-  where name = 'post_attachment_cleanup_secret'
+  where name = 'storage_cleanup_secret'
 );
 
 select vault.create_secret(

@@ -62,8 +62,11 @@ export function ProfileMediaEditor({
         cropped,
         isAvatar ? "icon" : "banner",
       );
+      const bitmap = await createImageBitmap(compressed);
+      const dimensions = { width: bitmap.width, height: bitmap.height };
+      bitmap.close();
 
-      await replaceProfileMedia(profile, slot, compressed);
+      await replaceProfileMedia(slot, compressed, dimensions);
 
       window.location.reload();
     } catch {
@@ -77,7 +80,7 @@ export function ProfileMediaEditor({
     setError(null);
 
     try {
-      await removeProfileMedia(profile, slot);
+      await removeProfileMedia(slot);
       window.location.reload();
     } catch {
       setPending(false);

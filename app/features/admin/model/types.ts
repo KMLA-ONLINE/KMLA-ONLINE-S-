@@ -7,6 +7,8 @@ export type AdminApplication =
 export type AcceptedUser =
   Functions["admin_list_accepted_users"]["Returns"][number];
 export type AdminMember = Functions["admin_list_members"]["Returns"][number];
+export type StorageCleanupStatus =
+  Functions["admin_storage_cleanup_status"]["Returns"][number];
 
 export interface AdminActionResult {
   ok?: boolean;

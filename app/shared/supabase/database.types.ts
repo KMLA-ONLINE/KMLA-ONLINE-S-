@@ -36,8 +36,6 @@ export type Database = {
     Tables: {
       comment_images: {
         Row: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
           comment_id: string | null
           created_at: string
           deleted_at: string | null
@@ -54,8 +52,6 @@ export type Database = {
           width: number
         }
         Insert: {
-          cleanup_lease_expires_at?: string | null
-          cleanup_lease_id?: string | null
           comment_id?: string | null
           created_at?: string
           deleted_at?: string | null
@@ -72,8 +68,6 @@ export type Database = {
           width: number
         }
         Update: {
-          cleanup_lease_expires_at?: string | null
-          cleanup_lease_id?: string | null
           comment_id?: string | null
           created_at?: string
           deleted_at?: string | null
@@ -256,8 +250,6 @@ export type Database = {
       }
       group_media_objects: {
         Row: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
           created_at: string
           deleted_at: string | null
           group_id: string
@@ -271,8 +263,6 @@ export type Database = {
           width: number
         }
         Insert: {
-          cleanup_lease_expires_at?: string | null
-          cleanup_lease_id?: string | null
           created_at?: string
           deleted_at?: string | null
           group_id: string
@@ -286,8 +276,6 @@ export type Database = {
           width: number
         }
         Update: {
-          cleanup_lease_expires_at?: string | null
-          cleanup_lease_id?: string | null
           created_at?: string
           deleted_at?: string | null
           group_id?: string
@@ -612,8 +600,6 @@ export type Database = {
       }
       post_attachments: {
         Row: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
           created_at: string
           deleted_at: string | null
           height: number | null
@@ -630,8 +616,6 @@ export type Database = {
           width: number | null
         }
         Insert: {
-          cleanup_lease_expires_at?: string | null
-          cleanup_lease_id?: string | null
           created_at?: string
           deleted_at?: string | null
           height?: number | null
@@ -648,8 +632,6 @@ export type Database = {
           width?: number | null
         }
         Update: {
-          cleanup_lease_expires_at?: string | null
-          cleanup_lease_id?: string | null
           created_at?: string
           deleted_at?: string | null
           height?: number | null
@@ -899,6 +881,56 @@ export type Database = {
           sort_order?: number
         }
         Relationships: []
+      }
+      profile_media_objects: {
+        Row: {
+          auth_user_id: string
+          created_at: string
+          height: number
+          id: string
+          object_path: string
+          profile_id: number
+          ready_at: string | null
+          size_bytes: number
+          slot: Database["public"]["Enums"]["profile_media_slot"]
+          status: Database["public"]["Enums"]["profile_media_status"]
+          width: number
+        }
+        Insert: {
+          auth_user_id: string
+          created_at?: string
+          height: number
+          id?: string
+          object_path: string
+          profile_id: number
+          ready_at?: string | null
+          size_bytes: number
+          slot: Database["public"]["Enums"]["profile_media_slot"]
+          status?: Database["public"]["Enums"]["profile_media_status"]
+          width: number
+        }
+        Update: {
+          auth_user_id?: string
+          created_at?: string
+          height?: number
+          id?: string
+          object_path?: string
+          profile_id?: number
+          ready_at?: string | null
+          size_bytes?: number
+          slot?: Database["public"]["Enums"]["profile_media_slot"]
+          status?: Database["public"]["Enums"]["profile_media_status"]
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_media_objects_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profile_permissions: {
         Row: {
@@ -1247,6 +1279,24 @@ export type Database = {
           profile_id: number
         }[]
       }
+      admin_storage_cleanup_status: {
+        Args: never
+        Returns: {
+          last_cron_at: string
+          last_cron_status: string
+          last_run_error: string
+          last_run_failed: number
+          last_run_finished_at: string
+          last_run_removed: number
+          last_run_started_at: string
+          last_run_status_code: number
+          queue_dry_run: number
+          queue_oldest_enqueued_at: string
+          queue_pending: number
+          queue_retrying: number
+          secrets_configured: boolean
+        }[]
+      }
       admin_unblock_application: {
         Args: { p_profile_id: number }
         Returns: {
@@ -1267,14 +1317,6 @@ export type Database = {
         Args: { p_effective_date?: string; p_reservation_id: number }
         Returns: undefined
       }
-      claim_group_media_cleanup: {
-        Args: { p_lease_seconds?: number; p_limit?: number }
-        Returns: {
-          lease_id: string
-          media_id: string
-          object_path: string
-        }[]
-      }
       claim_notification_deliveries: {
         Args: { p_lease_seconds?: number; p_limit?: number }
         Returns: {
@@ -1291,13 +1333,13 @@ export type Database = {
           title: string
         }[]
       }
-      claim_post_attachment_cleanup: {
+      claim_storage_cleanup: {
         Args: { p_lease_seconds?: number; p_limit?: number }
         Returns: {
-          attachment_id: string
+          bucket: string
+          id: string
           lease_id: string
           object_path: string
-          storage_bucket: string
         }[]
       }
       clear_comment_reaction: {
@@ -1337,14 +1379,6 @@ export type Database = {
         }
         Returns: string
       }
-      complete_group_media_cleanup: {
-        Args: {
-          p_lease_id: string
-          p_media_id: string
-          p_object_deleted: boolean
-        }
-        Returns: boolean
-      }
       complete_notification_delivery: {
         Args: {
           p_delivery_id: string
@@ -1355,13 +1389,14 @@ export type Database = {
         }
         Returns: boolean
       }
-      complete_post_attachment_cleanup: {
+      complete_storage_cleanup: {
         Args: {
-          p_attachment_id: string
+          p_error?: string
+          p_ids: string[]
           p_lease_id: string
-          p_object_deleted: boolean
+          p_removed_ids?: string[]
         }
-        Returns: boolean
+        Returns: number
       }
       create_group: {
         Args: {
@@ -1498,8 +1533,6 @@ export type Database = {
       finalize_comment_image: {
         Args: { p_image_id: string }
         Returns: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
           comment_id: string | null
           created_at: string
           deleted_at: string | null
@@ -1526,8 +1559,6 @@ export type Database = {
       finalize_post_attachment: {
         Args: { p_attachment_id: string }
         Returns: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
           created_at: string
           deleted_at: string | null
           height: number | null
@@ -1546,6 +1577,50 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "post_attachments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      finalize_profile_media: {
+        Args: { p_media_id: string }
+        Returns: {
+          academic_track:
+            | Database["public"]["Enums"]["profile_academic_track"]
+            | null
+          allow_timeline_posts: boolean
+          anonymous_username: string | null
+          auth_user_id: string | null
+          avatar_path: string | null
+          birthday: string | null
+          class_no: number | null
+          cohort: number | null
+          contact_email: string | null
+          cover_path: string | null
+          created_at: string
+          deleted_at: string | null
+          department: string | null
+          description: string | null
+          dorm_room: number | null
+          gender: Database["public"]["Enums"]["profile_gender"] | null
+          id: number
+          is_returning_student: boolean
+          name: string
+          onboarding_completed_at: string
+          phone_number: string | null
+          pub_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          search_name: string | null
+          status: Database["public"]["Enums"]["profile_status"]
+          status_updated_at: string
+          status_updated_by: number | null
+          student_number: string | null
+          submitted_at: string
+          type: Database["public"]["Enums"]["profile_type"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -2103,8 +2178,6 @@ export type Database = {
           p_width: number
         }
         Returns: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
           comment_id: string | null
           created_at: string
           deleted_at: string | null
@@ -2154,8 +2227,6 @@ export type Database = {
           p_width?: number
         }
         Returns: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
           created_at: string
           deleted_at: string | null
           height: number | null
@@ -2177,6 +2248,18 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      prepare_profile_media: {
+        Args: {
+          p_height: number
+          p_size_bytes: number
+          p_slot: Database["public"]["Enums"]["profile_media_slot"]
+          p_width: number
+        }
+        Returns: {
+          media_id: string
+          object_path: string
+        }[]
       }
       publish_group_post: { Args: { p_post_id: string }; Returns: string }
       register_my_web_push_subscription: {
@@ -2246,8 +2329,6 @@ export type Database = {
       reorder_post_attachments: {
         Args: { p_attachment_ids: string[]; p_post_id: string }
         Returns: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
           created_at: string
           deleted_at: string | null
           height: number | null
@@ -2352,50 +2433,6 @@ export type Database = {
           p_notification_level: Database["public"]["Enums"]["group_notification_level"]
         }
         Returns: undefined
-      }
-      set_my_profile_media: {
-        Args: { p_object_path: string; p_slot: string }
-        Returns: {
-          academic_track:
-            | Database["public"]["Enums"]["profile_academic_track"]
-            | null
-          allow_timeline_posts: boolean
-          anonymous_username: string | null
-          auth_user_id: string | null
-          avatar_path: string | null
-          birthday: string | null
-          class_no: number | null
-          cohort: number | null
-          contact_email: string | null
-          cover_path: string | null
-          created_at: string
-          deleted_at: string | null
-          department: string | null
-          description: string | null
-          dorm_room: number | null
-          gender: Database["public"]["Enums"]["profile_gender"] | null
-          id: number
-          is_returning_student: boolean
-          name: string
-          onboarding_completed_at: string
-          phone_number: string | null
-          pub_id: string
-          role: Database["public"]["Enums"]["app_role"]
-          search_name: string | null
-          status: Database["public"]["Enums"]["profile_status"]
-          status_updated_at: string
-          status_updated_by: number | null
-          student_number: string | null
-          submitted_at: string
-          type: Database["public"]["Enums"]["profile_type"]
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "profiles"
-          isOneToOne: true
-          isSetofReturn: false
-        }
       }
       set_post_reaction: {
         Args: {
@@ -2696,6 +2733,8 @@ export type Database = {
       profile_academic_track: "domestic" | "international"
       profile_gender: "male" | "female"
       profile_media_activity_kind: "avatar_changed" | "cover_changed"
+      profile_media_slot: "avatar" | "cover"
+      profile_media_status: "pending" | "ready"
       profile_status: "draft" | "pending" | "accepted" | "blocked" | "withdrawn"
       profile_type: "student" | "alumni" | "teacher"
     }
@@ -2898,6 +2937,8 @@ export const Constants = {
       profile_academic_track: ["domestic", "international"],
       profile_gender: ["male", "female"],
       profile_media_activity_kind: ["avatar_changed", "cover_changed"],
+      profile_media_slot: ["avatar", "cover"],
+      profile_media_status: ["pending", "ready"],
       profile_status: ["draft", "pending", "accepted", "blocked", "withdrawn"],
       profile_type: ["student", "alumni", "teacher"],
     },

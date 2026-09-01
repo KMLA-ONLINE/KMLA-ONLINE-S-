@@ -45,45 +45,6 @@ $$;
 
 ALTER FUNCTION "private"."can_upload_comment_image_object"("p_storage_bucket" "text", "p_object_path" "text") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "private"."claim_comment_image_cleanup"("p_limit" integer DEFAULT 100, "p_lease_seconds" integer DEFAULT 300) RETURNS TABLE("image_id" "uuid", "storage_bucket" "text", "object_path" "text", "lease_id" "uuid")
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-begin
-  if p_limit not between 1 and 500 or p_lease_seconds not between 30 and 3600 then
-    raise exception 'invalid cleanup lease parameters' using errcode = '22023';
-  end if;
-
-  return query
-  with candidates as (
-    select image.id
-    from public.comment_images as image
-    where (
-        (image.status in ('pending', 'finalized')
-          and image.created_at <= now() - interval '48 hours')
-        or image.status = 'deleted'
-      )
-      and (
-        image.cleanup_lease_expires_at is null
-        or image.cleanup_lease_expires_at <= now()
-      )
-    order by image.created_at, image.id
-    for update skip locked
-    limit p_limit
-  ), claimed as (
-    update public.comment_images as image
-    set cleanup_lease_id = gen_random_uuid(),
-      cleanup_lease_expires_at = now() + make_interval(secs => p_lease_seconds)
-    from candidates
-    where image.id = candidates.id
-    returning image.id, image.storage_bucket, image.object_path, image.cleanup_lease_id
-  )
-  select claimed.id, claimed.storage_bucket, claimed.object_path, claimed.cleanup_lease_id
-  from claimed;
-end;
-$$;
-
-ALTER FUNCTION "private"."claim_comment_image_cleanup"("p_limit" integer, "p_lease_seconds" integer) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "private"."comment_author_label"("p_identity" "public"."post_identity", "p_alias" smallint, "p_name" "text") RETURNS "text"
     LANGUAGE "sql" IMMUTABLE
@@ -99,31 +60,6 @@ $$;
 
 ALTER FUNCTION "private"."comment_author_label"("p_identity" "public"."post_identity", "p_alias" smallint, "p_name" "text") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "private"."complete_comment_image_cleanup"("p_image_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) RETURNS boolean
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-begin
-  if coalesce(p_object_deleted, false) then
-    delete from public.comment_images
-    where id = p_image_id
-      and cleanup_lease_id = p_lease_id
-      and cleanup_lease_expires_at > now()
-      and (
-        status = 'deleted'
-        or (status in ('pending', 'finalized')
-          and created_at <= now() - interval '48 hours')
-      );
-  else
-    update public.comment_images
-    set cleanup_lease_id = null, cleanup_lease_expires_at = null
-    where id = p_image_id and cleanup_lease_id = p_lease_id;
-  end if;
-  return found;
-end;
-$$;
-
-ALTER FUNCTION "private"."complete_comment_image_cleanup"("p_image_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "private"."is_comment_image_uploader"("p_image_id" "uuid") RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
@@ -197,8 +133,7 @@ CREATE OR REPLACE FUNCTION "private"."tombstone_comment_images"() RETURNS "trigg
     AS $$
 begin
   update public.comment_images
-  set status = 'deleted', deleted_at = now(), cleanup_lease_id = null,
-    cleanup_lease_expires_at = null
+  set status = 'deleted', deleted_at = now()
   where comment_id = new.id and status = 'ready';
   return null;
 end;
@@ -212,8 +147,7 @@ CREATE OR REPLACE FUNCTION "private"."tombstone_post_comment_images"() RETURNS "
     AS $$
 begin
   update public.comment_images
-  set status = 'deleted', deleted_at = now(), cleanup_lease_id = null,
-    cleanup_lease_expires_at = null
+  set status = 'deleted', deleted_at = now()
   where post_id = new.id and status <> 'deleted';
   return null;
 end;
@@ -236,10 +170,7 @@ CREATE TABLE IF NOT EXISTS "public"."comment_images" (
     "finalized_at" timestamp with time zone,
     "ready_at" timestamp with time zone,
     "deleted_at" timestamp with time zone,
-    "cleanup_lease_id" "uuid",
-    "cleanup_lease_expires_at" timestamp with time zone,
     CONSTRAINT "comment_images_bucket_check" CHECK (("storage_bucket" = 'post-attachments'::"text")),
-    CONSTRAINT "comment_images_cleanup_lease_check" CHECK ((("cleanup_lease_id" IS NULL) = ("cleanup_lease_expires_at" IS NULL))),
     CONSTRAINT "comment_images_dimensions_check" CHECK ("width" BETWEEN 1 AND 3072 AND "height" BETWEEN 1 AND 3072 AND greatest("width", "height") <= 3072),
     CONSTRAINT "comment_images_mime_check" CHECK (("mime_type" = 'image/webp'::"text")),
     CONSTRAINT "comment_images_path_check" CHECK (("object_path" = ((('comments/'::"text" || ("post_id")::"text") || '/'::"text") || ("id")::"text"))),
@@ -495,13 +426,9 @@ GRANT ALL ON FUNCTION "private"."can_read_comment_image_object"("p_storage_bucke
 REVOKE ALL ON FUNCTION "private"."can_upload_comment_image_object"("p_storage_bucket" "text", "p_object_path" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."can_upload_comment_image_object"("p_storage_bucket" "text", "p_object_path" "text") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "private"."claim_comment_image_cleanup"("p_limit" integer, "p_lease_seconds" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."claim_comment_image_cleanup"("p_limit" integer, "p_lease_seconds" integer) TO "service_role";
 
 REVOKE ALL ON FUNCTION "private"."comment_author_label"("p_identity" "public"."post_identity", "p_alias" smallint, "p_name" "text") FROM PUBLIC;
 
-REVOKE ALL ON FUNCTION "private"."complete_comment_image_cleanup"("p_image_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."complete_comment_image_cleanup"("p_image_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) TO "service_role";
 
 REVOKE ALL ON FUNCTION "private"."is_comment_image_uploader"("p_image_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."is_comment_image_uploader"("p_image_id" "uuid") TO "authenticated";
