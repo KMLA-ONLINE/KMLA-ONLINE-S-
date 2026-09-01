@@ -2,15 +2,12 @@ import { ChevronRightIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 
-import { AbsenceEditor } from "~/features/absences/components/absence-editor";
+import { StoryEditor } from "~/features/stories/components/story-editor";
+import { STORY_STALE_TIME, storyKeys } from "~/features/stories/data/cache";
 import {
-  ABSENCE_STALE_TIME,
-  absenceKeys,
-} from "~/features/absences/data/cache";
-import {
-  listTodayAbsences,
-  type AbsenceItem,
-} from "~/features/absences/data/queries";
+  listTodayStories,
+  type StoryItem,
+} from "~/features/stories/data/queries";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { getKoreaDateIso } from "~/shared/lib/korea-date";
 import { getQueryClient } from "~/shared/lib/query-client";
@@ -23,16 +20,16 @@ import {
   DialogTitle,
 } from "~/shared/ui/dialog";
 
-export function AbsenceRail({
+export function StoryRail({
   initialItems,
   viewerPubId,
 }: {
-  initialItems: AbsenceItem[];
+  initialItems: StoryItem[];
   viewerPubId: string;
 }) {
-  const [updatedItems, setUpdatedItems] = useState<AbsenceItem[] | null>(null);
+  const [updatedItems, setUpdatedItems] = useState<StoryItem[] | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<AbsenceItem | null>(null);
+  const [selectedItem, setSelectedItem] = useState<StoryItem | null>(null);
 
   const items = updatedItems ?? initialItems;
   const mine = items.find((item) => item.pubId === viewerPubId) ?? null;
@@ -40,12 +37,12 @@ export function AbsenceRail({
   if (items.length === 0) return null;
 
   async function refreshAfterEdit() {
-    // AbsenceEditor가 이미 캐시를 버렸으므로 여기서는 새로 받아 캐시를 다시 채운다.
+    // StoryEditor가 이미 캐시를 버렸으므로 여기서는 새로 받아 캐시를 다시 채운다.
     setUpdatedItems(
       await getQueryClient().fetchQuery({
-        queryKey: absenceKeys.today(getKoreaDateIso()),
-        queryFn: listTodayAbsences,
-        staleTime: ABSENCE_STALE_TIME,
+        queryKey: storyKeys.today(getKoreaDateIso()),
+        queryFn: listTodayStories,
+        staleTime: STORY_STALE_TIME,
       }),
     );
     setEditOpen(false);
@@ -56,12 +53,10 @@ export function AbsenceRail({
       <section className="border-y border-border bg-background md:border-0">
         <div className="flex h-11 items-center px-4">
           <Link
-            to="/menu/absence"
+            to="/menu/story"
             className="-ml-1 flex items-center gap-0.5 rounded-md px-1 py-1 transition-colors outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <h2 className="text-[15px] font-semibold tracking-tight">
-              공결 · 병결
-            </h2>
+            <h2 className="text-[15px] font-semibold tracking-tight">스토리</h2>
 
             <ChevronRightIcon
               className="size-4 shrink-0 text-muted-foreground"
@@ -86,11 +81,9 @@ export function AbsenceRail({
                       setSelectedItem(item);
                     }
                   }}
-                  className="flex w-[70px] shrink-0 flex-col items-center py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex w-20 shrink-0 flex-col items-center py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label={
-                    isMine
-                      ? "내 공결 · 병결 수정"
-                      : `${item.name} 공결 · 병결 사유 보기`
+                    isMine ? "내 스토리 수정" : `${item.name} 스토리 보기`
                   }
                 >
                   <span className="rounded-full bg-border p-[2px]">
@@ -107,8 +100,9 @@ export function AbsenceRail({
                     {item.name}
                   </span>
 
-                  <span className="mt-0.5 w-full truncate text-center text-[11px] leading-4 text-muted-foreground">
-                    {item.reason}
+                  {/* 두 줄까지만 보여 주고, 넘치는 내용은 눌러서 전문을 본다. */}
+                  <span className="mt-0.5 line-clamp-2 w-full text-center text-[11px] leading-4 [overflow-wrap:anywhere] break-keep text-muted-foreground">
+                    {item.content}
                   </span>
                 </button>
               );
@@ -142,16 +136,18 @@ export function AbsenceRail({
             </DialogClose>
           </DialogHeader>
 
-          <p className="leading-6 [overflow-wrap:anywhere] break-words">
-            {selectedItem?.reason}
-          </p>
+          {selectedItem ? (
+            <p className="leading-6 [overflow-wrap:anywhere] break-words">
+              {selectedItem.content}
+            </p>
+          ) : null}
         </DialogContent>
       </Dialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent showCloseButton={false} className="gap-3">
           <DialogHeader className="flex-row items-center justify-between gap-3">
-            <DialogTitle>공결 · 병결 수정</DialogTitle>
+            <DialogTitle>스토리 수정</DialogTitle>
 
             <DialogClose
               render={
@@ -169,10 +165,7 @@ export function AbsenceRail({
           </DialogHeader>
 
           {mine ? (
-            <AbsenceEditor
-              initialReason={mine.reason}
-              onSaved={refreshAfterEdit}
-            />
+            <StoryEditor initial={mine.content} onSaved={refreshAfterEdit} />
           ) : null}
         </DialogContent>
       </Dialog>

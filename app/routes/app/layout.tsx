@@ -7,7 +7,7 @@ import {
   useRevalidator,
 } from "react-router";
 
-import { absenceKeys } from "~/features/absences/data/cache";
+import { storyKeys } from "~/features/stories/data/cache";
 import {
   AppHeader,
   AppSidebar,
@@ -72,7 +72,7 @@ export default function MainAppLayout() {
     // 피드는 stale 표시가 아니라 리셋이다. 무한 쿼리에서 무효화는 "쌓인 페이지를 전부 다시
     // 읽어라"가 되는데, 당겨서 새로고침이 원하는 건 새 세션의 1페이지다.
     await (location.pathname === "/"
-      ? Promise.all([resetFeed(queryClient), stale(absenceKeys.all)])
+      ? Promise.all([resetFeed(queryClient), stale(storyKeys.all)])
       : stale(groupKeys.all));
     await revalidator.revalidate();
   };

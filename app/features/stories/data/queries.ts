@@ -1,15 +1,15 @@
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import { getSupabase } from "~/shared/supabase/client";
 
-export interface AbsenceItem {
+export interface StoryItem {
   pubId: string;
   name: string;
   avatarUrl: string | null;
-  reason: string;
+  content: string;
 }
 
-export async function listTodayAbsences(): Promise<AbsenceItem[]> {
-  const { data, error } = await getSupabase().rpc("list_today_absences");
+export async function listTodayStories(): Promise<StoryItem[]> {
+  const { data, error } = await getSupabase().rpc("list_today_stories");
 
   if (error) throw error;
 
@@ -24,6 +24,6 @@ export async function listTodayAbsences(): Promise<AbsenceItem[]> {
     avatarUrl: row.avatar_path
       ? (mediaUrls.get(row.avatar_path) ?? null)
       : null,
-    reason: row.reason,
+    content: row.content,
   }));
 }
