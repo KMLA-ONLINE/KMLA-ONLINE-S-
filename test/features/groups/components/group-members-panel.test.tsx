@@ -10,6 +10,7 @@ const member: GroupMember = {
   role: "member",
   joined_at: "2026-01-01T00:00:00Z",
   cohort: 30,
+  is_returning_student: false,
   pub_id: "profile-public-id",
   name: "홍길동",
   avatar_path: null,
@@ -48,6 +49,34 @@ describe("GroupMembersPanel", () => {
     expect(screen.getByText("30기")).toBeInTheDocument();
   });
 
+  it("marks returning students with a half cohort in the roster and in requests", () => {
+    renderRoute(() => (
+      <GroupMembersPanel
+        groupId="group-1"
+        viewerRole="owner"
+        initialPage={{
+          members: [{ ...member, is_returning_student: true }],
+          nextCursor: null,
+        }}
+        memberCount={1}
+        joinRequests={[
+          {
+            request_id: "request-1",
+            requested_at: "2026-01-02T00:00:00Z",
+            cohort: 31,
+            is_returning_student: true,
+            pub_id: "joiner-public-id",
+            name: "김가입",
+            avatar_path: null,
+          },
+        ]}
+      />
+    ));
+
+    expect(screen.getByText("30.5기")).toBeInTheDocument();
+    expect(screen.getByText("31.5기")).toBeInTheDocument();
+  });
+
   it("searches only after Enter with at least two characters", async () => {
     const { user } = renderRoute(() => <SearchTestScreen />);
     const search = screen.getByRole("searchbox", {
@@ -81,6 +110,7 @@ describe("GroupMembersPanel", () => {
             request_id: "request-1",
             requested_at: "2026-01-02T00:00:00Z",
             cohort: 31,
+            is_returning_student: false,
             pub_id: "joiner-public-id",
             name: "김가입",
             avatar_path: null,

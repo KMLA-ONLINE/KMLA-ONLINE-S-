@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(65);
+select plan(69);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -66,6 +66,12 @@ end
 from public.profiles as profile
 where membership.profile_id = profile.id
   and membership.group_id = '20000000-0000-0000-0000-000000000003';
+
+-- 복학생 표기와 검색을 확인하려면 명부와 가입 요청에 복학생이 있어야 한다.
+update public.profiles
+set is_returning_student = true
+where pub_id = 'saebyeok-24'
+  or auth_user_id = '10000000-0000-0000-0000-000000000001';
 
 insert into public.group_join_requests (group_id, profile_id, requested_at)
 values (
@@ -169,6 +175,30 @@ select is(
   'optional-anonymous roster searches cohorts'
 );
 select ok(
+  (
+    select is_returning_student
+    from public.list_group_members('20000000-0000-0000-0000-000000000004')
+    where pub_id = 'saebyeok-24'
+  ),
+  'roster reports returning students so the client can render n.5'
+);
+select is(
+  (
+    select count(*)
+    from public.list_group_members('20000000-0000-0000-0000-000000000004', '24.5')
+  ),
+  1::bigint,
+  'roster searches the displayed half cohort'
+);
+select is(
+  (
+    select count(*)
+    from public.list_group_members('20000000-0000-0000-0000-000000000003', '20.5')
+  ),
+  0::bigint,
+  'roster does not treat a whole cohort as a half cohort'
+);
+select ok(
   exists (
     select 1
     from public.list_group_members('20000000-0000-0000-0000-000000000004')
@@ -194,6 +224,13 @@ select is(
   ),
   '홍길동',
   'identified join requests expose the safe profile presentation'
+);
+select ok(
+  (
+    select is_returning_student
+    from public.list_group_join_requests('20000000-0000-0000-0000-000000000006')
+  ),
+  'join requests report returning students so the client can render n.5'
 );
 select lives_ok(
   $$select public.approve_group_join_request(

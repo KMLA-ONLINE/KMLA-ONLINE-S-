@@ -14,6 +14,7 @@ import { Link } from "react-router";
 
 import { ProfilePostsPanel, type ProfilePostPage } from "~/features/posts";
 import { ProfileMediaEditor } from "~/features/profiles/components/profile-media-editor";
+import { formatCohort } from "~/features/profiles/model/format";
 import type { AcceptedProfile } from "~/features/profiles/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
@@ -105,15 +106,6 @@ function formatBirthday(value: string) {
   return `${Number(year)}년 ${Number(month)}월 ${Number(day)}일`;
 }
 
-function formatCohort(profile: AcceptedProfile) {
-  if (profile.cohort === null) return null;
-
-  const displayedCohort =
-    profile.cohort + (profile.is_returning_student ? 0.5 : 0);
-
-  return `${displayedCohort}기`;
-}
-
 function ProfileDescription({ description }: { description: string }) {
   const descriptionRef = useRef<HTMLParagraphElement>(null);
   const [expanded, setExpanded] = useState(false);
@@ -183,7 +175,7 @@ export function ProfileDetail({
   const [factsExpanded, setFactsExpanded] = useState(false);
 
   const schoolSummary = [
-    formatCohort(profile),
+    formatCohort(profile.cohort, profile.is_returning_student),
     profile.academic_track === null
       ? null
       : TRACK_LABELS[profile.academic_track],

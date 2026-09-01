@@ -858,7 +858,7 @@ $$;
 
 ALTER FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_group_join_requests"("p_group_id" "uuid") RETURNS TABLE("request_id" "uuid", "pub_id" "text", "name" "text", "cohort" smallint, "avatar_path" "text", "requested_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."list_group_join_requests"("p_group_id" "uuid") RETURNS TABLE("request_id" "uuid", "pub_id" "text", "name" "text", "cohort" smallint, "is_returning_student" boolean, "avatar_path" "text", "requested_at" timestamp with time zone)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -876,7 +876,7 @@ begin
 
   return query
   select join_request.id, profile.pub_id, profile.name, profile.cohort,
-    profile.avatar_path, join_request.requested_at
+    profile.is_returning_student, profile.avatar_path, join_request.requested_at
   from public.group_join_requests as join_request
   join public.profiles as profile on profile.id = join_request.profile_id
   where join_request.group_id = p_group_id
@@ -886,7 +886,7 @@ $$;
 
 ALTER FUNCTION "public"."list_group_join_requests"("p_group_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_group_members"("p_group_id" "uuid", "p_query" "text" DEFAULT ''::"text", "p_after_role" "public"."group_member_role" DEFAULT NULL::"public"."group_member_role", "p_after_joined_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_after_membership_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 30) RETURNS TABLE("membership_id" "uuid", "pub_id" "text", "name" "text", "cohort" smallint, "avatar_path" "text", "role" "public"."group_member_role", "joined_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."list_group_members"("p_group_id" "uuid", "p_query" "text" DEFAULT ''::"text", "p_after_role" "public"."group_member_role" DEFAULT NULL::"public"."group_member_role", "p_after_joined_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_after_membership_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 30) RETURNS TABLE("membership_id" "uuid", "pub_id" "text", "name" "text", "cohort" smallint, "is_returning_student" boolean, "avatar_path" "text", "role" "public"."group_member_role", "joined_at" timestamp with time zone)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -914,13 +914,19 @@ begin
 
   return query
   select membership.id, profile.pub_id, profile.name, profile.cohort,
-    profile.avatar_path, membership.role, membership.joined_at
+    profile.is_returning_student, profile.avatar_path, membership.role,
+    membership.joined_at
   from public.group_memberships as membership
   join public.profiles as profile on profile.id = membership.profile_id
   where membership.group_id = p_group_id
     and (
       query_text = ''
-      or profile.cohort::text like '%' || query_text || '%'
+      -- 명부가 복학생을 n.5기로 보여 주므로 검색도 표시값을 기준으로 한다.
+      -- 표시값은 저장된 기수를 접두사로 포함하므로 '20'은 20기와 20.5기를 모두 찾는다.
+      or (
+        profile.cohort
+          + case when profile.is_returning_student then 0.5 else 0 end
+      )::text like '%' || query_text || '%'
       or profile.name ilike '%' || query_text || '%'
     )
     and (

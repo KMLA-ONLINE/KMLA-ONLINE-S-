@@ -1878,6 +1878,7 @@ export type Database = {
         Returns: {
           avatar_path: string
           cohort: number
+          is_returning_student: boolean
           name: string
           pub_id: string
           request_id: string
@@ -1896,6 +1897,7 @@ export type Database = {
         Returns: {
           avatar_path: string
           cohort: number
+          is_returning_student: boolean
           joined_at: string
           membership_id: string
           name: string
