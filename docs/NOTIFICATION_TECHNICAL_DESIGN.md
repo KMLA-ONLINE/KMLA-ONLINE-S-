@@ -132,7 +132,8 @@ Push 발송 직전에 기기 상태, 최신 유형·그룹 설정과 현재 대�
 - public table의 불필요한 `MAINTAIN`, `REFERENCES`, `TRIGGER`, `TRUNCATE` 권한을 회수한다.
 - subscription, event key, outbox와 실제 익명 신원은 client role에서 모두 회수한다.
 - definer 함수는 `search_path = ''`과 내부 호출자 검증을 사용한다.
-- Push payload에는 opaque notification/delivery ID와 안전한 제목·본문·tag만 넣는다.
+- Push payload에는 opaque notification/delivery ID, 안전한 제목·본문·tag와 서버가 정한 중요도·카테고리
+  enum만 넣는다. 서비스 워커는 이 값으로 표시와 묶음 정책을 적용한다.
 - Push payload에 사용자 내부 ID, 실제 익명 신원, 운영자 신원, 원문, 파일명, endpoint와 외부 URL을
   넣지 않는다.
 
@@ -146,6 +147,10 @@ worker는 delivery를 lease한 뒤 각 항목을 외부 서비스로 보내기 �
 dispatcher는 만료되지 않은 lease를 suppress하거나 가져가지 않는다. 최종 확인에서 더 이상 전달할 수
 없는 항목은 외부 호출 없이 suppress한다.
 
+낮음·보통 중요도 Web Push는 해당 subscription의 포그라운드 heartbeat가 유효하면 최종 확인에서
+suppress한다. 높음 중요도는 heartbeat와 관계없이 전달한다. Web Push `Urgency`도 낮음·보통·높음에
+각각 `low`, `normal`, `high`를 사용한다.
+
 - Web Push 2xx는 성공 처리한다.
 - 404와 410은 subscription을 폐기한다.
 - 429와 5xx는 제한된 exponential backoff로 재시도한다.
@@ -158,8 +163,13 @@ Production 앱 이벤트 이메일은 Resend를 사용한다. 로컬은 Supabase
 ## 7. 서비스 워커와 클릭
 
 기존 Workbox `generateSW`의 app shell·업데이트 정책을 유지하고 `importScripts`로 Push handler를 추가한다.
-handler는 `push`와 `notificationclick`을 처리한다. 동일 delivery ID와 notification tag를 사용해
-at-least-once 전달의 중복 표시를 억제한다.
+handler는 `push`와 `notificationclick`을 처리한다. 높음 중요도는 notification ID tag를, 낮음·보통은
+카테고리 tag를 사용한다. 동일 delivery ID는 기존 카드의 집계 수를 다시 늘리지 않는다.
+
+카테고리 tag의 기존 알림은 `getNotifications()`로 읽어 최신 알림과 누적 개수로 교체한다. 한 건인
+카드는 notification resolver를 열고, 둘 이상인 카드는 일반 알림함을 연다. 보통 중요도 교체는
+`renotify`하고 낮음 중요도 교체는 조용히 갱신한다. 표준 Web Notifications API에는 네이티브 앱의
+펼침형 그룹 API가 없으므로 카테고리별 대표 카드가 정식 동작이다.
 
 클릭 시 payload URL을 열지 않고 `/noti/open/:notificationId`만 구성한다. 기존 앱 창이 있으면 focus와
 navigate를 사용하고 없으면 새 창을 연다. resolver route는 인증, 현재 계정, 대상 접근 권한과 읽음
@@ -193,6 +203,11 @@ badge를 갱신하며 창 focus 복귀 시 revalidation을 fallback으로 사용
 Push 권한 설명은 승인 사용자의 gate 아래에서 표시한다. 사용자 동작 안에서만 브라우저 권한을 요청하고,
 기기·계정별 prompt 상태는 versioned localStorage key에 저장한다. 서비스 워커 업데이트, iOS 설치 안내,
 Push 권한과 일반 설치 안내가 겹치지 않도록 전역 PWA prompt 우선순위를 둔다.
+
+승인 사용자 gate 아래의 알림 동기화 컴포넌트는 문서가 `visible`이고 창이 focus된 동안 현재 Push
+subscription endpoint의 포그라운드 heartbeat를 주기적으로 갱신한다. 서버가 정한 짧은 만료 시각을
+사용하고 클라이언트가 임의 만료 시각을 지정하지 않는다. heartbeat를 명시적으로 해제하지 않고
+만료시키므로 여러 탭 중 하나가 닫혀 다른 활성 탭의 상태를 지우는 경쟁이 없다.
 
 ## 9. 지원 환경
 

@@ -7,6 +7,9 @@ export interface Delivery {
   auth: string | null;
   recipient_email: string | null;
   notification_id: string;
+  importance: "low" | "normal" | "high";
+  category:
+    "content" | "timeline" | "group" | "account" | "school" | "moderation";
   title: string;
   body: string;
   tag: string;
@@ -86,6 +89,8 @@ export function createDispatchHandler(deps: DispatchDependencies) {
                 JSON.stringify({
                   notificationId: delivery.notification_id,
                   deliveryId: delivery.delivery_id,
+                  importance: delivery.importance,
+                  category: delivery.category,
                   title: delivery.title,
                   body: delivery.body,
                   tag: delivery.tag,

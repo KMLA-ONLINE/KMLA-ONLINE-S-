@@ -130,6 +130,7 @@ create table private.web_push_subscriptions (
   p256dh text not null,
   auth text not null,
   expiration_time timestamptz,
+  foreground_until timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint web_push_subscriptions_endpoint_length check (
@@ -277,6 +278,11 @@ as $$
         and subscription.profile_id = p_delivery.recipient_profile_id
         and private.notification_push_allowed(
           notification, subscription.created_at, subscription.expiration_time
+        )
+        and (
+          notification.importance = 'high'
+          or subscription.foreground_until is null
+          or subscription.foreground_until <= now()
         )
         and (
           notification.category = 'moderation'
@@ -789,6 +795,23 @@ end;
 $$;
 alter function public.get_my_web_push_status(text) owner to postgres;
 
+create or replace function public.refresh_my_web_push_foreground(p_endpoint text)
+returns boolean
+language plpgsql security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null or private.current_profile_id() is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  update private.web_push_subscriptions
+  set foreground_until = now() + interval '75 seconds'
+  where endpoint = p_endpoint and profile_id = private.current_profile_id();
+  return found;
+end;
+$$;
+alter function public.refresh_my_web_push_foreground(text) owner to postgres;
+
 create or replace function public.resolve_my_notification_destination(p_notification_id uuid)
 returns text
 language plpgsql security definer
@@ -862,6 +885,8 @@ create or replace function public.claim_notification_deliveries(
   auth text,
   recipient_email text,
   notification_id uuid,
+  importance public.notification_importance,
+  category public.notification_category,
   title text,
   body text,
   tag text
@@ -920,6 +945,7 @@ begin
   select claimed.id, claimed.lease_id, claimed.channel,
     subscription.endpoint, subscription.p256dh, subscription.auth,
     claimed.recipient_email, notification.id,
+    notification.importance, notification.category,
     notification.title,
     case notification.kind
       when 'post_commented' then '내 게시물에 새 댓글이 등록되었습니다.'
@@ -931,7 +957,11 @@ begin
       when 'anonymous_activity_restricted' then '그룹 익명 활동이 제한되었습니다.'
       else '새 알림이 있습니다.'
     end,
-    'notification:' || notification.id::text
+    case
+      when notification.importance = 'high'
+        then 'notification:' || notification.id::text
+      else 'notification-category:' || notification.category::text
+    end
   from claimed
   left join private.web_push_subscriptions as subscription
     on subscription.id = claimed.subscription_id
@@ -1543,6 +1573,8 @@ revoke all on function public.unregister_my_web_push_subscription(text) from pub
 grant execute on function public.unregister_my_web_push_subscription(text) to authenticated;
 revoke all on function public.get_my_web_push_status(text) from public;
 grant execute on function public.get_my_web_push_status(text) to authenticated;
+revoke all on function public.refresh_my_web_push_foreground(text) from public;
+grant execute on function public.refresh_my_web_push_foreground(text) to authenticated;
 revoke all on function public.resolve_my_notification_destination(uuid) from public;
 grant execute on function public.resolve_my_notification_destination(uuid) to authenticated;
 revoke all on function public.claim_notification_deliveries(integer, integer) from public;

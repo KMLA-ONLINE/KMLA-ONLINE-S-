@@ -73,7 +73,15 @@ async function sendPush(delivery: Delivery, payload: string) {
         keys: { p256dh: delivery.p256dh, auth: delivery.auth },
       },
       payload,
-      { TTL: 86400, urgency: "normal" },
+      {
+        TTL: 86400,
+        urgency:
+          delivery.importance === "high"
+            ? "high"
+            : delivery.importance === "low"
+              ? "low"
+              : "normal",
+      },
     );
     return { status: response.statusCode };
   } catch (error) {
