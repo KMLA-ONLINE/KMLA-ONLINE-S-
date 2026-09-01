@@ -11,6 +11,7 @@ import { renderRoute, screen } from "../../router";
 function renderMenu(
   role: ProfileRole,
   type: ShellData["profile"]["type"] = "student",
+  badges: Record<string, number> = {},
 ) {
   const shell = {
     email: "student@kmla.hs.kr",
@@ -23,7 +24,7 @@ function renderMenu(
       status: "accepted",
       avatar_url: null,
     },
-    badges: {},
+    badges,
   } satisfies ShellData;
 
   return renderRoute(
@@ -43,6 +44,16 @@ describe("menu route", () => {
     const links = screen.getAllByRole("link", { name: "관리자 페이지" });
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveAttribute("href", "/admin");
+  });
+
+  it("shows the pending application count on the admin shortcut", () => {
+    renderMenu("admin", "student", { "/admin": 3 });
+
+    expect(
+      screen.getByRole("link", {
+        name: /관리자 페이지.*승인 대기 3명/,
+      }),
+    ).toHaveAttribute("href", "/admin");
   });
 
   it("keeps the admin shortcut away from a member", () => {

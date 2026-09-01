@@ -224,6 +224,7 @@ as $$
     and p_notification.kind not in ('post_reacted', 'comment_reacted', 'application_submitted')
     and (
       p_notification.category = 'moderation'
+      or p_notification.kind = 'group_posted'
       or case p_notification.category
         when 'content' then coalesce(preference.content_push_enabled, true)
         when 'timeline' then coalesce(preference.timeline_push_enabled, true)
@@ -1309,6 +1310,24 @@ end;
 $$;
 alter function private.notify_group_join_requested() owner to postgres;
 
+create or replace function private.cleanup_group_join_request_notification()
+returns trigger
+language plpgsql security definer
+set search_path = ''
+as $$
+begin
+  delete from public.notifications as notification
+  where notification.id in (
+    select event_key.notification_id
+    from private.notification_event_keys as event_key
+    where event_key.event_key like
+      'group-join-request:' || old.id::text || ':recipient:%'
+  );
+  return old;
+end;
+$$;
+alter function private.cleanup_group_join_request_notification() owner to postgres;
+
 create or replace function private.notify_official_group_joined()
 returns trigger
 language plpgsql security definer
@@ -1493,6 +1512,9 @@ for each row execute function private.notify_post_published();
 create trigger group_join_requests_notify_created
 after insert on public.group_join_requests
 for each row execute function private.notify_group_join_requested();
+create trigger group_join_requests_cleanup_notification
+after delete on public.group_join_requests
+for each row execute function private.cleanup_group_join_request_notification();
 create trigger group_memberships_notify_official_join
 after insert on public.group_memberships
 for each row execute function private.notify_official_group_joined();
@@ -1547,6 +1569,7 @@ revoke all on function private.notify_comment_created() from public;
 revoke all on function private.notify_reaction_created() from public;
 revoke all on function private.notify_post_published() from public;
 revoke all on function private.notify_group_join_requested() from public;
+revoke all on function private.cleanup_group_join_request_notification() from public;
 revoke all on function private.notify_official_group_joined() from public;
 revoke all on function private.notify_group_changed() from public;
 revoke all on function private.notify_profile_changed() from public;

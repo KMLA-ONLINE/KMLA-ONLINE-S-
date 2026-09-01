@@ -109,6 +109,30 @@ describe("public push service worker", () => {
     });
   });
 
+  it("accepts a title at the database limit", async () => {
+    const worker = loadPushWorker();
+    const title = "😀".repeat(160);
+
+    await worker.dispatch("push", {
+      data: {
+        json: () => ({
+          ...validPayload,
+          importance: "high",
+          category: "moderation",
+          title,
+          tag: `notification:${validPayload.notificationId}`,
+        }),
+      },
+    });
+
+    expect(worker.showNotification).toHaveBeenCalledWith(
+      title,
+      expect.objectContaining({
+        tag: `notification:${validPayload.notificationId}`,
+      }),
+    );
+  });
+
   it("replaces normal notifications by category and opens grouped cards in the inbox", async () => {
     const worker = loadPushWorker();
     await worker.dispatch("push", { data: { json: () => validPayload } });
@@ -189,6 +213,10 @@ describe("public push service worker", () => {
       { json: () => ({ ...validPayload, notificationId: "1" }) },
     ],
     ["blank title", { json: () => ({ ...validPayload, title: " " }) }],
+    [
+      "overlong title",
+      { json: () => ({ ...validPayload, title: "가".repeat(161) }) },
+    ],
     [
       "unstable notification tag",
       { json: () => ({ ...validPayload, tag: "notification:other" }) },

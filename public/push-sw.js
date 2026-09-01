@@ -47,7 +47,7 @@ function isBoundedText(value, maxLength) {
   return (
     typeof value === "string" &&
     value.trim().length > 0 &&
-    value.length <= maxLength
+    Array.from(value).length <= maxLength
   );
 }
 
@@ -62,7 +62,7 @@ function isPushPayload(value) {
     ID_PATTERN.test(value.deliveryId) &&
     IMPORTANCES.includes(value.importance) &&
     CATEGORIES.includes(value.category) &&
-    isBoundedText(value.title, 120) &&
+    isBoundedText(value.title, 160) &&
     isBoundedText(value.body, 240) &&
     value.tag === expectedTag
   );

@@ -1,5 +1,5 @@
 import { ChevronRightIcon } from "lucide-react";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { Link } from "react-router";
 
 import { cn } from "~/shared/lib/utils";
@@ -11,6 +11,7 @@ interface ListLinkRowProps {
   to: string;
   label: string;
   icon: RowIcon;
+  trailing?: ReactNode;
   className?: string;
 }
 
@@ -25,6 +26,7 @@ export function ListLinkRow({
   to,
   label,
   icon: Icon,
+  trailing,
   className,
 }: ListLinkRowProps) {
   return (
@@ -40,6 +42,8 @@ export function ListLinkRow({
       <span className="min-w-0 flex-1 truncate text-sm font-medium">
         {label}
       </span>
+
+      {trailing}
 
       <ChevronRightIcon
         className="size-4 shrink-0 text-muted-foreground"

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(15);
+select plan(17);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -157,6 +157,39 @@ select is(
   'suppressed'::private.notification_delivery_status,
   'new group posts remain explicit Push opt-in'
 );
+
+set local role authenticated;
+select public.update_my_notification_preferences(true, true, false, true, true);
+select public.set_my_group_notification_preferences(
+  '20000000-0000-0000-0000-000000000003', 'all', true, true
+);
+reset role;
+select private.emit_notification(
+  'delivery-pref:group-post-independent',
+  (select id from public.profiles where pub_id = 'hanbyeol-25'),
+  'group_posted', 'low', 'group', 'identified',
+  (select id from public.profiles where pub_id = 'saebyeok-24'),
+  '박새벽', null, '독립된 새 그룹 글',
+  '20000000-0000-0000-0000-000000000003',
+  '90000000-0000-0000-0000-000000000001'
+);
+set local role service_role;
+create temp table independent_group_post_claim as
+select * from public.claim_notification_deliveries(10, 60);
+select is(
+  (select count(*) from independent_group_post_claim where title = '독립된 새 그룹 글'),
+  1::bigint,
+  'new-post Push does not depend on the global group-status preference'
+);
+select ok(
+  public.complete_notification_delivery(
+    (select delivery_id from independent_group_post_claim where title = '독립된 새 그룹 글'),
+    (select lease_id from independent_group_post_claim where title = '독립된 새 그룹 글'),
+    'sent', 201, null
+  ),
+  'the independently allowed new-post delivery can be completed'
+);
+reset role;
 
 set local role authenticated;
 select public.update_my_notification_preferences(true, true, true, true, true);

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(19);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -134,6 +134,39 @@ select ok(
       and recipient_profile_id = (select id from public.profiles where pub_id = 'hanbyeol-25')
   ),
   'new group post fanout excludes its author'
+);
+
+set local role authenticated;
+with join_request as (
+  insert into public.group_join_requests (group_id, profile_id)
+  values (
+    '20000000-0000-0000-0000-000000000006',
+    private.current_profile_id()
+  )
+  returning id
+)
+insert into producer_ids
+select 'join_request', id from join_request;
+reset role;
+select ok(
+  exists (
+    select 1 from public.notifications
+    where kind = 'group_join_requested'
+      and group_id = '20000000-0000-0000-0000-000000000006'
+  ),
+  'a pending join request notifies group administrators'
+);
+set local role authenticated;
+delete from public.group_join_requests
+where id = (select id from producer_ids where name = 'join_request');
+reset role;
+select ok(
+  not exists (
+    select 1 from public.notifications
+    where kind = 'group_join_requested'
+      and group_id = '20000000-0000-0000-0000-000000000006'
+  ),
+  'canceling a join request removes its stale administrator notifications'
 );
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
