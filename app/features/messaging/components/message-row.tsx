@@ -97,6 +97,9 @@ export function MessageRow({
   const rowRef = useRef<HTMLElement>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
   const replySwipeStart = useRef<{ x: number; y: number } | null>(null);
+  const hasVisibleReactions =
+    showReactions &&
+    ((message.reactions?.length ?? 0) > 0 || selectedReaction != null);
 
   function startReplySwipe(event: PointerEvent<HTMLElement>) {
     if (event.pointerType !== "touch" || !onReply || message.deleted) return;
@@ -314,8 +317,6 @@ export function MessageRow({
         isOwn ? "justify-end" : "justify-start",
         startsGroup && "mt-3",
         contextMenuOpen && "relative z-50",
-        highlighted &&
-          "ring-2 ring-primary ring-offset-4 ring-offset-background",
       )}
       style={
         contextMenuLayout
@@ -337,7 +338,10 @@ export function MessageRow({
             src={sender?.avatarUrl}
             name={sender?.name}
             size="default"
-            className="mb-0.5 size-7"
+            className={cn(
+              hasVisibleReactions ? "mb-[1.125rem]" : "mb-0.5",
+              "size-7",
+            )}
           />
         ) : (
           <span className="w-7 shrink-0" aria-hidden />
@@ -381,6 +385,7 @@ export function MessageRow({
             anchorRef={bubbleRef}
             message={message}
             isOwn={isOwn}
+            highlighted={highlighted}
             startsGroup={startsGroup}
             endsGroup={endsGroup}
             selectedReaction={selectedReaction}

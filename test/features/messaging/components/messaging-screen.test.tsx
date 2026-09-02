@@ -63,7 +63,6 @@ describe("MessagingScreen", () => {
     expect(
       await screen.findByText("대화를 찾지 못했습니다"),
     ).toBeInTheDocument();
-    expect(screen.getByText("대화를 선택하세요")).toBeInTheDocument();
   });
 
   it("알림 꺼짐 상태를 대화 이름 옆에 표시한다", async () => {

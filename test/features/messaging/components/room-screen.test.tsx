@@ -321,7 +321,16 @@ describe("RoomScreen", () => {
     expect(replyQuote).toHaveClass("w-full", "min-w-0", "max-w-full");
     expect(replyQuote.lastElementChild).toHaveClass("truncate");
     await user.click(replyQuote);
-    expect(originalMessage).toHaveClass("ring-2", "ring-primary");
+    expect(originalMessage).not.toHaveClass("ring-2", "ring-primary");
+    expect(
+      originalMessage.querySelector('[data-slot="message-bubble"]'),
+    ).toHaveClass(
+      "rounded-2xl",
+      "rounded-bl-md",
+      "ring-1",
+      "ring-primary",
+      "ring-offset-1",
+    );
 
     await user.click(
       within(originalMessage).getByRole("button", { name: "메시지에 답장" }),
@@ -354,7 +363,10 @@ describe("RoomScreen", () => {
         name: "최민준의 원문 메시지 보기",
       }),
     );
-    expect(deletedOriginal).toHaveClass("ring-2", "ring-primary");
+    expect(deletedOriginal).not.toHaveClass("ring-2", "ring-primary");
+    expect(
+      deletedOriginal.querySelector('[data-slot="message-bubble"]'),
+    ).toHaveClass("rounded-2xl", "ring-1", "ring-primary", "ring-offset-1");
   });
 
   it("모바일 가로 스와이프로 답장을 시작한다", async () => {
@@ -778,11 +790,19 @@ describe("RoomScreen", () => {
       within(linkedMessage).getByRole("button", { name: "채팅에서 보기" }),
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    const originalPinnedMessage = screen
+      .getByRole("link", { name: "https://www.kmlaonline.net" })
+      .closest("article")!;
+    expect(originalPinnedMessage).not.toHaveClass("ring-2", "ring-primary");
     expect(
-      screen
-        .getByRole("link", { name: "https://www.kmlaonline.net" })
-        .closest("article"),
-    ).toHaveClass("ring-2", "ring-primary");
+      originalPinnedMessage.querySelector('[data-slot="message-bubble"]'),
+    ).toHaveClass(
+      "mb-4",
+      "rounded-2xl",
+      "ring-1",
+      "ring-primary",
+      "ring-offset-1",
+    );
 
     await user.click(screen.getByRole("button", { name: /고정된 메시지\s*2/ }));
     dialog = screen.getByRole("dialog");

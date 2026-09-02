@@ -14,6 +14,7 @@ import { Badge } from "~/shared/ui/badge";
 export function MessageBubble({
   message,
   isOwn,
+  highlighted = false,
   startsGroup = true,
   endsGroup = true,
   selectedReaction,
@@ -26,6 +27,7 @@ export function MessageBubble({
 }: {
   message: ConversationMessage;
   isOwn: boolean;
+  highlighted?: boolean;
   startsGroup?: boolean;
   endsGroup?: boolean;
   selectedReaction?: PostReaction | null;
@@ -54,9 +56,22 @@ export function MessageBubble({
   return (
     <div
       ref={anchorRef}
+      data-slot="message-bubble"
       className={cn(
         "relative w-fit max-w-full min-w-0",
         hasReactions && "mb-4",
+        highlighted &&
+          (isEmojiOnly
+            ? "rounded-full"
+            : cn(
+                "rounded-2xl",
+                !startsGroup && isOwn && "rounded-tr-md",
+                !startsGroup && !isOwn && "rounded-tl-md",
+                !endsGroup && isOwn && "rounded-br-md",
+                !endsGroup && !isOwn && "rounded-bl-md",
+              )),
+        highlighted &&
+          "ring-1 ring-primary ring-offset-1 ring-offset-background",
       )}
     >
       <div

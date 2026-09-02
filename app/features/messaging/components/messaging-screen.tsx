@@ -164,13 +164,9 @@ export function MessagingScreen({
         ) : (
           <Empty className="h-full rounded-none border-0">
             <EmptyHeader>
-              <EmptyMedia variant="icon" className="size-14 rounded-full">
-                <MessageSquareMoreIcon aria-hidden className="size-7" />
+              <EmptyMedia variant="icon" className="size-20 rounded-full">
+                <MessageSquareMoreIcon aria-hidden className="size-10" />
               </EmptyMedia>
-              <EmptyTitle>대화를 선택하세요</EmptyTitle>
-              <EmptyDescription>
-                왼쪽 목록에서 대화를 선택하면 메시지를 확인할 수 있습니다.
-              </EmptyDescription>
             </EmptyHeader>
           </Empty>
         )}
