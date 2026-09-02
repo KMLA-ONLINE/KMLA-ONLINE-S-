@@ -1,4 +1,5 @@
 import { ThumbsUpIcon } from "lucide-react";
+import type { Ref } from "react";
 
 import {
   getEmojiOnlyMessageGraphemes,
@@ -21,6 +22,7 @@ export function MessageBubble({
   replyTarget,
   replyTargetAuthor,
   onViewReply,
+  anchorRef,
 }: {
   message: ConversationMessage;
   isOwn: boolean;
@@ -32,6 +34,7 @@ export function MessageBubble({
   replyTarget?: ConversationMessage;
   replyTargetAuthor?: string;
   onViewReply?: () => void;
+  anchorRef?: Ref<HTMLDivElement>;
 }) {
   const reactions = new Map(
     message.reactions?.map(({ reaction, count }) => [reaction, count]) ?? [],
@@ -50,6 +53,7 @@ export function MessageBubble({
 
   return (
     <div
+      ref={anchorRef}
       className={cn(
         "relative w-fit max-w-full min-w-0",
         hasReactions && "mb-4",

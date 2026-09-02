@@ -347,7 +347,7 @@ export function MessageRow({
       <div
         className={cn(
           "flex min-w-0 flex-col",
-          "max-w-[88%] md:max-w-[78%]",
+          "max-w-[78%]",
           isOwn ? "items-end" : "items-start",
         )}
       >
@@ -367,10 +367,7 @@ export function MessageRow({
             고정됨
           </span>
         ) : null}
-        <div
-          ref={bubbleRef}
-          className={cn("flex w-full min-w-0 items-center gap-1.5")}
-        >
+        <div className={cn("flex w-full min-w-0 items-center gap-1.5")}>
           {isOwn ? actionRail : null}
           {isOwn && showUnreadCount && unreadParticipantCount > 0 ? (
             <span
@@ -381,6 +378,7 @@ export function MessageRow({
             </span>
           ) : null}
           <MessageBubble
+            anchorRef={bubbleRef}
             message={message}
             isOwn={isOwn}
             startsGroup={startsGroup}
@@ -420,12 +418,16 @@ export function MessageRow({
           side="top"
           align={isOwn ? "end" : "start"}
           sideOffset={CONTEXT_MENU_SURFACE_GAP}
+          collisionAvoidance={{ align: "shift" }}
           collisionPadding={16}
           className="isolate z-50 outline-none"
         >
           <ContextMenu.Popup
             data-slot="message-context-menu"
-            className="relative w-max max-w-[calc(100vw-2rem)] duration-0 outline-none data-open:animate-none data-closed:animate-none"
+            className={cn(
+              "relative w-max max-w-[calc(100vw-2rem)] duration-0 outline-none data-open:animate-none data-closed:animate-none",
+              !onSelectReaction && contextActions?.length && "min-w-56",
+            )}
             onTouchStartCapture={armContextInteraction}
             onKeyDownCapture={armContextInteraction}
             onClickCapture={blockOpeningTouchClick}

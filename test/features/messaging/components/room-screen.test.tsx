@@ -1,16 +1,42 @@
 /* eslint-disable testing-library/no-node-access */
 import { act, fireEvent } from "@testing-library/react";
-import { useState } from "react";
+import { type ComponentProps, useState } from "react";
+import type * as ContextMenuModule from "@base-ui/react/context-menu";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RoomScreen } from "~/features/messaging/components/room-screen";
 import { loadConversation } from "~/features/messaging/data/queries";
 import { renderRoute, screen, within } from "../../../router";
 
+type ContextMenuPositionerProps = ComponentProps<
+  typeof ContextMenuModule.ContextMenu.Positioner
+>;
+
+const positionerSpy = vi.hoisted(() =>
+  vi.fn<(props: ContextMenuPositionerProps) => void>(),
+);
+
+vi.mock("@base-ui/react/context-menu", async (importOriginal) => {
+  const actual = await importOriginal<typeof ContextMenuModule>();
+
+  function Positioner(
+    props: ComponentProps<typeof actual.ContextMenu.Positioner>,
+  ) {
+    positionerSpy(props);
+    return <actual.ContextMenu.Positioner {...props} />;
+  }
+
+  return {
+    ...actual,
+    ContextMenu: { ...actual.ContextMenu, Positioner },
+  };
+});
+
 const originalVisualViewport = window.visualViewport;
 
 afterEach(() => {
   vi.useRealTimers();
+  positionerSpy.mockClear();
   Object.defineProperty(window, "visualViewport", {
     configurable: true,
     value: originalVisualViewport,
@@ -277,10 +303,7 @@ describe("RoomScreen", () => {
       .getAllByRole("article", { name: "내 메시지" })
       .at(-1)!;
     expect(sentReply).toHaveClass("w-full");
-    expect(sentReply.firstElementChild).toHaveClass(
-      "max-w-[88%]",
-      "md:max-w-[78%]",
-    );
+    expect(sentReply.firstElementChild).toHaveClass("max-w-[78%]");
     expect(sentReply.firstElementChild?.lastElementChild).toHaveClass("w-full");
     expect(sentReply.firstElementChild).not.toHaveClass(
       "w-[88%]",
@@ -391,7 +414,7 @@ describe("RoomScreen", () => {
       DOMRect.fromRect({ x: 0, y: 100, width: 360, height: 600 }),
     );
     expect(actionRail).toHaveClass("hidden", "[@media(hover:hover)]:flex");
-    expect(message.children[1]).toHaveClass("max-w-[88%]", "md:max-w-[78%]");
+    expect(message.children[1]).toHaveClass("max-w-[78%]");
 
     composer.focus();
     fireEvent.touchStart(message, {
@@ -596,13 +619,14 @@ describe("RoomScreen", () => {
       .getByRole("region", { name: "학생회 기획부 대화" })
       .querySelector(".overflow-y-auto")!;
     const messageSurface = message.children[1].lastElementChild!;
+    const messageBubble = messageSurface.firstElementChild!;
     const messageRect = vi
       .spyOn(message, "getBoundingClientRect")
       .mockReturnValue(
         DOMRect.fromRect({ x: 20, y: 600, width: 320, height: 50 }),
       );
     const messageSurfaceRect = vi
-      .spyOn(messageSurface, "getBoundingClientRect")
+      .spyOn(messageBubble, "getBoundingClientRect")
       .mockReturnValue(
         DOMRect.fromRect({ x: 48, y: 600, width: 220, height: 50 }),
       );
@@ -781,6 +805,83 @@ describe("RoomScreen", () => {
     expect(
       screen.queryByRole("button", { name: "고정 메시지" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("고정 메시지 목록의 넓은 내 메시지를 롱프레스해도 작업을 오른쪽에 정렬한다", async () => {
+    const conversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+    const ownMessage = conversation!.messages.find(
+      (message) => message.senderId === "viewer",
+    )!;
+    ownMessage.pinned = true;
+    ownMessage.body = "내 메시지 ".repeat(80);
+
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+    await user.click(screen.getByRole("button", { name: "고정 메시지" }));
+    vi.useFakeTimers();
+
+    const dialog = screen.getByRole("dialog");
+    const message = within(dialog)
+      .getAllByRole("article", { name: "내 메시지" })
+      .find((article) =>
+        article.textContent?.includes(ownMessage.body.trim()),
+      )!;
+    const messageViewport = dialog.querySelector(".overflow-y-auto")!;
+    const messageSurface = message.children[0].lastElementChild!;
+    const messageBubble = messageSurface.lastElementChild!;
+    vi.spyOn(message, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 80, y: 600, width: 560, height: 80 }),
+    );
+    const messageSurfaceRect = vi
+      .spyOn(messageSurface, "getBoundingClientRect")
+      .mockReturnValue(
+        DOMRect.fromRect({ x: 160, y: 600, width: 0, height: 80 }),
+      );
+    const messageBubbleRect = vi
+      .spyOn(messageBubble, "getBoundingClientRect")
+      .mockReturnValue(
+        DOMRect.fromRect({ x: 160, y: 600, width: 480, height: 80 }),
+      );
+    vi.spyOn(messageViewport, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 40, y: 100, width: 640, height: 600 }),
+    );
+
+    fireEvent.touchStart(message, {
+      touches: [{ clientX: 400, clientY: 640 }],
+    });
+    act(() => void vi.advanceTimersByTime(500));
+
+    expect(messageSurfaceRect).not.toHaveBeenCalled();
+    expect(messageBubbleRect).toHaveBeenCalledOnce();
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(screen.getByRole("menu")).toHaveClass("min-w-56");
+  });
+
+  it("내 메시지 롱프레스 작업은 끝 정렬을 유지하도록 충돌을 이동 처리한다", async () => {
+    vi.useFakeTimers();
+    const conversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/student-council",
+    });
+    const message = screen
+      .getAllByRole("article", { name: "내 메시지" })
+      .at(0)!;
+    fireEvent.touchStart(message, {
+      touches: [{ clientX: 60, clientY: 625 }],
+    });
+    act(() => void vi.advanceTimersByTime(500));
+
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(
+      positionerSpy.mock.calls
+        .map(([props]) => props)
+        .find(({ align }) => align === "end"),
+    ).toMatchObject({ collisionAvoidance: { align: "shift" } });
   });
 
   it("메시지를 입력해 전송하고 빈 입력에서는 좋아요를 보낸다", async () => {
