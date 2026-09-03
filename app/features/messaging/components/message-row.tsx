@@ -6,6 +6,7 @@ import {
   type CSSProperties,
   type MouseEvent,
   type PointerEvent,
+  type ReactElement,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -19,6 +20,7 @@ import type { PostReaction } from "~/features/posts/model/types";
 import { QuickReactionBar } from "~/features/posts/components/quick-reaction-bar";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";
 
 export interface MessageContextAction {
   label: string;
@@ -30,12 +32,15 @@ interface ContextMenuLayout {
   anchor: { x: number; y: number; width: number; height: number };
   translateY: number;
   constrainedToViewport: boolean;
+  flowHeight: number;
 }
 
 const CONTEXT_MENU_EDGE_GAP = 16;
 const CONTEXT_MENU_SURFACE_GAP = 8;
 const REACTION_BAR_HEIGHT = 48;
 const CONTEXT_ACTION_HEIGHT = 42;
+const INLINE_TIMESTAMP_HEIGHT = 14;
+const CONTEXT_MENU_MOVE_DURATION = 200;
 
 export function MessageRow({
   message,
@@ -53,7 +58,7 @@ export function MessageRow({
   unreadParticipantCount = 0,
   showUnreadCount = true,
   showReactions = true,
-  showTimestamp = true,
+  showTimestamp = false,
   replyTarget,
   replyTargetAuthor,
   onViewReply,
@@ -89,6 +94,8 @@ export function MessageRow({
   contextPortalRef?: RefObject<HTMLElement | null>;
 }) {
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
+  const [contextOpenedByTouch, setContextOpenedByTouch] = useState(false);
+  const [contextMenuReady, setContextMenuReady] = useState(false);
   const [contextMenuLayout, setContextMenuLayout] =
     useState<ContextMenuLayout | null>(null);
   const contextMenuOpenRef = useRef(false);
@@ -128,6 +135,8 @@ export function MessageRow({
         document.activeElement.blur();
       }
       contextInteractionReadyRef.current = !contextTouchActiveRef.current;
+      setContextOpenedByTouch(contextTouchActiveRef.current);
+      setContextMenuReady(false);
       const row = rowRef.current;
       const bubble = bubbleRef.current;
       if (!row || !bubble) {
@@ -151,7 +160,12 @@ export function MessageRow({
         ? contextActions.length * CONTEXT_ACTION_HEIGHT +
           CONTEXT_MENU_SURFACE_GAP
         : 0;
-      const rowHalfHeight = rowRect.height / 2;
+      const messageHeight =
+        rowRect.height +
+        (contextTouchActiveRef.current && !showTimestamp
+          ? INLINE_TIMESTAMP_HEIGHT
+          : 0);
+      const rowHalfHeight = messageHeight / 2;
       const viewportCenter = viewportRect.top + viewportRect.height / 2;
       const availableMessageHeight = Math.max(
         0,
@@ -160,7 +174,7 @@ export function MessageRow({
           reactionSpace -
           actionSpace,
       );
-      const constrainedToViewport = rowRect.height > availableMessageHeight;
+      const constrainedToViewport = messageHeight > availableMessageHeight;
       const minimumCenter =
         viewportRect.top +
         CONTEXT_MENU_EDGE_GAP +
@@ -186,13 +200,16 @@ export function MessageRow({
           width: bubbleRect.width,
           height: constrainedToViewport
             ? availableMessageHeight
-            : rowRect.height,
+            : messageHeight,
         },
         translateY,
         constrainedToViewport,
+        flowHeight: rowRect.height,
       });
     } else {
       contextInteractionReadyRef.current = false;
+      setContextOpenedByTouch(false);
+      setContextMenuReady(false);
     }
     setContextMenuOpen(open);
   }
@@ -213,6 +230,8 @@ export function MessageRow({
     const row = rowRef.current;
     const visualViewport = window.visualViewport;
     let animationFrame = 0;
+    let revealAnimationFrame = 0;
+    let revealTimeout = 0;
 
     function updateAnchor() {
       const currentRow = rowRef.current;
@@ -241,14 +260,17 @@ export function MessageRow({
           reactionSpace -
           actionSpace,
       );
-      const constrainedToViewport = rowRect.height > availableMessageHeight;
+      const messageHeight =
+        rowRect.height +
+        (contextOpenedByTouch && !showTimestamp ? INLINE_TIMESTAMP_HEIGHT : 0);
+      const constrainedToViewport = messageHeight > availableMessageHeight;
       const nextAnchor = {
         x: bubbleRect.left,
         y: constrainedToViewport
           ? viewportRect.top + CONTEXT_MENU_EDGE_GAP + reactionSpace
           : rowRect.top,
         width: bubbleRect.width,
-        height: constrainedToViewport ? availableMessageHeight : rowRect.height,
+        height: constrainedToViewport ? availableMessageHeight : messageHeight,
       };
 
       setContextMenuLayout((current) => {
@@ -279,6 +301,18 @@ export function MessageRow({
     function handleTransitionEnd(event: TransitionEvent) {
       if (event.target === row && event.propertyName === "transform") {
         scheduleAnchorUpdate();
+        if (contextOpenedByTouch) setContextMenuReady(true);
+      }
+    }
+
+    function revealContextMenu() {
+      scheduleAnchorUpdate();
+      setContextMenuReady(true);
+    }
+
+    function handleTransitionCancel(event: TransitionEvent) {
+      if (event.target === row && event.propertyName === "transform") {
+        revealContextMenu();
       }
     }
 
@@ -286,19 +320,40 @@ export function MessageRow({
     visualViewport?.addEventListener("scroll", scheduleAnchorUpdate);
     window.addEventListener("resize", scheduleAnchorUpdate);
     row?.addEventListener("transitionend", handleTransitionEnd);
+    row?.addEventListener("transitioncancel", handleTransitionCancel);
+    if (!contextOpenedByTouch) {
+      scheduleAnchorUpdate();
+    } else if (
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    ) {
+      scheduleAnchorUpdate();
+      revealAnimationFrame = requestAnimationFrame(() =>
+        setContextMenuReady(true),
+      );
+    } else {
+      revealTimeout = window.setTimeout(
+        revealContextMenu,
+        CONTEXT_MENU_MOVE_DURATION + 50,
+      );
+    }
 
     return () => {
       cancelAnimationFrame(animationFrame);
+      cancelAnimationFrame(revealAnimationFrame);
+      window.clearTimeout(revealTimeout);
       visualViewport?.removeEventListener("resize", scheduleAnchorUpdate);
       visualViewport?.removeEventListener("scroll", scheduleAnchorUpdate);
       window.removeEventListener("resize", scheduleAnchorUpdate);
       row?.removeEventListener("transitionend", handleTransitionEnd);
+      row?.removeEventListener("transitioncancel", handleTransitionCancel);
     };
   }, [
     contextActions?.length,
     contextMenuOpen,
+    contextOpenedByTouch,
     contextViewportRef,
     onSelectReaction,
+    showTimestamp,
   ]);
 
   const contextMenuAnchor = contextMenuLayout
@@ -322,6 +377,9 @@ export function MessageRow({
         contextMenuLayout
           ? {
               transform: `translate3d(0, ${contextMenuOpen ? contextMenuLayout.translateY : 0}px, 0)`,
+              ...(contextOpenedByTouch
+                ? { height: contextMenuLayout.flowHeight, overflow: "visible" }
+                : {}),
             }
           : undefined
       }
@@ -341,6 +399,7 @@ export function MessageRow({
             className={cn(
               hasVisibleReactions ? "mb-[1.125rem]" : "mb-0.5",
               "size-7",
+              contextOpenedByTouch && "translate-y-[14px]",
             )}
           />
         ) : (
@@ -353,6 +412,7 @@ export function MessageRow({
           "flex min-w-0 flex-col",
           "max-w-[78%]",
           isOwn ? "items-end" : "items-start",
+          contextOpenedByTouch && "self-start",
         )}
       >
         {!isOwn && ((isGroup && startsGroup) || isPinned) ? (
@@ -381,20 +441,22 @@ export function MessageRow({
               {unreadParticipantCount}
             </span>
           ) : null}
-          <MessageBubble
-            anchorRef={bubbleRef}
-            message={message}
-            isOwn={isOwn}
-            highlighted={highlighted}
-            startsGroup={startsGroup}
-            endsGroup={endsGroup}
-            selectedReaction={selectedReaction}
-            showReactions={showReactions}
-            showTimestamp={showTimestamp}
-            replyTarget={replyTarget}
-            replyTargetAuthor={replyTargetAuthor}
-            onViewReply={onViewReply}
-          />
+          <MessageTimeCard message={message} showTimeCard={!showTimestamp}>
+            <MessageBubble
+              anchorRef={bubbleRef}
+              message={message}
+              isOwn={isOwn}
+              highlighted={highlighted}
+              startsGroup={startsGroup}
+              endsGroup={endsGroup}
+              selectedReaction={selectedReaction}
+              showReactions={showReactions}
+              showTimestamp={showTimestamp || contextOpenedByTouch}
+              replyTarget={replyTarget}
+              replyTargetAuthor={replyTargetAuthor}
+              onViewReply={onViewReply}
+            />
+          </MessageTimeCard>
           {!isOwn ? actionRail : null}
         </div>
       </div>
@@ -417,65 +479,90 @@ export function MessageRow({
           onClickCapture={blockOpeningTouchClick}
           onClick={() => changeContextMenuOpen(false)}
         />
-        <ContextMenu.Positioner
-          anchor={contextMenuAnchor}
-          positionMethod="fixed"
-          side="top"
-          align={isOwn ? "end" : "start"}
-          sideOffset={CONTEXT_MENU_SURFACE_GAP}
-          collisionAvoidance={{ align: "shift" }}
-          collisionPadding={16}
-          className="isolate z-50 outline-none"
-        >
-          <ContextMenu.Popup
-            data-slot="message-context-menu"
-            className={cn(
-              "relative w-max max-w-[calc(100vw-2rem)] duration-0 outline-none data-open:animate-none data-closed:animate-none",
-              !onSelectReaction && contextActions?.length && "min-w-56",
-            )}
-            onTouchStartCapture={armContextInteraction}
-            onKeyDownCapture={armContextInteraction}
-            onClickCapture={blockOpeningTouchClick}
-            style={
-              {
-                "--message-context-height": `${contextMenuLayout?.anchor.height ?? 0}px`,
-              } as CSSProperties
-            }
+        {!contextOpenedByTouch || contextMenuReady ? (
+          <ContextMenu.Positioner
+            anchor={contextMenuAnchor}
+            positionMethod="fixed"
+            side="top"
+            align={isOwn ? "end" : "start"}
+            sideOffset={CONTEXT_MENU_SURFACE_GAP}
+            collisionAvoidance={{ align: "shift" }}
+            collisionPadding={16}
+            className="isolate z-50 outline-none"
           >
-            {onSelectReaction ? (
-              <div className="rounded-full bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10">
-                <QuickReactionBar
-                  current={selectedReaction}
-                  onSelect={(reaction) => {
-                    onSelectReaction(reaction);
-                    changeContextMenuOpen(false);
-                  }}
-                />
-              </div>
-            ) : null}
-            {contextActions?.length ? (
-              <ContextMenu.Group
-                className={cn(
-                  "absolute top-[calc(100%+var(--message-context-height)+1rem)] min-w-56 rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10",
-                  isOwn ? "right-0" : "left-0",
-                )}
-              >
-                {contextActions.map((action) => (
-                  <ContextMenu.Item
-                    key={action.label}
-                    className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground [&_svg]:size-5 [&_svg]:shrink-0"
-                    onClick={action.onSelect}
-                  >
-                    {action.icon}
-                    {action.label}
-                  </ContextMenu.Item>
-                ))}
-              </ContextMenu.Group>
-            ) : null}
-          </ContextMenu.Popup>
-        </ContextMenu.Positioner>
+            <ContextMenu.Popup
+              data-slot="message-context-menu"
+              className={cn(
+                "relative w-max max-w-[calc(100vw-2rem)] duration-0 outline-none data-open:animate-none data-closed:animate-none",
+                !onSelectReaction && contextActions?.length && "min-w-56",
+              )}
+              onTouchStartCapture={armContextInteraction}
+              onKeyDownCapture={armContextInteraction}
+              onClickCapture={blockOpeningTouchClick}
+              style={
+                {
+                  "--message-context-height": `${contextMenuLayout?.anchor.height ?? 0}px`,
+                } as CSSProperties
+              }
+            >
+              {onSelectReaction ? (
+                <div className="rounded-full bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10">
+                  <QuickReactionBar
+                    current={selectedReaction}
+                    onSelect={(reaction) => {
+                      onSelectReaction(reaction);
+                      changeContextMenuOpen(false);
+                    }}
+                  />
+                </div>
+              ) : null}
+              {contextActions?.length ? (
+                <ContextMenu.Group
+                  className={cn(
+                    "absolute top-[calc(100%+var(--message-context-height)+1rem)] min-w-56 rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10",
+                    isOwn ? "right-0" : "left-0",
+                  )}
+                >
+                  {contextActions.map((action) => (
+                    <ContextMenu.Item
+                      key={action.label}
+                      className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground [&_svg]:size-5 [&_svg]:shrink-0"
+                      onClick={action.onSelect}
+                    >
+                      {action.icon}
+                      {action.label}
+                    </ContextMenu.Item>
+                  ))}
+                </ContextMenu.Group>
+              ) : null}
+            </ContextMenu.Popup>
+          </ContextMenu.Positioner>
+        ) : null}
       </ContextMenu.Portal>
     </ContextMenu.Root>
+  );
+}
+
+function MessageTimeCard({
+  message,
+  showTimeCard,
+  children,
+}: {
+  message: ConversationMessage;
+  showTimeCard: boolean;
+  children: ReactElement;
+}) {
+  if (!showTimeCard) return children;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="block w-fit max-w-full" />}>
+        {children}
+      </TooltipTrigger>
+      <TooltipContent className="[@media(hover:none)]:hidden">
+        {message.sentAt}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

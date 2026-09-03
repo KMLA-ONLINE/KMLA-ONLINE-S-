@@ -434,7 +434,6 @@ function MessageThread({
                     )}
                     startsGroup={startsGroup}
                     endsGroup={endsGroup}
-                    showTimestamp={endsGroup}
                     selectedReaction={selectedReactions[message.id]}
                     isPinned={message.pinned ?? false}
                     highlighted={highlightedMessageId === message.id}

@@ -166,7 +166,7 @@ describe("RoomScreen", () => {
     const ownBubble = screen.getByText(
       "확인했습니다! 2층 체험 부스 동선만 조금 넓히면 좋을 것 같아요.",
     );
-    expect(within(ownBubble).getByText("오후 3:18")).toBeInTheDocument();
+    expect(screen.queryByText("오후 3:18")).not.toBeInTheDocument();
     expect(ownBubble).toHaveClass("[overflow-wrap:anywhere]");
 
     const firstConnectedMessage = screen
@@ -175,7 +175,9 @@ describe("RoomScreen", () => {
     expect(
       within(firstConnectedMessage).queryByText("오후 3:12"),
     ).not.toBeInTheDocument();
-    expect(within(reactedMessage).getByText("오후 3:12")).toBeInTheDocument();
+    expect(
+      within(reactedMessage).queryByText("오후 3:12"),
+    ).not.toBeInTheDocument();
   });
 
   it("메시지 반응을 로컬에서 선택하고 제거한다", async () => {
@@ -449,8 +451,12 @@ describe("RoomScreen", () => {
       "motion-reduce:transition-none",
     );
     expect(message).toHaveStyle({
-      transform: "translate3d(0, -225px, 0)",
+      height: "50px",
+      transform: "translate3d(0, -232px, 0)",
     });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    fireEvent.transitionEnd(message, { propertyName: "transform" });
+    act(() => void vi.advanceTimersByTime(16));
     expect(screen.getByRole("menu")).toHaveClass(
       "duration-0",
       "data-open:animate-none",
@@ -462,6 +468,10 @@ describe("RoomScreen", () => {
     expect(screen.getByRole("menuitem", { name: "답장" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "복사" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "고정" })).toBeInTheDocument();
+    expect(within(message).getByText("오후 3:12")).toHaveClass(
+      "mt-1",
+      "text-right",
+    );
     expect(
       screen.getByRole("menuitem", { name: "답장" }).parentElement,
     ).toHaveClass(
@@ -469,7 +479,7 @@ describe("RoomScreen", () => {
       "top-[calc(100%+var(--message-context-height)+1rem)]",
     );
     expect(screen.getByRole("menu")).toHaveStyle({
-      "--message-context-height": "50px",
+      "--message-context-height": "64px",
     });
 
     const replyItem = screen.getByRole("menuitem", { name: "답장" });
@@ -523,9 +533,10 @@ describe("RoomScreen", () => {
       touches: [{ clientX: 120, clientY: 200 }],
     });
     act(() => void vi.advanceTimersByTime(500));
+    fireEvent.transitionEnd(message, { propertyName: "transform" });
 
     expect(message).toHaveStyle({
-      transform: "translate3d(0, -650px, 0)",
+      transform: "translate3d(0, -657px, 0)",
     });
     expect(screen.getByRole("menu")).toHaveStyle({
       "--message-context-height": "378px",
@@ -568,7 +579,7 @@ describe("RoomScreen", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
-  it("롱프레스 직후의 지연된 터치 click에도 중앙 위치를 유지한다", async () => {
+  it("전환 종료 이벤트가 없어도 롱프레스 메뉴를 표시한다", async () => {
     vi.useFakeTimers();
     const conversation = await loadConversation("student-council");
     expect(conversation).not.toBeNull();
@@ -599,6 +610,8 @@ describe("RoomScreen", () => {
       touches: [{ clientX: 120, clientY: 200 }],
     });
     act(() => void vi.advanceTimersByTime(500));
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    act(() => void vi.advanceTimersByTime(250));
     fireEvent.touchEnd(message);
     fireEvent.click(message, { pointerType: "touch" });
     fireEvent.contextMenu(message, { clientX: 120, clientY: 200 });
@@ -606,7 +619,7 @@ describe("RoomScreen", () => {
     expect(messageRect).toHaveBeenCalledTimes(1);
     expect(message).toHaveClass("z-50");
     expect(message).toHaveStyle({
-      transform: "translate3d(0, -225px, 0)",
+      transform: "translate3d(0, -232px, 0)",
     });
     expect(screen.getByRole("menu")).toBeInTheDocument();
   });
@@ -630,8 +643,9 @@ describe("RoomScreen", () => {
     const messageViewport = screen
       .getByRole("region", { name: "학생회 기획부 대화" })
       .querySelector(".overflow-y-auto")!;
-    const messageSurface = message.children[1].lastElementChild!;
-    const messageBubble = messageSurface.firstElementChild!;
+    const messageBubble = message.querySelector(
+      '[data-slot="message-bubble"]',
+    )!;
     const messageRect = vi
       .spyOn(message, "getBoundingClientRect")
       .mockReturnValue(
@@ -650,8 +664,9 @@ describe("RoomScreen", () => {
       touches: [{ clientX: 120, clientY: 200 }],
     });
     act(() => void vi.advanceTimersByTime(500));
+    fireEvent.transitionEnd(message, { propertyName: "transform" });
     expect(screen.getByRole("menu")).toHaveStyle({
-      "--message-context-height": "50px",
+      "--message-context-height": "64px",
     });
 
     messageRect.mockReturnValue(
@@ -668,7 +683,7 @@ describe("RoomScreen", () => {
     expect(messageRect).toHaveBeenCalledTimes(2);
     expect(messageSurfaceRect).toHaveBeenCalledTimes(2);
     expect(screen.getByRole("menu")).toHaveStyle({
-      "--message-context-height": "60px",
+      "--message-context-height": "74px",
     });
   });
 
@@ -701,6 +716,7 @@ describe("RoomScreen", () => {
       touches: [{ clientX: 120, clientY: 200 }],
     });
     act(() => void vi.advanceTimersByTime(500));
+    fireEvent.transitionEnd(message, { propertyName: "transform" });
     const backdrop = document.querySelector(
       '[data-slot="message-context-backdrop"]',
     )!;
@@ -710,7 +726,7 @@ describe("RoomScreen", () => {
     expect(screen.getByRole("menu")).toBeInTheDocument();
     expect(message).toHaveClass("z-50");
     expect(message).toHaveStyle({
-      transform: "translate3d(0, -225px, 0)",
+      transform: "translate3d(0, -232px, 0)",
     });
 
     fireEvent.touchStart(backdrop, {
@@ -873,6 +889,7 @@ describe("RoomScreen", () => {
       touches: [{ clientX: 400, clientY: 640 }],
     });
     act(() => void vi.advanceTimersByTime(500));
+    fireEvent.transitionEnd(message, { propertyName: "transform" });
 
     expect(messageSurfaceRect).not.toHaveBeenCalled();
     expect(messageBubbleRect).toHaveBeenCalledOnce();
@@ -895,6 +912,7 @@ describe("RoomScreen", () => {
       touches: [{ clientX: 60, clientY: 625 }],
     });
     act(() => void vi.advanceTimersByTime(500));
+    fireEvent.transitionEnd(message, { propertyName: "transform" });
 
     expect(screen.getByRole("menu")).toBeInTheDocument();
     expect(

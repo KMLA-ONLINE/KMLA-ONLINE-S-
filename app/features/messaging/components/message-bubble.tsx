@@ -19,7 +19,7 @@ export function MessageBubble({
   endsGroup = true,
   selectedReaction,
   showReactions = true,
-  showTimestamp = true,
+  showTimestamp = false,
   replyTarget,
   replyTargetAuthor,
   onViewReply,

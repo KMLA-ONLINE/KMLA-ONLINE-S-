@@ -135,6 +135,7 @@ export function PinnedMessagesDialog({
                       showPinnedLabel={false}
                       showUnreadCount={false}
                       showReactions={false}
+                      showTimestamp
                       contextViewportRef={messageViewportRef}
                       contextPortalRef={contextPortalRef}
                       contextActions={[
