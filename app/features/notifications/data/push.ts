@@ -93,6 +93,18 @@ export async function getPushSupport(): Promise<PushSupport> {
   };
 }
 
+export async function refreshWebPushForeground(): Promise<void> {
+  if (!("serviceWorker" in navigator)) return;
+  const registration = await navigator.serviceWorker.getRegistration("/");
+  const subscription = await registration?.pushManager.getSubscription();
+  if (!subscription) return;
+
+  const { error } = await getSupabase().rpc("refresh_my_web_push_foreground", {
+    p_endpoint: subscription.endpoint,
+  });
+  if (error) throw error;
+}
+
 export async function enableWebPush(): Promise<PushSupport> {
   const initial = await getPushSupport();
   if (initial.state !== "available") return initial;

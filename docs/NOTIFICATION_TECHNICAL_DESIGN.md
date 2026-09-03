@@ -5,18 +5,71 @@
 
 ## 1. 범위
 
-첫 구현은 원본 기능이 이미 존재하는 다음 이벤트를 지원한다.
+현재 구현은 다음 이벤트와 전달 동작을 지원한다.
 
-- 댓글, 답글, 게시물·댓글 반응
-- 타임라인 게시물 작성과 타임라인 당사자의 삭제
-- 새 그룹 게시물
-- 가입 요청, 승인, 거절, 역할, 소유권, 공식 그룹 자동 가입, 그룹 정책, 그룹 삭제
-- 운영자의 게시물·댓글 삭제
-- 가입 승인·차단·해제, 앱 관리자와 공강 관리자 권한 변경
-- 관리자 선예약으로 종료된 장기 공강 예약
-- 가입 승인·차단·해제 이메일
+### 1.1 콘텐츠와 타임라인
 
-멘션, 익명 활동 제한, 메시지, 사용자 지정 그룹 초대, 노래방 참여자, 예약 리마인더,
+| 이벤트                                                  | `notification_kind`     | 중요도 |
+| ------------------------------------------------------- | ----------------------- | ------ |
+| 내 게시물의 새 댓글                                     | `post_commented`        | 보통   |
+| 내 댓글의 새 답글                                       | `comment_replied`       | 보통   |
+| 내 게시물의 새 반응과 대상별 집계                       | `post_reacted`          | 낮음   |
+| 내 댓글의 새 반응과 대상별 집계                         | `comment_reacted`       | 낮음   |
+| 다른 사용자가 내 타임라인에 작성한 게시물               | `timeline_posted`       | 보통   |
+| 타임라인 당사자가 내가 작성한 개인 게시물을 삭제한 결과 | `timeline_post_deleted` | 보통   |
+| 알림 수준이 `all`인 그룹의 새 게시물                    | `group_posted`          | 낮음   |
+
+### 1.2 그룹 운영
+
+| 이벤트                                           | `notification_kind`           | 중요도 |
+| ------------------------------------------------ | ----------------------------- | ------ |
+| 그룹 소유자·관리자에게 전달하는 새 가입 요청     | `group_join_requested`        | 보통   |
+| 가입 요청 승인                                   | `group_join_approved`         | 보통   |
+| 가입 요청 거절                                   | `group_join_rejected`         | 보통   |
+| 그룹 역할 변경                                   | `group_role_changed`          | 보통   |
+| 새 소유자와 기존 소유자에게 전달하는 소유권 이전 | `group_ownership_transferred` | 높음   |
+| 공식 그룹 자동 가입                              | `official_group_joined`       | 보통   |
+| 가입·활동 신원·게시물 작성 정책 변경             | `group_policy_changed`        | 보통   |
+| 그룹 영구 삭제                                   | `group_deleted`               | 높음   |
+
+- 가입 요청 취소·승인·거절 등으로 원본 요청이 삭제될 때 기존 관리자 알림과 미발송 outbox 정리
+
+### 1.3 운영 조치
+
+| 이벤트               | `notification_kind`             | 중요도 |
+| -------------------- | ------------------------------- | ------ |
+| 운영자의 게시물 삭제 | `post_moderated`                | 높음   |
+| 운영자의 댓글 삭제   | `comment_moderated`             | 높음   |
+| 그룹 익명 활동 제한  | `anonymous_activity_restricted` | 높음   |
+
+### 1.4 계정·권한과 학교 기능
+
+| 이벤트                                  | `notification_kind`       | 중요도와 추가 전달                      |
+| --------------------------------------- | ------------------------- | --------------------------------------- |
+| 학교 프로필 승인                        | `account_approved`        | 높음 + 외부 필수 이메일                 |
+| 학교 프로필 차단                        | `account_blocked`         | 높음 + 외부 필수 이메일                 |
+| 학교 프로필 차단 해제                   | `account_unblocked`       | 높음 + 외부 필수 이메일                 |
+| 앱 관리자 임명                          | `app_admin_granted`       | 높음                                    |
+| 앱 관리자 강등                          | `app_admin_revoked`       | 높음                                    |
+| 공강 관리자 권한 부여                   | `gongang_manager_granted` | 보통                                    |
+| 공강 관리자 권한 회수                   | `gongang_manager_revoked` | 보통                                    |
+| 관리자 선예약으로 종료된 장기 공강 예약 | `gongang_preempted`       | 높음                                    |
+| 학교 프로필 신청 접수                   | 없음                      | 낮음, 관리자 승인 대기 인원 배지만 표시 |
+
+학교 프로필 신청 접수는 개별 `public.notifications` 행이나 Push를 만들지 않는다.
+
+### 1.5 전달과 클라이언트
+
+- 최근 24시간 미확인 수 배지, 커서 기반 알림함, 개별·전체 읽음 처리와 30일 보관
+- 알림 유형별·그룹별 설정과 기기별 Web Push 구독 등록·해제
+- transaction 안의 인앱 알림·outbox 생성과 Edge Function의 lease·재시도·dead-letter 전달
+- 발송 직전 최신 설정·접근 권한 재검증과 만료·해제된 Push 구독 정리
+- 포커스된 앱의 낮음·보통 Push 억제, 높음 Push 유지와 중요도별 Web Push `Urgency`
+- 낮음·보통 Push의 카테고리별 시스템 카드 집계와 높음 Push의 개별 카드 표시
+- 알림 클릭 resolver, 로그인 복귀와 앱이 종료된 상태의 선언적 뒤로가기 스택
+- Realtime과 창 focus 복귀를 통한 알림 목록·셸 배지 동기화
+
+멘션, 메시지, 사용자 지정 그룹 초대, 노래방 참여자, 예약 리마인더,
 비밀번호 변경·초기화와 계정 탈퇴는 원본 기능과 세부 정책이 구현될 때 같은 기반에 추가한다.
 
 댓글 스레드를 삭제할 때에는 직접 선택한 댓글 작성자에게만 알린다. 그룹을 삭제한 소유자 본인에게는
@@ -132,7 +185,8 @@ Push 발송 직전에 기기 상태, 최신 유형·그룹 설정과 현재 대�
 - public table의 불필요한 `MAINTAIN`, `REFERENCES`, `TRIGGER`, `TRUNCATE` 권한을 회수한다.
 - subscription, event key, outbox와 실제 익명 신원은 client role에서 모두 회수한다.
 - definer 함수는 `search_path = ''`과 내부 호출자 검증을 사용한다.
-- Push payload에는 opaque notification/delivery ID와 안전한 제목·본문·tag만 넣는다.
+- Push payload에는 opaque notification/delivery ID, 안전한 제목·본문·tag와 서버가 정한 중요도·카테고리
+  enum만 넣는다. 서비스 워커는 이 값으로 표시와 묶음 정책을 적용한다.
 - Push payload에 사용자 내부 ID, 실제 익명 신원, 운영자 신원, 원문, 파일명, endpoint와 외부 URL을
   넣지 않는다.
 
@@ -146,6 +200,14 @@ worker는 delivery를 lease한 뒤 각 항목을 외부 서비스로 보내기 �
 dispatcher는 만료되지 않은 lease를 suppress하거나 가져가지 않는다. 최종 확인에서 더 이상 전달할 수
 없는 항목은 외부 호출 없이 suppress한다.
 
+낮음 중요도 Web Push는 해당 subscription의 포그라운드 heartbeat가 유효하면 최종 확인에서
+suppress한다. 보통과 높음 중요도는 heartbeat와 관계없이 전달한다. Web Push `Urgency`도 낮음·보통·높음에
+각각 `low`, `normal`, `high`를 사용한다.
+
+억제 판정은 발송 직전 한 번뿐이고 되돌리지 않는다. 억제 대상을 브로드캐스트성 낮음 중요도로 한정하는
+이유가 여기에 있다. 억제해도 `public.notifications` 행과 읽지 않음 배지는 남으므로 사라지는 것은
+시스템 알림 하나다.
+
 - Web Push 2xx는 성공 처리한다.
 - 404와 410은 subscription을 폐기한다.
 - 429와 5xx는 제한된 exponential backoff로 재시도한다.
@@ -158,8 +220,13 @@ Production 앱 이벤트 이메일은 Resend를 사용한다. 로컬은 Supabase
 ## 7. 서비스 워커와 클릭
 
 기존 Workbox `generateSW`의 app shell·업데이트 정책을 유지하고 `importScripts`로 Push handler를 추가한다.
-handler는 `push`와 `notificationclick`을 처리한다. 동일 delivery ID와 notification tag를 사용해
-at-least-once 전달의 중복 표시를 억제한다.
+handler는 `push`와 `notificationclick`을 처리한다. 높음 중요도는 notification ID tag를, 낮음·보통은
+카테고리 tag를 사용한다. 동일 delivery ID는 기존 카드의 집계 수를 다시 늘리지 않는다.
+
+카테고리 tag의 기존 알림은 `getNotifications()`로 읽어 최신 알림과 누적 개수로 교체한다. 한 건인
+카드는 notification resolver를 열고, 둘 이상인 카드는 일반 알림함을 연다. 보통 중요도 교체는
+`renotify`하고 낮음 중요도 교체는 조용히 갱신한다. 표준 Web Notifications API에는 네이티브 앱의
+펼침형 그룹 API가 없으므로 카테고리별 대표 카드가 정식 동작이다.
 
 클릭 시 payload URL을 열지 않고 `/noti/open/:notificationId`만 구성한다. 기존 앱 창이 있으면 focus와
 navigate를 사용하고 없으면 새 창을 연다. resolver route는 인증, 현재 계정, 대상 접근 권한과 읽음
@@ -193,6 +260,11 @@ badge를 갱신하며 창 focus 복귀 시 revalidation을 fallback으로 사용
 Push 권한 설명은 승인 사용자의 gate 아래에서 표시한다. 사용자 동작 안에서만 브라우저 권한을 요청하고,
 기기·계정별 prompt 상태는 versioned localStorage key에 저장한다. 서비스 워커 업데이트, iOS 설치 안내,
 Push 권한과 일반 설치 안내가 겹치지 않도록 전역 PWA prompt 우선순위를 둔다.
+
+승인 사용자 gate 아래의 알림 동기화 컴포넌트는 문서가 `visible`이고 창이 focus된 동안 현재 Push
+subscription endpoint의 포그라운드 heartbeat를 주기적으로 갱신한다. 서버가 정한 짧은 만료 시각을
+사용하고 클라이언트가 임의 만료 시각을 지정하지 않는다. heartbeat를 명시적으로 해제하지 않고
+만료시키므로 여러 탭 중 하나가 닫혀 다른 활성 탭의 상태를 지우는 경쟁이 없다.
 
 ## 9. 지원 환경
 

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(38);
 
 select ok(
   (select relrowsecurity from pg_class where oid = 'public.notifications'::regclass),
@@ -38,6 +38,14 @@ select ok(
 select ok(
   not has_function_privilege('authenticated', 'public.prepare_notification_delivery(uuid,uuid)', 'EXECUTE'),
   'clients cannot prepare leased delivery work'
+);
+select ok(
+  has_function_privilege('authenticated', 'public.refresh_my_web_push_foreground(text)', 'EXECUTE'),
+  'authenticated clients can refresh their device foreground state'
+);
+select ok(
+  not has_function_privilege('anon', 'public.refresh_my_web_push_foreground(text)', 'EXECUTE'),
+  'anonymous clients cannot refresh device foreground state'
 );
 
 insert into auth.users (
@@ -216,6 +224,18 @@ select ok(
   )),
   'push status confirms a registered endpoint without returning its keys'
 );
+select ok(
+  public.refresh_my_web_push_foreground('https://push.example.test/subscription/one'),
+  'a caller can refresh its registered endpoint'
+);
+reset role;
+select ok(
+  (select foreground_until between now() + interval '35 seconds' and now() + interval '45 seconds'
+   from private.web_push_subscriptions
+   where endpoint = 'https://push.example.test/subscription/one'),
+  'the server controls the short foreground expiry'
+);
+set local role authenticated;
 select is(
   public.unregister_my_web_push_subscription('https://push.example.test/subscription/one'),
   true,

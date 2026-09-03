@@ -1322,9 +1322,11 @@ export type Database = {
         Returns: {
           auth: string
           body: string
+          category: Database["public"]["Enums"]["notification_category"]
           channel: "web_push" | "email"
           delivery_id: string
           endpoint: string
+          importance: Database["public"]["Enums"]["notification_importance"]
           lease_id: string
           notification_id: string
           p256dh: string
@@ -2262,6 +2264,10 @@ export type Database = {
         }[]
       }
       publish_group_post: { Args: { p_post_id: string }; Returns: string }
+      refresh_my_web_push_foreground: {
+        Args: { p_endpoint: string }
+        Returns: boolean
+      }
       register_my_web_push_subscription: {
         Args: {
           p_auth: string

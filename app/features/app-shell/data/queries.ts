@@ -47,14 +47,27 @@ export async function loadShellData(): Promise<ShellLoadData | null> {
     return { email: session.user.email ?? "", profile: null, badges: {} };
   }
 
-  const [avatarUrl, notificationCount] = await Promise.all([
-    resolveProfileAvatar(profile.avatar_path),
-    profile.status === "accepted"
-      ? supabase.rpc("get_my_recent_unread_notification_count")
-      : Promise.resolve({ data: 0, error: null }),
-  ]);
+  const [avatarUrl, notificationCount, pendingApplications] = await Promise.all(
+    [
+      resolveProfileAvatar(profile.avatar_path),
+      profile.status === "accepted"
+        ? supabase.rpc("get_my_recent_unread_notification_count")
+        : Promise.resolve({ data: 0, error: null }),
+      profile.status === "accepted" && profile.role === "admin"
+        ? supabase.rpc("admin_list_applications", {
+            p_status: "pending",
+            p_limit: 1,
+            p_offset: 0,
+          })
+        : Promise.resolve({ data: [], error: null }),
+    ],
+  );
   if (notificationCount.error) {
     await clearSessionOrThrow(notificationCount.error);
+    return null;
+  }
+  if (pendingApplications.error) {
+    await clearSessionOrThrow(pendingApplications.error);
     return null;
   }
 
@@ -71,6 +84,11 @@ export async function loadShellData(): Promise<ShellLoadData | null> {
   return {
     email: session.user.email ?? "",
     profile: shellProfile,
-    badges: { "/noti": notificationCount.data ?? 0 },
+    badges: {
+      "/noti": notificationCount.data ?? 0,
+      ...(profile.role === "admin"
+        ? { "/admin": pendingApplications.data?.[0]?.total_count ?? 0 }
+        : {}),
+    },
   };
 }

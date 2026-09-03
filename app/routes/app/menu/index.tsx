@@ -17,6 +17,7 @@ import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import { LogoutButton } from "~/features/auth";
 import { ListLinkRow } from "~/shared/components/list-link-row";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { Badge } from "~/shared/ui/badge";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -52,7 +53,8 @@ const shortcuts: Shortcut[] = [
 ];
 
 export default function MenuPage() {
-  const { profile } = useAppShell();
+  const { badges, profile } = useAppShell();
+  const pendingApplicationCount = badges["/admin"] ?? 0;
 
   const visibleShortcuts = shortcuts.filter(
     (shortcut) => !shortcut.studentOnly || profile.type === "student",
@@ -114,6 +116,18 @@ export default function MenuPage() {
               to="/admin"
               label="관리자 페이지"
               icon={ShieldCheckIcon}
+              trailing={
+                pendingApplicationCount > 0 ? (
+                  <Badge
+                    variant="secondary"
+                    aria-label={`승인 대기 ${pendingApplicationCount}명`}
+                  >
+                    {pendingApplicationCount > 99
+                      ? "99+"
+                      : pendingApplicationCount}
+                  </Badge>
+                ) : null
+              }
             />
           ) : null}
         </div>
