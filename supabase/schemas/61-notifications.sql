@@ -806,7 +806,7 @@ begin
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
   update private.web_push_subscriptions
-  set foreground_until = now() + interval '75 seconds'
+  set foreground_until = now() + interval '40 seconds'
   where endpoint = p_endpoint and profile_id = private.current_profile_id();
   return found;
 end;

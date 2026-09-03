@@ -13,14 +13,7 @@ const PUSH_KEYS = [
 ];
 const CLICK_KEYS = ["count", "deliveryId", "notificationId"];
 const LEGACY_CLICK_KEYS = ["deliveryId", "notificationId"];
-const CATEGORIES = [
-  "content",
-  "timeline",
-  "group",
-  "account",
-  "school",
-  "moderation",
-];
+const CATEGORY_PATTERN = /^[a-z_]{1,32}$/;
 const IMPORTANCES = ["low", "normal", "high"];
 const CATEGORY_TITLES = {
   content: "콘텐츠 알림",
@@ -43,6 +36,21 @@ function hasExactKeys(value, expected) {
   );
 }
 
+// A deployed worker outlives the server that talks to it: `skipWaiting` is off,
+// so the previous version keeps handling pushes until the user accepts the
+// update prompt. Rejecting a payload for carrying a key this version has never
+// heard of would silence every push in that window, so unknown keys are ignored
+// instead. Nothing here reads a key outside `expected`.
+function hasRequiredKeys(value, expected) {
+  return expected.every((key) => key in value);
+}
+
+function categoryTitle(category) {
+  return Object.hasOwn(CATEGORY_TITLES, category)
+    ? CATEGORY_TITLES[category]
+    : "새 알림";
+}
+
 function isBoundedText(value, maxLength) {
   return (
     typeof value === "string" &&
@@ -52,7 +60,7 @@ function isBoundedText(value, maxLength) {
 }
 
 function isPushPayload(value) {
-  if (!isRecord(value) || !hasExactKeys(value, PUSH_KEYS)) return false;
+  if (!isRecord(value) || !hasRequiredKeys(value, PUSH_KEYS)) return false;
   const expectedTag =
     value.importance === "high"
       ? `notification:${value.notificationId}`
@@ -61,7 +69,11 @@ function isPushPayload(value) {
     ID_PATTERN.test(value.notificationId) &&
     ID_PATTERN.test(value.deliveryId) &&
     IMPORTANCES.includes(value.importance) &&
-    CATEGORIES.includes(value.category) &&
+    // A category this version does not know still groups and tags correctly;
+    // only its display title falls back. The shape check keeps the tag
+    // comparison below meaningful.
+    typeof value.category === "string" &&
+    CATEGORY_PATTERN.test(value.category) &&
     isBoundedText(value.title, 160) &&
     isBoundedText(value.body, 240) &&
     value.tag === expectedTag
@@ -107,7 +119,7 @@ async function showPush(data) {
   const grouped = count > 1;
 
   await self.registration.showNotification(
-    grouped ? `${CATEGORY_TITLES[payload.category]} ${count}개` : payload.title,
+    grouped ? `${categoryTitle(payload.category)} ${count}개` : payload.title,
     {
       body: grouped
         ? `${payload.title} 외 ${count - 1}개의 알림이 있습니다.`

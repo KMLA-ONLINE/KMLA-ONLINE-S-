@@ -225,16 +225,98 @@ describe("public push service worker", () => {
       "unknown importance",
       { json: () => ({ ...validPayload, importance: "urgent" }) },
     ],
-    [
-      "arbitrary URL field",
-      { json: () => ({ ...validPayload, url: "https://evil.example" }) },
-    ],
+    ["missing category", { json: () => ({ ...validPayload, category: "" }) }],
   ])("ignores %s", async (_case, data) => {
     const worker = loadPushWorker();
 
     await worker.dispatch("push", { data });
 
     expect(worker.showNotification).not.toHaveBeenCalled();
+  });
+
+  // A key this worker version has never heard of must not silence the push: a
+  // deployed worker keeps running until the user accepts the update prompt, so
+  // rejecting unknown keys would drop every push emitted by a newer server.
+  it("shows a push carrying an unknown field without reading it", async () => {
+    const worker = loadPushWorker();
+
+    await worker.dispatch("push", {
+      data: { json: () => ({ ...validPayload, url: "https://evil.example" }) },
+    });
+
+    expect(worker.showNotification).toHaveBeenCalledWith(
+      validPayload.title,
+      expect.objectContaining({
+        icon: "/pwa-192x192.png",
+        tag: validPayload.tag,
+        data: {
+          notificationId: validPayload.notificationId,
+          deliveryId: validPayload.deliveryId,
+          count: 1,
+        },
+      }),
+    );
+
+    await worker.dispatch("notificationclick", {
+      notification: { close: vi.fn(), data: worker.notifications[0]?.data },
+    });
+    expect(worker.openWindow).toHaveBeenCalledWith(
+      `/noti/open/${validPayload.notificationId}`,
+    );
+  });
+
+  it("shows a push in a category this version does not know", async () => {
+    const worker = loadPushWorker();
+    const unknownCategory = { ...validPayload, category: "wellbeing" };
+
+    await worker.dispatch("push", {
+      data: {
+        json: () => ({
+          ...unknownCategory,
+          tag: "notification-category:wellbeing",
+        }),
+      },
+    });
+    await worker.dispatch("push", {
+      data: {
+        json: () => ({
+          ...unknownCategory,
+          notificationId: "038f3f14-9b9a-7c1d-a1b2-0123456789ab",
+          deliveryId: "038f3f15-40c7-7d25-b2c3-abcdef012345",
+          title: "또 다른 알림",
+          tag: "notification-category:wellbeing",
+        }),
+      },
+    });
+
+    expect(worker.showNotification).toHaveBeenLastCalledWith(
+      "새 알림 2개",
+      expect.objectContaining({ tag: "notification-category:wellbeing" }),
+    );
+  });
+
+  it("does not reach the prototype chain for a category title", async () => {
+    const worker = loadPushWorker();
+    const payload = {
+      ...validPayload,
+      category: "constructor",
+      tag: "notification-category:constructor",
+    };
+
+    await worker.dispatch("push", { data: { json: () => payload } });
+    await worker.dispatch("push", {
+      data: {
+        json: () => ({
+          ...payload,
+          deliveryId: "048f3f15-40c7-7d25-b2c3-abcdef012345",
+        }),
+      },
+    });
+
+    expect(worker.showNotification).toHaveBeenLastCalledWith(
+      "새 알림 2개",
+      expect.anything(),
+    );
   });
 
   it("focuses and navigates an existing app window to the local resolver", async () => {
