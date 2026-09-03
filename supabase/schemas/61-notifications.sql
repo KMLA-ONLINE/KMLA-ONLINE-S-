@@ -281,7 +281,7 @@ as $$
           notification, subscription.created_at, subscription.expiration_time
         )
         and (
-          notification.importance = 'high'
+          notification.importance in ('high', 'normal')
           or subscription.foreground_until is null
           or subscription.foreground_until <= now()
         )

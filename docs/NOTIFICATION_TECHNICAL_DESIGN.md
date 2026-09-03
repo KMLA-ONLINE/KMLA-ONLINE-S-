@@ -200,9 +200,13 @@ worker는 delivery를 lease한 뒤 각 항목을 외부 서비스로 보내기 �
 dispatcher는 만료되지 않은 lease를 suppress하거나 가져가지 않는다. 최종 확인에서 더 이상 전달할 수
 없는 항목은 외부 호출 없이 suppress한다.
 
-낮음·보통 중요도 Web Push는 해당 subscription의 포그라운드 heartbeat가 유효하면 최종 확인에서
-suppress한다. 높음 중요도는 heartbeat와 관계없이 전달한다. Web Push `Urgency`도 낮음·보통·높음에
+낮음 중요도 Web Push는 해당 subscription의 포그라운드 heartbeat가 유효하면 최종 확인에서
+suppress한다. 보통과 높음 중요도는 heartbeat와 관계없이 전달한다. Web Push `Urgency`도 낮음·보통·높음에
 각각 `low`, `normal`, `high`를 사용한다.
+
+억제 판정은 발송 직전 한 번뿐이고 되돌리지 않는다. 억제 대상을 브로드캐스트성 낮음 중요도로 한정하는
+이유가 여기에 있다. 억제해도 `public.notifications` 행과 읽지 않음 배지는 남으므로 사라지는 것은
+시스템 알림 하나다.
 
 - Web Push 2xx는 성공 처리한다.
 - 404와 410은 subscription을 폐기한다.

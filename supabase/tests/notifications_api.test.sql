@@ -230,7 +230,7 @@ select ok(
 );
 reset role;
 select ok(
-  (select foreground_until between now() + interval '70 seconds' and now() + interval '80 seconds'
+  (select foreground_until between now() + interval '35 seconds' and now() + interval '45 seconds'
    from private.web_push_subscriptions
    where endpoint = 'https://push.example.test/subscription/one'),
   'the server controls the short foreground expiry'
