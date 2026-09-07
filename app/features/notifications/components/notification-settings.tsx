@@ -472,9 +472,7 @@ export function NotificationSettings({
 
         <SettingsSection
           title="유형별 Push"
-          scope="모든 기기"
           description="이 기기 Push가 켜져 있을 때 어떤 유형을 보낼지 고릅니다."
-          footnote="운영 조치는 유형별 설정과 관계없이 전달됩니다. 가입 승인·차단 Push는 ‘계정 · 권한’ 설정을 따르며, 이메일과 앱 알림함은 계속 전달됩니다."
         >
           {PREFERENCE_ROWS.map(([key, Icon, title, description]) => (
             <div key={key} className="flex items-center gap-3 px-4 py-3">
@@ -509,9 +507,8 @@ export function NotificationSettings({
 
         <SettingsSection
           title="그룹별 알림"
-          scope="모든 기기"
-          description="기본값을 바꾼 그룹만 모아 둡니다. 그룹 화면의 ⋯ 메뉴에서 그룹마다 바꿀 수 있습니다."
-          footnote="앱 알림함과 Push를 따로 고릅니다. ‘없음’으로 둔 그룹은 Push도 받을 수 없습니다."
+          description="기본값을 바꾼 그룹만 보입니다. 그룹 화면의 ⋯ 메뉴에서 그룹마다 바꿀 수 있습니다."
+          footnote="앱 알림함과 Push는 별도로 작용합니다."
         >
           {adjustedGroups.length > 0 ? (
             adjustedGroups.map((preference) => (
