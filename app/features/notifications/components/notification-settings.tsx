@@ -182,13 +182,11 @@ function summarizeDelivery(
 
 function SettingsSection({
   title,
-  scope,
   description,
   footnote,
   children,
 }: {
   title: string;
-  scope: string;
   description: string;
   footnote?: React.ReactNode;
   children: React.ReactNode;
@@ -200,12 +198,6 @@ function SettingsSection({
           <h2 className="text-sm font-semibold">{title}</h2>
           {/* 어떤 설정이 이 기기에만 적용되고 어떤 것이 계정 전체에 적용되는지는 화면
               어디에도 드러나지 않던 정보다. 섹션마다 한 번씩 붙여 둔다. */}
-          <Badge
-            variant="outline"
-            className="font-normal text-muted-foreground"
-          >
-            {scope}
-          </Badge>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">{description}</p>
       </div>
