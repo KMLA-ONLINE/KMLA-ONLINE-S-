@@ -1,40 +1,37 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 
-import { absenceKeys } from "~/features/absences/data/cache";
+import { storyKeys } from "~/features/stories/data/cache";
+import { deleteMyStory, setMyStory } from "~/features/stories/data/mutations";
 import {
-  deleteMyAbsence,
-  setMyAbsence,
-} from "~/features/absences/data/mutations";
-import {
-  ABSENCE_REASON_MAX_LENGTH,
-  isAbsenceReasonValid,
-  normalizeAbsenceReason,
-} from "~/features/absences/model/absence";
+  isStoryContentValid,
+  normalizeStoryContent,
+  STORY_CONTENT_MAX_LENGTH,
+} from "~/features/stories/model/story";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { Button } from "~/shared/ui/button";
 import { Textarea } from "~/shared/ui/textarea";
 
-export function AbsenceEditor({
-  initialReason,
+export function StoryEditor({
+  initial,
   onSaved,
 }: {
-  initialReason: string | null;
+  initial: string | null;
   onSaved?: () => void | Promise<void>;
 }) {
   const navigate = useNavigate();
-  const [reason, setReason] = useState(initialReason ?? "");
+  const [content, setContent] = useState(initial ?? "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const normalizedReason = normalizeAbsenceReason(reason);
-  const valid = isAbsenceReasonValid(reason);
-  const editing = initialReason !== null;
+  const normalizedContent = normalizeStoryContent(content);
+  const valid = isStoryContentValid(content);
+  const editing = initial !== null;
 
   async function finish() {
     // 저장·삭제 직후 홈 레일이 예전 목록을 그리지 않도록 캐시를 먼저 버린다.
     await getQueryClient().invalidateQueries({
-      queryKey: absenceKeys.all,
+      queryKey: storyKeys.all,
       refetchType: "none",
     });
 
@@ -54,7 +51,7 @@ export function AbsenceEditor({
     setError(null);
 
     try {
-      await setMyAbsence(normalizedReason);
+      await setMyStory(normalizedContent);
       await finish();
     } catch {
       setError("저장하지 못했습니다.");
@@ -65,7 +62,7 @@ export function AbsenceEditor({
   async function remove() {
     if (!editing || pending) return;
 
-    if (!window.confirm("공결 · 병결 기록을 삭제할까요?")) {
+    if (!window.confirm("스토리를 삭제할까요?")) {
       return;
     }
 
@@ -73,7 +70,7 @@ export function AbsenceEditor({
     setError(null);
 
     try {
-      await deleteMyAbsence();
+      await deleteMyStory();
       await finish();
     } catch {
       setError("삭제하지 못했습니다.");
@@ -84,29 +81,31 @@ export function AbsenceEditor({
   return (
     <form
       onSubmit={(event) => void submit(event)}
-      className="flex min-w-0 flex-col gap-3"
+      className="flex min-w-0 flex-col gap-5"
     >
-      <div className="flex items-end justify-between gap-4">
-        <label htmlFor="absence-reason" className="text-sm font-medium">
-          사유
-        </label>
+      <div className="flex min-w-0 flex-col gap-3">
+        <div className="flex items-end justify-between gap-4">
+          <label htmlFor="story-content" className="text-sm font-medium">
+            오늘 한마디
+          </label>
 
-        <span className="text-xs text-muted-foreground">
-          {normalizedReason.length}/{ABSENCE_REASON_MAX_LENGTH}
-        </span>
+          <span className="text-xs text-muted-foreground">
+            {normalizedContent.length}/{STORY_CONTENT_MAX_LENGTH}
+          </span>
+        </div>
+
+        <Textarea
+          id="story-content"
+          value={content}
+          onChange={(event) => setContent(event.currentTarget.value)}
+          maxLength={STORY_CONTENT_MAX_LENGTH}
+          rows={4}
+          placeholder="오늘 무슨 일이 있었나요?"
+          aria-invalid={Boolean(content) && !valid}
+          disabled={pending}
+          className="[field-sizing:fixed] min-h-28 max-w-full min-w-0 resize-none"
+        />
       </div>
-
-      <Textarea
-        id="absence-reason"
-        value={reason}
-        onChange={(event) => setReason(event.currentTarget.value)}
-        maxLength={ABSENCE_REASON_MAX_LENGTH}
-        rows={4}
-        placeholder="사유를 입력하세요"
-        aria-invalid={Boolean(reason) && !valid}
-        disabled={pending}
-        className="[field-sizing:fixed] min-h-28 max-w-full min-w-0 resize-none"
-      />
 
       {error ? (
         <p role="alert" className="text-xs text-destructive">
@@ -129,7 +128,7 @@ export function AbsenceEditor({
         )}
 
         <Button type="submit" disabled={!valid || pending}>
-          {pending ? "처리 중" : editing ? "수정" : "알리기"}
+          {pending ? "처리 중" : editing ? "수정" : "올리기"}
         </Button>
       </div>
     </form>

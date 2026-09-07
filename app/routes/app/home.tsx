@@ -1,12 +1,9 @@
-import { MessagesSquareIcon, SearchIcon, UtensilsIcon } from "lucide-react";
+import { SearchIcon, UtensilsIcon } from "lucide-react";
 import { Link } from "react-router";
 
-import { AbsenceRail } from "~/features/absences/components/absence-rail";
-import {
-  ABSENCE_STALE_TIME,
-  absenceKeys,
-} from "~/features/absences/data/cache";
-import { listTodayAbsences } from "~/features/absences/data/queries";
+import { StoryRail } from "~/features/stories/components/story-rail";
+import { STORY_STALE_TIME, storyKeys } from "~/features/stories/data/cache";
+import { listTodayStories } from "~/features/stories/data/queries";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import { hasActiveSession } from "~/features/auth";
 import { FeedScreen, feedQuery } from "~/features/feed";
@@ -65,13 +62,13 @@ export async function clientLoader() {
   // 렌더되지 않지만, 그 전에 요청을 띄우면 인증 전용 RPC 세 개가 익명으로 나가 401이 된다.
   // 인증은 게이트가 판정하고, 여기서는 요청을 보내지 않는 것까지만 한다.
   if (!(await hasActiveSession())) {
-    return { mealDay: null, birthdays: null, absences: [] };
+    return { mealDay: null, birthdays: null, stories: [] };
   }
 
   const queryClient = getQueryClient();
   const referenceDate = getKoreaDateIso();
 
-  const [mealDay, birthdays, absences] = await Promise.all([
+  const [mealDay, birthdays, stories] = await Promise.all([
     getMealDay(getKoreaDate()).catch(() => null),
     queryClient
       .query({
@@ -83,9 +80,9 @@ export async function clientLoader() {
       .catch(() => null),
     queryClient
       .query({
-        queryKey: absenceKeys.today(referenceDate),
-        queryFn: listTodayAbsences,
-        staleTime: ABSENCE_STALE_TIME,
+        queryKey: storyKeys.today(referenceDate),
+        queryFn: listTodayStories,
+        staleTime: STORY_STALE_TIME,
       })
       .catch(() => []),
     // 캐시에 이미 세션이 있으면 그대로 쓴다. 뒤로 가기로 돌아왔을 때 쌓아 둔 페이지를
@@ -93,11 +90,11 @@ export async function clientLoader() {
     queryClient.ensureInfiniteQueryData(feedQuery()).catch(() => null),
   ]);
 
-  return { mealDay, birthdays, absences };
+  return { mealDay, birthdays, stories };
 }
 
 export default function FeedPage({ loaderData }: Route.ComponentProps) {
-  const { mealDay, birthdays, absences } = loaderData;
+  const { mealDay, birthdays, stories } = loaderData;
   const { profile } = useAppShell();
   const { openSearch: openDirectorySearch } = useDirectorySearchDialog();
 
@@ -111,15 +108,6 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
             <Button
               variant="ghost"
               size="icon"
-              nativeButton={false}
-              aria-label="급식"
-              render={<Link to="/menu/meal" />}
-            >
-              <UtensilsIcon />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
               aria-label="검색"
               onClick={openDirectorySearch}
             >
@@ -129,10 +117,10 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
               variant="ghost"
               size="icon"
               nativeButton={false}
-              aria-label="메시지"
-              render={<Link to="/messenger" />}
+              aria-label="급식"
+              render={<Link to="/menu/meal" />}
             >
-              <MessagesSquareIcon />
+              <UtensilsIcon />
             </Button>
           </>
         }
@@ -141,8 +129,8 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-4">
         <div className="min-w-0">
-          {profile.type === "student" && absences.length > 0 ? (
-            <AbsenceRail initialItems={absences} viewerPubId={profile.pub_id} />
+          {stories.length > 0 ? (
+            <StoryRail initialItems={stories} viewerPubId={profile.pub_id} />
           ) : null}
 
           <FeedScreen />

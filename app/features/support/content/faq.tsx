@@ -36,9 +36,9 @@ export const faqSections: FaqSection[] = [
         question: "홈 화면에 앱처럼 설치할 수 있나요?",
         answer: (
           <>
-            네. 브라우저 메뉴의 <b>홈 화면에 추가</b>(또는 <b>앱 설치</b>)를
-            누르면 설치됩니다. 설치하면 주소창 없이 전체 화면으로 열리고 알림도
-            더 안정적으로 받습니다.
+            네. Chrome이나 Safari에서 브라우저 메뉴의 <b>앱 설치</b>(또는{" "}
+            <b>공유 - 홈 화면에 추가</b>)를 누르면 설치됩니다. 설치하면 전체
+            화면으로 열리고 알림도 더 안정적으로 받습니다.
           </>
         ),
       },
@@ -166,11 +166,6 @@ export const faqSections: FaqSection[] = [
     title: "학사 관련 기능",
     items: [
       {
-        question: "공결·병결에 어떤 학생은 보이고 어떤 학생은 안 보여요.",
-        answer:
-          "현재 학교에서 함께 생활하는 기수를 기준으로 표시됩니다. 복학생도 원래 입학 기수가 아니라 현재 함께 생활하는 기수 기준으로 묶여 보입니다.",
-      },
-      {
         question: "공강이나 노래방 예약은 언제 열리나요?",
         answer:
           "매주 월요일 0시에 그 주 예약이 열리며, 해당 주 일요일까지의 자리만 예약할 수 있습니다.",
@@ -181,11 +176,12 @@ export const faqSections: FaqSection[] = [
 
 /**
  * 도움말 맨 아래 문의 안내.
- *
- * 문의 그룹의 주소(slug)는 런타임 데이터라 여기서 알 수 없어 글로만 안내한다. 주소가
- * 정해지면 `supportContacts`에 `{ label: "문의 그룹", to: "/groups/<slug>" }`를 넣어
- * 눌러서 갈 수 있게 만든다.
  */
-export const supportNote = "여기에 없는 질문은 링크를 이용해 주세요.";
+export const supportNote = "";
 
-export const supportContacts: SupportContact[] = [];
+export const supportContacts: SupportContact[] = [
+  {
+    label: "문의 그룹",
+    to: "/groups/support",
+  },
+];

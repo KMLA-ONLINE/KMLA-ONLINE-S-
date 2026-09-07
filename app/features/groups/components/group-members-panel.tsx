@@ -11,6 +11,7 @@ import type {
   GroupMemberPage,
   GroupMemberRole,
 } from "~/features/groups/model/types";
+import { formatCohort } from "~/features/profiles";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
@@ -222,7 +223,8 @@ function MemberRow({
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium">{member.name}</span>
         <span className="block text-xs text-muted-foreground">
-          {cohortLabel(member.cohort)}
+          {formatCohort(member.cohort, member.is_returning_student) ??
+            "기수 없음"}
         </span>
       </span>
       <Badge variant="secondary">{getGroupMemberRoleLabel(member.role)}</Badge>
@@ -244,8 +246,4 @@ function MemberRow({
       />
     </li>
   );
-}
-
-function cohortLabel(cohort: number | null): string {
-  return cohort === null ? "기수 없음" : `${cohort}기`;
 }

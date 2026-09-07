@@ -1,6 +1,7 @@
 import { Link, useFetcher } from "react-router";
 
 import type { GroupJoinRequest } from "~/features/groups/model/types";
+import { formatCohort } from "~/features/profiles";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
@@ -44,7 +45,8 @@ export function GroupJoinRequestsPanel({
                   {request.name}
                 </Link>
                 <p className="text-xs text-muted-foreground">
-                  {cohortLabel(request.cohort)}
+                  {formatCohort(request.cohort, request.is_returning_student) ??
+                    "기수 없음"}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {formatDate(request.requested_at)} 요청
@@ -96,10 +98,6 @@ export function GroupJoinRequestsPanel({
       </CardContent>
     </Card>
   );
-}
-
-function cohortLabel(cohort: number | null): string {
-  return cohort === null ? "기수 없음" : `${cohort}기`;
 }
 
 function formatDate(value: string): string {

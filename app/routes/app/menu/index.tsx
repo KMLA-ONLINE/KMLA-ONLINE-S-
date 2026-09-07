@@ -17,6 +17,7 @@ import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import { LogoutButton } from "~/features/auth";
 import { ListLinkRow } from "~/shared/components/list-link-row";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { cn } from "~/shared/lib/utils";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -27,8 +28,8 @@ interface Shortcut {
   to: string;
   label: string;
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
-  /** 재학생에게만 보이는 항목. */
-  studentOnly?: boolean;
+  /** 스토리처럼 재학생·교사만 쓰는 항목. 졸업생에게는 숨긴다. */
+  writersOnly?: boolean;
 }
 
 /**
@@ -44,10 +45,10 @@ const shortcuts: Shortcut[] = [
   { to: "/util/gongang", label: "공강 · 노래방", icon: CalendarClockIcon },
   { to: "/menu/birthdays", label: "생일", icon: CakeIcon },
   {
-    to: "/menu/absence",
-    label: "공결 & 병결",
+    to: "/menu/story",
+    label: "스토리",
     icon: ClipboardListIcon,
-    studentOnly: true,
+    writersOnly: true,
   },
 ];
 
@@ -55,7 +56,7 @@ export default function MenuPage() {
   const { profile } = useAppShell();
 
   const visibleShortcuts = shortcuts.filter(
-    (shortcut) => !shortcut.studentOnly || profile.type === "student",
+    (shortcut) => !shortcut.writersOnly || profile.type !== "alumni",
   );
 
   return (
@@ -87,18 +88,25 @@ export default function MenuPage() {
 
         <nav
           aria-label="바로가기"
-          className="grid grid-cols-3 gap-2 sm:grid-cols-5"
+          className="grid grid-cols-2 gap-2 sm:grid-cols-5"
         >
-          {visibleShortcuts.map(({ to, label, icon: Icon }) => (
+          {visibleShortcuts.map(({ to, label, icon: Icon }, index) => (
             <Link
               key={to}
               to={to}
-              className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-xl border bg-card px-2 py-3 transition-colors hover:bg-muted/60"
+              className={cn(
+                "flex min-h-18 flex-col items-center justify-center gap-2 rounded-xl border bg-card px-2 py-3 transition-colors hover:bg-muted/60",
+                // 항목 수는 역할에 따라 넷이거나 다섯이다. 홀수일 때 두 칸 그리드의 마지막
+                // 하나가 옆자리를 비운 채 남으므로, 그 하나만 한 줄을 다 쓰게 해 빈칸을 없앤다.
+                index === visibleShortcuts.length - 1 &&
+                  visibleShortcuts.length % 2 === 1 &&
+                  "col-span-2 sm:col-span-1",
+              )}
             >
               <Icon className="size-6 text-muted-foreground" aria-hidden />
 
-              {/* 세 칸 그리드에서 "공강 · 노래방"은 두 줄이 된다. `break-keep`이 없으면
-                  한국어가 어절 가운데서 잘린다. */}
+              {/* 다섯 칸으로 펴지는 데스크톱에서 "공강 · 노래방"은 두 줄이 된다.
+                  `break-keep`이 없으면 한국어가 어절 가운데서 잘린다. */}
               <span className="text-center text-xs leading-tight font-medium break-keep">
                 {label}
               </span>

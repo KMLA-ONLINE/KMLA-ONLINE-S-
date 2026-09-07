@@ -1081,28 +1081,28 @@ export type Database = {
           },
         ]
       }
-      student_absences: {
+      stories: {
         Row: {
+          content: string
           created_at: string
           id: number
           profile_id: number
-          reason: string
         }
         Insert: {
+          content: string
           created_at?: string
           id?: number
           profile_id: number
-          reason: string
         }
         Update: {
+          content?: string
           created_at?: string
           id?: number
           profile_id?: number
-          reason?: string
         }
         Relationships: [
           {
-            foreignKeyName: "student_absences_profile_id_fkey"
+            foreignKeyName: "stories_profile_id_fkey"
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -1491,7 +1491,7 @@ export type Database = {
         Returns: undefined
       }
       delete_group_post: { Args: { p_post_id: string }; Returns: undefined }
-      delete_my_absence: { Args: never; Returns: undefined }
+      delete_my_story: { Args: never; Returns: undefined }
       delete_post_attachment: {
         Args: { p_attachment_id: string }
         Returns: undefined
@@ -1878,6 +1878,7 @@ export type Database = {
         Returns: {
           avatar_path: string
           cohort: number
+          is_returning_student: boolean
           name: string
           pub_id: string
           request_id: string
@@ -1896,6 +1897,7 @@ export type Database = {
         Returns: {
           avatar_path: string
           cohort: number
+          is_returning_student: boolean
           joined_at: string
           membership_id: string
           name: string
@@ -2138,13 +2140,13 @@ export type Database = {
           visibility: Database["public"]["Enums"]["post_visibility"]
         }[]
       }
-      list_today_absences: {
+      list_today_stories: {
         Args: never
         Returns: {
           avatar_path: string
+          content: string
           name: string
           pub_id: string
-          reason: string
         }[]
       }
       mark_all_my_notifications_read: { Args: never; Returns: number }
@@ -2424,7 +2426,6 @@ export type Database = {
         Args: { p_pinned: boolean; p_post_id: string }
         Returns: string
       }
-      set_my_absence: { Args: { p_reason: string }; Returns: undefined }
       set_my_group_notification_preferences: {
         Args: {
           p_content_push_enabled: boolean
@@ -2434,6 +2435,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_my_story: { Args: { p_content: string }; Returns: undefined }
       set_post_reaction: {
         Args: {
           p_post_id: string

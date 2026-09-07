@@ -19,6 +19,7 @@ export {
   loadProfileDepartments,
   listBirthdays,
 } from "~/features/profiles/data/queries";
+export { formatCohort } from "~/features/profiles/model/format";
 export type {
   AcceptedProfile,
   BirthdayProfile,
