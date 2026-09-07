@@ -1322,9 +1322,12 @@ export type Database = {
         Returns: {
           auth: string
           body: string
+          category: Database["public"]["Enums"]["notification_category"]
           channel: "web_push" | "email"
           delivery_id: string
           endpoint: string
+          grouping_key: string
+          importance: Database["public"]["Enums"]["notification_importance"]
           lease_id: string
           notification_id: string
           p256dh: string

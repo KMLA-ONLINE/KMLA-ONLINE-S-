@@ -16,9 +16,12 @@ function delivery(overrides: Partial<Delivery> = {}): Delivery {
     auth: "auth",
     recipient_email: null,
     notification_id: "33333333-3333-4333-8333-333333333333",
+    importance: "normal",
+    category: "content",
+    grouping_key: "44444444-4444-4444-8444-444444444444",
     title: "새 알림",
     body: "새 알림이 있습니다.",
-    tag: "notification:33333333-3333-4333-8333-333333333333",
+    tag: "notification-category:content:44444444-4444-4444-8444-444444444444",
     ...overrides,
   };
 }
@@ -66,9 +69,12 @@ Deno.test(
     assertEquals(payloads[0], {
       notificationId: "33333333-3333-4333-8333-333333333333",
       deliveryId: "11111111-1111-4111-8111-111111111111",
+      importance: "normal",
+      category: "content",
+      groupingKey: "44444444-4444-4444-8444-444444444444",
       title: "새 알림",
       body: "새 알림이 있습니다.",
-      tag: "notification:33333333-3333-4333-8333-333333333333",
+      tag: "notification-category:content:44444444-4444-4444-8444-444444444444",
     });
     assertFalse("endpoint" in payloads[0]);
   },

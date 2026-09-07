@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(35);
 
 -- 이 파일의 목적은 두 가지다. 1층이 수명을 다한 행만 큐로 옮기는지, 그리고 2층 스윕이 살아 있는
 -- object를 절대 후보로 삼지 않는지. 후자가 틀리면 사용자 이미지가 사라지므로 참조 종류마다
@@ -10,6 +10,17 @@ select plan(34);
 select ok(
   (select relrowsecurity from pg_class where oid = 'private.storage_cleanup_queue'::regclass),
   'the cleanup queue has RLS'
+);
+select is(
+  (select count(*)
+   from pg_policies
+   where (schemaname, tablename, policyname) in (
+     ('private', 'storage_cleanup_queue', 'storage_cleanup_queue_deny_client_access'),
+     ('private', 'storage_cleanup_runs', 'storage_cleanup_runs_deny_client_access'),
+     ('public', 'profile_media_objects', 'profile_media_objects_deny_client_access')
+   )),
+  3::bigint,
+  'internal storage tables have explicit deny-all RLS policies'
 );
 select ok(
   not has_table_privilege('authenticated', 'private.storage_cleanup_queue', 'SELECT'),

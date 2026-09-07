@@ -158,8 +158,15 @@ Production 앱 이벤트 이메일은 Resend를 사용한다. 로컬은 Supabase
 ## 7. 서비스 워커와 클릭
 
 기존 Workbox `generateSW`의 app shell·업데이트 정책을 유지하고 `importScripts`로 Push handler를 추가한다.
-handler는 `push`와 `notificationclick`을 처리한다. 동일 delivery ID와 notification tag를 사용해
-at-least-once 전달의 중복 표시를 억제한다.
+handler는 `push`와 `notificationclick`을 처리한다. 높음 중요도는 notification ID tag를, 낮음·보통은
+카테고리 tag를 사용한다. 동일 delivery ID는 기존 카드의 집계 수를 다시 늘리지 않는다.
+
+카테고리 tag는 같은 브라우저에서 계정을 바꿔도 카드가 섞이지 않도록 opaque subscription ID로 범위를
+나눈다. 기존 알림은 `getNotifications()`로 읽어 최신 알림과 누적 개수로 교체하고, 동시에 도착한 Push는
+worker 안에서 직렬화한다. 처리한 delivery ID를 카드 data에 보관해 순서가 뒤섞인 재전달도 중복 집계하지
+않는다. 한 건인 카드는 notification resolver를 열고, 둘 이상인 카드는 일반 알림함을 연다. 보통 중요도
+교체는 `renotify`하고 낮음 중요도 교체는 조용히 갱신한다. 표준 Web Notifications API에는 네이티브 앱의
+펼침형 그룹 API가 없으므로 카테고리별 대표 카드가 정식 동작이다.
 
 클릭 시 payload URL을 열지 않고 `/noti/open/:notificationId`만 구성한다. 기존 앱 창이 있으면 focus와
 navigate를 사용하고 없으면 새 창을 연다. resolver route는 인증, 현재 계정, 대상 접근 권한과 읽음

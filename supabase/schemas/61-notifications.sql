@@ -862,6 +862,9 @@ create or replace function public.claim_notification_deliveries(
   auth text,
   recipient_email text,
   notification_id uuid,
+  importance public.notification_importance,
+  category public.notification_category,
+  grouping_key uuid,
   title text,
   body text,
   tag text
@@ -920,6 +923,8 @@ begin
   select claimed.id, claimed.lease_id, claimed.channel,
     subscription.endpoint, subscription.p256dh, subscription.auth,
     claimed.recipient_email, notification.id,
+    notification.importance, notification.category,
+    subscription.id,
     notification.title,
     case notification.kind
       when 'post_commented' then '내 게시물에 새 댓글이 등록되었습니다.'
@@ -931,7 +936,11 @@ begin
       when 'anonymous_activity_restricted' then '그룹 익명 활동이 제한되었습니다.'
       else '새 알림이 있습니다.'
     end,
-    'notification:' || notification.id::text
+    case
+      when notification.importance = 'high'
+        then 'notification:' || notification.id::text
+      else 'notification-category:' || notification.category::text || ':' || subscription.id::text
+    end
   from claimed
   left join private.web_push_subscriptions as subscription
     on subscription.id = claimed.subscription_id
