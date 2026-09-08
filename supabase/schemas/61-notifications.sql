@@ -67,8 +67,11 @@ create table public.notifications (
   actor_avatar_path text,
   actor_count integer not null default 1,
   group_id uuid references public.groups(id) on delete set null,
-  post_id uuid references public.posts(id) on delete set null,
-  comment_id uuid references public.post_comments(id) on delete set null,
+  -- 대상이 사라진 알림은 갈 곳이 없다. 게시물과 댓글이 하드 삭제로 바뀌었으므로 그 알림도 함께
+  -- 지운다(삭제 및 보존 정책 §5.5). 운영 조치 알림은 애초에 post_id를 싣지 않고 그룹 ID만 싣기
+  -- 때문에, "내 글이 삭제되었다"는 알림은 이 CASCADE에 걸리지 않는다.
+  post_id uuid references public.posts(id) on delete cascade,
+  comment_id uuid references public.post_comments(id) on delete cascade,
   target_profile_id bigint references public.profiles(id) on delete set null,
   reservation_id bigint references public.utility_reservations(id) on delete set null,
   title text not null,
