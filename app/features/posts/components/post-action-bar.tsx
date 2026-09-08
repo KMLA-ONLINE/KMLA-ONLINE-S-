@@ -32,6 +32,7 @@ export function PostActionBar({
   shareTitle,
   commentCount,
   commentTo,
+  commentState,
   onComment,
   className,
 }: {
@@ -42,6 +43,8 @@ export function PostActionBar({
   shareTitle: string;
   commentCount: number;
   commentTo?: string;
+  /** 댓글 링크에 실어 보낼 navigation state. 그룹 카드가 상세의 그룹 링크를 감출 때 쓴다. */
+  commentState?: unknown;
   onComment?: () => void;
   className?: string;
 }) {
@@ -86,6 +89,7 @@ export function PostActionBar({
         {commentTo ? (
           <Link
             to={commentTo}
+            state={commentState}
             preventScrollReset
             aria-label={commentLabel}
             className={ACTION_CLASS}

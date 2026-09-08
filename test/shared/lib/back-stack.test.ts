@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  resolveBackStack,
-  resolveOverlayParent,
-} from "~/shared/lib/back-stack";
+import { resolveBackStack } from "~/shared/lib/back-stack";
 
 describe("back stack", () => {
   it("puts the group and its list under a group post", () => {
@@ -45,33 +42,5 @@ describe("back stack", () => {
     expect(
       resolveBackStack("/groups/study/posts/post-id?from=push#c1"),
     ).toEqual(["/", "/groups", "/groups/study"]);
-  });
-});
-
-describe("overlay parent", () => {
-  it("names the screen a post overlay is opened on top of", () => {
-    expect(resolveOverlayParent("/groups/study/posts/post-id")).toBe(
-      "/groups/study",
-    );
-    expect(resolveOverlayParent("/profile/pub-1/posts/post-id")).toBe(
-      "/profile/pub-1",
-    );
-  });
-
-  /**
-   * 오버레이가 아닌 화면은 밑에 무엇이 있든 자기 힘으로 그려진다. 여기에 부모를 끼워 넣으면
-   * 알림함에서 그룹으로 들어간 사용자의 뒤로가기가 알림함이 아니라 그룹 목록이 된다.
-   */
-  it("has no parent to insert under a screen that is not an overlay", () => {
-    expect(resolveOverlayParent("/groups/study")).toBeNull();
-    expect(resolveOverlayParent("/profile/pub-1")).toBeNull();
-    expect(resolveOverlayParent("/noti")).toBeNull();
-    expect(resolveOverlayParent("/menu/meal")).toBeNull();
-  });
-
-  it("ignores the query and hash when matching", () => {
-    expect(
-      resolveOverlayParent("/groups/study/posts/post-id?from=push#c1"),
-    ).toBe("/groups/study");
   });
 });

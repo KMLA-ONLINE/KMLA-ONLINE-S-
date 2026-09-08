@@ -87,6 +87,7 @@ export default function GroupPostPage({ loaderData }: Route.ComponentProps) {
   return (
     <GroupPostDetail
       slug={parent.group.slug}
+      groupName={parent.group.name}
       post={loaderData.post}
       identities={resolveIdentityOptions(
         parent.group.identity_policy,

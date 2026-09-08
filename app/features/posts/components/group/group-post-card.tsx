@@ -11,6 +11,7 @@ import { splitPostAttachments } from "~/features/posts/model/attachments";
 import { PostAuthorAvatar } from "~/features/posts/components/post-author-avatar";
 import { PostBodyClamp } from "~/features/posts/components/post-body-clamp";
 import { PostMarkdown } from "~/features/posts/components/post-markdown";
+import { FROM_GROUP } from "~/features/posts/model/navigation";
 import type { GroupPost } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";
@@ -40,12 +41,7 @@ export function GroupPostCard({
         </div>
       ) : null}
 
-      <header
-        className={cn(
-          "flex items-start gap-3 px-4 pb-3",
-          post.is_pinned ? "pt-2" : "pt-4",
-        )}
-      >
+      <header className={cn("flex items-start gap-3 px-4 py-3")}>
         {post.author_identity !== "anonymous" && post.author_pub_id ? (
           <Link
             to={`/profile/${post.author_pub_id}`}
@@ -127,7 +123,7 @@ export function GroupPostCard({
       <div className="px-4">
         {/* 그룹 이름이 h1이므로 게시물 제목은 카드와 상세 모두 h2다. */}
         <h2 className="mb-2 text-xl font-semibold">
-          <Link to={postPath} className="hover:underline">
+          <Link to={postPath} state={FROM_GROUP} className="hover:underline">
             {post.title}
           </Link>
         </h2>
@@ -154,6 +150,7 @@ export function GroupPostCard({
         shareTitle={post.title}
         commentCount={post.comment_count}
         commentTo={`${postPath}?view=comments`}
+        commentState={FROM_GROUP}
         className="mt-1"
       />
     </article>

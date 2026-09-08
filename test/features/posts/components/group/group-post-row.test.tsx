@@ -1,9 +1,16 @@
 import { screen } from "@testing-library/react";
+import { useLocation } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
 import { GroupPostRow } from "~/features/posts/components/group/group-post-row";
+import { isFromGroup } from "~/features/posts/model/navigation";
 import { groupPost } from "../../group-post-fixture";
 import { renderRoute } from "../../../../router";
+
+/** state는 DOM에 남지 않으므로 실제로 눌러서 도착지가 무엇을 받았는지 본다. */
+function Landing() {
+  return <p>{isFromGroup(useLocation().state) ? "표식 있음" : "표식 없음"}</p>;
+}
 
 function renderRow(post = groupPost(), isVisited = false) {
   const onVisit = vi.fn();
@@ -27,6 +34,30 @@ describe("GroupPostRow", () => {
 
     await user.click(link);
     expect(onVisit).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * 상세는 이 표식으로 "◯◯ 그룹으로 이동" 링크를 감춘다(`model/navigation.ts`). 빠뜨리면
+   * 그룹에서 연 게시물에도 링크가 한 번 더 붙는다.
+   */
+  it("marks the post as opened from inside the group", async () => {
+    const onVisit = vi.fn();
+    const { user } = renderRoute(
+      () => (
+        <GroupPostRow
+          post={groupPost()}
+          slug="group"
+          isVisited={false}
+          onVisit={onVisit}
+        />
+      ),
+      {
+        routes: [{ path: "/groups/group/posts/post-id", Component: Landing }],
+      },
+    );
+
+    await user.click(screen.getByRole("link"));
+    expect(await screen.findByText("표식 있음")).toBeVisible();
   });
 
   it("shows the category badge only when the post has one", () => {

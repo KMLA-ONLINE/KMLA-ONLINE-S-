@@ -2,6 +2,7 @@ import { HeartIcon, MessageSquareIcon, PinIcon } from "lucide-react";
 import { Link } from "react-router";
 
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
+import { FROM_GROUP } from "~/features/posts/model/navigation";
 import type { GroupPost } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";
@@ -27,6 +28,7 @@ export function GroupPostRow({
   return (
     <Link
       to={`/groups/${slug}/posts/${post.post_id}`}
+      state={FROM_GROUP}
       onClick={onVisit}
       className={cn(
         "flex w-full flex-col gap-1 px-3 py-2.5 text-left transition-colors hover:bg-muted/60",

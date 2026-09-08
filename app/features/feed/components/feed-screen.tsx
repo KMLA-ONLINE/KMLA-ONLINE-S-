@@ -207,6 +207,7 @@ export function FeedScreen() {
       {detail?.kind === "group" ? (
         <GroupPostDetail
           slug={detail.slug}
+          groupName={detail.groupName}
           post={detail.post}
           identities={detail.identities}
           comments={detail.comments}

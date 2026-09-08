@@ -11,7 +11,9 @@ const HOME = "/";
  *
  * 이 표는 **뒤로가기 내역이 없을 때 무엇으로 채울지**만 정의한다. 앱 안에서 이동해 들어온
  * 경우의 뒤로가기는 여기와 무관하게 "내가 온 곳"으로 남아야 하므로, 이 값으로 기존 내역을
- * 덮어쓰지 않는다.
+ * 덮어쓰지 않는다. 게시물처럼 부모 위에 얹히는 화면도 예외가 아니다 — 밑에 깔린 것이 그룹이
+ * 아니어도 뒤로가기는 사용자가 온 곳을 내놓아야 하고, 그룹으로 가는 길은 상세 머리의 링크가
+ * 맡는다.
  */
 const PARENT_ROUTE: Record<string, string | null> = {
   "/": null,
@@ -41,18 +43,6 @@ function currentIndex(): number {
   const index = currentState().idx;
   return typeof index === "number" ? index : 0;
 }
-
-/**
- * 부모 화면 위에 오버레이로 열리는 route.
- *
- * 이 화면들의 닫기는 `navigate(-1)`이라(`useModalClose`) 바로 밑 entry가 그대로 드러난다.
- * 알림함에서 열었다면 그 자리가 알림함이어서, 게시물을 닫으면 글이 놓여 있던 그룹이 아니라
- * 목록으로 튕긴다. 그래서 이 목적지들만은 돌아갈 내역이 있어도 부모를 한 칸 깔아 준다.
- */
-const OVERLAY_ROUTES = new Set([
-  "/groups/:slug/posts/:postId",
-  "/profile/:pubId/posts/:postId",
-]);
 
 interface RouteMatch {
   pattern: string;
@@ -96,20 +86,6 @@ export function resolveBackStack(destination: string): string[] {
     stack.unshift(generatePath(parent, matched.params));
   }
   return stack;
-}
-
-/**
- * 목적지가 오버레이라면 그 밑에 놓일 화면 하나. 오버레이가 아니면 `null`이다.
- *
- * 오버레이가 아닌 화면은 밑에 무엇이 있든 자기 힘으로 그려지므로 손대지 않는다 — 뒤로가기는
- * "내가 온 곳"으로 남는 게 맞다.
- */
-export function resolveOverlayParent(destination: string): string | null {
-  const matched = matchRoute(destination);
-  if (matched === null || !OVERLAY_ROUTES.has(matched.pattern)) return null;
-
-  const parent = PARENT_ROUTE[matched.pattern];
-  return parent ? generatePath(parent, matched.params) : null;
 }
 
 /** 이 창에 뒤로 갈 수 있는 entry가 있는가. 서비스 워커가 새 창으로 열었다면 항상 없다. */

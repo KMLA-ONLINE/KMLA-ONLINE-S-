@@ -38,6 +38,7 @@ export async function clientLoader({
           post,
           comments,
           slug: group.slug,
+          groupName: group.name,
           identities: resolveIdentityOptions(
             group.identity_policy,
             group.member_role,

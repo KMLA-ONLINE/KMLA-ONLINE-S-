@@ -2,6 +2,7 @@ import { EyeOffIcon, FlagIcon, Trash2Icon } from "lucide-react";
 import { Link } from "react-router";
 
 import { GroupPostReportDescriptions } from "~/features/posts/components/group/group-post-report-descriptions";
+import { FROM_GROUP } from "~/features/posts/model/navigation";
 import type { GroupPostReportSummary } from "~/features/posts/data/group-reports";
 import {
   GROUP_POST_REPORT_REASON_OPTIONS,
@@ -65,6 +66,7 @@ export function GroupPostReportCard({
         <div className="border-l-2 border-border pl-3">
           <Link
             to={postTo}
+            state={FROM_GROUP}
             className="line-clamp-2 text-sm leading-5 font-semibold hover:underline md:text-base md:leading-6"
           >
             {report.title}
@@ -120,7 +122,7 @@ export function GroupPostReportCard({
             size="sm"
             variant="ghost"
             className="text-muted-foreground"
-            render={<Link to={postTo} />}
+            render={<Link to={postTo} state={FROM_GROUP} />}
           >
             게시물 보기
           </Button>

@@ -79,7 +79,6 @@ function NotificationRow({
   return (
     <Link
       to={`/noti/open/${encodeURIComponent(item.id)}`}
-      state={{ fromNotificationInbox: true }}
       onClick={() => {
         if (unread) {
           void readFetcher.submit(

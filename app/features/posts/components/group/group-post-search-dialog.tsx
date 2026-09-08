@@ -10,6 +10,7 @@ import { Link } from "react-router";
 
 import { searchGroupPosts } from "~/features/posts/data/queries";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
+import { FROM_GROUP } from "~/features/posts/model/navigation";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
 import type { GroupPostSearchResult } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
@@ -213,6 +214,7 @@ function SearchPanel({
                     뒤로가기로 돌아오면 URL에 남은 검색어로 결과가 다시 그려진다. */}
                 <Link
                   to={`/groups/${slug}/posts/${post.post_id}`}
+                  state={FROM_GROUP}
                   className="flex flex-col gap-1 px-4 py-3 transition-colors hover:bg-muted/60"
                 >
                   <div className="flex items-center gap-2">

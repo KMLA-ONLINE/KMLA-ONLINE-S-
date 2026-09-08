@@ -1,9 +1,16 @@
 import { screen } from "@testing-library/react";
+import { useLocation } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GroupPostCard } from "~/features/posts/components/group/group-post-card";
+import { isFromGroup } from "~/features/posts/model/navigation";
 import { groupPost } from "../../group-post-fixture";
 import { renderRoute } from "../../../../router";
+
+/** state는 DOM에 남지 않으므로 실제로 눌러서 도착지가 무엇을 받았는지 본다. */
+function Landing() {
+  return <p>{isFromGroup(useLocation().state) ? "표식 있음" : "표식 없음"}</p>;
+}
 
 /**
  * jsdom은 레이아웃을 계산하지 않아 모든 높이가 0이다. "더 보기"는 본문이 실제로
@@ -157,5 +164,31 @@ describe("GroupPostCard", () => {
     expect(
       screen.queryByRole("button", { name: "게시물 옵션" }),
     ).not.toBeInTheDocument();
+  });
+
+  /**
+   * 상세는 이 표식으로 "◯◯ 그룹으로 이동" 링크를 감춘다(`model/navigation.ts`). 제목과 댓글
+   * 링크가 둘 다 상세를 열므로 양쪽 모두 심어야 한다.
+   */
+  it("marks both routes into the post as opened from inside the group", async () => {
+    for (const name of ["제목", "댓글 0개"]) {
+      const { user, unmount } = renderRoute(
+        () => (
+          <GroupPostCard
+            post={groupPost()}
+            slug="group"
+            onPin={vi.fn()}
+            onDelete={vi.fn()}
+          />
+        ),
+        {
+          routes: [{ path: "/groups/group/posts/post-id", Component: Landing }],
+        },
+      );
+
+      await user.click(screen.getByRole("link", { name }));
+      expect(await screen.findByText("표식 있음")).toBeVisible();
+      unmount();
+    }
   });
 });
