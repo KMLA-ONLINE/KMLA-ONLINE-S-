@@ -16,10 +16,8 @@ import {
   listBirthdays,
 } from "~/features/profiles";
 import { createPostListRevalidation } from "~/features/posts";
-import {
-  GlobalSearchDialog,
-  useDirectorySearchDialog,
-} from "~/features/search";
+import { GlobalSearchDialog } from "~/features/search";
+import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { getKoreaDateIso } from "~/shared/lib/korea-date";
 import { Button } from "~/shared/ui/button";
@@ -96,7 +94,7 @@ export async function clientLoader() {
 export default function FeedPage({ loaderData }: Route.ComponentProps) {
   const { mealDay, birthdays, stories } = loaderData;
   const { profile } = useAppShell();
-  const { openSearch: openDirectorySearch } = useDirectorySearchDialog();
+  const { openSearch: openDirectorySearch } = useSearchDialogParam();
 
   return (
     <>

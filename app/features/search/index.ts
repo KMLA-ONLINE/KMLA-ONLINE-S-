@@ -6,7 +6,6 @@ export {
   resolveRecentSearchEntryUrls,
   searchDirectory,
 } from "~/features/search/data/queries";
-export { useDirectorySearchDialog } from "~/features/search/hooks/use-directory-search-dialog";
 export { useRecentSearchEntries } from "~/features/search/hooks/use-recent-search-entries";
 export {
   hasMinimumSearchLength,
