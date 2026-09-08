@@ -266,10 +266,14 @@ export function ProfilePostEditor({
           </p>
         )}
 
-        <div className="flex min-h-[24rem] flex-1 flex-col pt-5">
-          <PostFormField error={formErrors?.body}>
+        <div className="flex min-h-72 flex-1 flex-col pt-5 md:min-h-0 md:flex-none">
+          <PostFormField
+            className="flex-1 md:flex-none"
+            error={formErrors?.body}
+          >
             <PostBodyInput
               value={draftBody}
+              className="flex-1"
               onValueChange={(value) => {
                 bodyRef.current = value;
                 setDraftBody(value);

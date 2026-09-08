@@ -32,7 +32,6 @@ import type {
   PreparedPostFile,
 } from "~/features/posts/model/types";
 import { cn } from "~/shared/lib/utils";
-import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 import {
   DropdownMenu,
@@ -103,16 +102,21 @@ export function PostAttachmentEditor({
       )}
       aria-label="첨부 파일"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-3 px-3 py-2 sm:border-b sm:px-4 sm:py-3",
+          order.length > 0 && "border-b",
+        )}
+      >
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="font-medium">첨부</h2>
-            <Badge variant={atLimit ? "default" : "secondary"}>
+            <h2 className="text-sm font-medium sm:text-base">첨부</h2>
+            <span className="text-xs text-muted-foreground tabular-nums">
               {order.length} / {POST_ATTACHMENT_LIMIT}
-            </Badge>
+            </span>
           </div>
           <p
-            className="mt-0.5 text-xs text-muted-foreground"
+            className="mt-0.5 hidden text-xs text-muted-foreground sm:block"
             aria-live="polite"
           >
             {order.length > 0
@@ -124,20 +128,26 @@ export function PostAttachmentEditor({
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            size="icon-sm"
+            aria-label="사진 추가"
+            className="sm:w-auto sm:gap-1 sm:px-2.5"
             disabled={disabled || atLimit}
             onClick={() => photoInput.current?.click()}
           >
-            <ImagePlusIcon data-icon="inline-start" /> 사진 추가
+            <ImagePlusIcon />
+            <span className="hidden sm:inline">사진 추가</span>
           </Button>
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            size="icon-sm"
+            aria-label="파일 추가"
+            className="sm:w-auto sm:gap-1 sm:px-2.5"
             disabled={disabled || atLimit}
             onClick={() => fileInput.current?.click()}
           >
-            <PaperclipIcon data-icon="inline-start" /> 파일 추가
+            <PaperclipIcon />
+            <span className="hidden sm:inline">파일 추가</span>
           </Button>
         </div>
         <input
@@ -216,7 +226,7 @@ export function PostAttachmentEditor({
           type="button"
           disabled={disabled}
           onClick={() => fileInput.current?.click()}
-          className="group flex min-h-32 w-full flex-col items-center justify-center gap-2 px-4 py-6 text-center hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset disabled:pointer-events-none disabled:opacity-50"
+          className="group hidden min-h-32 w-full flex-col items-center justify-center gap-2 px-4 py-6 text-center hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset disabled:pointer-events-none disabled:opacity-50 sm:flex"
         >
           <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground group-hover:text-foreground">
             <UploadCloudIcon aria-hidden="true" />
