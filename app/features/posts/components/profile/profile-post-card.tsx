@@ -33,7 +33,7 @@ export function ProfilePostCard({
 
   return (
     <article className="overflow-hidden border-b-2 border-foreground/20 bg-card shadow-none md:rounded-xl md:border md:border-border md:shadow-sm">
-      <div className="px-4 pt-4 pb-3">
+      <div className="px-4 py-3">
         <ProfilePostHeader
           post={post}
           menu={
