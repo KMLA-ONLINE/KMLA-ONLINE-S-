@@ -1,14 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createProfilePostWithAttachments, updateProfilePostWithAttachments } =
-  vi.hoisted(() => ({
-    createProfilePostWithAttachments: vi.fn(),
-    updateProfilePostWithAttachments: vi.fn(),
-  }));
+const {
+  createProfilePostWithAttachments,
+  preuploadProfilePostFiles,
+  updateProfilePostWithAttachments,
+} = vi.hoisted(() => ({
+  createProfilePostWithAttachments: vi.fn(),
+  preuploadProfilePostFiles: vi.fn(),
+  updateProfilePostWithAttachments: vi.fn(),
+}));
 
 vi.mock("~/features/posts/data/mutations", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   createProfilePostWithAttachments,
+  preuploadProfilePostFiles,
   updateProfilePostWithAttachments,
 }));
 
@@ -32,6 +37,7 @@ function renderEditor(overrides: Partial<EditorProps> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   createProfilePostWithAttachments.mockResolvedValue("post-id");
+  preuploadProfilePostFiles.mockResolvedValue(undefined);
 });
 
 /**
@@ -123,5 +129,21 @@ describe("ProfilePostEditor", () => {
     renderEditor();
 
     expect(screen.getByText("이지은님의 타임라인")).toBeVisible();
+  });
+
+  it("파일을 선택하면 게시 전 업로드를 시작한다", async () => {
+    const { user } = renderEditor();
+    const file = new File(["내용"], "note.txt", { type: "text/plain" });
+
+    await user.upload(screen.getByLabelText("파일 선택"), file);
+
+    await vi.waitFor(() =>
+      expect(preuploadProfilePostFiles).toHaveBeenCalledWith(
+        "jieun-29",
+        "public",
+        [expect.objectContaining({ file })],
+        expect.anything(),
+      ),
+    );
   });
 });

@@ -1,4 +1,12 @@
-import { DownloadIcon, FileIcon, FileTextIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  DownloadIcon,
+  FileIcon,
+  FilesIcon,
+  FileTextIcon,
+} from "lucide-react";
+import { useState } from "react";
 
 import {
   imageDownloadName,
@@ -12,6 +20,7 @@ import {
 } from "~/shared/components/image-viewer";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
 import { cn } from "~/shared/lib/utils";
+import { Button } from "~/shared/ui/button";
 
 /** 업로드 파이프라인이 사진을 webp로 정규화하므로, 이미지인지 아닌지는 이 한 줄로 갈린다. */
 const IMAGE_MIME = "image/webp";
@@ -164,62 +173,112 @@ function fileIcon(mimeType: string) {
 }
 
 export function PostFileList({ files }: { files: PostAttachment[] }) {
+  const [expanded, setExpanded] = useState(false);
   if (files.length === 0) return null;
+  const canExpand = files.length > 3;
+  const visibleFiles = expanded ? files : files.slice(0, 3);
 
   return (
-    <ul className="flex flex-col gap-2">
-      {files.map((item) => {
-        const Icon = fileIcon(item.mime_type);
+    <section
+      className="overflow-hidden rounded-xl border bg-card"
+      aria-label="첨부 파일"
+    >
+      <div className="flex items-center gap-2 border-b px-3 py-2.5">
+        <FilesIcon
+          className="size-4 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <h3 className="text-sm font-medium">첨부 파일 {files.length}개</h3>
+      </div>
+      <ul className="grid gap-2 p-2 sm:grid-cols-2">
+        {visibleFiles.map((item) => {
+          const Icon = fileIcon(item.mime_type);
 
-        return (
-          <li key={item.attachment_id}>
-            {item.signedUrl ? (
-              <a
-                href={toAttachmentDownloadUrl(
-                  item.signedUrl,
-                  item.original_filename,
-                )}
-                download={item.original_filename}
-                className="flex items-center gap-3 rounded-lg border p-2 transition-colors hover:bg-muted"
-              >
-                <FileBadge icon={<Icon className="size-4.5" />} />
-                <FileMeta
-                  name={item.original_filename}
-                  sizeBytes={item.size_bytes}
-                />
-                <DownloadIcon className="size-4 shrink-0 text-muted-foreground" />
-              </a>
+          return (
+            <li key={item.attachment_id} className="min-w-0">
+              {item.signedUrl ? (
+                <a
+                  href={toAttachmentDownloadUrl(
+                    item.signedUrl,
+                    item.original_filename,
+                  )}
+                  download={item.original_filename}
+                  className="group flex min-w-0 items-center gap-3 rounded-lg border bg-background p-2.5 transition-colors hover:border-foreground/20 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                  <FileBadge icon={<Icon aria-hidden="true" />} />
+                  <FileMeta
+                    name={item.original_filename}
+                    sizeBytes={item.size_bytes}
+                    mimeType={item.mime_type}
+                  />
+                  <DownloadIcon
+                    className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground"
+                    aria-hidden="true"
+                  />
+                </a>
+              ) : (
+                <div className="flex min-w-0 items-center gap-3 rounded-lg border bg-muted/30 p-2.5 text-muted-foreground">
+                  <FileBadge icon={<Icon aria-hidden="true" />} />
+                  <FileMeta
+                    name={item.original_filename}
+                    sizeBytes={item.size_bytes}
+                    mimeType={item.mime_type}
+                  />
+                  <span className="shrink-0 text-xs">다운로드할 수 없음</span>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {canExpand ? (
+        <div className="border-t p-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((current) => !current)}
+          >
+            {expanded ? (
+              <ChevronUpIcon data-icon="inline-start" />
             ) : (
-              <div className="flex items-center gap-3 rounded-lg border p-2 text-muted-foreground">
-                <FileBadge icon={<Icon className="size-4.5" />} />
-                <FileMeta
-                  name={item.original_filename}
-                  sizeBytes={item.size_bytes}
-                />
-                <span className="shrink-0 text-xs">다운로드할 수 없음</span>
-              </div>
+              <ChevronDownIcon data-icon="inline-start" />
             )}
-          </li>
-        );
-      })}
-    </ul>
+            {expanded ? "파일 목록 접기" : `파일 ${files.length}개 모두 보기`}
+          </Button>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
 function FileBadge({ icon }: { icon: React.ReactNode }) {
   return (
-    <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+    <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&>svg]:size-4.5">
       {icon}
     </span>
   );
 }
 
-function FileMeta({ name, sizeBytes }: { name: string; sizeBytes: number }) {
+function FileMeta({
+  name,
+  sizeBytes,
+  mimeType,
+}: {
+  name: string;
+  sizeBytes: number;
+  mimeType: string;
+}) {
+  const typeLabel = mimeType === "application/pdf" ? "PDF" : "파일";
   return (
     <div className="min-w-0 flex-1">
-      <p className="truncate text-sm font-medium">{name}</p>
+      <p className="truncate text-sm font-medium" title={name}>
+        {name}
+      </p>
       <p className="text-xs text-muted-foreground">
-        {formatFileSize(sizeBytes)}
+        {typeLabel} · {formatFileSize(sizeBytes)}
       </p>
     </div>
   );

@@ -9,7 +9,7 @@ import {
 import { Link } from "react-router";
 
 import { searchGroupPosts } from "~/features/posts/data/queries";
-import { useGroupPostSearch } from "~/features/posts/hooks/use-group-post-search";
+import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
 import type { GroupPostSearchResult } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
@@ -37,7 +37,7 @@ const SEARCH_DIALOG_CLASS =
   "flex h-[85svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-lg";
 
 /**
- * 열림 상태와 제출한 검색어는 URL이 들고 있다(`useGroupPostSearch`). 그룹 화면에 이 dialog는
+ * 열림 상태와 제출한 검색어는 URL이 들고 있다(`useSearchDialogParam`). 그룹 화면에 이 dialog는
  * 하나만 둔다 — 검색 버튼은 모바일 헤더와 데스크톱 액션 두 곳에 있지만, 같은 URL을 두 곳이
  * 함께 보므로 각자 dialog를 그리면 같은 검색창이 두 장 겹쳐 열린다.
  */
@@ -49,7 +49,7 @@ export function GroupPostSearchDialog({
   slug: string;
 }) {
   const { open, submittedQuery, closeSearch, submitQuery } =
-    useGroupPostSearch();
+    useSearchDialogParam();
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (

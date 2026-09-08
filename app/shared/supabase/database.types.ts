@@ -1444,6 +1444,13 @@ export type Database = {
         }
         Returns: string
       }
+      create_group_post_upload_draft: {
+        Args: {
+          p_author_identity: Database["public"]["Enums"]["post_identity"]
+          p_group_id: string
+        }
+        Returns: string
+      }
       create_post_comment: {
         Args: {
           p_author_identity: Database["public"]["Enums"]["post_identity"]
@@ -2544,6 +2551,13 @@ export type Database = {
           p_category_id?: string
           p_post_id: string
           p_title: string
+        }
+        Returns: string
+      }
+      update_group_post_draft_identity: {
+        Args: {
+          p_author_identity: Database["public"]["Enums"]["post_identity"]
+          p_post_id: string
         }
         Returns: string
       }

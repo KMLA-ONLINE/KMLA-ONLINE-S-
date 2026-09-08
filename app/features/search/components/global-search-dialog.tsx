@@ -9,12 +9,12 @@ import {
 
 import { DirectorySearchPanel } from "~/features/search/components/directory-search-panel";
 import { searchDirectory } from "~/features/search/data/queries";
-import { useDirectorySearchDialog } from "~/features/search/hooks/use-directory-search-dialog";
 import {
   hasMinimumSearchLength,
   normalizeSearchInput,
 } from "~/features/search/model/format";
 import type { DirectorySearchResult } from "~/features/search/model/types";
+import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -38,7 +38,7 @@ interface SettledSearch {
  * `GlobalSearchDropdown`을 쓰므로 이 dialog는 데스크톱에서 열리지 않는다. */
 export function GlobalSearchDialog() {
   const { open, submittedQuery, closeSearch, submitQuery } =
-    useDirectorySearchDialog();
+    useSearchDialogParam();
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (

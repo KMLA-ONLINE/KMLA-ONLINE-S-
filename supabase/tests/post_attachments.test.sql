@@ -8,7 +8,9 @@ create temporary table cleanup_claims (
   lease_id uuid
 );
 grant select, insert on cleanup_claims to service_role;
-select plan(42);
+create temporary table attachment_test_ids (name text primary key, id uuid not null);
+grant select, insert on attachment_test_ids to authenticated;
+select plan(66);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -40,6 +42,16 @@ select is(
   'attachment metadata is written only through the definer RPCs'
 );
 select ok(not has_function_privilege('anon', 'public.prepare_post_attachment(uuid,text,text,bigint,integer,integer)', 'EXECUTE'), 'anon cannot prepare uploads');
+select ok(
+  has_function_privilege('authenticated', 'public.create_group_post_upload_draft(uuid,public.post_identity)', 'EXECUTE')
+    and not has_function_privilege('anon', 'public.create_group_post_upload_draft(uuid,public.post_identity)', 'EXECUTE'),
+  'only authenticated clients can create group upload drafts'
+);
+select ok(
+  has_function_privilege('authenticated', 'public.update_group_post_draft_identity(uuid,public.post_identity)', 'EXECUTE')
+    and not has_function_privilege('anon', 'public.update_group_post_draft_identity(uuid,public.post_identity)', 'EXECUTE'),
+  'only authenticated clients can change a group upload draft identity'
+);
 select ok(has_function_privilege('service_role', 'private.claim_storage_cleanup(integer,integer)', 'EXECUTE'), 'service role can claim cleanup work');
 select ok(not has_function_privilege('authenticated', 'private.claim_storage_cleanup(integer,integer)', 'EXECUTE'), 'clients cannot claim cleanup work');
 select is((select public from storage.buckets where id = 'post-attachments'), false, 'attachment bucket is private');
@@ -62,17 +74,171 @@ select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001
 set local role authenticated;
 
 select lives_ok(
-  $$select public.create_group_post('20000000-0000-0000-0000-000000000002', '첨부 초안', '', 'anonymous', null, false)$$,
-  'a blank draft can be created for uploads'
+  $$insert into attachment_test_ids values (
+      'limit_draft', public.create_group_post_upload_draft(
+        '20000000-0000-0000-0000-000000000002', 'identified'
+      )
+    )$$,
+  'an upload draft can be created before a title exists'
 );
-select is((select count(*) from public.posts where title = '첨부 초안' and published_at is null), 1::bigint, 'draft remains unpublished');
 select throws_ok(
-  $$select public.publish_group_post((select id from public.posts where title = '첨부 초안'))$$,
+  $$select public.prepare_post_attachment(
+      (select id from attachment_test_ids where name = 'limit_draft'),
+      'clip.mp4', 'application/octet-stream', 1, null, null
+    )$$,
+  '22023', 'video attachments are not supported',
+  'video attachments cannot bypass preparation with a generic MIME type'
+);
+select lives_ok(
+  $$select public.prepare_post_attachment(
+      (select id from attachment_test_ids where name = 'limit_draft'),
+      'file-' || n::text, 'application/octet-stream', 1, null, null
+    ) from generate_series(1, 30) as n$$,
+  'a post accepts 30 prepared attachments'
+);
+select is(
+  (select count(*) from public.post_attachments
+   where post_id = (select id from attachment_test_ids where name = 'limit_draft')),
+  30::bigint,
+  'all 30 attachment rows are retained'
+);
+select throws_ok(
+  $$select public.prepare_post_attachment(
+      (select id from attachment_test_ids where name = 'limit_draft'),
+      'file-31', 'application/octet-stream', 1, null, null
+    )$$,
+  '23514', 'a post can have at most 30 attachments',
+  'a 31st attachment is rejected'
+);
+
+reset role;
+delete from public.posts where id = (select id from attachment_test_ids where name = 'limit_draft');
+set local role authenticated;
+
+select lives_ok(
+  $$insert into attachment_test_ids values (
+      'upload_draft', public.create_group_post_upload_draft(
+        '20000000-0000-0000-0000-000000000002', 'anonymous'
+      )
+    )$$,
+  'an anonymous upload draft can be created without a user title'
+);
+select is(
+  (select count(*) from public.posts
+   where id = (select id from attachment_test_ids where name = 'upload_draft')
+     and published_at is null),
+  1::bigint,
+  'the upload draft remains unpublished'
+);
+select lives_ok(
+  $$select public.update_group_post_draft_identity(
+      (select id from attachment_test_ids where name = 'upload_draft'), 'identified'
+    )$$,
+  'the author can change an unpublished upload draft to identified'
+);
+select ok(
+  (select author_identity = 'identified' and display_author_profile_id is not null
+   from public.posts where id = (select id from attachment_test_ids where name = 'upload_draft')),
+  'changing to identified updates both identity fields'
+);
+
+reset role;
+update public.groups set identity_policy = 'identified'
+where id = '20000000-0000-0000-0000-000000000002';
+set local role authenticated;
+select throws_ok(
+  $$select public.update_group_post_draft_identity(
+      (select id from attachment_test_ids where name = 'upload_draft'), 'anonymous'
+    )$$,
+  '42501', 'anonymous posting is not allowed',
+  'draft identity changes recheck the current group identity policy'
+);
+reset role;
+update public.groups set identity_policy = 'optional_anonymous'
+where id = '20000000-0000-0000-0000-000000000002';
+insert into private.group_anonymous_activity_restrictions (
+  group_id, profile_id, reason, expires_at, restricted_by_profile_id, source_kind
+)
+select '20000000-0000-0000-0000-000000000002', target.id,
+  '업로드 초안 신원 변경 제한 검사', now() + interval '1 day', moderator.id, 'post'
+from public.profiles as target
+cross join public.profiles as moderator
+where target.auth_user_id = '10000000-0000-0000-0000-000000000001'
+  and moderator.auth_user_id = '10000000-0000-0000-0000-000000000002';
+set local role authenticated;
+select throws_ok(
+  $$select public.update_group_post_draft_identity(
+      (select id from attachment_test_ids where name = 'upload_draft'), 'anonymous'
+    )$$,
+  '42501', 'anonymous activity is restricted',
+  'draft identity changes recheck the current anonymous restriction'
+);
+select throws_ok(
+  $$select public.create_group_post_upload_draft(
+      '20000000-0000-0000-0000-000000000002', 'anonymous'
+    )$$,
+  '42501', 'anonymous activity is restricted',
+  'upload draft creation enforces anonymous restrictions'
+);
+reset role;
+delete from private.group_anonymous_activity_restrictions
+where group_id = '20000000-0000-0000-0000-000000000002';
+set local role authenticated;
+select lives_ok(
+  $$select public.update_group_post_draft_identity(
+      (select id from attachment_test_ids where name = 'upload_draft'), 'anonymous'
+    )$$,
+  'the author can change the draft back to an allowed anonymous identity'
+);
+select is(
+  (select display_author_profile_id from public.posts
+   where id = (select id from attachment_test_ids where name = 'upload_draft')),
+  null::bigint,
+  'anonymous draft identity removes the display profile'
+);
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
+set local role authenticated;
+select lives_ok(
+  $$insert into attachment_test_ids values (
+      'member_draft', public.create_group_post_upload_draft(
+        '20000000-0000-0000-0000-000000000002', 'identified'
+      )
+    )$$,
+  'a plain member can create an identified upload draft'
+);
+select throws_ok(
+  $$select public.update_group_post_draft_identity(
+      (select id from attachment_test_ids where name = 'member_draft'), 'staff'
+    )$$,
+  '42501', 'staff identity is not allowed',
+  'a plain member cannot switch their draft to staff identity'
+);
+select is(
+  (select count(*) from public.list_group_posts('20000000-0000-0000-0000-000000000002')
+   where post_id = (select id from attachment_test_ids where name = 'upload_draft')),
+  0::bigint,
+  'another member cannot see the unpublished draft'
+);
+select throws_ok(
+  $$select public.update_group_post_draft_identity(
+      (select id from attachment_test_ids where name = 'upload_draft'), 'identified'
+    )$$,
+  '42501', 'only the author can change an unpublished group draft identity',
+  'a non-author cannot change the draft identity'
+);
+
+reset role;
+delete from public.posts where id = (select id from attachment_test_ids where name = 'member_draft');
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select throws_ok(
+  $$select public.publish_group_post((select id from attachment_test_ids where name = 'upload_draft'))$$,
   '22023', 'published post requires a body or ready attachment', 'blank attachmentless draft cannot publish'
 );
 select lives_ok(
   $$select public.prepare_post_attachment(
-    (select id from public.posts where title = '첨부 초안'), 'photo.webp', 'image/webp', 4, 10, 20
+    (select id from attachment_test_ids where name = 'upload_draft'), 'photo.webp', 'image/webp', 4, 10, 20
   )$$,
   'author can prepare an attachment'
 );
@@ -81,7 +247,7 @@ select ok(
   'prepare returns the exact extensionless post/object UUID path'
 );
 select throws_ok(
-  $$select public.publish_group_post((select id from public.posts where title = '첨부 초안'))$$,
+  $$select public.publish_group_post((select id from attachment_test_ids where name = 'upload_draft'))$$,
   '55000', 'pending attachments must be finalized or deleted', 'pending upload blocks publication'
 );
 
@@ -107,10 +273,47 @@ select lives_ok(
 );
 select is((select status from public.post_attachments limit 1), 'ready'::public.post_attachment_status, 'finalize marks attachment ready');
 select lives_ok(
-  $$select public.publish_group_post((select id from public.posts where title = '첨부 초안'))$$,
+  $$select public.finalize_post_attachment((select id from public.post_attachments limit 1))$$,
+  'finalize is idempotent for the same author after validation'
+);
+select lives_ok(
+  $$select public.update_group_post_draft_identity(
+      (select id from attachment_test_ids where name = 'upload_draft'), 'identified'
+    )$$,
+  'the author can change identity after upload without preparing again'
+);
+select is(
+  (select count(*) from public.post_attachments
+   where post_id = (select id from attachment_test_ids where name = 'upload_draft')
+     and status = 'ready'),
+  1::bigint,
+  'changing draft identity retains the finalized attachment'
+);
+select lives_ok(
+  $$select public.update_group_post_draft_identity(
+      (select id from attachment_test_ids where name = 'upload_draft'), 'anonymous'
+    )$$,
+  'the draft can return to its selected anonymous identity without reupload'
+);
+select lives_ok(
+  $$select public.commit_group_post(
+      (select id from attachment_test_ids where name = 'upload_draft'),
+      '첨부 초안', '', array[(select id from public.post_attachments limit 1)], false, null
+    )$$,
+  'the first real title is stored before publication'
+);
+select lives_ok(
+  $$select public.publish_group_post((select id from attachment_test_ids where name = 'upload_draft'))$$,
   'ready attachment permits blank-body publication'
 );
 select is((select count(*) from public.list_post_attachments((select id from public.posts where title = '첨부 초안'))), 1::bigint, 'member can list ready metadata');
+select throws_ok(
+  $$select public.update_group_post_draft_identity(
+      (select id from attachment_test_ids where name = 'upload_draft'), 'identified'
+    )$$,
+  '42501', 'only the author can change an unpublished group draft identity',
+  'published post identity remains immutable'
+);
 select lives_ok(
   $$select public.update_group_post((select id from public.posts where title = '첨부 초안'), '첨부만', '', null)$$,
   'a ready attachment permits a blank update'

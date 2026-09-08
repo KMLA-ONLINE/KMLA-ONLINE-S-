@@ -1,7 +1,7 @@
 import { ArrowLeftIcon, SearchIcon } from "lucide-react";
 import { useNavigate } from "react-router";
 
-import { useGroupPostSearch } from "~/features/posts";
+import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { Button } from "~/shared/ui/button";
 
 export function GroupDetailMobileHeader({
@@ -15,7 +15,7 @@ export function GroupDetailMobileHeader({
 }) {
   const navigate = useNavigate();
   // 검색창은 `GroupDetailScreen`이 하나만 그린다. 여기서는 URL만 연다.
-  const { openSearch } = useGroupPostSearch();
+  const { openSearch } = useSearchDialogParam();
 
   return (
     <header

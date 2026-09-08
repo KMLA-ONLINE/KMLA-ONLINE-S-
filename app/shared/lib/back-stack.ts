@@ -43,38 +43,73 @@ function currentIndex(): number {
 }
 
 /**
+ * 부모 화면 위에 오버레이로 열리는 route.
+ *
+ * 이 화면들의 닫기는 `navigate(-1)`이라(`useModalClose`) 바로 밑 entry가 그대로 드러난다.
+ * 알림함에서 열었다면 그 자리가 알림함이어서, 게시물을 닫으면 글이 놓여 있던 그룹이 아니라
+ * 목록으로 튕긴다. 그래서 이 목적지들만은 돌아갈 내역이 있어도 부모를 한 칸 깔아 준다.
+ */
+const OVERLAY_ROUTES = new Set([
+  "/groups/:slug/posts/:postId",
+  "/profile/:pubId/posts/:postId",
+]);
+
+interface RouteMatch {
+  pattern: string;
+  params: Record<string, string>;
+}
+
+/** 표에 선언된 route 중 목적지와 맞는 것. 쿼리와 해시는 매칭에 쓰지 않는다. */
+function matchRoute(destination: string): RouteMatch | null {
+  const pathname = destination.split(/[?#]/, 1)[0] ?? destination;
+
+  for (const pattern of Object.keys(PARENT_ROUTE)) {
+    const match = matchPath(pattern, pathname);
+    if (!match) continue;
+    return {
+      pattern,
+      params: Object.fromEntries(
+        Object.entries(match.params).filter(
+          (entry): entry is [string, string] => entry[1] !== undefined,
+        ),
+      ),
+    };
+  }
+  return null;
+}
+
+/**
  * 목적지 아래에 깔려야 할 경로들. 루트부터 직속 부모까지 순서대로 돌려준다.
  *
  * 표에 없는 경로는 홈 하나만 깐다. 목적지가 홈이면 깔 것이 없다.
  */
 export function resolveBackStack(destination: string): string[] {
-  const pathname = destination.split(/[?#]/, 1)[0] ?? destination;
-
-  let pattern: string | null = null;
-  let params: Record<string, string> = {};
-  for (const candidate of Object.keys(PARENT_ROUTE)) {
-    const match = matchPath(candidate, pathname);
-    if (!match) continue;
-    pattern = candidate;
-    params = Object.fromEntries(
-      Object.entries(match.params).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    );
-    break;
-  }
-
-  if (pattern === null) return [HOME];
+  const matched = matchRoute(destination);
+  if (matched === null) return [HOME];
 
   const stack: string[] = [];
   for (
-    let parent = PARENT_ROUTE[pattern];
+    let parent = PARENT_ROUTE[matched.pattern];
     parent;
     parent = PARENT_ROUTE[parent]
   ) {
-    stack.unshift(generatePath(parent, params));
+    stack.unshift(generatePath(parent, matched.params));
   }
   return stack;
+}
+
+/**
+ * 목적지가 오버레이라면 그 밑에 놓일 화면 하나. 오버레이가 아니면 `null`이다.
+ *
+ * 오버레이가 아닌 화면은 밑에 무엇이 있든 자기 힘으로 그려지므로 손대지 않는다 — 뒤로가기는
+ * "내가 온 곳"으로 남는 게 맞다.
+ */
+export function resolveOverlayParent(destination: string): string | null {
+  const matched = matchRoute(destination);
+  if (matched === null || !OVERLAY_ROUTES.has(matched.pattern)) return null;
+
+  const parent = PARENT_ROUTE[matched.pattern];
+  return parent ? generatePath(parent, matched.params) : null;
 }
 
 /** 이 창에 뒤로 갈 수 있는 entry가 있는가. 서비스 워커가 새 창으로 열었다면 항상 없다. */

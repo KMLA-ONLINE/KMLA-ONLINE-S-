@@ -1,14 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createGroupPostWithAttachments, updateGroupPostWithAttachments } =
-  vi.hoisted(() => ({
-    createGroupPostWithAttachments: vi.fn(),
-    updateGroupPostWithAttachments: vi.fn(),
-  }));
+const {
+  createGroupPostWithAttachments,
+  preuploadGroupPostFiles,
+  updateGroupPostWithAttachments,
+} = vi.hoisted(() => ({
+  createGroupPostWithAttachments: vi.fn(),
+  preuploadGroupPostFiles: vi.fn(),
+  updateGroupPostWithAttachments: vi.fn(),
+}));
 
 vi.mock("~/features/posts/data/mutations", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   createGroupPostWithAttachments,
+  preuploadGroupPostFiles,
   updateGroupPostWithAttachments,
 }));
 
@@ -33,6 +38,7 @@ function renderEditor(overrides: Partial<OverlayProps> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   createGroupPostWithAttachments.mockResolvedValue("post-id");
+  preuploadGroupPostFiles.mockResolvedValue(undefined);
 });
 
 /**
@@ -97,6 +103,22 @@ describe("GroupPostOverlay 저장 경로", () => {
     expect(createGroupPostWithAttachments).not.toHaveBeenCalled();
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "선택할 수 없는 작성 신원입니다.",
+    );
+  });
+
+  it("파일을 선택하면 게시 전 업로드를 시작한다", async () => {
+    const { user } = renderEditor();
+    const file = new File(["내용"], "note.txt", { type: "text/plain" });
+
+    await user.upload(screen.getByLabelText("파일 선택"), file);
+
+    await vi.waitFor(() =>
+      expect(preuploadGroupPostFiles).toHaveBeenCalledWith(
+        "group-id",
+        "identified",
+        [expect.objectContaining({ file })],
+        expect.anything(),
+      ),
     );
   });
 });

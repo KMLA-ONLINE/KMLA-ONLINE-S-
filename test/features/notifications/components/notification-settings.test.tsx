@@ -210,9 +210,7 @@ describe("NotificationSettings", () => {
       screen.getByText("이 기기로 운영 조치 Push만 받습니다."),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "운영 조치는 유형별 설정과 관계없이 전달됩니다. 가입 승인·차단 Push는 ‘계정 · 권한’ 설정을 따르며, 이메일과 앱 알림함은 계속 전달됩니다.",
-      ),
+      screen.getByText("그 밖의 알림은 앱 알림함에서 확인합니다."),
     ).toBeInTheDocument();
   });
 });

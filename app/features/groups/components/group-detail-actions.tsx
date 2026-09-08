@@ -13,7 +13,7 @@ import { GroupConfirmDialog } from "~/features/groups/components/group-confirm-d
 import { GroupMembershipAction } from "~/features/groups/components/group-membership-action";
 import type { GroupDetail } from "~/features/groups/model/types";
 import { GroupNotificationDialog } from "~/features/notifications/components/group-notification-dialog";
-import { useGroupPostSearch } from "~/features/posts";
+import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { Button } from "~/shared/ui/button";
 import {
   DropdownMenu,
@@ -45,7 +45,7 @@ export function GroupDetailActions({
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   // 검색창은 `GroupDetailScreen`이 하나만 그린다. 여기서는 URL만 연다.
-  const { openSearch } = useGroupPostSearch();
+  const { openSearch } = useSearchDialogParam();
   const isMember = group.membership_state === "member";
   const isPrivate = group.join_policy === "invite_only";
   const canCurate =

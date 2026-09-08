@@ -2,6 +2,7 @@ import type {
   PreparedCommentImage,
   PreparedPostFile,
 } from "~/features/posts/model/types";
+export { POST_ATTACHMENT_LIMIT } from "~/features/posts/model/constants";
 import { validateSelectedFiles } from "~/features/posts/model/validation";
 import { compressImage } from "~/shared/lib/image/compress";
 

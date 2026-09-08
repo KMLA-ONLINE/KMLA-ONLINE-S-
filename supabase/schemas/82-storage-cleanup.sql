@@ -117,12 +117,27 @@ declare
   enqueued bigint := 0;
   moved bigint;
 begin
+  -- Upload preparation and commits lock the parent too. Taking the same lock first prevents a new
+  -- attachment from appearing after path capture but before the stale draft is deleted.
+  perform 1
+  from public.posts as post
+  where post.published_at is null
+    and post.created_at <= now() - interval '48 hours'
+  for update;
+
   with expired as (
     delete from public.post_attachments as attachment
     where attachment.status = 'deleted'
       or (
         attachment.status = 'pending'
         and attachment.created_at <= now() - interval '48 hours'
+      )
+      or exists (
+        select 1
+        from public.posts as post
+        where post.id = attachment.post_id
+          and post.published_at is null
+          and post.created_at <= now() - interval '48 hours'
       )
     returning attachment.storage_bucket as bucket, attachment.object_path as object_path
   )
@@ -133,6 +148,12 @@ begin
     set dry_run = queue.dry_run and excluded.dry_run;
   get diagnostics moved = row_count;
   enqueued := enqueued + moved;
+
+  -- Attachments are removed and queued first so deleting the parent cannot cascade away the only
+  -- copy of a ready object's path. Draft-row deletion is deliberately not included in `enqueued`.
+  delete from public.posts as post
+  where post.published_at is null
+    and post.created_at <= now() - interval '48 hours';
 
   with expired as (
     delete from public.comment_images as image

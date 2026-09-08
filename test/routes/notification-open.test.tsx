@@ -104,11 +104,11 @@ describe("notification open route", () => {
     expect(replaces(await redirection())).toBe(true);
   });
 
-  it("returns to the inbox after closing a post opened from the inbox", async () => {
-    function Post() {
-      const navigate = useNavigate();
-      return <button onClick={() => void navigate(-1)}>게시물 닫기</button>;
-    }
+  /**
+   * 게시물은 그룹 위에 오버레이로 열리고 닫기는 바로 밑 entry를 드러낸다. 알림함에서 열었다면
+   * 그 자리가 알림함이라, 부모를 끼워 넣지 않으면 글이 놓여 있던 그룹으로 갈 방법이 없다.
+   */
+  it("puts the group under a post opened from the inbox", async () => {
     const Stub = createRoutesStub([
       { path: "/noti", Component: () => <p>알림함</p> },
       {
@@ -116,7 +116,7 @@ describe("notification open route", () => {
         Component: NotificationOpenRoute,
         loader: () => ({ target: "/groups/study/posts/post-id" }),
       },
-      { path: "/groups/study/posts/post-id", Component: Post },
+      { path: "/groups/study/posts/post-id", Component: () => <p>게시물</p> },
     ]);
 
     render(
@@ -132,7 +132,73 @@ describe("notification open route", () => {
       />,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "게시물 닫기" }));
+    expect(await screen.findByText("게시물")).toBeVisible();
+    // 알림함 entry는 그대로 두고, resolver가 있던 자리만 그룹으로 갈아치운다. 깔았으므로
+    // 게시물은 그 위에 push다 — 뒤로가기가 그룹, 한 번 더 누르면 알림함이 된다.
+    expect(seeded.replaced).toEqual(["/groups/study"]);
+    expect(seeded.pushed).toEqual([]);
+  });
+
+  /**
+   * 앱이 떠 있는 채로 push를 누르면 서비스 워커가 그 창을 이 route로 보낸다. 알림함을 거치지
+   * 않았을 뿐 게시물이 오버레이라는 사실은 같으므로, 밑에 깔리는 것도 같아야 한다.
+   */
+  it("puts the group under a post opened by a push while the app was running", async () => {
+    const Stub = createRoutesStub([
+      { path: "/messenger", Component: () => <p>메신저</p> },
+      {
+        path: "/noti/open/:notificationId",
+        Component: NotificationOpenRoute,
+        loader: () => ({ target: "/groups/study/posts/post-id" }),
+      },
+      { path: "/groups/study/posts/post-id", Component: () => <p>게시물</p> },
+    ]);
+
+    render(
+      <Stub
+        initialEntries={["/messenger", "/noti/open/notification-id"]}
+        initialIndex={1}
+      />,
+    );
+
+    expect(await screen.findByText("게시물")).toBeVisible();
+    expect(seeded.replaced).toEqual(["/groups/study"]);
+    expect(seeded.pushed).toEqual([]);
+  });
+
+  /**
+   * 그룹 화면은 오버레이가 아니라 밑에 무엇이 있든 스스로 그려진다. 여기에 부모를 끼워 넣으면
+   * 알림함에서 들어온 사용자의 뒤로가기가 알림함이 아니라 그룹 목록이 된다.
+   */
+  it("returns to the inbox from a destination that is not an overlay", async () => {
+    function Group() {
+      const navigate = useNavigate();
+      return <button onClick={() => void navigate(-1)}>뒤로</button>;
+    }
+    const Stub = createRoutesStub([
+      { path: "/noti", Component: () => <p>알림함</p> },
+      {
+        path: "/noti/open/:notificationId",
+        Component: NotificationOpenRoute,
+        loader: () => ({ target: "/groups/study" }),
+      },
+      { path: "/groups/study", Component: Group },
+    ]);
+
+    render(
+      <Stub
+        initialEntries={[
+          "/noti",
+          {
+            pathname: "/noti/open/notification-id",
+            state: { fromNotificationInbox: true },
+          },
+        ]}
+        initialIndex={1}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "뒤로" }));
     expect(await screen.findByText("알림함")).toBeVisible();
     expect(seeded.replaced).toEqual([]);
     expect(seeded.pushed).toEqual([]);

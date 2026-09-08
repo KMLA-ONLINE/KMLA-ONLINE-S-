@@ -4,11 +4,12 @@ import { useLocation, useNavigate, useSearchParams } from "react-router";
 const OPEN_PARAM = "search";
 const QUERY_PARAM = "q";
 
-interface GroupPostSearchLocationState {
-  groupSearchPushed?: boolean;
+/** dialog를 연 것이 우리라는 표식. 뒤로가기로 닫을 수 있는지 판단하는 근거다. */
+interface SearchDialogLocationState {
+  searchDialogPushed?: boolean;
 }
 
-export interface GroupPostSearch {
+export interface SearchDialogState {
   /** 검색 dialog가 열려 있는가. */
   open: boolean;
   /** 제출된 검색어. 아직 제출하지 않았으면 빈 문자열이다. */
@@ -19,23 +20,26 @@ export interface GroupPostSearch {
 }
 
 /**
- * 그룹 게시물 검색의 열림 상태를 URL에 둔다(`?search=1`, 제출한 검색어는 `?q=`).
+ * 검색 dialog의 열림 상태를 URL에 둔다(`?search=1`, 제출한 검색어는 `?q=`).
  *
  * 모바일에서 검색은 전체화면 시트라 사용자는 습관적으로 뒤로가기로 닫는다. 열림 상태가
- * component state에만 있으면 그 뒤로가기가 닫을 것을 찾지 못해 그룹 화면 자체를 떠난다.
- * 열 때 history entry를 하나 push해 두면 뒤로가기가 그 entry만 pop해서 검색만 닫힌다.
+ * component state에만 있으면 그 뒤로가기가 닫을 것을 찾지 못해 화면 자체를 떠난다. 열 때
+ * history entry를 하나 push해 두면 뒤로가기가 그 entry만 pop해서 검색만 닫힌다.
  *
- * 검색어까지 URL에 두는 이유는 결과에서 게시물로 들어갔다가 돌아오는 길 때문이다. 돌아온
- * entry가 검색어를 들고 있어야 결과 목록이 그대로 복원된다.
+ * 검색어까지 URL에 두는 이유는 결과에서 게시물이나 프로필로 들어갔다가 돌아오는 길 때문이다.
+ * 돌아온 entry가 검색어를 들고 있어야 결과 목록이 그대로 복원된다.
  *
  * 제출은 push가 아니라 replace다. 그래야 검색어를 몇 번 바꾸든 검색 오버레이가 남기는 entry는
- * 하나고, 뒤로가기 한 번이면 그룹 화면으로 돌아온다.
+ * 하나고, 뒤로가기 한 번이면 원래 화면으로 돌아온다.
+ *
+ * 그룹 게시물 검색과 인명 검색이 같은 훅을 쓴다. 둘은 그룹 상세와 홈에 각각 붙어 한 화면에
+ * 함께 뜨지 않으므로, param과 표식을 공유해도 서로의 것을 열거나 닫지 않는다.
  */
-export function useGroupPostSearch(): GroupPostSearch {
+export function useSearchDialogParam(): SearchDialogState {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const locationState = location.state as GroupPostSearchLocationState | null;
+  const locationState = location.state as SearchDialogLocationState | null;
   const open = searchParams.get(OPEN_PARAM) === "1";
   // 손으로 주소를 고쳐 들어올 수도 있으므로 제출 경로와 같은 정규화를 읽을 때 한 번 더 건다.
   const submittedQuery = open
@@ -45,13 +49,12 @@ export function useGroupPostSearch(): GroupPostSearch {
   const openSearch = useCallback(() => {
     const next = new URLSearchParams(searchParams);
     next.set(OPEN_PARAM, "1");
-    // 새로 여는 검색은 언제나 빈 입력창에서 시작한다(기능 명세 §8.9).
+    // 새로 여는 검색은 언제나 빈 입력창에서 시작한다. 그룹 게시물 검색은 명세가 못박아 뒀고
+    // (기능 명세 §8.9), 인명 검색도 같은 시트라 다르게 둘 이유가 없다.
     next.delete(QUERY_PARAM);
     void setSearchParams(next, {
       preventScrollReset: true,
-      state: {
-        groupSearchPushed: true,
-      } satisfies GroupPostSearchLocationState,
+      state: { searchDialogPushed: true } satisfies SearchDialogLocationState,
     });
   }, [searchParams, setSearchParams]);
 
@@ -59,7 +62,7 @@ export function useGroupPostSearch(): GroupPostSearch {
     // 우리가 push한 entry라면 뒤로가기로 닫는 게 맞다 — 그래야 브라우저 뒤로가기가 방금 닫은
     // 검색을 다시 띄우지 않는다. 검색이 열린 주소로 곧장 들어온 경우엔 pop할 entry가 없어서
     // 앱 밖으로 나가 버리므로, 그때만 param을 지운다.
-    if (locationState?.groupSearchPushed) {
+    if (locationState?.searchDialogPushed) {
       void navigate(-1);
       return;
     }
@@ -76,7 +79,7 @@ export function useGroupPostSearch(): GroupPostSearch {
       if (query) next.set(QUERY_PARAM, query);
       else next.delete(QUERY_PARAM);
       // `location.state`를 그대로 넘긴다. replace는 state를 승계하지 않아서, 넘기지 않으면
-      // 검색 한 번에 `groupSearchPushed`가 사라지고 닫기 버튼이 뒤로가기 대신 param만 지운다.
+      // 검색 한 번에 표식이 사라지고 닫기 버튼이 뒤로가기 대신 param만 지운다.
       void setSearchParams(next, {
         replace: true,
         preventScrollReset: true,

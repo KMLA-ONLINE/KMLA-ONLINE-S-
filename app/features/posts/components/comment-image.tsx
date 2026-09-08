@@ -1,21 +1,12 @@
-import { useLocation, useNavigate, useSearchParams } from "react-router";
-
 import {
   imageDownloadName,
   toAttachmentDownloadUrl,
 } from "~/features/posts/model/attachments";
 import type { CommentImage as CommentImageModel } from "~/features/posts/model/types";
 import { ImageViewer } from "~/shared/components/image-viewer";
-
-interface ImageViewerLocationState {
-  imageViewerPushed?: boolean;
-}
+import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
 
 export function CommentImage({ image }: { image: CommentImageModel }) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const open = searchParams.get("image") === image.image_id;
   const downloadName = imageDownloadName(image.image_id);
   const viewerImages = image.signedUrl
     ? [
@@ -27,17 +18,8 @@ export function CommentImage({ image }: { image: CommentImageModel }) {
         },
       ]
     : [];
-
-  const close = () => {
-    const state = location.state as ImageViewerLocationState | null;
-    if (state?.imageViewerPushed) {
-      void navigate(-1);
-      return;
-    }
-    const next = new URLSearchParams(searchParams);
-    next.delete("image");
-    void setSearchParams(next, { replace: true, preventScrollReset: true });
-  };
+  // 서명에 실패해 목록이 비면 훅이 `openImageId`를 걸러 준다 — 열 수 없는 뷰어가 뜨지 않는다.
+  const viewer = useImageViewerParam(viewerImages);
 
   return (
     <>
@@ -46,16 +28,7 @@ export function CommentImage({ image }: { image: CommentImageModel }) {
         disabled={!image.signedUrl}
         aria-label="댓글 이미지 크게 보기"
         className="mt-1 block max-w-full overflow-hidden rounded-xl bg-muted focus:ring-0 focus:outline-none focus-visible:ring-0"
-        onClick={() => {
-          const next = new URLSearchParams(searchParams);
-          next.set("image", image.image_id);
-          void setSearchParams(next, {
-            preventScrollReset: true,
-            state: {
-              imageViewerPushed: true,
-            } satisfies ImageViewerLocationState,
-          });
-        }}
+        onClick={() => viewer.open(image.image_id)}
       >
         {image.signedUrl ? (
           <img
@@ -72,8 +45,8 @@ export function CommentImage({ image }: { image: CommentImageModel }) {
       </button>
       <ImageViewer
         images={viewerImages}
-        openImageId={open && viewerImages.length > 0 ? image.image_id : null}
-        onClose={close}
+        openImageId={viewer.openImageId}
+        onClose={viewer.close}
       />
     </>
   );
