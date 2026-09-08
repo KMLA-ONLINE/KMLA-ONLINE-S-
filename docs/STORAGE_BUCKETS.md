@@ -231,6 +231,8 @@ SQL RPC는 object의 실제 바이트가 WebP인지, 이미지의 실제 치수�
 
 정리는 두 층으로 나뉘고, 두 층이 같은 큐(`private.storage_cleanup_queue`)에 쌓는다. 실제 삭제는 큐를 드레인하는 Edge Function(`cleanup-storage-objects`) 하나만 수행한다. `storage.objects` 행만 지우면 실제 파일이 남으므로 삭제는 반드시 Storage API를 거친다.
 
+이 절은 object 파일이 지워지는 경로를 정의한다. 그 object를 가리키던 **행이 언제 사라지는지**는 [삭제 및 보존 정책](DELETION_POLICY.md)이 정하며, 아래 서술은 그 문서의 미구현 항목이 적용되면 함께 바뀐다.
+
 #### 1층: 행 수명주기
 
 - 첨부를 삭제하면 행을 즉시 제거하지 않고 상태를 `deleted`로 변경한다.

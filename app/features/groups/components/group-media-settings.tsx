@@ -114,7 +114,7 @@ function MediaField({
   const selectFile = (file: File | undefined) => {
     if (!file) return;
     if (!ACCEPTED_TYPES.has(file.type) || file.size > 30 * 1024 * 1024) {
-      setError("JPEG, PNG, WebP 이미지를 30MiB 이하로 선택해 주세요.");
+      setError("JPEG, PNG, WebP 이미지를 30MB 이하로 선택해 주세요.");
       return;
     }
     setError(null);
