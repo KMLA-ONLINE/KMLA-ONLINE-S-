@@ -179,18 +179,15 @@ export function PostFileList({ files }: { files: PostAttachment[] }) {
   const visibleFiles = expanded ? files : files.slice(0, 3);
 
   return (
-    <section
-      className="overflow-hidden rounded-xl border bg-card"
-      aria-label="첨부 파일"
-    >
-      <div className="flex items-center gap-2 border-b px-3 py-2.5">
+    <section className="border-t pt-2" aria-label="첨부 파일">
+      <div className="flex items-center gap-2 px-1.5 pb-1.5">
         <FilesIcon
           className="size-4 text-muted-foreground"
           aria-hidden="true"
         />
         <h3 className="text-sm font-medium">첨부 파일 {files.length}개</h3>
       </div>
-      <ul className="grid gap-2 p-2 sm:grid-cols-2">
+      <ul className="divide-y">
         {visibleFiles.map((item) => {
           const Icon = fileIcon(item.mime_type);
 
@@ -203,7 +200,7 @@ export function PostFileList({ files }: { files: PostAttachment[] }) {
                     item.original_filename,
                   )}
                   download={item.original_filename}
-                  className="group flex min-w-0 items-center gap-3 rounded-lg border bg-background p-2.5 transition-colors hover:border-foreground/20 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  className="group flex min-w-0 items-center gap-3 rounded-md px-1.5 py-2.5 transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 >
                   <FileBadge icon={<Icon aria-hidden="true" />} />
                   <FileMeta
@@ -217,7 +214,7 @@ export function PostFileList({ files }: { files: PostAttachment[] }) {
                   />
                 </a>
               ) : (
-                <div className="flex min-w-0 items-center gap-3 rounded-lg border bg-muted/30 p-2.5 text-muted-foreground">
+                <div className="flex min-w-0 items-center gap-3 px-1.5 py-2.5 text-muted-foreground">
                   <FileBadge icon={<Icon aria-hidden="true" />} />
                   <FileMeta
                     name={item.original_filename}
@@ -232,12 +229,12 @@ export function PostFileList({ files }: { files: PostAttachment[] }) {
         })}
       </ul>
       {canExpand ? (
-        <div className="border-t p-2">
+        <div className="border-t pt-1">
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="w-full"
+            className="w-full justify-start px-1.5"
             aria-expanded={expanded}
             onClick={() => setExpanded((current) => !current)}
           >
