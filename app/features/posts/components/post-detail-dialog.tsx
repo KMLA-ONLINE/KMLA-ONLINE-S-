@@ -147,7 +147,9 @@ export function PostDetailDialog({
    * 댓글만 보러 들어왔다는 의도(`?view=comments`)가 함께 있어야 한다.
    */
   const commentSheet = commentsOnly && sheetViewport;
-  const keyboardViewport = useKeyboardViewport(commentSheet);
+  const keyboardViewport = useKeyboardViewport(sheetViewport);
+  const mobileDetailKeyboardOpen =
+    !commentSheet && keyboardViewport.bottomInset > 0;
 
   useEffect(() => {
     if (!replyingTo || keyboardViewport.height === null) return;
@@ -338,14 +340,17 @@ export function PostDetailDialog({
           commentSheet &&
             !dragging &&
             "max-[1025px]:transition-transform max-[1025px]:duration-200",
+          mobileDetailKeyboardOpen &&
+            "max-[1025px]:top-auto max-[1025px]:translate-y-0",
         )}
         style={
-          commentSheet
+          sheetViewport
             ? ({
                 bottom:
                   keyboardViewport.bottomInset > 0
                     ? `${keyboardViewport.bottomInset}px`
                     : undefined,
+                top: mobileDetailKeyboardOpen ? "auto" : undefined,
                 maxHeight:
                   keyboardViewport.height === null
                     ? undefined
