@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(39);
+select plan(42);
 
 -- 이 파일의 목적은 두 가지다. 1층이 수명을 다한 행만 큐로 옮기는지, 그리고 2층 스윕이 살아 있는
 -- object를 절대 후보로 삼지 않는지. 후자가 틀리면 사용자 이미지가 사라지므로 참조 종류마다
@@ -51,11 +51,44 @@ select throws_ok(
 -- 설정이 없으면 조용히 null을 돌려주는 대신 실패해야 한다. 이 침묵이 정리가 한 번도 돌지 않은
 -- 것을 아무도 모르게 만들었던 원인이다.
 delete from vault.secrets where name = 'storage_cleanup_secret';
+
+-- 다만 큐가 비어 있으면 설정을 보기도 전에 빠져나온다. 백스톱이 매시간 돌아도 빈 실행 기록이
+-- 쌓이지 않게 하는 단락이다(삭제 및 보존 정책 §6).
+delete from private.storage_cleanup_queue;
+select is(
+  private.invoke_storage_cleanup(),
+  null::bigint,
+  'an empty queue skips the call before it reads any configuration'
+);
+
+insert into private.storage_cleanup_queue (bucket, object_path, reason)
+values ('post-attachments', 'wake/00000000-0000-0000-0000-0000000000aa', 'post_attachment');
+
 select throws_ok(
   $$select private.invoke_storage_cleanup()$$,
   '55000', 'storage cleanup vault configuration is missing',
   'a missing secret fails loudly instead of no-opping'
 );
+
+-- 삭제 RPC가 쓰는 호출은 같은 설정 누락을 삼킨다. Vault가 어긋났다고 게시물이 지워지지 않는
+-- 쪽이 훨씬 나쁘고, 경로는 이미 큐에 있으므로 백스톱이 받는다(§8.2).
+select is(
+  private.invoke_storage_cleanup(p_quiet => true),
+  null::bigint,
+  'the quiet caller swallows a missing secret instead of failing its deletion'
+);
+
+-- 진행 중인 실행이 있으면 겹쳐 부르지 않는다. 설정이 없는데도 예외가 아니라 null이 나오는 것이
+-- 디바운스가 Vault 검사보다 먼저 걸렸다는 증거다.
+insert into private.storage_cleanup_runs (request_id, started_at)
+values (null, now());
+select is(
+  private.invoke_storage_cleanup(),
+  null::bigint,
+  'a run already in flight suppresses another call'
+);
+delete from private.storage_cleanup_runs;
+delete from private.storage_cleanup_queue;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000098', true);
 select is(
   (select secrets_configured from public.admin_storage_cleanup_status()),
@@ -357,8 +390,7 @@ select is(
   0::bigint,
   'an unslotted profile image stays while its activity post is alive'
 );
-update public.posts set deleted_at = now()
-where id = 'dd000000-0000-0000-0000-000000000001';
+select private.purge_posts(array['dd000000-0000-0000-0000-000000000001'::uuid]);
 select is(
   private.enqueue_storage_cleanup(),
   1::bigint,

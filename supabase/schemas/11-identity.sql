@@ -92,7 +92,6 @@ CREATE OR REPLACE FUNCTION "private"."can_read_profile_media_path"("p_object_pat
         and timeline.deleted_at is null
       where post.activity_media_path = p_object_path
         and post.published_at is not null
-        and post.deleted_at is null
         and private.can_read_post(post.id)
     )
   );

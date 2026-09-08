@@ -19,7 +19,6 @@ CREATE OR REPLACE FUNCTION "private"."can_access_feed_post"("p_post_id" "uuid", 
       and viewer.deleted_at is null
     where post.id = p_post_id
       and post.published_at is not null
-      and post.deleted_at is null
       and (
         (
           post.kind = 'group'
@@ -29,7 +28,6 @@ CREATE OR REPLACE FUNCTION "private"."can_access_feed_post"("p_post_id" "uuid", 
             join public.groups as group_record on group_record.id = membership.group_id
             where membership.group_id = post.group_id
               and membership.profile_id = p_profile_id
-              and group_record.deleted_at is null
           )
         )
         or (
@@ -79,7 +77,6 @@ begin
     where post.id = new.post_id
       and post.kind = 'group'
       and post.published_at is not null
-      and post.deleted_at is null
   ) then
     return new;
   end if;
@@ -104,6 +101,10 @@ $$;
 
 ALTER FUNCTION "private"."capture_effective_feed_bump"() OWNER TO "postgres";
 
+-- 게시물이 사라지는 중이면 반응 취소 이력을 남기지 않는다. 게시물을 지우면 반응이 CASCADE로
+-- 함께 지워지고 이 트리거가 행마다 도는데, 그때 -1 이벤트를 넣으면 이미 없어진 게시물을 가리켜
+-- 외래 키 위반이 난다. 남긴다 해도 같은 CASCADE에 곧 지워질 행이다. 정리 경로가 세우는
+-- `app.feed_event_purge`로 그 상황을 구분한다(삭제 및 보존 정책 §7.4).
 CREATE OR REPLACE FUNCTION "private"."capture_post_reaction_count_event"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -112,7 +113,10 @@ begin
   if tg_op = 'INSERT' then
     insert into private.post_reaction_count_events (post_id, delta, occurred_at)
     values (new.post_id, 1, new.created_at);
-  elsif tg_op = 'DELETE' then
+  elsif tg_op = 'DELETE'
+    and coalesce(
+      pg_catalog.current_setting('app.feed_event_purge', true), ''
+    ) <> 'on' then
     insert into private.post_reaction_count_events (post_id, delta)
     values (old.post_id, -1);
   end if;
@@ -252,7 +256,6 @@ begin
     ) as comment on post.published_at > epoch - interval '6 hours'
     where post.published_at is not null
       and post.published_at <= epoch
-      and post.deleted_at is null
       and private.can_access_feed_post(post.id, p_profile_id)
   ) as ranked;
 
@@ -380,11 +383,22 @@ $$;
 
 ALTER FUNCTION "private"."feed_rank_time"("p_published_at" timestamp with time zone, "p_bumped_at" timestamp with time zone, "p_feed_epoch" timestamp with time zone, "p_reaction_count" integer, "p_ranking_comment_count" integer, "p_is_cross_timeline" boolean, "p_is_profile_media_activity" boolean) OWNER TO "postgres";
 
+-- 랭킹 이벤트는 순위가 오른 사실의 기록이다. 지우고 다시 만들어 순위를 반복해서 올리는 길을
+-- 막아야 하므로 UPDATE는 어떤 경우에도 통과시키지 않는다.
+--
+-- DELETE에만 예외를 둔다. 게시물이 사라지면 그 이벤트도 함께 사라져야 하는데 외래 키 CASCADE도
+-- 이 트리거를 거치기 때문이다. 정리 경로가 `app.feed_event_purge`를 세워 스스로를 밝히며, 그
+-- 설정은 트랜잭션 지역이라 밖으로 새지 않는다. 두 테이블은 private 스키마에 있고 authenticated
+-- 권한이 없어, 클라이언트가 이 설정을 세워도 행에 도달할 수 없다(삭제 및 보존 정책 §7.4).
 CREATE OR REPLACE FUNCTION "private"."reject_feed_event_mutation"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO ''
     AS $$
 begin
+  if "tg_op" = 'DELETE'
+    and "pg_catalog"."current_setting"('app.feed_event_purge', true) = 'on' then
+    return old;
+  end if;
   raise exception 'feed ranking events are append-only' using errcode = '55000';
 end;
 $$;
@@ -676,10 +690,10 @@ CREATE OR REPLACE TRIGGER "post_comments_capture_effective_feed_bump" AFTER INSE
 CREATE OR REPLACE TRIGGER "post_reactions_capture_count_event" AFTER INSERT OR DELETE ON "public"."post_reactions" FOR EACH ROW EXECUTE FUNCTION "private"."capture_post_reaction_count_event"();
 
 ALTER TABLE ONLY "private"."feed_bump_events"
-    ADD CONSTRAINT "feed_bump_events_comment_id_fkey" FOREIGN KEY ("comment_id") REFERENCES "public"."post_comments"("id");
+    ADD CONSTRAINT "feed_bump_events_comment_id_fkey" FOREIGN KEY ("comment_id") REFERENCES "public"."post_comments"("id") ON DELETE CASCADE;
 
 ALTER TABLE ONLY "private"."feed_bump_events"
-    ADD CONSTRAINT "feed_bump_events_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id");
+    ADD CONSTRAINT "feed_bump_events_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id") ON DELETE CASCADE;
 
 ALTER TABLE ONLY "private"."feed_pages"
     ADD CONSTRAINT "feed_pages_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "private"."feed_sessions"("id") ON DELETE CASCADE;
@@ -694,7 +708,7 @@ ALTER TABLE ONLY "private"."feed_sessions"
     ADD CONSTRAINT "feed_sessions_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
 
 ALTER TABLE ONLY "private"."post_reaction_count_events"
-    ADD CONSTRAINT "post_reaction_count_events_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id");
+    ADD CONSTRAINT "post_reaction_count_events_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id") ON DELETE CASCADE;
 
 ALTER TABLE "private"."feed_bump_events" ENABLE ROW LEVEL SECURITY;
 

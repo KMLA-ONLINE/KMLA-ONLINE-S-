@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(53);
+select plan(58);
 
 select ok(
   has_function_privilege('authenticated', 'public.list_feed_posts(uuid)', 'execute'),
@@ -750,6 +750,82 @@ select ok(
         and column_name in ('last_feed_seen_at', 'feed_seen_at')
     ),
   'the integrated feed adds no server-side read or new-post state'
+);
+
+-- 랭킹 이벤트 purge 가드(삭제 및 보존 정책 §7.4). 게시물을 하드 삭제하려면 외래 키 CASCADE가
+-- append-only 트리거를 통과해야 하고, 그 통과는 정리 경로가 스스로를 밝힐 때만 허용된다.
+-- 가드는 트랜잭션 지역 설정이라 이 블록을 파일 맨 끝에 둔다. 한 번 켜면 되돌릴 자리가 없다.
+-- 앞의 "그룹을 떠난 뷰어" 검증이 이 사용자의 멤버십을 지웠다. 댓글과 반응을 남기려면 되돌린다.
+insert into public.group_memberships (group_id, profile_id)
+select '20000000-0000-0000-0000-000000000003', profile.id
+from public.profiles as profile
+where profile.auth_user_id = '10000000-0000-0000-0000-000000000001'
+on conflict (group_id, profile_id) do nothing;
+
+insert into public.posts (
+  id, kind, body, group_id, title, author_identity, display_author_profile_id,
+  created_at, published_at
+)
+values (
+  '90000000-0000-0000-0000-0000000000ff', 'group', 'purge guard body',
+  '20000000-0000-0000-0000-000000000003', 'purge guard', 'identified',
+  (select id from public.profiles
+    where auth_user_id = '10000000-0000-0000-0000-000000000001'),
+  statement_timestamp(), statement_timestamp()
+);
+insert into private.post_authors (post_id, profile_id)
+select '90000000-0000-0000-0000-0000000000ff', profile.id
+from public.profiles as profile
+where profile.auth_user_id = '10000000-0000-0000-0000-000000000001';
+
+set local role authenticated;
+select comment_id from public.create_post_comment(
+  '90000000-0000-0000-0000-0000000000ff', '#업', 'identified'
+);
+select set_post_reaction('90000000-0000-0000-0000-0000000000ff', 'like');
+reset role;
+
+select ok(
+  exists (
+    select 1 from private.feed_bump_events
+    where post_id = '90000000-0000-0000-0000-0000000000ff'
+  )
+    and exists (
+      select 1 from private.post_reaction_count_events
+      where post_id = '90000000-0000-0000-0000-0000000000ff'
+    ),
+  'the purge fixture has both a bump event and a reaction count event'
+);
+select throws_ok(
+  $$delete from public.posts
+    where id = '90000000-0000-0000-0000-0000000000ff'$$,
+  '55000', 'feed ranking events are append-only',
+  'deleting a post without the purge guard is blocked by its ranking events'
+);
+
+select set_config('app.feed_event_purge', 'on', true);
+
+select throws_ok(
+  $$update private.feed_bump_events set effective_at = now()
+    where post_id = '90000000-0000-0000-0000-0000000000ff'$$,
+  '55000', 'feed ranking events are append-only',
+  'the purge guard never opens UPDATE, only DELETE'
+);
+select lives_ok(
+  $$delete from public.posts
+    where id = '90000000-0000-0000-0000-0000000000ff'$$,
+  'the purge guard lets a post deletion cascade through its ranking events'
+);
+select ok(
+  not exists (
+    select 1 from private.feed_bump_events
+    where post_id = '90000000-0000-0000-0000-0000000000ff'
+  )
+    and not exists (
+      select 1 from private.post_reaction_count_events
+      where post_id = '90000000-0000-0000-0000-0000000000ff'
+    ),
+  'cascading a post deletion removes both kinds of ranking event'
 );
 
 select * from finish();

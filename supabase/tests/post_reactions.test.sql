@@ -111,20 +111,29 @@ select is(
 );
 
 reset role;
-update public.posts
-set deleted_at = statement_timestamp()
-where id = '90000000-0000-0000-0000-000000000003';
+-- 게시물은 하드 삭제라 되돌릴 수 없다. 이 시나리오 전용 게시물을 만들어 지운다.
+insert into public.posts (
+  id, kind, body, group_id, title, author_identity, display_author_profile_id,
+  created_at, published_at
+)
+select '90000000-0000-0000-0000-0000000000e3', 'group', '사라질 글', post.group_id,
+  '사라질 글', post.author_identity, post.display_author_profile_id,
+  statement_timestamp(), statement_timestamp()
+from public.posts as post
+where post.id = '90000000-0000-0000-0000-000000000003';
+insert into private.post_authors (post_id, profile_id)
+select '90000000-0000-0000-0000-0000000000e3', author.profile_id
+from private.post_authors as author
+where author.post_id = '90000000-0000-0000-0000-000000000003';
+select private.purge_posts(array['90000000-0000-0000-0000-0000000000e3'::uuid]);
 set local role authenticated;
 select throws_ok(
   $$select * from public.set_post_reaction(
-      '90000000-0000-0000-0000-000000000003', 'like'
+      '90000000-0000-0000-0000-0000000000e3', 'like'
     )$$,
   'P0002', 'post not found', 'already deleted posts reject new reactions'
 );
 reset role;
-update public.posts
-set deleted_at = null
-where id = '90000000-0000-0000-0000-000000000003';
 set local role authenticated;
 
 select throws_ok(

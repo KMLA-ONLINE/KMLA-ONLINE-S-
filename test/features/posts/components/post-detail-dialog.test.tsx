@@ -194,6 +194,23 @@ describe("PostDetailDialog", () => {
     );
   });
 
+  it("keeps a mobile post detail composer inside the visual viewport", async () => {
+    stubTabletSheetViewport(true);
+    stubVisualViewport(500, 100);
+    renderRoute(Detail, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id"],
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole("dialog")).toHaveStyle({
+        bottom: "200px",
+        top: "auto",
+        maxHeight: "500px",
+      }),
+    );
+  });
+
   it("scrolls only enough to reveal a reply target after resizing", async () => {
     stubTabletSheetViewport(true);
     stubVisualViewport(500);

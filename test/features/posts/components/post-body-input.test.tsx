@@ -34,6 +34,12 @@ describe("PostBodyInput", () => {
     const textarea = screen.getByRole("textbox", { name: "Markdown 본문" });
 
     expect(textarea).toHaveValue("**원문**");
+    expect(textarea).toHaveClass(
+      "field-sizing-fixed",
+      "h-full",
+      "resize-none",
+      "overflow-y-auto",
+    );
     fireEvent.compositionStart(textarea);
     fireEvent.keyDown(textarea, { key: "b", ctrlKey: true, isComposing: true });
     fireEvent.compositionEnd(textarea);

@@ -134,14 +134,15 @@ select is(
   'the failed mutation creates no child row'
 );
 
+-- 삭제가 곧 하드 삭제라 치울 fixture가 남지 않는다. 지울 것이 없다는 사실 자체가 검증이다.
 select is(
   extensions.dblink_exec(
     'post_delete',
     $$reset role; delete from public.posts
       where id = 'f0000000-0000-0000-0000-000000000001'$$
   ),
-  'DELETE 1',
-  'the committed fixture is removed'
+  'DELETE 0',
+  'the deleting transaction already removed the row rather than tombstoning it'
 );
 
 do $$

@@ -105,6 +105,55 @@ $$;
 
 ALTER FUNCTION "private"."apply_post_commit"("p_post_id" "uuid", "p_body" "text", "p_attachment_ids" "uuid"[]) OWNER TO "postgres";
 
+-- 게시물을 실제로 지운다. 게시물 삭제는 세 곳(그룹 게시물, 개인 게시물, 그룹 삭제)에서 일어나고
+-- 세 곳이 똑같은 순서를 지켜야 하므로 한곳에 모은다(삭제 및 보존 정책 §5.1).
+--
+-- 순서가 중요하다. 첨부와 댓글 이미지의 경로를 먼저 큐로 옮기지 않으면, CASCADE가 그 행을
+-- 지우는 순간 object 경로를 다시 찾을 방법이 사라져 파일만 남는다.
+CREATE OR REPLACE FUNCTION "private"."purge_posts"("p_post_ids" "uuid"[]) RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  purged integer;
+begin
+  if p_post_ids is null or pg_catalog.cardinality(p_post_ids) = 0 then
+    return 0;
+  end if;
+
+  -- 랭킹 이벤트도 함께 사라져야 한다. 그 CASCADE는 append-only 트리거를 거치므로 정리 경로임을
+  -- 먼저 밝힌다(삭제 및 보존 정책 §7.4).
+  perform pg_catalog.set_config('app.feed_event_purge', 'on', true);
+
+  insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+  select attachment.storage_bucket, attachment.object_path, 'post_attachment'
+  from public.post_attachments as attachment
+  where attachment.post_id = any(p_post_ids)
+  on conflict (bucket, object_path) do update
+    set dry_run = queue.dry_run and excluded.dry_run;
+
+  insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+  select image.storage_bucket, image.object_path, 'comment_image'
+  from public.comment_images as image
+  where image.post_id = any(p_post_ids)
+  on conflict (bucket, object_path) do update
+    set dry_run = queue.dry_run and excluded.dry_run;
+
+  delete from public.posts as post where post.id = any(p_post_ids);
+  get diagnostics purged = row_count;
+
+  perform pg_catalog.set_config('app.feed_event_purge', 'off', true);
+
+  -- 파일까지 수초 안에 사라지도록 워커를 깨운다. 실패해도 행 삭제는 이미 끝났고 경로는 큐에
+  -- 남아 백스톱이 받는다. 그래서 이 호출은 조용해야 한다(삭제 및 보존 정책 §4.1).
+  perform private.invoke_storage_cleanup(p_quiet => true);
+
+  return purged;
+end;
+$$;
+
+ALTER FUNCTION "private"."purge_posts"("p_post_ids" "uuid"[]) OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "private"."can_read_post"("p_post_id" "uuid") RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
@@ -114,7 +163,6 @@ CREATE OR REPLACE FUNCTION "private"."can_read_post"("p_post_id" "uuid") RETURNS
       select 1
       from public.posts as post
       where post.id = p_post_id
-        and post.deleted_at is null
         and case
           -- 게시 전 초안은 첨부를 올리려는 작성자에게만 보인다.
           when post.published_at is null then private.is_post_author(post.id)
@@ -318,7 +366,6 @@ CREATE TABLE IF NOT EXISTS "public"."posts" (
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "published_at" timestamp with time zone,
     "edited_at" timestamp with time zone,
-    "deleted_at" timestamp with time zone,
     "comment_count" integer DEFAULT 0 NOT NULL,
     "activity_kind" "public"."profile_media_activity_kind",
     "activity_media_path" "text",
@@ -335,7 +382,7 @@ CASE "activity_kind"
     WHEN 'cover_changed'::"public"."profile_media_activity_kind" THEN 'cover'::"text"
     ELSE NULL::"text"
 END) || '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::"text"))))),
-    CONSTRAINT "posts_publication_timestamps" CHECK (((("published_at" IS NULL) OR ("published_at" >= "created_at")) AND (("edited_at" IS NULL) OR (("published_at" IS NOT NULL) AND ("edited_at" >= "published_at"))) AND (("deleted_at" IS NULL) OR ("published_at" IS NULL) OR ("deleted_at" >= "published_at")) AND (("pinned_at" IS NULL) OR (("published_at" IS NOT NULL) AND ("pinned_at" >= "published_at"))))),
+    CONSTRAINT "posts_publication_timestamps" CHECK (((("published_at" IS NULL) OR ("published_at" >= "created_at")) AND (("edited_at" IS NULL) OR (("published_at" IS NOT NULL) AND ("edited_at" >= "published_at"))) AND (("pinned_at" IS NULL) OR (("published_at" IS NOT NULL) AND ("pinned_at" >= "published_at"))))),
     CONSTRAINT "posts_title_length" CHECK ((("title" IS NULL) OR (("char_length"("btrim"("title")) >= 1) AND ("char_length"("btrim"("title")) <= 100))))
 );
 
@@ -371,21 +418,21 @@ CREATE INDEX "post_attachments_cleanup_idx" ON "public"."post_attachments" USING
 
 CREATE INDEX "post_attachments_post_list_idx" ON "public"."post_attachments" USING "btree" ("post_id", "position", "id") WHERE ("status" = 'ready'::"public"."post_attachment_status");
 
-CREATE INDEX "posts_category_recent_idx" ON "public"."posts" USING "btree" ("group_id", "category_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'group'::"public"."post_kind") AND ("category_id" IS NOT NULL) AND ("published_at" IS NOT NULL) AND ("deleted_at" IS NULL));
+CREATE INDEX "posts_category_recent_idx" ON "public"."posts" USING "btree" ("group_id", "category_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'group'::"public"."post_kind") AND ("category_id" IS NOT NULL) AND ("published_at" IS NOT NULL));
 
 CREATE INDEX "posts_display_author_idx" ON "public"."posts" USING "btree" ("display_author_profile_id", "published_at" DESC, "id" DESC) WHERE ("display_author_profile_id" IS NOT NULL);
 
-CREATE INDEX "posts_group_pinned_idx" ON "public"."posts" USING "btree" ("group_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'group'::"public"."post_kind") AND ("pinned_at" IS NOT NULL) AND ("deleted_at" IS NULL));
+CREATE INDEX "posts_group_pinned_idx" ON "public"."posts" USING "btree" ("group_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'group'::"public"."post_kind") AND ("pinned_at" IS NOT NULL));
 
-CREATE INDEX "posts_group_recent_idx" ON "public"."posts" USING "btree" ("group_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'group'::"public"."post_kind") AND ("published_at" IS NOT NULL) AND ("deleted_at" IS NULL));
+CREATE INDEX "posts_group_recent_idx" ON "public"."posts" USING "btree" ("group_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'group'::"public"."post_kind") AND ("published_at" IS NOT NULL));
 
-CREATE INDEX "posts_group_search_idx" ON "public"."posts" USING "gin" ("search_text" "extensions"."gin_trgm_ops") WHERE (("kind" = 'group'::"public"."post_kind") AND ("published_at" IS NOT NULL) AND ("deleted_at" IS NULL));
+CREATE INDEX "posts_group_search_idx" ON "public"."posts" USING "gin" ("search_text" "extensions"."gin_trgm_ops") WHERE (("kind" = 'group'::"public"."post_kind") AND ("published_at" IS NOT NULL));
 
 CREATE UNIQUE INDEX "posts_profile_activity_media_path_key" ON "public"."posts" USING "btree" ("activity_media_path") WHERE ("activity_media_path" IS NOT NULL);
 
-CREATE INDEX "posts_public_profile_feed_idx" ON "public"."posts" USING "btree" ("published_at" DESC, "id" DESC) WHERE (("kind" = 'profile'::"public"."post_kind") AND ("visibility" = 'public'::"public"."post_visibility") AND ("published_at" IS NOT NULL) AND ("deleted_at" IS NULL));
+CREATE INDEX "posts_public_profile_feed_idx" ON "public"."posts" USING "btree" ("published_at" DESC, "id" DESC) WHERE (("kind" = 'profile'::"public"."post_kind") AND ("visibility" = 'public'::"public"."post_visibility") AND ("published_at" IS NOT NULL));
 
-CREATE INDEX "posts_timeline_idx" ON "public"."posts" USING "btree" ("timeline_profile_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'profile'::"public"."post_kind") AND ("published_at" IS NOT NULL) AND ("deleted_at" IS NULL));
+CREATE INDEX "posts_timeline_idx" ON "public"."posts" USING "btree" ("timeline_profile_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'profile'::"public"."post_kind") AND ("published_at" IS NOT NULL));
 
 CREATE OR REPLACE TRIGGER "group_categories_set_updated_at" BEFORE UPDATE ON "public"."group_categories" FOR EACH ROW EXECUTE FUNCTION "private"."set_updated_at"();
 
@@ -438,6 +485,8 @@ CREATE POLICY "posts_select_readable" ON "public"."posts" FOR SELECT TO "authent
 REVOKE ALL ON FUNCTION "private"."apply_post_commit"("p_post_id" "uuid", "p_body" "text", "p_attachment_ids" "uuid"[]) FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."can_read_post"("p_post_id" "uuid") FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "private"."purge_posts"("p_post_ids" "uuid"[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."can_read_post"("p_post_id" "uuid") TO "authenticated";
 
 

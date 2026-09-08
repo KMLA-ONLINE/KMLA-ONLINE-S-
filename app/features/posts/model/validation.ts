@@ -109,7 +109,7 @@ export function validateSelectedFiles(
       return `동영상 파일은 아직 지원하지 않습니다: ${file.name}`;
     if (file.size === 0) return `빈 파일은 첨부할 수 없습니다: ${file.name}`;
     if (file.size > 30 * 1024 * 1024)
-      return `파일은 30MiB 이하여야 합니다: ${file.name}`;
+      return `파일은 30MB 이하여야 합니다: ${file.name}`;
   }
   return null;
 }

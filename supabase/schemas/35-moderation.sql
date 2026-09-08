@@ -12,25 +12,6 @@ CREATE TYPE "public"."group_post_report_reason" AS ENUM (
 
 ALTER TYPE "public"."group_post_report_reason" OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "private"."cleanup_group_post_reports"() RETURNS "trigger"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-begin
-  delete from private.group_post_reports
-  where post_id = new.id;
-
-  delete from private.group_post_report_dismissals
-  where post_id = new.id;
-
-  return new;
-end;
-$$;
-
-ALTER FUNCTION "private"."cleanup_group_post_reports"() OWNER TO "postgres";
-
-REVOKE ALL ON FUNCTION "private"."cleanup_group_post_reports"() FROM PUBLIC;
-
 CREATE OR REPLACE FUNCTION "public"."dismiss_group_post_reports"("p_post_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -52,8 +33,7 @@ begin
   from public.posts as post
   where post.id = p_post_id
     and post.kind = 'group'
-    and post.published_at is not null
-    and post.deleted_at is null;
+    and post.published_at is not null;
 
   if post_group_id is null then
     raise exception 'post not found'
@@ -127,7 +107,6 @@ begin
     where post.id = p_post_id
       and post.group_id = p_group_id
       and post.kind = 'group'
-      and post.deleted_at is null
   ) then
     raise exception 'post not found'
       using errcode = 'P0002';
@@ -223,7 +202,6 @@ begin
     where post.group_id = p_group_id
       and post.kind = 'group'
       and post.published_at is not null
-      and post.deleted_at is null
   ),
   aggregated as (
     select
@@ -416,8 +394,7 @@ begin
   from public.posts as post
   where post.id = p_post_id
     and post.kind = 'group'
-    and post.published_at is not null
-    and post.deleted_at is null;
+    and post.published_at is not null;
 
   if post_record.id is null then
     raise exception 'post not found'
@@ -523,8 +500,6 @@ ALTER TABLE ONLY "private"."group_post_reports"
     ADD CONSTRAINT "group_post_reports_unique_reporter" UNIQUE ("post_id", "reporter_profile_id");
 
 CREATE INDEX "group_post_reports_post_order_idx" ON "private"."group_post_reports" USING "btree" ("post_id", "created_at" DESC, "id" DESC);
-
-CREATE OR REPLACE TRIGGER "posts_cleanup_group_reports" AFTER UPDATE OF "deleted_at" ON "public"."posts" FOR EACH ROW WHEN ((("old"."deleted_at" IS NULL) AND ("new"."deleted_at" IS NOT NULL))) EXECUTE FUNCTION "private"."cleanup_group_post_reports"();
 
 ALTER TABLE ONLY "private"."group_post_report_dismissals"
     ADD CONSTRAINT "group_post_report_dismissals_dismissed_by_profile_id_fkey" FOREIGN KEY ("dismissed_by_profile_id") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;

@@ -282,7 +282,7 @@ function EditorSurface({
         ))}
       </div>
       <div
-        className="post-typography h-96 overflow-y-auto"
+        className="post-typography h-72 overflow-y-auto"
         role="presentation"
         onClick={(event) => {
           if (!(event.ctrlKey || event.metaKey)) return;

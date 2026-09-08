@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(18);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -254,6 +254,16 @@ select ok(
    where kind = 'comment_moderated'
      and recipient_profile_id = (select id from public.profiles where pub_id = 'hanbyeol-25')),
   'comment moderation never carries the deleted comment text'
+);
+
+-- 대상이 사라진 알림은 갈 곳이 없으므로 함께 지운다(삭제 및 보존 정책 §5.5). 바로 위의 두
+-- 검사가 운영 조치 알림은 이 CASCADE에 걸리지 않는다는 것을 이미 보이고 있다. 그 알림들은
+-- post_id를 싣지 않고 그룹 ID만 싣기 때문이다.
+select is(
+  (select count(*) from public.notifications
+   where post_id = (select id from producer_ids where name = 'group_post')),
+  0::bigint,
+  'deleting a post takes the notifications that pointed at it'
 );
 
 select * from finish();

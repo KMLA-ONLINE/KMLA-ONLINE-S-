@@ -55,8 +55,7 @@ begin
         else 2
       end::smallint
     from public.groups as group_record
-    where group_record.deleted_at is null
-      and caller_profile.type <> 'teacher'
+    where caller_profile.type <> 'teacher'
       and (group_record.kind = 'official' or group_record.join_policy <> 'invite_only')
       and group_record.search_name like '%' || normalized_query || '%'
     order by 5, group_record.name
