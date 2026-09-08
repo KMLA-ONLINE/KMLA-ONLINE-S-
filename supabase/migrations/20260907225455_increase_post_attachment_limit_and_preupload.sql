@@ -416,6 +416,10 @@ begin
   if post_record.id is null or not private.is_post_author(p_post_id) then
     raise exception 'only the author can add attachments' using errcode = '42501';
   end if;
+  if lower(btrim(p_mime_type)) like 'video/%'
+     or lower(btrim(p_original_filename)) ~ '\.(mp4|m4v|mov|webm|avi|mkv|mpeg|mpg|3gp|3g2|ogv|m2ts)$' then
+    raise exception 'video attachments are not supported' using errcode = '22023';
+  end if;
   if (select count(*) from public.post_attachments
       where post_id = p_post_id and status <> 'deleted') >= 30 then
     raise exception 'a post can have at most 30 attachments' using errcode = '23514';

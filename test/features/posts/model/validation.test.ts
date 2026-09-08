@@ -77,6 +77,14 @@ describe("attachment selection validation", () => {
       "첨부 파일은 최대 30개까지 추가할 수 있습니다.",
     );
   });
+
+  it("rejects video attachments", () => {
+    const video = new File(["video"], "clip.mp4");
+
+    expect(validateSelectedFiles([video], 0)).toBe(
+      "동영상 파일은 아직 지원하지 않습니다: clip.mp4",
+    );
+  });
 });
 
 describe("validateProfilePostForm", () => {

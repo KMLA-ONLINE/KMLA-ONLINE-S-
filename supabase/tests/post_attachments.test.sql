@@ -10,7 +10,7 @@ create temporary table cleanup_claims (
 grant select, insert on cleanup_claims to service_role;
 create temporary table attachment_test_ids (name text primary key, id uuid not null);
 grant select, insert on attachment_test_ids to authenticated;
-select plan(65);
+select plan(66);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -80,6 +80,14 @@ select lives_ok(
       )
     )$$,
   'an upload draft can be created before a title exists'
+);
+select throws_ok(
+  $$select public.prepare_post_attachment(
+      (select id from attachment_test_ids where name = 'limit_draft'),
+      'clip.mp4', 'application/octet-stream', 1, null, null
+    )$$,
+  '22023', 'video attachments are not supported',
+  'video attachments cannot bypass preparation with a generic MIME type'
 );
 select lives_ok(
   $$select public.prepare_post_attachment(

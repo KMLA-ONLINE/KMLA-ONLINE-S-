@@ -1,11 +1,4 @@
-import { ArrowLeftIcon } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { useCallback, useRef, useState, type FormEvent } from "react";
 import {
   useBeforeUnload,
   useBlocker,
@@ -18,27 +11,21 @@ import {
   PostFormField,
 } from "~/features/posts/components/post-attachment-editor";
 import { PostBodyInput } from "~/features/posts/components/post-body-input";
+import { PostEditorLayout } from "~/features/posts/components/post-editor-layout";
 import {
-  createPostUploadSession,
   createProfilePostWithAttachments,
-  discardPostFileUpload,
   discardPostUploadDraft,
   discardPostUploads,
   preuploadPostFiles,
   preuploadProfilePostFiles,
-  subscribePostUploadSession,
   updateProfilePostWithAttachments,
 } from "~/features/posts/data/mutations";
-import {
-  preparePostFiles,
-  releasePostFile,
-} from "~/features/posts/model/attachments";
+import { usePostAttachmentDraft } from "~/features/posts/hooks/use-post-attachment-draft";
+import { releasePostFile } from "~/features/posts/model/attachments";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
 import type {
   PostSaveProgress,
-  PostFileUploadState,
   PostVisibility,
-  PreparedPostFile,
   ProfilePost,
   ProfilePostFormErrors,
   ProfilePostFormValues,
@@ -48,12 +35,9 @@ import {
   readProfilePostForm,
   validateProfilePostForm,
 } from "~/features/posts/model/validation";
-import { useFileDrop } from "~/shared/hooks/use-file-drop";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
-import { Button } from "~/shared/ui/button";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
-import { Spinner } from "~/shared/ui/spinner";
 
 export function isProfilePostDraftDirty({
   initial,
@@ -108,37 +92,51 @@ export function ProfilePostEditor({
     visibility: post?.visibility ?? "public",
   };
   const [formErrors, setFormErrors] = useState<ProfilePostFormErrors>({});
-  const [existing, setExisting] = useState(post?.attachments ?? []);
-  const [removedIds, setRemovedIds] = useState(new Set<string>());
-  const [additions, setAdditions] = useState<PreparedPostFile[]>([]);
-  const [attachmentOrder, setAttachmentOrder] = useState(
-    () => post?.attachments.map((item) => item.attachment_id) ?? [],
-  );
-  const additionsRef = useRef(additions);
-  additionsRef.current = additions;
   const bodyRef = useRef(initial.body);
   const [draftBody, setDraftBody] = useState(initial.body);
   const [draftVisibility, setDraftVisibility] = useState(initial.visibility);
   const [saving, setSaving] = useState(false);
   const [discarding, setDiscarding] = useState(false);
-  const [preparingCount, setPreparingCount] = useState(0);
   const [progress, setProgress] = useState<PostSaveProgress | null>(null);
-  const session = useRef(createPostUploadSession());
-  const disposedRef = useRef(false);
-  const [uploadStates, setUploadStates] = useState<
-    Record<string, PostFileUploadState>
-  >({});
-  const totalCount = existing.length + additions.length;
-  const attachmentCountRef = useRef(totalCount);
-  const originalAttachmentOrder =
-    post?.attachments.map((item) => item.attachment_id) ?? [];
-  const attachmentsChanged =
-    additions.length > 0 ||
-    removedIds.size > 0 ||
-    attachmentOrder.length !== originalAttachmentOrder.length ||
-    attachmentOrder.some(
-      (key, index) => key !== originalAttachmentOrder[index],
-    );
+  const {
+    existing,
+    removedIds,
+    additions,
+    attachmentOrder,
+    uploadStates,
+    preparingCount,
+    preparationError,
+    clearPreparationError,
+    totalCount,
+    attachmentsChanged,
+    session,
+    disposedRef,
+    isDragging,
+    dropHandlers,
+    addFiles,
+    removeExisting,
+    removeAddition,
+    move,
+    retry,
+  } = usePostAttachmentDraft({
+    initialAttachments: post?.attachments ?? [],
+    disabled: saving,
+    preupload: (files, uploadSession) =>
+      mode === "create"
+        ? preuploadProfilePostFiles(
+            timelinePubId,
+            draftVisibility,
+            files,
+            uploadSession,
+          )
+        : preuploadPostFiles(post!.post_id, files, uploadSession),
+    onFilesAdded: () =>
+      setFormErrors((current) => ({
+        ...current,
+        form: undefined,
+        body: undefined,
+      })),
+  });
   const dirty = isProfilePostDraftDirty({
     initial,
     body: draftBody,
@@ -160,87 +158,8 @@ export function ProfilePostEditor({
     ),
   );
 
-  useEffect(() => {
-    disposedRef.current = false;
-    return () => {
-      disposedRef.current = true;
-      additionsRef.current.forEach(releasePostFile);
-    };
-  }, []);
-  useEffect(
-    () =>
-      subscribePostUploadSession(session.current, (key, state) => {
-        setUploadStates((current) => {
-          const next = { ...current };
-          if (state) next[key] = state;
-          else delete next[key];
-          return next;
-        });
-      }),
-    [],
-  );
-
-  const addFiles = async (
-    files: FileList | null,
-    selection: "image" | "file" | "mixed",
-  ) => {
-    if (!files?.length || saving) return;
-    const selectedCount = files.length;
-    const currentCount = attachmentCountRef.current;
-    attachmentCountRef.current += selectedCount;
-    setPreparingCount((current) => current + selectedCount);
-    let kept = false;
-    try {
-      const prepared = await preparePostFiles(
-        [...files],
-        currentCount,
-        selection,
-      );
-      if (disposedRef.current) {
-        prepared.forEach(releasePostFile);
-        return;
-      }
-      setAdditions((current) => [...current, ...prepared]);
-      setAttachmentOrder((current) => [
-        ...current,
-        ...prepared.map((item) => item.key),
-      ]);
-      const upload =
-        mode === "create"
-          ? preuploadProfilePostFiles(
-              timelinePubId,
-              draftVisibility,
-              prepared,
-              session.current,
-            )
-          : preuploadPostFiles(post!.post_id, prepared, session.current);
-      void upload.catch(() => undefined);
-      kept = true;
-      setFormErrors((current) => ({
-        ...current,
-        form: undefined,
-        body: undefined,
-      }));
-    } catch (error) {
-      if (disposedRef.current) return;
-      setFormErrors((current) => ({
-        ...current,
-        form:
-          error instanceof Error
-            ? error.message
-            : "파일을 준비하지 못했습니다.",
-      }));
-    } finally {
-      if (!kept) attachmentCountRef.current -= selectedCount;
-      if (!disposedRef.current)
-        setPreparingCount((current) => current - selectedCount);
-    }
-  };
-  const { isDragging, dropHandlers } = useFileDrop(
-    (files) => void addFiles(files, "mixed"),
-  );
-
   const save = async (nextValues: ProfilePostFormValues) => {
+    clearPreparationError();
     setSaving(true);
     setFormErrors({});
     try {
@@ -306,172 +225,78 @@ export function ProfilePostEditor({
     void save(nextValues);
   };
 
-  const removeExisting = (id: string) => {
-    attachmentCountRef.current -= 1;
-    setRemovedIds((current) => new Set(current).add(id));
-    setExisting((current) =>
-      current.filter((item) => item.attachment_id !== id),
-    );
-    setAttachmentOrder((current) => current.filter((key) => key !== id));
-  };
-  const removeAddition = (key: string) => {
-    attachmentCountRef.current -= 1;
-    setAdditions((current) => {
-      const removed = current.find((item) => item.key === key);
-      if (removed) releasePostFile(removed);
-      return current.filter((item) => item.key !== key);
-    });
-    setAttachmentOrder((current) => current.filter((item) => item !== key));
-    void discardPostFileUpload(key, session.current);
-  };
-  const move = (index: number, direction: -1 | 1) => {
-    setAttachmentOrder((current) => {
-      const next = [...current];
-      const target = index + direction;
-      if (target < 0 || target >= next.length) return current;
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
-  };
-  const progressLabel =
-    progress === "uploading"
-      ? "첨부 업로드 중"
-      : progress === "publishing"
-        ? "게시 중"
-        : "저장 중";
-
   return (
-    <div className="fixed inset-0 z-50 flex h-dvh flex-col bg-background">
-      {/*
-        제출은 이 폼이 직접 처리한다. react-router의 `<Form>`을 쓰면 route action으로 간다고
-        읽히지만, 첨부 업로드는 초안 생성→prepare→upload→finalize→commit으로 이어지는
-        브라우저 I/O라 action 한 번으로 표현할 수 없다.
-      */}
-      <form
-        onSubmit={(event) => void submit(event)}
-        onChange={(event) => {
-          const target = event.target;
-          if (
-            target instanceof HTMLSelectElement &&
-            target.name === "visibility"
-          ) {
-            setDraftVisibility(target.value as PostVisibility);
-          }
+    <>
+      <PostEditorLayout
+        mode={mode}
+        subtitle={`${timelineName}님의 타임라인`}
+        saving={saving}
+        preparingCount={preparingCount}
+        progress={progress}
+        onClose={close}
+        formProps={{
+          onSubmit: (event) => void submit(event),
+          onChange: (event) => {
+            const target = event.target;
+            if (
+              target instanceof HTMLSelectElement &&
+              target.name === "visibility"
+            ) {
+              setDraftVisibility(target.value as PostVisibility);
+            }
+          },
+          ...dropHandlers,
         }}
-        className="flex min-h-0 flex-1 flex-col"
-        {...dropHandlers}
       >
-        <header className="shrink-0 border-b bg-background pt-[env(safe-area-inset-top)] md:border-b-0 md:bg-muted/40">
-          <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-3 sm:px-6 md:border-x md:border-b md:bg-background md:shadow-sm">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="작성 화면 닫기"
-              onClick={close}
+        {canChooseVisibility ? (
+          <PostFormField error={formErrors?.visibility}>
+            <NativeSelect
+              name="visibility"
+              defaultValue={initial.visibility}
+              aria-label="공개 범위"
+              className="w-full sm:w-56"
             >
-              <ArrowLeftIcon />
-            </Button>
-            <div className="min-w-0 flex-1">
-              <h1 className="truncate font-semibold">
-                {mode === "create" ? "새 게시물" : "게시물 수정"}
-              </h1>
-              <p className="truncate text-xs text-muted-foreground">
-                {timelineName}님의 타임라인
-              </p>
-            </div>
-            <Button type="submit" disabled={saving || preparingCount > 0}>
-              {saving ? <Spinner /> : null}{" "}
-              {preparingCount > 0
-                ? "파일 준비 중"
-                : saving
-                  ? progressLabel
-                  : mode === "create"
-                    ? "게시"
-                    : "저장"}
-            </Button>
-          </div>
-        </header>
+              <NativeSelectOption value="public">전체 공개</NativeSelectOption>
+              <NativeSelectOption value="private">비공개</NativeSelectOption>
+            </NativeSelect>
+          </PostFormField>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            다른 사용자의 타임라인에 남기는 게시물은 전체 공개됩니다.
+          </p>
+        )}
 
-        {/*
-          첨부를 더해 내용이 길어지면 스크롤바가 생긴다. 그대로 두면 그 폭만큼 콘텐츠 상자가
-          좁아지면서 `mx-auto`로 가운데 둔 본문이 왼쪽으로 밀리는데, 헤더는 이 스크롤 영역
-          밖이라 함께 밀리지 않아 둘이 어긋난다. 양쪽에 자리를 미리 잡아 둔다.
-        */}
-        <main className="min-h-0 flex-1 [scrollbar-gutter:stable_both-edges] overflow-y-auto md:bg-muted/40">
-          <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-5 sm:px-6 sm:py-8 md:border-x md:bg-background md:shadow-sm">
-            {canChooseVisibility ? (
-              <PostFormField error={formErrors?.visibility}>
-                <NativeSelect
-                  name="visibility"
-                  defaultValue={initial.visibility}
-                  aria-label="공개 범위"
-                  className="w-full sm:w-56"
-                >
-                  <NativeSelectOption value="public">
-                    전체 공개
-                  </NativeSelectOption>
-                  <NativeSelectOption value="private">
-                    비공개
-                  </NativeSelectOption>
-                </NativeSelect>
-              </PostFormField>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                다른 사용자의 타임라인에 남기는 게시물은 전체 공개됩니다.
-              </p>
-            )}
-
-            <div className="flex min-h-[24rem] flex-1 flex-col pt-5">
-              <PostFormField error={formErrors?.body}>
-                <PostBodyInput
-                  value={draftBody}
-                  onValueChange={(value) => {
-                    bodyRef.current = value;
-                    setDraftBody(value);
-                  }}
-                />
-              </PostFormField>
-            </div>
-
-            <PostAttachmentEditor
-              existing={existing}
-              additions={additions}
-              order={attachmentOrder}
-              disabled={saving}
-              isDragging={isDragging}
-              uploadStates={uploadStates}
-              onSelect={addFiles}
-              onRemoveExisting={removeExisting}
-              onRemoveAddition={removeAddition}
-              onMove={move}
-              onRetry={(key) => {
-                const item = additions.find((addition) => addition.key === key);
-                if (!item) return;
-                const upload =
-                  mode === "create"
-                    ? preuploadProfilePostFiles(
-                        timelinePubId,
-                        draftVisibility,
-                        [item],
-                        session.current,
-                      )
-                    : preuploadPostFiles(
-                        post!.post_id,
-                        [item],
-                        session.current,
-                      );
-                void upload.catch(() => undefined);
+        <div className="flex min-h-[24rem] flex-1 flex-col pt-5">
+          <PostFormField error={formErrors?.body}>
+            <PostBodyInput
+              value={draftBody}
+              onValueChange={(value) => {
+                bodyRef.current = value;
+                setDraftBody(value);
               }}
             />
-            {formErrors?.form ? (
-              <p role="alert" className="mt-4 text-sm text-destructive">
-                {formErrors.form}
-              </p>
-            ) : null}
-          </div>
-        </main>
-      </form>
+          </PostFormField>
+        </div>
+
+        <PostAttachmentEditor
+          existing={existing}
+          additions={additions}
+          order={attachmentOrder}
+          disabled={saving}
+          isDragging={isDragging}
+          uploadStates={uploadStates}
+          onSelect={addFiles}
+          onRemoveExisting={removeExisting}
+          onRemoveAddition={removeAddition}
+          onMove={move}
+          onRetry={retry}
+        />
+        {(preparationError ?? formErrors?.form) ? (
+          <p role="alert" className="mt-4 text-sm text-destructive">
+            {preparationError ?? formErrors.form}
+          </p>
+        ) : null}
+      </PostEditorLayout>
 
       {blocker.state === "blocked" ? (
         <ConfirmDialog
@@ -507,6 +332,6 @@ export function ProfilePostEditor({
           }}
         />
       ) : null}
-    </div>
+    </>
   );
 }
