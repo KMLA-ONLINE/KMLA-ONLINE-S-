@@ -50,6 +50,7 @@ describe("ProfileDetail", () => {
     expect(screen.queryByText("@hanbyeol-25")).not.toBeInTheDocument();
     // 기수와 계열은 한 줄로 합쳐 낸다.
     expect(screen.getByText("25기 · 국제 계열")).toBeVisible();
+    expect(screen.getByText("관리자")).toBeVisible();
     expect(screen.getByRole("link", { name: "프로필 편집" })).toHaveAttribute(
       "href",
       "/profile/hanbyeol-25/edit",
@@ -101,7 +102,7 @@ describe("ProfileDetail", () => {
         hidden: true,
       }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText("앱 관리자")).not.toBeInTheDocument();
+    expect(screen.queryByText("관리자")).not.toBeInTheDocument();
   });
 
   it("expands an overflowing description on demand", async () => {

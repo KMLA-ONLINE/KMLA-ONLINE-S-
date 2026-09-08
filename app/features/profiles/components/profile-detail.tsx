@@ -7,6 +7,7 @@ import {
   MailIcon,
   PencilIcon,
   PhoneIcon,
+  ShieldCheckIcon,
   UserRoundIcon,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -332,7 +333,18 @@ export function ProfileDetail({
                   <h1 className="min-w-0 truncate text-[1.35rem] leading-tight font-semibold tracking-tight sm:text-3xl">
                     {profile.name}
                   </h1>
-                  {profile.role === "admin" ? <Badge>관리자</Badge> : null}
+                  {/* 이름이 주인공이므로 배지는 솔리드 대신 옅은 틴트로 둔다. 게시물의
+                      운영진 배지와 같은 언어를 쓰되, 앱 전체 권한이라는 뜻이 드러나도록
+                      브랜드 색과 방패를 쓴다. */}
+                  {profile.role === "admin" ? (
+                    <Badge
+                      variant="outline"
+                      className="h-[1.375rem] gap-1 border-primary/25 bg-primary/10 px-2 text-blue-700 sm:h-6 sm:px-2.5 sm:text-[13px] dark:border-primary/35 dark:bg-primary/15 dark:text-blue-300 sm:[&>svg]:size-3.5!"
+                    >
+                      <ShieldCheckIcon aria-hidden="true" />
+                      관리자
+                    </Badge>
+                  ) : null}
                 </div>
 
                 {schoolSummary.length > 0 ? (
