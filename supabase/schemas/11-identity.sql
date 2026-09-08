@@ -806,6 +806,8 @@ CREATE INDEX "profile_media_objects_cleanup_idx" ON "public"."profile_media_obje
 
 ALTER TABLE "public"."profile_media_objects" ENABLE ROW LEVEL SECURITY;
 
+CREATE POLICY "profile_media_objects_deny_client_access" ON "public"."profile_media_objects" USING (false) WITH CHECK (false);
+
 ALTER TABLE "public"."profile_departments" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "profile_departments_select_active" ON "public"."profile_departments" FOR SELECT TO "authenticated" USING ("is_active");

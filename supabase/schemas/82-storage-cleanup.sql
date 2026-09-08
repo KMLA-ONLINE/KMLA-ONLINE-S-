@@ -66,6 +66,11 @@ create index if not exists storage_cleanup_runs_started_idx
 alter table private.storage_cleanup_queue enable row level security;
 alter table private.storage_cleanup_runs enable row level security;
 
+create policy storage_cleanup_queue_deny_client_access
+on private.storage_cleanup_queue using (false) with check (false);
+create policy storage_cleanup_runs_deny_client_access
+on private.storage_cleanup_runs using (false) with check (false);
+
 -- 살아 있는 object의 단일 정의. 2층 스윕은 이 집합의 여집합만 지우므로, 버킷을 추가하면서
 -- 여기에 참조를 더하지 않으면 그 버킷의 파일이 전부 삭제 후보가 된다. 새 버킷은 반드시 같은
 -- 변경에서 이 뷰와 pgTAP 테스트에 함께 들어간다.
