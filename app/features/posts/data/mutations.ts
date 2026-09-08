@@ -5,6 +5,7 @@ import type {
   PostComment,
   PostFormValues,
   PostIdentity,
+  PostFileUploadState,
   PostReaction,
   PostSaveProgress,
   PreparedCommentImage,
@@ -115,17 +116,123 @@ export async function createGroupPost(
 
 type PreparedAttachmentRow = Awaited<ReturnType<typeof preparePostAttachment>>;
 
+interface PostUploadFileState extends PostFileUploadState {
+  attachment?: PreparedAttachmentRow;
+  uploaded: boolean;
+  finalized: boolean;
+  promise?: Promise<string>;
+  removed?: boolean;
+}
+
+type PostUploadListener = (
+  key: string,
+  state: PostFileUploadState | undefined,
+) => void;
+
+interface QueuedUpload {
+  key: string;
+  run: () => Promise<string>;
+  resolve: (id: string) => void;
+  reject: (error: unknown) => void;
+}
+
 export interface PostUploadSession {
   postId?: string;
+  postPromise?: Promise<string>;
   authorIdentity?: PostFormValues["authorIdentity"];
-  files: Map<
-    string,
-    { attachment: PreparedAttachmentRow; uploaded: boolean; finalized: boolean }
-  >;
+  files: Map<string, PostUploadFileState>;
+  listeners: Set<PostUploadListener>;
+  queue: QueuedUpload[];
+  activeUploads: number;
+  cancelled: boolean;
+  controllers: Map<string, AbortController>;
 }
 
 export function createPostUploadSession(): PostUploadSession {
-  return { files: new Map() };
+  return {
+    files: new Map(),
+    listeners: new Set(),
+    queue: [],
+    activeUploads: 0,
+    cancelled: false,
+    controllers: new Map(),
+  };
+}
+
+export function subscribePostUploadSession(
+  session: PostUploadSession,
+  listener: PostUploadListener,
+): () => void {
+  session.listeners.add(listener);
+  session.files.forEach((state, key) => listener(key, state));
+  return () => session.listeners.delete(listener);
+}
+
+function notifyPostUpload(
+  session: PostUploadSession,
+  key: string,
+  state: PostUploadFileState | undefined,
+) {
+  session.listeners.forEach((listener) => listener(key, state));
+}
+
+function updatePostUpload(
+  session: PostUploadSession,
+  key: string,
+  patch: Partial<PostUploadFileState>,
+) {
+  const state = session.files.get(key);
+  if (!state) return;
+  Object.assign(state, patch);
+  notifyPostUpload(session, key, { ...state });
+}
+
+function registerPostFiles(
+  files: PreparedPostFile[],
+  session: PostUploadSession,
+) {
+  files.forEach((item) => {
+    if (session.files.has(item.key)) return;
+    const state: PostUploadFileState = {
+      status: "queued",
+      progress: 0,
+      uploaded: false,
+      finalized: false,
+    };
+    session.files.set(item.key, state);
+    notifyPostUpload(session, item.key, { ...state });
+  });
+}
+
+function drainPostUploadQueue(session: PostUploadSession) {
+  if (session.cancelled) {
+    const error = new DOMException("Upload aborted", "AbortError");
+    session.queue.splice(0).forEach((task) => task.reject(error));
+    return;
+  }
+  while (session.activeUploads < 3 && session.queue.length > 0) {
+    const task = session.queue.shift()!;
+    session.activeUploads += 1;
+    void task
+      .run()
+      .then(task.resolve, task.reject)
+      .finally(() => {
+        session.activeUploads -= 1;
+        drainPostUploadQueue(session);
+      });
+  }
+}
+
+function enqueuePostUpload(
+  key: string,
+  session: PostUploadSession,
+  run: () => Promise<string>,
+): Promise<string> {
+  const promise = new Promise<string>((resolve, reject) => {
+    session.queue.push({ key, run, resolve, reject });
+  });
+  drainPostUploadQueue(session);
+  return promise;
 }
 
 type PreparedCommentImageRow = Awaited<
@@ -252,31 +359,46 @@ async function finalizePostAttachment(attachmentId: string): Promise<void> {
   if (error) throw error;
 }
 
-async function uploadPreparedFiles(
+async function deletePreparedPostAttachment(
+  attachmentId: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("delete_post_attachment", {
+    p_attachment_id: attachmentId,
+  });
+  if (error) throw error;
+}
+
+async function runPostFileUpload(
   postId: string,
-  files: PreparedPostFile[],
+  item: PreparedPostFile,
   session: PostUploadSession,
-  onProgress?: (
-    progress: PostSaveProgress,
-    completed: number,
-    total: number,
-  ) => void,
-): Promise<string[]> {
-  const ids: string[] = [];
-  for (const [index, item] of files.entries()) {
-    onProgress?.("uploading", index, files.length);
-    let state = session.files.get(item.key);
-    if (!state) {
-      state = {
-        attachment: await preparePostAttachment(postId, item),
-        uploaded: false,
-        finalized: false,
-      };
-      session.files.set(item.key, state);
+): Promise<string> {
+  const state = session.files.get(item.key)!;
+  const controller = new AbortController();
+  session.controllers.set(item.key, controller);
+  try {
+    if (session.cancelled || state.removed)
+      throw new DOMException("Upload aborted", "AbortError");
+    if (!state.attachment) {
+      updatePostUpload(session, item.key, {
+        status: "uploading",
+        progress: 0,
+        error: undefined,
+      });
+      state.attachment = await preparePostAttachment(postId, item);
     }
     if (!state.uploaded) {
       try {
-        await uploadPostAttachment(state.attachment.object_path, item.file);
+        await uploadPostAttachment(
+          state.attachment.object_path,
+          item.file,
+          (progress) =>
+            updatePostUpload(session, item.key, {
+              status: "uploading",
+              progress,
+            }),
+          controller.signal,
+        );
         state.uploaded = true;
       } catch (uploadError) {
         try {
@@ -292,8 +414,259 @@ async function uploadPreparedFiles(
       await finalizePostAttachment(state.attachment.id);
       state.finalized = true;
     }
-    ids.push(state.attachment.id);
+    if (state.removed) {
+      await deletePreparedPostAttachment(state.attachment.id);
+      state.attachment = undefined;
+      throw new Error("removed");
+    }
+    updatePostUpload(session, item.key, { status: "ready", progress: 1 });
+    return state.attachment.id;
+  } catch (error) {
+    if (!state.removed) {
+      updatePostUpload(session, item.key, {
+        status: "error",
+        error:
+          error instanceof Error
+            ? error.message
+            : "파일을 업로드하지 못했습니다.",
+      });
+    }
+    throw error;
+  } finally {
+    session.controllers.delete(item.key);
   }
+}
+
+function ensurePostFileUpload(
+  postId: string,
+  item: PreparedPostFile,
+  session: PostUploadSession,
+): Promise<string> {
+  if (session.cancelled)
+    return Promise.reject(new DOMException("Upload aborted", "AbortError"));
+  let state = session.files.get(item.key);
+  if (!state) {
+    state = {
+      status: "queued",
+      progress: 0,
+      uploaded: false,
+      finalized: false,
+    };
+    session.files.set(item.key, state);
+    notifyPostUpload(session, item.key, { ...state });
+  }
+  if (state.status === "ready" && state.attachment) {
+    return Promise.resolve(state.attachment.id);
+  }
+  if (state.promise) return state.promise;
+  state.removed = false;
+  state.error = undefined;
+  state.promise = enqueuePostUpload(item.key, session, () =>
+    runPostFileUpload(postId, item, session),
+  ).finally(() => {
+    const current = session.files.get(item.key);
+    if (current) current.promise = undefined;
+  });
+  return state.promise;
+}
+
+async function ensureGroupUploadDraft(
+  groupId: string,
+  identity: PostIdentity,
+  session: PostUploadSession,
+): Promise<string> {
+  if (session.postId) return session.postId;
+  session.postPromise ??= (async () => {
+    const { data, error } = await getSupabase().rpc(
+      "create_group_post_upload_draft",
+      { p_group_id: groupId, p_author_identity: identity },
+    );
+    if (error) throw error;
+    session.postId = data;
+    session.authorIdentity = identity;
+    return data;
+  })().finally(() => {
+    session.postPromise = undefined;
+  });
+  return session.postPromise;
+}
+
+async function ensureProfileUploadDraft(
+  timelinePubId: string,
+  visibility: ProfilePostFormValues["visibility"],
+  session: PostUploadSession,
+): Promise<string> {
+  if (session.postId) return session.postId;
+  session.postPromise ??= createProfilePost(timelinePubId, visibility)
+    .then((postId) => {
+      session.postId = postId;
+      return postId;
+    })
+    .finally(() => {
+      session.postPromise = undefined;
+    });
+  return session.postPromise;
+}
+
+export async function preuploadGroupPostFiles(
+  groupId: string,
+  identity: PostIdentity,
+  files: PreparedPostFile[],
+  session: PostUploadSession,
+): Promise<void> {
+  registerPostFiles(files, session);
+  try {
+    const postId = await ensureGroupUploadDraft(groupId, identity, session);
+    await Promise.all(
+      files.map((item) => ensurePostFileUpload(postId, item, session)),
+    );
+  } catch (error) {
+    files.forEach((item) => {
+      const state = session.files.get(item.key);
+      if (state?.status === "queued")
+        updatePostUpload(session, item.key, {
+          status: "error",
+          error:
+            error instanceof Error
+              ? error.message
+              : "업로드를 시작하지 못했습니다.",
+        });
+    });
+    throw error;
+  }
+}
+
+export async function preuploadProfilePostFiles(
+  timelinePubId: string,
+  visibility: ProfilePostFormValues["visibility"],
+  files: PreparedPostFile[],
+  session: PostUploadSession,
+): Promise<void> {
+  registerPostFiles(files, session);
+  try {
+    const postId = await ensureProfileUploadDraft(
+      timelinePubId,
+      visibility,
+      session,
+    );
+    await Promise.all(
+      files.map((item) => ensurePostFileUpload(postId, item, session)),
+    );
+  } catch (error) {
+    files.forEach((item) => {
+      const state = session.files.get(item.key);
+      if (state?.status === "queued")
+        updatePostUpload(session, item.key, {
+          status: "error",
+          error:
+            error instanceof Error
+              ? error.message
+              : "업로드를 시작하지 못했습니다.",
+        });
+    });
+    throw error;
+  }
+}
+
+export async function preuploadPostFiles(
+  postId: string,
+  files: PreparedPostFile[],
+  session: PostUploadSession,
+): Promise<void> {
+  session.postId = postId;
+  registerPostFiles(files, session);
+  await Promise.all(
+    files.map((item) => ensurePostFileUpload(postId, item, session)),
+  );
+}
+
+export async function discardPostFileUpload(
+  key: string,
+  session: PostUploadSession,
+): Promise<void> {
+  const state = session.files.get(key);
+  if (!state) return;
+  state.removed = true;
+  session.controllers.get(key)?.abort();
+  const queuedIndex = session.queue.findIndex((task) => task.key === key);
+  if (queuedIndex >= 0) {
+    const [task] = session.queue.splice(queuedIndex, 1);
+    task.reject(new DOMException("Upload aborted", "AbortError"));
+  }
+  if (state.promise) {
+    try {
+      await state.promise;
+    } catch {
+      // Failed and removed uploads have no live attachment to keep in the editor.
+    }
+  }
+  if (state.attachment) {
+    await deletePreparedPostAttachment(state.attachment.id);
+  }
+  session.files.delete(key);
+  notifyPostUpload(session, key, undefined);
+}
+
+export async function discardPostUploadDraft(
+  kind: "group" | "profile",
+  session: PostUploadSession,
+): Promise<void> {
+  cancelPostUploads(session);
+  if (session.postPromise) {
+    try {
+      await session.postPromise;
+    } catch {
+      return;
+    }
+  }
+  if (!session.postId) return;
+  if (kind === "group") await deleteGroupPost(session.postId);
+  else await deleteProfilePost(session.postId);
+  session.postId = undefined;
+  session.files.clear();
+}
+
+export async function discardPostUploads(
+  session: PostUploadSession,
+): Promise<void> {
+  cancelPostUploads(session);
+  await Promise.allSettled(
+    [...session.files.values()].flatMap((state) =>
+      state.promise ? [state.promise] : [],
+    ),
+  );
+  await Promise.allSettled(
+    [...session.files.values()].flatMap((state) =>
+      state.attachment
+        ? [deletePreparedPostAttachment(state.attachment.id)]
+        : [],
+    ),
+  );
+}
+
+function cancelPostUploads(session: PostUploadSession) {
+  session.cancelled = true;
+  session.files.forEach((state) => {
+    state.removed = true;
+  });
+  session.controllers.forEach((controller) => controller.abort());
+  drainPostUploadQueue(session);
+}
+
+async function uploadPreparedFiles(
+  postId: string,
+  files: PreparedPostFile[],
+  session: PostUploadSession,
+  onProgress?: (
+    progress: PostSaveProgress,
+    completed: number,
+    total: number,
+  ) => void,
+): Promise<string[]> {
+  onProgress?.("uploading", 0, files.length);
+  const ids = await Promise.all(
+    files.map((item) => ensurePostFileUpload(postId, item, session)),
+  );
   onProgress?.("uploading", files.length, files.length);
   return ids;
 }
@@ -334,14 +707,17 @@ export async function createGroupPostWithAttachments(
   ) => void,
 ): Promise<string> {
   onProgress?.("creating", 0, files.length);
-  if (
-    session.postId &&
-    session.authorIdentity &&
-    session.authorIdentity !== values.authorIdentity
-  ) {
-    await deleteGroupPost(session.postId);
-    session.postId = undefined;
-    session.files.clear();
+  if (session.postPromise) await session.postPromise;
+  if (session.postId && session.authorIdentity !== values.authorIdentity) {
+    const { error } = await getSupabase().rpc(
+      "update_group_post_draft_identity",
+      {
+        p_post_id: session.postId,
+        p_author_identity: values.authorIdentity,
+      },
+    );
+    if (error) throw error;
+    session.authorIdentity = values.authorIdentity;
   }
   const postId =
     session.postId ?? (await createGroupPost(groupId, values, false));
@@ -433,6 +809,7 @@ export async function createProfilePostWithAttachments(
   ) => void,
 ): Promise<string> {
   onProgress?.("creating", 0, files.length);
+  if (session.postPromise) await session.postPromise;
   const postId =
     session.postId ??
     (await createProfilePost(timelinePubId, values.visibility));

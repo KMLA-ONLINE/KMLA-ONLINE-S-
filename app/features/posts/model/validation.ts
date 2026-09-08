@@ -1,3 +1,4 @@
+import { POST_ATTACHMENT_LIMIT } from "~/features/posts/model/constants";
 import type {
   PostFormErrors,
   PostFormValues,
@@ -96,8 +97,8 @@ export function validateSelectedFiles(
   files: File[],
   currentCount: number,
 ): string | null {
-  if (currentCount + files.length > 10)
-    return "첨부 파일은 최대 10개까지 추가할 수 있습니다.";
+  if (currentCount + files.length > POST_ATTACHMENT_LIMIT)
+    return `첨부 파일은 최대 ${POST_ATTACHMENT_LIMIT}개까지 추가할 수 있습니다.`;
   for (const file of files) {
     if (file.size === 0) return `빈 파일은 첨부할 수 없습니다: ${file.name}`;
     if (file.size > 30 * 1024 * 1024)

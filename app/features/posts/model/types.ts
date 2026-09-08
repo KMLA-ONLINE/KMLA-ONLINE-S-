@@ -165,6 +165,14 @@ export interface PreparedPostFile {
   previewUrl: string | null;
 }
 
+export type PostFileUploadStatus = "queued" | "uploading" | "ready" | "error";
+
+export interface PostFileUploadState {
+  status: PostFileUploadStatus;
+  progress: number;
+  error?: string;
+}
+
 export interface PreparedCommentImage extends PreparedPostFile {
   kind: "image";
   width: number;

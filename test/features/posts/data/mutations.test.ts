@@ -21,6 +21,8 @@ import {
   createCommentImageUploadSession,
   createPostComment,
   createPostUploadSession,
+  discardPostFileUpload,
+  preuploadGroupPostFiles,
   updatePostComment,
   restrictGroupAnonymousActivity,
   cancelGroupAnonymousActivityRestriction,
@@ -111,7 +113,136 @@ describe("post attachment orchestration", () => {
     expect(uploadPostAttachment).toHaveBeenCalledWith(
       "post-id/attachment-id",
       prepared.file,
+      expect.any(Function),
+      expect.any(AbortSignal),
     );
+  });
+
+  it("limits immediate uploads to three concurrent files", async () => {
+    let active = 0;
+    let maximum = 0;
+    const releases: (() => void)[] = [];
+    rpc.mockImplementation((name: string) => {
+      if (name === "create_group_post_upload_draft")
+        return Promise.resolve({ data: "post-id", error: null });
+      if (name === "prepare_post_attachment") {
+        const id = `attachment-${rpc.mock.calls.length}`;
+        return Promise.resolve({
+          data: { id, object_path: `post-id/${id}` },
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: null, error: null });
+    });
+    uploadPostAttachment.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          active += 1;
+          maximum = Math.max(maximum, active);
+          releases.push(() => {
+            active -= 1;
+            resolve();
+          });
+        }),
+    );
+    const files = Array.from({ length: 4 }, (_, index) => ({
+      ...prepared,
+      key: `file-${index}`,
+      file: new File([`${index}`], `${index}.txt`, { type: "text/plain" }),
+      kind: "file" as const,
+      width: null,
+      height: null,
+      previewUrl: null,
+    }));
+
+    const uploading = preuploadGroupPostFiles(
+      "group-id",
+      "identified",
+      files,
+      createPostUploadSession(),
+    );
+    await vi.waitFor(() => expect(releases).toHaveLength(3));
+    expect(maximum).toBe(3);
+    releases.splice(0).forEach((release) => release());
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    releases[0]();
+    await uploading;
+  });
+
+  it("cancels a removed file before its queued upload starts", async () => {
+    const releases: (() => void)[] = [];
+    rpc.mockImplementation((name: string) => {
+      if (name === "create_group_post_upload_draft")
+        return Promise.resolve({ data: "post-id", error: null });
+      if (name === "prepare_post_attachment") {
+        const id = `attachment-${rpc.mock.calls.length}`;
+        return Promise.resolve({
+          data: { id, object_path: `post-id/${id}` },
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: null, error: null });
+    });
+    uploadPostAttachment.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releases.push(resolve);
+        }),
+    );
+    const files = Array.from({ length: 4 }, (_, index) => ({
+      ...prepared,
+      key: `file-${index}`,
+      file: new File([`${index}`], `${index}.txt`, { type: "text/plain" }),
+      kind: "file" as const,
+      width: null,
+      height: null,
+      previewUrl: null,
+    }));
+    const session = createPostUploadSession();
+
+    const uploading = preuploadGroupPostFiles(
+      "group-id",
+      "identified",
+      files,
+      session,
+    );
+    await vi.waitFor(() => expect(releases).toHaveLength(3));
+    await discardPostFileUpload(files[3].key, session);
+    releases.forEach((release) => release());
+
+    await expect(uploading).rejects.toThrow("Upload aborted");
+    expect(uploadPostAttachment).toHaveBeenCalledTimes(3);
+  });
+
+  it("reuses preuploaded files when the draft identity changes", async () => {
+    const session = createPostUploadSession();
+    rpc.mockImplementation((name: string) => {
+      if (name === "create_group_post_upload_draft")
+        return Promise.resolve({ data: "post-id", error: null });
+      if (name === "prepare_post_attachment")
+        return Promise.resolve({
+          data: { id: "attachment-id", object_path: "post-id/attachment-id" },
+          error: null,
+        });
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    await preuploadGroupPostFiles("group-id", "anonymous", [prepared], session);
+    await createGroupPostWithAttachments(
+      "group-id",
+      values,
+      [prepared],
+      session,
+    );
+
+    expect(uploadPostAttachment).toHaveBeenCalledOnce();
+    expect(rpc.mock.calls.map(([name]) => String(name))).toEqual([
+      "create_group_post_upload_draft",
+      "prepare_post_attachment",
+      "finalize_post_attachment",
+      "update_group_post_draft_identity",
+      "commit_group_post",
+    ]);
   });
 
   it("reuses draft and prepared metadata when retrying", async () => {

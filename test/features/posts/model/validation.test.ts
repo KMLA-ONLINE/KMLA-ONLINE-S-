@@ -6,6 +6,7 @@ import {
   readProfilePostForm,
   validatePostForm,
   validateProfilePostForm,
+  validateSelectedFiles,
 } from "~/features/posts/model/validation";
 
 describe("post form validation", () => {
@@ -64,6 +65,17 @@ describe("post form validation", () => {
       body: "첫째 줄\n둘째 줄",
       authorIdentity: "identified",
     });
+  });
+});
+
+describe("attachment selection validation", () => {
+  const file = new File(["x"], "x.txt", { type: "text/plain" });
+
+  it("accepts 30 attachments and rejects the 31st", () => {
+    expect(validateSelectedFiles([file], 29)).toBeNull();
+    expect(validateSelectedFiles([file], 30)).toBe(
+      "첨부 파일은 최대 30개까지 추가할 수 있습니다.",
+    );
   });
 });
 

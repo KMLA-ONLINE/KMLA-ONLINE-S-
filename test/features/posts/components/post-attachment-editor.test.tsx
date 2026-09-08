@@ -1,0 +1,64 @@
+import { screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+
+import { PostAttachmentEditor } from "~/features/posts/components/post-attachment-editor";
+import type { PreparedPostFile } from "~/features/posts/model/types";
+import { renderRoute } from "../../../router";
+
+const file: PreparedPostFile = {
+  key: "file-key",
+  file: new File(["document"], "document.pdf", { type: "application/pdf" }),
+  kind: "file",
+  width: null,
+  height: null,
+  previewUrl: null,
+};
+
+function renderEditor(
+  overrides: Partial<Parameters<typeof PostAttachmentEditor>[0]> = {},
+) {
+  const props: Parameters<typeof PostAttachmentEditor>[0] = {
+    existing: [],
+    additions: [file],
+    order: [file.key],
+    disabled: false,
+    isDragging: false,
+    uploadStates: {},
+    onSelect: vi.fn(),
+    onRemoveExisting: vi.fn(),
+    onRemoveAddition: vi.fn(),
+    onMove: vi.fn(),
+    onRetry: vi.fn(),
+    ...overrides,
+  };
+  return { ...renderRoute(() => <PostAttachmentEditor {...props} />), props };
+}
+
+describe("PostAttachmentEditor", () => {
+  it("shows the 30-file limit and immediate upload state", () => {
+    renderEditor({
+      uploadStates: {
+        "file-key": { status: "uploading", progress: 0.42 },
+      },
+    });
+
+    expect(screen.getByText("1 / 30")).toBeVisible();
+    expect(screen.getByText("업로드 중 42%")).toBeVisible();
+    expect(screen.getByRole("progressbar")).toHaveValue(0.42);
+  });
+
+  it("offers retry for a failed upload", async () => {
+    const onRetry = vi.fn();
+    const { user } = renderEditor({
+      onRetry,
+      uploadStates: {
+        "file-key": { status: "error", progress: 0, error: "offline" },
+      },
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "document.pdf 업로드 다시 시도" }),
+    );
+    expect(onRetry).toHaveBeenCalledWith("file-key");
+  });
+});

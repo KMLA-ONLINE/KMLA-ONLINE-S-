@@ -21,6 +21,12 @@ import { PostBodyInput } from "~/features/posts/components/post-body-input";
 import {
   createPostUploadSession,
   createProfilePostWithAttachments,
+  discardPostFileUpload,
+  discardPostUploadDraft,
+  discardPostUploads,
+  preuploadPostFiles,
+  preuploadProfilePostFiles,
+  subscribePostUploadSession,
   updateProfilePostWithAttachments,
 } from "~/features/posts/data/mutations";
 import {
@@ -30,6 +36,7 @@ import {
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
 import type {
   PostSaveProgress,
+  PostFileUploadState,
   PostVisibility,
   PreparedPostFile,
   ProfilePost,
@@ -113,9 +120,16 @@ export function ProfilePostEditor({
   const [draftBody, setDraftBody] = useState(initial.body);
   const [draftVisibility, setDraftVisibility] = useState(initial.visibility);
   const [saving, setSaving] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [preparingCount, setPreparingCount] = useState(0);
   const [progress, setProgress] = useState<PostSaveProgress | null>(null);
   const session = useRef(createPostUploadSession());
+  const disposedRef = useRef(false);
+  const [uploadStates, setUploadStates] = useState<
+    Record<string, PostFileUploadState>
+  >({});
   const totalCount = existing.length + additions.length;
+  const attachmentCountRef = useRef(totalCount);
   const originalAttachmentOrder =
     post?.attachments.map((item) => item.attachment_id) ?? [];
   const attachmentsChanged =
@@ -129,7 +143,7 @@ export function ProfilePostEditor({
     initial,
     body: draftBody,
     visibility: draftVisibility,
-    attachmentsChanged,
+    attachmentsChanged: attachmentsChanged || preparingCount > 0,
   });
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
@@ -146,30 +160,69 @@ export function ProfilePostEditor({
     ),
   );
 
-  useEffect(() => () => additionsRef.current.forEach(releasePostFile), []);
+  useEffect(() => {
+    disposedRef.current = false;
+    return () => {
+      disposedRef.current = true;
+      additionsRef.current.forEach(releasePostFile);
+    };
+  }, []);
+  useEffect(
+    () =>
+      subscribePostUploadSession(session.current, (key, state) => {
+        setUploadStates((current) => {
+          const next = { ...current };
+          if (state) next[key] = state;
+          else delete next[key];
+          return next;
+        });
+      }),
+    [],
+  );
 
   const addFiles = async (
     files: FileList | null,
     selection: "image" | "file" | "mixed",
   ) => {
     if (!files?.length || saving) return;
+    const selectedCount = files.length;
+    const currentCount = attachmentCountRef.current;
+    attachmentCountRef.current += selectedCount;
+    setPreparingCount((current) => current + selectedCount);
+    let kept = false;
     try {
       const prepared = await preparePostFiles(
         [...files],
-        totalCount,
+        currentCount,
         selection,
       );
+      if (disposedRef.current) {
+        prepared.forEach(releasePostFile);
+        return;
+      }
       setAdditions((current) => [...current, ...prepared]);
       setAttachmentOrder((current) => [
         ...current,
         ...prepared.map((item) => item.key),
       ]);
+      const upload =
+        mode === "create"
+          ? preuploadProfilePostFiles(
+              timelinePubId,
+              draftVisibility,
+              prepared,
+              session.current,
+            )
+          : preuploadPostFiles(post!.post_id, prepared, session.current);
+      void upload.catch(() => undefined);
+      kept = true;
       setFormErrors((current) => ({
         ...current,
         form: undefined,
         body: undefined,
       }));
     } catch (error) {
+      if (disposedRef.current) return;
       setFormErrors((current) => ({
         ...current,
         form:
@@ -177,6 +230,10 @@ export function ProfilePostEditor({
             ? error.message
             : "파일을 준비하지 못했습니다.",
       }));
+    } finally {
+      if (!kept) attachmentCountRef.current -= selectedCount;
+      if (!disposedRef.current)
+        setPreparingCount((current) => current - selectedCount);
     }
   };
   const { isDragging, dropHandlers } = useFileDrop(
@@ -228,6 +285,13 @@ export function ProfilePostEditor({
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (saving) return;
+    if (preparingCount > 0) {
+      setFormErrors((current) => ({
+        ...current,
+        form: "선택한 파일을 준비하고 있습니다. 잠시만 기다려 주세요.",
+      }));
+      return;
+    }
     // 본문만 폼 밖에서 온다 — Markdown 편집기는 네이티브 폼 필드가 아니라 ref에 싣는다.
     const nextValues: ProfilePostFormValues = {
       ...readProfilePostForm(new FormData(event.currentTarget)),
@@ -243,6 +307,7 @@ export function ProfilePostEditor({
   };
 
   const removeExisting = (id: string) => {
+    attachmentCountRef.current -= 1;
     setRemovedIds((current) => new Set(current).add(id));
     setExisting((current) =>
       current.filter((item) => item.attachment_id !== id),
@@ -250,12 +315,14 @@ export function ProfilePostEditor({
     setAttachmentOrder((current) => current.filter((key) => key !== id));
   };
   const removeAddition = (key: string) => {
+    attachmentCountRef.current -= 1;
     setAdditions((current) => {
       const removed = current.find((item) => item.key === key);
       if (removed) releasePostFile(removed);
       return current.filter((item) => item.key !== key);
     });
     setAttachmentOrder((current) => current.filter((item) => item !== key));
+    void discardPostFileUpload(key, session.current);
   };
   const move = (index: number, direction: -1 | 1) => {
     setAttachmentOrder((current) => {
@@ -313,9 +380,15 @@ export function ProfilePostEditor({
                 {timelineName}님의 타임라인
               </p>
             </div>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || preparingCount > 0}>
               {saving ? <Spinner /> : null}{" "}
-              {saving ? progressLabel : mode === "create" ? "게시" : "저장"}
+              {preparingCount > 0
+                ? "파일 준비 중"
+                : saving
+                  ? progressLabel
+                  : mode === "create"
+                    ? "게시"
+                    : "저장"}
             </Button>
           </div>
         </header>
@@ -367,10 +440,29 @@ export function ProfilePostEditor({
               order={attachmentOrder}
               disabled={saving}
               isDragging={isDragging}
+              uploadStates={uploadStates}
               onSelect={addFiles}
               onRemoveExisting={removeExisting}
               onRemoveAddition={removeAddition}
               onMove={move}
+              onRetry={(key) => {
+                const item = additions.find((addition) => addition.key === key);
+                if (!item) return;
+                const upload =
+                  mode === "create"
+                    ? preuploadProfilePostFiles(
+                        timelinePubId,
+                        draftVisibility,
+                        [item],
+                        session.current,
+                      )
+                    : preuploadPostFiles(
+                        post!.post_id,
+                        [item],
+                        session.current,
+                      );
+                void upload.catch(() => undefined);
+              }}
             />
             {formErrors?.form ? (
               <p role="alert" className="mt-4 text-sm text-destructive">
@@ -393,8 +485,26 @@ export function ProfilePostEditor({
           }
           confirmLabel="나가기"
           destructive
-          onCancel={() => blocker.reset()}
-          onConfirm={() => blocker.proceed()}
+          pending={discarding}
+          onCancel={() => {
+            if (!disposedRef.current) blocker.reset();
+          }}
+          onConfirm={() => {
+            if (disposedRef.current) return;
+            setDiscarding(true);
+            disposedRef.current = true;
+            void (async () => {
+              try {
+                if (mode === "create")
+                  await discardPostUploadDraft("profile", session.current);
+                else await discardPostUploads(session.current);
+              } catch {
+                // Scheduled cleanup removes any upload rows that could not be deleted now.
+              } finally {
+                blocker.proceed();
+              }
+            })();
+          }}
         />
       ) : null}
     </div>

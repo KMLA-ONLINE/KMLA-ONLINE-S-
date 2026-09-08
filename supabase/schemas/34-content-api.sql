@@ -598,6 +598,67 @@ $$;
 
 ALTER FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean) OWNER TO "postgres";
 
+CREATE OR REPLACE FUNCTION "public"."create_group_post_upload_draft"("p_group_id" "uuid", "p_author_identity" "public"."post_identity") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  locked_group_id uuid;
+  group_identity_policy public.group_identity_policy;
+  group_posting_policy public.group_posting_policy;
+  member_role public.group_member_role;
+  created_post_id uuid;
+begin
+  if auth.uid() is null or caller_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  if p_author_identity is null then
+    raise exception 'author identity is required' using errcode = '22023';
+  end if;
+  if p_author_identity = 'anonymous' then
+    perform private.lock_group_anonymous_activity_target(p_group_id, caller_profile_id);
+  end if;
+
+  select group_data.id, group_data.identity_policy, group_data.posting_policy,
+    membership.role
+  into locked_group_id, group_identity_policy, group_posting_policy, member_role
+  from public.groups as group_data
+  join public.group_memberships as membership
+    on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
+  where group_data.id = p_group_id and group_data.deleted_at is null
+  for share of group_data, membership;
+  if locked_group_id is null then
+    raise exception 'group membership required' using errcode = '42501';
+  end if;
+  if group_posting_policy = 'staff'
+    and member_role not in ('owner', 'admin', 'manager') then
+    raise exception 'group posting is restricted to staff' using errcode = '42501';
+  end if;
+  if p_author_identity = 'anonymous' and group_identity_policy = 'identified' then
+    raise exception 'anonymous posting is not allowed' using errcode = '42501';
+  end if;
+  if p_author_identity = 'anonymous' then
+    perform private.assert_group_anonymous_activity_allowed(p_group_id, caller_profile_id);
+  end if;
+  if p_author_identity = 'staff' and member_role not in ('owner', 'admin', 'manager') then
+    raise exception 'staff identity is not allowed' using errcode = '42501';
+  end if;
+
+  insert into public.posts (
+    kind, body, group_id, title, author_identity, display_author_profile_id
+  ) values (
+    'group', '', p_group_id, '[private upload draft]', p_author_identity,
+    case when p_author_identity = 'identified' then caller_profile_id end
+  ) returning id into created_post_id;
+  insert into private.post_authors (post_id, profile_id)
+  values (created_post_id, caller_profile_id);
+  return created_post_id;
+end;
+$$;
+
+ALTER FUNCTION "public"."create_group_post_upload_draft"("p_group_id" "uuid", "p_author_identity" "public"."post_identity") OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "public"."restrict_group_anonymous_activity"("p_source_kind" "text", "p_source_id" "uuid", "p_reason" "text", "p_duration_days" integer) RETURNS TABLE("restriction_id" "uuid", "expires_at" timestamp with time zone)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -1344,7 +1405,7 @@ begin
   if attachment.id is null or not private.is_post_author(attachment.post_id) then
     raise exception 'only the author can finalize attachments' using errcode = '42501';
   end if;
-  if attachment.status <> 'pending' then
+  if attachment.status = 'deleted' then
     raise exception 'attachment is not pending' using errcode = '55000';
   end if;
   select post.published_at is not null into is_published
@@ -1366,6 +1427,9 @@ begin
   if nullif(object_record.metadata ->> 'size', '')::bigint is distinct from attachment.size_bytes
     or object_record.metadata ->> 'mimetype' is distinct from attachment.mime_type then
     raise exception 'uploaded object metadata does not match' using errcode = '22023';
+  end if;
+  if attachment.status = 'ready' then
+    return attachment;
   end if;
   if not is_published then
     update public.post_attachments
@@ -2043,12 +2107,12 @@ begin
     raise exception 'only the author can add attachments' using errcode = '42501';
   end if;
   if (select count(*) from public.post_attachments
-      where post_id = p_post_id and status <> 'deleted') >= 10 then
-    raise exception 'a post can have at most 10 attachments' using errcode = '23514';
+      where post_id = p_post_id and status <> 'deleted') >= 30 then
+    raise exception 'a post can have at most 30 attachments' using errcode = '23514';
   end if;
 
   select coalesce(min(candidate), 0) into next_position
-  from generate_series(0, 9) as candidate
+  from generate_series(0, 29) as candidate
   where not exists (
     select 1 from public.post_attachments
     where post_id = p_post_id and status <> 'deleted' and position = candidate
@@ -2171,7 +2235,7 @@ begin
     raise exception 'only the author can reorder attachments' using errcode = '42501';
   end if;
   if p_attachment_ids is null
-    or cardinality(p_attachment_ids) > 10
+    or cardinality(p_attachment_ids) > 30
     or cardinality(p_attachment_ids) <> (
       select count(distinct id) from unnest(p_attachment_ids) as id
     ) then
@@ -2458,6 +2522,94 @@ $$;
 
 ALTER FUNCTION "public"."update_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_category_id" "uuid") OWNER TO "postgres";
 
+CREATE OR REPLACE FUNCTION "public"."update_group_post_draft_identity"("p_post_id" "uuid", "p_author_identity" "public"."post_identity") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  target_group_id uuid;
+  locked_group_id uuid;
+  group_identity_policy public.group_identity_policy;
+  group_posting_policy public.group_posting_policy;
+  member_role public.group_member_role;
+begin
+  if auth.uid() is null or caller_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  if p_author_identity is null then
+    raise exception 'author identity is required' using errcode = '22023';
+  end if;
+
+  select post.group_id into target_group_id
+  from public.posts as post
+  where post.id = p_post_id
+    and post.kind = 'group'
+    and post.activity_kind is null
+    and post.published_at is null
+    and post.deleted_at is null
+    and private.is_post_author(post.id);
+  if target_group_id is null then
+    raise exception 'only the author can change an unpublished group draft identity'
+      using errcode = '42501';
+  end if;
+  if p_author_identity = 'anonymous' then
+    perform private.lock_group_anonymous_activity_target(target_group_id, caller_profile_id);
+  end if;
+
+  select group_data.id, group_data.identity_policy, group_data.posting_policy,
+    membership.role
+  into locked_group_id, group_identity_policy, group_posting_policy, member_role
+  from public.groups as group_data
+  join public.group_memberships as membership
+    on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
+  where group_data.id = target_group_id and group_data.deleted_at is null
+  for share of group_data, membership;
+  if locked_group_id is null then
+    raise exception 'group membership required' using errcode = '42501';
+  end if;
+
+  perform 1
+  from public.posts as post
+  where post.id = p_post_id
+    and post.kind = 'group'
+    and post.group_id = target_group_id
+    and post.activity_kind is null
+    and post.published_at is null
+    and post.deleted_at is null
+    and private.is_post_author(post.id)
+  for update;
+  if not found then
+    raise exception 'only the author can change an unpublished group draft identity'
+      using errcode = '42501';
+  end if;
+  if group_posting_policy = 'staff'
+    and member_role not in ('owner', 'admin', 'manager') then
+    raise exception 'group posting is restricted to staff' using errcode = '42501';
+  end if;
+  if p_author_identity = 'anonymous' and group_identity_policy = 'identified' then
+    raise exception 'anonymous posting is not allowed' using errcode = '42501';
+  end if;
+  if p_author_identity = 'anonymous' then
+    perform private.assert_group_anonymous_activity_allowed(target_group_id, caller_profile_id);
+  end if;
+  if p_author_identity = 'staff' and member_role not in ('owner', 'admin', 'manager') then
+    raise exception 'staff identity is not allowed' using errcode = '42501';
+  end if;
+
+  perform set_config('app.update_group_post_draft_identity', p_post_id::text, true);
+  update public.posts
+  set author_identity = p_author_identity,
+    display_author_profile_id = case
+      when p_author_identity = 'identified' then caller_profile_id
+    end
+  where id = p_post_id;
+  return p_post_id;
+end;
+$$;
+
+ALTER FUNCTION "public"."update_group_post_draft_identity"("p_post_id" "uuid", "p_author_identity" "public"."post_identity") OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid" DEFAULT NULL::"uuid", "p_remove_image" boolean DEFAULT false) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -2589,6 +2741,9 @@ GRANT ALL ON FUNCTION "public"."create_group_category"("p_group_id" "uuid", "p_n
 REVOKE ALL ON FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean) TO "authenticated";
 
+REVOKE ALL ON FUNCTION "public"."create_group_post_upload_draft"("p_group_id" "uuid", "p_author_identity" "public"."post_identity") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_group_post_upload_draft"("p_group_id" "uuid", "p_author_identity" "public"."post_identity") TO "authenticated";
+
 REVOKE ALL ON FUNCTION "public"."restrict_group_anonymous_activity"("p_source_kind" "text", "p_source_id" "uuid", "p_reason" "text", "p_duration_days" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."restrict_group_anonymous_activity"("p_source_kind" "text", "p_source_id" "uuid", "p_reason" "text", "p_duration_days" integer) TO "authenticated";
 
@@ -2687,6 +2842,9 @@ GRANT ALL ON FUNCTION "public"."update_group_category"("p_category_id" "uuid", "
 
 REVOKE ALL ON FUNCTION "public"."update_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_category_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."update_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_category_id" "uuid") TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."update_group_post_draft_identity"("p_post_id" "uuid", "p_author_identity" "public"."post_identity") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."update_group_post_draft_identity"("p_post_id" "uuid", "p_author_identity" "public"."post_identity") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid", "p_remove_image" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid", "p_remove_image" boolean) TO "authenticated";

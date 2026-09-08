@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -179,5 +179,26 @@ describe("PostFileList", () => {
     ));
 
     expect(screen.getByText("다운로드할 수 없음")).toBeInTheDocument();
+  });
+
+  it("shows three files before expanding the complete list", async () => {
+    const files = Array.from({ length: 5 }, (_, index) =>
+      attachment({
+        attachment_id: `file-${index}`,
+        original_filename: `document-${index}.pdf`,
+      }),
+    );
+    const { user } = renderRoute(() => <PostFileList files={files} />);
+
+    expect(screen.getAllByRole("link")).toHaveLength(3);
+    const expand = screen.getByRole("button", { name: "파일 5개 모두 보기" });
+    await user.click(expand);
+    expect(screen.getAllByRole("link")).toHaveLength(5);
+    expect(
+      within(screen.getByRole("region", { name: "첨부 파일" })).getByRole(
+        "button",
+        { name: "파일 목록 접기" },
+      ),
+    ).toHaveAttribute("aria-expanded", "true");
   });
 });
