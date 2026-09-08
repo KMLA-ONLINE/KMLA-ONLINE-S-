@@ -311,7 +311,6 @@ as $$
               join public.groups as group_record on group_record.id = membership.group_id
               where membership.group_id = notification.group_id
                 and membership.profile_id = p_delivery.recipient_profile_id
-                and group_record.deleted_at is null
             )
           )
           or (notification.post_id is null and notification.group_id is null)
@@ -531,9 +530,9 @@ begin
   -- 이미 recipient 본인의 알림만 돌려주고 그 행이 group_id를 들고 있으므로 이름을 함께
   -- 내보내도 새로 드러나는 정보는 없다.
   --
-  -- 그룹 삭제는 deleted_at을 세우는 soft delete라서 삭제된 그룹의 알림도 이름을 그대로
-  -- 들고 온다. 그래야 "그룹이 영구 삭제되었습니다"가 어느 그룹인지 말할 수 있다. 이름이
-  -- 비는 경우는 애초에 그룹과 무관한 알림뿐이다.
+  -- 그룹 삭제 알림만 그룹 이름을 제목에 싣는다. 그룹 행이 하드 삭제로 사라지면 여기에서
+  -- 이름을 붙일 수 없기 때문이다(삭제 및 보존 정책 §5.2). 이름이 비는 경우는 그 알림과
+  -- 애초에 그룹과 무관한 알림뿐이다.
   return query
   select notification.id, notification.kind, notification.importance,
     notification.category, notification.actor_identity,
@@ -818,7 +817,7 @@ begin
     if target.group_id is not null then
       select group_record.slug into group_slug
       from public.groups as group_record
-      where group_record.id = target.group_id and group_record.deleted_at is null;
+      where group_record.id = target.group_id;
       if group_slug is not null then
         destination := '/groups/' || group_slug || '/posts/' || target.post_id::text;
       end if;
@@ -834,7 +833,7 @@ begin
   elsif target.group_id is not null and private.is_group_member(target.group_id) then
     select group_record.slug into group_slug
     from public.groups as group_record
-    where group_record.id = target.group_id and group_record.deleted_at is null;
+    where group_record.id = target.group_id;
     if group_slug is not null then destination := '/groups/' || group_slug; end if;
   elsif target.target_profile_id is not null then
     select profile.pub_id into profile_pub_id
@@ -1327,11 +1326,9 @@ declare
   event_title text;
 begin
   if actor_profile_id is null then return new; end if;
-  if old.deleted_at is null and new.deleted_at is not null then
-    event_kind := 'group_deleted';
-    event_importance := 'high';
-    event_title := '그룹이 영구 삭제되었습니다.';
-  elsif old.join_policy is distinct from new.join_policy
+  -- 그룹 삭제 알림은 여기서 보내지 않는다. 삭제가 UPDATE 가 아니라 DELETE 라 트리거가 볼 수
+  -- 없고, 알림이 그룹 이름을 제목에 실어야 하기 때문이다. public.delete_group 이 보낸다.
+  if old.join_policy is distinct from new.join_policy
     or old.identity_policy is distinct from new.identity_policy
     or old.posting_policy is distinct from new.posting_policy then
     event_kind := 'group_policy_changed';
@@ -1478,7 +1475,7 @@ create trigger group_memberships_notify_official_join
 after insert on public.group_memberships
 for each row execute function private.notify_official_group_joined();
 create trigger groups_notify_changed
-after update of join_policy, identity_policy, posting_policy, deleted_at on public.groups
+after update of join_policy, identity_policy, posting_policy on public.groups
 for each row execute function private.notify_group_changed();
 create trigger profiles_notify_changed
 after update of status, role on public.profiles

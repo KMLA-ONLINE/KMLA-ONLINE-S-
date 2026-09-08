@@ -340,7 +340,7 @@ begin
   from public.groups as group_data
   join public.group_memberships as membership
     on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
-  where group_data.id = target_group_id and group_data.deleted_at is null
+  where group_data.id = target_group_id
   for share of group_data, membership;
   if locked_group_id is null then
     raise exception 'group membership required' using errcode = '42501';
@@ -625,7 +625,7 @@ begin
   from public.groups as group_data
   join public.group_memberships as membership
     on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
-  where group_data.id = p_group_id and group_data.deleted_at is null
+  where group_data.id = p_group_id
   for share of group_data, membership;
   if locked_group_id is null then
     raise exception 'group membership required' using errcode = '42501';
@@ -687,7 +687,7 @@ begin
   if p_source_kind = 'post' then
     select post.group_id, author.profile_id into target_group_id, target_profile_id
     from public.posts as post
-    join public.groups as group_record on group_record.id = post.group_id and group_record.deleted_at is null
+    join public.groups as group_record on group_record.id = post.group_id
     join private.post_authors as author on author.post_id = post.id
     where post.id = p_source_id and post.kind = 'group'
       and post.author_identity = 'anonymous'
@@ -697,7 +697,7 @@ begin
     from public.post_comments as comment
     join public.posts as post on post.id = comment.post_id and post.kind = 'group'
       and post.published_at is not null
-    join public.groups as group_record on group_record.id = post.group_id and group_record.deleted_at is null
+    join public.groups as group_record on group_record.id = post.group_id
     join private.comment_authors as author on author.comment_id = comment.id
     where comment.id = p_source_id and comment.author_identity = 'anonymous'
       and comment.deleted_at is null;
@@ -768,7 +768,7 @@ begin
   if p_source_kind = 'post' then
     select post.group_id, author.profile_id into target_group_id, target_profile_id
     from public.posts as post
-    join public.groups as group_record on group_record.id = post.group_id and group_record.deleted_at is null
+    join public.groups as group_record on group_record.id = post.group_id
     join private.post_authors as author on author.post_id = post.id
     where post.id = p_source_id and post.kind = 'group'
       and post.author_identity = 'anonymous'
@@ -778,7 +778,7 @@ begin
     from public.post_comments as comment
     join public.posts as post on post.id = comment.post_id and post.kind = 'group'
       and post.published_at is not null
-    join public.groups as group_record on group_record.id = post.group_id and group_record.deleted_at is null
+    join public.groups as group_record on group_record.id = post.group_id
     join private.comment_authors as author on author.comment_id = comment.id
     where comment.id = p_source_id and comment.author_identity = 'anonymous'
       and comment.deleted_at is null;
@@ -2205,7 +2205,7 @@ begin
   from public.groups as group_data
   join public.group_memberships as membership
     on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
-  where group_data.id = target_group_id and group_data.deleted_at is null
+  where group_data.id = target_group_id
   for share of group_data, membership;
   if locked_group_id is null then
     raise exception 'group membership required' using errcode = '42501';
@@ -2596,7 +2596,7 @@ begin
   from public.groups as group_data
   join public.group_memberships as membership
     on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
-  where group_data.id = target_group_id and group_data.deleted_at is null
+  where group_data.id = target_group_id
   for share of group_data, membership;
   if locked_group_id is null then
     raise exception 'group membership required' using errcode = '42501';

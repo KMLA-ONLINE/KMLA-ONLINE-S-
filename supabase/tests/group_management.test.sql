@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(69);
+select plan(71);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -642,12 +642,31 @@ select is(
   0::bigint,
   'deleting a group drops every membership'
 );
+-- 삭제 알림만 그룹 이름을 제목에 싣는다. 행이 사라진 뒤에는 알림함이 이름을 붙일 수 없기
+-- 때문이다(삭제 및 보존 정책 §5.2).
 select ok(
-  (
-    select deleted_at is not null from public.groups
+  exists (
+    select 1 from public.notifications
+    where kind = 'group_deleted'
+      and group_id is null
+      and title like '%그룹이 영구 삭제되었습니다.'
+      and title like '%주말 산책단%'
+  ),
+  'group deletion names the group in the title because the row is gone'
+);
+select ok(
+  not exists (
+    select 1 from public.notifications
+    where group_id = '20000000-0000-0000-0000-000000000005'
+  ),
+  'notifications that pointed at the group are cleared with it'
+);
+select ok(
+  not exists (
+    select 1 from public.groups
     where id = '20000000-0000-0000-0000-000000000005'
   ),
-  'the group row survives as a tombstone so storage cleanup still has its targets'
+  'the group row leaves outright once its media paths are queued'
 );
 
 reset role;
@@ -702,11 +721,11 @@ select is(
   'admin deletion removes every official-group membership'
 );
 select ok(
-  (
-    select deleted_at is not null from public.groups
+  not exists (
+    select 1 from public.groups
     where id = '50000000-0000-0000-0000-000000000006'
   ),
-  'admin deletion leaves the official group as a storage-cleanup tombstone'
+  'admin deletion removes the official group row too'
 );
 
 select * from finish();

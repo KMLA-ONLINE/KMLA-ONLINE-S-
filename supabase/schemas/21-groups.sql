@@ -65,8 +65,7 @@ begin
   select group_record.*
   into target_group
   from public.groups as group_record
-  where group_record.id = p_group_id
-    and group_record.deleted_at is null;
+  where group_record.id = p_group_id;
 
   if target_group.id is null then
     raise exception 'group not found' using errcode = 'P0002';
@@ -386,8 +385,7 @@ begin
   select group_record.*
   into invited_group
   from public.groups as group_record
-  where group_record.id = invite_record.group_id
-    and group_record.deleted_at is null;
+  where group_record.id = invite_record.group_id;
 
   if invited_group.id is null then
     raise exception 'invite not found' using errcode = 'P0002';
@@ -556,6 +554,7 @@ CREATE OR REPLACE FUNCTION "public"."delete_group"("p_group_id" "uuid") RETURNS 
 declare
   caller_profile_id bigint := private.current_profile_id();
   target_group public.groups;
+  recipient record;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'group owner required' using errcode = '42501';
@@ -563,7 +562,7 @@ begin
 
   select group_record.* into target_group
   from public.groups as group_record
-  where group_record.id = p_group_id and group_record.deleted_at is null
+  where group_record.id = p_group_id
   for update;
   if target_group.id is null then
     raise exception 'group not found' using errcode = 'P0002';
@@ -583,22 +582,43 @@ begin
     raise exception 'group owner required' using errcode = '42501';
   end if;
 
-  update public.groups
-  set deleted_at = now(), icon_path = null, cover_path = null
-  where id = p_group_id;
-
-  -- 저장소를 돌려받는다. 청소 워커가 집어 갈 수 있게 tombstone만 찍고 객체는 건드리지 않는다.
-  update public.group_media_objects
-  set status = 'deleted', deleted_at = now()
-  where group_id = p_group_id and status <> 'deleted';
-
   -- 그룹의 게시물은 첨부·댓글·반응과 함께 즉시 사라진다(삭제 및 보존 정책 §5.2).
   perform private.purge_posts(array(
     select post.id from public.posts as post where post.group_id = p_group_id
   ));
 
-  delete from public.group_join_requests where group_id = p_group_id;
-  delete from public.group_memberships where group_id = p_group_id;
+  -- 그룹을 가리키던 알림은 갈 곳이 없다. 삭제 알림을 새로 보내기 전에 걷어낸다.
+  delete from public.notifications where group_id = p_group_id;
+
+  -- 삭제 알림만 이름을 제목에 싣는다. 행이 사라진 뒤에는 그룹 이름을 조회할 수 없고, 알림함은
+  -- `notifications.group_id`로 이름을 붙이기 때문이다. 게시물 운영 조치 알림이 제목을 싣는 것과
+  -- 같은 이유다. 트리거가 아니라 여기서 보내는 것도 UPDATE 가 아니라 DELETE 이기 때문이다.
+  for recipient in
+    select membership.profile_id
+    from public.group_memberships as membership
+    where membership.group_id = p_group_id
+      and membership.profile_id <> caller_profile_id
+  loop
+    perform private.emit_notification(
+      'group-deleted:' || p_group_id::text || ':' || recipient.profile_id::text,
+      recipient.profile_id, 'group_deleted', 'high', 'group', 'staff',
+      caller_profile_id, '운영진', null,
+      '“' || target_group.name || '” 그룹이 영구 삭제되었습니다.'
+    );
+  end loop;
+
+  -- 미디어 경로를 큐로 옮긴 뒤 그룹을 지운다. 멤버십·가입 요청·초대·카테고리·미디어 행은 모두
+  -- 외래 키 CASCADE로 함께 사라진다.
+  insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+  select 'group-media', media.object_path, 'group_media'
+  from public.group_media_objects as media
+  where media.group_id = p_group_id
+  on conflict (bucket, object_path) do update
+    set dry_run = queue.dry_run and excluded.dry_run;
+
+  delete from public.groups where id = p_group_id;
+
+  perform private.invoke_storage_cleanup(p_quiet => true);
 end;
 $$;
 
@@ -808,8 +828,7 @@ begin
   join public.groups as group_record on group_record.id = invite.group_id
   where invite.token = p_token
     and invite.expires_at > now()
-    and group_record.kind = 'unofficial'
-    and group_record.deleted_at is null;
+    and group_record.kind = 'unofficial';
 end;
 $$;
 
@@ -1285,7 +1304,6 @@ CREATE TABLE IF NOT EXISTS "public"."groups" (
     "member_count" bigint DEFAULT 0 NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "deleted_at" timestamp with time zone,
     CONSTRAINT "groups_description_length" CHECK (("char_length"("description") <= 2000)),
     CONSTRAINT "groups_member_count_nonnegative" CHECK (("member_count" >= 0)),
     CONSTRAINT "groups_name_length" CHECK ((("char_length"("btrim"("name")) >= 1) AND ("char_length"("btrim"("name")) <= 50))),
@@ -1417,7 +1435,7 @@ CREATE POLICY "group_memberships_update_own" ON "public"."group_memberships" FOR
 
 ALTER TABLE "public"."groups" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "groups_select_visible" ON "public"."groups" FOR SELECT TO "authenticated" USING ((("deleted_at" IS NULL) AND (EXISTS ( SELECT 1
+CREATE POLICY "groups_select_visible" ON "public"."groups" FOR SELECT TO "authenticated" USING (((EXISTS ( SELECT 1
     FROM "public"."profiles" "profile"
    WHERE (("profile"."id" = "private"."current_profile_id"()) AND ((("profile"."role" = 'admin'::"public"."app_role") AND ("groups"."kind" = 'official'::"public"."group_kind")) OR (("profile"."type" = ANY (ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type"])) AND (("groups"."kind" = 'official'::"public"."group_kind") OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND ("groups"."join_policy" <> 'invite_only'::"public"."group_join_policy")))) OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND "private"."is_group_member"("groups"."id"))))))));
 

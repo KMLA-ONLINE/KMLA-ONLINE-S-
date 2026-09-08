@@ -28,7 +28,6 @@ CREATE OR REPLACE FUNCTION "private"."can_access_feed_post"("p_post_id" "uuid", 
             join public.groups as group_record on group_record.id = membership.group_id
             where membership.group_id = post.group_id
               and membership.profile_id = p_profile_id
-              and group_record.deleted_at is null
           )
         )
         or (

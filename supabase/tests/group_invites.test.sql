@@ -303,8 +303,8 @@ select is(
   'the pending request is cleared instead of lingering'
 );
 
--- 삭제한 그룹의 링크. 그룹 행은 tombstone으로 남으므로 초대 경로마다 `deleted_at`을 걸러야
--- 하고, 한 군데라도 빠지면 사라진 그룹에 사람이 들어온다.
+-- 삭제한 그룹의 링크. 그룹 행이 사라지면 초대도 외래 키 CASCADE로 함께 사라지므로 링크는 더
+-- 이상 아무것도 가리키지 않는다. 예전에는 tombstone이 남아 경로마다 `deleted_at`을 걸러야 했다.
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000004', true);
 set local role authenticated;
 
