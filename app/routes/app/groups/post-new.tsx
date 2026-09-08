@@ -2,7 +2,7 @@ import { useRouteLoaderData } from "react-router";
 
 import { defineAppChrome } from "~/features/app-shell";
 import type { GroupDetail } from "~/features/groups";
-import { GroupPostOverlay, resolveIdentityOptions } from "~/features/posts";
+import { GroupPostEditor, resolveIdentityOptions } from "~/features/posts";
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
 import { invalidateSavedGroupPost } from "~/routes/app/groups/post-cache";
 
@@ -43,7 +43,7 @@ export default function NewGroupPostPage() {
     Boolean(parent.anonymousActivityRestriction),
   );
   return (
-    <GroupPostOverlay
+    <GroupPostEditor
       mode="create"
       slug={group.slug}
       groupName={group.name}

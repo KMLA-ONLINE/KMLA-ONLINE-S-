@@ -22,7 +22,7 @@ import type {
   GroupJoinRequest,
   GroupMemberPage,
 } from "~/features/groups/model/types";
-import { GroupPostReportsPanel } from "~/features/posts/components/group-post-reports-panel";
+import { GroupPostReportsPanel } from "~/features/posts/components/group/group-post-reports-panel";
 import type { GroupPostReportSummaryPage } from "~/features/posts/data/group-reports";
 import { formatPostDate } from "~/features/posts/model/format";
 import {

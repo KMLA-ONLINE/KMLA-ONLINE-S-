@@ -1,0 +1,55 @@
+import { lazy, Suspense, useEffect, useState } from "react";
+
+import { cn } from "~/shared/lib/utils";
+import { Textarea } from "~/shared/ui/textarea";
+
+const DesktopMarkdownEditor = lazy(
+  () => import("~/features/posts/components/editor/desktop-markdown-editor"),
+);
+
+export function PostBodyInput({
+  value,
+  onValueChange,
+  className,
+}: {
+  value: string;
+  onValueChange?: (value: string) => void;
+  className?: string;
+}) {
+  const [desktop, setDesktop] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 768px)");
+    const update = () => setDesktop(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  if (!desktop)
+    return (
+      <Textarea
+        name="body"
+        value={value}
+        onChange={(event) => onValueChange?.(event.target.value)}
+        maxLength={20_000}
+        aria-label="Markdown 본문"
+        placeholder="본문을 입력하세요"
+        className={cn(
+          "post-typography field-sizing-fixed h-full max-h-none min-h-72 resize-none overflow-y-auto whitespace-pre-wrap md:hidden",
+          className,
+        )}
+      />
+    );
+
+  return (
+    <Suspense
+      fallback={<div className="min-h-96 rounded-md border" aria-busy="true" />}
+    >
+      <DesktopMarkdownEditor
+        initialValue={value}
+        onValueChange={onValueChange}
+      />
+    </Suspense>
+  );
+}

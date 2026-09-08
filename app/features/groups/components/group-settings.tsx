@@ -6,7 +6,7 @@ import { InviteSettings } from "~/features/groups/components/group-invite-settin
 import { GroupMediaSettings } from "~/features/groups/components/group-media-settings";
 import { PolicySettings } from "~/features/groups/components/group-policy-settings";
 import type { GroupDetail, GroupInvite } from "~/features/groups/model/types";
-import { CategoryManager, type GroupCategory } from "~/features/posts";
+import { GroupCategoryManager, type GroupCategory } from "~/features/posts";
 import { Badge } from "~/shared/ui/badge";
 
 export function GroupSettings({
@@ -51,7 +51,10 @@ export function GroupSettings({
 
       {/* 매니저에게는 이 카드 하나만 보인다. 그래서 canManage 블록 밖에 있다. */}
       {canCurate ? (
-        <CategoryManager groupId={group.group_id} categories={categories} />
+        <GroupCategoryManager
+          groupId={group.group_id}
+          categories={categories}
+        />
       ) : null}
 
       {canManage ? (

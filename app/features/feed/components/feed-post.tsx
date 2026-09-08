@@ -11,13 +11,13 @@ import { PostActionBar } from "~/features/posts/components/post-action-bar";
 import {
   PostFileList,
   PostImageGrid,
-  splitPostAttachments,
 } from "~/features/posts/components/post-attachments";
+import { splitPostAttachments } from "~/features/posts/model/attachments";
 import { PostAuthorAvatar } from "~/features/posts/components/post-author-avatar";
 import { PostBodyClamp } from "~/features/posts/components/post-body-clamp";
 import { PostMarkdown } from "~/features/posts/components/post-markdown";
-import { ProfileMediaActivity } from "~/features/posts/components/profile-media-activity";
-import { ReactionEmoji } from "~/features/posts/components/reaction-emoji";
+import { ProfileMediaActivity } from "~/features/posts/components/profile/profile-media-activity";
+import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";

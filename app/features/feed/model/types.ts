@@ -83,7 +83,6 @@ export type FeedPostDetail =
       comments: PostCommentPage;
       slug: string;
       groupName: string;
-      groupId: string;
       identities: PostIdentity[];
     }
   | {

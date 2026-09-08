@@ -1,7 +1,7 @@
 import { useRouteLoaderData } from "react-router";
 
 import { defineAppChrome } from "~/features/app-shell";
-import { getGroupPost, GroupPostOverlay } from "~/features/posts";
+import { getGroupPost, GroupPostEditor } from "~/features/posts";
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
 import { invalidateSavedGroupPost } from "~/routes/app/groups/post-cache";
 import type { Route } from "./+types/post-edit";
@@ -32,7 +32,7 @@ export default function EditGroupPostPage({
   )
     throw new Response("게시물을 수정할 권한이 없습니다.", { status: 403 });
   return (
-    <GroupPostOverlay
+    <GroupPostEditor
       mode="edit"
       slug={parent.group.slug}
       groupName={parent.group.name}

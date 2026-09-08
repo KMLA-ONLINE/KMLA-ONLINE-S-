@@ -92,11 +92,41 @@
 - 반응 수와 상위 반응은 비정규화하지 않는다. 반응 변경 한 번이 두 종류의 순위를 동시에 흔들어 트리거로 유지하기 까다롭고, 읽기 RPC의 lateral 집계가 `(post_id, reaction)` 인덱스를 탄다.
 - `search_group_posts`는 댓글 수를 반환하지 않는다(검색 결과에 표시하지 않는다). 그래서 `GroupPostSearchResult`는 `GroupPost`가 아니라 검색 RPC에서 파생한다.
 
+## components 폴더
+
+이 기능만 `components/` 아래를 나눈다. 다른 기능은 평평하게 두고, 여기만 파일이 40개를 넘어
+알파벳순 목록에서 무엇이 무엇의 부품인지 읽히지 않게 됐다.
+
+- `comment/`, `reaction/`, `group/`, `profile/`, `editor/`에 각각 그 묶음에서만 쓰는 것을 둔다.
+- 루트에 남은 것은 **그룹과 개인 양쪽이 함께 쓰는 것**뿐이다(`post-detail-dialog`,
+  `post-action-bar`, `post-attachments`, `post-author-avatar`, `post-body-clamp`,
+  `post-markdown`, `post-menu`, `post-write-row`). 한쪽만 쓰게 되면 그 폴더로 내려보내라 —
+  루트에 있다는 것이 곧 "둘 다 쓴다"는 뜻이어야 판단이 서 있다.
+- 파일 이름은 폴더 안에서도 줄이지 않는다(`group/group-post-card.tsx`). 컴포넌트 이름과
+  파일 이름이 1:1이라야 `test/`의 같은 이름 파일과 짝이 유지된다.
+
+`GroupPostDetail`은 같은 이름의 모델 타입과 다투므로 제 파일 안에서 타입을
+`GroupPostDetailModel`로 alias한다. 배럴은 컴포넌트 쪽 이름을 내보낸다.
+
 ## 화면 공유
 
 - 상세 모달의 껍데기(머리, 스크롤 영역, 액션 바, 댓글 목록, 입력창)는 `PostDetailDialog` 하나다. 카드 댓글 링크의 `view=comments`는 화면 폭이 1024px 이하이고 터치가 주 입력인 환경에서 같은 껍데기를 98svh 하단 댓글 시트로 바꾸며, 별도 댓글 상태를 만들지 않는다. 모바일은 전체 폭을 쓰고 태블릿은 최대 2xl 폭으로 가로 중앙에 둔다.
   두 종류가 다른 것은 본문 영역뿐이다. 액션 바까지 껍데기가 그리는 이유는 그것이 방금 쓴 댓글을
   더한 개수와 입력창 포커스를 필요로 하는데, 둘 다 껍데기만 알기 때문이다.
+- 껍데기에 갈아 끼우는 본문은 `GroupPostDetail`과 `ProfilePostDetail`이고, 편집기도 같은 짝
+  (`GroupPostEditor` / `ProfilePostEditor`)이다. 한때 그룹 쪽 셋을 `mode` prop 하나로 받던
+  `GroupPostOverlay`가 있었으나 없앴다 — 호출부가 모두 `mode`를 리터럴로 넘기면서 절반의
+  모드에서만 쓰는 optional prop만 쌓였고, 상세가 쓰지도 않는 `groupName`/`groupId`를 피드
+  loader가 계속 실어 날랐다.
+- `GroupPostDetail`의 머리에 있는 "<그룹 이름> 그룹으로 이동" 링크는 장식이 아니다. 알림과
+  피드에서 들어온 사용자의 뒤로가기는 그가 온 곳으로 돌아가므로(`routes/notification-open.tsx`),
+  이 링크가 게시물에서 그룹으로 가는 유일한 길이다. 상세 RPC는 그룹 이름을 돌려주지 않아
+  `groupName`을 화면에서 받는다 — 그룹 route는 부모 loader, 피드는 `FeedPostDetail`이 들고 온다.
+- 그룹 안에서 연 게시물에서는 그 링크를 감춘다. 브라우저가 이전 history entry를 알려주지 않아
+  **그룹 안쪽 링크가 `FROM_GROUP` 표식을 심고**(`model/navigation.ts`) 상세가 그것을 읽는다.
+  방향을 뒤집어 알림·피드 쪽에 심지 마라 — 표식을 빠뜨렸을 때 링크가 꼭 필요한 화면에서
+  사라진다. 지금 방향의 실수는 링크가 한 번 더 보이는 것으로 끝난다. 그룹 안에서 상세로 가는
+  링크를 새로 만들면 표식도 같이 심어라.
 - `PostMenu`의 고정 관련 props는 선택이다. 개인 게시물은 넘기지 않고, 그러면 항목 자체가 사라진다.
 - 개인 게시물 댓글의 신원 선택지는 `["identified"]` 하나다. `CommentComposer`가 길이 1일 때 신원
   전환 버튼을 그리지 않으므로 별도 분기가 없다.
