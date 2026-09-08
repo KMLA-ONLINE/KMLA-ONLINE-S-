@@ -58,7 +58,10 @@ export function GroupHomeScreen({
     <div className="mx-auto flex w-full flex-col gap-5 px-1 pb-5 md:px-0 md:py-0">
       <ScreenHeader actionLabel={tab === "unofficial" ? "그룹 만들기" : null} />
 
-      <nav className="flex items-center gap-1 border-b" aria-label="그룹 종류">
+      <nav
+        className="grid grid-cols-2 border-b md:flex md:items-center md:gap-1"
+        aria-label="그룹 종류"
+      >
         {(["official", "unofficial"] as const).map((item) => (
           <button
             key={item}
@@ -72,7 +75,7 @@ export function GroupHomeScreen({
             }}
             aria-current={tab === item ? "page" : undefined}
             className={cn(
-              "-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
+              "-mb-px w-full border-b-2 px-4 py-3 text-center text-sm font-medium transition-colors md:w-auto md:py-2.5",
               tab === item
                 ? "border-foreground text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground",
