@@ -91,7 +91,6 @@ union all
 select 'profile-media'::text, post.activity_media_path
 from public.posts as post
 where post.activity_media_path is not null
-  and post.deleted_at is null
 union all
 select 'profile-media'::text, media.object_path
 from public.profile_media_objects as media
@@ -208,7 +207,6 @@ begin
           select 1
           from public.posts as post
           where post.activity_media_path = media.object_path
-            and post.deleted_at is null
         )
       )
     returning media.object_path as object_path
@@ -404,7 +402,15 @@ alter function public.complete_storage_cleanup(uuid, uuid[], uuid[], text) owner
 -- 설정이 없으면 예외를 던진다. 예전 구현은 null을 반환하고 끝나 cron이 성공으로 기록했고,
 -- 그래서 정리가 도는지 여부를 어디에서도 확인할 수 없었다. 관리자 화면은 이 실패를 시크릿
 -- 존재 여부로 직접 보여 준다.
-create or replace function private.invoke_storage_cleanup()
+-- 워커를 깨운다. 호출자는 둘이고 성격이 다르다.
+--
+--   예약 경로(`p_quiet => false`)는 설정이 어긋나면 시끄럽게 실패해야 한다. 정리가 한 번도 돌지
+--     않았다는 사실을 어디에서도 확인할 수 없게 두지 않는 것이 이 예외의 목적이다.
+--   삭제 RPC(`p_quiet => true`)는 무슨 일이 있어도 삭제 자체를 실패시키면 안 된다. Vault 설정
+--     문제로 게시물이 지워지지 않는 쪽이 훨씬 나쁘다. 경로는 이미 큐에 있으므로 백스톱이 받는다.
+--
+-- 함수를 둘로 나누지 않고 파라미터로 가른다(삭제 및 보존 정책 §3 원칙 6, §6.1).
+create or replace function private.invoke_storage_cleanup(p_quiet boolean default false)
 returns bigint
 language plpgsql security definer
 set search_path = ''
@@ -414,6 +420,25 @@ declare
   cleanup_secret text;
   request_id bigint;
 begin
+  -- 가져갈 것이 없으면 부르지 않는다. 백스톱이 자주 돌아도 빈 실행 기록이 쌓이지 않아, 관리자
+  -- 화면의 "마지막 실행"이 실제로 무언가를 처리한 실행을 가리킨다.
+  if not exists (
+    select 1
+    from private.storage_cleanup_queue as queue
+    where not queue.dry_run and queue.next_attempt_at <= now()
+  ) then
+    return null;
+  end if;
+
+  -- 진행 중인 실행이 있으면 겹쳐 부르지 않는다. 게시물을 잇달아 지워도 호출은 한 번이면 된다.
+  if exists (
+    select 1
+    from private.storage_cleanup_runs as run
+    where run.finished_at is null and run.started_at > now() - interval '2 minutes'
+  ) then
+    return null;
+  end if;
+
   select decrypted_secret into project_url
   from vault.decrypted_secrets
   where name = 'project_url';
@@ -423,6 +448,9 @@ begin
   where name = 'storage_cleanup_secret';
 
   if project_url is null or cleanup_secret is null then
+    if p_quiet then
+      return null;
+    end if;
     raise exception 'storage cleanup vault configuration is missing'
       using errcode = '55000';
   end if;
@@ -439,9 +467,17 @@ begin
 
   insert into private.storage_cleanup_runs (request_id) values (request_id);
   return request_id;
+exception
+  when others then
+    -- 조용한 호출은 어떤 실패도 밖으로 내보내지 않는다. 이 블록은 하위 트랜잭션이라 여기서
+    -- 되감기면 위에서 건 pg_net 요청도 함께 사라진다.
+    if p_quiet then
+      return null;
+    end if;
+    raise;
 end;
 $$;
-alter function private.invoke_storage_cleanup() owner to postgres;
+alter function private.invoke_storage_cleanup(boolean) owner to postgres;
 
 -- 워커 응답 본문에서 숫자 하나를 꺼낸다. 본문이 JSON이 아니거나(401 "Unauthorized" 같은) 키가
 -- 없으면 -1을 돌려주고 호출부가 null로 바꾼다.
@@ -547,7 +583,7 @@ begin
     select detail.status, detail.start_time
     from cron.job_run_details as detail
     join cron.job as job on job.jobid = detail.jobid
-    where job.jobname = 'drain-storage-cleanup-daily'
+    where job.jobname = 'drain-storage-cleanup-hourly'
     order by detail.start_time desc
     limit 1
   )
@@ -582,7 +618,7 @@ revoke all on function private.enqueue_storage_cleanup() from public;
 revoke all on function private.sweep_unreferenced_storage_objects(boolean, integer) from public;
 revoke all on function private.claim_storage_cleanup(integer, integer) from public;
 revoke all on function private.complete_storage_cleanup(uuid, uuid[], uuid[], text) from public;
-revoke all on function private.invoke_storage_cleanup() from public;
+revoke all on function private.invoke_storage_cleanup(boolean) from public;
 revoke all on function private.reconcile_storage_cleanup_runs() from public;
 revoke all on function private.storage_cleanup_response_field(text, text, text) from public;
 

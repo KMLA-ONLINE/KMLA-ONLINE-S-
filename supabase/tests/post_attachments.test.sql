@@ -378,18 +378,24 @@ select lives_ok(
   'deleting a post succeeds'
 );
 reset role;
-select is((select count(*) from public.post_attachments where status = 'deleted'), 2::bigint, 'post deletion tombstones every attachment');
-
--- 정리는 두 단계다. 하루 한 번 SQL이 수명을 다한 행을 큐로 옮기고, 워커가 큐를 드레인한다.
+-- 게시물 삭제가 곧 하드 삭제다. 첨부 행은 그 자리에서 사라지고 경로는 같은 트랜잭션에서 큐로
+-- 옮겨진다(삭제 및 보존 정책 §5.1). tombstone 단계가 없으므로 하루 한 번 도는 1층에는 할 일이
+-- 남지 않는다.
 select is(
-  private.enqueue_storage_cleanup(),
+  (select count(*) from private.storage_cleanup_queue where reason = 'post_attachment'),
   2::bigint,
-  'the daily pass moves both tombstoned attachments into the queue'
+  'post deletion queues every attachment object in the same transaction'
 );
 select is(
-  (select count(*) from public.post_attachments where status = 'deleted'),
+  private.enqueue_storage_cleanup(),
   0::bigint,
-  'the source rows leave with the same statement that queues their objects'
+  'the daily pass has nothing left to move for an already deleted post'
+);
+select is(
+  (select count(*) from public.post_attachments
+   where original_filename in ('photo.webp', 'second.bin')),
+  0::bigint,
+  'the attachment rows leave with the post rather than waiting as tombstones'
 );
 
 select set_config('request.jwt.claim.role', 'service_role', true);

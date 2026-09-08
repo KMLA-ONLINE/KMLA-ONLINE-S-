@@ -108,20 +108,44 @@ select throws_ok(
   'identified posts cannot resolve a restriction target'
 );
 reset role;
-update public.posts set deleted_at = now()
-where id = '90000000-0000-0000-0000-000000000002';
+
+-- 부모 게시물이 사라진 익명 댓글은 살아 있는 출처가 아니다. 게시물은 이제 하드 삭제라 지웠다가
+-- 되돌릴 수 없으므로, 이 시나리오 전용 게시물을 따로 만들어 지운다.
+insert into public.posts (
+  id, kind, body, group_id, title, author_identity, created_at, published_at
+)
+values (
+  '90000000-0000-0000-0000-0000000000e1', 'group', '사라질 게시물',
+  '20000000-0000-0000-0000-000000000003', '사라질 게시물', 'anonymous',
+  statement_timestamp(), statement_timestamp()
+);
+insert into private.post_authors (post_id, profile_id)
+select '90000000-0000-0000-0000-0000000000e1', profile.id
+from public.profiles as profile
+where profile.auth_user_id = '10000000-0000-0000-0000-000000000003';
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+set local role authenticated;
+insert into restriction_ids
+select 'orphan_comment', comment_id
+from public.create_post_comment(
+  '90000000-0000-0000-0000-0000000000e1', '부모가 사라질 댓글', 'anonymous'
+);
+reset role;
+
+select private.purge_posts(array['90000000-0000-0000-0000-0000000000e1'::uuid]);
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
 set local role authenticated;
 select throws_ok(
   $$select * from public.restrict_group_anonymous_activity(
-      'comment', (select id from restriction_ids where name = 'target_comment'),
+      'comment', (select id from restriction_ids where name = 'orphan_comment'),
       '충분히 구체적인 사유', 7
     )$$,
   'P0002', 'anonymous moderation source not found',
-  'an anonymous comment on a deleted parent post is not a live source'
+  'an anonymous comment whose parent post was deleted is not a live source'
 );
 reset role;
-update public.posts set deleted_at = null
-where id = '90000000-0000-0000-0000-000000000002';
 set local role authenticated;
 select throws_ok(
   $$select * from public.restrict_group_anonymous_activity(

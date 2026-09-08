@@ -290,7 +290,6 @@ as $$
               select 1
               from public.posts as post
               where post.id = notification.post_id
-                and post.deleted_at is null
                 and (
                   (post.kind = 'group' and exists (
                     select 1 from public.group_memberships as membership
@@ -1188,7 +1187,7 @@ begin
   end if;
 
   select post.* into target_post from public.posts as post where post.id = target_post_id;
-  if target_post.id is null or target_post.deleted_at is not null
+  if target_post.id is null
     or (target_post.kind = 'profile' and target_post.visibility = 'private') then
     return new;
   end if;

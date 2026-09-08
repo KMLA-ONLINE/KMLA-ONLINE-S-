@@ -772,7 +772,6 @@ export type Database = {
           category_id: string | null
           comment_count: number
           created_at: string
-          deleted_at: string | null
           display_author_profile_id: number | null
           edited_at: string | null
           group_id: string | null
@@ -796,7 +795,6 @@ export type Database = {
           category_id?: string | null
           comment_count?: number
           created_at?: string
-          deleted_at?: string | null
           display_author_profile_id?: number | null
           edited_at?: string | null
           group_id?: string | null
@@ -820,7 +818,6 @@ export type Database = {
           category_id?: string | null
           comment_count?: number
           created_at?: string
-          deleted_at?: string | null
           display_author_profile_id?: number | null
           edited_at?: string | null
           group_id?: string | null

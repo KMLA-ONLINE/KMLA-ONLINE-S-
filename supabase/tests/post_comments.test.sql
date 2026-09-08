@@ -118,20 +118,29 @@ select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003
 set local role authenticated;
 
 reset role;
-update public.posts
-set deleted_at = statement_timestamp()
-where id = '90000000-0000-0000-0000-000000000001';
+-- 게시물은 하드 삭제라 지웠다가 되돌릴 수 없다. 이 시나리오 전용 게시물을 만들어 지운다.
+insert into public.posts (
+  id, kind, body, group_id, title, author_identity, display_author_profile_id,
+  created_at, published_at
+)
+select '90000000-0000-0000-0000-0000000000e2', 'group', '사라질 글', post.group_id,
+  '사라질 글', post.author_identity, post.display_author_profile_id,
+  statement_timestamp(), statement_timestamp()
+from public.posts as post
+where post.id = '90000000-0000-0000-0000-000000000001';
+insert into private.post_authors (post_id, profile_id)
+select '90000000-0000-0000-0000-0000000000e2', author.profile_id
+from private.post_authors as author
+where author.post_id = '90000000-0000-0000-0000-000000000001';
+select private.purge_posts(array['90000000-0000-0000-0000-0000000000e2'::uuid]);
 set local role authenticated;
 select throws_ok(
   $$select * from public.create_post_comment(
-      '90000000-0000-0000-0000-000000000001', '삭제된 글의 댓글', 'identified'
+      '90000000-0000-0000-0000-0000000000e2', '삭제된 글의 댓글', 'identified'
     )$$,
   'P0002', 'post not found', 'already deleted posts reject new comments'
 );
 reset role;
-update public.posts
-set deleted_at = null
-where id = '90000000-0000-0000-0000-000000000001';
 set local role authenticated;
 
 insert into ids

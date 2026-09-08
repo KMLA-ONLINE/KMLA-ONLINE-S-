@@ -141,20 +141,6 @@ $$;
 
 ALTER FUNCTION "private"."tombstone_comment_images"() OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "private"."tombstone_post_comment_images"() RETURNS "trigger"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-begin
-  update public.comment_images
-  set status = 'deleted', deleted_at = now()
-  where post_id = new.id and status <> 'deleted';
-  return null;
-end;
-$$;
-
-ALTER FUNCTION "private"."tombstone_post_comment_images"() OWNER TO "postgres";
-
 CREATE TABLE IF NOT EXISTS "public"."comment_images" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "post_id" "uuid" NOT NULL,
@@ -302,8 +288,6 @@ CREATE OR REPLACE TRIGGER "post_comments_sync_count" AFTER INSERT OR DELETE OR U
 
 CREATE OR REPLACE TRIGGER "post_comments_tombstone_images" AFTER UPDATE OF "deleted_at" ON "public"."post_comments" FOR EACH ROW WHEN ((("old"."deleted_at" IS NULL) AND ("new"."deleted_at" IS NOT NULL))) EXECUTE FUNCTION "private"."tombstone_comment_images"();
 
-CREATE OR REPLACE TRIGGER "posts_tombstone_comment_images" AFTER UPDATE OF "deleted_at" ON "public"."posts" FOR EACH ROW WHEN ((("old"."deleted_at" IS NULL) AND ("new"."deleted_at" IS NOT NULL))) EXECUTE FUNCTION "private"."tombstone_post_comment_images"();
-
 ALTER TABLE ONLY "private"."comment_authors"
     ADD CONSTRAINT "comment_authors_comment_id_fkey" FOREIGN KEY ("comment_id") REFERENCES "public"."post_comments"("id") ON DELETE CASCADE;
 
@@ -438,8 +422,6 @@ REVOKE ALL ON FUNCTION "private"."prevent_comment_immutable_changes"() FROM PUBL
 REVOKE ALL ON FUNCTION "private"."sync_post_comment_count"() FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."tombstone_comment_images"() FROM PUBLIC;
-
-REVOKE ALL ON FUNCTION "private"."tombstone_post_comment_images"() FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."group_anonymous_activity_restricted"("p_group_id" "uuid", "p_profile_id" bigint) FROM PUBLIC;
 

@@ -13,8 +13,7 @@ begin
   select post.* into post_record
   from public.posts as post
   where post.id = p_post_id
-    and post.published_at is not null
-    and post.deleted_at is null;
+    and post.published_at is not null;
   if post_record.id is null then
     return;
   end if;
@@ -325,7 +324,7 @@ begin
   end if;
   select post.group_id, post.author_identity into target_group_id, target_author_identity
   from public.posts as post
-  where post.id = p_post_id and post.kind = 'group' and post.deleted_at is null;
+  where post.id = p_post_id and post.kind = 'group';
   if target_group_id is null or not private.is_post_author(p_post_id) then
     raise exception 'only the author can commit this post' using errcode = '42501';
   end if;
@@ -349,7 +348,7 @@ begin
   select post.* into post_record
   from public.posts as post
   where post.id = p_post_id and post.kind = 'group'
-    and post.group_id = target_group_id and post.deleted_at is null
+    and post.group_id = target_group_id
   for update;
   if post_record.id is null or not private.is_post_author(p_post_id) then
     raise exception 'only the author can commit this post' using errcode = '42501';
@@ -413,7 +412,7 @@ begin
   end if;
   select post.* into post_record
   from public.posts as post
-  where post.id = p_post_id and post.kind = 'profile' and post.deleted_at is null
+  where post.id = p_post_id and post.kind = 'profile'
   for update;
   -- 타임라인 당사자는 타인이 쓴 글을 수정할 수 없다(기능 명세 §12.4). 작성자만 통과한다.
   if post_record.id is null or not private.is_post_author(p_post_id) then
@@ -692,12 +691,12 @@ begin
     join private.post_authors as author on author.post_id = post.id
     where post.id = p_source_id and post.kind = 'group'
       and post.author_identity = 'anonymous'
-      and post.published_at is not null and post.deleted_at is null;
+      and post.published_at is not null;
   else
     select post.group_id, author.profile_id into target_group_id, target_profile_id
     from public.post_comments as comment
     join public.posts as post on post.id = comment.post_id and post.kind = 'group'
-      and post.published_at is not null and post.deleted_at is null
+      and post.published_at is not null
     join public.groups as group_record on group_record.id = post.group_id and group_record.deleted_at is null
     join private.comment_authors as author on author.comment_id = comment.id
     where comment.id = p_source_id and comment.author_identity = 'anonymous'
@@ -773,12 +772,12 @@ begin
     join private.post_authors as author on author.post_id = post.id
     where post.id = p_source_id and post.kind = 'group'
       and post.author_identity = 'anonymous'
-      and post.published_at is not null and post.deleted_at is null;
+      and post.published_at is not null;
   else
     select post.group_id, author.profile_id into target_group_id, target_profile_id
     from public.post_comments as comment
     join public.posts as post on post.id = comment.post_id and post.kind = 'group'
-      and post.published_at is not null and post.deleted_at is null
+      and post.published_at is not null
     join public.groups as group_record on group_record.id = post.group_id and group_record.deleted_at is null
     join private.comment_authors as author on author.comment_id = comment.id
     where comment.id = p_source_id and comment.author_identity = 'anonymous'
@@ -886,7 +885,6 @@ begin
   from public.posts as post
   where post.id = p_post_id
     and post.published_at is not null
-    and post.deleted_at is null
   for update;
   if not found then
     raise exception 'post not found' using errcode = 'P0002';
@@ -1111,7 +1109,7 @@ begin
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
   select post.* into post_record from public.posts as post
-  where post.id = p_post_id and post.kind = 'group' and post.deleted_at is null
+  where post.id = p_post_id and post.kind = 'group'
   for update;
   select membership.role into caller_role
   from public.group_memberships as membership
@@ -1125,10 +1123,7 @@ begin
   end if;
   select author.profile_id into author_profile_id
   from private.post_authors as author where author.post_id = p_post_id;
-  update public.posts set deleted_at = now(), pinned_at = null where id = p_post_id;
-  update public.post_attachments
-  set status = 'deleted', deleted_at = now()
-  where post_id = p_post_id and status <> 'deleted';
+  perform private.purge_posts(array[p_post_id]);
   if caller_profile_id <> author_profile_id then
     -- 어느 글이 사라졌는지 제목으로 말해준다. 삭제된 게시물은 열어볼 수 없으므로 알림이
     -- 대상을 밝히지 않으면 작성자는 무엇이 지워졌는지 영영 알 수 없다. 제목은 작성자
@@ -1303,7 +1298,7 @@ begin
   end if;
   select post.* into post_record
   from public.posts as post
-  where post.id = p_post_id and post.kind = 'profile' and post.deleted_at is null
+  where post.id = p_post_id and post.kind = 'profile'
   for update;
   if post_record.id is null then
     raise exception 'post not found or not accessible' using errcode = '42501';
@@ -1318,10 +1313,7 @@ begin
   select profile.* into caller_profile
   from public.profiles as profile where profile.id = caller_profile_id;
 
-  update public.posts set deleted_at = now() where id = p_post_id;
-  update public.post_attachments
-  set status = 'deleted', deleted_at = now()
-  where post_id = p_post_id and status <> 'deleted';
+  perform private.purge_posts(array[p_post_id]);
   if caller_profile_id = post_record.timeline_profile_id
     and caller_profile_id <> author_profile_id then
     perform private.emit_notification(
@@ -1410,7 +1402,7 @@ begin
   end if;
   select post.published_at is not null into is_published
   from public.posts as post
-  where post.id = attachment.post_id and post.deleted_at is null;
+  where post.id = attachment.post_id;
   if is_published is null then
     raise exception 'post is deleted' using errcode = '55000';
   end if;
@@ -1458,7 +1450,7 @@ begin
   select post.group_id into post_group_id
   from public.posts as post
   where post.id = p_post_id and post.kind = 'group'
-    and post.published_at is not null and post.deleted_at is null;
+    and post.published_at is not null;
   if post_group_id is null then
     return;
   end if;
@@ -1538,7 +1530,7 @@ begin
     ) as tally
   ) as summary on true
   where post.id = p_post_id and post.kind = 'group'
-    and post.published_at is not null and post.deleted_at is null;
+    and post.published_at is not null;
 end;
 $$;
 
@@ -1557,7 +1549,7 @@ begin
   if not exists (
     select 1 from public.posts as post
     where post.id = p_post_id and post.kind = 'profile'
-      and post.published_at is not null and post.deleted_at is null
+      and post.published_at is not null
   ) or not private.can_read_post(p_post_id) then
     return;
   end if;
@@ -1720,7 +1712,7 @@ begin
     ) as tally
   ) as summary on true
   where post.group_id = p_group_id and post.kind = 'group'
-    and post.published_at is not null and post.deleted_at is null
+    and post.published_at is not null
     and (p_category_id is null or post.category_id = p_category_id)
     and (
       p_cursor_post_id is null
@@ -1933,7 +1925,6 @@ begin
     where post.timeline_profile_id = target_profile_id
       and post.kind = 'profile'
       and post.published_at is not null
-      and post.deleted_at is null
       and (
         post.visibility = 'public'
         or exists (
@@ -2101,7 +2092,7 @@ begin
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
   select post.* into post_record from public.posts as post
-  where post.id = p_post_id and post.deleted_at is null
+  where post.id = p_post_id
   for update;
   if post_record.id is null or not private.is_post_author(p_post_id) then
     raise exception 'only the author can add attachments' using errcode = '42501';
@@ -2154,14 +2145,14 @@ begin
   end if;
   select post.group_id into target_group_id
   from public.posts as post
-  where post.id = p_post_id and post.kind = 'group' and post.deleted_at is null;
+  where post.id = p_post_id and post.kind = 'group';
   if target_group_id is null or not private.is_post_author(p_post_id) then
     raise exception 'only the author can publish this post' using errcode = '42501';
   end if;
   select post.* into post_record
   from public.posts as post
   where post.id = p_post_id and post.kind = 'group'
-    and post.group_id = target_group_id and post.deleted_at is null;
+    and post.group_id = target_group_id;
   if post_record.author_identity = 'anonymous' then
     perform private.lock_group_anonymous_activity_target(
       target_group_id, caller_profile_id
@@ -2182,7 +2173,7 @@ begin
   select post.* into post_record
   from public.posts as post
   where post.id = p_post_id and post.kind = 'group'
-    and post.group_id = target_group_id and post.deleted_at is null
+    and post.group_id = target_group_id
   for update;
   if post_record.id is null or not private.is_post_author(p_post_id) then
     raise exception 'only the author can publish this post' using errcode = '42501';
@@ -2234,7 +2225,7 @@ CREATE OR REPLACE FUNCTION "public"."reorder_post_attachments"("p_post_id" "uuid
 declare
   active_count integer;
 begin
-  perform 1 from public.posts where id = p_post_id and deleted_at is null for update;
+  perform 1 from public.posts where id = p_post_id for update;
   if not found or not private.is_post_author(p_post_id) then
     raise exception 'only the author can reorder attachments' using errcode = '42501';
   end if;
@@ -2325,7 +2316,7 @@ begin
     and profile.status = 'accepted'
     and profile.deleted_at is null
   where post.group_id = p_group_id and post.kind = 'group'
-    and post.published_at is not null and post.deleted_at is null
+    and post.published_at is not null
     and nullif(normalized_query, '') is not null
     and (
       post.search_text like '%' || normalized_query || '%'
@@ -2395,7 +2386,6 @@ begin
   where post.id = p_post_id
     and post.kind = 'group'
     and post.published_at is not null
-    and post.deleted_at is null
   for update;
 
   if post_record.id is null or not exists (
@@ -2489,7 +2479,7 @@ begin
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
   select post.* into post_record from public.posts as post
-  where post.id = p_post_id and post.kind = 'group' and post.deleted_at is null
+  where post.id = p_post_id and post.kind = 'group'
   for update;
   if post_record.id is null or not private.is_post_author(p_post_id) then
     raise exception 'only the author can update this post' using errcode = '42501';
@@ -2551,7 +2541,6 @@ begin
     and post.kind = 'group'
     and post.activity_kind is null
     and post.published_at is null
-    and post.deleted_at is null
     and private.is_post_author(post.id);
   if target_group_id is null then
     raise exception 'only the author can change an unpublished group draft identity'
@@ -2580,7 +2569,6 @@ begin
     and post.group_id = target_group_id
     and post.activity_kind is null
     and post.published_at is null
-    and post.deleted_at is null
     and private.is_post_author(post.id)
   for update;
   if not found then

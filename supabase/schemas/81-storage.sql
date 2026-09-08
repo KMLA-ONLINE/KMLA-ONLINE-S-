@@ -15,7 +15,7 @@ CREATE POLICY "group_media_storage_select_visible" ON "storage"."objects" FOR SE
 CREATE POLICY "post_attachments_storage_insert_pending_author" ON "storage"."objects" FOR INSERT TO "authenticated" WITH CHECK ((("bucket_id" = 'post-attachments'::"text") AND ("owner_id" = ( SELECT ("auth"."uid"())::"text" AS "uid")) AND (EXISTS ( SELECT 1
    FROM ("public"."post_attachments" "attachment"
      JOIN "public"."posts" "post" ON (("post"."id" = "attachment"."post_id")))
-  WHERE (("attachment"."storage_bucket" = "objects"."bucket_id") AND ("attachment"."object_path" = "objects"."name") AND ("attachment"."status" = 'pending'::"public"."post_attachment_status") AND ("post"."deleted_at" IS NULL) AND "private"."is_post_author"("post"."id"))))));
+  WHERE (("attachment"."storage_bucket" = "objects"."bucket_id") AND ("attachment"."object_path" = "objects"."name") AND ("attachment"."status" = 'pending'::"public"."post_attachment_status") AND "private"."is_post_author"("post"."id"))))));
 
 CREATE POLICY "post_attachments_storage_select_reader" ON "storage"."objects" FOR SELECT TO "authenticated" USING ((("bucket_id" = 'post-attachments'::"text") AND "storage"."allow_any_operation"(ARRAY['object.get_authenticated_info'::"text", 'object.get_authenticated'::"text", 'object.sign'::"text", 'object.sign_many'::"text"]) AND (EXISTS ( SELECT 1
    FROM "public"."post_attachments" "attachment"

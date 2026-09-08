@@ -592,17 +592,10 @@ begin
   set status = 'deleted', deleted_at = now()
   where group_id = p_group_id and status <> 'deleted';
 
-  update public.post_attachments as attachment
-  set status = 'deleted', deleted_at = now()
-  where attachment.status <> 'deleted'
-    and exists (
-      select 1 from public.posts as post
-      where post.id = attachment.post_id and post.group_id = p_group_id
-    );
-
-  update public.posts
-  set deleted_at = now(), pinned_at = null
-  where group_id = p_group_id and deleted_at is null;
+  -- 그룹의 게시물은 첨부·댓글·반응과 함께 즉시 사라진다(삭제 및 보존 정책 §5.2).
+  perform private.purge_posts(array(
+    select post.id from public.posts as post where post.group_id = p_group_id
+  ));
 
   delete from public.group_join_requests where group_id = p_group_id;
   delete from public.group_memberships where group_id = p_group_id;
