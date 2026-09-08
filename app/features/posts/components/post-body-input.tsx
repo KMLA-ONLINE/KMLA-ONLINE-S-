@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 
+import { cn } from "~/shared/lib/utils";
 import { Textarea } from "~/shared/ui/textarea";
 
 const DesktopMarkdownEditor = lazy(
@@ -9,9 +10,11 @@ const DesktopMarkdownEditor = lazy(
 export function PostBodyInput({
   value,
   onValueChange,
+  className,
 }: {
   value: string;
   onValueChange?: (value: string) => void;
+  className?: string;
 }) {
   const [desktop, setDesktop] = useState(false);
 
@@ -32,7 +35,10 @@ export function PostBodyInput({
         maxLength={20_000}
         aria-label="Markdown 본문"
         placeholder="본문을 입력하세요"
-        className="post-typography max-h-none min-h-72 resize-y whitespace-pre-wrap md:hidden"
+        className={cn(
+          "post-typography max-h-none min-h-72 resize-y whitespace-pre-wrap md:hidden",
+          className,
+        )}
       />
     );
 

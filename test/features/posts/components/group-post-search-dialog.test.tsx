@@ -5,7 +5,7 @@ import { useNavigate, useSearchParams } from "react-router";
 
 import { GroupPostSearchDialog } from "~/features/posts/components/group-post-search-dialog";
 import { searchGroupPosts } from "~/features/posts/data/queries";
-import { useGroupPostSearch } from "~/features/posts/hooks/use-group-post-search";
+import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import type { GroupPostSearchResult } from "~/features/posts/model/types";
 import { renderRoute } from "../../../router";
 
@@ -38,7 +38,7 @@ let goBack: () => void = () => {
 /** 열림 상태가 URL에 있으므로 dialog는 언제나 route 위에서 그린다. */
 function GroupRoute() {
   const [searchParams] = useSearchParams();
-  const { openSearch } = useGroupPostSearch();
+  const { openSearch } = useSearchDialogParam();
   const navigate = useNavigate();
 
   useEffect(() => {

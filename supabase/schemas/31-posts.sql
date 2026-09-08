@@ -41,12 +41,12 @@ begin
   if char_length(coalesce(p_body, '')) > 20000 then
     raise exception 'body must contain between 0 and 20000 characters' using errcode = '22023';
   end if;
-  if attachment_count > 10
+  if attachment_count > 30
     or attachment_count <> (
       select count(distinct attachment_id)
       from unnest(coalesce(p_attachment_ids, '{}'::uuid[])) as attachment_id
     ) then
-    raise exception 'attachment order must contain at most 10 unique ids' using errcode = '22023';
+    raise exception 'attachment order must contain at most 30 unique ids' using errcode = '22023';
   end if;
   if exists (
     select 1
@@ -155,8 +155,18 @@ begin
     or new.kind is distinct from old.kind
     or new.group_id is distinct from old.group_id
     or new.timeline_profile_id is distinct from old.timeline_profile_id
-    or new.author_identity is distinct from old.author_identity
-    or new.display_author_profile_id is distinct from old.display_author_profile_id
+    or (
+      (
+        new.author_identity is distinct from old.author_identity
+        or new.display_author_profile_id is distinct from old.display_author_profile_id
+      )
+      and not (
+        current_setting('app.update_group_post_draft_identity', true) = old.id::text
+        and old.published_at is null
+        and old.kind = 'group'
+        and old.activity_kind is null
+      )
+    )
     or new.body_format_version is distinct from old.body_format_version
     or new.activity_kind is distinct from old.activity_kind
     or new.activity_media_path is distinct from old.activity_media_path
@@ -276,7 +286,7 @@ CREATE TABLE IF NOT EXISTS "public"."post_attachments" (
     CONSTRAINT "post_attachments_filename_check" CHECK ((("char_length"("btrim"("original_filename")) >= 1) AND ("char_length"("btrim"("original_filename")) <= 255))),
     CONSTRAINT "post_attachments_mime_check" CHECK ((("char_length"("btrim"("mime_type")) >= 1) AND ("char_length"("btrim"("mime_type")) <= 255))),
     CONSTRAINT "post_attachments_path_check" CHECK (("object_path" = ((("post_id")::"text" || '/'::"text") || ("id")::"text"))),
-    CONSTRAINT "post_attachments_position_check" CHECK ((("position" >= '-10'::integer) AND ("position" <= 9))),
+    CONSTRAINT "post_attachments_position_check" CHECK ((("position" >= '-30'::integer) AND ("position" <= 29))),
     CONSTRAINT "post_attachments_size_check" CHECK ((("size_bytes" >= 1) AND ("size_bytes" <= 31457280))),
     CONSTRAINT "post_attachments_status_timestamps_check" CHECK (((("status" = 'pending'::"public"."post_attachment_status") AND ("ready_at" IS NULL) AND ("deleted_at" IS NULL)) OR (("status" = 'ready'::"public"."post_attachment_status") AND ("ready_at" IS NOT NULL) AND ("deleted_at" IS NULL)) OR (("status" = 'deleted'::"public"."post_attachment_status") AND ("deleted_at" IS NOT NULL))))
 );

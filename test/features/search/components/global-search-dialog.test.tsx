@@ -12,7 +12,7 @@ vi.mock("~/features/search/hooks/use-recent-search-entries", () => ({
 
 import { GlobalSearchDialog } from "~/features/search/components/global-search-dialog";
 import { searchDirectory } from "~/features/search/data/queries";
-import { useDirectorySearchDialog } from "~/features/search/hooks/use-directory-search-dialog";
+import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { renderRoute, screen, waitFor } from "../../../router";
 
 let goBack: () => void = () => {
@@ -21,7 +21,7 @@ let goBack: () => void = () => {
 
 function HomeRoute() {
   const [searchParams] = useSearchParams();
-  const { openSearch } = useDirectorySearchDialog();
+  const { openSearch } = useSearchDialogParam();
   const navigate = useNavigate();
 
   useEffect(() => {

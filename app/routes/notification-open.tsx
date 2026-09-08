@@ -9,6 +9,7 @@ import type { Route } from "./+types/notification-open";
 import {
   hasBackEntry,
   resolveBackStack,
+  resolveOverlayParent,
   seedBackStack,
 } from "~/shared/lib/back-stack";
 
@@ -20,9 +21,14 @@ import {
  * history에 확정된 뒤 컴포넌트가 자기 entry를 갈아치운다. loader에서 즉시 replace하면 SPA
  * navigation 중에는 출발 화면의 entry가 아직 현재 위치라 알림함 자체를 덮어쓰게 된다.
  *
- * 앱이 이미 떠 있었다면 그것으로 끝이다 — 뒤로가기는 원래 보던 화면으로 돌아간다. 앱이 종료된
- * 상태에서 열렸다면 돌아갈 화면 자체가 없으므로, 목적지가 앱 안에서 놓여 있던 자리를 밑에
- * 깔고 그 위에 목적지를 얹는다. 그래야 뒤로가기가 "게시물이 닫히고 그룹 화면"이 된다.
+ * 목적지 밑에 무엇을 깔지는 두 갈래다. 앱이 종료된 상태에서 열렸다면 돌아갈 화면 자체가
+ * 없으므로, 목적지가 앱 안에서 놓여 있던 자리를 루트까지 전부 깐다. 앱이 이미 떠 있었다면 원래
+ * 보던 화면이 밑에 있으니 그대로 두되, 목적지가 오버레이일 때만 부모를 한 칸 끼워 넣는다 —
+ * 오버레이의 닫기는 바로 밑 entry를 드러내는 일이라, 그러지 않으면 알림함에서 연 게시물을
+ * 닫았을 때 글이 놓여 있던 그룹이 아니라 알림함으로 튕긴다.
+ *
+ * 어느 쪽이든 깔았다면 목적지는 그 위에 push한다. 깔 것이 없을 때만 자기 entry를 목적지로
+ * 갈아치운다.
  */
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const notificationId = params.notificationId;
@@ -36,6 +42,18 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
 
   const target = sanitizeNotificationDestination(destination);
   return { target };
+}
+
+/** 목적지 밑에 깔 화면들. 이 창이 알림으로 처음 열렸으면 전부, 아니면 오버레이의 부모 한 칸. */
+function resolveSeedStack(
+  target: string,
+  fromNotificationInbox: boolean,
+): string[] {
+  if (!fromNotificationInbox && !hasBackEntry())
+    return resolveBackStack(target);
+
+  const parent = resolveOverlayParent(target);
+  return parent === null ? [] : [parent];
 }
 
 export default function NotificationOpenRoute({
@@ -55,10 +73,10 @@ export default function NotificationOpenRoute({
     if (startedNavigation.current) return;
     startedNavigation.current = true;
 
-    const needsBackStack = !fromNotificationInbox && !hasBackEntry();
-    if (needsBackStack) seedBackStack(resolveBackStack(loaderData.target));
+    const stack = resolveSeedStack(loaderData.target, fromNotificationInbox);
+    if (stack.length > 0) seedBackStack(stack);
 
-    void navigate(loaderData.target, { replace: !needsBackStack });
+    void navigate(loaderData.target, { replace: stack.length === 0 });
   }, [fromNotificationInbox, loaderData.target, navigate]);
 
   return null;

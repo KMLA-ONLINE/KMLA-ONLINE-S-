@@ -6,6 +6,7 @@ import {
   readProfilePostForm,
   validatePostForm,
   validateProfilePostForm,
+  validateSelectedFiles,
 } from "~/features/posts/model/validation";
 
 describe("post form validation", () => {
@@ -64,6 +65,25 @@ describe("post form validation", () => {
       body: "첫째 줄\n둘째 줄",
       authorIdentity: "identified",
     });
+  });
+});
+
+describe("attachment selection validation", () => {
+  const file = new File(["x"], "x.txt", { type: "text/plain" });
+
+  it("accepts 30 attachments and rejects the 31st", () => {
+    expect(validateSelectedFiles([file], 29)).toBeNull();
+    expect(validateSelectedFiles([file], 30)).toBe(
+      "첨부 파일은 최대 30개까지 추가할 수 있습니다.",
+    );
+  });
+
+  it("rejects video attachments", () => {
+    const video = new File(["video"], "clip.mp4");
+
+    expect(validateSelectedFiles([video], 0)).toBe(
+      "동영상 파일은 아직 지원하지 않습니다: clip.mp4",
+    );
   });
 });
 

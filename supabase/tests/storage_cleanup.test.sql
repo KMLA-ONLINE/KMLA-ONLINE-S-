@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(38);
 
 -- 이 파일의 목적은 두 가지다. 1층이 수명을 다한 행만 큐로 옮기는지, 그리고 2층 스윕이 살아 있는
 -- object를 절대 후보로 삼지 않는지. 후자가 틀리면 사용자 이미지가 사라지므로 참조 종류마다
@@ -53,7 +53,41 @@ select is(
 );
 select set_config('request.jwt.claim.sub', '', true);
 
--- 1층: 상태로 판단하는 세 종류.
+-- 1층: 상태로 판단하는 세 종류와 48시간 지난 미게시 초안.
+insert into public.posts (
+  id, kind, body, group_id, title, author_identity, display_author_profile_id, created_at
+)
+select drafts.draft_id, 'group', '', '20000000-0000-0000-0000-000000000003',
+  '[private upload draft]', 'identified', profile.id, drafts.created_at
+from public.profiles as profile
+cross join (values
+  ('ee000000-0000-0000-0000-000000000001'::uuid, now() - interval '72 hours'),
+  ('ee000000-0000-0000-0000-000000000002'::uuid, now())
+) as drafts(draft_id, created_at)
+where profile.auth_user_id = '10000000-0000-0000-0000-000000000001';
+
+insert into private.post_authors (post_id, profile_id)
+select post.id, post.display_author_profile_id
+from public.posts as post
+where post.id in (
+  'ee000000-0000-0000-0000-000000000001',
+  'ee000000-0000-0000-0000-000000000002'
+);
+
+insert into public.post_attachments (
+  id, post_id, object_path, original_filename, position, mime_type, size_bytes,
+  status, created_at, ready_at
+) values
+  ('ef000000-0000-0000-0000-000000000001', 'ee000000-0000-0000-0000-000000000001',
+   'ee000000-0000-0000-0000-000000000001/ef000000-0000-0000-0000-000000000001',
+   'ready.webp', 0, 'image/webp', 4, 'ready', now() - interval '72 hours', now() - interval '72 hours'),
+  ('ef000000-0000-0000-0000-000000000002', 'ee000000-0000-0000-0000-000000000001',
+   'ee000000-0000-0000-0000-000000000001/ef000000-0000-0000-0000-000000000002',
+   'pending.webp', 1, 'image/webp', 4, 'pending', now(), null),
+  ('ef000000-0000-0000-0000-000000000003', 'ee000000-0000-0000-0000-000000000002',
+   'ee000000-0000-0000-0000-000000000002/ef000000-0000-0000-0000-000000000003',
+   'fresh.webp', 0, 'image/webp', 4, 'ready', now(), now());
+
 insert into public.post_attachments (
   id, post_id, storage_bucket, object_path, position, mime_type, size_bytes,
   original_filename, status, created_at, deleted_at
@@ -79,8 +113,28 @@ from (values
 
 select is(
   private.enqueue_storage_cleanup(),
-  3::bigint,
-  'only the abandoned pending row and the tombstones move to the queue'
+  5::bigint,
+  'cleanup counts queued objects, including every attachment of an abandoned draft'
+);
+select ok(
+  not exists (select 1 from public.posts where id = 'ee000000-0000-0000-0000-000000000001'),
+  'an unpublished post older than 48 hours is deleted after its paths are captured'
+);
+select ok(
+  exists (select 1 from public.posts where id = 'ee000000-0000-0000-0000-000000000002'),
+  'a fresh unpublished draft remains'
+);
+select is(
+  (select count(*) from private.storage_cleanup_queue
+   where object_path like 'ee000000-0000-0000-0000-000000000001/%'
+     and reason = 'post_attachment'),
+  2::bigint,
+  'both ready and pending abandoned-draft object paths are queued'
+);
+select ok(
+  exists (select 1 from public.post_attachments
+          where id = 'ef000000-0000-0000-0000-000000000003'),
+  'the fresh draft keeps its ready attachment'
 );
 select ok(
   exists (
@@ -139,8 +193,8 @@ select is(
     '{}'::uuid[],
     'storage unavailable'
   ),
-  1,
-  'an object that is already gone completes even though Storage reported nothing'
+  3,
+  'objects that are already gone complete even though Storage reported nothing'
 );
 select is(
   (select count(*) from private.storage_cleanup_queue),
