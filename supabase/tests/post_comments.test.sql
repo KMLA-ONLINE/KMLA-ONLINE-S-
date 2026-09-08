@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(48);
+select plan(51);
 
 -- 시드에는 로그인 가능한 계정이 하나뿐이라 신원 정책과 운영 조치를 함께 볼 수 없다. 시드를
 -- 건드리지 않고 트랜잭션 안에서만 두 계정을 더 붙인다.
@@ -410,6 +410,20 @@ select is(
   null::text,
   'a tombstone hides its author'
 );
+-- 읽기 계층이 가리는 것과 저장된 값이 비어 있는 것은 다르다. 자리 표시에 필요한 것은 트리
+-- 골격뿐이므로 본문은 삭제 시점에 실제로 비운다(삭제 및 보존 정책 §7.2).
+reset role;
+select is(
+  (
+    select comment.body
+    from public.post_comments as comment
+    where comment.root_comment_id = (select id from ids where name = 'root')
+      and comment.depth = 5
+  ),
+  '',
+  'a tombstone empties its stored body rather than only hiding it'
+);
+set local role authenticated;
 select isnt(
   (
     select parent_author_label
@@ -451,6 +465,18 @@ select is(
   4,
   'a tombstone disappears once its last living descendant is gone'
 );
+reset role;
+select is(
+  (
+    select count(*)::integer
+    from public.post_comments as comment
+    where comment.root_comment_id = (select id from ids where name = 'root')
+      and comment.deleted_at is not null
+  ),
+  0,
+  'the vanished tombstones leave the table instead of lingering as rows'
+);
+set local role authenticated;
 
 -- kim-admin: 메이커스 랩 소유자.
 reset role;
@@ -527,6 +553,17 @@ select is(
   0,
   'the replies of a deleted top level comment are hidden too'
 );
+reset role;
+select is(
+  (
+    select count(*)::integer
+    from public.post_comments as comment
+    where comment.root_comment_id = (select id from ids where name = 'root')
+  ),
+  0,
+  'deleting a top level comment removes the whole bundle from the table'
+);
+set local role authenticated;
 
 -- 다른 멤버는 남의 댓글을 지울 수 없다.
 reset role;

@@ -1246,22 +1246,62 @@ begin
   from private.comment_authors as author where author.comment_id = p_comment_id;
 
   if comment_record.depth = 0 then
-    -- 최상위 댓글을 지우면 답글 묶음 전체가 사라진다(기능 명세 §9.4).
+    -- 최상위 댓글을 지우면 답글 묶음 전체가 사라진다(기능 명세 §9.4). 묶음이 통째로 숨는 이상
+    -- 자리 표시가 필요 없으므로 하드 삭제한다.
     perform 1
     from public.post_comments as comment
     where comment.root_comment_id = p_comment_id
-      and comment.deleted_at is null
     order by comment.id
     for update;
 
-    update public.post_comments as comment
-    set deleted_at = now()
-    where comment.root_comment_id = p_comment_id and comment.deleted_at is null;
+    insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+    select image.storage_bucket, image.object_path, 'comment_image'
+    from public.comment_images as image
+    join public.post_comments as comment on comment.id = image.comment_id
+    where comment.root_comment_id = p_comment_id
+    on conflict (bucket, object_path) do update
+      set dry_run = queue.dry_run and excluded.dry_run;
+
+    delete from public.post_comments as comment
+    where comment.root_comment_id = p_comment_id;
   else
+    -- 답글은 아래에 살아 있는 답글이 남아 있으면 대화 연결을 위해 자리 표시로 남아야 한다
+    -- (기능 명세 §9.4). 자리 표시에 필요한 것은 트리 골격뿐이므로 본문은 그 자리에서 비운다
+    -- (삭제 및 보존 정책 §7.2).
     update public.post_comments as comment
-    set deleted_at = now()
+    set deleted_at = now(), body = ''
     where comment.id = p_comment_id;
   end if;
+
+  -- 자식이 없는 자리 표시는 존재 이유가 없다. 잎에서부터 걷어내면 삭제만 남은 사슬이 조상까지
+  -- 함께 사라진다. 이미지 경로는 행이 사라지기 전에 큐로 옮긴다.
+  loop
+    with doomed as (
+      select comment.id
+      from public.post_comments as comment
+      where comment.post_id = target_post_id
+        and comment.deleted_at is not null
+        and not exists (
+          select 1
+          from public.post_comments as child
+          where child.parent_comment_id = comment.id
+        )
+    ), queued as (
+      insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+      select image.storage_bucket, image.object_path, 'comment_image'
+      from public.comment_images as image
+      join doomed on doomed.id = image.comment_id
+      on conflict (bucket, object_path) do update
+        set dry_run = queue.dry_run and excluded.dry_run
+      returning 1
+    )
+    delete from public.post_comments as comment
+    using doomed
+    where comment.id = doomed.id;
+    exit when not found;
+  end loop;
+
+  perform private.invoke_storage_cleanup(p_quiet => true);
   if caller_profile_id <> author_profile_id then
     -- 댓글 원문은 싣지 않는다(기능 명세 §14.8). 대신 댓글이 달려 있던 게시물의 제목으로
     -- 어느 댓글이었는지 짚어준다. 제목은 원문이 아니고 작성자가 이미 읽을 수 있던 값이다.
