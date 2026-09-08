@@ -36,7 +36,7 @@ export function PostBodyInput({
         aria-label="Markdown 본문"
         placeholder="본문을 입력하세요"
         className={cn(
-          "post-typography max-h-none min-h-72 resize-y whitespace-pre-wrap md:hidden",
+          "post-typography field-sizing-fixed h-full max-h-none min-h-72 resize-none overflow-y-auto whitespace-pre-wrap md:hidden",
           className,
         )}
       />

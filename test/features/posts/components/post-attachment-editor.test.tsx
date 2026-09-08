@@ -41,9 +41,6 @@ describe("PostAttachmentEditor", () => {
     expect(screen.getByText("사진 추가")).toHaveClass("hidden", "sm:inline");
     expect(screen.getByText("파일 추가")).toHaveClass("hidden", "sm:inline");
     expect(
-      screen.getByText("사진과 파일을 한 번에 여러 개 추가할 수 있습니다."),
-    ).toHaveClass("hidden", "sm:block");
-    expect(
       screen.getByRole("button", {
         name: /사진이나 파일을 끌어 놓으세요/,
       }),

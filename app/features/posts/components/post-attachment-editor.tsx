@@ -115,14 +115,14 @@ export function PostAttachmentEditor({
               {order.length} / {POST_ATTACHMENT_LIMIT}
             </span>
           </div>
-          <p
-            className="mt-0.5 hidden text-xs text-muted-foreground sm:block"
-            aria-live="polite"
-          >
-            {order.length > 0
-              ? `${formatFileSize(totalSize)}`
-              : "사진과 파일을 한 번에 여러 개 추가할 수 있습니다."}
-          </p>
+          {order.length > 0 ? (
+            <p
+              className="mt-0.5 hidden text-xs text-muted-foreground sm:block"
+              aria-live="polite"
+            >
+              {formatFileSize(totalSize)}
+            </p>
+          ) : null}
         </div>
         <div className="flex gap-2">
           <Button
