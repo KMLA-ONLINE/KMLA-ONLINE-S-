@@ -22,17 +22,7 @@ import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 
-/** 업로드 파이프라인이 사진을 webp로 정규화하므로, 이미지인지 아닌지는 이 한 줄로 갈린다. */
-const IMAGE_MIME = "image/webp";
-
 const VISIBLE_TILE_LIMIT = 5;
-
-export function splitPostAttachments(attachments: PostAttachment[]) {
-  return {
-    images: attachments.filter((item) => item.mime_type === IMAGE_MIME),
-    files: attachments.filter((item) => item.mime_type !== IMAGE_MIME),
-  };
-}
 
 /**
  * 타일 개수별 그리드. 반응형이 아니라 장수의 함수다 — 사진이 몇 장이냐에 따라 "보기 좋은

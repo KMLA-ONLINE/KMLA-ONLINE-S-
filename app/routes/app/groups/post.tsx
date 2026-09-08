@@ -6,7 +6,7 @@ import {
   deleteGroupPost,
   getGroupPost,
   getPostErrorMessage,
-  GroupPostOverlay,
+  GroupPostDetail,
   listPostComments,
   resolveIdentityOptions,
   setGroupPostPinned,
@@ -85,11 +85,8 @@ export default function GroupPostPage({ loaderData }: Route.ComponentProps) {
     throw new Response("게시물을 볼 권한이 없습니다.", { status: 403 });
   }
   return (
-    <GroupPostOverlay
-      mode="detail"
+    <GroupPostDetail
       slug={parent.group.slug}
-      groupName={parent.group.name}
-      groupId={parent.group.group_id}
       post={loaderData.post}
       identities={resolveIdentityOptions(
         parent.group.identity_policy,

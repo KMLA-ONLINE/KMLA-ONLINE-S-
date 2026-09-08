@@ -1,4 +1,5 @@
 import type {
+  PostAttachment,
   PreparedCommentImage,
   PreparedPostFile,
 } from "~/features/posts/model/types";
@@ -7,6 +8,16 @@ import { validateSelectedFiles } from "~/features/posts/model/validation";
 import { compressImage } from "~/shared/lib/image/compress";
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+/** 업로드 파이프라인이 사진을 webp로 정규화하므로, 이미지인지 아닌지는 이 한 줄로 갈린다. */
+const IMAGE_MIME = "image/webp";
+
+export function splitPostAttachments(attachments: PostAttachment[]) {
+  return {
+    images: attachments.filter((item) => item.mime_type === IMAGE_MIME),
+    files: attachments.filter((item) => item.mime_type !== IMAGE_MIME),
+  };
+}
 
 export async function prepareCommentImage(
   source: File,

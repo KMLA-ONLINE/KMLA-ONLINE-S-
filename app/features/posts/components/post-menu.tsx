@@ -2,8 +2,8 @@ import { MoreHorizontalIcon } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 
-import { GroupPostReportDialog } from "~/features/posts/components/group-post-report-dialog";
-import { AnonymousActivityRestrictionDialog } from "~/features/posts/components/anonymous-activity-restriction-dialog";
+import { GroupPostReportDialog } from "~/features/posts/components/group/group-post-report-dialog";
+import { AnonymousActivityRestrictionDialog } from "~/features/posts/components/group/anonymous-activity-restriction-dialog";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,

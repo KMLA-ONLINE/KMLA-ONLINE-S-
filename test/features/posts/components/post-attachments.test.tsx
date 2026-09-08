@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import {
   PostFileList,
   PostImageGrid,
-  splitPostAttachments,
 } from "~/features/posts/components/post-attachments";
 import type { PostAttachment } from "~/features/posts/model/types";
 import { renderRoute } from "../../../router";
@@ -35,18 +34,6 @@ const image = (id: string) =>
     mime_type: "image/webp",
     original_filename: `${id}.webp`,
   });
-
-describe("splitPostAttachments", () => {
-  it("treats normalized WebP as images and everything else as files", () => {
-    const { images, files } = splitPostAttachments([
-      image("photo"),
-      attachment({ attachment_id: "doc" }),
-    ]);
-
-    expect(images.map((item) => item.attachment_id)).toEqual(["photo"]);
-    expect(files.map((item) => item.attachment_id)).toEqual(["doc"]);
-  });
-});
 
 const gridRatio = () =>
   Number.parseFloat(screen.getByTestId("post-image-grid").style.aspectRatio);

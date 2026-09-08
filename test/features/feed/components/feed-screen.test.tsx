@@ -15,7 +15,7 @@ vi.mock("~/features/app-shell", () => ({
   useAppShell: () => ({ profile: { name: "나", avatar_url: null } }),
 }));
 vi.mock("~/features/posts", () => ({
-  GroupPostOverlay: () => null,
+  GroupPostDetail: () => null,
   ProfilePostDetail: () => null,
   usePostViewMode: () => ["card"],
   useVisitedPosts: () => ({ visited: new Set<string>(), markVisited: vi.fn() }),

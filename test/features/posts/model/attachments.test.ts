@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   imageDownloadName,
   prepareCommentImage,
+  splitPostAttachments,
   toAttachmentDownloadUrl,
 } from "~/features/posts/model/attachments";
+import type { PostAttachment } from "~/features/posts/model/types";
 
 describe("imageDownloadName", () => {
   it("uses the stable image UUID instead of an original filename", () => {
@@ -45,5 +47,41 @@ describe("prepareCommentImage", () => {
         new File(["pdf"], "paper.pdf", { type: "application/pdf" }),
       ),
     ).rejects.toThrow("JPEG, PNG, WebP");
+  });
+});
+
+function attachment(overrides: Partial<PostAttachment>): PostAttachment {
+  return {
+    attachment_id: "attachment-id",
+    created_at: "2026-08-13T00:00:00Z",
+    height: null,
+    mime_type: "application/pdf",
+    object_path: "post-id/attachment-id",
+    original_filename: "document.pdf",
+    position: 0,
+    post_id: "post-id",
+    ready_at: "2026-08-13T00:00:00Z",
+    size_bytes: 10,
+    status: "ready",
+    storage_bucket: "post-attachments",
+    width: null,
+    signedUrl: "https://example.com/file",
+    ...overrides,
+  };
+}
+
+describe("splitPostAttachments", () => {
+  it("treats normalized WebP as images and everything else as files", () => {
+    const { images, files } = splitPostAttachments([
+      attachment({
+        attachment_id: "photo",
+        mime_type: "image/webp",
+        original_filename: "photo.webp",
+      }),
+      attachment({ attachment_id: "doc" }),
+    ]);
+
+    expect(images.map((item) => item.attachment_id)).toEqual(["photo"]);
+    expect(files.map((item) => item.attachment_id)).toEqual(["doc"]);
   });
 });

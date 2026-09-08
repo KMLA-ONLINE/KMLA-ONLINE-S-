@@ -82,8 +82,6 @@ export type FeedPostDetail =
       post: GroupPostDetail;
       comments: PostCommentPage;
       slug: string;
-      groupName: string;
-      groupId: string;
       identities: PostIdentity[];
     }
   | {

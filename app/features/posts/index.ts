@@ -1,16 +1,17 @@
-export { CategoryManager } from "~/features/posts/components/category-manager";
-export { CommentComposer } from "~/features/posts/components/comment-composer";
-export type { CommentViewer } from "~/features/posts/components/comment-composer";
-export { CommentItem } from "~/features/posts/components/comment-item";
-export { CommentText } from "~/features/posts/components/comment-text";
-export { CommentThread } from "~/features/posts/components/comment-thread";
-export { GroupPostOverlay } from "~/features/posts/components/group-post-overlay";
-export { GroupPostSearchDialog } from "~/features/posts/components/group-post-search-dialog";
-export { GroupPostsPanel } from "~/features/posts/components/group-posts-panel";
+export { GroupCategoryManager } from "~/features/posts/components/group/group-category-manager";
+export { CommentComposer } from "~/features/posts/components/comment/comment-composer";
+export type { CommentViewer } from "~/features/posts/components/comment/comment-composer";
+export { CommentItem } from "~/features/posts/components/comment/comment-item";
+export { CommentText } from "~/features/posts/components/comment/comment-text";
+export { CommentThread } from "~/features/posts/components/comment/comment-thread";
+export { GroupPostDetail } from "~/features/posts/components/group/group-post-detail";
+export { GroupPostEditor } from "~/features/posts/components/group/group-post-editor";
+export { GroupPostSearchDialog } from "~/features/posts/components/group/group-post-search-dialog";
+export { GroupPostsPanel } from "~/features/posts/components/group/group-posts-panel";
 export { PostWriteRow } from "~/features/posts/components/post-write-row";
-export { ProfilePostDetail } from "~/features/posts/components/profile-post-detail";
-export { ProfilePostEditor } from "~/features/posts/components/profile-post-editor";
-export { ProfilePostsPanel } from "~/features/posts/components/profile-posts-panel";
+export { ProfilePostDetail } from "~/features/posts/components/profile/profile-post-detail";
+export { ProfilePostEditor } from "~/features/posts/components/profile/profile-post-editor";
+export { ProfilePostsPanel } from "~/features/posts/components/profile/profile-posts-panel";
 export { usePostComments } from "~/features/posts/hooks/use-post-comments";
 export { usePostViewMode } from "~/features/posts/hooks/use-post-view-mode";
 export { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
@@ -99,7 +100,6 @@ export type {
   CommentImageInput,
   GroupCategory,
   GroupPost,
-  GroupPostDetail,
   GroupPostPage,
   GroupPostSearchResult,
   PostComment,

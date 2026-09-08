@@ -3,9 +3,9 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 
-import { PostReactionButton } from "~/features/posts/components/post-reaction-button";
-import { ReactionEmoji } from "~/features/posts/components/reaction-emoji";
-import { ReactionListDialog } from "~/features/posts/components/reaction-list-dialog";
+import { PostReactionButton } from "~/features/posts/components/reaction/post-reaction-button";
+import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
+import { ReactionListDialog } from "~/features/posts/components/reaction/reaction-list-dialog";
 import { usePostReaction } from "~/features/posts/hooks/use-post-reaction";
 import type { ReactionSummary } from "~/features/posts/model/types";
 import { cn } from "~/shared/lib/utils";

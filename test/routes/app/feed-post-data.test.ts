@@ -65,7 +65,6 @@ describe("feed post detail loader", () => {
       detail: {
         kind: "group",
         slug: "notice",
-        groupName: "공지사항",
         identities: ["identified"],
       },
       error: null,

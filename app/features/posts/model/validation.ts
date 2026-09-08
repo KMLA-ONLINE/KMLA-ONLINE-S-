@@ -117,3 +117,54 @@ export function validateSelectedFiles(
 export function hasPostFormErrors(errors: PostFormErrors): boolean {
   return Object.keys(errors).length > 0;
 }
+
+/**
+ * 익명·운영진 명의는 한 번 더 확인을 받는다. 실명과 달리 되돌릴 수 없는 선택이라서다.
+ */
+export function needsPostIdentityConfirmation(identity: PostIdentity): boolean {
+  return identity === "staff" || identity === "anonymous";
+}
+
+export function isPostDraftDirty({
+  mode: _mode,
+  initial,
+  title,
+  body,
+  categoryId,
+  authorIdentity,
+  attachmentsChanged,
+}: {
+  mode: "create" | "edit";
+  initial: PostFormValues;
+  title: string;
+  body: string;
+  categoryId: string;
+  authorIdentity: PostIdentity;
+  attachmentsChanged: boolean;
+}): boolean {
+  return (
+    title !== initial.title ||
+    body !== initial.body ||
+    categoryId !== initial.categoryId ||
+    authorIdentity !== initial.authorIdentity ||
+    attachmentsChanged
+  );
+}
+
+export function isProfilePostDraftDirty({
+  initial,
+  body,
+  visibility,
+  attachmentsChanged,
+}: {
+  initial: ProfilePostFormValues;
+  body: string;
+  visibility: PostVisibility;
+  attachmentsChanged: boolean;
+}): boolean {
+  return (
+    body !== initial.body ||
+    visibility !== initial.visibility ||
+    attachmentsChanged
+  );
+}

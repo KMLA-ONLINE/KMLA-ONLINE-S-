@@ -15,9 +15,9 @@ import { useSearchParams } from "react-router";
 import {
   CommentComposer,
   type CommentViewer,
-} from "~/features/posts/components/comment-composer";
-import { CommentThread } from "~/features/posts/components/comment-thread";
-import { commentDomId } from "~/features/posts/components/comment-item";
+} from "~/features/posts/components/comment/comment-composer";
+import { CommentThread } from "~/features/posts/components/comment/comment-thread";
+import { commentDomId } from "~/features/posts/components/comment/comment-item";
 import { PostActionBar } from "~/features/posts/components/post-action-bar";
 import { useKeyboardViewport } from "~/features/posts/hooks/use-keyboard-viewport";
 import { usePostComments } from "~/features/posts/hooks/use-post-comments";

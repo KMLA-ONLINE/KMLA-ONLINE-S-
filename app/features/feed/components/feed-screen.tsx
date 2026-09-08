@@ -14,7 +14,7 @@ import type {
   FeedPostDetailResult,
 } from "~/features/feed/model/types";
 import {
-  GroupPostOverlay,
+  GroupPostDetail,
   ProfilePostDetail,
   usePostViewMode,
   useVisitedPosts,
@@ -205,11 +205,8 @@ export function FeedScreen() {
       <div ref={sentinelRef} className="h-px" aria-hidden="true" />
 
       {detail?.kind === "group" ? (
-        <GroupPostOverlay
-          mode="detail"
+        <GroupPostDetail
           slug={detail.slug}
-          groupName={detail.groupName}
-          groupId={detail.groupId}
           post={detail.post}
           identities={detail.identities}
           comments={detail.comments}
