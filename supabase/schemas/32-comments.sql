@@ -85,8 +85,14 @@ CREATE OR REPLACE FUNCTION "private"."sync_comment_mentions"("p_comment_id" "uui
 declare
   post_record public.posts;
   ordinals smallint[] := private.parse_mention_ordinals(p_body);
+  already_mentioned bigint[];
   resolved_count integer;
 begin
+  select coalesce(array_agg(mention.profile_id), '{}'::bigint[])
+  into already_mentioned
+  from public.comment_mentions as mention
+  where mention.comment_id = p_comment_id;
+
   delete from public.comment_mentions where comment_id = p_comment_id;
   if coalesce(array_length(ordinals, 1), 0) = 0 then
     return;
@@ -107,6 +113,10 @@ begin
     raise exception 'a comment can mention at most 10 members' using errcode = '22023';
   end if;
 
+  -- 이미 불린 사람은 멤버십을 다시 묻지 않는다. 다시 물으면 멘션된 멤버가 그룹을 나간 뒤로는
+  -- 제목 오타 하나 고치려 해도 저장이 막히고, 작성자가 본문에서 그 토큰을 손으로 찾아 지우는
+  -- 수밖에 없다. 이미 나간 시점의 알림은 이미 갔고 칩은 프로필로 남는다 -- 새로 부르는
+  -- 사람에게만 멤버십을 요구하면 충분하다.
   insert into public.comment_mentions (comment_id, ordinal, profile_id)
   select p_comment_id, entry.ordinal, profile.id
   from unnest(ordinals) as entry(ordinal)
@@ -114,9 +124,13 @@ begin
     on lower(profile.pub_id) = lower(btrim(coalesce(p_mention_pub_ids[entry.ordinal], '')))
     and profile.status = 'accepted'
     and profile.deleted_at is null
-  join public.group_memberships as membership
-    on membership.group_id = post_record.group_id
-    and membership.profile_id = profile.id;
+  where profile.id = any(already_mentioned)
+    or exists (
+      select 1
+      from public.group_memberships as membership
+      where membership.group_id = post_record.group_id
+        and membership.profile_id = profile.id
+    );
   get diagnostics resolved_count = row_count;
 
   if resolved_count <> array_length(ordinals, 1) then

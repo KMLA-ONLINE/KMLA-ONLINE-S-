@@ -1,4 +1,4 @@
-import type { ComponentPropsWithoutRef } from "react";
+import { Children, type ComponentPropsWithoutRef, type ReactNode } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -22,6 +22,19 @@ const allowedElements = ["p", "br", "strong", "em", "del", "h2", "h3", "a"];
 function transformUrl(url: string): string {
   if (isMentionHref(url)) return url;
   return defaultUrlTransform(url);
+}
+
+/**
+ * 대상을 못 찾았을 때 그릴 이름.
+ *
+ * 링크의 안쪽은 보통 문자열 하나지만, 이름에 Markdown 문자가 섞이면 중첩 노드가 된다. 그때
+ * 빈 문자열로 떨어뜨리면 `@`만 남으므로 텍스트를 모아 쓴다.
+ */
+function mentionFallbackLabel(label: ReactNode): string {
+  const text = Children.toArray(label)
+    .map((child) => (typeof child === "string" ? child : ""))
+    .join("");
+  return text.replace(/^@/, "");
 }
 
 function Paragraph({
@@ -54,9 +67,7 @@ export function PostMarkdown({
       return (
         <MentionChip
           mention={byOrdinal.get(ordinal) ?? null}
-          fallbackLabel={
-            typeof label === "string" ? label.replace(/^@/, "") : ""
-          }
+          fallbackLabel={mentionFallbackLabel(label)}
         />
       );
     }

@@ -6,13 +6,16 @@ import {
   extractPostPlainText,
 } from "~/features/posts/model/markdown";
 import {
+  MENTION_LIMIT,
   buildMentionToken,
   countMentionTargets,
   mentionOrdinalFromHref,
+  mentionTokenPattern,
   normalizeMentions,
   parseMentions,
   sanitizeMentionLabel,
   toMentionDraft,
+  validateMentionCount,
   type MentionDraftEntry,
 } from "~/features/posts/model/mentions";
 
@@ -56,6 +59,26 @@ describe("mention token", () => {
   it("drops characters that would break the token grammar", () => {
     expect(sanitizeMentionLabel("홍]길[동\\")).toBe("홍길동");
     expect(buildMentionToken("홍]길동", 3)).toBe("[@홍길동](m:3)");
+  });
+
+  it("drops markdown characters that would nest the link label", () => {
+    // 남겨 두면 링크의 안쪽이 문자열이 아니라 중첩 노드가 되고, 대상을 못 찾았을 때의 폴백
+    // 라벨이 비어 `@`만 남는다.
+    expect(sanitizeMentionLabel("*굵은*_이름_`코드`")).toBe("굵은이름코드");
+  });
+
+  it("uses one grammar for the whole client", () => {
+    // 서버(`private.parse_mention_ordinals`)와 글자 그대로 같아야 한다. 한쪽만 알아보는 토큰이
+    // 생기면 화면에 없는 멘션이 알림을 보내거나 저장이 통째로 막힌다.
+    expect(mentionTokenPattern().source).toBe(
+      String.raw`\[@([^\]\n]*)\]\(m:([0-9]{1,2})\)`,
+    );
+    // `g` 플래그는 `lastIndex`를 들고 다닌다. 매번 새 객체여야 호출 사이에 상태가 새지 않는다.
+    expect(mentionTokenPattern()).not.toBe(mentionTokenPattern());
+  });
+
+  it("rejects a label whose text spans a newline, exactly as the server does", () => {
+    expect("[@ab\ncd](m:1)".match(mentionTokenPattern())).toBeNull();
   });
 
   it("recognises only mention hrefs", () => {
@@ -102,6 +125,39 @@ describe("normalizeMentions", () => {
 
     expect(result.body).toBe("@아무개 님");
     expect(result.pubIds).toEqual([]);
+  });
+});
+
+describe("validateMentionCount", () => {
+  const many: MentionDraftEntry[] = Array.from(
+    { length: MENTION_LIMIT + 1 },
+    (_unused, index) => ({
+      ordinal: index + 1,
+      pubId: `member-${index}`,
+      name: `멤버${index}`,
+    }),
+  );
+
+  it("accepts a body at the limit", () => {
+    const body = many
+      .slice(0, MENTION_LIMIT)
+      .map((entry) => buildMentionToken(entry.name, entry.ordinal))
+      .join(" ");
+
+    expect(countMentionTargets(body, many)).toBe(MENTION_LIMIT);
+    expect(validateMentionCount(body, many)).toBeNull();
+  });
+
+  it("names the limit when the body goes past it", () => {
+    // 모바일 본문은 Markdown 원문을 그대로 편집하므로 버튼을 거치지 않고 토큰을 붙여넣을 수
+    // 있다. 서버가 잡기 전에 입력창 옆에서 알린다.
+    const body = many
+      .map((entry) => buildMentionToken(entry.name, entry.ordinal))
+      .join(" ");
+
+    expect(validateMentionCount(body, many)).toBe(
+      "멘션은 10명까지 할 수 있습니다.",
+    );
   });
 });
 

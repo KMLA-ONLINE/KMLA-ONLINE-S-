@@ -1,4 +1,5 @@
 import { isSafePostLink } from "~/features/posts/model/markdown";
+import { mentionTokenPattern } from "~/features/posts/model/mentions";
 
 /** 기능 명세 §9.1. 게시물 본문과 달리 댓글은 Markdown이 아니라 Unicode 평문이다. */
 export const COMMENT_MAX_LENGTH = 5000;
@@ -62,12 +63,6 @@ export function validateCommentBody(
 const URL_PATTERN = /https?:\/\/[^\s]+/gi;
 
 /**
- * 멘션 토큰. 게시물 본문과 같은 문법을 쓰지만(`model/mentions.ts`) 댓글은 Markdown 을 해석하지
- * 않으므로 링크가 아니라 이 한 가지 모양만 따로 알아본다.
- */
-const MENTION_PATTERN = /\[@([^\]\n]*)\]\(m:([0-9]{1,2})\)/g;
-
-/**
  * URL 뒤에 따라붙은 문장 부호는 링크에서 뗀다. "자세히는 https://example.com/a. 여기서"의
  * 마침표까지 링크에 넣으면 눌렀을 때 다른 주소로 간다.
  */
@@ -111,9 +106,11 @@ export function parseCommentText(value: string): CommentSegment[] {
       trailing?: string;
     }[] = [];
 
-    MENTION_PATTERN.lastIndex = 0;
+    // 게시물 본문과 같은 문법을 쓴다. 댓글은 Markdown 을 해석하지 않으므로 링크가 아니라
+    // 이 한 가지 모양만 따로 알아본다.
+    const mentionPattern = mentionTokenPattern();
     let mention: RegExpExecArray | null;
-    while ((mention = MENTION_PATTERN.exec(line)) !== null) {
+    while ((mention = mentionPattern.exec(line)) !== null) {
       found.push({
         index: mention.index,
         length: mention[0].length,

@@ -32,8 +32,17 @@ export interface MentionCandidate {
   avatar_path: string | null;
 }
 
-/** 서버의 `private.parse_mention_ordinals`와 같은 문법을 본다. 양쪽이 어긋나면 안 된다. */
-const MENTION_TOKEN = /\[@([^\]\n]*)\]\(m:([0-9]{1,2})\)/g;
+/**
+ * 멘션 토큰 문법. 서버의 `private.parse_mention_ordinals`와 **글자 그대로 같아야 한다** --
+ * 한쪽만 알아보는 토큰이 생기면 화면에 없는 멘션이 알림을 보내거나, 짝을 못 찾은 ordinal 때문에
+ * 저장이 통째로 막힌다.
+ *
+ * 새로 만들지 말고 이것을 쓰라고 내보낸다. `g` 플래그가 붙은 정규식은 `lastIndex`를 들고
+ * 다니므로, 쓰는 쪽은 매번 새 것을 받아야 한다.
+ */
+export function mentionTokenPattern(): RegExp {
+  return /\[@([^\]\n]*)\]\(m:([0-9]{1,2})\)/g;
+}
 
 const MENTION_HREF = /^m:([0-9]{1,2})$/;
 
@@ -42,7 +51,10 @@ const MENTION_HREF = /^m:([0-9]{1,2})$/;
  * 들어오면 토큰 문법이 깨져 서버 정규식이 그 멘션을 못 보므로 미리 덜어낸다.
  */
 export function sanitizeMentionLabel(name: string): string {
-  return name.replace(/[[\]\\\r\n]/g, "").trim();
+  // `[` `]` `\`는 토큰 문법을 깨서 서버가 그 멘션을 못 보게 만든다. `*` `_` 백틱은 문법을
+  // 깨지는 않지만 링크의 안쪽 텍스트를 중첩 노드로 만들어, 대상을 못 찾았을 때의 폴백 라벨이
+  // 문자열이 아니게 된다 -- 그러면 이름 없이 `@`만 남는다.
+  return name.replace(/[[\]\\*_`\r\n]/g, "").trim();
 }
 
 export function buildMentionToken(name: string, ordinal: number): string {
@@ -92,7 +104,7 @@ export function normalizeMentions(
   const pubIds: string[] = [];
 
   const nextBody = body.replace(
-    MENTION_TOKEN,
+    mentionTokenPattern(),
     (_token, label: string, rawOrdinal: string) => {
       const entry = byOrdinal.get(Number(rawOrdinal));
       // 편집기가 모르는 토큰은 사용자가 직접 친 것이다. 부를 사람을 지어내지 않고 평범한
@@ -119,6 +131,20 @@ export function countMentionTargets(
   entries: MentionDraftEntry[],
 ): number {
   return normalizeMentions(body, entries).pubIds.length;
+}
+
+/**
+ * 상한을 넘었으면 사용자에게 보여줄 이유, 아니면 `null`.
+ *
+ * 실제 경계는 서버에 있지만(§8.14) 모바일 본문은 Markdown 원문을 그대로 편집하므로 버튼을
+ * 거치지 않고 토큰을 붙여넣을 수 있다. 그때 일반 RPC 오류가 아니라 입력창 옆 문구로 알린다.
+ */
+export function validateMentionCount(
+  body: string,
+  entries: MentionDraftEntry[],
+): string | null {
+  if (countMentionTargets(body, entries) <= MENTION_LIMIT) return null;
+  return `멘션은 ${MENTION_LIMIT}명까지 할 수 있습니다.`;
 }
 
 /**

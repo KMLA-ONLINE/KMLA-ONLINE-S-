@@ -17,6 +17,7 @@ import {
 } from "~/features/posts/hooks/use-mention-draft";
 import {
   buildMentionToken,
+  validateMentionCount,
   type MentionDraftEntry,
   type PostMention,
 } from "~/features/posts/model/mentions";
@@ -234,7 +235,9 @@ export function CommentComposer({
 
   const send = () => {
     if (pending || processingImage) return;
-    const reason = validateCommentBody(draft, image !== null);
+    const reason =
+      validateCommentBody(draft, image !== null) ??
+      validateMentionCount(draft, mentionDraft.entries);
     if (reason) return setLocalError(reason);
     setLocalError(null);
     const body = normalizeCommentBody(draft);

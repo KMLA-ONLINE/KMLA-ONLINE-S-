@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(61);
+select plan(65);
 
 -- 멘션 대상의 정본은 `public.post_mentions` / `public.comment_mentions`이고 본문에는 ordinal
 -- 토큰만 남는다(기능 명세 §8.14). 이 파일은 그 둘이 어긋날 수 있는 자리를 전부 밟는다.
@@ -539,6 +539,59 @@ select throws_ok(
   $$select * from public.search_group_mention_candidates(
       '20000000-0000-0000-0000-000000000002')$$,
   '42501', null, 'anonymous visitors cannot use the mention picker'
+);
+reset role;
+
+-- ------------------------------------------------- 나간 멤버의 멘션은 글을 잠그지 않는다
+-- 편집마다 본문의 모든 토큰에 멤버십을 다시 물으면, 멘션된 멤버가 그룹을 나간 뒤로 그 글이
+-- 영구히 저장 불가가 된다 -- 제목 오타 하나도 못 고치고 작성자가 본문에서 토큰을 손으로 찾아
+-- 지워야 한다. 이 묶음은 그 자리를 지킨다. 후보 검색 단언이 멤버 목록에 걸려 있으므로 멤버십을
+-- 건드리는 이 검사를 맨 뒤에 둔다.
+reset role;
+delete from public.group_memberships
+where group_id = '20000000-0000-0000-0000-000000000002' and profile_id = 5;
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select lives_ok(
+  $$select public.commit_group_post(
+      (select id from public.posts where title = '발표 안내'),
+      '발표 안내', '[@이한별](m:1) 님과 [@박새벽](m:2) 님 확인 바랍니다',
+      null, false, null, array['hanbyeol-25', 'saebyeok-24']
+    )$$,
+  'a post still saves after a mentioned member leaves the group'
+);
+reset role;
+select is(
+  (select count(*)::integer from public.post_mentions as mention
+   join public.posts as post on post.id = mention.post_id
+   where post.title = '발표 안내'),
+  2,
+  'the mention of the member who left is kept rather than dropped'
+);
+
+-- 새로 부르는 사람에게는 여전히 멤버십을 요구한다. 관대해진 것은 이미 불린 사람뿐이다.
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select throws_ok(
+  $$select public.commit_group_post(
+      (select id from public.posts where title = '발표 안내'),
+      '발표 안내', '[@김민준](m:1) 님', null, false, null, array['032a49d61456']
+    )$$,
+  '22023', 'every mention must name a current group member',
+  'a brand-new mention still requires current membership'
+);
+reset role;
+
+-- 댓글도 같은 규칙이다.
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select lives_ok(
+  $$select public.update_post_comment(
+      (select id from mention_test_ids where name = 'reply'),
+      '[@이한별](m:1) 님 답합니다 (수정)', null, false, array['hanbyeol-25']
+    )$$,
+  'a comment still saves when its mention target is still a member'
 );
 reset role;
 
