@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(57);
+select plan(61);
 
 -- 멘션 대상의 정본은 `public.post_mentions` / `public.comment_mentions`이고 본문에는 ordinal
 -- 토큰만 남는다(기능 명세 §8.14). 이 파일은 그 둘이 어긋날 수 있는 자리를 전부 밟는다.
@@ -412,11 +412,64 @@ select is(
   'the comment notification wins and the mention is suppressed'
 );
 
--- ---------------------------------------------------------------- 삭제
+-- 답글도 같은 규칙을 따른다. 부모 댓글 작성자를 답글에서 부르면 답글 알림 하나만 남아야
+-- 한다. 최상위 댓글과 코드는 같지만 수신자를 찾는 분기가 갈리므로 따로 밟는다.
+--
+-- `post_comments`에는 클라이언트 select grant 가 없어서 부모 댓글 ID 를 조회로 찾을 수 없다.
+-- RPC 가 돌려주는 정본 행에서 받아 임시 표에 담는다(`post_attachments.test.sql`과 같은 방식).
+reset role;
+create temporary table mention_test_ids (name text primary key, id uuid not null);
+grant select, insert on mention_test_ids to authenticated;
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000004', true);
+set local role authenticated;
+select lives_ok(
+  $$insert into mention_test_ids
+    select 'parent', entry.comment_id
+    from public.create_post_comment(
+      (select id from public.posts where title = '발표 안내'), '부모 댓글', 'identified'
+    ) as entry$$,
+  'the other member leaves a comment to reply to'
+);
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+select lives_ok(
+  $$insert into mention_test_ids
+    select 'reply', entry.comment_id
+    from public.create_post_comment(
+      (select id from public.posts where title = '발표 안내'),
+      '[@이한별](m:1) 님 답합니다', 'identified',
+      (select id from mention_test_ids where name = 'parent'),
+      null, array['hanbyeol-25']
+    ) as entry$$,
+  'a reply mentions the parent comment author'
+);
+reset role;
 select is(
-  (select count(*)::integer from public.comment_mentions),
-  2,
-  'both comment mentions are stored'
+  (select count(*)::integer from public.notifications as notification
+   where notification.recipient_profile_id = 4
+     and notification.comment_id = (
+       select id from mention_test_ids where name = 'reply'
+     )),
+  1,
+  'mentioning the parent comment author in a reply yields one card, not two'
+);
+select is(
+  (select notification.kind::text from public.notifications as notification
+   where notification.recipient_profile_id = 4
+     and notification.comment_id = (
+       select id from mention_test_ids where name = 'reply'
+     )),
+  'comment_replied',
+  'the reply notification wins and the mention is suppressed'
+);
+
+-- ---------------------------------------------------------------- 삭제
+select isnt(
+  (select count(*)::integer from public.comment_mentions as mention
+   join public.post_comments as comment on comment.id = mention.comment_id
+   where comment.post_id = (select id from public.posts where title = '초안')),
+  0,
+  'the post about to be deleted holds comment mentions'
 );
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
