@@ -35,6 +35,14 @@ function renderEditor(
 }
 
 describe("PostAttachmentEditor", () => {
+  it("does not shrink and clip a long attachment list", () => {
+    renderEditor();
+
+    expect(screen.getByRole("region", { name: "첨부 파일" })).toHaveClass(
+      "shrink-0",
+    );
+  });
+
   it("keeps the empty mobile state to compact icon actions", () => {
     renderEditor({ additions: [], order: [] });
 

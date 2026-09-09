@@ -97,7 +97,7 @@ export function PostAttachmentEditor({
   return (
     <section
       className={cn(
-        "mt-6 overflow-hidden rounded-2xl border bg-card",
+        "mt-6 shrink-0 overflow-hidden rounded-2xl border bg-card",
         isDragging && "border-primary ring-4 ring-primary/10",
       )}
       aria-label="첨부 파일"

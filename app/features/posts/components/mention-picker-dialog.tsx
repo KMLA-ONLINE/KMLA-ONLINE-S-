@@ -20,7 +20,7 @@ import { Spinner } from "~/shared/ui/spinner";
 
 /** 검색 dialog(`group/group-post-search-dialog.tsx`)와 같은 껍데기 규칙을 쓴다. */
 const PICKER_DIALOG_CLASS =
-  "flex h-[70svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-md";
+  "flex h-[70svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-md [&_[data-slot=dialog-close]]:top-2";
 
 /** 기수가 없는 선생님은 화면에서도 `선생님`으로 부른다. 검색도 그 말로 걸린다. */
 function candidateLabel(candidate: MentionCandidate): string {
@@ -98,11 +98,11 @@ export function MentionPickerDialog({
       <DialogContent className={PICKER_DIALOG_CLASS}>
         <DialogHeader className="border-b p-4">
           <DialogTitle>멘션할 멤버</DialogTitle>
-          <DialogDescription>
-            {remaining > 0
-              ? `이름, 기수로 검색 / ${remaining}명 가능`
-              : `한 게시물에 최대 ${MENTION_LIMIT}명까지 부를 수 있습니다.`}
-          </DialogDescription>
+          {remaining <= 0 ? (
+            <DialogDescription>
+              한 게시물에 최대 {MENTION_LIMIT}명까지 부를 수 있습니다.
+            </DialogDescription>
+          ) : null}
         </DialogHeader>
 
         <form className="border-b p-3" onSubmit={submit}>

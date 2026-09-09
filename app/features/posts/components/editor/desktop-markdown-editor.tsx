@@ -108,8 +108,6 @@ const imeSafeShortcuts = $prose(
         handleKeyDown(view, event) {
           if (event.isComposing || view.composing || event.keyCode === 229)
             return false;
-          if (!window.matchMedia("(min-width: 768px)").matches) return false;
-
           const mod = event.ctrlKey || event.metaKey;
           if (!mod || event.altKey) return false;
           const key = event.key.toLowerCase();
@@ -295,7 +293,7 @@ function EditorSurface({
   return (
     <div
       className={cn(
-        "flex min-h-72 flex-col overflow-hidden rounded-md border bg-background md:h-auto md:min-h-0",
+        "flex h-[clamp(18rem,50dvh,32rem)] flex-none flex-col overflow-hidden rounded-md border bg-background md:h-auto",
         className,
       )}
     >
@@ -311,7 +309,7 @@ function EditorSurface({
         적용한다.
       */}
       <div
-        className="hidden flex-wrap gap-1 border-b bg-muted/50 p-1 md:flex"
+        className="flex shrink-0 flex-nowrap gap-1 overflow-x-auto border-b bg-muted/50 p-1"
         role="toolbar"
         aria-label="본문 서식"
       >
@@ -326,8 +324,14 @@ function EditorSurface({
           </Tool>
         ))}
       </div>
+      {/*
+        본문 영역의 높이는 편집기가 스스로 정한다. 모바일은 바깥 상자의 `clamp` 높이를 flex로
+        나눠 갖고, 데스크톱은 내용을 따라 자라다 상한에서 멈춘다. 데스크톱을 예전처럼 고정
+        높이로 두면 짧은 글에도 열 줄짜리 창 안에서 글을 쓰게 되고, 페이지 스크롤 안에 편집기
+        스크롤이 하나 더 생긴다. 반대로 상한을 없애면 긴 글에서 첨부 영역이 화면 밖으로 밀린다.
+      */}
       <div
-        className="post-typography min-h-72 flex-1 overflow-y-auto md:h-72 md:min-h-0 md:flex-none"
+        className="post-typography flex min-h-0 flex-1 flex-col overflow-y-auto md:h-auto md:max-h-[min(60dvh,40rem)] md:min-h-72 md:flex-none"
         role="presentation"
         onClick={(event) => {
           if (!(event.ctrlKey || event.metaKey)) return;
