@@ -95,6 +95,18 @@ const { count, size, warnings } = await generateSW({
       handler: "CacheFirst",
       options: {
         cacheName: STORAGE_MEDIA_CACHE,
+        // `ExpirationPlugin`을 쓰지 않는다. 그 플러그인은 타임스탬프를 `request.url`로
+        // 기록하고 만료시킬 때 `cache.delete(request.url)`을 부르는데, 우리 캐시 키는
+        // 토큰을 뗀 URL이라 **둘이 영영 만나지 않는다.** 그대로 두면 `maxEntries`도
+        // `maxAgeSeconds`도 한 건도 지우지 못하고, 캐시는 origin 용량 상한까지 자란다.
+        // (덤으로 그 플러그인은 토큰이 붙은 URL을 IndexedDB에 남긴다.)
+        //
+        // 그래서 상한은 같은 키로 직접 건다. `cache.keys()`는 넣은 순서대로 돌려주므로
+        // 가장 오래 전에 넣은 것부터 버린다. LRU는 아니지만, 경로가 불변이라 잘못 버려도
+        // 다음에 다시 받는 것뿐이고 추가 장부가 필요 없다.
+        //
+        // 150이라는 수는 용량으로 환산한 값이다. 첨부 사진은 아직 원본(긴 변 3072px)
+        // 그대로라 장당 수백 kB이므로 최악의 경우 100 MB 근처다. 썸네일이 생기면 올린다.
         plugins: [
           {
             cacheKeyWillBeUsed: async ({ request }) => {
@@ -102,17 +114,21 @@ const { count, size, warnings } = await generateSW({
               url.search = "";
               return url.href;
             },
+            cacheDidUpdate: async ({ cacheName }) => {
+              // 이 함수 본문은 여기서 실행되지 않는다. workbox-build가 문자열로 굳혀
+              // sw.js에 넣으므로 `caches`는 Service Worker 전역이다. 이 파일의 나머지는
+              // Node라서 ESLint가 `globals.node`로 본다.
+              // eslint-disable-next-line no-undef
+              const cache = await caches.open(cacheName);
+              const keys = await cache.keys();
+              const overflow = keys.length - 150;
+
+              for (let index = 0; index < overflow; index += 1) {
+                await cache.delete(keys[index]);
+              }
+            },
           },
         ],
-        // 항목 수는 용량으로 환산해서 잡는다. 첨부 사진은 아직 원본(긴 변 3072px)
-        // 그대로라 장당 수백 kB이므로, 150개면 최악의 경우 100 MB 근처다. 더 키우면
-        // iOS의 origin 용량 상한에 먼저 부딪히고, 그때 `purgeOnQuotaError`가 캐시를
-        // 통째로 비워 오히려 다시 받게 된다. 썸네일이 생기면 그때 올린다.
-        expiration: {
-          maxEntries: 150,
-          maxAgeSeconds: 60 * 60 * 24 * 30,
-          purgeOnQuotaError: true,
-        },
         // 폰트와 달리 `0`(opaque)을 받지 않는다. opaque 응답은 성공과 403을 구분할 수
         // 없어서, 만료된 토큰으로 한 번 실패한 이미지가 30일 동안 깨진 채로 굳는다.
         // Storage가 `Access-Control-Allow-Origin: *`를 주므로 이미지에 `crossOrigin`을

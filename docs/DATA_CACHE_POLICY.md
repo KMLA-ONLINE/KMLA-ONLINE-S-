@@ -20,6 +20,10 @@
   - 저장소의 주인이 바뀌면 `localStorage` 계정 키와 **같은 시점에** 캐시를 통째로 지운다.
     로그아웃뿐 아니라 "로그아웃하지 않고 탭만 닫은 뒤 다른 사람이 로그인"도 §7의 주인 판정이
     함께 덮는다.
+  - 캐시 키를 다시 쓰면 `ExpirationPlugin`을 함께 쓸 수 없다. 그 플러그인은 타임스탬프를
+    `request.url`로 적고 만료시킬 때 `cache.delete(request.url)`을 부르는데, 키가 토큰을
+    뗀 URL이라 둘이 만나지 않아 `maxEntries`도 `maxAgeSeconds`도 한 건도 지우지 못한다.
+    상한은 같은 키로 직접 건다(`cacheDidUpdate`에서 `cache.keys()` 순서대로 잘라낸다).
   - opaque 응답(`status: 0`)은 캐시하지 않는다. 성공과 403을 구분할 수 없어 만료된 토큰으로
     한 번 실패한 이미지가 깨진 채로 굳는다. Storage가 `Access-Control-Allow-Origin: *`를
     주므로 `<img crossOrigin="anonymous">`로 받아 200만 저장한다.
