@@ -1,3 +1,4 @@
+import type { MentionDraftEntry } from "~/features/posts/model/mentions";
 import { MoreHorizontalIcon } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
@@ -58,6 +59,7 @@ export function CommentItem({
   onReact,
   onJumpToParent,
   onEdit,
+  mentionGroupId,
   onDelete,
 }: {
   comment: PostComment;
@@ -74,7 +76,13 @@ export function CommentItem({
   onReact: (next: PostReaction | null) => void;
   onJumpToParent?: () => void;
   /** 성공하면 정본 행을 돌려준다. falsy면 수정 입력창을 열어 둔다. */
-  onEdit: (body: string, image?: CommentImageInput) => void | Promise<unknown>;
+  onEdit: (
+    body: string,
+    image?: CommentImageInput,
+    mentions?: MentionDraftEntry[],
+  ) => void | Promise<unknown>;
+  /** 멘션할 수 있는 그룹. 개인 게시물의 댓글에는 넘기지 않는다(기능 명세 §8.14). */
+  mentionGroupId?: string | null;
   onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -129,14 +137,16 @@ export function CommentItem({
         identity={comment.author_identity}
         initialValue={comment.body}
         initialImage={comment.images[0]}
+        initialMentions={comment.mentions}
+        mentionGroupId={mentionGroupId}
         submitLabel="댓글 수정"
         pending={pending}
         onCancel={() => setEditing(false)}
-        onSubmit={async (body, image) => {
+        onSubmit={async (body, image, mentions) => {
           // 저장에 성공했을 때만 닫는다. 먼저 닫으면 실패한 수정본이 입력창과 함께 사라진다.
           const updated = await (image === undefined
-            ? onEdit(body)
-            : onEdit(body, image));
+            ? onEdit(body, undefined, mentions)
+            : onEdit(body, image, mentions));
           if (updated) setEditing(false);
           return updated;
         }}
@@ -233,7 +243,9 @@ export function CommentItem({
                   </button>
                 ) : null}
                 <span className={cn(isEffectiveFeedBump && "text-primary")}>
-                  <CommentText>{comment.body}</CommentText>
+                  <CommentText mentions={comment.mentions}>
+                    {comment.body}
+                  </CommentText>
                 </span>
               </p>
             ) : null}

@@ -226,7 +226,7 @@ describe("CommentItem", () => {
     await user.type(editor, "  고친 본문  ");
     await user.click(screen.getByRole("button", { name: "댓글 수정" }));
 
-    expect(onEdit).toHaveBeenCalledWith("고친 본문");
+    expect(onEdit).toHaveBeenCalledWith("고친 본문", undefined, []);
   });
 
   it("leaves the comment untouched when the edit is reverted", async () => {
@@ -274,7 +274,7 @@ describe("CommentItem", () => {
     await user.click(screen.getByRole("button", { name: "댓글 이미지 제거" }));
     await user.click(screen.getByRole("button", { name: "댓글 수정" }));
 
-    expect(onEdit).toHaveBeenCalledWith("사진 댓글", null);
+    expect(onEdit).toHaveBeenCalledWith("사진 댓글", null, []);
   });
 
   it("confirms before deleting and warns when replies go with it", async () => {

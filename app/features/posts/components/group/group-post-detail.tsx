@@ -71,6 +71,7 @@ export function GroupPostDetail({
       viewer={viewer}
       identities={identities}
       postAuthorPubId={post.author_pub_id}
+      mentionGroupId={post.group_id}
       error={fetcher.data?.error}
       anonymousActivityRestriction={anonymousActivityRestriction}
       onClose={close}
@@ -187,7 +188,7 @@ export function GroupPostDetail({
 
         <div>
           <h2 className="mb-2 text-xl font-semibold">{post.title}</h2>
-          <PostMarkdown>{post.body}</PostMarkdown>
+          <PostMarkdown mentions={post.mentions}>{post.body}</PostMarkdown>
         </div>
 
         <PostImageGrid images={images} className="overflow-hidden rounded-lg" />

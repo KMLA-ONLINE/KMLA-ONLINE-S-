@@ -164,8 +164,9 @@ select ok(
   'anonymous author still receives self-only controls'
 );
 select lives_ok(
-  $$select public.update_group_post(
-      (select id from public.posts where title = '익명 글'), '수정된 익명 글', '수정 본문', null
+  $$select public.commit_group_post(
+      (select id from public.posts where title = '익명 글'), '수정된 익명 글', '수정 본문',
+      null, false, null
     )$$,
   'author can update title and body without changing identity'
 );

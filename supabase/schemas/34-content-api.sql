@@ -43,7 +43,7 @@ $$;
 
 ALTER FUNCTION "private"."comment_post_context"("p_post_id" "uuid", "p_caller_profile_id" bigint, OUT "is_visible" boolean, OUT "post_kind" "public"."post_kind", OUT "caller_role" "public"."group_member_role", OUT "identity_policy" "public"."group_identity_policy", OUT "post_author_identity" "public"."post_identity") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "private"."read_post_comments"("p_comment_ids" "uuid"[], "p_caller_profile_id" bigint, "p_caller_role" "public"."group_member_role") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "private"."read_post_comments"("p_comment_ids" "uuid"[], "p_caller_profile_id" bigint, "p_caller_role" "public"."group_member_role") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb")
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -120,7 +120,12 @@ CREATE OR REPLACE FUNCTION "private"."read_post_comments"("p_comment_ids" "uuid"
       and author.profile_id <> p_caller_profile_id
       and coalesce(p_caller_role in ('owner', 'admin'), false),
     active_restriction.expires_at is not null,
-    active_restriction.expires_at
+    active_restriction.expires_at,
+    -- tombstone은 본문을 내보내지 않으므로 그 본문에 걸려 있던 멘션도 내보내지 않는다.
+    case
+      when comment.deleted_at is null then private.comment_mentions_json(comment.id)
+      else '[]'::jsonb
+    end
   from public.post_comments as comment
   join public.posts as comment_post on comment_post.id = comment.post_id
   join private.comment_authors as author on author.comment_id = comment.id
@@ -305,7 +310,7 @@ $$;
 
 ALTER FUNCTION "public"."clear_post_reaction"("p_post_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean DEFAULT false, "p_category_id" "uuid" DEFAULT NULL::"uuid") RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean DEFAULT false, "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_mention_pub_ids" "text"[] DEFAULT '{}'::"text"[]) RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -391,11 +396,14 @@ begin
     published_at = case when coalesce(p_publish, false) then now() else published_at end,
     edited_at = case when published_at is not null then now() else null end
   where id = p_post_id;
+  -- 게시 시각을 세운 다음에 부른다. 새 멘션 행의 트리거가 이미 게시된 게시물을 보아야 알림이
+  -- 나가기 때문이다. 미게시 초안의 멘션은 `publish_group_post`가 게시할 때 알린다.
+  perform private.sync_post_mentions(p_post_id, coalesce(p_body, ''), p_mention_pub_ids);
   return p_post_id;
 end;
 $$;
 
-ALTER FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_category_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_category_id" "uuid", "p_mention_pub_ids" "text"[]) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."commit_profile_post"("p_post_id" "uuid", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean DEFAULT false, "p_visibility" "public"."post_visibility" DEFAULT NULL::"public"."post_visibility") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -519,7 +527,7 @@ $$;
 
 ALTER FUNCTION "public"."create_group_category"("p_group_id" "uuid", "p_name" "text", "p_position" integer) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_publish" boolean DEFAULT true) RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_publish" boolean DEFAULT true, "p_mention_pub_ids" "text"[] DEFAULT '{}'::"text"[]) RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -591,11 +599,16 @@ begin
   ) returning id into created_post_id;
   insert into private.post_authors (post_id, profile_id)
   values (created_post_id, caller_profile_id);
+  -- 즉시 게시 경로도 본문을 직접 쓰므로 여기서 대상을 맞춰야 한다. 이 한 줄이 없으면 화면에는
+  -- 멘션이 보이는데 `post_mentions`가 비어 아무도 불리지 않는다.
+  perform private.sync_post_mentions(
+    created_post_id, coalesce(p_body, ''), p_mention_pub_ids
+  );
   return created_post_id;
 end;
 $$;
 
-ALTER FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean) OWNER TO "postgres";
+ALTER FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean, "p_mention_pub_ids" "text"[]) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."create_group_post_upload_draft"("p_group_id" "uuid", "p_author_identity" "public"."post_identity") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -844,7 +857,7 @@ $$;
 
 ALTER FUNCTION "public"."get_my_group_anonymous_activity_restriction"("p_group_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid" DEFAULT NULL::"uuid", "p_image_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid" DEFAULT NULL::"uuid", "p_image_id" "uuid" DEFAULT NULL::"uuid", "p_mention_pub_ids" "text"[] DEFAULT '{}'::"text"[]) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -994,6 +1007,9 @@ begin
     set comment_id = new_comment_id, status = 'ready', ready_at = now()
     where id = p_image_id;
   end if;
+  perform private.sync_comment_mentions(
+    new_comment_id, trimmed_body, p_author_identity, p_mention_pub_ids
+  );
   return query
   select entry.*
   from private.read_post_comments(
@@ -1002,7 +1018,7 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid", "p_image_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid", "p_image_id" "uuid", "p_mention_pub_ids" "text"[]) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."create_profile_post"("p_timeline_pub_id" "text", "p_visibility" "public"."post_visibility" DEFAULT 'public'::"public"."post_visibility") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -1245,6 +1261,11 @@ begin
   select author.profile_id into author_profile_id
   from private.comment_authors as author where author.comment_id = p_comment_id;
 
+  -- 하드 삭제는 외래 키가 이 데이터를 정리하지만, 살아 있는 자식 때문에 답글이 tombstone으로
+  -- 남는 경우에도 삭제된 댓글을 가리키는 데이터는 즉시 사라져야 한다.
+  delete from public.notifications where comment_id = p_comment_id;
+  delete from public.comment_mentions where comment_id = p_comment_id;
+
   if comment_record.depth = 0 then
     -- 최상위 댓글을 지우면 답글 묶음 전체가 사라진다(기능 명세 §9.4). 묶음이 통째로 숨는 이상
     -- 자리 표시가 필요 없으므로 하드 삭제한다.
@@ -1475,7 +1496,7 @@ $$;
 
 ALTER FUNCTION "public"."finalize_post_attachment"("p_attachment_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."get_group_post"("p_post_id" "uuid") RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean, "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."get_group_post"("p_post_id" "uuid") RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean, "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1526,7 +1547,8 @@ begin
     post.author_identity = 'anonymous' and author.profile_id <> caller_profile_id
       and caller_role in ('owner', 'admin'),
     active_restriction.expires_at is not null,
-    active_restriction.expires_at
+    active_restriction.expires_at,
+    private.post_mentions_json(post.id)
   from public.posts as post
   join private.post_authors as author on author.post_id = post.id
   left join public.group_categories as category on category.id = post.category_id
@@ -1661,7 +1683,7 @@ $$;
 
 ALTER FUNCTION "public"."list_comment_reactors"("p_comment_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_cursor_published_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_post_id" "uuid" DEFAULT NULL::"uuid", "p_cursor_is_pinned" boolean DEFAULT NULL::boolean, "p_limit" integer DEFAULT 20) RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean, "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_cursor_published_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_post_id" "uuid" DEFAULT NULL::"uuid", "p_cursor_is_pinned" boolean DEFAULT NULL::boolean, "p_limit" integer DEFAULT 20) RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean, "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1708,7 +1730,8 @@ begin
     post.author_identity = 'anonymous' and author.profile_id <> caller_profile_id
       and caller_role in ('owner', 'admin'),
     active_restriction.expires_at is not null,
-    active_restriction.expires_at
+    active_restriction.expires_at,
+    private.post_mentions_json(post.id)
   from public.posts as post
   join private.post_authors as author on author.post_id = post.id
   left join public.group_categories as category on category.id = post.category_id
@@ -1798,7 +1821,7 @@ $$;
 
 ALTER FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_post_comment_replies"("p_root_comment_id" "uuid") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."list_post_comment_replies"("p_root_comment_id" "uuid") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1861,7 +1884,7 @@ $$;
 
 ALTER FUNCTION "public"."list_post_comment_replies"("p_root_comment_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_post_comments"("p_post_id" "uuid", "p_cursor_created_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_comment_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 20) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."list_post_comments"("p_post_id" "uuid", "p_cursor_created_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_comment_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 20) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -2507,55 +2530,6 @@ $$;
 
 ALTER FUNCTION "public"."update_group_category"("p_category_id" "uuid", "p_name" "text", "p_position" integer) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."update_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_category_id" "uuid" DEFAULT NULL::"uuid") RETURNS "uuid"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-declare
-  caller_profile_id bigint := private.current_profile_id();
-  post_record public.posts;
-begin
-  if auth.uid() is null or caller_profile_id is null then
-    raise exception 'accepted profile required' using errcode = '42501';
-  end if;
-  select post.* into post_record from public.posts as post
-  where post.id = p_post_id and post.kind = 'group'
-  for update;
-  if post_record.id is null or not private.is_post_author(p_post_id) then
-    raise exception 'only the author can update this post' using errcode = '42501';
-  end if;
-  if not private.is_group_member(post_record.group_id) then
-    raise exception 'group membership required' using errcode = '42501';
-  end if;
-  if nullif(btrim(p_title), '') is null or char_length(btrim(p_title)) > 100 then
-    raise exception 'title must contain between 1 and 100 characters' using errcode = '22023';
-  end if;
-  if char_length(coalesce(p_body, '')) > 20000 then
-    raise exception 'body must contain between 0 and 20000 characters' using errcode = '22023';
-  end if;
-  if nullif(btrim(coalesce(p_body, '')), '') is null and not exists (
-    select 1 from public.post_attachments
-    where post_id = p_post_id and status = 'ready'
-  ) then
-    raise exception 'post requires a body or ready attachment' using errcode = '22023';
-  end if;
-  if p_category_id is not null and not exists (
-    select 1 from public.group_categories as category
-    where category.id = p_category_id and category.group_id = post_record.group_id
-  ) then
-    raise exception 'category must belong to the group' using errcode = '22023';
-  end if;
-
-  update public.posts
-  set title = btrim(p_title), body = coalesce(p_body, ''), category_id = p_category_id,
-    edited_at = case when published_at is not null then now() else null end
-  where id = p_post_id;
-  return p_post_id;
-end;
-$$;
-
-ALTER FUNCTION "public"."update_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_category_id" "uuid") OWNER TO "postgres";
-
 CREATE OR REPLACE FUNCTION "public"."update_group_post_draft_identity"("p_post_id" "uuid", "p_author_identity" "public"."post_identity") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -2628,6 +2602,14 @@ begin
   if p_author_identity = 'staff' and member_role not in ('owner', 'admin', 'manager') then
     raise exception 'staff identity is not allowed' using errcode = '42501';
   end if;
+  -- 익명은 멘션할 수 없다(기능 명세 §8.14). 멘션을 넣어 둔 초안을 익명으로 바꾸는 길을 열어
+  -- 두면 그 금지가 통째로 우회된다. 본문에서 멘션을 지운 뒤 다시 바꾸게 한다.
+  if p_author_identity = 'anonymous' and exists (
+    select 1 from public.post_mentions as mention where mention.post_id = p_post_id
+  ) then
+    raise exception 'remove mentions before switching a draft to anonymous'
+      using errcode = '22023';
+  end if;
 
   perform set_config('app.update_group_post_draft_identity', p_post_id::text, true);
   update public.posts
@@ -2642,7 +2624,7 @@ $$;
 
 ALTER FUNCTION "public"."update_group_post_draft_identity"("p_post_id" "uuid", "p_author_identity" "public"."post_identity") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid" DEFAULT NULL::"uuid", "p_remove_image" boolean DEFAULT false) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid" DEFAULT NULL::"uuid", "p_remove_image" boolean DEFAULT false, "p_mention_pub_ids" "text"[] DEFAULT '{}'::"text"[]) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -2738,6 +2720,10 @@ begin
       else comment_record.edited_at
     end
   where comment.id = p_comment_id;
+  -- 작성 신원은 등록 뒤 바꿀 수 없으므로(기능 명세 §8.5) 저장된 값을 그대로 넘긴다.
+  perform private.sync_comment_mentions(
+    p_comment_id, trimmed_body, comment_record.author_identity, p_mention_pub_ids
+  );
 
   return query
   select entry.*
@@ -2747,7 +2733,7 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid", "p_remove_image" boolean) OWNER TO "postgres";
+ALTER FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid", "p_remove_image" boolean, "p_mention_pub_ids" "text"[]) OWNER TO "postgres";
 
 REVOKE ALL ON FUNCTION "private"."comment_post_context"("p_post_id" "uuid", "p_caller_profile_id" bigint, OUT "is_visible" boolean, OUT "post_kind" "public"."post_kind", OUT "caller_role" "public"."group_member_role", OUT "identity_policy" "public"."group_identity_policy", OUT "post_author_identity" "public"."post_identity") FROM PUBLIC;
 
@@ -2761,8 +2747,8 @@ GRANT ALL ON FUNCTION "public"."clear_comment_reaction"("p_comment_id" "uuid") T
 REVOKE ALL ON FUNCTION "public"."clear_post_reaction"("p_post_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."clear_post_reaction"("p_post_id" "uuid") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_category_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_category_id" "uuid") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_category_id" "uuid", "p_mention_pub_ids" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_category_id" "uuid", "p_mention_pub_ids" "text"[]) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."commit_profile_post"("p_post_id" "uuid", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_visibility" "public"."post_visibility") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."commit_profile_post"("p_post_id" "uuid", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_visibility" "public"."post_visibility") TO "authenticated";
@@ -2770,8 +2756,8 @@ GRANT ALL ON FUNCTION "public"."commit_profile_post"("p_post_id" "uuid", "p_body
 REVOKE ALL ON FUNCTION "public"."create_group_category"("p_group_id" "uuid", "p_name" "text", "p_position" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."create_group_category"("p_group_id" "uuid", "p_name" "text", "p_position" integer) TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean, "p_mention_pub_ids" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean, "p_mention_pub_ids" "text"[]) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."create_group_post_upload_draft"("p_group_id" "uuid", "p_author_identity" "public"."post_identity") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."create_group_post_upload_draft"("p_group_id" "uuid", "p_author_identity" "public"."post_identity") TO "authenticated";
@@ -2785,8 +2771,8 @@ GRANT ALL ON FUNCTION "public"."cancel_group_anonymous_activity_restriction"("p_
 REVOKE ALL ON FUNCTION "public"."get_my_group_anonymous_activity_restriction"("p_group_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_my_group_anonymous_activity_restriction"("p_group_id" "uuid") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid", "p_image_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid", "p_image_id" "uuid") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid", "p_image_id" "uuid", "p_mention_pub_ids" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid", "p_image_id" "uuid", "p_mention_pub_ids" "text"[]) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."create_profile_post"("p_timeline_pub_id" "text", "p_visibility" "public"."post_visibility") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."create_profile_post"("p_timeline_pub_id" "text", "p_visibility" "public"."post_visibility") TO "authenticated";
@@ -2872,11 +2858,9 @@ GRANT ALL ON FUNCTION "public"."set_post_reaction"("p_post_id" "uuid", "p_reacti
 REVOKE ALL ON FUNCTION "public"."update_group_category"("p_category_id" "uuid", "p_name" "text", "p_position" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."update_group_category"("p_category_id" "uuid", "p_name" "text", "p_position" integer) TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."update_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_category_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_category_id" "uuid") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."update_group_post_draft_identity"("p_post_id" "uuid", "p_author_identity" "public"."post_identity") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."update_group_post_draft_identity"("p_post_id" "uuid", "p_author_identity" "public"."post_identity") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid", "p_remove_image" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid", "p_remove_image" boolean) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid", "p_remove_image" boolean, "p_mention_pub_ids" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid", "p_remove_image" boolean, "p_mention_pub_ids" "text"[]) TO "authenticated";

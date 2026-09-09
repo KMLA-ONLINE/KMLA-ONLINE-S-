@@ -128,7 +128,7 @@ export function GroupPostCard({
           </Link>
         </h2>
         <PostBodyClamp testId="group-post-body">
-          <PostMarkdown>{post.body}</PostMarkdown>
+          <PostMarkdown mentions={post.mentions}>{post.body}</PostMarkdown>
         </PostBodyClamp>
       </div>
 

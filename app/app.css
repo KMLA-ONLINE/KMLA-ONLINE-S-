@@ -58,8 +58,21 @@
   .post-typography a {
     @apply text-primary underline underline-offset-2;
   }
+  /* 편집 영역의 높이는 바깥 상자가 정하고(`desktop-markdown-editor.tsx`), Milkdown이 만든 래퍼
+   * 전부가 그 상자를 끝까지 채워야 빈 아래쪽을 눌러도 캐럿이 잡힌다.
+   *
+   * 사슬이 세 겹인 게 함정이다. `<Milkdown />`이 그리는 것은 클래스 없는 `[data-milkdown-root]`
+   * 하나뿐이고, `.milkdown`과 `.editor.ProseMirror`는 편집기가 그 안에 직접 만들어 넣는다.
+   * 그래서 `.milkdown`만 늘려 봐야 부모인 root가 내용 높이 그대로라 한 줄에서 멈춘다. 퍼센트
+   * 높이도 같은 자리에서 죽는다 — root 높이가 auto면 백분율이 풀린다.
+   *
+   * 세 겹을 모두 flex로 늘린다. `shrink-0`이 있어야 본문이 상자보다 길어질 때 눌리지 않는다. */
+  .post-typography [data-milkdown-root],
+  .post-typography .milkdown {
+    @apply flex shrink-0 grow flex-col;
+  }
   .post-typography .milkdown .ProseMirror {
-    @apply min-h-72 px-3 py-2 outline-none;
+    @apply shrink-0 grow px-3 py-2 outline-none;
   }
   .post-typography
     .milkdown

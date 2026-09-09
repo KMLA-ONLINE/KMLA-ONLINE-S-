@@ -405,7 +405,7 @@ $$;
 
 ALTER FUNCTION "private"."reject_feed_event_mutation"() OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_feed_posts"("p_page_token" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("feed_epoch" timestamp with time zone, "next_page_token" "uuid", "feed_position" integer, "rank_time" timestamp with time zone, "post_id" "uuid", "kind" "public"."post_kind", "body" "text", "title" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "group_id" "uuid", "group_slug" "text", "group_name" "text", "category_name" "text", "is_pinned" boolean, "timeline_pub_id" "text", "timeline_name" "text", "activity_kind" "public"."profile_media_activity_kind", "activity_media_path" "text", "visibility" "public"."post_visibility", "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "attachments" "jsonb", "is_author" boolean)
+CREATE OR REPLACE FUNCTION "public"."list_feed_posts"("p_page_token" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("feed_epoch" timestamp with time zone, "next_page_token" "uuid", "feed_position" integer, "rank_time" timestamp with time zone, "post_id" "uuid", "kind" "public"."post_kind", "body" "text", "title" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "group_id" "uuid", "group_slug" "text", "group_name" "text", "category_name" "text", "is_pinned" boolean, "timeline_pub_id" "text", "timeline_name" "text", "activity_kind" "public"."profile_media_activity_kind", "activity_media_path" "text", "visibility" "public"."post_visibility", "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "attachments" "jsonb", "is_author" boolean, "mentions" "jsonb")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -515,7 +515,8 @@ begin
     reaction_summary.top,
     mine.reaction,
     attachment_summary.items,
-    author.profile_id = caller_profile_id
+    author.profile_id = caller_profile_id,
+    private.post_mentions_json(post.id)
   from unnest(selected_positions, selected_post_ids, selected_rank_times)
     as selected(position, post_id, rank_time)
   join public.posts as post on post.id = selected.post_id

@@ -1,3 +1,4 @@
+import type { MentionDraftEntry } from "~/features/posts/model/mentions";
 import { useState } from "react";
 
 import {
@@ -133,6 +134,7 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
     identity: PostIdentity,
     parentCommentId: string | null,
     image?: CommentImageInput,
+    mentions: MentionDraftEntry[] = [],
   ) =>
     run(async () => {
       const created = await createPostComment(
@@ -141,6 +143,7 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
         identity,
         parentCommentId,
         image,
+        mentions,
         imageSession,
       );
       setCountDelta((current) => current + 1);
@@ -157,6 +160,7 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
     comment: PostComment,
     body: string,
     image?: CommentImageInput,
+    mentions: MentionDraftEntry[] = [],
   ) =>
     run(async () => {
       const updated = await updatePostComment(
@@ -164,6 +168,7 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
         body,
         comment.post_id,
         image,
+        mentions,
         imageSession,
       );
       const replace = (item: PostComment) =>

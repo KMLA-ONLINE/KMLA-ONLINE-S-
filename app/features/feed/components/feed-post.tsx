@@ -194,7 +194,7 @@ export function FeedPostCard({ post }: { post: FeedPost }) {
               </h2>
             ) : null}
             <PostBodyClamp testId="feed-post-body">
-              <PostMarkdown>{post.body}</PostMarkdown>
+              <PostMarkdown mentions={post.mentions}>{post.body}</PostMarkdown>
             </PostBodyClamp>
           </div>
           <PostImageGrid images={images} className="mt-3" />

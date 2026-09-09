@@ -10,6 +10,19 @@ import {
   PostAnonymousAvatar,
   PostStaffAvatar,
 } from "~/features/posts/components/post-author-avatar";
+import { MentionButton } from "~/features/posts/components/mention-button";
+import {
+  activeMentionPubIds,
+  remainingMentions,
+  useMentionDraft,
+} from "~/features/posts/hooks/use-mention-draft";
+import {
+  buildMentionToken,
+  countMentionTargets,
+  validateMentionCount,
+  type MentionDraftEntry,
+  type PostMention,
+} from "~/features/posts/model/mentions";
 import {
   COMMENT_MAX_LENGTH,
   countCommentGraphemes,
@@ -96,6 +109,8 @@ export function CommentComposer({
   replyTarget,
   onCancelReply,
   initialImage,
+  initialMentions,
+  mentionGroupId,
   className = "border-t p-3",
 }: {
   viewer: CommentViewer;
@@ -107,6 +122,7 @@ export function CommentComposer({
   onSubmit: (
     body: string,
     image?: CommentImageInput,
+    mentions?: MentionDraftEntry[],
   ) => void | Promise<unknown>;
   /** 주면 되돌리기 버튼이 붙는다. 수정처럼 도중에 그만둘 수 있어야 하는 곳에서 쓴다. */
   onCancel?: () => void;
@@ -124,9 +140,17 @@ export function CommentComposer({
   replyTarget?: string;
   onCancelReply?: () => void;
   initialImage?: CommentImage;
+  /** 수정할 댓글이 이미 부르고 있던 사람들. 본문 토큰의 번호표다. */
+  initialMentions?: PostMention[];
+  /**
+   * 멘션할 수 있는 그룹. 개인 게시물의 댓글에는 멘션을 두지 않으므로(기능 명세 §8.14) 그때는
+   * 넘기지 않고, 그러면 버튼 자체가 사라진다. 익명으로 쓰는 동안에도 감춘다.
+   */
+  mentionGroupId?: string | null;
   className?: string;
 }) {
   const [draft, setDraft] = useState(initialValue);
+  const mentionDraft = useMentionDraft(initialMentions ?? []);
   const [image, setImage] = useState<
     CommentImage | PreparedCommentImage | null
   >(initialImage ?? null);
@@ -213,7 +237,9 @@ export function CommentComposer({
 
   const send = () => {
     if (pending || processingImage) return;
-    const reason = validateCommentBody(draft, image !== null);
+    const reason =
+      validateCommentBody(draft, image !== null) ??
+      validateMentionCount(draft, mentionDraft.entries);
     if (reason) return setLocalError(reason);
     setLocalError(null);
     const body = normalizeCommentBody(draft);
@@ -227,14 +253,13 @@ export function CommentComposer({
         ? undefined
         : image;
     void Promise.resolve(
-      submittedImage === undefined
-        ? onSubmit(body)
-        : onSubmit(body, submittedImage),
+      onSubmit(body, submittedImage, mentionDraft.entries),
     ).then((created) => {
       // 되돌리는 건 그 사이 아무것도 쓰지 않았을 때뿐이다. 새로 쓰고 있는 글을 덮으면 안 된다.
       if (!created)
         setDraft((current) => (current === "" ? submitted : current));
       else {
+        mentionDraft.reset([]);
         if (preparedImage.current) releasePostFile(preparedImage.current);
         preparedImage.current = null;
         setImage(null);
@@ -282,7 +307,18 @@ export function CommentComposer({
                 <button
                   type="button"
                   aria-label={`${IDENTITY_LABEL[identity]}으로 작성 중. 눌러서 ${IDENTITY_LABEL[nextIdentity]}으로`}
-                  onClick={() => setPendingIdentity(nextIdentity)}
+                  onClick={() => {
+                    if (
+                      nextIdentity === "anonymous" &&
+                      countMentionTargets(draft, mentionDraft.entries) > 0
+                    ) {
+                      setLocalError(
+                        "멘션을 모두 지운 뒤 익명으로 전환할 수 있습니다.",
+                      );
+                      return;
+                    }
+                    setPendingIdentity(nextIdentity);
+                  }}
                   className="relative mb-0.5 shrink-0 rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 />
               }
@@ -398,6 +434,36 @@ export function CommentComposer({
             >
               {processingImage ? <Spinner /> : <ImagePlusIcon />}
             </Button>
+            {/*
+              익명 댓글은 멘션할 수 없다(기능 명세 §8.14). 멘션 토큰이 남아 있으면 익명으로
+              바꿀 수 없으므로 버튼이 사라질 때 활성 멘션이 함께 숨는 일은 없다.
+            */}
+            {mentionGroupId && identity !== "anonymous" ? (
+              <MentionButton
+                groupId={mentionGroupId}
+                disabled={pending || processingImage}
+                remaining={remainingMentions(draft, mentionDraft.entries)}
+                activeTargetPubIds={activeMentionPubIds(
+                  draft,
+                  mentionDraft.entries,
+                )}
+                className="m-0.5 shrink-0 text-muted-foreground"
+                onSelect={(candidate) => {
+                  const ordinal = mentionDraft.register(candidate, draft);
+                  if (ordinal === null) return;
+                  const element = input.current;
+                  const token = `${buildMentionToken(candidate.name, ordinal)} `;
+                  const start = element?.selectionStart ?? draft.length;
+                  const end = element?.selectionEnd ?? start;
+                  setDraft(draft.slice(0, start) + token + draft.slice(end));
+                  requestAnimationFrame(() => {
+                    const caret = start + token.length;
+                    element?.focus();
+                    element?.setSelectionRange(caret, caret);
+                  });
+                }}
+              />
+            ) : null}
           </div>
         </div>
 

@@ -315,7 +315,14 @@ select throws_ok(
   'published post identity remains immutable'
 );
 select lives_ok(
-  $$select public.update_group_post((select id from public.posts where title = '첨부 초안'), '첨부만', '', null)$$,
+  $$select public.commit_group_post(
+      (select id from public.posts where title = '첨부 초안'), '첨부만', '',
+      (select array_agg(attachment.id order by attachment.position)
+       from public.post_attachments as attachment
+       where attachment.post_id = (select id from public.posts where title = '첨부 초안')
+         and attachment.status <> 'deleted'),
+      false, null
+    )$$,
   'a ready attachment permits a blank update'
 );
 

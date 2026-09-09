@@ -17,6 +17,22 @@ vi.mock("~/features/posts/data/mutations", async (importOriginal) => ({
   updateProfilePostWithAttachments,
 }));
 
+vi.mock("~/features/posts/components/editor/post-body-input", () => ({
+  PostBodyInput: ({
+    value,
+    onValueChange,
+  }: {
+    value: string;
+    onValueChange?: (value: string) => void;
+  }) => (
+    <textarea
+      aria-label="Markdown 본문"
+      value={value}
+      onChange={(event) => onValueChange?.(event.target.value)}
+    />
+  ),
+}));
+
 import { ProfilePostEditor } from "~/features/posts/components/profile/profile-post-editor";
 import { profilePost } from "../../profile-post-fixture";
 import { renderRoute, screen } from "../../../../router";

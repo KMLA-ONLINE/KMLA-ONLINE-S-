@@ -1,6 +1,7 @@
 import {
   defaultValueCtx,
   Editor as MilkdownEditor,
+  editorViewCtx,
   rootCtx,
 } from "@milkdown/core";
 import { history, redoCommand, undoCommand } from "@milkdown/plugin-history";
@@ -52,7 +53,7 @@ import {
   StrikethroughIcon,
   Undo2Icon,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useImperativeHandle, useRef, type RefObject } from "react";
 
 import {
   fromPostEditorMarkdown,
@@ -60,6 +61,9 @@ import {
   sanitizePostMarkdown,
   toMilkdownMarkdown,
 } from "~/features/posts/model/markdown";
+import type { PostBodyInputHandle } from "~/features/posts/components/editor/post-body-input";
+import { sanitizeMentionLabel } from "~/features/posts/model/mentions";
+import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 
 const markdownSchema = [
@@ -104,7 +108,6 @@ const imeSafeShortcuts = $prose(
         handleKeyDown(view, event) {
           if (event.isComposing || view.composing || event.keyCode === 229)
             return false;
-
           const mod = event.ctrlKey || event.metaKey;
           if (!mod || event.altKey) return false;
           const key = event.key.toLowerCase();
@@ -140,15 +143,21 @@ const imeSafeShortcuts = $prose(
 export default function DesktopMarkdownEditor({
   initialValue,
   onValueChange,
+  handleRef,
+  className,
 }: {
   initialValue: string;
   onValueChange?: (value: string) => void;
+  handleRef?: RefObject<PostBodyInputHandle | null>;
+  className?: string;
 }) {
   return (
     <MilkdownProvider>
       <EditorSurface
         initialValue={initialValue}
         onValueChange={onValueChange}
+        handleRef={handleRef}
+        className={className}
       />
     </MilkdownProvider>
   );
@@ -157,9 +166,13 @@ export default function DesktopMarkdownEditor({
 function EditorSurface({
   initialValue,
   onValueChange,
+  handleRef,
+  className,
 }: {
   initialValue: string;
   onValueChange?: (value: string) => void;
+  handleRef?: RefObject<PostBodyInputHandle | null>;
+  className?: string;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const lastValue = useRef(
@@ -193,6 +206,31 @@ function EditorSurface({
   ) => {
     get()?.action(command);
   };
+
+  // 멘션은 저장 형식이 CommonMark 링크라(`model/mentions.ts`) 편집기에도 링크 mark 로 넣는다.
+  // Markdown 원문을 글자로 흘려 넣으면 WYSIWYG 이 그것을 링크로 다시 읽지 않아 `[@이름](m:1)`이
+  // 그대로 보인다.
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      insertMention(label: string, ordinal: number) {
+        get()?.action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          const { state, dispatch } = view;
+          const mark = linkSchema.type(ctx).create({ href: `m:${ordinal}` });
+          const mention = state.schema.text(`@${sanitizeMentionLabel(label)}`, [
+            mark,
+          ]);
+          // 뒤에 이어 쓸 때 링크 안으로 빨려 들어가지 않도록 mark 없는 공백을 함께 넣는다.
+          const trailing = state.schema.text(" ");
+          const { from, to } = state.selection;
+          dispatch(state.tr.replaceWith(from, to, [mention, trailing]));
+          view.focus();
+        });
+      },
+    }),
+    [get],
+  );
   const link = () => {
     const value = window.prompt("링크 URL (https:// 또는 http://)");
     if (!value) return;
@@ -253,7 +291,12 @@ function EditorSurface({
   ];
 
   return (
-    <div className="overflow-hidden rounded-md border bg-background">
+    <div
+      className={cn(
+        "flex h-[clamp(18rem,50dvh,32rem)] flex-none flex-col overflow-hidden rounded-md border bg-background md:h-auto",
+        className,
+      )}
+    >
       <input
         ref={input}
         type="hidden"
@@ -266,7 +309,7 @@ function EditorSurface({
         적용한다.
       */}
       <div
-        className="flex flex-wrap gap-1 border-b bg-muted/50 p-1"
+        className="flex shrink-0 flex-nowrap gap-1 overflow-x-auto border-b bg-muted/50 p-1"
         role="toolbar"
         aria-label="본문 서식"
       >
@@ -281,8 +324,14 @@ function EditorSurface({
           </Tool>
         ))}
       </div>
+      {/*
+        본문 영역의 높이는 편집기가 스스로 정한다. 모바일은 바깥 상자의 `clamp` 높이를 flex로
+        나눠 갖고, 데스크톱은 내용을 따라 자라다 상한에서 멈춘다. 데스크톱을 예전처럼 고정
+        높이로 두면 짧은 글에도 열 줄짜리 창 안에서 글을 쓰게 되고, 페이지 스크롤 안에 편집기
+        스크롤이 하나 더 생긴다. 반대로 상한을 없애면 긴 글에서 첨부 영역이 화면 밖으로 밀린다.
+      */}
       <div
-        className="post-typography h-72 overflow-y-auto"
+        className="post-typography flex min-h-0 flex-1 flex-col overflow-y-auto md:h-auto md:max-h-[min(60dvh,40rem)] md:min-h-72 md:flex-none"
         role="presentation"
         onClick={(event) => {
           if (!(event.ctrlKey || event.metaKey)) return;

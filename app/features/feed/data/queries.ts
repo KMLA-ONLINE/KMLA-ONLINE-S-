@@ -1,3 +1,4 @@
+import { parseMentions } from "~/features/posts/model/mentions";
 import { createPostAttachmentUrls } from "~/features/posts/data/files";
 import type { PostAttachment } from "~/features/posts/model/types";
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
@@ -64,6 +65,7 @@ export async function listFeedPosts(
       edited_at: row.edited_at ?? null,
       my_reaction: row.my_reaction ?? null,
       activity_media_url: null,
+      mentions: parseMentions(row.mentions),
     };
 
     if (

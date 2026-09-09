@@ -4,6 +4,8 @@ import remarkParse from "remark-parse";
 import remarkStringify from "remark-stringify";
 import { unified } from "unified";
 
+import { isMentionHref } from "~/features/posts/model/mentions";
+
 const parser = unified().use(remarkParse).use(remarkGfm);
 const serializer = unified()
   .use(remarkStringify, {
@@ -49,7 +51,9 @@ function inline(nodes: Content[]): PhrasingContent[] {
         return [{ ...node, children: inline(node.children) }];
       case "link": {
         const children = inline(node.children);
-        return isSafeLink(node.url)
+        // 멘션은 CommonMark 링크 모양으로 저장한다(`model/mentions.ts`). 주소가 HTTP(S)가
+        // 아니라 여기서 함께 통과시키지 않으면 정화가 링크를 풀어 멘션이 평문이 된다.
+        return isSafeLink(node.url) || isMentionHref(node.url)
           ? [{ ...node, url: node.url, children }]
           : children;
       }

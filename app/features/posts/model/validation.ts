@@ -8,6 +8,7 @@ import type {
   ProfilePostFormValues,
 } from "~/features/posts/model/types";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
+import { validateMentionCount } from "~/features/posts/model/mentions";
 
 const IDENTITIES: PostIdentity[] = ["identified", "anonymous", "staff"];
 
@@ -23,6 +24,8 @@ export function readPostForm(formData: FormData): PostFormValues {
     authorIdentity: IDENTITIES.includes(identity as PostIdentity)
       ? (identity as PostIdentity)
       : "identified",
+    // 멘션은 폼 필드가 아니라 편집기 상태다. 읽어 온 값에 부르는 쪽이 얹는다.
+    mentions: [],
   };
 }
 
@@ -40,6 +43,10 @@ export function validatePostForm(
     errors.body = "본문 또는 첨부 파일을 추가해 주세요.";
   else if (Array.from(values.body).length > 20_000)
     errors.body = "본문은 20,000자 이하로 입력해 주세요.";
+  else {
+    const tooManyMentions = validateMentionCount(values.body, values.mentions);
+    if (tooManyMentions) errors.body = tooManyMentions;
+  }
   if (allowedIdentities && !allowedIdentities.includes(values.authorIdentity))
     errors.authorIdentity = "선택할 수 없는 작성 신원입니다.";
   if (

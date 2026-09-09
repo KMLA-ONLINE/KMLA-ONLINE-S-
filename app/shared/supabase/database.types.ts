@@ -100,6 +100,39 @@ export type Database = {
           },
         ]
       }
+      comment_mentions: {
+        Row: {
+          comment_id: string
+          ordinal: number
+          profile_id: number
+        }
+        Insert: {
+          comment_id: string
+          ordinal: number
+          profile_id: number
+        }
+        Update: {
+          comment_id?: string
+          ordinal?: number
+          profile_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_mentions_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "post_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_mentions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comment_reactions: {
         Row: {
           comment_id: string
@@ -717,6 +750,39 @@ export type Database = {
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_mentions: {
+        Row: {
+          ordinal: number
+          post_id: string
+          profile_id: number
+        }
+        Insert: {
+          ordinal: number
+          post_id: string
+          profile_id: number
+        }
+        Update: {
+          ordinal?: number
+          post_id?: string
+          profile_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_mentions_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_mentions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1360,6 +1426,7 @@ export type Database = {
           p_attachment_ids: string[]
           p_body: string
           p_category_id?: string
+          p_mention_pub_ids?: string[]
           p_post_id: string
           p_publish?: boolean
           p_title: string
@@ -1450,6 +1517,7 @@ export type Database = {
           p_author_identity: Database["public"]["Enums"]["post_identity"]
           p_body: string
           p_image_id?: string
+          p_mention_pub_ids?: string[]
           p_parent_comment_id?: string
           p_post_id: string
         }
@@ -1472,6 +1540,7 @@ export type Database = {
           is_author: boolean
           is_deleted: boolean
           is_effective_feed_bump: boolean
+          mentions: Json
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -1698,6 +1767,7 @@ export type Database = {
           group_id: string
           is_author: boolean
           is_pinned: boolean
+          mentions: Json
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           post_id: string
           published_at: string
@@ -1864,6 +1934,7 @@ export type Database = {
           is_author: boolean
           is_pinned: boolean
           kind: Database["public"]["Enums"]["post_kind"]
+          mentions: Json
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           next_page_token: string
           post_id: string
@@ -1983,6 +2054,7 @@ export type Database = {
           group_id: string
           is_author: boolean
           is_pinned: boolean
+          mentions: Json
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           post_id: string
           published_at: string
@@ -2059,6 +2131,7 @@ export type Database = {
           is_author: boolean
           is_deleted: boolean
           is_effective_feed_bump: boolean
+          mentions: Json
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -2095,6 +2168,7 @@ export type Database = {
           is_author: boolean
           is_deleted: boolean
           is_effective_feed_bump: boolean
+          mentions: Json
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -2392,6 +2466,17 @@ export type Database = {
           sort_rank: number
         }[]
       }
+      search_group_mention_candidates: {
+        Args: { p_group_id: string; p_limit?: number; p_query?: string }
+        Returns: {
+          avatar_path: string
+          cohort: number
+          is_returning_student: boolean
+          name: string
+          profile_type: Database["public"]["Enums"]["profile_type"]
+          pub_id: string
+        }[]
+      }
       search_group_posts: {
         Args: { p_group_id: string; p_limit?: number; p_query: string }
         Returns: {
@@ -2539,15 +2624,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      update_group_post: {
-        Args: {
-          p_body: string
-          p_category_id?: string
-          p_post_id: string
-          p_title: string
-        }
-        Returns: string
-      }
       update_group_post_draft_identity: {
         Args: {
           p_author_identity: Database["public"]["Enums"]["post_identity"]
@@ -2647,6 +2723,7 @@ export type Database = {
           p_body: string
           p_comment_id: string
           p_image_id?: string
+          p_mention_pub_ids?: string[]
           p_remove_image?: boolean
         }
         Returns: {
@@ -2668,6 +2745,7 @@ export type Database = {
           is_author: boolean
           is_deleted: boolean
           is_effective_feed_bump: boolean
+          mentions: Json
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -2738,6 +2816,8 @@ export type Database = {
         | "gongang_manager_granted"
         | "gongang_manager_revoked"
         | "gongang_preempted"
+        | "post_mentioned"
+        | "comment_mentioned"
       post_attachment_status: "pending" | "ready" | "deleted"
       post_identity: "identified" | "anonymous" | "staff"
       post_kind: "group" | "profile"
@@ -2941,6 +3021,8 @@ export const Constants = {
         "gongang_manager_granted",
         "gongang_manager_revoked",
         "gongang_preempted",
+        "post_mentioned",
+        "comment_mentioned",
       ],
       post_attachment_status: ["pending", "ready", "deleted"],
       post_identity: ["identified", "anonymous", "staff"],

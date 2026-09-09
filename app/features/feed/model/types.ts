@@ -5,6 +5,7 @@ import type {
   PostIdentity,
   ProfilePost,
 } from "~/features/posts/model/types";
+import type { PostMention } from "~/features/posts/model/mentions";
 import type { Database } from "~/shared/supabase/database.types";
 
 type FeedRow =
@@ -29,13 +30,17 @@ type NullableColumns =
   | "visibility";
 
 /** Postgres `returns table` nullability is not represented by generated types. */
-type FeedBase = Omit<FeedRow, NullableColumns | "attachments" | "kind"> & {
+type FeedBase = Omit<
+  FeedRow,
+  NullableColumns | "attachments" | "kind" | "mentions"
+> & {
   author_avatar_path: string | null;
   author_name: string | null;
   author_pub_id: string | null;
   edited_at: string | null;
   my_reaction: FeedRow["my_reaction"] | null;
   attachments: PostAttachment[];
+  mentions: PostMention[];
 };
 
 export type GroupFeedPost = FeedBase & {

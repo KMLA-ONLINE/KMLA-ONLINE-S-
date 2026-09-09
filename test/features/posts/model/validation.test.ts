@@ -19,6 +19,7 @@ describe("post form validation", () => {
         body: "",
         categoryId: "",
         authorIdentity: "identified",
+        mentions: [],
       }),
     ).toEqual({
       title: "제목을 입력해 주세요.",
@@ -31,6 +32,7 @@ describe("post form validation", () => {
           body: "",
           categoryId: "",
           authorIdentity: "identified",
+          mentions: [],
         },
         1,
       ),
@@ -45,6 +47,7 @@ describe("post form validation", () => {
           body: "본문",
           categoryId: "other",
           authorIdentity: "anonymous",
+          mentions: [],
         },
         0,
         ["identified"],
@@ -66,6 +69,7 @@ describe("post form validation", () => {
       title: "제목",
       body: "첫째 줄\n둘째 줄",
       authorIdentity: "identified",
+      mentions: [],
     });
   });
 });
@@ -170,6 +174,7 @@ describe("isPostDraftDirty", () => {
     body: "본문",
     categoryId: "category",
     authorIdentity: "identified" as const,
+    mentions: [],
   };
 
   it("considers every entered field and attachments for new posts", () => {

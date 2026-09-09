@@ -90,6 +90,7 @@ export function PostDetailDialog({
   actionBar,
   children,
   anonymousActivityRestriction,
+  mentionGroupId,
 }: {
   /** 모달 머리에 적는 제목. 낭독기에는 이것이 게시물의 이름이 된다. */
   title: string;
@@ -112,6 +113,11 @@ export function PostDetailDialog({
   /** 게시물 본문 영역. 종류마다 다른 유일한 부분이다. */
   children: ReactNode;
   anonymousActivityRestriction?: AnonymousActivityRestriction | null;
+  /**
+   * 댓글에서 멘션할 수 있는 그룹. 개인 게시물의 댓글에는 멘션을 두지 않으므로(기능 명세
+   * §8.14) 프로필 쪽 상세는 넘기지 않고, 그러면 버튼이 그려지지 않는다.
+   */
+  mentionGroupId?: string | null;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   /**
@@ -185,8 +191,9 @@ export function PostDetailDialog({
   const submitComment = async (
     body: string,
     image?: Parameters<typeof thread.create>[3],
+    mentions?: Parameters<typeof thread.create>[4],
   ) => {
-    const created = await thread.create(body, identity, null, image);
+    const created = await thread.create(body, identity, null, image, mentions);
     if (!created) return created;
     // 방금 쓴 댓글은 목록 맨 아래에 붙는다. 보이지 않는 곳에 등록되면 실패로 읽힌다.
     requestAnimationFrame(() => {
@@ -199,13 +206,15 @@ export function PostDetailDialog({
   const submit = async (
     body: string,
     image?: Parameters<typeof thread.create>[3],
+    mentions?: Parameters<typeof thread.create>[4],
   ) => {
-    if (!replyingTo) return submitComment(body, image);
+    if (!replyingTo) return submitComment(body, image, mentions);
     const created = await thread.create(
       body,
       identity,
       replyingTo.comment_id,
       image,
+      mentions,
     );
     if (created) setReplyingTo(null);
     return created;
@@ -449,6 +458,7 @@ export function PostDetailDialog({
               onToggleReplies={thread.toggleReplies}
               onReply={startReply}
               onEdit={thread.edit}
+              mentionGroupId={mentionGroupId}
               onReact={thread.react}
               onDelete={thread.remove}
             />
@@ -469,6 +479,7 @@ export function PostDetailDialog({
           identity={identity}
           onIdentityChange={setIdentity}
           onSubmit={submit}
+          mentionGroupId={mentionGroupId}
           pending={thread.pending}
           error={thread.error}
           inputRef={composerRef}
