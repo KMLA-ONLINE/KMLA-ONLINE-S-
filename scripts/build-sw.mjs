@@ -107,8 +107,10 @@ const { count, size, warnings } = await generateSW({
         // 가장 오래 전에 넣은 것부터 버린다. LRU는 아니지만, 경로가 불변이라 잘못 버려도
         // 다음에 다시 받는 것뿐이고 추가 장부가 필요 없다.
         //
-        // 150이라는 수는 용량으로 환산한 값이다. 첨부 사진은 아직 원본(긴 변 3072px)
-        // 그대로라 장당 수백 kB이므로 최악의 경우 100 MB 근처다. 썸네일이 생기면 올린다.
+        // 300이라는 수는 용량으로 환산한 값이다. 목록에 깔리는 것은 이제 축소본(긴 변
+        // 800px, 장당 수십 kB)이고 원본은 뷰어를 연 사진만 들어오므로, 300개라도 수십 MB
+        // 선이다. 이 수는 아래 `cacheDidUpdate` 안에도 그대로 적혀 있어야 한다 — 그 함수는
+        // 문자열로 굳어 sw.js에 들어가므로 이 파일의 상수를 참조할 수 없다.
         plugins: [
           {
             cacheKeyWillBeUsed: async ({ request }) => {
@@ -128,7 +130,7 @@ const { count, size, warnings } = await generateSW({
               // eslint-disable-next-line no-undef
               const cache = await caches.open(cacheName);
               const keys = await cache.keys();
-              const overflow = keys.length - 150;
+              const overflow = keys.length - 300;
 
               for (let index = 0; index < overflow; index += 1) {
                 await cache.delete(keys[index]);

@@ -64,6 +64,8 @@ function attachment(overrides: Partial<PostAttachment>): PostAttachment {
     size_bytes: 10,
     status: "ready",
     storage_bucket: "post-attachments",
+    thumbnail_path: null,
+    thumbnailUrl: null,
     width: null,
     signedUrl: "https://example.com/file",
     ...overrides,

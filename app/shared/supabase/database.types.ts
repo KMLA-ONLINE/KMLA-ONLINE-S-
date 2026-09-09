@@ -643,6 +643,7 @@ export type Database = {
           size_bytes: number
           status: Database["public"]["Enums"]["post_attachment_status"]
           storage_bucket: string
+          thumbnail_path: string | null
           width: number | null
         }
         Insert: {
@@ -659,6 +660,7 @@ export type Database = {
           size_bytes: number
           status?: Database["public"]["Enums"]["post_attachment_status"]
           storage_bucket?: string
+          thumbnail_path?: string | null
           width?: number | null
         }
         Update: {
@@ -675,6 +677,7 @@ export type Database = {
           size_bytes?: number
           status?: Database["public"]["Enums"]["post_attachment_status"]
           storage_bucket?: string
+          thumbnail_path?: string | null
           width?: number | null
         }
         Relationships: [
@@ -1500,6 +1503,7 @@ export type Database = {
           p_body: string
           p_category_id?: string
           p_group_id: string
+          p_mention_pub_ids?: string[]
           p_publish?: boolean
           p_title: string
         }
@@ -1645,6 +1649,7 @@ export type Database = {
           size_bytes: number
           status: Database["public"]["Enums"]["post_attachment_status"]
           storage_bucket: string
+          thumbnail_path: string | null
           width: number | null
         }
         SetofOptions: {
@@ -2107,6 +2112,7 @@ export type Database = {
           size_bytes: number
           status: Database["public"]["Enums"]["post_attachment_status"]
           storage_bucket: string
+          thumbnail_path: string
           width: number
         }[]
       }
@@ -2320,6 +2326,7 @@ export type Database = {
           size_bytes: number
           status: Database["public"]["Enums"]["post_attachment_status"]
           storage_bucket: string
+          thumbnail_path: string | null
           width: number | null
         }
         SetofOptions: {
@@ -2422,6 +2429,7 @@ export type Database = {
           size_bytes: number
           status: Database["public"]["Enums"]["post_attachment_status"]
           storage_bucket: string
+          thumbnail_path: string | null
           width: number | null
         }[]
         SetofOptions: {

@@ -26,7 +26,15 @@ export type PostAttachment = Pick<
   status?: PostAttachmentRow["status"];
   created_at?: PostAttachmentRow["created_at"];
   ready_at?: PostAttachmentRow["ready_at"] | null;
+  /** 원본의 signed URL. 이미지 뷰어와 다운로드가 쓴다. */
   signedUrl: string | null;
+  /** 축소본 object 경로. 이미지가 아니거나 축소본 업로드가 실패했으면 `null`이다. */
+  thumbnail_path: string | null;
+  /**
+   * 축소본의 signed URL. 목록에 까는 `<img>`가 이걸 먼저 쓰고, 없으면 `signedUrl`로
+   * 떨어진다 — 축소본이 없는 첨부(파일, 업로드 실패)도 화면은 그대로 동작해야 한다.
+   */
+  thumbnailUrl: string | null;
 };
 export type PostReaction = Database["public"]["Enums"]["post_reaction"];
 
@@ -175,6 +183,12 @@ export interface PostFormValues {
 export interface PreparedPostFile {
   key: string;
   file: File;
+  /**
+   * 목록에 까는 축소본. 이미지가 아니면 `null`이고, 축소본 생성이 실패해도 `null`이다 —
+   * 그때는 원본만 올라가고 목록도 원본을 그린다. 사진 한 장 때문에 글 전체가 실패하는 것보다
+   * 데이터를 조금 더 쓰는 편이 낫다.
+   */
+  thumbnail: File | null;
   kind: "image" | "file";
   width: number | null;
   height: number | null;

@@ -559,6 +559,7 @@ begin
           'attachment_id', attachment.id,
           'storage_bucket', attachment.storage_bucket,
           'object_path', attachment.object_path,
+          'thumbnail_path', attachment.thumbnail_path,
           'original_filename', attachment.original_filename,
           'position', attachment.position,
           'mime_type', attachment.mime_type,

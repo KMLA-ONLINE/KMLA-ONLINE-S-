@@ -58,6 +58,9 @@
 - 클라이언트에는 게시물 Storage object의 직접 UPDATE와 DELETE를 허용하지 않으며 upsert를 사용하지 않는다.
 - 첨부 metadata의 직접 INSERT, UPDATE 및 DELETE를 허용하지 않고 게시물 또는 댓글 작성자 권한을 확인하는 RPC로만 변경한다.
 - 게시물 하나에는 사진과 파일을 합해 최대 30개를 연결한다.
+- 사진 첨부는 원본과 목록용 축소본 두 개의 object를 가진다(기능 명세 §18.6). 축소본 path는 원본 path에서 파생되고 `post_attachments.thumbnail_path`에 기록하므로, Storage 정책이 허용하는 이름은 여전히 그 행이 예고한 것뿐이다.
+- 축소본은 원본과 같은 SELECT 정책을 따른다. 사진이 아니거나 축소본 업로드가 실패한 첨부는 `thumbnail_path`가 비어 있고, 그때는 목록도 원본을 표시한다.
+- `finalize_post_attachment`는 축소본 object가 없으면 실패시키지 않고 `thumbnail_path`를 비운다. 축소본은 데이터 사용량을 줄이는 수단이지 게시물의 일부가 아니다.
 - 게시물 또는 개별 첨부가 삭제되면 연결된 object도 정리한다.
 
 ### 4.4 `direct-message-attachments`
@@ -87,6 +90,7 @@
 | `profile-media`                | `{user_uuid}/{avatar\|cover}/{object_uuid}` |
 | `group-media`                  | `{group_uuid}/{icon\|cover}/{object_uuid}`  |
 | `post-attachments`             | `{post_uuid}/{object_uuid}`                 |
+| `post-attachments` 사진 축소본 | `{post_uuid}/{object_uuid}/thumb`           |
 | `post-attachments` 댓글 이미지 | `comments/{post_uuid}/{image_uuid}`         |
 | `direct-message-attachments`   | `{conversation_uuid}/{object_uuid}`         |
 | `group-message-attachments`    | `{conversation_uuid}/{object_uuid}`         |

@@ -1448,6 +1448,7 @@ CREATE OR REPLACE FUNCTION "public"."finalize_post_attachment"("p_attachment_id"
 declare
   attachment public.post_attachments;
   object_record storage.objects;
+  thumbnail_record storage.objects;
   is_published boolean;
 begin
   if auth.uid() is null or private.current_profile_id() is null then
@@ -1481,6 +1482,26 @@ begin
     or object_record.metadata ->> 'mimetype' is distinct from attachment.mime_type then
     raise exception 'uploaded object metadata does not match' using errcode = '22023';
   end if;
+
+  -- 썸네일이 없으면 실패시키지 않고 경로를 지운다. 축소본은 데이터 절약 수단이지 게시물의
+  -- 일부가 아니라서, 그것 하나 때문에 원본이 멀쩡한 글의 업로드를 되돌릴 이유가 없다.
+  -- 읽는 쪽은 `thumbnail_path`가 없으면 원본으로 떨어지므로 화면은 그대로 동작한다.
+  if attachment.thumbnail_path is not null then
+    select object.* into thumbnail_record
+    from storage.objects as object
+    where object.bucket_id = attachment.storage_bucket
+      and object.name = attachment.thumbnail_path;
+
+    if thumbnail_record.id is null
+      or thumbnail_record.owner_id is distinct from auth.uid()::text
+      or thumbnail_record.metadata ->> 'mimetype' not like 'image/%' then
+      update public.post_attachments
+      set thumbnail_path = null
+      where id = p_attachment_id
+      returning * into attachment;
+    end if;
+  end if;
+
   if attachment.status = 'ready' then
     return attachment;
   end if;
@@ -1802,13 +1823,14 @@ $$;
 
 ALTER FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid", "p_cursor_published_at" timestamp with time zone, "p_cursor_post_id" "uuid", "p_cursor_is_pinned" boolean, "p_limit" integer) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") RETURNS TABLE("attachment_id" "uuid", "post_id" "uuid", "storage_bucket" "text", "object_path" "text", "original_filename" "text", "position" integer, "mime_type" "text", "size_bytes" bigint, "width" integer, "height" integer, "status" "public"."post_attachment_status", "created_at" timestamp with time zone, "ready_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") RETURNS TABLE("attachment_id" "uuid", "post_id" "uuid", "storage_bucket" "text", "object_path" "text", "thumbnail_path" "text", "original_filename" "text", "position" integer, "mime_type" "text", "size_bytes" bigint, "width" integer, "height" integer, "status" "public"."post_attachment_status", "created_at" timestamp with time zone, "ready_at" timestamp with time zone)
     LANGUAGE "sql" STABLE
     SET "search_path" TO ''
     AS $$
   select item.id, item.post_id, item.storage_bucket, item.object_path,
-    item.original_filename, item.position, item.mime_type, item.size_bytes,
-    item.width, item.height, item.status, item.created_at, item.ready_at
+    item.thumbnail_path, item.original_filename, item.position, item.mime_type,
+    item.size_bytes, item.width, item.height, item.status, item.created_at,
+    item.ready_at
   from public.post_attachments as item
   where item.post_id = p_post_id
     and item.status <> 'deleted'
@@ -2176,11 +2198,18 @@ begin
     where post_id = p_post_id and status <> 'deleted' and position = candidate
   );
 
+  -- 이미지에만 썸네일 경로를 예고한다. pdf·hwp에는 축소본이랄 것이 없고, CHECK 제약도
+  -- 이미지가 아닌 행에 `thumbnail_path`가 붙는 것을 막는다. 경로는 원본에서 파생되므로
+  -- 클라이언트가 정하지 않는다 — Storage 정책이 이 행이 예고한 두 경로만 통과시킨다.
   insert into public.post_attachments (
-    id, post_id, object_path, original_filename, position, mime_type,
-    size_bytes, width, height
+    id, post_id, object_path, thumbnail_path, original_filename, position,
+    mime_type, size_bytes, width, height
   ) values (
     attachment_id, p_post_id, p_post_id::text || '/' || attachment_id::text,
+    case
+      when lower(btrim(p_mime_type)) like 'image/%'
+      then p_post_id::text || '/' || attachment_id::text || '/thumb'
+    end,
     btrim(p_original_filename), next_position, btrim(p_mime_type),
     p_size_bytes, p_width, p_height
   ) returning * into attachment;

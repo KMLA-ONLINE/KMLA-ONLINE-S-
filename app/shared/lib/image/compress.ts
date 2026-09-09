@@ -24,6 +24,17 @@ const PRESETS = {
   banner: { maxEdge: 2400, maxBytes: 4 * 1024 * 1024, quality: 0.85 },
   /** 글·채팅에 첨부한 사진. 눌러서 크게 열 수 있다. */
   photo: { maxEdge: 3072, maxBytes: 8 * 1024 * 1024, quality: 0.85 },
+  /**
+   * 목록에 까는 축소본. 피드와 그룹 게시물 목록이 이걸 그리고, 원본은 뷰어에서만 연다.
+   *
+   * 800px은 화면에서 필요한 값을 거꾸로 계산한 것이다. 가장 큰 자리가 모바일 전체폭 단일
+   * 사진 카드(약 390 CSS px)이고, DPR 2에서 780 device px다. 그리드 타일은 그 절반 아래다.
+   * `photo`가 3072px이라 같은 사진이 장당 수백 kB에서 수십 kB로 떨어진다.
+   *
+   * 품질이 `photo`보다 낮은 건, 이 이미지가 원래 크기의 4분의 1로 그려져 압축 흔적이
+   * 눈에 덜 띄기 때문이다. 크게 볼 때는 어차피 뷰어가 원본을 연다.
+   */
+  thumbnail: { maxEdge: 800, maxBytes: 1024 * 1024, quality: 0.8 },
 } as const satisfies Record<string, CompressionPolicy>;
 
 export type ImagePreset = keyof typeof PRESETS;

@@ -19,8 +19,15 @@ import { cn } from "~/shared/lib/utils";
 
 export interface ViewerImage {
   id: string;
-  /** 화면에 그릴 URL. */
+  /** 화면에 그릴 URL. 크게 보는 자리라 언제나 원본이다. */
   src: string;
+  /**
+   * 하단 썸네일 목록이 그릴 URL. 없으면 `src`로 떨어진다.
+   *
+   * 이게 따로 있는 이유는 그 목록이 **묶음의 모든 이미지**를 한 번에 그리기 때문이다.
+   * 사진 열 장짜리 게시물을 열면 56px 칸 열 개를 채우려고 원본 열 장을 받게 된다.
+   */
+  thumbSrc?: string;
   /** 저장 버튼이 쓸 URL. 같은 파일이지만 서버가 첨부로 내려주는 주소다. */
   downloadSrc: string;
   /** alt text이자 헤더 라벨. */
@@ -154,10 +161,11 @@ function Filmstrip({
               )}
             >
               <img
-                src={image.src}
+                src={image.thumbSrc ?? image.src}
                 alt=""
                 crossOrigin="anonymous"
                 draggable={false}
+                loading="lazy"
                 className="size-full object-cover"
               />
             </button>

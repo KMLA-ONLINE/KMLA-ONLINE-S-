@@ -38,6 +38,9 @@ function readAttachments(value: Json, postId: string): PostAttachment[] {
         width: typeof item.width === "number" ? item.width : null,
         height: typeof item.height === "number" ? item.height : null,
         signedUrl: null,
+        thumbnail_path:
+          typeof item.thumbnail_path === "string" ? item.thumbnail_path : null,
+        thumbnailUrl: null,
       },
     ];
   });
@@ -134,7 +137,10 @@ export async function hydrateFeedPostMedia(
   const [attachmentUrls, profileUrls] = await Promise.all([
     createPostAttachmentUrls(
       posts.flatMap((post) =>
-        post.attachments.map((attachment) => attachment.object_path),
+        post.attachments.flatMap((attachment) => [
+          attachment.object_path,
+          attachment.thumbnail_path,
+        ]),
       ),
     ),
     createProfileMediaUrls(
@@ -152,6 +158,9 @@ export async function hydrateFeedPostMedia(
     const attachments = post.attachments.map((attachment) => ({
       ...attachment,
       signedUrl: attachmentUrls.get(attachment.object_path) ?? null,
+      thumbnailUrl: attachment.thumbnail_path
+        ? (attachmentUrls.get(attachment.thumbnail_path) ?? null)
+        : null,
     }));
     if (post.kind === "group")
       return {

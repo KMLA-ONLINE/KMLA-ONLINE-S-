@@ -10,7 +10,7 @@ create temporary table cleanup_claims (
 grant select, insert on cleanup_claims to service_role;
 create temporary table attachment_test_ids (name text primary key, id uuid not null);
 grant select, insert on attachment_test_ids to authenticated;
-select plan(66);
+select plan(71);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -110,6 +110,52 @@ select throws_ok(
   '23514', 'a post can have at most 30 attachments',
   'a 31st attachment is rejected'
 );
+
+-- 축소본(§18.1). 이미지에만 두 번째 object를 예고하고, 경로는 원본에서 파생된다.
+select is(
+  (select thumbnail_path from public.post_attachments
+   where post_id = (select id from attachment_test_ids where name = 'limit_draft')
+   order by position limit 1),
+  null,
+  'a non-image attachment is not given a thumbnail path'
+);
+
+reset role;
+delete from public.post_attachments
+where post_id = (select id from attachment_test_ids where name = 'limit_draft');
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+
+select lives_ok(
+  $$select public.prepare_post_attachment(
+      (select id from attachment_test_ids where name = 'limit_draft'),
+      'photo.webp', 'image/webp', 100, 10, 10
+    )$$,
+  'an image attachment can be prepared'
+);
+select is(
+  (select thumbnail_path from public.post_attachments
+   where post_id = (select id from attachment_test_ids where name = 'limit_draft')),
+  (select object_path || '/thumb' from public.post_attachments
+   where post_id = (select id from attachment_test_ids where name = 'limit_draft')),
+  'an image attachment gets a thumbnail path derived from its own object path'
+);
+
+reset role;
+select throws_ok(
+  $$update public.post_attachments set thumbnail_path = 'anywhere/i/like'$$,
+  '23514', null,
+  'a thumbnail path that is not derived from the object path is rejected'
+);
+select throws_ok(
+  $$update public.post_attachments
+    set mime_type = 'application/pdf'
+    where thumbnail_path is not null$$,
+  '23514', null,
+  'a non-image row cannot keep a thumbnail path'
+);
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
 
 reset role;
 delete from public.posts where id = (select id from attachment_test_ids where name = 'limit_draft');

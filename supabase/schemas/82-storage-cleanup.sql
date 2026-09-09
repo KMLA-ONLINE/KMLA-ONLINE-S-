@@ -138,11 +138,20 @@ begin
           and post.published_at is null
           and post.created_at <= now() - interval '48 hours'
       )
-    returning attachment.storage_bucket as bucket, attachment.object_path as object_path
+    returning
+      attachment.storage_bucket as bucket,
+      attachment.object_path as object_path,
+      attachment.thumbnail_path as thumbnail_path
   )
+  -- 이미지 첨부는 object가 둘이다(원본 + 썸네일). 행은 이미 지워졌으므로 여기서 둘 다
+  -- 큐에 넣지 않으면 남는 쪽의 경로를 다시 알아낼 방법이 없다.
   insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
-  select expired.bucket, expired.object_path, 'post_attachment'
+  select expired.bucket, path.object_path, 'post_attachment'
   from expired
+  cross join lateral (
+    values (expired.object_path), (expired.thumbnail_path)
+  ) as path(object_path)
+  where path.object_path is not null
   on conflict (bucket, object_path) do update
     set dry_run = queue.dry_run and excluded.dry_run;
   get diagnostics moved = row_count;
