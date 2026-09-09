@@ -8,6 +8,7 @@ export function postComment(overrides: Partial<PostComment> = {}): PostComment {
     author_name: "이한별",
     author_pub_id: "hanbyeol-25",
     body: "댓글 본문",
+    mentions: [],
     anonymous_author_restricted: false,
     anonymous_author_restriction_expires_at: null,
     can_delete: false,

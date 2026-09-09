@@ -68,6 +68,37 @@
 - 운영자용 게시물·댓글 응답은 `can_moderate_anonymous`, `anonymous_author_restricted`와 활성 제한의 만료 시각만 공개한다. 실제 작성자 ID나 제한 대상 목록을 추가하지 마라.
 - 익명 게시·댓글 쓰기는 같은 그룹/대상의 advisory lock 아래 활성 제한을 검사한다. 즉시 게시, 두 초안 게시 경로와 댓글 경로 중 하나라도 빠뜨리면 제재와 작성이 경합할 때 우회된다.
 
+## 멘션
+
+- 본문에 남는 것은 `[@표시이름](m:<ordinal>)` 토큰뿐이고 실제 대상은 `public.post_mentions` /
+  `public.comment_mentions`에 있다. 본문에 `pub_id`를 박지 마라 — 공개 ID는 바뀌고 놓아준 값을
+  남이 다시 쓸 수 있어서(기능 명세 §12.2) 오래된 멘션이 조용히 다른 사람을 가리킨다. ordinal은
+  그 본문 안에서만 뜻이 있어 내부 프로필 ID도 새지 않는다.
+- 토큰이 CommonMark 링크 모양인 것은 편집기 때문이다. Milkdown이 커스텀 노드 없이 링크로 그려
+  주고 remark 왕복도 그대로 통과한다. 대신 `sanitizePostMarkdown()`의 링크 허용과
+  `PostMarkdown`의 `urlTransform`이 `m:` 하나를 함께 열어 줘야 한다 — 둘 중 하나만 빠뜨리면
+  정화가 링크를 풀어 멘션이 평문이 된다.
+- **수신자는 클라이언트가 준 목록이 아니라 본문에서 파생한다.** `private.sync_post_mentions()`가
+  본문을 정규식으로 훑어 ordinal을 뽑고 그 자리의 `pub_id`만 해석한다. 목록을 그대로 믿으면
+  본문에 없는 사람에게 알림을 보내게 할 수 있다.
+- 본문을 쓰는 경로는 전부 sync를 지나야 한다: `create_group_post`, `commit_group_post`,
+  `create_post_comment`, `update_post_comment`. 한때 `update_group_post`가 같은 일을 하면서 sync를
+  지나지 않아 함께 지웠다 — 본문 쓰기 경로를 새로 만들면 여기도 늘려라.
+- 수정은 행을 통째로 지우고 다시 넣는다. "제거 후 재추가에는 재알림 없음"(기능 명세 §8.14)과
+  "새로 추가된 대상에게만 알림"이 둘 다 `emit_notification`의 event key에서 나오므로, 여기서
+  차이를 계산하지 마라.
+- 알림은 두 곳에서 낸다. `post_mentions`의 INSERT 트리거는 이미 게시된 글을, `notify_post_published`는
+  초안이 게시되는 순간을 맡는다. 초안 커밋에서 둘이 겹칠 수 있지만 event key가 흡수한다. 한쪽만
+  두면 `publish_group_post`로 게시한 초안이 조용해진다.
+- 익명은 막고 운영진 명의는 연다. 운영진 명의 글은 실제 작성자의 이름과 사진을 그대로 보여주므로
+  (기능 명세 §8.6) 익명 뒤에 숨는 지목이 아니다. 초안의 신원 전환(`update_group_post_draft_identity`)도
+  같은 이유로 멘션이 남아 있으면 거절한다 — 안 막으면 익명 금지가 통째로 우회된다.
+- 후보 검색은 `search_group_mention_candidates`다. 명부(`list_group_members`)와 정렬이 다르다 —
+  명부는 그룹 역할 순이고 여기는 선생님 먼저, 그다음 최근 기수 순이다. 명부에 정렬 인자를 얹지 말고
+  이 함수를 써라.
+- 화면의 이름은 언제나 읽기 RPC의 `mentions`에서 온다. 토큰 안의 이름은 원문을 읽을 때를 위한
+  장식이므로 렌더러가 그것을 쓰면 개명이 반영되지 않는다.
+
 ## 직접 접근을 막은 테이블
 
 `post_comments`, `comment_images`, `post_reactions`, `comment_reactions`에는 select grant조차 주지 않는다. 읽기도 쓰기도 definer RPC를 거친다.

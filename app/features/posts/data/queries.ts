@@ -1,3 +1,7 @@
+import {
+  withMentions,
+  type MentionCandidate,
+} from "~/features/posts/model/mentions";
 import type {
   CommentCursor,
   CommentImage,
@@ -179,7 +183,7 @@ export async function listGroupPosts(
     p_limit: GROUP_POST_PAGE_SIZE + 1,
   });
   if (error) throw error;
-  const rows = data ?? [];
+  const rows = (data ?? []).map(withMentions);
   const postsWithFiles = await attachFiles(
     rows.slice(0, GROUP_POST_PAGE_SIZE),
     false,
@@ -253,7 +257,7 @@ export async function getGroupPost(
   const post = data?.[0];
   if (!post) return null;
   const [hydrated] = await hydrateGroupPostMedia([
-    { ...post, attachments: await listPostAttachments(postId) },
+    { ...withMentions(post), attachments: await listPostAttachments(postId) },
   ]);
   return hydrated;
 }
@@ -324,7 +328,7 @@ export async function listPostComments(
     p_limit: POST_COMMENT_PAGE_SIZE + 1,
   });
   if (error) throw error;
-  const rows = data ?? [];
+  const rows = (data ?? []).map(withMentions);
   const hasMore = rows.length > POST_COMMENT_PAGE_SIZE;
   const comments = await hydratePostComments(
     hasMore ? rows.slice(0, POST_COMMENT_PAGE_SIZE) : rows,
@@ -347,7 +351,7 @@ export async function listPostCommentReplies(
     p_root_comment_id: rootCommentId,
   });
   if (error) throw error;
-  return hydratePostComments(data ?? []);
+  return hydratePostComments((data ?? []).map(withMentions));
 }
 
 /**
@@ -371,4 +375,29 @@ export async function listCommentReactors(
   });
   if (error) throw error;
   return data ?? [];
+}
+
+/**
+ * 멘션 후보 한 페이지(기능 명세 §8.14).
+ *
+ * 정렬은 RPC가 정한다 — 선생님이 먼저, 그다음 최근 기수부터다. 명부(`list_group_members`)와
+ * 순서가 다르므로 그쪽을 재사용하지 않는다. 커서를 두지 않는 것은 부를 사람을 찾는 화면이기
+ * 때문이다. 목록을 끝까지 훑는 대신 검색어로 좁힌다.
+ */
+export async function searchGroupMentionCandidates(
+  groupId: string,
+  query = "",
+): Promise<MentionCandidate[]> {
+  const { data, error } = await getSupabase().rpc(
+    "search_group_mention_candidates",
+    { p_group_id: groupId, p_query: query, p_limit: 30 },
+  );
+  if (error) throw error;
+  const rows = data ?? [];
+  const urls = await createProfileMediaUrls(rows.map((row) => row.avatar_path));
+  return rows.map((row) => ({
+    ...row,
+    cohort: row.cohort ?? null,
+    avatar_path: row.avatar_path ? (urls.get(row.avatar_path) ?? null) : null,
+  }));
 }

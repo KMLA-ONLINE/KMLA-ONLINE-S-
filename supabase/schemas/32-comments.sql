@@ -76,6 +76,83 @@ $$;
 
 ALTER FUNCTION "private"."is_comment_image_uploader"("p_image_id" "uuid") OWNER TO "postgres";
 
+-- 댓글의 멘션 토큰과 `public.comment_mentions`를 맞춘다. 게시물 쪽
+-- `private.sync_post_mentions`와 같은 규칙이며, 그룹 판정만 부모 게시물에서 가져온다.
+CREATE OR REPLACE FUNCTION "private"."sync_comment_mentions"("p_comment_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_mention_pub_ids" "text"[]) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  post_record public.posts;
+  ordinals smallint[] := private.parse_mention_ordinals(p_body);
+  resolved_count integer;
+begin
+  delete from public.comment_mentions where comment_id = p_comment_id;
+  if coalesce(array_length(ordinals, 1), 0) = 0 then
+    return;
+  end if;
+
+  select post.* into post_record
+  from public.posts as post
+  join public.post_comments as comment on comment.post_id = post.id
+  where comment.id = p_comment_id;
+  -- 개인 게시물의 댓글에는 멘션을 두지 않는다(기능 명세 §8.14).
+  if post_record.kind <> 'group' then
+    raise exception 'mentions are only available in group posts' using errcode = '22023';
+  end if;
+  if p_author_identity = 'anonymous' then
+    raise exception 'anonymous comments cannot mention members' using errcode = '42501';
+  end if;
+  if (select max(entry.ordinal) from unnest(ordinals) as entry(ordinal)) > 10 then
+    raise exception 'a comment can mention at most 10 members' using errcode = '22023';
+  end if;
+
+  insert into public.comment_mentions (comment_id, ordinal, profile_id)
+  select p_comment_id, entry.ordinal, profile.id
+  from unnest(ordinals) as entry(ordinal)
+  join public.profiles as profile
+    on lower(profile.pub_id) = lower(btrim(coalesce(p_mention_pub_ids[entry.ordinal], '')))
+    and profile.status = 'accepted'
+    and profile.deleted_at is null
+  join public.group_memberships as membership
+    on membership.group_id = post_record.group_id
+    and membership.profile_id = profile.id;
+  get diagnostics resolved_count = row_count;
+
+  if resolved_count <> array_length(ordinals, 1) then
+    raise exception 'every mention must name a current group member' using errcode = '22023';
+  end if;
+end;
+$$;
+
+ALTER FUNCTION "private"."sync_comment_mentions"("p_comment_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_mention_pub_ids" "text"[]) OWNER TO "postgres";
+
+-- 댓글 읽기 RPC가 본문 옆에 실어 보내는 표현용 멘션 목록. 탈퇴한 사용자는 다른 화면과 같은
+-- 규칙으로 null이 되어 나가고 화면이 `탈퇴한 사용자`로 그린다.
+CREATE OR REPLACE FUNCTION "private"."comment_mentions_json"("p_comment_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO ''
+    AS $$
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'ordinal', mention.ordinal,
+        'pub_id', profile.pub_id,
+        'name', profile.name,
+        'avatar_path', profile.avatar_path
+      )
+      order by mention.ordinal
+    ),
+    '[]'::jsonb
+  )
+  from public.comment_mentions as mention
+  left join public.profiles as profile on profile.id = mention.profile_id
+    and profile.status = 'accepted' and profile.deleted_at is null
+  where mention.comment_id = p_comment_id;
+$$;
+
+ALTER FUNCTION "private"."comment_mentions_json"("p_comment_id" "uuid") OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "private"."prevent_comment_immutable_changes"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO ''
@@ -238,6 +315,17 @@ CREATE TABLE IF NOT EXISTS "public"."post_comments" (
 
 ALTER TABLE "public"."post_comments" OWNER TO "postgres";
 
+-- 댓글 멘션도 게시물과 같은 모양이다(기능 명세 §8.14). `public.post_mentions`의 주석에 왜
+-- 본문에 pub_id를 두지 않는지 적어 두었다.
+CREATE TABLE IF NOT EXISTS "public"."comment_mentions" (
+    "comment_id" "uuid" NOT NULL,
+    "ordinal" smallint NOT NULL,
+    "profile_id" bigint NOT NULL,
+    CONSTRAINT "comment_mentions_ordinal_range" CHECK ((("ordinal" >= 1) AND ("ordinal" <= 10)))
+);
+
+ALTER TABLE "public"."comment_mentions" OWNER TO "postgres";
+
 ALTER TABLE ONLY "private"."comment_authors"
     ADD CONSTRAINT "comment_authors_pkey" PRIMARY KEY ("comment_id");
 
@@ -261,6 +349,13 @@ ALTER TABLE ONLY "public"."comment_images"
 
 ALTER TABLE ONLY "public"."post_comments"
     ADD CONSTRAINT "post_comments_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."comment_mentions"
+    ADD CONSTRAINT "comment_mentions_pkey" PRIMARY KEY ("comment_id", "ordinal");
+
+-- 한 사람은 한 댓글에서 ordinal 하나를 쓴다. 같은 사람이 ordinal 둘로 들어오면 화면의
+-- 칩과 대상이 1:1이 아니게 되고, 클라이언트가 제출 전에 다시 매기는 번호와도 어긋난다.
+CREATE UNIQUE INDEX "comment_mentions_target_idx" ON "public"."comment_mentions" USING "btree" ("comment_id", "profile_id");
 
 CREATE INDEX "comment_authors_profile_idx" ON "private"."comment_authors" USING "btree" ("profile_id", "comment_id");
 
@@ -339,6 +434,12 @@ ALTER TABLE ONLY "public"."post_comments"
 ALTER TABLE ONLY "public"."post_comments"
     ADD CONSTRAINT "post_comments_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id") ON DELETE CASCADE;
 
+ALTER TABLE ONLY "public"."comment_mentions"
+    ADD CONSTRAINT "comment_mentions_comment_id_fkey" FOREIGN KEY ("comment_id") REFERENCES "public"."post_comments"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."comment_mentions"
+    ADD CONSTRAINT "comment_mentions_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+
 ALTER TABLE "private"."comment_authors" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "comment_authors_deny_client_access" ON "private"."comment_authors" USING (false) WITH CHECK (false);
@@ -358,6 +459,10 @@ CREATE POLICY "group_anonymous_restrictions_deny_client_access" ON "private"."gr
 ALTER TABLE "public"."comment_images" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "comment_images_deny_client_access" ON "public"."comment_images" USING (false) WITH CHECK (false);
+
+ALTER TABLE "public"."comment_mentions" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "comment_mentions_deny_client_access" ON "public"."comment_mentions" USING (false) WITH CHECK (false);
 
 ALTER TABLE "public"."post_comments" ENABLE ROW LEVEL SECURITY;
 
@@ -415,6 +520,10 @@ REVOKE ALL ON FUNCTION "private"."comment_author_label"("p_identity" "public"."p
 
 
 REVOKE ALL ON FUNCTION "private"."is_comment_image_uploader"("p_image_id" "uuid") FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "private"."sync_comment_mentions"("p_comment_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_mention_pub_ids" "text"[]) FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "private"."comment_mentions_json"("p_comment_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."is_comment_image_uploader"("p_image_id" "uuid") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "private"."prevent_comment_immutable_changes"() FROM PUBLIC;
@@ -432,7 +541,10 @@ REVOKE ALL ON FUNCTION "private"."assert_group_anonymous_activity_allowed"("p_gr
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."comment_images" TO "service_role";
 
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."post_comments" TO "service_role";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."comment_mentions" TO "service_role";
 
 REVOKE MAINTAIN, REFERENCES, TRIGGER, TRUNCATE ON TABLE "public"."post_comments" FROM "anon", "authenticated";
+
+REVOKE MAINTAIN, REFERENCES, TRIGGER, TRUNCATE ON TABLE "public"."comment_mentions" FROM "anon", "authenticated";
 
 REVOKE MAINTAIN, REFERENCES, TRIGGER, TRUNCATE ON TABLE "public"."comment_images" FROM "anon", "authenticated";

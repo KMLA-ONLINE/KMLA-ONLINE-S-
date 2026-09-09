@@ -1,6 +1,7 @@
 import {
   defaultValueCtx,
   Editor as MilkdownEditor,
+  editorViewCtx,
   rootCtx,
 } from "@milkdown/core";
 import { history, redoCommand, undoCommand } from "@milkdown/plugin-history";
@@ -52,7 +53,7 @@ import {
   StrikethroughIcon,
   Undo2Icon,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useImperativeHandle, useRef, type RefObject } from "react";
 
 import {
   fromPostEditorMarkdown,
@@ -60,6 +61,8 @@ import {
   sanitizePostMarkdown,
   toMilkdownMarkdown,
 } from "~/features/posts/model/markdown";
+import type { PostBodyInputHandle } from "~/features/posts/components/editor/post-body-input";
+import { sanitizeMentionLabel } from "~/features/posts/model/mentions";
 import { Button } from "~/shared/ui/button";
 
 const markdownSchema = [
@@ -140,15 +143,18 @@ const imeSafeShortcuts = $prose(
 export default function DesktopMarkdownEditor({
   initialValue,
   onValueChange,
+  handleRef,
 }: {
   initialValue: string;
   onValueChange?: (value: string) => void;
+  handleRef?: RefObject<PostBodyInputHandle | null>;
 }) {
   return (
     <MilkdownProvider>
       <EditorSurface
         initialValue={initialValue}
         onValueChange={onValueChange}
+        handleRef={handleRef}
       />
     </MilkdownProvider>
   );
@@ -157,9 +163,11 @@ export default function DesktopMarkdownEditor({
 function EditorSurface({
   initialValue,
   onValueChange,
+  handleRef,
 }: {
   initialValue: string;
   onValueChange?: (value: string) => void;
+  handleRef?: RefObject<PostBodyInputHandle | null>;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const lastValue = useRef(
@@ -193,6 +201,31 @@ function EditorSurface({
   ) => {
     get()?.action(command);
   };
+
+  // 멘션은 저장 형식이 CommonMark 링크라(`model/mentions.ts`) 편집기에도 링크 mark 로 넣는다.
+  // Markdown 원문을 글자로 흘려 넣으면 WYSIWYG 이 그것을 링크로 다시 읽지 않아 `[@이름](m:1)`이
+  // 그대로 보인다.
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      insertMention(label: string, ordinal: number) {
+        get()?.action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          const { state, dispatch } = view;
+          const mark = linkSchema.type(ctx).create({ href: `m:${ordinal}` });
+          const mention = state.schema.text(`@${sanitizeMentionLabel(label)}`, [
+            mark,
+          ]);
+          // 뒤에 이어 쓸 때 링크 안으로 빨려 들어가지 않도록 mark 없는 공백을 함께 넣는다.
+          const trailing = state.schema.text(" ");
+          const { from, to } = state.selection;
+          dispatch(state.tr.replaceWith(from, to, [mention, trailing]));
+          view.focus();
+        });
+      },
+    }),
+    [get],
+  );
   const link = () => {
     const value = window.prompt("링크 URL (https:// 또는 http://)");
     if (!value) return;

@@ -23,6 +23,8 @@ export function readPostForm(formData: FormData): PostFormValues {
     authorIdentity: IDENTITIES.includes(identity as PostIdentity)
       ? (identity as PostIdentity)
       : "identified",
+    // 멘션은 폼 필드가 아니라 편집기 상태다. 읽어 온 값에 부르는 쪽이 얹는다.
+    mentions: [],
   };
 }
 

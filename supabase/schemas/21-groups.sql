@@ -953,6 +953,63 @@ $$;
 
 ALTER FUNCTION "public"."list_group_members"("p_group_id" "uuid", "p_query" "text", "p_after_role" "public"."group_member_role", "p_after_joined_at" timestamp with time zone, "p_after_membership_id" "uuid", "p_limit" integer) OWNER TO "postgres";
 
+-- 멘션 후보 목록(기능 명세 §8.14). 명부(`list_group_members`)와 정렬이 다르다 -- 명부는 그룹
+-- 역할 순이지만 여기서는 선생님을 먼저, 그다음 최근 기수부터 보여준다. 부를 일이 잦은 순서다.
+-- 명부 RPC에 정렬 인자를 얹지 않고 따로 둔 것은 반환 모양도 다르기 때문이다: 화면이 기수를
+-- 함께 보여주므로 `type`이 필요하고, 커서 페이지네이션은 필요 없다.
+CREATE OR REPLACE FUNCTION "public"."search_group_mention_candidates"("p_group_id" "uuid", "p_query" "text" DEFAULT ''::"text", "p_limit" integer DEFAULT 30) RETURNS TABLE("pub_id" "text", "name" "text", "cohort" smallint, "is_returning_student" boolean, "profile_type" "public"."profile_type", "avatar_path" "text")
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  query_text text := btrim(coalesce(p_query, ''));
+begin
+  if auth.uid() is null or caller_profile_id is null then
+    raise exception 'group membership required' using errcode = '42501';
+  end if;
+  if p_limit not between 1 and 50 then
+    raise exception 'mention candidate limit must be between 1 and 50' using errcode = '22023';
+  end if;
+  if not exists (
+    select 1 from public.group_memberships as caller_membership
+    where caller_membership.group_id = p_group_id
+      and caller_membership.profile_id = caller_profile_id
+  ) then
+    raise exception 'group membership required' using errcode = '42501';
+  end if;
+
+  return query
+  select profile.pub_id, profile.name, profile.cohort,
+    profile.is_returning_student, profile.type, profile.avatar_path
+  from public.group_memberships as membership
+  join public.profiles as profile on profile.id = membership.profile_id
+  where membership.group_id = p_group_id
+    and profile.status = 'accepted'
+    and profile.deleted_at is null
+    and (
+      query_text = ''
+      or profile.name ilike '%' || query_text || '%'
+      -- 명부와 같은 규칙으로 표시값을 검색한다. 복학생은 n.5기로 보이므로 '20'이 20기와
+      -- 20.5기를 함께 찾는다.
+      or (
+        profile.cohort + case when profile.is_returning_student then 0.5 else 0 end
+      )::text like '%' || query_text || '%'
+      -- 선생님은 기수가 없어 화면에 '선생님'으로 나온다. 보이는 대로 검색되어야 한다.
+      or (profile.type = 'teacher' and '선생님' like '%' || query_text || '%')
+    )
+  order by
+    case when profile.type = 'teacher' then 0 else 1 end,
+    (profile.cohort + case when profile.is_returning_student then 0.5 else 0 end)
+      desc nulls last,
+    profile.name,
+    profile.id
+  limit p_limit;
+end;
+$$;
+
+ALTER FUNCTION "public"."search_group_mention_candidates"("p_group_id" "uuid", "p_query" "text", "p_limit" integer) OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "public"."prepare_group_media"("p_group_id" "uuid", "p_slot" "public"."group_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) RETURNS TABLE("media_id" "uuid", "object_path" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -1501,6 +1558,9 @@ GRANT ALL ON FUNCTION "public"."list_group_join_requests"("p_group_id" "uuid") T
 
 REVOKE ALL ON FUNCTION "public"."list_group_members"("p_group_id" "uuid", "p_query" "text", "p_after_role" "public"."group_member_role", "p_after_joined_at" timestamp with time zone, "p_after_membership_id" "uuid", "p_limit" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."list_group_members"("p_group_id" "uuid", "p_query" "text", "p_after_role" "public"."group_member_role", "p_after_joined_at" timestamp with time zone, "p_after_membership_id" "uuid", "p_limit" integer) TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."search_group_mention_candidates"("p_group_id" "uuid", "p_query" "text", "p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."search_group_mention_candidates"("p_group_id" "uuid", "p_query" "text", "p_limit" integer) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."prepare_group_media"("p_group_id" "uuid", "p_slot" "public"."group_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."prepare_group_media"("p_group_id" "uuid", "p_slot" "public"."group_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) TO "authenticated";

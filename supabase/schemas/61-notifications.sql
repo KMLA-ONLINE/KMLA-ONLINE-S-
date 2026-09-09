@@ -40,7 +40,9 @@ create type public.notification_kind as enum (
   'app_admin_revoked',
   'gongang_manager_granted',
   'gongang_manager_revoked',
-  'gongang_preempted'
+  'gongang_preempted',
+  'post_mentioned',
+  'comment_mentioned'
 );
 alter type public.notification_kind owner to postgres;
 
@@ -935,6 +937,8 @@ begin
       when 'account_blocked' then '가입이 차단되었습니다.'
       when 'account_unblocked' then '차단이 해제되었습니다.'
       when 'anonymous_activity_restricted' then '그룹 익명 활동이 제한되었습니다.'
+      when 'post_mentioned' then '게시물에서 회원님을 멘션했습니다.'
+      when 'comment_mentioned' then '댓글에서 회원님을 멘션했습니다.'
       else '새 알림이 있습니다.'
     end,
     case
@@ -1156,6 +1160,142 @@ end;
 $$;
 alter function private.notify_comment_created() owner to postgres;
 
+-- 알림 제목은 그대로 잠금 화면 Push 제목이 된다. 게시물 제목을 밝히되(운영 조치 알림이 쓰는
+-- 같은 문형) 40자에서 자른다 -- 길면 화면에서 잘려 문장이 통째로 사라진다.
+create or replace function private.mention_notification_title(
+  p_post_title text,
+  p_in_comment boolean
+) returns text
+language sql immutable
+set search_path = ''
+as $$
+  select '“'
+    || case
+      when char_length(btrim(coalesce(p_post_title, ''))) > 40
+        then left(btrim(p_post_title), 39) || '…'
+      else btrim(coalesce(p_post_title, ''))
+    end
+    || '” 게시물'
+    || case when p_in_comment then '의 댓글' else '' end
+    || '에서 회원님을 멘션했습니다.';
+$$;
+alter function private.mention_notification_title(text, boolean) owner to postgres;
+
+-- 게시된 게시물의 현재 멘션 전원에게 알림을 시도한다. event key가 이미 알린 사람을 막으므로
+-- 여러 번 불러도 처음 등장한 사람만 새 알림을 받는다.
+create or replace function private.emit_post_mention_notifications(p_post_id uuid)
+returns void
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  post_record public.posts;
+  actor_profile_id bigint := private.current_profile_id();
+  actor_profile public.profiles;
+  actor_identity public.notification_actor_identity;
+  mention record;
+begin
+  if actor_profile_id is null then return; end if;
+  select post.* into post_record from public.posts as post where post.id = p_post_id;
+  if post_record.id is null or post_record.published_at is null
+    or post_record.kind <> 'group' then
+    return;
+  end if;
+  actor_identity := post_record.author_identity::text::public.notification_actor_identity;
+  select profile.* into actor_profile
+  from public.profiles as profile where profile.id = actor_profile_id;
+
+  for mention in
+    select target.profile_id from public.post_mentions as target
+    where target.post_id = p_post_id
+  loop
+    perform private.emit_notification(
+      'post-mention:' || p_post_id::text || ':' || mention.profile_id::text,
+      mention.profile_id, 'post_mentioned', 'normal', 'content', actor_identity,
+      actor_profile_id,
+      case actor_identity
+        when 'identified' then coalesce(actor_profile.name, '탈퇴한 사용자')
+        else '운영진'
+      end,
+      case when actor_identity = 'identified' then actor_profile.avatar_path end,
+      private.mention_notification_title(post_record.title, false),
+      post_record.group_id, p_post_id
+    );
+  end loop;
+end;
+$$;
+alter function private.emit_post_mention_notifications(uuid) owner to postgres;
+
+create or replace function private.notify_post_mention()
+returns trigger
+language plpgsql security definer
+set search_path = ''
+as $$
+begin
+  perform private.emit_post_mention_notifications(new.post_id);
+  return new;
+end;
+$$;
+alter function private.notify_post_mention() owner to postgres;
+
+create or replace function private.notify_comment_mention()
+returns trigger
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  comment_record public.post_comments;
+  post_record public.posts;
+  actor_profile_id bigint := private.current_profile_id();
+  actor_profile public.profiles;
+  actor_identity public.notification_actor_identity;
+  direct_recipient_profile_id bigint;
+begin
+  if actor_profile_id is null then return new; end if;
+  select comment.* into comment_record
+  from public.post_comments as comment where comment.id = new.comment_id;
+  if comment_record.id is null or comment_record.deleted_at is not null then
+    return new;
+  end if;
+  select post.* into post_record
+  from public.posts as post where post.id = comment_record.post_id;
+  if post_record.id is null or post_record.published_at is null then return new; end if;
+
+  -- 댓글·답글 알림이 이미 간 사람에게는 멘션 알림을 만들지 않는다(기능 명세 §14.9). 한 댓글로
+  -- 알림 카드 두 장을 받는 일이 없어야 한다.
+  if comment_record.parent_comment_id is not null then
+    select author.profile_id into direct_recipient_profile_id
+    from private.comment_authors as author
+    where author.comment_id = comment_record.parent_comment_id;
+  else
+    select author.profile_id into direct_recipient_profile_id
+    from private.post_authors as author
+    where author.post_id = comment_record.post_id;
+  end if;
+  if new.profile_id is not distinct from direct_recipient_profile_id then
+    return new;
+  end if;
+
+  actor_identity := comment_record.author_identity::text::public.notification_actor_identity;
+  select profile.* into actor_profile
+  from public.profiles as profile where profile.id = actor_profile_id;
+  perform private.emit_notification(
+    'comment-mention:' || new.comment_id::text || ':' || new.profile_id::text,
+    new.profile_id, 'comment_mentioned', 'normal', 'content', actor_identity,
+    actor_profile_id,
+    case actor_identity
+      when 'identified' then coalesce(actor_profile.name, '탈퇴한 사용자')
+      else '운영진'
+    end,
+    case when actor_identity = 'identified' then actor_profile.avatar_path end,
+    private.mention_notification_title(post_record.title, true),
+    post_record.group_id, comment_record.post_id, new.comment_id
+  );
+  return new;
+end;
+$$;
+alter function private.notify_comment_mention() owner to postgres;
+
 create or replace function private.notify_reaction_created()
 returns trigger
 language plpgsql security definer
@@ -1246,6 +1386,9 @@ begin
         new.title, new.group_id, new.id
       );
     end loop;
+    -- 초안에 멘션을 넣고 나중에 게시하면(`publish_group_post`) 멘션 행은 이미 있고 새
+    -- INSERT가 없어 트리거가 돌지 않는다. 게시되는 이 순간이 그 알림의 유일한 자리다.
+    perform private.emit_post_mention_notifications(new.id);
   elsif new.timeline_profile_id <> actor_profile_id then
     perform private.emit_notification(
       'timeline-post:' || new.id::text,
@@ -1459,6 +1602,12 @@ for each row execute function private.prepare_group_notification_preferences();
 create trigger post_comments_notify_created
 after insert on public.post_comments
 for each row execute function private.notify_comment_created();
+create trigger post_mentions_notify_created
+after insert on public.post_mentions
+for each row execute function private.notify_post_mention();
+create trigger comment_mentions_notify_created
+after insert on public.comment_mentions
+for each row execute function private.notify_comment_mention();
 create trigger post_reactions_notify_created
 after insert on public.post_reactions
 for each row execute function private.notify_reaction_created();
@@ -1522,6 +1671,10 @@ revoke all on function private.cleanup_expired_notifications() from public;
 revoke all on function private.invoke_notification_dispatcher() from public;
 revoke all on function private.prepare_group_notification_preferences() from public;
 revoke all on function private.notify_comment_created() from public;
+revoke all on function private.mention_notification_title(text, boolean) from public;
+revoke all on function private.emit_post_mention_notifications(uuid) from public;
+revoke all on function private.notify_post_mention() from public;
+revoke all on function private.notify_comment_mention() from public;
 revoke all on function private.notify_reaction_created() from public;
 revoke all on function private.notify_post_published() from public;
 revoke all on function private.notify_group_join_requested() from public;

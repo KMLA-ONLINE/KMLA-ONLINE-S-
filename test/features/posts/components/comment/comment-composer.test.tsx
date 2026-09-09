@@ -60,7 +60,7 @@ describe("CommentComposer", () => {
     expect(onSubmit).not.toHaveBeenCalled();
 
     await user.type(input, "{Enter}");
-    expect(onSubmit).toHaveBeenCalledWith("첫 줄\n둘째 줄");
+    expect(onSubmit).toHaveBeenCalledWith("첫 줄\n둘째 줄", undefined, []);
   });
 
   it("ignores Enter while an IME composition is still open", async () => {
@@ -76,7 +76,7 @@ describe("CommentComposer", () => {
 
     fireEvent.compositionEnd(input);
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(onSubmit).toHaveBeenCalledWith("안녕하세");
+    expect(onSubmit).toHaveBeenCalledWith("안녕하세", undefined, []);
   });
 
   it("keeps the send button unavailable while the draft is blank", async () => {
@@ -161,7 +161,11 @@ describe("CommentComposer", () => {
 
     await user.type(input, "지워지면 안 되는 댓글{Enter}");
 
-    expect(onSubmit).toHaveBeenCalledWith("지워지면 안 되는 댓글");
+    expect(onSubmit).toHaveBeenCalledWith(
+      "지워지면 안 되는 댓글",
+      undefined,
+      [],
+    );
     await screen.findByDisplayValue("지워지면 안 되는 댓글");
   });
 
@@ -171,7 +175,7 @@ describe("CommentComposer", () => {
 
     await user.type(input, "올라간 댓글{Enter}");
 
-    expect(onSubmit).toHaveBeenCalledWith("올라간 댓글");
+    expect(onSubmit).toHaveBeenCalledWith("올라간 댓글", undefined, []);
     await vi.waitFor(() => expect(input).toHaveValue(""));
   });
 
@@ -217,7 +221,7 @@ describe("CommentComposer", () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "댓글 게시" }));
 
-    expect(onSubmit).toHaveBeenCalledWith("", preparedImage);
+    expect(onSubmit).toHaveBeenCalledWith("", preparedImage, []);
   });
 
   it("keeps the image draft when submission fails", async () => {

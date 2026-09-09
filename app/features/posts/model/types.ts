@@ -1,3 +1,7 @@
+import type {
+  MentionDraftEntry,
+  PostMention,
+} from "~/features/posts/model/mentions";
 import type { Database } from "~/shared/supabase/database.types";
 
 type Functions = Database["public"]["Functions"];
@@ -49,24 +53,30 @@ type WithReactions<Row> = Omit<Row, keyof ReactionSummary> & ReactionSummary;
 export type GroupPost = WithReactions<
   Omit<
     GroupPostRow,
-    "author_avatar_path" | "anonymous_author_restriction_expires_at"
+    | "author_avatar_path"
+    | "anonymous_author_restriction_expires_at"
+    | "mentions"
   >
 > & {
   author_avatar_path: string | null;
   anonymous_author_restriction_expires_at: string | null;
   attachments: PostAttachment[];
+  mentions: PostMention[];
 };
 // 검색 결과에는 댓글 수와 반응을 표시하지 않으므로(기능 명세 §8.9) 목록과 반환 모양이 다르다.
 export type GroupPostSearchResult = GroupPostSearchRow;
 export type GroupPostDetail = WithReactions<
   Omit<
     GroupPostDetailRow,
-    "author_avatar_path" | "anonymous_author_restriction_expires_at"
+    | "author_avatar_path"
+    | "anonymous_author_restriction_expires_at"
+    | "mentions"
   >
 > & {
   author_avatar_path: string | null;
   anonymous_author_restriction_expires_at: string | null;
   attachments: PostAttachment[];
+  mentions: PostMention[];
 };
 export type PostVisibility = Database["public"]["Enums"]["post_visibility"];
 export type ProfileMediaActivityKind =
@@ -154,6 +164,12 @@ export interface PostFormValues {
   body: string;
   categoryId: string;
   authorIdentity: PostIdentity;
+  /**
+   * 본문의 `(m:<ordinal>)` 토큰이 가리키는 사람들(기능 명세 §8.14). 저장 직전
+   * `normalizeMentions()`가 본문에 남은 토큰만 추려 번호를 다시 매기므로, 여기에는 편집기가
+   * 지금까지 고른 대상이 그대로 쌓여 있어도 된다.
+   */
+  mentions: MentionDraftEntry[];
 }
 
 export interface PreparedPostFile {
@@ -211,10 +227,11 @@ export interface CommentImage {
 
 /** 목록, 답글 묶음, 방금 작성한 댓글이 모두 같은 행 모양을 쓴다. */
 export type PostComment = WithReactions<
-  Omit<PostCommentRow, "anonymous_author_restriction_expires_at">
+  Omit<PostCommentRow, "anonymous_author_restriction_expires_at" | "mentions">
 > & {
   anonymous_author_restriction_expires_at: string | null;
   images: CommentImage[];
+  mentions: PostMention[];
 };
 
 export type CommentImageInput = CommentImage | PreparedCommentImage | null;

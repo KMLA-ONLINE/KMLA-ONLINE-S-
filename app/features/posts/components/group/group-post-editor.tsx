@@ -23,7 +23,15 @@ import {
   getPostErrorMessage,
 } from "~/features/posts/model/format";
 import { PostAttachmentEditor } from "~/features/posts/components/editor/post-attachment-editor";
-import { PostBodyInput } from "~/features/posts/components/editor/post-body-input";
+import {
+  PostBodyInput,
+  type PostBodyInputHandle,
+} from "~/features/posts/components/editor/post-body-input";
+import { MentionButton } from "~/features/posts/components/mention-button";
+import {
+  remainingMentions,
+  useMentionDraft,
+} from "~/features/posts/hooks/use-mention-draft";
 import {
   PostEditorLayout,
   PostFormField,
@@ -84,8 +92,13 @@ export function GroupPostEditor({
     body: post?.body ?? "",
     categoryId: post?.category_id ?? "",
     authorIdentity: post?.author_identity ?? identities[0],
+    mentions: [],
   };
   const [formErrors, setFormErrors] = useState<PostFormErrors>({});
+  // 수정 화면은 상세 RPC 가 돌려준 `mentions`가 곧 본문 토큰의 번호표다. 새 글은 빈 표에서
+  // 시작한다.
+  const mentionDraft = useMentionDraft(post?.mentions ?? []);
+  const bodyHandle = useRef<PostBodyInputHandle>(null);
   const bodyRef = useRef(initial.body);
   const [draftTitle, setDraftTitle] = useState(initial.title);
   const [draftBody, setDraftBody] = useState(initial.body);
@@ -212,6 +225,7 @@ export function GroupPostEditor({
     const nextValues: PostFormValues = {
       ...readPostForm(new FormData(event.currentTarget)),
       body: normalizePostMarkdownSource(bodyRef.current),
+      mentions: mentionDraft.entries,
     };
     const nextErrors = validatePostForm(
       nextValues,
@@ -336,11 +350,30 @@ export function GroupPostEditor({
             <PostBodyInput
               value={draftBody}
               className="flex-1"
+              handleRef={bodyHandle}
               onValueChange={(value) => {
                 bodyRef.current = value;
                 setDraftBody(value);
               }}
             />
+            {/*
+              익명 글은 멘션할 수 없다(기능 명세 §8.14). 운영진 명의는 실제 작성자의 이름과
+              사진이 그대로 보이므로(§8.6) 익명이 아니고, 여기서 감추지 않는다.
+            */}
+            {draftIdentity === "anonymous" ? null : (
+              <div className="flex items-center gap-1">
+                <MentionButton
+                  groupId={groupId}
+                  disabled={saving}
+                  remaining={remainingMentions(draftBody, mentionDraft.entries)}
+                  onSelect={(candidate) => {
+                    const ordinal = mentionDraft.register(candidate);
+                    bodyHandle.current?.insertMention(candidate.name, ordinal);
+                  }}
+                />
+                <span className="text-xs text-muted-foreground">멤버 멘션</span>
+              </div>
+            )}
           </PostFormField>
         </div>
         <PostAttachmentEditor

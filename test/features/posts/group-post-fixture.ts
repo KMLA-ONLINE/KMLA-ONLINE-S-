@@ -9,6 +9,7 @@ export function groupPost(overrides: Partial<GroupPost> = {}): GroupPost {
     author_name: "김서민",
     author_pub_id: "author-pub-id",
     body: "본문",
+    mentions: [],
     anonymous_author_restricted: false,
     anonymous_author_restriction_expires_at: null,
     can_delete: false,

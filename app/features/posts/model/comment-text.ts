@@ -6,6 +6,7 @@ export const COMMENT_MAX_LENGTH = 5000;
 export type CommentSegment =
   | { type: "text"; value: string }
   | { type: "link"; value: string }
+  | { type: "mention"; ordinal: number; label: string }
   | { type: "break" };
 
 /**
@@ -61,6 +62,12 @@ export function validateCommentBody(
 const URL_PATTERN = /https?:\/\/[^\s]+/gi;
 
 /**
+ * 멘션 토큰. 게시물 본문과 같은 문법을 쓰지만(`model/mentions.ts`) 댓글은 Markdown 을 해석하지
+ * 않으므로 링크가 아니라 이 한 가지 모양만 따로 알아본다.
+ */
+const MENTION_PATTERN = /\[@([^\]\n]*)\]\(m:([0-9]{1,2})\)/g;
+
+/**
  * URL 뒤에 따라붙은 문장 부호는 링크에서 뗀다. "자세히는 https://example.com/a. 여기서"의
  * 마침표까지 링크에 넣으면 눌렀을 때 다른 주소로 간다.
  */
@@ -95,18 +102,60 @@ export function parseCommentText(value: string): CommentSegment[] {
   lines.forEach((line, index) => {
     if (index > 0) segments.push({ type: "break" });
 
-    let cursor = 0;
+    // 멘션과 URL 을 한 줄에서 함께 찾아 등장 순서대로 잇는다. 따로 훑으면 뒤에 훑는 쪽이
+    // 앞의 결과를 덮어 순서가 뒤집힌다.
+    const found: {
+      index: number;
+      length: number;
+      segment: CommentSegment;
+      trailing?: string;
+    }[] = [];
+
+    MENTION_PATTERN.lastIndex = 0;
+    let mention: RegExpExecArray | null;
+    while ((mention = MENTION_PATTERN.exec(line)) !== null) {
+      found.push({
+        index: mention.index,
+        length: mention[0].length,
+        segment: {
+          type: "mention",
+          ordinal: Number(mention[2]),
+          label: mention[1],
+        },
+      });
+    }
+
     URL_PATTERN.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = URL_PATTERN.exec(line)) !== null) {
       const [link, trailing] = splitTrailingPunctuation(match[0]);
       if (!isSafePostLink(link)) continue;
-      if (match.index > cursor) {
-        segments.push({ type: "text", value: line.slice(cursor, match.index) });
+      // 멘션 토큰 안의 `m:1`은 URL 이 아니지만, 토큰 뒤에 붙은 진짜 주소와 겹칠 수는 있다.
+      const overlaps = found.some(
+        (item) =>
+          match!.index < item.index + item.length &&
+          item.index < match!.index + match![0].length,
+      );
+      if (overlaps) continue;
+      found.push({
+        index: match.index,
+        length: match[0].length,
+        segment: { type: "link", value: link },
+        trailing,
+      });
+    }
+
+    found.sort((left, right) => left.index - right.index);
+
+    let cursor = 0;
+    for (const item of found) {
+      if (item.index < cursor) continue;
+      if (item.index > cursor) {
+        segments.push({ type: "text", value: line.slice(cursor, item.index) });
       }
-      segments.push({ type: "link", value: link });
-      if (trailing) segments.push({ type: "text", value: trailing });
-      cursor = match.index + match[0].length;
+      segments.push(item.segment);
+      if (item.trailing) segments.push({ type: "text", value: item.trailing });
+      cursor = item.index + item.length;
     }
     if (cursor < line.length) {
       segments.push({ type: "text", value: line.slice(cursor) });

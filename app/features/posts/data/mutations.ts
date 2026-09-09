@@ -1,3 +1,8 @@
+import {
+  normalizeMentions,
+  withMentions,
+  type MentionDraftEntry,
+} from "~/features/posts/model/mentions";
 import type {
   GroupCategory,
   CommentImageInput,
@@ -102,13 +107,15 @@ export async function createGroupPost(
   values: PostFormValues,
   publish = true,
 ): Promise<string> {
+  const mentions = normalizeMentions(values.body, values.mentions);
   const { data, error } = await getSupabase().rpc("create_group_post", {
     p_group_id: groupId,
     p_title: values.title,
-    p_body: values.body,
+    p_body: mentions.body,
     p_category_id: values.categoryId || undefined,
     p_author_identity: values.authorIdentity,
     p_publish: publish,
+    p_mention_pub_ids: mentions.pubIds,
   });
   if (error) throw error;
   return data;
@@ -328,13 +335,17 @@ async function commitGroupPost(
   attachmentIds: string[],
   publish: boolean,
 ): Promise<void> {
+  // 편집기가 매긴 번호를 본문에 남은 토큰 기준으로 다시 매긴다. 서버는 ordinal 을 배열 첨자로
+  // 쓰고 1~10 만 받으므로, 넣었다 지우기를 반복한 본문을 그대로 보내면 상한에 걸린다.
+  const mentions = normalizeMentions(values.body, values.mentions);
   const { error } = await getSupabase().rpc("commit_group_post", {
     p_post_id: postId,
     p_title: values.title,
-    p_body: values.body,
+    p_body: mentions.body,
     p_category_id: values.categoryId || undefined,
     p_attachment_ids: attachmentIds,
     p_publish: publish,
+    p_mention_pub_ids: mentions.pubIds,
   });
   if (error) throw error;
 }
@@ -902,23 +913,26 @@ export async function createPostComment(
   authorIdentity: PostIdentity,
   parentCommentId?: string | null,
   image?: CommentImageInput,
+  mentionEntries: MentionDraftEntry[] = [],
   session = createCommentImageUploadSession(),
 ): Promise<PostComment> {
   const imageId =
     image && "file" in image
       ? await uploadCommentImage(postId, image, session)
       : undefined;
+  const mentions = normalizeMentions(body, mentionEntries);
   const { data, error } = await getSupabase().rpc("create_post_comment", {
     p_post_id: postId,
-    p_body: body,
+    p_body: mentions.body,
     p_author_identity: authorIdentity,
     p_parent_comment_id: parentCommentId ?? undefined,
     p_image_id: imageId,
+    p_mention_pub_ids: mentions.pubIds,
   });
   if (error) throw error;
   const comment = data?.[0];
   if (!comment) throw new Error("댓글을 저장하지 못했습니다.");
-  return hydrateCommittedComment(comment);
+  return hydrateCommittedComment(withMentions(comment));
 }
 
 export async function updatePostComment(
@@ -926,6 +940,7 @@ export async function updatePostComment(
   body: string,
   postId: string,
   image: CommentImageInput | undefined,
+  mentionEntries: MentionDraftEntry[] = [],
   session = createCommentImageUploadSession(),
 ): Promise<PostComment> {
   const imageId =
@@ -934,16 +949,18 @@ export async function updatePostComment(
       : image && "image_id" in image
         ? image.image_id
         : undefined;
+  const mentions = normalizeMentions(body, mentionEntries);
   const { data, error } = await getSupabase().rpc("update_post_comment", {
     p_comment_id: commentId,
-    p_body: body,
+    p_body: mentions.body,
     p_image_id: imageId,
     p_remove_image: image === null,
+    p_mention_pub_ids: mentions.pubIds,
   });
   if (error) throw error;
   const comment = data?.[0];
   if (!comment) throw new Error("댓글을 수정하지 못했습니다.");
-  return hydrateCommittedComment(comment);
+  return hydrateCommittedComment(withMentions(comment));
 }
 
 export async function deletePostComment(commentId: string): Promise<void> {

@@ -59,6 +59,16 @@ export {
 } from "~/features/posts/model/format";
 export { resolveIdentityOptions } from "~/features/posts/model/identity";
 export {
+  MENTION_LIMIT,
+  parseMentions,
+  withMentions,
+} from "~/features/posts/model/mentions";
+export type {
+  MentionCandidate,
+  MentionDraftEntry,
+  PostMention,
+} from "~/features/posts/model/mentions";
+export {
   createPostListRevalidation,
   shouldRevalidatePostDetail,
 } from "~/features/posts/model/revalidation";

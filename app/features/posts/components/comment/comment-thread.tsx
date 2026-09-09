@@ -1,3 +1,4 @@
+import type { MentionDraftEntry } from "~/features/posts/model/mentions";
 import { useEffect, useRef, useState, type RefObject } from "react";
 
 import type { CommentViewer } from "~/features/posts/components/comment/comment-composer";
@@ -39,6 +40,7 @@ export function CommentThread({
   onToggleReplies,
   onReply,
   onEdit,
+  mentionGroupId,
   onDelete,
   onReact,
 }: {
@@ -61,7 +63,10 @@ export function CommentThread({
     comment: PostComment,
     body: string,
     image?: CommentImageInput,
+    mentions?: MentionDraftEntry[],
   ) => void | Promise<unknown>;
+  /** 멘션할 수 있는 그룹. 개인 게시물에는 넘기지 않는다(기능 명세 §8.14). */
+  mentionGroupId?: string | null;
   onDelete: (comment: PostComment) => void | Promise<unknown>;
   onReact: (comment: PostComment, next: PostReaction | null) => void;
 }) {
@@ -141,7 +146,10 @@ export function CommentThread({
               highlighted={highlighted === comment.comment_id}
               pending={pending}
               onReply={() => onReply(comment)}
-              onEdit={(body, image) => onEdit(comment, body, image)}
+              mentionGroupId={mentionGroupId}
+              onEdit={(body, image, mentions) =>
+                onEdit(comment, body, image, mentions)
+              }
               onDelete={() => void onDelete(comment)}
               onReact={(next) => onReact(comment, next)}
             />
@@ -183,7 +191,10 @@ export function CommentThread({
                         reply.parent_comment_id &&
                         jumpTo(reply.parent_comment_id)
                       }
-                      onEdit={(body, image) => onEdit(reply, body, image)}
+                      mentionGroupId={mentionGroupId}
+                      onEdit={(body, image, mentions) =>
+                        onEdit(reply, body, image, mentions)
+                      }
                       onDelete={() => void onDelete(reply)}
                       onReact={(next) => onReact(reply, next)}
                     />

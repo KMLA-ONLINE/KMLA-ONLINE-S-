@@ -63,6 +63,7 @@ const values = {
   body: "",
   categoryId: "",
   authorIdentity: "identified" as const,
+  mentions: [],
 };
 const prepared = {
   key: "file-key",
@@ -348,6 +349,7 @@ describe("comment image orchestration", () => {
       "identified",
       null,
       prepared,
+      [],
       createCommentImageUploadSession(),
     );
 
@@ -375,6 +377,7 @@ describe("comment image orchestration", () => {
       "identified",
       null,
       prepared,
+      [],
       createCommentImageUploadSession(),
     );
 
@@ -408,6 +411,7 @@ describe("comment image orchestration", () => {
         "identified",
         null,
         prepared,
+        [],
         session,
       ),
     ).rejects.toThrow("offline");
@@ -421,6 +425,7 @@ describe("comment image orchestration", () => {
       "identified",
       null,
       prepared,
+      [],
       session,
     );
     expect(
@@ -445,6 +450,7 @@ describe("comment image orchestration", () => {
       p_body: "updated",
       p_image_id: undefined,
       p_remove_image: true,
+      p_mention_pub_ids: [],
     });
   });
 });
