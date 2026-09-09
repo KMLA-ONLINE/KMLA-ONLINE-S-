@@ -53,7 +53,7 @@ describe("post attachment files", () => {
     expect(from).toHaveBeenCalledWith("post-attachments");
     expect(upload).toHaveBeenCalledWith("post/file", file, {
       contentType: "application/pdf",
-      cacheControl: "31536000",
+      cacheControl: "86400",
       upsert: false,
     });
   });

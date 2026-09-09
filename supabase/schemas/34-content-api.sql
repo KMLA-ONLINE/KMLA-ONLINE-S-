@@ -1494,7 +1494,26 @@ begin
 
     if thumbnail_record.id is null
       or thumbnail_record.owner_id is distinct from auth.uid()::text
-      or thumbnail_record.metadata ->> 'mimetype' not like 'image/%' then
+      -- Storage metadata comes from the upload request, so do not trust the
+      -- client-side compressor to enforce the thumbnail contract by itself.
+      or thumbnail_record.metadata ->> 'mimetype' is distinct from 'image/webp'
+      or (
+        case
+          when thumbnail_record.metadata ->> 'size' ~ '^[0-9]+$'
+          then (thumbnail_record.metadata ->> 'size')::bigint > 1048576
+          else true
+        end
+      ) then
+      -- A rejected thumbnail is not referenced after this point. Queue the
+      -- uploaded object before clearing its path so the sweeper does not have
+      -- to discover it 48 hours later.
+      if thumbnail_record.id is not null then
+        insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+        values (attachment.storage_bucket, attachment.thumbnail_path, 'post_attachment')
+        on conflict (bucket, object_path) do update
+          set dry_run = queue.dry_run and excluded.dry_run;
+      end if;
+
       update public.post_attachments
       set thumbnail_path = null
       where id = p_attachment_id

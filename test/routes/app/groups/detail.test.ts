@@ -224,6 +224,18 @@ describe("group detail loader", () => {
     expect(result.anonymousActivityRestriction).toBe(restriction);
   });
 
+  it("checks current membership again after a focused group route invalidates access cache", async () => {
+    await load("/groups/test");
+    await getQueryClient().invalidateQueries({
+      queryKey: groupKeys.all,
+      refetchType: "none",
+    });
+
+    await load("/groups/test");
+
+    expect(mutations.loadGroupDetail).toHaveBeenCalledTimes(2);
+  });
+
   it("returns a refreshed post list while a detail modal is open", async () => {
     const initialPage = {
       posts: [{ post_id: "old-post" }],

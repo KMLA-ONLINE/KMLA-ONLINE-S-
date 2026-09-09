@@ -98,7 +98,7 @@ export function shouldRevalidate({
   if (formMethod && formMethod !== "GET") return true;
 
   // 명시적 revalidate(`useRevalidator().revalidate()`)는 URL이 그대로다.
-  // 알림을 읽고 뱃지를 떨어뜨릴 때 이 경로로 들어온다.
+  // 알림 Realtime·focus 복귀에서 현재 알림함을 다시 읽을 때 이 경로로 들어온다.
   if (
     currentUrl.pathname === nextUrl.pathname &&
     currentUrl.search === nextUrl.search

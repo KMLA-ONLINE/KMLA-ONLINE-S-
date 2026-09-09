@@ -1,12 +1,12 @@
 /**
- * Storage 업로드가 요청하는 캐시 수명. 1년(초)이다.
+ * Storage 업로드가 요청하는 캐시 수명. 24시간(초)이다.
  *
- * 이렇게까지 길게 잡아도 되는 이유는 경로가 불변이기 때문이다. 업로드는 매번 새
- * UUID 경로를 받고 기존 object를 덮어쓰지 않으므로(`upsert: false`), 한 URL이
- * 나중에 다른 내용을 가리키는 일이 없다.
+ * 경로는 불변이지만 HTTP 캐시는 Storage/RLS에 다시 묻지 않는다. 그래서 여기의 24시간은
+ * 권한 회수 뒤에도 기기에 남은 이미지를 다시 열 수 있는 최대 기간이다. signed URL 자체는
+ * 별도로 1시간만 유효하다.
  *
- * 버는 건 대부분 브라우저 캐시다. Smart CDN이 없으면 signed URL은 토큰마다 별개의
- * 캐시 키가 되어 CDN 히트를 기대하기 어렵고, 기본값인 1시간은 같은 URL을 다시 여는
- * 동안에도 이미지를 다시 받아오게 만든다.
+ * signed URL이 55분 동안 Query cache에서 재사용되므로 같은 화면을 다시 열 때는 일반
+ * HTTP 캐시도 계속 이긴다. 그 이후의 이미지 재사용은 Service Worker의 24시간 미디어
+ * 캐시가 맡되, 원본처럼 1MiB를 넘는 응답은 보관하지 않는다.
  */
-export const STORAGE_UPLOAD_CACHE_CONTROL = "31536000";
+export const STORAGE_UPLOAD_CACHE_CONTROL = "86400";

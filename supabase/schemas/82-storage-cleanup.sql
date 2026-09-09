@@ -98,6 +98,12 @@ union all
 select attachment.storage_bucket, attachment.object_path
 from public.post_attachments as attachment
 union all
+-- 이미지 첨부는 원본과 축소본을 함께 참조한다. 둘 중 하나라도 빠뜨리면 2층 스윕이
+-- 정상 게시물의 파일을 고아로 오인해 삭제한다.
+select attachment.storage_bucket, attachment.thumbnail_path
+from public.post_attachments as attachment
+where attachment.thumbnail_path is not null
+union all
 select image.storage_bucket, image.object_path
 from public.comment_images as image
 union all

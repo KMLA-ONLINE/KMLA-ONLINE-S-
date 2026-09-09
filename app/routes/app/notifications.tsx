@@ -6,12 +6,10 @@ import {
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
-  notificationKeys,
 } from "~/features/notifications";
 import { NotificationInbox } from "~/features/notifications/components/notification-inbox";
 import type { NotificationCursor } from "~/features/notifications";
 import type { Route } from "./+types/notifications";
-import { getQueryClient } from "~/shared/lib/query-client";
 
 // 헤더와 탭바를 고정으로 둔다. 자동 숨김은 숨길 때 둘의 자리를 음수 마진으로 반납해
 // 스크롤 영역 높이를 바꾸는데, 목록이 길어 끝까지 내려가면 브라우저가 그만큼 scrollTop을
@@ -38,11 +36,10 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
-  // 읽음 처리는 셸 뱃지를 떨어뜨린다. 예전에는 form POST가 게이트를 재검증하면서 뱃지가
-  // 딸려 왔지만, 이제 뱃지는 쿼리가 소유하므로 여기서 직접 무효화한다.
+  // POST 뒤 게이트 loader가 notification badge query를 항상 새로 읽는다. 여기서 같은 키를
+  // 다시 invalidate하면 그 RPC를 한 번 더 끝낸 뒤 gate가 또 요청하게 된다.
   if (intent === "mark-all") {
     const marked = await markAllNotificationsRead();
-    await invalidateBadge();
     return { marked };
   }
   if (intent === "mark-one") {
@@ -51,17 +48,10 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
       return data({ error: "알림을 찾을 수 없습니다." }, { status: 400 });
     }
     const marked = (await markNotificationRead(notificationId)) ? 1 : 0;
-    await invalidateBadge();
     return { marked };
   }
 
   return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
-}
-
-function invalidateBadge() {
-  return getQueryClient().invalidateQueries({
-    queryKey: notificationKeys.badge(),
-  });
 }
 
 export default function NotiPage({ loaderData }: Route.ComponentProps) {

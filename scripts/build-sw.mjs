@@ -69,17 +69,15 @@ const { count, size, warnings } = await generateSW({
     {
       // Storage 이미지. 여기가 모바일 데이터의 대부분이고, 캐시가 없으면 앱을 다시 열
       // 때마다 전부 다시 받는다 — signed URL은 서명할 때마다 토큰이 달라져 URL이 바뀌고,
-      // URL이 바뀌면 `Cache-Control: 31536000`을 붙여 둬도 브라우저 캐시가 통째로 빗나가기
+      // URL이 바뀌면 `Cache-Control: 86400`을 붙여 둬도 브라우저 캐시가 통째로 빗나가기
       // 때문이다. 그래서 토큰을 뗀 경로를 캐시 키로 쓴다(`cacheKeyWillBeUsed`). object
       // 경로는 UUID이고 업로드가 덮어쓰지 않으므로(`upsert: false`) 한 키가 나중에 다른
       // 내용을 가리키는 일이 없다.
       //
       // 이 캐시에는 보호된 이미지가 들어간다. 계정이 바뀌면
       // `syncUserScopedStorage()`가 통째로 지운다 — `docs/DATA_CACHE_POLICY.md` §1·§6.
-      // 담을 것을 두 번 거른다. `request.destination`으로 가르지 않는 이유는, 그 값이
-      // 정확히 이 기능이 겨냥하는 플랫폼(구형 WebKit)에서 cross-origin 이미지에 대해
-      // 빈 문자열로 오는 사례가 있기 때문이다. 그러면 라우트가 아예 안 걸려 캐시가 조용히
-      // 꺼지고, 아무 데도 오류가 남지 않는다.
+      // signed URL을 가진 탭 밖 요청이 같은 token-less 키를 읽지 못하도록 `<img>` 요청만
+      // 받는다. 이 제한은 권한 회수 뒤 24시간인 로컬 이미지 보관 경계에도 필요하다.
       //
       // 1. `download` 파라미터가 붙은 URL은 제외한다. 첨부 다운로드 링크는 같은 URL에
       //    `?download=<파일명>`을 붙여 `Content-Disposition`을 받는데, 아래
@@ -89,9 +87,10 @@ const { count, size, warnings } = await generateSW({
       // 2. 응답의 `content-type`이 이미지인 것만 담는다(`cacheWillUpdate`). post-attachments
       //    버킷은 MIME 제한이 없고 상한이 30 MB라 pdf·hwp가 같은 경로로 나가는데, 한 번
       //    받고 마는 파일이 캐시를 차지할 이유가 없다. opaque 응답은 헤더가 비어 있어 이
-      //    검사에서 저절로 떨어진다 — 성공과 403을 구분할 수 없는 응답을 30일 동안 붙들고
-      //    있다가 깨진 이미지로 굳는 일이 없다.
-      urlPattern: ({ url }) =>
+      //    검사에서 저절로 떨어진다 — 성공과 403을 구분할 수 없는 응답을 캐시에 남기지
+      //    않는다.
+      urlPattern: ({ request, url }) =>
+        request.destination === "image" &&
         url.pathname.includes("/storage/v1/object/sign/") &&
         !url.searchParams.has("download"),
       handler: "CacheFirst",
@@ -103,26 +102,69 @@ const { count, size, warnings } = await generateSW({
         // `maxAgeSeconds`도 한 건도 지우지 못하고, 캐시는 origin 용량 상한까지 자란다.
         // (덤으로 그 플러그인은 토큰이 붙은 URL을 IndexedDB에 남긴다.)
         //
-        // 그래서 상한은 같은 키로 직접 건다. `cache.keys()`는 넣은 순서대로 돌려주므로
-        // 가장 오래 전에 넣은 것부터 버린다. LRU는 아니지만, 경로가 불변이라 잘못 버려도
-        // 다음에 다시 받는 것뿐이고 추가 장부가 필요 없다.
+        // 그래서 상한은 같은 키로 직접 건다. 응답에 붙이는 저장 시각으로 24시간이 지난
+        // entry는 읽기 전에 지우고, `cache.keys()`는 넣은 순서대로 돌려주므로 나머지는 가장
+        // 오래 전에 넣은 것부터 버린다. LRU는 아니지만, 경로가 불변이라 잘못 버려도 다음에
+        // 다시 받는 것뿐이고 추가 장부가 필요 없다.
         //
-        // 300이라는 수는 용량으로 환산한 값이다. 목록에 깔리는 것은 이제 축소본(긴 변
-        // 800px, 장당 수십 kB)이고 원본은 뷰어를 연 사진만 들어오므로, 300개라도 수십 MB
-        // 선이다. 이 수는 아래 `cacheDidUpdate` 안에도 그대로 적혀 있어야 한다 — 그 함수는
-        // 문자열로 굳어 sw.js에 들어가므로 이 파일의 상수를 참조할 수 없다.
+        // 300이라는 수는 용량으로 환산한 값이다. 축소본은 서버가 1MiB 이하로만 확정하고,
+        // 그보다 큰 원본·커버는 아예 넣지 않으므로 최악의 경우도 약 300MiB다. 이 숫자와
+        // byte 상한은 아래 플러그인 안에도 그대로 적혀 있어야 한다 — 함수는 문자열로 굳어
+        // sw.js에 들어가므로 이 파일의 상수를 참조할 수 없다.
         plugins: [
           {
+            cachedResponseWillBeUsed: async ({
+              cacheName,
+              request,
+              cachedResponse,
+            }) => {
+              if (!cachedResponse) return null;
+
+              const cachedAt = Number(
+                cachedResponse.headers.get("x-kmla-storage-cached-at"),
+              );
+              if (
+                !Number.isFinite(cachedAt) ||
+                Date.now() - cachedAt > 24 * 60 * 60 * 1000
+              ) {
+                // workbox-build가 이 함수만 sw.js에 넣으므로 `caches`는 Service Worker
+                // 전역이다. 이 파일의 나머지는 Node라 ESLint에는 직접 알려야 한다.
+                // eslint-disable-next-line no-undef
+                const cache = await caches.open(cacheName);
+                const key = new URL(request.url);
+                key.search = "";
+                await cache.delete(key.href);
+                return null;
+              }
+
+              return cachedResponse;
+            },
             cacheKeyWillBeUsed: async ({ request }) => {
               const url = new URL(request.url);
               url.search = "";
               return url.href;
             },
-            cacheWillUpdate: async ({ response }) =>
-              response.status === 200 &&
-              (response.headers.get("content-type") ?? "").startsWith("image/")
-                ? response
-                : null,
+            cacheWillUpdate: async ({ response }) => {
+              if (
+                response.status !== 200 ||
+                !(response.headers.get("content-type") ?? "").startsWith(
+                  "image/",
+                )
+              ) {
+                return null;
+              }
+
+              const body = await response.clone().blob();
+              if (body.size > 1024 * 1024) return null;
+
+              const headers = new Headers(response.headers);
+              headers.set("x-kmla-storage-cached-at", String(Date.now()));
+              return new Response(body, {
+                status: response.status,
+                statusText: response.statusText,
+                headers,
+              });
+            },
             cacheDidUpdate: async ({ cacheName }) => {
               // 이 함수 본문은 여기서 실행되지 않는다. workbox-build가 문자열로 굳혀
               // sw.js에 넣으므로 `caches`는 Service Worker 전역이다. 이 파일의 나머지는
