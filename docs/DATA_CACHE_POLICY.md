@@ -10,6 +10,11 @@
   허용한다. signed URL 자체(토큰)는 여전히 메모리에만 둔다.
   - 캐시 키에서 쿼리 문자열을 떼어 object 경로만 남긴다. 토큰을 저장하지 않기 위해서이자,
     서명할 때마다 URL이 달라져 캐시가 통째로 빗나가는 것을 막기 위해서다.
+  - `request.destination`이 `image`인 요청만 담는다. `post-attachments`는 MIME 제한이 없어
+    pdf·hwp가 같은 경로로 나가고, 첨부 다운로드는 같은 URL에 `?download=`를 붙여
+    `Content-Disposition`을 받는다. 쿼리를 뗀 키만 보면 인라인 이미지와 다운로드가 한 키로
+    겹쳐, 이미 본 이미지를 다운로드할 때 헤더 없는 응답이 캐시에서 나온다. 새 이미지
+    렌더 경로를 추가할 때 이 조건을 깨지 않는지 확인한다.
   - 캐시 이름은 `kmla-online-storage-media` 하나이고, `scripts/build-sw.mjs`와
     `app/shared/lib/user-scoped-storage.ts`가 같은 이름을 쓴다.
   - 저장소의 주인이 바뀌면 `localStorage` 계정 키와 **같은 시점에** 캐시를 통째로 지운다.

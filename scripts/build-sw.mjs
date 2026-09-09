@@ -76,7 +76,21 @@ const { count, size, warnings } = await generateSW({
       //
       // 이 캐시에는 보호된 이미지가 들어간다. 계정이 바뀌면
       // `syncUserScopedStorage()`가 통째로 지운다 — `docs/DATA_CACHE_POLICY.md` §1·§6.
-      urlPattern: ({ url }) =>
+      // `destination`까지 보는 이유가 둘 있다.
+      //
+      // 하나는 post-attachments 버킷이 이미지 전용이 아니라는 것이다. MIME 제한이 없고
+      // 상한이 30 MB라 pdf·hwp가 같은 경로로 나간다. 첨부 다운로드까지 담으면 한 번 받고
+      // 마는 파일이 캐시를 차지하고, 용량 상한에 부딪히면 `purgeOnQuotaError`가 이미지까지
+      // 통째로 버린다.
+      //
+      // 다른 하나가 더 중요하다. 첨부 다운로드 링크는 같은 URL에 `?download=<파일명>`을
+      // 붙여 `Content-Disposition`을 받는데, 아래 `cacheKeyWillBeUsed`가 쿼리를 통째로
+      // 떼므로 인라인 이미지와 다운로드가 **같은 키로 겹친다.** 그대로 두면 본문에서 이미
+      // 본 이미지를 다운로드할 때 헤더 없는 응답이 캐시에서 나와 파일로 저장되지 않는다.
+      // `<img>`는 언제나 `download` 없는 URL을 쓰므로, destination으로 가르면 키가 겹칠
+      // 일이 없다.
+      urlPattern: ({ url, request }) =>
+        request.destination === "image" &&
         url.pathname.includes("/storage/v1/object/sign/"),
       handler: "CacheFirst",
       options: {
