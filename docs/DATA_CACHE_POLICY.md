@@ -6,7 +6,18 @@
 
 - 서버 조회 캐시는 TanStack Query의 브라우저 메모리 캐시만 사용한다.
 - 보호된 조회 결과와 signed URL을 `localStorage`, IndexedDB 또는 Service Worker Cache Storage에
-  저장하지 않는다.
+  저장하지 않는다. **예외는 Storage 이미지의 응답 본문 하나뿐이며**, 아래 규칙을 모두 지킬 때만
+  허용한다. signed URL 자체(토큰)는 여전히 메모리에만 둔다.
+  - 캐시 키에서 쿼리 문자열을 떼어 object 경로만 남긴다. 토큰을 저장하지 않기 위해서이자,
+    서명할 때마다 URL이 달라져 캐시가 통째로 빗나가는 것을 막기 위해서다.
+  - 캐시 이름은 `kmla-online-storage-media` 하나이고, `scripts/build-sw.mjs`와
+    `app/shared/lib/user-scoped-storage.ts`가 같은 이름을 쓴다.
+  - 저장소의 주인이 바뀌면 `localStorage` 계정 키와 **같은 시점에** 캐시를 통째로 지운다.
+    로그아웃뿐 아니라 "로그아웃하지 않고 탭만 닫은 뒤 다른 사람이 로그인"도 §7의 주인 판정이
+    함께 덮는다.
+  - opaque 응답(`status: 0`)은 캐시하지 않는다. 성공과 403을 구분할 수 없어 만료된 토큰으로
+    한 번 실패한 이미지가 깨진 채로 굳는다. Storage가 `Access-Control-Allow-Origin: *`를
+    주므로 `<img crossOrigin="anonymous">`로 받아 200만 저장한다.
 - 로그인 사용자 ID가 바뀌거나 로그아웃하면 진행 중인 보호 조회가 더 이상 재사용되지 않도록 전체
   QueryClient를 비운다.
 - 쿼리 키는 기능별 팩토리에서 정의한다. 컴포넌트와 라우트에 임의 배열 키를 흩어 놓지 않는다.
@@ -31,6 +42,7 @@
 ["groups", "join-requests", groupId]
 ["groups", "invite", groupId]
 ["groups", "reports", groupId, sort]
+["notifications", "badge"]
 ["notifications", "page", beforeLastActivityAt, beforeId]
 ["notifications", "preferences"]
 ["search", "directory", query]
@@ -45,12 +57,23 @@
 | 데이터                     | staleTime | 이유                                                                 |
 | -------------------------- | --------: | -------------------------------------------------------------------- |
 | 피드 세션                  |      15초 | 로더·화면이 같은 tick에 중복 요청하지 않게만 막는다. 아래 설명 참고. |
-| 그룹 홈·탐색·기본 상세     |      30초 | 탐색 이동의 중복 요청을 줄이고 membership 변경 시 즉시 무효화한다.   |
-| 그룹 게시물·카테고리       |      15초 | 작성·수정·고정 mutation 후 즉시 무효화한다.                          |
+| 그룹 홈·탐색·기본 상세     |       2분 | 아래 설명 참고. membership 변경 시 즉시 무효화한다.                  |
+| 그룹 게시물·카테고리       |       2분 | 아래 설명 참고. 작성·수정·고정 mutation 후 즉시 무효화한다.          |
 | 멤버·가입 요청·신고·초대   |       0초 | 권한과 운영 상태 변화에 민감하다.                                    |
 | 관리자·예약 등 미도입 영역 |       0초 | 별도 검토 전에는 기존 fresh-on-load 동작을 유지한다.                 |
-| 알림함·알림 설정           |       0초 | Realtime과 focus 복귀 시 라우트를 즉시 재검증한다.                   |
+| 알림함·알림 설정           |       0초 | Realtime과 focus 복귀 시 알림함 라우트를 즉시 재검증한다.            |
+| 셸 알림 뱃지               |       1분 | 아래 설명 참고. 읽음 처리·Realtime·focus 복귀가 즉시 무효화한다.     |
 | 전역 검색 결과             |       0초 | 매 검색이 사용자의 명시적 제출이라 재사용보다 최신성이 우선한다.     |
+
+그룹 캐시가 2분인 이유는 실제 사용 형태가 "탐색 이동"이 아니라 "다른 앱에 갔다 돌아오기"이기
+때문이다. 30초·15초는 한 세션 안에서 같은 화면을 두 번 읽지 않는 것만 노린 값이라 그 왕복을
+언제나 넘겼고, 복귀할 때마다 그룹 상세와 게시물 20개를 다시 받는 것이 모바일 데이터 사용량의 큰
+몫이었다. 늘려도 내 기기에서 한 변경은 §4의 명시적 무효화가 즉시 반영한다. 늦게 보이는 것은 다른
+기기·다른 사람이 만든 변경뿐이고, 그건 당겨서 새로고침이 덮는다.
+
+셸 뱃지는 사이드바와 탭바가 함께 읽어 observer가 둘이고 메신저 셸과 일반 셸을 오갈 때마다 다시
+마운트된다. `staleTime`이 0이면 그 왕복마다 요청이 나가므로 1분을 둔다. 최신성은 시간이 아니라
+명시적 무효화가 책임진다 — 무효화는 `staleTime`과 무관하게 활성 observer를 곧바로 다시 읽힌다.
 
 사용되지 않는 캐시의 기본 `gcTime`은 10분이다. 브라우저를 새로 열면 모든 쿼리 캐시는 비어 있다.
 Supabase가 피드 첫 페이지 요청을 5초 동안 중복 방지하는 규칙은 이 정책과 별개로 유지된다.
@@ -113,7 +136,15 @@ Storage signed URL도 같은 쿼리 캐시에 산다. 키는 `["signed-url", buc
 
 - 첫 페이지와 설정은 route loader snapshot을 사용하며 보호된 알림 데이터를 영속 저장하지 않는다.
 - 이전 페이지는 `(last_activity_at, id)` 커서로 현재 알림함 화면에만 병합하고 화면을 벗어나면 폐기한다.
-- 개별·전체 읽음 처리, 알림 Realtime 변경과 창 focus 복귀는 알림함과 셸의 최근 24시간 badge를 함께 재검증한다.
+- 셸의 최근 24시간 badge는 라우트 로더가 아니라 `["notifications", "badge"]` 쿼리가 소유한다.
+  개별·전체 읽음 처리, 알림 Realtime 변경과 창 focus 복귀는 **이 키만 무효화한다.**
+- 알림함 목록은 로더가 소유하므로, 위 세 신호는 사용자가 실제로 `/noti`에 있을 때만 라우트를
+  함께 재검증한다.
+- badge를 게이트 로더에 두지 않는다. 게이트의 `shouldRevalidate`는 같은 URL을 통과시키므로,
+  badge 하나를 갱신하려고 `revalidate()`를 부르면 지금 보고 있는 라우트의 로더까지 함께 돈다.
+  모바일에서 창 focus는 앱 전환 복귀와 키보드 내림마다 오고, 알림은 몰려서 온다 — 그룹 화면에
+  있으면 신호 한 번에 그룹 상세·카테고리·게시물 20개를 다시 받게 된다. 이 증폭이 badge를 키
+  하나로 떼어 낸 이유다.
 - Web Push 구독 정보는 브라우저 Push API와 서버 RPC에서 확인하며 endpoint와 key를 클라이언트 캐시에
   저장하지 않는다. 권한 안내를 처리했는지 여부만 기기·계정별 versioned localStorage key로 저장한다.
 
@@ -133,6 +164,14 @@ Storage signed URL도 같은 쿼리 캐시에 산다. 키는 `["signed-url", buc
 - signed URL은 메모리 쿼리 캐시에만 두고 키의 `userId`로 격리하며, 사용자 전환 시 `queryClient.clear()`로
   함께 폐기한다. 별도의 모듈 수준 Map을 새로 만들지 않는다 — 그 Map은 `clear()`가 닿지 않아
   로그아웃 뒤에도 유효한 URL이 남는다.
+- 새 화면에서 Storage 이미지를 그릴 때 `createSignedUrls`를 직접 부르지 않는다. 공용 서명
+  캐시(`app/shared/supabase/signed-urls.ts`)를 지나야 55분 동안 같은 URL이 나오고, URL이
+  같아야 브라우저와 Service Worker 캐시가 맞는다. 직접 부르면 화면을 다시 읽을 때마다 토큰이
+  바뀌어 같은 이미지를 매번 새로 내려받는다.
+- Storage 이미지를 그리는 `<img>`에는 `crossOrigin="anonymous"`를 단다. §1의 opaque 응답
+  규칙이 이것에 기댄다.
+- 계정을 바꾼 뒤 이전 사용자만 볼 수 있던 이미지가 Cache Storage에 남지 않는지 테스트한다.
+  DevTools의 Application → Cache Storage에서 `kmla-online-storage-media`가 비었는지 본다.
 - 사용자 A에서 로그아웃한 뒤 같은 탭에서 사용자 B로 로그인해도 A의 데이터가 첫 화면에 나타나지 않는지 테스트한다.
 - A가 로그아웃하지 않고 탭만 닫은 뒤 B가 같은 기기에서 로그인하는 경로도 함께 확인한다. §7의 계정 키가
   남아 있으면 시간표는 표시에 그치지 않고 B의 DB row에 A의 값이 저장된다.
@@ -156,6 +195,7 @@ Storage signed URL도 같은 쿼리 캐시에 산다. 키는 `["signed-url", buc
 | `kmla-online:visited-posts:v1`                   | 계정 | 열어본 게시물 id                                                  |
 | `kmla-online:search-recent:v1`                   | 계정 | 검색한 사람·그룹 이름이 들어 있다                                 |
 | `kmla-online:storage-owner:v1`                   | 계정 | 위 값들의 현재 주인. 로그아웃 때 함께 지운다                      |
+| `kmla-online-storage-media` (Cache Storage)      | 계정 | Storage 이미지 본문. 주인이 바뀔 때 위 키들과 함께 지운다         |
 | `kmla-online:posts-view:v1`                      | 기기 | 카드/목록 보기                                                    |
 | `kmla-online:experimental-features:v1`           | 기기 | 실험 기능 토글                                                    |
 | `kmla-online:pwa-install-preference`             | 기기 | 지우면 로그아웃할 때마다 설치 안내가 다시 뜬다                    |

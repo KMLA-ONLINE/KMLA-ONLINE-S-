@@ -279,6 +279,7 @@ export function ProfileDetail({
               <img
                 src={profile.cover_url ?? undefined}
                 alt=""
+                crossOrigin="anonymous"
                 aria-hidden="true"
                 className="absolute inset-0 size-full object-cover"
               />

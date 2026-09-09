@@ -92,6 +92,7 @@ function Slide({
           ref={imageRef}
           src={image.src}
           alt={image.name}
+          crossOrigin="anonymous"
           draggable={false}
           className={cn(
             "max-h-full max-w-full object-contain will-change-transform select-none sm:cursor-default",
@@ -155,6 +156,7 @@ function Filmstrip({
               <img
                 src={image.src}
                 alt=""
+                crossOrigin="anonymous"
                 draggable={false}
                 className="size-full object-cover"
               />

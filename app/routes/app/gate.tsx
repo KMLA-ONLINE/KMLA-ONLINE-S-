@@ -10,8 +10,10 @@ import {
   type ShellData,
 } from "~/features/app-shell";
 import type { Route } from "./+types/gate";
+import { notificationBadgeQuery } from "~/features/notifications";
 import { NotificationPermissionPrompt } from "~/features/notifications/components/notification-permission-prompt";
 import { NotificationSync } from "~/features/notifications/components/notification-sync";
+import { getQueryClient } from "~/shared/lib/query-client";
 
 /**
  * 로그인한 사용자가 보는 모든 화면의 바깥 껍데기.
@@ -52,6 +54,15 @@ export async function clientLoader(): Promise<ShellData> {
   if (shell.profile.status !== "accepted") {
     throw redirect(GATE_REDIRECT[shell.profile.status]);
   }
+
+  // 뱃지는 셸 데이터가 아니라 쿼리가 소유한다. 여기서는 캐시를 데우기만 하고 기다리지
+  // 않는다 — 기다리면 이미 직렬인 콜드 스타트(세션 → 프로필 → 아바타 서명)에 왕복이 하나
+  // 더 붙는다. `useNavBadges()`가 활성 observer라 이 요청을 그대로 이어받고, 같은 키의
+  // 중복 요청은 TanStack이 합친다. `ensureQueryData`라서 캐시가 있으면 아무 요청도 없다.
+  void getQueryClient()
+    .ensureQueryData(notificationBadgeQuery())
+    // 뱃지 하나 때문에 앱 전체가 에러 화면으로 갈 이유는 없다. 실패하면 0으로 그린다.
+    .catch(() => 0);
 
   return { ...shell, profile: shell.profile };
 }

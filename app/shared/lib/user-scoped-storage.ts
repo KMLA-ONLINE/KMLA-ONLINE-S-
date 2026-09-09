@@ -36,6 +36,16 @@ const USER_SCOPED_KEYS = [
 const OWNER_KEY = "kmla-online:storage-owner:v1";
 
 /**
+ * Service Worker가 Storage 이미지를 담아 두는 캐시. 이름은 `scripts/build-sw.mjs`의
+ * `STORAGE_MEDIA_CACHE`와 같아야 한다.
+ *
+ * 여기 든 이미지는 보호된 데이터다 — 비공개 그룹의 사진과 프로필 사진이 들어간다.
+ * `localStorage`와 마찬가지로 새로고침과 탭 종료를 넘어 살아남으므로, 지우는 시점도 같은
+ * 규칙을 따라야 한다. "로그아웃할 때"가 아니라 "저장소의 주인이 달라졌을 때"다.
+ */
+const STORAGE_MEDIA_CACHE = "kmla-online-storage-media";
+
+/**
  * 저장소의 주인을 `userId`에 맞춘다. 주인이 그대로면 아무것도 하지 않는다 — 새로고침마다
  * 캐시를 버리면 첫 페인트를 채우려고 둔 의미가 없어진다.
  *
@@ -53,6 +63,8 @@ export function syncUserScopedStorage(userId: string | null): void {
       notifySameTab(key);
     }
 
+    purgeStorageMediaCache();
+
     if (userId === null) {
       window.localStorage.removeItem(OWNER_KEY);
     } else {
@@ -69,6 +81,22 @@ export function syncUserScopedStorage(userId: string | null): void {
  * 그대로 남는다. 지운 키를 같은 모양의 합성 이벤트로 알려서, 이미 `storage`를 듣고 있는
  * 쪽이 별도 경로 없이 다시 읽게 한다.
  */
+/**
+ * Cache Storage는 비동기고 이 함수는 그렇지 않다. 기다리게 만들면 호출부인
+ * `onAuthStateChange` 핸들러까지 async가 되는데, 지우는 데 실패하든 성공하든 여기서 할 수
+ * 있는 일은 없다 — 다음 전환에서 다시 시도한다.
+ *
+ * Service Worker가 없는 브라우저나 비보안 컨텍스트에는 `caches` 자체가 없다. 그때는 캐시에
+ * 담긴 것도 없으니 지울 것도 없다.
+ */
+function purgeStorageMediaCache(): void {
+  if (typeof caches === "undefined") return;
+
+  void caches.delete(STORAGE_MEDIA_CACHE).catch(() => {
+    // 지우지 못했다. 다음 계정 전환이 다시 시도한다.
+  });
+}
+
 function notifySameTab(key: string): void {
   window.dispatchEvent(new StorageEvent("storage", { key, newValue: null }));
 }

@@ -38,7 +38,6 @@ const SHELL = {
     status: "accepted",
     avatar_url: null,
   },
-  badges: {},
 } satisfies ShellData;
 
 function postRequest(entries: Record<string, string>): Request {

@@ -1,15 +1,40 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useEffectEvent } from "react";
-import { useRevalidator } from "react-router";
+import { useLocation, useRevalidator } from "react-router";
 
+import { notificationKeys } from "~/features/notifications/data/cache";
 import { subscribeToNotifications } from "~/features/notifications/data/subscriptions";
 
+/**
+ * 알림 Realtime과 창 focus 복귀를 받아 알림함과 셸 뱃지를 갱신한다
+ * (`docs/DATA_CACHE_POLICY.md` §4).
+ *
+ * 예전에는 두 신호가 모두 `revalidator.revalidate()`를 불렀다. 그런데 라우트 재검증은
+ * 대상을 고를 수 없다 — 게이트와 지금 보고 있는 라우트의 로더가 함께 돈다. 모바일에서
+ * 창 focus는 앱을 전환해 돌아올 때마다, 키보드를 내릴 때마다 온다. 그래서 그룹 화면에
+ * 있으면 복귀 한 번에 그룹 상세·카테고리·게시물 20개를 다시 받았고, 알림이 몰리면
+ * 알림 한 건마다 같은 일이 반복됐다.
+ *
+ * 지금은 신호가 뱃지 키 하나만 무효화한다. 라우트를 재검증하는 건 알림함을 실제로 보고
+ * 있을 때뿐이고, 그 화면의 목록은 로더가 소유하므로 그때는 재검증이 맞는 도구다.
+ */
 export function NotificationSync({ profileId }: { profileId: number }) {
+  const queryClient = useQueryClient();
   const revalidator = useRevalidator();
-  const revalidate = useEffectEvent(() => void revalidator.revalidate());
+  const location = useLocation();
 
-  useEffect(() => subscribeToNotifications(profileId, revalidate), [profileId]);
+  const sync = useEffectEvent(() => {
+    void queryClient.invalidateQueries({ queryKey: notificationKeys.badge() });
+
+    if (location.pathname === "/noti") {
+      void revalidator.revalidate();
+    }
+  });
+
+  useEffect(() => subscribeToNotifications(profileId, sync), [profileId]);
+
   useEffect(() => {
-    const onFocus = () => revalidate();
+    const onFocus = () => sync();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, []);

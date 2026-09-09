@@ -38,6 +38,7 @@ export function GroupDetailMobileHeader({
             <img
               src={iconPath}
               alt=""
+              crossOrigin="anonymous"
               width={28}
               height={28}
               className="size-full object-cover"

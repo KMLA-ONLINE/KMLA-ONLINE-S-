@@ -1,4 +1,9 @@
 export {
+  notificationBadgeQuery,
+  notificationKeys,
+  NOTIFICATION_BADGE_STALE_TIME,
+} from "~/features/notifications/data/cache";
+export {
   getMyGroupNotificationPreference,
   getNotificationPreferences,
   getRecentUnreadNotificationCount,

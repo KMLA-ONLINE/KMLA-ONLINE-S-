@@ -23,7 +23,6 @@ function renderMenu(
       status: "accepted",
       avatar_url: null,
     },
-    badges: {},
   } satisfies ShellData;
 
   return renderRoute(

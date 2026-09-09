@@ -35,6 +35,7 @@ export function GroupDetailHero({
           <img
             src={group.cover_path}
             alt=""
+            crossOrigin="anonymous"
             width={1200}
             height={300}
             fetchPriority="high"

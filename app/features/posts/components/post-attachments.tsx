@@ -128,6 +128,7 @@ export function PostImageGrid({
                 <img
                   src={item.signedUrl}
                   alt={item.original_filename}
+                  crossOrigin="anonymous"
                   loading="lazy"
                   className="h-full w-full object-cover"
                 />
