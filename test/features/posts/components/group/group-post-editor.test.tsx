@@ -10,6 +10,56 @@ const {
   updateGroupPostWithAttachments: vi.fn(),
 }));
 
+vi.mock("~/features/posts/components/editor/post-body-input", async () => {
+  const { useImperativeHandle } = await import("react");
+  return {
+    PostBodyInput: ({
+      value,
+      onValueChange,
+      handleRef,
+    }: {
+      value: string;
+      onValueChange?: (value: string) => void;
+      handleRef?: React.RefObject<{
+        insertMention(label: string, ordinal: number): void;
+      } | null>;
+    }) => {
+      useImperativeHandle(handleRef, () => ({
+        insertMention(label: string, ordinal: number) {
+          onValueChange?.(`${value}[@${label}](m:${ordinal}) `);
+        },
+      }));
+      return (
+        <textarea
+          aria-label="Markdown 본문"
+          value={value}
+          onChange={(event) => onValueChange?.(event.target.value)}
+        />
+      );
+    },
+  };
+});
+
+vi.mock("~/features/posts/components/mention-button", () => ({
+  MentionButton: ({ onSelect }: { onSelect: (candidate: object) => void }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onSelect({
+          pub_id: "member-1",
+          name: "테스트 멤버",
+          cohort: 30,
+          is_returning_student: false,
+          profile_type: "student",
+          avatar_path: null,
+        })
+      }
+    >
+      멘션 추가
+    </button>
+  ),
+}));
+
 vi.mock("~/features/posts/data/mutations", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   createGroupPostWithAttachments,
@@ -119,6 +169,20 @@ describe("GroupPostEditor 저장 경로", () => {
         [expect.objectContaining({ file })],
         expect.anything(),
       ),
+    );
+  });
+
+  it("활성 멘션이 있으면 익명 신원으로 바꾸지 않는다", async () => {
+    const { user } = renderEditor({ identities: ["identified", "anonymous"] });
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+    await user.selectOptions(screen.getByLabelText("작성 신원"), "anonymous");
+
+    expect(screen.getByLabelText<HTMLSelectElement>("작성 신원")).toHaveValue(
+      "identified",
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "멘션을 모두 지운 뒤 익명으로 전환할 수 있습니다.",
     );
   });
 });

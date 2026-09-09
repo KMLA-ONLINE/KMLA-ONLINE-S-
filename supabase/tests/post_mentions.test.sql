@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(65);
+select plan(76);
 
 -- 멘션 대상의 정본은 `public.post_mentions` / `public.comment_mentions`이고 본문에는 ordinal
 -- 토큰만 남는다(기능 명세 §8.14). 이 파일은 그 둘이 어긋날 수 있는 자리를 전부 밟는다.
@@ -141,11 +141,11 @@ select throws_ok(
 select throws_ok(
   $$select public.create_group_post(
       '20000000-0000-0000-0000-000000000002', '상한 초과',
-      '[@이한별](m:11)', 'identified', null, true,
-      array['a','b','c','d','e','f','g','h','i','j','hanbyeol-25']
+      '[@이한별](m:51)', 'identified', null, true,
+      array_fill('a'::text, array[50]) || array['hanbyeol-25']
     )$$,
-  '22023', 'a post can mention at most 10 members',
-  'a post cannot mention more than ten members'
+  '22023', 'a post can mention at most 50 members',
+  'a post cannot mention more than fifty members'
 );
 
 -- ---------------------------------------------------------------- 익명
@@ -357,6 +357,15 @@ select throws_ok(
   '22023', 'every mention must name a current group member',
   'a comment cannot mention someone outside the group'
 );
+select throws_ok(
+  $$select public.create_post_comment(
+      (select id from public.posts where title = '초안'), '[@박새벽](m:51)',
+      'identified', null, null,
+      array_fill('a'::text, array[50]) || array['saebyeok-24']
+    )$$,
+  '22023', 'a comment can mention at most 50 members',
+  'a comment cannot mention more than fifty members'
+);
 reset role;
 select is(
   (select count(*)::integer from public.notifications
@@ -461,6 +470,115 @@ select is(
      )),
   'comment_replied',
   'the reply notification wins and the mention is suppressed'
+);
+
+-- 살아 있는 자식 때문에 중간 답글이 tombstone으로 남더라도, 그 댓글의 멘션과 그 댓글을
+-- 대상으로 한 알림은 즉시 지운다. 이후 생성되는 운영 조치 알림은 게시물을 대상으로 하므로 남는다.
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+insert into mention_test_ids
+select 'tombstone_parent', entry.comment_id
+from public.create_post_comment(
+  (select id from public.posts where title = '발표 안내'), '삭제 검사 부모', 'identified'
+) as entry;
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000004', true);
+insert into mention_test_ids
+select 'tombstone_middle', entry.comment_id
+from public.create_post_comment(
+  (select id from public.posts where title = '발표 안내'),
+  '[@박새벽](m:1) 님을 부르는 중간 답글', 'identified',
+  (select id from mention_test_ids where name = 'tombstone_parent'),
+  null, array['saebyeok-24']
+) as entry;
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+insert into mention_test_ids
+select 'tombstone_child', entry.comment_id
+from public.create_post_comment(
+  (select id from public.posts where title = '발표 안내'), '살아 있는 자식', 'identified',
+  (select id from mention_test_ids where name = 'tombstone_middle')
+) as entry;
+reset role;
+
+select is(
+  (select count(*)::integer from public.comment_mentions
+   where comment_id = (select id from mention_test_ids where name = 'tombstone_middle')),
+  1,
+  'the middle reply starts with its mention row'
+);
+select is(
+  (select count(*)::integer from public.notifications
+   where comment_id = (select id from mention_test_ids where name = 'tombstone_middle')),
+  2,
+  'the middle reply starts with its reply and mention notifications'
+);
+select is(
+  (select count(*)::integer from private.notification_event_keys
+   where event_key in (
+     'comment:' || (select id from mention_test_ids where name = 'tombstone_middle')::text,
+     'comment-mention:' || (select id from mention_test_ids where name = 'tombstone_middle')::text || ':5'
+   )),
+  2,
+  'the middle reply starts with event linkage for both notifications'
+);
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select lives_ok(
+  $$select public.delete_post_comment(
+      (select id from mention_test_ids where name = 'tombstone_middle')
+    )$$,
+  'a moderator can delete the mentioned middle reply'
+);
+reset role;
+
+select ok(
+  (select deleted_at is not null and body = ''
+   from public.post_comments
+   where id = (select id from mention_test_ids where name = 'tombstone_middle')),
+  'the deleted middle reply remains as an empty tombstone'
+);
+select is(
+  (select count(*)::integer from public.comment_mentions
+   where comment_id = (select id from mention_test_ids where name = 'tombstone_middle')),
+  0,
+  'tombstoning removes the deleted comment mention rows immediately'
+);
+select is(
+  (select count(*)::integer from public.notifications
+   where comment_id = (select id from mention_test_ids where name = 'tombstone_middle')),
+  0,
+  'tombstoning removes notifications targeting the deleted comment immediately'
+);
+select is(
+  (select count(*)::integer from private.notification_event_keys
+   where event_key in (
+     'comment:' || (select id from mention_test_ids where name = 'tombstone_middle')::text,
+     'comment-mention:' || (select id from mention_test_ids where name = 'tombstone_middle')::text || ':5'
+   )),
+  0,
+  'deleting the target notifications cascades through their event linkage'
+);
+select is(
+  (select count(*)::integer from public.post_comments
+   where id = (select id from mention_test_ids where name = 'tombstone_child')
+     and deleted_at is null),
+  1,
+  'the living child remains under the tombstone'
+);
+select is(
+  (select count(*)::integer
+   from public.notifications as notification
+   join private.notification_event_keys as event
+     on event.notification_id = notification.id
+   where event.event_key = 'comment-moderated:'
+       || (select id from mention_test_ids where name = 'tombstone_middle')::text
+     and notification.kind = 'comment_moderated'
+     and notification.post_id = (select id from public.posts where title = '발표 안내')
+     and notification.comment_id is null),
+  1,
+  'the later post-targeted moderation notification and its event linkage remain'
 );
 
 -- ---------------------------------------------------------------- 삭제

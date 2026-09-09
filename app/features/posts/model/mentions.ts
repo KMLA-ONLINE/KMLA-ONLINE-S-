@@ -12,7 +12,7 @@
  */
 
 /** 기능 명세 §8.14. 게시물 또는 댓글 하나가 부를 수 있는 사람 수. */
-export const MENTION_LIMIT = 10;
+export const MENTION_LIMIT = 50;
 
 /** 읽기 RPC가 본문 옆에 실어 보내는 표현용 멘션. 탈퇴한 사용자는 이름과 공개 ID가 null이다. */
 export interface PostMention {
@@ -90,10 +90,10 @@ export interface MentionDraftEntry {
  * 제출 직전 정규화.
  *
  * 편집기는 멘션을 넣을 때마다 번호를 올려서 매기므로, 넣었다 지우기를 반복하면 본문에 두 명만
- * 남아도 번호가 10을 넘어간다. 서버는 ordinal을 `p_mention_pub_ids`의 첨자로 쓰고 1~10만
+ * 남아도 번호가 50을 넘어간다. 서버는 ordinal을 `p_mention_pub_ids`의 첨자로 쓰고 1~50만
  * 받으므로, 본문에 실제로 남은 토큰만 등장 순서대로 1부터 다시 매긴다.
  *
- * 같은 사람이 두 번 불렸으면 ordinal 하나를 함께 쓴다 — 그래야 "최대 10명"이 사람 수와 맞다.
+ * 같은 사람이 두 번 불렸으면 ordinal 하나를 함께 쓴다 — 그래야 "최대 50명"이 사람 수와 맞다.
  */
 export function normalizeMentions(
   body: string,
@@ -136,8 +136,8 @@ export function countMentionTargets(
 /**
  * 상한을 넘었으면 사용자에게 보여줄 이유, 아니면 `null`.
  *
- * 실제 경계는 서버에 있지만(§8.14) 모바일 본문은 Markdown 원문을 그대로 편집하므로 버튼을
- * 거치지 않고 토큰을 붙여넣을 수 있다. 그때 일반 RPC 오류가 아니라 입력창 옆 문구로 알린다.
+ * 실제 경계는 서버에 있지만(§8.14), 기존 원문이나 댓글 입력에는 버튼을 거치지 않은 토큰이
+ * 들어올 수 있다. 그때 일반 RPC 오류가 아니라 입력창 옆 문구로 알린다.
  */
 export function validateMentionCount(
   body: string,
@@ -166,9 +166,16 @@ export function toMentionDraft(mentions: PostMention[]): MentionDraftEntry[] {
     }));
 }
 
-/** 편집기가 새 멘션에 줄 번호. 쓰던 번호를 다시 쓰지 않는다. */
-export function nextMentionOrdinal(entries: MentionDraftEntry[]): number {
-  return entries.reduce((max, entry) => Math.max(max, entry.ordinal), 0) + 1;
+/** 본문에서 쓰지 않는 가장 작은 멘션 번호. 모든 번호가 사용 중이면 `null`이다. */
+export function nextMentionOrdinal(body: string): number | null {
+  const used = new Set<number>();
+  for (const match of body.matchAll(mentionTokenPattern())) {
+    used.add(Number(match[2]));
+  }
+  for (let ordinal = 1; ordinal <= MENTION_LIMIT; ordinal += 1) {
+    if (!used.has(ordinal)) return ordinal;
+  }
+  return null;
 }
 
 /** RPC의 `Json` 컬럼을 화면이 쓰는 모양으로 좁힌다. */

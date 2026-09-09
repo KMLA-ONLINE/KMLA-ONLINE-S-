@@ -63,6 +63,7 @@ import {
 } from "~/features/posts/model/markdown";
 import type { PostBodyInputHandle } from "~/features/posts/components/editor/post-body-input";
 import { sanitizeMentionLabel } from "~/features/posts/model/mentions";
+import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 
 const markdownSchema = [
@@ -107,6 +108,7 @@ const imeSafeShortcuts = $prose(
         handleKeyDown(view, event) {
           if (event.isComposing || view.composing || event.keyCode === 229)
             return false;
+          if (!window.matchMedia("(min-width: 768px)").matches) return false;
 
           const mod = event.ctrlKey || event.metaKey;
           if (!mod || event.altKey) return false;
@@ -144,10 +146,12 @@ export default function DesktopMarkdownEditor({
   initialValue,
   onValueChange,
   handleRef,
+  className,
 }: {
   initialValue: string;
   onValueChange?: (value: string) => void;
   handleRef?: RefObject<PostBodyInputHandle | null>;
+  className?: string;
 }) {
   return (
     <MilkdownProvider>
@@ -155,6 +159,7 @@ export default function DesktopMarkdownEditor({
         initialValue={initialValue}
         onValueChange={onValueChange}
         handleRef={handleRef}
+        className={className}
       />
     </MilkdownProvider>
   );
@@ -164,10 +169,12 @@ function EditorSurface({
   initialValue,
   onValueChange,
   handleRef,
+  className,
 }: {
   initialValue: string;
   onValueChange?: (value: string) => void;
   handleRef?: RefObject<PostBodyInputHandle | null>;
+  className?: string;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const lastValue = useRef(
@@ -286,7 +293,12 @@ function EditorSurface({
   ];
 
   return (
-    <div className="overflow-hidden rounded-md border bg-background">
+    <div
+      className={cn(
+        "flex min-h-72 flex-col overflow-hidden rounded-md border bg-background md:h-auto md:min-h-0",
+        className,
+      )}
+    >
       <input
         ref={input}
         type="hidden"
@@ -299,7 +311,7 @@ function EditorSurface({
         적용한다.
       */}
       <div
-        className="flex flex-wrap gap-1 border-b bg-muted/50 p-1"
+        className="hidden flex-wrap gap-1 border-b bg-muted/50 p-1 md:flex"
         role="toolbar"
         aria-label="본문 서식"
       >
@@ -315,7 +327,7 @@ function EditorSurface({
         ))}
       </div>
       <div
-        className="post-typography h-72 overflow-y-auto"
+        className="post-typography min-h-72 flex-1 overflow-y-auto md:h-72 md:min-h-0 md:flex-none"
         role="presentation"
         onClick={(event) => {
           if (!(event.ctrlKey || event.metaKey)) return;

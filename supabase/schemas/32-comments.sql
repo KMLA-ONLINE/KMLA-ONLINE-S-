@@ -109,8 +109,8 @@ begin
   if p_author_identity = 'anonymous' then
     raise exception 'anonymous comments cannot mention members' using errcode = '42501';
   end if;
-  if (select max(entry.ordinal) from unnest(ordinals) as entry(ordinal)) > 10 then
-    raise exception 'a comment can mention at most 10 members' using errcode = '22023';
+  if (select max(entry.ordinal) from unnest(ordinals) as entry(ordinal)) > 50 then
+    raise exception 'a comment can mention at most 50 members' using errcode = '22023';
   end if;
 
   -- 이미 불린 사람은 멤버십을 다시 묻지 않는다. 다시 물으면 멘션된 멤버가 그룹을 나간 뒤로는
@@ -335,7 +335,7 @@ CREATE TABLE IF NOT EXISTS "public"."comment_mentions" (
     "comment_id" "uuid" NOT NULL,
     "ordinal" smallint NOT NULL,
     "profile_id" bigint NOT NULL,
-    CONSTRAINT "comment_mentions_ordinal_range" CHECK ((("ordinal" >= 1) AND ("ordinal" <= 10)))
+    CONSTRAINT "comment_mentions_ordinal_range" CHECK ((("ordinal" >= 1) AND ("ordinal" <= 50)))
 );
 
 ALTER TABLE "public"."comment_mentions" OWNER TO "postgres";

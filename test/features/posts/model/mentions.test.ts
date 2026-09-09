@@ -119,8 +119,8 @@ describe("normalizeMentions", () => {
   });
 
   it("unwraps a token the editor never issued", () => {
-    // 모바일은 Markdown 원문을 그대로 편집하므로 사용자가 토큰을 직접 칠 수 있다. 부를 사람을
-    // 지어내지 않고 평문으로 남긴다 -- 서버도 짝 없는 ordinal 은 거절한다.
+    // 기존 원문이나 댓글 입력에는 사용자가 직접 친 토큰이 들어올 수 있다. 부를 사람을 지어내지
+    // 않고 평문으로 남긴다 -- 서버도 짝 없는 ordinal 은 거절한다.
     const result = normalizeMentions("[@아무개](m:7) 님", []);
 
     expect(result.body).toBe("@아무개 님");
@@ -149,14 +149,14 @@ describe("validateMentionCount", () => {
   });
 
   it("names the limit when the body goes past it", () => {
-    // 모바일 본문은 Markdown 원문을 그대로 편집하므로 버튼을 거치지 않고 토큰을 붙여넣을 수
-    // 있다. 서버가 잡기 전에 입력창 옆에서 알린다.
+    // 기존 원문이나 댓글에는 버튼을 거치지 않은 토큰이 들어올 수 있다. 서버가 잡기 전에 입력창
+    // 옆에서 알린다.
     const body = many
       .map((entry) => buildMentionToken(entry.name, entry.ordinal))
       .join(" ");
 
     expect(validateMentionCount(body, many)).toBe(
-      "멘션은 10명까지 할 수 있습니다.",
+      "멘션은 50명까지 할 수 있습니다.",
     );
   });
 });

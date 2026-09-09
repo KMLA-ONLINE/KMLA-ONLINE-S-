@@ -1261,6 +1261,11 @@ begin
   select author.profile_id into author_profile_id
   from private.comment_authors as author where author.comment_id = p_comment_id;
 
+  -- 하드 삭제는 외래 키가 이 데이터를 정리하지만, 살아 있는 자식 때문에 답글이 tombstone으로
+  -- 남는 경우에도 삭제된 댓글을 가리키는 데이터는 즉시 사라져야 한다.
+  delete from public.notifications where comment_id = p_comment_id;
+  delete from public.comment_mentions where comment_id = p_comment_id;
+
   if comment_record.depth = 0 then
     -- 최상위 댓글을 지우면 답글 묶음 전체가 사라진다(기능 명세 §9.4). 묶음이 통째로 숨는 이상
     -- 자리 표시가 필요 없으므로 하드 삭제한다.

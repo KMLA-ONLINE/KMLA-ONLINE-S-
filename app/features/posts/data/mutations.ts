@@ -336,7 +336,7 @@ async function commitGroupPost(
   publish: boolean,
 ): Promise<void> {
   // 편집기가 매긴 번호를 본문에 남은 토큰 기준으로 다시 매긴다. 서버는 ordinal 을 배열 첨자로
-  // 쓰고 1~10 만 받으므로, 넣었다 지우기를 반복한 본문을 그대로 보내면 상한에 걸린다.
+  // 쓰고 1~50 만 받으므로, 넣었다 지우기를 반복한 본문을 그대로 보내면 상한에 걸린다.
   const mentions = normalizeMentions(values.body, values.mentions);
   const { error } = await getSupabase().rpc("commit_group_post", {
     p_post_id: postId,

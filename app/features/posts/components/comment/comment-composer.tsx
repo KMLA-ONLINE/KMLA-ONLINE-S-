@@ -12,11 +12,13 @@ import {
 } from "~/features/posts/components/post-author-avatar";
 import { MentionButton } from "~/features/posts/components/mention-button";
 import {
+  activeMentionPubIds,
   remainingMentions,
   useMentionDraft,
 } from "~/features/posts/hooks/use-mention-draft";
 import {
   buildMentionToken,
+  countMentionTargets,
   validateMentionCount,
   type MentionDraftEntry,
   type PostMention,
@@ -257,6 +259,7 @@ export function CommentComposer({
       if (!created)
         setDraft((current) => (current === "" ? submitted : current));
       else {
+        mentionDraft.reset([]);
         if (preparedImage.current) releasePostFile(preparedImage.current);
         preparedImage.current = null;
         setImage(null);
@@ -304,7 +307,18 @@ export function CommentComposer({
                 <button
                   type="button"
                   aria-label={`${IDENTITY_LABEL[identity]}으로 작성 중. 눌러서 ${IDENTITY_LABEL[nextIdentity]}으로`}
-                  onClick={() => setPendingIdentity(nextIdentity)}
+                  onClick={() => {
+                    if (
+                      nextIdentity === "anonymous" &&
+                      countMentionTargets(draft, mentionDraft.entries) > 0
+                    ) {
+                      setLocalError(
+                        "멘션을 모두 지운 뒤 익명으로 전환할 수 있습니다.",
+                      );
+                      return;
+                    }
+                    setPendingIdentity(nextIdentity);
+                  }}
                   className="relative mb-0.5 shrink-0 rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 />
               }
@@ -421,17 +435,22 @@ export function CommentComposer({
               {processingImage ? <Spinner /> : <ImagePlusIcon />}
             </Button>
             {/*
-              익명 댓글은 멘션할 수 없다(기능 명세 §8.14). 신원을 익명으로 바꾸면 버튼이
-              사라지고, 본문에 남은 토큰은 등록할 때 평문으로 풀린다.
+              익명 댓글은 멘션할 수 없다(기능 명세 §8.14). 멘션 토큰이 남아 있으면 익명으로
+              바꿀 수 없으므로 버튼이 사라질 때 활성 멘션이 함께 숨는 일은 없다.
             */}
             {mentionGroupId && identity !== "anonymous" ? (
               <MentionButton
                 groupId={mentionGroupId}
                 disabled={pending || processingImage}
                 remaining={remainingMentions(draft, mentionDraft.entries)}
+                activeTargetPubIds={activeMentionPubIds(
+                  draft,
+                  mentionDraft.entries,
+                )}
                 className="m-0.5 shrink-0 text-muted-foreground"
                 onSelect={(candidate) => {
-                  const ordinal = mentionDraft.register(candidate);
+                  const ordinal = mentionDraft.register(candidate, draft);
+                  if (ordinal === null) return;
                   const element = input.current;
                   const token = `${buildMentionToken(candidate.name, ordinal)} `;
                   const start = element?.selectionStart ?? draft.length;

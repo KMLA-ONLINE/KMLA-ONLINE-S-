@@ -29,9 +29,11 @@ import {
 } from "~/features/posts/components/editor/post-body-input";
 import { MentionButton } from "~/features/posts/components/mention-button";
 import {
+  activeMentionPubIds,
   remainingMentions,
   useMentionDraft,
 } from "~/features/posts/hooks/use-mention-draft";
+import { countMentionTargets } from "~/features/posts/model/mentions";
 import {
   PostEditorLayout,
   PostFormField,
@@ -265,8 +267,25 @@ export function GroupPostEditor({
             }
             if (target.name === "title") setDraftTitle(target.value);
             if (target.name === "categoryId") setDraftCategoryId(target.value);
-            if (target.name === "authorIdentity")
-              setDraftIdentity(target.value as PostIdentity);
+            if (target.name === "authorIdentity") {
+              const nextIdentity = target.value as PostIdentity;
+              if (
+                nextIdentity === "anonymous" &&
+                countMentionTargets(draftBody, mentionDraft.entries) > 0
+              ) {
+                setFormErrors((current) => ({
+                  ...current,
+                  authorIdentity:
+                    "멘션을 모두 지운 뒤 익명으로 전환할 수 있습니다.",
+                }));
+                return;
+              }
+              setDraftIdentity(nextIdentity);
+              setFormErrors((current) => ({
+                ...current,
+                authorIdentity: undefined,
+              }));
+            }
           },
           ...dropHandlers,
         }}
@@ -305,7 +324,7 @@ export function GroupPostEditor({
               <PostFormField error={formErrors?.authorIdentity}>
                 <NativeSelect
                   name="authorIdentity"
-                  defaultValue={initial.authorIdentity}
+                  value={draftIdentity}
                   aria-label="작성 신원"
                   className="w-full"
                 >
@@ -366,12 +385,17 @@ export function GroupPostEditor({
                   groupId={groupId}
                   disabled={saving}
                   remaining={remainingMentions(draftBody, mentionDraft.entries)}
+                  activeTargetPubIds={activeMentionPubIds(
+                    draftBody,
+                    mentionDraft.entries,
+                  )}
                   onSelect={(candidate) => {
-                    const ordinal = mentionDraft.register(candidate);
+                    const ordinal = mentionDraft.register(candidate, draftBody);
+                    if (ordinal === null) return;
                     bodyHandle.current?.insertMention(candidate.name, ordinal);
                   }}
                 />
-                <span className="text-xs text-muted-foreground">멤버 멘션</span>
+                <span className="text-xs text-muted-foreground">멘션</span>
               </div>
             )}
           </PostFormField>

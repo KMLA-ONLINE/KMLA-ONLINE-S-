@@ -246,8 +246,8 @@ begin
   if post_record.author_identity = 'anonymous' then
     raise exception 'anonymous posts cannot mention members' using errcode = '42501';
   end if;
-  if (select max(entry.ordinal) from unnest(ordinals) as entry(ordinal)) > 10 then
-    raise exception 'a post can mention at most 10 members' using errcode = '22023';
+  if (select max(entry.ordinal) from unnest(ordinals) as entry(ordinal)) > 50 then
+    raise exception 'a post can mention at most 50 members' using errcode = '22023';
   end if;
 
   -- 이미 불린 사람은 멤버십을 다시 묻지 않는다. 다시 물으면 멘션된 멤버가 그룹을 나간 뒤로는
@@ -459,12 +459,12 @@ ALTER TABLE "public"."post_attachments" OWNER TO "postgres";
 -- 놓아준 값을 남이 다시 쓸 수 있기 때문이다(기능 명세 §12.2) -- 박아 두면 오래된 멘션이
 -- 조용히 다른 사람을 가리킨다. `ordinal`은 그 본문 안에서만 뜻이 있는 라벨이라 내부 프로필
 -- ID가 본문으로 새지 않는다. 같은 사람을 두 번 불러도 ordinal 하나를 함께 쓰므로
--- ordinal 상한 10이 곧 "최대 10명"이다.
+-- ordinal 상한 50이 곧 "최대 50명"이다.
 CREATE TABLE IF NOT EXISTS "public"."post_mentions" (
     "post_id" "uuid" NOT NULL,
     "ordinal" smallint NOT NULL,
     "profile_id" bigint NOT NULL,
-    CONSTRAINT "post_mentions_ordinal_range" CHECK ((("ordinal" >= 1) AND ("ordinal" <= 10)))
+    CONSTRAINT "post_mentions_ordinal_range" CHECK ((("ordinal" >= 1) AND ("ordinal" <= 50)))
 );
 
 ALTER TABLE "public"."post_mentions" OWNER TO "postgres";

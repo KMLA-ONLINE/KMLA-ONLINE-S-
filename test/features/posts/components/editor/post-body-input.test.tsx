@@ -1,87 +1,84 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { useState } from "react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { PostBodyInput } from "~/features/posts/components/editor/post-body-input";
+import {
+  PostBodyInput,
+  type PostBodyInputHandle,
+} from "~/features/posts/components/editor/post-body-input";
 
+const { insertMention } = vi.hoisted(() => ({ insertMention: vi.fn() }));
 const matchMedia = vi.fn();
-let breakpointListener: (() => void) | undefined;
 
-vi.mock("~/features/posts/components/editor/desktop-markdown-editor", () => ({
-  default: ({ initialValue }: { initialValue: string }) => (
-    <div aria-label="데스크톱 본문">{initialValue}</div>
-  ),
-}));
+vi.mock(
+  "~/features/posts/components/editor/desktop-markdown-editor",
+  async () => {
+    const { useImperativeHandle } = await import("react");
+    function MockMarkdownEditor({
+      initialValue,
+      handleRef,
+      className,
+    }: {
+      initialValue: string;
+      handleRef?: React.RefObject<PostBodyInputHandle | null>;
+      className?: string;
+    }) {
+      useImperativeHandle(handleRef, () => ({ insertMention }));
+      return (
+        <div aria-label="Milkdown 본문" className={className}>
+          {initialValue}
+        </div>
+      );
+    }
+    return {
+      default: MockMarkdownEditor,
+    };
+  },
+);
 
 beforeEach(() => {
-  breakpointListener = undefined;
-  matchMedia.mockReturnValue({
-    matches: false,
-    addEventListener: vi.fn((_event, listener) => {
-      breakpointListener = listener;
-    }),
-    removeEventListener: vi.fn(),
-  });
+  insertMention.mockClear();
   Object.defineProperty(window, "matchMedia", {
     value: matchMedia,
     configurable: true,
   });
 });
 
+function InputWithExternalHandle() {
+  const handle = useRef<PostBodyInputHandle>(null);
+  return (
+    <>
+      <PostBodyInput
+        value="**서식 본문**"
+        handleRef={handle}
+        className="flex-1"
+      />
+      <button
+        type="button"
+        onClick={() => handle.current?.insertMention("한별", 7)}
+      >
+        멘션 넣기
+      </button>
+    </>
+  );
+}
+
 describe("PostBodyInput", () => {
-  it("keeps Markdown source in a native mobile textarea without shortcuts", () => {
-    render(<PostBodyInput value="**원문**" />);
-    const textarea = screen.getByRole("textbox", { name: "Markdown 본문" });
+  it.each([
+    ["mobile", false],
+    ["desktop", true],
+  ])("routes the external handle to Milkdown on %s", async (_name, desktop) => {
+    matchMedia.mockReturnValue({ matches: desktop });
+    const user = userEvent.setup();
+    render(<InputWithExternalHandle />);
 
-    expect(textarea).toHaveValue("**원문**");
-    expect(textarea).toHaveClass(
-      "field-sizing-fixed",
-      "h-full",
-      "resize-none",
-      "overflow-y-auto",
+    expect(await screen.findByLabelText("Milkdown 본문")).toHaveTextContent(
+      "**서식 본문**",
     );
-    fireEvent.compositionStart(textarea);
-    fireEvent.keyDown(textarea, { key: "b", ctrlKey: true, isComposing: true });
-    fireEvent.compositionEnd(textarea);
-    expect(textarea).toHaveValue("**원문**");
-    expect(screen.queryByRole("toolbar")).not.toBeInTheDocument();
-  });
+    expect(screen.getByLabelText("Milkdown 본문")).toHaveClass("flex-1");
+    await user.click(screen.getByRole("button", { name: "멘션 넣기" }));
 
-  it("reports the current mobile draft independently of form snapshots", () => {
-    const onValueChange = vi.fn();
-    render(<PostBodyInput value="본문" onValueChange={onValueChange} />);
-
-    fireEvent.change(screen.getByRole("textbox", { name: "Markdown 본문" }), {
-      target: { value: "수정한 본문" },
-    });
-
-    expect(onValueChange).toHaveBeenLastCalledWith("수정한 본문");
-  });
-
-  it("keeps the current draft when the breakpoint changes", async () => {
-    let desktop = false;
-    matchMedia.mockReturnValue({
-      get matches() {
-        return desktop;
-      },
-      addEventListener: vi.fn((_event, listener) => {
-        breakpointListener = listener;
-      }),
-      removeEventListener: vi.fn(),
-    });
-    function ControlledInput() {
-      const [value, setValue] = useState("본문");
-      return <PostBodyInput value={value} onValueChange={setValue} />;
-    }
-    render(<ControlledInput />);
-
-    const textarea = screen.getByRole("textbox", { name: "Markdown 본문" });
-    fireEvent.change(textarea, { target: { value: "수정한 본문" } });
-    desktop = true;
-    breakpointListener?.();
-
-    expect(await screen.findByLabelText("데스크톱 본문")).toHaveTextContent(
-      "수정한 본문",
-    );
+    expect(insertMention).toHaveBeenCalledWith("한별", 7);
   });
 });

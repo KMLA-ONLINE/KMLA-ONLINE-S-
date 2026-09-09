@@ -37,9 +37,8 @@ interface CandidateResult {
 /**
  * 멘션할 사람을 고르는 화면(기능 명세 §8.14).
  *
- * `@` 자동완성 대신 버튼으로 연다. 본문 편집기가 셋(데스크톱 Milkdown, 모바일 textarea, 댓글
- * 입력창)이라 자동완성은 각각에 붙여야 하고 한글 조합 중 입력까지 다뤄야 하지만, 이 시트는
- * 셋이 그대로 함께 쓴다.
+ * `@` 자동완성 대신 버튼으로 연다. 게시물 Milkdown과 댓글 입력창에 자동완성을 각각 붙이고
+ * 한글 조합 중 입력까지 다루는 대신, 이 dialog를 두 입력기가 함께 쓴다.
  *
  * 열려 있는 동안에만 마운트한다(`MentionButton`). 그래서 닫았다 열면 검색어와 결과가 저절로
  * 비고, 상태를 되돌리는 effect 를 두지 않아도 된다.
@@ -49,12 +48,15 @@ export function MentionPickerDialog({
   onOpenChange,
   onSelect,
   remaining,
+  activeTargetPubIds,
 }: {
   groupId: string;
   onOpenChange: (open: boolean) => void;
   onSelect: (candidate: MentionCandidate) => void;
-  /** 더 부를 수 있는 사람 수. 0이면 고를 수 없다. */
+  /** 더 부를 수 있는 사람 수. 0이어도 이미 부른 사람은 다시 고를 수 있다. */
   remaining: number;
+  /** 이미 본문에 남아 있어 상한에서도 다시 고를 수 있는 대상. */
+  activeTargetPubIds: string[];
 }) {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
@@ -98,7 +100,7 @@ export function MentionPickerDialog({
           <DialogTitle>멘션할 멤버</DialogTitle>
           <DialogDescription>
             {remaining > 0
-              ? `이름이나 기수로 찾습니다. ${remaining}명 더 부를 수 있습니다.`
+              ? `이름, 기수로 검색 / ${remaining}명 가능`
               : `한 게시물에 최대 ${MENTION_LIMIT}명까지 부를 수 있습니다.`}
           </DialogDescription>
         </DialogHeader>
@@ -136,7 +138,10 @@ export function MentionPickerDialog({
                     <Button
                       type="button"
                       variant="ghost"
-                      disabled={remaining <= 0}
+                      disabled={
+                        remaining <= 0 &&
+                        !activeTargetPubIds.includes(candidate.pub_id)
+                      }
                       className="h-auto w-full justify-start gap-3 rounded-none px-4 py-3"
                       onClick={() => onSelect(candidate)}
                     >

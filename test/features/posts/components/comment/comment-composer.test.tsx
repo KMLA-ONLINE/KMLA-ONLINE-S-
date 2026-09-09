@@ -6,11 +6,53 @@ const { prepareCommentImage, releasePostFile } = vi.hoisted(() => ({
   prepareCommentImage: vi.fn(),
   releasePostFile: vi.fn(),
 }));
+const { mentionState, mentionCandidates } = vi.hoisted(() => ({
+  mentionState: { index: 0 },
+  mentionCandidates: [
+    {
+      pub_id: "member-1",
+      name: "첫 멤버",
+      cohort: 30,
+      is_returning_student: false,
+      profile_type: "student" as const,
+      avatar_path: null,
+    },
+    {
+      pub_id: "member-2",
+      name: "둘째 멤버",
+      cohort: 31,
+      is_returning_student: false,
+      profile_type: "student" as const,
+      avatar_path: null,
+    },
+  ],
+}));
 
 vi.mock("~/features/posts/model/attachments", async (importActual) => ({
   ...(await importActual()),
   prepareCommentImage,
   releasePostFile,
+}));
+
+vi.mock("~/features/posts/components/mention-button", () => ({
+  MentionButton: ({
+    onSelect,
+  }: {
+    onSelect: (candidate: (typeof mentionCandidates)[number]) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onSelect(
+          mentionCandidates[
+            Math.min(mentionState.index++, mentionCandidates.length - 1)
+          ],
+        )
+      }
+    >
+      멘션 추가
+    </button>
+  ),
 }));
 
 import { CommentComposer } from "~/features/posts/components/comment/comment-composer";
@@ -51,7 +93,10 @@ describe("CommentComposer", () => {
     previewUrl: "blob:comment-image",
   };
 
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mentionState.index = 0;
+  });
 
   it("submits on Enter and inserts a newline on Shift+Enter", async () => {
     const { user, onSubmit, input } = renderComposer();
@@ -124,6 +169,21 @@ describe("CommentComposer", () => {
     expect(onIdentityChange).not.toHaveBeenCalled();
   });
 
+  it("blocks switching to anonymous while an active mention remains", async () => {
+    const { user, onIdentityChange } = renderComposer({
+      mentionGroupId: "group-id",
+    });
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+    await user.click(screen.getByRole("button", { name: /실명으로 작성 중/ }));
+
+    expect(onIdentityChange).not.toHaveBeenCalled();
+    expect(screen.queryByText("익명으로 작성할까요?")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "멘션을 모두 지운 뒤 익명으로 전환할 수 있습니다.",
+    );
+  });
+
   it("cycles through every identity the group allows", async () => {
     const { user, onIdentityChange } = renderComposer({
       identities: ["identified", "anonymous", "staff"],
@@ -177,6 +237,51 @@ describe("CommentComposer", () => {
 
     expect(onSubmit).toHaveBeenCalledWith("올라간 댓글", undefined, []);
     await vi.waitFor(() => expect(input).toHaveValue(""));
+  });
+
+  it("resets the mention draft only after a successful submit", async () => {
+    const onSubmit = vi
+      .fn()
+      .mockResolvedValueOnce({ comment_id: "c1" })
+      .mockResolvedValueOnce({ comment_id: "c2" });
+    const { user } = renderComposer({ onSubmit, mentionGroupId: "group-id" });
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+    await user.click(screen.getByRole("button", { name: "댓글 게시" }));
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+    await user.click(screen.getByRole("button", { name: "댓글 게시" }));
+
+    expect(onSubmit).toHaveBeenLastCalledWith("[@둘째 멤버](m:1)", undefined, [
+      { ordinal: 1, pubId: "member-2", name: "둘째 멤버" },
+    ]);
+  });
+
+  it("preserves the mention draft when submission fails", async () => {
+    const onSubmit = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ comment_id: "c2" });
+    const { user, input } = renderComposer({
+      onSubmit,
+      mentionGroupId: "group-id",
+    });
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+    await user.click(screen.getByRole("button", { name: "댓글 게시" }));
+    await vi.waitFor(() => expect(input).toHaveValue("[@첫 멤버](m:1) "));
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+    await user.click(screen.getByRole("button", { name: "댓글 게시" }));
+
+    expect(onSubmit).toHaveBeenLastCalledWith(
+      "[@첫 멤버](m:1) [@둘째 멤버](m:2)",
+      undefined,
+      [
+        { ordinal: 1, pubId: "member-1", name: "첫 멤버" },
+        { ordinal: 2, pubId: "member-2", name: "둘째 멤버" },
+      ],
+    );
+    expect(input).toHaveValue("");
   });
 
   it("does not overwrite a newly typed draft when the submit fails", async () => {
