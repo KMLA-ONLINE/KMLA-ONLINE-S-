@@ -41,6 +41,26 @@ const GATE_REDIRECT = {
 } as const;
 
 export async function clientLoader(): Promise<ShellData> {
+  // 뱃지는 셸 데이터가 아니라 쿼리가 소유하지만, 읽는 시점은 여전히 여기다.
+  //
+  // `staleTime`을 0으로 덮어 항상 새로 읽는다. 게이트 로더가 도는 순간이 곧 뱃지가 틀렸을
+  // 수 있는 순간이기 때문이다 — 특히 Push 알림으로 들어오는 경로에서 그렇다.
+  // `resolve_my_notification_destination()`이 `read_at`을 찍고, 그 라우트는 게이트 밖에
+  // 있어 목적지로 넘어오며 게이트가 새로 마운트된다. 캐시된 값을 그대로 쓰면 방금 읽은
+  // 알림이 최대 1분 동안 안 읽음으로 남는다. 같은 이유로 Realtime 이벤트를 언마운트 구간에
+  // 놓쳤을 때도 여기서 복구된다.
+  //
+  // 매번 읽어도 비싸지 않다. 게이트 로더는 이제 창 focus마다 돌지 않고, 첫 진입·뮤테이션·
+  // 당겨서 새로고침·알림함 복귀에서만 돈다 — 예전에 focus마다 이 RPC를 보내던 것보다 적다.
+  //
+  // `loadShellData()`와 병렬로 띄운다. 순서를 지키면 세션 → 프로필 → 아바타 서명이 끝난
+  // 뒤에야 요청이 나가 왕복이 하나 더 붙는데, 뱃지는 그중 무엇에도 의존하지 않는다.
+  // 세션이 없으면 이 요청은 401로 버려지지만, 그 경로는 곧바로 /login으로 나간다.
+  const badge = getQueryClient()
+    .fetchQuery({ ...notificationBadgeQuery(), staleTime: 0 })
+    // 뱃지 하나 때문에 앱 전체가 에러 화면으로 갈 이유는 없다. 실패하면 0으로 그린다.
+    .catch(() => 0);
+
   const shell = await loadShellData();
 
   if (!shell) {
@@ -55,14 +75,9 @@ export async function clientLoader(): Promise<ShellData> {
     throw redirect(GATE_REDIRECT[shell.profile.status]);
   }
 
-  // 뱃지는 셸 데이터가 아니라 쿼리가 소유한다. 여기서는 캐시를 데우기만 하고 기다리지
-  // 않는다 — 기다리면 이미 직렬인 콜드 스타트(세션 → 프로필 → 아바타 서명)에 왕복이 하나
-  // 더 붙는다. `useNavBadges()`가 활성 observer라 이 요청을 그대로 이어받고, 같은 키의
-  // 중복 요청은 TanStack이 합친다. `ensureQueryData`라서 캐시가 있으면 아무 요청도 없다.
-  void getQueryClient()
-    .ensureQueryData(notificationBadgeQuery())
-    // 뱃지 하나 때문에 앱 전체가 에러 화면으로 갈 이유는 없다. 실패하면 0으로 그린다.
-    .catch(() => 0);
+  // 여기서 기다려야 첫 페인트부터 숫자가 맞다. 위에서 병렬로 띄웠으므로 셸 데이터보다
+  // 먼저 끝나 있는 것이 보통이고, 그때는 기다리는 시간이 0이다.
+  await badge;
 
   return { ...shell, profile: shell.profile };
 }
