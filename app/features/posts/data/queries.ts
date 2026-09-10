@@ -23,9 +23,9 @@ import { createPostAttachmentUrls } from "~/features/posts/data/files";
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import { getSupabase } from "~/shared/supabase/client";
 
-export const GROUP_POST_PAGE_SIZE = 12;
-export const PROFILE_POST_PAGE_SIZE = 12;
-export const POST_COMMENT_PAGE_SIZE = 20;
+const GROUP_POST_PAGE_SIZE = 12;
+const PROFILE_POST_PAGE_SIZE = 12;
+const POST_COMMENT_PAGE_SIZE = 20;
 
 export async function getMyGroupAnonymousActivityRestriction(
   groupId: string,
@@ -132,9 +132,7 @@ async function attachProfileMedia<
   }));
 }
 
-export async function listPostAttachments(
-  postId: string,
-): Promise<PostAttachment[]> {
+async function listPostAttachments(postId: string): Promise<PostAttachment[]> {
   const { data, error } = await getSupabase().rpc("list_post_attachments", {
     p_post_id: postId,
   });

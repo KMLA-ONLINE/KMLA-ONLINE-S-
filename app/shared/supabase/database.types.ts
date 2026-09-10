@@ -2348,7 +2348,6 @@ export type Database = {
           object_path: string
         }[]
       }
-      publish_group_post: { Args: { p_post_id: string }; Returns: string }
       register_my_web_push_subscription: {
         Args: {
           p_auth: string
@@ -2411,32 +2410,6 @@ export type Database = {
           to: "profiles"
           isOneToOne: true
           isSetofReturn: false
-        }
-      }
-      reorder_post_attachments: {
-        Args: { p_attachment_ids: string[]; p_post_id: string }
-        Returns: {
-          created_at: string
-          deleted_at: string | null
-          height: number | null
-          id: string
-          mime_type: string
-          object_path: string
-          original_filename: string
-          position: number
-          post_id: string
-          ready_at: string | null
-          size_bytes: number
-          status: Database["public"]["Enums"]["post_attachment_status"]
-          storage_bucket: string
-          thumbnail_path: string | null
-          width: number | null
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "post_attachments"
-          isOneToOne: false
-          isSetofReturn: true
         }
       }
       report_group_post: {

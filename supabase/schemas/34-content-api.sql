@@ -323,6 +323,7 @@ declare
   group_identity_policy public.group_identity_policy;
   group_posting_policy public.group_posting_policy;
   member_role public.group_member_role;
+  content_changed boolean;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -390,14 +391,35 @@ begin
     raise exception 'category must belong to the group' using errcode = '22023';
   end if;
 
+  -- 카테고리 이동은 수정이 아니다. 글의 내용은 그대로고 분류만 바뀐다 — 개인 게시물에서
+  -- 공개 범위를 세지 않는 것과 같은 취급이다(`commit_profile_post`). 첨부를 재배치하기 전에
+  -- 재어 두어야 원래 순서와 비교할 수 있다(`apply_post_commit`이 position과 status를 갈아엎는다).
+  --
+  -- `ready`만 세는 것이 핵심이다. 게시된 글에서 `finalize_post_attachment`는 새 첨부를
+  -- `pending`으로 남기므로 `ready`가 곧 "이번 편집 전부터 있던 것"이다. `status <> 'deleted'`로
+  -- 세면 방금 올린 첨부까지 들어가 양쪽 배열이 같아지고, 사진만 더한 수정이 수정이 아닌 것이
+  -- 된다.
+  content_changed := btrim(p_title) is distinct from post_record.title
+    or coalesce(p_body, '') is distinct from post_record.body
+    or coalesce(p_attachment_ids, '{}'::uuid[]) is distinct from (
+      select coalesce(array_agg(attachment.id order by attachment.position), '{}'::uuid[])
+      from public.post_attachments as attachment
+      where attachment.post_id = p_post_id and attachment.status = 'ready'
+    );
+
   perform private.apply_post_commit(p_post_id, p_body, p_attachment_ids);
   update public.posts
   set title = btrim(p_title), body = coalesce(p_body, ''), category_id = p_category_id,
     published_at = case when coalesce(p_publish, false) then now() else published_at end,
-    edited_at = case when published_at is not null then now() else null end
+    edited_at = case
+      -- 지금 게시하는 글은 수정된 적이 없다.
+      when published_at is null then null
+      when content_changed then now()
+      else edited_at
+    end
   where id = p_post_id;
   -- 게시 시각을 세운 다음에 부른다. 새 멘션 행의 트리거가 이미 게시된 게시물을 보아야 알림이
-  -- 나가기 때문이다. 미게시 초안의 멘션은 `publish_group_post`가 게시할 때 알린다.
+  -- 나가기 때문이다. 미게시 초안의 멘션은 `p_publish`가 참인 커밋에서 함께 알린다.
   perform private.sync_post_mentions(p_post_id, coalesce(p_body, ''), p_mention_pub_ids);
   return p_post_id;
 end;
@@ -2257,145 +2279,6 @@ $$;
 
 ALTER FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."publish_group_post"("p_post_id" "uuid") RETURNS "uuid"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-declare
-  caller_profile_id bigint := private.current_profile_id();
-  post_record public.posts;
-  target_group_id uuid;
-  locked_group_id uuid;
-  group_identity_policy public.group_identity_policy;
-  group_posting_policy public.group_posting_policy;
-  member_role public.group_member_role;
-begin
-  if auth.uid() is null or caller_profile_id is null then
-    raise exception 'accepted profile required' using errcode = '42501';
-  end if;
-  select post.group_id into target_group_id
-  from public.posts as post
-  where post.id = p_post_id and post.kind = 'group';
-  if target_group_id is null or not private.is_post_author(p_post_id) then
-    raise exception 'only the author can publish this post' using errcode = '42501';
-  end if;
-  select post.* into post_record
-  from public.posts as post
-  where post.id = p_post_id and post.kind = 'group'
-    and post.group_id = target_group_id;
-  if post_record.author_identity = 'anonymous' then
-    perform private.lock_group_anonymous_activity_target(
-      target_group_id, caller_profile_id
-    );
-  end if;
-
-  select group_data.id, group_data.identity_policy, group_data.posting_policy,
-    membership.role
-  into locked_group_id, group_identity_policy, group_posting_policy, member_role
-  from public.groups as group_data
-  join public.group_memberships as membership
-    on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
-  where group_data.id = target_group_id
-  for share of group_data, membership;
-  if locked_group_id is null then
-    raise exception 'group membership required' using errcode = '42501';
-  end if;
-  select post.* into post_record
-  from public.posts as post
-  where post.id = p_post_id and post.kind = 'group'
-    and post.group_id = target_group_id
-  for update;
-  if post_record.id is null or not private.is_post_author(p_post_id) then
-    raise exception 'only the author can publish this post' using errcode = '42501';
-  end if;
-  if post_record.published_at is not null then
-    return p_post_id;
-  end if;
-  if group_posting_policy = 'staff'
-    and member_role not in ('owner', 'admin', 'manager') then
-    raise exception 'group posting is restricted to staff' using errcode = '42501';
-  end if;
-  if post_record.author_identity = 'anonymous'
-    and group_identity_policy = 'identified' then
-    raise exception 'anonymous posting is not allowed' using errcode = '42501';
-  end if;
-  if post_record.author_identity = 'anonymous' then
-    perform private.assert_group_anonymous_activity_allowed(
-      target_group_id, caller_profile_id
-    );
-  end if;
-  if post_record.author_identity = 'staff'
-    and member_role not in ('owner', 'admin', 'manager') then
-    raise exception 'staff identity is not allowed' using errcode = '42501';
-  end if;
-  if exists (
-    select 1 from public.post_attachments
-    where post_id = p_post_id and status = 'pending'
-  ) then
-    raise exception 'pending attachments must be finalized or deleted' using errcode = '55000';
-  end if;
-  if nullif(btrim(post_record.body), '') is null and not exists (
-    select 1 from public.post_attachments
-    where post_id = p_post_id and status = 'ready'
-  ) then
-    raise exception 'published post requires a body or ready attachment' using errcode = '22023';
-  end if;
-
-  update public.posts set published_at = now() where id = p_post_id;
-  return p_post_id;
-end;
-$$;
-
-ALTER FUNCTION "public"."publish_group_post"("p_post_id" "uuid") OWNER TO "postgres";
-
-CREATE OR REPLACE FUNCTION "public"."reorder_post_attachments"("p_post_id" "uuid", "p_attachment_ids" "uuid"[]) RETURNS SETOF "public"."post_attachments"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-declare
-  active_count integer;
-begin
-  perform 1 from public.posts where id = p_post_id for update;
-  if not found or not private.is_post_author(p_post_id) then
-    raise exception 'only the author can reorder attachments' using errcode = '42501';
-  end if;
-  if p_attachment_ids is null
-    or cardinality(p_attachment_ids) > 30
-    or cardinality(p_attachment_ids) <> (
-      select count(distinct id) from unnest(p_attachment_ids) as id
-    ) then
-    raise exception 'attachment order must contain unique ids' using errcode = '22023';
-  end if;
-  select count(*) into active_count from public.post_attachments
-  where post_id = p_post_id and status <> 'deleted';
-  if cardinality(p_attachment_ids) <> active_count
-    or exists (
-      select 1 from unnest(p_attachment_ids) as requested(id)
-      where not exists (
-        select 1 from public.post_attachments as item
-        where item.id = requested.id and item.post_id = p_post_id and item.status <> 'deleted'
-      )
-    ) then
-    raise exception 'attachment order must contain every active attachment exactly once'
-      using errcode = '22023';
-  end if;
-
-  -- Move to a disjoint range first so the partial unique index stays valid.
-  update public.post_attachments set position = -position - 1
-  where post_id = p_post_id and status <> 'deleted';
-  update public.post_attachments as item
-  set position = requested.ordinality - 1
-  from unnest(p_attachment_ids) with ordinality as requested(id, ordinality)
-  where item.id = requested.id;
-
-  return query select item.* from public.post_attachments as item
-  where item.post_id = p_post_id and item.status <> 'deleted'
-  order by item.position, item.id;
-end;
-$$;
-
-ALTER FUNCTION "public"."reorder_post_attachments"("p_post_id" "uuid", "p_attachment_ids" "uuid"[]) OWNER TO "postgres";
-
 CREATE OR REPLACE FUNCTION "public"."search_group_posts"("p_group_id" "uuid", "p_query" "text", "p_limit" integer DEFAULT 50) RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
@@ -2903,12 +2786,6 @@ GRANT ALL ON FUNCTION "public"."prepare_comment_image"("p_post_id" "uuid", "p_mi
 
 REVOKE ALL ON FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) TO "authenticated";
-
-REVOKE ALL ON FUNCTION "public"."publish_group_post"("p_post_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."publish_group_post"("p_post_id" "uuid") TO "authenticated";
-
-REVOKE ALL ON FUNCTION "public"."reorder_post_attachments"("p_post_id" "uuid", "p_attachment_ids" "uuid"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."reorder_post_attachments"("p_post_id" "uuid", "p_attachment_ids" "uuid"[]) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."search_group_posts"("p_group_id" "uuid", "p_query" "text", "p_limit" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."search_group_posts"("p_group_id" "uuid", "p_query" "text", "p_limit" integer) TO "authenticated";

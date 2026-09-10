@@ -102,7 +102,7 @@ export async function cancelGroupAnonymousActivityRestriction(
   if (error) throw error;
 }
 
-export async function createGroupPost(
+async function createGroupPost(
   groupId: string,
   values: PostFormValues,
   publish = true,
@@ -295,6 +295,8 @@ async function uploadCommentImage(
       await uploadPostAttachment(state.image.object_path, item.file);
       state.uploaded = true;
     } catch (uploadError) {
+      // 첨부와 같은 이유로 finalize를 한 번 더 믿는다 — `finalize_comment_image`도
+      // storage.objects를 대조하므로, 통과했다면 응답만 잃었던 것이다.
       try {
         const { error } = await getSupabase().rpc("finalize_comment_image", {
           p_image_id: state.image.id,
@@ -423,6 +425,10 @@ async function runPostFileUpload(
         }
         state.uploaded = true;
       } catch (uploadError) {
+        // 업로드가 실패로 보여도 finalize가 통과하면 object는 실제로 올라간 것이다 —
+        // `finalize_post_attachment`가 storage.objects에서 소유자·크기·MIME까지 대조하기
+        // 때문이다. 응답만 잃은 경우(타임아웃, 연결 끊김)를 여기서 건져 낸다. object가
+        // 없으면 finalize가 P0002로 던지므로, 원래의 업로드 오류를 그대로 올린다.
         try {
           await finalizePostAttachment(state.attachment.id);
           state.uploaded = true;
@@ -791,7 +797,7 @@ export async function updateGroupPostWithAttachments(
  * 요구하기 때문이다. 다른 점은 커밋에 제목·카테고리 대신 공개 범위가 들어간다는 것뿐이라
  * 업로드 단계는 `uploadPreparedFiles()`를 그대로 공유한다.
  */
-export async function createProfilePost(
+async function createProfilePost(
   timelinePubId: string,
   visibility: ProfilePostFormValues["visibility"],
 ): Promise<string> {
@@ -878,17 +884,6 @@ export async function updateProfilePostWithAttachments(
 export async function deleteProfilePost(postId: string): Promise<void> {
   const { error } = await getSupabase().rpc("delete_profile_post", {
     p_post_id: postId,
-  });
-  if (error) throw error;
-}
-
-export async function reorderPostAttachments(
-  postId: string,
-  attachmentIds: string[],
-): Promise<void> {
-  const { error } = await getSupabase().rpc("reorder_post_attachments", {
-    p_post_id: postId,
-    p_attachment_ids: attachmentIds,
   });
   if (error) throw error;
 }

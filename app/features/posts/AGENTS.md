@@ -29,7 +29,7 @@
   복제하면 첨부는 보이는데 본문은 안 보이는 식으로 어긋난다.
 - 공개 범위는 게시 후에도 바뀐다(기능 명세 §8.10). 그래서 `visibility`는 불변 트리거에서 조건부로
   풀려 있고, `commit_profile_post`가 세우는 `app.commit_post` 안에서만 열린다. 게시 전환 규칙에는
-  같은 플래그를 걸지 마라 — 플래그를 세우지 않는 `publish_group_post`가 함께 막힌다.
+  같은 플래그를 걸지 마라 — 플래그를 세우지 않는 게시 경로가 함께 막힌다.
 - 타인 타임라인 글은 언제나 전체 공개다. 서버가 `p_visibility`를 무시하고 `public`으로 되돌리므로
   클라이언트의 선택 UI는 자기 타임라인에서만 그린다.
 - 타인 작성 허용은 **게시하는 순간**의 값으로 다시 본다. 초안은 새 글이지만, 이미 게시된 글의 수정은
@@ -97,7 +97,7 @@
   차이를 계산하지 마라.
 - 알림은 두 곳에서 낸다. `post_mentions`의 INSERT 트리거는 이미 게시된 글을, `notify_post_published`는
   초안이 게시되는 순간을 맡는다. 초안 커밋에서 둘이 겹칠 수 있지만 event key가 흡수한다. 한쪽만
-  두면 `publish_group_post`로 게시한 초안이 조용해진다.
+  두면 멘션 행 INSERT 시점과 게시 시점이 어긋나는 초안에서 알림이 빠진다.
 - 익명은 막고 운영진 명의는 연다. 운영진 명의 글은 실제 작성자의 이름과 사진을 그대로 보여주므로
   (기능 명세 §8.6) 익명 뒤에 숨는 지목이 아니다. 초안의 신원 전환(`update_group_post_draft_identity`)도
   같은 이유로 멘션이 남아 있으면 거절한다 — 안 막으면 익명 금지가 통째로 우회된다.
@@ -115,6 +115,38 @@
   사람에게만** 멤버십을 요구한다.
 - 멘션 상한은 서로 다른 대상 50명이다. 같은 사람을 여러 번 부르는 것은 한 명으로 세므로 상한에
   닿아도 이미 본문에 남아 있는 대상은 후보 목록에서 다시 고를 수 있어야 한다.
+
+## 첨부의 수명주기
+
+첨부 하나가 다섯 곳에서 동시에 상태를 갖는다. 한 곳만 보고 고치면 나머지가 조용히 어긋난다.
+
+| 층                              | 상태                                                                                   | 옮기는 곳                                                  |
+| ------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| 클라이언트 세션                 | `status`(queued → uploading → ready 또는 error) + `uploaded` / `finalized` / `removed` | `runPostFileUpload()`                                      |
+| Storage                         | 원본 object, 축소본 object(없을 수 있다)                                               | 브라우저 업로드                                            |
+| `post_attachments`              | `pending` → `ready` → `deleted`                                                        | `finalize_post_attachment`, `private.apply_post_commit`    |
+| 부모 `posts.published_at`       | null(초안) / 값(게시됨)                                                                | `commit_group_post`, `commit_profile_post`                 |
+| `private.storage_cleanup_queue` | 지울 경로                                                                              | `apply_post_commit`, `purge_posts`, finalize의 축소본 반려 |
+
+- **축소본은 finalize보다 먼저 올려라.** `finalize_post_attachment`가 축소본 object의 존재·타입·크기를
+  확인하고, 미달이면 실패시키는 대신 `thumbnail_path`를 지워 원본으로 떨어뜨린다. 순서를 뒤집어도
+  아무것도 던지지 않고 화면도 멀쩡하다 — 축소본만 영영 안 생긴다. 계층을 넘는 순서 규칙이라
+  타입으로도 제약으로도 잡히지 않으니 손대면 직접 확인해라.
+- **`finalize_post_attachment`는 게시 여부에 따라 다른 함수다.** 미게시 초안이면 `ready`로 올리고,
+  이미 게시된 글이면 `pending`으로 남긴다. 그래야 커밋이 "이번 편집 전부터 있던 첨부"를 `ready` 하나로
+  구분할 수 있다.
+- 그 구분 위에 두 커밋 RPC의 `content_changed`가 서 있다. `ready`만 세어 원래 순서를 재고 그 값으로
+  `edited_at`을 찍는다. `status <> 'deleted'`로 세면 방금 올린 첨부까지 들어가 양쪽 배열이 같아지고,
+  사진만 더한 수정이 수정이 아닌 것이 된다. 반드시 `apply_post_commit` **앞에서** 재라 — 그 함수가
+  position과 status를 갈아엎는다.
+- **수정으로 치지 않는 것**: 그룹은 카테고리 이동, 개인은 공개 범위 변경. 제목·본문·첨부 구성만
+  `edited_at`을 움직인다. 둘 중 한쪽만 고치면 같은 규칙이 종류마다 달라진다.
+- 업로드가 던졌는데 finalize가 통과하면 성공으로 친다. finalize가 `storage.objects`를 대조하므로
+  통과했다는 것은 object가 실제로 올라갔다는 뜻이고, 응답만 잃은 경우를 여기서 건진다. 버그로 보고
+  지우면 재시도마다 중복 업로드가 난다.
+- 세션 상태에는 통지 경로가 둘이다. `updatePostUpload()`는 리스너에 알리지만
+  `state.uploaded` / `finalized` / `attachment` / `removed` 직접 대입은 알리지 않는다. 지금은 화면이
+  그 필드를 읽지 않아 무해하다. 읽게 만들 거라면 먼저 대입을 `updatePostUpload()`로 모아라.
 
 ## 직접 접근을 막은 테이블
 

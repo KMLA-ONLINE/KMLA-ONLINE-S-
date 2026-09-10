@@ -24,7 +24,7 @@ export const notificationKeys = {
  * 시간이 아니라 명시적 무효화(읽음 처리·Realtime·focus 복귀)가 책임진다 — 무효화는
  * `staleTime`과 무관하게 활성 observer를 곧바로 다시 읽힌다.
  */
-export const NOTIFICATION_BADGE_STALE_TIME = 60_000;
+const NOTIFICATION_BADGE_STALE_TIME = 60_000;
 
 export function notificationBadgeQuery() {
   return queryOptions({

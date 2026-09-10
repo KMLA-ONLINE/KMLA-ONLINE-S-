@@ -1,4 +1,4 @@
-export const STORY_CONTENT_MIN_LENGTH = 2;
+const STORY_CONTENT_MIN_LENGTH = 2;
 export const STORY_CONTENT_MAX_LENGTH = 100;
 
 export function normalizeStoryContent(value: string): string {

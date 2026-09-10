@@ -1386,8 +1386,8 @@ begin
         new.title, new.group_id, new.id
       );
     end loop;
-    -- 초안에 멘션을 넣고 나중에 게시하면(`publish_group_post`) 멘션 행은 이미 있고 새
-    -- INSERT가 없어 트리거가 돌지 않는다. 게시되는 이 순간이 그 알림의 유일한 자리다.
+    -- 초안에 멘션을 넣고 나중에 게시하면 멘션 행은 이미 있고 새 INSERT가 없어 트리거가
+    -- 돌지 않을 수 있다. 게시되는 이 순간이 그 알림의 유일한 자리다.
     perform private.emit_post_mention_notifications(new.id);
   elsif new.timeline_profile_id <> actor_profile_id then
     perform private.emit_notification(

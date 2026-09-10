@@ -297,7 +297,10 @@ select is(
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
 select lives_ok(
-  $$select public.publish_group_post((select id from public.posts where title = '초안'))$$,
+  $$select public.commit_group_post(
+      (select id from public.posts where title = '초안'),
+      '초안', '[@최푸름](m:1) 님', null, true, null, array['pureum-23']
+    )$$,
   'the draft is published'
 );
 reset role;

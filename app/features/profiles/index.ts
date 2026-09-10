@@ -21,12 +21,7 @@ export {
 } from "~/features/profiles/data/queries";
 export { formatCohort } from "~/features/profiles/model/format";
 export type {
-  AcceptedProfile,
   BirthdayProfile,
-  BirthdayScope,
   EditableProfile,
   ProfileEditActionData,
-  ProfileEditErrors,
-  ProfileEditValues,
-  ProfileMediaSlot,
 } from "~/features/profiles/model/types";

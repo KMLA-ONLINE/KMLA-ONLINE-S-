@@ -8,7 +8,7 @@ import { listFeedPosts } from "~/features/feed/data/queries";
 import type { FeedPage } from "~/features/feed/model/types";
 import { readPostViewMode } from "~/features/posts/model/view-preference";
 
-export const FEED_STALE_TIME = 15_000;
+const FEED_STALE_TIME = 15_000;
 
 export const feedKeys = {
   all: ["feed"] as const,
