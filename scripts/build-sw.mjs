@@ -41,13 +41,17 @@ const { count, size, warnings } = await generateSW({
   globPatterns: ["**/*.{html,js,css,ico,png,svg,webmanifest}"],
   // sw.js registers itself; the Vite manifest is a build artifact.
   // Promotional screenshots are only needed when the browser expands its
-  // install UI; downloading them with the offline app shell wastes bandwidth.
+  // install UI, and og-image.png is only ever fetched by link-preview
+  // crawlers; downloading either with the offline app shell wastes bandwidth.
+  // badge-96x96.png is deliberately absent from this list — the Push handler
+  // draws it on every notification, including while the app is offline.
   globIgnores: [
     "sw.js",
     "push-sw.js",
     "workbox-*.js",
     ".vite/**",
     "screenshots/**",
+    "og-image.png",
   ],
   importScripts: ["/push-sw.js"],
   runtimeCaching: [

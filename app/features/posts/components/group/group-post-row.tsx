@@ -1,6 +1,7 @@
 import { HeartIcon, MessageSquareIcon, PinIcon } from "lucide-react";
 import { Link } from "react-router";
 
+import { StaffMark } from "~/features/posts/components/staff-mark";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { FROM_GROUP } from "~/features/posts/model/navigation";
 import type { GroupPost } from "~/features/posts/model/types";
@@ -59,14 +60,7 @@ export function GroupPostRow({
         <span className="truncate">
           {post.author_name || post.author_label}
         </span>
-        {post.author_identity === "staff" ? (
-          <Badge
-            variant="outline"
-            className="shrink-0 border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300"
-          >
-            운영진
-          </Badge>
-        ) : null}
+        {post.author_identity === "staff" ? <StaffMark /> : null}
         {post.is_author && post.author_identity === "anonymous" ? (
           <Badge variant="secondary" className="shrink-0">
             나

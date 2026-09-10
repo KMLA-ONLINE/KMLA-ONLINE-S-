@@ -88,7 +88,9 @@ export default function MainAppLayout() {
           className={cn(
             "max-md:hidden",
             chrome.header === "hide-on-scroll" &&
-              "transition-[margin,transform] duration-200 ease-out motion-reduce:transition-none md:focus-within:mt-0 md:focus-within:translate-y-0",
+              // 키보드 포커스가 안에 들어와 있으면 숨기지 않는다. `focus-within`이 아니라
+              // `:focus-visible`을 보는 이유는 아래 탭바 주석에 있다.
+              "transition-[margin,transform] duration-200 ease-out motion-reduce:transition-none md:has-[:focus-visible]:mt-0 md:has-[:focus-visible]:translate-y-0",
             chrome.header === "hide-on-scroll" &&
               hidden &&
               "md:-mt-[var(--app-header-h)] md:-translate-y-full",
@@ -134,8 +136,19 @@ export default function MainAppLayout() {
             <MobileTabBar
               className={cn(
                 "md:hidden",
+                // 키보드로 탭바에 들어와 있는 동안에는 숨기지 않는다. 포커스한 항목이
+                // 발밑에서 사라지면 어디에 있는지 알 수 없다.
+                //
+                // `focus-within`이면 안 된다. 탭바의 링크는 **눌러도** 포커스를 받고,
+                // 탭바는 route가 바뀌어도 리마운트되지 않아 그 포커스가 그대로 남는다.
+                // 그래서 탭바로 한 번 이동하고 나면 `focus-within`이 계속 켜져 있고,
+                // 그 선택자(0,2,0)가 `max-md:translate-y-full`(0,1,0 — 미디어 쿼리는
+                // 특정도를 올리지 않는다)을 이겨서 자동 숨김이 영영 죽는다.
+                //
+                // `:focus-visible`은 포인터로 누른 링크에는 붙지 않으므로 탭 이동은
+                // 숨김을 막지 않고, 키보드 이동만 막는다.
                 chrome.bottomNav === "hide-on-scroll" &&
-                  "absolute inset-x-0 bottom-0 transition-transform duration-200 ease-out focus-within:translate-y-0 motion-reduce:transition-none",
+                  "absolute inset-x-0 bottom-0 transition-transform duration-200 ease-out has-[:focus-visible]:translate-y-0 motion-reduce:transition-none",
                 chrome.bottomNav === "hide-on-scroll" &&
                   hidden &&
                   "max-md:translate-y-full",

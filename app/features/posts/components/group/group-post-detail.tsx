@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Link, useFetcher, useLocation } from "react-router";
 
+import { StaffMark } from "~/features/posts/components/staff-mark";
 import type { CommentViewer } from "~/features/posts/components/comment/comment-composer";
 import {
   PostFileList,
@@ -141,14 +142,7 @@ export function GroupPostDetail({
                   {authorName}
                 </span>
               )}
-              {post.author_identity === "staff" ? (
-                <Badge
-                  variant="outline"
-                  className="shrink-0 border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300"
-                >
-                  운영진
-                </Badge>
-              ) : null}
+              {post.author_identity === "staff" ? <StaffMark /> : null}
               {post.is_author && post.author_identity === "anonymous" ? (
                 <Badge variant="secondary" className="shrink-0">
                   나

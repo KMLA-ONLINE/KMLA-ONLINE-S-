@@ -22,14 +22,22 @@ const validClickData = {
   count: 1,
 };
 
-function loadPushWorker(clients: object[] = []) {
+function loadPushWorker(
+  clients: object[] = [],
+  { badging = true }: { badging?: boolean } = {},
+) {
   const listeners = new Map<string, WorkerListener>();
   const notifications: {
     data: Record<string, unknown>;
     tag: string;
   }[] = [];
-  const getNotifications = vi.fn(({ tag }: { tag: string }) =>
-    Promise.resolve(notifications.filter((item) => item.tag === tag)),
+  // 필터 없는 호출은 지금 떠 있는 카드 전부를 준다 — 뱃지 합계가 그 경로를 쓴다.
+  const getNotifications = vi.fn((filter?: { tag: string }) =>
+    Promise.resolve(
+      filter
+        ? notifications.filter((item) => item.tag === filter.tag)
+        : [...notifications],
+    ),
   );
   const showNotification = vi.fn(
     (
@@ -47,6 +55,9 @@ function loadPushWorker(clients: object[] = []) {
   );
   const matchAll = vi.fn(() => Promise.resolve(clients));
   const openWindow = vi.fn(() => Promise.resolve());
+  const setAppBadge = vi.fn(() => Promise.resolve());
+  const clearAppBadge = vi.fn(() => Promise.resolve());
+  const subscribe = vi.fn(() => Promise.resolve({}));
   const source = readFileSync(
     resolve(process.cwd(), "public/push-sw.js"),
     "utf8",
@@ -56,7 +67,13 @@ function loadPushWorker(clients: object[] = []) {
     URL,
     self: {
       location: { origin: "https://kmla.example" },
-      registration: { getNotifications, showNotification },
+      // 데스크톱 Firefox처럼 Badging API가 없는 환경도 정상 경로다.
+      navigator: badging ? { setAppBadge, clearAppBadge } : {},
+      registration: {
+        getNotifications,
+        showNotification,
+        pushManager: { subscribe },
+      },
       clients: { matchAll, openWindow },
       addEventListener(type: string, listener: WorkerListener) {
         listeners.set(type, listener);
@@ -75,7 +92,16 @@ function loadPushWorker(clients: object[] = []) {
     await pending;
   }
 
-  return { dispatch, matchAll, notifications, openWindow, showNotification };
+  return {
+    clearAppBadge,
+    dispatch,
+    matchAll,
+    notifications,
+    openWindow,
+    setAppBadge,
+    showNotification,
+    subscribe,
+  };
 }
 
 describe("public push service worker", () => {
@@ -93,6 +119,8 @@ describe("public push service worker", () => {
     expect(worker.showNotification).toHaveBeenCalledWith("새 알림", {
       body: "확인할 새 알림이 있습니다.",
       icon: "/pwa-192x192.png",
+      badge: "/badge-96x96.png",
+      lang: "ko",
       tag: validPayload.tag,
       renotify: false,
       data: {
@@ -302,6 +330,68 @@ describe("public push service worker", () => {
     expect(worker.openWindow).toHaveBeenCalledWith(
       `/noti/open/${validPayload.notificationId}`,
     );
+  });
+
+  it("counts every shown card into the app icon badge", async () => {
+    const worker = loadPushWorker();
+
+    await worker.dispatch("push", { data: { json: () => validPayload } });
+    expect(worker.setAppBadge).toHaveBeenLastCalledWith(1);
+
+    // 같은 카테고리라 카드는 하나로 합쳐지지만 뱃지는 알림 수를 센다.
+    await worker.dispatch("push", {
+      data: {
+        json: () => ({
+          ...validPayload,
+          notificationId: "028f3f14-9b9a-7c1d-a1b2-0123456789ab",
+          deliveryId: "028f3f15-40c7-7d25-b2c3-abcdef012345",
+        }),
+      },
+    });
+    expect(worker.notifications).toHaveLength(1);
+    expect(worker.setAppBadge).toHaveBeenLastCalledWith(2);
+    expect(worker.clearAppBadge).not.toHaveBeenCalled();
+  });
+
+  it("clears the app icon badge once no card is left", async () => {
+    const worker = loadPushWorker();
+    await worker.dispatch("push", { data: { json: () => validPayload } });
+
+    worker.notifications.length = 0;
+    await worker.dispatch("notificationclose", {
+      notification: { data: validClickData },
+    });
+
+    expect(worker.clearAppBadge).toHaveBeenCalledOnce();
+  });
+
+  it("does not fail a push when the browser has no Badging API", async () => {
+    const worker = loadPushWorker([], { badging: false });
+
+    await worker.dispatch("push", { data: { json: () => validPayload } });
+
+    expect(worker.showNotification).toHaveBeenCalledOnce();
+  });
+
+  it("resubscribes with the previous options when the push subscription rotates", async () => {
+    const worker = loadPushWorker();
+    const options = { userVisibleOnly: true, applicationServerKey: "key" };
+
+    await worker.dispatch("pushsubscriptionchange", {
+      oldSubscription: { options },
+    });
+
+    expect(worker.subscribe).toHaveBeenCalledWith(options);
+  });
+
+  it("ignores a subscription change that carries no previous options", async () => {
+    const worker = loadPushWorker();
+
+    await worker.dispatch("pushsubscriptionchange", {
+      oldSubscription: undefined,
+    });
+
+    expect(worker.subscribe).not.toHaveBeenCalled();
   });
 
   it("ignores click data that was not produced by a validated push", async () => {

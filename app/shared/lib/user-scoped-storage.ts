@@ -1,3 +1,5 @@
+import { setAppBadgeCount } from "~/shared/lib/app-badge";
+
 /**
  * 계정에 딸린 `localStorage` 값을 저장소의 주인이 바뀔 때 버린다.
  *
@@ -75,6 +77,11 @@ export async function syncUserScopedStorage(
     window.localStorage.removeItem(key);
     notifySameTab(key);
   }
+
+  // 홈 화면 아이콘의 숫자도 이전 사용자의 값이다. `localStorage`와 달리 OS가 들고 있어
+  // 앱을 지웠다 깔지 않는 한 남는다 — 로그아웃한 계정의 안 읽은 수가 다음 사람 화면에
+  // 그대로 떠 있으면 안 된다. 새 사용자의 값은 게이트 로더가 다시 채운다.
+  setAppBadgeCount(0);
 
   // 새 주인을 기록하기 전에 이전 사용자의 보호 이미지가 실제로 사라져야 한다. 실패하면
   // OWNER_KEY를 그대로 두어 다음 호출이 같은 사용자여도 삭제를 다시 시도한다.
