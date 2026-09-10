@@ -170,6 +170,22 @@ worker 안에서 직렬화한다. 처리한 delivery ID를 카드 data에 보관
 교체는 `renotify`하고 낮음 중요도 교체는 조용히 갱신한다. 표준 Web Notifications API에는 네이티브 앱의
 펼침형 그룹 API가 없으므로 카테고리별 대표 카드가 정식 동작이다.
 
+알림 카드는 컬러 아이콘(`pwa-192x192.png`)과 함께 단색 badge(`badge-96x96.png`)를 지정하고
+`lang`을 `ko`로 둔다. Android 상태바와 잠금 화면은 컬러 아이콘이 아니라 알파 채널만 읽는
+badge를 쓰므로, 주지 않으면 브라우저 기본 도형이 대신 나간다. 두 이미지는
+`scripts/generate-brand-assets.mjs`가 `public/logo.svg`에서 파생한다.
+
+앱이 떠 있지 않은 동안에는 서비스 워커가 홈 화면 아이콘 배지(Badging API)를 유지한다. 값은
+지금 떠 있는 알림 카드의 누적 개수이며 push, 클릭, 닫기에서 다시 계산한다. 서버가 세는 읽지
+않은 수가 정답이고 앱이 뜨는 즉시 그 값으로 덮이므로, 이 값은 앱이 없는 구간을 메우는
+근사치다. Badging API가 없는 환경은 정상 경로이며 push 표시를 막지 않는다.
+
+`pushsubscriptionchange`에서는 `oldSubscription.options`로 다시 구독하기만 한다. 서비스
+워커에는 로그인 세션이 없어 새 endpoint를 서버에 올릴 수 없고, 그 절반은 앱이 다음에 뜰 때
+§8의 재동기화가 맡는다. 죽은 옛 endpoint는 전달 worker가 410으로 정리한다. 이 파일은 Vite가
+빌드하지 않는 정적 파일이라 VAPID 공개키를 읽을 수 없고, 옛 구독의 생성 옵션이 그 자리를
+대신한다.
+
 클릭 시 payload URL을 열지 않고 `/noti/open/:notificationId`만 구성한다. 기존 앱 창이 있으면 focus와
 navigate를 사용하고 없으면 새 창을 연다. resolver route는 인증, 현재 계정, 대상 접근 권한과 읽음
 처리를 다시 확인한다. 로그인하지 않았다면 안전하게 검증한 상대 `next` 경로를 로그인 후 복원한다.
@@ -204,7 +220,16 @@ route가 history에 확정된 다음 그 entry를 replace한다. SPA navigation�
 
 알림 첫 페이지는 route `clientLoader`, 읽음 변경은 `clientAction`과 fetcher를 사용한다. 이전 페이지는
 커서 기반으로 추가 로딩한다. `public.notifications`의 Realtime INSERT·UPDATE·DELETE는 알림 캐시와 셸
-badge를 갱신하며 창 focus 복귀 시 revalidation을 fallback으로 사용한다.
+badge를 갱신하며 창 복귀 시 revalidation을 fallback으로 사용한다.
+
+복귀 신호는 `focus`와 `visibilitychange`를 함께 듣는다. 설치형 PWA를 배경에서 되살릴 때 `focus`가
+오지 않는 경우가 있어 한쪽만으로는 배지가 이전 값에 머문다. 두 이벤트는 같은 복귀에서 함께 오는
+쪽이 보통이므로 짧은 간격 안의 두 번째 신호는 버리고, 창이 보이지 않는 동안 온 신호도 버린다.
+
+셸 badge 값은 홈 화면 아이콘 배지에도 그대로 반영한다(§3.2). 셸이 뜰 때 브라우저가 들고 있는 Push
+구독이 서버에도 있는지 한 번 확인하고, 없으면 다시 등록한다 — §7의 `pushsubscriptionchange`가
+브라우저 쪽만 되살리기 때문이다. 구독이 아예 없으면 새로 만들지 않는다. 앱에서 알림을 끄면 권한은
+granted로 남은 채 구독만 해지되므로, 새로 구독하면 사용자가 끈 알림이 저절로 켜진다.
 
 Push 권한 설명은 승인 사용자의 gate 아래에서 표시한다. 사용자 동작 안에서만 브라우저 권한을 요청하고,
 기기·계정별 prompt 상태는 versioned localStorage key에 저장한다. 서비스 워커 업데이트, iOS 설치 안내,

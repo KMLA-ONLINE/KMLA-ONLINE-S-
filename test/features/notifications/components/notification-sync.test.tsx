@@ -6,6 +6,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   revalidate: vi.fn(),
   subscribeToNotifications: vi.fn(),
+  getRecentUnreadNotificationCount: vi.fn(() => Promise.resolve(0)),
+  resyncWebPushSubscription: vi.fn(() => Promise.resolve()),
+  setAppBadgeCount: vi.fn(),
 }));
 
 vi.mock("react-router", async (importOriginal) => ({
@@ -15,6 +18,19 @@ vi.mock("react-router", async (importOriginal) => ({
 
 vi.mock("~/features/notifications/data/subscriptions", () => ({
   subscribeToNotifications: mocks.subscribeToNotifications,
+}));
+
+vi.mock("~/features/notifications/data/queries", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getRecentUnreadNotificationCount: mocks.getRecentUnreadNotificationCount,
+}));
+
+vi.mock("~/features/notifications/data/push", () => ({
+  resyncWebPushSubscription: mocks.resyncWebPushSubscription,
+}));
+
+vi.mock("~/shared/lib/app-badge", () => ({
+  setAppBadgeCount: mocks.setAppBadgeCount,
 }));
 
 import { groupKeys } from "~/features/groups/data/cache";
@@ -91,6 +107,50 @@ describe("NotificationSync", () => {
     onChange();
 
     await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
+  });
+
+  it("treats becoming visible again as a return, not only window focus", async () => {
+    const { invalidateQueries } = renderSync("/groups/private-club");
+
+    await waitFor(() =>
+      expect(mocks.subscribeToNotifications).toHaveBeenCalledOnce(),
+    );
+    // 설치형 PWA를 배경에서 되살릴 때 `focus` 없이 이것만 오는 경우가 있다.
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: notificationKeys.badge(),
+      }),
+    );
+    expect(mocks.revalidate).toHaveBeenCalledOnce();
+  });
+
+  it("coalesces focus and visibilitychange from one return into a single sync", async () => {
+    renderSync("/groups/private-club");
+
+    await waitFor(() =>
+      expect(mocks.subscribeToNotifications).toHaveBeenCalledOnce(),
+    );
+    window.dispatchEvent(new Event("focus"));
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
+  });
+
+  it("mirrors the shell badge onto the app icon", async () => {
+    mocks.getRecentUnreadNotificationCount.mockResolvedValueOnce(3);
+    renderSync("/");
+
+    await waitFor(() => expect(mocks.setAppBadgeCount).toHaveBeenCalledWith(3));
+  });
+
+  it("checks the stored push subscription once the shell mounts", async () => {
+    renderSync("/");
+
+    await waitFor(() =>
+      expect(mocks.resyncWebPushSubscription).toHaveBeenCalledOnce(),
+    );
   });
 
   it.each(["/groups", "/groups/discover", "/groups/create"])(

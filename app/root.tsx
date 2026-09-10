@@ -12,9 +12,55 @@ import type { Route } from "./+types/root";
 import { ErrorPage } from "~/shared/components/error-page";
 import { PwaPrompts } from "~/shared/components/pwa-prompts";
 import { QueryProvider } from "~/shared/components/query-provider";
+import { ThemeColor } from "~/shared/components/theme-color";
+import { env } from "~/shared/lib/env";
 import { Toaster } from "~/shared/ui/sonner";
 import { TooltipProvider } from "~/shared/ui/tooltip";
 import "./app.css";
+
+const SITE_NAME = "KMLA Online";
+const SITE_DESCRIPTION =
+  "민족사관고등학교 구성원을 위한 온라인 커뮤니티. 공지와 그룹 게시판, 급식과 시간표를 한곳에서 봅니다.";
+const OG_IMAGE = "/og-image.png";
+
+/**
+ * 문서 제목과 링크 미리보기 카드.
+ *
+ * SSR이 없으므로 여기서 나온 값이 곧 `build/client/index.html`이고, 크롤러가 보는 것도
+ * 그 한 장뿐이다. 게시물별 카드는 만들 수 없다 — 크롤러는 JavaScript를 실행하지 않아
+ * 어떤 경로로 들어와도 이 사이트 공통 카드를 읽는다. 그래도 제목·설명·이미지가 있는
+ * 카드와 아무것도 없는 회색 카드는 다르고, 카카오톡으로 링크가 도는 서비스에서는 그
+ * 차이가 제일 먼저 보인다.
+ *
+ * 자식 라우트가 `meta`를 export하면 이 값을 덮는다.
+ */
+export const meta: Route.MetaFunction = () => {
+  // 절대 URL을 만들 수 없으면 상대 경로로 둔다. 대부분의 크롤러는 문서 URL 기준으로
+  // 풀어내고, 못 푸는 쪽에서만 이미지가 빠진다 — 제목과 설명은 그대로 나간다.
+  const image = env.siteUrl ? `${env.siteUrl}${OG_IMAGE}` : OG_IMAGE;
+
+  return [
+    { title: SITE_NAME },
+    { name: "description", content: SITE_DESCRIPTION },
+    { name: "application-name", content: SITE_NAME },
+    // iOS 홈 화면 아이콘 아래 이름. 없으면 manifest의 `short_name`으로 넘어가지만,
+    // Safari 버전에 따라 문서 제목을 그대로 쓰는 경로가 남아 있다.
+    { name: "apple-mobile-web-app-title", content: SITE_NAME },
+    { property: "og:type", content: "website" },
+    { property: "og:site_name", content: SITE_NAME },
+    { property: "og:title", content: SITE_NAME },
+    { property: "og:description", content: SITE_DESCRIPTION },
+    { property: "og:locale", content: "ko_KR" },
+    { property: "og:image", content: image },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
+    { property: "og:image:alt", content: `${SITE_NAME} 로고` },
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "twitter:title", content: SITE_NAME },
+    { name: "twitter:description", content: SITE_DESCRIPTION },
+    { name: "twitter:image", content: image },
+  ];
+};
 
 export const links: Route.LinksFunction = () => [
   { rel: "manifest", href: "/manifest.webmanifest" },
@@ -44,7 +90,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           name="viewport"
           content="width=device-width, initial-scale=1, viewport-fit=cover"
         />
-        <meta name="theme-color" content="#0f172a" />
+        {/* 하이드레이션 전 기본값. `ThemeProvider`의 `defaultTheme`과 같은 라이트 배경이며,
+            테마가 정해진 뒤에는 `<ThemeColor />`가 실제 배경색으로 덮어쓴다. */}
+        <meta name="theme-color" content="#ffffff" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -61,6 +109,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           defaultTheme="light"
           disableTransitionOnChange
         >
+          <ThemeColor />
           <TooltipProvider>
             {children}
             <Toaster />

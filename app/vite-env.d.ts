@@ -10,6 +10,7 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string | undefined;
   readonly VITE_SUPABASE_PUBLISHABLE_KEY: string | undefined;
   readonly VITE_WEB_PUSH_VAPID_PUBLIC_KEY: string | undefined;
+  readonly VITE_SITE_URL: string | undefined;
 }
 
 interface ImportMeta {

@@ -61,6 +61,7 @@ Web Push를 로컬에서 확인하려면 `npm run web-push:keys`로 VAPID 키 �
 | `npm run db:diff -- <name>`                  | schemas 변경분으로 migration 초안 생성         |
 | `npm run db:types`                           | `app/shared/supabase/database.types.ts` 재생성 |
 | `npm run pwa:assets`                         | `public/logo.svg`에서 아이콘 일체 재생성       |
+| `npm run brand:assets`                       | 알림 badge와 링크 미리보기 이미지 재생성       |
 | `npm run web-push:keys`                      | 로컬 Web Push용 VAPID 키 쌍 생성               |
 | `npm run lint` / `lint:fix`                  | ESLint                                         |
 | `npm run format` / `format:check`            | Prettier                                       |
@@ -185,7 +186,8 @@ SPA 모드에서 그 preset의 이점(라우트별 함수 설정, 번들 스플�
 | Preview       | `dev` 및 PR | `trftjcieogrewqptgidd` |
 
 `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_WEB_PUSH_VAPID_PUBLIC_KEY`를
-두 스코프에 각각 등록합니다. 빌드 타임에 인라인되므로 값을 바꾸면 재배포해야 하고,
+두 스코프에 각각 등록합니다. `VITE_SITE_URL`은 선택이며, 그 스코프의 origin(끝의 `/` 없이)을
+넣으면 링크 미리보기 카드의 `og:image`가 절대 URL로 나갑니다. 빌드 타임에 인라인되므로 값을 바꾸면 재배포해야 하고,
 `env.ts`가 지연 평가라 누락돼도 빌드는 통과합니다.
 
 Preview는 `dev` 브랜치에 고정 도메인을 할당해서 씁니다 (PWA·푸시 구독·Auth 리다이렉트가

@@ -34,5 +34,41 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/feed-mobile.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "홈 통합 피드"
+    },
+    {
+      "src": "/screenshots/feed-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "홈 통합 피드"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "알림",
+      "short_name": "알림",
+      "url": "/noti",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "급식",
+      "short_name": "급식",
+      "url": "/menu/meal",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "시간표",
+      "short_name": "시간표",
+      "url": "/menu/timetable",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    }
   ]
 }
