@@ -78,6 +78,21 @@ describe("NotificationSync", () => {
     await waitFor(() => expect(mocks.revalidate).not.toHaveBeenCalled());
   });
 
+  it("coalesces a burst of inbox notification events into one revalidation", async () => {
+    renderSync("/noti");
+
+    await waitFor(() =>
+      expect(mocks.subscribeToNotifications).toHaveBeenCalledOnce(),
+    );
+    const onChange = mocks.subscribeToNotifications.mock
+      .calls[0][1] as () => void;
+    onChange();
+    onChange();
+    onChange();
+
+    await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
+  });
+
   it.each(["/groups", "/groups/discover", "/groups/create"])(
     "does not revalidate non-detail route %s on focus",
     async (pathname) => {

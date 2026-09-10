@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useEffectEvent } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import { useLocation, useRevalidator } from "react-router";
 
 import { groupKeys } from "~/features/groups/data/cache";
@@ -8,6 +8,7 @@ import { subscribeToNotifications } from "~/features/notifications/data/subscrip
 
 const GROUP_ROUTE =
   /^\/groups\/(?!(?:create|discover|member-page|report-page)(?:\/|$))[^/]+(?:\/|$)/;
+const INBOX_REVALIDATION_DELAY_MS = 50;
 
 /**
  * 알림 Realtime과 창 focus 복귀를 받아 알림함과 셸 뱃지를 갱신한다
@@ -28,12 +29,25 @@ export function NotificationSync({ profileId }: { profileId: number }) {
   const queryClient = useQueryClient();
   const revalidator = useRevalidator();
   const location = useLocation();
+  const inboxRevalidationTimer = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  const scheduleInboxRevalidation = useEffectEvent(() => {
+    if (inboxRevalidationTimer.current) {
+      clearTimeout(inboxRevalidationTimer.current);
+    }
+    inboxRevalidationTimer.current = setTimeout(() => {
+      inboxRevalidationTimer.current = null;
+      void revalidator.revalidate();
+    }, INBOX_REVALIDATION_DELAY_MS);
+  });
 
   const sync = useEffectEvent((source: "notification" | "focus") => {
     void queryClient.invalidateQueries({ queryKey: notificationKeys.badge() });
 
     if (location.pathname === "/noti") {
-      void revalidator.revalidate();
+      scheduleInboxRevalidation();
       return;
     }
 
@@ -56,7 +70,12 @@ export function NotificationSync({ profileId }: { profileId: number }) {
   useEffect(() => {
     const onFocus = () => sync("focus");
     window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      if (inboxRevalidationTimer.current) {
+        clearTimeout(inboxRevalidationTimer.current);
+      }
+    };
   }, []);
 
   return null;
