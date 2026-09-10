@@ -224,11 +224,6 @@
     @apply font-sans;
     color-scheme: light;
 
-    /* Android Chrome은 탭한 요소 위에 반투명 사각형을 한 번 덮는다. 버튼·탭바·목록 행이
-       눌릴 때마다 그 사각형이 요소 경계대로 번쩍여서, 설치해 둔 앱인데도 웹페이지를
-       누르는 느낌이 난다. 눌림 표시는 각 컴포넌트의 `active:` 상태가 이미 갖고 있다. */
-    -webkit-tap-highlight-color: transparent;
-
     &.dark {
       color-scheme: dark;
     }
