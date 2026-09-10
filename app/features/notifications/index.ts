@@ -1,12 +1,10 @@
 export {
   notificationBadgeQuery,
   notificationKeys,
-  NOTIFICATION_BADGE_STALE_TIME,
 } from "~/features/notifications/data/cache";
 export {
   getMyGroupNotificationPreference,
   getNotificationPreferences,
-  getRecentUnreadNotificationCount,
   listMyGroupNotificationPreferences,
   listNotifications,
   loadNotificationPage,
@@ -30,16 +28,11 @@ export {
   getNotificationCursor,
   groupNotifications,
   isDefaultGroupNotificationPreference,
-  NOTIFICATION_PAGE_SIZE,
   sanitizeNotificationDestination,
 } from "~/features/notifications/model/notifications";
 export type {
   NotificationCursor,
-  GroupNotificationGroupKind,
-  GroupNotificationLevel,
   GroupNotificationPreference,
   NotificationItem,
-  NotificationPage,
   NotificationPreferences,
-  PushSupport,
 } from "~/features/notifications/model/types";

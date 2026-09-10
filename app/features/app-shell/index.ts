@@ -16,16 +16,4 @@ export {
   useAppShell,
   useNavBadges,
 } from "~/features/app-shell/context/app-shell-context";
-export type {
-  AppChromeConfig,
-  AppChromeHandle,
-  AppContentWidth,
-  ChromeMode,
-} from "~/features/app-shell/model/chrome";
-export type {
-  ProfileRole,
-  ProfileStatus,
-  ShellData,
-  ShellLoadData,
-  ShellProfile,
-} from "~/features/app-shell/model/types";
+export type { ProfileRole, ShellData } from "~/features/app-shell/model/types";

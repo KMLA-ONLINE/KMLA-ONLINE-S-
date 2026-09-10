@@ -44,13 +44,6 @@ export function reactionAssetPath(reaction: PostReaction): string {
   return `/twemoji/15.1.0/${BY_KEY.get(reaction)?.codepoint ?? "1f44d"}.svg`;
 }
 
-/** 아직 아무도 누르지 않은 상태. 서버가 새 요약을 주기 전까지의 초기값으로 쓴다. */
-export const EMPTY_REACTION_SUMMARY: ReactionSummary = {
-  reaction_count: 0,
-  top_reactions: [],
-  my_reaction: null,
-};
-
 /**
  * 서버 왕복 없이 다음 요약을 계산한다. 누르는 즉시 숫자가 반응해야 하는데, RPC를 기다리면
  * 연타할 때 화면이 뒤늦게 따라오며 튄다. 정본은 응답이 오면 그대로 덮어쓴다.

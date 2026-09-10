@@ -115,11 +115,7 @@ async function flushBatch(bucket: SignedUrlBucket): Promise<void> {
  * 키에 사용자 ID를 담는다. `clear()`가 이미 사용자 전환을 처리하지만, 그건 auth 이벤트가
  * 도착한 뒤의 일이다. 키로 갈라 두면 그 사이에도 다른 사용자의 URL을 집을 수 없다.
  */
-export function signedUrlQuery(
-  bucket: SignedUrlBucket,
-  userId: string,
-  path: string,
-) {
+function signedUrlQuery(bucket: SignedUrlBucket, userId: string, path: string) {
   return queryOptions({
     queryKey: ["signed-url", bucket, userId, path] as const,
     queryFn: () => signPath(bucket, path),

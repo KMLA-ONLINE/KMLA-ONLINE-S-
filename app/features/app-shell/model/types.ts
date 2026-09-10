@@ -3,7 +3,6 @@ import type { Database } from "~/shared/supabase/database.types";
 type MyProfileRow =
   Database["public"]["Functions"]["get_my_profile"]["Returns"][number];
 
-export type ProfileStatus = Database["public"]["Enums"]["profile_status"];
 export type ProfileRole = Database["public"]["Enums"]["app_role"];
 
 /** 셸이 헤더·사이드바·게이트에 쓰는 최소 프로필. 라우트가 더 필요하면 자기 로더에서 읽는다. */

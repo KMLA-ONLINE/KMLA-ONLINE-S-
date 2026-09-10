@@ -102,7 +102,7 @@ export async function cancelGroupAnonymousActivityRestriction(
   if (error) throw error;
 }
 
-export async function createGroupPost(
+async function createGroupPost(
   groupId: string,
   values: PostFormValues,
   publish = true,
@@ -791,7 +791,7 @@ export async function updateGroupPostWithAttachments(
  * 요구하기 때문이다. 다른 점은 커밋에 제목·카테고리 대신 공개 범위가 들어간다는 것뿐이라
  * 업로드 단계는 `uploadPreparedFiles()`를 그대로 공유한다.
  */
-export async function createProfilePost(
+async function createProfilePost(
   timelinePubId: string,
   visibility: ProfilePostFormValues["visibility"],
 ): Promise<string> {
@@ -878,17 +878,6 @@ export async function updateProfilePostWithAttachments(
 export async function deleteProfilePost(postId: string): Promise<void> {
   const { error } = await getSupabase().rpc("delete_profile_post", {
     p_post_id: postId,
-  });
-  if (error) throw error;
-}
-
-export async function reorderPostAttachments(
-  postId: string,
-  attachmentIds: string[],
-): Promise<void> {
-  const { error } = await getSupabase().rpc("reorder_post_attachments", {
-    p_post_id: postId,
-    p_attachment_ids: attachmentIds,
   });
   if (error) throw error;
 }

@@ -114,7 +114,7 @@ export function getKoreaDate(now = new Date()) {
   return getKoreaDateIso(now).replaceAll("-", "");
 }
 
-export function getKoreaHour(now = new Date()) {
+function getKoreaHour(now = new Date()) {
   return Number(
     new Intl.DateTimeFormat("en-US", {
       timeZone: "Asia/Seoul",

@@ -1,8 +1,3 @@
-import type { Database } from "~/shared/supabase/database.types";
-
-export type SearchDirectoryRow =
-  Database["public"]["Functions"]["search_directory"]["Returns"][number];
-
 export interface DirectoryPersonResult {
   kind: "profile";
   id: string; // pub_id

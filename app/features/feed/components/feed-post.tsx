@@ -23,7 +23,7 @@ import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 
-export function feedPostPath(post: FeedPost): string {
+function feedPostPath(post: FeedPost): string {
   return post.kind === "group"
     ? `/groups/${post.group_slug}/posts/${post.post_id}`
     : `/profile/${post.timeline_pub_id}/posts/${post.post_id}`;
