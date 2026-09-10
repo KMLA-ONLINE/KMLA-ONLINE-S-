@@ -15,6 +15,7 @@ export { ProfilePostsPanel } from "~/features/posts/components/profile/profile-p
 export { usePostComments } from "~/features/posts/hooks/use-post-comments";
 export { usePostViewMode } from "~/features/posts/hooks/use-post-view-mode";
 export { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
+export { anonymousActivityRestrictionQuery } from "~/features/posts/data/cache";
 export {
   createGroupCategory,
   cancelGroupAnonymousActivityRestriction,
@@ -40,7 +41,6 @@ export {
 export type { PostUploadSession } from "~/features/posts/data/mutations";
 export {
   getGroupPost,
-  getMyGroupAnonymousActivityRestriction,
   hydrateGroupPostMedia,
   getProfilePost,
   listProfilePosts,
