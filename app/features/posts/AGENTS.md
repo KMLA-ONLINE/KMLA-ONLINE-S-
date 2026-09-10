@@ -116,6 +116,38 @@
 - 멘션 상한은 서로 다른 대상 50명이다. 같은 사람을 여러 번 부르는 것은 한 명으로 세므로 상한에
   닿아도 이미 본문에 남아 있는 대상은 후보 목록에서 다시 고를 수 있어야 한다.
 
+## 첨부의 수명주기
+
+첨부 하나가 다섯 곳에서 동시에 상태를 갖는다. 한 곳만 보고 고치면 나머지가 조용히 어긋난다.
+
+| 층                              | 상태                                                                                   | 옮기는 곳                                                  |
+| ------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| 클라이언트 세션                 | `status`(queued → uploading → ready 또는 error) + `uploaded` / `finalized` / `removed` | `runPostFileUpload()`                                      |
+| Storage                         | 원본 object, 축소본 object(없을 수 있다)                                               | 브라우저 업로드                                            |
+| `post_attachments`              | `pending` → `ready` → `deleted`                                                        | `finalize_post_attachment`, `private.apply_post_commit`    |
+| 부모 `posts.published_at`       | null(초안) / 값(게시됨)                                                                | `commit_group_post`, `commit_profile_post`                 |
+| `private.storage_cleanup_queue` | 지울 경로                                                                              | `apply_post_commit`, `purge_posts`, finalize의 축소본 반려 |
+
+- **축소본은 finalize보다 먼저 올려라.** `finalize_post_attachment`가 축소본 object의 존재·타입·크기를
+  확인하고, 미달이면 실패시키는 대신 `thumbnail_path`를 지워 원본으로 떨어뜨린다. 순서를 뒤집어도
+  아무것도 던지지 않고 화면도 멀쩡하다 — 축소본만 영영 안 생긴다. 계층을 넘는 순서 규칙이라
+  타입으로도 제약으로도 잡히지 않으니 손대면 직접 확인해라.
+- **`finalize_post_attachment`는 게시 여부에 따라 다른 함수다.** 미게시 초안이면 `ready`로 올리고,
+  이미 게시된 글이면 `pending`으로 남긴다. 그래야 커밋이 "이번 편집 전부터 있던 첨부"를 `ready` 하나로
+  구분할 수 있다.
+- 그 구분 위에 두 커밋 RPC의 `content_changed`가 서 있다. `ready`만 세어 원래 순서를 재고 그 값으로
+  `edited_at`을 찍는다. `status <> 'deleted'`로 세면 방금 올린 첨부까지 들어가 양쪽 배열이 같아지고,
+  사진만 더한 수정이 수정이 아닌 것이 된다. 반드시 `apply_post_commit` **앞에서** 재라 — 그 함수가
+  position과 status를 갈아엎는다.
+- **수정으로 치지 않는 것**: 그룹은 카테고리 이동, 개인은 공개 범위 변경. 제목·본문·첨부 구성만
+  `edited_at`을 움직인다. 둘 중 한쪽만 고치면 같은 규칙이 종류마다 달라진다.
+- 업로드가 던졌는데 finalize가 통과하면 성공으로 친다. finalize가 `storage.objects`를 대조하므로
+  통과했다는 것은 object가 실제로 올라갔다는 뜻이고, 응답만 잃은 경우를 여기서 건진다. 버그로 보고
+  지우면 재시도마다 중복 업로드가 난다.
+- 세션 상태에는 통지 경로가 둘이다. `updatePostUpload()`는 리스너에 알리지만
+  `state.uploaded` / `finalized` / `attachment` / `removed` 직접 대입은 알리지 않는다. 지금은 화면이
+  그 필드를 읽지 않아 무해하다. 읽게 만들 거라면 먼저 대입을 `updatePostUpload()`로 모아라.
+
 ## 직접 접근을 막은 테이블
 
 `post_comments`, `comment_images`, `post_reactions`, `comment_reactions`에는 select grant조차 주지 않는다. 읽기도 쓰기도 definer RPC를 거친다.

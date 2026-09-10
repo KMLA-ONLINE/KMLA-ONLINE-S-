@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(54);
+select plan(60);
 
 -- 아래 RPC들을 authenticated가 부를 수 있다는 사실은 이 파일이 실제로 호출해 보며 증명한다.
 -- 여기서는 반대쪽 — 직접 쓰기와 익명 접근이 닫혀 있는지 — 만 한자리에서 센다.
@@ -227,6 +227,46 @@ select is(
 select lives_ok(
   $$select public.create_group_post('20000000-0000-0000-0000-000000000003', '운영진 글', '운영진 본문', 'staff', null)$$,
   'manager can post with the staff identity'
+);
+-- 카테고리 이동은 수정이 아니다 — 개인 게시물이 공개 범위 변경을 수정으로 세지 않는 것과 같은
+-- 취급이다(`commit_profile_post`). 명세 §8.8이 게시물에 수정 표시를 두지 않기로 했으므로 화면에
+-- 드러나지는 않지만, 기록까지 틀리게 둘 이유는 없다.
+select lives_ok(
+  $$select public.create_group_post(
+      '20000000-0000-0000-0000-000000000003', '분류 이동 대상', '그대로 둘 본문', 'identified', null
+    )$$,
+  'manager publishes a post that later moves between categories'
+);
+select lives_ok(
+  $$select public.commit_group_post(
+      (select id from public.posts where title = '분류 이동 대상'),
+      '분류 이동 대상', '그대로 둘 본문', '{}', false,
+      '80000000-0000-0000-0000-000000000002'
+    )$$,
+  'the author moves a published post into another category'
+);
+select is(
+  (select category_id from public.posts where title = '분류 이동 대상'),
+  '80000000-0000-0000-0000-000000000002'::uuid,
+  'the category change is stored'
+);
+select is(
+  (select edited_at from public.posts where title = '분류 이동 대상'),
+  null::timestamptz,
+  'moving only the category does not count as an edit'
+);
+select lives_ok(
+  $$select public.commit_group_post(
+      (select id from public.posts where title = '분류 이동 대상'),
+      '분류 이동 대상', '고쳐 쓴 본문', '{}', false,
+      '80000000-0000-0000-0000-000000000002'
+    )$$,
+  'the author edits the body of the same post'
+);
+select isnt(
+  (select edited_at from public.posts where title = '분류 이동 대상'),
+  null::timestamptz,
+  'changing the body does count as an edit'
 );
 select lives_ok(
   $$select public.create_group_post('20000000-0000-0000-0000-000000000003', '운영진 초안', '초안 본문', 'staff', null, false)$$,
