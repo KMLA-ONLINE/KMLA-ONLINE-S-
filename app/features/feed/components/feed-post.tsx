@@ -17,6 +17,7 @@ import { PostAuthorAvatar } from "~/features/posts/components/post-author-avatar
 import { PostBodyClamp } from "~/features/posts/components/post-body-clamp";
 import { PostMarkdown } from "~/features/posts/components/post-markdown";
 import { ProfileMediaActivity } from "~/features/posts/components/profile/profile-media-activity";
+import { StaffMark } from "~/features/posts/components/staff-mark";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
 import { RelativeTime } from "~/shared/components/relative-time";
@@ -147,6 +148,10 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
           {post.kind === "group" ? (
             <>
               <AuthorName post={post} compact />
+              {/* 이 줄은 text-xs라 기본 size-4는 글자보다 커 보인다. */}
+              {post.author_identity === "staff" ? (
+                <StaffMark className="size-3.5" />
+              ) : null}
               {post.is_author && post.author_identity === "anonymous" ? (
                 <Badge variant="secondary" className="shrink-0">
                   나
