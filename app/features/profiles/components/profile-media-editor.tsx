@@ -11,7 +11,10 @@ import type {
 } from "~/features/profiles/model/types";
 import { ImageCropper } from "~/shared/components/image-cropper";
 import { useImageCrop } from "~/shared/hooks/use-image-crop";
-import { compressImage } from "~/shared/lib/image/compress";
+import {
+  compressImage,
+  validateImagePixels,
+} from "~/shared/lib/image/compress";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
@@ -93,7 +96,7 @@ export function ProfileMediaEditor({
     void upload(file);
   });
 
-  const chooseFile = (file: File | undefined) => {
+  const chooseFile = async (file: File | undefined) => {
     if (!file) return;
 
     if (!ACCEPTED_TYPES.has(file.type) || file.size > 30 * 1024 * 1024) {
@@ -102,7 +105,16 @@ export function ProfileMediaEditor({
     }
 
     setError(null);
-    crop.start(file);
+    try {
+      await validateImagePixels(file);
+      crop.start(file);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "이미지를 처리하지 못했습니다.",
+      );
+    }
   };
 
   const handleEditorClick = () => {
@@ -125,7 +137,7 @@ export function ProfileMediaEditor({
           accept="image/jpeg,image/png,image/webp"
           className="sr-only"
           onChange={(event) => {
-            chooseFile(event.currentTarget.files?.[0]);
+            void chooseFile(event.currentTarget.files?.[0]);
             event.currentTarget.value = "";
           }}
         />

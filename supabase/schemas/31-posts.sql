@@ -37,6 +37,7 @@ CREATE OR REPLACE FUNCTION "private"."apply_post_commit"("p_post_id" "uuid", "p_
     AS $$
 declare
   attachment_count integer := cardinality(coalesce(p_attachment_ids, '{}'::uuid[]));
+  removed_object_count integer;
 begin
   if char_length(coalesce(p_body, '')) > 20000 then
     raise exception 'body must contain between 0 and 20000 characters' using errcode = '22023';
@@ -73,6 +74,10 @@ begin
         or object.owner_id is distinct from auth.uid()::text
         or nullif(object.metadata ->> 'size', '')::bigint is distinct from attachment.size_bytes
         or object.metadata ->> 'mimetype' is distinct from attachment.mime_type
+        or (
+          lower(attachment.mime_type) like 'image/%'
+          and attachment.size_bytes > 8388608
+        )
       )
   ) then
     raise exception 'uploaded attachment metadata does not match' using errcode = '22023';
@@ -81,11 +86,29 @@ begin
     raise exception 'post requires a body or ready attachment' using errcode = '22023';
   end if;
 
-  update public.post_attachments
-  set status = 'deleted', deleted_at = now()
-  where post_id = p_post_id
-    and status <> 'deleted'
-    and not (id = any(coalesce(p_attachment_ids, '{}'::uuid[])));
+  -- 편집에서 뺀 첨부도 단독 삭제와 같은 수명주기를 따른다. tombstone 행이 순서를 보존해도
+  -- object는 더 이상 읽히지 않으므로, 원본과 축소본을 먼저 큐에 넣고 워커를 깨운다.
+  with removed as (
+    update public.post_attachments
+    set status = 'deleted', deleted_at = now()
+    where post_id = p_post_id
+      and status <> 'deleted'
+      and not (id = any(coalesce(p_attachment_ids, '{}'::uuid[])))
+    returning storage_bucket, object_path, thumbnail_path
+  )
+  insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+  select removed.storage_bucket, path.object_path, 'post_attachment'
+  from removed
+  cross join lateral (
+    values (removed.object_path), (removed.thumbnail_path)
+  ) as path(object_path)
+  where path.object_path is not null
+  on conflict (bucket, object_path) do update
+    set dry_run = queue.dry_run and excluded.dry_run;
+  get diagnostics removed_object_count = row_count;
+  if removed_object_count > 0 then
+    perform private.invoke_storage_cleanup(p_quiet => true);
+  end if;
 
   -- 순서를 음수로 밀어 두고 다시 매긴다. `(post_id, position)` unique 제약을 중간 상태에서
   -- 밟지 않기 위한 것이다.
