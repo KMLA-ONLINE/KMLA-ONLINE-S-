@@ -6,7 +6,8 @@ import { groupKeys } from "~/features/groups/data/cache";
 import { notificationKeys } from "~/features/notifications/data/cache";
 import { subscribeToNotifications } from "~/features/notifications/data/subscriptions";
 
-const GROUP_ROUTE = /^\/groups\/[^/]+(?:\/|$)/;
+const GROUP_ROUTE =
+  /^\/groups\/(?!(?:create|discover|member-page|report-page)(?:\/|$))[^/]+(?:\/|$)/;
 
 /**
  * 알림 Realtime과 창 focus 복귀를 받아 알림함과 셸 뱃지를 갱신한다

@@ -50,8 +50,7 @@ export async function clientLoader(): Promise<ShellData> {
   // 알림이 최대 1분 동안 안 읽음으로 남는다. 같은 이유로 Realtime 이벤트를 언마운트 구간에
   // 놓쳤을 때도 여기서 복구된다.
   //
-  // 매번 읽어도 비싸지 않다. 게이트 로더는 이제 창 focus마다 돌지 않고, 첫 진입·뮤테이션·
-  // 당겨서 새로고침·알림함 복귀에서만 돈다 — 예전에 focus마다 이 RPC를 보내던 것보다 적다.
+  // 매번 읽어도 비싸지 않다. 게이트 로더는 첫 진입과 뮤테이션 뒤에만 다시 돈다.
   //
   // `loadShellData()`와 병렬로 띄운다. 순서를 지키면 세션 → 프로필 → 아바타 서명이 끝난
   // 뒤에야 요청이 나가 왕복이 하나 더 붙는데, 뱃지는 그중 무엇에도 의존하지 않는다.
@@ -97,13 +96,13 @@ export function shouldRevalidate({
   // 뮤테이션 뒤에는 프로필·뱃지가 바뀔 수 있다.
   if (formMethod && formMethod !== "GET") return true;
 
-  // 명시적 revalidate(`useRevalidator().revalidate()`)는 URL이 그대로다.
-  // 알림 Realtime·focus 복귀에서 현재 알림함을 다시 읽을 때 이 경로로 들어온다.
+  // 명시적 revalidate(`useRevalidator().revalidate()`)는 URL이 그대로다. 자식 route의
+  // snapshot을 갱신하려는 호출이므로 프로필까지 다시 읽지 않는다.
   if (
     currentUrl.pathname === nextUrl.pathname &&
     currentUrl.search === nextUrl.search
   ) {
-    return true;
+    return false;
   }
 
   // 단순 페이지 이동이면 다시 부르지 않는다.

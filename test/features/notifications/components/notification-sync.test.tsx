@@ -77,4 +77,27 @@ describe("NotificationSync", () => {
 
     await waitFor(() => expect(mocks.revalidate).not.toHaveBeenCalled());
   });
+
+  it.each(["/groups", "/groups/discover", "/groups/create"])(
+    "does not revalidate non-detail route %s on focus",
+    async (pathname) => {
+      const { invalidateQueries } = renderSync(pathname);
+
+      await waitFor(() =>
+        expect(mocks.subscribeToNotifications).toHaveBeenCalledOnce(),
+      );
+      window.dispatchEvent(new Event("focus"));
+
+      await waitFor(() =>
+        expect(invalidateQueries).toHaveBeenCalledWith({
+          queryKey: notificationKeys.badge(),
+        }),
+      );
+      expect(invalidateQueries).not.toHaveBeenCalledWith({
+        queryKey: groupKeys.all,
+        refetchType: "none",
+      });
+      expect(mocks.revalidate).not.toHaveBeenCalled();
+    },
+  );
 });
