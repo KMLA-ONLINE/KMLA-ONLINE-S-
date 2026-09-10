@@ -28,8 +28,7 @@ select is(
     join pg_catalog.pg_namespace as schema on schema.oid = post_function.pronamespace
     where schema.nspname = 'public'
       and post_function.proname in (
-        'create_group_post', 'publish_group_post', 'commit_group_post',
-        'move_group_category'
+        'create_group_post', 'commit_group_post', 'move_group_category'
       )
       and has_function_privilege('anon', post_function.oid, 'EXECUTE')
   ),
@@ -37,6 +36,9 @@ select is(
   'anonymous visitors cannot call any group post RPC'
 );
 select ok(to_regprocedure('private.group_post_access(uuid)') is null, 'per-row private post access helper is removed');
+-- 초안은 임시 저장 목록으로 제공하지 않으므로(기능 명세 §8.16) 내용 없이 게시만 하는 경로에
+-- 닿을 수단이 없다. 게시는 `commit_group_post(p_publish => true)` 하나로 모았다.
+select ok(to_regprocedure('public.publish_group_post(uuid)') is null, 'the standalone group publish path is removed');
 
 set local role anon;
 select throws_ok($$select * from public.posts$$, '42501', null, 'anonymous cannot read posts');
@@ -121,11 +123,6 @@ select throws_ok(
     )$$,
   '42501', 'anonymous posting is not allowed',
   'commit rechecks the current identity policy before publishing a draft'
-);
-select throws_ok(
-  $$select public.publish_group_post((select id from public.posts where title = '익명 초안'))$$,
-  '42501', 'anonymous posting is not allowed',
-  'the standalone publish path also rechecks the current identity policy'
 );
 reset role;
 update public.groups set identity_policy = 'optional_anonymous'

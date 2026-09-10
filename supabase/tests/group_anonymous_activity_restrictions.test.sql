@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(45);
+select plan(44);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -72,11 +72,6 @@ set local role authenticated;
 insert into restriction_ids values (
   'commit_draft', public.create_group_post(
     '20000000-0000-0000-0000-000000000003', '커밋 초안', '본문', 'anonymous', null, false
-  )
-);
-insert into restriction_ids values (
-  'publish_draft', public.create_group_post(
-    '20000000-0000-0000-0000-000000000003', '게시 초안', '본문', 'anonymous', null, false
   )
 );
 insert into restriction_ids
@@ -311,13 +306,6 @@ select throws_ok(
     )$$,
   '42501', 'anonymous activity is restricted',
   'commit-and-publish rechecks the active restriction'
-);
-select throws_ok(
-  $$select public.publish_group_post(
-      (select id from restriction_ids where name = 'publish_draft')
-    )$$,
-  '42501', 'anonymous activity is restricted',
-  'standalone publishing rechecks the active restriction'
 );
 select throws_ok(
   $$select * from public.create_post_comment(

@@ -10,7 +10,7 @@ create temporary table cleanup_claims (
 grant select, insert on cleanup_claims to service_role;
 create temporary table attachment_test_ids (name text primary key, id uuid not null);
 grant select, insert on attachment_test_ids to authenticated;
-select plan(78);
+select plan(77);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -52,6 +52,9 @@ select ok(
     and not has_function_privilege('anon', 'public.update_group_post_draft_identity(uuid,public.post_identity)', 'EXECUTE'),
   'only authenticated clients can change a group upload draft identity'
 );
+-- 첨부 순서는 생성·수정 커밋의 `p_attachment_ids`가 정한다. 같은 재번호 로직을 두 곳에 두면
+-- `(post_id, position)` unique 제약을 양쪽에서 맞춰야 해서 독립 경로를 없앴다.
+select ok(to_regprocedure('public.reorder_post_attachments(uuid,uuid[])') is null, 'the standalone attachment reorder path is removed');
 select ok(has_function_privilege('service_role', 'private.claim_storage_cleanup(integer,integer)', 'EXECUTE'), 'service role can claim cleanup work');
 select ok(not has_function_privilege('authenticated', 'private.claim_storage_cleanup(integer,integer)', 'EXECUTE'), 'clients cannot claim cleanup work');
 select is((select public from storage.buckets where id = 'post-attachments'), false, 'attachment bucket is private');
@@ -287,8 +290,11 @@ delete from public.posts where id = (select id from attachment_test_ids where na
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
 select throws_ok(
-  $$select public.publish_group_post((select id from attachment_test_ids where name = 'upload_draft'))$$,
-  '22023', 'published post requires a body or ready attachment', 'blank attachmentless draft cannot publish'
+  $$select public.commit_group_post(
+      (select id from attachment_test_ids where name = 'upload_draft'),
+      '첨부 초안', '', '{}'::uuid[], true, null
+    )$$,
+  '22023', 'post requires a body or ready attachment', 'blank attachmentless draft cannot publish'
 );
 select lives_ok(
   $$select public.prepare_post_attachment(
@@ -300,9 +306,14 @@ select ok(
   (select object_path = post_id::text || '/' || id::text from public.post_attachments limit 1),
   'prepare returns the exact extensionless post/object UUID path'
 );
+-- 커밋은 pending 상태만 보고 막지 않는다. 아직 올라오지 않은 object를 첨부 목록에 넣으면
+-- storage 대조에서 걸린다.
 select throws_ok(
-  $$select public.publish_group_post((select id from attachment_test_ids where name = 'upload_draft'))$$,
-  '55000', 'pending attachments must be finalized or deleted', 'pending upload blocks publication'
+  $$select public.commit_group_post(
+      (select id from attachment_test_ids where name = 'upload_draft'),
+      '첨부 초안', '', array[(select id from public.post_attachments limit 1)], true, null
+    )$$,
+  '22023', 'uploaded attachment metadata does not match', 'pending upload blocks publication'
 );
 
 select throws_ok(
@@ -394,7 +405,10 @@ select lives_ok(
   'the first real title is stored before publication'
 );
 select lives_ok(
-  $$select public.publish_group_post((select id from attachment_test_ids where name = 'upload_draft'))$$,
+  $$select public.commit_group_post(
+      (select id from attachment_test_ids where name = 'upload_draft'),
+      '첨부 초안', '', array[(select id from public.post_attachments limit 1)], true, null
+    )$$,
   'ready attachment permits blank-body publication'
 );
 select is((select count(*) from public.list_post_attachments((select id from public.posts where title = '첨부 초안'))), 1::bigint, 'member can list ready metadata');
@@ -429,21 +443,6 @@ select throws_ok(
       '{"size":5,"mimetype":"image/webp"}'::jsonb
     from public.post_attachments where original_filename = 'second.webp'$$,
   '42501', null, 'Storage rejects a mismatched object owner'
-);
-select lives_ok(
-  $$select * from public.reorder_post_attachments(
-    (select id from public.posts where title = '첨부만'),
-    array[
-      (select id from public.post_attachments where original_filename = 'second.webp'),
-      (select id from public.post_attachments where original_filename = 'photo.webp')
-    ]
-  )$$,
-  'author can atomically reorder every active attachment'
-);
-select is(
-  (select position from public.post_attachments where original_filename = 'second.webp'),
-  0,
-  'reorder applies the requested position'
 );
 select lives_ok(
   $$select public.delete_post_attachment((select id from public.post_attachments where original_filename = 'second.webp'))$$,
