@@ -12,43 +12,26 @@ import type {
 // 배럴이 아니라 모듈을 직접 가져온다. `~/features/auth`는 자기 mutations를 통해 이 feature를
 // 다시 참조하므로 배럴로 들어가면 순환이 된다.
 import { readLiveSession } from "~/features/auth/data/queries";
+// 배럴(`~/features/profiles`)은 화면 컴포넌트를 전부 끌고 온다. 서명 헬퍼만 필요하다.
+import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import { getSupabase } from "~/shared/supabase/client";
 
 export async function listNotifications(
   cursor: NotificationCursor | null,
 ): Promise<NotificationPage["items"]> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase.rpc("list_my_notifications", {
+  const { data, error } = await getSupabase().rpc("list_my_notifications", {
     p_limit: NOTIFICATION_PAGE_SIZE,
     p_before_id: cursor?.beforeId,
     p_before_last_activity_at: cursor?.beforeLastActivityAt,
   });
   if (error) throw error;
 
-  const paths = [
-    ...new Set(
-      data.flatMap((item) => {
-        const path = item.actor_avatar_path;
-        if (!path || /^https?:\/\//i.test(path)) return [];
-        return [path];
-      }),
-    ),
-  ];
-  const avatarUrls = new Map<string, string>();
-  for (const item of data) {
-    if (/^https?:\/\//i.test(item.actor_avatar_path)) {
-      avatarUrls.set(item.actor_avatar_path, item.actor_avatar_path);
-    }
-  }
-  if (paths.length > 0) {
-    const { data: signed } = await supabase.storage
-      .from("profile-media")
-      .createSignedUrls(paths, 3600);
-    for (const item of signed ?? []) {
-      if (item.path && item.signedUrl)
-        avatarUrls.set(item.path, item.signedUrl);
-    }
-  }
+  // 알림함은 staleTime이 0이라 Realtime과 focus 복귀마다 다시 읽힌다. 여기서 직접
+  // `createSignedUrls`를 부르면 그때마다 같은 아바타에 새 토큰이 붙어 URL이 바뀌고,
+  // `<img>`가 브라우저 캐시를 놓친다. 공용 캐시를 지나면 55분 동안 같은 URL이 나온다.
+  const avatarUrls = await createProfileMediaUrls(
+    data.map((item) => item.actor_avatar_path),
+  );
 
   return data.map(({ actor_avatar_path: path, ...item }) => ({
     ...item,

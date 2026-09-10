@@ -20,6 +20,7 @@ import {
 import { isPostOverlayNavigation } from "~/features/app-shell/model/navigation";
 import { resetFeed } from "~/features/feed";
 import { groupKeys } from "~/features/groups";
+import { notificationKeys } from "~/features/notifications";
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
 import { useDelayedPending } from "~/shared/hooks/use-delayed-pending";
 import { getQueryClient } from "~/shared/lib/query-client";
@@ -71,9 +72,12 @@ export default function MainAppLayout() {
 
     // 피드는 stale 표시가 아니라 리셋이다. 무한 쿼리에서 무효화는 "쌓인 페이지를 전부 다시
     // 읽어라"가 되는데, 당겨서 새로고침이 원하는 건 새 세션의 1페이지다.
-    await (location.pathname === "/"
-      ? Promise.all([resetFeed(queryClient), stale(storyKeys.all)])
-      : stale(groupKeys.all));
+    await Promise.all([
+      location.pathname === "/"
+        ? Promise.all([resetFeed(queryClient), stale(storyKeys.all)])
+        : stale(groupKeys.all),
+      stale(notificationKeys.badge()),
+    ]);
     await revalidator.revalidate();
   };
 

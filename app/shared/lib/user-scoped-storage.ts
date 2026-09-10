@@ -36,30 +36,54 @@ const USER_SCOPED_KEYS = [
 const OWNER_KEY = "kmla-online:storage-owner:v1";
 
 /**
+ * Service Worker가 Storage 이미지를 담아 두는 캐시. 이름은 `scripts/build-sw.mjs`의
+ * `STORAGE_MEDIA_CACHE`와 같아야 한다.
+ *
+ * 여기 든 이미지는 보호된 데이터다 — 비공개 그룹의 사진과 프로필 사진이 들어간다.
+ * `localStorage`와 마찬가지로 새로고침과 탭 종료를 넘어 살아남으므로, 지우는 시점도 같은
+ * 규칙을 따라야 한다. "로그아웃할 때"가 아니라 "저장소의 주인이 달라졌을 때"다.
+ */
+const STORAGE_MEDIA_CACHE = "kmla-online-storage-media";
+
+/**
  * 저장소의 주인을 `userId`에 맞춘다. 주인이 그대로면 아무것도 하지 않는다 — 새로고침마다
  * 캐시를 버리면 첫 페인트를 채우려고 둔 의미가 없어진다.
  *
  * `userId`가 `null`이면 로그아웃이다. 주인 표시까지 지워서 다음 로그인이 깨끗한 상태에서
  * 시작하게 한다.
  */
-export function syncUserScopedStorage(userId: string | null): void {
+export async function syncUserScopedStorage(
+  userId: string | null,
+): Promise<void> {
   if (typeof window === "undefined") return;
 
+  let owner: string | null;
   try {
-    if (window.localStorage.getItem(OWNER_KEY) === userId) return;
-
-    for (const key of USER_SCOPED_KEYS) {
-      window.localStorage.removeItem(key);
-      notifySameTab(key);
-    }
-
-    if (userId === null) {
-      window.localStorage.removeItem(OWNER_KEY);
-    } else {
-      window.localStorage.setItem(OWNER_KEY, userId);
-    }
+    owner = window.localStorage.getItem(OWNER_KEY);
   } catch {
-    // 비공개 모드처럼 저장소를 쓸 수 없는 브라우저. 남은 값도 없으니 지울 것도 없다.
+    // localStorage를 쓸 수 없어도 보호된 Cache Storage는 남을 수 있다. 아래 삭제는 반드시
+    // 시도하고, 다음 auth 이벤트에서도 다시 시도한다.
+    await purgeStorageMediaCache();
+    return;
+  }
+
+  // 로그아웃은 owner key가 사라진 뒤에도 캐시를 한 번 더 비운다. localStorage를 사용자가
+  // 직접 지웠거나 비정상 종료된 뒤에도 보호 이미지를 남기지 않기 위해서다.
+  if (userId !== null && owner === userId) return;
+
+  for (const key of USER_SCOPED_KEYS) {
+    window.localStorage.removeItem(key);
+    notifySameTab(key);
+  }
+
+  // 새 주인을 기록하기 전에 이전 사용자의 보호 이미지가 실제로 사라져야 한다. 실패하면
+  // OWNER_KEY를 그대로 두어 다음 호출이 같은 사용자여도 삭제를 다시 시도한다.
+  await purgeStorageMediaCache();
+
+  if (userId === null) {
+    window.localStorage.removeItem(OWNER_KEY);
+  } else {
+    window.localStorage.setItem(OWNER_KEY, userId);
   }
 }
 
@@ -69,6 +93,18 @@ export function syncUserScopedStorage(userId: string | null): void {
  * 그대로 남는다. 지운 키를 같은 모양의 합성 이벤트로 알려서, 이미 `storage`를 듣고 있는
  * 쪽이 별도 경로 없이 다시 읽게 한다.
  */
+/**
+ * Cache Storage는 비동기다. 호출자는 이 Promise가 끝나기 전에는 새 사용자의 화면을 그리지
+ * 않는다. 그렇지 않으면 새 signed URL 요청이 이전 사용자의 CacheFirst 응답과 경합한다.
+ *
+ * Service Worker가 없는 브라우저나 비보안 컨텍스트에는 `caches` 자체가 없다. 그때는 캐시에
+ * 담긴 것도 없으니 지울 것도 없다.
+ */
+function purgeStorageMediaCache(): Promise<void> {
+  if (typeof caches === "undefined") return Promise.resolve();
+  return caches.delete(STORAGE_MEDIA_CACHE).then(() => undefined);
+}
+
 function notifySameTab(key: string): void {
   window.dispatchEvent(new StorageEvent("storage", { key, newValue: null }));
 }

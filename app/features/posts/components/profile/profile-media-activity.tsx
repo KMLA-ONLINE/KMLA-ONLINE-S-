@@ -62,6 +62,7 @@ export function ProfileMediaActivity({
           <img
             src={post.activity_media_url}
             alt={imageName}
+            crossOrigin="anonymous"
             loading="lazy"
             className="size-full object-cover"
           />

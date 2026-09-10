@@ -58,6 +58,9 @@
 - 클라이언트에는 게시물 Storage object의 직접 UPDATE와 DELETE를 허용하지 않으며 upsert를 사용하지 않는다.
 - 첨부 metadata의 직접 INSERT, UPDATE 및 DELETE를 허용하지 않고 게시물 또는 댓글 작성자 권한을 확인하는 RPC로만 변경한다.
 - 게시물 하나에는 사진과 파일을 합해 최대 30개를 연결한다.
+- 사진 첨부는 원본과 목록용 축소본 두 개의 object를 가진다(기능 명세 §18.6). 축소본 path는 원본 path에서 파생되고 `post_attachments.thumbnail_path`에 기록하므로, Storage 정책이 허용하는 이름은 여전히 그 행이 예고한 것뿐이다.
+- 축소본은 원본과 같은 SELECT 정책을 따른다. 사진이 아니거나 축소본 업로드가 실패한 첨부는 `thumbnail_path`가 비어 있고, 그때는 목록도 원본을 표시한다.
+- `finalize_post_attachment`는 축소본 object가 없으면 실패시키지 않고 `thumbnail_path`를 비운다. 축소본은 데이터 사용량을 줄이는 수단이지 게시물의 일부가 아니다.
 - 게시물 또는 개별 첨부가 삭제되면 연결된 object도 정리한다.
 
 ### 4.4 `direct-message-attachments`
@@ -87,6 +90,7 @@
 | `profile-media`                | `{user_uuid}/{avatar\|cover}/{object_uuid}` |
 | `group-media`                  | `{group_uuid}/{icon\|cover}/{object_uuid}`  |
 | `post-attachments`             | `{post_uuid}/{object_uuid}`                 |
+| `post-attachments` 사진 축소본 | `{post_uuid}/{object_uuid}/thumb`           |
 | `post-attachments` 댓글 이미지 | `comments/{post_uuid}/{image_uuid}`         |
 | `direct-message-attachments`   | `{conversation_uuid}/{object_uuid}`         |
 | `group-message-attachments`    | `{conversation_uuid}/{object_uuid}`         |
@@ -288,8 +292,12 @@ SQL RPC는 object의 실제 바이트가 WebP인지, 이미지의 실제 치수�
 - 게시물 목록 보기는 첨부를 표시하지 않으므로 object metadata만 유지하고 signed URL은 발급하지
   않는다. 카드 보기와 상세 화면은 실제로 표시할 경로만 배치로 서명하며, 같은 사용자와 경로에
   대한 동시 서명 요청은 하나로 합친다.
-- 업로드는 `Cache-Control: max-age=31536000`을 요청한다. object는 경로가 불변이라 한 URL이 나중에 다른 내용을 가리키지 않으므로 최대한 오래 캐시해도 안전하다.
-- Smart CDN이 없으면 signed URL은 토큰마다 별개의 CDN 캐시 키가 되므로 CDN 히트를 전제하지 않는다. 긴 `max-age`가 실제로 버는 것은 브라우저 캐시다.
+- 업로드는 `Cache-Control: max-age=86400`을 요청한다. object 경로는 불변이고, 권한을 잃은 뒤에도
+  기기에 있던 이미지 본문을 최대 24시간 재사용하도록 정한 제품 정책이다. signed URL 자체의 최대
+  유효 기간은 여전히 1시간이다.
+- Smart CDN이 없으면 signed URL은 토큰마다 별개의 CDN 캐시 키가 되므로 CDN 히트를 전제하지 않는다.
+  같은 URL은 55분 동안 Query cache에서 재사용되고, 1MiB 이하의 이미지 본문은 Service Worker가 같은
+  계정에서 최대 24시간 재사용한다.
 
 ## 10. 메시지 클라이언트 암호화
 

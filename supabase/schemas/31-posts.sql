@@ -125,10 +125,16 @@ begin
   -- 먼저 밝힌다(삭제 및 보존 정책 §7.4).
   perform pg_catalog.set_config('app.feed_event_purge', 'on', true);
 
+  -- 이미지 첨부는 object가 둘이다(원본 + 썸네일). 둘 다 큐에 넣지 않으면 남는 쪽은
+  -- 참조가 사라진 뒤라 아무도 경로를 모르는 고아가 된다.
   insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
-  select attachment.storage_bucket, attachment.object_path, 'post_attachment'
+  select attachment.storage_bucket, path.object_path, 'post_attachment'
   from public.post_attachments as attachment
+  cross join lateral (
+    values (attachment.object_path), (attachment.thumbnail_path)
+  ) as path(object_path)
   where attachment.post_id = any(p_post_ids)
+    and path.object_path is not null
   on conflict (bucket, object_path) do update
     set dry_run = queue.dry_run and excluded.dry_run;
 
@@ -432,6 +438,7 @@ CREATE TABLE IF NOT EXISTS "public"."post_attachments" (
     "post_id" "uuid" NOT NULL,
     "storage_bucket" "text" DEFAULT 'post-attachments'::"text" NOT NULL,
     "object_path" "text" NOT NULL,
+    "thumbnail_path" "text",
     "original_filename" "text" NOT NULL,
     "position" integer NOT NULL,
     "mime_type" "text" NOT NULL,
@@ -447,6 +454,8 @@ CREATE TABLE IF NOT EXISTS "public"."post_attachments" (
     CONSTRAINT "post_attachments_filename_check" CHECK ((("char_length"("btrim"("original_filename")) >= 1) AND ("char_length"("btrim"("original_filename")) <= 255))),
     CONSTRAINT "post_attachments_mime_check" CHECK ((("char_length"("btrim"("mime_type")) >= 1) AND ("char_length"("btrim"("mime_type")) <= 255))),
     CONSTRAINT "post_attachments_path_check" CHECK (("object_path" = ((("post_id")::"text" || '/'::"text") || ("id")::"text"))),
+    CONSTRAINT "post_attachments_thumbnail_path_check" CHECK ((("thumbnail_path" IS NULL) OR ("thumbnail_path" = (("object_path" || '/'::"text") || 'thumb'::"text")))),
+    CONSTRAINT "post_attachments_thumbnail_image_only_check" CHECK ((("thumbnail_path" IS NULL) OR ("mime_type" LIKE 'image/%'))),
     CONSTRAINT "post_attachments_position_check" CHECK ((("position" >= '-30'::integer) AND ("position" <= 29))),
     CONSTRAINT "post_attachments_size_check" CHECK ((("size_bytes" >= 1) AND ("size_bytes" <= 31457280))),
     CONSTRAINT "post_attachments_status_timestamps_check" CHECK (((("status" = 'pending'::"public"."post_attachment_status") AND ("ready_at" IS NULL) AND ("deleted_at" IS NULL)) OR (("status" = 'ready'::"public"."post_attachment_status") AND ("ready_at" IS NOT NULL) AND ("deleted_at" IS NULL)) OR (("status" = 'deleted'::"public"."post_attachment_status") AND ("deleted_at" IS NOT NULL))))

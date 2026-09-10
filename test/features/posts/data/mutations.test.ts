@@ -68,6 +68,7 @@ const values = {
 const prepared = {
   key: "file-key",
   file: new File(["image"], "photo.webp", { type: "image/webp" }),
+  thumbnail: null,
   kind: "image" as const,
   width: 100,
   height: 80,
@@ -150,6 +151,7 @@ describe("post attachment orchestration", () => {
       ...prepared,
       key: `file-${index}`,
       file: new File([`${index}`], `${index}.txt`, { type: "text/plain" }),
+      thumbnail: null,
       kind: "file" as const,
       width: null,
       height: null,
@@ -194,6 +196,7 @@ describe("post attachment orchestration", () => {
       ...prepared,
       key: `file-${index}`,
       file: new File([`${index}`], `${index}.txt`, { type: "text/plain" }),
+      thumbnail: null,
       kind: "file" as const,
       width: null,
       height: null,

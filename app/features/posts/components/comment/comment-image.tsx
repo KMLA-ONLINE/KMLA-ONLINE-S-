@@ -34,6 +34,7 @@ export function CommentImage({ image }: { image: CommentImageModel }) {
           <img
             src={image.signedUrl}
             alt="댓글 이미지"
+            crossOrigin="anonymous"
             loading="lazy"
             className="max-h-80 max-w-full object-contain"
           />

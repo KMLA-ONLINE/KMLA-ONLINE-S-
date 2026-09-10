@@ -1,8 +1,13 @@
 import { useRouteLoaderData } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 
 import { defineAppChrome } from "~/features/app-shell";
 import type { GroupDetail } from "~/features/groups";
-import { GroupPostEditor, resolveIdentityOptions } from "~/features/posts";
+import {
+  anonymousActivityRestrictionQuery,
+  GroupPostEditor,
+  resolveIdentityOptions,
+} from "~/features/posts";
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
 import { invalidateSavedGroupPost } from "~/routes/app/groups/post-cache";
 
@@ -29,6 +34,11 @@ export default function NewGroupPostPage() {
   const parent = useRouteLoaderData<typeof groupLoader>(
     "routes/app/groups/detail",
   );
+  const groupId = parent?.group.group_id ?? "";
+  const restrictionQuery = useQuery({
+    ...anonymousActivityRestrictionQuery(groupId),
+    enabled: parent?.group.identity_policy === "optional_anonymous",
+  });
   if (!parent) {
     throw new Response("그룹을 찾을 수 없습니다.", { status: 404 });
   }
@@ -37,10 +47,14 @@ export default function NewGroupPostPage() {
   if (!canCreate(group))
     throw new Response("게시물을 작성할 권한이 없습니다.", { status: 403 });
 
+  const anonymousUnavailable =
+    restrictionQuery.isPending ||
+    restrictionQuery.isError ||
+    Boolean(restrictionQuery.data);
   const identities = resolveIdentityOptions(
     group.identity_policy,
     group.member_role,
-    Boolean(parent.anonymousActivityRestriction),
+    anonymousUnavailable,
   );
   return (
     <GroupPostEditor
@@ -50,7 +64,7 @@ export default function NewGroupPostPage() {
       groupId={group.group_id}
       categories={categories}
       identities={identities}
-      anonymousActivityRestriction={parent.anonymousActivityRestriction}
+      anonymousActivityRestriction={restrictionQuery.data}
       onSaved={() => invalidateSavedGroupPost(group.group_id)}
     />
   );

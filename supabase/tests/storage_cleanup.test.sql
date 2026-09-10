@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(42);
+select plan(43);
 
 -- 이 파일의 목적은 두 가지다. 1층이 수명을 다한 행만 큐로 옮기는지, 그리고 2층 스윕이 살아 있는
 -- object를 절대 후보로 삼지 않는지. 후자가 틀리면 사용자 이미지가 사라지므로 참조 종류마다
@@ -119,17 +119,18 @@ where post.id in (
 );
 
 insert into public.post_attachments (
-  id, post_id, object_path, original_filename, position, mime_type, size_bytes,
-  status, created_at, ready_at
+  id, post_id, object_path, thumbnail_path, original_filename, position,
+  mime_type, size_bytes, status, created_at, ready_at
 ) values
   ('ef000000-0000-0000-0000-000000000001', 'ee000000-0000-0000-0000-000000000001',
-   'ee000000-0000-0000-0000-000000000001/ef000000-0000-0000-0000-000000000001',
+   'ee000000-0000-0000-0000-000000000001/ef000000-0000-0000-0000-000000000001', null,
    'ready.webp', 0, 'image/webp', 4, 'ready', now() - interval '72 hours', now() - interval '72 hours'),
   ('ef000000-0000-0000-0000-000000000002', 'ee000000-0000-0000-0000-000000000001',
-   'ee000000-0000-0000-0000-000000000001/ef000000-0000-0000-0000-000000000002',
+   'ee000000-0000-0000-0000-000000000001/ef000000-0000-0000-0000-000000000002', null,
    'pending.webp', 1, 'image/webp', 4, 'pending', now(), null),
   ('ef000000-0000-0000-0000-000000000003', 'ee000000-0000-0000-0000-000000000002',
    'ee000000-0000-0000-0000-000000000002/ef000000-0000-0000-0000-000000000003',
+   'ee000000-0000-0000-0000-000000000002/ef000000-0000-0000-0000-000000000003/thumb',
    'fresh.webp', 0, 'image/webp', 4, 'ready', now(), now());
 
 insert into public.post_attachments (
@@ -292,6 +293,8 @@ select is(
 set local role postgres;
 insert into storage.objects (bucket_id, name, owner_id, metadata, created_at)
 values
+  ('post-attachments', 'ee000000-0000-0000-0000-000000000002/ef000000-0000-0000-0000-000000000003/thumb',
+   '10000000-0000-0000-0000-000000000001', '{"size":4,"mimetype":"image/webp"}'::jsonb, now() - interval '72 hours'),
   ('profile-media', '10000000-0000-0000-0000-000000000001/avatar/bb000000-0000-0000-0000-000000000001',
    '10000000-0000-0000-0000-000000000001', '{"size":4,"mimetype":"image/webp"}'::jsonb, now() - interval '72 hours'),
   ('profile-media', '10000000-0000-0000-0000-000000000001/avatar/bb000000-0000-0000-0000-000000000002',
@@ -331,6 +334,13 @@ select ok(
     where object_path like '%bb000000-0000-0000-0000-000000000003'
   ),
   'an object uploaded within the last 48 hours is never swept'
+);
+select ok(
+  not exists (
+    select 1 from private.storage_cleanup_queue
+    where object_path = 'ee000000-0000-0000-0000-000000000002/ef000000-0000-0000-0000-000000000003/thumb'
+  ),
+  'the thumbnail a live attachment points at is never swept'
 );
 select is(
   (

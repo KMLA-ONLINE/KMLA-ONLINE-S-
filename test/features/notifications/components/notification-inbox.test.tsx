@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { NotificationInbox } from "~/features/notifications/components/notification-inbox";
 import type { NotificationItem } from "~/features/notifications/model/types";
-import { renderRoute, screen } from "../../../router";
+import { renderRoute, screen, waitFor } from "../../../router";
 
 function restrictedNotification(): NotificationItem {
   return {
@@ -40,5 +40,38 @@ describe("NotificationInbox", () => {
     expect(
       screen.getByText("사유: 반복적인 익명 괴롭힘", { exact: false }),
     ).toHaveTextContent(/만료:/);
+  });
+
+  it("loads older notifications through the non-revalidating page route", async () => {
+    const pageLoader = vi.fn((_args: { request: Request }) =>
+      Promise.resolve({
+        items: [],
+        nextCursor: null,
+      }),
+    );
+    const { user } = renderRoute(
+      () => (
+        <NotificationInbox
+          initialPage={{
+            items: [restrictedNotification()],
+            nextCursor: {
+              beforeId: "notification-id",
+              beforeLastActivityAt: "2026-08-31T00:00:00Z",
+            },
+          }}
+        />
+      ),
+      {
+        path: "/noti",
+        routes: [{ path: "/noti/page", loader: pageLoader }],
+      },
+    );
+
+    await user.click(screen.getByRole("button", { name: "이전 알림 더 보기" }));
+
+    await waitFor(() => expect(pageLoader).toHaveBeenCalledOnce());
+    expect(pageLoader.mock.calls[0][0].request.url).toBe(
+      "http://localhost/noti/page?beforeId=notification-id&beforeLastActivityAt=2026-08-31T00%3A00%3A00Z",
+    );
   });
 });

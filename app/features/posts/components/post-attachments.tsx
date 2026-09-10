@@ -85,6 +85,7 @@ export function PostImageGrid({
       return {
         id: item.attachment_id,
         src: item.signedUrl!,
+        thumbSrc: item.thumbnailUrl ?? undefined,
         downloadSrc: toAttachmentDownloadUrl(item.signedUrl!, downloadName),
         name: downloadName,
       };
@@ -126,8 +127,13 @@ export function PostImageGrid({
             >
               {item.signedUrl ? (
                 <img
-                  src={item.signedUrl}
+                  // 목록에 까는 타일은 축소본을 그린다. 원본은 3072px이고 이 타일은 넓어야
+                  // 모바일 전체폭이라, 여기서 원본을 받으면 보이는 픽셀의 열 배 넘게
+                  // 내려받는 셈이다. 축소본이 없는 첨부(업로드 실패)는 원본으로 떨어진다.
+                  // 뷰어는 위 `viewerImages`에서 계속 원본을 연다.
+                  src={item.thumbnailUrl ?? item.signedUrl}
                   alt={item.original_filename}
+                  crossOrigin="anonymous"
                   loading="lazy"
                   className="h-full w-full object-cover"
                 />

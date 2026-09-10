@@ -308,6 +308,7 @@ function AttachmentEditorItem({
           alt=""
           width={48}
           height={48}
+          crossOrigin="anonymous"
           className="size-12 shrink-0 rounded-lg object-cover"
         />
       ) : (

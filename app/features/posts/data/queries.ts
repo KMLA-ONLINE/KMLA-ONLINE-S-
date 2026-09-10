@@ -69,7 +69,7 @@ async function attachFiles<T extends { post_id: string }>(
   const { data, error } = await getSupabase()
     .from("post_attachments")
     .select(
-      "id,post_id,storage_bucket,object_path,original_filename,position,mime_type,size_bytes,width,height",
+      "id,post_id,storage_bucket,object_path,thumbnail_path,original_filename,position,mime_type,size_bytes,width,height",
     )
     .in(
       "post_id",
@@ -78,9 +78,10 @@ async function attachFiles<T extends { post_id: string }>(
     .eq("status", "ready")
     .order("position");
   if (error) throw error;
+  // 원본과 축소본을 한 번에 서명한다. 경로를 나눠 두 번 부르면 배치가 갈라져 왕복이 는다.
   const urls = signUrls
     ? await createPostAttachmentUrls(
-        (data ?? []).map((item) => item.object_path),
+        (data ?? []).flatMap((item) => [item.object_path, item.thumbnail_path]),
       )
     : new Map<string, string>();
   return posts.map((post) => ({
@@ -99,6 +100,10 @@ async function attachFiles<T extends { post_id: string }>(
         width: item.width,
         height: item.height,
         signedUrl: urls.get(item.object_path) ?? null,
+        thumbnail_path: item.thumbnail_path,
+        thumbnailUrl: item.thumbnail_path
+          ? (urls.get(item.thumbnail_path) ?? null)
+          : null,
       })),
   }));
 }
@@ -136,7 +141,7 @@ export async function listPostAttachments(
   if (error) throw error;
   const rows = data ?? [];
   const urls = await createPostAttachmentUrls(
-    rows.map((item) => item.object_path),
+    rows.flatMap((item) => [item.object_path, item.thumbnail_path]),
   );
   return rows.map((item) => ({
     attachment_id: item.attachment_id,
@@ -150,6 +155,10 @@ export async function listPostAttachments(
     width: item.width ?? null,
     height: item.height ?? null,
     signedUrl: urls.get(item.object_path) ?? null,
+    thumbnail_path: item.thumbnail_path,
+    thumbnailUrl: item.thumbnail_path
+      ? (urls.get(item.thumbnail_path) ?? null)
+      : null,
   }));
 }
 
@@ -212,7 +221,10 @@ export async function hydrateGroupPostMedia(
   const [attachmentUrls, profileUrls] = await Promise.all([
     createPostAttachmentUrls(
       posts.flatMap((post) =>
-        post.attachments.map((attachment) => attachment.object_path),
+        post.attachments.flatMap((attachment) => [
+          attachment.object_path,
+          attachment.thumbnail_path,
+        ]),
       ),
     ),
     createProfileMediaUrls(posts.map((post) => post.author_avatar_path)),
@@ -228,6 +240,9 @@ export async function hydrateGroupPostMedia(
     attachments: post.attachments.map((attachment) => ({
       ...attachment,
       signedUrl: attachmentUrls.get(attachment.object_path) ?? null,
+      thumbnailUrl: attachment.thumbnail_path
+        ? (attachmentUrls.get(attachment.thumbnail_path) ?? null)
+        : null,
     })),
   }));
 }

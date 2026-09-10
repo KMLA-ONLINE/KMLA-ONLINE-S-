@@ -8,6 +8,7 @@ import { renderRoute } from "../../../../router";
 const file: PreparedPostFile = {
   key: "file-key",
   file: new File(["document"], "document.pdf", { type: "application/pdf" }),
+  thumbnail: null,
   kind: "file",
   width: null,
   height: null,

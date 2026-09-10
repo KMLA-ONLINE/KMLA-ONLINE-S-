@@ -6,29 +6,14 @@ import { STORAGE_UPLOAD_CACHE_CONTROL } from "~/shared/supabase/storage";
 const BUCKET = "profile-media";
 
 /**
- * 신입생 임시 아바타처럼 Storage 밖에 있는 이미지는 경로가 아니라 이미 완성된 URL이다.
- * 서명 대상에서 빼고 그대로 돌려준다.
+ * `profiles.avatar_path`와 `cover_path`는 언제나 이 버킷의 object 경로이거나 `null`이다.
+ * 두 컬럼에 쓰는 곳은 `finalize_profile_media()`(→ `object_path`)와
+ * `remove_my_profile_media()`(→ `null`) 둘뿐이라, 완성된 외부 URL이 들어올 길이 없다.
  */
-function isExternalUrl(path: string): boolean {
-  return /^https?:\/\//i.test(path);
-}
-
-export async function createProfileMediaUrls(
+export function createProfileMediaUrls(
   paths: readonly (string | null | undefined)[],
 ): Promise<Map<string, string>> {
-  const uniquePaths = [
-    ...new Set(paths.filter((path): path is string => Boolean(path))),
-  ];
-  const urls = await createSignedUrls(
-    BUCKET,
-    uniquePaths.filter((path) => !isExternalUrl(path)),
-  );
-
-  for (const path of uniquePaths) {
-    if (isExternalUrl(path)) urls.set(path, path);
-  }
-
-  return urls;
+  return createSignedUrls(BUCKET, paths);
 }
 
 /**

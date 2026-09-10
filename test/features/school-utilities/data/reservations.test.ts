@@ -6,10 +6,19 @@ const { createSignedUrls, from } = vi.hoisted(() => ({
 }));
 
 vi.mock("~/shared/supabase/client", () => ({
-  getSupabase: () => ({ from, storage: { from } }),
+  getSupabase: () => ({
+    from,
+    storage: { from },
+    // 아바타 서명이 공용 캐시를 지나고, 그 캐시는 키에 사용자 ID를 담는다.
+    auth: {
+      getSession: () =>
+        Promise.resolve({ data: { session: { user: { id: "user-1" } } } }),
+    },
+  }),
 }));
 
 import { loadUtilityReservations } from "~/features/school-utilities/data/reservations";
+import { resetSignedUrlCacheForTests } from "~/shared/supabase/signed-urls";
 
 function reservation(id: number, avatarPath: string | null) {
   return {
@@ -31,6 +40,9 @@ function reservation(id: number, avatarPath: string | null) {
 describe("utility reservation avatar hydration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // 서명 캐시는 모듈 수준이라 테스트 사이에 살아남는다. 비우지 않으면 두 번째 테스트가
+    // 요청 없이 캐시에서 URL을 집어 "한 번만 요청한다"가 의미를 잃는다.
+    resetSignedUrlCacheForTests();
     let queryIndex = 0;
     from.mockImplementation((bucket: string) => {
       if (bucket === "profile-media") return { createSignedUrls };
@@ -39,10 +51,7 @@ describe("utility reservation avatar hydration", () => {
         queryIndex++ === 0
           ? { data: [reservation(1, "avatars/shared")], error: null }
           : {
-              data: [
-                reservation(2, "avatars/shared"),
-                reservation(3, "https://example.com/avatar.png"),
-              ],
+              data: [reservation(2, "avatars/shared"), reservation(3, null)],
               error: null,
             };
       const builder = {
@@ -74,7 +83,7 @@ describe("utility reservation avatar hydration", () => {
     expect(result.map((item) => item.avatarUrl)).toEqual([
       "signed-avatar",
       "signed-avatar",
-      "https://example.com/avatar.png",
+      null,
     ]);
   });
 });

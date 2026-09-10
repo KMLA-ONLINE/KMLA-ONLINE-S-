@@ -17,15 +17,16 @@ export interface ShellProfile {
   avatar_url: string | null;
 }
 
+/**
+ * 셸 뱃지는 여기 없다. 안 읽은 수는 `notificationBadgeQuery()`가 소유하고 `useNavBadges()`가
+ * 읽는다 — 뱃지 하나 때문에 게이트와 현재 라우트 로더를 통째로 재검증하지 않기 위해서다.
+ */
 export interface ShellData {
   email: string;
   profile: ShellProfile;
-  /** 경로별 안 읽은 수. 사이드바와 탭바가 같은 값을 쓴다. */
-  badges: Record<string, number>;
 }
 
 export interface ShellLoadData {
   email: string;
   profile: ShellProfile | null;
-  badges: Record<string, number>;
 }

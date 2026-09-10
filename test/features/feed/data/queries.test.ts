@@ -46,7 +46,10 @@ describe("listFeedPosts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.createPostAttachmentUrls.mockResolvedValue(
-      new Map([["posts/photo.webp", "signed-attachment"]]),
+      new Map([
+        ["posts/photo.webp", "signed-attachment"],
+        ["posts/photo.webp/thumb", "signed-thumbnail"],
+      ]),
     );
     mocks.createProfileMediaUrls.mockResolvedValue(
       new Map([
@@ -77,6 +80,7 @@ describe("listFeedPosts", () => {
               attachment_id: "40000000-0000-0000-0000-000000000001",
               storage_bucket: "post-attachments",
               object_path: "posts/photo.webp",
+              thumbnail_path: "posts/photo.webp/thumb",
               original_filename: "photo.webp",
               position: 0,
               mime_type: "image/webp",
@@ -115,8 +119,10 @@ describe("listFeedPosts", () => {
     expect(mocks.rpc).toHaveBeenCalledWith("list_feed_posts", {
       p_page_token: "50000000-0000-0000-0000-000000000001",
     });
+    // 원본과 축소본을 한 배치로 서명한다. 나눠 부르면 왕복이 두 번이 된다.
     expect(mocks.createPostAttachmentUrls).toHaveBeenCalledWith([
       "posts/photo.webp",
+      "posts/photo.webp/thumb",
     ]);
     expect(mocks.createProfileMediaUrls).toHaveBeenCalledTimes(1);
     expect(page.nextPageToken).toBe(common.next_page_token);
@@ -126,7 +132,9 @@ describe("listFeedPosts", () => {
       group_slug: "notice",
       is_pinned: false,
       author_avatar_path: "signed-avatar",
-      attachments: [{ signedUrl: "signed-attachment" }],
+      attachments: [
+        { signedUrl: "signed-attachment", thumbnailUrl: "signed-thumbnail" },
+      ],
     });
     expect(page.posts[1]).toMatchObject({
       kind: "profile",

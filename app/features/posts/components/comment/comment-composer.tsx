@@ -361,6 +361,7 @@ export function CommentComposer({
                       : (image.signedUrl ?? undefined)
                   }
                   alt="댓글 이미지 미리보기"
+                  crossOrigin="anonymous"
                   className="max-h-32 max-w-48 rounded-xl object-cover"
                 />
               ) : (

@@ -322,7 +322,7 @@ export function NotificationInbox({
                   beforeId: nextCursor.beforeId,
                   beforeLastActivityAt: nextCursor.beforeLastActivityAt,
                 });
-                void pageFetcher.load(`/noti?${search}`);
+                void pageFetcher.load(`/noti/page?${search}`);
               }}
             >
               {loadingMore ? (

@@ -36,6 +36,7 @@ export function GroupMediaSettings({ group }: { group: GroupDetail }) {
               <img
                 src={group.cover_path}
                 alt="현재 그룹 커버"
+                crossOrigin="anonymous"
                 width={1200}
                 height={300}
                 className="size-full object-cover"

@@ -8,19 +8,24 @@ import {
   clearSessionOrThrow,
   readLiveSession,
 } from "~/features/auth/data/queries";
+// 배럴(`~/features/profiles`)은 화면 컴포넌트를 전부 끌고 온다. 서명 헬퍼만 필요하다.
+import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import { getSupabase } from "~/shared/supabase/client";
 
+/**
+ * 셸 아바타도 다른 이미지와 같은 서명 캐시를 지난다.
+ *
+ * 예전에는 여기서 `createSignedUrl`을 직접 불렀는데, 그러면 `["signed-url", ...]` 캐시를
+ * 비켜 가서 게이트가 재검증될 때마다 새 토큰을 발급받았다. 토큰이 바뀌면 URL이 바뀌고,
+ * URL이 바뀌면 `<img>`가 브라우저 캐시를 놓쳐 같은 아바타를 매번 다시 내려받았다.
+ */
 async function resolveProfileAvatar(
   path: string | null,
 ): Promise<string | null> {
-  if (!path || /^https?:\/\//i.test(path)) return path;
+  if (!path) return null;
 
-  const { data, error } = await getSupabase()
-    .storage.from("profile-media")
-    .createSignedUrl(path, 3600);
-
-  if (error) return null;
-  return data.signedUrl;
+  const urls = await createProfileMediaUrls([path]);
+  return urls.get(path) ?? null;
 }
 
 /**
@@ -44,19 +49,10 @@ export async function loadShellData(): Promise<ShellLoadData | null> {
 
   const profile = profiles[0];
   if (!profile) {
-    return { email: session.user.email ?? "", profile: null, badges: {} };
+    return { email: session.user.email ?? "", profile: null };
   }
 
-  const [avatarUrl, notificationCount] = await Promise.all([
-    resolveProfileAvatar(profile.avatar_path),
-    profile.status === "accepted"
-      ? supabase.rpc("get_my_recent_unread_notification_count")
-      : Promise.resolve({ data: 0, error: null }),
-  ]);
-  if (notificationCount.error) {
-    await clearSessionOrThrow(notificationCount.error);
-    return null;
-  }
+  const avatarUrl = await resolveProfileAvatar(profile.avatar_path);
 
   const shellProfile: ShellData["profile"] = {
     id: profile.id,
@@ -68,9 +64,5 @@ export async function loadShellData(): Promise<ShellLoadData | null> {
     avatar_url: avatarUrl,
   };
 
-  return {
-    email: session.user.email ?? "",
-    profile: shellProfile,
-    badges: { "/noti": notificationCount.data ?? 0 },
-  };
+  return { email: session.user.email ?? "", profile: shellProfile };
 }

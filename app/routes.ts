@@ -21,6 +21,7 @@ export default [
       route("feed/posts/:postId", "routes/app/feed/post-data.ts"),
       route("profile", "routes/app/profile/index.tsx"),
       route("noti", "routes/app/notifications.tsx"),
+      route("noti/page", "routes/app/notification-page.ts"),
       route("noti/settings", "routes/app/notification-settings.tsx"),
       route("menu", "routes/app/menu/index.tsx"),
       route("menu/licenses", "routes/app/menu/licenses.tsx"),

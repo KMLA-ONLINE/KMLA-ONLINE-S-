@@ -10,7 +10,7 @@ create temporary table cleanup_claims (
 grant select, insert on cleanup_claims to service_role;
 create temporary table attachment_test_ids (name text primary key, id uuid not null);
 grant select, insert on attachment_test_ids to authenticated;
-select plan(66);
+select plan(76);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -110,6 +110,52 @@ select throws_ok(
   '23514', 'a post can have at most 30 attachments',
   'a 31st attachment is rejected'
 );
+
+-- 축소본(§18.1). 이미지에만 두 번째 object를 예고하고, 경로는 원본에서 파생된다.
+select is(
+  (select thumbnail_path from public.post_attachments
+   where post_id = (select id from attachment_test_ids where name = 'limit_draft')
+   order by position limit 1),
+  null,
+  'a non-image attachment is not given a thumbnail path'
+);
+
+reset role;
+delete from public.post_attachments
+where post_id = (select id from attachment_test_ids where name = 'limit_draft');
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+
+select lives_ok(
+  $$select public.prepare_post_attachment(
+      (select id from attachment_test_ids where name = 'limit_draft'),
+      'photo.webp', 'image/webp', 100, 10, 10
+    )$$,
+  'an image attachment can be prepared'
+);
+select is(
+  (select thumbnail_path from public.post_attachments
+   where post_id = (select id from attachment_test_ids where name = 'limit_draft')),
+  (select object_path || '/thumb' from public.post_attachments
+   where post_id = (select id from attachment_test_ids where name = 'limit_draft')),
+  'an image attachment gets a thumbnail path derived from its own object path'
+);
+
+reset role;
+select throws_ok(
+  $$update public.post_attachments set thumbnail_path = 'anywhere/i/like'$$,
+  '23514', null,
+  'a thumbnail path that is not derived from the object path is rejected'
+);
+select throws_ok(
+  $$update public.post_attachments
+    set mime_type = 'application/pdf'
+    where thumbnail_path is not null$$,
+  '23514', null,
+  'a non-image row cannot keep a thumbnail path'
+);
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
 
 reset role;
 delete from public.posts where id = (select id from attachment_test_ids where name = 'limit_draft');
@@ -262,6 +308,14 @@ select throws_ok(
 select lives_ok(
   $$insert into storage.objects (bucket_id, name, owner_id, metadata)
     values ('post-attachments',
+      (select thumbnail_path from public.post_attachments limit 1),
+      '10000000-0000-0000-0000-000000000001',
+      '{"size":4,"mimetype":"image/webp"}')$$,
+  'Storage accepts the exact pending thumbnail path for its author'
+);
+select lives_ok(
+  $$insert into storage.objects (bucket_id, name, owner_id, metadata)
+    values ('post-attachments',
       (select object_path from public.post_attachments limit 1),
       '10000000-0000-0000-0000-000000000001',
       '{"size":4,"mimetype":"image/webp"}')$$,
@@ -272,10 +326,39 @@ select lives_ok(
   'matching uploaded metadata finalizes'
 );
 select is((select status from public.post_attachments limit 1), 'ready'::public.post_attachment_status, 'finalize marks attachment ready');
+select ok(
+  (select thumbnail_path is not null from public.post_attachments limit 1),
+  'a valid WebP thumbnail survives finalization'
+);
 select lives_ok(
   $$select public.finalize_post_attachment((select id from public.post_attachments limit 1))$$,
   'finalize is idempotent for the same author after validation'
 );
+reset role;
+update storage.objects
+set metadata = '{"size":1048577,"mimetype":"image/webp"}'::jsonb
+where name = (select thumbnail_path from public.post_attachments limit 1);
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select lives_ok(
+  $$select public.finalize_post_attachment((select id from public.post_attachments limit 1))$$,
+  'an oversized thumbnail falls back without failing the attachment'
+);
+select is(
+  (select thumbnail_path from public.post_attachments limit 1),
+  null::text,
+  'an oversized thumbnail path is cleared before readers can receive it'
+);
+reset role;
+select ok(
+  exists (
+    select 1 from private.storage_cleanup_queue
+    where object_path like '%/thumb' and reason = 'post_attachment'
+  ),
+  'a rejected thumbnail is queued for deletion immediately'
+);
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
 select lives_ok(
   $$select public.update_group_post_draft_identity(
       (select id from attachment_test_ids where name = 'upload_draft'), 'identified'
@@ -390,8 +473,8 @@ reset role;
 -- 남지 않는다.
 select is(
   (select count(*) from private.storage_cleanup_queue where reason = 'post_attachment'),
-  2::bigint,
-  'post deletion queues every attachment object in the same transaction'
+  3::bigint,
+  'post deletion queues every remaining attachment object in the same transaction'
 );
 select is(
   private.enqueue_storage_cleanup(),
@@ -409,7 +492,7 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 set local role service_role;
 insert into cleanup_claims
 select * from public.claim_storage_cleanup(10, 300);
-select is((select count(*) from cleanup_claims), 2::bigint, 'the worker leases the queued objects');
+select is((select count(*) from cleanup_claims), 3::bigint, 'the worker leases the queued objects');
 select is(
   public.complete_storage_cleanup(
     (select lease_id from cleanup_claims limit 1),
@@ -422,15 +505,15 @@ select is(
 );
 select is(
   (select count(*) from storage.objects where bucket_id = 'post-attachments'),
-  1::bigint,
+  2::bigint,
   'the cleanup RPCs never touch Storage object metadata themselves'
 );
 
 reset role;
 select is(
   (select count(*) from private.storage_cleanup_queue),
-  1::bigint,
-  'the object that is still in Storage stays queued for the next run'
+  2::bigint,
+  'objects that are still in Storage stay queued for the next run'
 );
 
 reset role;

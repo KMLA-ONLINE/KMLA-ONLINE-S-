@@ -39,7 +39,6 @@ export default function EditGroupPostPage({
       groupId={parent.group.group_id}
       categories={parent.categories}
       post={loaderData.post}
-      anonymousActivityRestriction={parent.anonymousActivityRestriction}
       onSaved={() => invalidateSavedGroupPost(parent.group.group_id)}
     />
   );

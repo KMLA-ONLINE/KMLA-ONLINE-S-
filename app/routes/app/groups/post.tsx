@@ -1,8 +1,10 @@
 import { data, redirect, useRouteLoaderData } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 
 import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import { groupKeys, loadGroupDetail } from "~/features/groups";
 import {
+  anonymousActivityRestrictionQuery,
   deleteGroupPost,
   getGroupPost,
   getPostErrorMessage,
@@ -78,12 +80,21 @@ export default function GroupPostPage({ loaderData }: Route.ComponentProps) {
   const parent = useRouteLoaderData<typeof groupLoader>(
     "routes/app/groups/detail",
   );
+  const groupId = parent?.group.group_id ?? "";
+  const restrictionQuery = useQuery({
+    ...anonymousActivityRestrictionQuery(groupId),
+    enabled: parent?.group.identity_policy === "optional_anonymous",
+  });
   if (
     parent?.group.membership_state !== "member" ||
     loaderData.post.group_id !== parent.group.group_id
   ) {
     throw new Response("게시물을 볼 권한이 없습니다.", { status: 403 });
   }
+  const anonymousUnavailable =
+    restrictionQuery.isPending ||
+    restrictionQuery.isError ||
+    Boolean(restrictionQuery.data);
   return (
     <GroupPostDetail
       slug={parent.group.slug}
@@ -92,9 +103,9 @@ export default function GroupPostPage({ loaderData }: Route.ComponentProps) {
       identities={resolveIdentityOptions(
         parent.group.identity_policy,
         parent.group.member_role,
-        Boolean(parent.anonymousActivityRestriction),
+        anonymousUnavailable,
       )}
-      anonymousActivityRestriction={parent.anonymousActivityRestriction}
+      anonymousActivityRestriction={restrictionQuery.data}
       comments={loaderData.comments}
       viewer={{ name: profile.name, avatarUrl: profile.avatar_url }}
     />

@@ -33,11 +33,26 @@ export async function prepareCommentImage(
   return {
     key: crypto.randomUUID(),
     file,
+    // 댓글 이미지는 목록에 깔리지 않고 게시물을 열어야 보이므로 축소본을 만들지 않는다.
+    thumbnail: null,
     kind: "image",
     width,
     height,
     previewUrl: URL.createObjectURL(file),
   };
+}
+
+/**
+ * 이미 `photo`로 정규화한 이미지에서 축소본을 만든다.
+ *
+ * 원본이 아니라 압축 결과를 입력으로 쓰는 이유는 디코딩할 픽셀이 훨씬 적어 빠르고,
+ * `photo`가 이미 EXIF를 털고 방향을 굽혔기 때문이다. 여기서 한 번 더 굽힐 것이 없다.
+ *
+ * 실패해도 던지지 않는다. 축소본은 데이터를 아끼는 수단이지 게시물의 일부가 아니라서,
+ * 만들지 못했다고 업로드를 막을 이유가 없다.
+ */
+async function createThumbnail(file: File): Promise<File | null> {
+  return compressImage(file, "thumbnail").catch(() => null);
 }
 
 export async function preparePostFiles(
@@ -70,6 +85,7 @@ export async function preparePostFiles(
       return {
         key: crypto.randomUUID(),
         file,
+        thumbnail: isImage ? await createThumbnail(file) : null,
         kind: isImage ? "image" : "file",
         width,
         height,
