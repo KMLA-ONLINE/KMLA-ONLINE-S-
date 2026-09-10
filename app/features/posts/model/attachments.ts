@@ -8,6 +8,7 @@ import { validateSelectedFiles } from "~/features/posts/model/validation";
 import { compressImage } from "~/shared/lib/image/compress";
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const IMAGE_PREPARATION_CONCURRENCY = 2;
 
 /** 업로드 파이프라인이 사진을 webp로 정규화하므로, 이미지인지 아닌지는 이 한 줄로 갈린다. */
 const IMAGE_MIME = "image/webp";
@@ -63,8 +64,15 @@ export async function preparePostFiles(
   const error = validateSelectedFiles(selected, currentCount);
   if (error) throw new Error(error);
 
-  return Promise.all(
-    selected.map(async (source) => {
+  const prepared = new Array<PreparedPostFile>(selected.length);
+  let nextIndex = 0;
+
+  // Re-encoding large camera images is CPU and memory intensive on mobile.
+  async function worker(): Promise<void> {
+    while (nextIndex < selected.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      const source = selected[index];
       const isImage = IMAGE_TYPES.has(source.type);
       if (selection === "image" && !isImage)
         throw new Error(
@@ -82,7 +90,7 @@ export async function preparePostFiles(
         height = bitmap.height;
         bitmap.close();
       }
-      return {
+      prepared[index] = {
         key: crypto.randomUUID(),
         file,
         thumbnail: isImage ? await createThumbnail(file) : null,
@@ -91,8 +99,17 @@ export async function preparePostFiles(
         height,
         previewUrl: isImage ? URL.createObjectURL(file) : null,
       };
-    }),
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(IMAGE_PREPARATION_CONCURRENCY, selected.length) },
+      worker,
+    ),
   );
+
+  return prepared;
 }
 
 /**

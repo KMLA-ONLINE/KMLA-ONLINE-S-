@@ -39,6 +39,31 @@ const PRESETS = {
 
 export type ImagePreset = keyof typeof PRESETS;
 
+/** 캔버스나 압축 워커를 열기 전에 원본 디코딩 크기를 제한한다. */
+export async function validateImagePixels(file: File): Promise<void> {
+  if (
+    !file.type.startsWith("image/") ||
+    typeof createImageBitmap !== "function"
+  )
+    return;
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file, {
+      imageOrientation: "from-image",
+    });
+  } catch (cause) {
+    throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, { cause });
+  }
+
+  try {
+    if (bitmap.width * bitmap.height > 50_000_000)
+      throw new Error(`이미지는 50메가픽셀 이하여야 합니다: ${file.name}`);
+  } finally {
+    bitmap.close();
+  }
+}
+
 /**
  * 업로드 전 이미지 정규화의 단일 진입점. 아바타든 글 첨부든 채팅 사진이든 전부 여기를 거친다.
  *
@@ -65,22 +90,7 @@ export async function compressImage(
   if (!file.type.startsWith("image/")) return file;
 
   const { maxEdge, maxBytes, quality } = PRESETS[preset];
-  if (typeof createImageBitmap === "function") {
-    let bitmap: ImageBitmap;
-    try {
-      bitmap = await createImageBitmap(file, {
-        imageOrientation: "from-image",
-      });
-    } catch (cause) {
-      throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, {
-        cause,
-      });
-    }
-    const pixels = bitmap.width * bitmap.height;
-    bitmap.close();
-    if (pixels > 50_000_000)
-      throw new Error(`이미지는 50메가픽셀 이하여야 합니다: ${file.name}`);
-  }
+  await validateImagePixels(file);
 
   const compressed = await imageCompression(file, {
     maxWidthOrHeight: maxEdge,

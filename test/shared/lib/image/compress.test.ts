@@ -1,7 +1,10 @@
 import imageCompression from "browser-image-compression";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { compressImage } from "~/shared/lib/image/compress";
+import {
+  compressImage,
+  validateImagePixels,
+} from "~/shared/lib/image/compress";
 
 vi.mock("browser-image-compression", () => ({ default: vi.fn() }));
 
@@ -99,5 +102,20 @@ describe("compressImage", () => {
     compress.mockRejectedValue(new Error("canvas unavailable"));
 
     await expect(compressImage(file, "icon")).rejects.toThrow("broken.png");
+  });
+
+  it("크롭하기 전에 50메가픽셀을 넘는 원본을 거절한다", async () => {
+    const close = vi.fn();
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn(() => Promise.resolve({ width: 10_000, height: 5_001, close })),
+    );
+    const file = new File([new Uint8Array(20)], "large.png", {
+      type: "image/png",
+    });
+
+    await expect(validateImagePixels(file)).rejects.toThrow("50메가픽셀");
+    expect(close).toHaveBeenCalledOnce();
+    expect(compress).not.toHaveBeenCalled();
   });
 });

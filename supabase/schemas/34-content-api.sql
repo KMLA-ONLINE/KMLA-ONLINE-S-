@@ -1186,9 +1186,20 @@ begin
     raise exception 'post requires a body or ready attachment' using errcode = '22023';
   end if;
   if attachment.status <> 'deleted' then
+    insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+    select attachment.storage_bucket, path.object_path, 'post_attachment'
+    from (
+      values (attachment.object_path), (attachment.thumbnail_path)
+    ) as path(object_path)
+    where path.object_path is not null
+    on conflict (bucket, object_path) do update
+      set dry_run = queue.dry_run and excluded.dry_run;
+
     update public.post_attachments
     set status = 'deleted', deleted_at = now()
     where id = p_attachment_id;
+
+    perform private.invoke_storage_cleanup(p_quiet => true);
   end if;
 end;
 $$;
@@ -1481,6 +1492,10 @@ begin
   if nullif(object_record.metadata ->> 'size', '')::bigint is distinct from attachment.size_bytes
     or object_record.metadata ->> 'mimetype' is distinct from attachment.mime_type then
     raise exception 'uploaded object metadata does not match' using errcode = '22023';
+  end if;
+  if lower(attachment.mime_type) like 'image/%'
+    and attachment.size_bytes > 8388608 then
+    raise exception 'image attachments must be 8 MiB or smaller' using errcode = '22023';
   end if;
 
   -- 썸네일이 없으면 실패시키지 않고 경로를 지운다. 축소본은 데이터 절약 수단이지 게시물의
@@ -2204,6 +2219,10 @@ begin
   if lower(btrim(p_mime_type)) like 'video/%'
      or lower(btrim(p_original_filename)) ~ '\.(mp4|m4v|mov|webm|avi|mkv|mpeg|mpg|3gp|3g2|ogv|m2ts)$' then
     raise exception 'video attachments are not supported' using errcode = '22023';
+  end if;
+  if lower(btrim(p_mime_type)) like 'image/%'
+    and p_size_bytes > 8388608 then
+    raise exception 'image attachments must be 8 MiB or smaller' using errcode = '22023';
   end if;
   if (select count(*) from public.post_attachments
       where post_id = p_post_id and status <> 'deleted') >= 30 then

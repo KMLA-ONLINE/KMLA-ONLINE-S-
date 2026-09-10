@@ -1,12 +1,28 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   imageDownloadName,
   prepareCommentImage,
+  preparePostFiles,
   splitPostAttachments,
   toAttachmentDownloadUrl,
 } from "~/features/posts/model/attachments";
 import type { PostAttachment } from "~/features/posts/model/types";
+import { compressImage } from "~/shared/lib/image/compress";
+
+vi.mock("~/shared/lib/image/compress", () => ({
+  compressImage: vi.fn(),
+}));
+
+const compress = vi.mocked(compressImage);
+
+beforeEach(() => {
+  compress.mockReset();
+  vi.stubGlobal(
+    "createImageBitmap",
+    vi.fn(() => Promise.resolve({ width: 20, height: 10, close: vi.fn() })),
+  );
+});
 
 describe("imageDownloadName", () => {
   it("uses the stable image UUID instead of an original filename", () => {
@@ -47,6 +63,72 @@ describe("prepareCommentImage", () => {
         new File(["pdf"], "paper.pdf", { type: "application/pdf" }),
       ),
     ).rejects.toThrow("JPEG, PNG, WebP");
+  });
+});
+
+describe("preparePostFiles", () => {
+  it("limits CPU-heavy photo normalization to two selected images at once", async () => {
+    let active = 0;
+    let maxActive = 0;
+    let photoCalls = 0;
+    const release: (() => void)[] = [];
+
+    compress.mockImplementation((file, preset) => {
+      if (preset === "thumbnail") return Promise.resolve(file);
+
+      photoCalls += 1;
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+
+      if (photoCalls > 2) {
+        active -= 1;
+        return Promise.resolve(file);
+      }
+
+      return new Promise<File>((resolve) => {
+        release.push(() => {
+          active -= 1;
+          resolve(file);
+        });
+      });
+    });
+
+    const preparation = preparePostFiles(
+      [
+        new File(["one"], "one.png", { type: "image/png" }),
+        new File(["two"], "two.png", { type: "image/png" }),
+        new File(["three"], "three.png", { type: "image/png" }),
+      ],
+      0,
+      "image",
+    );
+
+    try {
+      expect(active).toBeGreaterThanOrEqual(2);
+      expect(maxActive).toBe(2);
+    } finally {
+      release.forEach((resolve) => resolve());
+      await preparation;
+    }
+  });
+
+  it("keeps an otherwise valid image when its optional thumbnail cannot be made", async () => {
+    const normalized = new File(["photo"], "photo.webp", {
+      type: "image/webp",
+    });
+    compress.mockImplementation((_file, preset) =>
+      preset === "thumbnail"
+        ? Promise.reject(new Error("thumbnail failed"))
+        : Promise.resolve(normalized),
+    );
+
+    await expect(
+      preparePostFiles(
+        [new File(["source"], "photo.png", { type: "image/png" })],
+        0,
+        "image",
+      ),
+    ).resolves.toMatchObject([{ file: normalized, thumbnail: null }]);
   });
 });
 

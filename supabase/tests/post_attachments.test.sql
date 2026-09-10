@@ -10,7 +10,7 @@ create temporary table cleanup_claims (
 grant select, insert on cleanup_claims to service_role;
 create temporary table attachment_test_ids (name text primary key, id uuid not null);
 grant select, insert on attachment_test_ids to authenticated;
-select plan(76);
+select plan(78);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -126,6 +126,14 @@ where post_id = (select id from attachment_test_ids where name = 'limit_draft');
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
 
+select throws_ok(
+  $$select public.prepare_post_attachment(
+      (select id from attachment_test_ids where name = 'limit_draft'),
+      'large.webp', 'image/webp', 8388609, 3072, 2730
+    )$$,
+  '22023', 'image attachments must be 8 MiB or smaller',
+  'image attachments cannot reserve an object larger than the processed image limit'
+);
 select lives_ok(
   $$select public.prepare_post_attachment(
       (select id from attachment_test_ids where name = 'limit_draft'),
@@ -411,38 +419,55 @@ select lives_ok(
 
 select lives_ok(
   $$select public.prepare_post_attachment(
-    (select id from public.posts where title = '첨부만'), 'second.bin', 'application/octet-stream', 5, null, null
+    (select id from public.posts where title = '첨부만'), 'second.webp', 'image/webp', 5, 10, 20
   )$$,
-  'published author can prepare another attachment'
+  'published author can prepare another image attachment'
 );
 select throws_ok(
   $$insert into storage.objects (bucket_id, name, owner_id, metadata)
     select storage_bucket, object_path, '10000000-0000-0000-0000-000000000002',
-      '{"size":5,"mimetype":"application/octet-stream"}'::jsonb
-    from public.post_attachments where original_filename = 'second.bin'$$,
+      '{"size":5,"mimetype":"image/webp"}'::jsonb
+    from public.post_attachments where original_filename = 'second.webp'$$,
   '42501', null, 'Storage rejects a mismatched object owner'
 );
 select lives_ok(
   $$select * from public.reorder_post_attachments(
     (select id from public.posts where title = '첨부만'),
     array[
-      (select id from public.post_attachments where original_filename = 'second.bin'),
+      (select id from public.post_attachments where original_filename = 'second.webp'),
       (select id from public.post_attachments where original_filename = 'photo.webp')
     ]
   )$$,
   'author can atomically reorder every active attachment'
 );
 select is(
-  (select position from public.post_attachments where original_filename = 'second.bin'),
+  (select position from public.post_attachments where original_filename = 'second.webp'),
   0,
   'reorder applies the requested position'
 );
 select lives_ok(
-  $$select public.delete_post_attachment((select id from public.post_attachments where original_filename = 'second.bin'))$$,
-  'author can tombstone a pending attachment'
+  $$select public.delete_post_attachment((select id from public.post_attachments where original_filename = 'second.webp'))$$,
+  'author can tombstone a pending image attachment'
+);
+reset role;
+select is(
+  (
+    select count(*)
+    from private.storage_cleanup_queue as queue
+    where queue.bucket = 'post-attachments'
+      and queue.object_path in (
+        select path.object_path
+        from public.post_attachments as attachment
+        cross join lateral (
+          values (attachment.object_path), (attachment.thumbnail_path)
+        ) as path(object_path)
+        where attachment.original_filename = 'second.webp'
+      )
+  ),
+  2::bigint,
+  'tombstoning an image attachment immediately queues both original and thumbnail objects'
 );
 
-reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
 set local role authenticated;
 select is((select count(*) from public.list_post_attachments((select id from public.posts where title = '첨부만'))), 1::bigint, 'another current group member can list ready attachments');
@@ -473,7 +498,7 @@ reset role;
 -- 남지 않는다.
 select is(
   (select count(*) from private.storage_cleanup_queue where reason = 'post_attachment'),
-  3::bigint,
+  4::bigint,
   'post deletion queues every remaining attachment object in the same transaction'
 );
 select is(
@@ -492,16 +517,16 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 set local role service_role;
 insert into cleanup_claims
 select * from public.claim_storage_cleanup(10, 300);
-select is((select count(*) from cleanup_claims), 3::bigint, 'the worker leases the queued objects');
+select is((select count(*) from cleanup_claims), 4::bigint, 'the worker leases the queued objects');
 select is(
   public.complete_storage_cleanup(
     (select lease_id from cleanup_claims limit 1),
-    (select array_agg(id) from cleanup_claims),
-    '{}'::uuid[],
-    'storage unavailable'
+  (select array_agg(id) from cleanup_claims),
+  '{}'::uuid[],
+  'storage unavailable'
   ),
-  1,
-  'the queued object that no longer exists in Storage completes anyway'
+  2,
+  'queued objects that no longer exist in Storage complete anyway'
 );
 select is(
   (select count(*) from storage.objects where bucket_id = 'post-attachments'),
