@@ -1,6 +1,7 @@
 import { EyeOffIcon, FlagIcon, Trash2Icon } from "lucide-react";
 import { Link } from "react-router";
 
+import { StaffMark } from "~/features/posts/components/staff-mark";
 import { GroupPostReportDescriptions } from "~/features/posts/components/group/group-post-report-descriptions";
 import { FROM_GROUP } from "~/features/posts/model/navigation";
 import type { GroupPostReportSummary } from "~/features/posts/data/group-reports";
@@ -96,14 +97,7 @@ export function GroupPostReportCard({
               <span className="truncate">{report.author_label}</span>
             )}
 
-            {report.author_identity === "staff" ? (
-              <Badge
-                variant="outline"
-                className="h-5 shrink-0 px-1.5 text-[10px] text-muted-foreground"
-              >
-                운영진
-              </Badge>
-            ) : null}
+            {report.author_identity === "staff" ? <StaffMark /> : null}
           </div>
         </div>
       </div>

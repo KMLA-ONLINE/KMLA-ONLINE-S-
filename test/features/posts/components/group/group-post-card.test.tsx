@@ -83,7 +83,8 @@ describe("GroupPostCard", () => {
       "href",
       "/profile/author-pub-id",
     );
-    expect(screen.getByText("운영진")).toBeVisible();
+    // 글자 배지가 아니라 파란 체크다. 화면에 글자가 없으므로 뜻은 접근성 이름이 진다.
+    expect(screen.getByRole("img", { name: "운영진 명의" })).toBeVisible();
   });
 
   it("does not link anonymous authors to a profile", () => {

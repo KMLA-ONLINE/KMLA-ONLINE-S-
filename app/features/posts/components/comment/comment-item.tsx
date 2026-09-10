@@ -1,3 +1,4 @@
+import { StaffMark } from "~/features/posts/components/staff-mark";
 import type { MentionDraftEntry } from "~/features/posts/model/mentions";
 import { MoreHorizontalIcon } from "lucide-react";
 import { useState } from "react";
@@ -197,14 +198,7 @@ export function CommentItem({
               ) : (
                 <p className="truncate text-xs font-semibold">{authorName}</p>
               )}
-              {comment.author_identity === "staff" ? (
-                <Badge
-                  variant="outline"
-                  className="shrink-0 text-muted-foreground"
-                >
-                  운영진
-                </Badge>
-              ) : null}
+              {comment.author_identity === "staff" ? <StaffMark /> : null}
               {/*
                 배지가 아니라 글자다. 누를 수 없는 표시에 배지를 쓰면 hover에서 배경이
                 깔려 눌리는 것처럼 보인다. 이름 옆에 파란 글자로 붙이는 편이 조용하다.

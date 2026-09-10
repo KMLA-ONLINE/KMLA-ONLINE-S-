@@ -101,7 +101,10 @@ describe("CommentItem", () => {
     });
 
     expect(screen.getByRole("link", { name: "김관리" })).toBeInTheDocument();
-    expect(screen.getByText("운영진")).toBeInTheDocument();
+    // 글자 배지가 아니라 파란 체크다. 화면에 글자가 없으므로 뜻은 접근성 이름이 진다.
+    expect(
+      screen.getByRole("img", { name: "운영진 명의" }),
+    ).toBeInTheDocument();
   });
 
   it("badges the comment the post author wrote", () => {
