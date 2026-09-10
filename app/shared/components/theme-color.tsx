@@ -16,6 +16,30 @@ import { useEffect } from "react";
  * 따라오고, `oklch()`를 브라우저가 이미 `rgb()`로 계산해 둔 값을 그대로 쓰므로 오래된
  * 파서가 있는 곳에서도 안전하다.
  */
+/**
+ * 알파가 0인 색인지 본다. 알파 채널이 없는 표기(`rgb(r, g, b)`)는 불투명이다.
+ *
+ * 문자열 끝을 보고 판정하면 안 된다 — `rgb(0, 0, 0)`처럼 마지막 채널이 0인 불투명 색이
+ * 투명으로 잡힌다. 그러면 순수 검정 배경에서 theme-color가 하이드레이션 전 기본값에
+ * 묶인 채로 남는다.
+ *
+ * 계산 값은 브라우저마다 `rgba(r, g, b, a)`와 `rgb(r g b / a)` 두 표기가 모두 나온다.
+ */
+export function isTransparent(color: string): boolean {
+  const value = color.trim();
+  // 계산 값은 키워드로 돌아오지 않지만, 돌아온다면 그대로 쓸 수 없는 값이다.
+  if (value === "transparent") return true;
+
+  const parsed = /^rgba?\(([^)]*)\)$/.exec(value);
+  if (!parsed) return false;
+
+  const [channels, slashAlpha] = parsed[1].split("/");
+  if (slashAlpha !== undefined) return Number.parseFloat(slashAlpha) === 0;
+
+  const parts = channels.split(",");
+  return parts.length === 4 && Number.parseFloat(parts[3]) === 0;
+}
+
 export function ThemeColor() {
   const { resolvedTheme } = useTheme();
 
@@ -29,7 +53,7 @@ export function ThemeColor() {
       // 스타일시트가 아직 안 붙었으면 빈 문자열이나 투명이 나온다(`transparent`는 계산
       // 값에서 `rgba(0, 0, 0, 0)`이다). 그때는 손대지 않고 하이드레이션 전 기본값을
       // 그대로 둔다 — 투명을 그대로 쓰면 브라우저가 색을 잃는다.
-      if (!background || /,\s*0\)$/.test(background)) return;
+      if (!background || isTransparent(background)) return;
       meta.setAttribute("content", background);
     });
 
