@@ -320,14 +320,14 @@ async function uploadCommentImage(
 }
 
 async function hydrateCommittedComment(
-  comment: Omit<PostComment, "images">,
+  comment: Omit<PostComment, "images" | "author_avatar_url">,
 ): Promise<PostComment> {
   try {
     return (await hydratePostComments([comment]))[0];
   } catch {
     // The database commit already succeeded. Treat a follow-up metadata/signing
     // failure as a temporary missing preview rather than inviting a duplicate retry.
-    return { ...comment, images: [] };
+    return { ...comment, author_avatar_url: null, images: [] };
   }
 }
 

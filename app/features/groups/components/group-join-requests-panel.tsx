@@ -33,7 +33,7 @@ export function GroupJoinRequestsPanel({
               className="flex min-h-16 items-center gap-3 py-2"
             >
               <UserAvatar
-                src={request.avatar_path}
+                src={request.avatar_url}
                 name={request.name}
                 size="lg"
               />

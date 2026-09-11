@@ -40,7 +40,7 @@ export function ProfilePostHeader({
           aria-label={`${authorName} 프로필`}
         >
           <UserAvatar
-            src={post.author_avatar_path}
+            src={post.author_avatar_url}
             name={post.author_name}
             size="lg"
           />

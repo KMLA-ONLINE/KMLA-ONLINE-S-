@@ -6,6 +6,7 @@ import type {
   CommentCursor,
   CommentImage,
   GroupCategory,
+  GroupPost,
   GroupPostDetail,
   GroupPostPage,
   GroupPostSearchResult,
@@ -38,8 +39,14 @@ export async function getMyGroupAnonymousActivityRestriction(
   return data?.[0] ?? null;
 }
 
+/**
+ * 댓글 한 묶음에 이미지와 작성자 아바타를 채운다.
+ *
+ * 두 버킷을 병렬로 서명한다 — 이미지 목록 RPC와 아바타 서명은 서로를 기다릴 이유가 없다.
+ * 아바타는 `author_avatar_url`에만 채우고 원시 경로는 그대로 둔다(모델 타입 주석 참고).
+ */
 export async function hydratePostComments(
-  comments: Omit<PostComment, "images">[],
+  comments: Omit<PostComment, "images" | "author_avatar_url">[],
 ): Promise<PostComment[]> {
   if (comments.length === 0) return [];
   const { data, error } = await getSupabase().rpc("list_comment_images", {
@@ -47,11 +54,17 @@ export async function hydratePostComments(
   });
   if (error) throw error;
   const rows = data ?? [];
-  const urls = await createPostAttachmentUrls(
-    rows.map((image) => image.object_path),
-  );
+  const [urls, avatarUrls] = await Promise.all([
+    createPostAttachmentUrls(rows.map((image) => image.object_path)),
+    createProfileMediaUrls(
+      comments.map((comment) => comment.author_avatar_path),
+    ),
+  ]);
   return comments.map((comment) => ({
     ...comment,
+    author_avatar_url: comment.author_avatar_path
+      ? (avatarUrls.get(comment.author_avatar_path) ?? null)
+      : null,
     images: rows
       .filter((image) => image.comment_id === comment.comment_id)
       .map((image): CommentImage => ({
@@ -108,12 +121,25 @@ async function attachFiles<T extends { post_id: string }>(
   }));
 }
 
+/**
+ * 아바타와 프로필 미디어 활동 이미지를 한 번에 서명한다.
+ *
+ * 서명 결과는 언제나 `*_url`에 담고 원시 경로는 건드리지 않는다. 그래야 이미 채워진 목록을
+ * 다시 통과시켜도 같은 결과가 나온다(모델 타입 주석 참고).
+ */
 async function attachProfileMedia<
   T extends {
     activity_media_path: string | null;
     author_avatar_path: string | null;
   },
->(posts: T[]): Promise<(T & { activity_media_url: string | null })[]> {
+>(
+  posts: T[],
+): Promise<
+  (T & {
+    activity_media_url: string | null;
+    author_avatar_url: string | null;
+  })[]
+> {
   const urls = await createProfileMediaUrls(
     posts.flatMap((post) => [
       post.author_avatar_path,
@@ -123,7 +149,7 @@ async function attachProfileMedia<
 
   return posts.map((post) => ({
     ...post,
-    author_avatar_path: post.author_avatar_path
+    author_avatar_url: post.author_avatar_path
       ? (urls.get(post.author_avatar_path) ?? null)
       : null,
     activity_media_url: post.activity_media_path
@@ -197,7 +223,9 @@ export async function listGroupPosts(
   );
   const posts =
     options.hydrateMedia === false
-      ? postsWithFiles
+      ? // 목록 보기는 아바타도 첨부도 그리지 않는다. 서명은 카드 보기로 바꿀 때
+        // `hydrateGroupPostMedia()`가 마저 채운다.
+        postsWithFiles.map((post) => ({ ...post, author_avatar_url: null }))
       : await hydrateGroupPostMedia(postsWithFiles);
   const last = posts.at(-1);
   return {
@@ -213,8 +241,15 @@ export async function listGroupPosts(
   };
 }
 
+/**
+ * 그룹 게시물 묶음에 첨부와 아바타의 signed URL을 채운다.
+ *
+ * 멱등하다 — 서명 결과는 `*_url`/`signedUrl`에만 담고 경로 컬럼은 건드리지 않는다. 로더가
+ * 이미 채워 둔 첫 페이지를 화면의 효과가 한 번 더 통과시키므로, 여기서 경로를 덮어쓰면
+ * 두 번째 통과에서 서명이 실패해 아바타가 전부 사라진다.
+ */
 export async function hydrateGroupPostMedia(
-  posts: GroupPostPage["posts"],
+  posts: Omit<GroupPost, "author_avatar_url">[],
 ): Promise<GroupPostPage["posts"]> {
   const [attachmentUrls, profileUrls] = await Promise.all([
     createPostAttachmentUrls(
@@ -230,9 +265,9 @@ export async function hydrateGroupPostMedia(
 
   return posts.map((post) => ({
     ...post,
-    // 서명에 실패하면 null이다. 원시 object path를 남기면 <img src>가 상대 경로로 나가
-    // 깨진 이미지가 되고, null이어야 이니셜 아바타로 떨어진다.
-    author_avatar_path: post.author_avatar_path
+    // 서명에 실패하면 null이다. 화면이 원시 object path를 그리면 <img src>가 상대 경로로
+    // 나가 깨진 이미지가 되고, null이어야 기본 실루엣으로 떨어진다.
+    author_avatar_url: post.author_avatar_path
       ? (profileUrls.get(post.author_avatar_path) ?? null)
       : null,
     attachments: post.attachments.map((attachment) => ({
@@ -376,7 +411,7 @@ export async function listPostReactors(postId: string): Promise<PostReactor[]> {
     p_post_id: postId,
   });
   if (error) throw error;
-  return data ?? [];
+  return signReactorAvatars(data ?? []);
 }
 
 /** 댓글 반응 참여자 목록. 게시물과 같은 모양이라 같은 dialog가 받는다. */
@@ -387,7 +422,22 @@ export async function listCommentReactors(
     p_comment_id: commentId,
   });
   if (error) throw error;
-  return data ?? [];
+  return signReactorAvatars(data ?? []);
+}
+
+/** 두 반응자 목록이 같은 모양이라 서명도 한 곳에서 한다. */
+async function signReactorAvatars(
+  rows: Omit<PostReactor, "reactor_avatar_url">[],
+): Promise<PostReactor[]> {
+  const urls = await createProfileMediaUrls(
+    rows.map((row) => row.reactor_avatar_path),
+  );
+  return rows.map((row) => ({
+    ...row,
+    reactor_avatar_url: row.reactor_avatar_path
+      ? (urls.get(row.reactor_avatar_path) ?? null)
+      : null,
+  }));
 }
 
 /**
@@ -411,6 +461,6 @@ export async function searchGroupMentionCandidates(
   return rows.map((row) => ({
     ...row,
     cohort: row.cohort ?? null,
-    avatar_path: row.avatar_path ? (urls.get(row.avatar_path) ?? null) : null,
+    avatar_url: row.avatar_path ? (urls.get(row.avatar_path) ?? null) : null,
   }));
 }

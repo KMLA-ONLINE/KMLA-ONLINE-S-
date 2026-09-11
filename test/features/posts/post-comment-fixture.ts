@@ -2,7 +2,8 @@ import type { PostComment } from "~/features/posts/model/types";
 
 export function postComment(overrides: Partial<PostComment> = {}): PostComment {
   return {
-    author_avatar_path: null as unknown as string,
+    author_avatar_path: null,
+    author_avatar_url: null,
     author_identity: "identified",
     author_label: "이한별",
     author_name: "이한별",

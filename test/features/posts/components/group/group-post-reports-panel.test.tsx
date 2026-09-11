@@ -17,6 +17,7 @@ function buildReport(
     author_pub_id: "hanbyeol-25",
     author_name: "한별",
     author_avatar_path: null,
+    author_avatar_url: null,
     author_label: "한별",
     report_count: 3,
     dismissed_count: 0,

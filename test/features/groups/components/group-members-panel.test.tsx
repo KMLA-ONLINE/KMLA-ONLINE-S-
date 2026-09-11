@@ -14,6 +14,7 @@ const member: GroupMember = {
   pub_id: "profile-public-id",
   name: "홍길동",
   avatar_path: null,
+  avatar_url: null,
 };
 
 function SearchTestScreen() {
@@ -68,6 +69,7 @@ describe("GroupMembersPanel", () => {
             pub_id: "joiner-public-id",
             name: "김가입",
             avatar_path: null,
+            avatar_url: null,
           },
         ]}
       />
@@ -114,6 +116,7 @@ describe("GroupMembersPanel", () => {
             pub_id: "joiner-public-id",
             name: "김가입",
             avatar_path: null,
+            avatar_url: null,
           },
         ]}
       />

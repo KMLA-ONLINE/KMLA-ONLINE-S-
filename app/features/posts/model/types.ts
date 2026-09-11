@@ -54,9 +54,16 @@ export interface ReactionSummary {
 type WithReactions<Row> = Omit<Row, keyof ReactionSummary> & ReactionSummary;
 
 /**
- * `author_avatar_path`는 서명에 실패하거나 계정이 사라지면 null이다. 생성기가 RPC의
- * `returns table` 컬럼을 전부 not null로 적어 내려서 `ProfilePost`와 같게 고쳐 준다 —
- * 거짓 타입을 두면 서명 실패 때 원시 object path를 그대로 `<img src>`에 흘리게 된다.
+ * 아바타는 원시 object path(`author_avatar_path`)와 서명된 URL(`author_avatar_url`)을
+ * 따로 든다. 한 필드에 서명 결과를 덮어쓰면 미디어 채우기가 멱등하지 않아서, 같은 목록을
+ * 두 번 지나는 순간(로더가 채운 페이지를 화면이 다시 채울 때) 서명된 URL이 경로 자리로
+ * 들어가 서명에 실패하고 아바타가 통째로 null이 된다.
+ *
+ * `<img src>`에는 언제나 `author_avatar_url`만 쓴다. 서명 전이거나 서명에 실패하면 null이라
+ * 기본 실루엣으로 떨어진다 — 원시 path를 흘리면 상대 경로 요청이 나가 깨진 이미지가 된다.
+ *
+ * `author_avatar_path`가 null 가능한 것은 생성기 때문이다. RPC의 `returns table` 컬럼을
+ * 전부 not null로 적어 내리므로 `ProfilePost`와 같게 고쳐 준다.
  */
 export type GroupPost = WithReactions<
   Omit<
@@ -67,6 +74,7 @@ export type GroupPost = WithReactions<
   >
 > & {
   author_avatar_path: string | null;
+  author_avatar_url: string | null;
   anonymous_author_restriction_expires_at: string | null;
   attachments: PostAttachment[];
   mentions: PostMention[];
@@ -82,6 +90,7 @@ export type GroupPostDetail = WithReactions<
   >
 > & {
   author_avatar_path: string | null;
+  author_avatar_url: string | null;
   anonymous_author_restriction_expires_at: string | null;
   attachments: PostAttachment[];
   mentions: PostMention[];
@@ -118,6 +127,7 @@ export type ProfilePost = WithReactions<
   author_pub_id: string | null;
   author_name: string | null;
   author_avatar_path: string | null;
+  author_avatar_url: string | null;
   edited_at: string | null;
   attachments: PostAttachment[];
 };
@@ -147,6 +157,8 @@ export interface PostReactor {
   reactor_pub_id: string | null;
   reactor_name: string | null;
   reactor_avatar_path: string | null;
+  /** 서명된 아바타 URL. 화면은 이쪽만 읽는다. */
+  reactor_avatar_url: string | null;
   reacted_at: string;
 }
 export type GroupCategory =
@@ -241,9 +253,17 @@ export interface CommentImage {
 
 /** 목록, 답글 묶음, 방금 작성한 댓글이 모두 같은 행 모양을 쓴다. */
 export type PostComment = WithReactions<
-  Omit<PostCommentRow, "anonymous_author_restriction_expires_at" | "mentions">
+  Omit<
+    PostCommentRow,
+    | "anonymous_author_restriction_expires_at"
+    | "author_avatar_path"
+    | "mentions"
+  >
 > & {
   anonymous_author_restriction_expires_at: string | null;
+  author_avatar_path: string | null;
+  /** 게시물과 같은 규칙이다 — 화면은 이쪽만 읽는다. `GroupPost`의 주석을 보라. */
+  author_avatar_url: string | null;
   images: CommentImage[];
   mentions: PostMention[];
 };

@@ -9,6 +9,7 @@ const identified = (over: Partial<PostReactor> = {}): PostReactor => ({
   reactor_pub_id: "hanbyeol-25",
   reactor_name: "이한별",
   reactor_avatar_path: null,
+  reactor_avatar_url: null,
   reacted_at: "2026-08-13T02:00:00Z",
   ...over,
 });
@@ -56,6 +57,7 @@ describe("ReactionListDialog", () => {
         reactor_pub_id: null,
         reactor_name: null,
         reactor_avatar_path: null,
+        reactor_avatar_url: null,
       }),
     ]);
 

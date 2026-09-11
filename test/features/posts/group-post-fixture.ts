@@ -4,6 +4,7 @@ export function groupPost(overrides: Partial<GroupPost> = {}): GroupPost {
   return {
     attachments: [],
     author_avatar_path: null,
+    author_avatar_url: null,
     author_identity: "identified",
     author_label: "익명",
     author_name: "김서민",

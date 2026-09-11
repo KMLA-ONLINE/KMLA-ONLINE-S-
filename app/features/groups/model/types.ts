@@ -103,6 +103,8 @@ export interface GroupMember {
   pub_id: string;
   name: string;
   avatar_path: string | null;
+  /** 서명된 아바타 URL. 화면은 이쪽만 읽는다. */
+  avatar_url: string | null;
 }
 
 /** Presentation-safe pending request returned by `list_group_join_requests`. */
@@ -114,6 +116,8 @@ export interface GroupJoinRequest {
   pub_id: string;
   name: string;
   avatar_path: string | null;
+  /** 서명된 아바타 URL. 화면은 이쪽만 읽는다. */
+  avatar_url: string | null;
 }
 
 /** 그룹당 하나만 살아 있는 초대 링크. 재발급하면 이전 토큰은 사라진다. */

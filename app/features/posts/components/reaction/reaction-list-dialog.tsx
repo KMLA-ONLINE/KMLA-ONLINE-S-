@@ -162,7 +162,7 @@ export function ReactionListDialog({
                     >
                       <ReactorAvatar reaction={row.reaction}>
                         <UserAvatar
-                          src={row.reactor_avatar_path}
+                          src={row.reactor_avatar_url}
                           name={row.reactor_name}
                           size="lg"
                         />

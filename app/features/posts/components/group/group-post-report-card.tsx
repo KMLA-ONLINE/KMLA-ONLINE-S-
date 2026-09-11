@@ -86,7 +86,7 @@ export function GroupPostReportCard({
                 className="flex min-w-0 items-center gap-1.5 hover:text-foreground"
               >
                 <UserAvatar
-                  src={report.author_avatar_path}
+                  src={report.author_avatar_url}
                   name={report.author_name}
                   className="size-5"
                 />

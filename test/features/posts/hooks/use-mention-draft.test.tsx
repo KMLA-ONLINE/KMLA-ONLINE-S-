@@ -16,6 +16,7 @@ function candidate(index: number): MentionCandidate {
     is_returning_student: false,
     profile_type: "student",
     avatar_path: null,
+    avatar_url: null,
   };
 }
 

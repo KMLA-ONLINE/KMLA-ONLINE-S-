@@ -172,14 +172,14 @@ export function CommentItem({
           <PostAuthorAvatar
             identity={comment.author_identity}
             name={comment.author_name}
-            avatarPath={comment.author_avatar_path}
+            avatarUrl={comment.author_avatar_url}
           />
         </Link>
       ) : (
         <PostAuthorAvatar
           identity={comment.author_identity}
           name={comment.author_name}
-          avatarPath={comment.author_avatar_path}
+          avatarUrl={comment.author_avatar_url}
           className="shrink-0"
         />
       )}

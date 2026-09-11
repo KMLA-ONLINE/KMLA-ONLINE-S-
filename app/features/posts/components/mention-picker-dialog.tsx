@@ -146,7 +146,7 @@ export function MentionPickerDialog({
                       onClick={() => onSelect(candidate)}
                     >
                       <UserAvatar
-                        src={candidate.avatar_path}
+                        src={candidate.avatar_url}
                         name={candidate.name}
                       />
                       <span className="truncate font-medium">

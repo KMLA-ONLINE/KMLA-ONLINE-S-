@@ -13,13 +13,17 @@ import { Avatar, AvatarFallback } from "~/shared/ui/avatar";
 export function PostAuthorAvatar({
   identity,
   name,
-  avatarPath,
+  avatarUrl,
   size = "default",
   className,
 }: {
   identity: PostIdentity;
   name: string | null;
-  avatarPath: string | null;
+  /**
+   * 서명된 Storage URL이어야 한다. 원시 object path를 넘기면 `<img src>`가 상대 경로로
+   * 나가 404를 받고, 아바타가 통째로 기본 실루엣이 된다.
+   */
+  avatarUrl: string | null;
   size?: "sm" | "default" | "lg";
   className?: string;
 }) {
@@ -28,12 +32,7 @@ export function PostAuthorAvatar({
   }
 
   return (
-    <UserAvatar
-      src={avatarPath}
-      name={name}
-      size={size}
-      className={className}
-    />
+    <UserAvatar src={avatarUrl} name={name} size={size} className={className} />
   );
 }
 

@@ -1,4 +1,5 @@
 import type { GroupPostReportReason } from "~/features/posts/model/group-report";
+import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import { getSupabase } from "~/shared/supabase/client";
 import type { Database } from "~/shared/supabase/database.types";
 
@@ -19,6 +20,8 @@ export type GroupPostReportSummary = Omit<
   author_pub_id: string | null;
   author_name: string | null;
   author_avatar_path: string | null;
+  /** 서명된 아바타 URL. 화면은 이쪽만 읽는다. */
+  author_avatar_url: string | null;
 };
 
 export interface GroupPostReportCursor {
@@ -87,7 +90,16 @@ export async function listGroupPostReportSummaries(
   if (error) throw error;
 
   const rows = data ?? [];
-  const reports = rows.slice(0, SUMMARY_PAGE_SIZE);
+  const page = rows.slice(0, SUMMARY_PAGE_SIZE);
+  const avatarUrls = await createProfileMediaUrls(
+    page.map((report) => report.author_avatar_path),
+  );
+  const reports = page.map((report) => ({
+    ...report,
+    author_avatar_url: report.author_avatar_path
+      ? (avatarUrls.get(report.author_avatar_path) ?? null)
+      : null,
+  }));
   const hasMore = rows.length > SUMMARY_PAGE_SIZE;
   const last = reports.at(-1);
 

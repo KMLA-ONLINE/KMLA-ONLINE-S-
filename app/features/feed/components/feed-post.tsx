@@ -46,7 +46,7 @@ function AuthorAvatar({ post }: { post: FeedPost }) {
     <PostAuthorAvatar
       identity={post.author_identity}
       name={post.author_name}
-      avatarPath={post.author_avatar_path}
+      avatarUrl={post.author_avatar_url}
       size="default"
       className="size-9"
     />

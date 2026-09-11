@@ -51,7 +51,7 @@ export function GroupPostCard({
             <PostAuthorAvatar
               identity={post.author_identity}
               name={post.author_name}
-              avatarPath={post.author_avatar_path}
+              avatarUrl={post.author_avatar_url}
               size="lg"
             />
           </Link>
@@ -59,7 +59,7 @@ export function GroupPostCard({
           <PostAuthorAvatar
             identity={post.author_identity}
             name={post.author_name}
-            avatarPath={post.author_avatar_path}
+            avatarUrl={post.author_avatar_url}
             size="lg"
           />
         )}
