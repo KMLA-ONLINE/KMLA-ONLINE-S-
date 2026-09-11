@@ -5,10 +5,11 @@ import type {
 } from "~/features/posts/model/types";
 export { POST_ATTACHMENT_LIMIT } from "~/features/posts/model/constants";
 import { validateSelectedFiles } from "~/features/posts/model/validation";
+import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 import { compressImage } from "~/shared/lib/image/compress";
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-const IMAGE_PREPARATION_CONCURRENCY = 2;
+const DEFAULT_IMAGE_PREPARATION_CONCURRENCY = 2;
 
 /** 업로드 파이프라인이 사진을 webp로 정규화하므로, 이미지인지 아닌지는 이 한 줄로 갈린다. */
 const IMAGE_MIME = "image/webp";
@@ -25,6 +26,8 @@ export async function prepareCommentImage(
 ): Promise<PreparedCommentImage> {
   if (!IMAGE_TYPES.has(source.type))
     throw new Error("JPEG, PNG, WebP 사진만 선택할 수 있습니다.");
+  if (source.size > MAX_INPUT_FILE_BYTES)
+    throw new Error(`이미지는 30MB 이하여야 합니다: ${source.name}`);
 
   const file = await compressImage(source, "photo");
   const bitmap = await createImageBitmap(file);
@@ -102,9 +105,18 @@ export async function preparePostFiles(
     }
   }
 
+  const isIOS =
+    typeof navigator !== "undefined" &&
+    (/^(?:iPad|iPhone|iPod)$/.test(navigator.platform) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
   await Promise.all(
     Array.from(
-      { length: Math.min(IMAGE_PREPARATION_CONCURRENCY, selected.length) },
+      {
+        length: Math.min(
+          isIOS ? 1 : DEFAULT_IMAGE_PREPARATION_CONCURRENCY,
+          selected.length,
+        ),
+      },
       worker,
     ),
   );

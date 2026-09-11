@@ -64,6 +64,16 @@ describe("prepareCommentImage", () => {
       ),
     ).rejects.toThrow("JPEG, PNG, WebP");
   });
+
+  it("rejects an image larger than 30 MB before compression", async () => {
+    const file = new File(["photo"], "large.png", { type: "image/png" });
+    Object.defineProperty(file, "size", { value: 30 * 1024 * 1024 + 1 });
+
+    await expect(prepareCommentImage(file)).rejects.toThrow(
+      "이미지는 30MB 이하여야 합니다",
+    );
+    expect(compress).not.toHaveBeenCalled();
+  });
 });
 
 describe("preparePostFiles", () => {
@@ -129,6 +139,41 @@ describe("preparePostFiles", () => {
         "image",
       ),
     ).resolves.toMatchObject([{ file: normalized, thumbnail: null }]);
+  });
+
+  it("normalizes one image at a time on iPad-class devices", async () => {
+    vi.stubGlobal("navigator", { platform: "iPad", maxTouchPoints: 5 });
+    let active = 0;
+    let maxActive = 0;
+    const release: (() => void)[] = [];
+    compress.mockImplementation((file, preset) => {
+      if (preset === "thumbnail") return Promise.resolve(file);
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      return new Promise<File>((resolve) => {
+        release.push(() => {
+          active -= 1;
+          resolve(file);
+        });
+      });
+    });
+
+    const preparation = preparePostFiles(
+      [
+        new File(["one"], "one.png", { type: "image/png" }),
+        new File(["two"], "two.png", { type: "image/png" }),
+      ],
+      0,
+      "image",
+    );
+
+    expect(active).toBe(1);
+    release.shift()?.();
+    await vi.waitFor(() => expect(active).toBe(1));
+    release.shift()?.();
+    await preparation;
+    expect(maxActive).toBe(1);
+    vi.unstubAllGlobals();
   });
 });
 

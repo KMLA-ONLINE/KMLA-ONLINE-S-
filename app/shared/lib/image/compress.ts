@@ -1,3 +1,5 @@
+import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
+
 interface CompressionPolicy {
   /** 긴 변의 상한(px). */
   maxEdge: number;
@@ -6,6 +8,11 @@ interface CompressionPolicy {
   /** 초기 품질(0 ~ 1). */
   quality: number;
 }
+
+const MAX_IMAGE_PIXELS = 50_000_000;
+const JPEG_START_OF_FRAME_MARKERS = new Set([
+  0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
+]);
 
 /**
  * 화면에서 이미지가 **어떤 크기로 쓰이는지**로 나눈 정책. 업로드 경로는 이 중 하나를 고른다.
@@ -39,13 +46,127 @@ const PRESETS = {
 
 export type ImagePreset = keyof typeof PRESETS;
 
-/** 캔버스나 압축 워커를 열기 전에 원본 디코딩 크기를 제한한다. */
-export async function validateImagePixels(file: File): Promise<void> {
+function readPngDimensions(view: DataView): [number, number] | null {
   if (
-    !file.type.startsWith("image/") ||
-    typeof createImageBitmap !== "function"
+    view.byteLength < 24 ||
+    view.getUint32(0) !== 0x89504e47 ||
+    view.getUint32(4) !== 0x0d0a1a0a ||
+    view.getUint32(12) !== 0x49484452
   )
+    return null;
+  return [view.getUint32(16), view.getUint32(20)];
+}
+
+function readJpegDimensions(view: DataView): [number, number] | null {
+  if (view.byteLength < 4 || view.getUint16(0) !== 0xffd8) return null;
+
+  let offset = 2;
+  while (offset + 8 < view.byteLength) {
+    if (view.getUint8(offset) !== 0xff) {
+      offset += 1;
+      continue;
+    }
+    while (offset < view.byteLength && view.getUint8(offset) === 0xff)
+      offset += 1;
+    if (offset >= view.byteLength) return null;
+
+    const marker = view.getUint8(offset);
+    offset += 1;
+    if (marker === 0xd9 || marker === 0xda) return null;
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) continue;
+    if (offset + 1 >= view.byteLength) return null;
+
+    const length = view.getUint16(offset);
+    if (length < 2 || offset + length > view.byteLength) return null;
+    if (JPEG_START_OF_FRAME_MARKERS.has(marker) && length >= 7)
+      return [view.getUint16(offset + 5), view.getUint16(offset + 3)];
+    offset += length;
+  }
+  return null;
+}
+
+function readUint24LittleEndian(view: DataView, offset: number): number {
+  return (
+    view.getUint8(offset) |
+    (view.getUint8(offset + 1) << 8) |
+    (view.getUint8(offset + 2) << 16)
+  );
+}
+
+function readWebpDimensions(view: DataView): [number, number] | null {
+  if (
+    view.byteLength < 20 ||
+    view.getUint32(0) !== 0x52494646 ||
+    view.getUint32(8) !== 0x57454250
+  )
+    return null;
+
+  let offset = 12;
+  while (offset + 8 <= view.byteLength) {
+    const chunkType = view.getUint32(offset);
+    const chunkSize = view.getUint32(offset + 4, true);
+    const payload = offset + 8;
+    if (payload + chunkSize > view.byteLength) return null;
+
+    if (chunkType === 0x56503858 && chunkSize >= 10)
+      return [
+        readUint24LittleEndian(view, payload + 4) + 1,
+        readUint24LittleEndian(view, payload + 7) + 1,
+      ];
+    if (
+      chunkType === 0x5650384c &&
+      chunkSize >= 5 &&
+      view.getUint8(payload) === 0x2f
+    ) {
+      const b1 = view.getUint8(payload + 1);
+      const b2 = view.getUint8(payload + 2);
+      const b3 = view.getUint8(payload + 3);
+      const b4 = view.getUint8(payload + 4);
+      return [
+        1 + (((b2 & 0x3f) << 8) | b1),
+        1 + (((b4 & 0x0f) << 10) | (b3 << 2) | ((b2 & 0xc0) >> 6)),
+      ];
+    }
+    if (
+      chunkType === 0x56503820 &&
+      chunkSize >= 10 &&
+      view.getUint8(payload + 3) === 0x9d &&
+      view.getUint8(payload + 4) === 0x01 &&
+      view.getUint8(payload + 5) === 0x2a
+    )
+      return [
+        view.getUint16(payload + 6, true) & 0x3fff,
+        view.getUint16(payload + 8, true) & 0x3fff,
+      ];
+
+    offset = payload + chunkSize + (chunkSize % 2);
+  }
+  return null;
+}
+
+async function readImageDimensions(
+  file: File,
+): Promise<[number, number] | null> {
+  const view = new DataView(await file.arrayBuffer());
+  if (file.type === "image/png") return readPngDimensions(view);
+  if (file.type === "image/jpeg") return readJpegDimensions(view);
+  if (file.type === "image/webp") return readWebpDimensions(view);
+  return null;
+}
+
+/** 압축 워커를 열기 전에 원본 크기를 제한한다. 지원 포맷은 전체 디코딩 없이 헤더를 읽는다. */
+export async function validateImageInput(file: File): Promise<void> {
+  if (!file.type.startsWith("image/")) return;
+  if (file.size > MAX_INPUT_FILE_BYTES)
+    throw new Error(`이미지는 30MB 이하여야 합니다: ${file.name}`);
+
+  const dimensions = await readImageDimensions(file);
+  if (dimensions) {
+    if (dimensions[0] * dimensions[1] > MAX_IMAGE_PIXELS)
+      throw new Error(`이미지는 50메가픽셀 이하여야 합니다: ${file.name}`);
     return;
+  }
+  if (typeof createImageBitmap !== "function") return;
 
   let bitmap: ImageBitmap;
   try {
@@ -57,7 +178,7 @@ export async function validateImagePixels(file: File): Promise<void> {
   }
 
   try {
-    if (bitmap.width * bitmap.height > 50_000_000)
+    if (bitmap.width * bitmap.height > MAX_IMAGE_PIXELS)
       throw new Error(`이미지는 50메가픽셀 이하여야 합니다: ${file.name}`);
   } finally {
     bitmap.close();
@@ -90,7 +211,7 @@ export async function compressImage(
   if (!file.type.startsWith("image/")) return file;
 
   const { maxEdge, maxBytes, quality } = PRESETS[preset];
-  await validateImagePixels(file);
+  await validateImageInput(file);
 
   const compressed = await imageCompression(file, {
     maxWidthOrHeight: maxEdge,

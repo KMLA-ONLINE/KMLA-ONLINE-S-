@@ -16,6 +16,7 @@ import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { ImageCropper } from "~/shared/components/image-cropper";
 import { useImageCrop } from "~/shared/hooks/use-image-crop";
 import { compressImage } from "~/shared/lib/image/compress";
+import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
@@ -114,7 +115,7 @@ function MediaField({
 
   const selectFile = (file: File | undefined) => {
     if (!file) return;
-    if (!ACCEPTED_TYPES.has(file.type) || file.size > 30 * 1024 * 1024) {
+    if (!ACCEPTED_TYPES.has(file.type) || file.size > MAX_INPUT_FILE_BYTES) {
       setError("JPEG, PNG, WebP 이미지를 30MB 이하로 선택해 주세요.");
       return;
     }

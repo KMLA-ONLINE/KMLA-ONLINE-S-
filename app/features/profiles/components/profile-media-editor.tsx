@@ -11,10 +11,8 @@ import type {
 } from "~/features/profiles/model/types";
 import { ImageCropper } from "~/shared/components/image-cropper";
 import { useImageCrop } from "~/shared/hooks/use-image-crop";
-import {
-  compressImage,
-  validateImagePixels,
-} from "~/shared/lib/image/compress";
+import { compressImage, validateImageInput } from "~/shared/lib/image/compress";
+import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
@@ -99,14 +97,14 @@ export function ProfileMediaEditor({
   const chooseFile = async (file: File | undefined) => {
     if (!file) return;
 
-    if (!ACCEPTED_TYPES.has(file.type) || file.size > 30 * 1024 * 1024) {
-      setError("JPEG, PNG, WebP 이미지만 사용할 수 있습니다.");
+    if (!ACCEPTED_TYPES.has(file.type) || file.size > MAX_INPUT_FILE_BYTES) {
+      setError("JPEG, PNG, WebP 이미지를 30MB 이하로 선택해 주세요.");
       return;
     }
 
     setError(null);
     try {
-      await validateImagePixels(file);
+      await validateImageInput(file);
       crop.start(file);
     } catch (cause) {
       setError(
