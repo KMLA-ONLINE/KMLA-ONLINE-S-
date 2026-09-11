@@ -105,6 +105,109 @@ describe("ProfileDetail", () => {
     expect(screen.queryByText("관리자")).not.toBeInTheDocument();
   });
 
+  it("opens another user's profile media directly in the image viewer", async () => {
+    const { user } = renderRoute(() => (
+      <ProfileDetail
+        profile={{
+          id: 25,
+          pub_id: "hanbyeol-25",
+          name: "이한별",
+          type: "alumni",
+          role: "member",
+          cohort: 25,
+          academic_track: "international",
+          avatar_path: "profiles/25/avatar/avatar-id",
+          avatar_url: "https://example.com/avatar.webp?token=avatar",
+          cover_path: "profiles/25/cover/cover-id",
+          cover_url: "https://example.com/cover.webp?token=cover",
+          description: null,
+          birthday: null,
+          class_no: null,
+          dorm_room: null,
+          department: null,
+          gender: null,
+          phone_number: null,
+          contact_email: null,
+          student_number: null,
+          allow_timeline_posts: true,
+          is_returning_student: false,
+        }}
+        isOwnProfile={false}
+        viewerName="김관리"
+        viewerAvatarUrl={null}
+        posts={{ posts: [], nextCursor: null }}
+      />
+    ));
+
+    await user.click(
+      screen.getByRole("button", { name: "커버 사진 크게 보기" }),
+    );
+
+    expect(
+      await screen.findByRole("dialog", { name: "cover-id.webp" }),
+    ).toBeVisible();
+    expect(screen.getByRole("img", { name: "cover-id.webp" })).toHaveAttribute(
+      "src",
+      "https://example.com/cover.webp?token=cover",
+    );
+    expect(screen.getByRole("link", { name: "다운로드" })).toHaveAttribute(
+      "href",
+      "https://example.com/cover.webp?token=cover&download=cover-id.webp",
+    );
+  });
+
+  it("offers image viewing alongside the owner's media actions", async () => {
+    const { user } = renderRoute(() => (
+      <ProfileDetail
+        profile={{
+          id: 25,
+          pub_id: "hanbyeol-25",
+          name: "이한별",
+          type: "alumni",
+          role: "member",
+          cohort: 25,
+          academic_track: "international",
+          avatar_path: "profiles/25/avatar/avatar-id",
+          avatar_url: "https://example.com/avatar.webp?token=avatar",
+          cover_path: null,
+          cover_url: null,
+          description: null,
+          birthday: null,
+          class_no: null,
+          dorm_room: null,
+          department: null,
+          gender: null,
+          phone_number: null,
+          contact_email: null,
+          student_number: null,
+          allow_timeline_posts: true,
+          is_returning_student: false,
+        }}
+        isOwnProfile
+        viewerName="이한별"
+        viewerAvatarUrl={null}
+        posts={{ posts: [], nextCursor: null }}
+      />
+    ));
+
+    await user.click(
+      screen.getAllByRole("button", { name: "프로필 사진 변경" })[0],
+    );
+    expect(
+      await screen.findByRole("dialog", { name: "프로필 사진" }),
+    ).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "이미지 보기" }));
+
+    expect(
+      await screen.findByRole("dialog", { name: "avatar-id.webp" }),
+    ).toBeVisible();
+    expect(screen.getByRole("img", { name: "avatar-id.webp" })).toHaveAttribute(
+      "src",
+      "https://example.com/avatar.webp?token=avatar",
+    );
+  });
+
   it("expands an overflowing description on demand", async () => {
     const scrollHeight = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,

@@ -1,4 +1,4 @@
-import { ImageIcon, RotateCcwIcon } from "lucide-react";
+import { EyeIcon, ImageIcon, RotateCcwIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
 import {
@@ -28,10 +28,12 @@ const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 export function ProfileMediaEditor({
   profile,
   slot,
+  onView,
   className,
 }: {
   profile: AcceptedProfile;
   slot: ProfileMediaSlot;
+  onView?: () => void;
   className?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -51,6 +53,14 @@ export function ProfileMediaEditor({
 
     requestAnimationFrame(() => {
       inputRef.current?.click();
+    });
+  };
+
+  const openViewer = () => {
+    setActionsOpen(false);
+
+    requestAnimationFrame(() => {
+      onView?.();
     });
   };
 
@@ -199,6 +209,19 @@ export function ProfileMediaEditor({
           </DialogHeader>
 
           <div className="grid gap-2">
+            {onView ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-start"
+                disabled={pending}
+                onClick={openViewer}
+              >
+                <EyeIcon />
+                이미지 보기
+              </Button>
+            ) : null}
+
             <Button
               type="button"
               className="w-full justify-start"

@@ -17,7 +17,12 @@ import { ProfilePostsPanel, type ProfilePostPage } from "~/features/posts";
 import { ProfileMediaEditor } from "~/features/profiles/components/profile-media-editor";
 import { formatCohort } from "~/features/profiles/model/format";
 import type { AcceptedProfile } from "~/features/profiles/model/types";
+import {
+  ImageViewer,
+  type ViewerImage,
+} from "~/shared/components/image-viewer";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 import { Button, buttonVariants } from "~/shared/ui/button";
@@ -107,6 +112,26 @@ function formatBirthday(value: string) {
   return `${Number(year)}년 ${Number(month)}월 ${Number(day)}일`;
 }
 
+function profileMediaViewerImage(
+  slot: "avatar" | "cover",
+  path: string | null,
+  src: string | null,
+): ViewerImage | null {
+  if (!path || !src) return null;
+
+  const objectId = path.split("/").at(-1) ?? `${slot}-image`;
+  const name = `${objectId}.webp`;
+  const downloadUrl = new URL(src);
+  downloadUrl.searchParams.set("download", name);
+
+  return {
+    id: `profile-${slot}-${path}`,
+    src,
+    downloadSrc: downloadUrl.toString(),
+    name,
+  };
+}
+
 function ProfileDescription({ description }: { description: string }) {
   const descriptionRef = useRef<HTMLParagraphElement>(null);
   const [expanded, setExpanded] = useState(false);
@@ -174,6 +199,21 @@ export function ProfileDetail({
   // 좁은 화면에서는 정보 카드가 타임라인 위에 통째로 쌓여서 첫 게시물까지 한참 걸린다.
   // 그래서 모바일에서만 첫 묶음을 남기고 접는다 — `sm:`부터는 항상 전부 펼쳐 둔다.
   const [factsExpanded, setFactsExpanded] = useState(false);
+
+  const avatarViewerImage = profileMediaViewerImage(
+    "avatar",
+    profile.avatar_path,
+    profile.avatar_url,
+  );
+  const coverViewerImage = profileMediaViewerImage(
+    "cover",
+    profile.cover_path,
+    profile.cover_url,
+  );
+  const viewerImages = [avatarViewerImage, coverViewerImage].filter(
+    (image): image is ViewerImage => image !== null,
+  );
+  const viewer = useImageViewerParam(viewerImages);
 
   const schoolSummary = [
     formatCohort(profile.cohort, profile.is_returning_student),
@@ -276,19 +316,41 @@ export function ProfileDetail({
             className="relative aspect-[3/1] w-full overflow-hidden bg-[#F3F4F7]"
           >
             {hasCoverImage ? (
-              <img
-                src={profile.cover_url ?? undefined}
-                alt=""
-                crossOrigin="anonymous"
-                aria-hidden="true"
-                className="absolute inset-0 size-full object-cover"
-              />
+              isOwnProfile || !coverViewerImage ? (
+                <img
+                  src={profile.cover_url ?? undefined}
+                  alt=""
+                  crossOrigin="anonymous"
+                  aria-hidden="true"
+                  className="absolute inset-0 size-full object-cover"
+                />
+              ) : (
+                <button
+                  type="button"
+                  aria-label="커버 사진 크게 보기"
+                  onClick={() => viewer.open(coverViewerImage.id)}
+                  className="absolute inset-0 size-full cursor-zoom-in outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
+                >
+                  <img
+                    src={profile.cover_url ?? undefined}
+                    alt=""
+                    crossOrigin="anonymous"
+                    aria-hidden="true"
+                    className="size-full object-cover"
+                  />
+                </button>
+              )
             ) : null}
 
             {isOwnProfile ? (
               <ProfileMediaEditor
                 profile={profile}
                 slot="cover"
+                onView={
+                  coverViewerImage
+                    ? () => viewer.open(coverViewerImage.id)
+                    : undefined
+                }
                 className="absolute top-3 right-3 z-20"
               />
             ) : null}
@@ -313,16 +375,36 @@ export function ProfileDetail({
             <div className="flex flex-wrap items-start gap-x-3 sm:grid sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-rows-[auto_1fr] sm:gap-x-7">
               <div className="relative z-10 -mt-5 w-fit shrink-0 rounded-full border-[3px] border-background bg-background sm:col-start-1 sm:row-span-2 sm:row-start-1 sm:mt-0 sm:border-0">
                 <div className="relative">
-                  <UserAvatar
-                    src={profile.avatar_url}
-                    name={profile.name}
-                    className="size-[5.5rem] after:hidden sm:size-36 sm:after:block"
-                  />
+                  {!isOwnProfile && avatarViewerImage ? (
+                    <button
+                      type="button"
+                      aria-label="프로필 사진 크게 보기"
+                      onClick={() => viewer.open(avatarViewerImage.id)}
+                      className="block cursor-zoom-in rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                      <UserAvatar
+                        src={profile.avatar_url}
+                        name={profile.name}
+                        className="size-[5.5rem] after:hidden sm:size-36 sm:after:block"
+                      />
+                    </button>
+                  ) : (
+                    <UserAvatar
+                      src={profile.avatar_url}
+                      name={profile.name}
+                      className="size-[5.5rem] after:hidden sm:size-36 sm:after:block"
+                    />
+                  )}
 
                   {isOwnProfile ? (
                     <ProfileMediaEditor
                       profile={profile}
                       slot="avatar"
+                      onView={
+                        avatarViewerImage
+                          ? () => viewer.open(avatarViewerImage.id)
+                          : undefined
+                      }
                       className="pointer-events-none absolute inset-0 z-20"
                     />
                   ) : null}
@@ -450,6 +532,12 @@ export function ProfileDetail({
           </section>
         </div>
       </div>
+
+      <ImageViewer
+        images={viewerImages}
+        openImageId={viewer.openImageId}
+        onClose={viewer.close}
+      />
     </main>
   );
 }

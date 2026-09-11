@@ -4,10 +4,11 @@
  * `react-router typegen`을 한 번만 돌린다. `lint`와 `typecheck`가 각각 부르던 자리라 매번
  * 5초를 두 번 쓰고 있었다. 뒤따르는 작업들은 생성된 타입을 읽기만 한다.
  *
- * 그다음 정적 검사 셋(eslint·prettier·tsc)을 동시에 띄우고, **테스트는 그것들이 끝난 뒤에
- * 혼자 돌린다.** 넷을 한꺼번에 돌려 봤더니 전체가 101초에서 171초로 늘었다. Vitest가 이미
+ * 그다음 정적 검사 셋(eslint·prettier·tsc)을 동시에 띄우고, 모두 통과했을 때만 테스트를
+ * 혼자 돌린다. 넷을 한꺼번에 돌려 봤더니 전체가 101초에서 171초로 늘었다. Vitest가 이미
  * threads 풀로 코어를 전부 쓰고 있어서, 옆에 무엇을 붙이든 서로 CPU를 빼앗고 테스트만
- * 59초에서 169초로 늘어진다. 정적 검사 셋은 서로 겹쳐도 그런 일이 없다.
+ * 59초에서 169초로 늘어진다. 정적 검사 셋은 서로 겹쳐도 그런 일이 없다. 정적 검사가
+ * 실패했는데 테스트까지 돌리면 고친 뒤 어차피 다시 실행할 작업만 늦어진다.
  *
  * 병렬 실행이 치르는 대가는 뒤섞인 출력이다. 각 작업의 출력을 따로 모아 두었다가 실패한
  * 것만 끝에서 묶어 낸다. 대신 작업이 끝날 때마다 한 줄씩 즉시 찍어, 멈춘 건지 도는 건지는
@@ -88,8 +89,12 @@ console.error(`▶ ${PARALLEL.map((task) => task.name).join(", ")}`);
 const results = await Promise.all(PARALLEL.map(run));
 
 if (!staticOnly) {
-  console.error(`▶ ${TEST.name}`);
-  results.push(await run(TEST));
+  if (results.every((result) => result.ok)) {
+    console.error(`▶ ${TEST.name}`);
+    results.push(await run(TEST));
+  } else {
+    console.error("▶ 정적 검사가 실패해 vitest는 돌리지 않았습니다.");
+  }
 }
 
 dumpFailures(results);
