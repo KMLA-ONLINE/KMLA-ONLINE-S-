@@ -260,8 +260,11 @@ begin
   elsif p_scope = 'month' then
     range_start := (p_reference_date - interval '1 month')::date;
     range_end := (p_reference_date + interval '1 month')::date;
+  elsif p_scope = 'year' then
+    range_start := p_reference_date;
+    range_end := (p_reference_date + interval '1 year - 1 day')::date;
   else
-    raise exception 'birthday scope must be today or month' using errcode = '22023';
+    raise exception 'birthday scope must be today, month, or year' using errcode = '22023';
   end if;
 
   current_cohort := (extract(year from p_reference_date)::integer - 1995)::smallint;

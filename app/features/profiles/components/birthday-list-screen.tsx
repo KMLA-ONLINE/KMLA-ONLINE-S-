@@ -1,11 +1,16 @@
 import { CakeIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
-import type { BirthdayProfile } from "~/features/profiles/model/types";
+import { createProfileMediaUrls } from "~/features/profiles/data/media";
+import type { BirthdayCalendarProfile } from "~/features/profiles/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useScrollContainer } from "~/shared/lib/scroll-container";
 import { cn } from "~/shared/lib/utils";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const BIRTHDAY_ROW_HEIGHT = 64;
+const BIRTHDAY_OVERSCAN = 12;
 
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
   month: "long",
@@ -33,40 +38,52 @@ function formatDayGap(gap: number) {
   return gap > 0 ? `${gap}일 뒤` : `${-gap}일 전`;
 }
 
-interface BirthdayEntry {
-  birthday: BirthdayProfile;
-  gap: number;
+function toBirthdayDate(birthday: BirthdayCalendarProfile, yearOffset: number) {
+  const year = Number(birthday.birthday_date.slice(0, 4)) + yearOffset;
+  const lastDay = new Date(
+    Date.UTC(year, birthday.birthday_month, 0),
+  ).getUTCDate();
+  const month = String(birthday.birthday_month).padStart(2, "0");
+  const day = String(Math.min(birthday.birthday_day, lastDay)).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
-function BirthdayRow({ birthday, gap }: BirthdayEntry) {
+interface BirthdayEntry {
+  birthday: BirthdayCalendarProfile;
+  birthdayDate: string;
+  index: number;
+}
+
+function BirthdayRow({
+  birthday,
+  birthdayDate,
+  avatarUrl,
+  referenceDate,
+}: BirthdayEntry & { avatarUrl: string | null; referenceDate: string }) {
+  const gap = dayGap(birthdayDate, referenceDate);
   const isToday = gap === 0;
 
   return (
     <Link
       to={`/profile/${birthday.pub_id}`}
-      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
+      className="flex h-16 items-center gap-3 border-b px-4 transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
     >
-      <UserAvatar
-        src={birthday.avatar_url}
-        name={birthday.name}
-        className="size-10"
-      />
+      <UserAvatar src={avatarUrl} name={birthday.name} className="size-10" />
 
       <span className="min-w-0 flex-1 truncate text-sm font-medium">
         {birthday.name}
       </span>
 
-      {/* 날짜와 상대 표현을 오른쪽에 쌓아 둔다. 날짜만으로는 "며칠 남았는지"가 안 읽히고,
-          상대 표현만으로는 정확한 날짜를 잃는다. */}
       <div className="flex shrink-0 flex-col items-end gap-0.5">
         <time
-          dateTime={birthday.birthday_date}
+          dateTime={birthdayDate}
           className={cn(
             "text-sm tabular-nums",
             isToday ? "font-medium" : "text-muted-foreground",
           )}
         >
-          {formatBirthdayDate(birthday.birthday_date)}
+          {formatBirthdayDate(birthdayDate)}
         </time>
 
         {isToday ? (
@@ -84,81 +101,225 @@ function BirthdayRow({ birthday, gap }: BirthdayEntry) {
   );
 }
 
-function BirthdaySection({
-  title,
-  entries,
-  highlight = false,
-}: {
-  title: string;
-  entries: BirthdayEntry[];
-  highlight?: boolean;
-}) {
-  if (entries.length === 0) return null;
+function birthdayEntries(
+  birthdays: BirthdayCalendarProfile[],
+  start: number,
+  end: number,
+  cycleOffset: number,
+) {
+  return Array.from({ length: end - start }, (_, offset) => {
+    const index = start + offset;
+    const birthday = birthdays[index % birthdays.length];
+    const yearOffset = cycleOffset + Math.floor(index / birthdays.length);
 
-  return (
-    <section className="flex flex-col gap-1.5">
-      <div className="flex items-baseline gap-1.5 px-1">
-        <h2 className="text-xs font-semibold tracking-wide text-muted-foreground">
-          {title}
-        </h2>
-
-        <span className="text-xs text-muted-foreground/70 tabular-nums">
-          {entries.length}
-        </span>
-      </div>
-
-      <div
-        className={cn(
-          "divide-y overflow-hidden rounded-xl border bg-card",
-          highlight && "border-primary/30 bg-primary/[0.04]",
-        )}
-      >
-        {entries.map((entry) => (
-          <BirthdayRow
-            key={`${entry.birthday.pub_id}-${entry.birthday.birthday_date}`}
-            birthday={entry.birthday}
-            gap={entry.gap}
-          />
-        ))}
-      </div>
-    </section>
-  );
+    return {
+      birthday,
+      birthdayDate: toBirthdayDate(birthday, yearOffset),
+      index,
+    };
+  });
 }
 
 export function BirthdayListScreen({
   birthdays,
   referenceDate,
 }: {
-  birthdays: BirthdayProfile[];
+  birthdays: BirthdayCalendarProfile[];
   referenceDate: string;
 }) {
-  const entries = birthdays.map((birthday) => ({
-    birthday,
-    gap: dayGap(birthday.birthday_date, referenceDate),
-  }));
+  const scrollRef = useScrollContainer();
+  const listRef = useRef<HTMLDivElement>(null);
+  const cycleOffsetRef = useRef(0);
+  const [cycleOffset, setCycleOffset] = useState(0);
+  const [visibleRange, setVisibleRange] = useState({
+    start: 0,
+    end: Math.min(birthdays.length * 2, BIRTHDAY_OVERSCAN * 2),
+  });
+  const [avatarUrls, setAvatarUrls] = useState<Map<string, string>>(
+    () => new Map(),
+  );
+  const totalRows = birthdays.length * 2;
+  const isVirtualized = scrollRef !== null;
+  const entries = isVirtualized
+    ? birthdayEntries(
+        birthdays,
+        visibleRange.start,
+        visibleRange.end,
+        cycleOffset,
+      )
+    : birthdays.map((birthday, index) => ({
+        birthday,
+        birthdayDate: birthday.birthday_date,
+        index,
+      }));
+  const visiblePathsKey = entries
+    .map((entry) => entry.birthday.avatar_path)
+    .join("\n");
 
-  const today = entries.filter((entry) => entry.gap === 0);
-  const upcoming = entries.filter((entry) => entry.gap > 0);
+  useEffect(() => {
+    const container = scrollRef?.current;
+    const list = listRef.current;
+    if (!container || !list || birthdays.length === 0) return;
 
-  // 지난 생일은 최근 순으로 뒤집는다. RPC는 오름차순이라 그대로 두면 한 달 전이 맨 위에 온다.
-  const past = entries.filter((entry) => entry.gap < 0).reverse();
+    const cycleHeight = birthdays.length * BIRTHDAY_ROW_HEIGHT;
+    let frameId = 0;
+    let lastTop = container.scrollTop;
+    const listTop =
+      container.scrollTop +
+      list.getBoundingClientRect().top -
+      container.getBoundingClientRect().top;
+
+    const updateVisibleRange = (top: number) => {
+      const firstVisible = Math.max(
+        0,
+        Math.floor((top - listTop) / BIRTHDAY_ROW_HEIGHT),
+      );
+      const visibleCount = Math.ceil(
+        container.clientHeight / BIRTHDAY_ROW_HEIGHT,
+      );
+      const start = Math.max(0, firstVisible - BIRTHDAY_OVERSCAN);
+      const end = Math.min(
+        totalRows,
+        firstVisible + visibleCount + BIRTHDAY_OVERSCAN,
+      );
+
+      setVisibleRange((current) =>
+        current.start === start && current.end === end
+          ? current
+          : { start, end },
+      );
+    };
+
+    const recenter = (direction: 1 | -1) => {
+      const nextTop = container.scrollTop - direction * cycleHeight;
+      cycleOffsetRef.current += direction;
+      setCycleOffset(cycleOffsetRef.current);
+      container.scrollTop = nextTop;
+      lastTop = nextTop;
+      updateVisibleRange(nextTop);
+    };
+
+    const update = () => {
+      frameId = 0;
+      const top = container.scrollTop;
+      const delta = top - lastTop;
+      lastTop = top;
+
+      if (cycleHeight > container.clientHeight) {
+        if (delta > 0 && top >= listTop + cycleHeight) {
+          recenter(1);
+          return;
+        }
+
+        if (delta < 0 && cycleOffsetRef.current > 0 && top <= listTop) {
+          recenter(-1);
+          return;
+        }
+      }
+
+      updateVisibleRange(top);
+    };
+
+    const onScroll = () => {
+      if (frameId === 0) frameId = window.requestAnimationFrame(update);
+    };
+
+    updateVisibleRange(container.scrollTop);
+    container.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+
+    return () => {
+      container.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (frameId !== 0) window.cancelAnimationFrame(frameId);
+    };
+  }, [birthdays.length, scrollRef, totalRows]);
+
+  useEffect(() => {
+    if (!isVirtualized || visiblePathsKey.length === 0) return;
+
+    let active = true;
+    void createProfileMediaUrls(visiblePathsKey.split("\n")).then((urls) => {
+      if (!active) return;
+
+      setAvatarUrls((current) => {
+        let changed = false;
+        const next = new Map(current);
+
+        urls.forEach((url, path) => {
+          if (next.get(path) === url) return;
+          next.set(path, url);
+          changed = true;
+        });
+
+        return changed ? next : current;
+      });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [isVirtualized, visiblePathsKey]);
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 pb-10 md:px-0">
       <h1 className="hidden text-2xl font-semibold md:block">생일</h1>
 
-      {entries.length > 0 ? (
-        <>
-          <BirthdaySection title="오늘" entries={today} highlight />
-          <BirthdaySection title="다가오는 생일" entries={upcoming} />
-          <BirthdaySection title="지난 생일" entries={past} />
-        </>
+      {birthdays.length > 0 ? (
+        <section className="flex flex-col gap-1.5">
+          <div className="flex items-baseline gap-1.5 px-1">
+            <h2 className="text-xs font-semibold tracking-wide text-muted-foreground">
+              생일 순서
+            </h2>
+
+            <span className="text-xs text-muted-foreground/70 tabular-nums">
+              {birthdays.length}
+            </span>
+          </div>
+
+          <p className="px-1 text-sm text-muted-foreground">
+            오늘부터 한 해 동안의 생일입니다. 끝까지 내리면 다음 해로
+            이어집니다.
+          </p>
+
+          <div
+            ref={listRef}
+            role="list"
+            className="relative overflow-hidden rounded-xl border bg-card"
+            style={
+              isVirtualized
+                ? { height: `${totalRows * BIRTHDAY_ROW_HEIGHT}px` }
+                : undefined
+            }
+          >
+            {entries.map((entry) => (
+              <div
+                key={`${cycleOffset}-${entry.index}-${entry.birthday.pub_id}`}
+                role="listitem"
+                className={isVirtualized ? "absolute inset-x-0" : undefined}
+                style={
+                  isVirtualized
+                    ? {
+                        transform: `translateY(${entry.index * BIRTHDAY_ROW_HEIGHT}px)`,
+                      }
+                    : undefined
+                }
+              >
+                <BirthdayRow
+                  {...entry}
+                  avatarUrl={avatarUrls.get(entry.birthday.avatar_path) ?? null}
+                  referenceDate={referenceDate}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
       ) : (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed py-16">
           <CakeIcon className="size-8 text-muted-foreground/50" aria-hidden />
 
           <p className="text-center text-sm text-muted-foreground">
-            이 기간에 예정된 생일이 없습니다.
+            등록된 생일이 없습니다.
           </p>
         </div>
       )}

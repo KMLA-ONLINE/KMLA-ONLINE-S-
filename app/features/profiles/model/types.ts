@@ -39,7 +39,9 @@ export type EditableProfile = AcceptedProfile;
 type BirthdayRow =
   Database["public"]["Functions"]["list_birthdays"]["Returns"][number];
 
-export type BirthdayScope = "today" | "month";
+export type BirthdayScope = "today" | "month" | "year";
+
+export type BirthdayCalendarProfile = BirthdayRow;
 
 export type BirthdayProfile = BirthdayRow & {
   avatar_url: string | null;

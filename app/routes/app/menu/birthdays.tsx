@@ -4,7 +4,7 @@ import {
   BIRTHDAY_STALE_TIME,
   birthdayKeys,
   BirthdayListScreen,
-  listBirthdays,
+  listBirthdayCalendar,
 } from "~/features/profiles";
 import { getKoreaDateIso } from "~/shared/lib/korea-date";
 import { getQueryClient } from "~/shared/lib/query-client";
@@ -20,8 +20,8 @@ export const handle = defineAppChrome({
 export async function clientLoader() {
   const referenceDate = getKoreaDateIso();
   const birthdays = await getQueryClient().fetchQuery({
-    queryKey: birthdayKeys.month(referenceDate),
-    queryFn: () => listBirthdays(referenceDate, "month"),
+    queryKey: birthdayKeys.year(referenceDate),
+    queryFn: () => listBirthdayCalendar(referenceDate),
     staleTime: BIRTHDAY_STALE_TIME,
     gcTime: BIRTHDAY_GC_TIME,
   });
@@ -34,6 +34,7 @@ export default function BirthdaysPage({ loaderData }: Route.ComponentProps) {
     <>
       <PageHeader title="생일" back="/menu" />
       <BirthdayListScreen
+        key={loaderData.referenceDate}
         birthdays={loaderData.birthdays}
         referenceDate={loaderData.referenceDate}
       />

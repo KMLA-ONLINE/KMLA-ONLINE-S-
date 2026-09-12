@@ -7,4 +7,6 @@ export const birthdayKeys = {
     [...birthdayKeys.all, "today", referenceDate] as const,
   month: (referenceDate: string) =>
     [...birthdayKeys.all, "month", referenceDate] as const,
+  year: (referenceDate: string) =>
+    [...birthdayKeys.all, "year", referenceDate] as const,
 };

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(15);
 
 insert into public.profiles (
   pub_id, name, type, student_number, cohort, gender, academic_track,
@@ -136,10 +136,19 @@ select ok(
   ),
   'the range spans into the next calendar year'
 );
+select ok(
+  exists (
+    select 1
+    from public.list_birthdays('2026-08-26', 'year')
+    where pub_id = 'birth-past'
+      and birthday_date = '2027-07-26'
+  ),
+  'the yearly range reaches each eligible birthday in the following cycle'
+);
 select throws_ok(
   $$select * from public.list_birthdays('2026-08-26', 'all')$$,
   '22023',
-  'birthday scope must be today or month',
+  'birthday scope must be today, month, or year',
   'the birthday listing rejects arbitrary scopes'
 );
 

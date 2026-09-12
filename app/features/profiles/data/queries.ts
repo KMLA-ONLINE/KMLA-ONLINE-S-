@@ -1,6 +1,7 @@
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import type {
   AcceptedProfile,
+  BirthdayCalendarProfile,
   BirthdayProfile,
   BirthdayScope,
 } from "~/features/profiles/model/types";
@@ -79,4 +80,20 @@ export async function listBirthdays(
     ...birthday,
     avatar_url: avatarUrls.get(birthday.avatar_path) ?? null,
   }));
+}
+
+/**
+ * 생일 순환 목록은 먼저 월·일과 안전한 프로필 정보만 읽는다. 화면 밖 아바타의 URL까지
+ * 한꺼번에 서명하지 않도록, 보이는 행의 서명은 목록 컴포넌트가 따로 배치한다.
+ */
+export async function listBirthdayCalendar(
+  referenceDate: string,
+): Promise<BirthdayCalendarProfile[]> {
+  const { data, error } = await getSupabase().rpc("list_birthdays", {
+    p_reference_date: referenceDate,
+    p_scope: "year",
+  });
+  if (error) throw error;
+
+  return data ?? [];
 }
