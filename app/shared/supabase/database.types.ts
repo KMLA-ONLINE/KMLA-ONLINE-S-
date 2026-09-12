@@ -1895,6 +1895,8 @@ export type Database = {
           birthday_date: string
           birthday_day: number
           birthday_month: number
+          cohort: number
+          is_returning_student: boolean
           name: string
           pub_id: string
         }[]

@@ -15,6 +15,8 @@ const birthdays = [
     name: "이한별",
     avatar_path: "profiles/25/avatar.webp",
     avatar_url: "https://example.com/hanbyeol.webp",
+    cohort: 31,
+    is_returning_student: false,
     birthday_month: 8,
     birthday_day: 26,
     birthday_date: "2026-08-26",
@@ -26,6 +28,8 @@ const birthdayCalendar = [
     pub_id: "year-end-25",
     name: "김연말",
     avatar_path: "profiles/25/avatar.webp",
+    cohort: 31,
+    is_returning_student: false,
     birthday_month: 12,
     birthday_day: 31,
     birthday_date: "2026-12-31",
@@ -34,9 +38,21 @@ const birthdayCalendar = [
     pub_id: "new-year-26",
     name: "박새해",
     avatar_path: "profiles/26/avatar.webp",
+    cohort: 28,
+    is_returning_student: true,
     birthday_month: 1,
     birthday_day: 1,
     birthday_date: "2027-01-01",
+  },
+  {
+    pub_id: "teacher-spring",
+    name: "최봄",
+    avatar_path: "profiles/teacher/avatar.webp",
+    cohort: null,
+    is_returning_student: false,
+    birthday_month: 3,
+    birthday_day: 1,
+    birthday_date: "2027-03-01",
   },
 ] satisfies BirthdayCalendarProfile[];
 
@@ -63,7 +79,7 @@ describe("birthday components", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("keeps December and January together in birthday order", () => {
+  it("groups birthdays by month and shows their cohort", () => {
     renderRoute(() => (
       <BirthdayListScreen
         birthdays={birthdayCalendar}
@@ -71,13 +87,71 @@ describe("birthday components", () => {
       />
     ));
 
-    expect(screen.getByRole("heading", { name: "생일 순서" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "12월" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "1월" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "3월" })).toBeVisible();
     expect(screen.getByText("12월 31일")).toBeVisible();
     expect(screen.getByText("1월 1일")).toBeVisible();
+    expect(screen.getByRole("link", { name: /김연말/ })).toHaveTextContent(
+      "31기",
+    );
+    expect(screen.getByRole("link", { name: /박새해/ })).toHaveTextContent(
+      "28.5기",
+    );
     expect(screen.getByText("내일")).toBeVisible();
     expect(
       screen.getAllByRole("link").map((link) => link.getAttribute("href")),
-    ).toEqual(["/profile/year-end-25", "/profile/new-year-26"]);
+    ).toEqual([
+      "/profile/year-end-25",
+      "/profile/new-year-26",
+      "/profile/teacher-spring",
+    ]);
+  });
+
+  it("shows a returning student in both cohort filters", async () => {
+    const { user } = renderRoute(() => (
+      <BirthdayListScreen
+        birthdays={birthdayCalendar}
+        referenceDate="2026-12-30"
+      />
+    ));
+
+    await user.click(screen.getByRole("button", { name: "28기" }));
+    expect(screen.getByRole("link", { name: /박새해/ })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "29기" }));
+    expect(screen.getByRole("link", { name: /박새해/ })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "교사" }));
+    expect(screen.getByRole("link", { name: /최봄/ })).toBeVisible();
+    expect(
+      screen.queryByRole("link", { name: /박새해/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("uses the closest annual birthday for the day difference", () => {
+    const distantBirthday = [
+      {
+        pub_id: "spring-31",
+        name: "한봄",
+        avatar_path: "profiles/31/avatar.webp",
+        cohort: 31,
+        is_returning_student: false,
+        birthday_month: 3,
+        birthday_day: 14,
+        birthday_date: "2027-03-14",
+      },
+    ] satisfies BirthdayCalendarProfile[];
+
+    renderRoute(() => (
+      <BirthdayListScreen
+        birthdays={distantBirthday}
+        referenceDate="2026-08-26"
+      />
+    ));
+
+    expect(screen.getByText("165일 전")).toBeVisible();
+    expect(screen.queryByText("200일 뒤")).not.toBeInTheDocument();
   });
 
   it("shows an empty state when the date range has no birthdays", () => {

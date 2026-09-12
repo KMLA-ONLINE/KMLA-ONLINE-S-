@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(15);
+select plan(16);
 
 insert into public.profiles (
   pub_id, name, type, student_number, cohort, gender, academic_track,
@@ -57,11 +57,23 @@ select ok(
     select 1
     from public.list_birthdays('2026-08-26', 'today')
     where pub_id = 'birth-cur31'
-      and birthday_month = 8
-      and birthday_day = 26
-      and birthday_date = '2026-08-26'
+       and birthday_month = 8
+       and birthday_day = 26
+       and birthday_date = '2026-08-26'
+       and cohort = 31
+       and not is_returning_student
+   ),
+  'today returns presentation-safe birthday fields and cohort metadata'
+);
+select ok(
+  exists (
+    select 1
+    from public.list_birthdays('2026-08-28', 'today')
+    where pub_id = 'birth-ret28'
+      and cohort = 28
+      and is_returning_student
   ),
-  'today returns presentation-safe birthday fields for a current student'
+  'the listing identifies returning students for cohort filtering'
 );
 select ok(
   not exists (
