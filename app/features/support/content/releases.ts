@@ -11,10 +11,13 @@ import type { Release } from "../model/types";
  *
  * https://itprogramming119.tistory.com/entry/IT-%EC%83%81%EC%8B%9D-%EB%B2%84%EC%A0%84-%ED%91%9C%EA%B8%B0%EB%B2%95-100
  */
+
+// 버그수정이나 사소한 업데이트 기록은 담지 않고, 중대 변경사항만 포함함.
+// 사소한 수정이면 뒤에 숫자를, 중대 수정이나 서비스 구조 자체가 달라지면 앞의 숫자를
 export const releases: Release[] = [
   {
     date: "2026-08-31",
-    version: "v0.1.0",
+    version: "v1.0",
     title: "MVP",
     changes: [
       {

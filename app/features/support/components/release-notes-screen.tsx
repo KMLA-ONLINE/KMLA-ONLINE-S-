@@ -68,7 +68,7 @@ export function ReleaseNotesScreen({ releases }: { releases: Release[] }) {
                   </time>
 
                   {release.version ? (
-                    <Badge variant="outline">{release.version}</Badge>
+                    <Badge variant="ghost">{release.version}</Badge>
                   ) : null}
                 </div>
 
