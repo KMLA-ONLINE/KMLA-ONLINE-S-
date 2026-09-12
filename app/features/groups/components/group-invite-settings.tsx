@@ -31,6 +31,7 @@ const PROFILE_TYPE_OPTIONS: GroupInviteProfileType[] = [
   "alumni",
   "teacher",
 ];
+const DEFAULT_ALLOWED_PROFILE_TYPES: GroupInviteProfileType[] = ["student"];
 
 /**
  * 그룹 초대 링크.
@@ -47,10 +48,10 @@ export function InviteSettings({
   invite: GroupInvite | null;
 }) {
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
-  const [hours, setHours] = useState(24);
+  const [hours, setHours] = useState(1);
   const [allowedProfileTypes, setAllowedProfileTypes] = useState<
     GroupInviteProfileType[]
-  >(() => invite?.allowed_profile_types ?? PROFILE_TYPE_OPTIONS);
+  >(() => invite?.allowed_profile_types ?? DEFAULT_ALLOWED_PROFILE_TYPES);
   const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState<"reissue" | "revoke" | null>(
     null,
@@ -148,8 +149,8 @@ export function InviteSettings({
           </div>
         ) : null}
 
-        <fieldset disabled={pending} className="grid gap-2">
-          <legend className="text-sm font-medium">가입 가능 대상</legend>
+        <fieldset disabled={pending} className="flex flex-col">
+          <legend className="mb-2 text-sm font-medium">가입 가능 대상</legend>
           <div className="flex flex-wrap gap-x-5 gap-y-3 rounded-lg border px-3 py-3">
             {PROFILE_TYPE_OPTIONS.map((profileType) => {
               const id = `invite-profile-type-${profileType}`;

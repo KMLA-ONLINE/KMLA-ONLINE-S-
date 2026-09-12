@@ -30,11 +30,11 @@ const invite: GroupInvite = {
 };
 
 describe("InviteSettings", () => {
-  it("opens with a one-day link and nothing to revoke yet", () => {
+  it("opens with a one-hour link and nothing to revoke yet", () => {
     renderRoute(() => <InviteSettings group={group} invite={null} />);
 
     expect(screen.getByRole("combobox", { name: "유효 기간" })).toHaveValue(
-      "24",
+      "1",
     );
     expect(
       screen.getByRole("button", { name: "초대 링크 만들기" }),
@@ -46,8 +46,8 @@ describe("InviteSettings", () => {
       screen.queryByRole("textbox", { name: "초대 링크" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "재학생" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "졸업생" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "교사" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "졸업생" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "교사" })).not.toBeChecked();
   });
 
   it("shows the address to hand out and when it dies", () => {
@@ -69,8 +69,6 @@ describe("InviteSettings", () => {
     ));
 
     await user.click(screen.getByRole("checkbox", { name: "재학생" }));
-    await user.click(screen.getByRole("checkbox", { name: "졸업생" }));
-    await user.click(screen.getByRole("checkbox", { name: "교사" }));
 
     expect(screen.getByText("한 유형 이상 선택해 주세요.")).toBeVisible();
     expect(
