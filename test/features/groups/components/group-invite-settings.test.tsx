@@ -26,6 +26,7 @@ const group: GroupDetail = {
 const invite: GroupInvite = {
   token: "0123456789abcdef0123456789abcdef",
   expires_at: "2026-09-01T09:00:00Z",
+  allowed_profile_types: ["student", "alumni"],
 };
 
 describe("InviteSettings", () => {
@@ -44,6 +45,9 @@ describe("InviteSettings", () => {
     expect(
       screen.queryByRole("textbox", { name: "초대 링크" }),
     ).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "재학생" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "졸업생" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "교사" })).toBeChecked();
   });
 
   it("shows the address to hand out and when it dies", () => {
@@ -53,6 +57,25 @@ describe("InviteSettings", () => {
       `${window.location.origin}/invite/${invite.token}`,
     );
     expect(screen.getByText(/만료됩니다/)).toBeVisible();
+    expect(screen.getByText(/재학생·졸업생 가입 가능/)).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "재학생" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "졸업생" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "교사" })).not.toBeChecked();
+  });
+
+  it("requires at least one allowed profile type", async () => {
+    const { user } = renderRoute(() => (
+      <InviteSettings group={group} invite={null} />
+    ));
+
+    await user.click(screen.getByRole("checkbox", { name: "재학생" }));
+    await user.click(screen.getByRole("checkbox", { name: "졸업생" }));
+    await user.click(screen.getByRole("checkbox", { name: "교사" }));
+
+    expect(screen.getByText("한 유형 이상 선택해 주세요.")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "초대 링크 만들기" }),
+    ).toBeDisabled();
   });
 
   it("warns that a new link cuts off everyone holding the old one", async () => {

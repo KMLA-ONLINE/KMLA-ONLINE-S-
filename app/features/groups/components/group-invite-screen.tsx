@@ -3,6 +3,7 @@ import { Link, useFetcher } from "react-router";
 
 import {
   getGroupIdentityPolicyLabel,
+  getGroupInviteProfileTypeLabel,
   getGroupJoinPolicyLabel,
   getGroupPostingPolicyLabel,
 } from "~/features/groups/model/format";
@@ -40,6 +41,33 @@ export function GroupInviteScreen({
             <p className="text-sm leading-6 text-muted-foreground">
               기한이 지났거나 그룹 운영진이 링크를 끊었습니다. 초대한 사람에게
               새 링크를 받아 주세요.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link to="/groups" />}
+          >
+            그룹 목록으로
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!preview.profile_type_allowed && !preview.already_member) {
+    return (
+      <Card className="rounded-none border-x-0 md:rounded-xl md:border">
+        <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
+          <div className="grid size-11 place-items-center rounded-full bg-muted text-muted-foreground">
+            <LockIcon aria-hidden="true" className="size-5" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <p className="font-medium">가입할 수 없는 초대 링크입니다</p>
+            <p className="text-sm leading-6 text-muted-foreground">
+              이 링크는{" "}
+              {formatAllowedProfileTypes(preview.allowed_profile_types)}만
+              가입할 수 있습니다.
             </p>
           </div>
           <Button
@@ -109,6 +137,12 @@ export function GroupInviteScreen({
       </CardContent>
     </Card>
   );
+}
+
+function formatAllowedProfileTypes(
+  types: GroupInvitePreview["allowed_profile_types"],
+): string {
+  return types.map(getGroupInviteProfileTypeLabel).join("·");
 }
 
 function InfoRow({

@@ -1731,6 +1731,7 @@ export type Database = {
       get_group_invite: {
         Args: { p_group_id: string }
         Returns: {
+          allowed_profile_types: Database["public"]["Enums"]["profile_type"][]
           expires_at: string
           token: string
         }[]
@@ -1738,6 +1739,7 @@ export type Database = {
       get_group_invite_preview: {
         Args: { p_token: string }
         Returns: {
+          allowed_profile_types: Database["public"]["Enums"]["profile_type"][]
           already_member: boolean
           description: string
           expires_at: string
@@ -1747,6 +1749,7 @@ export type Database = {
           member_count: number
           name: string
           posting_policy: Database["public"]["Enums"]["group_posting_policy"]
+          profile_type_allowed: boolean
           slug: string
         }[]
       }
@@ -1874,8 +1877,13 @@ export type Database = {
         }[]
       }
       issue_group_invite: {
-        Args: { p_group_id: string; p_hours?: number }
+        Args: {
+          p_allowed_profile_types?: Database["public"]["Enums"]["profile_type"][]
+          p_group_id: string
+          p_hours?: number
+        }
         Returns: {
+          allowed_profile_types: Database["public"]["Enums"]["profile_type"][]
           expires_at: string
           token: string
         }[]

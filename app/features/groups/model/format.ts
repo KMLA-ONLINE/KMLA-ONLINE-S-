@@ -1,5 +1,6 @@
 import type {
   GroupIdentityPolicy,
+  GroupInviteProfileType,
   GroupJoinPolicy,
   GroupKind,
   GroupMemberRole,
@@ -29,6 +30,12 @@ const MEMBER_ROLE_LABELS: Record<GroupMemberRole, string> = {
   member: "멤버",
 };
 
+const INVITE_PROFILE_TYPE_LABELS: Record<GroupInviteProfileType, string> = {
+  student: "재학생",
+  alumni: "졸업생",
+  teacher: "교사",
+};
+
 export function getGroupJoinPolicyLabel(policy: GroupJoinPolicy): string {
   return JOIN_POLICY_LABELS[policy];
 }
@@ -51,6 +58,12 @@ export function getGroupKindLabel(kind: GroupKind): string {
   return kind === "official" ? "공식 그룹" : "비공식 그룹";
 }
 
+export function getGroupInviteProfileTypeLabel(
+  type: GroupInviteProfileType,
+): string {
+  return INVITE_PROFILE_TYPE_LABELS[type];
+}
+
 export function normalizeGroupSearchInput(value: string): string {
   return value.normalize("NFC").trim();
 }
@@ -69,6 +82,9 @@ export function getGroupErrorMessage(error: unknown): string {
   if (candidate.code === "23514" || candidate.code === "22023") {
     if (candidate.message?.includes("invite lifetime")) {
       return "초대 링크 기한은 1시간에서 2주 사이여야 합니다.";
+    }
+    if (candidate.message?.includes("invite must allow")) {
+      return "가입 가능한 사용자 유형을 하나 이상 선택해 주세요.";
     }
     return "입력한 그룹 정보를 다시 확인해 주세요.";
   }

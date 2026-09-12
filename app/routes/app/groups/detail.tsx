@@ -17,6 +17,7 @@ import {
   GROUP_STALE_TIME,
   GroupDetailMobileHeader,
   GroupDetailScreen,
+  type GroupInviteProfileType,
   issueGroupInvite,
   isGroupAccessQuery,
   joinGroup,
@@ -375,17 +376,28 @@ export async function clientAction({
       return redirect("/groups");
     } else if (intent === "issue-invite") {
       const hours = Number(formData.get("hours"));
+      const allowedProfileTypesValue = formData.get("allowedProfileTypes");
+      const allowedProfileTypes =
+        typeof allowedProfileTypesValue === "string"
+          ? allowedProfileTypesValue.split(",")
+          : [];
       if (
         typeof groupId !== "string" ||
         !Number.isSafeInteger(hours) ||
         hours < 1 ||
-        hours > 336
+        hours > 336 ||
+        allowedProfileTypes.length === 0 ||
+        new Set(allowedProfileTypes).size !== allowedProfileTypes.length ||
+        !allowedProfileTypes.every(
+          (type): type is GroupInviteProfileType =>
+            type === "student" || type === "alumni" || type === "teacher",
+        )
       )
         return data(
-          { error: "유효 기간을 다시 확인해 주세요." },
+          { error: "유효 기간과 가입 가능 대상을 다시 확인해 주세요." },
           { status: 400 },
         );
-      await issueGroupInvite(groupId, hours);
+      await issueGroupInvite(groupId, hours, allowedProfileTypes);
     } else if (intent === "revoke-invite") {
       if (typeof groupId !== "string")
         return data({ error: "그룹을 찾을 수 없습니다." }, { status: 400 });
