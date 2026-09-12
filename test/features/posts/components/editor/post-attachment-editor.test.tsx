@@ -35,6 +35,7 @@ function renderEditor(
     disabled: false,
     isDragging: false,
     preparingCount: 0,
+    preparationError: undefined,
     uploadStates: {},
     onSelect: vi.fn(),
     onRemoveExisting: vi.fn(),
@@ -99,6 +100,19 @@ describe("PostAttachmentEditor", () => {
     renderEditor({ preparingCount: 2 });
 
     expect(screen.getByText("파일 최적화 중 2개")).toBeVisible();
+  });
+
+  it("explains the video policy before selection and shows rejection inline", () => {
+    renderEditor({
+      additions: [],
+      order: [],
+      preparationError: "동영상은 첨부할 수 없어 제외했습니다: clip.mp4",
+    });
+
+    expect(screen.getByText("동영상 미지원")).toBeVisible();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "동영상은 첨부할 수 없어 제외했습니다: clip.mp4",
+    );
   });
 
   it("hides image filenames while retaining an accessible image label", () => {
