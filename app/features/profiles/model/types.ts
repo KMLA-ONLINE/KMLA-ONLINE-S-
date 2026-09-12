@@ -36,10 +36,17 @@ export type AcceptedProfile = Pick<
 
 export type EditableProfile = AcceptedProfile;
 
-type BirthdayRow =
-  Database["public"]["Functions"]["list_birthdays"]["Returns"][number];
+type BirthdayRow = Omit<
+  Database["public"]["Functions"]["list_birthdays"]["Returns"][number],
+  "cohort"
+> & {
+  // PostgreSQL 함수 반환 열은 nullable이지만 생성기는 이를 표현하지 않는다.
+  cohort: number | null;
+};
 
-export type BirthdayScope = "today" | "month";
+export type BirthdayScope = "today" | "month" | "year";
+
+export type BirthdayCalendarProfile = BirthdayRow;
 
 export type BirthdayProfile = BirthdayRow & {
   avatar_url: string | null;

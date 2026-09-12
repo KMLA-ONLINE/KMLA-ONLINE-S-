@@ -6,7 +6,7 @@ create table public.stories (
   content text not null,
   created_at timestamptz not null default now(),
   constraint stories_content_length
-    check (char_length(btrim(content)) between 2 and 100)
+    check (char_length(btrim(content)) <= 100)
 );
 
 alter table public.stories enable row level security;
@@ -34,8 +34,8 @@ declare
   day_start timestamptz;
   day_end timestamptz;
 begin
-  if char_length(normalized_content) not between 2 and 100 then
-    raise exception 'content must be between 2 and 100 characters'
+  if char_length(normalized_content) > 100 then
+    raise exception 'content must be at most 100 characters'
       using errcode = '22023';
   end if;
 

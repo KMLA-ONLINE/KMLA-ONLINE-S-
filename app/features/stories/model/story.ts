@@ -1,4 +1,3 @@
-const STORY_CONTENT_MIN_LENGTH = 2;
 export const STORY_CONTENT_MAX_LENGTH = 100;
 
 export function normalizeStoryContent(value: string): string {
@@ -12,7 +11,5 @@ export function normalizeStoryContent(value: string): string {
 export function isStoryContentValid(value: string): boolean {
   const length = normalizeStoryContent(value).length;
 
-  return (
-    length >= STORY_CONTENT_MIN_LENGTH && length <= STORY_CONTENT_MAX_LENGTH
-  );
+  return length <= STORY_CONTENT_MAX_LENGTH;
 }

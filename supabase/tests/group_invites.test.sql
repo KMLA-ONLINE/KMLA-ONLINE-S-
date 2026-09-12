@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(33);
+select plan(40);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -137,10 +137,22 @@ select throws_ok(
   'invite lifetime must be between 1 and 336 hours',
   'an invite cannot outlive two weeks'
 );
+select throws_ok(
+  $$select * from public.issue_group_invite(
+    '20000000-0000-0000-0000-000000000002', 1, array[]::public.profile_type[]
+  )$$,
+  '22023',
+  'invite must allow at least one profile type',
+  'an invite must allow at least one profile type'
+);
 
 insert into invite_probe
 select 'second', token
-from public.issue_group_invite('20000000-0000-0000-0000-000000000002', 12);
+from public.issue_group_invite(
+  '20000000-0000-0000-0000-000000000002',
+  12,
+  array['alumni', 'student', 'student']::public.profile_type[]
+);
 
 select isnt(
   (select token from invite_probe where label = 'second'),
@@ -166,6 +178,21 @@ select ok(
     between now() + interval '11 hours' and now() + interval '13 hours',
   'the chosen lifetime is measured in hours, not days'
 );
+select is(
+  (
+    select allowed_profile_types::text
+    from public.get_group_invite('20000000-0000-0000-0000-000000000002')
+  ),
+  '{student,alumni}',
+  'the allowed profile types are deduplicated and stored in enum order'
+);
+select is(
+  (select profile_type_allowed from public.get_group_invite_preview(
+    (select token from invite_probe where label = 'second')
+  )),
+  true,
+  'the preview marks an allowed profile type as eligible'
+);
 
 select public.revoke_group_invite('20000000-0000-0000-0000-000000000002');
 
@@ -184,7 +211,11 @@ select is(
 
 insert into invite_probe
 select 'live', token
-from public.issue_group_invite('20000000-0000-0000-0000-000000000002', 336);
+from public.issue_group_invite(
+  '20000000-0000-0000-0000-000000000002',
+  336,
+  array['teacher']::public.profile_type[]
+);
 
 -- 교사. 그룹을 검색할 수도 가입 요청을 넣을 수도 없어서 초대가 유일한 가입 경로다.
 reset role;
@@ -204,6 +235,13 @@ select is(
   )),
   false,
   'the preview knows the teacher has not joined yet'
+);
+select is(
+  (select profile_type_allowed from public.get_group_invite_preview(
+    (select token from invite_probe where label = 'live')
+  )),
+  true,
+  'a teacher-only link allows a teacher'
 );
 select is(
   (select public.accept_group_invite((select token from invite_probe where label = 'live'))),
@@ -268,9 +306,46 @@ set local role authenticated;
 
 insert into invite_probe
 select 'film', token
-from public.issue_group_invite('20000000-0000-0000-0000-000000000006', 3);
+from public.issue_group_invite(
+  '20000000-0000-0000-0000-000000000006',
+  3,
+  array['student']::public.profile_type[]
+);
 
 reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000099', true);
+set local role authenticated;
+
+select is(
+  (select profile_type_allowed from public.get_group_invite_preview(
+    (select token from invite_probe where label = 'film')
+  )),
+  false,
+  'the preview marks a profile type outside the invite target as ineligible'
+);
+select throws_ok(
+  format(
+    $$select public.accept_group_invite(%L)$$,
+    (select token from invite_probe where label = 'film')
+  ),
+  '42501',
+  'profile type is not allowed by invite',
+  'calling the accept RPC directly cannot bypass the profile type restriction'
+);
+
+reset role;
+select is(
+  (
+    select count(*)
+    from public.group_memberships as membership
+    join public.profiles as profile on profile.id = membership.profile_id
+    where membership.group_id = '20000000-0000-0000-0000-000000000006'
+      and profile.pub_id = 'jung-teacher'
+  ),
+  0::bigint,
+  'a rejected profile type does not gain membership'
+);
+
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
 

@@ -41,11 +41,9 @@ select set_config(
 
 set local role authenticated;
 
-select throws_ok(
+select lives_ok(
   $$select public.set_my_story('1')$$,
-  '22023',
-  null,
-  'one character story is rejected'
+  'one character story is accepted'
 );
 
 select throws_ok(
@@ -55,18 +53,14 @@ select throws_ok(
   'long story is rejected'
 );
 
-select throws_ok(
+select lives_ok(
   $$select public.set_my_story('   ')$$,
-  '22023',
-  null,
-  'blank story is rejected'
+  'blank story is accepted'
 );
 
-select throws_ok(
+select lives_ok(
   $$select public.set_my_story(null)$$,
-  '22023',
-  null,
-  'null story is rejected'
+  'null story is normalized to blank content'
 );
 
 select lives_ok(

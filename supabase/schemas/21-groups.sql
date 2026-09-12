@@ -365,10 +365,6 @@ begin
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
 
-  -- 프로필 종류를 보지 않는다. `group_memberships_join_open` 정책은 교사를 막지만 그 정책이
-  -- 막는 것은 "스스로 가입"이고, 초대 수락은 definer라 그 옆을 지난다. 교사는 그룹을 찾을
-  -- 수도 가입 요청을 넣을 수도 없으므로 초대가 교사의 유일한 가입 경로다.
-
   select invite.*
   into invite_record
   from private.group_invites as invite
@@ -395,6 +391,15 @@ begin
   -- 수락이 뚫리지 않도록 여기서 한 번 더 본다.
   if invited_group.kind = 'official' then
     raise exception 'official groups cannot be invited to' using errcode = '55000';
+  end if;
+
+  if not exists (
+    select 1
+    from public.group_memberships as membership
+    where membership.group_id = invited_group.id
+      and membership.profile_id = caller_profile.id
+  ) and not caller_profile.type = any(invite_record.allowed_profile_types) then
+    raise exception 'profile type is not allowed by invite' using errcode = '42501';
   end if;
 
   -- 이미 멤버면 역할을 그대로 둔다. 관리자가 자기 링크를 눌러 멤버로 강등되면 안 된다.
@@ -779,7 +784,7 @@ $$;
 
 ALTER FUNCTION "public"."finalize_group_media"("p_media_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."get_group_invite"("p_group_id" "uuid") RETURNS TABLE("token" "text", "expires_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."get_group_invite"("p_group_id" "uuid") RETURNS TABLE("token" "text", "expires_at" timestamp with time zone, "allowed_profile_types" "public"."profile_type"[])
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -787,7 +792,7 @@ begin
   perform private.assert_group_invite_manager(p_group_id);
 
   return query
-  select invite.token, invite.expires_at
+  select invite.token, invite.expires_at, invite.allowed_profile_types
   from private.group_invites as invite
   where invite.group_id = p_group_id
     and invite.expires_at > now();
@@ -796,16 +801,22 @@ $$;
 
 ALTER FUNCTION "public"."get_group_invite"("p_group_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."get_group_invite_preview"("p_token" "text") RETURNS TABLE("group_id" "uuid", "slug" "text", "name" "text", "description" "text", "join_policy" "public"."group_join_policy", "identity_policy" "public"."group_identity_policy", "posting_policy" "public"."group_posting_policy", "member_count" bigint, "expires_at" timestamp with time zone, "already_member" boolean)
+CREATE OR REPLACE FUNCTION "public"."get_group_invite_preview"("p_token" "text") RETURNS TABLE("group_id" "uuid", "slug" "text", "name" "text", "description" "text", "join_policy" "public"."group_join_policy", "identity_policy" "public"."group_identity_policy", "posting_policy" "public"."group_posting_policy", "member_count" bigint, "expires_at" timestamp with time zone, "already_member" boolean, "allowed_profile_types" "public"."profile_type"[], "profile_type_allowed" boolean)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
   caller_profile_id bigint := private.current_profile_id();
+  caller_profile_type public.profile_type;
 begin
   if caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
+
+  select profile.type
+  into caller_profile_type
+  from public.profiles as profile
+  where profile.id = caller_profile_id;
 
   return query
   select
@@ -823,7 +834,9 @@ begin
       from public.group_memberships as membership
       where membership.group_id = group_record.id
         and membership.profile_id = caller_profile_id
-    )
+    ),
+    invite.allowed_profile_types,
+    caller_profile_type = any(invite.allowed_profile_types)
   from private.group_invites as invite
   join public.groups as group_record on group_record.id = invite.group_id
   where invite.token = p_token
@@ -834,12 +847,13 @@ $$;
 
 ALTER FUNCTION "public"."get_group_invite_preview"("p_token" "text") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer DEFAULT 24) RETURNS TABLE("token" "text", "expires_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer DEFAULT 24, "p_allowed_profile_types" "public"."profile_type"[] DEFAULT ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type", 'teacher'::"public"."profile_type"]) RETURNS TABLE("token" "text", "expires_at" timestamp with time zone, "allowed_profile_types" "public"."profile_type"[])
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
   new_token text := encode(extensions.gen_random_bytes(16), 'hex');
+  normalized_profile_types public.profile_type[];
 begin
   perform private.assert_group_invite_manager(p_group_id);
 
@@ -848,27 +862,43 @@ begin
       using errcode = '22023';
   end if;
 
+  if p_allowed_profile_types is null
+    or cardinality(p_allowed_profile_types) = 0
+    or array_position(p_allowed_profile_types, null) is not null then
+    raise exception 'invite must allow at least one profile type'
+      using errcode = '22023';
+  end if;
+
+  select array_agg(profile_type order by profile_type)
+  into normalized_profile_types
+  from (
+    select distinct profile_type
+    from unnest(p_allowed_profile_types) as allowed(profile_type)
+  ) as normalized;
+
   return query
   insert into private.group_invites as invite (
-    group_id, token, created_by, created_at, expires_at
+    group_id, token, created_by, created_at, expires_at, allowed_profile_types
   )
   values (
     p_group_id,
     new_token,
     private.current_profile_id(),
     now(),
-    now() + make_interval(hours => p_hours)
+    now() + make_interval(hours => p_hours),
+    normalized_profile_types
   )
   on conflict (group_id) do update
   set token = excluded.token,
     created_by = excluded.created_by,
     created_at = excluded.created_at,
-    expires_at = excluded.expires_at
-  returning invite.token, invite.expires_at;
+    expires_at = excluded.expires_at,
+    allowed_profile_types = excluded.allowed_profile_types
+  returning invite.token, invite.expires_at, invite.allowed_profile_types;
 end;
 $$;
 
-ALTER FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer) OWNER TO "postgres";
+ALTER FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer, "p_allowed_profile_types" "public"."profile_type"[]) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."list_group_join_requests"("p_group_id" "uuid") RETURNS TABLE("request_id" "uuid", "pub_id" "text", "name" "text", "cohort" smallint, "is_returning_student" boolean, "avatar_path" "text", "requested_at" timestamp with time zone)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
@@ -1294,6 +1324,8 @@ CREATE TABLE IF NOT EXISTS "private"."group_invites" (
     "created_by" bigint NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "expires_at" timestamp with time zone NOT NULL,
+    "allowed_profile_types" "public"."profile_type"[] DEFAULT ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type", 'teacher'::"public"."profile_type"] NOT NULL,
+    CONSTRAINT "group_invites_allowed_profile_types_not_empty" CHECK (("cardinality"("allowed_profile_types") > 0)),
     CONSTRAINT "group_invites_expires_after_creation" CHECK (("expires_at" > "created_at")),
     CONSTRAINT "group_invites_token_format" CHECK (("token" ~ '^[a-f0-9]{32}$'::"text"))
 );
@@ -1550,8 +1582,8 @@ GRANT ALL ON FUNCTION "public"."get_group_invite"("p_group_id" "uuid") TO "authe
 REVOKE ALL ON FUNCTION "public"."get_group_invite_preview"("p_token" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_group_invite_preview"("p_token" "text") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer, "p_allowed_profile_types" "public"."profile_type"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer, "p_allowed_profile_types" "public"."profile_type"[]) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."list_group_join_requests"("p_group_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."list_group_join_requests"("p_group_id" "uuid") TO "authenticated";

@@ -11,6 +11,8 @@ export type GroupIdentityPolicy =
 export type GroupPostingPolicy =
   Database["public"]["Enums"]["group_posting_policy"];
 export type GroupMemberRole = Database["public"]["Enums"]["group_member_role"];
+export type GroupInviteProfileType =
+  Database["public"]["Enums"]["profile_type"];
 
 export type GroupMembershipState = "member" | "requested" | "none";
 export type GroupHomeSection = "official" | "mine";

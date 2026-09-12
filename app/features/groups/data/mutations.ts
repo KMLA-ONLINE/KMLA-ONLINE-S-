@@ -2,6 +2,7 @@ import { getSupabase } from "~/shared/supabase/client";
 import type {
   CreateGroupValues,
   GroupInvite,
+  GroupInviteProfileType,
   GroupMemberRole,
   GroupMediaSlot,
   UpdateGroupSettingsValues,
@@ -208,10 +209,12 @@ export async function removeGroupMedia(
 export async function issueGroupInvite(
   groupId: string,
   hours: number,
+  allowedProfileTypes: GroupInviteProfileType[],
 ): Promise<GroupInvite> {
   const { data, error } = await getSupabase().rpc("issue_group_invite", {
     p_group_id: groupId,
     p_hours: hours,
+    p_allowed_profile_types: allowedProfileTypes,
   });
   if (error) throw error;
 

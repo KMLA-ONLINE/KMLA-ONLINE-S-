@@ -38,6 +38,7 @@ export {
 } from "~/features/groups/data/queries";
 export {
   getGroupErrorMessage,
+  getGroupInviteProfileTypeLabel,
   hasMinimumGroupSearchLength,
   normalizeGroupSearchInput,
 } from "~/features/groups/model/format";
@@ -54,6 +55,7 @@ export type {
   GroupDiscoveryCursor,
   GroupHomeItem,
   GroupInvite,
+  GroupInviteProfileType,
   GroupInvitePreview,
   GroupIdentityPolicy,
   GroupKind,

@@ -231,7 +231,7 @@ $$;
 
 ALTER FUNCTION "public"."get_accepted_profile"("p_pub_id" "text") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_birthdays"("p_reference_date" "date", "p_scope" "text" DEFAULT 'month'::"text") RETURNS TABLE("pub_id" "text", "name" "text", "avatar_path" "text", "birthday_month" smallint, "birthday_day" smallint, "birthday_date" "date")
+CREATE OR REPLACE FUNCTION "public"."list_birthdays"("p_reference_date" "date", "p_scope" "text" DEFAULT 'month'::"text") RETURNS TABLE("pub_id" "text", "name" "text", "avatar_path" "text", "cohort" smallint, "is_returning_student" boolean, "birthday_month" smallint, "birthday_day" smallint, "birthday_date" "date")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -260,15 +260,24 @@ begin
   elsif p_scope = 'month' then
     range_start := (p_reference_date - interval '1 month')::date;
     range_end := (p_reference_date + interval '1 month')::date;
+  elsif p_scope = 'year' then
+    range_start := p_reference_date;
+    range_end := (p_reference_date + interval '1 year - 1 day')::date;
   else
-    raise exception 'birthday scope must be today or month' using errcode = '22023';
+    raise exception 'birthday scope must be today, month, or year' using errcode = '22023';
   end if;
 
   current_cohort := (extract(year from p_reference_date)::integer - 1995)::smallint;
 
   return query
   with eligible_profiles as (
-    select profile.pub_id, profile.name, profile.avatar_path, profile.birthday
+    select
+      profile.pub_id,
+      profile.name,
+      profile.avatar_path,
+      profile.cohort,
+      profile.is_returning_student,
+      profile.birthday
     from public.profiles as profile
     where profile.status = 'accepted'
       and profile.deleted_at is null
@@ -294,6 +303,8 @@ begin
       profile.pub_id,
       profile.name,
       profile.avatar_path,
+      profile.cohort,
+      profile.is_returning_student,
       extract(month from profile.birthday)::smallint as birthday_month,
       extract(day from profile.birthday)::smallint as birthday_day,
       make_date(
@@ -322,6 +333,8 @@ begin
     anniversary.pub_id,
     anniversary.name,
     anniversary.avatar_path,
+    anniversary.cohort,
+    anniversary.is_returning_student,
     anniversary.birthday_month,
     anniversary.birthday_day,
     anniversary.birthday_date

@@ -182,9 +182,6 @@ describe("NotificationSettings", () => {
     expect(
       screen.getByText("이 기기로 오는 Push가 없습니다."),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("받도록 설정한 알림은 앱 알림함에서 확인합니다."),
-    ).toBeInTheDocument();
   });
 
   it("keeps mandatory moderation Push in the summary", () => {

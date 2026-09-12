@@ -17,11 +17,13 @@ export {
   loadAcceptedProfile,
   loadMyEditableProfile,
   loadProfileDepartments,
+  listBirthdayCalendar,
   listBirthdays,
 } from "~/features/profiles/data/queries";
 export { formatCohort } from "~/features/profiles/model/format";
 export type {
   BirthdayProfile,
+  BirthdayCalendarProfile,
   EditableProfile,
   ProfileEditActionData,
 } from "~/features/profiles/model/types";
