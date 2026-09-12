@@ -47,6 +47,7 @@ export function PostAttachmentEditor({
   order,
   disabled,
   isDragging,
+  preparingCount,
   uploadStates,
   onSelect,
   onRemoveExisting,
@@ -59,6 +60,7 @@ export function PostAttachmentEditor({
   order: string[];
   disabled: boolean;
   isDragging: boolean;
+  preparingCount: number;
   uploadStates: Record<string, PostFileUploadState>;
   onSelect: (
     files: FileList | null,
@@ -115,7 +117,14 @@ export function PostAttachmentEditor({
               {order.length} / {POST_ATTACHMENT_LIMIT}
             </span>
           </div>
-          {order.length > 0 ? (
+          {preparingCount > 0 ? (
+            <p
+              className="mt-0.5 text-xs text-muted-foreground"
+              aria-live="polite"
+            >
+              파일 최적화 중 {preparingCount}개
+            </p>
+          ) : order.length > 0 ? (
             <p
               className="mt-0.5 hidden text-xs text-muted-foreground sm:block"
               aria-live="polite"
@@ -189,10 +198,14 @@ export function PostAttachmentEditor({
                 const existingItem = existingById.get(key);
                 const addition = additionsByKey.get(key);
                 if (!existingItem && !addition) return null;
+                const isImage = existingItem
+                  ? existingItem.mime_type === "image/webp"
+                  : addition!.kind === "image";
                 return (
                   <AttachmentEditorItem
                     key={key}
                     id={key}
+                    isImage={isImage}
                     name={
                       existingItem?.original_filename ?? addition!.file.name
                     }
@@ -245,6 +258,7 @@ export function PostAttachmentEditor({
 
 function AttachmentEditorItem({
   id,
+  isImage,
   name,
   size,
   preview,
@@ -257,6 +271,7 @@ function AttachmentEditorItem({
   onRetry,
 }: {
   id: string;
+  isImage: boolean;
   name: string;
   size: number;
   preview: string | null;
@@ -278,6 +293,7 @@ function AttachmentEditorItem({
     isDragging,
   } = useSortable({ id, disabled });
   const status = state?.status;
+  const label = isImage ? `사진 ${index + 1}` : name;
 
   return (
     <div
@@ -295,7 +311,7 @@ function AttachmentEditorItem({
         variant="ghost"
         size="icon-sm"
         disabled={disabled}
-        aria-label={`${name} 순서 변경`}
+        aria-label={`${label} 순서 변경`}
         className="shrink-0 cursor-grab touch-none active:cursor-grabbing"
         {...attributes}
         {...listeners}
@@ -317,16 +333,18 @@ function AttachmentEditorItem({
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium" title={name}>
-          {name}
-        </p>
+        {isImage ? null : (
+          <p className="truncate text-sm font-medium" title={name}>
+            {name}
+          </p>
+        )}
         <p className="text-xs text-muted-foreground">
           {status === "queued"
             ? "업로드 대기 중"
             : status === "uploading"
               ? `업로드 중 ${Math.round((state?.progress ?? 0) * 100)}%`
               : status === "error"
-                ? "업로드 실패"
+                ? (state?.error ?? "업로드 실패")
                 : status === "ready"
                   ? "업로드 완료"
                   : formatFileSize(size)}
@@ -335,7 +353,7 @@ function AttachmentEditorItem({
           <progress
             value={state?.progress ?? 0}
             max={1}
-            aria-label={`${name} 업로드 진행률`}
+            aria-label={`${label} 업로드 진행률`}
             className="mt-1 h-1 w-full accent-primary"
           />
         ) : null}
@@ -345,7 +363,7 @@ function AttachmentEditorItem({
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label={`${name} 업로드 다시 시도`}
+          aria-label={`${label} 업로드 다시 시도`}
           onClick={onRetry}
         >
           <RefreshCwIcon />
@@ -359,7 +377,7 @@ function AttachmentEditorItem({
               variant="ghost"
               size="icon-sm"
               disabled={disabled}
-              aria-label={`${name} 첨부 메뉴`}
+              aria-label={`${label} 첨부 메뉴`}
             />
           }
         >

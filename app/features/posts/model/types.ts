@@ -201,6 +201,10 @@ export interface PreparedPostFile {
    * 데이터를 조금 더 쓰는 편이 낫다.
    */
   thumbnail: File | null;
+  /** 원본 WebP를 올리는 동안 병렬로 만드는 목록용 축소본. */
+  thumbnailPromise?: Promise<File | null>;
+  /** 항목을 지우거나 작성 화면을 닫으면 남은 이미지 인코딩도 중단한다. */
+  abortPreparation?: () => void;
   kind: "image" | "file";
   width: number | null;
   height: number | null;

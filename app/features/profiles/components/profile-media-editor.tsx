@@ -11,7 +11,11 @@ import type {
 } from "~/features/profiles/model/types";
 import { ImageCropper } from "~/shared/components/image-cropper";
 import { useImageCrop } from "~/shared/hooks/use-image-crop";
-import { compressImage, validateImageInput } from "~/shared/lib/image/compress";
+import {
+  compressImage,
+  getImageDimensions,
+  validateImageInput,
+} from "~/shared/lib/image/compress";
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -73,11 +77,9 @@ export function ProfileMediaEditor({
         cropped,
         isAvatar ? "icon" : "banner",
       );
-      const bitmap = await createImageBitmap(compressed);
-      const dimensions = { width: bitmap.width, height: bitmap.height };
-      bitmap.close();
+      const [width, height] = await getImageDimensions(compressed);
 
-      await replaceProfileMedia(slot, compressed, dimensions);
+      await replaceProfileMedia(slot, compressed, { width, height });
 
       window.location.reload();
     } catch {

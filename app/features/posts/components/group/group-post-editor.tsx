@@ -402,6 +402,7 @@ export function GroupPostEditor({
           order={attachmentOrder}
           disabled={saving}
           isDragging={isDragging}
+          preparingCount={preparingCount}
           uploadStates={uploadStates}
           onSelect={addFiles}
           onRemoveExisting={removeExisting}

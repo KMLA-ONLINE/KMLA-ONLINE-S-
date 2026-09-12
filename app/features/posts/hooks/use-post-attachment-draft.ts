@@ -50,6 +50,7 @@ export function usePostAttachmentDraft({
   const additionsRef = useRef(additions);
   const session = useRef(createPostUploadSession());
   const disposedRef = useRef(false);
+  const preparationControllers = useRef(new Set<AbortController>());
   const totalCount = existing.length + additions.length;
   const attachmentCountRef = useRef(totalCount);
   const attachmentsChanged =
@@ -64,8 +65,11 @@ export function usePostAttachmentDraft({
 
   useEffect(() => {
     disposedRef.current = false;
+    const controllers = preparationControllers.current;
     return () => {
       disposedRef.current = true;
+      controllers.forEach((controller) => controller.abort());
+      controllers.clear();
       additionsRef.current.forEach(releasePostFile);
     };
   }, []);
@@ -89,33 +93,35 @@ export function usePostAttachmentDraft({
     const currentCount = attachmentCountRef.current;
     attachmentCountRef.current += selectedCount;
     setPreparingCount((current) => current + selectedCount);
-    let kept = false;
+    let preparedCount = 0;
+    const controller = new AbortController();
+    preparationControllers.current.add(controller);
     try {
-      const prepared = await preparePostFiles(
-        [...files],
-        currentCount,
-        selection,
-      );
-      if (disposedRef.current) {
-        prepared.forEach(releasePostFile);
-        return;
-      }
-      setAdditions((current) => [...current, ...prepared]);
-      setAttachmentOrder((current) => [
-        ...current,
-        ...prepared.map((item) => item.key),
-      ]);
-      void preupload(prepared, session.current).catch(() => undefined);
-      kept = true;
-      setPreparationError(undefined);
-      onFilesAdded?.();
+      await preparePostFiles([...files], currentCount, selection, {
+        onPrepared: (prepared) => {
+          if (disposedRef.current) {
+            releasePostFile(prepared);
+            return;
+          }
+          preparedCount += 1;
+          setAdditions((current) => [...current, prepared]);
+          setAttachmentOrder((current) => [...current, prepared.key]);
+          void preupload([prepared], session.current).catch(() => undefined);
+          onFilesAdded?.();
+        },
+        onError: (error) => {
+          if (!disposedRef.current) setPreparationError(error.message);
+        },
+        signal: controller.signal,
+      });
     } catch (error) {
       if (disposedRef.current) return;
       setPreparationError(
         error instanceof Error ? error.message : "파일을 준비하지 못했습니다.",
       );
     } finally {
-      if (!kept) attachmentCountRef.current -= selectedCount;
+      preparationControllers.current.delete(controller);
+      attachmentCountRef.current -= selectedCount - preparedCount;
       if (!disposedRef.current)
         setPreparingCount((current) => current - selectedCount);
     }

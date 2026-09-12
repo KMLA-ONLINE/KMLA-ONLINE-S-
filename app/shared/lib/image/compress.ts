@@ -10,6 +10,8 @@ interface CompressionPolicy {
 }
 
 const MAX_IMAGE_PIXELS = 50_000_000;
+// PNG/WebP 치수와 일반적인 JPEG SOF는 파일 앞부분에 있다. 30MiB 전체를 복사하지 않는다.
+const IMAGE_HEADER_READ_BYTES = 256 * 1024;
 const JPEG_START_OF_FRAME_MARKERS = new Set([
   0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
 ]);
@@ -147,20 +149,32 @@ function readWebpDimensions(view: DataView): [number, number] | null {
 async function readImageDimensions(
   file: File,
 ): Promise<[number, number] | null> {
-  const view = new DataView(await file.arrayBuffer());
+  const view = new DataView(
+    await file.slice(0, IMAGE_HEADER_READ_BYTES).arrayBuffer(),
+  );
   if (file.type === "image/png") return readPngDimensions(view);
   if (file.type === "image/jpeg") return readJpegDimensions(view);
   if (file.type === "image/webp") return readWebpDimensions(view);
   return null;
 }
 
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted)
+    throw new DOMException("Image processing aborted", "AbortError");
+}
+
 /** 압축 워커를 열기 전에 원본 크기를 제한한다. 지원 포맷은 전체 디코딩 없이 헤더를 읽는다. */
-export async function validateImageInput(file: File): Promise<void> {
+export async function validateImageInput(
+  file: File,
+  signal?: AbortSignal,
+): Promise<void> {
+  throwIfAborted(signal);
   if (!file.type.startsWith("image/")) return;
   if (file.size > MAX_INPUT_FILE_BYTES)
     throw new Error(`이미지는 30MB 이하여야 합니다: ${file.name}`);
 
   const dimensions = await readImageDimensions(file);
+  throwIfAborted(signal);
   if (dimensions) {
     if (dimensions[0] * dimensions[1] > MAX_IMAGE_PIXELS)
       throw new Error(`이미지는 50메가픽셀 이하여야 합니다: ${file.name}`);
@@ -180,6 +194,38 @@ export async function validateImageInput(file: File): Promise<void> {
   try {
     if (bitmap.width * bitmap.height > MAX_IMAGE_PIXELS)
       throw new Error(`이미지는 50메가픽셀 이하여야 합니다: ${file.name}`);
+  } finally {
+    bitmap.close();
+  }
+}
+
+/**
+ * 정규화 뒤 metadata를 만들 때 쓰는 치수 판독기. WebP는 헤더만 읽으므로 두 번째 전체 디코딩을
+ * 피하고, 예상 밖의 유효 이미지일 때만 브라우저 디코더로 돌아간다.
+ */
+export async function getImageDimensions(
+  file: File,
+  signal?: AbortSignal,
+): Promise<[number, number]> {
+  throwIfAborted(signal);
+  const dimensions = await readImageDimensions(file);
+  throwIfAborted(signal);
+  if (dimensions) return dimensions;
+  if (typeof createImageBitmap !== "function")
+    throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`);
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file, {
+      imageOrientation: "from-image",
+    });
+  } catch (cause) {
+    throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, { cause });
+  }
+
+  try {
+    throwIfAborted(signal);
+    return [bitmap.width, bitmap.height];
   } finally {
     bitmap.close();
   }
@@ -207,11 +253,13 @@ export async function validateImageInput(file: File): Promise<void> {
 export async function compressImage(
   file: File,
   preset: ImagePreset,
+  signal?: AbortSignal,
 ): Promise<File> {
   if (!file.type.startsWith("image/")) return file;
 
   const { maxEdge, maxBytes, quality } = PRESETS[preset];
-  await validateImageInput(file);
+  await validateImageInput(file, signal);
+  throwIfAborted(signal);
 
   const compressed = await imageCompression(file, {
     maxWidthOrHeight: maxEdge,
@@ -221,9 +269,13 @@ export async function compressImage(
     libURL: workerLibUrl,
     preserveExif: false,
     alwaysKeepResolution: false,
+    signal,
   }).catch((cause) => {
+    if (cause instanceof DOMException && cause.name === "AbortError")
+      throw cause;
     throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, { cause });
   });
+  throwIfAborted(signal);
   if (compressed.size > maxBytes)
     throw new Error(`처리한 이미지가 용량 제한을 초과합니다: ${file.name}`);
 

@@ -1,7 +1,11 @@
 import imageCompression from "browser-image-compression";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { compressImage, validateImageInput } from "~/shared/lib/image/compress";
+import {
+  compressImage,
+  getImageDimensions,
+  validateImageInput,
+} from "~/shared/lib/image/compress";
 
 vi.mock("browser-image-compression", () => ({ default: vi.fn() }));
 
@@ -168,6 +172,28 @@ describe("compressImage", () => {
       expect(decode).not.toHaveBeenCalled();
     },
   );
+
+  it("WebP 결과의 치수는 헤더만 읽고 다시 디코딩하지 않는다", async () => {
+    const decode = vi.fn();
+    vi.stubGlobal("createImageBitmap", decode);
+
+    await expect(
+      getImageDimensions(webpWithDimensions(1920, 1080)),
+    ).resolves.toEqual([1920, 1080]);
+
+    expect(decode).not.toHaveBeenCalled();
+  });
+
+  it("입력 치수 검사는 파일 전체 대신 앞부분만 읽는다", async () => {
+    const bytes = new Uint8Array(512 * 1024);
+    bytes.set(new Uint8Array(await pngWithDimensions(10, 10).arrayBuffer()));
+    const file = new File([bytes], "photo.png", { type: "image/png" });
+    const slice = vi.spyOn(file, "slice");
+
+    await expect(validateImageInput(file)).resolves.toBeUndefined();
+
+    expect(slice).toHaveBeenCalledWith(0, 256 * 1024);
+  });
 
   it("30 MB를 넘는 입력은 헤더를 읽기 전에 거절한다", async () => {
     const file = pngWithDimensions(10, 10, "large.png");

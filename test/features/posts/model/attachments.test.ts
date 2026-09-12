@@ -7,21 +7,23 @@ import {
   splitPostAttachments,
   toAttachmentDownloadUrl,
 } from "~/features/posts/model/attachments";
-import type { PostAttachment } from "~/features/posts/model/types";
-import { compressImage } from "~/shared/lib/image/compress";
+import type {
+  PostAttachment,
+  PreparedPostFile,
+} from "~/features/posts/model/types";
+import { compressImage, getImageDimensions } from "~/shared/lib/image/compress";
 
 vi.mock("~/shared/lib/image/compress", () => ({
   compressImage: vi.fn(),
+  getImageDimensions: vi.fn(),
 }));
 
 const compress = vi.mocked(compressImage);
+const getDimensions = vi.mocked(getImageDimensions);
 
 beforeEach(() => {
   compress.mockReset();
-  vi.stubGlobal(
-    "createImageBitmap",
-    vi.fn(() => Promise.resolve({ width: 20, height: 10, close: vi.fn() })),
-  );
+  getDimensions.mockResolvedValue([20, 10]);
 });
 
 describe("imageDownloadName", () => {
@@ -77,7 +79,7 @@ describe("prepareCommentImage", () => {
 });
 
 describe("preparePostFiles", () => {
-  it("limits CPU-heavy photo normalization to two selected images at once", async () => {
+  it("limits CPU-heavy photo normalization to three selected images at once", async () => {
     let active = 0;
     let maxActive = 0;
     let photoCalls = 0;
@@ -90,7 +92,7 @@ describe("preparePostFiles", () => {
       active += 1;
       maxActive = Math.max(maxActive, active);
 
-      if (photoCalls > 2) {
+      if (photoCalls > 3) {
         active -= 1;
         return Promise.resolve(file);
       }
@@ -114,8 +116,8 @@ describe("preparePostFiles", () => {
     );
 
     try {
-      expect(active).toBeGreaterThanOrEqual(2);
-      expect(maxActive).toBe(2);
+      expect(active).toBeGreaterThanOrEqual(3);
+      expect(maxActive).toBe(3);
     } finally {
       release.forEach((resolve) => resolve());
       await preparation;
@@ -139,6 +141,36 @@ describe("preparePostFiles", () => {
         "image",
       ),
     ).resolves.toMatchObject([{ file: normalized, thumbnail: null }]);
+  });
+
+  it("adds the normalized photo before its optional thumbnail finishes", async () => {
+    const normalized = new File(["photo"], "photo.webp", {
+      type: "image/webp",
+    });
+    let resolveThumbnail: ((file: File) => void) | undefined;
+    compress.mockImplementation((_file, preset) => {
+      if (preset === "photo") return Promise.resolve(normalized);
+      return new Promise<File>((resolve) => {
+        resolveThumbnail = resolve;
+      });
+    });
+    const onPrepared = vi.fn();
+
+    const preparation = preparePostFiles(
+      [new File(["source"], "photo.png", { type: "image/png" })],
+      0,
+      "image",
+      { onPrepared },
+    );
+
+    await vi.waitFor(() => expect(onPrepared).toHaveBeenCalledOnce());
+    const item = onPrepared.mock.calls[0][0] as PreparedPostFile;
+    expect(item.file).toBe(normalized);
+    expect(item.thumbnail).toBeNull();
+    resolveThumbnail?.(normalized);
+    await expect(preparation).resolves.toMatchObject([
+      { file: normalized, thumbnail: normalized },
+    ]);
   });
 
   it("normalizes one image at a time on iPad-class devices", async () => {
