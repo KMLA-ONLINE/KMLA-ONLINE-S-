@@ -9,6 +9,7 @@ import type {
 } from "~/features/posts/model/types";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
 import { validateMentionCount } from "~/features/posts/model/mentions";
+import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 
 const IDENTITIES: PostIdentity[] = ["identified", "anonymous", "staff"];
 
@@ -115,7 +116,7 @@ export function validateSelectedFiles(
     )
       return `동영상 파일은 아직 지원하지 않습니다: ${file.name}`;
     if (file.size === 0) return `빈 파일은 첨부할 수 없습니다: ${file.name}`;
-    if (file.size > 30 * 1024 * 1024)
+    if (file.size > MAX_INPUT_FILE_BYTES)
       return `파일은 30MB 이하여야 합니다: ${file.name}`;
   }
   return null;

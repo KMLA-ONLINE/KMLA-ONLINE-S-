@@ -15,7 +15,12 @@ import type {
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { ImageCropper } from "~/shared/components/image-cropper";
 import { useImageCrop } from "~/shared/hooks/use-image-crop";
-import { compressImage } from "~/shared/lib/image/compress";
+import {
+  compressImage,
+  getImageDimensions,
+  validateImageInput,
+} from "~/shared/lib/image/compress";
+import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
@@ -94,10 +99,8 @@ function MediaField({
     setError(null);
     try {
       const file = await compressImage(cropped, isIcon ? "icon" : "banner");
-      const bitmap = await createImageBitmap(file);
-      const dimensions = { width: bitmap.width, height: bitmap.height };
-      bitmap.close();
-      await replaceGroupMedia(group.group_id, slot, file, dimensions);
+      const [width, height] = await getImageDimensions(file);
+      await replaceGroupMedia(group.group_id, slot, file, { width, height });
       await getQueryClient().invalidateQueries({
         queryKey: groupKeys.all,
         refetchType: "none",
@@ -112,14 +115,23 @@ function MediaField({
   };
   const crop = useImageCrop((file) => void upload(file));
 
-  const selectFile = (file: File | undefined) => {
+  const selectFile = async (file: File | undefined) => {
     if (!file) return;
-    if (!ACCEPTED_TYPES.has(file.type) || file.size > 30 * 1024 * 1024) {
+    if (!ACCEPTED_TYPES.has(file.type) || file.size > MAX_INPUT_FILE_BYTES) {
       setError("JPEG, PNG, WebP 이미지를 30MB 이하로 선택해 주세요.");
       return;
     }
     setError(null);
-    crop.start(file);
+    try {
+      await validateImageInput(file);
+      crop.start(file);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "이미지를 처리하지 못했습니다.",
+      );
+    }
   };
 
   const remove = async () => {
@@ -155,7 +167,7 @@ function MediaField({
           type="file"
           accept="image/jpeg,image/png,image/webp"
           className="sr-only"
-          onChange={(event) => selectFile(event.target.files?.[0])}
+          onChange={(event) => void selectFile(event.target.files?.[0])}
           aria-label={`${isIcon ? "그룹 아이콘" : "커버 이미지"} 파일 선택`}
         />
         <Button

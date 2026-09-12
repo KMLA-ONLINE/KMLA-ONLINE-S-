@@ -1,4 +1,4 @@
-import { ImageIcon, RotateCcwIcon } from "lucide-react";
+import { EyeIcon, ImageIcon, RotateCcwIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
 import {
@@ -13,8 +13,10 @@ import { ImageCropper } from "~/shared/components/image-cropper";
 import { useImageCrop } from "~/shared/hooks/use-image-crop";
 import {
   compressImage,
-  validateImagePixels,
+  getImageDimensions,
+  validateImageInput,
 } from "~/shared/lib/image/compress";
+import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
@@ -30,10 +32,12 @@ const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 export function ProfileMediaEditor({
   profile,
   slot,
+  onView,
   className,
 }: {
   profile: AcceptedProfile;
   slot: ProfileMediaSlot;
+  onView?: () => void;
   className?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,6 +60,14 @@ export function ProfileMediaEditor({
     });
   };
 
+  const openViewer = () => {
+    setActionsOpen(false);
+
+    requestAnimationFrame(() => {
+      onView?.();
+    });
+  };
+
   const upload = async (cropped: File) => {
     setPending(true);
     setError(null);
@@ -65,11 +77,9 @@ export function ProfileMediaEditor({
         cropped,
         isAvatar ? "icon" : "banner",
       );
-      const bitmap = await createImageBitmap(compressed);
-      const dimensions = { width: bitmap.width, height: bitmap.height };
-      bitmap.close();
+      const [width, height] = await getImageDimensions(compressed);
 
-      await replaceProfileMedia(slot, compressed, dimensions);
+      await replaceProfileMedia(slot, compressed, { width, height });
 
       window.location.reload();
     } catch {
@@ -99,14 +109,14 @@ export function ProfileMediaEditor({
   const chooseFile = async (file: File | undefined) => {
     if (!file) return;
 
-    if (!ACCEPTED_TYPES.has(file.type) || file.size > 30 * 1024 * 1024) {
-      setError("JPEG, PNG, WebP 이미지만 사용할 수 있습니다.");
+    if (!ACCEPTED_TYPES.has(file.type) || file.size > MAX_INPUT_FILE_BYTES) {
+      setError("JPEG, PNG, WebP 이미지를 30MB 이하로 선택해 주세요.");
       return;
     }
 
     setError(null);
     try {
-      await validateImagePixels(file);
+      await validateImageInput(file);
       crop.start(file);
     } catch (cause) {
       setError(
@@ -201,6 +211,19 @@ export function ProfileMediaEditor({
           </DialogHeader>
 
           <div className="grid gap-2">
+            {onView ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-start"
+                disabled={pending}
+                onClick={openViewer}
+              >
+                <EyeIcon />
+                이미지 보기
+              </Button>
+            ) : null}
+
             <Button
               type="button"
               className="w-full justify-start"

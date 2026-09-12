@@ -63,6 +63,8 @@ export async function listFeedPosts(
   const posts = withAttachments.flatMap((row): FeedPost[] => {
     const common = {
       ...row,
+      author_avatar_path: row.author_avatar_path ?? null,
+      author_avatar_url: null,
       author_name: row.author_name ?? null,
       author_pub_id: row.author_pub_id ?? null,
       edited_at: row.edited_at ?? null,
@@ -131,6 +133,13 @@ export async function listFeedPosts(
   };
 }
 
+/**
+ * 피드 한 묶음에 첨부와 아바타의 signed URL을 채운다.
+ *
+ * 멱등하다 — 서명 결과는 `*_url`에만 담고 경로 컬럼은 그대로 두므로, 이미 채워진 게시물을
+ * 다시 통과시켜도 같은 값이 나온다. 로더(`listFeedPosts`)가 채운 페이지를 화면의 효과가 한
+ * 번 더 통과시키는 경로가 실제로 있다.
+ */
 export async function hydrateFeedPostMedia(
   posts: FeedPost[],
 ): Promise<FeedPost[]> {
@@ -165,12 +174,12 @@ export async function hydrateFeedPostMedia(
     if (post.kind === "group")
       return {
         ...post,
-        author_avatar_path: authorAvatarUrl,
+        author_avatar_url: authorAvatarUrl,
         attachments,
       };
     return {
       ...post,
-      author_avatar_path: authorAvatarUrl,
+      author_avatar_url: authorAvatarUrl,
       attachments,
       activity_media_url: post.activity_media_path
         ? (profileUrls.get(post.activity_media_path) ?? null)

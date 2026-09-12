@@ -131,7 +131,10 @@ describe("listFeedPosts", () => {
       kind: "group",
       group_slug: "notice",
       is_pinned: false,
-      author_avatar_path: "signed-avatar",
+      // 서명 결과는 `*_url`에만 담고 원시 경로는 그대로 둔다. 그래야 이미 채워진 페이지를
+      // 화면이 한 번 더 통과시켜도 아바타가 살아남는다.
+      author_avatar_path: "avatars/test.webp",
+      author_avatar_url: "signed-avatar",
       attachments: [
         { signedUrl: "signed-attachment", thumbnailUrl: "signed-thumbnail" },
       ],
@@ -197,6 +200,7 @@ describe("listFeedPosts", () => {
     expect(mocks.createProfileMediaUrls).not.toHaveBeenCalled();
     expect(page.posts[0]).toMatchObject({
       author_avatar_path: "avatars/test.webp",
+      author_avatar_url: null,
       attachments: [{ signedUrl: null }],
     });
   });

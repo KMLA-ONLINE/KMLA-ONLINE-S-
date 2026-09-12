@@ -35,6 +35,11 @@ type FeedBase = Omit<
   NullableColumns | "attachments" | "kind" | "mentions"
 > & {
   author_avatar_path: string | null;
+  /**
+   * 서명된 아바타 URL. 화면은 언제나 이쪽만 읽는다 —
+   * `~/features/posts/model/types`의 `GroupPost` 주석이 이유를 적어 두었다.
+   */
+  author_avatar_url: string | null;
   author_name: string | null;
   author_pub_id: string | null;
   edited_at: string | null;

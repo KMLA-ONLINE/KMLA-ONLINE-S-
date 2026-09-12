@@ -17,6 +17,7 @@ import {
   hydrateGroupPostMedia,
   listGroupPosts,
   listPostComments,
+  listPostReactors,
   listProfilePosts,
   searchGroupPosts,
 } from "~/features/posts/data/queries";
@@ -273,11 +274,10 @@ describe("post queries", () => {
     expect(page.posts[0].attachments[0].signedUrl).toBeNull();
   });
   /**
-   * 서명은 실패할 수 있다(만료된 세션, 지워진 객체, 배치 중 일부 거절). 그때 원시 object
-   * path가 남으면 `<img src>`가 상대 경로로 나가 깨진 이미지가 된다. 피드 쪽은 이미 null로
-   * 떨어뜨리고 있어서, 그룹 게시물도 같아야 이니셜 아바타로 대체된다.
+   * 서명은 실패할 수 있다(만료된 세션, 지워진 객체, 배치 중 일부 거절). 그때 표시용 URL에
+   * 원시 object path가 남으면 `<img src>`가 상대 경로로 나가 깨진 이미지가 된다.
    */
-  it("drops an avatar path that Storage did not sign", async () => {
+  it("leaves the avatar URL null when Storage did not sign the path", async () => {
     createPostAttachmentUrls.mockResolvedValue(new Map());
     createProfileMediaUrls.mockResolvedValue(new Map());
 
@@ -289,7 +289,7 @@ describe("post queries", () => {
       },
     ] as never);
 
-    expect(post?.author_avatar_path).toBeNull();
+    expect(post?.author_avatar_url).toBeNull();
   });
 
   it("keeps the signed avatar URL when signing succeeds", async () => {
@@ -306,6 +306,91 @@ describe("post queries", () => {
       },
     ] as never);
 
-    expect(post?.author_avatar_path).toBe("https://signed.example/avatar");
+    expect(post?.author_avatar_url).toBe("https://signed.example/avatar");
+  });
+
+  /**
+   * 로더가 채워 둔 첫 페이지를 화면의 효과가 한 번 더 통과시킨다
+   * (`group-posts-panel.tsx`, `feed-screen.tsx`). 서명 결과를 경로 컬럼에 덮어쓰면 두 번째
+   * 통과에서 signed URL이 object path 자리로 들어가 서명이 실패하고, 그룹 홈과 피드의
+   * 아바타가 통째로 기본 실루엣이 된다.
+   */
+  it("keeps the avatar across a second hydration pass", async () => {
+    createPostAttachmentUrls.mockResolvedValue(new Map());
+    // Storage처럼 굴게 한다 — 실제로 존재하는 object 경로만 서명된다.
+    createProfileMediaUrls.mockImplementation((paths: (string | null)[]) =>
+      Promise.resolve(
+        new Map(
+          paths
+            .filter((path) => path === "profiles/avatar.webp")
+            .map((path) => [path, "https://signed.example/avatar"] as const),
+        ),
+      ),
+    );
+
+    const [once] = await hydrateGroupPostMedia([
+      {
+        post_id: "post-id",
+        author_avatar_path: "profiles/avatar.webp",
+        attachments: [],
+      },
+    ] as never);
+    const [twice] = await hydrateGroupPostMedia([once]);
+
+    expect(twice?.author_avatar_url).toBe("https://signed.example/avatar");
+  });
+
+  it("signs comment author avatars", async () => {
+    const rpc = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: [
+          {
+            comment_id: "comment-1",
+            post_id: "post-id",
+            author_avatar_path: "profiles/avatar.webp",
+            created_at: "2026-08-24T00:00:00Z",
+          },
+        ],
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: [], error: null });
+    getSupabase.mockReturnValue({ rpc });
+    createPostAttachmentUrls.mockResolvedValue(new Map());
+    createProfileMediaUrls.mockResolvedValue(
+      new Map([["profiles/avatar.webp", "https://signed.example/avatar"]]),
+    );
+
+    const page = await listPostComments("post-id");
+
+    expect(createProfileMediaUrls).toHaveBeenCalledWith([
+      "profiles/avatar.webp",
+    ]);
+    expect(page.comments[0]?.author_avatar_url).toBe(
+      "https://signed.example/avatar",
+    );
+  });
+
+  it("signs reactor avatars", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          reaction: "like",
+          reactor_pub_id: "hanbyeol-25",
+          reactor_name: "이한별",
+          reactor_avatar_path: "profiles/avatar.webp",
+          reacted_at: "2026-08-24T00:00:00Z",
+        },
+      ],
+      error: null,
+    });
+    getSupabase.mockReturnValue({ rpc });
+    createProfileMediaUrls.mockResolvedValue(
+      new Map([["profiles/avatar.webp", "https://signed.example/avatar"]]),
+    );
+
+    const [reactor] = await listPostReactors("post-id");
+
+    expect(reactor?.reactor_avatar_url).toBe("https://signed.example/avatar");
   });
 });

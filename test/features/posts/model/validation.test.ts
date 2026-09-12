@@ -91,6 +91,20 @@ describe("attachment selection validation", () => {
       "동영상 파일은 아직 지원하지 않습니다: clip.mp4",
     );
   });
+
+  it("accepts 30 MB and rejects one byte more", () => {
+    const atLimit = new File(["x"], "limit.bin");
+    const overLimit = new File(["x"], "large.bin");
+    Object.defineProperty(atLimit, "size", { value: 30 * 1024 * 1024 });
+    Object.defineProperty(overLimit, "size", {
+      value: 30 * 1024 * 1024 + 1,
+    });
+
+    expect(validateSelectedFiles([atLimit], 0)).toBeNull();
+    expect(validateSelectedFiles([overLimit], 0)).toBe(
+      "파일은 30MB 이하여야 합니다: large.bin",
+    );
+  });
 });
 
 describe("validateProfilePostForm", () => {

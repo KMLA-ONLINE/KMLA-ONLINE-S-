@@ -30,6 +30,8 @@ export interface MentionCandidate {
   is_returning_student: boolean;
   profile_type: "student" | "alumni" | "teacher";
   avatar_path: string | null;
+  /** 서명된 아바타 URL. 화면은 이쪽만 읽는다. */
+  avatar_url: string | null;
 }
 
 /**

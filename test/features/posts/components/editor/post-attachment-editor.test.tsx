@@ -15,6 +15,16 @@ const file: PreparedPostFile = {
   previewUrl: null,
 };
 
+const imageFile: PreparedPostFile = {
+  key: "image-key",
+  file: new File(["image"], "photo.webp", { type: "image/webp" }),
+  thumbnail: null,
+  kind: "image",
+  width: 20,
+  height: 10,
+  previewUrl: "blob:photo",
+};
+
 function renderEditor(
   overrides: Partial<Parameters<typeof PostAttachmentEditor>[0]> = {},
 ) {
@@ -24,6 +34,7 @@ function renderEditor(
     order: [file.key],
     disabled: false,
     isDragging: false,
+    preparingCount: 0,
     uploadStates: {},
     onSelect: vi.fn(),
     onRemoveExisting: vi.fn(),
@@ -80,6 +91,22 @@ describe("PostAttachmentEditor", () => {
     await user.click(
       screen.getByRole("button", { name: "document.pdf 업로드 다시 시도" }),
     );
+    expect(screen.getByText("offline")).toBeVisible();
     expect(onRetry).toHaveBeenCalledWith("file-key");
+  });
+
+  it("shows how many files are still being optimized", () => {
+    renderEditor({ preparingCount: 2 });
+
+    expect(screen.getByText("파일 최적화 중 2개")).toBeVisible();
+  });
+
+  it("hides image filenames while retaining an accessible image label", () => {
+    renderEditor({ additions: [imageFile], order: [imageFile.key] });
+
+    expect(screen.queryByText("photo.webp")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "사진 1 첨부 메뉴" }),
+    ).toBeVisible();
   });
 });

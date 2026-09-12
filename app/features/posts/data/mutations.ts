@@ -320,14 +320,14 @@ async function uploadCommentImage(
 }
 
 async function hydrateCommittedComment(
-  comment: Omit<PostComment, "images">,
+  comment: Omit<PostComment, "images" | "author_avatar_url">,
 ): Promise<PostComment> {
   try {
     return (await hydratePostComments([comment]))[0];
   } catch {
     // The database commit already succeeded. Treat a follow-up metadata/signing
     // failure as a temporary missing preview rather than inviting a duplicate retry.
-    return { ...comment, images: [] };
+    return { ...comment, author_avatar_url: null, images: [] };
   }
 }
 
@@ -412,13 +412,15 @@ async function runPostFileUpload(
             }),
           controller.signal,
         );
-        // 축소본은 finalize보다 먼저 올라가야 한다 — `finalize_post_attachment`가 object의
-        // 존재를 확인하고, 없으면 `thumbnail_path`를 지워 원본으로 떨어뜨리기 때문이다.
-        // 진행률은 원본이 이미 100%를 찍었으므로 건드리지 않는다. 실패해도 삼킨다.
-        if (state.attachment.thumbnail_path && item.thumbnail) {
+        // 축소본 생성은 원본 업로드와 겹친다. finalize 전에만 준비되면 되므로, 여기서 결과를
+        // 기다려 올린다. 실패해도 원본 첨부는 그대로 확정한다.
+        const thumbnail = item.thumbnailPromise
+          ? await item.thumbnailPromise
+          : item.thumbnail;
+        if (state.attachment.thumbnail_path && thumbnail) {
           await uploadPostAttachment(
             state.attachment.thumbnail_path,
-            item.thumbnail,
+            thumbnail,
             undefined,
             controller.signal,
           ).catch(() => undefined);

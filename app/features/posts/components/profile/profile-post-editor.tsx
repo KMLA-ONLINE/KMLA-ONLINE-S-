@@ -267,6 +267,7 @@ export function ProfilePostEditor({
           order={attachmentOrder}
           disabled={saving}
           isDragging={isDragging}
+          preparingCount={preparingCount}
           uploadStates={uploadStates}
           onSelect={addFiles}
           onRemoveExisting={removeExisting}

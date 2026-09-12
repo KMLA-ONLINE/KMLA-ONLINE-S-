@@ -219,7 +219,7 @@ function MemberRow({
 }) {
   const content = (
     <>
-      <UserAvatar src={member.avatar_path} name={member.name} size="lg" />
+      <UserAvatar src={member.avatar_url} name={member.name} size="lg" />
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium">{member.name}</span>
         <span className="block text-xs text-muted-foreground">

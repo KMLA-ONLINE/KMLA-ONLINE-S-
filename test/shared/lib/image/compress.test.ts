@@ -3,12 +3,51 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   compressImage,
-  validateImagePixels,
+  getImageDimensions,
+  validateImageInput,
 } from "~/shared/lib/image/compress";
 
 vi.mock("browser-image-compression", () => ({ default: vi.fn() }));
 
 const compress = vi.mocked(imageCompression);
+
+function pngWithDimensions(width: number, height: number, name = "photo.png") {
+  const bytes = new Uint8Array(24);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 0x89504e47);
+  view.setUint32(4, 0x0d0a1a0a);
+  view.setUint32(12, 0x49484452);
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+  return new File([bytes], name, { type: "image/png" });
+}
+
+function jpegWithDimensions(width: number, height: number) {
+  const bytes = new Uint8Array(21);
+  const view = new DataView(bytes.buffer);
+  view.setUint16(0, 0xffd8);
+  view.setUint16(2, 0xffc0);
+  view.setUint16(4, 17);
+  view.setUint8(6, 8);
+  view.setUint16(7, height);
+  view.setUint16(9, width);
+  return new File([bytes], "photo.jpg", { type: "image/jpeg" });
+}
+
+function webpWithDimensions(width: number, height: number) {
+  const bytes = new Uint8Array(30);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 0x52494646);
+  view.setUint32(4, 22, true);
+  view.setUint32(8, 0x57454250);
+  view.setUint32(12, 0x56503858);
+  view.setUint32(16, 10, true);
+  for (let index = 0; index < 3; index += 1) {
+    view.setUint8(24 + index, ((width - 1) >> (index * 8)) & 0xff);
+    view.setUint8(27 + index, ((height - 1) >> (index * 8)) & 0xff);
+  }
+  return new File([bytes], "photo.webp", { type: "image/webp" });
+}
 
 describe("compressImage", () => {
   beforeEach(() => {
@@ -114,8 +153,67 @@ describe("compressImage", () => {
       type: "image/png",
     });
 
-    await expect(validateImagePixels(file)).rejects.toThrow("50메가픽셀");
+    await expect(validateImageInput(file)).rejects.toThrow("50메가픽셀");
     expect(close).toHaveBeenCalledOnce();
     expect(compress).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["PNG", pngWithDimensions(10_000, 5_001)],
+    ["JPEG", jpegWithDimensions(10_000, 5_001)],
+    ["WebP", webpWithDimensions(10_000, 5_001)],
+  ])(
+    "%s 헤더에서 치수를 읽어 전체 디코딩 전에 거절한다",
+    async (_type, file) => {
+      const decode = vi.fn();
+      vi.stubGlobal("createImageBitmap", decode);
+
+      await expect(validateImageInput(file)).rejects.toThrow("50메가픽셀");
+      expect(decode).not.toHaveBeenCalled();
+    },
+  );
+
+  it("WebP 결과의 치수는 헤더만 읽고 다시 디코딩하지 않는다", async () => {
+    const decode = vi.fn();
+    vi.stubGlobal("createImageBitmap", decode);
+
+    await expect(
+      getImageDimensions(webpWithDimensions(1920, 1080)),
+    ).resolves.toEqual([1920, 1080]);
+
+    expect(decode).not.toHaveBeenCalled();
+  });
+
+  it("입력 치수 검사는 파일 전체 대신 앞부분만 읽는다", async () => {
+    const bytes = new Uint8Array(512 * 1024);
+    bytes.set(new Uint8Array(await pngWithDimensions(10, 10).arrayBuffer()));
+    const file = new File([bytes], "photo.png", { type: "image/png" });
+    const slice = vi.spyOn(file, "slice");
+
+    await expect(validateImageInput(file)).resolves.toBeUndefined();
+
+    expect(slice).toHaveBeenCalledWith(0, 256 * 1024);
+  });
+
+  it("30 MB를 넘는 입력은 헤더를 읽기 전에 거절한다", async () => {
+    const file = pngWithDimensions(10, 10, "large.png");
+    Object.defineProperty(file, "size", { value: 30 * 1024 * 1024 + 1 });
+
+    await expect(validateImageInput(file)).rejects.toThrow(
+      "이미지는 30MB 이하여야 합니다",
+    );
+  });
+
+  it("처리 결과가 사진의 8 MiB 상한을 넘으면 거절한다", async () => {
+    const file = pngWithDimensions(10, 10);
+    const result = new File(["result"], "photo.webp", {
+      type: "image/webp",
+    });
+    Object.defineProperty(result, "size", { value: 8 * 1024 * 1024 + 1 });
+    compress.mockResolvedValue(result);
+
+    await expect(compressImage(file, "photo")).rejects.toThrow(
+      "처리한 이미지가 용량 제한을 초과합니다",
+    );
   });
 });

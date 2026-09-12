@@ -17,6 +17,7 @@ import type {
   GroupSummary,
 } from "~/features/groups/model/types";
 import { createGroupMediaUrls } from "~/features/groups/data/files";
+import { createProfileMediaUrls } from "~/features/profiles/data/media";
 
 type GroupRow = Database["public"]["Tables"]["groups"]["Row"];
 
@@ -224,8 +225,8 @@ export async function listGroupMembers(
   });
   if (error) throw error;
 
-  const rows = (data ?? []) as GroupMember[];
-  const members = rows.slice(0, pageSize);
+  const rows = (data ?? []) as Omit<GroupMember, "avatar_url">[];
+  const members = await signAvatars(rows.slice(0, pageSize));
   const last = members.at(-1);
   return {
     members,
@@ -247,7 +248,23 @@ export async function listGroupJoinRequests(
     p_group_id: groupId,
   });
   if (error) throw error;
-  return data ?? [];
+  return signAvatars(data ?? []);
+}
+
+/**
+ * 명부와 가입 신청 목록의 아바타를 한 번의 배치로 서명한다.
+ *
+ * 원시 `avatar_path`는 그대로 두고 `avatar_url`만 채운다 — 같은 행이 두 번 지나가도
+ * 결과가 같아야 하고, 화면은 서명된 쪽만 그린다.
+ */
+async function signAvatars<T extends { avatar_path: string | null }>(
+  rows: T[],
+): Promise<(T & { avatar_url: string | null })[]> {
+  const urls = await createProfileMediaUrls(rows.map((row) => row.avatar_path));
+  return rows.map((row) => ({
+    ...row,
+    avatar_url: row.avatar_path ? (urls.get(row.avatar_path) ?? null) : null,
+  }));
 }
 
 /**
