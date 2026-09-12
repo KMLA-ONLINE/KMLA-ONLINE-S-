@@ -46,7 +46,6 @@ const MAX_ZOOM = 4;
 const DOUBLE_TAP_ZOOM = 2;
 const DOUBLE_TAP_DELAY = 250;
 const CLICK_SUPPRESSION_TIME = 400;
-const MOBILE_MEDIA_QUERY = "(max-width: 639px)";
 
 interface Point {
   x: number;
@@ -211,6 +210,7 @@ export function ImageViewer({
   const hasDraggedRef = useRef(false);
   const suppressClicksUntilRef = useRef(0);
   const pendingTapRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPointerTypeRef = useRef<string | null>(null);
   // pointermove는 연속 이벤트라 pointerup이 도착할 때까지 setState가 아직 커밋되지 않았을 수
   // 있다. 놓는 순간의 임계값 판정은 이 ref를 읽는다.
   const offsetRef = useRef(0);
@@ -315,11 +315,6 @@ export function ImageViewer({
     }
   };
 
-  const isMobileViewport = () =>
-    typeof window.matchMedia === "function"
-      ? window.matchMedia(MOBILE_MEDIA_QUERY).matches
-      : window.innerWidth < 640;
-
   const clearPendingTap = () => {
     if (pendingTapRef.current === null) return;
     clearTimeout(pendingTapRef.current);
@@ -404,6 +399,7 @@ export function ImageViewer({
     // 컨트롤 위에서는 드래그하지 않고, 마우스로도 드래그하지 않는다 — 마우스의 어포던스는
     // 좌우 화살표다. 터치 포인터는 브라우저가 암묵적으로 캡처하므로 setPointerCapture가
     // 필요 없고, 부르면 후속 click이 이 요소로 리타깃돼서 탭-닫기와 화살표 탭이 깨진다.
+    lastPointerTypeRef.current = event.pointerType;
     if (
       event.pointerType === "mouse" ||
       (event.target as HTMLElement).closest("button, a")
@@ -414,7 +410,7 @@ export function ImageViewer({
     const point = { x: event.clientX, y: event.clientY };
     activePointersRef.current.set(event.pointerId, point);
 
-    if (activePointersRef.current.size === 2 && isMobileViewport()) {
+    if (activePointersRef.current.size === 2) {
       const pair = getPointerPair();
       if (!pair || pair.distance === 0) return;
 
@@ -436,7 +432,7 @@ export function ImageViewer({
     gestureStartRef.current = point;
     setIsGestureActive(true);
 
-    if (zoomRef.current.scale > 1 && isMobileViewport()) {
+    if (zoomRef.current.scale > 1) {
       gestureModeRef.current = "pan";
       panBaseRef.current = { x: zoomRef.current.x, y: zoomRef.current.y };
       return;
@@ -621,7 +617,9 @@ export function ImageViewer({
 
   const handleImageClick = (event: ReactMouseEvent<HTMLImageElement>) => {
     event.stopPropagation();
-    if (!isMobileViewport() || shouldSuppressClick()) return;
+    if (lastPointerTypeRef.current !== "touch" || shouldSuppressClick()) {
+      return;
+    }
 
     if (pendingTapRef.current !== null) {
       clearPendingTap();
@@ -717,7 +715,7 @@ export function ImageViewer({
           <div
             ref={viewportRef}
             data-testid="image-viewer-viewport"
-            className="relative min-h-0 flex-1 touch-none overflow-hidden sm:touch-pan-y"
+            className="relative min-h-0 flex-1 touch-none overflow-hidden"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}

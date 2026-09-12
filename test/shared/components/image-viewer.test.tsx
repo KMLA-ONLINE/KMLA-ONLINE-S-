@@ -31,6 +31,12 @@ function stubMobileViewport() {
   );
 }
 
+function stubDesktopViewport() {
+  vi.spyOn(window, "matchMedia").mockReturnValue({
+    matches: false,
+  } as MediaQueryList);
+}
+
 function getGestureElements() {
   const image = screen.getByAltText("a.webp");
   const viewport = screen.getByTestId("image-viewer-viewport");
@@ -58,9 +64,25 @@ function getGestureElements() {
   return { image, viewport };
 }
 
-function doubleTap(image: HTMLElement) {
+function tap(image: HTMLElement, pointerType = "touch") {
+  fireEvent.pointerDown(image, {
+    pointerId: 1,
+    pointerType,
+    clientX: 200,
+    clientY: 300,
+  });
+  fireEvent.pointerUp(image, {
+    pointerId: 1,
+    pointerType,
+    clientX: 200,
+    clientY: 300,
+  });
   fireEvent.click(image, { clientX: 200, clientY: 300 });
-  fireEvent.click(image, { clientX: 200, clientY: 300 });
+}
+
+function doubleTap(image: HTMLElement, pointerType = "touch") {
+  tap(image, pointerType);
+  tap(image, pointerType);
 }
 
 afterEach(() => {
@@ -142,7 +164,7 @@ describe("ImageViewer", () => {
     const { image } = getGestureElements();
     const header = screen.getByTestId("image-viewer-header");
 
-    fireEvent.click(image);
+    tap(image);
     act(() => {
       vi.advanceTimersByTime(250);
     });
@@ -154,7 +176,7 @@ describe("ImageViewer", () => {
     );
     expect(header).not.toHaveClass("hidden");
 
-    fireEvent.click(image);
+    tap(image);
     act(() => {
       vi.advanceTimersByTime(250);
     });
@@ -186,9 +208,9 @@ describe("ImageViewer", () => {
     });
   });
 
-  it("zooms on a mobile double tap and resets when the image changes", () => {
+  it("zooms on a tablet touch double tap and resets when the image changes", () => {
     vi.useFakeTimers();
-    stubMobileViewport();
+    stubDesktopViewport();
     renderViewer("a");
     const { image } = getGestureElements();
 
@@ -203,8 +225,21 @@ describe("ImageViewer", () => {
     });
   });
 
-  it("caps mobile pinch zoom at 4x and does not page while zoomed", () => {
-    stubMobileViewport();
+  it("does not zoom from a mouse double click", () => {
+    vi.useFakeTimers();
+    stubDesktopViewport();
+    renderViewer("a");
+    const { image } = getGestureElements();
+
+    doubleTap(image, "mouse");
+
+    expect(image).toHaveStyle({
+      transform: "translate3d(0px, 0px, 0) scale(1)",
+    });
+  });
+
+  it("caps tablet pinch zoom at 4x and does not page while zoomed", () => {
+    stubDesktopViewport();
     renderViewer("a");
     const { image, viewport } = getGestureElements();
 
