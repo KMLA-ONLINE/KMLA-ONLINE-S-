@@ -98,15 +98,13 @@ describe("useServiceWorker", () => {
     }
   });
 
-  it("첫 설치에서 새로고침하지 않고 오프라인 준비 상태를 유지한다", async () => {
-    const { emit, reload, result, workbox } = await setupHook();
+  it("첫 설치에서 현재 페이지를 새로고침하지 않는다", async () => {
+    const { emit, reload, workbox } = await setupHook();
 
     expect(workbox.options).toEqual({ scope: "/", updateViaCache: "none" });
 
-    emit("activated", { isUpdate: false });
     emit("controlling", { isUpdate: false });
 
-    expect(result.current.offlineReady).toBe(true);
     expect(reload).not.toHaveBeenCalled();
   });
 

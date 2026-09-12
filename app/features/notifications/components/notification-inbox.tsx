@@ -4,6 +4,7 @@ import { Link, useFetcher } from "react-router";
 
 import { PageHeader } from "~/features/app-shell";
 import { NotificationAvatar } from "~/features/notifications/components/notification-avatar";
+import { NotificationPermissionCard } from "~/features/notifications/components/notification-permission-card";
 import { groupNotifications } from "~/features/notifications/model/notifications";
 import type {
   NotificationItem,
@@ -182,8 +183,10 @@ function NotificationGroup({
 
 export function NotificationInbox({
   initialPage,
+  profileId,
 }: {
   initialPage: NotificationPage;
+  profileId: number;
 }) {
   const pageFetcher = useFetcher<NotificationPage>();
   const markAllFetcher = useFetcher();
@@ -278,6 +281,8 @@ export function NotificationInbox({
             </Button>
           </div>
         </div>
+
+        <NotificationPermissionCard profileId={profileId} />
 
         {items.length === 0 ? (
           <Empty className="border-0 py-20">

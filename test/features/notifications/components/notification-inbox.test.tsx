@@ -34,6 +34,7 @@ describe("NotificationInbox", () => {
     renderRoute(() => (
       <NotificationInbox
         initialPage={{ items: [restrictedNotification()], nextCursor: null }}
+        profileId={1}
       />
     ));
 
@@ -59,6 +60,7 @@ describe("NotificationInbox", () => {
               beforeLastActivityAt: "2026-08-31T00:00:00Z",
             },
           }}
+          profileId={1}
         />
       ),
       {
