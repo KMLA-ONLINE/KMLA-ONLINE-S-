@@ -150,11 +150,10 @@ function describePush(
 function summarizeDelivery(
   pushEnabled: boolean,
   preferences: NotificationPreferences,
-): { headline: string; detail: string } {
+): { headline: string; detail?: string } {
   if (!pushEnabled) {
     return {
       headline: "이 기기로 오는 Push가 없습니다.",
-      detail: "받도록 설정한 알림은 앱 알림함에서 확인합니다.",
     };
   }
 
@@ -187,7 +186,7 @@ function SettingsSection({
   children,
 }: {
   title: string;
-  description: string;
+  description?: string;
   footnote?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -462,10 +461,7 @@ export function NotificationSettings({
           ) : null}
         </section>
 
-        <SettingsSection
-          title="유형별 Push"
-          description="이 기기 Push가 켜져 있을 때 어떤 유형을 보낼지 고릅니다."
-        >
+        <SettingsSection title="유형별 Push">
           {PREFERENCE_ROWS.map(([key, Icon, title, description]) => (
             <div key={key} className="flex items-center gap-3 px-4 py-3">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
