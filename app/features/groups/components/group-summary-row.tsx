@@ -140,7 +140,10 @@ export function GroupSummaryRow({
           ) : null}
         </div>
         {isMember ? (
-          <fetcher.Form method="post" className="relative z-10 shrink-0">
+          <fetcher.Form
+            method="post"
+            className="relative z-10 -mr-2 flex shrink-0 items-center self-center"
+          >
             <PinFields
               groupId={group.group_id}
               profileId={profileId}
@@ -149,13 +152,17 @@ export function GroupSummaryRow({
             <Button
               type="submit"
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               aria-label={group.pinned_at ? "고정 해제" : "그룹 고정"}
               aria-pressed={Boolean(group.pinned_at)}
               disabled={pending}
-              className={`${group.pinned_at ? "text-primary" : "text-muted-foreground"} sr-only focus:not-sr-only md:not-sr-only`}
+              className={`${group.pinned_at ? "text-primary" : "text-muted-foreground"} sr-only min-h-9 min-w-9 focus:not-sr-only md:not-sr-only`}
             >
-              {pending ? <Spinner /> : <PinIcon className="-rotate-45" />}
+              {pending ? (
+                <Spinner />
+              ) : (
+                <PinIcon className="size-4.5 -rotate-45" />
+              )}
             </Button>
           </fetcher.Form>
         ) : null}

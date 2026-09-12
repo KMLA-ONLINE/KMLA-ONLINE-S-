@@ -268,6 +268,7 @@ export function ProfilePostEditor({
           disabled={saving}
           isDragging={isDragging}
           preparingCount={preparingCount}
+          preparationError={preparationError}
           uploadStates={uploadStates}
           onSelect={addFiles}
           onRemoveExisting={removeExisting}
@@ -275,9 +276,9 @@ export function ProfilePostEditor({
           onMove={move}
           onRetry={retry}
         />
-        {(preparationError ?? formErrors?.form) ? (
+        {formErrors?.form ? (
           <p role="alert" className="mt-4 text-sm text-destructive">
-            {preparationError ?? formErrors.form}
+            {formErrors.form}
           </p>
         ) : null}
       </PostEditorLayout>

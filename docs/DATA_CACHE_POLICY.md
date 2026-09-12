@@ -233,7 +233,7 @@ Storage signed URL도 같은 쿼리 캐시에 산다. 키는 `["signed-url", buc
 | `kmla-online:posts-view:v1`                      | 기기 | 카드/목록 보기                                                    |
 | `kmla-online:experimental-features:v1`           | 기기 | 실험 기능 토글                                                    |
 | `kmla-online:pwa-install-preference`             | 기기 | 지우면 로그아웃할 때마다 설치 안내가 다시 뜬다                    |
-| `kmla-online:notification-prompt:v1:<profileId>` | 계정 | 키에 profileId가 있어 이미 격리되어 있다                          |
+| `kmla-online:notification-prompt:v2:<profileId>` | 계정 | 키에 profileId가 있어 이미 격리되어 있다                          |
 
 계정 데이터를 지울 때는 같은 탭에도 합성 `storage` 이벤트로 알린다. `storage`는 값을 바꾼 탭에는
 오지 않으므로, 알리지 않으면 `useVisitedPosts`의 모듈 수준 snapshot처럼 값을 캐시해 둔 store가

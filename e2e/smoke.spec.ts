@@ -96,10 +96,6 @@ test("첫 서비스 워커 설치는 현재 페이지를 새로고침하지 않�
       page.evaluate(() => Boolean(navigator.serviceWorker.controller)),
     )
     .toBe(true);
-  await expect(
-    page.getByText("오프라인에서도 사용할 수 있습니다."),
-  ).toBeVisible();
-
   expect(
     await page.evaluate(() => sessionStorage.getItem("document-load-count")),
   ).toBe("1");

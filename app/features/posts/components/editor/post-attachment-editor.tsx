@@ -48,6 +48,7 @@ export function PostAttachmentEditor({
   disabled,
   isDragging,
   preparingCount,
+  preparationError,
   uploadStates,
   onSelect,
   onRemoveExisting,
@@ -61,6 +62,7 @@ export function PostAttachmentEditor({
   disabled: boolean;
   isDragging: boolean;
   preparingCount: number;
+  preparationError?: string;
   uploadStates: Record<string, PostFileUploadState>;
   onSelect: (
     files: FileList | null,
@@ -115,6 +117,9 @@ export function PostAttachmentEditor({
             <h2 className="text-sm font-medium sm:text-base">첨부</h2>
             <span className="text-xs text-muted-foreground tabular-nums">
               {order.length} / {POST_ATTACHMENT_LIMIT}
+            </span>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+              동영상 미지원
             </span>
           </div>
           {preparingCount > 0 ? (
@@ -186,6 +191,15 @@ export function PostAttachmentEditor({
         />
       </div>
 
+      {preparationError ? (
+        <p
+          role="alert"
+          className="border-b bg-destructive/5 px-3 py-2 text-sm break-words text-destructive sm:px-4"
+        >
+          {preparationError}
+        </p>
+      ) : null}
+
       {order.length > 0 ? (
         <DndContext
           sensors={sensors}
@@ -248,7 +262,7 @@ export function PostAttachmentEditor({
             사진이나 파일을 끌어 놓으세요
           </span>
           <span className="text-xs text-muted-foreground">
-            파일당 최대 30MB
+            동영상 제외 · 파일당 최대 30MB
           </span>
         </button>
       )}

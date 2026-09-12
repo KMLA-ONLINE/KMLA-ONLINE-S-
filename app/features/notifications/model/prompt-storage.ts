@@ -1,4 +1,4 @@
-const KEY_PREFIX = "kmla-online:notification-prompt:v1";
+const KEY_PREFIX = "kmla-online:notification-prompt:v2";
 
 export function hasHandledNotificationPrompt(profileId: number): boolean {
   try {

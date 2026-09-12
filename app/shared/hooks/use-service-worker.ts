@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Workbox } from "workbox-window";
 
 const reloadPage = () => window.location.reload();
-const OFFLINE_READY_DURATION_MS = 5000;
 const APPLY_UPDATE_TIMEOUT_MS = 5000;
 const UPDATE_POLL_INTERVAL_MS = 60 * 60 * 1000;
 const UPDATE_CHECK_THROTTLE_MS = 5 * 60 * 1000;
@@ -19,11 +18,9 @@ const UPDATE_CHECK_THROTTLE_MS = 5 * 60 * 1000;
  */
 export function useServiceWorker(reload = reloadPage) {
   const [updateReady, setUpdateReady] = useState(false);
-  const [offlineReady, setOfflineReady] = useState(false);
   const [applyingUpdate, setApplyingUpdate] = useState(false);
   const [updateAppliedElsewhere, setUpdateAppliedElsewhere] = useState(false);
   const wbRef = useRef<Workbox | null>(null);
-  const offlineReadyTimerRef = useRef<number | null>(null);
   const applyTimeoutRef = useRef<number | null>(null);
   const updateAcceptedRef = useRef(false);
   const updateAppliedElsewhereRef = useRef(false);
@@ -58,17 +55,7 @@ export function useServiceWorker(reload = reloadPage) {
         updateAppliedElsewhereRef.current = false;
         setApplyingUpdate(false);
         setUpdateAppliedElsewhere(false);
-        setOfflineReady(false);
         setUpdateReady(true);
-      });
-      wb.addEventListener("activated", (event) => {
-        if (!event.isUpdate) {
-          setOfflineReady(true);
-          offlineReadyTimerRef.current = window.setTimeout(
-            () => setOfflineReady(false),
-            OFFLINE_READY_DURATION_MS,
-          );
-        }
       });
       wb.addEventListener("controlling", (event) => {
         // clientsClaim also fires this on the first install. Only updates that
@@ -83,7 +70,6 @@ export function useServiceWorker(reload = reloadPage) {
 
         updateAppliedElsewhereRef.current = true;
         setUpdateAppliedElsewhere(true);
-        setOfflineReady(false);
         setUpdateReady(true);
       });
 
@@ -132,9 +118,6 @@ export function useServiceWorker(reload = reloadPage) {
       cancelled = true;
       stopUpdateChecks?.();
       clearApplyTimeout();
-      if (offlineReadyTimerRef.current !== null) {
-        window.clearTimeout(offlineReadyTimerRef.current);
-      }
     };
   }, [clearApplyTimeout, reload]);
 
@@ -159,14 +142,10 @@ export function useServiceWorker(reload = reloadPage) {
     void wbRef.current?.messageSkipWaiting();
   }, [reload]);
 
-  const dismissOfflineReady = useCallback(() => setOfflineReady(false), []);
-
   return {
     updateReady,
-    offlineReady,
     applyingUpdate,
     updateAppliedElsewhere,
     applyUpdate,
-    dismissOfflineReady,
   };
 }

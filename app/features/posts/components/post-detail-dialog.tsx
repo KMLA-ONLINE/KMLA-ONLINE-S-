@@ -50,12 +50,13 @@ const DETAIL_DIALOG_CLASS =
   "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-2xl";
 
 const COMMENT_SHEET_CLASS =
-  "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-[1025px]:top-auto max-[1025px]:bottom-0 max-[1025px]:h-[98svh] max-[1025px]:max-h-[98svh] max-[1025px]:rounded-t-2xl max-[1025px]:rounded-b-none max-[1025px]:translate-y-[var(--sheet-drag-offset,0px)] max-[1025px]:data-open:zoom-in-100 max-[1025px]:data-open:slide-in-from-bottom-4 max-[1025px]:data-closed:zoom-out-100 max-[1025px]:data-closed:slide-out-to-bottom-4 max-md:left-0 max-md:max-w-full max-md:translate-x-0 md:max-[1025px]:left-1/2 md:max-[1025px]:max-w-2xl md:max-[1025px]:-translate-x-1/2 min-[1025px]:max-w-2xl";
+  "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-[1025px]:top-auto max-[1025px]:bottom-0 max-[1025px]:h-[98svh] max-[1025px]:max-h-[98svh] max-[1025px]:rounded-t-2xl max-[1025px]:rounded-b-none max-[1025px]:translate-y-[var(--sheet-drag-offset,0px)] max-[1025px]:data-open:zoom-in-100 max-[1025px]:data-open:slide-in-from-bottom-4 max-[1025px]:data-closed:zoom-out-100 max-[1025px]:data-closed:slide-out-to-bottom-4 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 sm:max-[1025px]:left-1/2 sm:max-[1025px]:max-w-2xl sm:max-[1025px]:-translate-x-1/2 min-[1025px]:max-w-2xl";
 
 const DISMISS_DRAG_DISTANCE = 96;
 /** 목록에서 시작한 손짓을 당기기로 볼 최소 거리. 그 전에는 브라우저의 스크롤로 둔다. */
 const PULL_START_SLOP = 6;
 const TABLET_SHEET_QUERY = "(max-width: 1024px) and (hover: none)";
+const TOUCH_PRIMARY_QUERY = "(hover: none) and (pointer: coarse)";
 
 function subscribeToTabletSheetQuery(onChange: () => void) {
   const query = window.matchMedia(TABLET_SHEET_QUERY);
@@ -69,6 +70,16 @@ function isTabletSheetViewport() {
 
 function getServerTabletSheetViewport() {
   return false;
+}
+
+function subscribeToTouchPrimaryQuery(onChange: () => void) {
+  const query = window.matchMedia(TOUCH_PRIMARY_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function isTouchPrimaryViewport() {
+  return window.matchMedia(TOUCH_PRIMARY_QUERY).matches;
 }
 
 /**
@@ -144,6 +155,11 @@ export function PostDetailDialog({
   const sheetViewport = useSyncExternalStore(
     subscribeToTabletSheetQuery,
     isTabletSheetViewport,
+    getServerTabletSheetViewport,
+  );
+  const touchPrimaryViewport = useSyncExternalStore(
+    subscribeToTouchPrimaryQuery,
+    isTouchPrimaryViewport,
     getServerTabletSheetViewport,
   );
   /**
@@ -483,7 +499,7 @@ export function PostDetailDialog({
           pending={thread.pending}
           error={thread.error}
           inputRef={composerRef}
-          focusOnMount={commentsOnly && !sheetViewport}
+          focusOnMount={commentsOnly && !touchPrimaryViewport}
           replyTarget={replyTarget}
           onCancelReply={() => setReplyingTo(null)}
         />

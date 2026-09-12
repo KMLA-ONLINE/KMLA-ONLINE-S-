@@ -1,6 +1,6 @@
 import { data } from "react-router";
 
-import { defineAppChrome } from "~/features/app-shell";
+import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import {
   getNotificationCursor,
   listNotifications,
@@ -55,5 +55,6 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
 }
 
 export default function NotiPage({ loaderData }: Route.ComponentProps) {
-  return <NotificationInbox initialPage={loaderData} />;
+  const { profile } = useAppShell();
+  return <NotificationInbox initialPage={loaderData} profileId={profile.id} />;
 }

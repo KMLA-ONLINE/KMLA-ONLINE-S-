@@ -15,6 +15,7 @@ import type {
   PostFileUploadState,
   PreparedPostFile,
 } from "~/features/posts/model/types";
+import { isPostVideoFile } from "~/features/posts/model/validation";
 import { useFileDrop } from "~/shared/hooks/use-file-drop";
 
 type FileSelection = "image" | "file" | "mixed";
@@ -89,7 +90,19 @@ export function usePostAttachmentDraft({
 
   const addFiles = async (files: FileList | null, selection: FileSelection) => {
     if (!files?.length || disabled) return;
-    const selectedCount = files.length;
+    const selected = [...files];
+    const videos = selected.filter(isPostVideoFile);
+    const supported = selected.filter((file) => !isPostVideoFile(file));
+    setPreparationError(
+      videos.length > 0
+        ? videos.length === 1
+          ? `동영상은 첨부할 수 없어 제외했습니다: ${videos[0].name}`
+          : `동영상 ${videos.length}개는 첨부할 수 없어 제외했습니다.`
+        : undefined,
+    );
+    if (supported.length === 0) return;
+
+    const selectedCount = supported.length;
     const currentCount = attachmentCountRef.current;
     attachmentCountRef.current += selectedCount;
     setPreparingCount((current) => current + selectedCount);
@@ -97,7 +110,7 @@ export function usePostAttachmentDraft({
     const controller = new AbortController();
     preparationControllers.current.add(controller);
     try {
-      await preparePostFiles([...files], currentCount, selection, {
+      await preparePostFiles(supported, currentCount, selection, {
         onPrepared: (prepared) => {
           if (disposedRef.current) {
             releasePostFile(prepared);

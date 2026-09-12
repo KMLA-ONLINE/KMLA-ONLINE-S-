@@ -11,7 +11,6 @@ import {
 } from "~/features/app-shell";
 import type { Route } from "./+types/gate";
 import { notificationBadgeQuery } from "~/features/notifications";
-import { NotificationPermissionPrompt } from "~/features/notifications/components/notification-permission-prompt";
 import { NotificationSync } from "~/features/notifications/components/notification-sync";
 import { getQueryClient } from "~/shared/lib/query-client";
 
@@ -114,10 +113,6 @@ export default function Shell({ loaderData }: Route.ComponentProps) {
     <AppShellProvider value={loaderData}>
       <Outlet />
       <NotificationSync profileId={loaderData.profile.id} />
-      <NotificationPermissionPrompt
-        key={loaderData.profile.id}
-        profileId={loaderData.profile.id}
-      />
     </AppShellProvider>
   );
 }

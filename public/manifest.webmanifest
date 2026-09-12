@@ -63,12 +63,6 @@
       "short_name": "급식",
       "url": "/menu/meal",
       "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "시간표",
-      "short_name": "시간표",
-      "url": "/menu/timetable",
-      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
     }
   ]
 }

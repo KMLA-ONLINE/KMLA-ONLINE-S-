@@ -88,7 +88,17 @@ describe("attachment selection validation", () => {
     const video = new File(["video"], "clip.mp4");
 
     expect(validateSelectedFiles([video], 0)).toBe(
-      "동영상 파일은 아직 지원하지 않습니다: clip.mp4",
+      "동영상 파일은 첨부할 수 없습니다: clip.mp4",
+    );
+  });
+
+  it("reports an unsupported video before the attachment count limit", () => {
+    const video = new File(["video"], "clip.mov", {
+      type: "application/octet-stream",
+    });
+
+    expect(validateSelectedFiles([video], 30)).toBe(
+      "동영상 파일은 첨부할 수 없습니다: clip.mov",
     );
   });
 
