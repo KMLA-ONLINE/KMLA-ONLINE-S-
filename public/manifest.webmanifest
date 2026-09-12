@@ -1,7 +1,7 @@
 {
   "name": "KMLA Online",
   "short_name": "큼라온라인",
-  "description": "KMLA Online / 과학기술부",
+  "description": "민족사관고등학교 공식 통합 플랫폼 · 과학기술부 제작",
   "id": "/",
   "start_url": "/",
   "scope": "/",
@@ -33,22 +33,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/screenshots/feed-mobile.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "홈 통합 피드"
-    },
-    {
-      "src": "/screenshots/feed-desktop.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "홈 통합 피드"
     }
   ],
   "shortcuts": [
