@@ -14,7 +14,9 @@ import { useImageCrop } from "~/shared/hooks/use-image-crop";
 import {
   compressImage,
   getImageDimensions,
-  validateImageInput,
+  IMAGE_INPUT_ACCEPT,
+  isSupportedImageInput,
+  prepareImageInput,
 } from "~/shared/lib/image/compress";
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 import { cn } from "~/shared/lib/utils";
@@ -26,8 +28,6 @@ import {
   DialogTitle,
 } from "~/shared/ui/dialog";
 import { Spinner } from "~/shared/ui/spinner";
-
-const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export function ProfileMediaEditor({
   profile,
@@ -109,15 +109,16 @@ export function ProfileMediaEditor({
   const chooseFile = async (file: File | undefined) => {
     if (!file) return;
 
-    if (!ACCEPTED_TYPES.has(file.type) || file.size > MAX_INPUT_FILE_BYTES) {
-      setError("JPEG, PNG, WebP 이미지를 30MB 이하로 선택해 주세요.");
+    if (!isSupportedImageInput(file) || file.size > MAX_INPUT_FILE_BYTES) {
+      setError(
+        "JPEG, PNG, WebP, HEIC, HEIF 이미지를 30MB 이하로 선택해 주세요.",
+      );
       return;
     }
 
     setError(null);
     try {
-      await validateImageInput(file);
-      crop.start(file);
+      crop.start(await prepareImageInput(file));
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -144,7 +145,7 @@ export function ProfileMediaEditor({
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept={IMAGE_INPUT_ACCEPT}
           className="sr-only"
           onChange={(event) => {
             void chooseFile(event.currentTarget.files?.[0]);

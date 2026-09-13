@@ -42,6 +42,7 @@ import type {
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
+import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";
@@ -419,7 +420,7 @@ export function CommentComposer({
             <input
               ref={fileInput}
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept={IMAGE_INPUT_ACCEPT}
               className="sr-only"
               aria-label="댓글 이미지 선택"
               onChange={(event) => void selectImage(event.target.files?.[0])}

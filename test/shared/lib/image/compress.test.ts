@@ -1,15 +1,20 @@
 import imageCompression from "browser-image-compression";
+import { heicTo } from "heic-to/csp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   compressImage,
   getImageDimensions,
+  isSupportedImageInput,
+  prepareImageInput,
   validateImageInput,
 } from "~/shared/lib/image/compress";
 
 vi.mock("browser-image-compression", () => ({ default: vi.fn() }));
+vi.mock("heic-to/csp", () => ({ heicTo: vi.fn() }));
 
 const compress = vi.mocked(imageCompression);
+const convertHeic = vi.mocked(heicTo);
 
 function pngWithDimensions(width: number, height: number, name = "photo.png") {
   const bytes = new Uint8Array(24);
@@ -49,9 +54,63 @@ function webpWithDimensions(width: number, height: number) {
   return new File([bytes], "photo.webp", { type: "image/webp" });
 }
 
+function heifWithDimensions(width: number, height: number) {
+  const bytes = new Uint8Array(40);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 20);
+  bytes.set(new TextEncoder().encode("ftyp"), 4);
+  bytes.set(new TextEncoder().encode("heic"), 8);
+  bytes.set(new TextEncoder().encode("heic"), 16);
+  view.setUint32(20, 20);
+  bytes.set(new TextEncoder().encode("ispe"), 24);
+  view.setUint32(32, width);
+  view.setUint32(36, height);
+  return new File([bytes], "photo.heic", { type: "image/heic" });
+}
+
 describe("compressImage", () => {
   beforeEach(() => {
     compress.mockReset();
+    convertHeic.mockReset();
+  });
+
+  it("HEIC와 HEIF MIME 또는 확장자를 이미지 입력으로 분류한다", () => {
+    expect(
+      isSupportedImageInput(
+        new File(["image"], "photo.bin", { type: "image/heif" }),
+      ),
+    ).toBe(true);
+    expect(
+      isSupportedImageInput(
+        new File(["image"], "photo.HEIC", {
+          type: "application/octet-stream",
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it("HEIC를 PNG 중간본으로 디코딩한 뒤 기존 WebP 정규화에 넘긴다", async () => {
+    const heic = heifWithDimensions(1920, 1080);
+    const png = pngWithDimensions(1920, 1080);
+    convertHeic.mockResolvedValue(png);
+    compress.mockResolvedValue(webpWithDimensions(1920, 1080));
+
+    const prepared = await prepareImageInput(heic);
+    expect(prepared.type).toBe("image/png");
+    expect(prepared.name).toBe("photo.png");
+
+    await compressImage(heic, "photo");
+    expect(compress).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "image/png" }),
+      expect.objectContaining({ fileType: "image/webp" }),
+    );
+  });
+
+  it("50메가픽셀을 넘는 HEIF는 디코더를 불러 처리하기 전에 거절한다", async () => {
+    await expect(
+      prepareImageInput(heifWithDimensions(10_000, 5_001)),
+    ).rejects.toThrow("50메가픽셀");
+    expect(convertHeic).not.toHaveBeenCalled();
   });
 
   it("비이미지는 압축 라이브러리를 부르지 않고 원본을 반환한다", async () => {

@@ -18,15 +18,15 @@ import { useImageCrop } from "~/shared/hooks/use-image-crop";
 import {
   compressImage,
   getImageDimensions,
-  validateImageInput,
+  IMAGE_INPUT_ACCEPT,
+  isSupportedImageInput,
+  prepareImageInput,
 } from "~/shared/lib/image/compress";
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Spinner } from "~/shared/ui/spinner";
-
-const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export function GroupMediaSettings({ group }: { group: GroupDetail }) {
   return (
@@ -117,14 +117,15 @@ function MediaField({
 
   const selectFile = async (file: File | undefined) => {
     if (!file) return;
-    if (!ACCEPTED_TYPES.has(file.type) || file.size > MAX_INPUT_FILE_BYTES) {
-      setError("JPEG, PNG, WebP 이미지를 30MB 이하로 선택해 주세요.");
+    if (!isSupportedImageInput(file) || file.size > MAX_INPUT_FILE_BYTES) {
+      setError(
+        "JPEG, PNG, WebP, HEIC, HEIF 이미지를 30MB 이하로 선택해 주세요.",
+      );
       return;
     }
     setError(null);
     try {
-      await validateImageInput(file);
-      crop.start(file);
+      crop.start(await prepareImageInput(file));
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -165,7 +166,7 @@ function MediaField({
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept={IMAGE_INPUT_ACCEPT}
           className="sr-only"
           onChange={(event) => void selectFile(event.target.files?.[0])}
           aria-label={`${isIcon ? "그룹 아이콘" : "커버 이미지"} 파일 선택`}

@@ -120,9 +120,10 @@ Bucket 제한은 object 하나에 적용되는 최종 방어선이다. 이미지
 
 ### 6.2 이미지 입력
 
-- JPEG, PNG 및 WebP만 입력으로 받는다.
+- JPEG, PNG, WebP, HEIC 및 HEIF를 입력으로 받는다.
 - 입력 파일은 최대 30MiB 및 50메가픽셀이다.
-- GIF, SVG 및 HEIC는 받지 않는다.
+- GIF 및 SVG는 받지 않는다.
+- HEIC와 HEIF는 클라이언트가 업로드 전에 디코딩하며 Storage에는 정규화된 WebP만 저장한다.
 - 원본 이미지는 보존하지 않는다.
 - 모든 입력 이미지는 클라이언트에서 EXIF 등 metadata를 제거하고 WebP로 다시 인코딩한다.
 - 원본보다 큰 해상도로 확대하지 않는다.

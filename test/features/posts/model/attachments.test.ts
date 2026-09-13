@@ -16,6 +16,14 @@ import { compressImage, getImageDimensions } from "~/shared/lib/image/compress";
 vi.mock("~/shared/lib/image/compress", () => ({
   compressImage: vi.fn(),
   getImageDimensions: vi.fn(),
+  isSupportedImageInput: (file: File) =>
+    [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/heic",
+      "image/heif",
+    ].includes(file.type) || /\.(?:jpe?g|png|webp|heic|heif)$/i.test(file.name),
 }));
 
 const compress = vi.mocked(compressImage);
@@ -75,6 +83,20 @@ describe("prepareCommentImage", () => {
       "이미지는 30MB 이하여야 합니다",
     );
     expect(compress).not.toHaveBeenCalled();
+  });
+
+  it("normalizes HEIC comment images through the shared image pipeline", async () => {
+    const source = new File(["photo"], "photo.heic", { type: "image/heic" });
+    const normalized = new File(["webp"], "photo.webp", {
+      type: "image/webp",
+    });
+    compress.mockResolvedValue(normalized);
+
+    await expect(prepareCommentImage(source)).resolves.toMatchObject({
+      file: normalized,
+      kind: "image",
+    });
+    expect(compress).toHaveBeenCalledWith(source, "photo");
   });
 });
 
