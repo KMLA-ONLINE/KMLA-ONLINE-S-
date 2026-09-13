@@ -32,6 +32,7 @@ create table if not exists private.storage_cleanup_queue (
       'comment_image',
       'group_media',
       'profile_media',
+      'profile_media_activity',
       'unreferenced_sweep'
     )
   ),
@@ -94,6 +95,9 @@ where post.activity_media_path is not null
 union all
 select 'profile-media'::text, media.object_path
 from public.profile_media_objects as media
+union all
+select 'profile-media'::text, activity.object_path
+from public.profile_media_activity_objects as activity
 union all
 select attachment.storage_bucket, attachment.object_path
 from public.post_attachments as attachment
@@ -229,6 +233,38 @@ begin
   insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
   select 'profile-media', expired.object_path, 'profile_media'
   from expired
+  on conflict (bucket, object_path) do update
+    set dry_run = queue.dry_run and excluded.dry_run;
+  get diagnostics moved = row_count;
+  enqueued := enqueued + moved;
+
+  -- 아바타 슬롯과 별개인 활동용 고화질본은 활동 게시물을 지웠을 때 바로 참조를 끊고 회수한다.
+  -- 슬롯용 512px object는 현재 프로필이 계속 가리킬 수 있으므로 여기서 건드리지 않는다.
+  with expired as (
+    select activity.id, activity.object_path
+    from public.profile_media_activity_objects as activity
+    where (
+        activity.status = 'pending'
+        and activity.created_at <= now() - interval '48 hours'
+      )
+      or (
+        activity.status = 'ready'
+        and not exists (
+        select 1
+        from public.posts as post
+        where post.activity_media_path = activity.object_path
+        )
+      )
+    for update
+  ), deleted as (
+    delete from public.profile_media_activity_objects as activity
+    using expired
+    where activity.id = expired.id
+    returning expired.object_path
+  )
+  insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+  select 'profile-media', deleted.object_path, 'profile_media_activity'
+  from deleted
   on conflict (bucket, object_path) do update
     set dry_run = queue.dry_run and excluded.dry_run;
   get diagnostics moved = row_count;

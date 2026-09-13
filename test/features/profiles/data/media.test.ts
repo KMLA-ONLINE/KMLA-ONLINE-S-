@@ -61,7 +61,12 @@ describe("replacing profile media", () => {
       name === "prepare_profile_media"
         ? Promise.resolve({
             data: [
-              { media_id: "media-1", object_path: "user-1/avatar/media-1" },
+              {
+                media_id: "media-1",
+                object_path: "user-1/avatar/media-1",
+                activity_media_id: "activity-1",
+                activity_object_path: "user-1/avatar/activity-1",
+              },
             ],
             error: null,
           })
@@ -69,20 +74,34 @@ describe("replacing profile media", () => {
     );
   });
 
-  it("uploads only to the path the server prepared", async () => {
-    await replaceProfileMedia("avatar", new File(["x"], "a.webp"), {
-      width: 100,
-      height: 100,
-    });
+  it("uploads avatar slot and activity files only to server-prepared paths", async () => {
+    await replaceProfileMedia(
+      "avatar",
+      new File(["x"], "a.webp"),
+      { width: 100, height: 100 },
+      {
+        file: new File(["activity"], "activity.webp"),
+        width: 200,
+        height: 200,
+      },
+    );
 
     expect(rpc).toHaveBeenNthCalledWith(1, "prepare_profile_media", {
       p_slot: "avatar",
       p_size_bytes: 1,
       p_width: 100,
       p_height: 100,
+      p_activity_size_bytes: 8,
+      p_activity_width: 200,
+      p_activity_height: 200,
     });
     expect(upload).toHaveBeenCalledWith(
       "user-1/avatar/media-1",
+      expect.any(File),
+      expect.objectContaining({ upsert: false }),
+    );
+    expect(upload).toHaveBeenCalledWith(
+      "user-1/avatar/activity-1",
       expect.any(File),
       expect.objectContaining({ upsert: false }),
     );
@@ -103,6 +122,27 @@ describe("replacing profile media", () => {
         width: 300,
         height: 100,
       }),
+    ).rejects.toThrow("network");
+
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not finalize when the high-resolution activity upload fails", async () => {
+    upload
+      .mockResolvedValueOnce({ error: null })
+      .mockResolvedValueOnce({ error: new Error("network") });
+
+    await expect(
+      replaceProfileMedia(
+        "avatar",
+        new File(["x"], "a.webp"),
+        { width: 100, height: 100 },
+        {
+          file: new File(["activity"], "activity.webp"),
+          width: 200,
+          height: 200,
+        },
+      ),
     ).rejects.toThrow("network");
 
     expect(rpc).toHaveBeenCalledTimes(1);

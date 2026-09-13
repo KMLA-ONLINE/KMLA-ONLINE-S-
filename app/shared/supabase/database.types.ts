@@ -945,8 +945,56 @@ export type Database = {
         }
         Relationships: []
       }
+      profile_media_activity_objects: {
+        Row: {
+          auth_user_id: string
+          created_at: string
+          height: number
+          id: string
+          object_path: string
+          profile_id: number
+          ready_at: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["profile_media_status"]
+          width: number
+        }
+        Insert: {
+          auth_user_id: string
+          created_at?: string
+          height: number
+          id?: string
+          object_path: string
+          profile_id: number
+          ready_at?: string | null
+          size_bytes: number
+          status?: Database["public"]["Enums"]["profile_media_status"]
+          width: number
+        }
+        Update: {
+          auth_user_id?: string
+          created_at?: string
+          height?: number
+          id?: string
+          object_path?: string
+          profile_id?: number
+          ready_at?: string | null
+          size_bytes?: number
+          status?: Database["public"]["Enums"]["profile_media_status"]
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_media_activity_objects_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profile_media_objects: {
         Row: {
+          activity_media_id: string | null
           auth_user_id: string
           created_at: string
           height: number
@@ -960,6 +1008,7 @@ export type Database = {
           width: number
         }
         Insert: {
+          activity_media_id?: string | null
           auth_user_id: string
           created_at?: string
           height: number
@@ -973,6 +1022,7 @@ export type Database = {
           width: number
         }
         Update: {
+          activity_media_id?: string | null
           auth_user_id?: string
           created_at?: string
           height?: number
@@ -986,6 +1036,13 @@ export type Database = {
           width?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "profile_media_objects_activity_media_id_fkey"
+            columns: ["activity_media_id"]
+            isOneToOne: false
+            referencedRelation: "profile_media_activity_objects"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "profile_media_objects_profile_id_fkey"
             columns: ["profile_id"]
@@ -2348,12 +2405,17 @@ export type Database = {
       }
       prepare_profile_media: {
         Args: {
+          p_activity_height?: number
+          p_activity_size_bytes?: number
+          p_activity_width?: number
           p_height: number
           p_size_bytes: number
           p_slot: Database["public"]["Enums"]["profile_media_slot"]
           p_width: number
         }
         Returns: {
+          activity_media_id: string
+          activity_object_path: string
           media_id: string
           object_path: string
         }[]

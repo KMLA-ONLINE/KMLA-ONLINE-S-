@@ -25,6 +25,7 @@ export async function replaceProfileMedia(
   slot: ProfileMediaSlot,
   file: File,
   dimensions: { width: number; height: number },
+  activity: { file: File; width: number; height: number } | null = null,
 ): Promise<void> {
   const supabase = getSupabase();
   const { data, error } = await supabase.rpc("prepare_profile_media", {
@@ -32,18 +33,36 @@ export async function replaceProfileMedia(
     p_size_bytes: file.size,
     p_width: dimensions.width,
     p_height: dimensions.height,
+    p_activity_size_bytes: activity?.file.size,
+    p_activity_width: activity?.width,
+    p_activity_height: activity?.height,
   });
   if (error) throw error;
   const prepared = data?.[0];
   if (!prepared) throw new Error("Profile media upload was not prepared");
 
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(prepared.object_path, file, {
+  const uploads = [
+    supabase.storage.from(BUCKET).upload(prepared.object_path, file, {
       contentType: "image/webp",
       cacheControl: STORAGE_UPLOAD_CACHE_CONTROL,
       upsert: false,
-    });
+    }),
+  ];
+
+  if (activity && prepared.activity_object_path) {
+    uploads.push(
+      supabase.storage
+        .from(BUCKET)
+        .upload(prepared.activity_object_path, activity.file, {
+          contentType: "image/webp",
+          cacheControl: STORAGE_UPLOAD_CACHE_CONTROL,
+          upsert: false,
+        }),
+    );
+  }
+
+  const results = await Promise.all(uploads);
+  const uploadError = results.find((result) => result.error)?.error;
   if (uploadError) throw uploadError;
 
   const { error: finalizeError } = await supabase.rpc(

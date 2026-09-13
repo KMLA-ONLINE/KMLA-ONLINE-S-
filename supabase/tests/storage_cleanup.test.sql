@@ -368,10 +368,24 @@ select is(
   'turning the sweep live promotes the recorded candidate'
 );
 
--- 프로필 이미지는 슬롯에서 내려와도 변경 활동 게시물이 살아 있는 동안에는 남는다.
+-- 활동 게시물용 고화질 아바타는 활동이 살아 있는 동안에는 남고, 슬롯용 저화질 아바타와
+-- 별개로 활동 삭제 후 정리된다.
+insert into public.profile_media_activity_objects (
+  id, profile_id, auth_user_id, object_path, size_bytes, width, height,
+  status, ready_at
+)
+select
+  'ce000000-0000-0000-0000-000000000001',
+  profile.id,
+  profile.auth_user_id,
+  profile.auth_user_id::text || '/avatar/ce000000-0000-0000-0000-000000000001',
+  4, 200, 200, 'ready', now()
+from public.profiles as profile
+where profile.auth_user_id = '10000000-0000-0000-0000-000000000001';
+
 insert into public.profile_media_objects (
   id, profile_id, auth_user_id, slot, object_path, size_bytes, width, height,
-  status, ready_at
+  activity_media_id, status, ready_at
 )
 select
   'cc000000-0000-0000-0000-000000000001',
@@ -379,9 +393,13 @@ select
   profile.auth_user_id,
   'avatar',
   profile.auth_user_id::text || '/avatar/cc000000-0000-0000-0000-000000000001',
-  4, 100, 100, 'ready', now()
+  4, 100, 100, 'ce000000-0000-0000-0000-000000000001', 'ready', now()
 from public.profiles as profile
 where profile.auth_user_id = '10000000-0000-0000-0000-000000000001';
+
+update public.profiles
+set avatar_path = '10000000-0000-0000-0000-000000000001/avatar/cc000000-0000-0000-0000-000000000001'
+where auth_user_id = '10000000-0000-0000-0000-000000000001';
 
 insert into public.posts (
   id, kind, body, timeline_profile_id, author_identity,
@@ -391,29 +409,29 @@ insert into public.posts (
 select
   'dd000000-0000-0000-0000-000000000001', 'profile', '', profile.id,
   'identified', profile.id, 'public', now(), 'avatar_changed',
-  profile.auth_user_id::text || '/avatar/cc000000-0000-0000-0000-000000000001'
+  profile.auth_user_id::text || '/avatar/ce000000-0000-0000-0000-000000000001'
 from public.profiles as profile
 where profile.auth_user_id = '10000000-0000-0000-0000-000000000001';
 
 select is(
   private.enqueue_storage_cleanup(),
   0::bigint,
-  'an unslotted profile image stays while its activity post is alive'
+  'a high-resolution avatar activity image stays while its activity post is alive'
 );
 select private.purge_posts(array['dd000000-0000-0000-0000-000000000001'::uuid]);
 select is(
   private.enqueue_storage_cleanup(),
   1::bigint,
-  'deleting the last activity post releases the old profile image'
+  'deleting the last activity post releases the high-resolution avatar image'
 );
 select ok(
   exists (
     select 1 from private.storage_cleanup_queue
-    where object_path like '%cc000000-0000-0000-0000-000000000001'
-      and reason = 'profile_media'
+    where object_path like '%ce000000-0000-0000-0000-000000000001'
+      and reason = 'profile_media_activity'
       and not dry_run
   ),
-  'the released profile image is queued for real deletion'
+  'the released high-resolution avatar image is queued for real deletion'
 );
 
 select * from finish();

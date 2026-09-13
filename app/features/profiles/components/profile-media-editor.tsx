@@ -73,13 +73,30 @@ export function ProfileMediaEditor({
     setError(null);
 
     try {
+      const activityFile = isAvatar
+        ? await compressImage(cropped, "activity")
+        : null;
       const compressed = await compressImage(
         cropped,
         isAvatar ? "icon" : "banner",
       );
       const [width, height] = await getImageDimensions(compressed);
+      const activityDimensions = activityFile
+        ? await getImageDimensions(activityFile)
+        : null;
 
-      await replaceProfileMedia(slot, compressed, { width, height });
+      await replaceProfileMedia(
+        slot,
+        compressed,
+        { width, height },
+        activityFile && activityDimensions
+          ? {
+              file: activityFile,
+              width: activityDimensions[0],
+              height: activityDimensions[1],
+            }
+          : null,
+      );
 
       window.location.reload();
     } catch {
@@ -259,7 +276,7 @@ export function ProfileMediaEditor({
         <ImageCropper
           {...crop.cropperProps}
           aspect={isAvatar ? 1 : 3}
-          maxOutputEdge={isAvatar ? 512 : 2400}
+          maxOutputEdge={isAvatar ? 2048 : 2400}
           round={isAvatar}
           title={isAvatar ? "프로필 사진" : "커버 사진"}
         />

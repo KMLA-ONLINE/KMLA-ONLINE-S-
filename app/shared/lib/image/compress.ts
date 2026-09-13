@@ -51,6 +51,8 @@ const PRESETS = {
   icon: { maxEdge: 512, maxBytes: 1024 * 1024, quality: 0.85 },
   /** 프로필·그룹 커버. 가로로 넓게 깔리는 띠. */
   banner: { maxEdge: 2400, maxBytes: 4 * 1024 * 1024, quality: 0.85 },
+  /** 프로필 사진 변경 활동에서 크게 보는 정사각 이미지. */
+  activity: { maxEdge: 2048, maxBytes: 4 * 1024 * 1024, quality: 0.85 },
   /** 글·채팅에 첨부한 사진. 눌러서 크게 열 수 있다. */
   photo: { maxEdge: 3072, maxBytes: 8 * 1024 * 1024, quality: 0.85 },
   /**
