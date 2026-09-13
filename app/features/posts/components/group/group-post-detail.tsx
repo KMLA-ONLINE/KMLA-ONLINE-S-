@@ -188,7 +188,7 @@ export function GroupPostDetail({
         <PostImageGrid
           images={images}
           className="overflow-hidden rounded-lg"
-          useThumbnailForTiles={false}
+          allowOriginalTile
         />
         <PostFileList files={files} />
       </div>

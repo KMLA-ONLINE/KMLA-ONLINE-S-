@@ -104,27 +104,41 @@ describe("PostImageGrid", () => {
     expect(screen.queryByText(/^\+/)).not.toBeInTheDocument();
   });
 
-  it("uses thumbnails for list tiles and originals when requested by details", () => {
-    const item = {
-      ...image("photo"),
-      thumbnailUrl: "https://example.com/thumbnail",
-    };
-    const { unmount } = renderRoute(() => <PostImageGrid images={[item]} />);
+  it("uses thumbnails for tiles and the original only for a full-width single tile", () => {
+    const thumbnailed = (id: string) => ({
+      ...image(id),
+      thumbnailUrl: `https://example.com/thumbnail-${id}`,
+    });
+    const first = thumbnailed("a");
+    const { unmount } = renderRoute(() => <PostImageGrid images={[first]} />);
 
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",
-      "https://example.com/thumbnail",
+      "https://example.com/thumbnail-a",
     );
 
     unmount();
-    renderRoute(() => (
-      <PostImageGrid images={[item]} useThumbnailForTiles={false} />
+    const { unmount: unmountSingle } = renderRoute(() => (
+      <PostImageGrid images={[first]} allowOriginalTile />
     ));
 
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",
       "https://example.com/file",
     );
+
+    // 상세라도 두 장부터는 타일이 절반 이하로 줄어 축소본으로 충분하다.
+    unmountSingle();
+    renderRoute(() => (
+      <PostImageGrid images={[first, thumbnailed("b")]} allowOriginalTile />
+    ));
+
+    expect(
+      screen.getAllByRole("img").map((node) => node.getAttribute("src")),
+    ).toEqual([
+      "https://example.com/thumbnail-a",
+      "https://example.com/thumbnail-b",
+    ]);
   });
 
   it("caps visible tiles at five and marks the rest as overflow", () => {
