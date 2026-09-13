@@ -12,6 +12,26 @@ interface CompressionPolicy {
 const MAX_IMAGE_PIXELS = 50_000_000;
 // PNG/WebP 치수와 일반적인 JPEG SOF는 파일 앞부분에 있다. 30MiB 전체를 복사하지 않는다.
 const IMAGE_HEADER_READ_BYTES = 256 * 1024;
+const IMAGE_INPUT_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+const IMAGE_INPUT_EXTENSION = /\.(?:jpe?g|png|webp|heic|heif)$/i;
+const HEIF_BRANDS = new Set([
+  "heic",
+  "heix",
+  "hevc",
+  "hevx",
+  "heim",
+  "heis",
+  "hevm",
+  "hevs",
+]);
+export const IMAGE_INPUT_ACCEPT =
+  "image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif";
 const JPEG_START_OF_FRAME_MARKERS = new Set([
   0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
 ]);
@@ -31,6 +51,8 @@ const PRESETS = {
   icon: { maxEdge: 512, maxBytes: 1024 * 1024, quality: 0.85 },
   /** 프로필·그룹 커버. 가로로 넓게 깔리는 띠. */
   banner: { maxEdge: 2400, maxBytes: 4 * 1024 * 1024, quality: 0.85 },
+  /** 프로필 사진 변경 활동에서 크게 보는 정사각 이미지. */
+  activity: { maxEdge: 2048, maxBytes: 4 * 1024 * 1024, quality: 0.85 },
   /** 글·채팅에 첨부한 사진. 눌러서 크게 열 수 있다. */
   photo: { maxEdge: 3072, maxBytes: 8 * 1024 * 1024, quality: 0.85 },
   /**
@@ -47,6 +69,42 @@ const PRESETS = {
 } as const satisfies Record<string, CompressionPolicy>;
 
 export type ImagePreset = keyof typeof PRESETS;
+
+export function isSupportedImageInput(file: File): boolean {
+  return (
+    IMAGE_INPUT_TYPES.has(file.type) || IMAGE_INPUT_EXTENSION.test(file.name)
+  );
+}
+
+function readAscii(view: DataView, offset: number, length: number): string {
+  let value = "";
+  for (let index = 0; index < length; index += 1)
+    value += String.fromCharCode(view.getUint8(offset + index));
+  return value;
+}
+
+function isHeifHeader(view: DataView): boolean {
+  if (view.byteLength < 16 || readAscii(view, 4, 4) !== "ftyp") return false;
+  const boxSize = Math.min(view.getUint32(0), view.byteLength);
+  if (boxSize < 16) return false;
+
+  if (HEIF_BRANDS.has(readAscii(view, 8, 4))) return true;
+  for (let offset = 16; offset + 4 <= boxSize; offset += 4) {
+    if (HEIF_BRANDS.has(readAscii(view, offset, 4))) return true;
+  }
+  return false;
+}
+
+function readHeifDimensions(view: DataView): [number, number] | null {
+  for (let offset = 4; offset + 16 <= view.byteLength; offset += 1) {
+    if (readAscii(view, offset, 4) !== "ispe") continue;
+    const boxStart = offset - 4;
+    const boxSize = view.getUint32(boxStart);
+    if (boxSize < 20 || boxStart + boxSize > view.byteLength) continue;
+    return [view.getUint32(offset + 8), view.getUint32(offset + 12)];
+  }
+  return null;
+}
 
 function readPngDimensions(view: DataView): [number, number] | null {
   if (
@@ -163,6 +221,53 @@ function throwIfAborted(signal?: AbortSignal): void {
     throw new DOMException("Image processing aborted", "AbortError");
 }
 
+/** HEIC/HEIF를 크롭과 WebP 인코더가 공통으로 읽을 수 있는 PNG 중간본으로 바꾼다. */
+export async function prepareImageInput(
+  file: File,
+  signal?: AbortSignal,
+): Promise<File> {
+  throwIfAborted(signal);
+  if (!isSupportedImageInput(file))
+    throw new Error(`지원하지 않는 이미지 형식입니다: ${file.name}`);
+  if (file.size > MAX_INPUT_FILE_BYTES)
+    throw new Error(`이미지는 30MB 이하여야 합니다: ${file.name}`);
+
+  const header = new DataView(
+    await file.slice(0, IMAGE_HEADER_READ_BYTES).arrayBuffer(),
+  );
+  throwIfAborted(signal);
+  if (!isHeifHeader(header)) {
+    if (file.type === "image/heic" || file.type === "image/heif")
+      throw new Error(`지원하지 않는 이미지 형식입니다: ${file.name}`);
+    await validateImageInput(file, signal);
+    return file;
+  }
+
+  const dimensions = readHeifDimensions(header);
+  if (dimensions && dimensions[0] * dimensions[1] > MAX_IMAGE_PIXELS)
+    throw new Error(`이미지는 50메가픽셀 이하여야 합니다: ${file.name}`);
+
+  try {
+    const { heicTo } = await import("heic-to/csp");
+    throwIfAborted(signal);
+    const converted = await heicTo({ blob: file, type: "image/png" });
+    throwIfAborted(signal);
+    const base = file.name.replace(/\.[^./\\]+$/, "") || "image";
+    const png = new File([converted], `${base}.png`, {
+      type: "image/png",
+      lastModified: file.lastModified,
+    });
+    await validateImageInput(png, signal);
+    return png;
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === "AbortError")
+      throw cause;
+    if (cause instanceof Error && cause.message.includes("50메가픽셀"))
+      throw cause;
+    throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, { cause });
+  }
+}
+
 /** 압축 워커를 열기 전에 원본 크기를 제한한다. 지원 포맷은 전체 디코딩 없이 헤더를 읽는다. */
 export async function validateImageInput(
   file: File,
@@ -255,13 +360,13 @@ export async function compressImage(
   preset: ImagePreset,
   signal?: AbortSignal,
 ): Promise<File> {
-  if (!file.type.startsWith("image/")) return file;
+  if (!isSupportedImageInput(file)) return file;
 
   const { maxEdge, maxBytes, quality } = PRESETS[preset];
-  await validateImageInput(file, signal);
+  const input = await prepareImageInput(file, signal);
   throwIfAborted(signal);
 
-  const compressed = await imageCompression(file, {
+  const compressed = await imageCompression(input, {
     maxWidthOrHeight: maxEdge,
     initialQuality: quality,
     fileType: "image/webp",

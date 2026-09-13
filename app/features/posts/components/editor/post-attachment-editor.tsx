@@ -32,6 +32,7 @@ import type {
   PreparedPostFile,
 } from "~/features/posts/model/types";
 import { cn } from "~/shared/lib/utils";
+import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
 import { Button } from "~/shared/ui/button";
 import {
   DropdownMenu,
@@ -170,7 +171,7 @@ export function PostAttachmentEditor({
           type="file"
           name="postPhotos"
           aria-label="사진 선택"
-          accept="image/jpeg,image/png,image/webp"
+          accept={IMAGE_INPUT_ACCEPT}
           multiple
           onChange={(event) => {
             void onSelect(event.target.files, "image");

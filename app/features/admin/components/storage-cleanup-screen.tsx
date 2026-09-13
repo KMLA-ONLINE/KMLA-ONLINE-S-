@@ -2,12 +2,16 @@ import {
   AlertTriangleIcon,
   CheckCircle2Icon,
   CircleDashedIcon,
+  RefreshCwIcon,
 } from "lucide-react";
+import { useRevalidator } from "react-router";
 
 import type { StorageCleanupStatus } from "~/features/admin/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { Badge } from "~/shared/ui/badge";
+import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
+import { Spinner } from "~/shared/ui/spinner";
 
 /**
  * 정리 상태를 화면에 올리는 이유는 통계가 아니라 침묵을 막기 위해서다. 예전 정리 작업은 Vault
@@ -19,6 +23,9 @@ export function StorageCleanupScreen({
 }: {
   status: StorageCleanupStatus | null;
 }) {
+  const revalidator = useRevalidator();
+  const refreshing = revalidator.state === "loading";
+
   if (!status) {
     return (
       <div className="px-4 py-6">
@@ -37,6 +44,26 @@ export function StorageCleanupScreen({
 
   return (
     <div className="space-y-6 px-0 py-4 md:px-4">
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={refreshing}
+          onClick={() => void revalidator.revalidate()}
+        >
+          {refreshing ? (
+            <Spinner data-icon="inline-start" />
+          ) : (
+            <RefreshCwIcon data-icon="inline-start" />
+          )}
+          상태 새로고침
+        </Button>
+        <p className="sr-only" aria-live="polite">
+          {refreshing ? "정리 상태를 새로고치는 중입니다." : ""}
+        </p>
+      </div>
+
       <Card className="rounded-none md:rounded-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -61,7 +88,7 @@ export function StorageCleanupScreen({
               <code>storage_cleanup_secret</code>이 모두 있습니다.
             </p>
           ) : (
-            <p role="alert" className="text-destructive">
+            <p role="alert" className="break-words text-destructive">
               Vault 시크릿이 없어 정리 작업이 실행되지 않습니다.{" "}
               <code>project_url</code>과 <code>storage_cleanup_secret</code>을
               이 프로젝트에 설정해 주세요.
@@ -133,11 +160,11 @@ export function StorageCleanupScreen({
             <Field label="실패">{status.last_run_failed ?? "-"}</Field>
           </dl>
           {status.last_run_error ? (
-            <p role="alert" className="text-destructive">
+            <p role="alert" className="break-words text-destructive">
               {status.last_run_error}
             </p>
           ) : null}
-          <p className="text-muted-foreground">
+          <p className="break-words text-muted-foreground">
             예약 실행:{" "}
             {status.last_cron_at ? (
               <>
@@ -169,7 +196,7 @@ function Metric({
     <div>
       <p className="text-muted-foreground">{label}</p>
       <p
-        className={`mt-1 text-2xl font-semibold ${warn ? "text-destructive" : ""}`}
+        className={`mt-1 text-2xl font-semibold tabular-nums ${warn ? "text-destructive" : ""}`}
       >
         {value ?? 0}
       </p>

@@ -115,6 +115,15 @@ CREATE OR REPLACE FUNCTION "private"."can_upload_profile_media"("p_object_path" 
       and profile.auth_user_id = auth.uid()
       and profile.status = 'accepted'
       and profile.deleted_at is null
+  ) or exists (
+    select 1
+    from public.profile_media_activity_objects as activity
+    join public.profiles as profile on profile.id = activity.profile_id
+    where activity.object_path = p_object_path
+      and activity.status = 'pending'
+      and profile.auth_user_id = auth.uid()
+      and profile.status = 'accepted'
+      and profile.deleted_at is null
   );
 $$;
 
@@ -393,7 +402,7 @@ $$;
 
 ALTER FUNCTION "public"."remove_my_profile_media"("p_slot" "text") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."prepare_profile_media"("p_slot" "public"."profile_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) RETURNS TABLE("media_id" "uuid", "object_path" "text")
+CREATE OR REPLACE FUNCTION "public"."prepare_profile_media"("p_slot" "public"."profile_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_activity_size_bytes" bigint DEFAULT NULL::bigint, "p_activity_width" integer DEFAULT NULL::integer, "p_activity_height" integer DEFAULT NULL::integer) RETURNS TABLE("media_id" "uuid", "object_path" "text", "activity_media_id" "uuid", "activity_object_path" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -401,6 +410,7 @@ declare
   caller_id uuid := auth.uid();
   owner_profile_id bigint;
   created_id uuid := gen_random_uuid();
+  created_activity_id uuid;
 begin
   select profile.id
   into owner_profile_id
@@ -413,8 +423,29 @@ begin
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
 
+  if p_slot = 'avatar' then
+    if p_activity_size_bytes is null or p_activity_width is null or p_activity_height is null then
+      raise exception 'avatar activity rendition required' using errcode = '22023';
+    end if;
+    created_activity_id := gen_random_uuid();
+
+    insert into public.profile_media_activity_objects (
+      id, profile_id, auth_user_id, object_path, size_bytes, width, height
+    ) values (
+      created_activity_id,
+      owner_profile_id,
+      caller_id,
+      caller_id::text || '/avatar/' || created_activity_id::text,
+      p_activity_size_bytes,
+      p_activity_width,
+      p_activity_height
+    );
+  elsif p_activity_size_bytes is not null or p_activity_width is not null or p_activity_height is not null then
+    raise exception 'cover media does not use an activity rendition' using errcode = '22023';
+  end if;
+
   insert into public.profile_media_objects (
-    id, profile_id, auth_user_id, slot, object_path, size_bytes, width, height
+    id, profile_id, auth_user_id, slot, object_path, size_bytes, width, height, activity_media_id
   ) values (
     created_id,
     owner_profile_id,
@@ -423,15 +454,20 @@ begin
     caller_id::text || '/' || p_slot::text || '/' || created_id::text,
     p_size_bytes,
     p_width,
-    p_height
+    p_height,
+    created_activity_id
   );
 
   return query select created_id,
-    caller_id::text || '/' || p_slot::text || '/' || created_id::text;
+    caller_id::text || '/' || p_slot::text || '/' || created_id::text,
+    created_activity_id,
+    case when created_activity_id is not null
+      then caller_id::text || '/avatar/' || created_activity_id::text
+    end;
 end;
 $$;
 
-ALTER FUNCTION "public"."prepare_profile_media"("p_slot" "public"."profile_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) OWNER TO "postgres";
+ALTER FUNCTION "public"."prepare_profile_media"("p_slot" "public"."profile_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_activity_size_bytes" bigint, "p_activity_width" integer, "p_activity_height" integer) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."finalize_profile_media"("p_media_id" "uuid") RETURNS "public"."profiles"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -440,7 +476,9 @@ CREATE OR REPLACE FUNCTION "public"."finalize_profile_media"("p_media_id" "uuid"
 declare
   caller_id uuid := auth.uid();
   media public.profile_media_objects;
+  activity_media public.profile_media_activity_objects;
   object_record storage.objects;
+  activity_object_record storage.objects;
   current_profile public.profiles;
   updated_profile public.profiles;
   activity_post_id uuid := gen_random_uuid();
@@ -486,9 +524,49 @@ begin
     raise exception 'uploaded object metadata does not match' using errcode = '22023';
   end if;
 
+  if media.slot = 'avatar' and media.activity_media_id is null then
+    raise exception 'avatar activity media required' using errcode = '55000';
+  end if;
+
+  if media.activity_media_id is not null then
+    select item.* into activity_media
+    from public.profile_media_activity_objects as item
+    where item.id = media.activity_media_id
+    for update;
+
+    if activity_media.id is null
+      or activity_media.profile_id is distinct from media.profile_id
+      or activity_media.auth_user_id is distinct from caller_id
+      or activity_media.status <> 'pending' then
+      raise exception 'profile activity media is not pending' using errcode = '55000';
+    end if;
+
+    select object.* into activity_object_record
+    from storage.objects as object
+    where object.bucket_id = 'profile-media'
+      and object.name = activity_media.object_path;
+
+    if activity_object_record.id is null then
+      raise exception 'uploaded activity object not found' using errcode = 'P0002';
+    end if;
+    if activity_object_record.owner_id is distinct from caller_id::text then
+      raise exception 'uploaded activity object owner does not match' using errcode = '42501';
+    end if;
+    if nullif(activity_object_record.metadata ->> 'size', '')::bigint is distinct from activity_media.size_bytes
+      or activity_object_record.metadata ->> 'mimetype' is distinct from 'image/webp' then
+      raise exception 'uploaded activity object metadata does not match' using errcode = '22023';
+    end if;
+  end if;
+
   update public.profile_media_objects
   set status = 'ready', ready_at = now()
   where id = media.id;
+
+  if activity_media.id is not null then
+    update public.profile_media_activity_objects
+    set status = 'ready', ready_at = now()
+    where id = activity_media.id;
+  end if;
 
   if media.slot = 'avatar' then
     activity_kind := 'avatar_changed';
@@ -525,7 +603,7 @@ begin
     'public',
     now(),
     activity_kind,
-    media.object_path
+    coalesce(activity_media.object_path, media.object_path)
   );
 
   insert into private.post_authors (post_id, profile_id)
@@ -737,6 +815,7 @@ CREATE TABLE IF NOT EXISTS "public"."profile_media_objects" (
     "size_bytes" bigint NOT NULL,
     "width" integer NOT NULL,
     "height" integer NOT NULL,
+    "activity_media_id" "uuid",
     "status" "public"."profile_media_status" DEFAULT 'pending'::"public"."profile_media_status" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "ready_at" timestamp with time zone,
@@ -751,6 +830,25 @@ END))),
 );
 
 ALTER TABLE "public"."profile_media_objects" OWNER TO "postgres";
+
+CREATE TABLE IF NOT EXISTS "public"."profile_media_activity_objects" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "profile_id" bigint NOT NULL,
+    "auth_user_id" "uuid" NOT NULL,
+    "object_path" "text" NOT NULL,
+    "size_bytes" bigint NOT NULL,
+    "width" integer NOT NULL,
+    "height" integer NOT NULL,
+    "status" "public"."profile_media_status" DEFAULT 'pending'::"public"."profile_media_status" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "ready_at" timestamp with time zone,
+    CONSTRAINT "profile_media_activity_dimensions_check" CHECK ((("width" = "height") AND ("width" >= 1) AND ("width" <= 2048))),
+    CONSTRAINT "profile_media_activity_path_check" CHECK (("object_path" = ((("auth_user_id")::"text" || '/avatar/'::"text") || ("id")::"text"))),
+    CONSTRAINT "profile_media_activity_size_check" CHECK ((("size_bytes" >= 1) AND ("size_bytes" <= 4194304))),
+    CONSTRAINT "profile_media_activity_status_timestamps_check" CHECK ((("status" = 'pending'::"public"."profile_media_status") AND ("ready_at" IS NULL)) OR (("status" = 'ready'::"public"."profile_media_status") AND ("ready_at" IS NOT NULL)))
+);
+
+ALTER TABLE "public"."profile_media_activity_objects" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."profile_departments" (
     "name" "text" NOT NULL,
@@ -776,6 +874,12 @@ ALTER TABLE ONLY "public"."profile_media_objects"
 
 ALTER TABLE ONLY "public"."profile_media_objects"
     ADD CONSTRAINT "profile_media_objects_object_path_key" UNIQUE ("object_path");
+
+ALTER TABLE ONLY "public"."profile_media_activity_objects"
+    ADD CONSTRAINT "profile_media_activity_objects_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."profile_media_activity_objects"
+    ADD CONSTRAINT "profile_media_activity_objects_object_path_key" UNIQUE ("object_path");
 
 ALTER TABLE ONLY "public"."profile_departments"
     ADD CONSTRAINT "profile_departments_pkey" PRIMARY KEY ("name");
@@ -812,13 +916,25 @@ ALTER TABLE ONLY "public"."profiles"
 ALTER TABLE ONLY "public"."profile_media_objects"
     ADD CONSTRAINT "profile_media_objects_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
 
+ALTER TABLE ONLY "public"."profile_media_activity_objects"
+    ADD CONSTRAINT "profile_media_activity_objects_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."profile_media_objects"
+    ADD CONSTRAINT "profile_media_objects_activity_media_id_fkey" FOREIGN KEY ("activity_media_id") REFERENCES "public"."profile_media_activity_objects"("id") ON DELETE SET NULL;
+
 -- 정리 큐로 옮길 후보를 훑는 인덱스. `ready` 행은 참조가 끊긴 순간부터 대상이 되므로 상태로
 -- 좁히지 않고 생성 순서만 유지한다.
 CREATE INDEX "profile_media_objects_cleanup_idx" ON "public"."profile_media_objects" USING "btree" ("created_at", "id");
 
+CREATE INDEX "profile_media_activity_objects_cleanup_idx" ON "public"."profile_media_activity_objects" USING "btree" ("created_at", "id");
+
 ALTER TABLE "public"."profile_media_objects" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "profile_media_objects_deny_client_access" ON "public"."profile_media_objects" USING (false) WITH CHECK (false);
+
+ALTER TABLE "public"."profile_media_activity_objects" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "profile_media_activity_objects_deny_client_access" ON "public"."profile_media_activity_objects" USING (false) WITH CHECK (false);
 
 ALTER TABLE "public"."profile_departments" ENABLE ROW LEVEL SECURITY;
 
@@ -854,8 +970,8 @@ GRANT EXECUTE ON FUNCTION "public"."list_birthdays"("p_reference_date" "date", "
 REVOKE ALL ON FUNCTION "public"."remove_my_profile_media"("p_slot" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."remove_my_profile_media"("p_slot" "text") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."prepare_profile_media"("p_slot" "public"."profile_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION "public"."prepare_profile_media"("p_slot" "public"."profile_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."prepare_profile_media"("p_slot" "public"."profile_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_activity_size_bytes" bigint, "p_activity_width" integer, "p_activity_height" integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "public"."prepare_profile_media"("p_slot" "public"."profile_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_activity_size_bytes" bigint, "p_activity_width" integer, "p_activity_height" integer) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."finalize_profile_media"("p_media_id" "uuid") FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION "public"."finalize_profile_media"("p_media_id" "uuid") TO "authenticated";
@@ -879,5 +995,9 @@ REVOKE MAINTAIN, REFERENCES, TRIGGER, TRUNCATE ON TABLE "public"."profiles" FROM
 REVOKE MAINTAIN, REFERENCES, TRIGGER, TRUNCATE ON TABLE "public"."profile_media_objects" FROM "anon", "authenticated";
 REVOKE ALL ON TABLE "public"."profile_media_objects" FROM "anon", "authenticated";
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."profile_media_objects" TO "service_role";
+
+REVOKE MAINTAIN, REFERENCES, TRIGGER, TRUNCATE ON TABLE "public"."profile_media_activity_objects" FROM "anon", "authenticated";
+REVOKE ALL ON TABLE "public"."profile_media_activity_objects" FROM "anon", "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."profile_media_activity_objects" TO "service_role";
 
 REVOKE MAINTAIN, REFERENCES, TRIGGER, TRUNCATE ON TABLE "public"."profile_departments" FROM "anon", "authenticated";

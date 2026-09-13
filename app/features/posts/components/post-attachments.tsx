@@ -72,9 +72,19 @@ function tileClass(count: number, index: number): string {
 export function PostImageGrid({
   images,
   className,
+  allowOriginalTile = false,
 }: {
   images: PostAttachment[];
   className?: string;
+  /**
+   * 전폭으로 깔리는 한 장짜리 타일에 한해 원본을 그린다. 상세 화면만 켠다.
+   *
+   * 타일이 컨테이너 폭을 통째로 쓰는 건 사진이 한 장일 때뿐이고, 그때 축소본(800px)은
+   * 상세 다이얼로그 폭(640 CSS px)에 DPR 2를 곱한 1280px에 한참 못 미쳐 눈에 띄게
+   * 흐리다. 두 장부터는 타일이 절반 이하로 줄어 축소본으로 충분하므로, 이 플래그를
+   * 켜도 축소본을 쓴다 — 상세라는 이유만으로 원본 다섯 장을 받을 일은 없다.
+   */
+  allowOriginalTile?: boolean;
 }) {
   // signed URL을 못 받은 첨부는 뷰어에 넣지 않는다. 슬라이드에 빈 칸이 생기고 좌우 이동이
   // 어긋나느니, 그리드에서만 깨진 타일로 보이는 편이 낫다.
@@ -102,6 +112,8 @@ export function PostImageGrid({
   // 높이가 정해진다 — 로드 후 레이아웃이 튀지 않는다.
   const singleRatio =
     visible.length === 1 ? singleImageRatio(visible[0]) : null;
+  // 원본을 쓸지는 화면이 아니라 타일 크기가 정한다. 근거는 `allowOriginalTile` 주석에 있다.
+  const tileUsesOriginal = allowOriginalTile && visible.length === 1;
 
   return (
     <>
@@ -127,11 +139,15 @@ export function PostImageGrid({
             >
               {item.signedUrl ? (
                 <img
-                  // 목록에 까는 타일은 축소본을 그린다. 원본은 3072px이고 이 타일은 넓어야
-                  // 모바일 전체폭이라, 여기서 원본을 받으면 보이는 픽셀의 열 배 넘게
-                  // 내려받는 셈이다. 축소본이 없는 첨부(업로드 실패)는 원본으로 떨어진다.
-                  // 뷰어는 위 `viewerImages`에서 계속 원본을 연다.
-                  src={item.thumbnailUrl ?? item.signedUrl}
+                  // 타일은 축소본을 그린다. 원본은 3072px인데 타일은 가장 넓어야 컨테이너
+                  // 전폭(데스크톱 피드 기준 약 716 CSS px)이라, 여기서 원본을 받으면 보이는
+                  // 픽셀의 몇 배를 내려받는 셈이다. 축소본이 없는 첨부(업로드 실패)는 원본으로
+                  // 떨어진다. 뷰어는 위 `viewerImages`에서 계속 원본을 연다.
+                  src={
+                    tileUsesOriginal
+                      ? item.signedUrl
+                      : (item.thumbnailUrl ?? item.signedUrl)
+                  }
                   alt={item.original_filename}
                   crossOrigin="anonymous"
                   loading="lazy"

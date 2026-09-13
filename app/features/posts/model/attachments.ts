@@ -6,9 +6,11 @@ import type {
 export { POST_ATTACHMENT_LIMIT } from "~/features/posts/model/constants";
 import { validateSelectedFiles } from "~/features/posts/model/validation";
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
-import { compressImage, getImageDimensions } from "~/shared/lib/image/compress";
-
-const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+import {
+  compressImage,
+  getImageDimensions,
+  isSupportedImageInput,
+} from "~/shared/lib/image/compress";
 const DEFAULT_IMAGE_PREPARATION_CONCURRENCY = 3;
 
 /** 업로드 파이프라인이 사진을 webp로 정규화하므로, 이미지인지 아닌지는 이 한 줄로 갈린다. */
@@ -84,8 +86,8 @@ export function splitPostAttachments(attachments: PostAttachment[]) {
 export async function prepareCommentImage(
   source: File,
 ): Promise<PreparedCommentImage> {
-  if (!IMAGE_TYPES.has(source.type))
-    throw new Error("JPEG, PNG, WebP 사진만 선택할 수 있습니다.");
+  if (!isSupportedImageInput(source))
+    throw new Error("JPEG, PNG, WebP, HEIC, HEIF 사진만 선택할 수 있습니다.");
   if (source.size > MAX_INPUT_FILE_BYTES)
     throw new Error(`이미지는 30MB 이하여야 합니다: ${source.name}`);
 
@@ -144,10 +146,10 @@ export async function preparePostFiles(
       options.signal?.addEventListener("abort", abort, { once: true });
       const prepare = async () => {
         try {
-          const isImage = IMAGE_TYPES.has(source.type);
+          const isImage = isSupportedImageInput(source);
           if (selection === "image" && !isImage)
             throw new Error(
-              `JPEG, PNG, WebP 사진만 선택할 수 있습니다: ${source.name}`,
+              `JPEG, PNG, WebP, HEIC, HEIF 사진만 선택할 수 있습니다: ${source.name}`,
             );
           if (source.type.startsWith("image/") && !isImage)
             throw new Error(`지원하지 않는 이미지 형식입니다: ${source.name}`);
@@ -188,7 +190,7 @@ export async function preparePostFiles(
           return undefined;
         }
       };
-      const preparation = IMAGE_TYPES.has(source.type)
+      const preparation = isSupportedImageInput(source)
         ? enqueueImagePreparation(prepare).then((item) =>
             item?.thumbnailPromise?.then(() => undefined),
           )

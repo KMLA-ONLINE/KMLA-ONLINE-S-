@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(35);
+select plan(37);
 
 select is(
   (select public from storage.buckets where id = 'profile-media'),
@@ -41,7 +41,7 @@ select ok(
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.prepare_profile_media(public.profile_media_slot,bigint,integer,integer)',
+    'public.prepare_profile_media(public.profile_media_slot,bigint,integer,integer,bigint,integer,integer)',
     'EXECUTE'
   ),
   'authenticated users can reserve a profile media upload'
@@ -152,7 +152,7 @@ select is(
 -- prepare -> upload -> finalize. 업로드는 prepare가 만든 `pending` 행이 가리키는 경로에만
 -- 허용되므로 경로를 지어내는 업로드는 여기서 막힌다.
 create temporary table prepared_media as
-select * from public.prepare_profile_media('avatar', 4, 100, 100);
+select * from public.prepare_profile_media('avatar', 4, 100, 100, 5, 200, 200);
 select set_config(
   'test.profile_media_path',
   (select object_path from prepared_media),
@@ -161,6 +161,11 @@ select set_config(
 select set_config(
   'test.profile_media_id',
   (select media_id::text from prepared_media),
+  true
+);
+select set_config(
+  'test.profile_activity_media_path',
+  (select activity_object_path from prepared_media),
   true
 );
 select throws_ok(
@@ -184,6 +189,24 @@ select lives_ok(
       '{"size":4,"mimetype":"image/webp"}'::jsonb
     )$$,
   'owner can upload at the prepared path'
+);
+select throws_ok(
+  $$select public.finalize_profile_media(
+      current_setting('test.profile_media_id')::uuid
+    )$$,
+  'P0002',
+  'uploaded activity object not found',
+  'finalize refuses an avatar when its high-resolution activity object is missing'
+);
+select lives_ok(
+  $$insert into storage.objects (bucket_id, name, owner_id, metadata)
+    values (
+      'profile-media',
+      current_setting('test.profile_activity_media_path'),
+      '10000000-0000-0000-0000-000000000001',
+      '{"size":5,"mimetype":"image/webp"}'::jsonb
+    )$$,
+  'owner can upload the prepared high-resolution activity path'
 );
 select lives_ok(
   $$select public.finalize_profile_media(
@@ -213,10 +236,13 @@ select is(
     select count(*)
     from storage.objects
     where bucket_id = 'profile-media'
-      and name = current_setting('test.profile_media_path')
+      and name in (
+        current_setting('test.profile_media_path'),
+        current_setting('test.profile_activity_media_path')
+      )
   ),
-  1::bigint,
-  'accepted users can sign readable profile media'
+  2::bigint,
+  'accepted users can sign both avatar and high-resolution activity media'
 );
 select set_config('storage.operation', 'storage.object.list', true);
 select is(
@@ -231,7 +257,7 @@ select is(
     from public.list_profile_posts(
       (select pub_id from public.get_my_profile())
     )
-    where activity_media_path = current_setting('test.profile_media_path')
+    where activity_media_path = current_setting('test.profile_activity_media_path')
   ),
   'avatar_changed'::public.profile_media_activity_kind,
   'connecting an avatar creates an avatar activity post'
@@ -244,8 +270,8 @@ select is(
     )
     where activity_kind = 'avatar_changed'
   ),
-  current_setting('test.profile_media_path'),
-  'the activity keeps the changed image path'
+  current_setting('test.profile_activity_media_path'),
+  'the activity keeps the high-resolution changed image path'
 );
 select is(
   (
