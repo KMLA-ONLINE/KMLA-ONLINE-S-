@@ -72,9 +72,11 @@ function tileClass(count: number, index: number): string {
 export function PostImageGrid({
   images,
   className,
+  useThumbnailForTiles = true,
 }: {
   images: PostAttachment[];
   className?: string;
+  useThumbnailForTiles?: boolean;
 }) {
   // signed URL을 못 받은 첨부는 뷰어에 넣지 않는다. 슬라이드에 빈 칸이 생기고 좌우 이동이
   // 어긋나느니, 그리드에서만 깨진 타일로 보이는 편이 낫다.
@@ -131,7 +133,11 @@ export function PostImageGrid({
                   // 모바일 전체폭이라, 여기서 원본을 받으면 보이는 픽셀의 열 배 넘게
                   // 내려받는 셈이다. 축소본이 없는 첨부(업로드 실패)는 원본으로 떨어진다.
                   // 뷰어는 위 `viewerImages`에서 계속 원본을 연다.
-                  src={item.thumbnailUrl ?? item.signedUrl}
+                  src={
+                    useThumbnailForTiles
+                      ? (item.thumbnailUrl ?? item.signedUrl)
+                      : item.signedUrl
+                  }
                   alt={item.original_filename}
                   crossOrigin="anonymous"
                   loading="lazy"

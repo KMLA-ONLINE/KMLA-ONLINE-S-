@@ -104,6 +104,29 @@ describe("PostImageGrid", () => {
     expect(screen.queryByText(/^\+/)).not.toBeInTheDocument();
   });
 
+  it("uses thumbnails for list tiles and originals when requested by details", () => {
+    const item = {
+      ...image("photo"),
+      thumbnailUrl: "https://example.com/thumbnail",
+    };
+    const { unmount } = renderRoute(() => <PostImageGrid images={[item]} />);
+
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "https://example.com/thumbnail",
+    );
+
+    unmount();
+    renderRoute(() => (
+      <PostImageGrid images={[item]} useThumbnailForTiles={false} />
+    ));
+
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "https://example.com/file",
+    );
+  });
+
   it("caps visible tiles at five and marks the rest as overflow", () => {
     renderRoute(() => (
       <PostImageGrid images={["a", "b", "c", "d", "e", "f", "g"].map(image)} />

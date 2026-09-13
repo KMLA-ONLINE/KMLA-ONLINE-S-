@@ -97,6 +97,7 @@ export function ProfilePostDetail({
             <PostImageGrid
               images={images}
               className="overflow-hidden rounded-lg"
+              useThumbnailForTiles={false}
             />
             <PostFileList files={files} />
           </>

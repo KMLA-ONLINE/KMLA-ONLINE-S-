@@ -185,7 +185,11 @@ export function GroupPostDetail({
           <PostMarkdown mentions={post.mentions}>{post.body}</PostMarkdown>
         </div>
 
-        <PostImageGrid images={images} className="overflow-hidden rounded-lg" />
+        <PostImageGrid
+          images={images}
+          className="overflow-hidden rounded-lg"
+          useThumbnailForTiles={false}
+        />
         <PostFileList files={files} />
       </div>
     </PostDetailDialog>
