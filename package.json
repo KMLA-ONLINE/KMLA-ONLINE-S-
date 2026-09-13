@@ -20,6 +20,7 @@
     "format": "prettier --write .",
     "fix": "npm run lint:fix && npm run format",
     "format:check": "prettier --check . --cache",
+    "check:map": "node scripts/check-agent-map.mjs",
     "check:static": "node scripts/check.mjs --static",
     "check": "node scripts/check.mjs",
     "verify": "npm run check && npm run build",

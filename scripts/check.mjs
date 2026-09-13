@@ -23,11 +23,15 @@ const staticOnly = process.argv.includes("--static");
 const LINT = { name: "eslint", script: "lint:only" };
 const TYPES = { name: "tsc", script: "typecheck:only" };
 const FORMAT = { name: "prettier", script: "format:check" };
+// `docs/AGENT_MAP.md`는 에이전트가 탐색 대신 읽는 좌표표라 틀리면 곧바로 잘못된 파일을 열게
+// 한다. 검사가 100ms 남짓이라 편집 루프(`--static`)에도 같이 둔다 — 라우트나 Supabase 호출을
+// 추가한 순간에 알려 주는 것이 나중에 찾는 것보다 싸다.
+const MAP = { name: "agent-map", script: "check:map" };
 const TEST = { name: "vitest", script: "test" };
 
 // `--static`은 편집 루프용이라 포맷 검사를 뺀다. 커밋할 때 lint-staged가 `prettier --write`로
 // 이미 고쳐 주므로, 여기서 같은 것을 다시 물어봐야 손으로 할 일이 생기지 않는다.
-const PARALLEL = staticOnly ? [LINT, TYPES] : [LINT, FORMAT, TYPES];
+const PARALLEL = staticOnly ? [LINT, TYPES, MAP] : [LINT, FORMAT, TYPES, MAP];
 
 const width = Math.max(...[...PARALLEL, TEST].map((task) => task.name.length));
 
