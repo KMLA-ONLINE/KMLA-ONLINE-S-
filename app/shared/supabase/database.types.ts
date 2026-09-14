@@ -388,6 +388,7 @@ export type Database = {
           created_at: string
           created_by: number
           description: string
+          hide_staff_roles: boolean
           icon_path: string | null
           id: string
           identity_policy: Database["public"]["Enums"]["group_identity_policy"]
@@ -406,6 +407,7 @@ export type Database = {
           created_at?: string
           created_by: number
           description?: string
+          hide_staff_roles?: boolean
           icon_path?: string | null
           id?: string
           identity_policy: Database["public"]["Enums"]["group_identity_policy"]
@@ -424,6 +426,7 @@ export type Database = {
           created_at?: string
           created_by?: number
           description?: string
+          hide_staff_roles?: boolean
           icon_path?: string | null
           id?: string
           identity_policy?: Database["public"]["Enums"]["group_identity_policy"]
@@ -1525,6 +1528,7 @@ export type Database = {
       create_group: {
         Args: {
           p_description?: string
+          p_hide_staff_roles?: boolean
           p_identity_policy?: Database["public"]["Enums"]["group_identity_policy"]
           p_join_policy?: Database["public"]["Enums"]["group_join_policy"]
           p_kind: Database["public"]["Enums"]["group_kind"]
@@ -2688,6 +2692,7 @@ export type Database = {
         Args: {
           p_description: string
           p_group_id: string
+          p_hide_staff_roles: boolean
           p_identity_policy: Database["public"]["Enums"]["group_identity_policy"]
           p_join_policy: Database["public"]["Enums"]["group_join_policy"]
           p_name: string
@@ -2695,6 +2700,7 @@ export type Database = {
         }
         Returns: {
           description: string
+          hide_staff_roles: boolean
           identity_policy: Database["public"]["Enums"]["group_identity_policy"]
           join_policy: Database["public"]["Enums"]["group_join_policy"]
           name: string

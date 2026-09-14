@@ -479,7 +479,7 @@ ALTER FUNCTION "public"."approve_group_join_request"("p_group_id" "uuid", "p_req
 
 
 
-CREATE OR REPLACE FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text" DEFAULT ''::"text", "p_slug" "text" DEFAULT NULL::"text", "p_join_policy" "public"."group_join_policy" DEFAULT NULL::"public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy" DEFAULT 'optional_anonymous'::"public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy" DEFAULT 'members'::"public"."group_posting_policy") RETURNS TABLE("group_id" "uuid", "slug" "text")
+CREATE OR REPLACE FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text" DEFAULT ''::"text", "p_slug" "text" DEFAULT NULL::"text", "p_join_policy" "public"."group_join_policy" DEFAULT NULL::"public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy" DEFAULT 'optional_anonymous'::"public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy" DEFAULT 'members'::"public"."group_posting_policy", "p_hide_staff_roles" boolean DEFAULT false) RETURNS TABLE("group_id" "uuid", "slug" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -528,7 +528,7 @@ begin
 
   insert into public.groups (
     id, slug, slug_is_custom, kind, name, description, join_policy,
-    identity_policy, posting_policy, created_by
+    identity_policy, posting_policy, hide_staff_roles, created_by
   ) values (
     created_group_id,
     chosen_slug,
@@ -539,6 +539,7 @@ begin
     chosen_policy,
     p_identity_policy,
     p_posting_policy,
+    p_hide_staff_roles,
     caller_profile.id
   );
 
@@ -546,7 +547,7 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") OWNER TO "postgres";
+ALTER FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) OWNER TO "postgres";
 
 SET default_tablespace = '';
 
@@ -935,6 +936,8 @@ CREATE OR REPLACE FUNCTION "public"."list_group_members"("p_group_id" "uuid", "p
 declare
   caller_profile_id bigint := private.current_profile_id();
   query_text text := btrim(coalesce(p_query, ''));
+  caller_role public.group_member_role;
+  roles_visible boolean;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'group membership required' using errcode = '42501';
@@ -946,17 +949,24 @@ begin
     or (p_after_role is null) <> (p_after_membership_id is null) then
     raise exception 'member cursor must be complete' using errcode = '22023';
   end if;
-  if not exists (
-    select 1 from public.group_memberships as caller_membership
-    where caller_membership.group_id = p_group_id
-      and caller_membership.profile_id = caller_profile_id
-  ) then
+  select caller_membership.role,
+    not group_record.hide_staff_roles
+      or caller_membership.role in ('owner', 'admin')
+  into caller_role, roles_visible
+  from public.groups as group_record
+  join public.group_memberships as caller_membership
+    on caller_membership.group_id = group_record.id
+   and caller_membership.profile_id = caller_profile_id
+  where group_record.id = p_group_id;
+
+  if caller_role is null then
     raise exception 'group membership required' using errcode = '42501';
   end if;
 
   return query
   select membership.id, profile.pub_id, profile.name, profile.cohort,
-    profile.is_returning_student, profile.avatar_path, membership.role,
+    profile.is_returning_student, profile.avatar_path,
+    case when roles_visible then membership.role else 'member'::public.group_member_role end,
     membership.joined_at
   from public.group_memberships as membership
   join public.profiles as profile on profile.id = membership.profile_id
@@ -973,10 +983,21 @@ begin
     )
     and (
       p_after_role is null
-      or (membership.role, membership.joined_at, membership.id)
-        > (p_after_role, p_after_joined_at, p_after_membership_id)
+      or (
+        roles_visible
+        and (membership.role, membership.joined_at, membership.id)
+          > (p_after_role, p_after_joined_at, p_after_membership_id)
+      )
+      or (
+        not roles_visible
+        and (membership.joined_at, membership.id)
+          > (p_after_joined_at, p_after_membership_id)
+      )
     )
-  order by membership.role, membership.joined_at, membership.id
+  order by
+    case when roles_visible then membership.role else 'member'::public.group_member_role end,
+    membership.joined_at,
+    membership.id
   limit p_limit;
 end;
 $$;
@@ -1272,7 +1293,7 @@ $$;
 
 ALTER FUNCTION "public"."update_group_member_role"("p_group_id" "uuid", "p_membership_id" "uuid", "p_role" "public"."group_member_role") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") RETURNS TABLE("name" "text", "description" "text", "join_policy" "public"."group_join_policy", "identity_policy" "public"."group_identity_policy", "posting_policy" "public"."group_posting_policy", "updated_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) RETURNS TABLE("name" "text", "description" "text", "join_policy" "public"."group_join_policy", "identity_policy" "public"."group_identity_policy", "posting_policy" "public"."group_posting_policy", "hide_staff_roles" boolean, "updated_at" timestamp with time zone)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1309,14 +1330,15 @@ begin
   update public.groups as group_record
   set name = btrim(p_name), description = btrim(coalesce(p_description, '')),
     join_policy = p_join_policy, identity_policy = p_identity_policy,
-    posting_policy = p_posting_policy
+    posting_policy = p_posting_policy, hide_staff_roles = p_hide_staff_roles
   where group_record.id = p_group_id
   returning group_record.name, group_record.description, group_record.join_policy,
-    group_record.identity_policy, group_record.posting_policy, group_record.updated_at;
+    group_record.identity_policy, group_record.posting_policy,
+    group_record.hide_staff_roles, group_record.updated_at;
 end;
 $$;
 
-ALTER FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") OWNER TO "postgres";
+ALTER FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "private"."group_invites" (
     "group_id" "uuid" NOT NULL,
@@ -1387,6 +1409,7 @@ CREATE TABLE IF NOT EXISTS "public"."groups" (
     "join_policy" "public"."group_join_policy" NOT NULL,
     "identity_policy" "public"."group_identity_policy" NOT NULL,
     "posting_policy" "public"."group_posting_policy" NOT NULL,
+    "hide_staff_roles" boolean DEFAULT false NOT NULL,
     "created_by" bigint NOT NULL,
     "icon_path" "text",
     "cover_path" "text",
@@ -1564,8 +1587,8 @@ GRANT ALL ON FUNCTION "public"."approve_group_join_request"("p_group_id" "uuid",
 
 
 
-REVOKE ALL ON FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."delete_group"("p_group_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."delete_group"("p_group_id" "uuid") TO "authenticated";
@@ -1612,8 +1635,8 @@ GRANT ALL ON FUNCTION "public"."transfer_group_ownership"("p_group_id" "uuid", "
 REVOKE ALL ON FUNCTION "public"."update_group_member_role"("p_group_id" "uuid", "p_membership_id" "uuid", "p_role" "public"."group_member_role") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."update_group_member_role"("p_group_id" "uuid", "p_membership_id" "uuid", "p_role" "public"."group_member_role") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) TO "authenticated";
 
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."group_join_requests" TO "service_role";
 GRANT SELECT,DELETE ON TABLE "public"."group_join_requests" TO "authenticated";

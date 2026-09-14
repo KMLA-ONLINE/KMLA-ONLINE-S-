@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(39);
+select plan(40);
 
 insert into public.groups (
   id,
@@ -293,9 +293,16 @@ select lives_ok(
     'db-official',
     'open',
     'identified',
-    'staff'
+    'staff',
+    true
   )$$,
   'student app admin can create an official group'
+);
+
+select is(
+  (select hide_staff_roles from public.groups where slug = 'db-official'),
+  true,
+  'group creation stores the requested staff-role visibility'
 );
 
 select is(
