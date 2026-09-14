@@ -1,3 +1,5 @@
+import { fitOutputSize } from "~/shared/lib/image/crop";
+import { encodeWebp } from "~/shared/lib/image/encode-webp";
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 
 interface CompressionPolicy {
@@ -366,31 +368,44 @@ export async function compressImage(
   const input = await prepareImageInput(file, signal);
   throwIfAborted(signal);
 
-  const compressed = await imageCompression(input, {
-    maxWidthOrHeight: maxEdge,
-    initialQuality: quality,
-    fileType: "image/webp",
-    useWebWorker: true,
-    libURL: workerLibUrl,
-    preserveExif: false,
-    alwaysKeepResolution: false,
-    signal,
-  }).catch((cause) => {
-    if (cause instanceof DOMException && cause.name === "AbortError")
-      throw cause;
-    throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, { cause });
-  });
+  const compressed = await toWebpBytes(input, maxEdge, quality).catch(
+    (cause) => {
+      throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, { cause });
+    },
+  );
   throwIfAborted(signal);
   if (compressed.size > maxBytes)
     throw new Error(`처리한 이미지가 용량 제한을 초과합니다: ${file.name}`);
 
-  // 라이브러리가 이름·타입을 원본대로 남길 수 있어, 확장자와 MIME을 webp로 맞춰 다시 감싼다.
-  // 스토리지의 insert 정책이 MIME을 보므로 일관돼야 한다.
+  // 인코더는 이름 없는 Blob을 준다. 확장자와 MIME을 여기서 webp로 맞춰 감싼다. 스토리지의
+  // insert 정책이 MIME을 보므로 일관돼야 한다.
   const base = file.name.replace(/\.[^./\\]+$/, "") || "image";
   return new File([compressed], `${base}.webp`, {
     type: "image/webp",
     lastModified: file.lastModified,
   });
 }
-import imageCompression from "browser-image-compression";
-import workerLibUrl from "browser-image-compression/dist/browser-image-compression.js?url";
+
+/**
+ * 원본을 디코딩해 프리셋 치수로 줄인 WebP 바이트를 만든다.
+ *
+ * 디코딩에 `createImageBitmap`을 쓰는 건 치수 계산 때문만이 아니다. `imageOrientation`이
+ * EXIF 회전을 디코딩 단계에서 적용해 주고, 그 뒤 캔버스를 거치면서 EXIF 자체는 사라진다.
+ * `compressImage()`가 약속하는 두 가지가 이 한 줄에서 같이 성립한다.
+ */
+async function toWebpBytes(
+  input: File,
+  maxEdge: number,
+  quality: number,
+): Promise<Blob> {
+  const bitmap = await createImageBitmap(input, {
+    imageOrientation: "from-image",
+  });
+
+  try {
+    const { width, height } = fitOutputSize(bitmap, maxEdge);
+    return await encodeWebp(bitmap, width, height, quality);
+  } finally {
+    bitmap.close();
+  }
+}
