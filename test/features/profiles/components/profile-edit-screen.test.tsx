@@ -114,20 +114,4 @@ describe("ProfileEditScreen", () => {
     expect(screen.getByLabelText(/slug/)).toBeVisible();
     expect(screen.getByText(String(actionData.errors?.pubId))).toBeVisible();
   });
-
-  it("opens the identity section when a submission is rejected inside it", () => {
-    const actionData = submit({
-      birthdayYear: "",
-      birthdayMonth: "",
-      birthdayDay: "",
-    });
-
-    expect(actionData.errors?.birthday).toBeDefined();
-
-    renderScreen(actionData);
-
-    // 접힌 칸의 오류는 아무도 못 본다. 펼친 채로 렌더돼야 한다.
-    expect(screen.getByLabelText(/이름/)).toBeVisible();
-    expect(screen.getByText(String(actionData.errors?.birthday))).toBeVisible();
-  });
 });

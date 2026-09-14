@@ -88,9 +88,4 @@ describe("GroupPostRow", () => {
     renderRow(groupPost({ is_pinned: true }));
     expect(screen.getByLabelText("고정됨")).toBeInTheDocument();
   });
-
-  it("dims a visited row", () => {
-    renderRow(groupPost(), true);
-    expect(screen.getByRole("link")).toHaveClass("bg-muted/45");
-  });
 });

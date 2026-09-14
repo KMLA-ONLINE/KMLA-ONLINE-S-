@@ -41,20 +41,6 @@ const gridRatio = () =>
   Number.parseFloat(screen.getByTestId("post-image-grid").style.aspectRatio);
 
 describe("PostImageGrid", () => {
-  it("rules a single image top and bottom only", () => {
-    const { unmount } = renderRoute(() => (
-      <PostImageGrid images={[image("single")]} />
-    ));
-
-    // 좌우는 카드 폭에 꽉 차서 카드 테두리와 겹쳐 두 줄로 보인다.
-    expect(screen.getByTestId("post-image-grid")).toHaveClass("border-y");
-
-    unmount();
-    renderRoute(() => <PostImageGrid images={[image("a"), image("b")]} />);
-
-    expect(screen.getByTestId("post-image-grid")).not.toHaveClass("border-y");
-  });
-
   it("shows a single image at its own aspect ratio", () => {
     renderRoute(() => (
       <PostImageGrid

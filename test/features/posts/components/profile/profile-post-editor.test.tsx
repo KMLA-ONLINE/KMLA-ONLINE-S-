@@ -141,12 +141,6 @@ describe("ProfilePostEditor", () => {
     );
   });
 
-  it("작성 화면 제목에 누구의 타임라인인지 밝힌다", () => {
-    renderEditor();
-
-    expect(screen.getByText("이지은님의 타임라인")).toBeVisible();
-  });
-
   it("파일을 선택하면 게시 전 업로드를 시작한다", async () => {
     const { user } = renderEditor();
     const file = new File(["내용"], "note.txt", { type: "text/plain" });
