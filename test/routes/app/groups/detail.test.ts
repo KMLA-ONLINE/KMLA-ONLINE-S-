@@ -41,6 +41,7 @@ const group = {
   join_policy: "open",
   identity_policy: "identified",
   posting_policy: "members",
+  hide_staff_roles: false,
   icon_path: null,
   cover_path: null,
   member_count: 1,
@@ -125,12 +126,14 @@ describe("group detail management action", () => {
     const result = await action(
       new URLSearchParams({
         intent: "update-settings",
+        settingsSection: "posting",
         groupId: "group",
         name: "새 이름",
         description: "설명",
         joinPolicy: "request",
         identityPolicy: "optional_anonymous",
         postingPolicy: "staff",
+        hideStaffRoles: "true",
       }),
     );
     expect(result).toMatchObject({ data: { ok: true } });
@@ -140,6 +143,7 @@ describe("group detail management action", () => {
       joinPolicy: "request",
       identityPolicy: "optional_anonymous",
       postingPolicy: "staff",
+      hideStaffRoles: true,
     });
   });
 
@@ -164,12 +168,14 @@ describe("group detail management action", () => {
     const result = await action(
       new URLSearchParams({
         intent: "update-settings",
+        settingsSection: "posting",
         groupId: "group",
         name,
         description,
         joinPolicy: "request",
         identityPolicy: "identified",
         postingPolicy: "members",
+        hideStaffRoles: "false",
       }),
     );
 

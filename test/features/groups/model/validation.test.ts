@@ -15,6 +15,7 @@ const VALID_GROUP: CreateGroupValues = {
   joinPolicy: "open",
   identityPolicy: "optional_anonymous",
   postingPolicy: "members",
+  hideStaffRoles: false,
 };
 
 describe("group creation validation", () => {
@@ -57,6 +58,7 @@ describe("group creation validation", () => {
     formData.set("joinPolicy", "open");
     formData.set("identityPolicy", "identified");
     formData.set("postingPolicy", "staff");
+    formData.set("hideStaffRoles", "true");
 
     expect(readCreateGroupForm(formData)).toEqual({
       kind: "unofficial",
@@ -66,6 +68,7 @@ describe("group creation validation", () => {
       joinPolicy: "open",
       identityPolicy: "identified",
       postingPolicy: "staff",
+      hideStaffRoles: true,
     });
   });
 });

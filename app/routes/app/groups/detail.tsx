@@ -306,17 +306,39 @@ export async function clientAction({
       const description = formData.get("description");
       const joinPolicy = formData.get("joinPolicy");
       const identityPolicy = formData.get("identityPolicy");
-      const postingPolicy = formData.get("postingPolicy");
+      const settingsSection = formData.get("settingsSection");
+      const rawPostingPolicy = formData.get("postingPolicy");
+      const postingPolicy =
+        rawPostingPolicy === "staff"
+          ? "staff"
+          : rawPostingPolicy === "members" ||
+              (rawPostingPolicy === null && settingsSection === "posting")
+            ? "members"
+            : null;
+      const rawHideStaffRoles = formData.get("hideStaffRoles");
+      const hideStaffRoles =
+        rawHideStaffRoles === "true"
+          ? true
+          : rawHideStaffRoles === "false" ||
+              (rawHideStaffRoles === null && settingsSection === "staffRoles")
+            ? false
+            : null;
       if (
         typeof groupId !== "string" ||
         typeof rawName !== "string" ||
         typeof description !== "string" ||
+        (settingsSection !== "basic" &&
+          settingsSection !== "join" &&
+          settingsSection !== "identity" &&
+          settingsSection !== "posting" &&
+          settingsSection !== "staffRoles") ||
         (joinPolicy !== "open" &&
           joinPolicy !== "request" &&
           joinPolicy !== "invite_only") ||
         (identityPolicy !== "identified" &&
           identityPolicy !== "optional_anonymous") ||
-        (postingPolicy !== "members" && postingPolicy !== "staff")
+        (postingPolicy !== "members" && postingPolicy !== "staff") ||
+        typeof hideStaffRoles !== "boolean"
       )
         return data(
           { error: "그룹 설정을 다시 확인해 주세요." },
@@ -342,6 +364,7 @@ export async function clientAction({
         joinPolicy,
         identityPolicy,
         postingPolicy,
+        hideStaffRoles,
       });
     } else if (intent === "pin") {
       if (typeof groupId !== "string")
@@ -502,6 +525,7 @@ async function invalidateGroupMutation(
       invalidate(groupKeys.detail(slug)),
       invalidate(groupKeys.home()),
       invalidate(groupKeys.discoveries()),
+      invalidate(groupKeys.memberLists(groupId)),
     );
   } else if (intent === "issue-invite" || intent === "revoke-invite") {
     tasks.push(

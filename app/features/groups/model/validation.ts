@@ -34,7 +34,9 @@ export function readCreateGroupForm(formData: FormData): CreateGroupValues {
     slug: formText(formData, "slug").toLowerCase(),
     joinPolicy: formText(formData, "joinPolicy") as GroupJoinPolicy,
     identityPolicy: formText(formData, "identityPolicy") as GroupIdentityPolicy,
-    postingPolicy: formText(formData, "postingPolicy") as GroupPostingPolicy,
+    postingPolicy: (formText(formData, "postingPolicy") ||
+      "members") as GroupPostingPolicy,
+    hideStaffRoles: formData.get("hideStaffRoles") === "true",
   };
 }
 

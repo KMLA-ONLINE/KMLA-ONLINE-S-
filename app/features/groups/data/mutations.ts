@@ -20,6 +20,7 @@ export async function createGroup(
     p_join_policy: values.joinPolicy,
     p_identity_policy: values.identityPolicy,
     p_posting_policy: values.postingPolicy,
+    p_hide_staff_roles: values.hideStaffRoles,
   });
   if (error) throw error;
 
@@ -162,6 +163,7 @@ export async function updateGroupSettings(
     p_join_policy: values.joinPolicy,
     p_identity_policy: values.identityPolicy,
     p_posting_policy: values.postingPolicy,
+    p_hide_staff_roles: values.hideStaffRoles,
   });
   if (error) throw error;
 }

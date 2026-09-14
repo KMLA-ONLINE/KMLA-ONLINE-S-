@@ -15,8 +15,10 @@ import type {
 } from "~/features/groups/model/types";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent } from "~/shared/ui/card";
+import { Checkbox } from "~/shared/ui/checkbox";
 import {
   Field,
+  FieldContent,
   FieldDescription,
   FieldError,
   FieldGroup,
@@ -38,6 +40,7 @@ const DEFAULT_VALUES: CreateGroupValues = {
   joinPolicy: "invite_only",
   identityPolicy: "optional_anonymous",
   postingPolicy: "members",
+  hideStaffRoles: false,
 };
 
 export function GroupCreateForm({
@@ -284,23 +287,51 @@ export function GroupCreateForm({
                 </NativeSelect>
                 <FieldError>{errors.identityPolicy}</FieldError>
               </Field>
-              <Field data-invalid={Boolean(errors.postingPolicy)}>
-                <FieldLabel htmlFor="posting-policy">글쓰기</FieldLabel>
-                <NativeSelect
-                  id="posting-policy"
+              <Field
+                orientation="horizontal"
+                data-invalid={Boolean(errors.postingPolicy)}
+              >
+                <Checkbox
+                  id="staff-only-posting"
                   name="postingPolicy"
-                  defaultValue={values.postingPolicy}
+                  value="staff"
+                  defaultChecked={values.postingPolicy === "staff"}
                   disabled={pending}
                   aria-invalid={Boolean(errors.postingPolicy)}
-                >
-                  <NativeSelectOption value="members">
-                    모든 멤버
-                  </NativeSelectOption>
-                  <NativeSelectOption value="staff">
-                    운영진만
-                  </NativeSelectOption>
-                </NativeSelect>
+                />
+                <FieldContent>
+                  <FieldLabel htmlFor="staff-only-posting">
+                    운영진만 게시 가능
+                  </FieldLabel>
+                  <FieldDescription>
+                    매니저, 관리자와 소유자만 게시물을 작성합니다.
+                  </FieldDescription>
+                </FieldContent>
                 <FieldError>{errors.postingPolicy}</FieldError>
+              </Field>
+              <Field
+                orientation="horizontal"
+                className="sm:col-span-2"
+                data-invalid={Boolean(errors.hideStaffRoles)}
+              >
+                <Checkbox
+                  id="hide-staff-roles"
+                  name="hideStaffRoles"
+                  value="true"
+                  defaultChecked={values.hideStaffRoles}
+                  disabled={pending}
+                  aria-invalid={Boolean(errors.hideStaffRoles)}
+                />
+                <FieldContent>
+                  <FieldLabel htmlFor="hide-staff-roles">
+                    일반 멤버에게 운영진 역할 숨기기
+                  </FieldLabel>
+                  <FieldDescription>
+                    소유자와 관리자를 제외한 멤버 명부에서는 운영진도 일반
+                    멤버처럼 표시합니다.
+                  </FieldDescription>
+                </FieldContent>
+                <FieldError>{errors.hideStaffRoles}</FieldError>
               </Field>
             </FieldGroup>
           </FieldSet>

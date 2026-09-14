@@ -23,6 +23,7 @@ type GroupRow = Database["public"]["Tables"]["groups"]["Row"];
 
 const GROUP_COLUMNS =
   "id, slug, name, description, kind, join_policy, identity_policy, posting_policy, icon_path, cover_path, member_count" as const;
+const GROUP_DETAIL_COLUMNS = `${GROUP_COLUMNS}, hide_staff_roles` as const;
 
 interface MembershipWithGroup {
   role: GroupMemberRole;
@@ -167,7 +168,7 @@ export async function loadGroupDetail(
   const [groupResult, membershipResult, requestResult] = await Promise.all([
     supabase
       .from("groups")
-      .select(GROUP_COLUMNS)
+      .select(GROUP_DETAIL_COLUMNS)
       .eq("slug", slug)
       .maybeSingle(),
     supabase

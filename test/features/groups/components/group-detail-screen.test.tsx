@@ -15,6 +15,7 @@ const baseGroup: GroupDetail = {
   join_policy: "open",
   identity_policy: "identified",
   posting_policy: "members",
+  hide_staff_roles: false,
   icon_path: null,
   cover_path: null,
   member_count: 12,
