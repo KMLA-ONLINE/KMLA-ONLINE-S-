@@ -6,6 +6,7 @@ import {
   cancelGroupJoinRequest,
   getGroupErrorMessage,
   groupKeys,
+  GROUP_STALE_TIME,
   GroupHomeScreen,
   joinGroup,
   loadGroupHome,
@@ -44,7 +45,7 @@ export async function clientLoader() {
     groups: await getQueryClient().fetchQuery({
       queryKey: groupKeys.home(),
       queryFn: loadGroupHome,
-      staleTime: 0,
+      staleTime: GROUP_STALE_TIME,
     }),
   };
 }

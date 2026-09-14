@@ -216,6 +216,42 @@ describe("group detail loader", () => {
     expect(mutations.markGroupPostsVisited).toHaveBeenCalledWith("group-id");
   });
 
+  it("clears this group's home badge without waiting for the visit RPC", async () => {
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    // 끝나지 않는 RPC — 배지는 응답을 기다리지 않고 내려가야 한다.
+    mutations.markGroupPostsVisited.mockReturnValue(
+      new Promise<void>(() => undefined),
+    );
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(groupKeys.home(), [
+      { group_id: "group-id", new_post_count: 3 },
+      { group_id: "other-id", new_post_count: 5 },
+    ]);
+
+    await load("/groups/test");
+
+    expect(queryClient.getQueryData(groupKeys.home())).toEqual([
+      { group_id: "group-id", new_post_count: 0 },
+      { group_id: "other-id", new_post_count: 5 },
+    ]);
+  });
+
+  it("re-reads the home counts when the visit RPC fails", async () => {
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    mutations.markGroupPostsVisited.mockRejectedValue(new Error("offline"));
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(groupKeys.home(), [
+      { group_id: "group-id", new_post_count: 3 },
+    ]);
+
+    await load("/groups/test");
+    await vi.waitFor(() =>
+      expect(queryClient.getQueryState(groupKeys.home())?.isInvalidated).toBe(
+        true,
+      ),
+    );
+  });
+
   it("does not block optional-anonymous group content on a restriction lookup", async () => {
     mutations.loadGroupDetail.mockResolvedValue({
       ...group,

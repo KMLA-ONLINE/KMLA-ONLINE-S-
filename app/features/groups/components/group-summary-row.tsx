@@ -19,7 +19,6 @@ import {
   DialogTitle,
 } from "~/shared/ui/dialog";
 import { Spinner } from "~/shared/ui/spinner";
-import { Badge } from "~/shared/ui/badge";
 
 export function GroupSummaryRow({
   group,
@@ -120,7 +119,16 @@ export function GroupSummaryRow({
             ) : null}
             <span>멤버 {group.member_count.toLocaleString("ko-KR")}명</span>
             {group.new_post_count > 0 ? (
-              <Badge>{`새 게시물 ${group.new_post_count.toLocaleString("ko-KR")}개`}</Badge>
+              <>
+                <span aria-hidden>·</span>
+                <span className="flex items-center gap-1">
+                  새 게시물 {group.new_post_count.toLocaleString("ko-KR")}개
+                  <span
+                    aria-hidden
+                    className="size-1.5 shrink-0 rounded-full bg-primary"
+                  />
+                </span>
+              </>
             ) : null}
           </p>
           {actionError ? (

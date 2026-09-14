@@ -17,6 +17,7 @@ import {
   GROUP_STALE_TIME,
   GroupDetailMobileHeader,
   GroupDetailScreen,
+  type GroupHomeItem,
   type GroupInviteProfileType,
   issueGroupInvite,
   isGroupAccessQuery,
@@ -169,14 +170,24 @@ export async function clientLoader({
 
   // A post detail is a child route, so only the group's exact posts tab advances §7.19.
   if (postsTab && url.pathname === `/groups/${group.slug}`) {
+    // 그룹 홈에는 활성 observer가 없어 무효화가 화면을 다시 그리지 않는다. 배지를 먼저 0으로
+    // 낮춰야 RPC보다 먼저 목록으로 돌아와도 옛 숫자가 남지 않는다(§7.19).
+    queryClient.setQueryData(
+      groupKeys.home(),
+      (groups: GroupHomeItem[] | undefined) =>
+        groups?.map((item) =>
+          item.group_id === group.group_id
+            ? { ...item, new_post_count: 0 }
+            : item,
+        ),
+    );
+    // 성공이든 실패든 다음 진입은 서버 값을 다시 읽는다 — 방문 저장이 실패했다면 위에서 낮춘
+    // 0이 거짓말이고, 무효화하지 않으면 2분 동안 안 읽은 글이 읽은 것으로 보인다.
     void markGroupPostsVisited(group.group_id)
-      .then(() =>
-        queryClient.invalidateQueries({
-          queryKey: groupKeys.home(),
-          refetchType: "none",
-        }),
-      )
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() =>
+        queryClient.invalidateQueries({ queryKey: groupKeys.home() }),
+      );
   }
   return {
     group,
