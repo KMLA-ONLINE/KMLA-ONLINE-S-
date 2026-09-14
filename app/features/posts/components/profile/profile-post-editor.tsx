@@ -85,6 +85,7 @@ export function ProfilePostEditor({
     existing,
     removedIds,
     additions,
+    orderedAdditions,
     attachmentOrder,
     uploadStates,
     preparingCount,
@@ -152,7 +153,7 @@ export function ProfilePostEditor({
           ? await createProfilePostWithAttachments(
               timelinePubId,
               nextValues,
-              additions,
+              orderedAdditions,
               session.current,
               onProgress,
             )

@@ -48,6 +48,11 @@ export function usePostAttachmentDraft({
   const [initialOrder] = useState(() =>
     initialAttachments.map((item) => item.attachment_id),
   );
+  const additionsByKey = new Map(additions.map((item) => [item.key, item]));
+  const orderedAdditions = attachmentOrder.flatMap((key) => {
+    const item = additionsByKey.get(key);
+    return item ? [item] : [];
+  });
   const additionsRef = useRef(additions);
   const session = useRef(createPostUploadSession());
   const disposedRef = useRef(false);
@@ -111,6 +116,12 @@ export function usePostAttachmentDraft({
     preparationControllers.current.add(controller);
     try {
       await preparePostFiles(supported, currentCount, selection, {
+        // 자리는 고른 순서대로 미리 잡는다. 목록은 `attachmentOrder`를 따라 그려지고 아직
+        // 준비되지 않은 key는 건너뛰므로, 준비가 끝난 사진이 제 자리에 들어온다.
+        onQueued: (keys) => {
+          if (!disposedRef.current)
+            setAttachmentOrder((current) => [...current, ...keys]);
+        },
         onPrepared: (prepared) => {
           if (disposedRef.current) {
             releasePostFile(prepared);
@@ -118,12 +129,16 @@ export function usePostAttachmentDraft({
           }
           preparedCount += 1;
           setAdditions((current) => [...current, prepared]);
-          setAttachmentOrder((current) => [...current, prepared.key]);
           void preupload([prepared], session.current).catch(() => undefined);
           onFilesAdded?.();
         },
-        onError: (error) => {
-          if (!disposedRef.current) setPreparationError(error.message);
+        onError: (error, key) => {
+          if (disposedRef.current) return;
+          // 준비하지 못한 파일이 차지한 자리를 비운다. 남겨 두면 영영 채워지지 않는다.
+          setAttachmentOrder((current) =>
+            current.filter((item) => item !== key),
+          );
+          setPreparationError(error.message);
         },
         signal: controller.signal,
       });
@@ -184,6 +199,14 @@ export function usePostAttachmentDraft({
     existing,
     removedIds,
     additions,
+    /**
+     * 화면에 보이는 순서대로 정렬한 새 첨부. 새 글 작성이 커밋에 넘기는 배열이 이것이다.
+     *
+     * `additions`는 준비가 끝난 순서로 쌓이므로 표시 순서와 다르고, 드래그로 바꾼 순서도
+     * 담고 있지 않다. 수정 경로는 `attachmentOrder`를 따로 넘겨 업로드 뒤에
+     * `resolveAttachmentOrder()`가 같은 변환을 하지만, 작성 경로에는 넘길 자리가 없다.
+     */
+    orderedAdditions,
     attachmentOrder,
     uploadStates,
     preparingCount,

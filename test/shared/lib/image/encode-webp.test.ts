@@ -95,6 +95,39 @@ describe("encodeWebp", () => {
     });
   });
 
+  it("워커를 쓸 수 있으면 메인 스레드에서 인코딩하지 않는다", async () => {
+    // 유휴 종료 타이머가 테스트 뒤에도 30초를 붙잡지 않도록 가짜 시계를 쓴다.
+    vi.useFakeTimers();
+    const transfers: (Transferable[] | undefined)[] = [];
+    class FakeWorker {
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onerror: (() => void) | null = null;
+      postMessage(message: { id: number }, transfer?: Transferable[]) {
+        transfers.push(transfer);
+        queueMicrotask(() =>
+          this.onmessage?.({
+            data: { id: message.id, encoded: new Uint8Array([9]).buffer },
+          } as MessageEvent),
+        );
+      }
+      terminate = vi.fn();
+    }
+    vi.stubGlobal("Worker", FakeWorker);
+    stubCanvas(false);
+    const encodeWebp = await loadEncoder();
+
+    try {
+      const blob = await encodeWebp(bitmap, 800, 600, 0.8);
+
+      expect(blob.type).toBe("image/webp");
+      expect(encodeWithWasm).not.toHaveBeenCalled();
+      // 픽셀은 복사가 아니라 넘긴다. 3072px 한 장이 28MB다.
+      expect(transfers[0]).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("감지를 통과해도 결과가 WebP가 아니면 WASM으로 되돌아간다", async () => {
     const { toBlob } = stubCanvas(true, false);
     const encodeWebp = await loadEncoder();

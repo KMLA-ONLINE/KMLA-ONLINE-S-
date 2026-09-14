@@ -116,6 +116,7 @@ export function GroupPostEditor({
     existing,
     removedIds,
     additions,
+    orderedAdditions,
     attachmentOrder,
     uploadStates,
     preparingCount,
@@ -181,7 +182,7 @@ export function GroupPostEditor({
           ? await createGroupPostWithAttachments(
               groupId,
               nextValues,
-              additions,
+              orderedAdditions,
               session.current,
               onProgress,
             )

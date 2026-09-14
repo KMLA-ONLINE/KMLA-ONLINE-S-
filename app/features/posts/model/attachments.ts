@@ -12,6 +12,18 @@ import {
   isSupportedImageInput,
 } from "~/shared/lib/image/compress";
 const DEFAULT_IMAGE_PREPARATION_CONCURRENCY = 3;
+/**
+ * 휴대폰과 저사양 기기에서 한 번에 손보는 사진 수.
+ *
+ * 한때 1이었다. 그때는 WebP 인코딩이 메인 스레드에서 동기로 돌아 두 장을 띄워도 겹칠 것이
+ * 없었고, HEIF는 전체 해상도 PNG를 왕복하느라 진행 중인 사진마다 수십 MB를 들고 있었다.
+ * 지금은 인코딩이 워커에 있고 그 왕복도 없어져서, 한 장을 인코딩하는 동안 다음 장을
+ * 디코딩하는 겹침이 실제로 생긴다.
+ *
+ * 그래도 데스크톱과 같은 3을 주지는 않는다. iOS는 메모리 압박에서 탭을 통째로 죽이고, 그건
+ * 조금 느린 것보다 훨씬 나쁜 실패다.
+ */
+const LOW_POWER_IMAGE_PREPARATION_CONCURRENCY = 2;
 
 /** 업로드 파이프라인이 사진을 webp로 정규화하므로, 이미지인지 아닌지는 이 한 줄로 갈린다. */
 const IMAGE_MIME = "image/webp";
@@ -35,7 +47,7 @@ function imagePreparationConcurrency(): number {
     navigator.maxTouchPoints > 0 &&
     (!navigator.hardwareConcurrency || navigator.hardwareConcurrency <= 4);
   return isIOS || isLowPowerTouchDevice
-    ? 1
+    ? LOW_POWER_IMAGE_PREPARATION_CONCURRENCY
     : DEFAULT_IMAGE_PREPARATION_CONCURRENCY;
 }
 
@@ -122,8 +134,16 @@ async function createThumbnail(
 }
 
 interface PostFilePreparationOptions {
+  /**
+   * 고른 파일들의 key를 고른 순서대로, 준비가 시작되기 전에 알린다.
+   *
+   * 표시 순서를 여기서 잡아야 한다. 압축은 동시에 여러 개가 돌고 큰 사진일수록 늦게 끝나므로,
+   * `onPrepared`가 오는 순서는 고른 순서가 아니다. 그 순서로 목록을 쌓으면 사용자가 고른
+   * 차례와 글에 실리는 차례가 어긋난다.
+   */
+  onQueued?: (keys: string[]) => void;
   onPrepared?: (file: PreparedPostFile) => void;
-  onError?: (error: Error) => void;
+  onError?: (error: Error, key: string) => void;
   signal?: AbortSignal;
 }
 
@@ -135,6 +155,11 @@ export async function preparePostFiles(
 ): Promise<PreparedPostFile[]> {
   const error = validateSelectedFiles(selected, currentCount);
   if (error) throw new Error(error);
+
+  // 첫 `await` 전에 동기적으로 알린다. 앞선 선택이 아직 준비 중이어도 이번 선택의 자리는
+  // 그 뒤에 통째로 잡힌다.
+  const keys = selected.map(() => crypto.randomUUID());
+  options.onQueued?.(keys);
 
   const prepared = new Array<PreparedPostFile>(selected.length);
   const errors: Error[] = [];
@@ -161,7 +186,7 @@ export async function preparePostFiles(
             ? await getImageDimensions(file, controller.signal)
             : [null, null];
           const item: PreparedPostFile = {
-            key: crypto.randomUUID(),
+            key: keys[index],
             file,
             thumbnail: null,
             kind: isImage ? "image" : "file",
@@ -186,7 +211,7 @@ export async function preparePostFiles(
               ? cause
               : new Error("파일을 준비하지 못했습니다.");
           errors.push(itemError);
-          options.onError?.(itemError);
+          options.onError?.(itemError, keys[index]);
           return undefined;
         }
       };

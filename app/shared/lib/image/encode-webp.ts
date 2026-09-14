@@ -10,8 +10,102 @@
  * 이미지가 용량 제한을 초과합니다"로 끝나던 원인이 이것이다.
  *
  * 네이티브가 WebP를 내놓지 못하면 libwebp(WASM)로 직접 인코딩한다. 이 갈래는 WASM이 필요한
- * 브라우저에서만 내려받도록 지연 로드한다.
+ * 브라우저에서만 내려받도록 지연 로드하고, 인코딩 자체는 워커에서 돌린다 — 동기 호출이라
+ * 메인 스레드에 두면 그 시간 동안 화면이 멈춘다. 파일 앞쪽 절반이 그 워커를 다루는 배관이다.
  */
+
+/**
+ * 마지막 인코딩에서 이만큼 지나면 워커를 접는다.
+ *
+ * 살려 두면 다음 사진에서 libwebp를 다시 세우지 않아 이득이지만, 그 대가로 WASM 힙이 계속
+ * 잡혀 있다. 업로드를 끝내고 피드로 돌아간 사용자에게 수십 MB를 물려 둘 이유는 없다 — iOS는
+ * 메모리 압박에서 탭을 죽이고, 그건 느린 것보다 나쁘다. 연속 업로드는 이 시간 안에 들어온다.
+ */
+const WORKER_IDLE_TIMEOUT_MS = 30_000;
+
+interface PendingEncode {
+  resolve: (blob: Blob) => void;
+  reject: (reason: unknown) => void;
+}
+
+let worker: Worker | null | undefined;
+let idleTimer: ReturnType<typeof setTimeout> | undefined;
+let nextRequestId = 0;
+const pending = new Map<number, PendingEncode>();
+
+function disposeWorker(reason?: Error): void {
+  worker?.terminate();
+  // `null`은 "이 세션에서는 워커를 쓰지 않는다", `undefined`는 "아직 안 만들었다"를 뜻한다.
+  worker = reason ? null : undefined;
+  if (!reason) return;
+  pending.forEach((request) => request.reject(reason));
+  pending.clear();
+}
+
+function scheduleIdleDisposal(): void {
+  clearTimeout(idleTimer);
+  if (pending.size > 0 || !worker) return;
+  idleTimer = setTimeout(() => disposeWorker(), WORKER_IDLE_TIMEOUT_MS);
+}
+
+function encoderWorker(): Worker | null {
+  if (worker !== undefined) return worker;
+  if (typeof Worker !== "function") return (worker = null);
+
+  try {
+    worker = new Worker(new URL("./webp-encoder.worker.ts", import.meta.url), {
+      type: "module",
+    });
+  } catch {
+    return (worker = null);
+  }
+
+  worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
+    const request = pending.get(event.data.id);
+    pending.delete(event.data.id);
+    if ("error" in event.data) request?.reject(new Error(event.data.error));
+    else
+      request?.resolve(new Blob([event.data.encoded], { type: "image/webp" }));
+    scheduleIdleDisposal();
+  };
+  // 워커가 통째로 죽으면 남은 요청은 영영 답을 받지 못한다. 여기서 끊고, 이후로는 인라인으로
+  // 내려간다 — 한 번 세우지 못한 워커가 다음에 세워질 이유가 없다.
+  worker.onerror = () => disposeWorker(new Error("webp encoder worker failed"));
+  return worker;
+}
+
+type WorkerResponse =
+  { id: number; encoded: ArrayBuffer } | { id: number; error: string };
+
+/** 워커가 인코딩하면 그 결과를, 워커를 쓸 수 없으면 `null`을 준다. */
+function encodeOnWorker(
+  image: ImageData,
+  quality: number,
+): Promise<Blob | null> {
+  const target = encoderWorker();
+  if (!target) return Promise.resolve(null);
+
+  clearTimeout(idleTimer);
+  const id = (nextRequestId += 1);
+  const promise = new Promise<Blob>((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+  });
+  // `image.data`는 `getImageData()`가 막 만들어 준 사본이라 넘겨도 잃을 것이 없다. 다만 넘긴
+  // 뒤에는 이쪽 버퍼가 비므로, 워커가 도중에 죽으면 이 사진은 인라인으로 되돌릴 수 없고
+  // 그대로 실패한다. 다음 사진부터는 인라인으로 내려가고, 실패한 사진은 재시도로 다시 푼다.
+  const pixels = image.data.buffer;
+  target.postMessage(
+    {
+      id,
+      pixels,
+      width: image.width,
+      height: image.height,
+      quality: toLibwebpQuality(quality),
+    },
+    [pixels],
+  );
+  return promise;
+}
 
 let nativeEncoder: boolean | undefined;
 
@@ -43,13 +137,28 @@ async function encodeWithCanvas(
 }
 
 /** libwebp의 품질은 0~100이고, 캔버스 API는 0~1이다. 호출부는 캔버스 쪽 단위로 말한다. */
+function toLibwebpQuality(quality: number): number {
+  return Math.round(quality * 100);
+}
+
+/**
+ * 워커를 못 쓸 때 쓰는 갈래. 인코딩이 동기라 그동안 화면이 멈춘다.
+ *
+ * 워커 생성이 막히거나(구형 브라우저, 일부 내장 웹뷰) 워커가 죽어도 업로드는 되어야 한다.
+ * 느린 것과 안 되는 것은 다르다.
+ */
+async function encodeInline(image: ImageData, quality: number): Promise<Blob> {
+  const { default: encode } = await import("@jsquash/webp/encode");
+  const encoded = await encode(image, { quality: toLibwebpQuality(quality) });
+  return new Blob([encoded], { type: "image/webp" });
+}
+
 async function encodeWithWasm(
   image: ImageData,
   quality: number,
 ): Promise<Blob> {
-  const { default: encode } = await import("@jsquash/webp/encode");
-  const encoded = await encode(image, { quality: Math.round(quality * 100) });
-  return new Blob([encoded], { type: "image/webp" });
+  const encoded = await encodeOnWorker(image, quality);
+  return encoded ?? encodeInline(image, quality);
 }
 
 /**

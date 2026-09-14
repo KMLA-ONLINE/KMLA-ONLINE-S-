@@ -105,21 +105,39 @@ describe("compressImage", () => {
     ).toBe(true);
   });
 
-  it("HEIC를 PNG 중간본으로 디코딩한 뒤 기존 WebP 정규화에 넘긴다", async () => {
-    const heic = heifWithDimensions(1920, 1080);
+  it("크롭에 넘길 HEIC는 PNG 중간본으로 디코딩한다", async () => {
     const png = pngWithDimensions(1920, 1080);
     convertHeic.mockResolvedValue(png);
-    const { decode } = stubDecoder(1920, 1080);
 
-    const prepared = await prepareImageInput(heic);
+    const prepared = await prepareImageInput(heifWithDimensions(1920, 1080));
+
     expect(prepared.type).toBe("image/png");
     expect(prepared.name).toBe("photo.png");
+    expect(convertHeic).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "image/png" }),
+    );
+  });
+
+  it("업로드하는 HEIC는 전체 해상도 PNG를 거치지 않고 곧바로 픽셀로 받는다", async () => {
+    // PNG 왕복은 12메가픽셀 사진에서 40MB가 넘었고, iOS에서 메모리 상한에 먼저 닿았다.
+    const heic = heifWithDimensions(1920, 1080);
+    const close = vi.fn();
+    convertHeic.mockResolvedValue({
+      width: 1920,
+      height: 1080,
+      close,
+    } as unknown as Blob);
+    const { decode } = stubDecoder(1920, 1080);
 
     const result = await compressImage(heic, "photo");
-    expect(decode).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "image/png" }),
-      { imageOrientation: "from-image" },
-    );
+
+    expect(convertHeic).toHaveBeenCalledWith({
+      blob: heic,
+      type: "bitmap",
+      options: { imageOrientation: "from-image" },
+    });
+    expect(decode).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledOnce();
     expect(result.type).toBe("image/webp");
   });
 
@@ -269,6 +287,18 @@ describe("compressImage", () => {
     await expect(validateImageInput(file)).rejects.toThrow(
       "이미지는 30MB 이하여야 합니다",
     );
+  });
+
+  it("디코딩한 뒤에야 드러난 치수 초과도 그대로 알린다", async () => {
+    // `ispe` 박스가 없는 HEIF는 헤더만 보고 거를 수 없다.
+    const heic = heifWithDimensions(10, 10);
+    convertHeic.mockResolvedValue({
+      width: 10_000,
+      height: 5_001,
+      close: vi.fn(),
+    } as unknown as Blob);
+
+    await expect(compressImage(heic, "photo")).rejects.toThrow("50메가픽셀");
   });
 
   it("처리 결과가 사진의 8 MiB 상한을 넘으면 거절한다", async () => {
