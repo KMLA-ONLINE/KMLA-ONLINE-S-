@@ -38,6 +38,7 @@ export type GroupHomeItem = GroupSummary & {
   membership_state: GroupMembershipState;
   member_role: GroupMemberRole | null;
   pinned_at: string | null;
+  new_post_count: number;
 };
 
 export type DiscoverGroupItem = Omit<

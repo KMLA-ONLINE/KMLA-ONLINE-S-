@@ -1392,6 +1392,7 @@ CREATE TABLE IF NOT EXISTS "public"."group_memberships" (
     "profile_id" bigint NOT NULL,
     "role" "public"."group_member_role" DEFAULT 'member'::"public"."group_member_role" NOT NULL,
     "joined_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "posts_visited_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "pinned_at" timestamp with time zone,
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL
 );

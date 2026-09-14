@@ -340,6 +340,7 @@ export type Database = {
           new_post_push_enabled: boolean
           notification_level: Database["public"]["Enums"]["group_notification_level"]
           pinned_at: string | null
+          posts_visited_at: string
           profile_id: number
           role: Database["public"]["Enums"]["group_member_role"]
         }
@@ -351,6 +352,7 @@ export type Database = {
           new_post_push_enabled?: boolean
           notification_level?: Database["public"]["Enums"]["group_notification_level"]
           pinned_at?: string | null
+          posts_visited_at?: string
           profile_id: number
           role?: Database["public"]["Enums"]["group_member_role"]
         }
@@ -362,6 +364,7 @@ export type Database = {
           new_post_push_enabled?: boolean
           notification_level?: Database["public"]["Enums"]["group_notification_level"]
           pinned_at?: string | null
+          posts_visited_at?: string
           profile_id?: number
           role?: Database["public"]["Enums"]["group_member_role"]
         }
@@ -1852,6 +1855,13 @@ export type Database = {
           reason: string
         }[]
       }
+      get_my_group_new_post_counts: {
+        Args: never
+        Returns: {
+          group_id: string
+          new_post_count: number
+        }[]
+      }
       get_my_notification_preferences: {
         Args: never
         Returns: {
@@ -2305,6 +2315,10 @@ export type Database = {
         }[]
       }
       mark_all_my_notifications_read: { Args: never; Returns: number }
+      mark_group_posts_visited: {
+        Args: { p_group_id: string }
+        Returns: undefined
+      }
       mark_my_notification_read: {
         Args: { p_notification_id: string }
         Returns: boolean

@@ -164,6 +164,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `get_group_invite_preview`                    | `groups/data/queries.ts`                                                        | `21-groups.sql`               |
 | `get_group_post`                              | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `get_my_group_anonymous_activity_restriction` | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
+| `get_my_group_new_post_counts`                | `groups/data/queries.ts`                                                        | `31-posts.sql`                |
 | `get_my_notification_preferences`             | `notifications/data/queries.ts`                                                 | `61-notifications.sql`        |
 | `get_my_profile`                              | `app-shell/data/queries.ts`, `auth/data/queries.ts`, `profiles/data/queries.ts` | `11-identity.sql`             |
 | `get_my_recent_unread_notification_count`     | `notifications/data/queries.ts`                                                 | `61-notifications.sql`        |
@@ -187,6 +188,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `list_profile_posts`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_today_stories`                          | `stories/data/queries.ts`                                                       | `42-stories.sql`              |
 | `mark_all_my_notifications_read`              | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
+| `mark_group_posts_visited`                    | `groups/data/mutations.ts`                                                      | `31-posts.sql`                |
 | `mark_my_notification_read`                   | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
 | `move_group_category`                         | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `prepare_comment_image`                       | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |

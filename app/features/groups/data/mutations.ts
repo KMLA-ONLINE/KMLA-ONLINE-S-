@@ -39,6 +39,13 @@ export async function joinGroup(
   if (error) throw error;
 }
 
+export async function markGroupPostsVisited(groupId: string): Promise<void> {
+  const { error } = await getSupabase().rpc("mark_group_posts_visited", {
+    p_group_id: groupId,
+  });
+  if (error) throw error;
+}
+
 export async function requestGroupJoin(
   groupId: string,
   profileId: number,

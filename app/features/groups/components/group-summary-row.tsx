@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from "~/shared/ui/dialog";
 import { Spinner } from "~/shared/ui/spinner";
+import { Badge } from "~/shared/ui/badge";
 
 export function GroupSummaryRow({
   group,
@@ -35,11 +36,6 @@ export function GroupSummaryRow({
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressStart = useRef({ x: 0, y: 0 });
   const suppressNextClick = useRef(false);
-  const memberCountLabel =
-    group.kind === "unofficial"
-      ? `멤버 ${group.member_count.toLocaleString("ko-KR")}명`
-      : null;
-  const description = group.description?.trim() || null;
 
   const cancelLongPress = () => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
@@ -112,27 +108,21 @@ export function GroupSummaryRow({
               </Link>
             </h3>
           </div>
-          <p className="flex items-center gap-1 truncate text-xs text-muted-foreground md:hidden">
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {group.pinned_at ? (
               <>
                 <PinIcon
                   aria-hidden
-                  className="size-3 -rotate-45 text-primary"
+                  className="size-3 -rotate-45 text-primary md:hidden"
                 />
-                <span className="sr-only">고정됨</span>
+                <span className="sr-only md:hidden">고정됨</span>
               </>
             ) : null}
-            멤버 {group.member_count.toLocaleString("ko-KR")}명
+            <span>멤버 {group.member_count.toLocaleString("ko-KR")}명</span>
+            {group.new_post_count > 0 ? (
+              <Badge>{`새 게시물 ${group.new_post_count.toLocaleString("ko-KR")}개`}</Badge>
+            ) : null}
           </p>
-          {memberCountLabel || description ? (
-            <p className="hidden truncate text-xs text-muted-foreground md:block">
-              {memberCountLabel ? (
-                <span className="tabular-nums">{memberCountLabel}</span>
-              ) : null}
-              {memberCountLabel && description ? " · " : null}
-              {description}
-            </p>
-          ) : null}
           {actionError ? (
             <p role="alert" className="mt-1 text-xs text-destructive">
               {actionError}

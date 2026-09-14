@@ -25,6 +25,7 @@ import {
   listGroupJoinRequests,
   listGroupMembers,
   loadGroupDetail,
+  markGroupPostsVisited,
   requestGroupJoin,
   rejectGroupJoinRequest,
   revokeGroupInvite,
@@ -165,6 +166,18 @@ export async function clientLoader({
           })
         : Promise.resolve(undefined),
     ]);
+
+  // A post detail is a child route, so only the group's exact posts tab advances §7.19.
+  if (postsTab && url.pathname === `/groups/${group.slug}`) {
+    void markGroupPostsVisited(group.group_id)
+      .then(() =>
+        queryClient.invalidateQueries({
+          queryKey: groupKeys.home(),
+          refetchType: "none",
+        }),
+      )
+      .catch(() => undefined);
+  }
   return {
     group,
     categories,

@@ -10,6 +10,7 @@ const mutations = vi.hoisted(() => ({
   loadGroupDetail: vi.fn(),
   listGroupCategories: vi.fn(),
   listGroupPosts: vi.fn(),
+  markGroupPostsVisited: vi.fn(),
 }));
 
 vi.mock("~/features/groups", async (importOriginal) => ({
@@ -190,6 +191,7 @@ describe("group detail loader", () => {
     getQueryClient().clear();
     mutations.loadGroupDetail.mockResolvedValue(group);
     mutations.listGroupCategories.mockResolvedValue([]);
+    mutations.markGroupPostsVisited.mockResolvedValue(undefined);
   });
 
   it("loads the background post list for a direct post detail", async () => {
@@ -202,6 +204,16 @@ describe("group detail loader", () => {
       hydrateMedia: expect.any(Boolean),
     });
     expect(result.posts).toBe(page);
+  });
+
+  it("marks posts visited only when the group post list itself loads", async () => {
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+
+    await load("/groups/test/posts/post-id");
+    expect(mutations.markGroupPostsVisited).not.toHaveBeenCalled();
+
+    await load("/groups/test");
+    expect(mutations.markGroupPostsVisited).toHaveBeenCalledWith("group-id");
   });
 
   it("does not block optional-anonymous group content on a restriction lookup", async () => {

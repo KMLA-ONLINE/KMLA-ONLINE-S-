@@ -38,6 +38,7 @@ function asHomeItem(
     state: GroupMembershipState;
     role?: GroupMemberRole | null;
     pinnedAt?: string | null;
+    newPostCount?: number;
   },
 ): GroupHomeItem {
   return {
@@ -47,13 +48,14 @@ function asHomeItem(
     membership_state: values.state,
     member_role: values.role ?? null,
     pinned_at: values.pinnedAt ?? null,
+    new_post_count: values.newPostCount ?? 0,
   };
 }
 
 export async function loadGroupHome(): Promise<GroupHomeItem[]> {
   const supabase = getSupabase();
-  const [officialResult, membershipsResult, requestsResult] = await Promise.all(
-    [
+  const [officialResult, membershipsResult, requestsResult, countsResult] =
+    await Promise.all([
       supabase
         .from("groups")
         .select(GROUP_COLUMNS)
@@ -64,12 +66,13 @@ export async function loadGroupHome(): Promise<GroupHomeItem[]> {
         .select(`role, pinned_at, groups!inner(${GROUP_COLUMNS})`)
         .order("pinned_at", { ascending: false, nullsFirst: false }),
       supabase.from("group_join_requests").select("group_id, requested_at"),
-    ],
-  );
+      supabase.rpc("get_my_group_new_post_counts"),
+    ]);
 
   if (officialResult.error) throw officialResult.error;
   if (membershipsResult.error) throw membershipsResult.error;
   if (requestsResult.error) throw requestsResult.error;
+  if (countsResult.error) throw countsResult.error;
 
   const memberships = membershipsResult.data as MembershipWithGroup[];
   const membershipByGroup = new Map(
@@ -77,6 +80,12 @@ export async function loadGroupHome(): Promise<GroupHomeItem[]> {
   );
   const requestedGroups = new Set(
     requestsResult.data.map((request) => request.group_id),
+  );
+  const newPostCounts = new Map(
+    (countsResult.data ?? []).map((count) => [
+      count.group_id,
+      count.new_post_count,
+    ]),
   );
 
   const official = (officialResult.data as GroupRow[]).map((group) => {
@@ -90,6 +99,7 @@ export async function loadGroupHome(): Promise<GroupHomeItem[]> {
           : "none",
       role: membership?.role,
       pinnedAt: membership?.pinned_at,
+      newPostCount: newPostCounts.get(group.id),
     });
   });
 
@@ -101,6 +111,7 @@ export async function loadGroupHome(): Promise<GroupHomeItem[]> {
         state: "member",
         role: membership.role,
         pinnedAt: membership.pinned_at,
+        newPostCount: newPostCounts.get(membership.groups.id),
       }),
     );
 
