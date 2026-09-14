@@ -195,7 +195,7 @@ describe("preparePostFiles", () => {
     ]);
   });
 
-  it("normalizes one image at a time on iPad-class devices", async () => {
+  it("normalizes two images at a time on iPad-class devices", async () => {
     vi.stubGlobal("navigator", { platform: "iPad", maxTouchPoints: 5 });
     let active = 0;
     let maxActive = 0;
@@ -216,18 +216,80 @@ describe("preparePostFiles", () => {
       [
         new File(["one"], "one.png", { type: "image/png" }),
         new File(["two"], "two.png", { type: "image/png" }),
+        new File(["three"], "three.png", { type: "image/png" }),
       ],
       0,
       "image",
     );
 
-    expect(active).toBe(1);
+    expect(active).toBe(2);
     release.shift()?.();
-    await vi.waitFor(() => expect(active).toBe(1));
-    release.shift()?.();
+    await vi.waitFor(() => expect(active).toBe(2));
+    release.forEach((resolve) => resolve());
     await preparation;
-    expect(maxActive).toBe(1);
+    // 데스크톱의 3보다 낮게 유지한다. iOS는 메모리 압박에서 탭을 죽인다.
+    expect(maxActive).toBe(2);
     vi.unstubAllGlobals();
+  });
+
+  it("자리를 고른 순서대로 먼저 잡고 압축이 끝나는 순서에 흔들리지 않는다", async () => {
+    const release = new Map<string, (file: File) => void>();
+    compress.mockImplementation((file, preset) => {
+      if (preset === "thumbnail") return Promise.resolve(file);
+      return new Promise<File>((resolve) => release.set(file.name, resolve));
+    });
+    const onQueued = vi.fn();
+    const onPrepared = vi.fn();
+    const selected = [
+      new File(["one"], "one.png", { type: "image/png" }),
+      new File(["two"], "two.png", { type: "image/png" }),
+      new File(["three"], "three.png", { type: "image/png" }),
+    ];
+
+    const preparation = preparePostFiles(selected, 0, "image", {
+      onQueued,
+      onPrepared,
+    });
+
+    // 준비가 시작되기 전에 한 번에 알려야 화면이 자리를 잡을 수 있다.
+    expect(onQueued).toHaveBeenCalledOnce();
+    expect(onPrepared).not.toHaveBeenCalled();
+    const keys = onQueued.mock.calls[0][0] as string[];
+    expect(keys).toHaveLength(3);
+
+    // 마지막에 고른 사진이 가장 먼저 끝난다 — 큰 사진 뒤에 작은 사진을 고른 경우다.
+    await vi.waitFor(() => expect(release.size).toBe(3));
+    release.get("three.png")!(selected[2]);
+    release.get("one.png")!(selected[0]);
+    release.get("two.png")!(selected[1]);
+
+    const prepared = await preparation;
+    expect(prepared.map((item) => item.key)).toEqual(keys);
+    expect(prepared.map((item) => item.file.name)).toEqual([
+      "one.png",
+      "two.png",
+      "three.png",
+    ]);
+  });
+
+  it("준비하지 못한 파일의 key를 알려 자리를 비울 수 있게 한다", async () => {
+    compress.mockRejectedValue(new Error("압축 실패"));
+    const onQueued = vi.fn();
+    const onError = vi.fn();
+
+    await expect(
+      preparePostFiles(
+        [new File(["one"], "one.png", { type: "image/png" })],
+        0,
+        "image",
+        { onQueued, onError },
+      ),
+    ).rejects.toThrow("압축 실패");
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.any(Error),
+      (onQueued.mock.calls[0][0] as string[])[0],
+    );
   });
 });
 

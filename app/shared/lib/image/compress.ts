@@ -1,3 +1,5 @@
+import { fitOutputSize } from "~/shared/lib/image/crop";
+import { encodeWebp } from "~/shared/lib/image/encode-webp";
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 
 interface CompressionPolicy {
@@ -221,11 +223,16 @@ function throwIfAborted(signal?: AbortSignal): void {
     throw new DOMException("Image processing aborted", "AbortError");
 }
 
-/** HEIC/HEIF를 크롭과 WebP 인코더가 공통으로 읽을 수 있는 PNG 중간본으로 바꾼다. */
-export async function prepareImageInput(
+/**
+ * 디코딩하기 전에 통과해야 하는 검사. 입력이 HEIF면 `true`를 준다.
+ *
+ * HEIF는 헤더의 `ispe` 박스에서 치수를 읽어 디코더를 부르기 전에 거른다. 나머지 포맷은
+ * `validateImageInput()`이 같은 일을 한다.
+ */
+async function validateImageSource(
   file: File,
   signal?: AbortSignal,
-): Promise<File> {
+): Promise<boolean> {
   throwIfAborted(signal);
   if (!isSupportedImageInput(file))
     throw new Error(`지원하지 않는 이미지 형식입니다: ${file.name}`);
@@ -240,12 +247,27 @@ export async function prepareImageInput(
     if (file.type === "image/heic" || file.type === "image/heif")
       throw new Error(`지원하지 않는 이미지 형식입니다: ${file.name}`);
     await validateImageInput(file, signal);
-    return file;
+    return false;
   }
 
   const dimensions = readHeifDimensions(header);
   if (dimensions && dimensions[0] * dimensions[1] > MAX_IMAGE_PIXELS)
     throw new Error(`이미지는 50메가픽셀 이하여야 합니다: ${file.name}`);
+  return true;
+}
+
+/**
+ * HEIC/HEIF를 크롭 UI가 읽을 수 있는 PNG 중간본으로 바꾼다.
+ *
+ * 업로드 경로는 이 함수를 거치지 않는다. `compressImage()`는 디코더에서 `ImageBitmap`을
+ * 곧바로 받아 전체 해상도 PNG를 만들지 않는다 — `decodeImageSource()`를 보라. 크롭은
+ * 아직 `File` 하나를 들고 화면 사이를 오가는 구조라 여기가 남아 있다.
+ */
+export async function prepareImageInput(
+  file: File,
+  signal?: AbortSignal,
+): Promise<File> {
+  if (!(await validateImageSource(file, signal))) return file;
 
   try {
     const { heicTo } = await import("heic-to/csp");
@@ -363,34 +385,73 @@ export async function compressImage(
   if (!isSupportedImageInput(file)) return file;
 
   const { maxEdge, maxBytes, quality } = PRESETS[preset];
-  const input = await prepareImageInput(file, signal);
+  // 검사는 감싸지 않는다. "30MB 이하" 같은 메시지가 사용자에게 그대로 닿아야 한다.
+  const isHeif = await validateImageSource(file, signal);
   throwIfAborted(signal);
 
-  const compressed = await imageCompression(input, {
-    maxWidthOrHeight: maxEdge,
-    initialQuality: quality,
-    fileType: "image/webp",
-    useWebWorker: true,
-    libURL: workerLibUrl,
-    preserveExif: false,
-    alwaysKeepResolution: false,
-    signal,
-  }).catch((cause) => {
-    if (cause instanceof DOMException && cause.name === "AbortError")
-      throw cause;
-    throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, { cause });
-  });
+  const compressed = await toWebpBytes(file, isHeif, maxEdge, quality).catch(
+    (cause) => {
+      // 치수 상한은 디코딩한 뒤에야 확실해지는 경우가 있다(`ispe`가 없는 HEIF). 그때도
+      // 사용자는 무엇이 잘못됐는지 알아야 하므로 일반 메시지로 덮지 않는다.
+      if (cause instanceof Error && cause.message.includes("50메가픽셀"))
+        throw cause;
+      throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, { cause });
+    },
+  );
   throwIfAborted(signal);
   if (compressed.size > maxBytes)
     throw new Error(`처리한 이미지가 용량 제한을 초과합니다: ${file.name}`);
 
-  // 라이브러리가 이름·타입을 원본대로 남길 수 있어, 확장자와 MIME을 webp로 맞춰 다시 감싼다.
-  // 스토리지의 insert 정책이 MIME을 보므로 일관돼야 한다.
+  // 인코더는 이름 없는 Blob을 준다. 확장자와 MIME을 여기서 webp로 맞춰 감싼다. 스토리지의
+  // insert 정책이 MIME을 보므로 일관돼야 한다.
   const base = file.name.replace(/\.[^./\\]+$/, "") || "image";
   return new File([compressed], `${base}.webp`, {
     type: "image/webp",
     lastModified: file.lastModified,
   });
 }
-import imageCompression from "browser-image-compression";
-import workerLibUrl from "browser-image-compression/dist/browser-image-compression.js?url";
+
+/**
+ * 원본을 픽셀로 푼다.
+ *
+ * HEIF도 `ImageBitmap`으로 직접 받는다. 예전에는 디코더에게 PNG를 받아 그걸 다시
+ * `createImageBitmap`에 넣었는데, 그 중간본이 12메가픽셀 사진에서 40MB를 넘었다. 전체 해상도
+ * PNG 인코딩 한 번과 디코딩 한 번을 왕복으로 치르면서 그만큼을 들고 있던 셈이라, iOS에서는
+ * 이것이 메모리 상한에 가장 먼저 닿는 자리였다.
+ *
+ * `imageOrientation`은 두 갈래 모두에 준다. 회전이 디코딩 단계에서 적용되고 그 뒤 캔버스를
+ * 거치면서 EXIF 자체는 사라지므로, `compressImage()`가 약속하는 두 가지가 여기서 성립한다.
+ */
+async function decodeImageSource(
+  file: File,
+  isHeif: boolean,
+): Promise<ImageBitmap> {
+  if (!isHeif)
+    return createImageBitmap(file, { imageOrientation: "from-image" });
+
+  const { heicTo } = await import("heic-to/csp");
+  return heicTo({
+    blob: file,
+    type: "bitmap",
+    options: { imageOrientation: "from-image" },
+  });
+}
+
+/** 디코딩한 원본을 프리셋 치수로 줄여 WebP 바이트로 만든다. */
+async function toWebpBytes(
+  file: File,
+  isHeif: boolean,
+  maxEdge: number,
+  quality: number,
+): Promise<Blob> {
+  const bitmap = await decodeImageSource(file, isHeif);
+
+  try {
+    if (bitmap.width * bitmap.height > MAX_IMAGE_PIXELS)
+      throw new Error(`이미지는 50메가픽셀 이하여야 합니다: ${file.name}`);
+    const { width, height } = fitOutputSize(bitmap, maxEdge);
+    return await encodeWebp(bitmap, width, height, quality);
+  } finally {
+    bitmap.close();
+  }
+}
