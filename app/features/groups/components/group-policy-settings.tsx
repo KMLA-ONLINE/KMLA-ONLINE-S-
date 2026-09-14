@@ -1,6 +1,7 @@
 import {
   FilePenLineIcon,
   LockKeyholeIcon,
+  ShieldCheckIcon,
   UserRoundCheckIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -16,6 +17,13 @@ import type { GroupDetail } from "~/features/groups/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
+import { Checkbox } from "~/shared/ui/checkbox";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldLabel,
+} from "~/shared/ui/field";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 
 type PolicyKind = Exclude<SettingsSection, "basic">;
@@ -72,6 +80,20 @@ const POLICY = {
       ["staff", "매니저 이상", "매니저, 관리자와 소유자만 작성합니다."],
     ],
   },
+  staffRoles: {
+    title: "운영진 역할",
+    description: "멤버 명부에서 운영진 역할을 표시하는 방식",
+    icon: ShieldCheckIcon,
+    name: "hideStaffRoles",
+    options: [
+      ["false", "모두에게 표시", "모든 멤버에게 운영진 역할을 표시합니다."],
+      [
+        "true",
+        "일반 멤버에게 숨김",
+        "소유자와 관리자를 제외한 멤버 명부에서는 운영진도 일반 멤버처럼 표시합니다.",
+      ],
+    ],
+  },
 } as const;
 
 export function PolicySettings({ group }: { group: GroupDetail }) {
@@ -84,16 +106,18 @@ export function PolicySettings({ group }: { group: GroupDetail }) {
       </CardHeader>
       <CardContent className="p-0">
         <div className="divide-y">
-          {(["join", "identity", "posting"] as const).map((kind) => (
-            <PolicyRow
-              key={kind}
-              group={group}
-              kind={kind}
-              editing={editing === kind}
-              onEdit={() => setEditing(kind)}
-              onCancel={() => setEditing(null)}
-            />
-          ))}
+          {(["join", "identity", "posting", "staffRoles"] as const).map(
+            (kind) => (
+              <PolicyRow
+                key={kind}
+                group={group}
+                kind={kind}
+                editing={editing === kind}
+                onEdit={() => setEditing(kind)}
+                onCancel={() => setEditing(null)}
+              />
+            ),
+          )}
         </div>
       </CardContent>
     </Card>
@@ -124,7 +148,9 @@ function PolicyRow({
       ? group.join_policy
       : kind === "identity"
         ? group.identity_policy
-        : group.posting_policy;
+        : kind === "posting"
+          ? group.posting_policy
+          : String(group.hide_staff_roles);
   const currentOption = config.options.find(([value]) => value === current);
   const options = config.options.filter(
     ([value]) => value === current || allowsPolicyChange(group, kind, value),
@@ -176,20 +202,56 @@ function PolicyRow({
               }}
             >
               <SettingsHidden group={group} omit={kind} />
-              <label className="grid gap-2 text-sm font-medium">
-                <NativeSelect
-                  name={config.name}
-                  defaultValue={current}
-                  aria-label={config.title}
-                  className="w-full [&_[data-slot=native-select]]:h-10 [&_[data-slot=native-select]]:rounded-lg"
-                >
-                  {options.map(([value, label]) => (
-                    <NativeSelectOption key={value} value={value}>
-                      {label}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </label>
+              {kind === "posting" ? (
+                <Field orientation="horizontal">
+                  <Checkbox
+                    id="staff-only-posting"
+                    name={config.name}
+                    value="staff"
+                    defaultChecked={current === "staff"}
+                  />
+                  <FieldContent>
+                    <FieldLabel htmlFor="staff-only-posting">
+                      운영진만 게시 가능
+                    </FieldLabel>
+                    <FieldDescription>
+                      매니저, 관리자와 소유자만 게시물을 작성합니다.
+                    </FieldDescription>
+                  </FieldContent>
+                </Field>
+              ) : kind === "staffRoles" ? (
+                <Field orientation="horizontal">
+                  <Checkbox
+                    id="hide-staff-roles"
+                    name={config.name}
+                    value="true"
+                    defaultChecked={current === "true"}
+                  />
+                  <FieldContent>
+                    <FieldLabel htmlFor="hide-staff-roles">
+                      일반 멤버에게 운영진 역할 숨기기
+                    </FieldLabel>
+                    <FieldDescription>
+                      이름, 기수, 검색과 프로필 이동은 그대로 제공합니다.
+                    </FieldDescription>
+                  </FieldContent>
+                </Field>
+              ) : (
+                <label className="grid gap-2 text-sm font-medium">
+                  <NativeSelect
+                    name={config.name}
+                    defaultValue={current}
+                    aria-label={config.title}
+                    className="w-full [&_[data-slot=native-select]]:h-10 [&_[data-slot=native-select]]:rounded-lg"
+                  >
+                    {options.map(([value, label]) => (
+                      <NativeSelectOption key={value} value={value}>
+                        {label}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </label>
+              )}
               {kind === "identity" ? (
                 <p className="rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
                   변경한 정책은 앞으로 작성하는 활동부터 적용됩니다. 기존

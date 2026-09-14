@@ -38,6 +38,7 @@ export type GroupHomeItem = GroupSummary & {
   membership_state: GroupMembershipState;
   member_role: GroupMemberRole | null;
   pinned_at: string | null;
+  new_post_count: number;
 };
 
 export type DiscoverGroupItem = Omit<
@@ -79,6 +80,7 @@ export interface GroupMemberPage {
 
 export type GroupDetail = GroupSummary & {
   group_id: GroupRow["id"];
+  hide_staff_roles: boolean;
   membership_state: GroupMembershipState;
   member_role: GroupMemberRole | null;
   requested_at: string | null;
@@ -93,6 +95,7 @@ export interface CreateGroupValues {
   joinPolicy: GroupJoinPolicy;
   identityPolicy: GroupIdentityPolicy;
   postingPolicy: GroupPostingPolicy;
+  hideStaffRoles: boolean;
 }
 
 /** Presentation-safe member row returned by `list_group_members`. */
@@ -141,6 +144,7 @@ export interface UpdateGroupSettingsValues {
   joinPolicy: GroupJoinPolicy;
   identityPolicy: GroupIdentityPolicy;
   postingPolicy: GroupPostingPolicy;
+  hideStaffRoles: boolean;
 }
 
 export type GroupMediaSlot = Database["public"]["Enums"]["group_media_slot"];

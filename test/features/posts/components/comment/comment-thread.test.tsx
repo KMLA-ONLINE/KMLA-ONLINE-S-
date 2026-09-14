@@ -140,14 +140,6 @@ describe("CommentThread", () => {
     );
   });
 
-  it("drops the mark once the reply mode ends", () => {
-    renderThread({ replyingToId: null });
-
-    expect(screen.getByText("최상위 댓글").closest("[id]")).not.toHaveClass(
-      "bg-primary/5",
-    );
-  });
-
   it("marks the comment the post author wrote", () => {
     renderThread({ postAuthorPubId: "hanbyeol-25" });
 

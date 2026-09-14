@@ -19,6 +19,7 @@ export {
   issueGroupInvite,
   joinGroup,
   leaveGroup,
+  markGroupPostsVisited,
   rejectGroupJoinRequest,
   requestGroupJoin,
   revokeGroupInvite,

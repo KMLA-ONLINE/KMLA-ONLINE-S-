@@ -20,6 +20,7 @@ export async function createGroup(
     p_join_policy: values.joinPolicy,
     p_identity_policy: values.identityPolicy,
     p_posting_policy: values.postingPolicy,
+    p_hide_staff_roles: values.hideStaffRoles,
   });
   if (error) throw error;
 
@@ -35,6 +36,13 @@ export async function joinGroup(
   const { error } = await getSupabase()
     .from("group_memberships")
     .insert({ group_id: groupId, profile_id: profileId });
+  if (error) throw error;
+}
+
+export async function markGroupPostsVisited(groupId: string): Promise<void> {
+  const { error } = await getSupabase().rpc("mark_group_posts_visited", {
+    p_group_id: groupId,
+  });
   if (error) throw error;
 }
 
@@ -162,6 +170,7 @@ export async function updateGroupSettings(
     p_join_policy: values.joinPolicy,
     p_identity_policy: values.identityPolicy,
     p_posting_policy: values.postingPolicy,
+    p_hide_staff_roles: values.hideStaffRoles,
   });
   if (error) throw error;
 }

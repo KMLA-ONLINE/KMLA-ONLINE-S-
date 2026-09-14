@@ -57,6 +57,7 @@ describe("group cards", () => {
             posting_policy: "members",
             membership_state: "member",
             pinned_at: null,
+            new_post_count: 0,
             section: "mine",
           } satisfies GroupHomeItem
         }
@@ -67,5 +68,31 @@ describe("group cards", () => {
     await user.tab();
     await user.tab();
     expect(screen.getByRole("button", { name: "그룹 고정" })).toHaveFocus();
+  });
+
+  it("shows the blue new-post badge only when the group has new posts", () => {
+    const homeGroup = {
+      ...group,
+      id: group.group_id,
+      kind: "unofficial" as const,
+      posting_policy: "members" as const,
+      membership_state: "member" as const,
+      pinned_at: null,
+      new_post_count: 3,
+      section: "mine" as const,
+    } satisfies GroupHomeItem;
+    const { unmount } = renderRoute(() => (
+      <GroupSummaryRow group={homeGroup} profileId={1} />
+    ));
+
+    expect(screen.getByText("새 게시물 3개")).toBeVisible();
+    unmount();
+    renderRoute(() => (
+      <GroupSummaryRow
+        group={{ ...homeGroup, new_post_count: 0 }}
+        profileId={1}
+      />
+    ));
+    expect(screen.queryByText("새 게시물 3개")).not.toBeInTheDocument();
   });
 });

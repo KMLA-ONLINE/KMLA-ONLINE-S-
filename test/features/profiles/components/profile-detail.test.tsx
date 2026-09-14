@@ -337,7 +337,7 @@ describe("ProfileDetail", () => {
     expect(screen.getByRole("button", { name: "이메일 보기" })).toBeVisible();
   });
 
-  it("collapses every fact group after the first on narrow screens", async () => {
+  it("collapses every fact group after the first until 정보 더 보기 is pressed", async () => {
     const { user } = renderRoute(() => (
       <ProfileDetail
         profile={{

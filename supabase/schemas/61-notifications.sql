@@ -1473,7 +1473,8 @@ begin
   -- 없고, 알림이 그룹 이름을 제목에 실어야 하기 때문이다. public.delete_group 이 보낸다.
   if old.join_policy is distinct from new.join_policy
     or old.identity_policy is distinct from new.identity_policy
-    or old.posting_policy is distinct from new.posting_policy then
+    or old.posting_policy is distinct from new.posting_policy
+    or old.hide_staff_roles is distinct from new.hide_staff_roles then
     event_kind := 'group_policy_changed';
     event_importance := 'normal';
     event_title := '그룹 운영 정책이 변경되었습니다.';
@@ -1624,7 +1625,7 @@ create trigger group_memberships_notify_official_join
 after insert on public.group_memberships
 for each row execute function private.notify_official_group_joined();
 create trigger groups_notify_changed
-after update of join_policy, identity_policy, posting_policy on public.groups
+after update of join_policy, identity_policy, posting_policy, hide_staff_roles on public.groups
 for each row execute function private.notify_group_changed();
 create trigger profiles_notify_changed
 after update of status, role on public.profiles

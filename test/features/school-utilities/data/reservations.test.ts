@@ -40,8 +40,8 @@ function reservation(id: number, avatarPath: string | null) {
 describe("utility reservation avatar hydration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // 서명 캐시는 모듈 수준이라 테스트 사이에 살아남는다. 비우지 않으면 두 번째 테스트가
-    // 요청 없이 캐시에서 URL을 집어 "한 번만 요청한다"가 의미를 잃는다.
+    // 서명 캐시는 모듈 수준이라 테스트 사이에 살아남는다. 비우지 않으면 캐시가 요청 없이
+    // URL을 내주어 아래의 "한 번만 요청한다"가 의미를 잃는다.
     resetSignedUrlCacheForTests();
     let queryIndex = 0;
     from.mockImplementation((bucket: string) => {

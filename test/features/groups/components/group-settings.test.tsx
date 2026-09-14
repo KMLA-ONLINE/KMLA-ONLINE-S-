@@ -15,6 +15,7 @@ const group: GroupDetail = {
   join_policy: "request",
   identity_policy: "identified",
   posting_policy: "members",
+  hide_staff_roles: false,
   icon_path: null,
   cover_path: null,
   member_count: 1,
@@ -101,7 +102,9 @@ describe("GroupSettings", () => {
 
     await user.click(screen.getByRole("button", { name: "게시물 작성 변경" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "게시물 작성" })).toBeVisible();
+    expect(
+      screen.getByRole("checkbox", { name: "운영진만 게시 가능" }),
+    ).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "저장" }));
     expect(screen.getByRole("dialog")).toHaveTextContent("게시물 작성 저장");
@@ -119,6 +122,19 @@ describe("GroupSettings", () => {
     expect(
       within(select).getByRole("option", { name: "작성할 때 선택" }),
     ).toBeVisible();
+  });
+
+  it("lets administrators hide staff roles from the roster with a checkbox", async () => {
+    const { user } = renderSettings();
+
+    await user.click(screen.getByRole("button", { name: "운영진 역할 변경" }));
+    const hideStaffRoles = screen.getByRole("checkbox", {
+      name: "일반 멤버에게 운영진 역할 숨기기",
+    });
+
+    expect(hideStaffRoles).not.toBeChecked();
+    await user.click(hideStaffRoles);
+    expect(hideStaffRoles).toBeChecked();
   });
 
   it("warns when making a private group public", async () => {
@@ -252,27 +268,24 @@ describe("GroupSettings", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "게시물 작성 변경" }));
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: "게시물 작성" }),
-      "staff",
-    );
+    const staffOnly = screen.getByRole("checkbox", {
+      name: "운영진만 게시 가능",
+    });
+    await user.click(staffOnly);
     await save(user);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "정책을 저장하지 못했습니다.",
     );
-    expect(screen.getByRole("combobox", { name: "게시물 작성" })).toHaveValue(
-      "staff",
-    );
+    expect(staffOnly).toBeChecked();
   });
 
   it("closes policy edits once saving succeeds", async () => {
     const { user } = renderSettings({}, { action: () => data({ ok: true }) });
 
     await user.click(screen.getByRole("button", { name: "게시물 작성 변경" }));
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: "게시물 작성" }),
-      "staff",
+    await user.click(
+      screen.getByRole("checkbox", { name: "운영진만 게시 가능" }),
     );
     await save(user);
 

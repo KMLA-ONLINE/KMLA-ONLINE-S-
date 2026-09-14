@@ -37,6 +37,7 @@ describe("GroupCreateForm", () => {
           joinPolicy: "open",
           identityPolicy: "optional_anonymous",
           postingPolicy: "members",
+          hideStaffRoles: false,
         }}
       />
     ));
@@ -66,6 +67,31 @@ describe("GroupCreateForm", () => {
     expect(
       within(identity).getByRole("option", { name: "작성할 때 선택" }),
     ).toBeVisible();
+  });
+
+  it("uses independent checkboxes for staff-only posting and role hiding", async () => {
+    const { user } = renderRoute(() => (
+      <GroupCreateForm canCreateOfficial={false} pending={false} />
+    ));
+    const staffOnly = screen.getByRole("checkbox", {
+      name: "운영진만 게시 가능",
+    });
+    const hideStaffRoles = screen.getByRole("checkbox", {
+      name: "일반 멤버에게 운영진 역할 숨기기",
+    });
+
+    expect(staffOnly).not.toBeChecked();
+    expect(hideStaffRoles).not.toBeChecked();
+    await user.click(staffOnly);
+    await user.click(hideStaffRoles);
+
+    expect(staffOnly).toBeChecked();
+    expect(hideStaffRoles).toBeChecked();
+    const form = staffOnly.closest("form");
+    expect(form).not.toBeNull();
+    const values = new FormData(form!);
+    expect(values.get("postingPolicy")).toBe("staff");
+    expect(values.get("hideStaffRoles")).toBe("true");
   });
 
   it("requires a second confirmation before creating an official group", async () => {

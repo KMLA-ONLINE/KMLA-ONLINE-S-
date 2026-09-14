@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(71);
+select plan(79);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -93,7 +93,7 @@ select ok(
   'anonymous users cannot execute roster RPCs'
 );
 select ok(
-  has_function_privilege('authenticated', 'public.update_group_settings(uuid,text,text,public.group_join_policy,public.group_identity_policy,public.group_posting_policy)', 'EXECUTE'),
+  has_function_privilege('authenticated', 'public.update_group_settings(uuid,text,text,public.group_join_policy,public.group_identity_policy,public.group_posting_policy,boolean)', 'EXECUTE'),
   'settings RPC is explicitly granted to authenticated users'
 );
 
@@ -206,6 +206,91 @@ select ok(
   ),
   'optional-anonymous roster exposes normal profile presentation fields'
 );
+select is(
+  (select hide_staff_roles from public.groups where id = '20000000-0000-0000-0000-000000000003'),
+  false,
+  'staff roles are visible by default'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
+set local role authenticated;
+
+select lives_ok(
+  $$select * from public.update_group_settings(
+    '20000000-0000-0000-0000-000000000003',
+    '메이커스 랩', '개발, 로보틱스, 제작 프로젝트를 함께 진행합니다.',
+    'open', 'optional_anonymous', 'members', true
+  )$$,
+  'owner can hide staff roles from the roster'
+);
+select is(
+  (select hide_staff_roles from public.groups where id = '20000000-0000-0000-0000-000000000003'),
+  true,
+  'staff-role visibility setting is stored'
+);
+select is(
+  (
+    select array_agg(role order by role, joined_at, membership_id)
+    from public.list_group_members('20000000-0000-0000-0000-000000000003')
+  ),
+  array['owner', 'admin', 'manager', 'member']::public.group_member_role[],
+  'owner still sees every actual roster role'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+set local role authenticated;
+
+select is(
+  (
+    select array_agg(role order by role, joined_at, membership_id)
+    from public.list_group_members('20000000-0000-0000-0000-000000000003')
+  ),
+  array['owner', 'admin', 'manager', 'member']::public.group_member_role[],
+  'administrator still sees every actual roster role'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000004', true);
+set local role authenticated;
+
+select is(
+  (
+    select array_agg(role order by joined_at, membership_id)
+    from public.list_group_members('20000000-0000-0000-0000-000000000003')
+  ),
+  array['member', 'member', 'member', 'member']::public.group_member_role[],
+  'manager receives every roster member with the neutral role and join ordering'
+);
+select ok(
+  (
+    select pub_id = 'hanbyeol-25'
+      and name = '이한별'
+      and avatar_path is not null
+      and role = 'member'
+    from public.list_group_members('20000000-0000-0000-0000-000000000003', '이한별')
+  ),
+  'manager can search a hidden administrator while receiving only the neutral role'
+);
+select is(
+  (
+    with first_page as (
+      select * from public.list_group_members(
+        '20000000-0000-0000-0000-000000000003', '', null, null, null, 2
+      )
+    ), cursor_row as (
+      select * from first_page order by joined_at desc, membership_id desc limit 1
+    )
+    select count(*) from cursor_row,
+    lateral public.list_group_members(
+      '20000000-0000-0000-0000-000000000003', '', cursor_row.role,
+      cursor_row.joined_at, cursor_row.membership_id, 30
+    )
+  ),
+  2::bigint,
+  'neutral-role roster cursor continues in joined order without duplicates'
+);
 select throws_ok(
   $$select * from public.list_group_join_requests('20000000-0000-0000-0000-000000000004')$$,
   '42501',
@@ -271,7 +356,7 @@ select ok(
 select throws_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000004',
-    '기숙사 이야기', '', 'open', 'optional_anonymous', 'members'
+    '기숙사 이야기', '', 'open', 'optional_anonymous', 'members', false
   )$$,
   '55000',
   'pending join requests must be resolved first',
@@ -317,7 +402,7 @@ set local role authenticated;
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000004',
-    '새 기숙사 이야기', '새 설명', 'open', 'optional_anonymous', 'staff'
+    '새 기숙사 이야기', '새 설명', 'open', 'optional_anonymous', 'staff', false
   )$$,
   'settings can change after requests are resolved'
 );
@@ -417,14 +502,14 @@ select is(
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000003',
-    '메이커스 랩', '실명 전용 전환', 'open', 'identified', 'members'
+    '메이커스 랩', '실명 전용 전환', 'open', 'identified', 'members', true
   )$$,
   'admin can change group settings'
 );
 select throws_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000003',
-    '메이커스 랩', '비공개 복귀', 'invite_only', 'identified', 'members'
+    '메이커스 랩', '비공개 복귀', 'invite_only', 'identified', 'members', true
   )$$,
   '55000',
   'public groups cannot become private',
@@ -433,7 +518,7 @@ select throws_ok(
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000001',
-    '학교 공지', '기본 정보 변경', 'open', 'identified', 'staff'
+    '학교 공지', '기본 정보 변경', 'open', 'identified', 'staff', false
   )$$,
   'an official group admin can save its settings'
 );
@@ -441,7 +526,7 @@ select lives_ok(
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000001',
-    '학교 공지', '정책 변경', 'request', 'identified', 'staff'
+    '학교 공지', '정책 변경', 'request', 'identified', 'staff', false
   )$$,
   'official group policies can change too'
 );
@@ -468,7 +553,7 @@ set local role authenticated;
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000001',
-    '학교 공지', '선택 익명 전환', 'request', 'optional_anonymous', 'staff'
+    '학교 공지', '선택 익명 전환', 'request', 'optional_anonymous', 'staff', false
   )$$,
   'an official group can enable optional anonymity'
 );
@@ -481,7 +566,7 @@ select is(
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000003',
-    '메이커스 랩', '선택 익명 복귀', 'open', 'optional_anonymous', 'members'
+    '메이커스 랩', '선택 익명 복귀', 'open', 'optional_anonymous', 'members', true
   )$$,
   'identity policy can change back to optional-anonymous'
 );
@@ -502,7 +587,7 @@ set local role authenticated;
 select throws_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000003',
-    '권한 없음', '', 'open', 'identified', 'members'
+    '권한 없음', '', 'open', 'identified', 'members', true
   )$$,
   '42501',
   'group administrator required',

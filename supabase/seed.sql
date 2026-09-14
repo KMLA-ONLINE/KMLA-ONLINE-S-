@@ -448,6 +448,7 @@ insert into public.groups (
   join_policy,
   identity_policy,
   posting_policy,
+  hide_staff_roles,
   created_by
 )
 values
@@ -461,6 +462,7 @@ values
     'open',
     'identified',
     'staff',
+    false,
     (select id from public.profiles where pub_id = 'kim-admin')
   ),
   (
@@ -473,6 +475,7 @@ values
     'invite_only',
     'optional_anonymous',
     'members',
+    false,
     (select id from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001')
   ),
   (
@@ -485,6 +488,7 @@ values
     'open',
     'optional_anonymous',
     'members',
+    false,
     (select id from public.profiles where pub_id = 'kim-admin')
   ),
   (
@@ -497,6 +501,7 @@ values
     'request',
     'optional_anonymous',
     'members',
+    false,
     (select id from public.profiles where pub_id = 'hanbyeol-25')
   ),
   (
@@ -509,6 +514,7 @@ values
     'open',
     'identified',
     'members',
+    false,
     (select id from public.profiles where pub_id = 'saebyeok-24')
   ),
   (
@@ -521,6 +527,7 @@ values
     'request',
     'optional_anonymous',
     'members',
+    false,
     (select id from public.profiles where pub_id = 'pureum-23')
   )
 on conflict (id) do update set
@@ -529,6 +536,7 @@ on conflict (id) do update set
   join_policy = excluded.join_policy,
   identity_policy = excluded.identity_policy,
   posting_policy = excluded.posting_policy,
+  hide_staff_roles = excluded.hide_staff_roles,
   updated_at = now();
 
 insert into public.group_memberships (group_id, profile_id, role, pinned_at)

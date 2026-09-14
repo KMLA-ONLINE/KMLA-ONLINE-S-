@@ -10,6 +10,7 @@ const mutations = vi.hoisted(() => ({
   loadGroupDetail: vi.fn(),
   listGroupCategories: vi.fn(),
   listGroupPosts: vi.fn(),
+  markGroupPostsVisited: vi.fn(),
 }));
 
 vi.mock("~/features/groups", async (importOriginal) => ({
@@ -41,6 +42,7 @@ const group = {
   join_policy: "open",
   identity_policy: "identified",
   posting_policy: "members",
+  hide_staff_roles: false,
   icon_path: null,
   cover_path: null,
   member_count: 1,
@@ -125,12 +127,14 @@ describe("group detail management action", () => {
     const result = await action(
       new URLSearchParams({
         intent: "update-settings",
+        settingsSection: "posting",
         groupId: "group",
         name: "새 이름",
         description: "설명",
         joinPolicy: "request",
         identityPolicy: "optional_anonymous",
         postingPolicy: "staff",
+        hideStaffRoles: "true",
       }),
     );
     expect(result).toMatchObject({ data: { ok: true } });
@@ -140,6 +144,7 @@ describe("group detail management action", () => {
       joinPolicy: "request",
       identityPolicy: "optional_anonymous",
       postingPolicy: "staff",
+      hideStaffRoles: true,
     });
   });
 
@@ -164,12 +169,14 @@ describe("group detail management action", () => {
     const result = await action(
       new URLSearchParams({
         intent: "update-settings",
+        settingsSection: "posting",
         groupId: "group",
         name,
         description,
         joinPolicy: "request",
         identityPolicy: "identified",
         postingPolicy: "members",
+        hideStaffRoles: "false",
       }),
     );
 
@@ -184,6 +191,7 @@ describe("group detail loader", () => {
     getQueryClient().clear();
     mutations.loadGroupDetail.mockResolvedValue(group);
     mutations.listGroupCategories.mockResolvedValue([]);
+    mutations.markGroupPostsVisited.mockResolvedValue(undefined);
   });
 
   it("loads the background post list for a direct post detail", async () => {
@@ -196,6 +204,52 @@ describe("group detail loader", () => {
       hydrateMedia: expect.any(Boolean),
     });
     expect(result.posts).toBe(page);
+  });
+
+  it("marks posts visited only when the group post list itself loads", async () => {
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+
+    await load("/groups/test/posts/post-id");
+    expect(mutations.markGroupPostsVisited).not.toHaveBeenCalled();
+
+    await load("/groups/test");
+    expect(mutations.markGroupPostsVisited).toHaveBeenCalledWith("group-id");
+  });
+
+  it("clears this group's home badge without waiting for the visit RPC", async () => {
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    // 끝나지 않는 RPC — 배지는 응답을 기다리지 않고 내려가야 한다.
+    mutations.markGroupPostsVisited.mockReturnValue(
+      new Promise<void>(() => undefined),
+    );
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(groupKeys.home(), [
+      { group_id: "group-id", new_post_count: 3 },
+      { group_id: "other-id", new_post_count: 5 },
+    ]);
+
+    await load("/groups/test");
+
+    expect(queryClient.getQueryData(groupKeys.home())).toEqual([
+      { group_id: "group-id", new_post_count: 0 },
+      { group_id: "other-id", new_post_count: 5 },
+    ]);
+  });
+
+  it("re-reads the home counts when the visit RPC fails", async () => {
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    mutations.markGroupPostsVisited.mockRejectedValue(new Error("offline"));
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(groupKeys.home(), [
+      { group_id: "group-id", new_post_count: 3 },
+    ]);
+
+    await load("/groups/test");
+    await vi.waitFor(() =>
+      expect(queryClient.getQueryState(groupKeys.home())?.isInvalidated).toBe(
+        true,
+      ),
+    );
   });
 
   it("does not block optional-anonymous group content on a restriction lookup", async () => {

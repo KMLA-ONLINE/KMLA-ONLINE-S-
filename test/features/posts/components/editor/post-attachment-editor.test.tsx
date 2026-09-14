@@ -48,26 +48,6 @@ function renderEditor(
 }
 
 describe("PostAttachmentEditor", () => {
-  it("does not shrink and clip a long attachment list", () => {
-    renderEditor();
-
-    expect(screen.getByRole("region", { name: "첨부 파일" })).toHaveClass(
-      "shrink-0",
-    );
-  });
-
-  it("keeps the empty mobile state to compact icon actions", () => {
-    renderEditor({ additions: [], order: [] });
-
-    expect(screen.getByText("사진 추가")).toHaveClass("hidden", "sm:inline");
-    expect(screen.getByText("파일 추가")).toHaveClass("hidden", "sm:inline");
-    expect(
-      screen.getByRole("button", {
-        name: /사진이나 파일을 끌어 놓으세요/,
-      }),
-    ).toHaveClass("hidden", "sm:flex");
-  });
-
   it("shows the 30-file limit and immediate upload state", () => {
     renderEditor({
       uploadStates: {

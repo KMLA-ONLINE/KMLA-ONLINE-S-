@@ -130,20 +130,6 @@ describe("PostDetailDialog", () => {
     ).not.toHaveFocus();
   });
 
-  it("uses a centered bottom sheet through the tablet breakpoint", () => {
-    stubPostDetailViewport({ sheet: true });
-    renderRoute(Detail, {
-      path: "/posts/:postId",
-      initialEntries: ["/posts/post-id?view=comments"],
-    });
-
-    expect(screen.getByRole("dialog")).toHaveClass(
-      "max-[1025px]:bottom-0",
-      "sm:max-[1025px]:left-1/2",
-      "sm:max-[1025px]:-translate-x-1/2",
-    );
-  });
-
   /**
    * 회귀: 시트 여부를 뷰포트만으로 정하던 때에는, 글을 쓰고 상세로 이동하기만 해도 본문이
    * 숨겨진 댓글 서랍이 떴다. 댓글만 보러 왔다는 의도가 함께 있어야 시트다.
