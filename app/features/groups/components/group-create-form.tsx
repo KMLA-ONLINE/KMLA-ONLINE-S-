@@ -363,7 +363,10 @@ export function GroupCreateForm({
         }
         details={
           <dl className="flex flex-col gap-1 text-sm">
-            <SummaryRow label="종류">{getGroupKindLabel(kind)}</SummaryRow>
+            {/* 종류를 고를 수 없는 사용자에게 `비공식 그룹`은 알려 줄 것이 없는 한 줄이다. */}
+            {canCreateOfficial ? (
+              <SummaryRow label="종류">{getGroupKindLabel(kind)}</SummaryRow>
+            ) : null}
             <SummaryRow label="가입 정책">
               {getGroupJoinPolicyLabel(joinPolicy)}
             </SummaryRow>
