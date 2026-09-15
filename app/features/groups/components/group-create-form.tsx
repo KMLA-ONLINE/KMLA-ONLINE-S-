@@ -1,4 +1,4 @@
-import { ChevronLeftIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { Form, Link } from "react-router";
 
@@ -13,6 +13,7 @@ import type {
   GroupJoinPolicy,
   GroupKind,
 } from "~/features/groups/model/types";
+import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent } from "~/shared/ui/card";
 import { Checkbox } from "~/shared/ui/checkbox";
@@ -59,6 +60,11 @@ export function GroupCreateForm({
     values.joinPolicy,
   );
   const customSlugAllowed = joinPolicy !== "invite_only";
+  // 주소는 거의 모든 그룹이 임의 주소로 두는 선택 항목이다. 접어 두면 폼을 위에서
+  // 아래로 읽는 사람이 굳이 판단하지 않고 지나간다. 값이나 오류가 있으면 펴 둔다.
+  const [slugOpen, setSlugOpen] = useState(
+    Boolean(values.slug) || Boolean(errors.slug),
+  );
   const formRef = useRef<HTMLFormElement>(null);
   const confirmedRef = useRef(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -229,33 +235,59 @@ export function GroupCreateForm({
               </Field>
 
               {customSlugAllowed ? (
-                <Field data-invalid={Boolean(errors.slug)}>
-                  <FieldLabel htmlFor="group-slug">그룹 주소 (선택)</FieldLabel>
-                  <div className="flex items-center gap-1">
-                    <span className="shrink-0 text-sm text-muted-foreground">
-                      /groups/
-                    </span>
-                    <Input
-                      id="group-slug"
-                      name="slug"
-                      type="text"
-                      defaultValue={values.slug}
-                      minLength={4}
-                      maxLength={15}
-                      pattern="[a-z0-9][a-z0-9-]{2,13}[a-z0-9]"
-                      placeholder="makers-lab"
-                      disabled={pending}
-                      aria-invalid={Boolean(errors.slug)}
-                      autoComplete="off"
-                      spellCheck={false}
+                <div className="flex flex-col gap-4">
+                  <button
+                    type="button"
+                    id="group-slug-toggle"
+                    className="flex w-fit items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    aria-expanded={slugOpen}
+                    aria-controls="group-slug-panel"
+                    onClick={() => setSlugOpen((open) => !open)}
+                  >
+                    <ChevronRightIcon
+                      aria-hidden
+                      className={cn(
+                        "size-4 transition-transform duration-150 motion-reduce:transition-none",
+                        slugOpen && "rotate-90",
+                      )}
                     />
-                  </div>
-                  <FieldDescription>
-                    비워 두면 임의 주소를 만듭니다. 영문 소문자, 숫자,
-                    하이픈으로 4~15자입니다.
-                  </FieldDescription>
-                  <FieldError>{errors.slug}</FieldError>
-                </Field>
+                    그룹 주소 직접 정하기 (선택)
+                  </button>
+
+                  {slugOpen ? (
+                    <Field
+                      id="group-slug-panel"
+                      aria-labelledby="group-slug-toggle"
+                      data-invalid={Boolean(errors.slug)}
+                    >
+                      <FieldLabel htmlFor="group-slug">그룹 주소</FieldLabel>
+                      <div className="flex items-center gap-1">
+                        <span className="shrink-0 text-sm text-muted-foreground">
+                          /groups/
+                        </span>
+                        <Input
+                          id="group-slug"
+                          name="slug"
+                          type="text"
+                          defaultValue={values.slug}
+                          minLength={4}
+                          maxLength={15}
+                          pattern="[a-z0-9][a-z0-9-]{2,13}[a-z0-9]"
+                          placeholder="makers-lab"
+                          disabled={pending}
+                          aria-invalid={Boolean(errors.slug)}
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                      </div>
+                      <FieldDescription>
+                        비워 두면 임의 주소를 만듭니다. 영문 소문자, 숫자,
+                        하이픈으로 4~15자입니다.
+                      </FieldDescription>
+                      <FieldError>{errors.slug}</FieldError>
+                    </Field>
+                  ) : null}
+                </div>
               ) : (
                 <p className="rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
                   비공개 그룹은 임의 주소를 사용합니다.
