@@ -128,12 +128,6 @@ export function GroupCreateForm({
         className="flex flex-col gap-4"
         onSubmit={handleSubmit}
       >
-        {errors.form ? (
-          <div className="px-4 md:px-0">
-            <FieldError>{errors.form}</FieldError>
-          </div>
-        ) : null}
-
         {canCreateOfficial ? (
           <SectionCard>
             <FieldSet>
@@ -369,18 +363,23 @@ export function GroupCreateForm({
           </FieldSet>
         </SectionCard>
 
-        <div className="flex justify-end gap-2 px-4 md:px-0">
-          <Button
-            variant="ghost"
-            nativeButton={false}
-            render={<Link to="/groups" />}
-          >
-            취소
-          </Button>
-          <Button type="submit" disabled={pending}>
-            {pending ? <Spinner data-icon="inline-start" /> : null}
-            그룹 만들기
-          </Button>
+        {/* 제출 실패 메시지는 폼 맨 위가 아니라 버튼 옆에 둔다. 모바일에서는 만들기를
+            누른 자리가 화면 아래라, 위쪽에 뜬 메시지는 스크롤을 올리기 전까지 안 보인다. */}
+        <div className="flex flex-col gap-3 px-4 md:px-0">
+          {errors.form ? <FieldError>{errors.form}</FieldError> : null}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              nativeButton={false}
+              render={<Link to="/groups" />}
+            >
+              취소
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? <Spinner data-icon="inline-start" /> : null}
+              그룹 만들기
+            </Button>
+          </div>
         </div>
       </Form>
 
