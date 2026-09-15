@@ -490,6 +490,22 @@ export function PostDetailDialog({
           </p>
         ) : null}
         <CommentComposer
+          /**
+           * 입력창이 시트의 맨 밑이고 시트는 뷰포트 맨 밑에 붙는다. 홈 인디케이터가 있는
+           * 기기에서는 전송 버튼이 그 제스처 띠에 겹쳐, 잘려 보이는 것은 물론 탭도 OS가
+           * 가져간다.
+           *
+           * 키보드가 올라와 있으면 주지 않는다. 그때 입력창 아래는 인디케이터가 아니라
+           * 키보드이고(시트의 `bottom`이 그만큼 올라가 있다), 여백을 얹으면 입력창과
+           * 키보드 사이가 벌어진다. iOS Safari는 키보드가 떠 있어도
+           * `env(safe-area-inset-bottom)`을 0으로 내려 주지 않으므로 CSS만으로는 갈라낼
+           * 수 없고, 우리가 재 둔 `bottomInset`으로 판단한다.
+           */
+          className={cn(
+            "border-t p-3",
+            keyboardViewport.bottomInset === 0 &&
+              "pb-[calc(0.75rem+var(--app-safe-b))]",
+          )}
           viewer={viewer}
           identities={identities}
           identity={identity}
