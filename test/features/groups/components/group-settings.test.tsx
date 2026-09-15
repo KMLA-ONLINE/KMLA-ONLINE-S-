@@ -124,17 +124,18 @@ describe("GroupSettings", () => {
     ).toBeVisible();
   });
 
-  it("lets administrators hide staff roles from the roster with a checkbox", async () => {
+  it("lets administrators hide staff roles from the roster with a dropdown", async () => {
     const { user } = renderSettings();
 
     await user.click(screen.getByRole("button", { name: "운영진 역할 변경" }));
-    const hideStaffRoles = screen.getByRole("checkbox", {
-      name: "일반 멤버에게 운영진 역할 숨기기",
-    });
+    const select = screen.getByRole("combobox", { name: "운영진 역할" });
 
-    expect(hideStaffRoles).not.toBeChecked();
-    await user.click(hideStaffRoles);
-    expect(hideStaffRoles).toBeChecked();
+    expect(select).toHaveValue("false");
+    expect(
+      within(select).getByRole("option", { name: "모두에게 표시" }),
+    ).toBeVisible();
+    await user.selectOptions(select, "true");
+    expect(select).toHaveValue("true");
   });
 
   it("warns when making a private group public", async () => {

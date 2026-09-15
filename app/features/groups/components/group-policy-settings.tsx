@@ -219,23 +219,6 @@ function PolicyRow({
                     </FieldDescription>
                   </FieldContent>
                 </Field>
-              ) : kind === "staffRoles" ? (
-                <Field orientation="horizontal">
-                  <Checkbox
-                    id="hide-staff-roles"
-                    name={config.name}
-                    value="true"
-                    defaultChecked={current === "true"}
-                  />
-                  <FieldContent>
-                    <FieldLabel htmlFor="hide-staff-roles">
-                      일반 멤버에게 운영진 역할 숨기기
-                    </FieldLabel>
-                    <FieldDescription>
-                      이름, 기수, 검색과 프로필 이동은 그대로 제공합니다.
-                    </FieldDescription>
-                  </FieldContent>
-                </Field>
               ) : (
                 <label className="grid gap-2 text-sm font-medium">
                   <NativeSelect
@@ -256,6 +239,11 @@ function PolicyRow({
                 <p className="rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
                   변경한 정책은 앞으로 작성하는 활동부터 적용됩니다. 기존
                   게시물과 댓글의 신원 표시는 바뀌지 않습니다.
+                </p>
+              ) : kind === "staffRoles" ? (
+                <p className="rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
+                  멤버 명부의 역할 표시와 정렬에만 적용됩니다. 이름, 기수,
+                  검색과 프로필 이동, 게시물의 운영진 명의 표시는 그대로입니다.
                 </p>
               ) : null}
               <FormActions pending={pending} cancel={onCancel} />
