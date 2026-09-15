@@ -71,7 +71,7 @@ export function PostActionBar({
   // 0은 숫자로 적지 않는다. 아직 아무도 남기지 않은 자리에 0이 붙으면 눈에 걸린다.
   const commentInner = (
     <>
-      <MessageCircleIcon className="size-4.5" aria-hidden="true" />
+      <MessageCircleIcon className="size-5.5" aria-hidden="true" />
       {commentCount > 0 ? commentCount : null}
     </>
   );
@@ -112,7 +112,7 @@ export function PostActionBar({
           className={ACTION_CLASS}
           onClick={() => void share()}
         >
-          <SendIcon className="size-4.5" aria-hidden="true" />
+          <SendIcon className="size-5.5" aria-hidden="true" />
         </button>
       </div>
 
