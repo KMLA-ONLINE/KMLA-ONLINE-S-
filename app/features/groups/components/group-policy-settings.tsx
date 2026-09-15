@@ -242,8 +242,8 @@ function PolicyRow({
                 </p>
               ) : kind === "staffRoles" ? (
                 <p className="rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
-                  멤버 명부의 역할 표시와 정렬에만 적용됩니다. 이름, 기수,
-                  검색과 프로필 이동, 게시물의 운영진 명의 표시는 그대로입니다.
+                  일반 멤버는 관리자 역할을 가진 사람을 볼 수 없습니다. 게시물의
+                  운영진 명의 표시는 유지됩니다.
                 </p>
               ) : null}
               <FormActions pending={pending} cancel={onCancel} />
