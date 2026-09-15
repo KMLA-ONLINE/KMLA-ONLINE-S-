@@ -125,9 +125,12 @@ export function PostReactionButton({
         }}
       >
         {mine ? (
+          // 이모지는 `em` 크기라 글자 크기로 조절한다. 같은 줄의 댓글·공유
+          // 아이콘(`size-5`)보다 한 단계 작게 둔다 — 색이 꽉 찬 그림이라 선으로 그린
+          // 아이콘과 같은 크기면 혼자 튄다.
           <ReactionEmoji reaction={mine} className="text-base" />
         ) : (
-          <ThumbsUpIcon className="size-4.5" aria-hidden="true" />
+          <ThumbsUpIcon className="size-5" aria-hidden="true" />
         )}
         {summary.reaction_count > 0 ? summary.reaction_count : null}
       </button>

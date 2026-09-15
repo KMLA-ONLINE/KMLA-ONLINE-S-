@@ -20,16 +20,23 @@ export function GroupDetailMobileHeader({
   return (
     <header
       data-slot="group-detail-mobile-header"
-      className="sticky top-0 z-10 flex h-[calc(2.75rem+var(--app-safe-t))] items-center gap-2 border-b bg-background/95 px-1.5 pt-[var(--app-safe-t)] backdrop-blur md:hidden"
+      // 배경은 `PageHeader`와 같은 이유로 불투명하다 — 반투명 헤더는 아래로 지나가는
+      // 게시물 이미지 색에 물든다.
+      //
+      // 높이는 `--app-page-header-h`보다 한 단계 낮다. 이 헤더는 제목만 있는 페이지
+      // 헤더와 달리 그룹 화면이 계속 붙들고 있어서, 같은 높이면 목록이 그만큼 좁아진다.
+      className="sticky top-0 z-10 flex h-[calc(3rem+var(--app-safe-t))] items-center gap-2 border-b bg-background px-2 pt-[var(--app-safe-t)] md:hidden"
     >
+      {/* 그룹을 빠져나가는 유일한 손잡이다. 나머지 헤더 요소보다 크게 둔다 —
+          화면 맨 위 모서리는 엄지가 닿기 가장 나쁜 자리라 작으면 자주 빗나간다. */}
       <Button
         type="button"
         variant="ghost"
-        size="icon-sm"
+        size="icon"
         aria-label="그룹 목록으로 돌아가기"
         onClick={() => void navigate("/groups")}
       >
-        <ArrowLeftIcon />
+        <ArrowLeftIcon className="size-5.5" />
       </Button>
 
       <div className="flex min-w-0 flex-1 items-center gap-2">

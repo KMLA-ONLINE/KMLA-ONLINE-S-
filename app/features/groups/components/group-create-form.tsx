@@ -1,4 +1,4 @@
-import { ChevronLeftIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { Form, Link } from "react-router";
 
@@ -13,6 +13,7 @@ import type {
   GroupJoinPolicy,
   GroupKind,
 } from "~/features/groups/model/types";
+import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent } from "~/shared/ui/card";
 import { Checkbox } from "~/shared/ui/checkbox";
@@ -59,6 +60,11 @@ export function GroupCreateForm({
     values.joinPolicy,
   );
   const customSlugAllowed = joinPolicy !== "invite_only";
+  // 주소는 거의 모든 그룹이 임의 주소로 두는 선택 항목이다. 접어 두면 폼을 위에서
+  // 아래로 읽는 사람이 굳이 판단하지 않고 지나간다. 값이나 오류가 있으면 펴 둔다.
+  const [slugOpen, setSlugOpen] = useState(
+    Boolean(values.slug) || Boolean(errors.slug),
+  );
   const formRef = useRef<HTMLFormElement>(null);
   const confirmedRef = useRef(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -122,12 +128,6 @@ export function GroupCreateForm({
         className="flex flex-col gap-4"
         onSubmit={handleSubmit}
       >
-        {errors.form ? (
-          <div className="px-4 md:px-0">
-            <FieldError>{errors.form}</FieldError>
-          </div>
-        ) : null}
-
         {canCreateOfficial ? (
           <SectionCard>
             <FieldSet>
@@ -229,33 +229,59 @@ export function GroupCreateForm({
               </Field>
 
               {customSlugAllowed ? (
-                <Field data-invalid={Boolean(errors.slug)}>
-                  <FieldLabel htmlFor="group-slug">그룹 주소 (선택)</FieldLabel>
-                  <div className="flex items-center gap-1">
-                    <span className="shrink-0 text-sm text-muted-foreground">
-                      /groups/
-                    </span>
-                    <Input
-                      id="group-slug"
-                      name="slug"
-                      type="text"
-                      defaultValue={values.slug}
-                      minLength={4}
-                      maxLength={15}
-                      pattern="[a-z0-9][a-z0-9-]{2,13}[a-z0-9]"
-                      placeholder="makers-lab"
-                      disabled={pending}
-                      aria-invalid={Boolean(errors.slug)}
-                      autoComplete="off"
-                      spellCheck={false}
+                <div className="flex flex-col gap-4">
+                  <button
+                    type="button"
+                    id="group-slug-toggle"
+                    className="flex w-fit items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    aria-expanded={slugOpen}
+                    aria-controls="group-slug-panel"
+                    onClick={() => setSlugOpen((open) => !open)}
+                  >
+                    <ChevronRightIcon
+                      aria-hidden
+                      className={cn(
+                        "size-4 transition-transform duration-150 motion-reduce:transition-none",
+                        slugOpen && "rotate-90",
+                      )}
                     />
-                  </div>
-                  <FieldDescription>
-                    비워 두면 임의 주소를 만듭니다. 영문 소문자, 숫자,
-                    하이픈으로 4~15자입니다.
-                  </FieldDescription>
-                  <FieldError>{errors.slug}</FieldError>
-                </Field>
+                    그룹 주소 직접 정하기 (선택)
+                  </button>
+
+                  {slugOpen ? (
+                    <Field
+                      id="group-slug-panel"
+                      aria-labelledby="group-slug-toggle"
+                      data-invalid={Boolean(errors.slug)}
+                    >
+                      <FieldLabel htmlFor="group-slug">그룹 주소</FieldLabel>
+                      <div className="flex items-center gap-1">
+                        <span className="shrink-0 text-sm text-muted-foreground">
+                          /groups/
+                        </span>
+                        <Input
+                          id="group-slug"
+                          name="slug"
+                          type="text"
+                          defaultValue={values.slug}
+                          minLength={4}
+                          maxLength={15}
+                          pattern="[a-z0-9][a-z0-9-]{2,13}[a-z0-9]"
+                          placeholder="makers-lab"
+                          disabled={pending}
+                          aria-invalid={Boolean(errors.slug)}
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                      </div>
+                      <FieldDescription>
+                        비워 두면 임의 주소를 만듭니다. 영문 소문자, 숫자,
+                        하이픈으로 4~15자입니다.
+                      </FieldDescription>
+                      <FieldError>{errors.slug}</FieldError>
+                    </Field>
+                  ) : null}
+                </div>
               ) : (
                 <p className="rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
                   비공개 그룹은 임의 주소를 사용합니다.
@@ -337,18 +363,23 @@ export function GroupCreateForm({
           </FieldSet>
         </SectionCard>
 
-        <div className="flex justify-end gap-2 px-4 md:px-0">
-          <Button
-            variant="ghost"
-            nativeButton={false}
-            render={<Link to="/groups" />}
-          >
-            취소
-          </Button>
-          <Button type="submit" disabled={pending}>
-            {pending ? <Spinner data-icon="inline-start" /> : null}
-            그룹 만들기
-          </Button>
+        {/* 제출 실패 메시지는 폼 맨 위가 아니라 버튼 옆에 둔다. 모바일에서는 만들기를
+            누른 자리가 화면 아래라, 위쪽에 뜬 메시지는 스크롤을 올리기 전까지 안 보인다. */}
+        <div className="flex flex-col gap-3 px-4 md:px-0">
+          {errors.form ? <FieldError>{errors.form}</FieldError> : null}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              nativeButton={false}
+              render={<Link to="/groups" />}
+            >
+              취소
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? <Spinner data-icon="inline-start" /> : null}
+              그룹 만들기
+            </Button>
+          </div>
         </div>
       </Form>
 
@@ -363,7 +394,10 @@ export function GroupCreateForm({
         }
         details={
           <dl className="flex flex-col gap-1 text-sm">
-            <SummaryRow label="종류">{getGroupKindLabel(kind)}</SummaryRow>
+            {/* 종류를 고를 수 없는 사용자에게 `비공식 그룹`은 알려 줄 것이 없는 한 줄이다. */}
+            {canCreateOfficial ? (
+              <SummaryRow label="종류">{getGroupKindLabel(kind)}</SummaryRow>
+            ) : null}
             <SummaryRow label="가입 정책">
               {getGroupJoinPolicyLabel(joinPolicy)}
             </SummaryRow>
