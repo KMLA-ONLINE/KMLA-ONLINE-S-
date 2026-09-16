@@ -282,14 +282,9 @@ export function FeedScreen() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
           <div className="flex min-w-48 flex-col items-center gap-3 rounded-xl bg-background p-5 shadow-xl">
             {activeDetailResult?.error ? (
-              <>
-                <p role="alert" className="text-sm text-muted-foreground">
-                  {activeDetailResult.error}
-                </p>
-                <Button type="button" variant="outline" onClick={closeDetail}>
-                  닫기
-                </Button>
-              </>
+              <p role="alert" className="text-sm text-muted-foreground">
+                {activeDetailResult.error}
+              </p>
             ) : (
               <>
                 <Spinner />
@@ -298,6 +293,13 @@ export function FeedScreen() {
                 </p>
               </>
             )}
+            {/*
+              불러오는 중에도 닫을 수 있어야 한다. 응답이 끝내 오지 않으면 이 화면에는
+              다른 출구가 없어, 사용자는 브라우저 뒤로 가기밖에 쓸 수 없다.
+            */}
+            <Button type="button" variant="outline" onClick={closeDetail}>
+              닫기
+            </Button>
           </div>
         </div>
       ) : null}

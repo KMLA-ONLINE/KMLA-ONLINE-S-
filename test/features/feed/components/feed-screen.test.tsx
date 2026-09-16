@@ -259,6 +259,9 @@ describe("FeedScreen detail re-entry", () => {
     // 재시도는 한 번으로 묶는다 — 계속 실패하는 요청을 무한히 다시 걸지 않는다.
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(detailLoads).toEqual(["post-a", "post-a"]);
+
+    // 재시도까지 빈손이면 이 버튼이 유일한 출구다.
+    expect(screen.getByRole("button", { name: "닫기" })).toBeInTheDocument();
   });
 
   /**
