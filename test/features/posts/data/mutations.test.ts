@@ -338,7 +338,13 @@ describe("comment image orchestration", () => {
         });
       if (name === "create_post_comment")
         return Promise.resolve({
-          data: [{ comment_id: "comment-id", post_id: "post-id" }],
+          data: [
+            {
+              comment_id: "comment-id",
+              post_id: "post-id",
+              post_comment_count: 7,
+            },
+          ],
           error: null,
         });
       return Promise.resolve({ data: null, error: null });
@@ -384,10 +390,26 @@ describe("comment image orchestration", () => {
       createCommentImageUploadSession(),
     );
 
-    expect(created.images).toEqual([]);
+    expect(created.comment.images).toEqual([]);
     expect(
       rpc.mock.calls.filter(([name]) => name === "create_post_comment"),
     ).toHaveLength(1);
+  });
+
+  it("returns the canonical comment count apart from the comment row", async () => {
+    const created = await createPostComment(
+      "post-id",
+      "본문",
+      "identified",
+      null,
+      undefined,
+      [],
+      createCommentImageUploadSession(),
+    );
+
+    expect(created.commentCount).toBe(7);
+    // 정본 수는 게시물의 것이다. 댓글 행에 섞여 목록 캐시로 흘러가면 안 된다.
+    expect(created.comment).not.toHaveProperty("post_comment_count");
   });
 
   it("does not create a comment after upload failure and reuses preparation on retry", async () => {

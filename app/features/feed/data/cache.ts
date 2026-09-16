@@ -49,6 +49,46 @@ export function resetFeed(queryClient: QueryClient) {
 }
 
 /**
+ * 상세에서 쓴 댓글의 정본 수를 피드 캐시의 해당 게시물에 반영한다.
+ *
+ * 쌓인 페이지를 모두 훑는다. 같은 글이 여러 페이지에 걸쳐 있지는 않지만, 몇 번째 페이지에
+ * 있는지는 캐시만 안다.
+ *
+ * 값은 `max`로 덮는다. 댓글을 연달아 달면 응답이 보낸 순서대로 돌아온다는 보장이 없어, 늦게
+ * 도착한 예전 응답이 최신 수를 도로 낮출 수 있다. 수는 이 화면에서 줄어들 일이 없으므로
+ * 큰 쪽을 남기는 것으로 충분하다.
+ */
+export function patchFeedPostCommentCount(
+  queryClient: QueryClient,
+  postId: string,
+  commentCount: number,
+) {
+  queryClient.setQueryData(
+    feedKeys.list(),
+    (current: InfiniteData<FeedPage, string | null> | undefined) => {
+      if (!current) return current;
+
+      let patched = false;
+      const pages = current.pages.map((page) => {
+        let pagePatched = false;
+        const posts = page.posts.map((post) => {
+          if (post.post_id !== postId) return post;
+          const next = Math.max(post.comment_count, commentCount);
+          if (next === post.comment_count) return post;
+          pagePatched = true;
+          return { ...post, comment_count: next };
+        });
+        if (!pagePatched) return page;
+        patched = true;
+        return { ...page, posts };
+      });
+
+      return patched ? { ...current, pages } : current;
+    },
+  );
+}
+
+/**
  * 랭킹을 다시 계산하지 않고 캐시에서 게시물 하나만 뺀다.
  *
  * 삭제는 "이 글이 사라진다"이지 "피드 순서가 바뀐다"가 아니다. 반면 새 세션 하나는

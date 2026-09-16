@@ -24,8 +24,17 @@ vi.mock("~/features/feed/components/feed-post", () => ({
   FeedPostCard: ({
     post,
   }: {
-    post: { post_id: string; author_avatar_path: string | null };
-  }) => <div>{`${post.post_id}=${post.author_avatar_path ?? "unsigned"}`}</div>,
+    post: {
+      post_id: string;
+      author_avatar_path: string | null;
+      comment_count?: number;
+    };
+  }) => (
+    <div>
+      {`${post.post_id}=${post.author_avatar_path ?? "unsigned"}`}
+      <span>{`${post.post_id}:comments=${post.comment_count ?? 0}`}</span>
+    </div>
+  ),
   FeedPostRow: () => null,
 }));
 vi.mock("~/shared/hooks/use-infinite-scroll", () => ({
@@ -33,14 +42,15 @@ vi.mock("~/shared/hooks/use-infinite-scroll", () => ({
 }));
 
 import { FeedScreen } from "~/features/feed/components/feed-screen";
-import { feedKeys } from "~/features/feed";
+import { feedKeys, patchFeedPostCommentCount } from "~/features/feed";
 import {
   getQueryClient,
   resetQueryClientForTests,
 } from "~/shared/lib/query-client";
 import { renderRoute } from "../../../router";
+import { useSearchParams } from "react-router";
 
-function seedSession(feedEpoch: string, postIds: string[]) {
+function seedSession(feedEpoch: string, postIds: string[], commentCount = 0) {
   getQueryClient().setQueryData(feedKeys.list(), {
     pages: [
       {
@@ -48,6 +58,7 @@ function seedSession(feedEpoch: string, postIds: string[]) {
           post_id,
           author_avatar_path: null,
           attachments: [],
+          comment_count: commentCount,
         })),
         feedEpoch,
         nextPageToken: null,
@@ -129,5 +140,97 @@ describe("FeedScreen media hydration", () => {
     renderRoute(Harness);
 
     expect(await screen.findByText("post-a=signed:post-a")).toBeInTheDocument();
+  });
+});
+
+describe("FeedScreen detail re-entry", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetQueryClientForTests();
+    hydrateFeedPostMedia.mockResolvedValue([]);
+  });
+
+  /**
+   * `useFetcher`의 데이터는 상세를 닫아도 남는다. "이 글의 데이터가 이미 있다"로 판단하면
+   * 같은 글을 다시 열었을 때 방금 쓴 댓글이 빠진 예전 응답이 그대로 뜬다.
+   */
+  it("re-loads the detail when the same post is opened again", async () => {
+    const detailLoads: string[] = [];
+
+    function Harness() {
+      const [, setSearchParams] = useSearchParams();
+      return (
+        <QueryClientProvider client={getQueryClient()}>
+          <button
+            type="button"
+            onClick={() =>
+              setSearchParams({
+                post: "post-a",
+                kind: "group",
+                source: "group-id",
+              })
+            }
+          >
+            상세 열기
+          </button>
+          <button type="button" onClick={() => setSearchParams({})}>
+            상세 닫기
+          </button>
+          <FeedScreen />
+        </QueryClientProvider>
+      );
+    }
+
+    seedSession("epoch-1", ["post-a"]);
+    const { user } = renderRoute(Harness, {
+      routes: [
+        {
+          path: "/feed/posts/:postId",
+          loader: ({ params }) => {
+            detailLoads.push(params.postId!);
+            return {
+              requestedPostId: params.postId,
+              detail: null,
+              error: "불러오지 못했습니다.",
+            };
+          },
+        },
+      ],
+    });
+
+    await user.click(screen.getByRole("button", { name: "상세 열기" }));
+    await waitFor(() => expect(detailLoads).toEqual(["post-a"]));
+
+    await user.click(screen.getByRole("button", { name: "상세 닫기" }));
+    await user.click(screen.getByRole("button", { name: "상세 열기" }));
+
+    await waitFor(() => expect(detailLoads).toEqual(["post-a", "post-a"]));
+  });
+
+  /**
+   * 미디어 수화본은 만들어진 시점에 멈춰 있다. 그 복사본이 화면을 이기면, 댓글을 쓰고 상세를
+   * 닫은 순간 캐시가 고친 수를 수화본의 옛 수가 도로 덮는다.
+   */
+  it("keeps a patched comment count that media hydration would overwrite", async () => {
+    hydrateFeedPostMedia.mockImplementation((posts: { post_id: string }[]) =>
+      Promise.resolve(
+        posts.map((post) => ({
+          ...post,
+          author_avatar_path: `signed:${post.post_id}`,
+        })),
+      ),
+    );
+
+    seedSession("epoch-1", ["post-a"], 0);
+    renderRoute(Harness);
+
+    // 수화가 끝난 뒤에 댓글 수가 갱신된다.
+    expect(await screen.findByText("post-a=signed:post-a")).toBeInTheDocument();
+
+    act(() => patchFeedPostCommentCount(getQueryClient(), "post-a", 3));
+
+    expect(await screen.findByText("post-a:comments=3")).toBeInTheDocument();
+    // 수화가 채운 미디어는 그대로 남아야 한다.
+    expect(screen.getByText("post-a=signed:post-a")).toBeInTheDocument();
   });
 });

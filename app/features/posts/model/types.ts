@@ -272,6 +272,15 @@ export type PostComment = WithReactions<
   mentions: PostMention[];
 };
 
+/**
+ * 댓글 생성 응답. `commentCount`는 insert 트리거가 갱신한 게시물의 정본 댓글 수다.
+ * 목록 캐시는 손에 든 낡은 값에 `+1` 하지 말고 이 값을 써야 한다.
+ */
+export interface CreatedPostComment {
+  comment: PostComment;
+  commentCount: number;
+}
+
 export type CommentImageInput = CommentImage | PreparedCommentImage | null;
 
 export interface CommentCursor {

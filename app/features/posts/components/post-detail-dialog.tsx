@@ -102,6 +102,7 @@ export function PostDetailDialog({
   children,
   anonymousActivityRestriction,
   mentionGroupId,
+  onCommentCreated,
 }: {
   /** 모달 머리에 적는 제목. 낭독기에는 이것이 게시물의 이름이 된다. */
   title: string;
@@ -114,7 +115,10 @@ export function PostDetailDialog({
   postAuthorPubId?: string | null;
   error?: string | null;
   onClose: () => void;
-  /** 본문 아래 액션 바. 댓글 수는 서버가 준 값만 넘기면 된다 — 방금 쓴 댓글은 여기서 더한다. */
+  /**
+   * 본문 아래 액션 바. 댓글 수는 서버가 준 값만 넘기면 된다 — 생성 RPC가 돌려준 정본 수로
+   * 여기서 갈아 끼운다.
+   */
   actionBar: {
     reaction: ReactionSummary;
     sharePath: string;
@@ -129,6 +133,11 @@ export function PostDetailDialog({
    * §8.14) 프로필 쪽 상세는 넘기지 않고, 그러면 버튼이 그려지지 않는다.
    */
   mentionGroupId?: string | null;
+  /**
+   * 댓글이 등록되면 게시물의 정본 댓글 수를 알린다. 상세를 연 목록이 자기 캐시를 맞추는 데
+   * 쓴다 — 상세를 닫을 때 route를 재검증하지 않아도 목록 수가 맞는다.
+   */
+  onCommentCreated?: (postId: string, commentCount: number) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   /**
@@ -144,7 +153,12 @@ export function PostDetailDialog({
     setListElement(node);
   }, []);
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const thread = usePostComments(postId, comments);
+  const thread = usePostComments(
+    postId,
+    comments,
+    actionBar.commentCount,
+    onCommentCreated,
+  );
   const [identity, setIdentity] = useState<PostIdentity>(identities[0]);
   const [replyingTo, setReplyingTo] = useState<PostComment | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
@@ -453,7 +467,7 @@ export function PostDetailDialog({
               reaction={actionBar.reaction}
               sharePath={actionBar.sharePath}
               shareTitle={actionBar.shareTitle}
-              commentCount={actionBar.commentCount + thread.countDelta}
+              commentCount={thread.commentCount}
               onComment={focusComposer}
             />
           </article>

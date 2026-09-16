@@ -51,14 +51,25 @@ function mergeComments(
  *
  * 답글은 만들거나 지운 뒤 그 묶음만 다시 불러온다. tombstone이 보이는지 여부는 "살아 있는
  * 자손이 있는가"라는 서버 규칙이라, 클라이언트에서 흉내 내면 두 규칙이 갈라진다.
+ *
+ * 댓글 수도 같은 원칙이다. 생성 RPC는 트리거 적용 뒤의 정본 수를 함께 돌려주므로 손에 든 값에
+ * `+1` 하지 않고 그 값을 그대로 쓴다. 삭제 RPC에는 정본 수가 없어 그쪽만 상대 계산으로 남는다.
  */
-export function usePostComments(postId: string, initialPage: PostCommentPage) {
+export function usePostComments(
+  postId: string,
+  initialPage: PostCommentPage,
+  /** loader가 준 게시물의 댓글 수. 훅이 여기서 시작해 정본 값으로 갱신한다. */
+  serverCommentCount: number,
+  /** 생성 성공 시 정본 수를 상위(피드·그룹 목록 캐시)에 알린다. */
+  onCommentCreated?: (postId: string, commentCount: number) => void,
+) {
   const [imageSession] = useState(createCommentImageUploadSession);
   const [comments, setComments] = useState(initialPage.comments);
   const [nextCursor, setNextCursor] = useState(initialPage.nextCursor);
   const [replies, setReplies] = useState<Record<string, PostComment[]>>({});
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const [countDelta, setCountDelta] = useState(0);
+  const [commentCount, setCommentCount] = useState(serverCommentCount);
+  const [loadedCount, setLoadedCount] = useState(serverCommentCount);
   const [loading, setLoading] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,8 +82,13 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
     setNextCursor(initialPage.nextCursor);
     setReplies({});
     setExpanded(new Set());
-    setCountDelta(0);
+    setLoadedCount(serverCommentCount);
+    setCommentCount(serverCommentCount);
     setError(null);
+  } else if (loadedCount !== serverCommentCount) {
+    // 페이지는 그대로인데 게시물의 수만 새로 내려온 경우. loader 쪽이 더 최신이다.
+    setLoadedCount(serverCommentCount);
+    setCommentCount(serverCommentCount);
   }
 
   const run = async <T>(action: () => Promise<T>): Promise<T | undefined> => {
@@ -146,14 +162,17 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
         mentions,
         imageSession,
       );
-      setCountDelta((current) => current + 1);
-      if (created.depth === 0) {
-        setComments((current) => mergeComments(current, [created]));
-        return created;
+      setCommentCount(created.commentCount);
+      onCommentCreated?.(postId, created.commentCount);
+      if (created.comment.depth === 0) {
+        setComments((current) => mergeComments(current, [created.comment]));
+        return created.comment;
       }
-      await refreshBundle(created.root_comment_id);
-      setExpanded((current) => new Set(current).add(created.root_comment_id));
-      return created;
+      await refreshBundle(created.comment.root_comment_id);
+      setExpanded((current) =>
+        new Set(current).add(created.comment.root_comment_id),
+      );
+      return created.comment;
     });
 
   const edit = (
@@ -193,7 +212,9 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
       await deletePostComment(comment.comment_id);
       if (comment.depth === 0) {
         // 최상위를 지우면 답글 묶음까지 함께 사라진다(기능 명세 §9.4).
-        setCountDelta((current) => current - (1 + comment.reply_count));
+        setCommentCount((current) =>
+          Math.max(0, current - (1 + comment.reply_count)),
+        );
         setComments((current) =>
           current.filter((item) => item.comment_id !== comment.comment_id),
         );
@@ -211,7 +232,9 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
       }
       const before = liveCount(replies[comment.root_comment_id] ?? []);
       const bundle = await refreshBundle(comment.root_comment_id);
-      setCountDelta((current) => current - (before - liveCount(bundle)));
+      setCommentCount((current) =>
+        Math.max(0, current - (before - liveCount(bundle))),
+      );
     });
 
   /**
@@ -254,7 +277,7 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
     comments,
     replies,
     expanded,
-    countDelta,
+    commentCount,
     hasMore: nextCursor !== null,
     loading,
     pending,

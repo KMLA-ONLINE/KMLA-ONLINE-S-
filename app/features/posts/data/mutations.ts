@@ -6,6 +6,7 @@ import {
 import type {
   GroupCategory,
   CommentImageInput,
+  CreatedPostComment,
   PostAttachment,
   PostComment,
   PostFormValues,
@@ -923,7 +924,7 @@ export async function createPostComment(
   image?: CommentImageInput,
   mentionEntries: MentionDraftEntry[] = [],
   session = createCommentImageUploadSession(),
-): Promise<PostComment> {
+): Promise<CreatedPostComment> {
   const imageId =
     image && "file" in image
       ? await uploadCommentImage(postId, image, session)
@@ -938,9 +939,15 @@ export async function createPostComment(
     p_mention_pub_ids: mentions.pubIds,
   });
   if (error) throw error;
-  const comment = data?.[0];
-  if (!comment) throw new Error("댓글을 저장하지 못했습니다.");
-  return hydrateCommittedComment(withMentions(comment));
+  const row = data?.[0];
+  if (!row) throw new Error("댓글을 저장하지 못했습니다.");
+  // 정본 count는 댓글 행이 아니라 게시물의 것이다. 행에 섞인 채로 두면 목록 캐시가
+  // 댓글 필드로 오해한다. 여기서 떼어 내고 나머지만 댓글로 수화한다.
+  const { post_comment_count: commentCount, ...comment } = row;
+  return {
+    comment: await hydrateCommittedComment(withMentions(comment)),
+    commentCount,
+  };
 }
 
 export async function updatePostComment(

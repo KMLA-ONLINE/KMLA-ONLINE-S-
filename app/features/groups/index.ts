@@ -9,6 +9,7 @@ export {
   GROUP_STALE_TIME,
   groupKeys,
   isGroupAccessQuery,
+  patchGroupPostCommentCount,
 } from "~/features/groups/data/cache";
 export {
   acceptGroupInvite,
