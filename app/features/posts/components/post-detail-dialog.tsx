@@ -115,8 +115,8 @@ export function PostDetailDialog({
   error?: string | null;
   onClose: () => void;
   /**
-   * 본문 아래 액션 바. 댓글 수는 서버가 준 값만 넘기면 된다 — 생성 RPC가 돌려준 정본 수로
-   * 여기서 갈아 끼운다.
+   * 본문 아래 액션 바. 댓글 수는 서버가 준 값만 넘기면 된다 — 댓글 생성·삭제 RPC가 돌려준
+   * 정본 수를 `usePostComments`가 화면과 engagement overlay에 얹는다.
    */
   actionBar: {
     reaction: ReactionSummary;

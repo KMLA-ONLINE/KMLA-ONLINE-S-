@@ -213,8 +213,8 @@ export function CommentComposer({
     !processingImage;
   const nextIdentity =
     identities[(identities.indexOf(identity) + 1) % identities.length];
-  // 운영진 명의를 쓸 수 있으면 선택지를 돌려 가며 확인시키지 않는다. 명의를 잘못 달고 올린
-  // 댓글은 되돌릴 수 없으므로(기능 명세 §9.1) 무엇으로 쓰는지 명시적으로 고르게 한다.
+  // 운영진 명의를 쓸 수 있으면 선택할 수 있는 신원을 한 화면에 모두 나열해 고르게 하고,
+  // 그렇지 않으면 바꾸기 직전에 확인을 받는다(기능 명세 §9.1).
   const usesIdentityPicker = identities.includes("staff");
   const mentionBlocksAnonymous =
     countMentionTargets(draft, mentionDraft.entries) > 0;
@@ -586,7 +586,7 @@ function IdentityPickerDialog({
   /** 현재 신원. 기본 선택이 된다. */
   identity: PostIdentity;
   viewer: CommentViewer;
-  /** 활성 멘션이 남아 있으면 익명을 고를 수 없다(기능 명세 §9.1). */
+  /** 활성 멘션이 남아 있으면 익명을 고를 수 없다(기능 명세 §8.14). */
   anonymousBlocked: boolean;
   onCancel: () => void;
   onConfirm: (next: PostIdentity) => void;

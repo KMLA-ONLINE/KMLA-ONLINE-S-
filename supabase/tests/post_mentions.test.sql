@@ -344,7 +344,8 @@ select lives_ok(
     )$$,
   'a comment can mention a member'
 );
--- 익명 댓글은 자기 글에 달 수 없으므로(기능 명세 §9.1) 멘션 규칙은 남의 글에서 확인한다.
+-- 실명 게시물의 작성자는 자기 글에 익명 댓글을 달 수 없으므로(기능 명세 §9.1) 멘션 규칙은
+-- 남의 글에서 확인한다. `초안`은 이 호출자가 실명으로 쓴 글이라 익명 금지가 먼저 걸린다.
 reset role;
 insert into public.posts (
   id, kind, body, group_id, title, author_identity, display_author_profile_id,
