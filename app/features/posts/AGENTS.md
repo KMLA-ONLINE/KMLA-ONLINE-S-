@@ -66,7 +66,8 @@
 - 실제 작성자는 `private.post_authors` / `private.comment_authors`에만 있다. 클라이언트 가독 행에는 표현용 값(`author_identity`, `display_author_profile_id`, `anon_alias_number`)만 둔다.
 - 신원 판정의 경계는 RPC 안이다. 클라이언트의 `resolveIdentityOptions()`는 선택지를 그리기 위한 것이고, 게시물과 댓글이 같은 규칙을 쓰므로 화면마다 다시 계산하지 않는다.
 - 익명 번호는 게시물 단위이며 원본은 `private.post_anonymous_aliases`에만 있다. 클라이언트에 열어 주면 번호로 같은 사용자를 여러 게시물에 걸쳐 이을 수 있다.
-- `글쓴이`는 **게시물 자체가 익명일 때만** 붙인다. 실명 게시물의 작성자에게 붙이면 실명과 익명 댓글이 연결돼 익명 선택이 무너진다.
+- `글쓴이`(alias `0`)는 **게시물 자체가 익명일 때만** 붙인다. 실명 게시물의 작성자에게 붙이면 실명과 익명 댓글이 연결돼 익명 선택이 무너진다.
+- 실명·운영진 게시물의 실제 작성자는 자기 글에 익명 댓글·답글을 쓸 수 없다(기능 명세 §9.1). 이름을 걸고 쓴 글 아래의 익명은 이미 작성자라고 드러난 셈이라 익명일 이유가 없다. 익명 게시물에는 걸지 마라 — 거기서는 작성자도 `글쓴이`로 익명 참여한다. 판정은 표시 신원이 아니라 `private.post_authors`로 하고, 경계는 `public.create_post_comment` 안이다. `GroupPostDetail`이 익명 선택지를 지우는 것은 UX다.
 - 그룹 익명 활동 제한은 `private.group_anonymous_activity_restrictions`에 멤버십과 별도로 남는다. 운영 RPC는 대상 프로필 ID를 받지 않고 현재 공개 중인 익명 게시물·댓글의 private author에서만 대상을 찾는다.
 - 운영자용 게시물·댓글 응답은 `can_moderate_anonymous`, `anonymous_author_restricted`와 활성 제한의 만료 시각만 공개한다. 실제 작성자 ID나 제한 대상 목록을 추가하지 마라.
 - 익명 게시·댓글 쓰기는 같은 그룹/대상의 advisory lock 아래 활성 제한을 검사한다. 즉시 게시, 두 초안 게시 경로와 댓글 경로 중 하나라도 빠뜨리면 제재와 작성이 경합할 때 우회된다.
@@ -218,7 +219,9 @@
 
 - 댓글·반응 뮤테이션은 route를 재검증하지 않는다. 재검증하면 펼쳐 둔 답글 묶음과 위로 불러온 이전 페이지가 통째로 초기화된다. RPC가 돌려주는 정본 행을 병합한다(`hooks/use-post-comments.ts`).
 - 반응은 누르는 즉시 로컬 계산으로 앞서 나가고 정본으로 덮는다. **상위 반응은 로컬에서 계산하지 마라** — 내 반응 하나로는 남들의 순위를 알 수 없다. `applyReactionLocally()`가 내 반응과 총계만 건드리는 이유다.
-- 목록 카드의 댓글 수는 다음 이동이나 재검증까지 낡은 값으로 남는다. 알고 두는 것이지 버그가 아니다.
+- 댓글 수는 `create_post_comment`가 돌려주는 `post_comment_count`가 정본이다. 손에 든 값에 `+1` 하지 마라 — 그 사이 다른 사람이 단 댓글을 지운 수가 된다. 상세는 이 값을 쓰고 `onCommentCreated(postId, commentCount)`로 목록에 알리며, 목록은 `patchFeedPostCommentCount` / `patchGroupPostCommentCount`로 자기 캐시만 고친다(`docs/DATA_CACHE_POLICY.md` §4).
+- 피드의 미디어 수화본은 만들어진 시점에 멈춰 있다. raw post와 합칠 때 수화가 채운 필드만 쓰고 댓글 수는 최신 raw post의 것을 얹어라. 통째로 갈아 끼우면 방금 고친 수가 되돌아간다.
+- 피드 상세의 `useFetcher` 데이터는 닫아도 남는다. 같은 게시물을 다시 열 때는 명시적으로 다시 읽어라 — "이미 이 글의 데이터가 있다"로 판단하면 방금 쓴 댓글이 빠진 예전 응답이 뜬다.
 
 ## `#업`
 
