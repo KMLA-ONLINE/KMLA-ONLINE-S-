@@ -95,6 +95,12 @@ globbing 하게 됩니다 ([vite-pwa/vite-plugin-pwa#809](https://github.com/vit
 대신 `scripts/build-sw.mjs`가 완성된 `build/client`를 대상으로 `workbox-build`를 직접 실행합니다.
 `npm run build`에 체이닝되어 있으므로 별도로 호출할 필요는 없습니다.
 
+같은 이유로 `scripts/inline-root-css.mjs`도 빌드 후처리입니다. `index.html`에 유일하게 남는
+render-blocking `<link rel="stylesheet">`를 `<style>`로 인라인해 첫 화면의 왕복 한 번을 없앱니다
+(서비스 워커가 바뀐 `index.html`을 precache하도록 `build-sw.mjs`보다 먼저 돕니다).
+prerender된 앱 셸이 그 CSS를 그대로 쓰기 때문에 비동기 로드는 대안이 못 됩니다 — 왕복을
+스타일 없는 깜빡임으로 바꾸는 것뿐입니다.
+
 - `index.html`이 precache에 포함되고 navigation fallback으로 바인딩됩니다 (딥링크 오프라인 동작).
 - **폰트는 precache에 넣지 않습니다.** Pretendard는 한글 글리프 전체가 단일 ~750 kB 파일이라
   설치 시점 다운로드가 두 배 이상으로 불어납니다. 대신 `runtimeCaching`의 CacheFirst로

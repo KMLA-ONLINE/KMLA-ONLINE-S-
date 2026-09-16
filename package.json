@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "react-router dev",
-    "build": "react-router build && node scripts/build-sw.mjs",
+    "build": "react-router build && node scripts/inline-root-css.mjs && node scripts/build-sw.mjs",
     "build:app": "react-router build",
     "preview": "vite preview",
     "typegen": "react-router typegen",
