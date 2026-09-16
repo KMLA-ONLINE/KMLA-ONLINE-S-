@@ -49,14 +49,14 @@ export function resetFeed(queryClient: QueryClient) {
 }
 
 /**
- * 상세에서 쓴 댓글의 정본 수를 피드 캐시의 해당 게시물에 반영한다.
+ * 상세에서 쓰거나 지운 댓글의 수를 피드 캐시의 해당 게시물에 반영한다.
  *
  * 쌓인 페이지를 모두 훑는다. 같은 글이 여러 페이지에 걸쳐 있지는 않지만, 몇 번째 페이지에
  * 있는지는 캐시만 안다.
  *
- * 값은 `max`로 덮는다. 댓글을 연달아 달면 응답이 보낸 순서대로 돌아온다는 보장이 없어, 늦게
- * 도착한 예전 응답이 최신 수를 도로 낮출 수 있다. 수는 이 화면에서 줄어들 일이 없으므로
- * 큰 쪽을 남기는 것으로 충분하다.
+ * 받은 값을 그대로 덮는다. 삭제로 수가 줄어들 수 있어 `max`로 걸러낼 수 없다 — 걸러내면
+ * 목록이 지운 댓글을 계속 세게 된다. 늦게 온 예전 응답이 최신 수를 도로 낮추는 문제는 한
+ * 게시물의 댓글 뮤테이션이 상세의 `pending`으로 직렬화되어 애초에 겹치지 않는 것으로 막는다.
  */
 export function patchFeedPostCommentCount(
   queryClient: QueryClient,
@@ -73,10 +73,9 @@ export function patchFeedPostCommentCount(
         let pagePatched = false;
         const posts = page.posts.map((post) => {
           if (post.post_id !== postId) return post;
-          const next = Math.max(post.comment_count, commentCount);
-          if (next === post.comment_count) return post;
+          if (post.comment_count === commentCount) return post;
           pagePatched = true;
-          return { ...post, comment_count: next };
+          return { ...post, comment_count: commentCount };
         });
         if (!pagePatched) return page;
         patched = true;

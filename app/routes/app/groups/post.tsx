@@ -113,7 +113,7 @@ export default function GroupPostPage({ loaderData }: Route.ComponentProps) {
       anonymousActivityRestriction={restrictionQuery.data}
       comments={loaderData.comments}
       viewer={{ name: profile.name, avatarUrl: profile.avatar_url }}
-      onCommentCreated={(postId, commentCount) => {
+      onCommentCountChange={(postId, commentCount) => {
         // 이 글은 그룹 목록에도 피드에도 들어 있다. 상세를 닫을 때 재검증하지 않으므로
         // 정본 수를 양쪽 캐시에 직접 얹는다(`docs/DATA_CACHE_POLICY.md` §4).
         const queryClient = getQueryClient();

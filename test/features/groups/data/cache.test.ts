@@ -120,14 +120,14 @@ describe("patchGroupPostCommentCount", () => {
     ).toEqual([1]);
   });
 
-  it("never lowers a count that is already higher", () => {
+  it("lowers the count when comments were deleted", () => {
     const client = new QueryClient();
     seed(client);
 
     patchGroupPostCommentCount(client, "group-id", "post-b", 3);
 
     expect(countsFor(client, groupKeys.posts("group-id", null, null))).toEqual([
-      1, 9,
+      1, 3,
     ]);
   });
 });

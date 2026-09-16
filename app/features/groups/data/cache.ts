@@ -45,14 +45,14 @@ export const groupKeys = {
 };
 
 /**
- * 상세에서 쓴 댓글의 정본 수를 그룹 게시물 목록 캐시에 반영한다.
+ * 상세에서 쓰거나 지운 댓글의 수를 그룹 게시물 목록 캐시에 반영한다.
  *
  * 그룹 목록은 피드와 달리 `(categoryId, cursor)`마다 엔트리가 따로 있다. 같은 글이 "전체"와
  * 자기 카테고리 양쪽에 동시에 들어 있으므로, 한 엔트리만 고치면 카테고리를 바꾸는 순간
  * 낡은 수가 돌아온다. 그룹의 모든 페이지 엔트리를 훑는 이유다.
  *
- * `patchFeedPostCommentCount`와 같은 이유로 `max`를 쓴다 — 늦게 온 예전 응답이 최신 수를
- * 낮추지 못하게 한다.
+ * `patchFeedPostCommentCount`와 같은 이유로 받은 값을 그대로 덮는다 — 삭제로 줄어든 수도
+ * 반영되어야 한다.
  */
 export function patchGroupPostCommentCount(
   queryClient: QueryClient,
@@ -68,10 +68,9 @@ export function patchGroupPostCommentCount(
       let patched = false;
       const posts = current.posts.map((post) => {
         if (post.post_id !== postId) return post;
-        const next = Math.max(post.comment_count, commentCount);
-        if (next === post.comment_count) return post;
+        if (post.comment_count === commentCount) return post;
         patched = true;
-        return { ...post, comment_count: next };
+        return { ...post, comment_count: commentCount };
       });
 
       return patched ? { ...current, posts } : current;

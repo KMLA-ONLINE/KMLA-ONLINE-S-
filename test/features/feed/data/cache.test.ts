@@ -66,16 +66,15 @@ describe("patchFeedPostCommentCount", () => {
   });
 
   /**
-   * 댓글을 연달아 달면 응답 순서가 보장되지 않는다. 늦게 도착한 예전 응답이 이미 반영된 최신
-   * 수를 도로 낮추면, 목록이 방금 쓴 댓글을 잃은 것처럼 보인다.
+   * 상세에서 댓글을 지우면 수가 줄어든다. 큰 값만 남기면 목록이 지운 댓글을 계속 센다.
    */
-  it("never lowers a count that is already higher", () => {
+  it("lowers the count when comments were deleted", () => {
     const client = new QueryClient();
     seed(client, [[{ post_id: "post-a", count: 4 }]]);
 
     patchFeedPostCommentCount(client, "post-a", 2);
 
-    expect(read(client)).toEqual([{ post_id: "post-a", comment_count: 4 }]);
+    expect(read(client)).toEqual([{ post_id: "post-a", comment_count: 2 }]);
   });
 
   it("does nothing when the feed has no cached session", () => {

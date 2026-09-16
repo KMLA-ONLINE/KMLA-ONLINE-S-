@@ -102,7 +102,7 @@ export function PostDetailDialog({
   children,
   anonymousActivityRestriction,
   mentionGroupId,
-  onCommentCreated,
+  onCommentCountChange,
 }: {
   /** 모달 머리에 적는 제목. 낭독기에는 이것이 게시물의 이름이 된다. */
   title: string;
@@ -137,7 +137,7 @@ export function PostDetailDialog({
    * 댓글이 등록되면 게시물의 정본 댓글 수를 알린다. 상세를 연 목록이 자기 캐시를 맞추는 데
    * 쓴다 — 상세를 닫을 때 route를 재검증하지 않아도 목록 수가 맞는다.
    */
-  onCommentCreated?: (postId: string, commentCount: number) => void;
+  onCommentCountChange?: (postId: string, commentCount: number) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   /**
@@ -157,7 +157,7 @@ export function PostDetailDialog({
     postId,
     comments,
     actionBar.commentCount,
-    onCommentCreated,
+    onCommentCountChange,
   );
   const [identity, setIdentity] = useState<PostIdentity>(identities[0]);
   const [replyingTo, setReplyingTo] = useState<PostComment | null>(null);

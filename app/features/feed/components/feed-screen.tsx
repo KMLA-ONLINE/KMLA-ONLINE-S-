@@ -156,9 +156,9 @@ export function FeedScreen() {
   }
 
   /**
-   * 상세에서 댓글을 쓰면 목록의 수도 바로 맞아야 한다. 상세를 닫을 때 route를 재검증하지
-   * 않으므로(`docs/DATA_CACHE_POLICY.md` §4) 정본 수를 캐시에 직접 얹는다. 그룹 글은 피드와
-   * 그룹 목록 양쪽에 들어 있어 둘 다 고친다.
+   * 상세에서 댓글을 쓰거나 지우면 목록의 수도 바로 맞아야 한다. 상세를 닫을 때 route를
+   * 재검증하지 않으므로(`docs/DATA_CACHE_POLICY.md` §4) 정본 수를 캐시에 직접 얹는다. 그룹
+   * 글은 피드와 그룹 목록 양쪽에 들어 있어 둘 다 고친다.
    */
   const patchCommentCount = (postId: string, commentCount: number) => {
     patchFeedPostCommentCount(queryClient, postId, commentCount);
@@ -248,7 +248,7 @@ export function FeedScreen() {
           comments={detail.comments}
           viewer={{ name: profile.name, avatarUrl: profile.avatar_url }}
           onClose={closeDetail}
-          onCommentCreated={patchCommentCount}
+          onCommentCountChange={patchCommentCount}
           action={`/groups/${detail.slug}/posts/${detail.post.post_id}`}
         />
       ) : null}
@@ -259,7 +259,7 @@ export function FeedScreen() {
           comments={detail.comments}
           viewer={{ name: profile.name, avatarUrl: profile.avatar_url }}
           onClose={closeDetail}
-          onCommentCreated={patchCommentCount}
+          onCommentCountChange={patchCommentCount}
           action={`/profile/${detail.post.timeline_pub_id}/posts/${detail.post.post_id}`}
         />
       ) : null}

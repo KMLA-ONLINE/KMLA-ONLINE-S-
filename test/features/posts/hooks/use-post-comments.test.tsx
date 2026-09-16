@@ -67,11 +67,11 @@ describe("usePostComments", () => {
   it("applies the canonical count instead of incrementing the stale one", async () => {
     const created = comment({ comment_id: "created" });
     createPostComment.mockResolvedValue({ comment: created, commentCount: 9 });
-    const onCommentCreated = vi.fn();
+    const onCountChange = vi.fn();
     const initial = page();
 
     const { result } = renderHook(() =>
-      usePostComments("post-id", initial, 4, onCommentCreated),
+      usePostComments("post-id", initial, 4, onCountChange),
     );
 
     await act(async () => {
@@ -79,7 +79,7 @@ describe("usePostComments", () => {
     });
 
     expect(result.current.commentCount).toBe(9);
-    expect(onCommentCreated).toHaveBeenCalledWith("post-id", 9);
+    expect(onCountChange).toHaveBeenCalledWith("post-id", 9);
     expect(result.current.comments.map((entry) => entry.comment_id)).toEqual([
       "created",
     ]);
@@ -118,9 +118,12 @@ describe("usePostComments", () => {
   it("lowers the count when a top level comment and its replies are deleted", async () => {
     const root = comment({ comment_id: "root", reply_count: 2 });
     deletePostComment.mockResolvedValue(undefined);
+    const onCountChange = vi.fn();
     const initial = page([root]);
 
-    const { result } = renderHook(() => usePostComments("post-id", initial, 5));
+    const { result } = renderHook(() =>
+      usePostComments("post-id", initial, 5, onCountChange),
+    );
 
     await act(async () => {
       await result.current.remove(root);
@@ -128,6 +131,44 @@ describe("usePostComments", () => {
 
     expect(result.current.commentCount).toBe(2);
     expect(result.current.comments).toEqual([]);
+    // 삭제도 생성과 똑같이 목록 캐시에 알려야 한다. 한쪽만 알리면 피드가 지운 댓글을 계속 센다.
+    expect(onCountChange).toHaveBeenCalledWith("post-id", 2);
+  });
+
+  it("reports the lowered count to the list caches when a reply is deleted", async () => {
+    const root = comment({ comment_id: "root", reply_count: 2 });
+    const kept = comment({
+      comment_id: "kept",
+      parent_comment_id: "root",
+      root_comment_id: "root",
+      depth: 1,
+    });
+    const removed = comment({
+      comment_id: "removed",
+      parent_comment_id: "root",
+      root_comment_id: "root",
+      depth: 1,
+    });
+    deletePostComment.mockResolvedValue(undefined);
+    listPostCommentReplies
+      .mockResolvedValueOnce([kept, removed])
+      .mockResolvedValueOnce([kept]);
+    const onCountChange = vi.fn();
+    const initial = page([root]);
+
+    const { result } = renderHook(() =>
+      usePostComments("post-id", initial, 5, onCountChange),
+    );
+
+    await act(async () => {
+      await result.current.toggleReplies("root");
+    });
+    await act(async () => {
+      await result.current.remove(removed);
+    });
+
+    expect(result.current.commentCount).toBe(4);
+    expect(onCountChange).toHaveBeenCalledWith("post-id", 4);
   });
 
   it("adopts a fresh server count when the loader revalidates", async () => {

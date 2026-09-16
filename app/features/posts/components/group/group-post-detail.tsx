@@ -34,7 +34,7 @@ export function GroupPostDetail({
   onClose,
   action,
   anonymousActivityRestriction,
-  onCommentCreated,
+  onCommentCountChange,
 }: {
   post: GroupPostDetailModel;
   slug: string;
@@ -48,7 +48,7 @@ export function GroupPostDetail({
   action?: string;
   anonymousActivityRestriction?: AnonymousActivityRestriction | null;
   /** 댓글 등록 뒤 정본 댓글 수. 상세를 연 목록이 자기 캐시를 맞추는 데 쓴다. */
-  onCommentCreated?: (postId: string, commentCount: number) => void;
+  onCommentCountChange?: (postId: string, commentCount: number) => void;
 }) {
   const fetcher = useFetcher<{ error?: string }>();
   const { markVisited } = useVisitedPosts();
@@ -87,7 +87,7 @@ export function GroupPostDetail({
       error={fetcher.data?.error}
       anonymousActivityRestriction={anonymousActivityRestriction}
       onClose={close}
-      onCommentCreated={onCommentCreated}
+      onCommentCountChange={onCommentCountChange}
       actionBar={{
         reaction: {
           reaction_count: post.reaction_count,

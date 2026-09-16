@@ -60,8 +60,11 @@ export function usePostComments(
   initialPage: PostCommentPage,
   /** loader가 준 게시물의 댓글 수. 훅이 여기서 시작해 정본 값으로 갱신한다. */
   serverCommentCount: number,
-  /** 생성 성공 시 정본 수를 상위(피드·그룹 목록 캐시)에 알린다. */
-  onCommentCreated?: (postId: string, commentCount: number) => void,
+  /**
+   * 수가 바뀔 때마다 상위(피드·그룹 목록 캐시)에 알린다. 생성과 삭제 양쪽에서 부른다 —
+   * 한쪽만 알리면 목록이 "댓글은 늘지만 줄지는 않는" 상태로 어긋난다.
+   */
+  onCommentCountChange?: (postId: string, commentCount: number) => void,
 ) {
   const [imageSession] = useState(createCommentImageUploadSession);
   const [comments, setComments] = useState(initialPage.comments);
@@ -102,6 +105,18 @@ export function usePostComments(
     } finally {
       setPending(false);
     }
+  };
+
+  /**
+   * 새 댓글 수를 화면과 상위 캐시에 함께 적용한다.
+   *
+   * 함수형 업데이터가 아니라 계산된 값을 넘긴다 — 상위에 알릴 값과 화면에 넣을 값이 반드시
+   * 같아야 하는데, 업데이터 안에서 바깥으로 값을 꺼내면 그 업데이터가 순수하지 않게 된다.
+   * 한 게시물의 뮤테이션은 `pending`으로 직렬화되므로 손에 든 수가 곧 최신이다.
+   */
+  const applyCount = (next: number) => {
+    setCommentCount(next);
+    onCommentCountChange?.(postId, next);
   };
 
   const refreshBundle = async (rootId: string) => {
@@ -162,8 +177,7 @@ export function usePostComments(
         mentions,
         imageSession,
       );
-      setCommentCount(created.commentCount);
-      onCommentCreated?.(postId, created.commentCount);
+      applyCount(created.commentCount);
       if (created.comment.depth === 0) {
         setComments((current) => mergeComments(current, [created.comment]));
         return created.comment;
@@ -212,9 +226,7 @@ export function usePostComments(
       await deletePostComment(comment.comment_id);
       if (comment.depth === 0) {
         // 최상위를 지우면 답글 묶음까지 함께 사라진다(기능 명세 §9.4).
-        setCommentCount((current) =>
-          Math.max(0, current - (1 + comment.reply_count)),
-        );
+        applyCount(Math.max(0, commentCount - (1 + comment.reply_count)));
         setComments((current) =>
           current.filter((item) => item.comment_id !== comment.comment_id),
         );
@@ -232,9 +244,7 @@ export function usePostComments(
       }
       const before = liveCount(replies[comment.root_comment_id] ?? []);
       const bundle = await refreshBundle(comment.root_comment_id);
-      setCommentCount((current) =>
-        Math.max(0, current - (before - liveCount(bundle))),
-      );
+      applyCount(Math.max(0, commentCount - (before - liveCount(bundle))));
     });
 
   /**

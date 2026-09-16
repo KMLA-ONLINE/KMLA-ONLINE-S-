@@ -67,7 +67,7 @@ export default function ProfilePostPage({ loaderData }: Route.ComponentProps) {
       post={loaderData.post}
       comments={loaderData.comments}
       viewer={{ name: profile.name, avatarUrl: profile.avatar_url }}
-      onCommentCreated={(postId, commentCount) => {
+      onCommentCountChange={(postId, commentCount) => {
         // 개인 게시물은 피드에만 목록 캐시가 있다. 프로필 목록은 상세를 닫을 때 부모 loader
         // 재검증으로 최신 수를 받는 기존 흐름을 그대로 쓴다.
         patchFeedPostCommentCount(getQueryClient(), postId, commentCount);
