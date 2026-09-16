@@ -879,7 +879,7 @@ $$;
 
 ALTER FUNCTION "public"."get_my_group_anonymous_activity_restriction"("p_group_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid" DEFAULT NULL::"uuid", "p_image_id" "uuid" DEFAULT NULL::"uuid", "p_mention_pub_ids" "text"[] DEFAULT '{}'::"text"[]) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb")
+CREATE OR REPLACE FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid" DEFAULT NULL::"uuid", "p_image_id" "uuid" DEFAULT NULL::"uuid", "p_mention_pub_ids" "text"[] DEFAULT '{}'::"text"[]) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb", "post_comment_count" integer)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -893,6 +893,7 @@ declare
   new_depth smallint := 0;
   new_root_id uuid;
   new_alias smallint;
+  new_post_comment_count integer;
   target_group_id uuid;
   trimmed_body text := btrim(coalesce(p_body, ''));
 begin
@@ -949,6 +950,23 @@ begin
       raise exception 'staff identity is not allowed' using errcode = '42501';
     end if;
   end if;
+  -- 자기 글 익명 댓글 판정. 공개 표시 필드가 아니라 private.post_authors만 쓴다.
+  --
+  -- 실명·운영진 게시물의 실제 작성자는 자기 글에 익명 댓글/답글을 쓸 수 없다(기능 명세 §9.1).
+  -- 이름을 걸고 쓴 글 아래에 같은 사람이 익명으로 서면, 그 익명이 게시물 작성자라는 것이 이미
+  -- 드러난 셈이라 익명을 고를 이유가 없다.
+  --
+  -- 익명 게시물은 다르다. 작성자도 익명으로 답할 수 있고, 아래 alias 분기가 `글쓴이`를 준다.
+  if p_author_identity = 'anonymous' then
+    select author.profile_id into post_author_profile_id
+    from private.post_authors as author
+    where author.post_id = p_post_id;
+    if post_author_profile_id = caller_profile_id
+      and context.post_author_identity <> 'anonymous' then
+      raise exception 'post author cannot comment anonymously on own post'
+        using errcode = '42501';
+    end if;
+  end if;
   if char_length(trimmed_body) > 5000 then
     raise exception 'comment must contain between 1 and 5000 characters' using errcode = '22023';
   end if;
@@ -986,9 +1004,9 @@ begin
     end if;
   end if;
   if p_author_identity = 'anonymous' then
-    select author.profile_id into post_author_profile_id
-    from private.post_authors as author
-    where author.post_id = p_post_id;
+    -- 익명 게시물의 작성자는 alias 0을 받아 `글쓴이`로 표시된다. 읽는 사람이 답을 다는 쪽이
+    -- 글쓴이인지 다른 참여자인지 알아야 스레드가 읽히기 때문이다. 실명 자기 댓글의 `작성자`
+    -- 표시와 같은 역할이다(기능 명세 §9.3).
     if context.post_author_identity = 'anonymous'
       and post_author_profile_id = caller_profile_id then
       new_alias := 0;
@@ -1032,8 +1050,12 @@ begin
   perform private.sync_comment_mentions(
     new_comment_id, trimmed_body, p_author_identity, p_mention_pub_ids
   );
+  -- insert 트리거가 갱신한 정본 count를 읽어 클라이언트가 낡은 값에 +1 하지 않게 한다.
+  select post.comment_count into new_post_comment_count
+  from public.posts as post
+  where post.id = p_post_id;
   return query
-  select entry.*
+  select entry.*, new_post_comment_count
   from private.read_post_comments(
     array[new_comment_id], caller_profile_id, context.caller_role
   ) as entry;

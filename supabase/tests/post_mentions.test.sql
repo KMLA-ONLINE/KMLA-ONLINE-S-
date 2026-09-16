@@ -344,9 +344,26 @@ select lives_ok(
     )$$,
   'a comment can mention a member'
 );
+-- 익명 댓글은 자기 글에 달 수 없으므로(기능 명세 §9.1) 멘션 규칙은 남의 글에서 확인한다.
+reset role;
+insert into public.posts (
+  id, kind, body, group_id, title, author_identity, display_author_profile_id,
+  created_at, published_at
+)
+values (
+  '90000000-0000-0000-0000-0000000000b1', 'group', '본문',
+  '20000000-0000-0000-0000-000000000002', '남의 글', 'identified',
+  (select id from public.profiles where pub_id = 'pureum-23'), now(), now()
+);
+insert into private.post_authors (post_id, profile_id)
+values (
+  '90000000-0000-0000-0000-0000000000b1',
+  (select id from public.profiles where pub_id = 'pureum-23')
+);
+set local role authenticated;
 select throws_ok(
   $$select public.create_post_comment(
-      (select id from public.posts where title = '초안'), '[@박새벽](m:1) 님',
+      '90000000-0000-0000-0000-0000000000b1', '[@박새벽](m:1) 님',
       'anonymous', null, null, array['saebyeok-24']
     )$$,
   '42501', 'anonymous comments cannot mention members',

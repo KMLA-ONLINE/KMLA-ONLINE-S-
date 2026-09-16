@@ -1,13 +1,14 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(51);
+select plan(57);
 
 -- 시드에는 로그인 가능한 계정이 하나뿐이라 신원 정책과 운영 조치를 함께 볼 수 없다. 시드를
 -- 건드리지 않고 트랜잭션 안에서만 두 계정을 더 붙인다.
 --   auth1 = 시드 학생. 메이커스 랩 비멤버, 학교 공지의 일반 멤버
 --   auth2 = kim-admin. 메이커스 랩 소유자
 --   auth3 = hanbyeol-25. 메이커스 랩 멤버이자 익명 게시물의 실제 작성자
+--   auth4 = saebyeok-24. 메이커스 랩 멤버. 어느 게시물의 작성자도 아니다
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   confirmation_token, recovery_token, email_change_token_new, email_change,
@@ -24,6 +25,11 @@ values
     '00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000003',
     'authenticated', 'authenticated', 'writer@kmla.hs.kr', '', now(),
     '', '', '', '', '', '', '', '', '{}', '{}', now(), now()
+  ),
+  (
+    '00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000004',
+    'authenticated', 'authenticated', 'peer@kmla.hs.kr', '', now(),
+    '', '', '', '', '', '', '', '', '{}', '{}', now(), now()
   );
 
 update public.profiles
@@ -32,6 +38,9 @@ where pub_id = 'kim-admin';
 update public.profiles
 set auth_user_id = '10000000-0000-0000-0000-000000000003'
 where pub_id = 'hanbyeol-25';
+update public.profiles
+set auth_user_id = '10000000-0000-0000-0000-000000000004'
+where pub_id = 'saebyeok-24';
 
 -- 이 파일은 빈 스레드에서 시작하는 것을 전제로 번호와 개수를 센다. 시드가 넣어 둔 댓글은
 -- 트랜잭션 안에서만 걷어낸다(파일 끝에서 통째로 롤백된다).
@@ -267,17 +276,108 @@ select is(
   'the comment cursor continues toward newer comments without overlap'
 );
 
--- 익명 게시물의 실제 작성자가 익명으로 달면 `글쓴이`다(기능 명세 §9.3).
+-- 익명 게시물의 실제 작성자가 익명으로 달면 `글쓴이`다(기능 명세 §9.3). 익명 글에서는
+-- 작성자도 익명으로 답할 수 있어야 스레드가 이어진다.
 insert into ids
 select 'author_note', comment_id
 from public.create_post_comment(
   '90000000-0000-0000-0000-000000000002', '작성자입니다', 'anonymous'
 );
 select is(
-  (select author_label from public.list_post_comments('90000000-0000-0000-0000-000000000002')),
+  (
+    select author_label
+    from public.list_post_comments('90000000-0000-0000-0000-000000000002')
+    where comment_id = (select id from ids where name = 'author_note')
+  ),
   '글쓴이',
   'the anonymous post author is labelled as the writer'
 );
+
+-- 답글도 마찬가지다.
+insert into ids
+select 'author_reply', comment_id
+from public.create_post_comment(
+  '90000000-0000-0000-0000-000000000002', '이어서 답합니다', 'anonymous',
+  (select id from ids where name = 'author_note')
+);
+select is(
+  (
+    select author_label
+    from public.list_post_comment_replies(
+      (select id from ids where name = 'author_note')
+    )
+    where comment_id = (select id from ids where name = 'author_reply')
+  ),
+  '글쓴이',
+  'the anonymous post author keeps the writer label on replies'
+);
+
+-- 실명 게시물과 운영진 게시물은 다르다. 이름을 걸고 쓴 글 아래에 같은 사람이 익명으로 서는
+-- 것은 막는다(기능 명세 §9.1). kim-admin은 메이커스 랩 소유자라 실명 게시물 `...0001`의
+-- 작성자이자 운영진 명의를 쓸 수 있다.
+reset role;
+insert into public.posts (
+  id, kind, body, group_id, title, author_identity, display_author_profile_id,
+  created_at, published_at
+)
+values (
+  '90000000-0000-0000-0000-0000000000a1', 'group', '운영진 명의 게시물',
+  '20000000-0000-0000-0000-000000000003', '운영진 공지', 'staff', null,
+  now(), now()
+);
+insert into private.post_authors (post_id, profile_id)
+values (
+  '90000000-0000-0000-0000-0000000000a1',
+  (select id from public.profiles where pub_id = 'kim-admin')
+);
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
+set local role authenticated;
+select throws_ok(
+  $$select * from public.create_post_comment(
+      '90000000-0000-0000-0000-000000000001', '내 실명 글에 익명', 'anonymous'
+    )$$,
+  '42501',
+  'post author cannot comment anonymously on own post',
+  'the author of an identified post cannot comment anonymously on it'
+);
+select throws_ok(
+  $$select * from public.create_post_comment(
+      '90000000-0000-0000-0000-0000000000a1', '내 운영진 글에 익명', 'anonymous'
+    )$$,
+  '42501',
+  'post author cannot comment anonymously on own post',
+  'the author of a staff post cannot comment anonymously on it'
+);
+select lives_ok(
+  $$select * from public.create_post_comment(
+      '90000000-0000-0000-0000-0000000000a1', '운영진 명의로 남깁니다', 'staff'
+    )$$,
+  'the post author may still comment on their own post under the staff byline'
+);
+
+-- 생성 RPC는 트리거 적용 뒤의 정본 `comment_count`를 함께 돌려준다.
+select is(
+  (
+    select entry.post_comment_count
+    from public.create_post_comment(
+      '90000000-0000-0000-0000-0000000000a1', '정본 count 확인', 'identified'
+    ) as entry
+  ),
+  2,
+  'creating a comment returns the canonical post comment count'
+);
+select is(
+  (
+    select comment_count
+    from public.get_group_post('90000000-0000-0000-0000-0000000000a1')
+  ),
+  2,
+  'the returned canonical count matches the denormalized post count'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+set local role authenticated;
 
 -- 답글 중첩. 10단계를 채운 뒤 한 단계 더는 거부한다.
 do $$
@@ -478,15 +578,16 @@ select is(
 );
 set local role authenticated;
 
--- kim-admin: 메이커스 랩 소유자.
+-- saebyeok-24: 메이커스 랩 멤버. 두 게시물 어느 쪽의 작성자도 아니라서 익명 번호를
+-- 게시물별로 확인할 수 있다. 소유자 kim-admin은 `...0001`의 작성자라 여기에 쓸 수 없다.
 reset role;
-select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000004', true);
 set local role authenticated;
 
 insert into ids
 select 'anon_b', comment_id
 from public.create_post_comment(
-  '90000000-0000-0000-0000-000000000001', '소유자의 익명 댓글', 'anonymous'
+  '90000000-0000-0000-0000-000000000001', '다른 멤버의 익명 댓글', 'anonymous'
 );
 select is(
   (
@@ -513,6 +614,11 @@ select is(
   '익명1',
   'anonymous numbers do not follow a user across posts'
 );
+
+-- kim-admin: 메이커스 랩 소유자. 운영진 명의와 모더레이션은 여기부터 확인한다.
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
+set local role authenticated;
 
 select lives_ok(
   $$select * from public.create_post_comment(

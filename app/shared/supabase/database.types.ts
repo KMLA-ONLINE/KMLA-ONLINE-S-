@@ -1612,6 +1612,7 @@ export type Database = {
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
+          post_comment_count: number
           post_id: string
           reaction_count: number
           reply_count: number
