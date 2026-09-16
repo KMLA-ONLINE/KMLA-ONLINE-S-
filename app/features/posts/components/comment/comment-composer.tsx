@@ -40,6 +40,14 @@ import type {
   PreparedCommentImage,
 } from "~/features/posts/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/shared/ui/dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
@@ -161,6 +169,7 @@ export function CommentComposer({
   const [pendingIdentity, setPendingIdentity] = useState<PostIdentity | null>(
     null,
   );
+  const [pickerOpen, setPickerOpen] = useState(false);
   // 한글 조합 중의 `Enter`는 글자를 확정하는 키다. 이걸 등록으로 처리하면 "안녕하세"까지만
   // 쓴 댓글이 올라간다.
   const composing = useRef(false);
@@ -204,6 +213,11 @@ export function CommentComposer({
     !processingImage;
   const nextIdentity =
     identities[(identities.indexOf(identity) + 1) % identities.length];
+  // 운영진 명의를 쓸 수 있으면 선택지를 돌려 가며 확인시키지 않는다. 명의를 잘못 달고 올린
+  // 댓글은 되돌릴 수 없으므로(기능 명세 §9.1) 무엇으로 쓰는지 명시적으로 고르게 한다.
+  const usesIdentityPicker = identities.includes("staff");
+  const mentionBlocksAnonymous =
+    countMentionTargets(draft, mentionDraft.entries) > 0;
 
   const selectImage = async (file: File | undefined) => {
     if (!file || processingImage || pending) return;
@@ -307,11 +321,19 @@ export function CommentComposer({
               render={
                 <button
                   type="button"
-                  aria-label={`${IDENTITY_LABEL[identity]}으로 작성 중. 눌러서 ${IDENTITY_LABEL[nextIdentity]}으로`}
+                  aria-label={
+                    usesIdentityPicker
+                      ? `${IDENTITY_LABEL[identity]}으로 작성 중. 눌러서 신원 선택`
+                      : `${IDENTITY_LABEL[identity]}으로 작성 중. 눌러서 ${IDENTITY_LABEL[nextIdentity]}으로`
+                  }
                   onClick={() => {
+                    if (usesIdentityPicker) {
+                      setPickerOpen(true);
+                      return;
+                    }
                     if (
                       nextIdentity === "anonymous" &&
-                      countMentionTargets(draft, mentionDraft.entries) > 0
+                      mentionBlocksAnonymous
                     ) {
                       setLocalError(
                         "멘션을 모두 지운 뒤 익명으로 전환할 수 있습니다.",
@@ -516,6 +538,20 @@ export function CommentComposer({
         </div>
       ) : null}
 
+      {pickerOpen ? (
+        <IdentityPickerDialog
+          identities={identities}
+          identity={identity}
+          viewer={viewer}
+          anonymousBlocked={mentionBlocksAnonymous}
+          onCancel={() => setPickerOpen(false)}
+          onConfirm={(next) => {
+            setPickerOpen(false);
+            if (next !== identity) onIdentityChange?.(next);
+          }}
+        />
+      ) : null}
+
       {pendingIdentity ? (
         <ConfirmDialog
           title={`${IDENTITY_LABEL[pendingIdentity]}으로 작성할까요?`}
@@ -529,6 +565,91 @@ export function CommentComposer({
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * 댓글 작성 신원 선택 모달.
+ *
+ * 선택은 `바꾸기`를 누르기 전까지 이 모달 안에만 머문다. 입력창의 본문과 이미지 초안은
+ * 건드리지 않으므로, 신원만 고르고 쓰던 댓글을 이어 갈 수 있다.
+ */
+function IdentityPickerDialog({
+  identities,
+  identity,
+  viewer,
+  anonymousBlocked,
+  onCancel,
+  onConfirm,
+}: {
+  identities: PostIdentity[];
+  /** 현재 신원. 기본 선택이 된다. */
+  identity: PostIdentity;
+  viewer: CommentViewer;
+  /** 활성 멘션이 남아 있으면 익명을 고를 수 없다(기능 명세 §9.1). */
+  anonymousBlocked: boolean;
+  onCancel: () => void;
+  onConfirm: (next: PostIdentity) => void;
+}) {
+  const [selected, setSelected] = useState(identity);
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="max-w-xs" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>어떤 신원으로 작성할까요?</DialogTitle>
+          <DialogDescription>
+            작성한 뒤에는 댓글의 신원을 바꿀 수 없습니다.
+          </DialogDescription>
+        </DialogHeader>
+        <fieldset className="flex flex-col gap-1">
+          <legend className="sr-only">댓글 작성 신원</legend>
+          {identities.map((option) => {
+            const disabled = option === "anonymous" && anonymousBlocked;
+            return (
+              <label
+                key={option}
+                className={cn(
+                  "flex items-start gap-3 rounded-lg border p-3 text-left",
+                  disabled
+                    ? "opacity-60"
+                    : "cursor-pointer hover:bg-accent has-checked:border-primary",
+                )}
+              >
+                <input
+                  type="radio"
+                  name="comment-identity"
+                  value={option}
+                  checked={selected === option}
+                  disabled={disabled}
+                  onChange={() => setSelected(option)}
+                  className="mt-1 size-4 shrink-0 accent-primary"
+                />
+                <IdentityAvatar identity={option} viewer={viewer} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium">
+                    {IDENTITY_LABEL[option]}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    {disabled
+                      ? "멘션을 모두 지운 뒤 익명으로 전환할 수 있습니다."
+                      : IDENTITY_CONFIRMATION[option]}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
+        </fieldset>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onCancel}>
+            취소
+          </Button>
+          <Button type="button" onClick={() => onConfirm(selected)}>
+            바꾸기
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
