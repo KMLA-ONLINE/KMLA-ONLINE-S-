@@ -55,8 +55,13 @@ export function resetFeed(queryClient: QueryClient) {
  * 있는지는 캐시만 안다.
  *
  * 받은 값을 그대로 덮는다. 삭제로 수가 줄어들 수 있어 `max`로 걸러낼 수 없다 — 걸러내면
- * 목록이 지운 댓글을 계속 세게 된다. 늦게 온 예전 응답이 최신 수를 도로 낮추는 문제는 한
- * 게시물의 댓글 뮤테이션이 상세의 `pending`으로 직렬화되어 애초에 겹치지 않는 것으로 막는다.
+ * 목록이 지운 댓글을 계속 세게 된다.
+ *
+ * 늦게 온 예전 응답이 최신 수를 도로 낮추는 문제는 `create_post_comment`와
+ * `delete_post_comment`가 작업 전에 게시물 행을 `for update`로 잠그는 것으로 막는다. 한
+ * 게시물의 댓글 뮤테이션은 DB에서 직렬화되므로, 나중 요청은 앞 요청이 커밋된 뒤의 수를 읽고
+ * 그 응답은 앞 응답이 나간 뒤에야 만들어진다. UI의 `pending`이 아니다 — 삭제 메뉴는 거기
+ * 걸려 있지 않고, 걸어 봐야 이미 있는 잠금 위에 약한 보호막을 덧대는 것뿐이다.
  */
 export function patchFeedPostCommentCount(
   queryClient: QueryClient,
