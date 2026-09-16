@@ -6,6 +6,7 @@ import {
   XIcon,
 } from "lucide-react";
 import {
+  forwardRef,
   useEffect,
   useRef,
   useState,
@@ -16,6 +17,13 @@ import {
 } from "react";
 
 import { cn } from "~/shared/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/shared/ui/dropdown-menu";
 
 export interface ViewerImage {
   id: string;
@@ -41,7 +49,7 @@ const SLIDE_TRANSITION = "transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1)";
 const SWIPE_MAX_TRIGGER_DISTANCE = 80;
 const SWIPE_TRIGGER_RATIO = 0.2;
 const SWIPE_RUBBER_BAND = 0.25;
-const DRAG_CLICK_TOLERANCE = 6;
+const DRAG_START_TOLERANCE = 12;
 const MAX_ZOOM = 4;
 const DOUBLE_TAP_ZOOM = 2;
 const DOUBLE_TAP_DELAY = 250;
@@ -60,9 +68,76 @@ type GestureMode = "slide" | "pan" | "pinch" | null;
 
 const DEFAULT_ZOOM: ZoomState = { scale: 1, x: 0, y: 0 };
 
-function ControlButton({ className, ...props }: ComponentProps<"button">) {
+const ControlButton = forwardRef<HTMLButtonElement, ComponentProps<"button">>(
+  function ControlButton({ className, ...props }, ref) {
+    return (
+      <button
+        ref={ref}
+        type="button"
+        className={cn(CONTROL_CLASS, className)}
+        {...props}
+      />
+    );
+  },
+);
+
+function ViewerSlideImage({
+  image,
+  imageRef,
+  zoom,
+  isGestureActive,
+  onImageClick,
+}: {
+  image: ViewerImage;
+  imageRef?: Ref<HTMLImageElement>;
+  zoom: ZoomState;
+  isGestureActive: boolean;
+  onImageClick: (event: ReactMouseEvent<HTMLImageElement>) => void;
+}) {
+  const thumbnailSrc =
+    image.thumbSrc && image.thumbSrc !== image.src ? image.thumbSrc : undefined;
+  const [loadedOriginalSrc, setLoadedOriginalSrc] = useState(() =>
+    thumbnailSrc ? null : image.src,
+  );
+  const hasOriginal = !thumbnailSrc || loadedOriginalSrc === image.src;
+
+  useEffect(() => {
+    if (!thumbnailSrc || loadedOriginalSrc === image.src) return;
+
+    let cancelled = false;
+
+    const original = new Image();
+    original.crossOrigin = "anonymous";
+    original.onload = () => {
+      if (!cancelled) setLoadedOriginalSrc(image.src);
+    };
+    original.src = image.src;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [image.src, loadedOriginalSrc, thumbnailSrc]);
+
   return (
-    <button type="button" className={cn(CONTROL_CLASS, className)} {...props} />
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
+    <img
+      ref={imageRef}
+      src={hasOriginal ? image.src : thumbnailSrc}
+      alt={image.name}
+      crossOrigin="anonymous"
+      draggable={false}
+      className={cn(
+        "max-h-full max-w-full object-contain will-change-transform select-none sm:cursor-default",
+        zoom.scale > 1
+          ? "cursor-grab active:cursor-grabbing"
+          : "cursor-zoom-in",
+      )}
+      style={{
+        transform: `translate3d(${zoom.x}px, ${zoom.y}px, 0) scale(${zoom.scale})`,
+        transition: isGestureActive ? "none" : SLIDE_TRANSITION,
+      }}
+      onClick={onImageClick}
+    />
   );
 }
 
@@ -93,24 +168,12 @@ function Slide({
       onClick={onBackdropClick}
     >
       {image ? (
-        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
-        <img
-          ref={imageRef}
-          src={image.src}
-          alt={image.name}
-          crossOrigin="anonymous"
-          draggable={false}
-          className={cn(
-            "max-h-full max-w-full object-contain will-change-transform select-none sm:cursor-default",
-            imageZoom.scale > 1
-              ? "cursor-grab active:cursor-grabbing"
-              : "cursor-zoom-in",
-          )}
-          style={{
-            transform: `translate3d(${imageZoom.x}px, ${imageZoom.y}px, 0) scale(${imageZoom.scale})`,
-            transition: isGestureActive ? "none" : SLIDE_TRANSITION,
-          }}
-          onClick={onImageClick}
+        <ViewerSlideImage
+          image={image}
+          imageRef={imageRef}
+          zoom={imageZoom}
+          isGestureActive={isGestureActive}
+          onImageClick={onImageClick}
         />
       ) : null}
     </div>
@@ -121,10 +184,14 @@ function Filmstrip({
   images,
   activeIndex,
   onSelect,
+  className,
+  testId = "image-viewer-filmstrip",
 }: {
   images: ViewerImage[];
   activeIndex: number;
   onSelect: (index: number) => void;
+  className?: string;
+  testId?: string;
 }) {
   const activeThumbnailRef = useRef<HTMLButtonElement>(null);
 
@@ -137,8 +204,8 @@ function Filmstrip({
 
   return (
     <div
-      data-testid="image-viewer-filmstrip"
-      className="hidden shrink-0 scrollbar-none overflow-x-auto sm:block"
+      data-testid={testId}
+      className={cn("shrink-0 scrollbar-none overflow-x-auto", className)}
     >
       <div className="mx-auto flex w-max gap-2 px-3 pt-3 pb-[calc(0.75rem+var(--app-safe-b))]">
         {images.map((image, index) => {
@@ -175,6 +242,65 @@ function Filmstrip({
   );
 }
 
+function startDownload(image: ViewerImage) {
+  const anchor = document.createElement("a");
+  anchor.href = image.downloadSrc;
+  anchor.download = image.name;
+  anchor.target = "_blank";
+  anchor.rel = "noopener noreferrer";
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+function DownloadControl({
+  activeImage,
+  images,
+  allowDownloadAll,
+}: {
+  activeImage: ViewerImage;
+  images: ViewerImage[];
+  allowDownloadAll: boolean;
+}) {
+  if (!allowDownloadAll || images.length < 2) {
+    return (
+      <a
+        href={activeImage.downloadSrc}
+        download={activeImage.name}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="다운로드"
+        className={CONTROL_CLASS}
+      >
+        <DownloadIcon className="size-5" />
+      </a>
+    );
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        type="button"
+        aria-label="다운로드 옵션"
+        className={CONTROL_CLASS}
+      >
+        <DownloadIcon className="size-5" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" positionerClassName="z-[70]">
+        <DropdownMenuGroup>
+          <DropdownMenuItem onClick={() => startDownload(activeImage)}>
+            <DownloadIcon />이 이미지 다운로드
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => images.forEach(startDownload)}>
+            <DownloadIcon />
+            전체 이미지 다운로드
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /**
  * 전체화면 이미지 뷰어.
  *
@@ -188,10 +314,13 @@ export function ImageViewer({
   images,
   openImageId,
   onClose,
+  allowDownloadAll = false,
 }: {
   images: ViewerImage[];
   openImageId: string | null;
   onClose: () => void;
+  /** 게시물의 이미지 묶음에서만 전체 다운로드를 연다. */
+  allowDownloadAll?: boolean;
 }) {
   const popupRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -495,8 +624,14 @@ export function ImageViewer({
 
     const distanceX = event.clientX - gestureStart.x;
     const distanceY = event.clientY - gestureStart.y;
-    if (Math.hypot(distanceX, distanceY) > DRAG_CLICK_TOLERANCE) {
+    if (!hasDraggedRef.current) {
+      if (Math.hypot(distanceX, distanceY) <= DRAG_START_TOLERANCE) return;
+
       markDragged();
+      if (Math.abs(distanceX) <= Math.abs(distanceY)) {
+        gestureModeRef.current = null;
+        return;
+      }
     }
 
     if (gestureModeRef.current === "pan") {
@@ -519,7 +654,10 @@ export function ImageViewer({
     // 첫 장과 마지막 장의 정지 offset을 현재 index 기준으로 환산한 값.
     const firstSlideOffset = index * viewportWidth;
     const lastSlideOffset = (index - (images.length - 1)) * viewportWidth;
-    const draggedOffset = dragBaseRef.current + distanceX;
+    const draggedDistance =
+      Math.sign(distanceX) *
+      Math.max(0, Math.abs(distanceX) - DRAG_START_TOLERANCE);
+    const draggedOffset = dragBaseRef.current + draggedDistance;
 
     if (draggedOffset > firstSlideOffset) {
       setDragOffset(
@@ -577,11 +715,10 @@ export function ImageViewer({
     gestureModeRef.current = null;
     gestureStartRef.current = null;
     setIsGestureActive(false);
+    setIsDragging(false);
 
     if (gestureMode === "pan") return;
     if (gestureMode !== "slide") return;
-
-    setIsDragging(false);
 
     const viewportWidth = getViewportWidth();
     if (viewportWidth === 0) {
@@ -697,16 +834,11 @@ export function ImageViewer({
                 </p>
               ) : null}
             </div>
-            <a
-              href={activeImage.downloadSrc}
-              download={activeImage.name}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="다운로드"
-              className={CONTROL_CLASS}
-            >
-              <DownloadIcon className="size-5" />
-            </a>
+            <DownloadControl
+              activeImage={activeImage}
+              images={images}
+              allowDownloadAll={allowDownloadAll}
+            />
             <Dialog.Close render={<ControlButton aria-label="닫기" />}>
               <XIcon className="size-5" />
             </Dialog.Close>
@@ -767,10 +899,29 @@ export function ImageViewer({
                 <ChevronRightIcon className="size-6" />
               </ControlButton>
             </div>
+            {images.length > 1 ? (
+              <Filmstrip
+                images={images}
+                activeIndex={index}
+                onSelect={goTo}
+                testId="image-viewer-mobile-filmstrip"
+                className={cn(
+                  "absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/75 to-transparent transition-opacity duration-150 sm:hidden",
+                  isChromeHidden
+                    ? "pointer-events-none opacity-0"
+                    : "opacity-100",
+                )}
+              />
+            ) : null}
           </div>
 
           {images.length > 1 ? (
-            <Filmstrip images={images} activeIndex={index} onSelect={goTo} />
+            <Filmstrip
+              images={images}
+              activeIndex={index}
+              onSelect={goTo}
+              className="hidden sm:block"
+            />
           ) : (
             // 한 장뿐이어도 필름스트립 높이를 비워둔다. 안 그러면 이미지 영역이 그만큼
             // 늘어나서, 여러 장짜리 게시물과 한 장짜리 게시물의 크기가 달라 보인다.

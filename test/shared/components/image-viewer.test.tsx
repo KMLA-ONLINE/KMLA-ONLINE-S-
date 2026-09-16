@@ -24,19 +24,6 @@ function renderViewer(openImageId: string | null) {
 const pressArrow = (key: "ArrowLeft" | "ArrowRight") =>
   fireEvent.keyDown(document.body, { key });
 
-function stubMobileViewport() {
-  vi.spyOn(window, "matchMedia").mockImplementation(
-    (query: string) =>
-      ({ matches: query === "(max-width: 639px)" }) as MediaQueryList,
-  );
-}
-
-function stubDesktopViewport() {
-  vi.spyOn(window, "matchMedia").mockReturnValue({
-    matches: false,
-  } as MediaQueryList);
-}
-
 function getGestureElements() {
   const image = screen.getByAltText("a.webp");
   const viewport = screen.getByTestId("image-viewer-viewport");
@@ -87,6 +74,8 @@ function doubleTap(image: HTMLElement, pointerType = "touch") {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("ImageViewer", () => {
@@ -141,6 +130,36 @@ describe("ImageViewer", () => {
     );
   });
 
+  it("shows a thumbnail until the original image finishes loading", () => {
+    const preloaded: { onload: (() => void) | null }[] = [];
+
+    class ImagePreloader {
+      crossOrigin = "";
+      onload: (() => void) | null = null;
+
+      set src(_value: string) {
+        preloaded.push(this);
+      }
+    }
+
+    vi.stubGlobal("Image", ImagePreloader);
+    renderRoute(() => (
+      <ImageViewer
+        images={[
+          { ...images[0], thumbSrc: "https://example.com/a-thumb.webp" },
+        ]}
+        openImageId="a"
+        onClose={vi.fn()}
+      />
+    ));
+
+    const image = screen.getByAltText("a.webp");
+    expect(image).toHaveAttribute("src", "https://example.com/a-thumb.webp");
+
+    act(() => preloaded[0].onload?.());
+    expect(image).toHaveAttribute("src", "https://example.com/a.webp");
+  });
+
   it("closes on the close button", async () => {
     const { user, onClose } = renderViewer("a");
 
@@ -148,21 +167,26 @@ describe("ImageViewer", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("keeps the filmstrip desktop-only", () => {
+  it("renders a desktop filmstrip and a mobile overlay filmstrip", () => {
     renderViewer("a");
 
     expect(screen.getByTestId("image-viewer-filmstrip")).toHaveClass(
       "hidden",
       "sm:block",
     );
+    expect(screen.getByTestId("image-viewer-mobile-filmstrip")).toHaveClass(
+      "sm:hidden",
+      "absolute",
+      "bottom-0",
+    );
   });
 
-  it("toggles the mobile chrome without changing the image viewport layout", () => {
+  it("toggles the mobile chrome and filmstrip without changing the image viewport layout", () => {
     vi.useFakeTimers();
-    stubMobileViewport();
     renderViewer("a");
     const { image } = getGestureElements();
     const header = screen.getByTestId("image-viewer-header");
+    const filmstrip = screen.getByTestId("image-viewer-mobile-filmstrip");
 
     tap(image);
     act(() => {
@@ -175,6 +199,7 @@ describe("ImageViewer", () => {
       "sm:static",
     );
     expect(header).not.toHaveClass("hidden");
+    expect(filmstrip).toHaveClass("pointer-events-none", "opacity-0");
 
     tap(image);
     act(() => {
@@ -182,10 +207,11 @@ describe("ImageViewer", () => {
     });
     expect(header).toHaveClass("flex", "opacity-100");
     expect(header).not.toHaveClass("pointer-events-none", "hidden");
+    expect(filmstrip).toHaveClass("opacity-100");
+    expect(filmstrip).not.toHaveClass("pointer-events-none");
   });
 
-  it("does not shift slides for touch movement inside the tap tolerance", () => {
-    stubMobileViewport();
+  it("does not shift slides for 10px of touch jitter", () => {
     renderViewer("a");
     const { viewport } = getGestureElements();
     const track = screen.getByTestId("image-viewer-track");
@@ -199,7 +225,7 @@ describe("ImageViewer", () => {
     fireEvent.pointerMove(viewport, {
       pointerId: 1,
       pointerType: "touch",
-      clientX: 205,
+      clientX: 210,
       clientY: 300,
     });
 
@@ -208,9 +234,29 @@ describe("ImageViewer", () => {
     });
   });
 
+  it("changes image after an intentional horizontal swipe", () => {
+    renderViewer("a");
+    const { viewport } = getGestureElements();
+
+    fireEvent.pointerDown(viewport, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 300,
+      clientY: 300,
+    });
+    fireEvent.pointerMove(viewport, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 300,
+    });
+    fireEvent.pointerUp(viewport, { pointerId: 1, pointerType: "touch" });
+
+    expect(screen.getByText("2 / 3")).toBeInTheDocument();
+  });
+
   it("zooms on a tablet touch double tap and resets when the image changes", () => {
     vi.useFakeTimers();
-    stubDesktopViewport();
     renderViewer("a");
     const { image } = getGestureElements();
 
@@ -227,7 +273,6 @@ describe("ImageViewer", () => {
 
   it("does not zoom from a mouse double click", () => {
     vi.useFakeTimers();
-    stubDesktopViewport();
     renderViewer("a");
     const { image } = getGestureElements();
 
@@ -239,7 +284,6 @@ describe("ImageViewer", () => {
   });
 
   it("caps tablet pinch zoom at 4x and does not page while zoomed", () => {
-    stubDesktopViewport();
     renderViewer("a");
     const { image, viewport } = getGestureElements();
 

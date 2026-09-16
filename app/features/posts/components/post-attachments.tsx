@@ -172,6 +172,7 @@ export function PostImageGrid({
         images={viewerImages}
         openImageId={viewer.openImageId}
         onClose={viewer.close}
+        allowDownloadAll
       />
     </>
   );
