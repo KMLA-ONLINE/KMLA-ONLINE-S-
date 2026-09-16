@@ -110,7 +110,24 @@ export function FeedScreen() {
     hydratedState.feedEpoch === feedEpoch
       ? hydratedState.posts
       : new Map<string, FeedPost>();
-  const posts = rawPosts.map((post) => hydratedPosts.get(post.post_id) ?? post);
+  /**
+   * 미디어 수화본은 만들어진 시점에 멈춰 있다. 수화가 채운 필드만 쓰고 engagement는 언제나
+   * 최신 raw post의 것을 얹는다 — overlay에는 내 뮤테이션만 담기므로, 남이 남긴 댓글·반응은
+   * 배경 리페치가 가져온 raw post로만 들어온다. 수화본으로 통째로 덮으면 그 게시물의 수는
+   * 세션이 바뀔 때까지 수화 시점에 얼어붙는다.
+   */
+  const posts = rawPosts.map((post) => {
+    const hydrated = hydratedPosts.get(post.post_id);
+    return hydrated
+      ? {
+          ...hydrated,
+          comment_count: post.comment_count,
+          reaction_count: post.reaction_count,
+          top_reactions: post.top_reactions,
+          my_reaction: post.my_reaction,
+        }
+      : post;
+  });
 
   /**
    * 지금 화면에 걸린 세션. 서명이 날아가는 사이 피드가 리셋될 수 있어서, resolve 시점에

@@ -6,7 +6,6 @@ import {
 
 import { listFeedPosts } from "~/features/feed/data/queries";
 import type { FeedPage } from "~/features/feed/model/types";
-import { clearPostEngagement } from "~/features/posts/data/cache";
 import { readPostViewMode } from "~/features/posts/model/view-preference";
 
 const FEED_STALE_TIME = 15_000;
@@ -44,9 +43,13 @@ export function feedQuery() {
  * 피드를 처음부터 다시 읽게 만든다. `invalidateQueries`가 아니라 `resetQueries`인 이유는,
  * 무효화는 "쌓인 페이지 전부를 다시 읽어라"가 되지만 여기서 원하는 건 "새 세션을 열어라"이기
  * 때문이다. 다음 접근이 1페이지부터 새 `feedEpoch`로 시작한다.
+ *
+ * engagement overlay는 건드리지 않는다. 새 세션은 그룹 가입이나 글 저장으로도 열리는데, 그때
+ * 다시 읽히는 건 피드뿐이다. 여기서 overlay를 비우면 다른 화면에 열려 있는 게시물은 방금
+ * 성공한 반응·댓글 수를 로더가 준 옛 snapshot으로 되돌린 뒤 되돌릴 길이 없다. overlay를
+ * 버리는 건 화면 전체를 다시 읽는 당겨서 새로고침의 몫이다.
  */
 export function resetFeed(queryClient: QueryClient) {
-  clearPostEngagement(queryClient);
   return queryClient.resetQueries({ queryKey: feedKeys.all });
 }
 

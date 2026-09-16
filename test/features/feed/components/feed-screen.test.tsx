@@ -32,11 +32,12 @@ vi.mock("~/features/feed/components/feed-post", async () => {
         post_id: string;
         author_avatar_path: string | null;
         comment_count?: number;
+        reaction_count?: number;
       };
     }) => {
       const engagement = usePostEngagement(post.post_id, {
         comment_count: post.comment_count ?? 0,
-        reaction_count: 0,
+        reaction_count: post.reaction_count ?? 0,
         top_reactions: [],
         my_reaction: null,
       });
@@ -44,6 +45,7 @@ vi.mock("~/features/feed/components/feed-post", async () => {
         <div>
           {`${post.post_id}=${post.author_avatar_path ?? "unsigned"}`}
           <span>{`${post.post_id}:comments=${engagement.comment_count}`}</span>
+          <span>{`${post.post_id}:reactions=${engagement.reaction_count}`}</span>
         </div>
       );
     },
@@ -64,7 +66,12 @@ import {
 import { renderRoute } from "../../../router";
 import { useSearchParams } from "react-router";
 
-function seedSession(feedEpoch: string, postIds: string[], commentCount = 0) {
+function seedSession(
+  feedEpoch: string,
+  postIds: string[],
+  commentCount = 0,
+  reactionCount = 0,
+) {
   getQueryClient().setQueryData(feedKeys.list(), {
     pages: [
       {
@@ -73,6 +80,9 @@ function seedSession(feedEpoch: string, postIds: string[], commentCount = 0) {
           author_avatar_path: null,
           attachments: [],
           comment_count: commentCount,
+          reaction_count: reactionCount,
+          top_reactions: [],
+          my_reaction: null,
         })),
         feedEpoch,
         nextPageToken: null,
@@ -138,6 +148,35 @@ describe("FeedScreen media hydration", () => {
     expect(
       await screen.findByText("post-new=signed:post-new"),
     ).toBeInTheDocument();
+  });
+
+  /**
+   * overlay는 내 뮤테이션만 담는다. 남이 남긴 댓글·반응은 배경 리페치가 가져온 raw post로만
+   * 들어오므로, 수화본이 화면을 통째로 이기면 그 게시물의 수는 수화 시점에 얼어붙는다.
+   */
+  it("shows engagement from a background refetch on a hydrated card", async () => {
+    hydrateFeedPostMedia.mockImplementation((posts: { post_id: string }[]) =>
+      Promise.resolve(
+        posts.map((post) => ({
+          ...post,
+          author_avatar_path: `signed:${post.post_id}`,
+        })),
+      ),
+    );
+
+    seedSession("epoch-1", ["post-a"], 0, 0);
+    renderRoute(Harness);
+
+    expect(await screen.findByText("post-a=signed:post-a")).toBeInTheDocument();
+    expect(screen.getByText("post-a:comments=0")).toBeInTheDocument();
+
+    // 다른 사용자가 댓글과 반응을 남긴 뒤의 리페치. 같은 세션이라 수화본은 그대로 쓰인다.
+    act(() => seedSession("epoch-1", ["post-a"], 2, 5));
+
+    expect(await screen.findByText("post-a:comments=2")).toBeInTheDocument();
+    expect(screen.getByText("post-a:reactions=5")).toBeInTheDocument();
+    // 수화가 채운 미디어는 그대로 남아야 한다.
+    expect(screen.getByText("post-a=signed:post-a")).toBeInTheDocument();
   });
 
   it("keeps hydrated media for the session that is on screen", async () => {
