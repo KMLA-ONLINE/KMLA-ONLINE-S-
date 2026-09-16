@@ -1,6 +1,6 @@
 import type { GroupDiscoveryCursor } from "~/features/groups/model/types";
-import type { GroupPostPage, PostCursor } from "~/features/posts/model/types";
-import type { QueryClient, QueryKey } from "@tanstack/react-query";
+import type { PostCursor } from "~/features/posts/model/types";
+import type { QueryKey } from "@tanstack/react-query";
 
 /**
  * 두 값 모두 2분이다. 30초·15초는 "탐색 이동 중 같은 화면을 두 번 읽지 않는다"만 노린
@@ -43,40 +43,6 @@ export const groupKeys = {
   reports: (groupId: string, sort: "count" | "recent") =>
     [...groupKeys.all, "reports", groupId, sort] as const,
 };
-
-/**
- * 상세에서 쓰거나 지운 댓글의 수를 그룹 게시물 목록 캐시에 반영한다.
- *
- * 그룹 목록은 피드와 달리 `(categoryId, cursor)`마다 엔트리가 따로 있다. 같은 글이 "전체"와
- * 자기 카테고리 양쪽에 동시에 들어 있으므로, 한 엔트리만 고치면 카테고리를 바꾸는 순간
- * 낡은 수가 돌아온다. 그룹의 모든 페이지 엔트리를 훑는 이유다.
- *
- * `patchFeedPostCommentCount`와 같은 이유로 받은 값을 그대로 덮는다 — 삭제로 줄어든 수도
- * 반영되어야 한다.
- */
-export function patchGroupPostCommentCount(
-  queryClient: QueryClient,
-  groupId: string,
-  postId: string,
-  commentCount: number,
-) {
-  queryClient.setQueriesData<GroupPostPage>(
-    { queryKey: groupKeys.postPages(groupId) },
-    (current) => {
-      if (!current) return current;
-
-      let patched = false;
-      const posts = current.posts.map((post) => {
-        if (post.post_id !== postId) return post;
-        if (post.comment_count === commentCount) return post;
-        patched = true;
-        return { ...post, comment_count: commentCount };
-      });
-
-      return patched ? { ...current, posts } : current;
-    },
-  );
-}
 
 export function isGroupAccessQuery(
   queryKey: QueryKey,

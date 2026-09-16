@@ -6,6 +6,7 @@ import {
 
 import { listFeedPosts } from "~/features/feed/data/queries";
 import type { FeedPage } from "~/features/feed/model/types";
+import { clearPostEngagement } from "~/features/posts/data/cache";
 import { readPostViewMode } from "~/features/posts/model/view-preference";
 
 const FEED_STALE_TIME = 15_000;
@@ -45,51 +46,8 @@ export function feedQuery() {
  * 때문이다. 다음 접근이 1페이지부터 새 `feedEpoch`로 시작한다.
  */
 export function resetFeed(queryClient: QueryClient) {
+  clearPostEngagement(queryClient);
   return queryClient.resetQueries({ queryKey: feedKeys.all });
-}
-
-/**
- * 상세에서 쓰거나 지운 댓글의 수를 피드 캐시의 해당 게시물에 반영한다.
- *
- * 쌓인 페이지를 모두 훑는다. 같은 글이 여러 페이지에 걸쳐 있지는 않지만, 몇 번째 페이지에
- * 있는지는 캐시만 안다.
- *
- * 받은 값을 그대로 덮는다. 삭제로 수가 줄어들 수 있어 `max`로 걸러낼 수 없다 — 걸러내면
- * 목록이 지운 댓글을 계속 세게 된다.
- *
- * 늦게 온 예전 응답이 최신 수를 도로 낮추는 문제는 `create_post_comment`와
- * `delete_post_comment`가 작업 전에 게시물 행을 `for update`로 잠그는 것으로 막는다. 한
- * 게시물의 댓글 뮤테이션은 DB에서 직렬화되므로, 나중 요청은 앞 요청이 커밋된 뒤의 수를 읽고
- * 그 응답은 앞 응답이 나간 뒤에야 만들어진다. UI의 `pending`이 아니다 — 삭제 메뉴는 거기
- * 걸려 있지 않고, 걸어 봐야 이미 있는 잠금 위에 약한 보호막을 덧대는 것뿐이다.
- */
-export function patchFeedPostCommentCount(
-  queryClient: QueryClient,
-  postId: string,
-  commentCount: number,
-) {
-  queryClient.setQueryData(
-    feedKeys.list(),
-    (current: InfiniteData<FeedPage, string | null> | undefined) => {
-      if (!current) return current;
-
-      let patched = false;
-      const pages = current.pages.map((page) => {
-        let pagePatched = false;
-        const posts = page.posts.map((post) => {
-          if (post.post_id !== postId) return post;
-          if (post.comment_count === commentCount) return post;
-          pagePatched = true;
-          return { ...post, comment_count: commentCount };
-        });
-        if (!pagePatched) return page;
-        patched = true;
-        return { ...page, posts };
-      });
-
-      return patched ? { ...current, pages } : current;
-    },
-  );
 }
 
 /**

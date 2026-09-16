@@ -15,6 +15,13 @@ export { usePostViewMode } from "~/features/posts/hooks/use-post-view-mode";
 export { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
 export { anonymousActivityRestrictionQuery } from "~/features/posts/data/cache";
 export {
+  clearPostEngagement,
+  patchPostEngagement,
+  postKeys,
+} from "~/features/posts/data/cache";
+export { usePostEngagement } from "~/features/posts/hooks/use-post-engagement";
+export type { PostEngagement } from "~/features/posts/data/cache";
+export {
   createGroupCategory,
   cancelGroupAnonymousActivityRestriction,
   createProfilePostWithAttachments,

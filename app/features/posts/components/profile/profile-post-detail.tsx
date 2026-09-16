@@ -33,15 +33,12 @@ export function ProfilePostDetail({
   comments,
   onClose,
   action,
-  onCommentCountChange,
 }: {
   post: ProfilePost;
   viewer: CommentViewer;
   comments: PostCommentPage;
   onClose?: () => void;
   action?: string;
-  /** 댓글 등록 뒤 정본 댓글 수. 상세를 연 목록이 자기 캐시를 맞추는 데 쓴다. */
-  onCommentCountChange?: (postId: string, commentCount: number) => void;
 }) {
   const fetcher = useFetcher<{ error?: string }>();
   const defaultClose = useModalClose(`/profile/${post.timeline_pub_id}`);
@@ -61,7 +58,6 @@ export function ProfilePostDetail({
       postAuthorPubId={post.author_pub_id}
       error={fetcher.data?.error}
       onClose={close}
-      onCommentCountChange={onCommentCountChange}
       actionBar={{
         reaction: {
           reaction_count: post.reaction_count,

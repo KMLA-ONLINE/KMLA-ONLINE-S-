@@ -20,29 +20,43 @@ vi.mock("~/features/posts", () => ({
   usePostViewMode: () => ["card"],
   useVisitedPosts: () => ({ visited: new Set<string>(), markVisited: vi.fn() }),
 }));
-vi.mock("~/features/feed/components/feed-post", () => ({
-  FeedPostCard: ({
-    post,
-  }: {
-    post: {
-      post_id: string;
-      author_avatar_path: string | null;
-      comment_count?: number;
-    };
-  }) => (
-    <div>
-      {`${post.post_id}=${post.author_avatar_path ?? "unsigned"}`}
-      <span>{`${post.post_id}:comments=${post.comment_count ?? 0}`}</span>
-    </div>
-  ),
-  FeedPostRow: () => null,
-}));
+vi.mock("~/features/feed/components/feed-post", async () => {
+  const { usePostEngagement } =
+    await import("~/features/posts/hooks/use-post-engagement");
+
+  return {
+    FeedPostCard: ({
+      post,
+    }: {
+      post: {
+        post_id: string;
+        author_avatar_path: string | null;
+        comment_count?: number;
+      };
+    }) => {
+      const engagement = usePostEngagement(post.post_id, {
+        comment_count: post.comment_count ?? 0,
+        reaction_count: 0,
+        top_reactions: [],
+        my_reaction: null,
+      });
+      return (
+        <div>
+          {`${post.post_id}=${post.author_avatar_path ?? "unsigned"}`}
+          <span>{`${post.post_id}:comments=${engagement.comment_count}`}</span>
+        </div>
+      );
+    },
+    FeedPostRow: () => null,
+  };
+});
 vi.mock("~/shared/hooks/use-infinite-scroll", () => ({
   useInfiniteScroll: () => ({ current: null }),
 }));
 
 import { FeedScreen } from "~/features/feed/components/feed-screen";
-import { feedKeys, patchFeedPostCommentCount } from "~/features/feed";
+import { feedKeys } from "~/features/feed";
+import { patchPostEngagement } from "~/features/posts/data/cache";
 import {
   getQueryClient,
   resetQueryClientForTests,
@@ -284,7 +298,9 @@ describe("FeedScreen detail re-entry", () => {
     // 수화가 끝난 뒤에 댓글 수가 갱신된다.
     expect(await screen.findByText("post-a=signed:post-a")).toBeInTheDocument();
 
-    act(() => patchFeedPostCommentCount(getQueryClient(), "post-a", 3));
+    act(() =>
+      patchPostEngagement(getQueryClient(), "post-a", { comment_count: 3 }),
+    );
 
     expect(await screen.findByText("post-a:comments=3")).toBeInTheDocument();
     // 수화가 채운 미디어는 그대로 남아야 한다.

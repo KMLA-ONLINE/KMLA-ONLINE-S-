@@ -51,6 +51,10 @@ export interface ReactionSummary {
   my_reaction: PostReaction | null;
 }
 
+export type PostEngagement = ReactionSummary & {
+  comment_count: number;
+};
+
 type WithReactions<Row> = Omit<Row, keyof ReactionSummary> & ReactionSummary;
 
 /**

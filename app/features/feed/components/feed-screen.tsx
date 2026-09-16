@@ -7,12 +7,7 @@ import {
   FeedPostCard,
   FeedPostRow,
 } from "~/features/feed/components/feed-post";
-import {
-  feedQuery,
-  patchFeedPostCommentCount,
-  resetFeed,
-} from "~/features/feed/data/cache";
-import { patchGroupPostCommentCount } from "~/features/groups";
+import { feedQuery, resetFeed } from "~/features/feed/data/cache";
 import { hydrateFeedPostMedia } from "~/features/feed/data/queries";
 import type {
   FeedPost,
@@ -115,12 +110,7 @@ export function FeedScreen() {
     hydratedState.feedEpoch === feedEpoch
       ? hydratedState.posts
       : new Map<string, FeedPost>();
-  // 미디어 수화본은 만들어진 시점에 멈춰 있다. 그 사이 캐시가 고친 값(댓글 수)까지 되돌리지
-  // 않도록, 수화가 채운 필드만 쓰고 수는 언제나 최신 raw post의 것을 얹는다.
-  const posts = rawPosts.map((post) => {
-    const hydrated = hydratedPosts.get(post.post_id);
-    return hydrated ? { ...hydrated, comment_count: post.comment_count } : post;
-  });
+  const posts = rawPosts.map((post) => hydratedPosts.get(post.post_id) ?? post);
 
   /**
    * 지금 화면에 걸린 세션. 서명이 날아가는 사이 피드가 리셋될 수 있어서, resolve 시점에
@@ -168,19 +158,6 @@ export function FeedScreen() {
     if (!hasNextPage || pending) return;
     void fetchNextPage();
   }
-
-  /**
-   * 상세에서 댓글을 쓰거나 지우면 목록의 수도 바로 맞아야 한다. 상세를 닫을 때 route를
-   * 재검증하지 않으므로(`docs/DATA_CACHE_POLICY.md` §4) 정본 수를 캐시에 직접 얹는다. 그룹
-   * 글은 피드와 그룹 목록 양쪽에 들어 있어 둘 다 고친다.
-   */
-  const patchCommentCount = (postId: string, commentCount: number) => {
-    patchFeedPostCommentCount(queryClient, postId, commentCount);
-    const groupId = detail?.kind === "group" ? detail.post.group_id : null;
-    if (groupId) {
-      patchGroupPostCommentCount(queryClient, groupId, postId, commentCount);
-    }
-  };
 
   const sentinelRef = useInfiniteScroll(loadMore, {
     enabled: hasNextPage && !error,
@@ -262,7 +239,6 @@ export function FeedScreen() {
           comments={detail.comments}
           viewer={{ name: profile.name, avatarUrl: profile.avatar_url }}
           onClose={closeDetail}
-          onCommentCountChange={patchCommentCount}
           action={`/groups/${detail.slug}/posts/${detail.post.post_id}`}
         />
       ) : null}
@@ -273,7 +249,6 @@ export function FeedScreen() {
           comments={detail.comments}
           viewer={{ name: profile.name, avatarUrl: profile.avatar_url }}
           onClose={closeDetail}
-          onCommentCountChange={patchCommentCount}
           action={`/profile/${detail.post.timeline_pub_id}/posts/${detail.post.post_id}`}
         />
       ) : null}

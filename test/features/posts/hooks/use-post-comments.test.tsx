@@ -1,4 +1,6 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -24,6 +26,7 @@ vi.mock("~/features/posts/data/queries", () => ({
 }));
 
 import { usePostComments } from "~/features/posts/hooks/use-post-comments";
+import { postKeys } from "~/features/posts/data/cache";
 import type {
   PostComment,
   PostCommentPage,
@@ -51,11 +54,27 @@ function page(comments: PostComment[] = []): PostCommentPage {
 }
 
 describe("usePostComments", () => {
-  beforeEach(() => vi.clearAllMocks());
+  let queryClient: QueryClient;
+
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+  });
 
   it("starts from the post's server comment count", () => {
     const initial = page();
-    const { result } = renderHook(() => usePostComments("post-id", initial, 4));
+    const { result } = renderHook(
+      () => usePostComments("post-id", initial, 4),
+      {
+        wrapper,
+      },
+    );
 
     expect(result.current.commentCount).toBe(4);
   });
@@ -67,11 +86,13 @@ describe("usePostComments", () => {
   it("applies the canonical count instead of incrementing the stale one", async () => {
     const created = comment({ comment_id: "created" });
     createPostComment.mockResolvedValue({ comment: created, commentCount: 9 });
-    const onCountChange = vi.fn();
     const initial = page();
 
-    const { result } = renderHook(() =>
-      usePostComments("post-id", initial, 4, onCountChange),
+    const { result } = renderHook(
+      () => usePostComments("post-id", initial, 4),
+      {
+        wrapper,
+      },
     );
 
     await act(async () => {
@@ -79,7 +100,9 @@ describe("usePostComments", () => {
     });
 
     expect(result.current.commentCount).toBe(9);
-    expect(onCountChange).toHaveBeenCalledWith("post-id", 9);
+    expect(queryClient.getQueryData(postKeys.engagement("post-id"))).toEqual({
+      comment_count: 9,
+    });
     expect(result.current.comments.map((entry) => entry.comment_id)).toEqual([
       "created",
     ]);
@@ -98,7 +121,12 @@ describe("usePostComments", () => {
     listPostCommentReplies.mockResolvedValue([reply]);
     const initial = page([root]);
 
-    const { result } = renderHook(() => usePostComments("post-id", initial, 5));
+    const { result } = renderHook(
+      () => usePostComments("post-id", initial, 5),
+      {
+        wrapper,
+      },
+    );
 
     await act(async () => {
       await result.current.create("답글", "identified", "root");
@@ -123,11 +151,13 @@ describe("usePostComments", () => {
   it("takes the deletion count from the server instead of subtracting", async () => {
     const root = comment({ comment_id: "root", reply_count: 2 });
     deletePostComment.mockResolvedValue(1);
-    const onCountChange = vi.fn();
     const initial = page([root]);
 
-    const { result } = renderHook(() =>
-      usePostComments("post-id", initial, 5, onCountChange),
+    const { result } = renderHook(
+      () => usePostComments("post-id", initial, 5),
+      {
+        wrapper,
+      },
     );
 
     await act(async () => {
@@ -137,8 +167,9 @@ describe("usePostComments", () => {
     // 상대 계산이었다면 5 - (1 + 2) = 2가 됐을 자리다.
     expect(result.current.commentCount).toBe(1);
     expect(result.current.comments).toEqual([]);
-    // 삭제도 생성과 똑같이 목록 캐시에 알려야 한다. 한쪽만 알리면 피드가 지운 댓글을 계속 센다.
-    expect(onCountChange).toHaveBeenCalledWith("post-id", 1);
+    expect(queryClient.getQueryData(postKeys.engagement("post-id"))).toEqual({
+      comment_count: 1,
+    });
   });
 
   it("reports the lowered count to the list caches when a reply is deleted", async () => {
@@ -160,11 +191,13 @@ describe("usePostComments", () => {
     listPostCommentReplies
       .mockResolvedValueOnce([kept, removed])
       .mockResolvedValueOnce([kept]);
-    const onCountChange = vi.fn();
     const initial = page([root]);
 
-    const { result } = renderHook(() =>
-      usePostComments("post-id", initial, 5, onCountChange),
+    const { result } = renderHook(
+      () => usePostComments("post-id", initial, 5),
+      {
+        wrapper,
+      },
     );
 
     await act(async () => {
@@ -176,7 +209,9 @@ describe("usePostComments", () => {
 
     // 사라진 답글 수만 세었다면 5 - 1 = 4가 됐을 자리다.
     expect(result.current.commentCount).toBe(3);
-    expect(onCountChange).toHaveBeenCalledWith("post-id", 3);
+    expect(queryClient.getQueryData(postKeys.engagement("post-id"))).toEqual({
+      comment_count: 3,
+    });
     // 묶음은 여전히 다시 읽는다 — tombstone 규칙은 서버만 안다.
     expect(
       result.current.replies.root?.map((entry) => entry.comment_id),
@@ -188,7 +223,7 @@ describe("usePostComments", () => {
     const { result, rerender } = renderHook(
       ({ count }: { count: number }) =>
         usePostComments("post-id", initial, count),
-      { initialProps: { count: 4 } },
+      { initialProps: { count: 4 }, wrapper },
     );
 
     rerender({ count: 7 });
@@ -203,7 +238,12 @@ describe("usePostComments", () => {
     });
     const initial = page();
 
-    const { result } = renderHook(() => usePostComments("post-id", initial, 4));
+    const { result } = renderHook(
+      () => usePostComments("post-id", initial, 4),
+      {
+        wrapper,
+      },
+    );
 
     await act(async () => {
       await result.current.create("익명 댓글", "anonymous", null);

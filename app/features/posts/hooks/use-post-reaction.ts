@@ -1,6 +1,9 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { patchPostEngagement } from "~/features/posts/data/cache";
+import { usePostEngagement } from "~/features/posts/hooks/use-post-engagement";
 import {
   clearPostReaction,
   setPostReaction,
@@ -21,10 +24,11 @@ import type {
  * 바뀌는 조작이라 왕복을 기다리면 눌린 뒤에야 숫자가 따라오며 눈에 띄게 끊긴다. 실패하면 누르기
  * 직전 상태로 되돌린다 — 반응 하나 때문에 화면을 다시 불러올 이유는 없다.
  *
- * 게시물 카드마다 하나씩 붙으므로 목록에서도 각자 자기 것만 갱신한다.
+ * 같은 게시물을 그리는 카드·행·상세는 하나의 engagement overlay를 구독한다.
  */
 export function usePostReaction(postId: string, initial: ReactionSummary) {
-  const [summary, setSummary] = useState(initial);
+  const queryClient = useQueryClient();
+  const summary = usePostEngagement(postId, { ...initial, comment_count: 0 });
   const [reactors, setReactors] = useState<PostReactor[] | null>(null);
   const [loadingReactors, setLoadingReactors] = useState(false);
   const [source, setSource] = useState(postId);
@@ -32,23 +36,32 @@ export function usePostReaction(postId: string, initial: ReactionSummary) {
   // 같은 컴포넌트가 다른 게시물로 재사용되면(피드 페이지 이동) 로컬 상태를 버린다.
   if (source !== postId) {
     setSource(postId);
-    setSummary(initial);
     setReactors(null);
   }
 
   const apply = async (next: PostReaction | null) => {
     const previous = summary;
-    setSummary(applyReactionLocally(previous, next));
+    const optimistic = applyReactionLocally(previous, next);
+    patchPostEngagement(queryClient, postId, {
+      reaction_count: optimistic.reaction_count,
+      my_reaction: optimistic.my_reaction,
+    });
     // 반응이 바뀌면 이미 받아 둔 참여자 목록은 낡는다. 다음에 열 때 다시 받는다.
     setReactors(null);
     try {
-      setSummary(
+      patchPostEngagement(
+        queryClient,
+        postId,
         next === null
           ? await clearPostReaction(postId)
           : await setPostReaction(postId, next),
       );
     } catch (cause) {
-      setSummary(previous);
+      patchPostEngagement(queryClient, postId, {
+        reaction_count: previous.reaction_count,
+        top_reactions: previous.top_reactions,
+        my_reaction: previous.my_reaction,
+      });
       toast.error(getPostErrorMessage(cause));
     }
   };

@@ -1,6 +1,8 @@
 import type { MentionDraftEntry } from "~/features/posts/model/mentions";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { patchPostEngagement } from "~/features/posts/data/cache";
 import {
   clearCommentReaction,
   createCommentImageUploadSession,
@@ -62,12 +64,8 @@ export function usePostComments(
   initialPage: PostCommentPage,
   /** loader가 준 게시물의 댓글 수. 훅이 여기서 시작해 정본 값으로 갱신한다. */
   serverCommentCount: number,
-  /**
-   * 수가 바뀔 때마다 상위(피드·그룹 목록 캐시)에 알린다. 생성과 삭제 양쪽에서 부른다 —
-   * 한쪽만 알리면 목록이 "댓글은 늘지만 줄지는 않는" 상태로 어긋난다.
-   */
-  onCommentCountChange?: (postId: string, commentCount: number) => void,
 ) {
+  const queryClient = useQueryClient();
   const [imageSession] = useState(createCommentImageUploadSession);
   const [comments, setComments] = useState(initialPage.comments);
   const [nextCursor, setNextCursor] = useState(initialPage.nextCursor);
@@ -110,7 +108,7 @@ export function usePostComments(
   };
 
   /**
-   * 정본 댓글 수를 화면과 상위 캐시에 함께 적용한다.
+   * 정본 댓글 수를 화면과 게시물 engagement overlay에 함께 적용한다.
    *
    * 넘어오는 값은 언제나 서버가 센 절대값이라, 같은 값을 두 번 적용해도 결과가 같고 늦게
    * 온 응답도 다음 뮤테이션이 고쳐 준다. 상대 증감이었다면 한 번 어긋난 수가 스스로 돌아올
@@ -118,7 +116,7 @@ export function usePostComments(
    */
   const applyCount = (next: number) => {
     setCommentCount(next);
-    onCommentCountChange?.(postId, next);
+    patchPostEngagement(queryClient, postId, { comment_count: next });
   };
 
   const refreshBundle = async (rootId: string) => {

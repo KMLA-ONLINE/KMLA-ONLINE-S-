@@ -7,6 +7,7 @@ import { PostReactionButton } from "~/features/posts/components/reaction/post-re
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { ReactionListDialog } from "~/features/posts/components/reaction/reaction-list-dialog";
 import { usePostReaction } from "~/features/posts/hooks/use-post-reaction";
+import { usePostEngagement } from "~/features/posts/hooks/use-post-engagement";
 import type { ReactionSummary } from "~/features/posts/model/types";
 import { cn } from "~/shared/lib/utils";
 
@@ -49,6 +50,10 @@ export function PostActionBar({
   className?: string;
 }) {
   const reactions = usePostReaction(postId, reaction);
+  const engagement = usePostEngagement(postId, {
+    ...reaction,
+    comment_count: commentCount,
+  });
   const [reactorsOpen, setReactorsOpen] = useState(false);
 
   const share = async () => {
@@ -67,12 +72,12 @@ export function PostActionBar({
     }
   };
 
-  const commentLabel = `댓글 ${commentCount}개`;
+  const commentLabel = `댓글 ${engagement.comment_count}개`;
   // 0은 숫자로 적지 않는다. 아직 아무도 남기지 않은 자리에 0이 붙으면 눈에 걸린다.
   const commentInner = (
     <>
       <MessageCircleIcon className="size-5" aria-hidden="true" />
-      {commentCount > 0 ? commentCount : null}
+      {engagement.comment_count > 0 ? engagement.comment_count : null}
     </>
   );
 

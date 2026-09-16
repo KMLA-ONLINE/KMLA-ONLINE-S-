@@ -1,3 +1,4 @@
+import { act } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { setPostReaction, clearPostReaction, listPostReactors } = vi.hoisted(
@@ -15,6 +16,7 @@ vi.mock("~/features/posts/data/mutations", () => ({
 vi.mock("~/features/posts/data/queries", () => ({ listPostReactors }));
 
 import { PostActionBar } from "~/features/posts/components/post-action-bar";
+import { patchPostEngagement } from "~/features/posts/data/cache";
 import { renderRoute, screen } from "../../../router";
 
 beforeEach(() => {
@@ -95,6 +97,40 @@ describe("PostActionBar", () => {
     expect(
       await screen.findByRole("button", { name: "좋아요 취소" }),
     ).toBeInTheDocument();
+  });
+
+  it("shares comment and reaction changes with another action bar for the post", async () => {
+    const { queryClient, user } = renderRoute(() => (
+      <>
+        <PostActionBar
+          postId="post-id"
+          reaction={noReactions}
+          sharePath="/groups/group/posts/post-id"
+          shareTitle="제목"
+          commentCount={0}
+        />
+        <PostActionBar
+          postId="post-id"
+          reaction={noReactions}
+          sharePath="/groups/group/posts/post-id"
+          shareTitle="제목"
+          commentCount={0}
+        />
+      </>
+    ));
+
+    act(() =>
+      patchPostEngagement(queryClient, "post-id", { comment_count: 3 }),
+    );
+    expect(
+      await screen.findAllByRole("button", { name: "댓글 3개" }),
+    ).toHaveLength(2);
+
+    await user.click(screen.getAllByRole("button", { name: "반응 남기기" })[0]);
+
+    expect(
+      await screen.findAllByRole("button", { name: "좋아요 취소" }),
+    ).toHaveLength(2);
   });
 
   it("hides the reaction summary until someone reacts", () => {
