@@ -1,4 +1,4 @@
-import { act, fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ImageViewer } from "~/shared/components/image-viewer";
@@ -10,6 +10,12 @@ const images = ["a", "b", "c"].map((id) => ({
   downloadSrc: `https://example.com/${id}.webp?download=${id}.webp`,
   name: `${id}.webp`,
 }));
+
+interface ZoomState {
+  x: number;
+  y: number;
+  scale: number;
+}
 
 function renderViewer(openImageId: string | null) {
   const onClose = vi.fn();
@@ -72,13 +78,23 @@ function doubleTap(image: HTMLElement, pointerType = "touch") {
   tap(image, pointerType);
 }
 
-/** 원본 프리로드를 가로채, 언제 끝난 것으로 칠지 테스트가 정하게 한다. */
-function stubImagePreloading() {
-  const preloaded: { onload: (() => void) | null }[] = [];
+/** 원본 프리로드와 decode를 가로채, 언제 화면에 올릴지 테스트가 정하게 한다. */
+function stubImagePreloading({
+  decode = () => Promise.resolve(),
+}: {
+  decode?: () => Promise<void>;
+} = {}) {
+  const preloaded: {
+    onerror: (() => void) | null;
+    onload: (() => void) | null;
+  }[] = [];
 
   class ImagePreloader {
     crossOrigin = "";
+    onerror: (() => void) | null = null;
     onload: (() => void) | null = null;
+
+    decode = decode;
 
     set src(_value: string) {
       preloaded.push(this);
@@ -88,8 +104,25 @@ function stubImagePreloading() {
   vi.stubGlobal("Image", ImagePreloader);
 
   return {
-    finishAll: () => act(() => preloaded.forEach((image) => image.onload?.())),
+    finishAll: async () => {
+      await act(async () => {
+        preloaded.forEach((image) => image.onload?.());
+        await Promise.resolve();
+      });
+    },
   };
+}
+
+function expectZoom(image: HTMLElement, zoom: ZoomState) {
+  expect(image.style.getPropertyValue("--image-viewer-zoom-x") || "0px").toBe(
+    `${zoom.x}px`,
+  );
+  expect(image.style.getPropertyValue("--image-viewer-zoom-y") || "0px").toBe(
+    `${zoom.y}px`,
+  );
+  expect(image.style.getPropertyValue("--image-viewer-zoom-scale") || "1").toBe(
+    `${zoom.scale}`,
+  );
 }
 
 afterEach(() => {
@@ -150,7 +183,7 @@ describe("ImageViewer", () => {
     );
   });
 
-  it("shows a thumbnail until the original image finishes loading", () => {
+  it("shows a thumbnail until the original image finishes decoding", async () => {
     const preloading = stubImagePreloading();
     renderRoute(() => (
       <ImageViewer
@@ -165,11 +198,59 @@ describe("ImageViewer", () => {
     const image = screen.getByAltText("a.webp");
     expect(image).toHaveAttribute("src", "https://example.com/a-thumb.webp");
 
-    preloading.finishAll();
+    await preloading.finishAll();
     expect(image).toHaveAttribute("src", "https://example.com/a.webp");
   });
 
-  it("keeps the original after paging away from a slide and back", () => {
+  it("keeps the thumbnail when original decoding fails", async () => {
+    const preloading = stubImagePreloading({
+      decode: () => Promise.reject(new Error("decode failed")),
+    });
+    renderRoute(() => (
+      <ImageViewer
+        images={[
+          { ...images[0], thumbSrc: "https://example.com/a-thumb.webp" },
+        ]}
+        openImageId="a"
+        onClose={vi.fn()}
+      />
+    ));
+
+    await preloading.finishAll();
+    expect(screen.getByAltText("a.webp")).toHaveAttribute(
+      "src",
+      "https://example.com/a-thumb.webp",
+    );
+  });
+
+  it("keeps the thumbnail during a gesture and reveals the decoded original after release", async () => {
+    const preloading = stubImagePreloading();
+    renderRoute(() => (
+      <ImageViewer
+        images={[
+          { ...images[0], thumbSrc: "https://example.com/a-thumb.webp" },
+        ]}
+        openImageId="a"
+        onClose={vi.fn()}
+      />
+    ));
+    const { viewport } = getGestureElements();
+    const image = screen.getByAltText("a.webp");
+
+    fireEvent.pointerDown(viewport, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 200,
+      clientY: 300,
+    });
+    await preloading.finishAll();
+    expect(image).toHaveAttribute("src", "https://example.com/a-thumb.webp");
+
+    fireEvent.pointerUp(viewport, { pointerId: 1, pointerType: "touch" });
+    expect(image).toHaveAttribute("src", "https://example.com/a.webp");
+  });
+
+  it("keeps the original after paging away from a slide and back", async () => {
     const preloading = stubImagePreloading();
     renderRoute(() => (
       <ImageViewer
@@ -182,7 +263,7 @@ describe("ImageViewer", () => {
       />
     ));
 
-    preloading.finishAll();
+    await preloading.finishAll();
     expect(screen.getByAltText("a.webp")).toHaveAttribute(
       "src",
       "https://example.com/a.webp",
@@ -221,6 +302,38 @@ describe("ImageViewer", () => {
       "absolute",
       "bottom-0",
     );
+  });
+
+  /**
+   * 회귀: 썸네일을 가운데로 보내려고 `scrollIntoView`를 부르면 조상이 전부 끌려간다.
+   * 모바일 필름스트립이 들어앉은 슬라이드 뷰포트는 `overflow-hidden`이어도 트랙이 사진 수만큼
+   * 넓어서 가로로 밀리고, 그 자리는 transform 페이징으로는 되돌아오지 않는다.
+   */
+  it("centers a thumbnail inside the filmstrip only", () => {
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView");
+    renderViewer("a");
+
+    const filmstrip = screen.getByTestId("image-viewer-mobile-filmstrip");
+    const thumbnail = within(filmstrip).getByRole("button", {
+      name: "b.webp",
+    });
+    filmstrip.scrollLeft = 100;
+    const scrollTo = vi.spyOn(filmstrip, "scrollTo");
+    vi.spyOn(filmstrip, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      width: 300,
+    } as DOMRect);
+    vi.spyOn(thumbnail, "getBoundingClientRect").mockReturnValue({
+      left: 260,
+      width: 56,
+    } as DOMRect);
+
+    fireEvent.click(thumbnail);
+
+    // 260 − (300 − 56) / 2 = 138만큼 더 밀면 썸네일이 가운데에 온다.
+    expect(scrollTo).toHaveBeenCalledWith({ left: 238, behavior: "smooth" });
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(screen.getByTestId("image-viewer-viewport").scrollLeft).toBe(0);
   });
 
   it("toggles the mobile chrome and filmstrip without changing the image viewport layout", () => {
@@ -271,9 +384,53 @@ describe("ImageViewer", () => {
       clientY: 300,
     });
 
-    expect(track).toHaveStyle({
-      transform: "translateX(calc(0% + 0px))",
+    expect(track.style.getPropertyValue("--image-viewer-track-offset")).toBe(
+      "0px",
+    );
+  });
+
+  it("coalesces continuous slide updates into one animation frame", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
     });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(
+      () => undefined,
+    );
+    renderViewer("a");
+    const { viewport } = getGestureElements();
+    const track = screen.getByTestId("image-viewer-track");
+    const framesBeforeGesture = frames.length;
+
+    fireEvent.pointerDown(viewport, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 300,
+      clientY: 300,
+    });
+    fireEvent.pointerMove(viewport, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 250,
+      clientY: 300,
+    });
+    fireEvent.pointerMove(viewport, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 300,
+    });
+
+    expect(frames).toHaveLength(framesBeforeGesture + 1);
+    expect(track.style.getPropertyValue("--image-viewer-track-offset")).toBe(
+      "0px",
+    );
+
+    act(() => frames.at(-1)?.(0));
+    expect(track.style.getPropertyValue("--image-viewer-track-offset")).toBe(
+      "-108px",
+    );
   });
 
   it("changes image after an intentional horizontal swipe", () => {
@@ -327,7 +484,9 @@ describe("ImageViewer", () => {
     });
     // 뷰어가 트랙 위치를 읽는 것은 잡는 순간뿐이다. 이후 단언은 실제 스타일로 확인한다.
     grabbedTransform.mockRestore();
-    expect(track).toHaveStyle({ transform: "translateX(calc(0% + -150px))" });
+    expect(track.style.getPropertyValue("--image-viewer-track-offset")).toBe(
+      "-150px",
+    );
 
     fireEvent.pointerMove(viewport, {
       pointerId: 1,
@@ -342,7 +501,9 @@ describe("ImageViewer", () => {
       clientY: 360,
     });
 
-    expect(track).toHaveStyle({ transform: "translateX(calc(0% + 0px))" });
+    expect(track.style.getPropertyValue("--image-viewer-track-offset")).toBe(
+      "0px",
+    );
     expect(screen.getByText("1 / 3")).toBeInTheDocument();
   });
 
@@ -352,14 +513,10 @@ describe("ImageViewer", () => {
     const { image } = getGestureElements();
 
     doubleTap(image);
-    expect(image).toHaveStyle({
-      transform: "translate3d(0px, 0px, 0) scale(2)",
-    });
+    expectZoom(image, { x: 0, y: 0, scale: 2 });
 
     pressArrow("ArrowRight");
-    expect(screen.getByAltText("b.webp")).toHaveStyle({
-      transform: "translate3d(0px, 0px, 0) scale(1)",
-    });
+    expectZoom(screen.getByAltText("b.webp"), { x: 0, y: 0, scale: 1 });
   });
 
   it("pans a zoomed image vertically", () => {
@@ -368,9 +525,7 @@ describe("ImageViewer", () => {
     const { image, viewport } = getGestureElements();
 
     doubleTap(image);
-    expect(image).toHaveStyle({
-      transform: "translate3d(0px, 0px, 0) scale(2)",
-    });
+    expectZoom(image, { x: 0, y: 0, scale: 2 });
 
     // 세로로 미는 손가락은 슬라이드를 포기하는 신호지만, 확대한 뒤에는 사진을 끄는 손짓이다.
     fireEvent.pointerDown(viewport, {
@@ -386,16 +541,14 @@ describe("ImageViewer", () => {
       clientY: 380,
     });
 
-    expect(image).toHaveStyle({
-      transform: "translate3d(5px, 80px, 0) scale(2)",
-    });
-
     fireEvent.pointerUp(viewport, {
       pointerId: 1,
       pointerType: "touch",
       clientX: 205,
       clientY: 380,
     });
+
+    expectZoom(image, { x: 5, y: 80, scale: 2 });
 
     expect(screen.getByText("1 / 3")).toBeInTheDocument();
   });
@@ -407,9 +560,7 @@ describe("ImageViewer", () => {
 
     doubleTap(image, "mouse");
 
-    expect(image).toHaveStyle({
-      transform: "translate3d(0px, 0px, 0) scale(1)",
-    });
+    expectZoom(image, { x: 0, y: 0, scale: 1 });
   });
 
   it("caps tablet pinch zoom at 4x and does not page while zoomed", () => {
@@ -437,7 +588,7 @@ describe("ImageViewer", () => {
     fireEvent.pointerUp(viewport, { pointerId: 2, pointerType: "touch" });
     fireEvent.pointerUp(viewport, { pointerId: 1, pointerType: "touch" });
 
-    expect(image.style.transform).toContain("scale(4)");
+    expect(image.style.getPropertyValue("--image-viewer-zoom-scale")).toBe("4");
 
     fireEvent.pointerDown(viewport, {
       pointerId: 3,

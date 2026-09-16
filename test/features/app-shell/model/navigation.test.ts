@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { isPostOverlayNavigation } from "~/features/app-shell/model/navigation";
+import {
+  isPostOverlayNavigation,
+  isSamePathUiOverlayNavigation,
+} from "~/features/app-shell/model/navigation";
 
 describe("isPostOverlayNavigation", () => {
   it.each([
@@ -20,4 +23,51 @@ describe("isPostOverlayNavigation", () => {
   ])("keeps normal navigation from %s to %s", (current, next) => {
     expect(isPostOverlayNavigation(current, next)).toBe(false);
   });
+});
+
+describe("isSamePathUiOverlayNavigation", () => {
+  it.each([
+    ["/groups/study/posts/post-id", "", "?image=attachment-id"],
+    [
+      "/groups/study/posts/post-id",
+      "?image=attachment-id",
+      "?view=comments&image=attachment-id",
+    ],
+    ["/profile/jieun-29/posts/post-id", "?view=comments", ""],
+  ])(
+    "preserves the outlet for UI-only search navigation",
+    (path, current, next) => {
+      expect(isSamePathUiOverlayNavigation(path, current, path, next)).toBe(
+        true,
+      );
+    },
+  );
+
+  it.each([
+    [
+      "/groups/study/posts/post-id",
+      "",
+      "/groups/study",
+      "?image=attachment-id",
+    ],
+    [
+      "/groups/study/posts/post-id",
+      "?image=attachment-id",
+      "/groups/study/posts/post-id",
+      "?image=attachment-id&filter=recent",
+    ],
+    ["/groups/study/posts/post-id", "?image=attachment-id", "/menu", ""],
+  ])(
+    "keeps normal navigation pending",
+    (currentPath, currentSearch, nextPath, nextSearch) => {
+      expect(
+        isSamePathUiOverlayNavigation(
+          currentPath,
+          currentSearch,
+          nextPath,
+          nextSearch,
+        ),
+      ).toBe(false);
+    },
+  );
 });

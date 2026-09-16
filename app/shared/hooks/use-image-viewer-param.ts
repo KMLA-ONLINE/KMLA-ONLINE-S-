@@ -147,6 +147,7 @@ export function useImageViewerParam(
 ) {
   const registry = useContext(ImageViewerRegistryContext);
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const registrationId = useId();
 
   if (!registry) {
@@ -167,9 +168,17 @@ export function useImageViewerParam(
   const open = (imageId: string) => {
     const next = new URLSearchParams(searchParams);
     next.set("image", imageId);
+    const locationState = location.state as unknown;
+    const existingState =
+      locationState !== null && typeof locationState === "object"
+        ? locationState
+        : {};
     void setSearchParams(next, {
       preventScrollReset: true,
-      state: { imageViewerPushed: true } satisfies ImageViewerLocationState,
+      state: {
+        ...existingState,
+        imageViewerPushed: true,
+      } satisfies ImageViewerLocationState,
     });
   };
 
