@@ -208,6 +208,60 @@ describe("FeedScreen detail re-entry", () => {
   });
 
   /**
+   * 요청을 건 순간 "읽었다"고 기록하므로, 그 요청이 이 글의 응답 없이 끝나면(중간에 끊긴
+   * 경우) 다시 걸 길이 없어 상세가 열려 있는 내내 spinner만 돌아간다. 한 번은 더 건다.
+   */
+  it("retries once when a detail load ends without this post's data", async () => {
+    const detailLoads: string[] = [];
+
+    function Harness() {
+      const [, setSearchParams] = useSearchParams();
+      return (
+        <QueryClientProvider client={getQueryClient()}>
+          <button
+            type="button"
+            onClick={() =>
+              setSearchParams({
+                post: "post-a",
+                kind: "group",
+                source: "group-id",
+              })
+            }
+          >
+            상세 열기
+          </button>
+          <FeedScreen />
+        </QueryClientProvider>
+      );
+    }
+
+    seedSession("epoch-1", ["post-a"]);
+    const { user } = renderRoute(Harness, {
+      routes: [
+        {
+          path: "/feed/posts/:postId",
+          loader: ({ params }) => {
+            detailLoads.push(params.postId!);
+            // 이 글의 응답이 실려 오지 않은 상태.
+            return {
+              requestedPostId: "other-post",
+              detail: null,
+              error: null,
+            };
+          },
+        },
+      ],
+    });
+
+    await user.click(screen.getByRole("button", { name: "상세 열기" }));
+    await waitFor(() => expect(detailLoads).toEqual(["post-a", "post-a"]));
+
+    // 재시도는 한 번으로 묶는다 — 계속 실패하는 요청을 무한히 다시 걸지 않는다.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(detailLoads).toEqual(["post-a", "post-a"]);
+  });
+
+  /**
    * 미디어 수화본은 만들어진 시점에 멈춰 있다. 그 복사본이 화면을 이기면, 댓글을 쓰고 상세를
    * 닫은 순간 캐시가 고친 수를 수화본의 옛 수가 도로 덮는다.
    */

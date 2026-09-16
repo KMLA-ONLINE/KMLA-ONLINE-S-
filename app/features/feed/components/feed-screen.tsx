@@ -62,25 +62,39 @@ export function FeedScreen() {
   } = useInfiniteQuery(feedQuery());
 
   /**
-   * 이미 읽어 둔 게시물. `detailFetcher.data`는 상세를 닫아도 남아 있어서, 같은 글을 다시
-   * 열면 "이미 이 글의 데이터가 있다"가 되어 방금 쓴 댓글이 빠진 예전 응답이 그대로 뜬다.
-   * 닫을 때 비워 두고, 열 때마다 이 ref로 판단한다.
+   * 지금 상세에 걸어 둔 요청. `detailFetcher.data`는 상세를 닫아도 남아 있어서, 같은 글을
+   * 다시 열면 "이미 이 글의 데이터가 있다"가 되어 방금 쓴 댓글이 빠진 예전 응답이 그대로
+   * 뜬다. 닫을 때 비워 두고, 열 때마다 이 ref로 판단한다.
+   *
+   * `load`를 거는 순간 기록한다 — 응답을 기다렸다 기록하면 그 사이 effect가 다시 돌아 같은
+   * 요청을 두 번 건다. 대신 요청이 끝났는데도 이 글의 응답이 실려 오지 않았으면(중간에
+   * 끊긴 요청) 한 번 더 건다. 기록만 하고 끝내면 상세가 열려 있는 내내 다시 걸 길이 없어
+   * 사용자는 돌아가는 spinner만 본다. loader가 실패까지 잡아 `error`로 돌려주므로 응답이
+   * 아예 없는 경우는 드물고, 그게 이어지더라도 재시도는 한 번으로 묶는다.
    */
-  const loadedDetailPostId = useRef<string | null>(null);
+  const detailLoad = useRef<{ postId: string; attempts: number } | null>(null);
+  const detailFetcherState = useRef(detailFetcher.state);
 
   useEffect(() => {
+    const settled =
+      detailFetcherState.current !== "idle" && detailFetcher.state === "idle";
+    detailFetcherState.current = detailFetcher.state;
+
     if (!activePostId) {
-      loadedDetailPostId.current = null;
+      detailLoad.current = null;
       return;
     }
-    if (
-      detailRequest &&
-      detailFetcher.state === "idle" &&
-      loadedDetailPostId.current !== activePostId
-    ) {
-      loadedDetailPostId.current = activePostId;
-      void detailFetcher.load(detailRequest);
+    if (!detailRequest || detailFetcher.state !== "idle") return;
+
+    const current = detailLoad.current;
+    if (current?.postId === activePostId) {
+      const missing = detailFetcher.data?.requestedPostId !== activePostId;
+      if (!settled || !missing || current.attempts >= 2) return;
+      detailLoad.current = { postId: activePostId, attempts: 2 };
+    } else {
+      detailLoad.current = { postId: activePostId, attempts: 1 };
     }
+    void detailFetcher.load(detailRequest);
   }, [activePostId, detailFetcher, detailRequest]);
 
   const pages = data?.pages ?? [];
