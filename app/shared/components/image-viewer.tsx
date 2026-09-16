@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -86,37 +87,40 @@ function ViewerSlideImage({
   imageRef,
   zoom,
   isGestureActive,
+  loadedOriginals,
+  onOriginalLoaded,
   onImageClick,
 }: {
   image: ViewerImage;
   imageRef?: Ref<HTMLImageElement>;
   zoom: ZoomState;
   isGestureActive: boolean;
+  /** 이미 받아 둔 원본 URL. 뷰어가 소유한다 — 이유는 그 선언부에 적어 두었다. */
+  loadedOriginals: ReadonlySet<string>;
+  onOriginalLoaded: (src: string) => void;
   onImageClick: (event: ReactMouseEvent<HTMLImageElement>) => void;
 }) {
   const thumbnailSrc =
     image.thumbSrc && image.thumbSrc !== image.src ? image.thumbSrc : undefined;
-  const [loadedOriginalSrc, setLoadedOriginalSrc] = useState(() =>
-    thumbnailSrc ? null : image.src,
-  );
-  const hasOriginal = !thumbnailSrc || loadedOriginalSrc === image.src;
+  const hasOriginal = !thumbnailSrc || loadedOriginals.has(image.src);
 
   useEffect(() => {
-    if (!thumbnailSrc || loadedOriginalSrc === image.src) return;
+    if (hasOriginal) return;
 
-    let cancelled = false;
-
+    // 받았다는 사실은 이 슬라이드가 떠난 뒤에도 남긴다. 다시 돌아올 때 쓴다.
     const original = new Image();
     original.crossOrigin = "anonymous";
+    let cancelled = false;
     original.onload = () => {
-      if (!cancelled) setLoadedOriginalSrc(image.src);
+      if (!cancelled) onOriginalLoaded(image.src);
     };
     original.src = image.src;
 
     return () => {
       cancelled = true;
+      original.onload = null;
     };
-  }, [image.src, loadedOriginalSrc, thumbnailSrc]);
+  }, [hasOriginal, image.src, onOriginalLoaded]);
 
   return (
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
@@ -146,6 +150,8 @@ function Slide({
   imageRef,
   zoom,
   isGestureActive,
+  loadedOriginals,
+  onOriginalLoaded,
   onBackdropClick,
   onImageClick,
 }: {
@@ -153,6 +159,8 @@ function Slide({
   imageRef?: Ref<HTMLImageElement>;
   zoom?: ZoomState;
   isGestureActive: boolean;
+  loadedOriginals: ReadonlySet<string>;
+  onOriginalLoaded: (src: string) => void;
   onBackdropClick: () => void;
   onImageClick: (event: ReactMouseEvent<HTMLImageElement>) => void;
 }) {
@@ -173,6 +181,8 @@ function Slide({
           imageRef={imageRef}
           zoom={imageZoom}
           isGestureActive={isGestureActive}
+          loadedOriginals={loadedOriginals}
+          onOriginalLoaded={onOriginalLoaded}
           onImageClick={onImageClick}
         />
       ) : null}
@@ -354,6 +364,16 @@ export function ImageViewer({
   const [renderedOpenImageId, setRenderedOpenImageId] = useState<string | null>(
     null,
   );
+  // 슬라이드는 현재 장에서 두 칸 멀어지면 언마운트된다. 어느 원본을 이미 받았는지까지 함께
+  // 사라지면 되돌아올 때마다 축소본부터 다시 그리므로, 그 기억은 뷰어가 들고 있는다.
+  const [loadedOriginals, setLoadedOriginals] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const markOriginalLoaded = useCallback((src: string) => {
+    setLoadedOriginals((current) =>
+      current.has(src) ? current : new Set(current).add(src),
+    );
+  }, []);
 
   useEffect(
     () => () => {
@@ -718,7 +738,13 @@ export function ImageViewer({
     setIsDragging(false);
 
     if (gestureMode === "pan") return;
-    if (gestureMode !== "slide") return;
+    // 세로로 밀어 슬라이드를 포기한 경우. 정지 상태에서 잡았다면 0을 다시 쓰는 것뿐이지만,
+    // 슬라이드 애니메이션 도중에 잡았다면 그 중간 지점이 offset에 남아 있다. 여기서 되돌리지
+    // 않으면 트랙이 어긋난 자리에 그대로 멈춘다.
+    if (gestureMode !== "slide") {
+      setDragOffset(0);
+      return;
+    }
 
     const viewportWidth = getViewportWidth();
     if (viewportWidth === 0) {
@@ -871,6 +897,8 @@ export function ImageViewer({
                   imageRef={slideIndex === index ? imageRef : undefined}
                   zoom={slideIndex === index ? zoom : undefined}
                   isGestureActive={isGestureActive}
+                  loadedOriginals={loadedOriginals}
+                  onOriginalLoaded={markOriginalLoaded}
                   onBackdropClick={handleBackdropClick}
                   onImageClick={handleImageClick}
                 />

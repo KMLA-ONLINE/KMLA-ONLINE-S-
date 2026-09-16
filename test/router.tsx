@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { createRoutesStub, type RoutesTestStubProps } from "react-router";
 import type { ComponentType, ReactNode } from "react";
 
+import { ImageViewerProvider } from "~/shared/hooks/use-image-viewer-param";
+
 type StubRoutes = Parameters<typeof createRoutesStub>[0];
 
 type RenderRouteOptions = RoutesTestStubProps &
@@ -50,8 +52,13 @@ export function renderRoute(
     ...renderOptions
   }: RenderRouteOptions = {},
 ) {
+  const ComponentWithImageViewer: ComponentType<any> = (props) => (
+    <ImageViewerProvider>
+      <Component {...props} />
+    </ImageViewerProvider>
+  );
   const Stub = createRoutesStub([
-    { path, Component, action, loader },
+    { path, Component: ComponentWithImageViewer, action, loader },
     ...routes,
   ]);
   const queryClient = new QueryClient({

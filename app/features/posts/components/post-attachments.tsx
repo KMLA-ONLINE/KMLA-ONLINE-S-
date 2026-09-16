@@ -6,7 +6,7 @@ import {
   FilesIcon,
   FileTextIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
   imageDownloadName,
@@ -14,10 +14,7 @@ import {
 } from "~/features/posts/model/attachments";
 import { formatFileSize } from "~/features/posts/model/format";
 import type { PostAttachment } from "~/features/posts/model/types";
-import {
-  ImageViewer,
-  type ViewerImage,
-} from "~/shared/components/image-viewer";
+import type { ViewerImage } from "~/shared/components/image-viewer";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -88,20 +85,24 @@ export function PostImageGrid({
 }) {
   // signed URL을 못 받은 첨부는 뷰어에 넣지 않는다. 슬라이드에 빈 칸이 생기고 좌우 이동이
   // 어긋나느니, 그리드에서만 깨진 타일로 보이는 편이 낫다.
-  const viewerImages: ViewerImage[] = images
-    .filter((item) => item.signedUrl !== null)
-    .map((item) => {
-      const downloadName = imageDownloadName(item.attachment_id);
-      return {
-        id: item.attachment_id,
-        src: item.signedUrl!,
-        thumbSrc: item.thumbnailUrl ?? undefined,
-        downloadSrc: toAttachmentDownloadUrl(item.signedUrl!, downloadName),
-        name: downloadName,
-      };
-    });
-  // attachment_id가 전역 유일하므로, 한 화면에 카드가 여럿이어도 자기 첨부만 연다.
-  const viewer = useImageViewerParam(viewerImages);
+  const viewerImages = useMemo<ViewerImage[]>(
+    () =>
+      images
+        .filter((item) => item.signedUrl !== null)
+        .map((item) => {
+          const downloadName = imageDownloadName(item.attachment_id);
+          return {
+            id: item.attachment_id,
+            src: item.signedUrl!,
+            thumbSrc: item.thumbnailUrl ?? undefined,
+            downloadSrc: toAttachmentDownloadUrl(item.signedUrl!, downloadName),
+            name: downloadName,
+          };
+        }),
+    [images],
+  );
+  // attachment_id가 전역 유일하므로 같은 첨부가 카드와 상세에 있어도 전역 host가 하나만 연다.
+  const viewer = useImageViewerParam(viewerImages, true);
 
   if (images.length === 0) return null;
 
@@ -167,13 +168,6 @@ export function PostImageGrid({
           );
         })}
       </div>
-
-      <ImageViewer
-        images={viewerImages}
-        openImageId={viewer.openImageId}
-        onClose={viewer.close}
-        allowDownloadAll
-      />
     </>
   );
 }

@@ -72,6 +72,26 @@ function doubleTap(image: HTMLElement, pointerType = "touch") {
   tap(image, pointerType);
 }
 
+/** 원본 프리로드를 가로채, 언제 끝난 것으로 칠지 테스트가 정하게 한다. */
+function stubImagePreloading() {
+  const preloaded: { onload: (() => void) | null }[] = [];
+
+  class ImagePreloader {
+    crossOrigin = "";
+    onload: (() => void) | null = null;
+
+    set src(_value: string) {
+      preloaded.push(this);
+    }
+  }
+
+  vi.stubGlobal("Image", ImagePreloader);
+
+  return {
+    finishAll: () => act(() => preloaded.forEach((image) => image.onload?.())),
+  };
+}
+
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -131,18 +151,7 @@ describe("ImageViewer", () => {
   });
 
   it("shows a thumbnail until the original image finishes loading", () => {
-    const preloaded: { onload: (() => void) | null }[] = [];
-
-    class ImagePreloader {
-      crossOrigin = "";
-      onload: (() => void) | null = null;
-
-      set src(_value: string) {
-        preloaded.push(this);
-      }
-    }
-
-    vi.stubGlobal("Image", ImagePreloader);
+    const preloading = stubImagePreloading();
     renderRoute(() => (
       <ImageViewer
         images={[
@@ -156,8 +165,41 @@ describe("ImageViewer", () => {
     const image = screen.getByAltText("a.webp");
     expect(image).toHaveAttribute("src", "https://example.com/a-thumb.webp");
 
-    act(() => preloaded[0].onload?.());
+    preloading.finishAll();
     expect(image).toHaveAttribute("src", "https://example.com/a.webp");
+  });
+
+  it("keeps the original after paging away from a slide and back", () => {
+    const preloading = stubImagePreloading();
+    renderRoute(() => (
+      <ImageViewer
+        images={images.map((image) => ({
+          ...image,
+          thumbSrc: `https://example.com/${image.id}-thumb.webp`,
+        }))}
+        openImageId="a"
+        onClose={vi.fn()}
+      />
+    ));
+
+    preloading.finishAll();
+    expect(screen.getByAltText("a.webp")).toHaveAttribute(
+      "src",
+      "https://example.com/a.webp",
+    );
+
+    // 두 칸 넘기면 첫 슬라이드는 디코딩 창 밖으로 나가 언마운트된다. 돌아왔을 때 다시
+    // 축소본부터 그리면, 이미 받아 둔 원본을 두고 저해상도를 한 번 더 보여 주는 셈이다.
+    pressArrow("ArrowRight");
+    pressArrow("ArrowRight");
+    expect(screen.queryByAltText("a.webp")).not.toBeInTheDocument();
+
+    pressArrow("ArrowLeft");
+    pressArrow("ArrowLeft");
+    expect(screen.getByAltText("a.webp")).toHaveAttribute(
+      "src",
+      "https://example.com/a.webp",
+    );
   });
 
   it("closes on the close button", async () => {
@@ -253,6 +295,55 @@ describe("ImageViewer", () => {
     fireEvent.pointerUp(viewport, { pointerId: 1, pointerType: "touch" });
 
     expect(screen.getByText("2 / 3")).toBeInTheDocument();
+  });
+
+  it("snaps the track back when a swipe grabbed mid-animation turns vertical", () => {
+    renderViewer("a");
+    const { viewport } = getGestureElements();
+    const track = screen.getByTestId("image-viewer-track");
+    // 슬라이드 애니메이션이 도는 중에 손을 댄 상황을 만든다. 정지 상태에서 잡으면 되돌릴
+    // offset이 애초에 0이라 이 경로가 드러나지 않는다. jsdom에는 DOMMatrix가 없으므로
+    // 트랙이 정지 위치에서 150px 떨어진 지점에 그려져 있다고 알려 준다.
+    class StubMatrix {
+      m41 = -150;
+    }
+    vi.stubGlobal("DOMMatrix", StubMatrix);
+    const computedStyle = window.getComputedStyle.bind(window);
+    const grabbedTransform = vi
+      .spyOn(window, "getComputedStyle")
+      .mockImplementation((element, pseudo) =>
+        element === track
+          ? ({
+              transform: "matrix(1, 0, 0, 1, -150, 0)",
+            } as CSSStyleDeclaration)
+          : computedStyle(element, pseudo),
+      );
+
+    fireEvent.pointerDown(viewport, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 200,
+      clientY: 300,
+    });
+    // 뷰어가 트랙 위치를 읽는 것은 잡는 순간뿐이다. 이후 단언은 실제 스타일로 확인한다.
+    grabbedTransform.mockRestore();
+    expect(track).toHaveStyle({ transform: "translateX(calc(0% + -150px))" });
+
+    fireEvent.pointerMove(viewport, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 202,
+      clientY: 360,
+    });
+    fireEvent.pointerUp(viewport, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 202,
+      clientY: 360,
+    });
+
+    expect(track).toHaveStyle({ transform: "translateX(calc(0% + 0px))" });
+    expect(screen.getByText("1 / 3")).toBeInTheDocument();
   });
 
   it("zooms on a tablet touch double tap and resets when the image changes", () => {
