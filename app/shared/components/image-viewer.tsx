@@ -644,14 +644,27 @@ export function ImageViewer({
 
     const distanceX = event.clientX - gestureStart.x;
     const distanceY = event.clientY - gestureStart.y;
-    if (!hasDraggedRef.current) {
-      if (Math.hypot(distanceX, distanceY) <= DRAG_START_TOLERANCE) return;
+    const wasDragging = hasDraggedRef.current;
+    if (
+      !wasDragging &&
+      Math.hypot(distanceX, distanceY) <= DRAG_START_TOLERANCE
+    ) {
+      return;
+    }
 
-      markDragged();
-      if (Math.abs(distanceX) <= Math.abs(distanceY)) {
-        gestureModeRef.current = null;
-        return;
-      }
+    // 손이 움직이는 동안 계속 갱신한다. 클릭 억제 창은 드래그를 시작한 시각이 아니라
+    // 손을 뗀 시각을 기준으로 닫혀야 하기 때문이다.
+    markDragged();
+
+    // 세로로 밀기 시작했다면 슬라이드는 포기한다. 확대한 이미지를 끄는 pan은 세로로도
+    // 움직여야 하므로 여기서 걸러 내면 안 된다.
+    if (
+      !wasDragging &&
+      gestureModeRef.current === "slide" &&
+      Math.abs(distanceX) <= Math.abs(distanceY)
+    ) {
+      gestureModeRef.current = null;
+      return;
     }
 
     if (gestureModeRef.current === "pan") {
@@ -667,13 +680,12 @@ export function ImageViewer({
     }
 
     if (gestureModeRef.current !== "slide") return;
-    // 탭 중의 미세한 손가락 흔들림은 슬라이드에 반영하지 않아 이미지가 잠깐 움직이지 않게 한다.
-    if (!hasDraggedRef.current) return;
 
     const viewportWidth = getViewportWidth();
     // 첫 장과 마지막 장의 정지 offset을 현재 index 기준으로 환산한 값.
     const firstSlideOffset = index * viewportWidth;
     const lastSlideOffset = (index - (images.length - 1)) * viewportWidth;
+    // 드래그로 인정하는 데 쓴 만큼은 빼고 민다. 그래야 문턱을 넘는 순간 이미지가 튀지 않는다.
     const draggedDistance =
       Math.sign(distanceX) *
       Math.max(0, Math.abs(distanceX) - DRAG_START_TOLERANCE);

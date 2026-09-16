@@ -362,6 +362,44 @@ describe("ImageViewer", () => {
     });
   });
 
+  it("pans a zoomed image vertically", () => {
+    vi.useFakeTimers();
+    renderViewer("a");
+    const { image, viewport } = getGestureElements();
+
+    doubleTap(image);
+    expect(image).toHaveStyle({
+      transform: "translate3d(0px, 0px, 0) scale(2)",
+    });
+
+    // 세로로 미는 손가락은 슬라이드를 포기하는 신호지만, 확대한 뒤에는 사진을 끄는 손짓이다.
+    fireEvent.pointerDown(viewport, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 200,
+      clientY: 300,
+    });
+    fireEvent.pointerMove(viewport, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 205,
+      clientY: 380,
+    });
+
+    expect(image).toHaveStyle({
+      transform: "translate3d(5px, 80px, 0) scale(2)",
+    });
+
+    fireEvent.pointerUp(viewport, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 205,
+      clientY: 380,
+    });
+
+    expect(screen.getByText("1 / 3")).toBeInTheDocument();
+  });
+
   it("does not zoom from a mouse double click", () => {
     vi.useFakeTimers();
     renderViewer("a");

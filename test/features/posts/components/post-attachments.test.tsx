@@ -57,6 +57,22 @@ function DuplicateImageGrids() {
   );
 }
 
+function ImageGridLeavingToStaleLink() {
+  const navigate = useNavigate();
+
+  return (
+    <>
+      <PostImageGrid images={[image("shared")]} />
+      <button
+        type="button"
+        onClick={() => void navigate("/previous?image=shared")}
+      >
+        다른 화면으로
+      </button>
+    </>
+  );
+}
+
 describe("PostImageGrid", () => {
   it("shows a single image at its own aspect ratio", () => {
     renderRoute(() => (
@@ -241,6 +257,19 @@ describe("PostImageGrid", () => {
 
     await user.click(screen.getByRole("button", { name: "이전 화면으로" }));
     expect(await screen.findByText("이전 화면")).toBeVisible();
+  });
+
+  // provider는 화면보다 오래 산다. 화면을 떠난 그리드가 등록을 거두지 않으면, 그 사진을
+  // 가리키는 `?image=`가 아무 화면에서나 뷰어를 연다.
+  it("stops answering an image link once the grid leaves the screen", async () => {
+    const { user } = renderRoute(ImageGridLeavingToStaleLink, {
+      routes: [{ path: "/previous", Component: () => <p>이전 화면</p> }],
+    });
+
+    await user.click(screen.getByRole("button", { name: "다른 화면으로" }));
+
+    expect(await screen.findByText("이전 화면")).toBeVisible();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("opens a direct image link in one global viewer", async () => {

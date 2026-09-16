@@ -23,9 +23,10 @@ export function ProfileMediaActivity({
 }) {
   const imageId = `profile-activity-${post.post_id}`;
   const downloadName = imageDownloadName(post.post_id);
+  // 아무것도 그리지 않는 경우까지 등록하면 열 수단이 없는 사진이 `?image=`로만 열린다.
   const viewerImages = useMemo<ViewerImage[]>(
     () =>
-      post.activity_media_url
+      post.activity_kind && post.activity_media_url
         ? [
             {
               id: imageId,
@@ -38,7 +39,7 @@ export function ProfileMediaActivity({
             },
           ]
         : [],
-    [downloadName, imageId, post.activity_media_url],
+    [downloadName, imageId, post.activity_kind, post.activity_media_url],
   );
   const viewer = useImageViewerParam(viewerImages);
 
