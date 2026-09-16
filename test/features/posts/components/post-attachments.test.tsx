@@ -1,5 +1,6 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { useNavigate } from "react-router";
 
 import {
   PostFileList,
@@ -39,6 +40,38 @@ const image = (id: string) =>
 
 const gridRatio = () =>
   Number.parseFloat(screen.getByTestId("post-image-grid").style.aspectRatio);
+
+function DuplicateImageGrids() {
+  const navigate = useNavigate();
+  const images = [image("shared")];
+
+  return (
+    <>
+      <p>현재 화면</p>
+      <button type="button" onClick={() => void navigate(-1)}>
+        이전 화면으로
+      </button>
+      <PostImageGrid images={images} />
+      <PostImageGrid images={images} />
+    </>
+  );
+}
+
+function ImageGridLeavingToStaleLink() {
+  const navigate = useNavigate();
+
+  return (
+    <>
+      <PostImageGrid images={[image("shared")]} />
+      <button
+        type="button"
+        onClick={() => void navigate("/previous?image=shared")}
+      >
+        다른 화면으로
+      </button>
+    </>
+  );
+}
 
 describe("PostImageGrid", () => {
   it("shows a single image at its own aspect ratio", () => {
@@ -172,6 +205,59 @@ describe("PostImageGrid", () => {
       "https://example.com/file?download=image-uuid.webp",
     );
     expect(download).toHaveAttribute("download", "image-uuid.webp");
+  });
+
+  it("closes one history entry when the same image is registered twice", async () => {
+    const { user } = renderRoute(DuplicateImageGrids, {
+      initialEntries: ["/previous", "/"],
+      initialIndex: 1,
+      routes: [{ path: "/previous", Component: () => <p>이전 화면</p> }],
+    });
+
+    await user.click(
+      screen.getAllByRole("button", { name: "shared.webp 크게 보기" })[0],
+    );
+    expect(await screen.findAllByRole("dialog")).toHaveLength(1);
+
+    await user.keyboard("{Escape}");
+    expect(await screen.findByText("현재 화면")).toBeVisible();
+    expect(screen.queryByText("이전 화면")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "이전 화면으로" }));
+    expect(await screen.findByText("이전 화면")).toBeVisible();
+  });
+
+  // provider는 화면보다 오래 산다. 화면을 떠난 그리드가 등록을 거두지 않으면, 그 사진을
+  // 가리키는 `?image=`가 아무 화면에서나 뷰어를 연다.
+  it("stops answering an image link once the grid leaves the screen", async () => {
+    const { user } = renderRoute(ImageGridLeavingToStaleLink, {
+      routes: [{ path: "/previous", Component: () => <p>이전 화면</p> }],
+    });
+
+    await user.click(screen.getByRole("button", { name: "다른 화면으로" }));
+
+    expect(await screen.findByText("이전 화면")).toBeVisible();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("opens a direct image link in one global viewer", async () => {
+    renderRoute(DuplicateImageGrids, { initialEntries: ["/?image=shared"] });
+
+    expect(await screen.findAllByRole("dialog")).toHaveLength(1);
+  });
+
+  it("opens a legacy image entry after a remount", async () => {
+    renderRoute(DuplicateImageGrids, {
+      initialEntries: [
+        {
+          pathname: "/",
+          search: "?image=shared",
+          state: { imageViewerOwner: ":legacy:" },
+        },
+      ],
+    });
+
+    expect(await screen.findAllByRole("dialog")).toHaveLength(1);
   });
 });
 

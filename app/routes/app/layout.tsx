@@ -17,7 +17,10 @@ import {
   resolveAppChrome,
   ScrollRegion,
 } from "~/features/app-shell";
-import { isPostOverlayNavigation } from "~/features/app-shell/model/navigation";
+import {
+  isPostOverlayNavigation,
+  isSamePathUiOverlayNavigation,
+} from "~/features/app-shell/model/navigation";
 import { resetFeed } from "~/features/feed";
 import { groupKeys } from "~/features/groups";
 import { notificationKeys } from "~/features/notifications";
@@ -57,11 +60,21 @@ export default function MainAppLayout() {
     navigation.state === "loading" &&
     Boolean(pendingPathname) &&
     isPostOverlayNavigation(location.pathname, pendingPathname ?? "");
+  const uiOverlaySearchNavigation =
+    navigation.state === "loading" &&
+    Boolean(pendingPathname) &&
+    isSamePathUiOverlayNavigation(
+      location.pathname,
+      location.search,
+      pendingPathname ?? "",
+      navigation.location.search,
+    );
   const navigationPending =
     navigation.state === "loading" &&
     Boolean(pendingPathname) &&
     !groupDetailSearchNavigation &&
-    !postOverlayNavigation;
+    !postOverlayNavigation &&
+    !uiOverlaySearchNavigation;
   const showNavigationSkeleton = useDelayedPending(navigationPending);
   const skeletonPath = pendingPathname ?? location.pathname;
 

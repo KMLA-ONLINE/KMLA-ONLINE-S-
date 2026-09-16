@@ -2,6 +2,7 @@ import { screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ProfilePostCard } from "~/features/posts/components/profile/profile-post-card";
+import { ProfileMediaActivity } from "~/features/posts/components/profile/profile-media-activity";
 import { profilePost } from "../../profile-post-fixture";
 import { renderRoute } from "../../../../router";
 
@@ -162,5 +163,25 @@ describe("ProfilePostCard", () => {
       "https://example.com/activity.webp?download=post-id.webp",
     );
     expect(download).toHaveAttribute("download", "post-id.webp");
+  });
+
+  it("opens one viewer when the same activity appears twice", async () => {
+    const post = profilePost({
+      activity_kind: "avatar_changed",
+      activity_media_path: "1/avatar/image-id",
+      activity_media_url: "https://example.com/activity.webp",
+    });
+    const { user } = renderRoute(() => (
+      <>
+        <ProfileMediaActivity post={post} />
+        <ProfileMediaActivity post={post} />
+      </>
+    ));
+
+    await user.click(
+      screen.getAllByRole("button", { name: "프로필 사진 크게 보기" })[0],
+    );
+
+    expect(await screen.findAllByRole("dialog")).toHaveLength(1);
   });
 });

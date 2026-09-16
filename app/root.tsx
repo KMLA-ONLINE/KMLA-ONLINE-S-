@@ -14,6 +14,7 @@ import { PwaPrompts } from "~/shared/components/pwa-prompts";
 import { QueryProvider } from "~/shared/components/query-provider";
 import { ThemeColor } from "~/shared/components/theme-color";
 import { env } from "~/shared/lib/env";
+import { ImageViewerProvider } from "~/shared/hooks/use-image-viewer-param";
 import { Toaster } from "~/shared/ui/sonner";
 import { TooltipProvider } from "~/shared/ui/tooltip";
 import "./app.css";
@@ -125,8 +126,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <QueryProvider>
-      <Outlet />
-      <PwaPrompts />
+      <ImageViewerProvider>
+        <Outlet />
+        <PwaPrompts />
+      </ImageViewerProvider>
     </QueryProvider>
   );
 }

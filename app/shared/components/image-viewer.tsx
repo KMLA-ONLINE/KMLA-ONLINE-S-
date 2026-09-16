@@ -6,7 +6,11 @@ import {
   XIcon,
 } from "lucide-react";
 import {
+  forwardRef,
+  useCallback,
   useEffect,
+  useEffectEvent,
+  useLayoutEffect,
   useRef,
   useState,
   type ComponentProps,
@@ -41,7 +45,7 @@ const SLIDE_TRANSITION = "transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1)";
 const SWIPE_MAX_TRIGGER_DISTANCE = 80;
 const SWIPE_TRIGGER_RATIO = 0.2;
 const SWIPE_RUBBER_BAND = 0.25;
-const DRAG_CLICK_TOLERANCE = 6;
+const DRAG_START_TOLERANCE = 12;
 const MAX_ZOOM = 4;
 const DOUBLE_TAP_ZOOM = 2;
 const DOUBLE_TAP_DELAY = 250;
@@ -56,13 +60,76 @@ interface ZoomState extends Point {
   scale: number;
 }
 
+interface ZoomMetrics {
+  viewportLeft: number;
+  viewportTop: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  imageWidth: number;
+  imageHeight: number;
+}
+
 type GestureMode = "slide" | "pan" | "pinch" | null;
 
 const DEFAULT_ZOOM: ZoomState = { scale: 1, x: 0, y: 0 };
 
-function ControlButton({ className, ...props }: ComponentProps<"button">) {
+function hasDistinctThumbnail(image: ViewerImage): boolean {
+  return Boolean(image.thumbSrc && image.thumbSrc !== image.src);
+}
+
+const ControlButton = forwardRef<HTMLButtonElement, ComponentProps<"button">>(
+  function ControlButton({ className, ...props }, ref) {
+    return (
+      <button
+        ref={ref}
+        type="button"
+        className={cn(CONTROL_CLASS, className)}
+        {...props}
+      />
+    );
+  },
+);
+
+function ViewerSlideImage({
+  image,
+  imageRef,
+  zoom,
+  isGestureActive,
+  showOriginal,
+  onImageClick,
+}: {
+  image: ViewerImage;
+  imageRef?: Ref<HTMLImageElement>;
+  zoom: ZoomState;
+  isGestureActive: boolean;
+  /** 원본은 decode까지 끝난 뒤에만 축소본 위로 올린다. */
+  showOriginal: boolean;
+  onImageClick: (event: ReactMouseEvent<HTMLImageElement>) => void;
+}) {
+  const thumbnailSrc =
+    image.thumbSrc && image.thumbSrc !== image.src ? image.thumbSrc : undefined;
+
   return (
-    <button type="button" className={cn(CONTROL_CLASS, className)} {...props} />
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
+    <img
+      ref={imageRef}
+      src={showOriginal || !thumbnailSrc ? image.src : thumbnailSrc}
+      alt={image.name}
+      crossOrigin="anonymous"
+      draggable={false}
+      className={cn(
+        "max-h-full max-w-full object-contain will-change-transform select-none sm:cursor-default",
+        zoom.scale > 1
+          ? "cursor-grab active:cursor-grabbing"
+          : "cursor-zoom-in",
+      )}
+      style={{
+        transform:
+          "translate3d(var(--image-viewer-zoom-x, 0px), var(--image-viewer-zoom-y, 0px), 0) scale(var(--image-viewer-zoom-scale, 1))",
+        transition: isGestureActive ? "none" : SLIDE_TRANSITION,
+      }}
+      onClick={onImageClick}
+    />
   );
 }
 
@@ -71,6 +138,7 @@ function Slide({
   imageRef,
   zoom,
   isGestureActive,
+  showOriginal,
   onBackdropClick,
   onImageClick,
 }: {
@@ -78,6 +146,7 @@ function Slide({
   imageRef?: Ref<HTMLImageElement>;
   zoom?: ZoomState;
   isGestureActive: boolean;
+  showOriginal: boolean;
   onBackdropClick: () => void;
   onImageClick: (event: ReactMouseEvent<HTMLImageElement>) => void;
 }) {
@@ -93,24 +162,13 @@ function Slide({
       onClick={onBackdropClick}
     >
       {image ? (
-        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
-        <img
-          ref={imageRef}
-          src={image.src}
-          alt={image.name}
-          crossOrigin="anonymous"
-          draggable={false}
-          className={cn(
-            "max-h-full max-w-full object-contain will-change-transform select-none sm:cursor-default",
-            imageZoom.scale > 1
-              ? "cursor-grab active:cursor-grabbing"
-              : "cursor-zoom-in",
-          )}
-          style={{
-            transform: `translate3d(${imageZoom.x}px, ${imageZoom.y}px, 0) scale(${imageZoom.scale})`,
-            transition: isGestureActive ? "none" : SLIDE_TRANSITION,
-          }}
-          onClick={onImageClick}
+        <ViewerSlideImage
+          image={image}
+          imageRef={imageRef}
+          zoom={imageZoom}
+          isGestureActive={isGestureActive}
+          showOriginal={showOriginal}
+          onImageClick={onImageClick}
         />
       ) : null}
     </div>
@@ -121,24 +179,62 @@ function Filmstrip({
   images,
   activeIndex,
   onSelect,
+  className,
+  testId = "image-viewer-filmstrip",
+  screen,
 }: {
   images: ViewerImage[];
   activeIndex: number;
   onSelect: (index: number) => void;
+  className?: string;
+  testId?: string;
+  screen: "desktop" | "mobile";
 }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
   const activeThumbnailRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    activeThumbnailRef.current?.scrollIntoView({
-      block: "nearest",
-      inline: "center",
+    const isDesktop = window.matchMedia?.("(min-width: 640px)").matches;
+    if (
+      (screen === "desktop" && !isDesktop) ||
+      (screen === "mobile" && isDesktop)
+    ) {
+      return;
+    }
+
+    const scroller = scrollerRef.current;
+    const thumbnail = activeThumbnailRef.current;
+    if (!scroller || !thumbnail) return;
+
+    /*
+      `scrollIntoView`는 스크롤 조상을 전부 훑는다. 모바일 필름스트립은 `overflow-hidden`인
+      슬라이드 뷰포트 안에 놓여 있고, 그 뷰포트는 트랙이 사진 수만큼 넓어서 가로로 밀 자리가
+      있다. 썸네일을 가운데로 보내려다 뷰포트까지 밀면 화면 전체가 옆으로 어긋나는데, 페이징은
+      transform으로 하므로 그 어긋남은 되돌아오지 않는다. 스크롤은 이 목록 안에서만 한다.
+    */
+    const scrollerRect = scroller.getBoundingClientRect();
+    const thumbnailRect = thumbnail.getBoundingClientRect();
+    if (
+      thumbnailRect.left >= scrollerRect.left &&
+      thumbnailRect.right <= scrollerRect.right
+    ) {
+      return;
+    }
+    const toCenter =
+      thumbnailRect.left -
+      scrollerRect.left -
+      (scrollerRect.width - thumbnailRect.width) / 2;
+    scroller.scrollTo({
+      left: scroller.scrollLeft + toCenter,
+      behavior: "smooth",
     });
-  }, [activeIndex]);
+  }, [activeIndex, screen]);
 
   return (
     <div
-      data-testid="image-viewer-filmstrip"
-      className="hidden shrink-0 scrollbar-none overflow-x-auto sm:block"
+      ref={scrollerRef}
+      data-testid={testId}
+      className={cn("shrink-0 scrollbar-none overflow-x-auto", className)}
     >
       <div className="mx-auto flex w-max gap-2 px-3 pt-3 pb-[calc(0.75rem+var(--app-safe-b))]">
         {images.map((image, index) => {
@@ -211,12 +307,21 @@ export function ImageViewer({
   const suppressClicksUntilRef = useRef(0);
   const pendingTapRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPointerTypeRef = useRef<string | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const pendingTrackOffsetRef = useRef<number | null>(null);
+  const pendingZoomRef = useRef<ZoomState | null>(null);
+  const zoomMetricsRef = useRef<ZoomMetrics | null>(null);
+  const isGestureActiveRef = useRef(false);
+  const decodedOriginalsRef = useRef(new Set<string>());
+  const pendingOriginalRevealsRef = useRef(new Set<string>());
+  const originalLoadPromisesRef = useRef(new Map<string, Promise<boolean>>());
+  const prefetchedOriginalsRef = useRef(new Set<string>());
+  const appliedOpenImageIdRef = useRef<string | null>(null);
   // pointermove는 연속 이벤트라 pointerup이 도착할 때까지 setState가 아직 커밋되지 않았을 수
   // 있다. 놓는 순간의 임계값 판정은 이 ref를 읽는다.
   const offsetRef = useRef(0);
 
   const [storedIndex, setStoredIndex] = useState(0);
-  const [offset, setOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isGestureActive, setIsGestureActive] = useState(false);
   const [isChromeHidden, setIsChromeHidden] = useState(false);
@@ -225,17 +330,156 @@ export function ImageViewer({
   const [renderedOpenImageId, setRenderedOpenImageId] = useState<string | null>(
     null,
   );
+  // 슬라이드는 현재 장에서 두 칸 멀어지면 언마운트된다. 이미 decode한 원본을 기억하지 않으면
+  // 되돌아올 때마다 축소본으로 내려가므로, 이 기억은 뷰어가 소유한다.
+  const [shownOriginals, setShownOriginals] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const markOriginalDecoded = useCallback((src: string) => {
+    decodedOriginalsRef.current.add(src);
+    if (isGestureActiveRef.current) {
+      pendingOriginalRevealsRef.current.add(src);
+      return;
+    }
+
+    setShownOriginals((current) =>
+      current.has(src) ? current : new Set(current).add(src),
+    );
+  }, []);
+
+  const revealDecodedOriginals = () => {
+    if (pendingOriginalRevealsRef.current.size === 0) return;
+
+    const pending = pendingOriginalRevealsRef.current;
+    pendingOriginalRevealsRef.current = new Set();
+    setShownOriginals((current) => {
+      const next = new Set(current);
+      pending.forEach((src) => next.add(src));
+      return next;
+    });
+  };
+
+  const preloadOriginal = useCallback((src: string): Promise<boolean> => {
+    const existing = originalLoadPromisesRef.current.get(src);
+    if (existing) return existing;
+
+    const promise = new Promise<boolean>((resolve) => {
+      const original = new Image();
+      original.crossOrigin = "anonymous";
+      original.onload = () => {
+        if (typeof original.decode !== "function") {
+          resolve(true);
+          return;
+        }
+
+        try {
+          void original.decode().then(
+            () => resolve(true),
+            () => resolve(false),
+          );
+        } catch {
+          resolve(false);
+        }
+      };
+      original.onerror = () => resolve(false);
+      original.src = src;
+    });
+    originalLoadPromisesRef.current.set(src, promise);
+    return promise;
+  }, []);
+
+  const writeTrackOffset = (value: number) => {
+    trackRef.current?.style.setProperty(
+      "--image-viewer-track-offset",
+      `${value}px`,
+    );
+  };
+
+  const writeZoom = (value: ZoomState) => {
+    const image = imageRef.current;
+    if (!image) return;
+
+    image.style.setProperty("--image-viewer-zoom-x", `${value.x}px`);
+    image.style.setProperty("--image-viewer-zoom-y", `${value.y}px`);
+    image.style.setProperty("--image-viewer-zoom-scale", `${value.scale}`);
+  };
+
+  const flushPendingTransforms = () => {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    if (pendingTrackOffsetRef.current !== null) {
+      writeTrackOffset(pendingTrackOffsetRef.current);
+      pendingTrackOffsetRef.current = null;
+    }
+    if (pendingZoomRef.current !== null) {
+      writeZoom(pendingZoomRef.current);
+      pendingZoomRef.current = null;
+    }
+  };
+
+  const scheduleTransformFrame = () => {
+    if (animationFrameRef.current !== null) return;
+
+    animationFrameRef.current = requestAnimationFrame(() => {
+      animationFrameRef.current = null;
+      if (pendingTrackOffsetRef.current !== null) {
+        writeTrackOffset(pendingTrackOffsetRef.current);
+        pendingTrackOffsetRef.current = null;
+      }
+      if (pendingZoomRef.current !== null) {
+        writeZoom(pendingZoomRef.current);
+        pendingZoomRef.current = null;
+      }
+    });
+  };
+
+  const setDragOffset = (value: number) => {
+    offsetRef.current = value;
+    pendingTrackOffsetRef.current = value;
+    scheduleTransformFrame();
+  };
+
+  const setDragOffsetImmediately = (value: number) => {
+    offsetRef.current = value;
+    pendingTrackOffsetRef.current = null;
+    writeTrackOffset(value);
+  };
+
+  const setZoomState = (value: ZoomState) => {
+    zoomRef.current = value;
+    pendingZoomRef.current = value;
+    scheduleTransformFrame();
+  };
+
+  const commitZoomState = (value: ZoomState) => {
+    zoomRef.current = value;
+    pendingZoomRef.current = null;
+    writeZoom(value);
+    setZoom(value);
+  };
+
+  const resetZoom = () => {
+    zoomMetricsRef.current = null;
+    commitZoomState(DEFAULT_ZOOM);
+  };
+
+  const setGestureActive = (active: boolean) => {
+    isGestureActiveRef.current = active;
+    setIsGestureActive(active);
+  };
 
   useEffect(
     () => () => {
       if (pendingTapRef.current !== null) clearTimeout(pendingTapRef.current);
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
     },
     [],
   );
-
-  useEffect(() => {
-    zoomRef.current = zoom;
-  }, [zoom]);
 
   useEffect(() => {
     if (openImageId === null) return;
@@ -248,30 +492,29 @@ export function ImageViewer({
   // 데스크톱에서 좌우 방향키로 넘긴다. Popup의 onKeyDown을 쓰지 않는 이유는 이 뷰어가
   // 게시물 상세 dialog 위에 열려 포커스가 여기까지 오지 않기 때문이고, capture 단계인
   // 이유는 그 아래 dialog가 방향키를 먼저 삼켜 bubble까지 오지 않기 때문이다.
+  const handleArrowKey = useEffectEvent((event: KeyboardEvent) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+
+    event.preventDefault();
+    flushPendingTransforms();
+    offsetRef.current = 0;
+    pendingTrackOffsetRef.current = null;
+    resetZoom();
+    setStoredIndex((current) => {
+      const clamped = Math.max(0, Math.min(current, images.length - 1));
+      const next = event.key === "ArrowLeft" ? clamped - 1 : clamped + 1;
+      return Math.max(0, Math.min(next, images.length - 1));
+    });
+  });
+
   useEffect(() => {
     if (openImageId === null) return;
-
-    const handleArrowKey = (event: KeyboardEvent) => {
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-
-      event.preventDefault();
-      offsetRef.current = 0;
-      setOffset(0);
-      zoomRef.current = DEFAULT_ZOOM;
-      setZoom(DEFAULT_ZOOM);
-      setStoredIndex((current) => {
-        const clamped = Math.max(0, Math.min(current, images.length - 1));
-        const next = event.key === "ArrowLeft" ? clamped - 1 : clamped + 1;
-        return Math.max(0, Math.min(next, images.length - 1));
-      });
-    };
-
     document.addEventListener("keydown", handleArrowKey, { capture: true });
     return () =>
       document.removeEventListener("keydown", handleArrowKey, {
         capture: true,
       });
-  }, [openImageId, images.length]);
+  }, [openImageId]);
 
   // 새로 열렸다: 열린 장으로 점프한다. 바깥에서 index를 움직이는 건 이것뿐이다.
   if (renderedOpenImageId !== openImageId) {
@@ -282,7 +525,6 @@ export function ImageViewer({
         images.findIndex((image) => image.id === openImageId),
       ),
     );
-    setOffset(0);
     setZoom(DEFAULT_ZOOM);
     setIsChromeHidden(false);
   }
@@ -291,24 +533,79 @@ export function ImageViewer({
   const index = Math.max(0, Math.min(storedIndex, images.length - 1));
   const activeImage = images[index];
 
+  useLayoutEffect(() => {
+    if (!openImageId) return;
+
+    if (appliedOpenImageIdRef.current !== openImageId) {
+      appliedOpenImageIdRef.current = openImageId;
+      offsetRef.current = 0;
+      pendingTrackOffsetRef.current = null;
+      zoomRef.current = DEFAULT_ZOOM;
+      pendingZoomRef.current = null;
+      zoomMetricsRef.current = null;
+    }
+    if (!isDragging) writeTrackOffset(0);
+    writeZoom(zoomRef.current);
+  }, [index, isDragging, openImageId]);
+
+  useEffect(() => {
+    if (!openImageId || !activeImage || !hasDistinctThumbnail(activeImage)) {
+      return;
+    }
+
+    let cancelled = false;
+    let adjacentPreloadTimer: number | null = null;
+
+    const loadActiveAndPrefetch = async () => {
+      const activeLoaded = await preloadOriginal(activeImage.src);
+      if (cancelled) return;
+      if (!activeLoaded) return;
+
+      markOriginalDecoded(activeImage.src);
+      if (isGestureActiveRef.current) return;
+
+      // 열린 사진을 먼저 decode한 뒤에만 다음 후보 한 장을 낮은 우선순위로 준비한다.
+      const adjacent = [images[index + 1], images[index - 1]].find(
+        (image) =>
+          image !== undefined &&
+          hasDistinctThumbnail(image) &&
+          !prefetchedOriginalsRef.current.has(image.src),
+      );
+      if (!adjacent) return;
+
+      prefetchedOriginalsRef.current.add(adjacent.src);
+      adjacentPreloadTimer = window.setTimeout(() => {
+        if (isGestureActiveRef.current) return;
+        void preloadOriginal(adjacent.src).then((loaded) => {
+          if (!cancelled && loaded) markOriginalDecoded(adjacent.src);
+        });
+      }, 200);
+    };
+
+    void loadActiveAndPrefetch();
+    return () => {
+      cancelled = true;
+      if (adjacentPreloadTimer !== null) {
+        window.clearTimeout(adjacentPreloadTimer);
+      }
+    };
+  }, [
+    activeImage,
+    images,
+    index,
+    markOriginalDecoded,
+    openImageId,
+    preloadOriginal,
+  ]);
+
   if (!openImageId || !activeImage) return null;
 
   const getViewportWidth = () => viewportRef.current?.clientWidth ?? 0;
 
-  const setDragOffset = (value: number) => {
-    offsetRef.current = value;
-    setOffset(value);
-  };
-
-  const setZoomState = (value: ZoomState) => {
-    zoomRef.current = value;
-    setZoom(value);
-  };
-
-  const resetZoom = () => setZoomState(DEFAULT_ZOOM);
-
   const goTo = (nextIndex: number) => {
-    setDragOffset(0);
+    flushPendingTransforms();
+    offsetRef.current = 0;
+    pendingTrackOffsetRef.current = null;
     if (nextIndex >= 0 && nextIndex < images.length) {
       resetZoom();
       setStoredIndex(nextIndex);
@@ -339,19 +636,38 @@ export function ImageViewer({
     return true;
   };
 
-  const clampZoom = (next: ZoomState): ZoomState => {
-    const scale = Math.max(1, Math.min(MAX_ZOOM, next.scale));
+  const measureZoomMetrics = (): ZoomMetrics | null => {
     const viewport = viewportRef.current;
     const image = imageRef.current;
-    if (scale === 1 || !viewport || !image) return DEFAULT_ZOOM;
+    if (!viewport || !image) return null;
+
+    const rect = viewport.getBoundingClientRect();
+    const metrics = {
+      viewportLeft: rect.left,
+      viewportTop: rect.top,
+      viewportWidth: viewport.clientWidth,
+      viewportHeight: viewport.clientHeight,
+      imageWidth: image.clientWidth,
+      imageHeight: image.clientHeight,
+    };
+    zoomMetricsRef.current = metrics;
+    return metrics;
+  };
+
+  const clampZoom = (next: ZoomState): ZoomState => {
+    const scale = Math.max(1, Math.min(MAX_ZOOM, next.scale));
+    if (scale === 1) return DEFAULT_ZOOM;
+
+    const metrics = zoomMetricsRef.current ?? measureZoomMetrics();
+    if (!metrics) return DEFAULT_ZOOM;
 
     const maxX = Math.max(
       0,
-      (image.clientWidth * scale - viewport.clientWidth) / 2,
+      (metrics.imageWidth * scale - metrics.viewportWidth) / 2,
     );
     const maxY = Math.max(
       0,
-      (image.clientHeight * scale - viewport.clientHeight) / 2,
+      (metrics.imageHeight * scale - metrics.viewportHeight) / 2,
     );
 
     return {
@@ -417,9 +733,10 @@ export function ImageViewer({
       markDragged();
       gestureModeRef.current = "pinch";
       pinchStartRef.current = { ...pair, zoom: zoomRef.current };
-      setDragOffset(0);
+      measureZoomMetrics();
+      setDragOffsetImmediately(0);
       setIsDragging(false);
-      setIsGestureActive(true);
+      setGestureActive(true);
       setIsChromeHidden(true);
       return;
     }
@@ -430,11 +747,12 @@ export function ImageViewer({
     }
 
     gestureStartRef.current = point;
-    setIsGestureActive(true);
+    setGestureActive(true);
 
     if (zoomRef.current.scale > 1) {
       gestureModeRef.current = "pan";
       panBaseRef.current = { x: zoomRef.current.x, y: zoomRef.current.y };
+      measureZoomMetrics();
       return;
     }
 
@@ -443,7 +761,7 @@ export function ImageViewer({
     gestureModeRef.current = "slide";
     dragBaseRef.current = grabbedOffset;
     hasDraggedRef.current = false;
-    setDragOffset(grabbedOffset);
+    setDragOffsetImmediately(grabbedOffset);
     setIsDragging(true);
   };
 
@@ -457,18 +775,17 @@ export function ImageViewer({
     if (gestureModeRef.current === "pinch") {
       const start = pinchStartRef.current;
       const pair = getPointerPair();
-      const viewport = viewportRef.current;
-      if (!start || !pair || !viewport || start.distance === 0) return;
+      const metrics = zoomMetricsRef.current;
+      if (!start || !pair || !metrics || start.distance === 0) return;
 
       event.preventDefault();
-      const viewportRect = viewport.getBoundingClientRect();
       const scale = Math.max(
         1,
         Math.min(MAX_ZOOM, start.zoom.scale * (pair.distance / start.distance)),
       );
       const viewportCenter = {
-        x: viewportRect.left + viewport.clientWidth / 2,
-        y: viewportRect.top + viewport.clientHeight / 2,
+        x: metrics.viewportLeft + metrics.viewportWidth / 2,
+        y: metrics.viewportTop + metrics.viewportHeight / 2,
       };
       const startMidpoint = {
         x: start.midpoint.x - viewportCenter.x,
@@ -495,8 +812,27 @@ export function ImageViewer({
 
     const distanceX = event.clientX - gestureStart.x;
     const distanceY = event.clientY - gestureStart.y;
-    if (Math.hypot(distanceX, distanceY) > DRAG_CLICK_TOLERANCE) {
-      markDragged();
+    const wasDragging = hasDraggedRef.current;
+    if (
+      !wasDragging &&
+      Math.hypot(distanceX, distanceY) <= DRAG_START_TOLERANCE
+    ) {
+      return;
+    }
+
+    // 손이 움직이는 동안 계속 갱신한다. 클릭 억제 창은 드래그를 시작한 시각이 아니라
+    // 손을 뗀 시각을 기준으로 닫혀야 하기 때문이다.
+    markDragged();
+
+    // 세로로 밀기 시작했다면 슬라이드는 포기한다. 확대한 이미지를 끄는 pan은 세로로도
+    // 움직여야 하므로 여기서 걸러 내면 안 된다.
+    if (
+      !wasDragging &&
+      gestureModeRef.current === "slide" &&
+      Math.abs(distanceX) <= Math.abs(distanceY)
+    ) {
+      gestureModeRef.current = null;
+      return;
     }
 
     if (gestureModeRef.current === "pan") {
@@ -512,14 +848,16 @@ export function ImageViewer({
     }
 
     if (gestureModeRef.current !== "slide") return;
-    // 탭 중의 미세한 손가락 흔들림은 슬라이드에 반영하지 않아 이미지가 잠깐 움직이지 않게 한다.
-    if (!hasDraggedRef.current) return;
 
     const viewportWidth = getViewportWidth();
     // 첫 장과 마지막 장의 정지 offset을 현재 index 기준으로 환산한 값.
     const firstSlideOffset = index * viewportWidth;
     const lastSlideOffset = (index - (images.length - 1)) * viewportWidth;
-    const draggedOffset = dragBaseRef.current + distanceX;
+    // 드래그로 인정하는 데 쓴 만큼은 빼고 민다. 그래야 문턱을 넘는 순간 이미지가 튀지 않는다.
+    const draggedDistance =
+      Math.sign(distanceX) *
+      Math.max(0, Math.abs(distanceX) - DRAG_START_TOLERANCE);
+    const draggedOffset = dragBaseRef.current + draggedDistance;
 
     if (draggedOffset > firstSlideOffset) {
       setDragOffset(
@@ -542,6 +880,7 @@ export function ImageViewer({
   const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!activePointersRef.current.has(event.pointerId)) return;
     activePointersRef.current.delete(event.pointerId);
+    flushPendingTransforms();
 
     if (gestureModeRef.current === "pinch") {
       pinchStartRef.current = null;
@@ -567,7 +906,9 @@ export function ImageViewer({
 
       gestureModeRef.current = null;
       gestureStartRef.current = null;
-      setIsGestureActive(false);
+      commitZoomState(zoomRef.current);
+      setGestureActive(false);
+      revealDecodedOriginals();
       return;
     }
 
@@ -576,16 +917,25 @@ export function ImageViewer({
     const gestureMode = gestureModeRef.current;
     gestureModeRef.current = null;
     gestureStartRef.current = null;
-    setIsGestureActive(false);
+    commitZoomState(zoomRef.current);
+    setGestureActive(false);
+    revealDecodedOriginals();
+    setIsDragging(false);
 
     if (gestureMode === "pan") return;
-    if (gestureMode !== "slide") return;
-
-    setIsDragging(false);
+    // 세로로 밀어 슬라이드를 포기한 경우. 정지 상태에서 잡았다면 0을 다시 쓰는 것뿐이지만,
+    // 슬라이드 애니메이션 도중에 잡았다면 그 중간 지점이 offset에 남아 있다. 여기서 되돌리지
+    // 않으면 트랙이 어긋난 자리에 그대로 멈춘다.
+    if (gestureMode !== "slide") {
+      offsetRef.current = 0;
+      pendingTrackOffsetRef.current = null;
+      return;
+    }
 
     const viewportWidth = getViewportWidth();
     if (viewportWidth === 0) {
-      setDragOffset(0);
+      offsetRef.current = 0;
+      pendingTrackOffsetRef.current = null;
       return;
     }
 
@@ -634,7 +984,7 @@ export function ImageViewer({
       const rect = viewport.getBoundingClientRect();
       const x = event.clientX - rect.left - rect.width / 2;
       const y = event.clientY - rect.top - rect.height / 2;
-      setZoomState(
+      commitZoomState(
         clampZoom({
           scale: DOUBLE_TAP_ZOOM,
           x: x * (1 - DOUBLE_TAP_ZOOM),
@@ -726,19 +1076,20 @@ export function ImageViewer({
               data-testid="image-viewer-track"
               className="flex h-full w-full"
               style={{
-                transform: `translateX(calc(${-index * 100}% + ${offset}px))`,
+                transform: `translateX(calc(${-index * 100}% + var(--image-viewer-track-offset, 0px)))`,
                 transition: isDragging ? "none" : SLIDE_TRANSITION,
               }}
             >
               {images.map((image, slideIndex) => (
                 <Slide
                   key={image.id}
-                  // 양옆 한 장씩만 디코딩한다. 빈 슬롯도 트랙의 기하는 유지하므로 transform은
-                  // 계속 100%의 정수배로 남는다.
+                  // 양옆 한 장씩만 그린다. 빈 슬롯도 트랙의 기하는 유지하므로 transform은 계속
+                  // 100%의 정수배로 남고, 원본 decode는 활성 사진부터 별도로 순서를 둔다.
                   image={Math.abs(slideIndex - index) <= 1 ? image : undefined}
                   imageRef={slideIndex === index ? imageRef : undefined}
                   zoom={slideIndex === index ? zoom : undefined}
                   isGestureActive={isGestureActive}
+                  showOriginal={shownOriginals.has(image.src)}
                   onBackdropClick={handleBackdropClick}
                   onImageClick={handleImageClick}
                 />
@@ -767,10 +1118,31 @@ export function ImageViewer({
                 <ChevronRightIcon className="size-6" />
               </ControlButton>
             </div>
+            {images.length > 1 ? (
+              <Filmstrip
+                images={images}
+                activeIndex={index}
+                onSelect={goTo}
+                testId="image-viewer-mobile-filmstrip"
+                screen="mobile"
+                className={cn(
+                  "absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/75 to-transparent transition-opacity duration-150 sm:hidden",
+                  isChromeHidden
+                    ? "pointer-events-none opacity-0"
+                    : "opacity-100",
+                )}
+              />
+            ) : null}
           </div>
 
           {images.length > 1 ? (
-            <Filmstrip images={images} activeIndex={index} onSelect={goTo} />
+            <Filmstrip
+              images={images}
+              activeIndex={index}
+              onSelect={goTo}
+              screen="desktop"
+              className="hidden sm:block"
+            />
           ) : (
             // 한 장뿐이어도 필름스트립 높이를 비워둔다. 안 그러면 이미지 영역이 그만큼
             // 늘어나서, 여러 장짜리 게시물과 한 장짜리 게시물의 크기가 달라 보인다.

@@ -1,10 +1,24 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderOptions } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createRoutesStub, type RoutesTestStubProps } from "react-router";
+import {
+  createRoutesStub,
+  Outlet,
+  type RoutesTestStubProps,
+} from "react-router";
 import type { ComponentType, ReactNode } from "react";
 
+import { ImageViewerProvider } from "~/shared/hooks/use-image-viewer-param";
+
 type StubRoutes = Parameters<typeof createRoutesStub>[0];
+
+function ImageViewerLayout() {
+  return (
+    <ImageViewerProvider>
+      <Outlet />
+    </ImageViewerProvider>
+  );
+}
 
 type RenderRouteOptions = RoutesTestStubProps &
   Omit<RenderOptions, "wrapper"> & {
@@ -51,8 +65,12 @@ export function renderRoute(
   }: RenderRouteOptions = {},
 ) {
   const Stub = createRoutesStub([
-    { path, Component, action, loader },
-    ...routes,
+    {
+      // `app/root.tsx`와 같은 자리다. provider가 라우트 위에 있어야 화면을 옮겨도 살아남고,
+      // 등록을 거두는 쪽 경로가 테스트에서도 실제로 밟힌다.
+      Component: ImageViewerLayout,
+      children: [{ path, Component, action, loader }, ...routes],
+    },
   ]);
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },

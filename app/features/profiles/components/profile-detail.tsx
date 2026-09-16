@@ -10,17 +10,14 @@ import {
   ShieldCheckIcon,
   UserRoundIcon,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { ProfilePostsPanel, type ProfilePostPage } from "~/features/posts";
 import { ProfileMediaEditor } from "~/features/profiles/components/profile-media-editor";
 import { formatCohort } from "~/features/profiles/model/format";
 import type { AcceptedProfile } from "~/features/profiles/model/types";
-import {
-  ImageViewer,
-  type ViewerImage,
-} from "~/shared/components/image-viewer";
+import type { ViewerImage } from "~/shared/components/image-viewer";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
 import { cn } from "~/shared/lib/utils";
@@ -200,18 +197,26 @@ export function ProfileDetail({
   // 그래서 모바일에서만 첫 묶음을 남기고 접는다 — `sm:`부터는 항상 전부 펼쳐 둔다.
   const [factsExpanded, setFactsExpanded] = useState(false);
 
-  const avatarViewerImage = profileMediaViewerImage(
-    "avatar",
-    profile.avatar_path,
-    profile.avatar_url,
+  const avatarViewerImage = useMemo(
+    () =>
+      profileMediaViewerImage(
+        "avatar",
+        profile.avatar_path,
+        profile.avatar_url,
+      ),
+    [profile.avatar_path, profile.avatar_url],
   );
-  const coverViewerImage = profileMediaViewerImage(
-    "cover",
-    profile.cover_path,
-    profile.cover_url,
+  const coverViewerImage = useMemo(
+    () =>
+      profileMediaViewerImage("cover", profile.cover_path, profile.cover_url),
+    [profile.cover_path, profile.cover_url],
   );
-  const viewerImages = [avatarViewerImage, coverViewerImage].filter(
-    (image): image is ViewerImage => image !== null,
+  const viewerImages = useMemo(
+    () =>
+      [avatarViewerImage, coverViewerImage].filter(
+        (image): image is ViewerImage => image !== null,
+      ),
+    [avatarViewerImage, coverViewerImage],
   );
   const viewer = useImageViewerParam(viewerImages);
 
@@ -532,12 +537,6 @@ export function ProfileDetail({
           </section>
         </div>
       </div>
-
-      <ImageViewer
-        images={viewerImages}
-        openImageId={viewer.openImageId}
-        onClose={viewer.close}
-      />
     </main>
   );
 }
