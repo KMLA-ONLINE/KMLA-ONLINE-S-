@@ -1250,7 +1250,7 @@ $$;
 
 ALTER FUNCTION "public"."delete_post_attachment"("p_attachment_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."delete_post_comment"("p_comment_id" "uuid") RETURNS "void"
+CREATE OR REPLACE FUNCTION "public"."delete_post_comment"("p_comment_id" "uuid") RETURNS integer
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1262,6 +1262,7 @@ declare
   comment_post_title text;
   caller_role public.group_member_role;
   author_profile_id bigint;
+  remaining_comment_count integer;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -1394,6 +1395,14 @@ begin
       comment_group_id, target_post_id
     );
   end if;
+
+  -- `create_post_comment`와 같은 이유로 삭제 트리거가 갱신한 정본 count를 돌려준다. 삭제는
+  -- 답글 묶음과 자식 없는 자리 표시까지 함께 걷어내므로, 클라이언트가 지워진 개수를 세어
+  -- 빼려면 그 규칙을 그대로 옮겨 적어야 한다. 두 벌이 되면 언젠가 갈라진다.
+  select post.comment_count into remaining_comment_count
+  from public.posts as post
+  where post.id = target_post_id;
+  return remaining_comment_count;
 end;
 $$;
 

@@ -115,9 +115,14 @@ describe("usePostComments", () => {
     expect(result.current.commentCount).toBe(6);
   });
 
-  it("lowers the count when a top level comment and its replies are deleted", async () => {
+  /**
+   * 최상위를 지우면 답글 묶음이 통째로 사라지고, 자식이 없어진 자리 표시는 조상까지 데려간다.
+   * 손에 든 값에서 "1 + reply_count"를 빼면 그 규칙을 클라이언트가 한 벌 더 적는 셈이고, 두
+   * 벌은 언젠가 갈라진다. 여기서는 그 뺄셈으로는 나올 수 없는 수를 서버가 돌려준다.
+   */
+  it("takes the deletion count from the server instead of subtracting", async () => {
     const root = comment({ comment_id: "root", reply_count: 2 });
-    deletePostComment.mockResolvedValue(undefined);
+    deletePostComment.mockResolvedValue(1);
     const onCountChange = vi.fn();
     const initial = page([root]);
 
@@ -129,10 +134,11 @@ describe("usePostComments", () => {
       await result.current.remove(root);
     });
 
-    expect(result.current.commentCount).toBe(2);
+    // 상대 계산이었다면 5 - (1 + 2) = 2가 됐을 자리다.
+    expect(result.current.commentCount).toBe(1);
     expect(result.current.comments).toEqual([]);
     // 삭제도 생성과 똑같이 목록 캐시에 알려야 한다. 한쪽만 알리면 피드가 지운 댓글을 계속 센다.
-    expect(onCountChange).toHaveBeenCalledWith("post-id", 2);
+    expect(onCountChange).toHaveBeenCalledWith("post-id", 1);
   });
 
   it("reports the lowered count to the list caches when a reply is deleted", async () => {
@@ -149,7 +155,8 @@ describe("usePostComments", () => {
       root_comment_id: "root",
       depth: 1,
     });
-    deletePostComment.mockResolvedValue(undefined);
+    // 지운 답글 하나로 끝나지 않고 자리 표시만 남아 있던 조상까지 함께 사라진 경우.
+    deletePostComment.mockResolvedValue(3);
     listPostCommentReplies
       .mockResolvedValueOnce([kept, removed])
       .mockResolvedValueOnce([kept]);
@@ -167,8 +174,13 @@ describe("usePostComments", () => {
       await result.current.remove(removed);
     });
 
-    expect(result.current.commentCount).toBe(4);
-    expect(onCountChange).toHaveBeenCalledWith("post-id", 4);
+    // 사라진 답글 수만 세었다면 5 - 1 = 4가 됐을 자리다.
+    expect(result.current.commentCount).toBe(3);
+    expect(onCountChange).toHaveBeenCalledWith("post-id", 3);
+    // 묶음은 여전히 다시 읽는다 — tombstone 규칙은 서버만 안다.
+    expect(
+      result.current.replies.root?.map((entry) => entry.comment_id),
+    ).toEqual(["kept"]);
   });
 
   it("adopts a fresh server count when the loader revalidates", async () => {

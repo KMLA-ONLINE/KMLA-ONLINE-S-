@@ -637,10 +637,19 @@ select lives_ok(
   'group owners can delete other members comments'
 );
 
--- 최상위 댓글을 지우면 답글 묶음 전체가 사라진다.
-select lives_ok(
-  $$select public.delete_post_comment((select id from ids where name = 'root'))$$,
-  'a top level comment can be deleted'
+-- 최상위 댓글을 지우면 답글 묶음 전체가 사라진다. 돌려주는 수는 그 정리가 끝난 뒤의 정본이라,
+-- 클라이언트가 "지운 하나 + 답글 수"를 직접 빼면서 이 규칙을 한 벌 더 적을 필요가 없다.
+create temporary table deleted_root as
+select public.delete_post_comment((select id from ids where name = 'root')) as remaining;
+
+select is(
+  (select remaining from deleted_root),
+  (
+    select comment_count
+    from public.posts
+    where id = '90000000-0000-0000-0000-000000000001'
+  ),
+  'deleting a top level comment returns the canonical count'
 );
 select is(
   (

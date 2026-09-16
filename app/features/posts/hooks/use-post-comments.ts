@@ -52,8 +52,10 @@ function mergeComments(
  * 답글은 만들거나 지운 뒤 그 묶음만 다시 불러온다. tombstone이 보이는지 여부는 "살아 있는
  * 자손이 있는가"라는 서버 규칙이라, 클라이언트에서 흉내 내면 두 규칙이 갈라진다.
  *
- * 댓글 수도 같은 원칙이다. 생성 RPC는 트리거 적용 뒤의 정본 수를 함께 돌려주므로 손에 든 값에
- * `+1` 하지 않고 그 값을 그대로 쓴다. 삭제 RPC에는 정본 수가 없어 그쪽만 상대 계산으로 남는다.
+ * 댓글 수도 같은 원칙이다. 생성과 삭제 RPC 모두 트리거 적용 뒤의 정본 수를 돌려주므로, 손에 든
+ * 값에 `±1` 하지 않고 그 값을 그대로 쓴다. 상대 계산이었다면 "최상위를 지우면 답글 묶음이
+ * 통째로 사라지고, 자식 없는 자리 표시는 조상까지 데려간다"는 서버 규칙을 클라이언트가 한 벌
+ * 더 적어 두는 셈이 된다.
  */
 export function usePostComments(
   postId: string,
@@ -108,11 +110,11 @@ export function usePostComments(
   };
 
   /**
-   * 새 댓글 수를 화면과 상위 캐시에 함께 적용한다.
+   * 정본 댓글 수를 화면과 상위 캐시에 함께 적용한다.
    *
-   * 함수형 업데이터가 아니라 계산된 값을 넘긴다 — 상위에 알릴 값과 화면에 넣을 값이 반드시
-   * 같아야 하는데, 업데이터 안에서 바깥으로 값을 꺼내면 그 업데이터가 순수하지 않게 된다.
-   * 한 게시물의 뮤테이션은 `pending`으로 직렬화되므로 손에 든 수가 곧 최신이다.
+   * 넘어오는 값은 언제나 서버가 센 절대값이라, 같은 값을 두 번 적용해도 결과가 같고 늦게
+   * 온 응답도 다음 뮤테이션이 고쳐 준다. 상대 증감이었다면 한 번 어긋난 수가 스스로 돌아올
+   * 길이 없다 — 이 화면은 댓글 뒤에 route를 재검증하지 않기 때문이다.
    */
   const applyCount = (next: number) => {
     setCommentCount(next);
@@ -223,10 +225,9 @@ export function usePostComments(
 
   const remove = (comment: PostComment) =>
     run(async () => {
-      await deletePostComment(comment.comment_id);
+      applyCount(await deletePostComment(comment.comment_id));
       if (comment.depth === 0) {
         // 최상위를 지우면 답글 묶음까지 함께 사라진다(기능 명세 §9.4).
-        applyCount(Math.max(0, commentCount - (1 + comment.reply_count)));
         setComments((current) =>
           current.filter((item) => item.comment_id !== comment.comment_id),
         );
@@ -242,9 +243,9 @@ export function usePostComments(
         });
         return;
       }
-      const before = liveCount(replies[comment.root_comment_id] ?? []);
-      const bundle = await refreshBundle(comment.root_comment_id);
-      applyCount(Math.max(0, commentCount - (before - liveCount(bundle))));
+      // 답글은 tombstone으로 남을 수도, 조상까지 데려가며 사라질 수도 있다. 어느 쪽인지는
+      // 묶음을 다시 읽어야 알 수 있다 — 수는 이미 위에서 정본으로 받았다.
+      await refreshBundle(comment.root_comment_id);
     });
 
   /**

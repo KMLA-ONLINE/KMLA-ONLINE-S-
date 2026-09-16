@@ -1638,10 +1638,7 @@ export type Database = {
         Args: { p_attachment_id: string }
         Returns: undefined
       }
-      delete_post_comment: {
-        Args: { p_comment_id: string }
-        Returns: undefined
-      }
+      delete_post_comment: { Args: { p_comment_id: string }; Returns: number }
       delete_profile_post: { Args: { p_post_id: string }; Returns: undefined }
       discover_groups: {
         Args: {

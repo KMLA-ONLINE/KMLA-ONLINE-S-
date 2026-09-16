@@ -219,7 +219,7 @@
 
 - 댓글·반응 뮤테이션은 route를 재검증하지 않는다. 재검증하면 펼쳐 둔 답글 묶음과 위로 불러온 이전 페이지가 통째로 초기화된다. RPC가 돌려주는 정본 행을 병합한다(`hooks/use-post-comments.ts`).
 - 반응은 누르는 즉시 로컬 계산으로 앞서 나가고 정본으로 덮는다. **상위 반응은 로컬에서 계산하지 마라** — 내 반응 하나로는 남들의 순위를 알 수 없다. `applyReactionLocally()`가 내 반응과 총계만 건드리는 이유다.
-- 댓글 수는 `create_post_comment`가 돌려주는 `post_comment_count`가 정본이다. 손에 든 값에 `+1` 하지 마라 — 그 사이 다른 사람이 단 댓글을 지운 수가 된다. 상세는 이 값을 쓰고 `onCommentCountChange(postId, commentCount)`로 목록에 알리며, 목록은 `patchFeedPostCommentCount` / `patchGroupPostCommentCount`로 자기 캐시만 고친다(`docs/DATA_CACHE_POLICY.md` §4). 생성만이 아니라 삭제에서도 알려야 한다 — 한쪽만 알리면 목록이 지운 댓글을 계속 센다. 목록 쪽 패치는 받은 값을 그대로 덮으므로 `max`로 거르지 마라.
+- 댓글 수는 `create_post_comment`가 돌려주는 `post_comment_count`와 `delete_post_comment`의 반환값이 정본이다. 손에 든 값에 `±1` 하지 마라 — 생성은 그 사이 남이 단 댓글을 지운 수가 되고, 삭제는 답글 묶음과 자식 없는 자리 표시까지 함께 사라져서(기능 명세 §9.4) 뺄 개수를 클라이언트가 셀 수 없다. 상세는 이 값을 쓰고 `onCommentCountChange(postId, commentCount)`로 목록에 알리며, 목록은 `patchFeedPostCommentCount` / `patchGroupPostCommentCount`로 자기 캐시만 고친다(`docs/DATA_CACHE_POLICY.md` §4). 생성만이 아니라 삭제에서도 알려야 한다 — 한쪽만 알리면 목록이 지운 댓글을 계속 센다. 목록 쪽 패치는 받은 값을 그대로 덮으므로 `max`로 거르지 마라.
 - 피드의 미디어 수화본은 만들어진 시점에 멈춰 있다. raw post와 합칠 때 수화가 채운 필드만 쓰고 댓글 수는 최신 raw post의 것을 얹어라. 통째로 갈아 끼우면 방금 고친 수가 되돌아간다.
 - 피드 상세의 `useFetcher` 데이터는 닫아도 남는다. 같은 게시물을 다시 열 때는 명시적으로 다시 읽어라 — "이미 이 글의 데이터가 있다"로 판단하면 방금 쓴 댓글이 빠진 예전 응답이 뜬다.
 
