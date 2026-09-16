@@ -102,7 +102,7 @@ export function PostImageGrid({
     [images],
   );
   // attachment_id가 전역 유일하므로 같은 첨부가 카드와 상세에 있어도 전역 host가 하나만 연다.
-  const viewer = useImageViewerParam(viewerImages, true);
+  const viewer = useImageViewerParam(viewerImages);
 
   if (images.length === 0) return null;
 

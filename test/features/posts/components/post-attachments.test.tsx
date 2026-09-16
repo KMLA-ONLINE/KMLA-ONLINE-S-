@@ -1,5 +1,5 @@
 import { screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { useNavigate } from "react-router";
 
 import {
@@ -205,38 +205,6 @@ describe("PostImageGrid", () => {
       "https://example.com/file?download=image-uuid.webp",
     );
     expect(download).toHaveAttribute("download", "image-uuid.webp");
-  });
-
-  it("offers a current-or-all choice for a multi-image post", async () => {
-    const downloadHrefs: string[] = [];
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
-      function mockDownload(this: HTMLAnchorElement) {
-        downloadHrefs.push(this.href);
-      },
-    );
-    const { user } = renderRoute(() => (
-      <PostImageGrid
-        images={[
-          { ...image("first"), signedUrl: "https://example.com/first" },
-          { ...image("second"), signedUrl: "https://example.com/second" },
-        ]}
-      />
-    ));
-
-    await user.click(screen.getByRole("button", { name: /first.webp/ }));
-    await user.click(screen.getByRole("button", { name: "다운로드 옵션" }));
-
-    expect(
-      await screen.findByRole("menuitem", { name: "이 이미지 다운로드" }),
-    ).toBeInTheDocument();
-    await user.click(
-      await screen.findByRole("menuitem", { name: "전체 이미지 다운로드" }),
-    );
-
-    expect(downloadHrefs).toEqual([
-      "https://example.com/first?download=first.webp",
-      "https://example.com/second?download=second.webp",
-    ]);
   });
 
   it("closes one history entry when the same image is registered twice", async () => {

@@ -24,7 +24,6 @@ interface ImageViewerLocationState {
 interface ImageViewerRegistration {
   id: string;
   images: ViewerImage[];
-  allowDownloadAll: boolean;
 }
 
 interface ImageViewerRegistry {
@@ -65,10 +64,7 @@ export function ImageViewerProvider({ children }: { children: ReactNode }) {
       if (index === -1) return [...current, registration];
 
       const existing = current[index];
-      if (
-        existing?.allowDownloadAll === registration.allowDownloadAll &&
-        sameImages(existing.images, registration.images)
-      ) {
+      if (existing && sameImages(existing.images, registration.images)) {
         return current;
       }
 
@@ -125,7 +121,6 @@ export function ImageViewerProvider({ children }: { children: ReactNode }) {
           images: activeRegistration.images,
           openImageId: requestedImageId,
           onClose: close,
-          allowDownloadAll: activeRegistration.allowDownloadAll,
         })
       : null,
   );
@@ -141,10 +136,7 @@ export function ImageViewerProvider({ children }: { children: ReactNode }) {
  * 이미지 묶음은 앱의 단일 `ImageViewerProvider`에 등록한다. 같은 사진이 카드와 상세에 동시에
  * 있어도 provider가 Dialog 하나만 렌더링하므로 history 닫기가 겹치지 않는다.
  */
-export function useImageViewerParam(
-  images: ViewerImage[],
-  allowDownloadAll = false,
-) {
+export function useImageViewerParam(images: ViewerImage[]) {
   const registry = useContext(ImageViewerRegistryContext);
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
@@ -157,13 +149,9 @@ export function useImageViewerParam(
   }
 
   useEffect(() => {
-    registry.register({
-      id: registrationId,
-      images,
-      allowDownloadAll,
-    });
+    registry.register({ id: registrationId, images });
     return () => registry.unregister(registrationId);
-  }, [allowDownloadAll, images, registrationId, registry]);
+  }, [images, registrationId, registry]);
 
   const open = (imageId: string) => {
     const next = new URLSearchParams(searchParams);

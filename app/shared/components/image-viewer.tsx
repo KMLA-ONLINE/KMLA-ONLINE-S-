@@ -20,13 +20,6 @@ import {
 } from "react";
 
 import { cn } from "~/shared/lib/utils";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "~/shared/ui/dropdown-menu";
 
 export interface ViewerImage {
   id: string;
@@ -278,65 +271,6 @@ function Filmstrip({
   );
 }
 
-function startDownload(image: ViewerImage) {
-  const anchor = document.createElement("a");
-  anchor.href = image.downloadSrc;
-  anchor.download = image.name;
-  anchor.target = "_blank";
-  anchor.rel = "noopener noreferrer";
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-}
-
-function DownloadControl({
-  activeImage,
-  images,
-  allowDownloadAll,
-}: {
-  activeImage: ViewerImage;
-  images: ViewerImage[];
-  allowDownloadAll: boolean;
-}) {
-  if (!allowDownloadAll || images.length < 2) {
-    return (
-      <a
-        href={activeImage.downloadSrc}
-        download={activeImage.name}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="다운로드"
-        className={CONTROL_CLASS}
-      >
-        <DownloadIcon className="size-5" />
-      </a>
-    );
-  }
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        type="button"
-        aria-label="다운로드 옵션"
-        className={CONTROL_CLASS}
-      >
-        <DownloadIcon className="size-5" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" positionerClassName="z-[70]">
-        <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => startDownload(activeImage)}>
-            <DownloadIcon />이 이미지 다운로드
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => images.forEach(startDownload)}>
-            <DownloadIcon />
-            전체 이미지 다운로드
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 /**
  * 전체화면 이미지 뷰어.
  *
@@ -350,13 +284,10 @@ export function ImageViewer({
   images,
   openImageId,
   onClose,
-  allowDownloadAll = false,
 }: {
   images: ViewerImage[];
   openImageId: string | null;
   onClose: () => void;
-  /** 게시물의 이미지 묶음에서만 전체 다운로드를 연다. */
-  allowDownloadAll?: boolean;
 }) {
   const popupRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -1116,11 +1047,16 @@ export function ImageViewer({
                 </p>
               ) : null}
             </div>
-            <DownloadControl
-              activeImage={activeImage}
-              images={images}
-              allowDownloadAll={allowDownloadAll}
-            />
+            <a
+              href={activeImage.downloadSrc}
+              download={activeImage.name}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="다운로드"
+              className={CONTROL_CLASS}
+            >
+              <DownloadIcon className="size-5" />
+            </a>
             <Dialog.Close render={<ControlButton aria-label="닫기" />}>
               <XIcon className="size-5" />
             </Dialog.Close>
