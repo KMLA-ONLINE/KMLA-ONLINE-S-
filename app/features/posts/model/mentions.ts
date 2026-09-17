@@ -168,6 +168,96 @@ export function toMentionDraft(mentions: PostMention[]): MentionDraftEntry[] {
     }));
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** 토큰 바깥의 글자에만 `map`을 적용한다. 붙여넣기로 들어온 토큰을 두 번 감싸지 않는다. */
+function outsideMentionTokens(
+  text: string,
+  map: (segment: string) => string,
+): string {
+  const pattern = mentionTokenPattern();
+  let result = "";
+  let last = 0;
+
+  for (const match of text.matchAll(pattern)) {
+    result += map(text.slice(last, match.index)) + match[0];
+    last = match.index + match[0].length;
+  }
+
+  return result + map(text.slice(last));
+}
+
+/**
+ * 표시형. `textarea`로 쓰는 댓글 입력창이 원문 대신 보여 주는 글이다.
+ *
+ * Milkdown은 토큰을 링크로 그려 주지만 `textarea`는 글자 일부만 달리 그릴 수 없어서, 넣는
+ * 순간부터 `[@홍길동](m:1)`이 그대로 보였다. 대신 입력창이 드는 값은 `@홍길동`이고 제출
+ * 직전에 `fromMentionDisplay()`가 토큰으로 되돌린다.
+ *
+ * 이름은 토큰의 라벨이 아니라 초안 목록에서 가져온다. 라벨은 장식이라 개명 전 이름일 수 있고,
+ * 되돌릴 때 짝을 찾는 것도 이 이름이다. 초안이 모르는 ordinal(탈퇴한 사용자)은 어차피
+ * `normalizeMentions()`가 평문으로 푸므로 라벨을 그대로 쓴다.
+ */
+export function toMentionDisplay(
+  body: string,
+  entries: MentionDraftEntry[],
+): string {
+  const byOrdinal = new Map(entries.map((entry) => [entry.ordinal, entry]));
+
+  return body.replace(
+    mentionTokenPattern(),
+    (_token, label: string, rawOrdinal: string) =>
+      `@${byOrdinal.get(Number(rawOrdinal))?.name ?? label}`,
+  );
+}
+
+/**
+ * 표시형을 원문으로 되돌린다. 초안에 있는 이름만 토큰이 되므로, 고르지 않은 사람을 손으로
+ * 쳐도 멘션이 되지 않는다.
+ *
+ * 같은 이름이 여럿이면 **나온 순서대로** 짝을 짓는다. 고른 순서와 본문에 넣은 순서가 같으므로
+ * 보통은 그대로 맞고, 어긋나도 이름이 같은 사람들 사이에서만 어긋난다. 동명이인이라고 토큰을
+ * 그대로 보여 주면 입력창에 원문이 다시 새어 나온다. 수가 모자라면 마지막 사람을 다시 쓴다 —
+ * 같은 사람을 여러 번 부르는 것은 `normalizeMentions()`가 하나로 센다.
+ */
+export function fromMentionDisplay(
+  text: string,
+  entries: MentionDraftEntry[],
+): string {
+  const byName = new Map<string, MentionDraftEntry[]>();
+
+  [...entries]
+    .sort((left, right) => left.ordinal - right.ordinal)
+    .forEach((entry) => {
+      if (entry.name === "") return;
+      const group = byName.get(entry.name);
+      if (group) group.push(entry);
+      else byName.set(entry.name, [entry]);
+    });
+
+  const names = Array.from(byName.keys()).sort(
+    // 긴 이름을 먼저 본다. `김민`이 `김민수`를 반으로 자르지 않게 한다.
+    (left, right) => right.length - left.length,
+  );
+  if (names.length === 0) return text;
+
+  const pattern = new RegExp(`@(${names.map(escapeRegExp).join("|")})`, "g");
+  const seen = new Map<string, number>();
+
+  return outsideMentionTokens(text, (segment) =>
+    segment.replace(pattern, (_match, name: string) => {
+      const group = byName.get(name) ?? [];
+      const index = seen.get(name) ?? 0;
+      seen.set(name, index + 1);
+      const entry = group[Math.min(index, group.length - 1)];
+
+      return buildMentionToken(entry.name, entry.ordinal);
+    }),
+  );
+}
+
 /** 본문에서 쓰지 않는 가장 작은 멘션 번호. 모든 번호가 사용 중이면 `null`이다. */
 export function nextMentionOrdinal(body: string): number | null {
   const used = new Set<number>();

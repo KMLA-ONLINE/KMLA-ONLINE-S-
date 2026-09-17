@@ -9,11 +9,13 @@ import {
   MENTION_LIMIT,
   buildMentionToken,
   countMentionTargets,
+  fromMentionDisplay,
   mentionOrdinalFromHref,
   mentionTokenPattern,
   normalizeMentions,
   parseMentions,
   sanitizeMentionLabel,
+  toMentionDisplay,
   toMentionDraft,
   validateMentionCount,
   type MentionDraftEntry,
@@ -223,5 +225,68 @@ describe("parseMentions", () => {
         },
       ]),
     ).toEqual([{ ordinal: 2, pubId: "saebyeok-24", name: "박새벽" }]);
+  });
+});
+
+describe("mention display form", () => {
+  it("unwraps tokens with the current name and wraps them back", () => {
+    const body = `${buildMentionToken("옛 이름", 1)} 확인 부탁`;
+    const display = toMentionDisplay(body, [한별]);
+
+    // 토큰의 라벨은 장식이라 개명 전 이름일 수 있다. 짝은 ordinal로 찾는다.
+    expect(display).toBe("@이한별 확인 부탁");
+    expect(fromMentionDisplay(display, [한별])).toBe(
+      `${buildMentionToken("이한별", 1)} 확인 부탁`,
+    );
+  });
+
+  it("leaves a name nobody picked as plain text", () => {
+    expect(fromMentionDisplay("@아무개 안녕", [한별])).toBe("@아무개 안녕");
+  });
+
+  it("does not cut a longer name in half", () => {
+    const 민: MentionDraftEntry = { ordinal: 1, pubId: "min", name: "김민" };
+    const 민수: MentionDraftEntry = {
+      ordinal: 2,
+      pubId: "minsu",
+      name: "김민수",
+    };
+
+    expect(fromMentionDisplay("@김민수 님", [민, 민수])).toBe(
+      `${buildMentionToken("김민수", 2)} 님`,
+    );
+  });
+
+  it("pairs duplicate names in the order they appear", () => {
+    const 한별둘: MentionDraftEntry = {
+      ordinal: 2,
+      pubId: "hanbyeol-26",
+      name: "이한별",
+    };
+
+    // 동명이인도 입력창에는 이름으로 보인다. 짝은 나온 순서대로 짓고, 수가 모자라면
+    // 마지막 사람을 다시 쓴다.
+    expect(fromMentionDisplay("@이한별 @이한별 @이한별", [한별, 한별둘])).toBe(
+      `${buildMentionToken("이한별", 1)} ${buildMentionToken("이한별", 2)} ${buildMentionToken("이한별", 2)}`,
+    );
+  });
+
+  it("does not wrap a token that is already in the text", () => {
+    const body = `${buildMentionToken("이한별", 1)} @이한별`;
+
+    expect(fromMentionDisplay(body, [한별])).toBe(
+      `${buildMentionToken("이한별", 1)} ${buildMentionToken("이한별", 1)}`,
+    );
+  });
+
+  it("keeps a withdrawn target readable and lets it fall back to plain text", () => {
+    const body = `${buildMentionToken("탈퇴한 사람", 3)} 안녕`;
+
+    // 초안이 모르는 ordinal은 라벨을 그대로 보여 준다. 되돌릴 짝이 없어 평문으로 남고,
+    // 서버로 가는 본문에서도 `normalizeMentions()`가 같은 결론을 낸다.
+    expect(toMentionDisplay(body, [한별])).toBe("@탈퇴한 사람 안녕");
+    expect(fromMentionDisplay("@탈퇴한 사람 안녕", [한별])).toBe(
+      "@탈퇴한 사람 안녕",
+    );
   });
 });

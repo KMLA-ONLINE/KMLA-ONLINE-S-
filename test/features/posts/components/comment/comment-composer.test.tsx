@@ -303,6 +303,43 @@ describe("CommentComposer", () => {
     await vi.waitFor(() => expect(input).toHaveValue(""));
   });
 
+  it("shows a picked mention as a name and submits it as a token", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
+    const { user, input } = renderComposer({ onSubmit, mentionGroupId: "g" });
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+
+    // 입력창은 `textarea`라 토큰을 링크로 그릴 수 없다. 원문 대신 표시형을 담는다.
+    expect(input).toHaveValue("@첫 멤버 ");
+
+    await user.type(input, "확인 부탁");
+    await user.click(screen.getByRole("button", { name: "댓글 게시" }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      "[@첫 멤버](m:1) 확인 부탁",
+      undefined,
+      [{ ordinal: 1, pubId: "member-1", name: "첫 멤버" }],
+    );
+  });
+
+  it("opens an edited comment with its mentions already unwrapped", () => {
+    const { input } = renderComposer({
+      mentionGroupId: "g",
+      initialValue: "[@옛 이름](m:1) 확인 부탁",
+      initialMentions: [
+        {
+          ordinal: 1,
+          pub_id: "member-1",
+          // 토큰의 라벨은 장식이라 개명 전 이름일 수 있다. 화면에는 지금 이름을 보여준다.
+          name: "첫 멤버",
+          avatar_path: null,
+        },
+      ],
+    });
+
+    expect(input).toHaveValue("@첫 멤버 확인 부탁");
+  });
+
   it("resets the mention draft only after a successful submit", async () => {
     const onSubmit = vi
       .fn()
@@ -333,7 +370,7 @@ describe("CommentComposer", () => {
 
     await user.click(screen.getByRole("button", { name: "멘션 추가" }));
     await user.click(screen.getByRole("button", { name: "댓글 게시" }));
-    await vi.waitFor(() => expect(input).toHaveValue("[@첫 멤버](m:1) "));
+    await vi.waitFor(() => expect(input).toHaveValue("@첫 멤버 "));
     await user.click(screen.getByRole("button", { name: "멘션 추가" }));
     await user.click(screen.getByRole("button", { name: "댓글 게시" }));
 
