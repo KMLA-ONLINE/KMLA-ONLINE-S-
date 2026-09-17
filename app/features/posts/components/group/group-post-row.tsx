@@ -3,6 +3,7 @@ import { Link } from "react-router";
 
 import { StaffMark } from "~/features/posts/components/staff-mark";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
+import { usePostEngagement } from "~/features/posts/hooks/use-post-engagement";
 import { FROM_GROUP } from "~/features/posts/model/navigation";
 import type { GroupPost } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
@@ -26,6 +27,8 @@ export function GroupPostRow({
   isVisited: boolean;
   onVisit: () => void;
 }) {
+  const engagement = usePostEngagement(post.post_id, post);
+
   return (
     <Link
       to={`/groups/${slug}/posts/${post.post_id}`}
@@ -71,8 +74,8 @@ export function GroupPostRow({
         <span className="ml-auto flex shrink-0 items-center gap-3">
           {/* 행 전체가 링크라 여기서는 누를 수 없다. 반응은 카드나 상세에서 남긴다. */}
           <span className="flex items-center gap-1">
-            {post.top_reactions.length > 0 ? (
-              post.top_reactions.map((reaction) => (
+            {engagement.top_reactions.length > 0 ? (
+              engagement.top_reactions.map((reaction) => (
                 <ReactionEmoji
                   key={reaction}
                   reaction={reaction}
@@ -83,12 +86,12 @@ export function GroupPostRow({
               <HeartIcon className="size-3.5" aria-hidden="true" />
             )}
             <span className="sr-only">반응</span>
-            {post.reaction_count}
+            {engagement.reaction_count}
           </span>
           <span className="flex items-center gap-1">
             <MessageSquareIcon className="size-3.5" aria-hidden="true" />
             <span className="sr-only">댓글</span>
-            {post.comment_count}
+            {engagement.comment_count}
           </span>
         </span>
       </div>

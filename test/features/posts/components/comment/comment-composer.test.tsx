@@ -184,15 +184,79 @@ describe("CommentComposer", () => {
     );
   });
 
-  it("cycles through every identity the group allows", async () => {
+  it("opens an explicit picker when the staff byline is available", async () => {
     const { user, onIdentityChange } = renderComposer({
       identities: ["identified", "anonymous", "staff"],
       identity: "anonymous",
     });
 
     await user.click(screen.getByRole("button", { name: /익명으로 작성 중/ }));
-    await user.click(await screen.findByRole("button", { name: "바꾸기" }));
+
+    // 선택지를 돌려 가며 확인시키지 않는다. 셋 다 한 화면에 놓고 고르게 한다.
+    const options = await screen.findAllByRole("radio");
+    expect(options.map((option) => (option as HTMLInputElement).value)).toEqual(
+      ["identified", "anonymous", "staff"],
+    );
+    expect(screen.getByRole("radio", { name: /익명/ })).toBeChecked();
+
+    await user.click(screen.getByRole("radio", { name: /운영진/ }));
+    // 고르기만 해서는 바뀌지 않는다. `바꾸기`를 눌러야 한다.
+    expect(onIdentityChange).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "바꾸기" }));
     expect(onIdentityChange).toHaveBeenCalledWith("staff");
+  });
+
+  it("uses the picker for a two-way choice that includes the staff byline", async () => {
+    const { user, onIdentityChange } = renderComposer({
+      identities: ["identified", "staff"],
+      identity: "identified",
+    });
+
+    await user.click(screen.getByRole("button", { name: /실명으로 작성 중/ }));
+
+    expect(await screen.findAllByRole("radio")).toHaveLength(2);
+    await user.click(screen.getByRole("radio", { name: /운영진/ }));
+    await user.click(screen.getByRole("button", { name: "바꾸기" }));
+    expect(onIdentityChange).toHaveBeenCalledWith("staff");
+  });
+
+  it("keeps the identity and the draft when the picker is dismissed", async () => {
+    const { user, onIdentityChange, input } = renderComposer({
+      identities: ["identified", "anonymous", "staff"],
+      identity: "identified",
+    });
+
+    await user.type(input, "쓰던 댓글");
+    await user.click(screen.getByRole("button", { name: /실명으로 작성 중/ }));
+    await user.click(screen.getByRole("radio", { name: /운영진/ }));
+    await user.click(await screen.findByRole("button", { name: "취소" }));
+
+    expect(onIdentityChange).not.toHaveBeenCalled();
+    // 신원만 고르는 창이다. 쓰던 본문을 날리면 고를 이유가 없어진다.
+    expect(input).toHaveValue("쓰던 댓글");
+  });
+
+  it("disables the anonymous option in the picker while an active mention remains", async () => {
+    const { user, onIdentityChange } = renderComposer({
+      identities: ["identified", "anonymous", "staff"],
+      identity: "identified",
+      mentionGroupId: "group-id",
+    });
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+    await user.click(screen.getByRole("button", { name: /실명으로 작성 중/ }));
+
+    const anonymous = await screen.findByRole("radio", { name: /익명/ });
+    expect(anonymous).toBeDisabled();
+    expect(anonymous).toHaveAccessibleName(
+      expect.stringContaining(
+        "멘션을 모두 지운 뒤 익명으로 전환할 수 있습니다.",
+      ),
+    );
+
+    await user.click(screen.getByRole("button", { name: "바꾸기" }));
+    expect(onIdentityChange).not.toHaveBeenCalled();
   });
 
   it("hides the identity toggle when only one identity is allowed", () => {

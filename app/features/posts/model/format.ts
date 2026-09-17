@@ -65,6 +65,8 @@ export function getCommentErrorMessage(error: unknown): string {
     return "댓글은 1자 이상 5,000자 이하로 입력해 주세요.";
   if (message.includes("staff identity"))
     return "운영진 명의는 그룹 운영진만 사용할 수 있습니다.";
+  if (message.includes("post author cannot comment anonymously"))
+    return "내가 쓴 게시물에는 익명으로 댓글을 남길 수 없습니다.";
   if (message.includes("anonymous commenting"))
     return "이 그룹에서는 익명으로 댓글을 쓸 수 없습니다.";
   if (message.includes("identified commenting"))

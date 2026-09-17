@@ -19,6 +19,7 @@ import { PostMarkdown } from "~/features/posts/components/post-markdown";
 import { ProfileMediaActivity } from "~/features/posts/components/profile/profile-media-activity";
 import { StaffMark } from "~/features/posts/components/staff-mark";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
+import { usePostEngagement } from "~/features/posts/hooks/use-post-engagement";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";
@@ -240,6 +241,7 @@ export function FeedPostRow({
   isVisited: boolean;
   onVisit: () => void;
 }) {
+  const engagement = usePostEngagement(post.post_id, post);
   const path = feedPostOverlayPath(post);
   const author = post.author_name ?? post.author_label;
   const target = post.kind === "group" ? post.group_name : post.timeline_name;
@@ -279,20 +281,20 @@ export function FeedPostRow({
         <RelativeTime value={post.published_at} />
         <span className="ml-auto flex shrink-0 items-center gap-3">
           <span className="flex items-center gap-1">
-            {post.top_reactions.length ? (
-              post.top_reactions.map((reaction) => (
+            {engagement.top_reactions.length ? (
+              engagement.top_reactions.map((reaction) => (
                 <ReactionEmoji key={reaction} reaction={reaction} />
               ))
             ) : (
               <HeartIcon className="size-3.5" aria-hidden="true" />
             )}
             <span className="sr-only">반응</span>
-            {post.reaction_count}
+            {engagement.reaction_count}
           </span>
           <span className="flex items-center gap-1">
             <MessageSquareIcon className="size-3.5" aria-hidden="true" />
             <span className="sr-only">댓글</span>
-            {post.comment_count}
+            {engagement.comment_count}
           </span>
         </span>
       </div>

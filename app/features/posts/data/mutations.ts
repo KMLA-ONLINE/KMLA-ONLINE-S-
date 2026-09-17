@@ -6,6 +6,7 @@ import {
 import type {
   GroupCategory,
   CommentImageInput,
+  CreatedPostComment,
   PostAttachment,
   PostComment,
   PostFormValues,
@@ -923,7 +924,7 @@ export async function createPostComment(
   image?: CommentImageInput,
   mentionEntries: MentionDraftEntry[] = [],
   session = createCommentImageUploadSession(),
-): Promise<PostComment> {
+): Promise<CreatedPostComment> {
   const imageId =
     image && "file" in image
       ? await uploadCommentImage(postId, image, session)
@@ -938,9 +939,15 @@ export async function createPostComment(
     p_mention_pub_ids: mentions.pubIds,
   });
   if (error) throw error;
-  const comment = data?.[0];
-  if (!comment) throw new Error("댓글을 저장하지 못했습니다.");
-  return hydrateCommittedComment(withMentions(comment));
+  const row = data?.[0];
+  if (!row) throw new Error("댓글을 저장하지 못했습니다.");
+  // 정본 count는 댓글 행이 아니라 게시물의 것이다. 행에 섞인 채로 두면 목록 캐시가
+  // 댓글 필드로 오해한다. 여기서 떼어 내고 나머지만 댓글로 수화한다.
+  const { post_comment_count: commentCount, ...comment } = row;
+  return {
+    comment: await hydrateCommittedComment(withMentions(comment)),
+    commentCount,
+  };
 }
 
 export async function updatePostComment(
@@ -971,11 +978,22 @@ export async function updatePostComment(
   return hydrateCommittedComment(withMentions(comment));
 }
 
-export async function deletePostComment(commentId: string): Promise<void> {
-  const { error } = await getSupabase().rpc("delete_post_comment", {
+/**
+ * 댓글 삭제. 돌려주는 값은 삭제 트리거가 갱신한 게시물의 정본 댓글 수다.
+ *
+ * 삭제는 지운 댓글 하나로 끝나지 않는다 — 최상위는 답글 묶음을 통째로 데려가고, 자식이 없어진
+ * 자리 표시는 조상까지 이어서 사라진다(기능 명세 §9.4). 클라이언트가 빠진 개수를 세려면 그
+ * 규칙을 그대로 옮겨 적어야 하므로, 서버가 센 수를 받는다.
+ */
+export async function deletePostComment(commentId: string): Promise<number> {
+  const { data, error } = await getSupabase().rpc("delete_post_comment", {
     p_comment_id: commentId,
   });
   if (error) throw error;
+  if (typeof data !== "number") {
+    throw new Error("댓글을 삭제하지 못했습니다.");
+  }
+  return data;
 }
 
 /**

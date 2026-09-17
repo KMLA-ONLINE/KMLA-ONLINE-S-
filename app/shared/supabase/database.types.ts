@@ -1612,6 +1612,7 @@ export type Database = {
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
+          post_comment_count: number
           post_id: string
           reaction_count: number
           reply_count: number
@@ -1637,10 +1638,7 @@ export type Database = {
         Args: { p_attachment_id: string }
         Returns: undefined
       }
-      delete_post_comment: {
-        Args: { p_comment_id: string }
-        Returns: undefined
-      }
+      delete_post_comment: { Args: { p_comment_id: string }; Returns: number }
       delete_profile_post: { Args: { p_post_id: string }; Returns: undefined }
       discover_groups: {
         Args: {

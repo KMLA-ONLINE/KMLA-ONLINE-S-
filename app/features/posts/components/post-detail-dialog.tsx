@@ -114,7 +114,10 @@ export function PostDetailDialog({
   postAuthorPubId?: string | null;
   error?: string | null;
   onClose: () => void;
-  /** 본문 아래 액션 바. 댓글 수는 서버가 준 값만 넘기면 된다 — 방금 쓴 댓글은 여기서 더한다. */
+  /**
+   * 본문 아래 액션 바. 댓글 수는 서버가 준 값만 넘기면 된다 — 댓글 생성·삭제 RPC가 돌려준
+   * 정본 수를 `usePostComments`가 화면과 engagement overlay에 얹는다.
+   */
   actionBar: {
     reaction: ReactionSummary;
     sharePath: string;
@@ -144,7 +147,7 @@ export function PostDetailDialog({
     setListElement(node);
   }, []);
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const thread = usePostComments(postId, comments);
+  const thread = usePostComments(postId, comments, actionBar.commentCount);
   const [identity, setIdentity] = useState<PostIdentity>(identities[0]);
   const [replyingTo, setReplyingTo] = useState<PostComment | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
@@ -453,7 +456,7 @@ export function PostDetailDialog({
               reaction={actionBar.reaction}
               sharePath={actionBar.sharePath}
               shareTitle={actionBar.shareTitle}
-              commentCount={actionBar.commentCount + thread.countDelta}
+              commentCount={thread.commentCount}
               onComment={focusComposer}
             />
           </article>

@@ -55,6 +55,14 @@ export function GroupPostDetail({
   const defaultClose = useModalClose(`/groups/${slug}`);
   const close = onClose ?? defaultClose;
 
+  // 실명·운영진 게시물의 작성자는 자기 글에 익명 댓글을 달 수 없다(기능 명세 §9.1). 익명
+  // 게시물에서는 작성자도 익명으로 답할 수 있으므로 선택지를 그대로 둔다. DB가 최종 경계지만,
+  // 고를 수 없는 신원을 띄워 두고 거절하는 편보다 아예 지우는 편이 낫다.
+  const commentIdentities =
+    post.is_author && post.author_identity !== "anonymous"
+      ? identities.filter((identity) => identity !== "anonymous")
+      : identities;
+
   const { images, files } = splitPostAttachments(post.attachments);
   const authorName = post.author_name || post.author_label;
   const postPath = `/groups/${slug}/posts/${post.post_id}`;
@@ -70,7 +78,7 @@ export function GroupPostDetail({
       postId={post.post_id}
       comments={comments}
       viewer={viewer}
-      identities={identities}
+      identities={commentIdentities}
       postAuthorPubId={post.author_pub_id}
       mentionGroupId={post.group_id}
       error={fetcher.data?.error}

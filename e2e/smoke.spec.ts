@@ -65,6 +65,25 @@ test("PWA manifest is served and installable", async ({ page, request }) => {
   expect(json.icons.some((icon) => icon.sizes === "512x512")).toBeTruthy();
 });
 
+test("첫 화면은 스타일시트를 네트워크로 받지 않는다", async ({ page }) => {
+  // `scripts/inline-root-css.mjs`가 유일한 render-blocking 스타일시트를 index.html에
+  // 인라인하고, 라우트 매니페스트의 `css` 목록에서도 뺀다. 매니페스트 쪽을 놓치면
+  // 하이드레이션한 `<Links />`가 이미 인라인된 CSS를 한 번 더 받아 온다 — 화면은 멀쩡해서
+  // 요청 수를 보지 않으면 드러나지 않는다.
+  const stylesheets: string[] = [];
+  page.on("request", (request) => {
+    if (request.resourceType() === "stylesheet") {
+      stylesheets.push(request.url());
+    }
+  });
+
+  await page.goto("/login");
+  // 하이드레이션이 끝난 뒤를 봐야 한다. `<Links />`가 링크를 다시 그리는 것은 그때다.
+  await expect(page.getByRole("button", { name: "로그인" })).toBeVisible();
+
+  expect(stylesheets).toEqual([]);
+});
+
 test("service worker imports a revalidated Push companion", async ({
   request,
 }) => {

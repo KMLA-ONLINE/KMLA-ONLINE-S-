@@ -261,6 +261,18 @@
     background-clip: padding-box;
   }
 
+  /* Mobile relies on direct-touch scrolling, so keep every scrollbar visually
+     unobtrusive without changing its scroll behavior. */
+  @media (max-width: 767px) {
+    * {
+      scrollbar-color: transparent transparent;
+    }
+
+    *::-webkit-scrollbar-thumb {
+      background: transparent;
+    }
+  }
+
   /* Opt-outs for surfaces that should hide their scrollbar entirely. */
   .no-scrollbar,
   .scrollbar-none {
