@@ -168,8 +168,30 @@ export function toMentionDraft(mentions: PostMention[]): MentionDraftEntry[] {
     }));
 }
 
+/**
+ * 표시형 멘션 앞에 붙는 보이지 않는 표시(U+2060 WORD JOINER).
+ *
+ * 되돌릴 때 이름만 보고 짝을 지으면, 버튼으로 불렀다가 지운 사람의 이름을 손으로 친 글이
+ * 진짜 멘션이 되고 탈퇴한 대상의 라벨이 동명이인 쪽으로 붙는다. 둘 다 부른 적 없는 사람에게
+ * 알림이 가는 길이다. 그래서 버튼이 넣은 자리에만 이 표시를 남기고, 표시가 붙은 것만 토큰으로
+ * 되돌린다.
+ *
+ * 폭이 없고 줄바꿈도 만들지 않아 화면에는 `@홍길동`만 보인다. 사용자가 이름을 고쳐 표시가
+ * 떨어져 나가면 멘션은 평문이 된다 — 엉뚱한 사람을 부르는 것보다 안 부르는 쪽이 낫다.
+ */
+export const MENTION_DISPLAY_MARK = "\u2060";
+
+/** 입력창에 넣을 표시형 한 조각. 버튼이 이것을 넣고 `fromMentionDisplay()`가 이것만 되돌린다. */
+export function mentionDisplayText(name: string): string {
+  return `${MENTION_DISPLAY_MARK}@${name}`;
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function stripDisplayMarks(text: string): string {
+  return text.replaceAll(MENTION_DISPLAY_MARK, "");
 }
 
 /** 토큰 바깥의 글자에만 `map`을 적용한다. 붙여넣기로 들어온 토큰을 두 번 감싸지 않는다. */
@@ -197,8 +219,8 @@ function outsideMentionTokens(
  * 직전에 `fromMentionDisplay()`가 토큰으로 되돌린다.
  *
  * 이름은 토큰의 라벨이 아니라 초안 목록에서 가져온다. 라벨은 장식이라 개명 전 이름일 수 있고,
- * 되돌릴 때 짝을 찾는 것도 이 이름이다. 초안이 모르는 ordinal(탈퇴한 사용자)은 어차피
- * `normalizeMentions()`가 평문으로 푸므로 라벨을 그대로 쓴다.
+ * 되돌릴 때 짝을 찾는 것도 이 이름이다. 초안이 모르는 ordinal(탈퇴한 사용자)은 되돌릴 짝이
+ * 없으므로 표시만 남기고 평문으로 둔다 — `normalizeMentions()`도 같은 결론을 낸다.
  */
 export function toMentionDisplay(
   body: string,
@@ -208,19 +230,24 @@ export function toMentionDisplay(
 
   return body.replace(
     mentionTokenPattern(),
-    (_token, label: string, rawOrdinal: string) =>
-      `@${byOrdinal.get(Number(rawOrdinal))?.name ?? label}`,
+    (_token, label: string, rawOrdinal: string) => {
+      const entry = byOrdinal.get(Number(rawOrdinal));
+      return entry ? mentionDisplayText(entry.name) : `@${label}`;
+    },
   );
 }
 
 /**
- * 표시형을 원문으로 되돌린다. 초안에 있는 이름만 토큰이 되므로, 고르지 않은 사람을 손으로
- * 쳐도 멘션이 되지 않는다.
+ * 표시형을 원문으로 되돌린다. `MENTION_DISPLAY_MARK`가 붙은 자리만 토큰이 되므로, 손으로 친
+ * `@이름`은 그 이름을 고른 적이 있어도 평문으로 남는다.
  *
  * 같은 이름이 여럿이면 **나온 순서대로** 짝을 짓는다. 고른 순서와 본문에 넣은 순서가 같으므로
  * 보통은 그대로 맞고, 어긋나도 이름이 같은 사람들 사이에서만 어긋난다. 동명이인이라고 토큰을
  * 그대로 보여 주면 입력창에 원문이 다시 새어 나온다. 수가 모자라면 마지막 사람을 다시 쓴다 —
  * 같은 사람을 여러 번 부르는 것은 `normalizeMentions()`가 하나로 센다.
+ *
+ * 짝을 찾지 못한 표시는 제출 전에 지운다. 골라 넣은 뒤 이름을 고쳐 쓴 자리에 보이지 않는
+ * 글자가 남아 저장되지 않게 한다.
  */
 export function fromMentionDisplay(
   text: string,
@@ -241,20 +268,25 @@ export function fromMentionDisplay(
     // 긴 이름을 먼저 본다. `김민`이 `김민수`를 반으로 자르지 않게 한다.
     (left, right) => right.length - left.length,
   );
-  if (names.length === 0) return text;
+  if (names.length === 0) return stripDisplayMarks(text);
 
-  const pattern = new RegExp(`@(${names.map(escapeRegExp).join("|")})`, "g");
+  const pattern = new RegExp(
+    `${MENTION_DISPLAY_MARK}@(${names.map(escapeRegExp).join("|")})`,
+    "g",
+  );
   const seen = new Map<string, number>();
 
-  return outsideMentionTokens(text, (segment) =>
-    segment.replace(pattern, (_match, name: string) => {
-      const group = byName.get(name) ?? [];
-      const index = seen.get(name) ?? 0;
-      seen.set(name, index + 1);
-      const entry = group[Math.min(index, group.length - 1)];
+  return stripDisplayMarks(
+    outsideMentionTokens(text, (segment) =>
+      segment.replace(pattern, (_match, name: string) => {
+        const group = byName.get(name) ?? [];
+        const index = seen.get(name) ?? 0;
+        seen.set(name, index + 1);
+        const entry = group[Math.min(index, group.length - 1)];
 
-      return buildMentionToken(entry.name, entry.ordinal);
-    }),
+        return buildMentionToken(entry.name, entry.ordinal);
+      }),
+    ),
   );
 }
 

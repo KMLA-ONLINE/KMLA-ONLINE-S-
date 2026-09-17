@@ -57,6 +57,7 @@ vi.mock("~/features/posts/components/mention-button", () => ({
 
 import { CommentComposer } from "~/features/posts/components/comment/comment-composer";
 import { COMMENT_MAX_LENGTH } from "~/features/posts/model/comment-text";
+import { mentionDisplayText } from "~/features/posts/model/mentions";
 import type { PostIdentity } from "~/features/posts/model/types";
 import { renderRoute } from "../../../../router";
 
@@ -310,7 +311,7 @@ describe("CommentComposer", () => {
     await user.click(screen.getByRole("button", { name: "멘션 추가" }));
 
     // 입력창은 `textarea`라 토큰을 링크로 그릴 수 없다. 원문 대신 표시형을 담는다.
-    expect(input).toHaveValue("@첫 멤버 ");
+    expect(input).toHaveValue(`${mentionDisplayText("첫 멤버")} `);
 
     await user.type(input, "확인 부탁");
     await user.click(screen.getByRole("button", { name: "댓글 게시" }));
@@ -337,7 +338,24 @@ describe("CommentComposer", () => {
       ],
     });
 
-    expect(input).toHaveValue("@첫 멤버 확인 부탁");
+    expect(input).toHaveValue(`${mentionDisplayText("첫 멤버")} 확인 부탁`);
+  });
+
+  it("does not mention a picked member again from hand-typed text", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
+    const { user, input } = renderComposer({ onSubmit, mentionGroupId: "g" });
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+    await user.clear(input);
+    await user.type(input, "@첫 멤버 선배가 그러던데{Enter}");
+
+    // 골랐다가 지운 사람은 초안에 남지만, 손으로 친 이름까지 다시 부르면 부른 적 없는
+    // 사람에게 알림이 간다.
+    expect(onSubmit).toHaveBeenCalledWith(
+      "@첫 멤버 선배가 그러던데",
+      undefined,
+      [{ ordinal: 1, pubId: "member-1", name: "첫 멤버" }],
+    );
   });
 
   it("resets the mention draft only after a successful submit", async () => {
@@ -370,7 +388,9 @@ describe("CommentComposer", () => {
 
     await user.click(screen.getByRole("button", { name: "멘션 추가" }));
     await user.click(screen.getByRole("button", { name: "댓글 게시" }));
-    await vi.waitFor(() => expect(input).toHaveValue("@첫 멤버 "));
+    await vi.waitFor(() =>
+      expect(input).toHaveValue(`${mentionDisplayText("첫 멤버")} `),
+    );
     await user.click(screen.getByRole("button", { name: "멘션 추가" }));
     await user.click(screen.getByRole("button", { name: "댓글 게시" }));
 

@@ -19,6 +19,7 @@ import {
 import {
   countMentionTargets,
   fromMentionDisplay,
+  mentionDisplayText,
   toMentionDisplay,
   validateMentionCount,
   type MentionDraftEntry,
@@ -488,7 +489,7 @@ export function CommentComposer({
                   const ordinal = mentionDraft.register(candidate, body);
                   if (ordinal === null) return;
                   const element = input.current;
-                  const label = `@${candidate.name} `;
+                  const label = `${mentionDisplayText(candidate.name)} `;
                   const start = element?.selectionStart ?? draft.length;
                   const end = element?.selectionEnd ?? start;
                   setDraft(draft.slice(0, start) + label + draft.slice(end));
