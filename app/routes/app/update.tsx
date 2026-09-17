@@ -3,7 +3,7 @@ import { releases, ReleaseNotesScreen } from "~/features/support";
 
 export const handle = defineAppChrome({
   header: "sticky",
-  bottomNav: "sticky",
+  bottomNav: "none",
   contentWidth: "2xl",
 });
 
