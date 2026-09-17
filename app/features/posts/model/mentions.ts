@@ -176,11 +176,8 @@ export function toMentionDraft(mentions: PostMention[]): MentionDraftEntry[] {
  * 진짜 멘션이 되고 탈퇴한 대상의 라벨이 동명이인 쪽으로 붙는다. 둘 다 부른 적 없는 사람에게
  * 알림이 가는 길이다. 그래서 버튼이 넣은 자리에만 표시를 남기고, 표시가 붙은 것만 되돌린다.
  *
- * 표시가 여럿인 것은 동명이인 때문이다. 이름이 같으면 글자만으로는 누구인지 알 수 없어, 같은
- * 이름 안에서 몇 번째 사람인지를 표시가 들고 다닌다. 그래야 넣은 순서를 바꾸거나 둘 중 하나를
- * 지워도 남은 쪽이 자기 사람을 부른다. 표시는 다섯 개이며, 한 댓글에서 이름이 같은 사람을
- * 그보다 많이 부르면 넘친 쪽은 다섯 번째 사람으로 모인다 — 한 글에 동명이인 여섯 명을 부르는
- * 일보다, 표시를 늘려 캐럿이 지나야 할 보이지 않는 글자를 늘리는 쪽이 더 나쁘다.
+ * 표시가 여럿인 것은 동명이인 때문이다. 이름이 같으면 글자만으로는 누구인지 알 수 없어,
+ * 표시가 ordinal을 가리킨다. 어느 표시인지는 `mentionDisplaySlot()`이 정한다.
  *
  * 사용자가 이름을 고쳐 표시가 떨어져 나가면 멘션은 평문이 된다 — 엉뚱한 사람을 부르는 것보다
  * 안 부르는 쪽이 낫다.
@@ -193,41 +190,28 @@ const MENTION_DISPLAY_MARKS = [
   "\u2064",
 ];
 
-/** 이름이 하나뿐인 대상이 쓰는 첫 표시. */
+/** ordinal 1이 쓰는 첫 표시. */
 export const MENTION_DISPLAY_MARK = MENTION_DISPLAY_MARKS[0];
 
-/** 초안에서 이름이 같은 사람들. ordinal 순서가 곧 고른 순서다. */
-function sameNameEntries(
-  entries: MentionDraftEntry[],
-  name: string,
-): MentionDraftEntry[] {
-  return entries
-    .filter((entry) => entry.name === name)
-    .sort((left, right) => left.ordinal - right.ordinal);
-}
-
 /**
- * 고른 사람이 같은 이름 안에서 몇 번째인지. 처음 부르는 사람은 그 이름의 맨 뒤에 선다.
+ * 이 ordinal이 쓸 표시 번호.
  *
- * 부르는 쪽은 `register()` 이전의 초안을 넘긴다. 이미 있는 사람이면 제자리를, 새 사람이면
- * 다음 자리를 돌려주므로 어느 쪽이든 같은 답이 나온다.
+ * **초안의 다른 항목을 보지 않는다.** 같은 이름 안에서 몇 번째인지로 정하면, 초안이 자리를
+ * 하나 잃는 순간(`register()`는 본문에서 사라진 ordinal을 재사용하며 그 항목을 버린다) 이미
+ * 써 놓은 표시들이 한 칸씩 밀려 옆 사람을 가리킨다. ordinal은 그 항목이 사는 동안 변하지
+ * 않으므로 표시도 변하지 않는다.
+ *
+ * 표시는 다섯 개뿐이라 ordinal이 5만큼 떨어진 동명이인은 같은 표시를 쓴다. 그 경우 먼저
+ * 부른 쪽이 가져간다 — 한 댓글에서 그렇게까지 부르는 일보다, 표시를 늘려 캐럿이 지나야 할
+ * 보이지 않는 글자를 늘리는 쪽이 더 나쁘다.
  */
-export function mentionDisplaySlot(
-  entries: MentionDraftEntry[],
-  target: { pub_id: string; name: string },
-): number {
-  const group = sameNameEntries(entries, target.name);
-  const at = group.findIndex((entry) => entry.pubId === target.pub_id);
-
-  return at === -1 ? group.length : at;
+export function mentionDisplaySlot(ordinal: number): number {
+  return (ordinal - 1) % MENTION_DISPLAY_MARKS.length;
 }
 
 /** 입력창에 넣을 표시형 한 조각. 버튼이 이것을 넣고 `fromMentionDisplay()`가 이것만 되돌린다. */
-export function mentionDisplayText(name: string, slot = 0): string {
-  const mark =
-    MENTION_DISPLAY_MARKS[Math.min(slot, MENTION_DISPLAY_MARKS.length - 1)];
-
-  return `${mark}@${name}`;
+export function mentionDisplayText(name: string, ordinal: number): string {
+  return `${MENTION_DISPLAY_MARKS[mentionDisplaySlot(ordinal)]}@${name}`;
 }
 
 function escapeRegExp(value: string): string {
@@ -264,10 +248,7 @@ export function toMentionDisplay(
       const entry = byOrdinal.get(Number(rawOrdinal));
       if (!entry) return `@${label}`;
 
-      return mentionDisplayText(
-        entry.name,
-        mentionDisplaySlot(entries, { pub_id: entry.pubId, name: entry.name }),
-      );
+      return mentionDisplayText(entry.name, entry.ordinal);
     },
   );
 }
@@ -287,8 +268,11 @@ export function mentionDisplayRanges(
   text: string,
   entries: MentionDraftEntry[],
 ): MentionDisplayRange[] {
+  const ordered = [...entries].sort(
+    (left, right) => left.ordinal - right.ordinal,
+  );
   const names = Array.from(
-    new Set(entries.map((entry) => entry.name).filter((name) => name !== "")),
+    new Set(ordered.map((entry) => entry.name).filter((name) => name !== "")),
   ).sort(
     // 긴 이름을 먼저 본다. `김민`이 `김민수`를 반으로 자르지 않게 한다.
     (left, right) => right.length - left.length,
@@ -302,10 +286,14 @@ export function mentionDisplayRanges(
   const ranges: MentionDisplayRange[] = [];
 
   for (const match of text.matchAll(pattern)) {
-    const group = sameNameEntries(entries, match[2]);
     const slot = MENTION_DISPLAY_MARKS.indexOf(match[1]);
-    // 다섯 번째부터는 표시를 함께 쓴다. 그 자리는 마지막 사람이 받는다.
-    const entry = group[Math.min(slot, group.length - 1)];
+    // 이름과 표시가 함께 맞아야 한 자리다. 짝이 없으면 그 글자는 멘션이 아니다 — 초안이
+    // 그 사람을 잃은 뒤에도 남아 있던 글자가 옆 사람을 부르지 않는다.
+    const entry = ordered.find(
+      (candidate) =>
+        candidate.name === match[2] &&
+        mentionDisplaySlot(candidate.ordinal) === slot,
+    );
     if (!entry) continue;
 
     ranges.push({

@@ -320,7 +320,7 @@ describe("CommentComposer", () => {
     await user.click(screen.getByRole("button", { name: "멘션 추가" }));
 
     // 입력창은 `textarea`라 토큰을 링크로 그릴 수 없다. 원문 대신 표시형을 담는다.
-    expect(input).toHaveValue(`${mentionDisplayText("첫 멤버")} `);
+    expect(input).toHaveValue(`${mentionDisplayText("첫 멤버", 1)} `);
 
     await user.type(input, "확인 부탁");
     await user.click(screen.getByRole("button", { name: "댓글 게시" }));
@@ -347,7 +347,7 @@ describe("CommentComposer", () => {
       ],
     });
 
-    expect(input).toHaveValue(`${mentionDisplayText("첫 멤버")} 확인 부탁`);
+    expect(input).toHaveValue(`${mentionDisplayText("첫 멤버", 1)} 확인 부탁`);
   });
 
   it("does not mention a picked member again from hand-typed text", async () => {
@@ -373,7 +373,7 @@ describe("CommentComposer", () => {
     const field = input as HTMLTextAreaElement;
 
     await user.click(screen.getByRole("button", { name: "멘션 추가" }));
-    expect(field).toHaveValue(`${mentionDisplayText("첫 멤버")} `);
+    expect(field).toHaveValue(`${mentionDisplayText("첫 멤버", 1)} `);
 
     // 이름 가운데(`첫` 뒤)에 캐럿을 두고 한 글자만 지운다. 반쪽이 남으면 화면에는 멀쩡한
     // 글자처럼 보이는데 멘션은 아닌 상태가 된다.
@@ -398,7 +398,7 @@ describe("CommentComposer", () => {
     // 이름 가운데에 글자가 끼어 멘션이 깨진 상태. 보이지 않는 표시만 남으면 `째`를 도로
     // 지웠을 때 멘션이 조용히 되살아난다.
     fireEvent.change(field, {
-      target: { value: `${mentionDisplayText("첫째 멤버")} ` },
+      target: { value: `${mentionDisplayText("첫째 멤버", 1)} ` },
     });
     await vi.waitFor(() => expect(field).toHaveValue("@첫째 멤버 "));
 
@@ -408,6 +408,23 @@ describe("CommentComposer", () => {
     expect(onSubmit).toHaveBeenCalledWith("@첫 멤버", undefined, [
       { ordinal: 1, pubId: "member-1", name: "첫 멤버" },
     ]);
+  });
+
+  it("waits for the IME composition to end before repairing a mention", async () => {
+    const { user, input } = renderComposer({ mentionGroupId: "g" });
+    const field = input as HTMLTextAreaElement;
+    const broken = `${mentionDisplayText("첫째 멤버", 1)} `;
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+
+    fireEvent.compositionStart(field);
+    fireEvent.change(field, { target: { value: broken } });
+
+    // 조합 중에 값과 캐럿을 건드리면 쓰던 글자가 끊긴다. 표시는 조합이 끝난 뒤에 걷는다.
+    expect(field.value).toBe(broken);
+
+    fireEvent.compositionEnd(field);
+    await vi.waitFor(() => expect(field).toHaveValue("@첫째 멤버 "));
   });
 
   it("calls both members when two of them share a name", async () => {
@@ -421,7 +438,7 @@ describe("CommentComposer", () => {
 
     // 둘은 화면에 똑같이 `@첫 멤버`로 보이지만 서로 다른 사람을 부른다.
     expect(input).toHaveValue(
-      `${mentionDisplayText("첫 멤버", 0)} ${mentionDisplayText("둘째 멤버")} ${mentionDisplayText("첫 멤버", 1)} `,
+      `${mentionDisplayText("첫 멤버", 1)} ${mentionDisplayText("둘째 멤버", 2)} ${mentionDisplayText("첫 멤버", 3)} `,
     );
     expect(
       (input as HTMLTextAreaElement).value.replaceAll(/\p{Cf}/gu, ""),
@@ -471,7 +488,7 @@ describe("CommentComposer", () => {
     await user.click(screen.getByRole("button", { name: "멘션 추가" }));
     await user.click(screen.getByRole("button", { name: "댓글 게시" }));
     await vi.waitFor(() =>
-      expect(input).toHaveValue(`${mentionDisplayText("첫 멤버")} `),
+      expect(input).toHaveValue(`${mentionDisplayText("첫 멤버", 1)} `),
     );
     await user.click(screen.getByRole("button", { name: "멘션 추가" }));
     await user.click(screen.getByRole("button", { name: "댓글 게시" }));

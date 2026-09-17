@@ -239,7 +239,7 @@ describe("mention display form", () => {
     const display = toMentionDisplay(body, [한별]);
 
     // 토큰의 라벨은 장식이라 개명 전 이름일 수 있다. 짝은 ordinal로 찾는다.
-    expect(display).toBe(`${mentionDisplayText("이한별")} 확인 부탁`);
+    expect(display).toBe(`${mentionDisplayText("이한별", 1)} 확인 부탁`);
     expect(display).toContain("@이한별");
     expect(fromMentionDisplay(display, [한별])).toBe(
       `${buildMentionToken("이한별", 1)} 확인 부탁`,
@@ -278,7 +278,7 @@ describe("mention display form", () => {
     };
 
     expect(
-      fromMentionDisplay(`${mentionDisplayText("김민수")} 님`, [민, 민수]),
+      fromMentionDisplay(`${mentionDisplayText("김민수", 2)} 님`, [민, 민수]),
     ).toBe(`${buildMentionToken("김민수", 2)} 님`);
   });
 
@@ -288,8 +288,8 @@ describe("mention display form", () => {
       pubId: "hanbyeol-26",
       name: "이한별",
     };
-    const 먼저 = mentionDisplayText("이한별", 0);
-    const 나중 = mentionDisplayText("이한별", 1);
+    const 먼저 = mentionDisplayText("이한별", 한별.ordinal);
+    const 나중 = mentionDisplayText("이한별", 한별둘.ordinal);
 
     // 이름이 같아도 각자 자기 표시를 달고 있다. 화면에는 둘 다 `@이한별`로 보인다.
     expect(먼저).not.toBe(나중);
@@ -309,41 +309,57 @@ describe("mention display form", () => {
     ).toEqual(["hanbyeol-26"]);
   });
 
-  it("folds namesakes past the last mark into one", () => {
-    // 표시는 다섯 개뿐이다. 한 댓글에서 이름이 같은 사람을 그보다 많이 부르면 넘친 쪽은
-    // 다섯 번째 사람으로 모인다.
-    const group: MentionDraftEntry[] = Array.from(
-      { length: 6 },
-      (_unused, index) => ({
-        ordinal: index + 1,
-        pubId: `hanbyeol-${index}`,
-        name: "이한별",
-      }),
-    );
+  it("keeps a mark pointing at its own person when the draft loses another", () => {
+    // `register()`는 본문에서 사라진 ordinal을 재사용하며 그 항목을 버린다. 표시를 "같은 이름
+    // 안에서 몇 번째"로 정하면 그때 남은 표시들이 한 칸씩 밀려 옆 사람을 부른다.
+    const 한별둘: MentionDraftEntry = {
+      ordinal: 2,
+      pubId: "hanbyeol-26",
+      name: "이한별",
+    };
+    const 한별셋: MentionDraftEntry = {
+      ordinal: 1,
+      pubId: "hanbyeol-27",
+      name: "이한별",
+    };
+    const 나중 = mentionDisplayText("이한별", 한별둘.ordinal);
 
-    expect(mentionDisplayText("이한별", 5)).toBe(
-      mentionDisplayText("이한별", 4),
+    // 한별이 빠지고 한별셋이 그 ordinal을 가져가도, 이미 써 놓은 한별둘의 표시는 그대로다.
+    expect(fromMentionDisplay(나중, [한별둘, 한별셋])).toBe(
+      buildMentionToken("이한별", 2),
     );
-    expect(fromMentionDisplay(mentionDisplayText("이한별", 5), group)).toBe(
-      buildMentionToken("이한별", 5),
+    expect(
+      fromMentionDisplay(mentionDisplayText("이한별", 한별셋.ordinal), [
+        한별둘,
+        한별셋,
+      ]),
+    ).toBe(buildMentionToken("이한별", 1));
+  });
+
+  it("leaves a mark plain when the draft no longer holds its person", () => {
+    // 초안이 그 사람을 잃으면 짝이 없다. 옆 사람에게 넘기지 않고 평문으로 둔다.
+    expect(fromMentionDisplay(mentionDisplayText("이한별", 2), [한별])).toBe(
+      "@이한별",
     );
   });
 
-  it("puts a new namesake at the end of the name", () => {
-    const 한별둘 = { pub_id: "hanbyeol-26", name: "이한별" };
+  it("shares a mark between namesakes five apart", () => {
+    // 표시는 다섯 개뿐이다. ordinal이 5만큼 떨어진 동명이인은 같은 표시를 쓰고, 먼저 부른
+    // 쪽이 가져간다.
+    const 여섯째: MentionDraftEntry = {
+      ordinal: 6,
+      pubId: "hanbyeol-30",
+      name: "이한별",
+    };
 
-    expect(mentionDisplaySlot([한별], 한별둘)).toBe(1);
-    // 이미 부른 사람은 제자리를 지킨다. 같은 사람을 다시 골라도 표시가 바뀌지 않는다.
+    expect(mentionDisplaySlot(6)).toBe(mentionDisplaySlot(1));
     expect(
-      mentionDisplaySlot([한별], { pub_id: "hanbyeol-25", name: "이한별" }),
-    ).toBe(0);
-    expect(
-      mentionDisplaySlot([한별], { pub_id: "saebyeok-24", name: "박새벽" }),
-    ).toBe(0);
+      fromMentionDisplay(mentionDisplayText("이한별", 6), [한별, 여섯째]),
+    ).toBe(buildMentionToken("이한별", 1));
   });
 
   it("does not wrap a token that is already in the text", () => {
-    const body = `${buildMentionToken("이한별", 1)} ${mentionDisplayText("이한별")}`;
+    const body = `${buildMentionToken("이한별", 1)} ${mentionDisplayText("이한별", 1)}`;
 
     expect(fromMentionDisplay(body, [한별])).toBe(
       `${buildMentionToken("이한별", 1)} ${buildMentionToken("이한별", 1)}`,
@@ -351,7 +367,7 @@ describe("mention display form", () => {
   });
 
   it("marks off the span the input deletes as one piece", () => {
-    const picked = mentionDisplayText("이한별");
+    const picked = mentionDisplayText("이한별", 1);
     const ranges = mentionDisplayRanges(`앞 ${picked} 뒤`, [한별]);
 
     expect(ranges).toHaveLength(1);
@@ -365,7 +381,7 @@ describe("mention display form", () => {
 
   it("strips a mark whose name no longer matches", () => {
     const broken = `${MENTION_DISPLAY_MARK}@이한벌`;
-    const intact = mentionDisplayText("이한별");
+    const intact = mentionDisplayText("이한별", 1);
 
     expect(sanitizeMentionDisplay(broken, [한별])).toBe("@이한벌");
     expect(sanitizeMentionDisplay(intact, [한별])).toBe(intact);

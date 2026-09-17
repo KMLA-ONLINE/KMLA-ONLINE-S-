@@ -20,7 +20,6 @@ import {
   countMentionTargets,
   fromMentionDisplay,
   mentionDisplayRanges,
-  mentionDisplaySlot,
   mentionDisplayText,
   sanitizeMentionDisplay,
   toMentionDisplay,
@@ -229,6 +228,22 @@ export function CommentComposer({
       element.focus();
       element.setSelectionRange(caret, caret);
     });
+  };
+
+  /**
+   * 짝 잃은 표시를 걷어낸 값으로 맞춘다. 조합 중에는 부르지 않는다 — 값과 캐럿을 건드리면
+   * 한글 조합이 끊긴다.
+   */
+  const repairDraft = (element: HTMLTextAreaElement) => {
+    const value = element.value;
+    const next = sanitizeMentionDisplay(value, mentionDraft.entries);
+    if (next === value) {
+      setDraft(value);
+      return;
+    }
+
+    const caret = element.selectionStart ?? value.length;
+    replaceDraft(next, Math.max(0, caret - (value.length - next.length)));
   };
 
   /**
@@ -464,23 +479,10 @@ export function CommentComposer({
               placeholder={placeholder}
               className="min-h-9 min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent px-4 py-1.5 text-base leading-6 outline-none placeholder:text-muted-foreground"
               onChange={(event) => {
-                const value = event.target.value;
                 // 이름이 깨진 자리의 보이지 않는 표시를 걷어낸다. 남겨 두면 원래 이름을 다시
-                // 쳤을 때 멘션이 되살아난다.
-                const next = sanitizeMentionDisplay(
-                  value,
-                  mentionDraft.entries,
-                );
-                if (next === value) setDraft(value);
-                else
-                  replaceDraft(
-                    next,
-                    Math.max(
-                      0,
-                      (event.target.selectionStart ?? value.length) -
-                        (value.length - next.length),
-                    ),
-                  );
+                // 쳤을 때 멘션이 되살아난다. 조합 중에는 미뤘다가 조합이 끝나면 정리한다.
+                if (composing.current) setDraft(event.target.value);
+                else repairDraft(event.target);
                 if (localError) setLocalError(null);
               }}
               onPaste={(event) => {
@@ -493,7 +495,10 @@ export function CommentComposer({
                 void selectImage(pasted.getAsFile() ?? undefined);
               }}
               onCompositionStart={() => (composing.current = true)}
-              onCompositionEnd={() => (composing.current = false)}
+              onCompositionEnd={(event) => {
+                composing.current = false;
+                repairDraft(event.currentTarget);
+              }}
               onKeyDown={(event) => {
                 if (
                   (event.key === "Backspace" || event.key === "Delete") &&
@@ -554,13 +559,9 @@ export function CommentComposer({
                   const ordinal = mentionDraft.register(candidate, body);
                   if (ordinal === null) return;
                   const element = input.current;
-                  // 이름이 같은 사람이 여럿이면 표시가 누구인지를 들고 다닌다. 자리는
-                  // `register()` 이전의 초안으로 센다.
-                  const slot = mentionDisplaySlot(mentionDraft.entries, {
-                    pub_id: candidate.pub_id,
-                    name: candidate.name,
-                  });
-                  const label = `${mentionDisplayText(candidate.name, slot)} `;
+                  // 이름이 같은 사람이 여럿이면 표시가 누구인지를 들고 다닌다. 어느
+                  // 표시인지는 ordinal이 정하므로 초안의 다른 항목을 보지 않는다.
+                  const label = `${mentionDisplayText(candidate.name, ordinal)} `;
                   const start = element?.selectionStart ?? draft.length;
                   const end = element?.selectionEnd ?? start;
                   setDraft(draft.slice(0, start) + label + draft.slice(end));
