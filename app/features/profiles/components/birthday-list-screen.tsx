@@ -187,8 +187,8 @@ function birthdayListItems(
   start: number,
   end: number,
   cycleOffset: number,
+  totalItems: number,
 ): BirthdayListItem[] {
-  const totalItems = cycleItems.length * 2;
   const itemStart = Math.max(0, start);
   const itemEnd = Math.min(end, totalItems);
 
@@ -265,6 +265,10 @@ export function BirthdayListScreen({
   const listRef = useRef<HTMLDivElement>(null);
   const cycleOffsetRef = useRef(0);
   const [cycleOffset, setCycleOffset] = useState(0);
+  // 목록을 몇 바퀴 깔아 둘지. 순환이 일어나려면 다음 바퀴가 미리 깔려 있어야 하지만, 한
+  // 바퀴가 화면보다 짧으면 그 두 번째 바퀴가 같은 사람을 한 화면에 두 번 보여 준다.
+  // 측정 전에는 1로 두어 겹쳐 보이는 상태로 먼저 그리지 않는다.
+  const [cycleRepeat, setCycleRepeat] = useState(1);
   const [selectedFilter, setSelectedFilter] = useState<BirthdayFilter>("all");
   const filters = birthdayFilterOptions(birthdays);
   const filteredBirthdays = birthdays.filter((birthday) =>
@@ -278,7 +282,7 @@ export function BirthdayListScreen({
   const [avatarUrls, setAvatarUrls] = useState<Map<string, string>>(
     () => new Map(),
   );
-  const totalRows = cycleItems.length * 2;
+  const totalRows = cycleItems.length * cycleRepeat;
   const isVirtualized = scrollRef !== null;
   const items = isVirtualized
     ? birthdayListItems(
@@ -286,8 +290,9 @@ export function BirthdayListScreen({
         visibleRange.start,
         visibleRange.end,
         cycleOffset,
+        totalRows,
       )
-    : birthdayListItems(cycleItems, 0, cycleItems.length, 0);
+    : birthdayListItems(cycleItems, 0, cycleItems.length, 0, cycleItems.length);
   const visiblePathsKey = Array.from(
     new Set(
       items.flatMap((item) =>
@@ -332,6 +337,18 @@ export function BirthdayListScreen({
       );
     };
 
+    // 순환 조건과 같다. 한 바퀴가 화면을 넘어야 두 번째 바퀴의 같은 행이 화면 밖에 남는다.
+    // 이미 다음 바퀴로 넘어가 있다면 화면이 커져도 되돌리지 않는다. 지금 보고 있는 연도가
+    // 통째로 사라지기 때문이다.
+    const syncCycleRepeat = () => {
+      const repeat =
+        cycleHeight > container.clientHeight || cycleOffsetRef.current > 0
+          ? 2
+          : 1;
+
+      setCycleRepeat((current) => (current === repeat ? current : repeat));
+    };
+
     const recenter = (direction: 1 | -1) => {
       const nextTop = container.scrollTop - direction * cycleHeight;
       cycleOffsetRef.current += direction;
@@ -346,6 +363,7 @@ export function BirthdayListScreen({
       const top = container.scrollTop;
       const delta = top - lastTop;
       lastTop = top;
+      syncCycleRepeat();
 
       if (cycleHeight > container.clientHeight) {
         if (delta > 0 && top >= listTop + cycleHeight) {
@@ -366,6 +384,7 @@ export function BirthdayListScreen({
       if (frameId === 0) frameId = window.requestAnimationFrame(update);
     };
 
+    syncCycleRepeat();
     updateVisibleRange(container.scrollTop);
     container.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);

@@ -1,5 +1,6 @@
 import { screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { useRef, type ReactNode } from "react";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   BirthdayListScreen,
@@ -7,7 +8,46 @@ import {
   type BirthdayCalendarProfile,
   type BirthdayProfile,
 } from "~/features/profiles";
+import { ScrollContainerContext } from "~/shared/lib/scroll-container";
 import { renderRoute } from "../../../router";
+
+// 가상화된 목록은 보이는 행의 아바타 URL을 서명받는다. 여기서 보는 것은 행 자체다.
+vi.mock("~/features/profiles/data/media", () => ({
+  createProfileMediaUrls: () => Promise.resolve(new Map<string, string>()),
+}));
+
+/**
+ * 목록을 실제 스크롤 컨테이너 안에 넣어 가상화 경로를 켠다. jsdom은 레이아웃을 계산하지
+ * 않으므로 목록이 순환을 깔지 말지 판단하는 데 쓰는 `clientHeight`만 심어 준다.
+ */
+function ScrollHost({
+  clientHeight,
+  children,
+}: {
+  clientHeight: number;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLElement | null>(null);
+
+  return (
+    <ScrollContainerContext.Provider value={ref}>
+      <div
+        ref={(node) => {
+          if (node) {
+            Object.defineProperty(node, "clientHeight", {
+              value: clientHeight,
+              configurable: true,
+            });
+          }
+
+          ref.current = node;
+        }}
+      >
+        {children}
+      </div>
+    </ScrollContainerContext.Provider>
+  );
+}
 
 const birthdays = [
   {
@@ -152,6 +192,53 @@ describe("birthday components", () => {
 
     expect(screen.getByText("165일 전")).toBeVisible();
     expect(screen.queryByText("200일 뒤")).not.toBeInTheDocument();
+  });
+
+  it("does not repeat a cycle that already fits on one screen", async () => {
+    renderRoute(() => (
+      <ScrollHost clientHeight={800}>
+        <BirthdayListScreen
+          birthdays={birthdayCalendar}
+          referenceDate="2026-12-30"
+        />
+      </ScrollHost>
+    ));
+
+    // 세 명이면 한 바퀴가 384px이라 800px 화면 안에 다 들어간다. 두 바퀴째를 깔면 같은
+    // 사람이 한 화면에 두 번 보인다.
+    const hrefs = (await screen.findAllByRole("link")).map((link) =>
+      link.getAttribute("href"),
+    );
+
+    expect(hrefs).toEqual([
+      "/profile/year-end-25",
+      "/profile/new-year-26",
+      "/profile/teacher-spring",
+    ]);
+  });
+
+  it("lays down the next cycle when one cycle is taller than the screen", async () => {
+    renderRoute(() => (
+      <ScrollHost clientHeight={100}>
+        <BirthdayListScreen
+          birthdays={birthdayCalendar}
+          referenceDate="2026-12-30"
+        />
+      </ScrollHost>
+    ));
+
+    const hrefs = (await screen.findAllByRole("link")).map((link) =>
+      link.getAttribute("href"),
+    );
+
+    expect(hrefs).toEqual([
+      "/profile/year-end-25",
+      "/profile/new-year-26",
+      "/profile/teacher-spring",
+      "/profile/year-end-25",
+      "/profile/new-year-26",
+      "/profile/teacher-spring",
+    ]);
   });
 
   it("shows an empty state when the date range has no birthdays", () => {
