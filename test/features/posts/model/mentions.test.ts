@@ -11,6 +11,7 @@ import {
   buildMentionToken,
   countMentionTargets,
   fromMentionDisplay,
+  mentionDisplaySlot,
   mentionDisplayText,
   mentionOrdinalFromHref,
   mentionTokenPattern,
@@ -279,21 +280,64 @@ describe("mention display form", () => {
     ).toBe(`${buildMentionToken("김민수", 2)} 님`);
   });
 
-  it("pairs duplicate names in the order they appear", () => {
+  it("calls each namesake by the mark it carries", () => {
     const 한별둘: MentionDraftEntry = {
       ordinal: 2,
       pubId: "hanbyeol-26",
       name: "이한별",
     };
-    const picked = mentionDisplayText("이한별");
+    const 먼저 = mentionDisplayText("이한별", 0);
+    const 나중 = mentionDisplayText("이한별", 1);
 
-    // 동명이인도 입력창에는 이름으로 보인다. 짝은 나온 순서대로 짓고, 수가 모자라면
-    // 마지막 사람을 다시 쓴다.
-    expect(
-      fromMentionDisplay(`${picked} ${picked} ${picked}`, [한별, 한별둘]),
-    ).toBe(
-      `${buildMentionToken("이한별", 1)} ${buildMentionToken("이한별", 2)} ${buildMentionToken("이한별", 2)}`,
+    // 이름이 같아도 각자 자기 표시를 달고 있다. 화면에는 둘 다 `@이한별`로 보인다.
+    expect(먼저).not.toBe(나중);
+    expect(fromMentionDisplay(`${먼저} ${나중}`, [한별, 한별둘])).toBe(
+      `${buildMentionToken("이한별", 1)} ${buildMentionToken("이한별", 2)}`,
     );
+
+    // 넣은 순서를 바꿔도, 하나를 지워도 남은 쪽은 자기 사람을 부른다.
+    expect(fromMentionDisplay(`${나중} ${먼저}`, [한별, 한별둘])).toBe(
+      `${buildMentionToken("이한별", 2)} ${buildMentionToken("이한별", 1)}`,
+    );
+    expect(
+      normalizeMentions(fromMentionDisplay(나중, [한별, 한별둘]), [
+        한별,
+        한별둘,
+      ]).pubIds,
+    ).toEqual(["hanbyeol-26"]);
+  });
+
+  it("folds namesakes past the last mark into one", () => {
+    // 표시는 다섯 개뿐이다. 한 댓글에서 이름이 같은 사람을 그보다 많이 부르면 넘친 쪽은
+    // 다섯 번째 사람으로 모인다.
+    const group: MentionDraftEntry[] = Array.from(
+      { length: 6 },
+      (_unused, index) => ({
+        ordinal: index + 1,
+        pubId: `hanbyeol-${index}`,
+        name: "이한별",
+      }),
+    );
+
+    expect(mentionDisplayText("이한별", 5)).toBe(
+      mentionDisplayText("이한별", 4),
+    );
+    expect(fromMentionDisplay(mentionDisplayText("이한별", 5), group)).toBe(
+      buildMentionToken("이한별", 5),
+    );
+  });
+
+  it("puts a new namesake at the end of the name", () => {
+    const 한별둘 = { pub_id: "hanbyeol-26", name: "이한별" };
+
+    expect(mentionDisplaySlot([한별], 한별둘)).toBe(1);
+    // 이미 부른 사람은 제자리를 지킨다. 같은 사람을 다시 골라도 표시가 바뀌지 않는다.
+    expect(
+      mentionDisplaySlot([한별], { pub_id: "hanbyeol-25", name: "이한별" }),
+    ).toBe(0);
+    expect(
+      mentionDisplaySlot([한별], { pub_id: "saebyeok-24", name: "박새벽" }),
+    ).toBe(0);
   });
 
   it("does not wrap a token that is already in the text", () => {

@@ -25,6 +25,15 @@ const { mentionState, mentionCandidates } = vi.hoisted(() => ({
       profile_type: "student" as const,
       avatar_path: null,
     },
+    // 동명이인. 화면에 보이는 이름이 첫 멤버와 같다.
+    {
+      pub_id: "member-3",
+      name: "첫 멤버",
+      cohort: 29,
+      is_returning_student: false,
+      profile_type: "student" as const,
+      avatar_path: null,
+    },
   ],
 }));
 
@@ -355,6 +364,36 @@ describe("CommentComposer", () => {
       "@첫 멤버 선배가 그러던데",
       undefined,
       [{ ordinal: 1, pubId: "member-1", name: "첫 멤버" }],
+    );
+  });
+
+  it("calls both members when two of them share a name", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
+    const { user, input } = renderComposer({ onSubmit, mentionGroupId: "g" });
+
+    const add = screen.getByRole("button", { name: "멘션 추가" });
+    await user.click(add);
+    await user.click(add);
+    await user.click(add);
+
+    // 둘은 화면에 똑같이 `@첫 멤버`로 보이지만 서로 다른 사람을 부른다.
+    expect(input).toHaveValue(
+      `${mentionDisplayText("첫 멤버", 0)} ${mentionDisplayText("둘째 멤버")} ${mentionDisplayText("첫 멤버", 1)} `,
+    );
+    expect(
+      (input as HTMLTextAreaElement).value.replaceAll(/\p{Cf}/gu, ""),
+    ).toBe("@첫 멤버 @둘째 멤버 @첫 멤버 ");
+
+    await user.click(screen.getByRole("button", { name: "댓글 게시" }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      "[@첫 멤버](m:1) [@둘째 멤버](m:2) [@첫 멤버](m:3)",
+      undefined,
+      [
+        { ordinal: 1, pubId: "member-1", name: "첫 멤버" },
+        { ordinal: 2, pubId: "member-2", name: "둘째 멤버" },
+        { ordinal: 3, pubId: "member-3", name: "첫 멤버" },
+      ],
     );
   });
 

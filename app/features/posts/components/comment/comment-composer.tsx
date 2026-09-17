@@ -19,6 +19,7 @@ import {
 import {
   countMentionTargets,
   fromMentionDisplay,
+  mentionDisplaySlot,
   mentionDisplayText,
   toMentionDisplay,
   validateMentionCount,
@@ -489,7 +490,13 @@ export function CommentComposer({
                   const ordinal = mentionDraft.register(candidate, body);
                   if (ordinal === null) return;
                   const element = input.current;
-                  const label = `${mentionDisplayText(candidate.name)} `;
+                  // 이름이 같은 사람이 여럿이면 표시가 누구인지를 들고 다닌다. 자리는
+                  // `register()` 이전의 초안으로 센다.
+                  const slot = mentionDisplaySlot(mentionDraft.entries, {
+                    pub_id: candidate.pub_id,
+                    name: candidate.name,
+                  });
+                  const label = `${mentionDisplayText(candidate.name, slot)} `;
                   const start = element?.selectionStart ?? draft.length;
                   const end = element?.selectionEnd ?? start;
                   setDraft(draft.slice(0, start) + label + draft.slice(end));

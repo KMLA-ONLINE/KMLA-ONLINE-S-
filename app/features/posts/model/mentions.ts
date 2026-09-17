@@ -169,21 +169,65 @@ export function toMentionDraft(mentions: PostMention[]): MentionDraftEntry[] {
 }
 
 /**
- * 표시형 멘션 앞에 붙는 보이지 않는 표시(U+2060 WORD JOINER).
+ * 표시형 멘션 앞에 붙는 보이지 않는 표시. 폭도 글리프도 없는 U+2060 WORD JOINER와 그 뒤의
+ * 보이지 않는 연산자들이라 화면에는 `@홍길동`만 보인다.
  *
  * 되돌릴 때 이름만 보고 짝을 지으면, 버튼으로 불렀다가 지운 사람의 이름을 손으로 친 글이
  * 진짜 멘션이 되고 탈퇴한 대상의 라벨이 동명이인 쪽으로 붙는다. 둘 다 부른 적 없는 사람에게
- * 알림이 가는 길이다. 그래서 버튼이 넣은 자리에만 이 표시를 남기고, 표시가 붙은 것만 토큰으로
- * 되돌린다.
+ * 알림이 가는 길이다. 그래서 버튼이 넣은 자리에만 표시를 남기고, 표시가 붙은 것만 되돌린다.
  *
- * 폭이 없고 줄바꿈도 만들지 않아 화면에는 `@홍길동`만 보인다. 사용자가 이름을 고쳐 표시가
- * 떨어져 나가면 멘션은 평문이 된다 — 엉뚱한 사람을 부르는 것보다 안 부르는 쪽이 낫다.
+ * 표시가 여럿인 것은 동명이인 때문이다. 이름이 같으면 글자만으로는 누구인지 알 수 없어, 같은
+ * 이름 안에서 몇 번째 사람인지를 표시가 들고 다닌다. 그래야 넣은 순서를 바꾸거나 둘 중 하나를
+ * 지워도 남은 쪽이 자기 사람을 부른다. 표시는 다섯 개이며, 한 댓글에서 이름이 같은 사람을
+ * 그보다 많이 부르면 넘친 쪽은 다섯 번째 사람으로 모인다 — 한 글에 동명이인 여섯 명을 부르는
+ * 일보다, 표시를 늘려 캐럿이 지나야 할 보이지 않는 글자를 늘리는 쪽이 더 나쁘다.
+ *
+ * 사용자가 이름을 고쳐 표시가 떨어져 나가면 멘션은 평문이 된다 — 엉뚱한 사람을 부르는 것보다
+ * 안 부르는 쪽이 낫다.
  */
-export const MENTION_DISPLAY_MARK = "\u2060";
+const MENTION_DISPLAY_MARKS = [
+  "\u2060",
+  "\u2061",
+  "\u2062",
+  "\u2063",
+  "\u2064",
+];
+
+/** 이름이 하나뿐인 대상이 쓰는 첫 표시. */
+export const MENTION_DISPLAY_MARK = MENTION_DISPLAY_MARKS[0];
+
+/** 초안에서 이름이 같은 사람들. ordinal 순서가 곧 고른 순서다. */
+function sameNameEntries(
+  entries: MentionDraftEntry[],
+  name: string,
+): MentionDraftEntry[] {
+  return entries
+    .filter((entry) => entry.name === name)
+    .sort((left, right) => left.ordinal - right.ordinal);
+}
+
+/**
+ * 고른 사람이 같은 이름 안에서 몇 번째인지. 처음 부르는 사람은 그 이름의 맨 뒤에 선다.
+ *
+ * 부르는 쪽은 `register()` 이전의 초안을 넘긴다. 이미 있는 사람이면 제자리를, 새 사람이면
+ * 다음 자리를 돌려주므로 어느 쪽이든 같은 답이 나온다.
+ */
+export function mentionDisplaySlot(
+  entries: MentionDraftEntry[],
+  target: { pub_id: string; name: string },
+): number {
+  const group = sameNameEntries(entries, target.name);
+  const at = group.findIndex((entry) => entry.pubId === target.pub_id);
+
+  return at === -1 ? group.length : at;
+}
 
 /** 입력창에 넣을 표시형 한 조각. 버튼이 이것을 넣고 `fromMentionDisplay()`가 이것만 되돌린다. */
-export function mentionDisplayText(name: string): string {
-  return `${MENTION_DISPLAY_MARK}@${name}`;
+export function mentionDisplayText(name: string, slot = 0): string {
+  const mark =
+    MENTION_DISPLAY_MARKS[Math.min(slot, MENTION_DISPLAY_MARKS.length - 1)];
+
+  return `${mark}@${name}`;
 }
 
 function escapeRegExp(value: string): string {
@@ -191,7 +235,10 @@ function escapeRegExp(value: string): string {
 }
 
 function stripDisplayMarks(text: string): string {
-  return text.replaceAll(MENTION_DISPLAY_MARK, "");
+  return MENTION_DISPLAY_MARKS.reduce(
+    (result, mark) => result.replaceAll(mark, ""),
+    text,
+  );
 }
 
 /** 토큰 바깥의 글자에만 `map`을 적용한다. 붙여넣기로 들어온 토큰을 두 번 감싸지 않는다. */
@@ -232,19 +279,22 @@ export function toMentionDisplay(
     mentionTokenPattern(),
     (_token, label: string, rawOrdinal: string) => {
       const entry = byOrdinal.get(Number(rawOrdinal));
-      return entry ? mentionDisplayText(entry.name) : `@${label}`;
+      if (!entry) return `@${label}`;
+
+      return mentionDisplayText(
+        entry.name,
+        mentionDisplaySlot(entries, { pub_id: entry.pubId, name: entry.name }),
+      );
     },
   );
 }
 
 /**
- * 표시형을 원문으로 되돌린다. `MENTION_DISPLAY_MARK`가 붙은 자리만 토큰이 되므로, 손으로 친
- * `@이름`은 그 이름을 고른 적이 있어도 평문으로 남는다.
+ * 표시형을 원문으로 되돌린다. 표시가 붙은 자리만 토큰이 되므로, 손으로 친 `@이름`은 그 이름을
+ * 고른 적이 있어도 평문으로 남는다.
  *
- * 같은 이름이 여럿이면 **나온 순서대로** 짝을 짓는다. 고른 순서와 본문에 넣은 순서가 같으므로
- * 보통은 그대로 맞고, 어긋나도 이름이 같은 사람들 사이에서만 어긋난다. 동명이인이라고 토큰을
- * 그대로 보여 주면 입력창에 원문이 다시 새어 나온다. 수가 모자라면 마지막 사람을 다시 쓴다 —
- * 같은 사람을 여러 번 부르는 것은 `normalizeMentions()`가 하나로 센다.
+ * 누구인지는 표시가 정한다. 이름이 같은 사람이 여럿이어도 각자 자기 표시를 달고 있어, 본문에
+ * 넣은 순서를 바꾸거나 하나를 지워도 남은 쪽이 자기 사람을 부른다.
  *
  * 짝을 찾지 못한 표시는 제출 전에 지운다. 골라 넣은 뒤 이름을 고쳐 쓴 자리에 보이지 않는
  * 글자가 남아 저장되지 않게 한다.
@@ -253,36 +303,27 @@ export function fromMentionDisplay(
   text: string,
   entries: MentionDraftEntry[],
 ): string {
-  const byName = new Map<string, MentionDraftEntry[]>();
-
-  [...entries]
-    .sort((left, right) => left.ordinal - right.ordinal)
-    .forEach((entry) => {
-      if (entry.name === "") return;
-      const group = byName.get(entry.name);
-      if (group) group.push(entry);
-      else byName.set(entry.name, [entry]);
-    });
-
-  const names = Array.from(byName.keys()).sort(
+  const names = Array.from(
+    new Set(entries.map((entry) => entry.name).filter((name) => name !== "")),
+  ).sort(
     // 긴 이름을 먼저 본다. `김민`이 `김민수`를 반으로 자르지 않게 한다.
     (left, right) => right.length - left.length,
   );
   if (names.length === 0) return stripDisplayMarks(text);
 
   const pattern = new RegExp(
-    `${MENTION_DISPLAY_MARK}@(${names.map(escapeRegExp).join("|")})`,
+    `([${MENTION_DISPLAY_MARKS.join("")}])@(${names.map(escapeRegExp).join("|")})`,
     "g",
   );
-  const seen = new Map<string, number>();
 
   return stripDisplayMarks(
     outsideMentionTokens(text, (segment) =>
-      segment.replace(pattern, (_match, name: string) => {
-        const group = byName.get(name) ?? [];
-        const index = seen.get(name) ?? 0;
-        seen.set(name, index + 1);
-        const entry = group[Math.min(index, group.length - 1)];
+      segment.replace(pattern, (match, mark: string, name: string) => {
+        const group = sameNameEntries(entries, name);
+        const slot = MENTION_DISPLAY_MARKS.indexOf(mark);
+        // 다섯 번째부터는 표시를 함께 쓴다. 그 자리는 마지막 사람이 받는다.
+        const entry = group[Math.min(slot, group.length - 1)];
+        if (!entry) return match;
 
         return buildMentionToken(entry.name, entry.ordinal);
       }),
