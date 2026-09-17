@@ -2,21 +2,22 @@
  * `docs/AGENT_MAP.md`가 실제 코드와 어긋났는지 검사한다.
  *
  * 이 지도는 에이전트가 탐색 대신 읽는 좌표표라, 틀린 지도는 없는 지도보다 나쁘다. 그래서
- * 지도에서 가장 자주 낡는 표들을 사람 눈이 아니라 `npm run check`가 지킨다. 검사는 여섯 가지다.
+ * 지도에서 가장 자주 낡는 표들을 사람 눈이 아니라 `npm run check`가 지킨다. 검사는 일곱 가지다.
  *
  *   1. 라우트 표의 `URL ↔ route module` 쌍이 `app/routes.ts`와 일치하는가
- *   2. 라우트 표의 Data 열(`L`/`A`/`S`)이 그 모듈의 실제 export와 일치하는가
- *   3. 라우트 표의 Test 열이 그 모듈을 import 하는 test 파일과 일치하는가
- *   4. feature 표의 이름이 `app/features/` 디렉터리와 일치하는가
- *   5. RPC·테이블 표가 `app/features/`의 `.rpc("...")`·`.from("...")` 호출 전부와 일치하는가
- *   6. 문서가 backtick으로 적은 저장소 경로가 전부 실제로 존재하는가
+ *   2. 라우트 표의 Chrome 열이 그 모듈의 `defineAppChrome` 설정과 일치하는가
+ *   3. 라우트 표의 Data 열(`L`/`A`/`S`)이 그 모듈의 실제 export와 일치하는가
+ *   4. 라우트 표의 Test 열이 그 모듈을 import 하는 test 파일과 일치하는가
+ *   5. feature 표의 이름이 `app/features/` 디렉터리와 일치하는가
+ *   6. RPC·테이블 표가 `app/features/`의 `.rpc("...")`·`.from("...")` 호출 전부와 일치하는가
+ *   7. 문서가 backtick으로 적은 저장소 경로가 전부 실제로 존재하는가
  *
  * 1번은 `app/routes.ts`를 파싱하지 않고 그대로 실행해서 얻는다. 이 파일이 쓰는 것은
  * `index`/`layout`/`route` 세 함수와 `satisfies RouteConfig`뿐이라, import와 타입 표기만
  * 걷어내면 그대로 JS다. 정규식으로 중첩을 흉내 내면 언젠가 부모를 잘못 읽지만, 이렇게 하면
  * React Router가 보는 것과 같은 트리를 본다.
  *
- * 3번은 RPC 이름이 선언된 schema 파일에 실제로 있는지까지 본다. 문서가 가리키는 곳과 정의된
+ * 6번은 RPC 이름이 선언된 schema 파일에 실제로 있는지까지 본다. 문서가 가리키는 곳과 정의된
  * 곳이 갈라지는 것이 이 표가 낡는 가장 흔한 방식이기 때문이다.
  *
  * `--print`는 검사 대신 세 표에 들어갈 행을 그대로 찍는다. 표를 갱신할 때 손으로 적지 않기
@@ -31,6 +32,7 @@ const MAP_PATH = "docs/AGENT_MAP.md";
 const ROUTES_PATH = "app/routes.ts";
 const FEATURES_DIR = "app/features";
 const SCHEMAS_DIR = "supabase/schemas";
+const CHROME_PATH = "app/features/app-shell/model/chrome.ts";
 
 /** 문서에서 표를 찾는 표지. prettier가 표의 폭을 바꿔도 이 줄은 그대로 남는다. */
 const MARKERS = {
@@ -205,6 +207,56 @@ function tableRows(markdown, kind) {
 }
 
 /**
+ * 라우트 표의 Chrome 열을 `defineAppChrome` 설정에서 다시 뽑는다. 형식은 문서와 같은
+ * `header/bottomNav/contentWidth`이고 `pullToRefresh`가 켜져 있으면 `/PTR`이 붙는다.
+ *
+ * 생략된 `contentWidth`는 `DEFAULT_APP_CHROME`이 채우므로, 기본값을 여기 적어 두지 않고
+ * `chrome.ts`에서 읽는다. 기본이 바뀌면 지도도 같이 틀려야 한다.
+ */
+async function routeChrome(file, fallbackWidth) {
+  const source = await readFile(path.join(root, file), "utf8").catch(
+    () => null,
+  );
+  if (source === null) return null;
+
+  const declaration = source.match(
+    /export\s+const\s+handle\s*=\s*defineAppChrome\(\{([\s\S]*?)\}\)/,
+  );
+  if (!declaration) return "—";
+
+  const body = declaration[1];
+  const field = (name) =>
+    body.match(new RegExp(String.raw`\b${name}\s*:\s*"([a-z0-9-]+)"`))?.[1] ??
+    null;
+
+  const header = field("header");
+  const bottomNav = field("bottomNav");
+  // 두 값은 타입이 필수로 요구하므로, 못 읽었다면 이 정규식이 낡은 것이다.
+  if (!header || !bottomNav) return "???";
+
+  const width = field("contentWidth") ?? fallbackWidth;
+  const ptr = /\bpullToRefresh\s*:\s*true\b/.test(body);
+
+  return `${header}/${bottomNav}/${width}${ptr ? "/PTR" : ""}`;
+}
+
+/** `DEFAULT_APP_CHROME`의 `contentWidth`. Chrome 열의 생략된 폭이 이 값으로 풀린다. */
+async function defaultContentWidth() {
+  const source = await readFile(path.join(root, CHROME_PATH), "utf8");
+  const width = source
+    .match(/DEFAULT_APP_CHROME[^{]*\{([\s\S]*?)\}/)?.[1]
+    ?.match(/\bcontentWidth\s*:\s*"([a-z0-9]+)"/)?.[1];
+
+  if (!width) {
+    console.error(
+      `${CHROME_PATH}에서 DEFAULT_APP_CHROME.contentWidth를 읽지 못했습니다.`,
+    );
+    process.exit(1);
+  }
+  return width;
+}
+
+/**
  * 라우트 표의 Data 열(`L`/`A`/`S`)을 export 기준으로 다시 뽑는다.
  *
  * 이름이 본문 어딘가에 나오는지로 세면 안 된다. `posts/new` 라우트들은 부모의
@@ -363,8 +415,18 @@ for (const file of await walk("test", /\.tsx?$/)) {
   testFiles.push([file, await readFile(path.join(root, file), "utf8")]);
 }
 
+const contentWidth = await defaultContentWidth();
+
 for (const cells of tableRows(markdown, "routes")) {
-  const [url, file, , documentedData, , , documentedTest] = cells;
+  const [url, file, documentedChrome, documentedData, , , documentedTest] =
+    cells;
+
+  const chrome = await routeChrome(file, contentWidth);
+  if (chrome !== null && chrome !== documentedChrome) {
+    errors.push(
+      `Chrome 열: ${url} — 문서 "${documentedChrome}", 실제 "${chrome}" (${file})`,
+    );
+  }
 
   const data = await routeDataFlags(file);
   if (data !== null && data !== documentedData) {
