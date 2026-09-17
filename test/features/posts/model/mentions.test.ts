@@ -17,6 +17,8 @@ import {
   mentionTokenPattern,
   normalizeMentions,
   parseMentions,
+  mentionDisplayRanges,
+  sanitizeMentionDisplay,
   sanitizeMentionLabel,
   toMentionDisplay,
   toMentionDraft,
@@ -345,6 +347,30 @@ describe("mention display form", () => {
 
     expect(fromMentionDisplay(body, [한별])).toBe(
       `${buildMentionToken("이한별", 1)} ${buildMentionToken("이한별", 1)}`,
+    );
+  });
+
+  it("marks off the span the input deletes as one piece", () => {
+    const picked = mentionDisplayText("이한별");
+    const ranges = mentionDisplayRanges(`앞 ${picked} 뒤`, [한별]);
+
+    expect(ranges).toHaveLength(1);
+    expect(ranges[0].start).toBe(2);
+    expect(ranges[0].end).toBe(2 + picked.length);
+    expect(ranges[0].entry).toEqual(한별);
+
+    // 손으로 친 이름은 자리가 아니다. 지울 때도 한 글자씩 지워진다.
+    expect(mentionDisplayRanges("@이한별", [한별])).toEqual([]);
+  });
+
+  it("strips a mark whose name no longer matches", () => {
+    const broken = `${MENTION_DISPLAY_MARK}@이한벌`;
+    const intact = mentionDisplayText("이한별");
+
+    expect(sanitizeMentionDisplay(broken, [한별])).toBe("@이한벌");
+    expect(sanitizeMentionDisplay(intact, [한별])).toBe(intact);
+    expect(sanitizeMentionDisplay(`${intact} ${broken}`, [한별])).toBe(
+      `${intact} @이한벌`,
     );
   });
 

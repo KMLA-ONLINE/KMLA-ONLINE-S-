@@ -19,8 +19,10 @@ import {
 import {
   countMentionTargets,
   fromMentionDisplay,
+  mentionDisplayRanges,
   mentionDisplaySlot,
   mentionDisplayText,
+  sanitizeMentionDisplay,
   toMentionDisplay,
   validateMentionCount,
   type MentionDraftEntry,
@@ -217,6 +219,43 @@ export function CommentComposer({
   // 길이 상한은 저장되는 원문에 걸린다. 화면에 보이는 글자 수로 세면 토큰 길이만큼 넘겨
   // 보내고 서버에서 거절당한다.
   const length = countCommentGraphemes(body);
+
+  /** 입력창의 값과 캐럿을 함께 바꾼다. React가 값을 다시 심으면 캐럿이 끝으로 튄다. */
+  const replaceDraft = (next: string, caret: number) => {
+    setDraft(next);
+    requestAnimationFrame(() => {
+      const element = input.current;
+      if (!element) return;
+      element.focus();
+      element.setSelectionRange(caret, caret);
+    });
+  };
+
+  /**
+   * 멘션은 한 덩어리로 지워진다. 이름 가운데를 지워 반쪽만 남으면 화면에는 멀쩡한 글자처럼
+   * 보이는데 멘션은 아닌 상태가 되고, 지운 글자를 다시 치면 조용히 되살아난다.
+   */
+  const deleteAtomically = (
+    element: HTMLTextAreaElement,
+    key: "Backspace" | "Delete",
+  ) => {
+    const { selectionStart, selectionEnd } = element;
+    const collapsed = selectionStart === selectionEnd;
+    const from =
+      collapsed && key === "Backspace" ? selectionStart - 1 : selectionStart;
+    const to =
+      collapsed && key === "Delete" ? selectionStart + 1 : selectionEnd;
+
+    const touched = mentionDisplayRanges(draft, mentionDraft.entries).filter(
+      (range) => range.start < to && from < range.end,
+    );
+    if (touched.length === 0) return false;
+
+    const start = Math.min(from, ...touched.map((range) => range.start));
+    const end = Math.max(to, ...touched.map((range) => range.end));
+    replaceDraft(draft.slice(0, start) + draft.slice(end), start);
+    return true;
+  };
   const overLimit = length > COMMENT_MAX_LENGTH;
   const canSend =
     (draft.trim() !== "" || image !== null) &&
@@ -425,7 +464,23 @@ export function CommentComposer({
               placeholder={placeholder}
               className="min-h-9 min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent px-4 py-1.5 text-base leading-6 outline-none placeholder:text-muted-foreground"
               onChange={(event) => {
-                setDraft(event.target.value);
+                const value = event.target.value;
+                // 이름이 깨진 자리의 보이지 않는 표시를 걷어낸다. 남겨 두면 원래 이름을 다시
+                // 쳤을 때 멘션이 되살아난다.
+                const next = sanitizeMentionDisplay(
+                  value,
+                  mentionDraft.entries,
+                );
+                if (next === value) setDraft(value);
+                else
+                  replaceDraft(
+                    next,
+                    Math.max(
+                      0,
+                      (event.target.selectionStart ?? value.length) -
+                        (value.length - next.length),
+                    ),
+                  );
                 if (localError) setLocalError(null);
               }}
               onPaste={(event) => {
@@ -440,6 +495,15 @@ export function CommentComposer({
               onCompositionStart={() => (composing.current = true)}
               onCompositionEnd={() => (composing.current = false)}
               onKeyDown={(event) => {
+                if (
+                  (event.key === "Backspace" || event.key === "Delete") &&
+                  !composing.current &&
+                  !event.nativeEvent.isComposing
+                ) {
+                  if (deleteAtomically(event.currentTarget, event.key))
+                    event.preventDefault();
+                  return;
+                }
                 if (event.key === "Escape" && onCancel) {
                   event.preventDefault();
                   onCancel();

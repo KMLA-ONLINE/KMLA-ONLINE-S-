@@ -367,6 +367,49 @@ describe("CommentComposer", () => {
     );
   });
 
+  it("deletes a mention as one piece and does not bring it back", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
+    const { user, input } = renderComposer({ onSubmit, mentionGroupId: "g" });
+    const field = input as HTMLTextAreaElement;
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+    expect(field).toHaveValue(`${mentionDisplayText("첫 멤버")} `);
+
+    // 이름 가운데(`첫` 뒤)에 캐럿을 두고 한 글자만 지운다. 반쪽이 남으면 화면에는 멀쩡한
+    // 글자처럼 보이는데 멘션은 아닌 상태가 된다.
+    field.setSelectionRange(3, 3);
+    fireEvent.keyDown(field, { key: "Backspace" });
+    await vi.waitFor(() => expect(field).toHaveValue(" "));
+
+    // 지운 이름을 그대로 다시 쳐도 멘션이 아니다. 보이지 않는 표시까지 함께 지워졌다.
+    await user.type(field, "@첫 멤버 확인{Enter}");
+    expect(onSubmit).toHaveBeenCalledWith("@첫 멤버 확인", undefined, [
+      { ordinal: 1, pubId: "member-1", name: "첫 멤버" },
+    ]);
+  });
+
+  it("drops the hidden mark when the name is edited in place", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
+    const { user, input } = renderComposer({ onSubmit, mentionGroupId: "g" });
+    const field = input as HTMLTextAreaElement;
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+
+    // 이름 가운데에 글자가 끼어 멘션이 깨진 상태. 보이지 않는 표시만 남으면 `째`를 도로
+    // 지웠을 때 멘션이 조용히 되살아난다.
+    fireEvent.change(field, {
+      target: { value: `${mentionDisplayText("첫째 멤버")} ` },
+    });
+    await vi.waitFor(() => expect(field).toHaveValue("@첫째 멤버 "));
+
+    fireEvent.change(field, { target: { value: "@첫 멤버 " } });
+    await user.click(screen.getByRole("button", { name: "댓글 게시" }));
+
+    expect(onSubmit).toHaveBeenCalledWith("@첫 멤버", undefined, [
+      { ordinal: 1, pubId: "member-1", name: "첫 멤버" },
+    ]);
+  });
+
   it("calls both members when two of them share a name", async () => {
     const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
     const { user, input } = renderComposer({ onSubmit, mentionGroupId: "g" });

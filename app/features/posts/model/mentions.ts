@@ -241,23 +241,6 @@ function stripDisplayMarks(text: string): string {
   );
 }
 
-/** 토큰 바깥의 글자에만 `map`을 적용한다. 붙여넣기로 들어온 토큰을 두 번 감싸지 않는다. */
-function outsideMentionTokens(
-  text: string,
-  map: (segment: string) => string,
-): string {
-  const pattern = mentionTokenPattern();
-  let result = "";
-  let last = 0;
-
-  for (const match of text.matchAll(pattern)) {
-    result += map(text.slice(last, match.index)) + match[0];
-    last = match.index + match[0].length;
-  }
-
-  return result + map(text.slice(last));
-}
-
 /**
  * 표시형. `textarea`로 쓰는 댓글 입력창이 원문 대신 보여 주는 글이다.
  *
@@ -289,6 +272,77 @@ export function toMentionDisplay(
   );
 }
 
+/** 표시형 본문이 들고 있는 멘션 한 자리. 입력창이 통째로 지울 범위이기도 하다. */
+export interface MentionDisplayRange {
+  start: number;
+  end: number;
+  entry: MentionDraftEntry;
+}
+
+/**
+ * 표시형 본문에서 버튼이 넣은 멘션 자리를 찾는다. 표시가 붙어 있고 그 뒤가 초안에 있는
+ * 이름이어야 한 자리다 — 손으로 친 `@이름`도, 이름이 깨져 표시만 남은 자리도 아니다.
+ */
+export function mentionDisplayRanges(
+  text: string,
+  entries: MentionDraftEntry[],
+): MentionDisplayRange[] {
+  const names = Array.from(
+    new Set(entries.map((entry) => entry.name).filter((name) => name !== "")),
+  ).sort(
+    // 긴 이름을 먼저 본다. `김민`이 `김민수`를 반으로 자르지 않게 한다.
+    (left, right) => right.length - left.length,
+  );
+  if (names.length === 0) return [];
+
+  const pattern = new RegExp(
+    `([${MENTION_DISPLAY_MARKS.join("")}])@(${names.map(escapeRegExp).join("|")})`,
+    "g",
+  );
+  const ranges: MentionDisplayRange[] = [];
+
+  for (const match of text.matchAll(pattern)) {
+    const group = sameNameEntries(entries, match[2]);
+    const slot = MENTION_DISPLAY_MARKS.indexOf(match[1]);
+    // 다섯 번째부터는 표시를 함께 쓴다. 그 자리는 마지막 사람이 받는다.
+    const entry = group[Math.min(slot, group.length - 1)];
+    if (!entry) continue;
+
+    ranges.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      entry,
+    });
+  }
+
+  return ranges;
+}
+
+/**
+ * 입력창이 편집마다 부르는 정리. 짝을 잃은 표시를 지운다.
+ *
+ * 멘션 가운데를 고치면 이름이 깨져 그 자리는 더 이상 멘션이 아니다. 보이지 않는 표시만
+ * 남겨 두면 원래 이름을 다시 쳤을 때 조용히 멘션으로 되살아난다 — 사용자는 평범한 글자를
+ * 쓴 줄 아는데 알림이 나간다. 깨지는 순간 표시를 걷어 그 길을 막는다.
+ */
+export function sanitizeMentionDisplay(
+  text: string,
+  entries: MentionDraftEntry[],
+): string {
+  const ranges = mentionDisplayRanges(text, entries);
+  let result = "";
+  let last = 0;
+
+  for (const range of ranges) {
+    result +=
+      stripDisplayMarks(text.slice(last, range.start)) +
+      text.slice(range.start, range.end);
+    last = range.end;
+  }
+
+  return result + stripDisplayMarks(text.slice(last));
+}
+
 /**
  * 표시형을 원문으로 되돌린다. 표시가 붙은 자리만 토큰이 되므로, 손으로 친 `@이름`은 그 이름을
  * 고른 적이 있어도 평문으로 남는다.
@@ -303,32 +357,29 @@ export function fromMentionDisplay(
   text: string,
   entries: MentionDraftEntry[],
 ): string {
-  const names = Array.from(
-    new Set(entries.map((entry) => entry.name).filter((name) => name !== "")),
-  ).sort(
-    // 긴 이름을 먼저 본다. `김민`이 `김민수`를 반으로 자르지 않게 한다.
-    (left, right) => right.length - left.length,
-  );
-  if (names.length === 0) return stripDisplayMarks(text);
+  const ranges = mentionDisplayRanges(text, entries);
+  if (ranges.length === 0) return stripDisplayMarks(text);
 
-  const pattern = new RegExp(
-    `([${MENTION_DISPLAY_MARKS.join("")}])@(${names.map(escapeRegExp).join("|")})`,
-    "g",
-  );
+  // 붙여넣기로 들어온 토큰 안은 건드리지 않는다. 토큰을 두 번 감싸지 않기 위해서다.
+  const tokens = Array.from(text.matchAll(mentionTokenPattern()), (match) => ({
+    start: match.index,
+    end: match.index + match[0].length,
+  }));
+  const inToken = (range: MentionDisplayRange) =>
+    tokens.some((token) => token.start < range.end && range.start < token.end);
 
-  return stripDisplayMarks(
-    outsideMentionTokens(text, (segment) =>
-      segment.replace(pattern, (match, mark: string, name: string) => {
-        const group = sameNameEntries(entries, name);
-        const slot = MENTION_DISPLAY_MARKS.indexOf(mark);
-        // 다섯 번째부터는 표시를 함께 쓴다. 그 자리는 마지막 사람이 받는다.
-        const entry = group[Math.min(slot, group.length - 1)];
-        if (!entry) return match;
+  let result = "";
+  let last = 0;
 
-        return buildMentionToken(entry.name, entry.ordinal);
-      }),
-    ),
-  );
+  for (const range of ranges) {
+    if (inToken(range)) continue;
+    result +=
+      stripDisplayMarks(text.slice(last, range.start)) +
+      buildMentionToken(range.entry.name, range.entry.ordinal);
+    last = range.end;
+  }
+
+  return result + stripDisplayMarks(text.slice(last));
 }
 
 /** 본문에서 쓰지 않는 가장 작은 멘션 번호. 모든 번호가 사용 중이면 `null`이다. */
