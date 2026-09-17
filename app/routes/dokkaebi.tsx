@@ -14,7 +14,7 @@ function TestCase({ children, title }: { children: ReactNode; title: string }) {
   );
 }
 
-export default function Theme() {
+export default function Dokkaebi() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-xl flex-col gap-4 p-6">
       <section className="flex flex-col gap-4">

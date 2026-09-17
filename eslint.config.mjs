@@ -142,7 +142,7 @@ export default defineConfig([
   },
   {
     files: ["app/**/*.{ts,tsx}"],
-    ignores: ["app/routes/theme.tsx"],
+    ignores: ["app/routes/dokkaebi.tsx"],
     plugins: {
       local: {
         rules: {
