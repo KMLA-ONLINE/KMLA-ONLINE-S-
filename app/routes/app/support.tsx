@@ -8,7 +8,7 @@ import {
 
 export const handle = defineAppChrome({
   header: "sticky",
-  bottomNav: "sticky",
+  bottomNav: "none",
   contentWidth: "2xl",
 });
 

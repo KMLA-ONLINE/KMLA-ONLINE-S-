@@ -119,11 +119,11 @@ Vitest 테스트는 `test/` 아래에 두고 `app/`의 영역 구조를 따라 �
 별도의 `e2e/`에 둡니다.
 
 ```tsx
-// test/routes/theme.test.tsx
-import Theme from "~/routes/theme";
+// test/routes/dokkaebi.test.tsx
+import Dokkaebi from "~/routes/dokkaebi";
 import { renderRoute, screen } from "../router";
 
-renderRoute(Theme, { path: "/theme" });
+renderRoute(Dokkaebi, { path: "/dokkaebi" });
 ```
 
 `createRoutesStub`은 `clientLoader` 키를 모르므로, 로더를 직접 태우고 싶다면 `loader`로 넘기세요.

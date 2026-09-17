@@ -14,7 +14,7 @@ export default [
   route("blocked", "routes/auth/blocked.tsx"),
   route("logout", "routes/auth/logout.tsx"),
   route("noti/open/:notificationId", "routes/notification-open.tsx"),
-  route("theme", "routes/theme.tsx"),
+  route("dokkaebi", "routes/dokkaebi.tsx"),
   layout("routes/app/gate.tsx", [
     layout("routes/app/layout.tsx", [
       index("routes/app/home.tsx"),

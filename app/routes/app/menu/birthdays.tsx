@@ -13,7 +13,7 @@ import type { Route } from "./+types/birthdays";
 
 export const handle = defineAppChrome({
   header: "sticky",
-  bottomNav: "sticky",
+  bottomNav: "none",
   contentWidth: "5xl",
 });
 

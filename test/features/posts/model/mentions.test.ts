@@ -6,14 +6,21 @@ import {
   extractPostPlainText,
 } from "~/features/posts/model/markdown";
 import {
+  MENTION_DISPLAY_MARK,
   MENTION_LIMIT,
   buildMentionToken,
   countMentionTargets,
+  fromMentionDisplay,
+  mentionDisplaySlot,
+  mentionDisplayText,
   mentionOrdinalFromHref,
   mentionTokenPattern,
   normalizeMentions,
   parseMentions,
+  mentionDisplayRanges,
+  sanitizeMentionDisplay,
   sanitizeMentionLabel,
+  toMentionDisplay,
   toMentionDraft,
   validateMentionCount,
   type MentionDraftEntry,
@@ -223,5 +230,171 @@ describe("parseMentions", () => {
         },
       ]),
     ).toEqual([{ ordinal: 2, pubId: "saebyeok-24", name: "박새벽" }]);
+  });
+});
+
+describe("mention display form", () => {
+  it("unwraps tokens with the current name and wraps them back", () => {
+    const body = `${buildMentionToken("옛 이름", 1)} 확인 부탁`;
+    const display = toMentionDisplay(body, [한별]);
+
+    // 토큰의 라벨은 장식이라 개명 전 이름일 수 있다. 짝은 ordinal로 찾는다.
+    expect(display).toBe(`${mentionDisplayText("이한별", 1)} 확인 부탁`);
+    expect(display).toContain("@이한별");
+    expect(fromMentionDisplay(display, [한별])).toBe(
+      `${buildMentionToken("이한별", 1)} 확인 부탁`,
+    );
+  });
+
+  it("leaves a name nobody picked as plain text", () => {
+    expect(fromMentionDisplay("@아무개 안녕", [한별])).toBe("@아무개 안녕");
+  });
+
+  it("leaves a hand-typed name plain even when that person was picked", () => {
+    // 버튼으로 불렀다가 지운 사람의 이름을 나중에 손으로 쳐도 다시 불리지 않는다. 초안은
+    // 본문에서 토큰이 사라져도 그 사람을 계속 들고 있기 때문이다.
+    expect(fromMentionDisplay("@이한별 선배가 그러던데", [한별])).toBe(
+      "@이한별 선배가 그러던데",
+    );
+  });
+
+  it("does not hand a withdrawn target's label to a namesake", () => {
+    const body = `${buildMentionToken("이한별", 1)} 그리고 ${buildMentionToken("이한별", 3)} 님도`;
+    const display = toMentionDisplay(body, [한별]);
+
+    // ordinal 3은 탈퇴한 사용자라 초안에 없다. 라벨이 같다고 활성 대상 쪽으로 붙으면 부른 적
+    // 없는 사람에게 알림이 간다.
+    expect(fromMentionDisplay(display, [한별])).toBe(
+      `${buildMentionToken("이한별", 1)} 그리고 @이한별 님도`,
+    );
+  });
+
+  it("does not cut a longer name in half", () => {
+    const 민: MentionDraftEntry = { ordinal: 1, pubId: "min", name: "김민" };
+    const 민수: MentionDraftEntry = {
+      ordinal: 2,
+      pubId: "minsu",
+      name: "김민수",
+    };
+
+    expect(
+      fromMentionDisplay(`${mentionDisplayText("김민수", 2)} 님`, [민, 민수]),
+    ).toBe(`${buildMentionToken("김민수", 2)} 님`);
+  });
+
+  it("calls each namesake by the mark it carries", () => {
+    const 한별둘: MentionDraftEntry = {
+      ordinal: 2,
+      pubId: "hanbyeol-26",
+      name: "이한별",
+    };
+    const 먼저 = mentionDisplayText("이한별", 한별.ordinal);
+    const 나중 = mentionDisplayText("이한별", 한별둘.ordinal);
+
+    // 이름이 같아도 각자 자기 표시를 달고 있다. 화면에는 둘 다 `@이한별`로 보인다.
+    expect(먼저).not.toBe(나중);
+    expect(fromMentionDisplay(`${먼저} ${나중}`, [한별, 한별둘])).toBe(
+      `${buildMentionToken("이한별", 1)} ${buildMentionToken("이한별", 2)}`,
+    );
+
+    // 넣은 순서를 바꿔도, 하나를 지워도 남은 쪽은 자기 사람을 부른다.
+    expect(fromMentionDisplay(`${나중} ${먼저}`, [한별, 한별둘])).toBe(
+      `${buildMentionToken("이한별", 2)} ${buildMentionToken("이한별", 1)}`,
+    );
+    expect(
+      normalizeMentions(fromMentionDisplay(나중, [한별, 한별둘]), [
+        한별,
+        한별둘,
+      ]).pubIds,
+    ).toEqual(["hanbyeol-26"]);
+  });
+
+  it("keeps a mark pointing at its own person when the draft loses another", () => {
+    // `register()`는 본문에서 사라진 ordinal을 재사용하며 그 항목을 버린다. 표시를 "같은 이름
+    // 안에서 몇 번째"로 정하면 그때 남은 표시들이 한 칸씩 밀려 옆 사람을 부른다.
+    const 한별둘: MentionDraftEntry = {
+      ordinal: 2,
+      pubId: "hanbyeol-26",
+      name: "이한별",
+    };
+    const 한별셋: MentionDraftEntry = {
+      ordinal: 1,
+      pubId: "hanbyeol-27",
+      name: "이한별",
+    };
+    const 나중 = mentionDisplayText("이한별", 한별둘.ordinal);
+
+    // 한별이 빠지고 한별셋이 그 ordinal을 가져가도, 이미 써 놓은 한별둘의 표시는 그대로다.
+    expect(fromMentionDisplay(나중, [한별둘, 한별셋])).toBe(
+      buildMentionToken("이한별", 2),
+    );
+    expect(
+      fromMentionDisplay(mentionDisplayText("이한별", 한별셋.ordinal), [
+        한별둘,
+        한별셋,
+      ]),
+    ).toBe(buildMentionToken("이한별", 1));
+  });
+
+  it("leaves a mark plain when the draft no longer holds its person", () => {
+    // 초안이 그 사람을 잃으면 짝이 없다. 옆 사람에게 넘기지 않고 평문으로 둔다.
+    expect(fromMentionDisplay(mentionDisplayText("이한별", 2), [한별])).toBe(
+      "@이한별",
+    );
+  });
+
+  it("shares a mark between namesakes five apart", () => {
+    // 표시는 다섯 개뿐이다. ordinal이 5만큼 떨어진 동명이인은 같은 표시를 쓰고, 먼저 부른
+    // 쪽이 가져간다.
+    const 여섯째: MentionDraftEntry = {
+      ordinal: 6,
+      pubId: "hanbyeol-30",
+      name: "이한별",
+    };
+
+    expect(mentionDisplaySlot(6)).toBe(mentionDisplaySlot(1));
+    expect(
+      fromMentionDisplay(mentionDisplayText("이한별", 6), [한별, 여섯째]),
+    ).toBe(buildMentionToken("이한별", 1));
+  });
+
+  it("does not wrap a token that is already in the text", () => {
+    const body = `${buildMentionToken("이한별", 1)} ${mentionDisplayText("이한별", 1)}`;
+
+    expect(fromMentionDisplay(body, [한별])).toBe(
+      `${buildMentionToken("이한별", 1)} ${buildMentionToken("이한별", 1)}`,
+    );
+  });
+
+  it("marks off the span the input deletes as one piece", () => {
+    const picked = mentionDisplayText("이한별", 1);
+    const ranges = mentionDisplayRanges(`앞 ${picked} 뒤`, [한별]);
+
+    expect(ranges).toHaveLength(1);
+    expect(ranges[0].start).toBe(2);
+    expect(ranges[0].end).toBe(2 + picked.length);
+    expect(ranges[0].entry).toEqual(한별);
+
+    // 손으로 친 이름은 자리가 아니다. 지울 때도 한 글자씩 지워진다.
+    expect(mentionDisplayRanges("@이한별", [한별])).toEqual([]);
+  });
+
+  it("strips a mark whose name no longer matches", () => {
+    const broken = `${MENTION_DISPLAY_MARK}@이한벌`;
+    const intact = mentionDisplayText("이한별", 1);
+
+    expect(sanitizeMentionDisplay(broken, [한별])).toBe("@이한벌");
+    expect(sanitizeMentionDisplay(intact, [한별])).toBe(intact);
+    expect(sanitizeMentionDisplay(`${intact} ${broken}`, [한별])).toBe(
+      `${intact} @이한벌`,
+    );
+  });
+
+  it("drops a mark that lost its name", () => {
+    // 골라 넣은 뒤 이름을 고쳐 쓰면 표시만 남는다. 보이지 않는 글자를 저장하지 않는다.
+    const orphan = `${MENTION_DISPLAY_MARK}@이한벌`;
+
+    expect(fromMentionDisplay(orphan, [한별])).toBe("@이한벌");
+    expect(fromMentionDisplay(orphan, [])).toBe("@이한벌");
   });
 });

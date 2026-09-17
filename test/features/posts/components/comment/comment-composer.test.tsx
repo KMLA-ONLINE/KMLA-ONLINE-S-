@@ -25,6 +25,15 @@ const { mentionState, mentionCandidates } = vi.hoisted(() => ({
       profile_type: "student" as const,
       avatar_path: null,
     },
+    // 동명이인. 화면에 보이는 이름이 첫 멤버와 같다.
+    {
+      pub_id: "member-3",
+      name: "첫 멤버",
+      cohort: 29,
+      is_returning_student: false,
+      profile_type: "student" as const,
+      avatar_path: null,
+    },
   ],
 }));
 
@@ -57,6 +66,7 @@ vi.mock("~/features/posts/components/mention-button", () => ({
 
 import { CommentComposer } from "~/features/posts/components/comment/comment-composer";
 import { COMMENT_MAX_LENGTH } from "~/features/posts/model/comment-text";
+import { mentionDisplayText } from "~/features/posts/model/mentions";
 import type { PostIdentity } from "~/features/posts/model/types";
 import { renderRoute } from "../../../../router";
 
@@ -303,6 +313,150 @@ describe("CommentComposer", () => {
     await vi.waitFor(() => expect(input).toHaveValue(""));
   });
 
+  it("shows a picked mention as a name and submits it as a token", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
+    const { user, input } = renderComposer({ onSubmit, mentionGroupId: "g" });
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+
+    // 입력창은 `textarea`라 토큰을 링크로 그릴 수 없다. 원문 대신 표시형을 담는다.
+    expect(input).toHaveValue(`${mentionDisplayText("첫 멤버", 1)} `);
+
+    await user.type(input, "확인 부탁");
+    await user.click(screen.getByRole("button", { name: "댓글 게시" }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      "[@첫 멤버](m:1) 확인 부탁",
+      undefined,
+      [{ ordinal: 1, pubId: "member-1", name: "첫 멤버" }],
+    );
+  });
+
+  it("opens an edited comment with its mentions already unwrapped", () => {
+    const { input } = renderComposer({
+      mentionGroupId: "g",
+      initialValue: "[@옛 이름](m:1) 확인 부탁",
+      initialMentions: [
+        {
+          ordinal: 1,
+          pub_id: "member-1",
+          // 토큰의 라벨은 장식이라 개명 전 이름일 수 있다. 화면에는 지금 이름을 보여준다.
+          name: "첫 멤버",
+          avatar_path: null,
+        },
+      ],
+    });
+
+    expect(input).toHaveValue(`${mentionDisplayText("첫 멤버", 1)} 확인 부탁`);
+  });
+
+  it("does not mention a picked member again from hand-typed text", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
+    const { user, input } = renderComposer({ onSubmit, mentionGroupId: "g" });
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+    await user.clear(input);
+    await user.type(input, "@첫 멤버 선배가 그러던데{Enter}");
+
+    // 골랐다가 지운 사람은 초안에 남지만, 손으로 친 이름까지 다시 부르면 부른 적 없는
+    // 사람에게 알림이 간다.
+    expect(onSubmit).toHaveBeenCalledWith(
+      "@첫 멤버 선배가 그러던데",
+      undefined,
+      [{ ordinal: 1, pubId: "member-1", name: "첫 멤버" }],
+    );
+  });
+
+  it("deletes a mention as one piece and does not bring it back", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
+    const { user, input } = renderComposer({ onSubmit, mentionGroupId: "g" });
+    const field = input as HTMLTextAreaElement;
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+    expect(field).toHaveValue(`${mentionDisplayText("첫 멤버", 1)} `);
+
+    // 이름 가운데(`첫` 뒤)에 캐럿을 두고 한 글자만 지운다. 반쪽이 남으면 화면에는 멀쩡한
+    // 글자처럼 보이는데 멘션은 아닌 상태가 된다.
+    field.setSelectionRange(3, 3);
+    fireEvent.keyDown(field, { key: "Backspace" });
+    await vi.waitFor(() => expect(field).toHaveValue(" "));
+
+    // 지운 이름을 그대로 다시 쳐도 멘션이 아니다. 보이지 않는 표시까지 함께 지워졌다.
+    await user.type(field, "@첫 멤버 확인{Enter}");
+    expect(onSubmit).toHaveBeenCalledWith("@첫 멤버 확인", undefined, [
+      { ordinal: 1, pubId: "member-1", name: "첫 멤버" },
+    ]);
+  });
+
+  it("drops the hidden mark when the name is edited in place", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
+    const { user, input } = renderComposer({ onSubmit, mentionGroupId: "g" });
+    const field = input as HTMLTextAreaElement;
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+
+    // 이름 가운데에 글자가 끼어 멘션이 깨진 상태. 보이지 않는 표시만 남으면 `째`를 도로
+    // 지웠을 때 멘션이 조용히 되살아난다.
+    fireEvent.change(field, {
+      target: { value: `${mentionDisplayText("첫째 멤버", 1)} ` },
+    });
+    await vi.waitFor(() => expect(field).toHaveValue("@첫째 멤버 "));
+
+    fireEvent.change(field, { target: { value: "@첫 멤버 " } });
+    await user.click(screen.getByRole("button", { name: "댓글 게시" }));
+
+    expect(onSubmit).toHaveBeenCalledWith("@첫 멤버", undefined, [
+      { ordinal: 1, pubId: "member-1", name: "첫 멤버" },
+    ]);
+  });
+
+  it("waits for the IME composition to end before repairing a mention", async () => {
+    const { user, input } = renderComposer({ mentionGroupId: "g" });
+    const field = input as HTMLTextAreaElement;
+    const broken = `${mentionDisplayText("첫째 멤버", 1)} `;
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+
+    fireEvent.compositionStart(field);
+    fireEvent.change(field, { target: { value: broken } });
+
+    // 조합 중에 값과 캐럿을 건드리면 쓰던 글자가 끊긴다. 표시는 조합이 끝난 뒤에 걷는다.
+    expect(field.value).toBe(broken);
+
+    fireEvent.compositionEnd(field);
+    await vi.waitFor(() => expect(field).toHaveValue("@첫째 멤버 "));
+  });
+
+  it("calls both members when two of them share a name", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
+    const { user, input } = renderComposer({ onSubmit, mentionGroupId: "g" });
+
+    const add = screen.getByRole("button", { name: "멘션 추가" });
+    await user.click(add);
+    await user.click(add);
+    await user.click(add);
+
+    // 둘은 화면에 똑같이 `@첫 멤버`로 보이지만 서로 다른 사람을 부른다.
+    expect(input).toHaveValue(
+      `${mentionDisplayText("첫 멤버", 1)} ${mentionDisplayText("둘째 멤버", 2)} ${mentionDisplayText("첫 멤버", 3)} `,
+    );
+    expect(
+      (input as HTMLTextAreaElement).value.replaceAll(/\p{Cf}/gu, ""),
+    ).toBe("@첫 멤버 @둘째 멤버 @첫 멤버 ");
+
+    await user.click(screen.getByRole("button", { name: "댓글 게시" }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      "[@첫 멤버](m:1) [@둘째 멤버](m:2) [@첫 멤버](m:3)",
+      undefined,
+      [
+        { ordinal: 1, pubId: "member-1", name: "첫 멤버" },
+        { ordinal: 2, pubId: "member-2", name: "둘째 멤버" },
+        { ordinal: 3, pubId: "member-3", name: "첫 멤버" },
+      ],
+    );
+  });
+
   it("resets the mention draft only after a successful submit", async () => {
     const onSubmit = vi
       .fn()
@@ -333,7 +487,9 @@ describe("CommentComposer", () => {
 
     await user.click(screen.getByRole("button", { name: "멘션 추가" }));
     await user.click(screen.getByRole("button", { name: "댓글 게시" }));
-    await vi.waitFor(() => expect(input).toHaveValue("[@첫 멤버](m:1) "));
+    await vi.waitFor(() =>
+      expect(input).toHaveValue(`${mentionDisplayText("첫 멤버", 1)} `),
+    );
     await user.click(screen.getByRole("button", { name: "멘션 추가" }));
     await user.click(screen.getByRole("button", { name: "댓글 게시" }));
 

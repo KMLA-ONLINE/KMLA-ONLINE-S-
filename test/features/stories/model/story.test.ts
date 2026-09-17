@@ -14,8 +14,9 @@ describe("story content", () => {
     expect(isStoryContentValid("  1  ")).toBe(true);
   });
 
-  it("accepts an empty story", () => {
-    expect(isStoryContentValid("")).toBe(true);
-    expect(isStoryContentValid("   ")).toBe(true);
+  it("rejects a story that is empty or only whitespace", () => {
+    expect(isStoryContentValid("")).toBe(false);
+    expect(isStoryContentValid("   ")).toBe(false);
+    expect(isStoryContentValid("\n\t")).toBe(false);
   });
 });

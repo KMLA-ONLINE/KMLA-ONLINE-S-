@@ -8,6 +8,7 @@
 
 ## Product Requirements
 
+- Before editing, use docs/AGENT_MAP.md to identify the owning feature and relevant route/data/spec/test context, read the nearest applicable AGENTS.md, start at docs/KMLA_SPEC_INDEX.md and follow its links to the relevant domain specification and technical design documents, then load the matching project skill from .agents/skills/ and follow its workflow and references.
 - Before implementing or changing a product feature, start at `docs/KMLA_SPEC_INDEX.md` and follow its links to the relevant domain specification and technical design documents.
 - If the required behavior is ambiguous or unspecified, ask the user before implementation rather than deciding it implicitly.
 - When a user decision changes or adds product behavior, update the relevant functional specification or technical design document as part of the same change.
@@ -21,8 +22,8 @@
 - `app/` follows `docs/structure.md`: `app/routes.ts` explicitly declares the route tree, `app/routes/` contains thin route modules, `app/features/<feature>/` owns product UI/data/model code, and `app/shared/` contains domain-free code. There is no top-level `app/lib/`; domain-free utilities live in `app/shared/lib/`.
 - A feature directory may carry its own `AGENTS.md` holding that feature's rules and invariants, as `app/features/app-shell/AGENTS.md` does. Read it before changing anything in that feature, and update it in the same change when an invariant moves.
 - Dependencies flow `routes → features → shared`. Features never import routes, and shared never imports routes or features. Prefer another feature's narrow `index.ts` public API; a direct module import is acceptable when it avoids a broad barrel or cycle and the imported module is intentionally stable.
-- ESLint enforces the outer layer direction and prevents routes from importing Supabase directly. Feature components and models are kept out of Supabase by review.
-- Supabase calls belong in a feature's `data/` only. Routes, components, and `model/` must not import `getSupabase()` directly.
+- ESLint enforces the outer layer direction and prevents routes from importing Supabase directly.
+- Supabase access belongs in a feature's data/ only. Routes, components, hooks, and model/ modules must not import or call getSupabase() directly; they access Supabase-backed behavior through the feature's data API.
 - `data/` uses `queries.ts`, `mutations.ts`, `subscriptions.ts`, and `files.ts` for query, mutation, realtime, and Storage I/O. Do not pre-split a small feature's data by domain. Multi-step browser I/O such as prepare/upload/finalize may be coordinated in `data/`; keeping an I/O transaction coherent is more important than making every data function thin.
 - `app/features/app-shell/` owns app chrome and shell data; `app/routes/app/gate.tsx` owns the auth gate. `app/routes/app/layout.tsx` owns the standard app shell, while `app/routes/messenger/layout.tsx` owns the sidebar-free messenger shell. Standard app routes configure the global header and mobile bottom nav through a typed `handle.chrome` export; `PageHeader` remains page-owned and is not part of this config.
 - `mock.ts` files stand in for tables and RPCs that `supabase/migrations/` does not have yet. Each one is read by exactly one `data/queries.ts`; delete the mock when the migration lands and change only that query.
@@ -34,8 +35,7 @@
 - That build-time render is also why `isbot`, `@react-router/node`, and `react-dom` are dependencies even though no `app/` module imports them. They are not unused; do not prune them.
 - A `clientLoader` must not create dependent request waterfalls or per-item queries. Run independent requests in parallel with `Promise.all`; they remain separate requests.
 - Every mutation defines how loader data becomes current: revalidate, merge the canonical result, or use an optimistic update with rollback. Prefer `clientAction` for route-shaped form mutations, but keep file processing, progress, retries, and other browser-I/O orchestration in the owning feature.
-- Browser code talks directly to Supabase. Client-side checks are UX only; authorization belongs in Postgres and defaults to RLS.
-- Database constraints, triggers, or transactional RPCs enforce uniqueness, ownership, state transitions, and cross-row invariants; client validation is UX only.
+- Browser code talks directly to Supabase. Client-side validation and authorization checks are UX only. Authorization belongs in Postgres and defaults to RLS; database constraints, triggers, or transactional RPCs must enforce uniqueness, ownership, state transitions, and cross-row invariants.
 - Every `VITE_*` value is public in the bundle. Never place a `service_role` key or other secret there; use a Supabase Edge Function for webhooks, privileged work, or third-party secrets.
 - Use the lazy singleton `getSupabase()` from `app/shared/supabase/client.ts`, and call it only from browser-only paths such as client loaders, effects, and event handlers.
 
@@ -51,7 +51,7 @@
 - Never pass `--include-seed` to a remote push, and never run `supabase config push`. `seed.sql` inserts into `auth.users` and `config.toml` carries the local `site_url`.
 - Vault secrets, Edge Function secrets, and Auth URL configuration are per project and migrations do not carry them. Document a new one in `supabase/README.md` under "Remote project secrets"; `seed.sql` is local-only. A Vault name and its paired function variable must match or the cron call 401s silently.
 - A new `VITE_*` goes into `.env.example`, both Vercel scopes, and the table in `README.md`.
-- Give every browser-accessible table its grants and RLS policies in the same migration. Use table APIs for simple reads and writes. Use transactional RPCs when direct grants would expose invariant-bearing columns or private relations; choose invoker or definer from the actual privilege boundary rather than treating invoker as a goal by itself.
+- Give every browser-accessible table its grants and RLS policies in the same migration. Use table APIs when an operation can be safely authorized and constrained entirely by grants, RLS, and database constraints. Use a transactional RPC when an operation must atomically coordinate multiple rows or tables, or when direct grants would expose invariant-bearing columns or private relations. Choose invoker or definer from the actual privilege boundary rather than treating invoker as a goal by itself.
 - When anonymous or pseudonymous rows vary in identity visibility, keep presentation fields in client-readable rows and the real identity in `private` tables with no client grants. This rule does not apply to ordinary public profile or membership identity.
 - A `security definer` read is allowed when one set-based screen query must combine private identity data with public presentation without exposing the private relation. It must return only presentation-safe fields, authorize the caller inside the function, use `search_path = ''`, revoke default `EXECUTE`, and grant only the required role. Do not use per-row definer helpers when one set-based RPC can do the work.
 - A feature read may join tables from other domains but must not call another feature's query function.

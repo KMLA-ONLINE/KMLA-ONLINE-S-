@@ -168,6 +168,208 @@ export function toMentionDraft(mentions: PostMention[]): MentionDraftEntry[] {
     }));
 }
 
+/**
+ * 표시형 멘션 앞에 붙는 보이지 않는 표시. 폭도 글리프도 없는 U+2060 WORD JOINER와 그 뒤의
+ * 보이지 않는 연산자들이라 화면에는 `@홍길동`만 보인다.
+ *
+ * 되돌릴 때 이름만 보고 짝을 지으면, 버튼으로 불렀다가 지운 사람의 이름을 손으로 친 글이
+ * 진짜 멘션이 되고 탈퇴한 대상의 라벨이 동명이인 쪽으로 붙는다. 둘 다 부른 적 없는 사람에게
+ * 알림이 가는 길이다. 그래서 버튼이 넣은 자리에만 표시를 남기고, 표시가 붙은 것만 되돌린다.
+ *
+ * 표시가 여럿인 것은 동명이인 때문이다. 이름이 같으면 글자만으로는 누구인지 알 수 없어,
+ * 표시가 ordinal을 가리킨다. 어느 표시인지는 `mentionDisplaySlot()`이 정한다.
+ *
+ * 사용자가 이름을 고쳐 표시가 떨어져 나가면 멘션은 평문이 된다 — 엉뚱한 사람을 부르는 것보다
+ * 안 부르는 쪽이 낫다.
+ */
+const MENTION_DISPLAY_MARKS = [
+  "\u2060",
+  "\u2061",
+  "\u2062",
+  "\u2063",
+  "\u2064",
+];
+
+/** ordinal 1이 쓰는 첫 표시. */
+export const MENTION_DISPLAY_MARK = MENTION_DISPLAY_MARKS[0];
+
+/**
+ * 이 ordinal이 쓸 표시 번호.
+ *
+ * **초안의 다른 항목을 보지 않는다.** 같은 이름 안에서 몇 번째인지로 정하면, 초안이 자리를
+ * 하나 잃는 순간(`register()`는 본문에서 사라진 ordinal을 재사용하며 그 항목을 버린다) 이미
+ * 써 놓은 표시들이 한 칸씩 밀려 옆 사람을 가리킨다. ordinal은 그 항목이 사는 동안 변하지
+ * 않으므로 표시도 변하지 않는다.
+ *
+ * 표시는 다섯 개뿐이라 ordinal이 5만큼 떨어진 동명이인은 같은 표시를 쓴다. 그 경우 먼저
+ * 부른 쪽이 가져간다 — 한 댓글에서 그렇게까지 부르는 일보다, 표시를 늘려 캐럿이 지나야 할
+ * 보이지 않는 글자를 늘리는 쪽이 더 나쁘다.
+ */
+export function mentionDisplaySlot(ordinal: number): number {
+  return (ordinal - 1) % MENTION_DISPLAY_MARKS.length;
+}
+
+/** 입력창에 넣을 표시형 한 조각. 버튼이 이것을 넣고 `fromMentionDisplay()`가 이것만 되돌린다. */
+export function mentionDisplayText(name: string, ordinal: number): string {
+  return `${MENTION_DISPLAY_MARKS[mentionDisplaySlot(ordinal)]}@${name}`;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function stripDisplayMarks(text: string): string {
+  return MENTION_DISPLAY_MARKS.reduce(
+    (result, mark) => result.replaceAll(mark, ""),
+    text,
+  );
+}
+
+/**
+ * 표시형. `textarea`로 쓰는 댓글 입력창이 원문 대신 보여 주는 글이다.
+ *
+ * Milkdown은 토큰을 링크로 그려 주지만 `textarea`는 글자 일부만 달리 그릴 수 없어서, 넣는
+ * 순간부터 `[@홍길동](m:1)`이 그대로 보였다. 대신 입력창이 드는 값은 `@홍길동`이고 제출
+ * 직전에 `fromMentionDisplay()`가 토큰으로 되돌린다.
+ *
+ * 이름은 토큰의 라벨이 아니라 초안 목록에서 가져온다. 라벨은 장식이라 개명 전 이름일 수 있고,
+ * 되돌릴 때 짝을 찾는 것도 이 이름이다. 초안이 모르는 ordinal(탈퇴한 사용자)은 되돌릴 짝이
+ * 없으므로 표시만 남기고 평문으로 둔다 — `normalizeMentions()`도 같은 결론을 낸다.
+ */
+export function toMentionDisplay(
+  body: string,
+  entries: MentionDraftEntry[],
+): string {
+  const byOrdinal = new Map(entries.map((entry) => [entry.ordinal, entry]));
+
+  return body.replace(
+    mentionTokenPattern(),
+    (_token, label: string, rawOrdinal: string) => {
+      const entry = byOrdinal.get(Number(rawOrdinal));
+      if (!entry) return `@${label}`;
+
+      return mentionDisplayText(entry.name, entry.ordinal);
+    },
+  );
+}
+
+/** 표시형 본문이 들고 있는 멘션 한 자리. 입력창이 통째로 지울 범위이기도 하다. */
+export interface MentionDisplayRange {
+  start: number;
+  end: number;
+  entry: MentionDraftEntry;
+}
+
+/**
+ * 표시형 본문에서 버튼이 넣은 멘션 자리를 찾는다. 표시가 붙어 있고 그 뒤가 초안에 있는
+ * 이름이어야 한 자리다 — 손으로 친 `@이름`도, 이름이 깨져 표시만 남은 자리도 아니다.
+ */
+export function mentionDisplayRanges(
+  text: string,
+  entries: MentionDraftEntry[],
+): MentionDisplayRange[] {
+  const ordered = [...entries].sort(
+    (left, right) => left.ordinal - right.ordinal,
+  );
+  const names = Array.from(
+    new Set(ordered.map((entry) => entry.name).filter((name) => name !== "")),
+  ).sort(
+    // 긴 이름을 먼저 본다. `김민`이 `김민수`를 반으로 자르지 않게 한다.
+    (left, right) => right.length - left.length,
+  );
+  if (names.length === 0) return [];
+
+  const pattern = new RegExp(
+    `([${MENTION_DISPLAY_MARKS.join("")}])@(${names.map(escapeRegExp).join("|")})`,
+    "g",
+  );
+  const ranges: MentionDisplayRange[] = [];
+
+  for (const match of text.matchAll(pattern)) {
+    const slot = MENTION_DISPLAY_MARKS.indexOf(match[1]);
+    // 이름과 표시가 함께 맞아야 한 자리다. 짝이 없으면 그 글자는 멘션이 아니다 — 초안이
+    // 그 사람을 잃은 뒤에도 남아 있던 글자가 옆 사람을 부르지 않는다.
+    const entry = ordered.find(
+      (candidate) =>
+        candidate.name === match[2] &&
+        mentionDisplaySlot(candidate.ordinal) === slot,
+    );
+    if (!entry) continue;
+
+    ranges.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      entry,
+    });
+  }
+
+  return ranges;
+}
+
+/**
+ * 입력창이 편집마다 부르는 정리. 짝을 잃은 표시를 지운다.
+ *
+ * 멘션 가운데를 고치면 이름이 깨져 그 자리는 더 이상 멘션이 아니다. 보이지 않는 표시만
+ * 남겨 두면 원래 이름을 다시 쳤을 때 조용히 멘션으로 되살아난다 — 사용자는 평범한 글자를
+ * 쓴 줄 아는데 알림이 나간다. 깨지는 순간 표시를 걷어 그 길을 막는다.
+ */
+export function sanitizeMentionDisplay(
+  text: string,
+  entries: MentionDraftEntry[],
+): string {
+  const ranges = mentionDisplayRanges(text, entries);
+  let result = "";
+  let last = 0;
+
+  for (const range of ranges) {
+    result +=
+      stripDisplayMarks(text.slice(last, range.start)) +
+      text.slice(range.start, range.end);
+    last = range.end;
+  }
+
+  return result + stripDisplayMarks(text.slice(last));
+}
+
+/**
+ * 표시형을 원문으로 되돌린다. 표시가 붙은 자리만 토큰이 되므로, 손으로 친 `@이름`은 그 이름을
+ * 고른 적이 있어도 평문으로 남는다.
+ *
+ * 누구인지는 표시가 정한다. 이름이 같은 사람이 여럿이어도 각자 자기 표시를 달고 있어, 본문에
+ * 넣은 순서를 바꾸거나 하나를 지워도 남은 쪽이 자기 사람을 부른다.
+ *
+ * 짝을 찾지 못한 표시는 제출 전에 지운다. 골라 넣은 뒤 이름을 고쳐 쓴 자리에 보이지 않는
+ * 글자가 남아 저장되지 않게 한다.
+ */
+export function fromMentionDisplay(
+  text: string,
+  entries: MentionDraftEntry[],
+): string {
+  const ranges = mentionDisplayRanges(text, entries);
+  if (ranges.length === 0) return stripDisplayMarks(text);
+
+  // 붙여넣기로 들어온 토큰 안은 건드리지 않는다. 토큰을 두 번 감싸지 않기 위해서다.
+  const tokens = Array.from(text.matchAll(mentionTokenPattern()), (match) => ({
+    start: match.index,
+    end: match.index + match[0].length,
+  }));
+  const inToken = (range: MentionDisplayRange) =>
+    tokens.some((token) => token.start < range.end && range.start < token.end);
+
+  let result = "";
+  let last = 0;
+
+  for (const range of ranges) {
+    if (inToken(range)) continue;
+    result +=
+      stripDisplayMarks(text.slice(last, range.start)) +
+      buildMentionToken(range.entry.name, range.entry.ordinal);
+    last = range.end;
+  }
+
+  return result + stripDisplayMarks(text.slice(last));
+}
+
 /** 본문에서 쓰지 않는 가장 작은 멘션 번호. 모든 번호가 사용 중이면 `null`이다. */
 export function nextMentionOrdinal(body: string): number | null {
   const used = new Set<number>();

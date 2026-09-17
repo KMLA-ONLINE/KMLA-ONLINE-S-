@@ -4,7 +4,7 @@ import {
   SendIcon,
   XIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import {
   PostAnonymousAvatar,
@@ -17,8 +17,12 @@ import {
   useMentionDraft,
 } from "~/features/posts/hooks/use-mention-draft";
 import {
-  buildMentionToken,
   countMentionTargets,
+  fromMentionDisplay,
+  mentionDisplayRanges,
+  mentionDisplayText,
+  sanitizeMentionDisplay,
+  toMentionDisplay,
   validateMentionCount,
   type MentionDraftEntry,
   type PostMention,
@@ -158,8 +162,11 @@ export function CommentComposer({
   mentionGroupId?: string | null;
   className?: string;
 }) {
-  const [draft, setDraft] = useState(initialValue);
   const mentionDraft = useMentionDraft(initialMentions ?? []);
+  // 입력창이 드는 값은 원문이 아니라 표시형(`@홍길동`)이다. 원문은 제출과 검사에만 쓴다.
+  const [draft, setDraft] = useState(() =>
+    toMentionDisplay(initialValue, mentionDraft.entries),
+  );
   const [image, setImage] = useState<
     CommentImage | PreparedCommentImage | null
   >(initialImage ?? null);
@@ -204,7 +211,66 @@ export function CommentComposer({
     if (element) resize(element);
   }, [draft, input]);
 
-  const length = countCommentGraphemes(draft);
+  const body = useMemo(
+    () => fromMentionDisplay(draft, mentionDraft.entries),
+    [draft, mentionDraft.entries],
+  );
+  // 길이 상한은 저장되는 원문에 걸린다. 화면에 보이는 글자 수로 세면 토큰 길이만큼 넘겨
+  // 보내고 서버에서 거절당한다.
+  const length = countCommentGraphemes(body);
+
+  /** 입력창의 값과 캐럿을 함께 바꾼다. React가 값을 다시 심으면 캐럿이 끝으로 튄다. */
+  const replaceDraft = (next: string, caret: number) => {
+    setDraft(next);
+    requestAnimationFrame(() => {
+      const element = input.current;
+      if (!element) return;
+      element.focus();
+      element.setSelectionRange(caret, caret);
+    });
+  };
+
+  /**
+   * 짝 잃은 표시를 걷어낸 값으로 맞춘다. 조합 중에는 부르지 않는다 — 값과 캐럿을 건드리면
+   * 한글 조합이 끊긴다.
+   */
+  const repairDraft = (element: HTMLTextAreaElement) => {
+    const value = element.value;
+    const next = sanitizeMentionDisplay(value, mentionDraft.entries);
+    if (next === value) {
+      setDraft(value);
+      return;
+    }
+
+    const caret = element.selectionStart ?? value.length;
+    replaceDraft(next, Math.max(0, caret - (value.length - next.length)));
+  };
+
+  /**
+   * 멘션은 한 덩어리로 지워진다. 이름 가운데를 지워 반쪽만 남으면 화면에는 멀쩡한 글자처럼
+   * 보이는데 멘션은 아닌 상태가 되고, 지운 글자를 다시 치면 조용히 되살아난다.
+   */
+  const deleteAtomically = (
+    element: HTMLTextAreaElement,
+    key: "Backspace" | "Delete",
+  ) => {
+    const { selectionStart, selectionEnd } = element;
+    const collapsed = selectionStart === selectionEnd;
+    const from =
+      collapsed && key === "Backspace" ? selectionStart - 1 : selectionStart;
+    const to =
+      collapsed && key === "Delete" ? selectionStart + 1 : selectionEnd;
+
+    const touched = mentionDisplayRanges(draft, mentionDraft.entries).filter(
+      (range) => range.start < to && from < range.end,
+    );
+    if (touched.length === 0) return false;
+
+    const start = Math.min(from, ...touched.map((range) => range.start));
+    const end = Math.max(to, ...touched.map((range) => range.end));
+    replaceDraft(draft.slice(0, start) + draft.slice(end), start);
+    return true;
+  };
   const overLimit = length > COMMENT_MAX_LENGTH;
   const canSend =
     (draft.trim() !== "" || image !== null) &&
@@ -217,7 +283,7 @@ export function CommentComposer({
   // 그렇지 않으면 바꾸기 직전에 확인을 받는다(기능 명세 §9.1).
   const usesIdentityPicker = identities.includes("staff");
   const mentionBlocksAnonymous =
-    countMentionTargets(draft, mentionDraft.entries) > 0;
+    countMentionTargets(body, mentionDraft.entries) > 0;
 
   const selectImage = async (file: File | undefined) => {
     if (!file || processingImage || pending) return;
@@ -253,11 +319,11 @@ export function CommentComposer({
   const send = () => {
     if (pending || processingImage) return;
     const reason =
-      validateCommentBody(draft, image !== null) ??
-      validateMentionCount(draft, mentionDraft.entries);
+      validateCommentBody(body, image !== null) ??
+      validateMentionCount(body, mentionDraft.entries);
     if (reason) return setLocalError(reason);
     setLocalError(null);
-    const body = normalizeCommentBody(draft);
+    const submittedBody = normalizeCommentBody(body);
     // 입력창은 먼저 비운다(메신저처럼 즉시 반응해야 한다). 다만 등록이 실패하면 되돌린다 —
     // 오류 문구만 남기고 쓴 글을 버리면 긴 댓글을 처음부터 다시 쓰는 수밖에 없다.
     const submitted = draft;
@@ -268,7 +334,7 @@ export function CommentComposer({
         ? undefined
         : image;
     void Promise.resolve(
-      onSubmit(body, submittedImage, mentionDraft.entries),
+      onSubmit(submittedBody, submittedImage, mentionDraft.entries),
     ).then((created) => {
       // 되돌리는 건 그 사이 아무것도 쓰지 않았을 때뿐이다. 새로 쓰고 있는 글을 덮으면 안 된다.
       if (!created)
@@ -413,7 +479,10 @@ export function CommentComposer({
               placeholder={placeholder}
               className="min-h-9 min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent px-4 py-1.5 text-base leading-6 outline-none placeholder:text-muted-foreground"
               onChange={(event) => {
-                setDraft(event.target.value);
+                // 이름이 깨진 자리의 보이지 않는 표시를 걷어낸다. 남겨 두면 원래 이름을 다시
+                // 쳤을 때 멘션이 되살아난다. 조합 중에는 미뤘다가 조합이 끝나면 정리한다.
+                if (composing.current) setDraft(event.target.value);
+                else repairDraft(event.target);
                 if (localError) setLocalError(null);
               }}
               onPaste={(event) => {
@@ -426,8 +495,20 @@ export function CommentComposer({
                 void selectImage(pasted.getAsFile() ?? undefined);
               }}
               onCompositionStart={() => (composing.current = true)}
-              onCompositionEnd={() => (composing.current = false)}
+              onCompositionEnd={(event) => {
+                composing.current = false;
+                repairDraft(event.currentTarget);
+              }}
               onKeyDown={(event) => {
+                if (
+                  (event.key === "Backspace" || event.key === "Delete") &&
+                  !composing.current &&
+                  !event.nativeEvent.isComposing
+                ) {
+                  if (deleteAtomically(event.currentTarget, event.key))
+                    event.preventDefault();
+                  return;
+                }
                 if (event.key === "Escape" && onCancel) {
                   event.preventDefault();
                   onCancel();
@@ -466,22 +547,26 @@ export function CommentComposer({
               <MentionButton
                 groupId={mentionGroupId}
                 disabled={pending || processingImage}
-                remaining={remainingMentions(draft, mentionDraft.entries)}
+                remaining={remainingMentions(body, mentionDraft.entries)}
                 activeTargetPubIds={activeMentionPubIds(
-                  draft,
+                  body,
                   mentionDraft.entries,
                 )}
                 className="m-0.5 shrink-0 text-muted-foreground"
                 onSelect={(candidate) => {
-                  const ordinal = mentionDraft.register(candidate, draft);
+                  // 번호는 원문의 토큰을 보고 고른다. 표시형에는 토큰이 없어 언제나 1이
+                  // 나오고, 두 번째로 고른 사람이 첫 번째를 덮는다.
+                  const ordinal = mentionDraft.register(candidate, body);
                   if (ordinal === null) return;
                   const element = input.current;
-                  const token = `${buildMentionToken(candidate.name, ordinal)} `;
+                  // 이름이 같은 사람이 여럿이면 표시가 누구인지를 들고 다닌다. 어느
+                  // 표시인지는 ordinal이 정하므로 초안의 다른 항목을 보지 않는다.
+                  const label = `${mentionDisplayText(candidate.name, ordinal)} `;
                   const start = element?.selectionStart ?? draft.length;
                   const end = element?.selectionEnd ?? start;
-                  setDraft(draft.slice(0, start) + token + draft.slice(end));
+                  setDraft(draft.slice(0, start) + label + draft.slice(end));
                   requestAnimationFrame(() => {
-                    const caret = start + token.length;
+                    const caret = start + label.length;
                     element?.focus();
                     element?.setSelectionRange(caret, caret);
                   });
