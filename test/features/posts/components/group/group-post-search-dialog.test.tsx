@@ -225,7 +225,7 @@ describe("GroupPostSearchDialog", () => {
     expect(
       screen.getByText("제목, 내용 또는 작성자 이름으로 검색..."),
     ).toBeVisible();
-    expect(searchInput()).toHaveFocus();
+    await waitFor(() => expect(searchInput()).toHaveFocus());
   });
 
   it("opens with an empty query even when the last search is still in the URL", async () => {
