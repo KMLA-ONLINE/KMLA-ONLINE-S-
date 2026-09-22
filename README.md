@@ -200,6 +200,22 @@ SPA 모드에서 그 preset의 이점(라우트별 함수 설정, 번들 스플�
 Preview는 `dev` 브랜치에 고정 도메인을 할당해서 씁니다 (PWA·푸시 구독·Auth 리다이렉트가
 origin에 묶임).
 
+Production은 GitHub Actions의 `Quality Checks / Production release`가 배포합니다. `main`의
+Vercel Git 자동 배포는 `vercel.json`에서 끄고, 검증과 GitHub `Production` Environment 승인이
+끝난 같은 커밋을 DB migration → Edge Functions → Vercel 순서로 배포합니다. 배포 job은 다음
+Environment 설정을 요구합니다.
+
+| 종류     | 이름                                            |
+| -------- | ----------------------------------------------- |
+| Secret   | `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD` |
+| Secret   | `VERCEL_TOKEN`                                  |
+| Variable | `SUPABASE_PROJECT_ID` (`nvgtzkylunpefdvonioo`)  |
+| Variable | `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`            |
+
+`Production`에는 `main`만 허용하고 `cjeonguk`, `kmlaswtech`, `survibo`를 required reviewer로
+등록합니다. 셋 중 한 명의 승인이면 충분하며 self-review는 허용합니다. Function/Vault 시크릿은
+릴리스마다 덮어쓰지 않고 별도로 관리합니다.
+
 dev 배포는 스크립트로 합니다. `db:*`는 실행 전에 dev로 다시 링크합니다.
 
 ```bash
@@ -209,17 +225,13 @@ npm run fn:secrets:dev   # supabase/.env.dev.local
 npm run fn:deploy:dev
 ```
 
-prod 스크립트는 두지 않았습니다. dev에서 확인한 뒤 손으로 칩니다.
-
-```bash
-npx supabase link --project-ref nvgtzkylunpefdvonioo
-npx supabase db push --linked
-npm run link:dev
-```
-
-`db push`에 `--project-ref`가 없어 링크가 곧 대상입니다. 마지막 줄을 빼먹지 마세요.
-
-CI는 로컬 스택만 씁니다. `.env.local`도 그대로 둡니다.
+첫 Production job은 운영 DB의 migration history와 실제 스키마가 저장소와 정렬되었는지
+읽기 전용으로 확인하고 백업한 뒤 승인합니다. 기존 객체가 있는데 history만 비어 있으면 전체
+migration을 그대로 push하지 말고 `supabase/README.md`의 초기 baseline 절차를 따릅니다.
+실패한 릴리스는 자동 롤백하지 않습니다. 해당 SHA가 여전히 `main`이면 GitHub에서 failed job을
+재실행하고, `main`이 전진했다면 수정된 최신 `main`을 새로 릴리스합니다. 재실행 시 적용된
+migration은 건너뛰고 Functions와 Vercel은 다시 배포됩니다. `.env.local`은 계속 로컬 스택만
+가리킵니다.
 
 ## 알려진 제약
 

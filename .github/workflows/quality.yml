@@ -7,16 +7,19 @@ on:
     branches: [main]
 
 concurrency:
-  group: quality-${{ github.ref }}
-  cancel-in-progress: true
+  group: quality-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: ".nvmrc"
           cache: npm
@@ -38,3 +41,205 @@ jobs:
       # still generates against the real output).
       - name: Verify
         run: npm run verify
+
+  production-release:
+    name: Production release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: Production
+      url: ${{ steps.deploy_vercel.outputs.url }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate release configuration
+        shell: bash
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          for name in \
+            SUPABASE_ACCESS_TOKEN \
+            SUPABASE_DB_PASSWORD \
+            SUPABASE_PROJECT_ID \
+            VERCEL_ORG_ID \
+            VERCEL_PROJECT_ID \
+            VERCEL_TOKEN
+          do
+            if [[ -z "${!name}" ]]; then
+              echo "Production environment value is missing: $name" >&2
+              exit 1
+            fi
+          done
+
+          if [[ "$SUPABASE_PROJECT_ID" != "nvgtzkylunpefdvonioo" ]]; then
+            echo "Refusing unexpected Supabase project $SUPABASE_PROJECT_ID." >&2
+            exit 1
+          fi
+
+      - name: Refuse a stale release
+        shell: bash
+        run: |
+          current_main="$(git ls-remote origin refs/heads/main | awk '{ print $1 }')"
+          if [[ "$GITHUB_SHA" != "$current_main" ]]; then
+            echo "Refusing to release $GITHUB_SHA because main is now $current_main." >&2
+            exit 1
+          fi
+
+      - name: Preflight Supabase
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
+        run: |
+          npx supabase link \
+            --project-ref "$SUPABASE_PROJECT_ID" \
+            --yes
+          npx supabase db push \
+            --linked \
+            --dry-run
+          npx supabase functions list --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Preflight Vercel
+        id: preflight_vercel
+        shell: bash
+        env:
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          project="$(curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID?teamId=$VERCEL_ORG_ID" \
+            )"
+          project_id="$(jq -er '.id' <<< "$project")"
+          if [[ "$project_id" != "$VERCEL_PROJECT_ID" ]]; then
+            echo "Vercel returned unexpected project $project_id." >&2
+            exit 1
+          fi
+          if ! jq -e \
+            --arg account "$VERCEL_ORG_ID" \
+            --arg owner "${GITHUB_REPOSITORY%/*}" \
+            --arg repository "${GITHUB_REPOSITORY#*/}" \
+            '.accountId == $account and
+             .link.type == "github" and
+             .link.org == $owner and
+             .link.repo == $repository and
+             .link.productionBranch == "main"' \
+            <<< "$project" >/dev/null
+          then
+            echo "Vercel project is not the main deployment for $GITHUB_REPOSITORY." >&2
+            exit 1
+          fi
+          echo "name=$(jq -er '.name' <<< "$project")" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy database migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          current_main="$(git ls-remote origin refs/heads/main | awk '{ print $1 }')"
+          if [[ "$GITHUB_SHA" != "$current_main" ]]; then
+            echo "Refusing to release $GITHUB_SHA because main is now $current_main." >&2
+            exit 1
+          fi
+          npx supabase db push --linked --yes
+
+      - name: Deploy Edge Functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
+        run: >-
+          npx supabase functions deploy
+          --project-ref "$SUPABASE_PROJECT_ID"
+          --use-api
+
+      - name: Deploy Vercel production
+        id: deploy_vercel
+        shell: bash
+        env:
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_PROJECT_NAME: ${{ steps.preflight_vercel.outputs.name }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          repository_owner="${GITHUB_REPOSITORY%/*}"
+          repository_name="${GITHUB_REPOSITORY#*/}"
+          payload="$(jq -n \
+            --arg name "$VERCEL_PROJECT_NAME" \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg owner "$repository_owner" \
+            --arg repository "$repository_name" \
+            --arg sha "$GITHUB_SHA" \
+            '{
+              name: $name,
+              project: $project,
+              target: "production",
+              gitSource: {
+                type: "github",
+                org: $owner,
+                repo: $repository,
+                ref: "main",
+                sha: $sha
+              }
+            }')"
+          deployment="$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data-binary "$payload" \
+            "https://api.vercel.com/v13/deployments?teamId=$VERCEL_ORG_ID&skipAutoDetectionConfirmation=1&forceNew=1")"
+          deployment_id="$(jq -er '.id' <<< "$deployment")"
+
+          for attempt in {1..120}; do
+            deployment="$(curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$deployment_id?teamId=$VERCEL_ORG_ID&withGitRepoInfo=true")"
+            state="$(jq -er '.readyState' <<< "$deployment")"
+
+            case "$state" in
+              READY)
+                if ! jq -e \
+                  --arg project "$VERCEL_PROJECT_ID" \
+                  --arg sha "$GITHUB_SHA" \
+                  '.projectId == $project and
+                   .target == "production" and
+                   .gitSource.sha == $sha' \
+                  <<< "$deployment" >/dev/null
+                then
+                  echo "Vercel deployed an unexpected project, target, or commit." >&2
+                  exit 1
+                fi
+                deployment_url="https://$(jq -er '.url' <<< "$deployment")"
+                echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+                echo "Production deployment: $deployment_url" >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+                ;;
+              ERROR | CANCELED | BLOCKED)
+                jq -r '(.errorCode // "VERCEL_DEPLOYMENT_FAILED") + ": " + (.errorMessage // .readyState)' \
+                  <<< "$deployment" >&2
+                exit 1
+                ;;
+            esac
+
+            sleep 10
+          done
+
+          echo "Timed out waiting for Vercel deployment $deployment_id." >&2
+          exit 1

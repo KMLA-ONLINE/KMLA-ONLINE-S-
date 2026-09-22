@@ -79,20 +79,13 @@ npm run fn:deploy:dev
 
 ### 5.2 prod
 
-스크립트를 두지 않았습니다. dev에서 확인한 뒤 손으로 칩니다.
+`main` push의 품질 검사가 통과하면 GitHub `Production` Environment 승인을 기다립니다. 승인 후
+GitHub Actions가 migration, 모든 Edge Function, Vercel Production을 순서대로 배포합니다.
+필요한 secret/variable과 reviewer 설정은 `README.md`의 "환경 (prod / dev)"에 있습니다.
 
-```bash
-npx supabase link --project-ref nvgtzkylunpefdvonioo
-npx supabase db push --linked
-npm run link:dev
-```
-
-```bash
-npx supabase secrets set --project-ref nvgtzkylunpefdvonioo --env-file supabase/.env.prod.local
-npx supabase functions deploy --project-ref nvgtzkylunpefdvonioo
-```
-
-`db push`에 `--project-ref`가 없어 링크가 곧 대상입니다. 마지막 `link:dev`를 빼먹지 마세요.
+첫 승인 전에는 운영 DB를 백업하고 migration history와 실제 스키마가 저장소와 정렬되었는지
+확인합니다. 기존 스키마의 버전을 검증 없이 `migration repair`로 일괄 등록하지 않습니다.
+Function/Vault 시크릿과 Auth URL은 릴리스 workflow가 변경하지 않습니다.
 
 > ⚠️ 원격 push에 `--include-seed` 금지 (`seed.sql`은 `auth.users`에 직접 insert),
 > `supabase config push` 금지 (`config.toml`의 `site_url`이 로컬 값).

@@ -32,7 +32,11 @@ Never edit a deployed migration.
 
 `trftjcieogrewqptgidd` (dev, Vercel Preview) and `nvgtzkylunpefdvonioo` (prod, Production). Dev first, prod after it is checked in the deployed app.
 
-`db push` has no `--project-ref`; the link is the target. `db:diff:dev` and `db:push:dev` re-link to dev first. Prod has no script — link, push, and link back:
+`db push` has no `--project-ref`; the link is the target. `db:diff:dev` and `db:push:dev` re-link to dev first. Production is deployed by the approved `Production release` GitHub Actions job, which links to the production project explicitly before it performs a dry run and push.
+
+Before approving the first production release, back up the database and compare both the remote migration history and the actual schema with this repository. If existing production objects match repository migrations but their history is missing, review and baseline each matching version as a separate manual operation. Do not blindly mark every migration as applied. If the schema differs, reconcile the declarative schema and migration history before enabling automated releases.
+
+Production releases apply database migrations, deploy all repository Edge Functions, and then deploy the same commit to Vercel. They do not synchronize Edge Function secrets, change Vault values, repair migration history, prune remote functions, or roll back an applied migration automatically. After correcting a failure, rerun the failed job only while that SHA is still `main`; otherwise release the corrected latest `main`. Already-applied migrations are skipped.
 
 Never `--include-seed` a remote push (`seed.sql` inserts into `auth.users`), and never `supabase config push` (`config.toml` holds the local `site_url`).
 
