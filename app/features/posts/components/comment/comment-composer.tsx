@@ -4,7 +4,14 @@ import {
   SendIcon,
   XIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 
 import {
   PostAnonymousAvatar,
@@ -182,6 +189,7 @@ export function CommentComposer({
   const composing = useRef(false);
   const fallbackRef = useRef<HTMLTextAreaElement>(null);
   const input = inputRef ?? fallbackRef;
+  const pendingCaret = useRef<number | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const preparedImage = useRef<PreparedCommentImage | null>(null);
 
@@ -211,6 +219,19 @@ export function CommentComposer({
     if (element) resize(element);
   }, [draft, input]);
 
+  // React가 제어하는 값을 textarea에 반영한 직후 커서를 옮긴다. animation frame까지 미루면
+  // 그 사이 입력한 글자의 중간으로 이전 커서가 돌아갈 수 있다.
+  useLayoutEffect(() => {
+    const caret = pendingCaret.current;
+    if (caret === null) return;
+    pendingCaret.current = null;
+
+    const element = input.current;
+    if (!element) return;
+    element.focus();
+    element.setSelectionRange(caret, caret);
+  }, [draft, input]);
+
   const body = useMemo(
     () => fromMentionDisplay(draft, mentionDraft.entries),
     [draft, mentionDraft.entries],
@@ -221,13 +242,14 @@ export function CommentComposer({
 
   /** 입력창의 값과 캐럿을 함께 바꾼다. React가 값을 다시 심으면 캐럿이 끝으로 튄다. */
   const replaceDraft = (next: string, caret: number) => {
-    setDraft(next);
-    requestAnimationFrame(() => {
+    if (next === draft) {
       const element = input.current;
-      if (!element) return;
-      element.focus();
-      element.setSelectionRange(caret, caret);
-    });
+      element?.focus();
+      element?.setSelectionRange(caret, caret);
+      return;
+    }
+    pendingCaret.current = caret;
+    setDraft(next);
   };
 
   /**
@@ -564,12 +586,10 @@ export function CommentComposer({
                   const label = `${mentionDisplayText(candidate.name, ordinal)} `;
                   const start = element?.selectionStart ?? draft.length;
                   const end = element?.selectionEnd ?? start;
-                  setDraft(draft.slice(0, start) + label + draft.slice(end));
-                  requestAnimationFrame(() => {
-                    const caret = start + label.length;
-                    element?.focus();
-                    element?.setSelectionRange(caret, caret);
-                  });
+                  replaceDraft(
+                    draft.slice(0, start) + label + draft.slice(end),
+                    start + label.length,
+                  );
                 }}
               />
             ) : null}

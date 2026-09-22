@@ -332,6 +332,21 @@ describe("CommentComposer", () => {
     );
   });
 
+  it("does not restore a stale caret after replacing selected text unchanged", async () => {
+    const { user, input } = renderComposer({ mentionGroupId: "g" });
+    const field = input as HTMLTextAreaElement;
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+    mentionState.index = 0;
+    field.setSelectionRange(0, field.value.length);
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+
+    field.setSelectionRange(field.value.length, field.value.length);
+    await user.type(field, "확인 부탁");
+
+    expect(field).toHaveValue(`${mentionDisplayText("첫 멤버", 1)} 확인 부탁`);
+  });
+
   it("opens an edited comment with its mentions already unwrapped", () => {
     const { input } = renderComposer({
       mentionGroupId: "g",
