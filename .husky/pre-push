@@ -1,4 +1,6 @@
 # Whole-project checks that lint-staged cannot do from a partial file list:
-# a type error or a broken test usually lives in a file the commit did not touch.
+# a type error usually lives in a file the commit did not touch.
 npm run typecheck
+
+# Run the full test suite before every push.
 npm test

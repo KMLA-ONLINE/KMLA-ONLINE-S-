@@ -34,26 +34,40 @@ npm run dev           # http://localhost:5173
 
 `db:start` 출력의 `API URL` / publishable key를 `.env.local`에 채워 넣습니다.
 
+Web Push를 로컬에서 확인하려면 `npm run web-push:keys`로 VAPID 키 쌍을 만든 뒤 같은
+공개 키를 브라우저와 Edge Function 양쪽에 설정합니다.
+
+- `.env.local`: `VITE_WEB_PUSH_VAPID_PUBLIC_KEY`
+- `supabase/functions/.env`: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+  `VAPID_SUBJECT=mailto:<개발용 이메일>`,
+  `NOTIFICATION_DISPATCH_SECRET=local-notification-dispatch-only`
+
+`supabase/functions/.env`는 `supabase start` 때 자동으로 로드되므로 파일을 만든 뒤에는
+로컬 스택을 재시작합니다. 두 `.env` 파일은 Git에서 제외되며, `VAPID_PRIVATE_KEY`는
+브라우저용 `.env.local`에 넣지 않습니다.
+
 ## 스크립트
 
-| 명령                                         | 설명                                        |
-| -------------------------------------------- | ------------------------------------------- |
-| `npm run dev`                                | 개발 서버 (서비스 워커 비활성)              |
-| `npm run build`                              | SPA 빌드 + 서비스 워커 생성                 |
-| `npm run preview`                            | 빌드 결과를 로컬에서 서빙                   |
-| `npm run typecheck`                          | 라우트 타입 생성 후 `tsc`                   |
-| `npm test` / `test:watch` / `test:coverage`  | Vitest                                      |
-| `npm run e2e` / `e2e:ui`                     | Playwright (빌드 후 자동 서빙)              |
-| `npm run db:start` / `db:stop` / `db:status` | 로컬 Supabase                               |
-| `npm run db:reset`                           | 마이그레이션 + seed 재적용                  |
-| `npm run db:diff -- <name>`                  | 로컬 변경분을 마이그레이션 파일로 추출      |
-| `npm run db:types`                           | `app/lib/supabase/database.types.ts` 재생성 |
-| `npm run pwa:assets`                         | `public/logo.svg`에서 아이콘 일체 재생성    |
-| `npm run lint` / `lint:fix`                  | ESLint                                      |
-| `npm run format` / `format:check`            | Prettier                                    |
-| `npm run check`                              | lint + format + typecheck + test 일괄       |
-| `npm run verify`                             | `check` + 프로덕션 빌드 (CI가 실행하는 것)  |
-| `npm run e2e:install`                        | Playwright 브라우저 5종 설치                |
+| 명령                                         | 설명                                           |
+| -------------------------------------------- | ---------------------------------------------- |
+| `npm run dev`                                | 개발 서버 (서비스 워커 비활성)                 |
+| `npm run build`                              | SPA 빌드 + 서비스 워커 생성                    |
+| `npm run preview`                            | 빌드 결과를 로컬에서 서빙                      |
+| `npm run typecheck`                          | 라우트 타입 생성 후 `tsc`                      |
+| `npm test` / `test:watch` / `test:coverage`  | Vitest                                         |
+| `npm run e2e` / `e2e:ui`                     | Playwright (빌드 후 자동 서빙)                 |
+| `npm run db:start` / `db:stop` / `db:status` | 로컬 Supabase                                  |
+| `npm run db:reset`                           | 마이그레이션 + seed 재적용                     |
+| `npm run db:diff -- <name>`                  | schemas 변경분으로 migration 초안 생성         |
+| `npm run db:types`                           | `app/shared/supabase/database.types.ts` 재생성 |
+| `npm run pwa:assets`                         | `public/logo.svg`에서 아이콘 일체 재생성       |
+| `npm run brand:assets`                       | 알림 badge와 링크 미리보기 이미지 재생성       |
+| `npm run web-push:keys`                      | 로컬 Web Push용 VAPID 키 쌍 생성               |
+| `npm run lint` / `lint:fix`                  | ESLint                                         |
+| `npm run format` / `format:check`            | Prettier                                       |
+| `npm run check`                              | lint + format + typecheck + test 일괄          |
+| `npm run verify`                             | `check` + 프로덕션 빌드 (CI가 실행하는 것)     |
+| `npm run e2e:install`                        | Playwright 브라우저 5종 설치                   |
 
 ## 아키텍처에서 반드시 알아야 할 것
 
@@ -81,13 +95,19 @@ globbing 하게 됩니다 ([vite-pwa/vite-plugin-pwa#809](https://github.com/vit
 대신 `scripts/build-sw.mjs`가 완성된 `build/client`를 대상으로 `workbox-build`를 직접 실행합니다.
 `npm run build`에 체이닝되어 있으므로 별도로 호출할 필요는 없습니다.
 
+같은 이유로 `scripts/inline-root-css.mjs`도 빌드 후처리입니다. `index.html`에 유일하게 남는
+render-blocking `<link rel="stylesheet">`를 `<style>`로 인라인해 첫 화면의 왕복 한 번을 없앱니다
+(서비스 워커가 바뀐 `index.html`을 precache하도록 `build-sw.mjs`보다 먼저 돕니다).
+prerender된 앱 셸이 그 CSS를 그대로 쓰기 때문에 비동기 로드는 대안이 못 됩니다 — 왕복을
+스타일 없는 깜빡임으로 바꾸는 것뿐입니다.
+
 - `index.html`이 precache에 포함되고 navigation fallback으로 바인딩됩니다 (딥링크 오프라인 동작).
 - **폰트는 precache에 넣지 않습니다.** Pretendard는 한글 글리프 전체가 단일 ~750 kB 파일이라
   설치 시점 다운로드가 두 배 이상으로 불어납니다. 대신 `runtimeCaching`의 CacheFirst로
   `fonts` 캐시에 담습니다 (파일명이 해시라 stale 위험 없음). 대가는 최초 1회 렌더에서
   시스템 폰트로 잠깐 보일 수 있다는 것뿐입니다.
 - `skipWaiting: false`이므로 새 버전은 사용자가 수락할 때까지 대기합니다
-  (`app/pwa/use-service-worker.ts` → `app/pwa/update-prompt.tsx`).
+  (`app/shared/hooks/use-service-worker.ts` → `app/shared/components/update-prompt.tsx`).
 - 개발 서버에는 서비스 워커가 등록되지 않습니다 (`import.meta.env.PROD` 가드).
 
 ### 3. 테스트에서는 React Router Vite 플러그인을 쓰지 않습니다
@@ -95,14 +115,15 @@ globbing 하게 됩니다 ([vite-pwa/vite-plugin-pwa#809](https://github.com/vit
 `vitest.config.ts`는 `reactRouter()` 플러그인을 포함하지 않습니다. 이 플러그인은 typegen과
 가상 서버 모듈을 포함한 프레임워크 그래프를 구성하는데 Vitest 환경에서 동작하지 않습니다.
 대신 `test/router.tsx`의 `renderRoute()`가 `createRoutesStub`으로 라우터 컨텍스트를 만듭니다.
+Vitest 테스트는 `test/` 아래에 두고 `app/`의 영역 구조를 따라 배치합니다. Playwright 테스트는
+별도의 `e2e/`에 둡니다.
 
 ```tsx
-import { renderRoute, screen } from "../../test/router";
-import Home from "./home";
+// test/routes/dokkaebi.test.tsx
+import Dokkaebi from "~/routes/dokkaebi";
+import { renderRoute, screen } from "../router";
 
-renderRoute(Home, {
-  hydrationData: { loaderData: { "0": { ok: true, session: false } } },
-});
+renderRoute(Dokkaebi, { path: "/dokkaebi" });
 ```
 
 `createRoutesStub`은 `clientLoader` 키를 모르므로, 로더를 직접 태우고 싶다면 `loader`로 넘기세요.
@@ -123,7 +144,7 @@ husky가 두 단계로 나눠 겁니다.
 잡히지 않습니다. 그래서 commit이 아니라 push에 걸었습니다.
 
 `.lintstagedrc.mjs`의 `--no-warn-ignored`는 필수입니다. lint-staged는 ESLint에 파일 경로를 직접
-넘기는데, `globalIgnores` 대상(`app/components/ui/**`, `database.types.ts`)이 스테이지되면
+넘기는데, `globalIgnores` 대상(`app/shared/ui/**`, `database.types.ts`)이 스테이지되면
 "ignored" 경고가 나고 `--max-warnings 0` 때문에 커밋이 실패합니다.
 
 훅을 한 번 건너뛰려면 `HUSKY=0 git commit ...` 또는 `git commit --no-verify`.
@@ -161,7 +182,56 @@ E2E 워크플로는 러너에서 `supabase start`로 로컬 스택을 띄운 뒤
 `@vercel/react-router` preset은 사용하지 않습니다 — peer가 아직 `@react-router/dev: 7`에 묶여 있고,
 SPA 모드에서 그 preset의 이점(라우트별 함수 설정, 번들 스플리팅)은 모두 SSR용이라 해당 사항이 없습니다.
 
-Vercel 프로젝트 환경변수에 `VITE_SUPABASE_URL`과 `VITE_SUPABASE_PUBLISHABLE_KEY`를 등록해야 합니다.
+## 환경 (prod / dev)
+
+원격 Supabase 프로젝트는 둘입니다.
+
+| Vercel 스코프 | 브랜치      | Supabase               |
+| ------------- | ----------- | ---------------------- |
+| Production    | `main`      | `nvgtzkylunpefdvonioo` |
+| Preview       | `dev` 및 PR | `trftjcieogrewqptgidd` |
+
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_WEB_PUSH_VAPID_PUBLIC_KEY`를
+두 스코프에 각각 등록합니다. `VITE_SITE_URL`은 등록하지 않아도 됩니다 — Vercel 빌드에서는
+`vite.config.ts`가 `VERCEL_PROJECT_PRODUCTION_URL`로 채워 링크 미리보기 카드의
+`og:image`를 절대 URL로 만듭니다. 다른 도메인을 쓰려면 그때만 직접 등록합니다. 빌드 타임에 인라인되므로 값을 바꾸면 재배포해야 하고,
+`env.ts`가 지연 평가라 누락돼도 빌드는 통과합니다.
+
+Preview는 `dev` 브랜치에 고정 도메인을 할당해서 씁니다 (PWA·푸시 구독·Auth 리다이렉트가
+origin에 묶임).
+
+Production은 GitHub Actions의 `Quality Checks / Production release`가 배포합니다. `main`의
+Vercel Git 자동 배포는 `vercel.json`에서 끄고, 검증과 GitHub `Production` Environment 승인이
+끝난 같은 커밋을 DB migration → Edge Functions → Vercel 순서로 배포합니다. 배포 job은 다음
+Environment 설정을 요구합니다.
+
+| 종류     | 이름                                            |
+| -------- | ----------------------------------------------- |
+| Secret   | `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD` |
+| Secret   | `VERCEL_TOKEN`                                  |
+| Variable | `SUPABASE_PROJECT_ID` (`nvgtzkylunpefdvonioo`)  |
+| Variable | `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`            |
+
+`Production`에는 `main`만 허용하고 `cjeonguk`, `kmlaswtech`, `survibo`를 required reviewer로
+등록합니다. 셋 중 한 명의 승인이면 충분하며 self-review는 허용합니다. Function/Vault 시크릿은
+릴리스마다 덮어쓰지 않고 별도로 관리합니다.
+
+dev 배포는 스크립트로 합니다. `db:*`는 실행 전에 dev로 다시 링크합니다.
+
+```bash
+npm run db:diff:dev      # 드리프트 확인
+npm run db:push:dev
+npm run fn:secrets:dev   # supabase/.env.dev.local
+npm run fn:deploy:dev
+```
+
+첫 Production job은 운영 DB의 migration history와 실제 스키마가 저장소와 정렬되었는지
+읽기 전용으로 확인하고 백업한 뒤 승인합니다. 기존 객체가 있는데 history만 비어 있으면 전체
+migration을 그대로 push하지 말고 `supabase/README.md`의 초기 baseline 절차를 따릅니다.
+실패한 릴리스는 자동 롤백하지 않습니다. 해당 SHA가 여전히 `main`이면 GitHub에서 failed job을
+재실행하고, `main`이 전진했다면 수정된 최신 `main`을 새로 릴리스합니다. 재실행 시 적용된
+migration은 건너뛰고 Functions와 Vercel은 다시 배포됩니다. `.env.local`은 계속 로컬 스택만
+가리킵니다.
 
 ## 알려진 제약
 

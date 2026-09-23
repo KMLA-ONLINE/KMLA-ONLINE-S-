@@ -1,5 +1,7 @@
 .DS_Store
 /node_modules/
+**/node_modules/
+/deno.lock
 
 # Env
 .env
@@ -12,6 +14,9 @@
 
 # Vite / PWA dev output
 /dev-dist/
+
+# Lint and format caches (prettier's lives under node_modules/)
+/.eslintcache
 
 # Tests
 /coverage/
@@ -26,3 +31,7 @@
 
 # Vercel
 /.vercel/
+
+# Docs
+**.local.md
+/plans/
