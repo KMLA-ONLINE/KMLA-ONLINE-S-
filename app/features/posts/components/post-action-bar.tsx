@@ -89,7 +89,10 @@ export function PostActionBar({
 
   return (
     <div
-      className={cn("flex items-center justify-between px-2 py-1", className)}
+      className={cn(
+        "flex items-center justify-between px-2 py-1 select-none",
+        className,
+      )}
     >
       <div className="flex items-center text-muted-foreground">
         <PostReactionButton
