@@ -172,6 +172,14 @@ export default function MainAppLayout() {
               )}
             />
           )}
+          {/* 탭바가 숨으면 탭바의 safe-area 여백도 같이 내려가서, 시스템 내비게이션 바 뒤가
+              스크롤 중인 콘텐츠로 비친다. 그 띠만은 탭바와 상관없이 배경색으로 고정한다. */}
+          {chrome.bottomNav === "hide-on-scroll" ? (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[var(--app-safe-b)] bg-background md:hidden"
+            />
+          ) : null}
         </div>
       </div>
     </div>
