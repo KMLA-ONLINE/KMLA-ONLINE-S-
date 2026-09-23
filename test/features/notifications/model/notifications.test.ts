@@ -7,6 +7,7 @@ import {
   isDefaultGroupNotificationPreference,
   sanitizeNotificationDestination,
 } from "~/features/notifications";
+import { getNotificationMessage } from "~/features/notifications/model/notifications";
 import type { NotificationItem } from "~/features/notifications";
 
 function notification(id: string, lastActivityAt: string): NotificationItem {
@@ -16,6 +17,7 @@ function notification(id: string, lastActivityAt: string): NotificationItem {
     actor_display_name: "홍길동",
     actor_identity: "identified",
     category: "content",
+    comment_excerpt: null,
     comment_id: "",
     created_at: lastActivityAt,
     detail: "",
@@ -26,6 +28,7 @@ function notification(id: string, lastActivityAt: string): NotificationItem {
     kind: "post_commented",
     last_activity_at: lastActivityAt,
     post_id: "post-id",
+    reaction: null,
     read_at: "",
     reservation_id: 0,
     restriction_expires_at: "",
@@ -146,5 +149,57 @@ describe("group notification defaults", () => {
         newPostPushEnabled: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe("notification message", () => {
+  const base = notification("id", "2026-08-26T12:00:00.000Z");
+
+  it("shows only the comment body, with mentions unwrapped and lines folded", () => {
+    expect(
+      getNotificationMessage({
+        ...base,
+        kind: "comment_replied",
+        comment_excerpt: "[@박새벽](m:1) 저도요\n\n몇 시까지요?",
+      }),
+    ).toBe("@박새벽 저도요 몇 시까지요?");
+  });
+
+  it("falls back to the stored title when the comment body is unavailable", () => {
+    expect(
+      getNotificationMessage({
+        ...base,
+        kind: "post_commented",
+        comment_excerpt: null,
+      }),
+    ).toBe(base.title);
+  });
+
+  it("names the reaction kind and whether a post or a comment received it", () => {
+    expect(
+      getNotificationMessage({
+        ...base,
+        kind: "post_reacted",
+        reaction: "love",
+      }),
+    ).toBe("게시물에 ‘하트’ 반응을 남겼습니다.");
+    expect(
+      getNotificationMessage({
+        ...base,
+        kind: "comment_reacted",
+        reaction: null,
+      }),
+    ).toBe("댓글에 반응을 남겼습니다.");
+  });
+
+  it("keeps the stored title for other kinds", () => {
+    expect(
+      getNotificationMessage({
+        ...base,
+        kind: "group_posted",
+        title: "주말 모임 공지",
+        comment_excerpt: "무시된다",
+      }),
+    ).toBe("주말 모임 공지");
   });
 });

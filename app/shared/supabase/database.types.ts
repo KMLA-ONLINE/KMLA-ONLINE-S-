@@ -2159,6 +2159,7 @@ export type Database = {
           actor_display_name: string
           actor_identity: Database["public"]["Enums"]["notification_actor_identity"]
           category: Database["public"]["Enums"]["notification_category"]
+          comment_excerpt: string
           comment_id: string
           created_at: string
           detail: string
@@ -2169,6 +2170,7 @@ export type Database = {
           kind: Database["public"]["Enums"]["notification_kind"]
           last_activity_at: string
           post_id: string
+          reaction: Database["public"]["Enums"]["post_reaction"]
           read_at: string
           reservation_id: number
           restriction_expires_at: string
