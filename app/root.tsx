@@ -87,10 +87,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <html lang="ko" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1, viewport-fit=cover"
-        />
+        {/* `viewport-fit=cover`는 일부러 뺐다. Android Chrome 135+는 cover를 선언한 페이지를
+            하단 시스템 내비게이션 바 뒤까지 그려서, 탭바 배경이 시스템 바를 덮어 버린다. */}
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         {/* 하이드레이션 전 기본값. `ThemeProvider`의 `defaultTheme`과 같은 라이트 배경이며,
             테마가 정해진 뒤에는 `<ThemeColor />`가 실제 배경색으로 덮어쓴다. */}
         <meta name="theme-color" content="#ffffff" />
