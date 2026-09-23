@@ -8,3 +8,4 @@ export {
   getMealDay,
   getMealReferenceDate,
 } from "./data/neis";
+export type { MealDay } from "./data/neis";

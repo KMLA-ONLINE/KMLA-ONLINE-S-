@@ -34,10 +34,11 @@ if (!existsSync(pushWorker)) {
 const { count, size, warnings } = await generateSW({
   globDirectory: clientDir,
   swDest: resolve(clientDir, "sw.js"),
-  // Fonts are deliberately absent: Pretendard ships every Hangul glyph in one
-  // ~750 kB file, which would more than double what a first-time visitor has to
-  // download before the app is installable. They are runtime-cached instead
-  // (see below), so the first render may fall back to a system font once.
+  // Fonts are deliberately absent: Pretendard is split into ~90 unicode-range
+  // subsets and a page needs only the few that cover its glyphs, so precaching
+  // all of them would download far more than any visit uses. They are
+  // runtime-cached instead (see below), so the first render may fall back to a
+  // system font once.
   globPatterns: ["**/*.{html,js,css,ico,png,svg,webmanifest}"],
   // sw.js registers itself; the Vite manifest is a build artifact.
   // Promotional screenshots are only needed when the browser expands its
@@ -52,19 +53,24 @@ const { count, size, warnings } = await generateSW({
     ".vite/**",
     "screenshots/**",
     "og-image.png",
+    // HEIC 변환기는 ~3 MB로 나머지 앱 셸 전체보다 크고, HEIC 사진을 올릴 때만 불린다.
+    // 업로드는 어차피 온라인에서만 되므로 오프라인에 들고 있을 이유가 없다.
+    "assets/heic-to-*.js",
   ],
   importScripts: ["/push-sw.js"],
   runtimeCaching: [
     {
       // Vite content-hashes font filenames, so a cached entry can never go
       // stale — CacheFirst with a long TTL is safe. maxEntries bounds the
-      // leftovers from previous deploys.
+      // leftovers from previous deploys; it sits above the ~100 subset files
+      // (Pretendard plus Inter) one build ships, so a heavy reader never evicts
+      // subsets the current build still uses.
       urlPattern: /\.woff2$/,
       handler: "CacheFirst",
       options: {
         cacheName: "fonts",
         expiration: {
-          maxEntries: 20,
+          maxEntries: 150,
           maxAgeSeconds: 60 * 60 * 24 * 365,
         },
         cacheableResponse: { statuses: [0, 200] },
