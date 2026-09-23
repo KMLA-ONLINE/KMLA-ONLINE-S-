@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+  <body style="margin: 0; padding: 0; background: #f5f7fb">
+    <!--
+      배경·글꼴·글자색을 <body>가 아니라 이 래퍼가 들고 있다. 상당수 메일 클라이언트가
+      <body>를 통째로 걷어내거나 속성 일부만 남긴 <div>로 바꿔 넣기 때문에, body에만
+      건 스타일은 본문이 기본 세리프 글꼴로 떨어지는 형태로 사라진다.
+
+      글꼴 스택에 따옴표가 필요한 이름을 쓰지 않는다. style 속성 안에서 &quot; 엔티티로
+      빠져나가야 하는데, 그 엔티티를 그대로 두지 않는 클라이언트가 있다. 한글은 어느
+      스택이든 클라이언트가 자체 한글 글꼴로 대체하므로 실익도 없다.
+    -->
+    <div
+      style="
+        background: #f5f7fb;
+        padding: 40px 16px;
+        font-family: Arial, Helvetica, sans-serif;
+        color: #172033;
+      "
+    >
+      <div
+        style="
+          max-width: 480px;
+          margin: 0 auto;
+          padding: 32px;
+          background: #ffffff;
+          border-radius: 16px;
+        "
+      >
+        <p style="margin: 0 0 8px; color: #2563eb; font-weight: 700">
+          KMLA Online
+        </p>
+        <h1 style="margin: 0 0 16px; font-size: 22px">
+          비밀번호를 재설정해 주세요
+        </h1>
+        <p style="margin: 0 0 24px; line-height: 1.6">
+          비밀번호 찾기 페이지에 아래 6자리 코드를 입력해 주세요.
+        </p>
+        <p
+          style="
+            margin: 0;
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: 8px;
+          "
+        >
+          {{ .Token }}
+        </p>
+        <p style="margin: 24px 0 0; color: #667085; font-size: 13px">
+          이 코드를 요청하지 않았다면 이 메일을 무시해 주세요. 비밀번호는 그대로
+          유지됩니다.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

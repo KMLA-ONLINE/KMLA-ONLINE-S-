@@ -4,7 +4,7 @@
  * whole program, not the staged subset.
  *
  * `--no-warn-ignored` matters: lint-staged hands ESLint explicit paths, and a
- * staged file covered by `globalIgnores` (shadcn's `app/components/ui/**`, the
+ * staged file covered by `globalIgnores` (shadcn's `app/shared/ui/**`, the
  * generated `database.types.ts`) would otherwise emit a warning that
  * `--max-warnings 0` turns into a failed commit.
  */

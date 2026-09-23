@@ -1,0 +1,281 @@
+import { describe, expect, it } from "vitest";
+
+import { getPostErrorMessage } from "~/features/posts/model/format";
+import {
+  isPostDraftDirty,
+  needsPostIdentityConfirmation,
+  readPostForm,
+  readProfilePostForm,
+  validatePostForm,
+  validateProfilePostForm,
+  validateSelectedFiles,
+} from "~/features/posts/model/validation";
+
+describe("post form validation", () => {
+  it("requires a title and either a body or attachment", () => {
+    expect(
+      validatePostForm({
+        title: "",
+        body: "",
+        categoryId: "",
+        authorIdentity: "identified",
+        mentions: [],
+      }),
+    ).toEqual({
+      title: "제목을 입력해 주세요.",
+      body: "본문 또는 첨부 파일을 추가해 주세요.",
+    });
+    expect(
+      validatePostForm(
+        {
+          title: "첨부 게시물",
+          body: "",
+          categoryId: "",
+          authorIdentity: "identified",
+          mentions: [],
+        },
+        1,
+      ),
+    ).toEqual({});
+  });
+
+  it("validates identity and category against route-loaded choices", () => {
+    expect(
+      validatePostForm(
+        {
+          title: "제목",
+          body: "본문",
+          categoryId: "other",
+          authorIdentity: "anonymous",
+          mentions: [],
+        },
+        0,
+        ["identified"],
+        ["category"],
+      ),
+    ).toEqual({
+      authorIdentity: "선택할 수 없는 작성 신원입니다.",
+      categoryId: "선택할 수 없는 카테고리입니다.",
+    });
+  });
+
+  it("normalizes form text and rejects unknown identity values", () => {
+    const formData = new FormData();
+    formData.set("title", "  제목  ");
+    formData.set("body", "\r\n첫째 줄\r\n둘째 줄\r\n");
+    formData.set("authorIdentity", "invalid");
+
+    expect(readPostForm(formData)).toMatchObject({
+      title: "제목",
+      body: "첫째 줄\n둘째 줄",
+      authorIdentity: "identified",
+      mentions: [],
+    });
+  });
+});
+
+describe("attachment selection validation", () => {
+  const file = new File(["x"], "x.txt", { type: "text/plain" });
+
+  it("accepts 30 attachments and rejects the 31st", () => {
+    expect(validateSelectedFiles([file], 29)).toBeNull();
+    expect(validateSelectedFiles([file], 30)).toBe(
+      "첨부 파일은 최대 30개까지 추가할 수 있습니다.",
+    );
+  });
+
+  it("rejects video attachments", () => {
+    const video = new File(["video"], "clip.mp4");
+
+    expect(validateSelectedFiles([video], 0)).toBe(
+      "동영상 파일은 첨부할 수 없습니다: clip.mp4",
+    );
+  });
+
+  it("reports an unsupported video before the attachment count limit", () => {
+    const video = new File(["video"], "clip.mov", {
+      type: "application/octet-stream",
+    });
+
+    expect(validateSelectedFiles([video], 30)).toBe(
+      "동영상 파일은 첨부할 수 없습니다: clip.mov",
+    );
+  });
+
+  it("accepts 30 MB and rejects one byte more", () => {
+    const atLimit = new File(["x"], "limit.bin");
+    const overLimit = new File(["x"], "large.bin");
+    Object.defineProperty(atLimit, "size", { value: 30 * 1024 * 1024 });
+    Object.defineProperty(overLimit, "size", {
+      value: 30 * 1024 * 1024 + 1,
+    });
+
+    expect(validateSelectedFiles([atLimit], 0)).toBeNull();
+    expect(validateSelectedFiles([overLimit], 0)).toBe(
+      "파일은 30MB 이하여야 합니다: large.bin",
+    );
+  });
+});
+
+describe("validateProfilePostForm", () => {
+  it("accepts a body-only post, since profile posts have no title", () => {
+    expect(
+      validateProfilePostForm({ body: "메모", visibility: "public" }),
+    ).toEqual({});
+  });
+
+  it("accepts an attachment-only post", () => {
+    expect(
+      validateProfilePostForm({ body: "", visibility: "public" }, 1),
+    ).toEqual({});
+  });
+
+  it("rejects a post with neither body nor attachment", () => {
+    expect(validateProfilePostForm({ body: "", visibility: "public" })).toEqual(
+      { body: "본문 또는 첨부 파일을 추가해 주세요." },
+    );
+  });
+
+  // 타인 타임라인 글은 언제나 전체 공개다(기능 명세 §8.4). 서버도 같은 이유로 되돌린다.
+  it("rejects a private post on someone else timeline", () => {
+    expect(
+      validateProfilePostForm(
+        { body: "메모", visibility: "private" },
+        0,
+        false,
+      ),
+    ).toMatchObject({
+      visibility:
+        "다른 사용자의 타임라인에 쓴 게시물은 전체 공개로만 남길 수 있습니다.",
+    });
+  });
+
+  it("falls back to public for an unknown visibility value", () => {
+    const formData = new FormData();
+    formData.set("body", "\r\n첫째 줄\r\n둘째 줄\r\n");
+    formData.set("visibility", "invalid");
+
+    expect(readProfilePostForm(formData)).toEqual({
+      body: "첫째 줄\n둘째 줄",
+      visibility: "public",
+    });
+  });
+});
+
+describe("getPostErrorMessage", () => {
+  it("turns common database failures into useful Korean messages", () => {
+    expect(getPostErrorMessage({ code: "42501" })).toBe(
+      "이 작업을 수행할 권한이 없습니다.",
+    );
+    expect(getPostErrorMessage({ code: "23505" })).toBe(
+      "같은 이름의 카테고리가 이미 있습니다.",
+    );
+  });
+
+  // 개인 게시물 거절은 42501로 뭉뚱그리면 "권한이 없습니다"가 되어 무엇을 고쳐야 할지
+  // 알 수 없다. 서버 문구를 보고 갈라 준다.
+  it("explains why a closed timeline refused the post", () => {
+    expect(
+      getPostErrorMessage({
+        code: "42501",
+        message: "timeline owner does not accept posts",
+      }),
+    ).toBe("이 사용자는 타임라인에 다른 사람의 글을 받지 않습니다.");
+  });
+});
+
+describe("needsPostIdentityConfirmation", () => {
+  it("confirms anonymous and staff identities", () => {
+    expect(needsPostIdentityConfirmation("identified")).toBe(false);
+    expect(needsPostIdentityConfirmation("anonymous")).toBe(true);
+    expect(needsPostIdentityConfirmation("staff")).toBe(true);
+  });
+});
+
+describe("isPostDraftDirty", () => {
+  const initial = {
+    title: "제목",
+    body: "본문",
+    categoryId: "category",
+    authorIdentity: "identified" as const,
+    mentions: [],
+  };
+
+  it("considers every entered field and attachments for new posts", () => {
+    for (const change of [
+      { title: "새 제목" },
+      { categoryId: "other" },
+      { authorIdentity: "anonymous" as const },
+    ]) {
+      expect(
+        isPostDraftDirty({
+          mode: "create",
+          initial: { ...initial, title: "", body: "", categoryId: "" },
+          title: "",
+          body: "",
+          categoryId: "",
+          authorIdentity: "identified",
+          attachmentsChanged: false,
+          ...change,
+        }),
+      ).toBe(true);
+    }
+    expect(
+      isPostDraftDirty({
+        mode: "create",
+        initial: { ...initial, title: "", body: "", categoryId: "" },
+        title: "",
+        body: "작성 중",
+        categoryId: "",
+        authorIdentity: "identified",
+        attachmentsChanged: false,
+      }),
+    ).toBe(true);
+    expect(
+      isPostDraftDirty({
+        mode: "create",
+        initial: { ...initial, title: "", body: "", categoryId: "" },
+        title: "",
+        body: "",
+        categoryId: "",
+        authorIdentity: "identified",
+        attachmentsChanged: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("considers every editable field and attachments for edits", () => {
+    expect(
+      isPostDraftDirty({
+        mode: "edit",
+        initial,
+        title: initial.title,
+        body: initial.body,
+        categoryId: initial.categoryId,
+        authorIdentity: initial.authorIdentity,
+        attachmentsChanged: false,
+      }),
+    ).toBe(false);
+
+    for (const change of [
+      { title: "다른 제목" },
+      { body: "다른 본문" },
+      { categoryId: "other" },
+      { authorIdentity: "staff" as const },
+      { attachmentsChanged: true },
+    ]) {
+      expect(
+        isPostDraftDirty({
+          mode: "edit",
+          initial,
+          title: initial.title,
+          body: initial.body,
+          categoryId: initial.categoryId,
+          authorIdentity: initial.authorIdentity,
+          attachmentsChanged: false,
+          ...change,
+        }),
+      ).toBe(true);
+    }
+  });
+});

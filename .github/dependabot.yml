@@ -1,28 +1,54 @@
 version: 2
+
 updates:
   # Keep bundler dependencies up to date
   - package-ecosystem: "npm"
     directory: "/"
+
     schedule:
       interval: "weekly"
       day: "wednesday"
       time: "01:00"
       timezone: "Asia/Seoul"
+
     target-branch: "dev"
+
     groups:
+      # Production dependencies:
+      # - Group minor/patch updates
+      # - Major updates are left as individual PRs
+      # - @base-ui/react is also left as an individual PR
       prod-deps:
         dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
         exclude-patterns:
           - "@react-router/*"
           - "react*"
           - "@types/react*"
+          - "@base-ui/react"
+
+      # Development dependencies:
+      # - Group minor/patch updates
+      # - Major updates are left as individual PRs
       dev-deps:
         dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
         exclude-patterns:
           - "@react-router/*"
           - "react*"
           - "@types/react*"
+
+      # React Router ecosystem:
+      # - Group minor/patch updates
+      # - Major updates are left as individual PRs
       react-router:
+        update-types:
+          - "minor"
+          - "patch"
         patterns:
           - "@react-router/*"
           - "react-router"
@@ -30,7 +56,14 @@ updates:
           - "react"
           - "react-dom"
           - "@types/react*"
+
+      # React ecosystem:
+      # - Group minor/patch updates
+      # - Major updates are left as individual PRs
       react:
+        update-types:
+          - "minor"
+          - "patch"
         patterns:
           - "react"
           - "react-dom"

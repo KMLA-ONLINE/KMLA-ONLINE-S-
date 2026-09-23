@@ -1,17 +1,17 @@
 {
   "name": "KMLA Online",
-  "short_name": "KMLA",
-  "description": "KMLA 커뮤니티",
+  "short_name": "큼라온라인",
+  "description": "민족사관고등학교 공식 통합 플랫폼 · 과학기술부 제작",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
-  "orientation": "portrait",
   "lang": "ko",
   "dir": "ltr",
+  "categories": ["social", "education"],
   "background_color": "#ffffff",
-  "theme_color": "#0f172a",
+  "theme_color": "#ffffff",
   "icons": [
     {
       "src": "/pwa-64x64.png",
@@ -33,6 +33,20 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "알림",
+      "short_name": "알림",
+      "url": "/noti",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "급식",
+      "short_name": "급식",
+      "url": "/menu/meal",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
     }
   ]
 }

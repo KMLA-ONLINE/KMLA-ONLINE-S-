@@ -1,0 +1,174 @@
+// 배럴(`~/features/profiles`)은 화면 컴포넌트를 전부 끌고 온다. 서명 헬퍼만 필요하다.
+import { createProfileMediaUrls } from "~/features/profiles/data/media";
+import { getSupabase } from "~/shared/supabase/client";
+
+export type UtilityMode = "gongang" | "karaoke";
+
+export interface UtilityReservation {
+  id: number;
+  profileId: number;
+  mode: UtilityMode;
+  reservationDate: string;
+  slot: string;
+  location: string | null;
+  detail: string;
+  recurring: boolean;
+  recurringUntil: string | null;
+  applicantName: string;
+  applicantPubId: string;
+  /** 신청자 기수. 이름은 예약 행에 복사돼 있지만 기수는 프로필에서 읽어 온다. */
+  applicantCohort: number | null;
+  avatarUrl: string | null;
+}
+
+interface CreateUtilityReservationInput {
+  profileId: number;
+  mode: UtilityMode;
+  reservationDate: string;
+  slot: string;
+  location: string | null;
+  detail: string;
+  recurring: boolean;
+}
+
+const SELECT_COLUMNS =
+  "id, profile_id, mode, reservation_date, slot, location, detail, recurring, recurring_until, applicant_name, avatar_path, profiles(cohort, pub_id)" as const;
+
+interface ReservationRow {
+  id: number;
+  profile_id: number;
+  mode: string;
+  reservation_date: string;
+  slot: string;
+  location: string | null;
+  detail: string;
+  recurring: boolean;
+  recurring_until: string | null;
+  applicant_name: string;
+  avatar_path: string | null;
+  profiles: {
+    cohort: number | null;
+    pub_id: string;
+  } | null;
+}
+
+function toMode(value: string): UtilityMode {
+  if (value === "gongang" || value === "karaoke") {
+    return value;
+  }
+
+  throw new Error("Unknown utility reservation mode.");
+}
+
+/**
+ * 여기서 `createSignedUrls`를 직접 부르면 공용 서명 캐시를 비켜 가, 예약 목록을 다시 읽을
+ * 때마다 같은 아바타에 새 토큰이 붙는다. URL이 바뀌면 `<img>`가 브라우저·Service Worker
+ * 캐시를 모두 놓쳐 같은 이미지를 매번 새로 내려받는다.
+ */
+function createAvatarUrls(rows: ReservationRow[]) {
+  return createProfileMediaUrls(rows.map((row) => row.avatar_path));
+}
+
+function mapReservation(
+  row: ReservationRow,
+  avatarUrls: ReadonlyMap<string, string>,
+): UtilityReservation {
+  return {
+    id: row.id,
+    profileId: row.profile_id,
+    mode: toMode(row.mode),
+    reservationDate: row.reservation_date,
+    slot: row.slot,
+    location: row.location,
+    detail: row.detail,
+    recurring: row.recurring,
+    recurringUntil: row.recurring_until,
+    applicantName: row.applicant_name,
+    applicantPubId: row.profiles?.pub_id ?? "",
+    applicantCohort: row.profiles?.cohort ?? null,
+    avatarUrl: row.avatar_path
+      ? (avatarUrls.get(row.avatar_path) ?? null)
+      : null,
+  };
+}
+
+export async function loadUtilityReservations(
+  mode: UtilityMode,
+  weekStart: string,
+  weekEnd: string,
+): Promise<UtilityReservation[]> {
+  const supabase = getSupabase();
+
+  const [directResult, recurringResult] = await Promise.all([
+    supabase
+      .from("utility_reservations")
+      .select(SELECT_COLUMNS)
+      .eq("mode", mode)
+      .eq("recurring", false)
+      .gte("reservation_date", weekStart)
+      .lte("reservation_date", weekEnd),
+
+    supabase
+      .from("utility_reservations")
+      .select(SELECT_COLUMNS)
+      .eq("mode", mode)
+      .eq("recurring", true)
+      .lte("reservation_date", weekEnd)
+      .or(`recurring_until.is.null,recurring_until.gt.${weekStart}`),
+  ]);
+
+  if (directResult.error) {
+    throw directResult.error;
+  }
+
+  if (recurringResult.error) {
+    throw recurringResult.error;
+  }
+
+  const rows = [...(directResult.data ?? []), ...(recurringResult.data ?? [])];
+  const avatarUrls = await createAvatarUrls(rows);
+
+  return rows.map((row) => mapReservation(row, avatarUrls));
+}
+
+export async function createUtilityReservation(
+  input: CreateUtilityReservationInput,
+): Promise<UtilityReservation> {
+  const { data, error } = await getSupabase()
+    .from("utility_reservations")
+    .insert({
+      profile_id: input.profileId,
+      mode: input.mode,
+      reservation_date: input.reservationDate,
+      slot: input.slot,
+      location: input.location,
+      detail: input.detail,
+      recurring: input.recurring,
+
+      // DB trigger가 실제 로그인 프로필 값으로 덮어쓴다.
+      applicant_name: "",
+    })
+    .select(SELECT_COLUMNS)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  const avatarUrls = await createAvatarUrls([data]);
+  return mapReservation(data, avatarUrls);
+}
+
+export async function deleteUtilityReservation(
+  reservationId: number,
+  effectiveDate?: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("cancel_utility_reservation", {
+    p_reservation_id: reservationId,
+    p_effective_date: effectiveDate ?? undefined,
+  });
+
+  if (error) {
+    throw error;
+  }
+}

@@ -1,0 +1,117 @@
+import { setAppBadgeCount } from "~/shared/lib/app-badge";
+
+/**
+ * 계정에 딸린 `localStorage` 값을 저장소의 주인이 바뀔 때 버린다.
+ *
+ * 브라우저 저장소에는 성격이 다른 두 가지가 섞여 있다. 하나는 기기 취향(카드/목록 보기,
+ * 설치 안내, 실험 기능 토글)이라 누가 로그인하든 그대로 남아야 하고, 다른 하나는 그 계정의
+ * 데이터라 계정이 바뀌면 남아 있으면 안 된다. 여기 모인 키는 후자뿐이다 —
+ * `docs/DATA_CACHE_POLICY.md` §1이 말하는 "로그인 사용자 ID가 바뀌거나 로그아웃하면"의
+ * `localStorage` 쪽 절반이고, 메모리 쪽 절반은 `QueryProvider`의 `queryClient.clear()`다.
+ *
+ * 로그아웃 시점에만 지우면 부족하다. 로그아웃하지 않고 탭만 닫은 뒤 같은 기기에서 다른
+ * 사람이 로그인하는 경로가 그대로 남는다. 그래서 "언제 지울까"가 아니라 "지금 이 저장소의
+ * 주인이 누구인가"를 적어 두고, 주인이 달라졌을 때 지운다.
+ */
+
+/** 시간표. DB의 `user_timetables`가 진짜 저장소이고 이 값은 첫 페인트를 채우는 캐시다. */
+export const TIMETABLE_STORAGE_KEY = "kmla-online:timetable:v1";
+
+/** 열어본 게시물 id. 목록에서 "이미 읽음"을 흐리게 그리는 데 쓴다. */
+export const VISITED_POSTS_STORAGE_KEY = "kmla-online:visited-posts:v1";
+
+/** 최근 검색. 검색한 사람과 그룹의 이름이 그대로 들어 있다. */
+export const RECENT_SEARCH_STORAGE_KEY = "kmla-online:search-recent:v1";
+
+const USER_SCOPED_KEYS = [
+  TIMETABLE_STORAGE_KEY,
+  VISITED_POSTS_STORAGE_KEY,
+  RECENT_SEARCH_STORAGE_KEY,
+];
+
+/**
+ * 지금 저장소에 남은 값이 누구 것인지 적어 두는 자리.
+ *
+ * 값은 Supabase auth user id다. 비밀이 아니다 — 로그인한 본인만 볼 수 있는 화면에서 이미
+ * 쓰는 id이고, 여기서는 내용이 아니라 "달라졌는가"만 본다.
+ */
+const OWNER_KEY = "kmla-online:storage-owner:v1";
+
+/**
+ * Service Worker가 Storage 이미지를 담아 두는 캐시. 이름은 `scripts/build-sw.mjs`의
+ * `STORAGE_MEDIA_CACHE`와 같아야 한다.
+ *
+ * 여기 든 이미지는 보호된 데이터다 — 비공개 그룹의 사진과 프로필 사진이 들어간다.
+ * `localStorage`와 마찬가지로 새로고침과 탭 종료를 넘어 살아남으므로, 지우는 시점도 같은
+ * 규칙을 따라야 한다. "로그아웃할 때"가 아니라 "저장소의 주인이 달라졌을 때"다.
+ */
+const STORAGE_MEDIA_CACHE = "kmla-online-storage-media";
+
+/**
+ * 저장소의 주인을 `userId`에 맞춘다. 주인이 그대로면 아무것도 하지 않는다 — 새로고침마다
+ * 캐시를 버리면 첫 페인트를 채우려고 둔 의미가 없어진다.
+ *
+ * `userId`가 `null`이면 로그아웃이다. 주인 표시까지 지워서 다음 로그인이 깨끗한 상태에서
+ * 시작하게 한다.
+ */
+export async function syncUserScopedStorage(
+  userId: string | null,
+): Promise<void> {
+  if (typeof window === "undefined") return;
+
+  let owner: string | null;
+  try {
+    owner = window.localStorage.getItem(OWNER_KEY);
+  } catch {
+    // localStorage를 쓸 수 없어도 보호된 Cache Storage는 남을 수 있다. 아래 삭제는 반드시
+    // 시도하고, 다음 auth 이벤트에서도 다시 시도한다.
+    await purgeStorageMediaCache();
+    return;
+  }
+
+  // 로그아웃은 owner key가 사라진 뒤에도 캐시를 한 번 더 비운다. localStorage를 사용자가
+  // 직접 지웠거나 비정상 종료된 뒤에도 보호 이미지를 남기지 않기 위해서다.
+  if (userId !== null && owner === userId) return;
+
+  for (const key of USER_SCOPED_KEYS) {
+    window.localStorage.removeItem(key);
+    notifySameTab(key);
+  }
+
+  // 홈 화면 아이콘의 숫자도 이전 사용자의 값이다. `localStorage`와 달리 OS가 들고 있어
+  // 앱을 지웠다 깔지 않는 한 남는다 — 로그아웃한 계정의 안 읽은 수가 다음 사람 화면에
+  // 그대로 떠 있으면 안 된다. 새 사용자의 값은 게이트 로더가 다시 채운다.
+  setAppBadgeCount(0);
+
+  // 새 주인을 기록하기 전에 이전 사용자의 보호 이미지가 실제로 사라져야 한다. 실패하면
+  // OWNER_KEY를 그대로 두어 다음 호출이 같은 사용자여도 삭제를 다시 시도한다.
+  await purgeStorageMediaCache();
+
+  if (userId === null) {
+    window.localStorage.removeItem(OWNER_KEY);
+  } else {
+    window.localStorage.setItem(OWNER_KEY, userId);
+  }
+}
+
+/**
+ * `storage` 이벤트는 값을 바꾼 탭에는 오지 않는다. 그런데 지우는 쪽도 읽는 쪽도 같은 탭이라,
+ * 알리지 않으면 `useVisitedPosts`의 모듈 수준 snapshot 같은 캐시가 이전 사용자의 값을 들고
+ * 그대로 남는다. 지운 키를 같은 모양의 합성 이벤트로 알려서, 이미 `storage`를 듣고 있는
+ * 쪽이 별도 경로 없이 다시 읽게 한다.
+ */
+/**
+ * Cache Storage는 비동기다. 호출자는 이 Promise가 끝나기 전에는 새 사용자의 화면을 그리지
+ * 않는다. 그렇지 않으면 새 signed URL 요청이 이전 사용자의 CacheFirst 응답과 경합한다.
+ *
+ * Service Worker가 없는 브라우저나 비보안 컨텍스트에는 `caches` 자체가 없다. 그때는 캐시에
+ * 담긴 것도 없으니 지울 것도 없다.
+ */
+function purgeStorageMediaCache(): Promise<void> {
+  if (typeof caches === "undefined") return Promise.resolve();
+  return caches.delete(STORAGE_MEDIA_CACHE).then(() => undefined);
+}
+
+function notifySameTab(key: string): void {
+  window.dispatchEvent(new StorageEvent("storage", { key, newValue: null }));
+}
