@@ -77,8 +77,22 @@ describe("home feed loader", () => {
     expect(mocks.listFeedPosts).toHaveBeenCalledWith(null, true);
     expect(mocks.getMealDay).toHaveBeenCalledWith("20260824");
     expect(mocks.listBirthdays).toHaveBeenCalledWith("2026-08-24", "today");
-    expect(result).toMatchObject({ mealDay, birthdays });
+    await expect(result.mealDay).resolves.toBe(mealDay);
+    await expect(result.birthdays).resolves.toBe(birthdays);
     expect(result).not.toHaveProperty("page");
+    expect(getQueryClient().getQueryData(feedKeys.list())).toMatchObject({
+      pages: [page],
+    });
+  });
+
+  // 급식과 생일은 넓은 화면의 옆 칸에만 보인다. 외부 NEIS API가 늦어도 피드가 먼저 떠야 한다.
+  it("does not wait for the side-column meal and birthdays", async () => {
+    mocks.getMealDay.mockReturnValue(new Promise(() => undefined));
+    mocks.listBirthdays.mockReturnValue(new Promise(() => undefined));
+
+    const result = await load();
+
+    expect(result.stories).toEqual([]);
     expect(getQueryClient().getQueryData(feedKeys.list())).toMatchObject({
       pages: [page],
     });
@@ -106,11 +120,9 @@ describe("home feed loader", () => {
     expect(mocks.listBirthdays).not.toHaveBeenCalled();
     expect(mocks.listTodayStories).not.toHaveBeenCalled();
     expect(mocks.getMealDay).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      mealDay: null,
-      birthdays: null,
-      stories: [],
-    });
+    await expect(result.mealDay).resolves.toBeNull();
+    await expect(result.birthdays).resolves.toBeNull();
+    expect(result.stories).toEqual([]);
   });
 });
 

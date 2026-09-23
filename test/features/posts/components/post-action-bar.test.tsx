@@ -133,6 +133,51 @@ describe("PostActionBar", () => {
     ).toHaveLength(2);
   });
 
+  describe("share", () => {
+    const share = vi.fn();
+
+    beforeEach(() => {
+      share.mockReset().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "share", {
+        configurable: true,
+        value: share,
+      });
+      return () => {
+        Reflect.deleteProperty(navigator, "share");
+      };
+    });
+
+    function stubTouchPrimary(touch: boolean) {
+      vi.spyOn(window, "matchMedia").mockReturnValue({
+        matches: touch,
+      } as MediaQueryList);
+    }
+
+    it("copies the link on desktop even when the browser can share", async () => {
+      stubTouchPrimary(false);
+      const { user } = renderBar();
+
+      await user.click(screen.getByRole("button", { name: "공유" }));
+
+      expect(share).not.toHaveBeenCalled();
+      expect(await navigator.clipboard.readText()).toBe(
+        `${window.location.origin}/groups/group/posts/post-id`,
+      );
+    });
+
+    it("opens the system share sheet on touch devices", async () => {
+      stubTouchPrimary(true);
+      const { user } = renderBar();
+
+      await user.click(screen.getByRole("button", { name: "공유" }));
+
+      expect(share).toHaveBeenCalledWith({
+        title: "제목",
+        url: `${window.location.origin}/groups/group/posts/post-id`,
+      });
+    });
+  });
+
   it("hides the reaction summary until someone reacts", () => {
     renderBar();
     expect(

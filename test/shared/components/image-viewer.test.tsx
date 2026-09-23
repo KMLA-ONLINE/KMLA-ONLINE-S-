@@ -366,6 +366,52 @@ describe("ImageViewer", () => {
     expect(filmstrip).not.toHaveClass("pointer-events-none");
   });
 
+  it("collapses the wide-screen chrome on a mouse click so the image takes its space", () => {
+    renderViewer("a");
+    const { image } = getGestureElements();
+    const header = screen.getByTestId("image-viewer-header");
+
+    // 마우스에는 두 번 눌러 확대가 없으니 타이머 없이 바로 접힌다.
+    tap(image, "mouse");
+    expect(header).toHaveClass("sm:hidden");
+    expect(
+      screen.queryByTestId("image-viewer-filmstrip"),
+    ).not.toBeInTheDocument();
+
+    tap(image, "mouse");
+    expect(header).not.toHaveClass("sm:hidden");
+    expect(screen.getByTestId("image-viewer-filmstrip")).toHaveClass(
+      "sm:block",
+      "opacity-100",
+    );
+  });
+
+  it("only fades the chrome when a pinch hides it, keeping the image viewport size", () => {
+    renderViewer("a");
+    const { viewport } = getGestureElements();
+    const header = screen.getByTestId("image-viewer-header");
+
+    fireEvent.pointerDown(viewport, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 150,
+      clientY: 300,
+    });
+    fireEvent.pointerDown(viewport, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 250,
+      clientY: 300,
+    });
+
+    expect(header).toHaveClass("pointer-events-none", "opacity-0");
+    expect(header).not.toHaveClass("sm:hidden");
+    expect(screen.getByTestId("image-viewer-filmstrip")).toHaveClass(
+      "sm:block",
+      "opacity-0",
+    );
+  });
+
   it("does not shift slides for 10px of touch jitter", () => {
     renderViewer("a");
     const { viewport } = getGestureElements();
@@ -563,7 +609,7 @@ describe("ImageViewer", () => {
     expectZoom(image, { x: 0, y: 0, scale: 1 });
   });
 
-  it("caps tablet pinch zoom at 4x and does not page while zoomed", () => {
+  it("caps tablet pinch zoom at 5x and does not page while zoomed", () => {
     renderViewer("a");
     const { image, viewport } = getGestureElements();
 
@@ -588,7 +634,7 @@ describe("ImageViewer", () => {
     fireEvent.pointerUp(viewport, { pointerId: 2, pointerType: "touch" });
     fireEvent.pointerUp(viewport, { pointerId: 1, pointerType: "touch" });
 
-    expect(image.style.getPropertyValue("--image-viewer-zoom-scale")).toBe("4");
+    expect(image.style.getPropertyValue("--image-viewer-zoom-scale")).toBe("5");
 
     fireEvent.pointerDown(viewport, {
       pointerId: 3,

@@ -13,7 +13,7 @@ import { invalidateDeletedProfilePost } from "~/routes/app/profile/post-cache";
 
 export const handle = defineAppChrome({
   header: "sticky",
-  bottomNav: "sticky",
+  bottomNav: "none",
   contentWidth: "5xl",
 });
 

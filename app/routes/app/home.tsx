@@ -1,4 +1,5 @@
 import { SearchIcon, UtensilsIcon } from "lucide-react";
+import { Suspense, use } from "react";
 import { Link } from "react-router";
 
 import { StoryRail } from "~/features/stories/components/story-rail";
@@ -7,11 +8,17 @@ import { listTodayStories } from "~/features/stories/data/queries";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import { hasActiveSession } from "~/features/auth";
 import { FeedScreen, feedQuery } from "~/features/feed";
-import { getKoreaDate, getMealDay, HomeMealSummary } from "~/features/meal";
+import {
+  getKoreaDate,
+  getMealDay,
+  HomeMealSummary,
+  type MealDay,
+} from "~/features/meal";
 import {
   BIRTHDAY_GC_TIME,
   BIRTHDAY_STALE_TIME,
   birthdayKeys,
+  type BirthdayProfile,
   HomeBirthdaySummary,
   listBirthdays,
 } from "~/features/profiles";
@@ -60,22 +67,29 @@ export async function clientLoader() {
   // 렌더되지 않지만, 그 전에 요청을 띄우면 인증 전용 RPC 세 개가 익명으로 나가 401이 된다.
   // 인증은 게이트가 판정하고, 여기서는 요청을 보내지 않는 것까지만 한다.
   if (!(await hasActiveSession())) {
-    return { mealDay: null, birthdays: null, stories: [] };
+    return {
+      mealDay: Promise.resolve(null),
+      birthdays: Promise.resolve(null),
+      stories: [],
+    };
   }
 
   const queryClient = getQueryClient();
   const referenceDate = getKoreaDateIso();
 
-  const [mealDay, birthdays, stories] = await Promise.all([
-    getMealDay(getKoreaDate()).catch(() => null),
-    queryClient
-      .query({
-        queryKey: birthdayKeys.today(referenceDate),
-        queryFn: () => listBirthdays(referenceDate, "today"),
-        staleTime: BIRTHDAY_STALE_TIME,
-        gcTime: BIRTHDAY_GC_TIME,
-      })
-      .catch(() => null),
+  // 급식과 생일은 넓은 화면의 옆 칸에만 보인다. 기다리면 피드 전체가 가장 느린 요청 —
+  // 특히 외부 NEIS API — 에 묶이므로 promise째 넘기고 옆 칸만 따로 채운다.
+  const mealDay = getMealDay(getKoreaDate()).catch(() => null);
+  const birthdays = queryClient
+    .query({
+      queryKey: birthdayKeys.today(referenceDate),
+      queryFn: () => listBirthdays(referenceDate, "today"),
+      staleTime: BIRTHDAY_STALE_TIME,
+      gcTime: BIRTHDAY_GC_TIME,
+    })
+    .catch(() => null);
+
+  const [stories] = await Promise.all([
     queryClient
       .query({
         queryKey: storyKeys.today(referenceDate),
@@ -134,13 +148,29 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
           <FeedScreen />
         </div>
 
-        {mealDay || birthdays ? (
-          <aside className="hidden space-y-3 self-start lg:block">
-            {birthdays ? <HomeBirthdaySummary birthdays={birthdays} /> : null}
-            {mealDay ? <HomeMealSummary day={mealDay} /> : null}
-          </aside>
-        ) : null}
+        <aside className="hidden space-y-3 self-start lg:block">
+          <Suspense fallback={null}>
+            <DeferredBirthdays birthdays={birthdays} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <DeferredMeal mealDay={mealDay} />
+          </Suspense>
+        </aside>
       </div>
     </>
   );
+}
+
+function DeferredBirthdays({
+  birthdays,
+}: {
+  birthdays: Promise<BirthdayProfile[] | null>;
+}) {
+  const value = use(birthdays);
+  return value ? <HomeBirthdaySummary birthdays={value} /> : null;
+}
+
+function DeferredMeal({ mealDay }: { mealDay: Promise<MealDay | null> }) {
+  const value = use(mealDay);
+  return value ? <HomeMealSummary day={value} /> : null;
 }

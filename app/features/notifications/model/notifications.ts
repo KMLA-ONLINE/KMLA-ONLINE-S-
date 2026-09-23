@@ -5,6 +5,9 @@ import type {
   NotificationCursor,
   NotificationItem,
 } from "~/features/notifications/model/types";
+// 배럴은 화면 컴포넌트와 Markdown 파서를 끌고 온다. 의존성 없는 두 모듈만 가져온다.
+import { mentionTokenPattern } from "~/features/posts/model/mentions";
+import { reactionLabel } from "~/features/posts/model/reactions";
 
 export const NOTIFICATION_PAGE_SIZE = 20;
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
@@ -57,6 +60,49 @@ export function isDefaultGroupNotificationPreference(
     preference.contentPushEnabled &&
     !preference.newPostPushEnabled
   );
+}
+
+/**
+ * 서버가 본문을 200자에서 자르면 멘션 토큰이 `[@김철`처럼 중간에 끊길 수 있다. 온전한 토큰을
+ * 먼저 푼 뒤에도 끝에 남은 토큰 조각은 이것으로 걷어 낸다.
+ */
+const TRUNCATED_MENTION_TAIL =
+  /\[@[^\]\n]*(?:\](?:\((?:m(?::[0-9]{0,2})?)?)?)?$/;
+
+/**
+ * 알림 한 행의 본문 문장(기능 명세 §14.3).
+ *
+ * 댓글·답글 알림은 댓글 내용만 보여준다. 누가 썼는지는 윗줄이 이미 말한다. 댓글은 평문이라
+ * 멘션 토큰만 `@이름`으로 풀고 줄바꿈을 공백으로 접는다. 본문이 없으면(사진만 있는 댓글,
+ * 삭제되었거나 더는 읽을 수 없는 게시물) 저장된 `title`로 돌아간다.
+ */
+export function getNotificationMessage(
+  item: Pick<
+    NotificationItem,
+    "kind" | "title" | "comment_excerpt" | "reaction"
+  >,
+): string {
+  switch (item.kind) {
+    case "post_commented":
+    case "comment_replied": {
+      const text = item.comment_excerpt
+        ?.replace(mentionTokenPattern(), "@$1")
+        .replace(TRUNCATED_MENTION_TAIL, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (text) return text;
+      return item.title;
+    }
+    case "post_reacted":
+    case "comment_reacted": {
+      const target = item.kind === "post_reacted" ? "게시물" : "댓글";
+      return item.reaction
+        ? `${target}에 ‘${reactionLabel(item.reaction)}’ 반응을 남겼습니다.`
+        : `${target}에 반응을 남겼습니다.`;
+    }
+    default:
+      return item.title;
+  }
 }
 
 export function getNotificationCursor(

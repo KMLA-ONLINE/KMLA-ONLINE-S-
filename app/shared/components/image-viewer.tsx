@@ -46,7 +46,7 @@ const SWIPE_MAX_TRIGGER_DISTANCE = 80;
 const SWIPE_TRIGGER_RATIO = 0.2;
 const SWIPE_RUBBER_BAND = 0.25;
 const DRAG_START_TOLERANCE = 12;
-const MAX_ZOOM = 4;
+const MAX_ZOOM = 5;
 const DOUBLE_TAP_ZOOM = 2;
 const DOUBLE_TAP_DELAY = 250;
 const CLICK_SUPPRESSION_TIME = 400;
@@ -71,7 +71,53 @@ interface ZoomMetrics {
 
 type GestureMode = "slide" | "pan" | "pinch" | null;
 
+/**
+ * 주변 UI(헤더, 썸네일 목록, 이동 버튼)의 표시 상태.
+ *
+ * - `faded`: 투명하게만 숨긴다. 확대 제스처가 이걸 쓴다 — 확대 도중에 이미지 영역 크기가
+ *   바뀌면 손가락 아래의 이미지가 움직인다.
+ * - `collapsed`: 넓은 화면에서 자리까지 비워 이미지가 그만큼 커진다. 탭·클릭 토글이 쓴다.
+ *
+ * 모바일은 UI가 원래 이미지 위에 겹쳐 있어 두 상태가 똑같이 보인다.
+ */
+type ChromeState = "visible" | "faded" | "collapsed";
+
 const DEFAULT_ZOOM: ZoomState = { scale: 1, x: 0, y: 0 };
+
+function readZoomMetrics(
+  viewport: HTMLElement,
+  image: HTMLImageElement,
+): ZoomMetrics {
+  const rect = viewport.getBoundingClientRect();
+  return {
+    viewportLeft: rect.left,
+    viewportTop: rect.top,
+    viewportWidth: viewport.clientWidth,
+    viewportHeight: viewport.clientHeight,
+    imageWidth: image.clientWidth,
+    imageHeight: image.clientHeight,
+  };
+}
+
+function clampZoomToMetrics(next: ZoomState, metrics: ZoomMetrics): ZoomState {
+  const scale = Math.max(1, Math.min(MAX_ZOOM, next.scale));
+  if (scale === 1) return DEFAULT_ZOOM;
+
+  const maxX = Math.max(
+    0,
+    (metrics.imageWidth * scale - metrics.viewportWidth) / 2,
+  );
+  const maxY = Math.max(
+    0,
+    (metrics.imageHeight * scale - metrics.viewportHeight) / 2,
+  );
+
+  return {
+    scale,
+    x: Math.max(-maxX, Math.min(maxX, next.x)),
+    y: Math.max(-maxY, Math.min(maxY, next.y)),
+  };
+}
 
 function hasDistinctThumbnail(image: ViewerImage): boolean {
   return Boolean(image.thumbSrc && image.thumbSrc !== image.src);
@@ -118,7 +164,7 @@ function ViewerSlideImage({
       crossOrigin="anonymous"
       draggable={false}
       className={cn(
-        "max-h-full max-w-full object-contain will-change-transform select-none sm:cursor-default",
+        "max-h-full max-w-full object-contain will-change-transform select-none sm:cursor-pointer",
         zoom.scale > 1
           ? "cursor-grab active:cursor-grabbing"
           : "cursor-zoom-in",
@@ -324,7 +370,7 @@ export function ImageViewer({
   const [storedIndex, setStoredIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isGestureActive, setIsGestureActive] = useState(false);
-  const [isChromeHidden, setIsChromeHidden] = useState(false);
+  const [chrome, setChrome] = useState<ChromeState>("visible");
   const [zoom, setZoom] = useState<ZoomState>(DEFAULT_ZOOM);
   const zoomRef = useRef(DEFAULT_ZOOM);
   const [renderedOpenImageId, setRenderedOpenImageId] = useState<string | null>(
@@ -526,7 +572,7 @@ export function ImageViewer({
       ),
     );
     setZoom(DEFAULT_ZOOM);
-    setIsChromeHidden(false);
+    setChrome("visible");
   }
 
   // 뷰어가 열려 있는 동안 첨부 목록이 바뀔 수 있다.
@@ -547,6 +593,23 @@ export function ImageViewer({
     if (!isDragging) writeTrackOffset(0);
     writeZoom(zoomRef.current);
   }, [index, isDragging, openImageId]);
+
+  const isChromeCollapsed = chrome === "collapsed";
+
+  // 넓은 화면에서 UI가 자리를 비우거나 되찾으면 이미지의 기본 크기가 바뀐다. 확대해 둔 상태라면
+  // 이동 범위를 새 크기로 다시 잰다. 옛 범위가 남으면 이미지가 밀려나 가장자리에 빈 바탕이 보인다.
+  const reclampZoom = useEffectEvent(() => {
+    zoomMetricsRef.current = null;
+    const viewport = viewportRef.current;
+    const image = imageRef.current;
+    if (zoomRef.current.scale === 1 || !viewport || !image) return;
+
+    commitZoomState(
+      clampZoomToMetrics(zoomRef.current, readZoomMetrics(viewport, image)),
+    );
+  });
+
+  useLayoutEffect(() => reclampZoom(), [isChromeCollapsed]);
 
   useEffect(() => {
     if (!openImageId || !activeImage || !hasDistinctThumbnail(activeImage)) {
@@ -612,6 +675,13 @@ export function ImageViewer({
     }
   };
 
+  const chromeOpacityClass =
+    chrome === "visible" ? "opacity-100" : "pointer-events-none opacity-0";
+  // 이동 버튼은 넓은 화면에만 있다. 자리를 비울 때는 포커스도 받지 않도록 아예 내린다.
+  const navButtonClass = isChromeCollapsed
+    ? "hidden"
+    : cn("hidden transition-opacity duration-150 sm:flex", chromeOpacityClass);
+
   const clearPendingTap = () => {
     if (pendingTapRef.current === null) return;
     clearTimeout(pendingTapRef.current);
@@ -641,40 +711,14 @@ export function ImageViewer({
     const image = imageRef.current;
     if (!viewport || !image) return null;
 
-    const rect = viewport.getBoundingClientRect();
-    const metrics = {
-      viewportLeft: rect.left,
-      viewportTop: rect.top,
-      viewportWidth: viewport.clientWidth,
-      viewportHeight: viewport.clientHeight,
-      imageWidth: image.clientWidth,
-      imageHeight: image.clientHeight,
-    };
+    const metrics = readZoomMetrics(viewport, image);
     zoomMetricsRef.current = metrics;
     return metrics;
   };
 
   const clampZoom = (next: ZoomState): ZoomState => {
-    const scale = Math.max(1, Math.min(MAX_ZOOM, next.scale));
-    if (scale === 1) return DEFAULT_ZOOM;
-
     const metrics = zoomMetricsRef.current ?? measureZoomMetrics();
-    if (!metrics) return DEFAULT_ZOOM;
-
-    const maxX = Math.max(
-      0,
-      (metrics.imageWidth * scale - metrics.viewportWidth) / 2,
-    );
-    const maxY = Math.max(
-      0,
-      (metrics.imageHeight * scale - metrics.viewportHeight) / 2,
-    );
-
-    return {
-      scale,
-      x: Math.max(-maxX, Math.min(maxX, next.x)),
-      y: Math.max(-maxY, Math.min(maxY, next.y)),
-    };
+    return metrics ? clampZoomToMetrics(next, metrics) : DEFAULT_ZOOM;
   };
 
   const getPointerPair = () => {
@@ -737,7 +781,7 @@ export function ImageViewer({
       setDragOffsetImmediately(0);
       setIsDragging(false);
       setGestureActive(true);
-      setIsChromeHidden(true);
+      fadeChrome();
       return;
     }
 
@@ -965,9 +1009,19 @@ export function ImageViewer({
     onClose();
   };
 
+  const fadeChrome = () =>
+    setChrome((current) => (current === "visible" ? "faded" : current));
+
+  const toggleChrome = () =>
+    setChrome((current) => (current === "visible" ? "collapsed" : "visible"));
+
   const handleImageClick = (event: ReactMouseEvent<HTMLImageElement>) => {
     event.stopPropagation();
-    if (lastPointerTypeRef.current !== "touch" || shouldSuppressClick()) {
+    if (shouldSuppressClick()) return;
+
+    // 마우스·터치패드에는 두 번 눌러 확대하는 동작이 없으니 두 번째 탭을 기다리지 않는다.
+    if (lastPointerTypeRef.current !== "touch") {
+      toggleChrome();
       return;
     }
 
@@ -991,13 +1045,13 @@ export function ImageViewer({
           y: y * (1 - DOUBLE_TAP_ZOOM),
         }),
       );
-      setIsChromeHidden(true);
+      fadeChrome();
       return;
     }
 
     pendingTapRef.current = setTimeout(() => {
       pendingTapRef.current = null;
-      setIsChromeHidden((hidden) => !hidden);
+      toggleChrome();
     }, DOUBLE_TAP_DELAY);
   };
 
@@ -1033,10 +1087,10 @@ export function ImageViewer({
           <header
             data-testid="image-viewer-header"
             className={cn(
-              "absolute inset-x-0 top-0 z-10 flex items-center gap-2 pt-[max(0.5rem,var(--app-safe-t))] pr-[max(0.5rem,var(--app-safe-r))] pb-2 pl-[max(0.5rem,var(--app-safe-l))] transition-opacity duration-150 sm:static sm:z-auto sm:shrink-0 sm:transition-none md:p-3",
-              isChromeHidden
-                ? "pointer-events-none opacity-0 sm:pointer-events-auto sm:opacity-100"
-                : "opacity-100",
+              "absolute inset-x-0 top-0 z-10 flex items-center gap-2 pt-[max(0.5rem,var(--app-safe-t))] pr-[max(0.5rem,var(--app-safe-r))] pb-2 pl-[max(0.5rem,var(--app-safe-l))] transition-opacity duration-150 sm:static sm:z-auto sm:shrink-0 md:p-3",
+              chromeOpacityClass,
+              // 넓은 화면에서는 헤더가 자리를 차지한다. 그 자리까지 이미지에 내준다.
+              isChromeCollapsed && "sm:hidden",
             )}
           >
             {/* 파일 이름은 화면에 띄우지 않는다. 스크린리더용 제목과 저장 파일명에는 그대로 쓴다. */}
@@ -1096,7 +1150,12 @@ export function ImageViewer({
               ))}
             </div>
 
-            <div className="absolute inset-y-0 left-2 hidden items-center sm:left-4 sm:flex">
+            <div
+              className={cn(
+                "absolute inset-y-0 left-2 items-center sm:left-4",
+                navButtonClass,
+              )}
+            >
               <ControlButton
                 aria-label="이전 이미지"
                 disabled={index === 0}
@@ -1107,7 +1166,12 @@ export function ImageViewer({
                 <ChevronLeftIcon className="size-6" />
               </ControlButton>
             </div>
-            <div className="absolute inset-y-0 right-2 hidden items-center sm:right-4 sm:flex">
+            <div
+              className={cn(
+                "absolute inset-y-0 right-2 items-center sm:right-4",
+                navButtonClass,
+              )}
+            >
               <ControlButton
                 aria-label="다음 이미지"
                 disabled={index === images.length - 1}
@@ -1127,21 +1191,23 @@ export function ImageViewer({
                 screen="mobile"
                 className={cn(
                   "absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/75 to-transparent transition-opacity duration-150 sm:hidden",
-                  isChromeHidden
-                    ? "pointer-events-none opacity-0"
-                    : "opacity-100",
+                  chromeOpacityClass,
                 )}
               />
             ) : null}
           </div>
 
-          {images.length > 1 ? (
+          {/* 자리를 비울 때는 언마운트한다. 다시 나타나며 마운트될 때 현재 썸네일로 스크롤한다. */}
+          {isChromeCollapsed ? null : images.length > 1 ? (
             <Filmstrip
               images={images}
               activeIndex={index}
               onSelect={goTo}
               screen="desktop"
-              className="hidden sm:block"
+              className={cn(
+                "hidden transition-opacity duration-150 sm:block",
+                chromeOpacityClass,
+              )}
             />
           ) : (
             // 한 장뿐이어도 필름스트립 높이를 비워둔다. 안 그러면 이미지 영역이 그만큼

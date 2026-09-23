@@ -15,6 +15,12 @@ const ACTION_CLASS =
   "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted hover:text-foreground";
 
 /**
+ * 운영체제 공유 화면을 여는 기기. 폰·태블릿은 공유 시트가 메신저로 바로 이어지지만, 데스크톱
+ * 브라우저의 공유 창은 쓸 곳이 마땅치 않아 링크 복사가 더 빠르다.
+ */
+const NATIVE_SHARE_QUERY = "(hover: none) and (pointer: coarse)";
+
+/**
  * 게시물 하단 액션 바.
  *
  * 왼쪽은 조작(반응·댓글·공유), 오른쪽은 이 게시물에 달린 반응 요약이다. 요약을 누르면 누가
@@ -59,7 +65,7 @@ export function PostActionBar({
   const share = async () => {
     try {
       const url = new URL(sharePath, window.location.origin).toString();
-      if (navigator.share) {
+      if (navigator.share && window.matchMedia(NATIVE_SHARE_QUERY).matches) {
         await navigator.share({ title: shareTitle, url });
         return;
       }
@@ -83,7 +89,10 @@ export function PostActionBar({
 
   return (
     <div
-      className={cn("flex items-center justify-between px-2 py-1", className)}
+      className={cn(
+        "flex items-center justify-between px-2 py-1 select-none",
+        className,
+      )}
     >
       <div className="flex items-center text-muted-foreground">
         <PostReactionButton

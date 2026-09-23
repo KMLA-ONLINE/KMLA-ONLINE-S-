@@ -1,5 +1,7 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 
+import { useScrollContainer } from "~/shared/lib/scroll-container";
 import { cn } from "~/shared/lib/utils";
 
 /**
@@ -11,6 +13,22 @@ import { cn } from "~/shared/lib/utils";
  * 같이 바꿔야 한다 — 안 그러면 마지막 줄이 반쯤 잘려 보인다.
  */
 const COLLAPSED_BODY_CLASS = "max-h-[72px] overflow-hidden";
+
+/**
+ * 긴 본문을 읽다가 접으면 줄어든 만큼 아래 글이 딸려 올라와, 읽던 글이 아니라 다음 글이
+ * 보인다. 카드 머리가 화면 위로 벗어나 있을 때만 머리가 보이는 자리로 되돌린다.
+ *
+ * 모바일 sticky 헤더는 화면마다 높이가 달라 스크롤 영역 안의 것을 그때 잰다. 데스크톱은
+ * `md:hidden`이라 0이 된다. 대략 머리 언저리면 충분하므로 더 엄밀히 맞추지 않는다.
+ */
+function revealCardHead(body: HTMLElement, container: HTMLElement) {
+  const card = body.closest("article") ?? body;
+  const stickyHeader = container.querySelector<HTMLElement>("header.sticky");
+  const visibleTop =
+    container.getBoundingClientRect().top + (stickyHeader?.offsetHeight ?? 0);
+  const overshoot = card.getBoundingClientRect().top - visibleTop;
+  if (overshoot < 0) container.scrollTop += overshoot;
+}
 
 /**
  * 피드 카드의 본문 접기. 그룹 카드와 프로필 타임라인 카드가 함께 쓴다.
@@ -27,11 +45,27 @@ export function PostBodyClamp({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [clampable, setClampable] = useState(false);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useScrollContainer();
 
   const measureBody = useCallback((node: HTMLDivElement | null) => {
+    bodyRef.current = node;
     if (!node) return;
     setClampable(node.scrollHeight > node.clientHeight);
   }, []);
+
+  const toggle = () => {
+    if (!expanded) {
+      setExpanded(true);
+      return;
+    }
+    // 접힌 레이아웃을 먼저 그려야 카드가 어디로 밀려났는지 잴 수 있다. 같은 프레임에서
+    // 스크롤까지 맞춰 화면이 한 번만 바뀐다.
+    flushSync(() => setExpanded(false));
+    const body = bodyRef.current;
+    const container = scrollRef?.current;
+    if (body && container) revealCardHead(body, container);
+  };
 
   return (
     <>
@@ -44,7 +78,7 @@ export function PostBodyClamp({
         onClick={(event) => {
           if (!window.matchMedia("(pointer: coarse)").matches) return;
           if ((event.target as Element).closest("a, button")) return;
-          if (clampable || expanded) setExpanded((current) => !current);
+          if (clampable || expanded) toggle();
         }}
         className={cn(
           !expanded && COLLAPSED_BODY_CLASS,
@@ -58,7 +92,7 @@ export function PostBodyClamp({
       {clampable || expanded ? (
         <button
           type="button"
-          onClick={() => setExpanded((current) => !current)}
+          onClick={toggle}
           className="mt-0.5 text-sm font-medium text-muted-foreground hover:underline pointer-fine:font-semibold pointer-fine:text-foreground"
         >
           {expanded ? "접기" : "더 보기"}

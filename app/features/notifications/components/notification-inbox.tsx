@@ -5,11 +5,16 @@ import { Link, useFetcher } from "react-router";
 import { PageHeader } from "~/features/app-shell";
 import { NotificationAvatar } from "~/features/notifications/components/notification-avatar";
 import { NotificationPermissionCard } from "~/features/notifications/components/notification-permission-card";
-import { groupNotifications } from "~/features/notifications/model/notifications";
+import {
+  getNotificationMessage,
+  groupNotifications,
+} from "~/features/notifications/model/notifications";
 import type {
   NotificationItem,
   NotificationPage,
 } from "~/features/notifications/model/types";
+// 배럴(`~/features/posts`)은 편집기와 Markdown 파서까지 끌고 온다. 그림 하나만 필요하다.
+import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { Button } from "~/shared/ui/button";
 import {
@@ -54,7 +59,8 @@ function MetaDot() {
  *
  * `title`은 DB가 만든 완결된 문장("내 게시물에 새 댓글이 등록되었습니다.")이라 이름 뒤에
  * 그대로 이어 붙이면 조사가 어긋난다. 그래서 이름과 문장은 위아래로 나누고, 시간은 이름 옆에
- * 붙여 첫 줄에서 함께 끝낸다.
+ * 붙여 첫 줄에서 함께 끝낸다. 댓글·반응 알림은 `title` 대신 댓글 내용과 반응 종류를 보여준다
+ * (`getNotificationMessage`).
  *
  * 그룹 이름이 첫 줄에 함께 서는 이유는 새 그룹 게시물 알림 때문이다. 그 알림의 `title`은
  * 게시물 제목 그대로여서, 그룹을 말해주지 않으면 어디에 올라온 글인지 알 수가 없다.
@@ -138,7 +144,14 @@ function NotificationRow({
             unread ? "text-foreground" : "text-muted-foreground",
           )}
         >
-          {item.title}
+          {item.reaction &&
+          (item.kind === "post_reacted" || item.kind === "comment_reacted") ? (
+            <ReactionEmoji
+              reaction={item.reaction}
+              className="mr-1 inline-block align-[-0.2em]"
+            />
+          ) : null}
+          {getNotificationMessage(item)}
         </span>
         {item.kind === "anonymous_activity_restricted" ? (
           <span className="mt-1 line-clamp-2 text-xs break-words text-muted-foreground">
