@@ -165,6 +165,24 @@ describe("notification message", () => {
     ).toBe("@박새벽 저도요 몇 시까지요?");
   });
 
+  it("drops a mention token cut off by the server's excerpt limit", () => {
+    for (const tail of [
+      "[@김철",
+      "[@김철수]",
+      "[@김철수](",
+      "[@김철수](m:",
+      "[@김철수](m:1",
+    ]) {
+      expect(
+        getNotificationMessage({
+          ...base,
+          kind: "post_commented",
+          comment_excerpt: `[@박새벽](m:1) 반가워요 ${tail}`,
+        }),
+      ).toBe("@박새벽 반가워요");
+    }
+  });
+
   it("falls back to the stored title when the comment body is unavailable", () => {
     expect(
       getNotificationMessage({

@@ -63,6 +63,13 @@ export function isDefaultGroupNotificationPreference(
 }
 
 /**
+ * 서버가 본문을 200자에서 자르면 멘션 토큰이 `[@김철`처럼 중간에 끊길 수 있다. 온전한 토큰을
+ * 먼저 푼 뒤에도 끝에 남은 토큰 조각은 이것으로 걷어 낸다.
+ */
+const TRUNCATED_MENTION_TAIL =
+  /\[@[^\]\n]*(?:\](?:\((?:m(?::[0-9]{0,2})?)?)?)?$/;
+
+/**
  * 알림 한 행의 본문 문장(기능 명세 §14.3).
  *
  * 댓글·답글 알림은 댓글 내용만 보여준다. 누가 썼는지는 윗줄이 이미 말한다. 댓글은 평문이라
@@ -80,6 +87,7 @@ export function getNotificationMessage(
     case "comment_replied": {
       const text = item.comment_excerpt
         ?.replace(mentionTokenPattern(), "@$1")
+        .replace(TRUNCATED_MENTION_TAIL, "")
         .replace(/\s+/g, " ")
         .trim();
       if (text) return text;
