@@ -1,68 +1,35 @@
-import { globSync } from "node:fs";
 import { defineConfig } from "vitest/config";
 
-const pureLayers = [
-  "test/**/model/**/*.{test,spec}.ts",
-  "test/**/data/**/*.{test,spec}.ts",
-  "test/shared/lib/**/*.{test,spec}.ts",
-  "test/routes/**/*.{test,spec}.ts",
-  "test/eslint/**/*.{test,spec}.ts",
-  "test/shared/service-worker/**/*.{test,spec}.ts",
-];
-
-const domDependent = [
-  "test/features/posts/model/view-preference.test.ts",
-  "test/features/search/model/recent-searches.test.ts",
-  "test/routes/notification-open.test.ts",
-  "test/shared/lib/user-scoped-storage.test.ts",
-];
-
-const nodeFiles = globSync(pureLayers)
-  .map((file) => file.replaceAll("\\", "/"))
-  .filter((file) => !domDependent.includes(file));
-
-const ignored = ["e2e/**", "node_modules/**", "build/**"];
-
+// Deliberately does NOT include the `reactRouter()` Vite plugin: it builds a
+// full framework graph (typegen, virtual server modules) that does not work
+// under Vitest. Unit tests import route modules and components directly and
+// wrap them with `createRoutesStub` from `react-router` when routing context
+// is needed. End-to-end coverage lives in Playwright instead.
 export default defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
   test: {
-    testTimeout: 10_000,
-    css: false,
-    pool: "vmThreads",
-
-    projects: [
-      {
-        extends: true,
-        test: {
-          name: "node",
-          environment: "node",
-          isolate: true,
-          globals: false,
-          setupFiles: ["./test/setup.node.ts"],
-          include: nodeFiles,
-          exclude: ignored,
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "dom",
-          environment: "jsdom",
-          isolate: true,
-          globals: false,
-          setupFiles: ["./test/setup.ts"],
-          include: ["test/**/*.{test,spec}.{ts,tsx}"],
-          exclude: [...ignored, ...nodeFiles],
-        },
-      },
+    environment: "jsdom",
+    // Explicit imports instead of globals so Vitest's `expect` and Playwright's
+    // `expect` can coexist under a single tsconfig without clashing.
+    globals: false,
+    setupFiles: ["./test/setup.ts"],
+    include: [
+      "app/**/*.{test,spec}.{ts,tsx}",
+      "test/**/*.{test,spec}.{ts,tsx}",
     ],
+    exclude: ["e2e/**", "node_modules/**", "build/**"],
+    css: true,
     coverage: {
       provider: "v8",
       reportsDirectory: "./coverage",
       include: ["app/**/*.{ts,tsx}"],
-      exclude: ["app/routes.ts", "app/**/+types/**"],
+      exclude: [
+        "app/**/*.{test,spec}.{ts,tsx}",
+        "app/routes.ts",
+        "app/**/+types/**",
+      ],
     },
   },
 });
