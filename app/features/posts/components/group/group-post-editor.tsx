@@ -1,10 +1,5 @@
-import { useCallback, useRef, useState, type FormEvent } from "react";
-import {
-  useBeforeUnload,
-  useBlocker,
-  useNavigate,
-  useRevalidator,
-} from "react-router";
+import { useRef, useState, type FormEvent } from "react";
+import { useNavigate, useRevalidator } from "react-router";
 
 import {
   createGroupPostWithAttachments,
@@ -18,10 +13,9 @@ import { releasePostFile } from "~/features/posts/model/attachments";
 import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import { usePostAttachmentDraft } from "~/features/posts/hooks/use-post-attachment-draft";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
-import {
-  formatPostDate,
-  getPostErrorMessage,
-} from "~/features/posts/model/format";
+import { getPostErrorMessage } from "~/features/posts/model/format";
+import { AnonymousActivityRestrictionNotice } from "~/features/posts/components/group/anonymous-activity-restriction-notice";
+import { PostLeaveGuard } from "~/features/posts/components/editor/post-leave-guard";
 import { PostAttachmentEditor } from "~/features/posts/components/editor/post-attachment-editor";
 import {
   PostBodyInput,
@@ -107,7 +101,6 @@ export function GroupPostEditor({
   const [draftCategoryId, setDraftCategoryId] = useState(initial.categoryId);
   const [draftIdentity, setDraftIdentity] = useState(initial.authorIdentity);
   const [saving, setSaving] = useState(false);
-  const [discarding, setDiscarding] = useState(false);
   const [pendingIdentity, setPendingIdentity] = useState<PostFormValues | null>(
     null,
   );
@@ -156,21 +149,6 @@ export function GroupPostEditor({
     authorIdentity: draftIdentity,
     attachmentsChanged: attachmentsChanged || preparingCount > 0,
   });
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      dirty && !saving && currentLocation.pathname !== nextLocation.pathname,
-  );
-
-  useBeforeUnload(
-    useCallback(
-      (event) => {
-        if (!dirty || saving) return;
-        event.preventDefault();
-      },
-      [dirty, saving],
-    ),
-  );
-
   const save = async (nextValues: PostFormValues) => {
     clearPreparationError();
     setSaving(true);
@@ -292,12 +270,10 @@ export function GroupPostEditor({
         }}
       >
         {mode === "create" && anonymousActivityRestriction ? (
-          <p className="mb-4 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-            익명 활동이 제한되어 있습니다. 사유:{" "}
-            {anonymousActivityRestriction.reason}
-            {" · "}만료:{" "}
-            {formatPostDate(anonymousActivityRestriction.expires_at)}
-          </p>
+          <AnonymousActivityRestrictionNotice
+            restriction={anonymousActivityRestriction}
+            className="mb-4 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground"
+          />
         ) : null}
         <div className="grid gap-2">
           <div
@@ -440,40 +416,17 @@ export function GroupPostEditor({
           }}
         />
       ) : null}
-      {blocker.state === "blocked" ? (
-        <ConfirmDialog
-          title={
-            mode === "create" ? "작성 중인 게시물" : "저장하지 않은 변경 사항"
-          }
-          description={
-            mode === "create"
-              ? "작성 중인 본문이나 첨부가 있습니다. 저장하지 않고 나갈까요?"
-              : "수정한 내용이 저장되지 않았습니다. 저장하지 않고 나갈까요?"
-          }
-          confirmLabel="나가기"
-          destructive
-          pending={discarding}
-          onCancel={() => {
-            if (!disposedRef.current) blocker.reset();
-          }}
-          onConfirm={() => {
-            if (disposedRef.current) return;
-            setDiscarding(true);
-            disposedRef.current = true;
-            void (async () => {
-              try {
-                if (mode === "create")
-                  await discardPostUploadDraft("group", session.current);
-                else await discardPostUploads(session.current);
-              } catch {
-                // Scheduled cleanup removes any upload rows that could not be deleted now.
-              } finally {
-                blocker.proceed();
-              }
-            })();
-          }}
-        />
-      ) : null}
+      <PostLeaveGuard
+        dirty={dirty}
+        saving={saving}
+        mode={mode}
+        disposedRef={disposedRef}
+        discard={() =>
+          mode === "create"
+            ? discardPostUploadDraft("group", session.current)
+            : discardPostUploads(session.current)
+        }
+      />
     </>
   );
 }

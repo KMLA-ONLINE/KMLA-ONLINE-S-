@@ -21,7 +21,7 @@ import { commentDomId } from "~/features/posts/components/comment/comment-item";
 import { PostActionBar } from "~/features/posts/components/post-action-bar";
 import { useKeyboardViewport } from "~/features/posts/hooks/use-keyboard-viewport";
 import { usePostComments } from "~/features/posts/hooks/use-post-comments";
-import { formatPostDate } from "~/features/posts/model/format";
+import { AnonymousActivityRestrictionNotice } from "~/features/posts/components/group/anonymous-activity-restriction-notice";
 import type {
   PostComment,
   PostCommentPage,
@@ -485,12 +485,10 @@ export function PostDetailDialog({
         </div>
 
         {anonymousActivityRestriction ? (
-          <p className="border-t px-4 pt-2 text-xs text-muted-foreground">
-            익명 활동이 제한되어 있습니다. 사유:{" "}
-            {anonymousActivityRestriction.reason}
-            {" · "}만료:{" "}
-            {formatPostDate(anonymousActivityRestriction.expires_at)}
-          </p>
+          <AnonymousActivityRestrictionNotice
+            restriction={anonymousActivityRestriction}
+            className="border-t px-4 pt-2 text-xs text-muted-foreground"
+          />
         ) : null}
         <CommentComposer
           /**

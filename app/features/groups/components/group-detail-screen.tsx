@@ -24,8 +24,8 @@ import type {
 } from "~/features/groups/model/types";
 import { GroupPostReportsPanel } from "~/features/posts/components/group/group-post-reports-panel";
 import type { GroupPostReportSummaryPage } from "~/features/posts/data/group-reports";
-import { formatPostDate } from "~/features/posts/model/format";
 import {
+  AnonymousActivityRestrictionNotice,
   GroupPostSearchDialog,
   GroupPostsPanel,
   PostWriteRow,
@@ -171,12 +171,10 @@ export function GroupDetailScreen({
                     viewerAvatarUrl={viewerAvatarUrl}
                   />
                   {anonymousActivityRestriction ? (
-                    <p className="px-4 text-sm text-muted-foreground md:px-1">
-                      익명 활동이 제한되어 있습니다. 사유:{" "}
-                      {anonymousActivityRestriction.reason}
-                      {" · "}만료:{" "}
-                      {formatPostDate(anonymousActivityRestriction.expires_at)}
-                    </p>
+                    <AnonymousActivityRestrictionNotice
+                      restriction={anonymousActivityRestriction}
+                      className="px-4 text-sm text-muted-foreground md:px-1"
+                    />
                   ) : null}
                 </>
               ) : null}

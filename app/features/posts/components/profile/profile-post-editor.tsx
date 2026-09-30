@@ -1,11 +1,7 @@
-import { useCallback, useRef, useState, type FormEvent } from "react";
-import {
-  useBeforeUnload,
-  useBlocker,
-  useNavigate,
-  useRevalidator,
-} from "react-router";
+import { useRef, useState, type FormEvent } from "react";
+import { useNavigate, useRevalidator } from "react-router";
 
+import { PostLeaveGuard } from "~/features/posts/components/editor/post-leave-guard";
 import { PostAttachmentEditor } from "~/features/posts/components/editor/post-attachment-editor";
 import { PostBodyInput } from "~/features/posts/components/editor/post-body-input";
 import {
@@ -37,7 +33,6 @@ import {
   validateProfilePostForm,
 } from "~/features/posts/model/validation";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
-import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 
 /**
@@ -79,7 +74,6 @@ export function ProfilePostEditor({
   const [draftBody, setDraftBody] = useState(initial.body);
   const [draftVisibility, setDraftVisibility] = useState(initial.visibility);
   const [saving, setSaving] = useState(false);
-  const [discarding, setDiscarding] = useState(false);
   const [progress, setProgress] = useState<PostSaveProgress | null>(null);
   const {
     existing,
@@ -127,21 +121,6 @@ export function ProfilePostEditor({
     visibility: draftVisibility,
     attachmentsChanged: attachmentsChanged || preparingCount > 0,
   });
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      dirty && !saving && currentLocation.pathname !== nextLocation.pathname,
-  );
-
-  useBeforeUnload(
-    useCallback(
-      (event) => {
-        if (!dirty || saving) return;
-        event.preventDefault();
-      },
-      [dirty, saving],
-    ),
-  );
-
   const save = async (nextValues: ProfilePostFormValues) => {
     clearPreparationError();
     setSaving(true);
@@ -284,40 +263,17 @@ export function ProfilePostEditor({
         ) : null}
       </PostEditorLayout>
 
-      {blocker.state === "blocked" ? (
-        <ConfirmDialog
-          title={
-            mode === "create" ? "작성 중인 게시물" : "저장하지 않은 변경 사항"
-          }
-          description={
-            mode === "create"
-              ? "작성 중인 본문이나 첨부가 있습니다. 저장하지 않고 나갈까요?"
-              : "수정한 내용이 저장되지 않았습니다. 저장하지 않고 나갈까요?"
-          }
-          confirmLabel="나가기"
-          destructive
-          pending={discarding}
-          onCancel={() => {
-            if (!disposedRef.current) blocker.reset();
-          }}
-          onConfirm={() => {
-            if (disposedRef.current) return;
-            setDiscarding(true);
-            disposedRef.current = true;
-            void (async () => {
-              try {
-                if (mode === "create")
-                  await discardPostUploadDraft("profile", session.current);
-                else await discardPostUploads(session.current);
-              } catch {
-                // Scheduled cleanup removes any upload rows that could not be deleted now.
-              } finally {
-                blocker.proceed();
-              }
-            })();
-          }}
-        />
-      ) : null}
+      <PostLeaveGuard
+        dirty={dirty}
+        saving={saving}
+        mode={mode}
+        disposedRef={disposedRef}
+        discard={() =>
+          mode === "create"
+            ? discardPostUploadDraft("profile", session.current)
+            : discardPostUploads(session.current)
+        }
+      />
     </>
   );
 }
