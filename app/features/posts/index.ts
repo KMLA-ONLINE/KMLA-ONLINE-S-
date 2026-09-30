@@ -52,7 +52,6 @@ export {
   searchGroupPosts,
 } from "~/features/posts/data/queries";
 export {
-  formatPostDate,
   getCommentErrorMessage,
   getPostErrorMessage,
   getAnonymousActivityRestrictionErrorMessage,

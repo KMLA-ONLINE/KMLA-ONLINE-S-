@@ -29,13 +29,6 @@ export function getPostErrorMessage(error: unknown): string {
   return "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
-export function formatPostDate(value: string): string {
-  return new Intl.DateTimeFormat("ko-KR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
 const KIB = 1024;
 const MIB = KIB * KIB;
 

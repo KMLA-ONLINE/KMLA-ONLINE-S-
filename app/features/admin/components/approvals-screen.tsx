@@ -3,9 +3,9 @@ import { Link, useFetcher, useSearchParams } from "react-router";
 
 import {
   formatApplicationField,
-  formatDateTime,
   formatProfileType,
 } from "~/features/admin/model/format";
+import { formatDateTime } from "~/shared/lib/time";
 import type {
   AdminActionResult,
   AdminApplication,
