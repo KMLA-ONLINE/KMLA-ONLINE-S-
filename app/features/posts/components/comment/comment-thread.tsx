@@ -16,13 +16,7 @@ import { Spinner } from "~/shared/ui/spinner";
 /** 답글 최대 중첩 단계(기능 명세 §9.2). 이 깊이에 닿은 댓글에는 답글 버튼을 두지 않는다. */
 const MAX_REPLY_DEPTH = 10;
 
-/**
- * `@작성자` 칩으로 부모 댓글에 옮겨 온 뒤 표시가 남아 있는 시간.
- *
- * 답글 대상 표시는 이 타이머를 쓰지 않는다 — 그쪽은 `replyingToId`가 살아 있는 동안 계속
- * 남아야 한다. 댓글을 쓰는 데 걸리는 시간은 몇 초로 정해 둘 수 있는 것이 아니고, 표시가
- * 먼저 꺼지면 긴 답글을 쓰는 도중 누구에게 답하고 있었는지 화면에서 사라진다.
- */
+/** `@작성자` 칩 이동 뒤 표시가 남는 시간. 답글 대상 표시는 `replyingToId`가 작성이 끝날 때까지 유지하므로 타이머를 쓰지 않는다. */
 const HIGHLIGHT_MS = 1600;
 
 export function CommentThread({
@@ -75,13 +69,7 @@ export function CommentThread({
 
   useEffect(() => () => clearTimeout(highlightTimer.current), []);
 
-  /**
-   * 이 댓글을 쓴 사람이 게시물 작성자인가.
-   *
-   * 익명 댓글과 익명 게시물은 RPC가 `author_pub_id`를 지워 내려보내므로 여기서 참이 될 수
-   * 없다. 그래도 구멍은 아니다 — 익명 게시물에 글쓴이가 익명으로 단 댓글은 서버가 이미
-   * `글쓴이` 라벨로 밝힌다. 비교로 익명이 벗겨지지 않는 것도 같은 이유다.
-   */
+  /** 댓글 작성자가 게시물 작성자인가. 익명은 RPC가 `author_pub_id`를 지워 참이 될 수 없고, 서버가 이미 `글쓴이`로 밝힌다. */
   const isPostAuthor = (comment: PostComment) =>
     Boolean(postAuthorPubId) && comment.author_pub_id === postAuthorPubId;
 
@@ -93,12 +81,7 @@ export function CommentThread({
     if (container && !container.contains(element)) return;
 
     if (container) {
-      /*
-        `scrollIntoView`는 스크롤 조상을 전부 훑고 모바일에서는 visual viewport까지 민다.
-        댓글 시트의 높이와 위치가 거기에 묶여 있어서(`use-keyboard-viewport`), 부모 댓글로
-        옮겨 왔을 뿐인데 시트가 통째로 끌려온다. 컨테이너 안에서만 움직이면 옮겨 가는 동작은
-        그대로고 바깥은 가만히 있는다.
-      */
+      // `scrollIntoView`는 모바일에서 visual viewport까지 밀어 댓글 시트가 끌려오므로(`use-keyboard-viewport`) 컨테이너 안에서만 움직인다.
       const containerRect = container.getBoundingClientRect();
       const elementRect = element.getBoundingClientRect();
       const toCenter =
@@ -166,10 +149,7 @@ export function CommentThread({
               </button>
             ) : null}
 
-            {/*
-              3단계 이상도 1단계와 같은 자리에 그린다. 논리적 부모는 `@작성자` 칩이 밝힌다.
-              RPC가 스레드 전체를 작성 시각 순으로 내려주므로 대화 순서는 그대로 유지된다.
-            */}
+            {/* 3단계 이상도 1단계와 같은 자리에 그린다. 논리적 부모는 `@작성자` 칩이 밝힌다. */}
             {open && bundle.length > 0 ? (
               <ul
                 id={`${commentDomId(comment.comment_id)}-replies`}

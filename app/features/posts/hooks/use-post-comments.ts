@@ -46,18 +46,8 @@ function mergeComments(
 }
 
 /**
- * 게시물 상세의 댓글 상태.
- *
- * 뮤테이션 뒤에 route를 재검증하지 않는다. 재검증하면 사용자가 펼쳐 둔 답글 묶음과 위로 불러온
- * 이전 페이지가 통째로 초기화된다. 대신 RPC가 돌려준 정본 행을 목록에 병합한다.
- *
- * 답글은 만들거나 지운 뒤 그 묶음만 다시 불러온다. tombstone이 보이는지 여부는 "살아 있는
- * 자손이 있는가"라는 서버 규칙이라, 클라이언트에서 흉내 내면 두 규칙이 갈라진다.
- *
- * 댓글 수도 같은 원칙이다. 생성과 삭제 RPC 모두 트리거 적용 뒤의 정본 수를 돌려주므로, 손에 든
- * 값에 `±1` 하지 않고 그 값을 그대로 쓴다. 상대 계산이었다면 "최상위를 지우면 답글 묶음이
- * 통째로 사라지고, 자식 없는 자리 표시는 조상까지 데려간다"는 서버 규칙을 클라이언트가 한 벌
- * 더 적어 두는 셈이 된다.
+ * 게시물 상세의 댓글 상태. 뮤테이션 뒤 route를 재검증하지 않고(펼친 답글·이전 페이지가 초기화된다) RPC의 정본 행을 병합한다.
+ * 답글은 바뀐 뒤 그 묶음만 다시 읽는다. 댓글 수도 서버의 정본 값을 그대로 쓰고 `±1` 하지 않는다 — 삭제 연쇄 규칙을 클라이언트가 복제하게 된다.
  */
 export function usePostComments(
   postId: string,
@@ -107,13 +97,7 @@ export function usePostComments(
     }
   };
 
-  /**
-   * 정본 댓글 수를 화면과 게시물 engagement overlay에 함께 적용한다.
-   *
-   * 넘어오는 값은 언제나 서버가 센 절대값이라, 같은 값을 두 번 적용해도 결과가 같고 늦게
-   * 온 응답도 다음 뮤테이션이 고쳐 준다. 상대 증감이었다면 한 번 어긋난 수가 스스로 돌아올
-   * 길이 없다 — 이 화면은 댓글 뒤에 route를 재검증하지 않기 때문이다.
-   */
+  /** 정본 댓글 수를 화면과 engagement overlay에 적용한다. 절대값이라 중복·지연 응답에도 안전하다. */
   const applyCount = (next: number) => {
     setCommentCount(next);
     patchPostEngagement(queryClient, postId, { comment_count: next });
@@ -246,11 +230,7 @@ export function usePostComments(
       await refreshBundle(comment.root_comment_id);
     });
 
-  /**
-   * 댓글 반응. 게시물 반응과 같은 이유로 화면이 먼저 움직이고 정본이 덮는다.
-   *
-   * `run`을 쓰지 않는다 — 반응은 실패해도 되돌리면 그만이라 입력창까지 잠글 일이 아니다.
-   */
+  /** 댓글 반응. 게시물 반응처럼 화면이 먼저 움직이고 정본이 덮는다. `run`은 입력창까지 잠그므로 쓰지 않는다. */
   const react = (comment: PostComment, next: PostReaction | null) => {
     const merge = (summary: ReactionSummary) => {
       const patch = (item: PostComment) =>

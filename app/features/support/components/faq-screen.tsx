@@ -18,13 +18,7 @@ interface FaqScreenProps {
   note?: ReactNode;
 }
 
-/**
- * 도움말 화면.
- *
- * 아코디언을 상태로 만들지 않고 `<details>`에 맡긴다. 열림 상태가 화면 안에만 사는 값이라
- * React state로 올릴 이유가 없고, 그 대가로 브라우저의 키보드 조작과 페이지 내 찾기(닫힌
- * 답변까지 펼쳐서 찾아 준다)를 공짜로 얻는다.
- */
+/** 아코디언은 state 대신 `<details>`에 맡겨 키보드 조작과 페이지 내 찾기(닫힌 답변 포함)를 공짜로 얻는다. */
 export function FaqScreen({ sections, contacts, note }: FaqScreenProps) {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
@@ -68,8 +62,7 @@ export function FaqScreen({ sections, contacts, note }: FaqScreenProps) {
                     />
                   </summary>
 
-                  {/* 링크 스타일을 여기서 한 번에 준다. 콘텐츠 파일이 className을 들고
-                      다니지 않아야 글만 고치는 편집이 쉬워진다. */}
+                  {/* 링크 스타일은 여기서 줘서 콘텐츠 파일이 className을 들고 다니지 않게 한다. */}
                   <div className="px-4 pb-4 text-sm leading-relaxed text-muted-foreground [&_a]:text-foreground [&_a]:underline [&_a]:underline-offset-2 [&_b]:font-medium [&_b]:text-foreground">
                     {item.answer}
                   </div>

@@ -17,15 +17,7 @@ import type {
   ReactionSummary,
 } from "~/features/posts/model/types";
 
-/**
- * 게시물 하나의 반응 상태.
- *
- * 누르는 즉시 로컬 계산으로 숫자를 옮기고, RPC가 돌려준 정본으로 덮어쓴다. 반응은 연타로
- * 바뀌는 조작이라 왕복을 기다리면 눌린 뒤에야 숫자가 따라오며 눈에 띄게 끊긴다. 실패하면 누르기
- * 직전 상태로 되돌린다 — 반응 하나 때문에 화면을 다시 불러올 이유는 없다.
- *
- * 같은 게시물을 그리는 카드·행·상세는 하나의 engagement overlay를 구독한다.
- */
+/** 게시물 하나의 반응 상태. 누르는 즉시 로컬 계산으로 앞서 가고 RPC 정본으로 덮으며, 실패하면 직전 상태로 되돌린다. */
 export function usePostReaction(postId: string, initial: ReactionSummary) {
   const queryClient = useQueryClient();
   const summary = usePostEngagement(postId, { ...initial, comment_count: 0 });

@@ -1,16 +1,10 @@
 // 계정이 바뀌면 버려야 하는 값이라 키 자체는 `user-scoped-storage`가 소유한다.
 import { VISITED_POSTS_STORAGE_KEY } from "~/shared/lib/user-scoped-storage";
 
-/**
- * 무한정 쌓이면 목록 하나 그리자고 수 MB짜리 JSON을 파싱하게 된다. 오래된 쪽부터 버린다 —
- * "이미 읽음" 표시는 최근 것만 맞아도 쓸모가 있다.
- */
+/** 무한정 쌓이면 파싱 비용이 커진다. 오래된 쪽부터 버린다. */
 const MAX_VISITED = 500;
 
-/**
- * `localStorage`가 없거나(비공개 모드, 용량 초과) 값이 깨졌을 때는 조용히 빈 상태로 떨어진다.
- * 방문 표시는 부가 정보라서, 이것 때문에 게시물 목록이 통째로 죽으면 안 된다.
- */
+/** `localStorage`가 없거나 값이 깨지면 조용히 빈 상태다. 방문 표시는 부가 정보다. */
 export function readVisitedPosts(): string[] {
   if (typeof window === "undefined") return [];
   try {

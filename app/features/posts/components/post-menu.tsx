@@ -20,16 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "~/shared/ui/dropdown-menu";
 
-/**
- * 게시물 카드와 상세가 함께 쓰는 ⋯ 메뉴.
- *
- * 권한 플래그는 RPC가 내려준 `can_edit`/`can_pin`/`can_delete`를 그대로 받는다. 클라이언트가
- * 역할을 다시 계산하지 않는다 — 실제 판정은 RLS와 RPC 안에 있고, 여기서 한 번 더 계산하면
- * 두 규칙이 언젠가 갈라진다.
- *
- * 고정은 그룹 게시물에만 있다(기능 명세 §8.1). 개인 게시물은 고정 관련 props를 넘기지 않고,
- * 그러면 고정 항목 자체가 그려지지 않는다.
- */
+/** 카드와 상세가 함께 쓰는 ⋯ 메뉴. 권한은 RPC의 `can_*`를 그대로 받고 클라이언트가 다시 계산하지 않는다. 고정은 그룹 게시물에만 있다(기능 명세 §8.1). */
 export function PostMenu({
   editTo,
   isPinned = false,

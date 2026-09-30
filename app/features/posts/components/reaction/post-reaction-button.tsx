@@ -21,12 +21,7 @@ const LONG_PRESS_MS = 350;
 /** 데스크톱에서 마우스를 올린 채 기다렸을 때 피커가 뜨는 시간(기능 명세 §10.1). */
 const HOVER_OPEN_MS = 700;
 
-/**
- * 게시물 반응 버튼.
- *
- * 짧게 누르면 기본 반응을 붙이거나 뗀다. 꾹 누르거나(터치) 마우스를 올린 채 기다리면(데스크톱)
- * 종류를 고르는 줄이 뜬다 — 기능 명세 §10.1이 요구하는 두 가지 진입이다.
- */
+/** 게시물 반응 버튼. 짧게 누르면 기본 반응 토글, 꾹 누르거나(터치) 호버하면(데스크톱) 종류 줄이 뜬다(기능 명세 §10.1). */
 export function PostReactionButton({
   summary,
   onSelect,
@@ -125,9 +120,7 @@ export function PostReactionButton({
         }}
       >
         {mine ? (
-          // 이모지는 `em` 크기라 글자 크기로 조절한다. 같은 줄의 댓글·공유
-          // 아이콘(`size-5`)보다 한 단계 작게 둔다 — 색이 꽉 찬 그림이라 선으로 그린
-          // 아이콘과 같은 크기면 혼자 튄다.
+          // 이모지는 `em` 크기라 글자 크기로 조절한다. 색이 꽉 찬 그림이라 `size-5` 선 아이콘보다 한 단계 작게 둔다.
           <ReactionEmoji reaction={mine} className="text-base" />
         ) : (
           <ThumbsUpIcon className="size-5" aria-hidden="true" />

@@ -12,13 +12,8 @@ type RawStorageCleanupStatus =
   Functions["admin_storage_cleanup_status"]["Returns"][number];
 
 /**
- * RPC가 마지막 실행과 마지막 예약 실행을 `left join ... on true`로 붙이므로, 기록이 없으면 두
- * 묶음이 통째로 NULL로 돌아온다. 정리가 한 번도 돌지 않은 프로젝트가 정확히 그 상태고, 그것을
- * 드러내는 것이 이 화면의 목적이다.
- *
- * 생성된 타입은 `returns table`의 nullability를 표현하지 못해 전부 non-null로 나온다. 여기에서
- * 고쳐 두지 않으면 화면의 NULL 분기를 타입이 지켜 주지 못하고, 테스트도 빈 상태를 만들 수 없다.
- * 컬럼이 RPC에서 사라지면 아래 매핑이 색인에 실패해 컴파일 오류가 난다.
+ * RPC가 마지막 실행을 `left join`으로 붙이므로 기록이 없으면 묶음 전체가 NULL이다(정리가 한 번도 안 돈 상태).
+ * 생성 타입은 이를 non-null로 적어, 여기서 고쳐야 NULL 분기를 타입이 지킨다. 컬럼이 사라지면 아래 매핑이 컴파일 오류를 낸다.
  */
 type NullableStorageCleanupField =
   | "queue_oldest_enqueued_at"

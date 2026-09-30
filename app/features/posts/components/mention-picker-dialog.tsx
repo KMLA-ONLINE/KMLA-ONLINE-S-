@@ -34,15 +34,7 @@ interface CandidateResult {
   error: string | null;
 }
 
-/**
- * 멘션할 사람을 고르는 화면(기능 명세 §8.14).
- *
- * `@` 자동완성 대신 버튼으로 연다. 게시물 Milkdown과 댓글 입력창에 자동완성을 각각 붙이고
- * 한글 조합 중 입력까지 다루는 대신, 이 dialog를 두 입력기가 함께 쓴다.
- *
- * 열려 있는 동안에만 마운트한다(`MentionButton`). 그래서 닫았다 열면 검색어와 결과가 저절로
- * 비고, 상태를 되돌리는 effect 를 두지 않아도 된다.
- */
+/** 멘션할 사람을 고르는 화면(기능 명세 §8.14). `@` 자동완성 대신 두 입력기가 이 dialog를 함께 쓰며, 열려 있는 동안에만 마운트해 검색어가 남지 않는다. */
 export function MentionPickerDialog({
   groupId,
   onOpenChange,

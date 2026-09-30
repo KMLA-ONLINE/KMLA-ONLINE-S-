@@ -81,14 +81,7 @@ const IDENTITY_CONFIRMATION: Record<PostIdentity, string> = {
 /** 남은 글자 수는 끝에 가까워질 때만 보여준다. 항상 띄우면 짧은 댓글에서 잡음이 된다. */
 const COUNTER_THRESHOLD = COMMENT_MAX_LENGTH - 500;
 
-/**
- * 입력 높이 상한. shadcn `Textarea`의 `field-sizing-content`는 글자마다 레이아웃을 다시
- * 계산해서 긴 댓글에서 눈에 띄게 밀린다. 메신저 입력기처럼 직접 재는 편이 가볍다.
- *
- * 다섯 줄까지 보이고 그 뒤로 스크롤한다 — 줄 높이 24px × 5 + 안쪽 여백 12px = 132px에
- * 여유를 둔 값이다. 여섯 줄(156px)에는 닿지 않아야 한다. 본문 글자 크기나 `py-1.5`를
- * 바꾸면 이 값도 같이 봐야 한다.
- */
+/** 입력 높이 상한(5줄 + 여백에 여유). 글자 크기나 `py-1.5`를 바꾸면 같이 본다. */
 const MAX_HEIGHT = 140;
 
 function resize(element: HTMLTextAreaElement) {
@@ -104,14 +97,7 @@ export interface CommentViewer {
   avatarUrl: string | null;
 }
 
-/**
- * 댓글 입력창. 하단 고정 댓글과 답글, 댓글 수정이 같은 컴포넌트를 쓴다. 답글 대상은 입력값에
- * 넣지 않고 입력창 위에 따로 표시해 저장되는 평문과 대화 관계를 섞지 않는다.
- *
- * 왼쪽 아바타가 곧 작성 신원이다. 눌러 다음 신원으로 넘어가되 바꾸기 직전에 확인을 받는다.
- * 등록마다 확인을 띄우면 `Enter` 한 번으로 등록되는 흐름(기능 명세 §9.1)이 무너지고, 확인 없이
- * 바꾸게 두면 실명으로 쓸 생각이던 댓글이 익명으로 나가는 사고를 되돌릴 수 없다.
- */
+/** 댓글 입력창. 하단 댓글·답글·수정이 함께 쓴다. 신원 전환은 바꾸기 직전에만 확인받아 `Enter` 등록 흐름(기능 명세 §9.1)을 지킨다. */
 export function CommentComposer({
   viewer,
   identities,
@@ -162,10 +148,7 @@ export function CommentComposer({
   initialImage?: CommentImage;
   /** 수정할 댓글이 이미 부르고 있던 사람들. 본문 토큰의 번호표다. */
   initialMentions?: PostMention[];
-  /**
-   * 멘션할 수 있는 그룹. 개인 게시물의 댓글에는 멘션을 두지 않으므로(기능 명세 §8.14) 그때는
-   * 넘기지 않고, 그러면 버튼 자체가 사라진다. 익명으로 쓰는 동안에도 감춘다.
-   */
+  /** 멘션할 수 있는 그룹. 개인 게시물 댓글에는 넘기지 않고(기능 명세 §8.14), 익명으로 쓰는 동안은 버튼을 감춘다. */
   mentionGroupId?: string | null;
   className?: string;
 }) {
@@ -252,10 +235,7 @@ export function CommentComposer({
     setDraft(next);
   };
 
-  /**
-   * 짝 잃은 표시를 걷어낸 값으로 맞춘다. 조합 중에는 부르지 않는다 — 값과 캐럿을 건드리면
-   * 한글 조합이 끊긴다.
-   */
+  /** 짝 잃은 표시를 걷어낸다. 조합 중에는 부르지 않는다 — 한글 조합이 끊긴다. */
   const repairDraft = (element: HTMLTextAreaElement) => {
     const value = element.value;
     const next = sanitizeMentionDisplay(value, mentionDraft.entries);
@@ -268,10 +248,7 @@ export function CommentComposer({
     replaceDraft(next, Math.max(0, caret - (value.length - next.length)));
   };
 
-  /**
-   * 멘션은 한 덩어리로 지워진다. 이름 가운데를 지워 반쪽만 남으면 화면에는 멀쩡한 글자처럼
-   * 보이는데 멘션은 아닌 상태가 되고, 지운 글자를 다시 치면 조용히 되살아난다.
-   */
+  /** 멘션은 한 덩어리로 지운다. 반쪽이 남으면 멘션이 아닌 채로 조용히 되살아난다. */
   const deleteAtomically = (
     element: HTMLTextAreaElement,
     key: "Backspace" | "Delete",
@@ -561,10 +538,7 @@ export function CommentComposer({
             >
               {processingImage ? <Spinner /> : <ImagePlusIcon />}
             </Button>
-            {/*
-              익명 댓글은 멘션할 수 없다(기능 명세 §8.14). 멘션 토큰이 남아 있으면 익명으로
-              바꿀 수 없으므로 버튼이 사라질 때 활성 멘션이 함께 숨는 일은 없다.
-            */}
+            {/* 익명 댓글은 멘션 불가(기능 명세 §8.14). 멘션 토큰이 있으면 익명으로 못 바꾼다. */}
             {mentionGroupId && identity !== "anonymous" ? (
               <MentionButton
                 groupId={mentionGroupId}
@@ -673,12 +647,7 @@ export function CommentComposer({
   );
 }
 
-/**
- * 댓글 작성 신원 선택 모달.
- *
- * 선택은 `바꾸기`를 누르기 전까지 이 모달 안에만 머문다. 입력창의 본문과 이미지 초안은
- * 건드리지 않으므로, 신원만 고르고 쓰던 댓글을 이어 갈 수 있다.
- */
+/** 댓글 작성 신원 선택 모달. 선택은 `바꾸기` 전까지 모달 안에만 머물고 입력창 초안은 건드리지 않는다. */
 function IdentityPickerDialog({
   identities,
   identity,

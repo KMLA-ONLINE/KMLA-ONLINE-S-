@@ -153,17 +153,8 @@ export default function MainAppLayout() {
             <MobileTabBar
               className={cn(
                 "md:hidden",
-                // 키보드로 탭바에 들어와 있는 동안에는 숨기지 않는다. 포커스한 항목이
-                // 발밑에서 사라지면 어디에 있는지 알 수 없다.
-                //
-                // `focus-within`이면 안 된다. 탭바의 링크는 **눌러도** 포커스를 받고,
-                // 탭바는 route가 바뀌어도 리마운트되지 않아 그 포커스가 그대로 남는다.
-                // 그래서 탭바로 한 번 이동하고 나면 `focus-within`이 계속 켜져 있고,
-                // 그 선택자(0,2,0)가 `max-md:translate-y-full`(0,1,0 — 미디어 쿼리는
-                // 특정도를 올리지 않는다)을 이겨서 자동 숨김이 영영 죽는다.
-                //
-                // `:focus-visible`은 포인터로 누른 링크에는 붙지 않으므로 탭 이동은
-                // 숨김을 막지 않고, 키보드 이동만 막는다.
+                // 키보드 포커스 중에는 숨기지 않는다. `focus-within`은 탭을 눌러도 포커스가 남아
+                // (탭바는 리마운트되지 않음) 자동 숨김을 영영 죽이므로 `:focus-visible`을 쓴다.
                 chrome.bottomNav === "hide-on-scroll" &&
                   "absolute inset-x-0 bottom-0 transition-transform duration-200 ease-out has-[:focus-visible]:translate-y-0 motion-reduce:transition-none",
                 chrome.bottomNav === "hide-on-scroll" &&
@@ -172,8 +163,7 @@ export default function MainAppLayout() {
               )}
             />
           )}
-          {/* 탭바가 숨으면 탭바의 safe-area 여백도 같이 내려가서, 시스템 내비게이션 바 뒤가
-              스크롤 중인 콘텐츠로 비친다. 그 띠만은 탭바와 상관없이 배경색으로 고정한다. */}
+          {/* 탭바가 숨어도 시스템 내비게이션 바 뒤 띠는 배경색으로 고정한다. */}
           {chrome.bottomNav === "hide-on-scroll" ? (
             <div
               aria-hidden

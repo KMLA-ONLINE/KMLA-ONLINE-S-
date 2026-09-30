@@ -42,11 +42,7 @@ export function UserAvatar({
     <Avatar size={size} className={className}>
       {src ? <AvatarImage src={src} alt={alt} /> : null}
 
-      {/* 실루엣의 어깨가 뷰박스 밑변까지 꽉 차서, 원 밖으로 삐져나오지 않게 `overflow-hidden`이
-          필요하다. `AvatarFallback`은 이니셜을 담는 게 기본이라 clip을 걸어두지 않는다.
-
-          `avatar.svg`는 검정 단색이라 다크 모드에서 배경에 묻힌다. `invert`로 흰 실루엣을
-          만들고, 양쪽 모두 투명도를 낮춰 실제 사진 옆에서 튀지 않게 한다. */}
+      {/* 실루엣 어깨가 원 밖으로 나오지 않게 `overflow-hidden`. 검정 `avatar.svg`는 다크 모드에서 `invert`로 흰색으로 바꾸고, 투명도를 낮춰 사진 옆에서 튀지 않게 한다. */}
       <AvatarFallback className="overflow-hidden">
         <img
           src={FALLBACK_SRC}

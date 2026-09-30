@@ -24,8 +24,8 @@ import type {
 } from "~/features/groups/model/types";
 import { GroupPostReportsPanel } from "~/features/posts/components/group/group-post-reports-panel";
 import type { GroupPostReportSummaryPage } from "~/features/posts/data/group-reports";
-import { formatPostDate } from "~/features/posts/model/format";
 import {
+  AnonymousActivityRestrictionNotice,
   GroupPostSearchDialog,
   GroupPostsPanel,
   PostWriteRow,
@@ -171,12 +171,10 @@ export function GroupDetailScreen({
                     viewerAvatarUrl={viewerAvatarUrl}
                   />
                   {anonymousActivityRestriction ? (
-                    <p className="px-4 text-sm text-muted-foreground md:px-1">
-                      익명 활동이 제한되어 있습니다. 사유:{" "}
-                      {anonymousActivityRestriction.reason}
-                      {" · "}만료:{" "}
-                      {formatPostDate(anonymousActivityRestriction.expires_at)}
-                    </p>
+                    <AnonymousActivityRestrictionNotice
+                      restriction={anonymousActivityRestriction}
+                      className="px-4 text-sm text-muted-foreground md:px-1"
+                    />
                   ) : null}
                 </>
               ) : null}
@@ -253,8 +251,7 @@ export function GroupDetailScreen({
         </aside>
       </div>
 
-      {/* 검색 버튼은 모바일 헤더와 데스크톱 액션 두 곳에 있지만 검색창은 여기 하나뿐이다.
-          열림 상태가 URL에 있으므로 두 곳이 각자 그리면 같은 검색창이 두 장 열린다. */}
+      {/* 열림 상태가 URL에 있어 검색창은 두 트리거 대신 여기 하나만 그린다. */}
       {isMember ? (
         <GroupPostSearchDialog groupId={group.group_id} slug={group.slug} />
       ) : null}

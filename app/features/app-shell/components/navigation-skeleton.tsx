@@ -217,7 +217,6 @@ function GroupDiscoverSkeleton() {
 function GroupDetailSkeleton() {
   return (
     <PendingRegion>
-      {/* `GroupDetailMobileHeader`: 뒤로가기 · 그룹 아이콘 · 이름 */}
       <div className="flex h-[calc(3rem+var(--app-safe-t))] items-center gap-2 border-b px-2 pt-[var(--app-safe-t)] md:hidden">
         <Block className="m-2 size-5" />
         <Block className="size-7" />

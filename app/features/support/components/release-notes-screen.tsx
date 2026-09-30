@@ -82,8 +82,7 @@ export function ReleaseNotesScreen({ releases }: { releases: Release[] }) {
 
                     return (
                       <li key={change.text} className="flex gap-2.5">
-                        {/* 꼬리표 높이가 글자 한 줄보다 낮아서, 여러 줄로 넘어가는
-                            문장에서도 첫 줄에 맞도록 살짝 내린다. */}
+                        {/* 여러 줄 문장에서도 첫 줄에 맞도록 살짝 내린다. */}
                         <Badge variant={badge.variant} className="mt-0.5">
                           {badge.label}
                         </Badge>

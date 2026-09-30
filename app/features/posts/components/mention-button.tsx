@@ -6,12 +6,7 @@ import type { MentionCandidate } from "~/features/posts/model/mentions";
 import { Button } from "~/shared/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";
 
-/**
- * 멘션 버튼과 그것이 여는 후보 시트(기능 명세 §8.14).
- *
- * 게시물 편집기(데스크톱·모바일)와 댓글 입력창이 함께 쓴다. 고른 뒤 어디에 넣을지는 부르는
- * 쪽이 정한다 — 편집기마다 커서를 다루는 방식이 다르기 때문이다.
- */
+/** 멘션 버튼과 후보 시트(기능 명세 §8.14). 넣을 자리는 입력기마다 달라 부르는 쪽이 정한다. */
 export function MentionButton({
   groupId,
   remaining,
@@ -50,7 +45,7 @@ export function MentionButton({
         />
         <TooltipContent>멘션</TooltipContent>
       </Tooltip>
-      {/* 열려 있는 동안에만 마운트한다. 그래야 다시 열 때 지난 검색어가 남지 않는다. */}
+      {/* 열려 있을 때만 마운트해 지난 검색어를 지운다. */}
       {open ? (
         <MentionPickerDialog
           groupId={groupId}

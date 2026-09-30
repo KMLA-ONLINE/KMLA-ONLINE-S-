@@ -21,13 +21,14 @@ import { StaffMark } from "~/features/posts/components/staff-mark";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { usePostEngagement } from "~/features/posts/hooks/use-post-engagement";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
+import { groupPostPath } from "~/features/posts/model/navigation";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 
 function feedPostPath(post: FeedPost): string {
   return post.kind === "group"
-    ? `/groups/${post.group_slug}/posts/${post.post_id}`
+    ? groupPostPath(post.group_slug, post.post_id)
     : `/profile/${post.timeline_pub_id}/posts/${post.post_id}`;
 }
 
@@ -149,7 +150,6 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
           {post.kind === "group" ? (
             <>
               <AuthorName post={post} compact />
-              {/* 이 줄은 text-xs라 기본 size-4는 글자보다 커 보인다. */}
               {post.author_identity === "staff" ? (
                 <StaffMark className="size-3.5" />
               ) : null}

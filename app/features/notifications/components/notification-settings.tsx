@@ -76,12 +76,7 @@ interface SettingsActionResult {
   error?: string;
 }
 
-/**
- * Web Push 상태 하나를 배지 문구·설명·색으로 한 번에 푼다.
- *
- * 상태가 여섯 갈래(미지원, 키 없음, iOS 브라우저, 차단, 꺼짐, 켜짐)라 JSX 안에서 삼항으로
- * 엮으면 어느 가지가 어떤 화면을 그리는지 읽히지 않는다. 분기는 여기 한 곳에만 둔다.
- */
+/** Web Push 상태 여섯 갈래를 배지 문구·설명·색으로 한 곳에서 푼다. JSX 삼항으로 엮으면 읽히지 않는다. */
 function describePush(
   support: PushSupport,
   pending: boolean,
@@ -138,14 +133,8 @@ function describePush(
 }
 
 /**
- * 지금 설정이 실제로 무엇을 뜻하는지 한 문장으로 돌려준다.
- *
- * 규칙을 설명하는 대신 결과를 보여주는 쪽을 택했다. 우선순위 체인(권한 → 기기 → 유형 →
- * 그룹)을 글로 가르치면 읽어야 이해되지만, 결과 문장은 스위치를 만지는 동안 같이 바뀌므로
- * "이거 끄면 어떻게 되지?"를 눌러 보고 확인할 수 있다.
- *
- * 목록을 "받습니다" 앞에 두지 않고 대시 뒤에 두는 것은 조사 때문이다 — 마지막 항목에 따라
- * 을/를이 갈리는데, 항목이 설정에 따라 바뀌므로 문장으로 이으면 반드시 어색해진다.
+ * 지금 설정이 실제로 뜻하는 바를 한 문장으로 돌려준다. 규칙을 설명하는 대신 스위치와 함께 바뀌는 결과를 보여준다.
+ * 목록을 대시 뒤에 두는 것은 마지막 항목에 따라 을/를이 갈려 문장으로 잇기 어색하기 때문이다.
  */
 function summarizeDelivery(
   pushEnabled: boolean,
@@ -195,8 +184,6 @@ function SettingsSection({
       <div className="mb-2 px-1">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold">{title}</h2>
-          {/* 어떤 설정이 이 기기에만 적용되고 어떤 것이 계정 전체에 적용되는지는 화면
-              어디에도 드러나지 않던 정보다. 섹션마다 한 번씩 붙여 둔다. */}
         </div>
         <p className="mt-1 text-xs text-muted-foreground">{description}</p>
       </div>

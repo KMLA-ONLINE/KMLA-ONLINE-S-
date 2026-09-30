@@ -4,15 +4,8 @@ import type {
 } from "~/features/posts/model/types";
 
 /**
- * 반응 종류와 그 그래픽 (기능 명세 §10, §18.4).
- *
- * 순서가 곧 빠른 반응 줄에 놓이는 순서다. 데이터베이스의 `public.post_reaction` enum과 같은
- * 순서를 지켜라 — 상위 반응이 같은 수로 묶일 때 서버가 enum 순서로 갈라 내려주므로, 여기서
- * 순서가 어긋나면 화면과 서버의 "많이 쓰인 순"이 서로 다르게 보인다.
- *
- * `codepoint`는 `public/twemoji/`에 넣어 둔 파일 이름이다. Unicode 이모지를 그대로 쓰면 기기마다
- * 다른 그림이 나오는데, 반응은 같은 것을 눌렀다는 사실이 보여야 해서 통일된 그래픽을 쓴다.
- * 본문과 댓글 텍스트는 여전히 기기 이모지 그대로다.
+ * 반응 종류와 그래픽(기능 명세 §10, §18.4). 순서는 빠른 반응 줄 순서이자 DB `public.post_reaction` enum 순서여야 한다(서버가 enum 순서로 동률을 가른다).
+ * `codepoint`는 `public/twemoji/` 파일 이름이다.
  */
 export const REACTION_TYPES = [
   { key: "like", label: "좋아요", codepoint: "1f44d" },
@@ -44,13 +37,7 @@ export function reactionAssetPath(reaction: PostReaction): string {
   return `/twemoji/15.1.0/${BY_KEY.get(reaction)?.codepoint ?? "1f44d"}.svg`;
 }
 
-/**
- * 서버 왕복 없이 다음 요약을 계산한다. 누르는 즉시 숫자가 반응해야 하는데, RPC를 기다리면
- * 연타할 때 화면이 뒤늦게 따라오며 튄다. 정본은 응답이 오면 그대로 덮어쓴다.
- *
- * 상위 반응은 서버가 실제 집계로 다시 내려주므로 여기서 다시 계산하지 않는다. 내 반응 하나로는
- * 다른 사람들의 순위를 알 수 없다.
- */
+/** 서버 왕복 없이 다음 요약을 계산한다(연타에도 즉시 반응). 정본은 응답이 덮고, 상위 반응은 서버 집계라 다시 계산하지 않는다. */
 export function applyReactionLocally(
   summary: ReactionSummary,
   next: PostReaction | null,

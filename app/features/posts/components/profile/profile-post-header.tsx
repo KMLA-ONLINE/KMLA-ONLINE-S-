@@ -9,12 +9,7 @@ import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 
-/**
- * 개인 게시물의 머리 줄. 카드와 상세가 같은 것을 쓴다.
- *
- * 타인이 남의 타임라인에 쓴 글은 `작성자 ▸ 타임라인 당사자`로 둘을 함께 밝힌다(기능 명세
- * §8.8). 자기 타임라인에 쓴 글은 이름이 한 번만 나온다 — 같은 이름을 두 번 적으면 잡음이다.
- */
+/** 개인 게시물 머리 줄. 남의 타임라인에 쓴 글은 `작성자 ▸ 당사자`로 둘을 밝힌다(기능 명세 §8.8). */
 export function ProfilePostHeader({
   post,
   align = "start",

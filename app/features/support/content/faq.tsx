@@ -233,9 +233,6 @@ export const faqSections: FaqSection[] = [
   },
 ];
 
-/**
- * 도움말 맨 아래 문의 안내.
- */
 export const supportNote = "";
 
 export const supportContacts: SupportContact[] = [

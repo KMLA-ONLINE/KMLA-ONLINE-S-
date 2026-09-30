@@ -55,13 +55,7 @@ export function ProfileEditScreen({
   );
 }
 
-/**
- * 필수 항목 별표.
- *
- * `FieldLabel`이 `flex gap-2`라 별표를 형제로 두면 8px 떨어져 붙는다. 라벨 글자와 한 span에
- * 담아야 바로 뒤에 온다. 별표는 시각 전용이다 — 스크린리더에는 입력의 `required` 속성이
- * 이미 필수라고 알린다.
- */
+/** 필수 항목 별표. `FieldLabel`이 `flex gap-2`라 라벨 글자와 같은 span에 담아야 붙는다. 시각 전용이고 스크린리더는 `required`로 안다. */
 function RequiredLabel({ children }: { children: ReactNode }) {
   return (
     <span>
@@ -105,10 +99,7 @@ function formatBirthday(value: string): string {
   return `${year}년 ${Number(month)}월 ${Number(day)}일`;
 }
 
-/**
- * 접어 둔 신원 정보의 현재 값을 한 줄로 보여 준다. 감추는 것은 고칠 수 있다는 사실이지 값
- * 자체가 아니다. 요약이 없으면 "내 생일이 맞게 들어갔나" 확인할 때마다 펼쳐야 한다.
- */
+/** 접어 둔 신원 정보의 현재 값을 한 줄로 보여 준다(감추는 건 고칠 수 있다는 사실이지 값이 아니다). */
 function identitySummary(values: ProfileEditValues): string {
   return [
     `@${values.pubId}`,
@@ -148,9 +139,8 @@ function ProfileEditForm({
   ].some(Boolean);
 
   /**
-   * 접힌 칸 안의 `required` 입력이 비어 있으면 브라우저는 포커스를 줄 데가 없어 제출을
-   * 조용히 취소한다. 사용자에게는 눌러도 아무 일 없는 저장 버튼만 남는다. 브라우저가 첫
-   * 오류를 알리기 전에 먼저 펼쳐 둔다 — `invalid`는 버블링하지 않으므로 캡처로 받는다.
+   * 접힌 칸의 빈 `required` 입력은 포커스할 데가 없어 제출이 조용히 취소된다. 브라우저가 알리기 전에 펼친다.
+   * `invalid`는 버블링하지 않아 캡처로 받는다.
    */
   function openIdentityOnInvalid(event: SyntheticEvent<HTMLFormElement>) {
     const details = identityRef.current;
@@ -411,11 +401,7 @@ function ProfileEditForm({
             ) : null}
           </section>
 
-          {/*
-            이름·생일·성별·계열은 승인 때 대조하는 신원 정보다. 고칠 일이 거의 없고 함부로
-            고쳐서도 안 되므로 접어 둔다. 요약 줄로 값은 계속 보이니, 뒤로 미룬 것은 확인이
-            아니라 편집이다.
-          */}
+          {/* 신원 정보는 고칠 일이 거의 없어 접어 둔다. 요약 줄로 값은 계속 보인다. */}
           <details
             ref={identityRef}
             open={identityHasError || undefined}
@@ -567,10 +553,7 @@ function ProfileEditForm({
         </CardContent>
       </Card>
 
-      {/*
-        Card가 `overflow-hidden`이라 그 안에서는 sticky가 걸리지 않는다. 저장 줄만 카드
-        바깥으로 빼서 스크롤 영역에 직접 붙인다.
-      */}
+      {/* Card의 `overflow-hidden` 안에서는 sticky가 안 걸려 저장 줄을 밖으로 뺀다. */}
       <div className="sticky bottom-0 z-10 -mx-3 flex flex-col-reverse gap-2 border-t bg-background/95 px-3 py-3 backdrop-blur-sm sm:mx-0 sm:flex-row sm:justify-end sm:border-0 sm:bg-transparent sm:px-0 sm:backdrop-blur-none">
         <Link
           to={`/profile/${profile.pub_id}`}

@@ -428,10 +428,8 @@ async function runPostFileUpload(
         }
         state.uploaded = true;
       } catch (uploadError) {
-        // 업로드가 실패로 보여도 finalize가 통과하면 object는 실제로 올라간 것이다 —
-        // `finalize_post_attachment`가 storage.objects에서 소유자·크기·MIME까지 대조하기
-        // 때문이다. 응답만 잃은 경우(타임아웃, 연결 끊김)를 여기서 건져 낸다. object가
-        // 없으면 finalize가 P0002로 던지므로, 원래의 업로드 오류를 그대로 올린다.
+        // 업로드가 실패로 보여도 finalize가 통과하면 object는 올라간 것이다(소유자·크기·MIME을 storage.objects와 대조한다). 응답만 잃은 경우를 건진다.
+        // object가 없으면 finalize가 P0002로 던지므로 원래 업로드 오류를 올린다.
         try {
           await finalizePostAttachment(state.attachment.id);
           state.uploaded = true;
@@ -702,12 +700,7 @@ async function uploadPreparedFiles(
   return ids;
 }
 
-/**
- * 화면이 들고 있던 표시 순서를 커밋이 받는 첨부 ID 배열로 옮긴다.
- *
- * 화면의 순서 배열은 기존 첨부의 ID와 아직 업로드되지 않은 새 파일의 로컬 key가 섞여 있다.
- * 업로드가 끝나야 새 파일의 ID가 정해지므로 이 변환은 업로드 뒤에만 할 수 있다.
- */
+/** 화면의 표시 순서(기존 ID + 새 파일 local key)를 커밋용 첨부 ID 배열로 옮긴다. 업로드 뒤에만 새 파일 ID가 정해진다. */
 function resolveAttachmentOrder(
   order: string[],
   existing: PostAttachment[],
@@ -793,13 +786,7 @@ export async function updateGroupPostWithAttachments(
   return postId;
 }
 
-/**
- * 개인 게시물 작성.
- *
- * 그룹 게시물과 같은 초안→업로드→커밋 흐름을 쓴다. 첨부 업로드가 부모 게시물 UUID를 먼저
- * 요구하기 때문이다. 다른 점은 커밋에 제목·카테고리 대신 공개 범위가 들어간다는 것뿐이라
- * 업로드 단계는 `uploadPreparedFiles()`를 그대로 공유한다.
- */
+/** 개인 게시물 작성. 그룹과 같은 초안→업로드→커밋 흐름이며 커밋에 공개 범위가 들어갈 뿐이라 `uploadPreparedFiles()`를 공유한다. */
 async function createProfilePost(
   timelinePubId: string,
   visibility: ProfilePostFormValues["visibility"],
@@ -910,12 +897,7 @@ export async function setGroupPostPinned(
   return data;
 }
 
-/**
- * 댓글 작성.
- *
- * 세 뮤테이션 모두 RPC가 정본 행을 돌려준다. route를 재검증하는 대신 이 행을 목록에 병합하는
- * 이유는 재검증이 펼쳐 둔 답글 묶음과 불러온 이전 페이지까지 되돌리기 때문이다.
- */
+/** 댓글 작성. RPC가 정본 행을 돌려주므로 재검증 대신 병합한다 — 재검증은 펼친 답글 묶음과 이전 페이지까지 되돌린다. */
 export async function createPostComment(
   postId: string,
   body: string,
@@ -978,13 +960,7 @@ export async function updatePostComment(
   return hydrateCommittedComment(withMentions(comment));
 }
 
-/**
- * 댓글 삭제. 돌려주는 값은 삭제 트리거가 갱신한 게시물의 정본 댓글 수다.
- *
- * 삭제는 지운 댓글 하나로 끝나지 않는다 — 최상위는 답글 묶음을 통째로 데려가고, 자식이 없어진
- * 자리 표시는 조상까지 이어서 사라진다(기능 명세 §9.4). 클라이언트가 빠진 개수를 세려면 그
- * 규칙을 그대로 옮겨 적어야 하므로, 서버가 센 수를 받는다.
- */
+/** 댓글 삭제. 삭제 트리거가 센 게시물 정본 댓글 수를 돌려준다 — 연쇄 삭제 규칙(기능 명세 §9.4)을 클라이언트가 옮겨 적지 않는다. */
 export async function deletePostComment(commentId: string): Promise<number> {
   const { data, error } = await getSupabase().rpc("delete_post_comment", {
     p_comment_id: commentId,
@@ -996,15 +972,7 @@ export async function deletePostComment(commentId: string): Promise<number> {
   return data;
 }
 
-/**
- * 반응 쓰기.
- *
- * 넷 다 갱신된 요약을 그대로 돌려준다. 화면은 누르는 즉시 로컬 계산으로 앞서 나가고, 응답이
- * 오면 이 정본으로 덮어쓴다 — 상위 반응 순위는 남들의 반응까지 봐야 알 수 있어서 클라이언트가
- * 혼자 맞힐 수 없다.
- *
- * 실명이냐 익명이냐는 그룹 정책이 정하므로 인자로 받지 않는다.
- */
+/** 반응 쓰기. 넷 다 갱신된 요약을 돌려주고 화면은 이 정본으로 덮는다(상위 반응 순위는 클라이언트가 못 맞힌다). 실명/익명은 그룹 정책이 정한다. */
 export async function setPostReaction(
   postId: string,
   reaction: PostReaction,

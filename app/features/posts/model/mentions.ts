@@ -1,14 +1,6 @@
 /**
- * 그룹 게시물·댓글의 사용자 멘션(기능 명세 §8.14).
- *
- * 본문에는 `[@표시이름](m:<ordinal>)` 토큰만 남고 실제 대상은 서버의 `post_mentions` /
- * `comment_mentions`에 있다. 본문에 `pub_id`를 박지 않는 이유는 공개 ID가 바뀔 수 있고
- * 놓아준 값을 남이 다시 쓸 수 있어서다(기능 명세 §12.2) — 박아 두면 오래된 멘션이 조용히
- * 다른 사람을 가리킨다.
- *
- * 토큰이 CommonMark 링크 그대로인 것은 의도한 것이다. Milkdown이 커스텀 노드 없이 링크로
- * 그려 주고, remark 왕복에서도 모양이 보존된다. 화면에 뜨는 이름은 토큰이 아니라 읽기 RPC가
- * 돌려주는 `mentions`에서 가져오므로 이름이 바뀌면 옛 글의 멘션도 함께 바뀐다.
+ * 그룹 게시물·댓글의 사용자 멘션(기능 명세 §8.14). 본문에는 `[@표시이름](m:<ordinal>)` 토큰만 남고 대상은 서버의 `post_mentions`/`comment_mentions`에 있다
+ * (`pub_id`는 바뀔 수 있어 박지 않는다, 기능 명세 §12.2). 토큰이 CommonMark 링크인 것은 Milkdown이 커스텀 노드 없이 그려 주기 때문이다.
  */
 
 /** 기능 명세 §8.14. 게시물 또는 댓글 하나가 부를 수 있는 사람 수. */
@@ -34,28 +26,16 @@ export interface MentionCandidate {
   avatar_url: string | null;
 }
 
-/**
- * 멘션 토큰 문법. 서버의 `private.parse_mention_ordinals`와 **글자 그대로 같아야 한다** --
- * 한쪽만 알아보는 토큰이 생기면 화면에 없는 멘션이 알림을 보내거나, 짝을 못 찾은 ordinal 때문에
- * 저장이 통째로 막힌다.
- *
- * 새로 만들지 말고 이것을 쓰라고 내보낸다. `g` 플래그가 붙은 정규식은 `lastIndex`를 들고
- * 다니므로, 쓰는 쪽은 매번 새 것을 받아야 한다.
- */
+/** 멘션 토큰 문법. 서버의 `private.parse_mention_ordinals`와 **글자 그대로 같아야 한다**. `g` 플래그 정규식은 `lastIndex`를 들고 다니므로 쓰는 쪽이 매번 새 것을 받는다. */
 export function mentionTokenPattern(): RegExp {
   return /\[@([^\]\n]*)\]\(m:([0-9]{1,2})\)/g;
 }
 
 const MENTION_HREF = /^m:([0-9]{1,2})$/;
 
-/**
- * 토큰 안의 표시 이름은 장식이다 — 화면은 `mentions`에서 이름을 가져온다. 다만 `]`나 `\`가
- * 들어오면 토큰 문법이 깨져 서버 정규식이 그 멘션을 못 보므로 미리 덜어낸다.
- */
+/** 토큰 안의 표시 이름은 장식이다. `]`나 `\`는 토큰 문법을 깨 서버가 못 보므로 덜어낸다. */
 export function sanitizeMentionLabel(name: string): string {
-  // `[` `]` `\`는 토큰 문법을 깨서 서버가 그 멘션을 못 보게 만든다. `*` `_` 백틱은 문법을
-  // 깨지는 않지만 링크의 안쪽 텍스트를 중첩 노드로 만들어, 대상을 못 찾았을 때의 폴백 라벨이
-  // 문자열이 아니게 된다 -- 그러면 이름 없이 `@`만 남는다.
+  // `[` `]` `\`는 토큰 문법을 깨 서버가 멘션을 못 본다. `*` `_` 백틱은 링크 안쪽을 중첩 노드로 만들어 폴백 라벨이 문자열이 아니게 된다(`@`만 남는다).
   return name.replace(/[[\]\\*_`\r\n]/g, "").trim();
 }
 
@@ -88,15 +68,7 @@ export interface MentionDraftEntry {
   name: string;
 }
 
-/**
- * 제출 직전 정규화.
- *
- * 편집기는 멘션을 넣을 때마다 번호를 올려서 매기므로, 넣었다 지우기를 반복하면 본문에 두 명만
- * 남아도 번호가 50을 넘어간다. 서버는 ordinal을 `p_mention_pub_ids`의 첨자로 쓰고 1~50만
- * 받으므로, 본문에 실제로 남은 토큰만 등장 순서대로 1부터 다시 매긴다.
- *
- * 같은 사람이 두 번 불렸으면 ordinal 하나를 함께 쓴다 — 그래야 "최대 50명"이 사람 수와 맞다.
- */
+/** 제출 직전 정규화. 본문에 남은 토큰만 등장 순서대로 1부터 다시 매긴다(서버는 ordinal을 1~50 첨자로 받는다). 같은 사람은 ordinal 하나를 쓴다. */
 export function normalizeMentions(
   body: string,
   entries: MentionDraftEntry[],
@@ -135,12 +107,7 @@ export function countMentionTargets(
   return normalizeMentions(body, entries).pubIds.length;
 }
 
-/**
- * 상한을 넘었으면 사용자에게 보여줄 이유, 아니면 `null`.
- *
- * 실제 경계는 서버에 있지만(§8.14), 기존 원문이나 댓글 입력에는 버튼을 거치지 않은 토큰이
- * 들어올 수 있다. 그때 일반 RPC 오류가 아니라 입력창 옆 문구로 알린다.
- */
+/** 상한을 넘었으면 사용자에게 보여줄 이유, 아니면 `null`. 경계는 서버에 있지만(§8.14) 버튼을 거치지 않은 토큰을 입력창 옆 문구로 알린다. */
 export function validateMentionCount(
   body: string,
   entries: MentionDraftEntry[],
@@ -149,12 +116,7 @@ export function validateMentionCount(
   return `멘션은 ${MENTION_LIMIT}명까지 할 수 있습니다.`;
 }
 
-/**
- * 이미 게시된 글을 수정할 때 편집기가 이어받을 초안 상태.
- *
- * 읽기 RPC의 `mentions`가 곧 그 본문의 ordinal 표다. 탈퇴한 사용자는 부를 수 없으므로
- * 초안에서 뺀다 — 본문의 토큰은 남지만 제출할 때 평문으로 풀린다.
- */
+/** 수정할 때 편집기가 이어받을 초안. 읽기 RPC의 `mentions`가 ordinal 표이며, 탈퇴한 사용자는 초안에서 빼 제출 때 평문이 된다. */
 export function toMentionDraft(mentions: PostMention[]): MentionDraftEntry[] {
   return mentions
     .filter(
@@ -169,18 +131,8 @@ export function toMentionDraft(mentions: PostMention[]): MentionDraftEntry[] {
 }
 
 /**
- * 표시형 멘션 앞에 붙는 보이지 않는 표시. 폭도 글리프도 없는 U+2060 WORD JOINER와 그 뒤의
- * 보이지 않는 연산자들이라 화면에는 `@홍길동`만 보인다.
- *
- * 되돌릴 때 이름만 보고 짝을 지으면, 버튼으로 불렀다가 지운 사람의 이름을 손으로 친 글이
- * 진짜 멘션이 되고 탈퇴한 대상의 라벨이 동명이인 쪽으로 붙는다. 둘 다 부른 적 없는 사람에게
- * 알림이 가는 길이다. 그래서 버튼이 넣은 자리에만 표시를 남기고, 표시가 붙은 것만 되돌린다.
- *
- * 표시가 여럿인 것은 동명이인 때문이다. 이름이 같으면 글자만으로는 누구인지 알 수 없어,
- * 표시가 ordinal을 가리킨다. 어느 표시인지는 `mentionDisplaySlot()`이 정한다.
- *
- * 사용자가 이름을 고쳐 표시가 떨어져 나가면 멘션은 평문이 된다 — 엉뚱한 사람을 부르는 것보다
- * 안 부르는 쪽이 낫다.
+ * 표시형 멘션 앞에 붙는 보이지 않는 표시(U+2060 WORD JOINER 등). 이름만 보고 짝을 지으면 손으로 친 글이 멘션이 되어 부른 적 없는 사람에게 알림이 가므로,
+ * 버튼이 넣은 자리만 표시로 되돌린다. 표시가 여럿인 것은 동명이인 때문이다(`mentionDisplaySlot()`). 표시가 떨어지면 멘션은 평문이 된다.
  */
 const MENTION_DISPLAY_MARKS = [
   "\u2060",
@@ -194,16 +146,8 @@ const MENTION_DISPLAY_MARKS = [
 export const MENTION_DISPLAY_MARK = MENTION_DISPLAY_MARKS[0];
 
 /**
- * 이 ordinal이 쓸 표시 번호.
- *
- * **초안의 다른 항목을 보지 않는다.** 같은 이름 안에서 몇 번째인지로 정하면, 초안이 자리를
- * 하나 잃는 순간(`register()`는 본문에서 사라진 ordinal을 재사용하며 그 항목을 버린다) 이미
- * 써 놓은 표시들이 한 칸씩 밀려 옆 사람을 가리킨다. ordinal은 그 항목이 사는 동안 변하지
- * 않으므로 표시도 변하지 않는다.
- *
- * 표시는 다섯 개뿐이라 ordinal이 5만큼 떨어진 동명이인은 같은 표시를 쓴다. 그 경우 먼저
- * 부른 쪽이 가져간다 — 한 댓글에서 그렇게까지 부르는 일보다, 표시를 늘려 캐럿이 지나야 할
- * 보이지 않는 글자를 늘리는 쪽이 더 나쁘다.
+ * 이 ordinal이 쓰는 표시 번호. 초안의 다른 항목을 보지 않는다 — 자리가 하나 빠질 때 표시가 밀려 옆 사람을 가리키지 않게.
+ * 표시는 다섯 개뿐이라 5 차이 동명이인은 먼저 부른 쪽이 가져간다.
  */
 export function mentionDisplaySlot(ordinal: number): number {
   return (ordinal - 1) % MENTION_DISPLAY_MARKS.length;
@@ -226,15 +170,8 @@ function stripDisplayMarks(text: string): string {
 }
 
 /**
- * 표시형. `textarea`로 쓰는 댓글 입력창이 원문 대신 보여 주는 글이다.
- *
- * Milkdown은 토큰을 링크로 그려 주지만 `textarea`는 글자 일부만 달리 그릴 수 없어서, 넣는
- * 순간부터 `[@홍길동](m:1)`이 그대로 보였다. 대신 입력창이 드는 값은 `@홍길동`이고 제출
- * 직전에 `fromMentionDisplay()`가 토큰으로 되돌린다.
- *
- * 이름은 토큰의 라벨이 아니라 초안 목록에서 가져온다. 라벨은 장식이라 개명 전 이름일 수 있고,
- * 되돌릴 때 짝을 찾는 것도 이 이름이다. 초안이 모르는 ordinal(탈퇴한 사용자)은 되돌릴 짝이
- * 없으므로 표시만 남기고 평문으로 둔다 — `normalizeMentions()`도 같은 결론을 낸다.
+ * 표시형. `textarea`는 글자 일부만 달리 그릴 수 없어 입력창은 `@홍길동`을 들고 제출 직전 `fromMentionDisplay()`가 토큰으로 되돌린다.
+ * 이름은 라벨이 아니라 초안에서 가져오며, 초안이 모르는 ordinal은 평문으로 둔다.
  */
 export function toMentionDisplay(
   body: string,
@@ -260,10 +197,7 @@ export interface MentionDisplayRange {
   entry: MentionDraftEntry;
 }
 
-/**
- * 표시형 본문에서 버튼이 넣은 멘션 자리를 찾는다. 표시가 붙어 있고 그 뒤가 초안에 있는
- * 이름이어야 한 자리다 — 손으로 친 `@이름`도, 이름이 깨져 표시만 남은 자리도 아니다.
- */
+/** 표시형 본문에서 버튼이 넣은 멘션 자리를 찾는다. 표시가 붙고 뒤가 초안의 이름이어야 한 자리다. */
 export function mentionDisplayRanges(
   text: string,
   entries: MentionDraftEntry[],
@@ -306,13 +240,7 @@ export function mentionDisplayRanges(
   return ranges;
 }
 
-/**
- * 입력창이 편집마다 부르는 정리. 짝을 잃은 표시를 지운다.
- *
- * 멘션 가운데를 고치면 이름이 깨져 그 자리는 더 이상 멘션이 아니다. 보이지 않는 표시만
- * 남겨 두면 원래 이름을 다시 쳤을 때 조용히 멘션으로 되살아난다 — 사용자는 평범한 글자를
- * 쓴 줄 아는데 알림이 나간다. 깨지는 순간 표시를 걷어 그 길을 막는다.
- */
+/** 입력창이 편집마다 부르는 정리. 멘션 가운데를 고치면 남은 보이지 않는 표시가 나중에 조용히 멘션으로 되살아나므로 걷는다. */
 export function sanitizeMentionDisplay(
   text: string,
   entries: MentionDraftEntry[],
@@ -331,16 +259,7 @@ export function sanitizeMentionDisplay(
   return result + stripDisplayMarks(text.slice(last));
 }
 
-/**
- * 표시형을 원문으로 되돌린다. 표시가 붙은 자리만 토큰이 되므로, 손으로 친 `@이름`은 그 이름을
- * 고른 적이 있어도 평문으로 남는다.
- *
- * 누구인지는 표시가 정한다. 이름이 같은 사람이 여럿이어도 각자 자기 표시를 달고 있어, 본문에
- * 넣은 순서를 바꾸거나 하나를 지워도 남은 쪽이 자기 사람을 부른다.
- *
- * 짝을 찾지 못한 표시는 제출 전에 지운다. 골라 넣은 뒤 이름을 고쳐 쓴 자리에 보이지 않는
- * 글자가 남아 저장되지 않게 한다.
- */
+/** 표시형을 원문으로 되돌린다. 표시가 붙은 자리만 토큰이 되며 누구인지는 표시가 정한다. 짝 없는 표시는 제출 전에 지운다. */
 export function fromMentionDisplay(
   text: string,
   entries: MentionDraftEntry[],
@@ -402,10 +321,7 @@ export function parseMentions(value: unknown): PostMention[] {
   });
 }
 
-/**
- * RPC 행 하나의 `mentions`를 화면 타입으로 좁힌다. `data/`가 RPC를 부른 자리마다 통과시켜,
- * 생성기가 `Json`으로 적어 내린 컬럼이 컴포넌트까지 그대로 흘러가지 않게 한다.
- */
+/** RPC 행의 `mentions`를 화면 타입으로 좁힌다. 생성기의 `Json` 컬럼이 컴포넌트까지 흘러가지 않게 한다. */
 export function withMentions<T extends { mentions: unknown }>(
   row: T,
 ): Omit<T, "mentions"> & { mentions: PostMention[] } {

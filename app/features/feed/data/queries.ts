@@ -134,11 +134,8 @@ export async function listFeedPosts(
 }
 
 /**
- * 피드 한 묶음에 첨부와 아바타의 signed URL을 채운다.
- *
- * 멱등하다 — 서명 결과는 `*_url`에만 담고 경로 컬럼은 그대로 두므로, 이미 채워진 게시물을
- * 다시 통과시켜도 같은 값이 나온다. 로더(`listFeedPosts`)가 채운 페이지를 화면의 효과가 한
- * 번 더 통과시키는 경로가 실제로 있다.
+ * 피드 한 묶음에 첨부·아바타 signed URL을 채운다.
+ * 경로 컬럼은 그대로 두므로 멱등하다 — 화면 효과가 로더가 채운 페이지를 다시 통과시키는 경로가 있다.
  */
 export async function hydrateFeedPostMedia(
   posts: FeedPost[],

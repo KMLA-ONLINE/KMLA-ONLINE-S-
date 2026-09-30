@@ -49,7 +49,7 @@ export function GroupSettings({
         </>
       ) : null}
 
-      {/* 매니저에게는 이 카드 하나만 보인다. 그래서 canManage 블록 밖에 있다. */}
+      {/* 매니저에게 보이는 유일한 카드라 canManage 밖에 둔다. */}
       {canCurate ? (
         <GroupCategoryManager
           groupId={group.group_id}

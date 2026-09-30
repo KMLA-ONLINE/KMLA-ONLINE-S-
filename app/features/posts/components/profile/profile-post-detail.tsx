@@ -21,12 +21,7 @@ import type {
 } from "~/features/posts/model/types";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
 
-/**
- * 개인 게시물 상세.
- *
- * 그룹 상세와 같은 모달 껍데기를 쓰고 본문 영역만 갈아 끼운다. 댓글에 쓸 수 있는 신원은
- * 실명 하나뿐이라 입력창의 신원 전환 버튼이 나타나지 않는다(기능 명세 §9.1).
- */
+/** 개인 게시물 상세. 그룹 상세와 같은 껍데기에 본문 영역만 갈아 끼운다. 댓글 신원이 실명 하나뿐이라 전환 버튼이 없다(기능 명세 §9.1). */
 export function ProfilePostDetail({
   post,
   viewer,

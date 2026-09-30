@@ -10,7 +10,8 @@ import { Link } from "react-router";
 
 import { searchGroupPosts } from "~/features/posts/data/queries";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
-import { FROM_GROUP } from "~/features/posts/model/navigation";
+import { postAuthorName } from "~/features/posts/model/identity";
+import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
 import type { GroupPostSearchResult } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
@@ -26,22 +27,11 @@ import {
 import { Input } from "~/shared/ui/input";
 import { Spinner } from "~/shared/ui/spinner";
 
-/**
- * 모바일에서는 전체화면, 데스크톱에서는 가운데 정렬된 dialog.
- *
- * `max-md:*`가 하는 일은 Base UI의 기본 위치 지정(가운데로 translate)을 되돌리는 것이다.
- * `bg-background ring-0`은 vendored `DialogContent`의 `bg-popover`/`ring-1`을 덮는다 —
- * 전체화면 시트에서 팝오버 색과 링은 어울리지 않는다. 높이 단위가 `svh`인 것은 모바일
- * 브라우저의 주소창이 접힐 때 화면이 튀지 않게 하기 위해서다.
- */
+/** 모바일은 전체화면, 데스크톱은 가운데 dialog. `svh`는 주소창이 접힐 때 화면이 튀지 않게 한다. */
 const SEARCH_DIALOG_CLASS =
   "flex h-[85svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-lg";
 
-/**
- * 열림 상태와 제출한 검색어는 URL이 들고 있다(`useSearchDialogParam`). 그룹 화면에 이 dialog는
- * 하나만 둔다 — 검색 버튼은 모바일 헤더와 데스크톱 액션 두 곳에 있지만, 같은 URL을 두 곳이
- * 함께 보므로 각자 dialog를 그리면 같은 검색창이 두 장 겹쳐 열린다.
- */
+/** 열림 상태와 검색어는 URL이 들고 있다. 그룹 화면에 dialog는 하나만 둔다 — 버튼이 두 곳이라 각자 그리면 겹쳐 열린다. */
 export function GroupPostSearchDialog({
   groupId,
   slug,
@@ -58,13 +48,9 @@ export function GroupPostSearchDialog({
       <DialogContent
         showCloseButton={false}
         className={SEARCH_DIALOG_CLASS}
-        // 포커스는 Base UI에게 맡긴다. `autoFocus` 속성이나 열릴 때의 `focus()` effect는
-        // vendored `DialogContent`가 팝업 컨테이너로 보내는 초기 포커스에 덮인다.
-        //
-        // 검색어를 들고 열릴 때(게시물에서 뒤로가기로 결과에 돌아온 길)는 넘기지 않아
-        // 그 기본 동작에 맡긴다. 그때 보러 온 것은 결과 목록인데, 입력창에 포커스를 주면
-        // 모바일 키보드가 그 위로 올라온다. `initialFocus: undefined`를 넘기면 기본값까지
-        // 지워져 닫기 버튼에 포커스 링이 붙으므로, 조건부로 spread한다.
+        // 포커스는 Base UI에 맡긴다. `autoFocus`/`focus()` effect는 `DialogContent`의 초기 포커스에 덮인다.
+        // 검색어를 들고 열릴 때는 결과 목록을 보러 온 것이라 키보드가 올라오지 않게 기본 동작에 맡긴다.
+        // `initialFocus: undefined`는 기본값까지 지워 닫기 버튼에 포커스 링이 붙으므로 조건부로 spread한다.
         {...(submittedQuery ? {} : { initialFocus: inputRef })}
       >
         <SearchPanel
@@ -87,11 +73,7 @@ interface SettledSearch {
   error: string | null;
 }
 
-/**
- * dialog가 닫히면 Base UI가 이 subtree를 통째로 unmount한다. 검색어와 결과를 손으로 지우는
- * 코드가 없는 건 그래서다 — 다음에 열 때 이 component는 URL이 들고 있는 검색어로 새로
- * 시작한다(기능 명세 §8.9). 뒤로가기로 결과 화면에 돌아온 경우에만 그 검색어가 남아 있다.
- */
+/** 닫히면 subtree가 unmount되어 상태를 지우는 코드가 없다. 다시 열면 URL의 검색어로 시작한다(기능 명세 §8.9). */
 function SearchPanel({
   groupId,
   slug,
@@ -182,7 +164,7 @@ function SearchPanel({
             />
           </div>
         </form>
-        {/* 검색창 자체가 헤더라서 보이는 제목은 없다. 낭독기에는 따로 알려준다. */}
+        {/* 검색창이 헤더라 제목은 낭독기 전용이다. */}
         <DialogTitle className="sr-only">게시물 검색</DialogTitle>
         <DialogDescription className="sr-only">
           이 그룹의 게시물을 제목, 본문 또는 작성자 이름으로 검색합니다.
@@ -210,10 +192,9 @@ function SearchPanel({
           <ul className="flex flex-col divide-y divide-border/70">
             {current.results.map((post) => (
               <li key={post.post_id}>
-                {/* 게시물 주소에는 검색 param이 없으므로 이동만으로 검색이 닫힌다. 새 entry라서
-                    뒤로가기로 돌아오면 URL에 남은 검색어로 결과가 다시 그려진다. */}
+                {/* 게시물 주소엔 검색 param이 없어 이동하면 검색이 닫히고, 뒤로가기로 URL의 검색어가 복원된다. */}
                 <Link
-                  to={`/groups/${slug}/posts/${post.post_id}`}
+                  to={groupPostPath(slug, post.post_id)}
                   state={FROM_GROUP}
                   className="flex flex-col gap-1 px-4 py-3 transition-colors hover:bg-muted/60"
                 >
@@ -231,9 +212,7 @@ function SearchPanel({
                     {extractPostPlainText(post.body)}
                   </p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="truncate">
-                      {post.author_name || post.author_label}
-                    </span>
+                    <span className="truncate">{postAuthorName(post)}</span>
                     <span aria-hidden="true">·</span>
                     <RelativeTime value={post.published_at} />
                   </div>

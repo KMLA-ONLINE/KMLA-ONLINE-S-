@@ -7,13 +7,7 @@ import {
 } from "~/features/posts/model/visited-posts";
 import { VISITED_POSTS_STORAGE_KEY } from "~/shared/lib/user-scoped-storage";
 
-/**
- * 목록 보기에서 이미 열어본 게시물을 흐리게 그리기 위한 상태.
- *
- * `usePostViewMode`와 같은 store 방식이다. `useSyncExternalStore`의 snapshot은 참조가
- * 안정되어야 하므로 — 매번 `JSON.parse`로 새 배열을 만들면 무한 루프가 된다 —
- * 모듈 수준에서 한 번만 읽어 캐시하고, 방문을 기록할 때만 새 Set으로 교체한다.
- */
+/** 목록에서 열어본 게시물을 흐리게 그리기 위한 상태. snapshot 참조가 안정돼야 하므로 모듈에서 한 번 읽어 캐시하고, 기록할 때만 새 Set으로 교체한다. */
 const CHANGE_EVENT = "kmla-online:visited-posts-change";
 const EMPTY: ReadonlySet<string> = new Set();
 

@@ -263,12 +263,7 @@ export async function listGroupJoinRequests(
   return signAvatars(data ?? []);
 }
 
-/**
- * 명부와 가입 신청 목록의 아바타를 한 번의 배치로 서명한다.
- *
- * 원시 `avatar_path`는 그대로 두고 `avatar_url`만 채운다 — 같은 행이 두 번 지나가도
- * 결과가 같아야 하고, 화면은 서명된 쪽만 그린다.
- */
+/** 명부·가입 신청 아바타를 한 배치로 서명한다. `avatar_path`는 두고 `avatar_url`만 채우므로 멱등하다. */
 async function signAvatars<T extends { avatar_path: string | null }>(
   rows: T[],
 ): Promise<(T & { avatar_url: string | null })[]> {
@@ -279,12 +274,7 @@ async function signAvatars<T extends { avatar_path: string | null }>(
   }));
 }
 
-/**
- * 그룹에 살아 있는 초대 링크. 없거나 만료됐으면 null이다.
- *
- * 발급과 분리한 이유는 설정 화면을 다시 열 때마다 링크가 바뀌면 안 되기 때문이다.
- * 소유자와 관리자만 부를 수 있다.
- */
+/** 그룹의 살아 있는 초대 링크(없거나 만료면 null). 발급과 분리해 설정 화면을 열 때마다 링크가 바뀌지 않게 한다. */
 export async function getGroupInvite(
   groupId: string,
 ): Promise<GroupInvite | null> {
@@ -295,12 +285,7 @@ export async function getGroupInvite(
   return data?.[0] ?? null;
 }
 
-/**
- * 초대 토큰이 가리키는 그룹의 미리보기. 토큰이 없거나 만료됐으면 null이다.
- *
- * 비공개 그룹의 행은 RLS가 비멤버에게 통째로 숨기므로, 이 definer RPC 없이는 링크를 받은
- * 사람이 그룹 이름조차 볼 수 없다.
- */
+/** 초대 토큰의 그룹 미리보기(없거나 만료면 null). RLS가 비멤버에게 비공개 그룹을 숨겨 이 definer RPC가 필요하다. */
 export async function getGroupInvitePreview(
   token: string,
 ): Promise<GroupInvitePreview | null> {

@@ -4,18 +4,14 @@ import { Link } from "react-router";
 import { StaffMark } from "~/features/posts/components/staff-mark";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { usePostEngagement } from "~/features/posts/hooks/use-post-engagement";
-import { FROM_GROUP } from "~/features/posts/model/navigation";
+import { postAuthorName } from "~/features/posts/model/identity";
+import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import type { GroupPost } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 
-/**
- * 목록 보기의 한 행. 제목 중심의 조밀한 줄이고, 행 전체가 하나의 링크다 — 안에 또 다른
- * 클릭 대상을 두면 "어디를 눌러도 열린다"는 목록의 규칙이 깨진다.
- *
- * 방문한 게시물은 배경을 한 단계 낮춰 구분한다.
- */
+/** 목록 보기의 한 행. 행 전체가 하나의 링크이며, 방문한 게시물은 배경을 낮춘다. */
 export function GroupPostRow({
   post,
   slug,
@@ -31,7 +27,7 @@ export function GroupPostRow({
 
   return (
     <Link
-      to={`/groups/${slug}/posts/${post.post_id}`}
+      to={groupPostPath(slug, post.post_id)}
       state={FROM_GROUP}
       onClick={onVisit}
       className={cn(
@@ -60,9 +56,7 @@ export function GroupPostRow({
       </div>
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="truncate">
-          {post.author_name || post.author_label}
-        </span>
+        <span className="truncate">{postAuthorName(post)}</span>
         {post.author_identity === "staff" ? <StaffMark /> : null}
         {post.is_author && post.author_identity === "anonymous" ? (
           <Badge variant="secondary" className="shrink-0">
@@ -72,7 +66,7 @@ export function GroupPostRow({
         <span aria-hidden="true">·</span>
         <RelativeTime value={post.published_at} />
         <span className="ml-auto flex shrink-0 items-center gap-3">
-          {/* 행 전체가 링크라 여기서는 누를 수 없다. 반응은 카드나 상세에서 남긴다. */}
+          {/* 행 전체가 링크라 반응은 누를 수 없다. */}
           <span className="flex items-center gap-1">
             {engagement.top_reactions.length > 0 ? (
               engagement.top_reactions.map((reaction) => (

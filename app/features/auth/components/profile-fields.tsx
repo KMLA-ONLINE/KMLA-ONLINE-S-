@@ -18,10 +18,8 @@ import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 import { TextField } from "~/shared/ui/text-field";
 
 /**
- * 학교 프로필 입력 묶음. 가입 마법사의 프로필 단계와 `/setup`의 재제출 화면이 함께 쓴다.
- *
- * 사용자 유형만 이 안에서 상태를 들고 있다. 유형에 따라 보여줄 칸이 달라지는데, 그 분기를
- * 두 화면이 각자 복제하면 필수 항목 규칙이 서로 어긋나기 시작한다.
+ * 가입 프로필 단계와 `/setup` 재제출이 공유한다.
+ * 유형별 분기를 한 곳에 둬야 필수 항목 규칙이 어긋나지 않는다.
  */
 export function ProfileFields({
   values,
@@ -39,11 +37,7 @@ export function ProfileFields({
 
   return (
     <>
-      {/*
-        반과 기숙사 방은 가입 단계에서 묻지 않는다. 승인 뒤 프로필 설정에서 채우는 항목인데,
-        `submit_my_profile`은 넘어온 값으로 두 열을 통째로 덮어쓴다. 재제출이 이미 채워 둔
-        값을 조용히 지우지 않도록, 화면에 내보이지 않고 값만 그대로 실어 보낸다.
-      */}
+      {/* 반·기숙사 방은 가입 때 묻지 않지만, `submit_my_profile`이 두 열을 덮어쓰므로 기존 값을 그대로 실어 보낸다. */}
       <input type="hidden" name="classNo" value={values.classNo} />
       <input type="hidden" name="dormRoom" value={values.dormRoom} />
 

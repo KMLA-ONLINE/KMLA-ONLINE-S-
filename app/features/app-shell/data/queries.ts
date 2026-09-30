@@ -13,11 +13,7 @@ import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import { getSupabase } from "~/shared/supabase/client";
 
 /**
- * 셸 아바타도 다른 이미지와 같은 서명 캐시를 지난다.
- *
- * 예전에는 여기서 `createSignedUrl`을 직접 불렀는데, 그러면 `["signed-url", ...]` 캐시를
- * 비켜 가서 게이트가 재검증될 때마다 새 토큰을 발급받았다. 토큰이 바뀌면 URL이 바뀌고,
- * URL이 바뀌면 `<img>`가 브라우저 캐시를 놓쳐 같은 아바타를 매번 다시 내려받았다.
+ * 셸 아바타도 공용 서명 캐시를 지난다. `createSignedUrl`을 직접 부르면 재검증마다 토큰이 바뀌어 `<img>`가 브라우저 캐시를 놓친다.
  */
 async function resolveProfileAvatar(
   path: string | null,
@@ -29,11 +25,8 @@ async function resolveProfileAvatar(
 }
 
 /**
- * 게이트가 쓰는 셸 데이터를 읽는다.
- *
- * `null`은 "인증되지 않았다"는 뜻이며 게이트는 이걸 `/login`으로 옮긴다. 세션이 없는 경우뿐
- * 아니라 서버가 세션을 거절한 경우도 여기로 접는다. 거절을 그대로 던지면 로그인 화면으로
- * 가는 대신 루트 ErrorBoundary가 잡아 앱이 깨진 것처럼 보인다.
+ * 게이트가 쓰는 셸 데이터를 읽는다. `null`은 "인증되지 않음"이며 게이트가 `/login`으로 보낸다. 서버가 세션을 거절한 경우도 접는다 —
+ * 던지면 루트 ErrorBoundary가 잡아 앱이 깨진 것처럼 보인다.
  */
 export async function loadShellData(): Promise<ShellLoadData | null> {
   const supabase = getSupabase();

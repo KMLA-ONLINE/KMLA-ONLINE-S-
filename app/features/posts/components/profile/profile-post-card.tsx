@@ -15,12 +15,7 @@ import {
 } from "~/features/posts/model/profile-post";
 import type { ProfilePost } from "~/features/posts/model/types";
 
-/**
- * 프로필 타임라인의 게시물 카드.
- *
- * 프레이밍과 본문 접기, 액션 바는 그룹 카드와 같은 것을 쓴다. 다른 것은 머리 줄뿐이다 —
- * 개인 게시물에는 제목과 카테고리와 고정이 없다(기능 명세 §8.1).
- */
+/** 프로필 타임라인의 게시물 카드. 머리 줄만 그룹 카드와 다르다(기능 명세 §8.1). */
 export function ProfilePostCard({
   post,
   onDelete,
