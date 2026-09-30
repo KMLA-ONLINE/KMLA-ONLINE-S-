@@ -23,3 +23,8 @@ export function isFromGroup(state: unknown): boolean {
     state.fromGroup === true
   );
 }
+
+/** 그룹 게시물 상세 주소. 수정 화면은 여기에 `/edit`, 댓글 시트는 `?view=comments`를 붙인다. */
+export function groupPostPath(slug: string, postId: string): string {
+  return `/groups/${slug}/posts/${postId}`;
+}

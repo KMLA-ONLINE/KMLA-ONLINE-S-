@@ -15,6 +15,7 @@ import type {
 } from "~/features/feed/model/types";
 import {
   GroupPostDetail,
+  groupPostPath,
   ProfilePostDetail,
   usePostViewMode,
   useVisitedPosts,
@@ -256,7 +257,7 @@ export function FeedScreen() {
           comments={detail.comments}
           viewer={{ name: profile.name, avatarUrl: profile.avatar_url }}
           onClose={closeDetail}
-          action={`/groups/${detail.slug}/posts/${detail.post.post_id}`}
+          action={groupPostPath(detail.slug, detail.post.post_id)}
         />
       ) : null}
 

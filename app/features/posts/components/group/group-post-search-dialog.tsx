@@ -10,7 +10,8 @@ import { Link } from "react-router";
 
 import { searchGroupPosts } from "~/features/posts/data/queries";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
-import { FROM_GROUP } from "~/features/posts/model/navigation";
+import { postAuthorName } from "~/features/posts/model/identity";
+import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
 import type { GroupPostSearchResult } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
@@ -213,7 +214,7 @@ function SearchPanel({
                 {/* 게시물 주소에는 검색 param이 없으므로 이동만으로 검색이 닫힌다. 새 entry라서
                     뒤로가기로 돌아오면 URL에 남은 검색어로 결과가 다시 그려진다. */}
                 <Link
-                  to={`/groups/${slug}/posts/${post.post_id}`}
+                  to={groupPostPath(slug, post.post_id)}
                   state={FROM_GROUP}
                   className="flex flex-col gap-1 px-4 py-3 transition-colors hover:bg-muted/60"
                 >
@@ -231,9 +232,7 @@ function SearchPanel({
                     {extractPostPlainText(post.body)}
                   </p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="truncate">
-                      {post.author_name || post.author_label}
-                    </span>
+                    <span className="truncate">{postAuthorName(post)}</span>
                     <span aria-hidden="true">·</span>
                     <RelativeTime value={post.published_at} />
                   </div>

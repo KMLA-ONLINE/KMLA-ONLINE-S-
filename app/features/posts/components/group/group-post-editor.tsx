@@ -15,7 +15,7 @@ import {
   updateGroupPostWithAttachments,
 } from "~/features/posts/data/mutations";
 import { releasePostFile } from "~/features/posts/model/attachments";
-import { FROM_GROUP } from "~/features/posts/model/navigation";
+import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import { usePostAttachmentDraft } from "~/features/posts/hooks/use-post-attachment-draft";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
 import {
@@ -201,7 +201,7 @@ export function GroupPostEditor({
       await revalidator.revalidate();
       // 새 글은 그룹 → 작성 화면 → 상세라 방금 갈아치운 entry 밑이 그룹이다. 수정은 밑이
       // 이전 상세 entry여서 뒤로가기가 한 번에 그룹에 닿지 않으므로 표식을 심지 않는다.
-      void navigate(`/groups/${slug}/posts/${postId}`, {
+      void navigate(groupPostPath(slug, postId), {
         replace: true,
         state: mode === "create" ? FROM_GROUP : undefined,
       });

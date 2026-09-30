@@ -1,28 +1,26 @@
 import { useEffect } from "react";
 import { Link, useFetcher, useLocation } from "react-router";
 
-import { StaffMark } from "~/features/posts/components/staff-mark";
 import type { CommentViewer } from "~/features/posts/components/comment/comment-composer";
 import {
   PostFileList,
   PostImageGrid,
 } from "~/features/posts/components/post-attachments";
 import { splitPostAttachments } from "~/features/posts/model/attachments";
-import { PostAuthorAvatar } from "~/features/posts/components/post-author-avatar";
 import { PostDetailDialog } from "~/features/posts/components/post-detail-dialog";
 import { PostMarkdown } from "~/features/posts/components/post-markdown";
-import { PostMenu } from "~/features/posts/components/post-menu";
 import type {
   GroupPostDetail as GroupPostDetailModel,
   PostCommentPage,
   PostIdentity,
   AnonymousActivityRestriction,
 } from "~/features/posts/model/types";
-import { isFromGroup } from "~/features/posts/model/navigation";
+import { GroupPostHeader } from "~/features/posts/components/group/group-post-header";
+import { GroupPostMenu } from "~/features/posts/components/group/group-post-menu";
+import { postAuthorName } from "~/features/posts/model/identity";
+import { groupPostPath, isFromGroup } from "~/features/posts/model/navigation";
 import { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
-import { RelativeTime } from "~/shared/components/relative-time";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
-import { Badge } from "~/shared/ui/badge";
 
 export function GroupPostDetail({
   post,
@@ -64,8 +62,8 @@ export function GroupPostDetail({
       : identities;
 
   const { images, files } = splitPostAttachments(post.attachments);
-  const authorName = post.author_name || post.author_label;
-  const postPath = `/groups/${slug}/posts/${post.post_id}`;
+  const authorName = postAuthorName(post);
+  const postPath = groupPostPath(slug, post.post_id);
 
   useEffect(() => markVisited(post.post_id), [markVisited, post.post_id]);
 
@@ -115,78 +113,23 @@ export function GroupPostDetail({
           </Link>
         )}
 
-        <header className="flex items-center gap-3">
-          {post.author_identity !== "anonymous" && post.author_pub_id ? (
-            <Link
-              to={`/profile/${post.author_pub_id}`}
-              aria-label={`${authorName} 프로필`}
-            >
-              <PostAuthorAvatar
-                identity={post.author_identity}
-                name={post.author_name}
-                avatarUrl={post.author_avatar_url}
-                size="lg"
-              />
-            </Link>
-          ) : (
-            <PostAuthorAvatar
-              identity={post.author_identity}
-              name={post.author_name}
-              avatarUrl={post.author_avatar_url}
-              size="lg"
+        <GroupPostHeader
+          post={post}
+          align="center"
+          menu={
+            <GroupPostMenu
+              post={post}
+              slug={slug}
+              onPin={() =>
+                submitIntent({
+                  intent: "pin",
+                  pinned: String(!post.is_pinned),
+                })
+              }
+              onDelete={() => submitIntent({ intent: "delete" })}
             />
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              {post.author_identity !== "anonymous" && post.author_pub_id ? (
-                <Link
-                  to={`/profile/${post.author_pub_id}`}
-                  className="truncate text-sm font-semibold hover:underline"
-                >
-                  {authorName}
-                </Link>
-              ) : (
-                <span className="truncate text-sm font-semibold">
-                  {authorName}
-                </span>
-              )}
-              {post.author_identity === "staff" ? <StaffMark /> : null}
-              {post.is_author && post.author_identity === "anonymous" ? (
-                <Badge variant="secondary" className="shrink-0">
-                  나
-                </Badge>
-              ) : null}
-            </div>
-            <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-              <RelativeTime value={post.published_at} />
-            </div>
-          </div>
-          <PostMenu
-            editTo={`${postPath}/edit`}
-            isPinned={post.is_pinned}
-            canEdit={post.can_edit}
-            canPin={post.can_pin}
-            canDelete={post.can_delete}
-            canReport={!post.is_author}
-            reportPostId={post.post_id}
-            canModerateAnonymous={
-              post.author_identity === "anonymous" &&
-              post.can_moderate_anonymous
-            }
-            anonymousAuthorRestricted={post.anonymous_author_restricted}
-            anonymousAuthorRestrictionExpiresAt={
-              post.anonymous_author_restriction_expires_at
-            }
-            anonymousSourceId={post.post_id}
-            onPin={() =>
-              submitIntent({
-                intent: "pin",
-                pinned: String(!post.is_pinned),
-              })
-            }
-            onDelete={() => submitIntent({ intent: "delete" })}
-          />
-        </header>
+          }
+        />
 
         <div>
           <h2 className="mb-2 text-xl font-semibold">{post.title}</h2>

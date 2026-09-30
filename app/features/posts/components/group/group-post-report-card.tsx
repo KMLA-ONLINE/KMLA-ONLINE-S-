@@ -3,7 +3,8 @@ import { Link } from "react-router";
 
 import { StaffMark } from "~/features/posts/components/staff-mark";
 import { GroupPostReportDescriptions } from "~/features/posts/components/group/group-post-report-descriptions";
-import { FROM_GROUP } from "~/features/posts/model/navigation";
+import { postAuthorName } from "~/features/posts/model/identity";
+import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import type { GroupPostReportSummary } from "~/features/posts/data/group-reports";
 import {
   GROUP_POST_REPORT_REASON_OPTIONS,
@@ -39,8 +40,8 @@ export function GroupPostReportCard({
   onDismiss: () => void;
   onDelete: () => void;
 }) {
-  const authorName = report.author_name ?? report.author_label;
-  const postTo = `/groups/${slug}/posts/${report.post_id}`;
+  const authorName = postAuthorName(report);
+  const postTo = groupPostPath(slug, report.post_id);
 
   return (
     <article className="bg-card md:rounded-md">

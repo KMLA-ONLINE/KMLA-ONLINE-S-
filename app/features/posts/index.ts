@@ -57,6 +57,7 @@ export {
   getAnonymousActivityRestrictionErrorMessage,
 } from "~/features/posts/model/format";
 export { resolveIdentityOptions } from "~/features/posts/model/identity";
+export { groupPostPath } from "~/features/posts/model/navigation";
 export { MENTION_LIMIT, parseMentions } from "~/features/posts/model/mentions";
 export type {
   MentionCandidate,

@@ -4,7 +4,8 @@ import { Link } from "react-router";
 import { StaffMark } from "~/features/posts/components/staff-mark";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { usePostEngagement } from "~/features/posts/hooks/use-post-engagement";
-import { FROM_GROUP } from "~/features/posts/model/navigation";
+import { postAuthorName } from "~/features/posts/model/identity";
+import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import type { GroupPost } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";
@@ -31,7 +32,7 @@ export function GroupPostRow({
 
   return (
     <Link
-      to={`/groups/${slug}/posts/${post.post_id}`}
+      to={groupPostPath(slug, post.post_id)}
       state={FROM_GROUP}
       onClick={onVisit}
       className={cn(
@@ -60,9 +61,7 @@ export function GroupPostRow({
       </div>
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="truncate">
-          {post.author_name || post.author_label}
-        </span>
+        <span className="truncate">{postAuthorName(post)}</span>
         {post.author_identity === "staff" ? <StaffMark /> : null}
         {post.is_author && post.author_identity === "anonymous" ? (
           <Badge variant="secondary" className="shrink-0">

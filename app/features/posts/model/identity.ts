@@ -23,3 +23,15 @@ export function resolveIdentityOptions(
   if (memberRole && memberRole !== "member") identities.push("staff");
   return identities;
 }
+
+/**
+ * 게시물 머리에 적는 작성자 이름. 익명·탈퇴처럼 이름이 비면 서버가 내려준 라벨로 대신한다.
+ * `??`가 아니라 `||`인 것은 빈 문자열도 "이름 없음"이기 때문이다.
+ */
+export function postAuthorName(post: {
+  author_name: string | null;
+  author_label: string;
+}): string {
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 빈 문자열도 이름 없음이다.
+  return post.author_name || post.author_label;
+}
