@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { useNavigate } from "react-router";
 
@@ -237,7 +237,10 @@ describe("PostImageGrid", () => {
     await user.click(screen.getByRole("button", { name: "다른 화면으로" }));
 
     expect(await screen.findByText("이전 화면")).toBeVisible();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // 뷰어는 닫히는 애니메이션이 끝난 뒤에 빠진다.
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
   });
 
   it("opens a direct image link in one global viewer", async () => {
