@@ -22,10 +22,12 @@ export function CommentImage({ image }: { image: CommentImageModel }) {
                 downloadName,
               ),
               name: downloadName,
+              width: image.width,
+              height: image.height,
             },
           ]
         : [],
-    [downloadName, image.image_id, image.signedUrl],
+    [downloadName, image.height, image.image_id, image.signedUrl, image.width],
   );
   // 서명에 실패해 목록이 비면 전역 host가 해당 URL을 열지 않는다.
   const viewer = useImageViewerParam(viewerImages);

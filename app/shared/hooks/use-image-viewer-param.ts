@@ -24,12 +24,15 @@ interface ImageViewerLocationState {
 interface ImageViewerRegistration {
   id: string;
   images: ViewerImage[];
+  downloadAll: boolean;
 }
 
 interface ImageViewerRegistry {
   register: (registration: ImageViewerRegistration) => void;
   unregister: (id: string) => void;
 }
+
+const NO_IMAGES: ViewerImage[] = [];
 
 const ImageViewerRegistryContext = createContext<ImageViewerRegistry | null>(
   null,
@@ -44,7 +47,9 @@ function sameImages(left: ViewerImage[], right: ViewerImage[]): boolean {
         image.src === right[index]?.src &&
         image.thumbSrc === right[index]?.thumbSrc &&
         image.downloadSrc === right[index]?.downloadSrc &&
-        image.name === right[index]?.name,
+        image.name === right[index]?.name &&
+        image.width === right[index]?.width &&
+        image.height === right[index]?.height,
     )
   );
 }
@@ -64,7 +69,10 @@ export function ImageViewerProvider({ children }: { children: ReactNode }) {
       if (index === -1) return [...current, registration];
 
       const existing = current[index];
-      if (existing && sameImages(existing.images, registration.images)) {
+      if (
+        existing?.downloadAll === registration.downloadAll &&
+        sameImages(existing.images, registration.images)
+      ) {
         return current;
       }
 
@@ -116,13 +124,13 @@ export function ImageViewerProvider({ children }: { children: ReactNode }) {
     ImageViewerRegistryContext.Provider,
     { value: registry },
     children,
-    activeRegistration && requestedImageId
-      ? createElement(ImageViewer, {
-          images: activeRegistration.images,
-          openImageId: requestedImageId,
-          onClose: close,
-        })
-      : null,
+    // 닫혀 있어도 그린다. 뷰어는 닫히는 애니메이션이 끝날 때까지 마지막 묶음을 스스로 들고 있다.
+    createElement(ImageViewer, {
+      images: activeRegistration?.images ?? NO_IMAGES,
+      openImageId: activeRegistration ? requestedImageId : null,
+      downloadAll: activeRegistration?.downloadAll,
+      onClose: close,
+    }),
   );
 }
 
@@ -136,7 +144,10 @@ export function ImageViewerProvider({ children }: { children: ReactNode }) {
  * 이미지 묶음은 앱의 단일 `ImageViewerProvider`에 등록한다. 같은 사진이 카드와 상세에 동시에
  * 있어도 provider가 Dialog 하나만 렌더링하므로 history 닫기가 겹치지 않는다.
  */
-export function useImageViewerParam(images: ViewerImage[]) {
+export function useImageViewerParam(
+  images: ViewerImage[],
+  { downloadAll = false }: { downloadAll?: boolean } = {},
+) {
   const registry = useContext(ImageViewerRegistryContext);
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
@@ -149,9 +160,9 @@ export function useImageViewerParam(images: ViewerImage[]) {
   }
 
   useEffect(() => {
-    registry.register({ id: registrationId, images });
+    registry.register({ id: registrationId, images, downloadAll });
     return () => registry.unregister(registrationId);
-  }, [images, registrationId, registry]);
+  }, [downloadAll, images, registrationId, registry]);
 
   const open = (imageId: string) => {
     const next = new URLSearchParams(searchParams);
