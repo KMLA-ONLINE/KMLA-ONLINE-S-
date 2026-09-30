@@ -93,55 +93,61 @@ export function PostImageGrid({
   const tileUsesOriginal = allowOriginalTile && visible.length === 1;
 
   return (
-    <>
-      <div
-        data-testid="post-image-grid"
-        className={cn("bg-muted", containerClass(visible.length), className)}
-        style={singleRatio === null ? undefined : { aspectRatio: singleRatio }}
-      >
-        {visible.map((item, index) => {
-          const isLastVisible = index === visible.length - 1;
+    <div
+      data-testid="post-image-grid"
+      className={cn("bg-muted", containerClass(visible.length), className)}
+      style={singleRatio === null ? undefined : { aspectRatio: singleRatio }}
+    >
+      {visible.map((item, index) => {
+        const hidesOverflow = overflow > 0 && index === visible.length - 1;
 
-          return (
-            <button
-              key={item.attachment_id}
-              type="button"
-              disabled={item.signedUrl === null}
-              onClick={() => viewer.open(item.attachment_id)}
-              aria-label={`${item.original_filename} 크게 보기`}
-              className={cn(
-                "relative block h-full w-full overflow-hidden focus:outline-none",
-                tileClass(visible.length, index),
-              )}
-            >
-              {item.signedUrl ? (
-                <img
-                  // 타일은 축소본을 그린다. 원본(3072px)을 받으면 보이는 픽셀의 몇 배를 내려받는다. 축소본이 없으면 원본으로 떨어지고, 뷰어는 원본을 연다.
-                  src={
-                    tileUsesOriginal
-                      ? item.signedUrl
-                      : (item.thumbnailUrl ?? item.signedUrl)
-                  }
-                  alt={item.original_filename}
-                  crossOrigin="anonymous"
-                  loading="lazy"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <span className="flex h-full w-full items-center justify-center bg-muted px-2 text-center text-xs text-muted-foreground">
-                  이미지를 불러오지 못했습니다
-                </span>
-              )}
-              {overflow > 0 && isLastVisible ? (
-                <span className="absolute inset-0 flex items-center justify-center bg-foreground/60 text-lg font-semibold text-background">
-                  +{overflow}
-                </span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
-    </>
+        return (
+          <button
+            key={item.attachment_id}
+            type="button"
+            disabled={item.signedUrl === null}
+            onClick={() => viewer.open(item.attachment_id)}
+            // `+N` 덮개는 aria-label에 가려 읽히지 않으니 남은 장수를 이름에 넣는다.
+            aria-label={
+              hidesOverflow
+                ? `${item.original_filename} 크게 보기, 사진 ${overflow}장 더 있음`
+                : `${item.original_filename} 크게 보기`
+            }
+            className={cn(
+              "relative block h-full w-full overflow-hidden focus:outline-none",
+              tileClass(visible.length, index),
+            )}
+          >
+            {item.signedUrl ? (
+              <img
+                // 타일은 축소본을 그린다. 원본(3072px)을 받으면 보이는 픽셀의 몇 배를 내려받는다. 축소본이 없으면 원본으로 떨어지고, 뷰어는 원본을 연다.
+                src={
+                  tileUsesOriginal
+                    ? item.signedUrl
+                    : (item.thumbnailUrl ?? item.signedUrl)
+                }
+                alt={item.original_filename}
+                crossOrigin="anonymous"
+                loading="lazy"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center bg-muted px-2 text-center text-xs text-muted-foreground">
+                이미지를 불러오지 못했습니다
+              </span>
+            )}
+            {hidesOverflow ? (
+              <span
+                aria-hidden="true"
+                className="absolute inset-0 flex items-center justify-center bg-foreground/60 text-lg font-semibold text-background"
+              >
+                +{overflow}
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

@@ -167,6 +167,11 @@ describe("PostImageGrid", () => {
 
     expect(screen.getAllByRole("img")).toHaveLength(5);
     expect(screen.getByText("+2")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "e.webp 크게 보기, 사진 2장 더 있음",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("disables the tile when the attachment could not be signed", () => {
