@@ -21,7 +21,7 @@ import { commentDomId } from "~/features/posts/components/comment/comment-item";
 import { PostActionBar } from "~/features/posts/components/post-action-bar";
 import { useKeyboardViewport } from "~/features/posts/hooks/use-keyboard-viewport";
 import { usePostComments } from "~/features/posts/hooks/use-post-comments";
-import { AnonymousActivityRestrictionNotice } from "~/features/posts/components/group/anonymous-activity-restriction-notice";
+import { AnonymousActivityRestrictionNotice } from "~/features/posts/components/anonymous-activity-restriction-notice";
 import type {
   PostComment,
   PostCommentPage,

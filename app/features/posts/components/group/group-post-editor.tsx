@@ -14,7 +14,7 @@ import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import { usePostAttachmentDraft } from "~/features/posts/hooks/use-post-attachment-draft";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
 import { getPostErrorMessage } from "~/features/posts/model/format";
-import { AnonymousActivityRestrictionNotice } from "~/features/posts/components/group/anonymous-activity-restriction-notice";
+import { AnonymousActivityRestrictionNotice } from "~/features/posts/components/anonymous-activity-restriction-notice";
 import { PostLeaveGuard } from "~/features/posts/components/editor/post-leave-guard";
 import { PostAttachmentEditor } from "~/features/posts/components/editor/post-attachment-editor";
 import {

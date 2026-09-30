@@ -3,7 +3,6 @@ import { Link } from "react-router";
 
 import { StaffMark } from "~/features/posts/components/staff-mark";
 import { GroupPostReportDescriptions } from "~/features/posts/components/group/group-post-report-descriptions";
-import { postAuthorName } from "~/features/posts/model/identity";
 import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import type { GroupPostReportSummary } from "~/features/posts/data/group-reports";
 import {
@@ -40,7 +39,7 @@ export function GroupPostReportCard({
   onDismiss: () => void;
   onDelete: () => void;
 }) {
-  const authorName = postAuthorName(report);
+  const authorName = report.author_name ?? report.author_label;
   const postTo = groupPostPath(slug, report.post_id);
 
   return (
