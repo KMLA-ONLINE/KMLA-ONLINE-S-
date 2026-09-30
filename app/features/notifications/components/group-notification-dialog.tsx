@@ -28,10 +28,7 @@ import {
 import { Spinner } from "~/shared/ui/spinner";
 import { Switch } from "~/shared/ui/switch";
 
-/**
- * 짧은 라벨과 설명을 나눠 둔다. 라벨은 트리거의 좁은 폭에 들어가야 하고, 고르는 순간에는
- * "전체"가 무엇까지 포함하는지가 필요하다.
- */
+/** 라벨은 트리거의 좁은 폭용, 설명은 고르는 순간 "전체"의 범위를 알리는 용. */
 const GROUP_LEVELS = [
   ["all", "전체", "새 게시물과 나와 관련된 활동을 모두 받습니다."],
   [
@@ -46,10 +43,7 @@ const GROUP_LEVELS = [
   string,
 ])[];
 
-/**
- * `Select.Value`는 `items`가 없으면 라벨이 아니라 값 자체를 그린다. 넘기지 않으면 트리거에는
- * `direct`가, 목록에는 `직접 관련`이 나와 한 컨트롤 안에서 언어가 갈린다.
- */
+/** `Select.Value`는 `items`가 없으면 라벨 대신 값(`direct`)을 그려 한 컨트롤 안에서 언어가 갈린다. */
 const GROUP_LEVEL_LABEL: Record<GroupNotificationLevel, string> = {
   all: "전체",
   direct: "직접 관련",
@@ -57,10 +51,7 @@ const GROUP_LEVEL_LABEL: Record<GroupNotificationLevel, string> = {
 };
 
 /**
- * 그룹 하나의 앱 알림함 수준과 두 Push 설정. 알림 설정 화면의 행과 그룹 화면의 다이얼로그가
- * 같은 컨트롤을 그려야 해서 한 곳에 둔다.
- *
- * 저장은 하지 않는다 — 부르는 쪽이 fetcher를 쓸지 직접 mutation을 부를지 정한다.
+ * 그룹 하나의 알림함 수준과 Push 설정. 설정 화면 행과 그룹 다이얼로그가 같은 컨트롤을 쓰려고 공유한다. 저장은 부르는 쪽 몫이다.
  */
 export function GroupNotificationFields({
   label,
@@ -173,13 +164,7 @@ export function GroupNotificationFields({
 }
 
 /**
- * 그룹 화면의 ⋯ 메뉴에서 여는 알림 다이얼로그.
- *
- * 설정을 바꾸고 싶어지는 순간은 "이 그룹 시끄럽네" 하고 느낄 때, 즉 그룹을 보고 있을 때다.
- * 알림 설정 화면까지 걸어가서 가입한 그룹 목록에서 이름을 찾게 하지 않는다.
- *
- * 값은 열릴 때 읽는다. 그룹 상세 loader에 얹으면 다이얼로그를 열지 않는 대다수 방문이
- * 매번 한 번씩 더 왕복한다.
+ * 그룹 화면의 ⋯ 메뉴에서 여는 알림 다이얼로그. 값은 열릴 때만 읽는다(그룹 상세 loader에 얹으면 안 여는 방문도 왕복한다).
  */
 export function GroupNotificationDialog({
   groupId,

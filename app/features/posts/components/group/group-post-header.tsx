@@ -9,12 +9,7 @@ import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 
-/**
- * 그룹 게시물의 머리 줄. 카드와 상세가 같은 것을 쓴다.
- *
- * 익명 작성자는 프로필로 가는 길을 열지 않는다. 카테고리 badge는 목록에서 글을 가르는
- * 표시라 카드만 켠다(기능 명세 §8.8).
- */
+/** 그룹 게시물 머리 줄. 카테고리 badge는 카드만 켠다(기능 명세 §8.8). */
 export function GroupPostHeader({
   post,
   align = "start",

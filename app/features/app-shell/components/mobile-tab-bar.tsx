@@ -9,12 +9,8 @@ import {
 import { cn } from "~/shared/lib/utils";
 
 /**
- * 모바일 하단 탭바.
- *
- * `fixed`가 아니라 일반 앱 셸의 flex 흐름 마지막 행이다. 그래서 콘텐츠가 탭바에 가리지
- * 않게 하려고 `pb-[calc(4rem+env(safe-area-inset-bottom))]`을 계산해 붙이는 코드가 아예 없다.
- *
- * 표시와 자동 숨김 여부는 현재 route의 `handle.chrome.bottomNav`가 정한다.
+ * 모바일 하단 탭바. `fixed`가 아니라 셸 flex 흐름의 마지막 행이라 콘텐츠 하단 패딩 보정이 없다.
+ * 표시·자동 숨김은 현재 route의 `handle.chrome.bottomNav`가 정한다.
  */
 export function MobileTabBar({ className }: { className?: string }) {
   const location = useLocation();
@@ -35,8 +31,7 @@ export function MobileTabBar({ className }: { className?: string }) {
 
           return (
             <li key={item.to} className="min-w-0">
-              {/* 탭바는 아이콘만 그려서 링크에 읽을 텍스트가 없다 — 라벨을 접근성 이름으로 붙이고,
-                  안 읽은 게 있으면 개수까지 이름에 담는다(뱃지 자체는 aria-hidden). */}
+              {/* 아이콘만 있어 라벨(과 안 읽은 개수)을 접근성 이름으로 붙인다. */}
               <NavLink
                 to={item.to}
                 end={item.end}

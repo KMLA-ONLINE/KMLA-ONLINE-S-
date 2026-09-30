@@ -13,13 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Spinner } from "~/shared/ui/spinner";
 
 /**
- * 초대 링크를 열었을 때 보이는 화면.
- *
- * 그룹 상세(`/groups/:slug`)로 바로 보낼 수 없어서 화면이 따로 있다. 그 로더는 토큰을 읽기도
- * 전에 RLS에 막혀 404를 던진다 — 비공개 그룹의 행은 비멤버에게 존재하지 않기 때문이다.
- *
- * 아이콘과 커버는 보여 주지 않는다. 저장소 정책이 비멤버에게 비공개 그룹의 이미지를 내주지
- * 않고, 미리보기 한 장을 위해 그 정책을 넓히지 않았다.
+ * 초대 링크 화면. 상세 loader는 토큰을 읽기 전에 RLS로 404를 던지므로(비멤버에겐 비공개 그룹 행이 없다) 따로 둔다.
+ * 저장소 정책상 비멤버에게 비공개 그룹 이미지를 주지 않아 아이콘·커버는 보이지 않는다.
  */
 export function GroupInviteScreen({
   preview,

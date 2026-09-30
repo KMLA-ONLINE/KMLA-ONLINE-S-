@@ -10,9 +10,7 @@ export function useFileDrop(onDrop: (files: FileList | null) => void) {
   const [isDragging, setIsDragging] = useState(false);
   const depth = useRef(0);
 
-  // 페이지 내부 요소(채팅 속 이미지 등)를 드래그하면 브라우저가 그 이미지를 `dataTransfer`의
-  // `"Files"`로도 실어 보내, 파일 존재 여부만으로는 외부 파일 드롭과 구분되지 않는다. 우리
-  // 문서에서 시작된 드래그는 `dragstart`가 뜨지만 외부 OS 파일 드래그는 뜨지 않는다.
+  // 페이지 내부 요소 드래그도 `dataTransfer`에 "Files"를 싣기 때문에 외부 OS 파일 드롭과 구분이 안 된다. 내부 드래그만 `dragstart`가 뜬다.
   const internalDrag = useRef(false);
 
   useEffect(() => {
@@ -20,23 +18,18 @@ export function useFileDrop(onDrop: (files: FileList | null) => void) {
       internalDrag.current = true;
     };
 
-    // `dragend`만으로 내리면 한 번 놓쳤을 때 이 인스턴스가 영구히 꺼진다 — 드래그 소스 노드가
-    // 도중에 사라지면(가상 목록, 리렌더) 실제로 발생한다. 오래 사는 작성기에서 그러면 이후 모든
-    // OS 파일 드롭이 내부 드래그로 오판된다. 그래서 종료로 볼 수 있는 경로를 더 받는다.
+    // `dragend`만 믿으면 드래그 소스 노드가 사라질 때(가상 목록, 리렌더) 플래그가 영구히 켜진다. 종료 경로를 더 받는다.
     const end = () => {
       internalDrag.current = false;
     };
 
     document.addEventListener("dragstart", begin, true);
     document.addEventListener("dragend", end, true);
-    // **버블 단계여야 한다.** capture로 달면 드롭 존의 React 핸들러보다 먼저 돌아서, 내부 드래그를
-    // 페이지 안에 떨어뜨렸을 때 이미 `false`가 된 플래그를 보고 외부 파일로 오판한다 — 이 훅이
-    // 막으려던 바로 그 상황이다. 버블로 두면 드롭 처리가 끝난 뒤에 내려간다.
+    // 버블 단계여야 한다. capture면 드롭 존 핸들러보다 먼저 플래그가 내려가 내부 드래그를 외부 파일로 오판한다.
     document.addEventListener("drop", end);
     document.addEventListener("visibilitychange", end);
 
-    // `window`의 `blur`는 쓰지 않는다. 드래그를 시작하는 것만으로 blur가 뜨는 브라우저가 있어,
-    // 그러면 내부 드래그 플래그가 곧바로 풀려 가드가 통째로 무력해진다.
+    // `window` blur는 쓰지 않는다. 드래그 시작만으로 blur가 뜨는 브라우저가 있어 가드가 풀린다.
 
     return () => {
       document.removeEventListener("dragstart", begin, true);

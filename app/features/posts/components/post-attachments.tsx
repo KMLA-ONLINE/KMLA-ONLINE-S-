@@ -21,37 +21,20 @@ import { Button } from "~/shared/ui/button";
 
 const VISIBLE_TILE_LIMIT = 5;
 
-/**
- * 타일 개수별 그리드. 반응형이 아니라 장수의 함수다 — 사진이 몇 장이냐에 따라 "보기 좋은
- * 배치"가 정해져 있고, 화면 폭이 그걸 바꾸지는 않는다.
- */
+/** 타일 개수별 그리드. 화면 폭이 아니라 장수가 배치를 정한다. */
 function containerClass(count: number): string {
-  // 한 장일 때만 테두리를 둘러 여백과 사진의 경계를 알린다. 좌우는 카드 폭에 꽉 차서 선이
-  // 카드 테두리와 겹쳐 두 줄로 보이므로 위아래만 긋는다. `aspect-video`는 치수를 모르는
-  // 첨부를 위한 폴백이다 — 아는 경우엔 `singleImageRatio`가 인라인 스타일로 덮는다.
+  // 한 장일 때만 위아래로 테두리를 긋는다(좌우는 카드 테두리와 겹친다). `aspect-video`는 치수를 모르는 첨부의 폴백이다.
   if (count === 1) return "aspect-video border-y";
   if (count === 2) return "grid aspect-[2/1] grid-cols-2 gap-1";
   if (count <= 4) return "grid aspect-[4/3] grid-cols-2 grid-rows-2 gap-1";
   return "grid aspect-[4/3] grid-cols-6 grid-rows-2 gap-1";
 }
 
-/**
- * 사진이 한 장일 때 허용하는 가로세로비의 양 끝.
- *
- * 한 장짜리는 사진 자체가 게시물의 내용이라 되도록 원본 그대로 보여 주는 편이 낫다. 16:9로
- * 못 박으면 흔한 세로 사진(3:4)이 절반 넘게 잘려 나간다. 그렇다고 원본 비율을 그대로 따르면
- * 9:16 스크린샷 한 장이 카드 폭의 1.78배 높이를 차지해서, 목록에서 아래 게시물을 화면 밖으로
- * 밀어낸다 — 이 그리드는 상세뿐 아니라 피드·그룹·프로필 카드에서도 쓰인다. 그래서 원본 비율을
- * 이 범위로 자른다. 아래 끝을 3:4에 둔 것은 폰 카메라의 기본 세로비라 가장 흔하기 때문이다.
- * 4:3, 1:1, 3:4는 손실 없이 다 보이고, 파노라마와 긴 캡처만 끝에서 크롭된다.
- */
+/** 한 장일 때 허용하는 가로세로비 범위. 16:9 고정은 세로 사진이 잘리고 원본 그대로는 9:16 캡처가 피드를 밀어내 이 범위로 자른다(하한 3:4는 폰 기본 세로비). */
 const SINGLE_IMAGE_WIDEST = 16 / 9;
 const SINGLE_IMAGE_TALLEST = 3 / 4;
 
-/**
- * 한 장일 때 컨테이너에 실을 가로세로비. 업로드 때 잰 치수가 없으면(옛 첨부, 메타를 못 읽은
- * 경우) null이고, 그러면 `containerClass`의 `aspect-video`가 그대로 남는다.
- */
+/** 한 장일 때 컨테이너 가로세로비. 치수가 없으면 null이고 `containerClass`의 `aspect-video`가 남는다. */
 function singleImageRatio(image: PostAttachment): number | null {
   if (!image.width || !image.height) return null;
   return Math.min(
@@ -73,14 +56,7 @@ export function PostImageGrid({
 }: {
   images: PostAttachment[];
   className?: string;
-  /**
-   * 전폭으로 깔리는 한 장짜리 타일에 한해 원본을 그린다. 상세 화면만 켠다.
-   *
-   * 타일이 컨테이너 폭을 통째로 쓰는 건 사진이 한 장일 때뿐이고, 그때 축소본(800px)은
-   * 상세 다이얼로그 폭(640 CSS px)에 DPR 2를 곱한 1280px에 한참 못 미쳐 눈에 띄게
-   * 흐리다. 두 장부터는 타일이 절반 이하로 줄어 축소본으로 충분하므로, 이 플래그를
-   * 켜도 축소본을 쓴다 — 상세라는 이유만으로 원본 다섯 장을 받을 일은 없다.
-   */
+  /** 전폭 한 장짜리 타일에 한해 원본을 그린다(상세만 켬). 축소본(800px)은 그 폭에서 흐리고, 두 장부터는 충분하다. */
   allowOriginalTile?: boolean;
 }) {
   // signed URL을 못 받은 첨부는 뷰어에 넣지 않는다. 슬라이드에 빈 칸이 생기고 좌우 이동이
@@ -108,9 +84,7 @@ export function PostImageGrid({
 
   const visible = images.slice(0, VISIBLE_TILE_LIMIT);
   const overflow = images.length - visible.length;
-  // 임의의 실수라 클래스로는 못 적는다. 인라인 스타일이 `aspect-video`를 덮고, 값이 없으면
-  // 그 폴백이 그대로 쓰인다. 치수는 업로드 때 재서 저장해 두므로 이미지가 도착하기 전에
-  // 높이가 정해진다 — 로드 후 레이아웃이 튀지 않는다.
+  // 임의의 실수라 클래스로 못 적어 인라인 스타일이 `aspect-video`를 덮는다. 치수는 업로드 때 저장해 두어 로드 후 레이아웃이 튀지 않는다.
   const singleRatio =
     visible.length === 1 ? singleImageRatio(visible[0]) : null;
   // 원본을 쓸지는 화면이 아니라 타일 크기가 정한다. 근거는 `allowOriginalTile` 주석에 있다.
@@ -140,10 +114,7 @@ export function PostImageGrid({
             >
               {item.signedUrl ? (
                 <img
-                  // 타일은 축소본을 그린다. 원본은 3072px인데 타일은 가장 넓어야 컨테이너
-                  // 전폭(데스크톱 피드 기준 약 716 CSS px)이라, 여기서 원본을 받으면 보이는
-                  // 픽셀의 몇 배를 내려받는 셈이다. 축소본이 없는 첨부(업로드 실패)는 원본으로
-                  // 떨어진다. 뷰어는 위 `viewerImages`에서 계속 원본을 연다.
+                  // 타일은 축소본을 그린다. 원본(3072px)을 받으면 보이는 픽셀의 몇 배를 내려받는다. 축소본이 없으면 원본으로 떨어지고, 뷰어는 원본을 연다.
                   src={
                     tileUsesOriginal
                       ? item.signedUrl

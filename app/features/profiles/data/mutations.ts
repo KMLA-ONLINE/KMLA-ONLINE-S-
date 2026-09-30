@@ -11,10 +11,7 @@ import { getSupabase } from "~/shared/supabase/client";
 /** `profiles_pub_id_format`와 같은 형식이다. 앞뒤는 영숫자, 전체 5~15자 (§12.1). */
 const PUB_ID_PATTERN = /^[a-z0-9][a-z0-9-]{3,13}[a-z0-9]$/;
 
-/**
- * `profiles_pub_id_not_reserved`와 같은 목록. 판정은 제약이 하고 이 목록은 저장을 눌러
- * 보기 전에 알려 주기만 한다. 목록이 뒤처져도 DB가 막고, 그 실패는 필드 오류로 돌아온다.
- */
+/** `profiles_pub_id_not_reserved`와 같은 목록. 판정은 DB 제약이 하고 이건 저장 전 안내용이다. */
 const RESERVED_PUB_IDS = new Set([
   "admin",
   "administrator",
@@ -163,12 +160,7 @@ function optional(value: string): string | undefined {
   return trimmed || undefined;
 }
 
-/**
- * 저장 실패를 폼 오류로 옮긴다.
- *
- * 공개 ID(화면 표기는 slug)가 이미 쓰이는지는 서버만 안다. 그 실패를 폼 상단
- * 문구로 접으면 어디를 고쳐야 하는지 사라지므로 필드 오류로 되돌린다.
- */
+/** 저장 실패를 폼 오류로 옮긴다. 공개 ID 중복은 서버만 알아, 상단 문구 대신 필드 오류로 돌려 고칠 곳을 남긴다. */
 export function readProfileEditFailure(error: unknown): ProfileEditErrors {
   const candidate = (error ?? {}) as { code?: string; message?: string };
 

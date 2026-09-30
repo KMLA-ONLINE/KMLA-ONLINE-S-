@@ -290,16 +290,8 @@ export function ImageCropper({
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
           <div className="mx-auto w-full max-w-sm overflow-hidden rounded-lg bg-muted">
             {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions --
-                ARIA에는 2차원 조작 표면에 맞는 interactive role이 없다. 그래서 규칙이 요구하는
-                role을 줄 방법이 없는데, 이 요소는 실제로 상호작용한다.
-
-                `application`을 쓰는 건 이 기능이 성립하기 위한 조건이다. `group` 같은
-                non-interactive role이면 스크린 리더가 browse mode에서 방향키를 자기 탐색용으로
-                가로채, 키보드 사용자에게 `onKeyDown`이 아예 도달하지 않는다.
-
-                규칙이 지키려는 것들은 다른 수단으로 갖췄다: `tabIndex`로 포커스 가능하고(테스트가
-                실제 포커스까지 확인한다), 방향키 핸들러가 있고, 접근 이름과 조작 설명을
-                `aria-label`·`aria-describedby`로 준다. */}
+                2차원 조작 표면에 맞는 interactive role이 ARIA에 없다. `application`이어야 스크린 리더가
+                방향키를 가로채지 않는다. 포커스(`tabIndex`)·방향키 핸들러·`aria-label`/`aria-describedby`는 갖췄다. */}
             <div
               ref={setFrameElement}
               onPointerDown={onPointerDown}

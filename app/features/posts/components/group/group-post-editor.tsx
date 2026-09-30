@@ -80,9 +80,7 @@ export function GroupPostEditor({
   // 그룹으로 `navigate`하면 히스토리에 작성 화면이 남아서, 뒤로 가기를 누른 사용자가 방금
   // 버린 초안을 다시 마주하게 된다. 들어온 경로를 되감는 게 맞다.
   const close = useModalClose(`/groups/${slug}`);
-  // 저장은 이 컴포넌트가 RPC로 직접 돌린다(`AGENTS.md`: 파일 처리·진행률·재시도는 소유
-  // 기능에 둔다). route action으로 왕복하지 않으므로 되돌아온 값이 아니라 게시물 자체가
-  // 언제나 초기값이다.
+  // 저장은 RPC를 직접 돌린다(`AGENTS.md`). route action을 거치지 않으므로 게시물 자체가 언제나 초기값이다.
   const initial: PostFormValues = {
     title: post?.title ?? "",
     body: post?.body ?? "",
@@ -348,10 +346,7 @@ export function GroupPostEditor({
                 setDraftBody(value);
               }}
             />
-            {/*
-              익명 글은 멘션할 수 없다(기능 명세 §8.14). 운영진 명의는 실제 작성자의 이름과
-              사진이 그대로 보이므로(§8.6) 익명이 아니고, 여기서 감추지 않는다.
-            */}
+            {/* 익명 글은 멘션 불가(기능 명세 §8.14). 운영진 명의는 익명이 아니다(§8.6). */}
             {draftIdentity === "anonymous" ? null : (
               <div className="flex items-center gap-1">
                 <MentionButton

@@ -135,19 +135,9 @@ export async function enableWebPush(): Promise<PushSupport> {
 }
 
 /**
- * 브라우저가 들고 있는 구독을 서버가 아직 아는지 확인하고, 모르면 다시 등록한다.
- *
- * Push service는 구독을 말없이 갈아치운다(브라우저 데이터 정리, 장기 미사용, 서비스
- * 자체 정책). 그러면 서버에 남은 endpoint는 죽고, 전달 worker는 410을 받아 그 행을
- * 정리한다. 서비스 워커가 `pushsubscriptionchange`에서 새로 구독하지만 거기에는 로그인
- * 세션이 없어 새 endpoint를 올리지 못한다. 이 함수가 그 나머지 절반이다.
- *
- * 없는 구독을 새로 만들지는 않는다. `disableWebPush()`는 권한은 granted로 남긴 채
- * 구독만 해지하므로, 구독이 없다는 건 "이 기기에서 알림을 껐다"는 뜻일 수 있다. 살아
- * 있는 구독을 서버에 맞추는 것까지만 한다.
- *
- * 앱이 뜰 때마다 도는 배경 정비라 실패는 삼킨다 — 사용자가 요청한 동작이 아니고, 다음
- * 실행에서 다시 시도한다.
+ * 브라우저의 구독을 서버가 모르면 다시 등록한다. 서비스 워커의 `pushsubscriptionchange`는 로그인 세션이 없어 새 endpoint를 못 올리므로 그 나머지 절반이다.
+ * 없는 구독은 만들지 않는다 — `disableWebPush()`가 권한은 남기고 구독만 해지하기 때문이다.
+ * 배경 정비라 실패는 삼키고 다음 실행에서 다시 시도한다.
  */
 export async function resyncWebPushSubscription(): Promise<void> {
   try {

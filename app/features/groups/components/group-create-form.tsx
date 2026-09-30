@@ -363,8 +363,7 @@ export function GroupCreateForm({
           </FieldSet>
         </SectionCard>
 
-        {/* 제출 실패 메시지는 폼 맨 위가 아니라 버튼 옆에 둔다. 모바일에서는 만들기를
-            누른 자리가 화면 아래라, 위쪽에 뜬 메시지는 스크롤을 올리기 전까지 안 보인다. */}
+        {/* 모바일에서 위쪽 메시지는 안 보이므로 버튼 옆에 둔다. */}
         <div className="flex flex-col gap-3 px-4 md:px-0">
           {errors.form ? <FieldError>{errors.form}</FieldError> : null}
           <div className="flex justify-end gap-2">
@@ -394,7 +393,6 @@ export function GroupCreateForm({
         }
         details={
           <dl className="flex flex-col gap-1 text-sm">
-            {/* 종류를 고를 수 없는 사용자에게 `비공식 그룹`은 알려 줄 것이 없는 한 줄이다. */}
             {canCreateOfficial ? (
               <SummaryRow label="종류">{getGroupKindLabel(kind)}</SummaryRow>
             ) : null}

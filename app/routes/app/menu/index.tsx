@@ -105,8 +105,7 @@ export default function MenuPage() {
             >
               <Icon className="size-6 text-muted-foreground" aria-hidden />
 
-              {/* 다섯 칸으로 펴지는 데스크톱에서 "공강 · 노래방"은 두 줄이 된다.
-                  `break-keep`이 없으면 한국어가 어절 가운데서 잘린다. */}
+              {/* `break-keep`이 없으면 두 줄 라벨이 어절 가운데서 잘린다. */}
               <span className="text-center text-xs leading-tight font-medium break-keep">
                 {label}
               </span>
@@ -126,8 +125,7 @@ export default function MenuPage() {
           ) : null}
         </div>
 
-        {/* 내 것을 바꾸는 설정과 달리 이 둘은 서비스에 대해 읽는 화면이고, 여는 빈도도
-            훨씬 낮다. 이 화면의 위계가 빈도이므로 설정 카드에 섞지 않고 한 층 아래 둔다. */}
+        {/* 읽기용이고 여는 빈도가 낮아 설정 카드와 섞지 않는다. */}
         <div className="divide-y overflow-hidden rounded-xl border bg-card">
           <ListLinkRow
             to="/support"
@@ -138,7 +136,7 @@ export default function MenuPage() {
           <ListLinkRow to="/update" label="업데이트 기록" icon={SparklesIcon} />
         </div>
 
-        {/* 로그아웃은 이동이 아니라 동작이라 목록 카드에서 떼어 따로 앉힌다. */}
+        {/* 로그아웃은 이동이 아니라 동작이라 목록 카드에서 뗀다. */}
         <div className="overflow-hidden rounded-xl border bg-card">
           <LogoutButton appearance="row" />
         </div>

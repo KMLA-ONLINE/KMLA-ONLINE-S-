@@ -16,13 +16,8 @@ export const feedKeys = {
 };
 
 /**
- * 피드는 페이지 하나가 아니라 세션 하나다.
- *
- * `list_feed_posts`는 첫 페이지에서 `feedEpoch`를 발급하고 이후 페이지 토큰을 거기에 묶는다.
- * 페이지마다 캐시 키를 따로 두면 서버가 "한 덩어리"라고 말하는 걸 클라이언트가 "낱개"로
- * 저장하는 셈이라, 1페이지를 다시 읽는 순간 나머지 토큰이 전부 죽었다. 무한 쿼리는 pages와
- * pageParams를 한 엔트리로 다루고 리페치할 때 1페이지부터 순차로 새 토큰을 흘려보내므로,
- * 캐시 단위가 서버의 일관성 단위와 맞는다.
+ * 피드는 페이지 하나가 아니라 세션 하나다. 서버가 첫 페이지에서 `feedEpoch`를 발급해 이후 토큰을 묶으므로,
+ * 캐시 단위를 무한 쿼리 한 엔트리로 맞춘다(페이지별 키면 1페이지 리페치 때 나머지 토큰이 죽는다).
  */
 export function feedQuery() {
   return infiniteQueryOptions({
@@ -32,34 +27,20 @@ export function feedQuery() {
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: FeedPage) => lastPage.nextPageToken,
     staleTime: FEED_STALE_TIME,
-    // 무한 쿼리의 리페치는 쌓아 둔 페이지를 전부 다시 읽는다. 10페이지까지 내려간 사용자가
-    // 15초 뒤 돌아왔다고 열 번 왕복시킬 이유는 없다. 시간 기반 갱신 대신 명시적 갱신만
-    // 쓴다 — 랭킹 피드는 보고 있는 사이 조용히 재배열되지 않는 편이 낫기도 하다.
+    // 리페치는 쌓인 페이지를 전부 다시 읽는다. 시간 기반 갱신 대신 명시적 갱신만 쓴다 — 랭킹 피드가 조용히 재배열되지 않게.
     refetchOnMount: false,
   });
 }
 
 /**
- * 피드를 처음부터 다시 읽게 만든다. `invalidateQueries`가 아니라 `resetQueries`인 이유는,
- * 무효화는 "쌓인 페이지 전부를 다시 읽어라"가 되지만 여기서 원하는 건 "새 세션을 열어라"이기
- * 때문이다. 다음 접근이 1페이지부터 새 `feedEpoch`로 시작한다.
- *
- * engagement overlay는 건드리지 않는다. 새 세션은 그룹 가입이나 글 저장으로도 열리는데, 그때
- * 다시 읽히는 건 피드뿐이다. 여기서 overlay를 비우면 다른 화면에 열려 있는 게시물은 방금
- * 성공한 반응·댓글 수를 로더가 준 옛 snapshot으로 되돌린 뒤 되돌릴 길이 없다. overlay를
- * 버리는 건 화면 전체를 다시 읽는 당겨서 새로고침의 몫이다.
+ * 피드를 처음부터 다시 읽게 한다. `invalidateQueries`는 쌓인 페이지를 전부 다시 읽지만 여기서는 새 세션(새 `feedEpoch`)이 필요해 `resetQueries`다.
+ * engagement overlay는 건드리지 않는다 — 비우면 다른 화면의 반응·댓글 수가 옛 snapshot으로 되돌아간다. overlay는 당겨서 새로고침이 버린다.
  */
 export function resetFeed(queryClient: QueryClient) {
   return queryClient.resetQueries({ queryKey: feedKeys.all });
 }
 
-/**
- * 랭킹을 다시 계산하지 않고 캐시에서 게시물 하나만 뺀다.
- *
- * 삭제는 "이 글이 사라진다"이지 "피드 순서가 바뀐다"가 아니다. 반면 새 세션 하나는
- * `private.create_feed_session()`이 후보를 전부 랭킹해 `feed_session_posts`에 행 단위
- * 루프로 물리화하는 일이라, 글 하나 지우자고 치를 값이 아니다.
- */
+/** 랭킹 재계산 없이 캐시에서 게시물 하나만 뺀다. 새 세션은 후보 전체를 다시 랭킹·물리화하는 비싼 일이다. */
 export function removeFeedPost(queryClient: QueryClient, postId: string) {
   queryClient.setQueryData(
     feedKeys.list(),

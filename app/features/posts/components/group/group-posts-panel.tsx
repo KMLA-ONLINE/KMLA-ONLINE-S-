@@ -25,13 +25,7 @@ import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 import { getQueryClient } from "~/shared/lib/query-client";
 
-/**
- * 그룹 게시물 목록.
- *
- * 카테고리 전환과 더 보기는 route를 재검증하지 않고 `data/queries`를 직접 부른다 — 목록을
- * 훑는 동작이라 URL에 남길 이유가 없고, loader를 다시 돌리면 그룹 헤더까지 함께 깜빡인다.
- * 반대로 고정·삭제는 권한과 revalidate가 걸려 있으므로 부모 route의 action으로 보낸다.
- */
+/** 그룹 게시물 목록. 카테고리 전환·더 보기는 route 재검증 없이 `data/queries`를 직접 부르고, 고정·삭제는 부모 route action으로 보낸다. */
 export function GroupPostsPanel({
   groupId,
   slug,

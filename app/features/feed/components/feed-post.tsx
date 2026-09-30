@@ -150,7 +150,6 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
           {post.kind === "group" ? (
             <>
               <AuthorName post={post} compact />
-              {/* 이 줄은 text-xs라 기본 size-4는 글자보다 커 보인다. */}
               {post.author_identity === "staff" ? (
                 <StaffMark className="size-3.5" />
               ) : null}

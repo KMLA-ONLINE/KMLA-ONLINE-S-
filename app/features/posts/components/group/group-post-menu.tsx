@@ -2,10 +2,7 @@ import { PostMenu } from "~/features/posts/components/post-menu";
 import { groupPostPath } from "~/features/posts/model/navigation";
 import type { GroupPost, GroupPostDetail } from "~/features/posts/model/types";
 
-/**
- * 그룹 게시물의 더보기 메뉴. 카드와 상세가 같은 권한 필드를 `PostMenu`에 같은 방식으로
- * 이어 주므로 그 배선을 여기 한 곳에 둔다 — 한쪽에서 필드를 빠뜨려도 타입이 잡아주지 못한다.
- */
+/** 그룹 게시물 더보기 메뉴. 카드와 상세의 권한 필드 배선을 한 곳에 둔다. */
 export function GroupPostMenu({
   post,
   slug,

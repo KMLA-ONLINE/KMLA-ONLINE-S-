@@ -52,7 +52,7 @@ export function GroupPostCard({
       />
 
       <div className="px-4">
-        {/* 그룹 이름이 h1이므로 게시물 제목은 카드와 상세 모두 h2다. */}
+        {/* 그룹 이름이 h1이라 제목은 h2다. */}
         <h2 className="mb-2 text-xl font-semibold">
           <Link to={postPath} state={FROM_GROUP} className="hover:underline">
             {post.title}

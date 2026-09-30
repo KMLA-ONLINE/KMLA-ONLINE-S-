@@ -479,8 +479,7 @@ function BookingRow({
           {label}
         </span>
 
-        {/* `sm`(24px)은 두 줄짜리 줄에서 작아 보이고 `default`(32px)는 과하다.
-            `default` 기준 클래스만 tailwind-merge로 덮어써서 28px로 쓴다. */}
+        {/* `default` 기준 클래스만 tailwind-merge로 덮어 28px로 쓴다. */}
         <Link
           to={`/profile/${reservation.applicantPubId}`}
           aria-label={`${reservation.applicantName} 프로필`}

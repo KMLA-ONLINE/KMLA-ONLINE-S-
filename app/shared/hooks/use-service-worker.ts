@@ -76,11 +76,7 @@ export function useServiceWorker(reload = reloadPage) {
       await wb.register();
       if (cancelled) return;
 
-      // The browser only refetches sw.js on a document navigation, and this app
-      // is an SPA: after the first load it never performs one. Left alone, an
-      // installed app that lives in the background for days would keep running
-      // the build it launched with and the update banner would have nothing to
-      // announce. So we ask ourselves.
+      // sw.js is only refetched on a document navigation, which an SPA never does, so poll for updates ourselves.
       let lastCheckedAt = Date.now();
       const checkForUpdate = () => {
         // A background tab cannot show the banner anyway, and the visible check
@@ -108,10 +104,7 @@ export function useServiceWorker(reload = reloadPage) {
         window.removeEventListener("online", checkForUpdate);
       };
     })().catch(() => {
-      // `register()` can reject outright — sw.js missing after a bad deploy, or
-      // a SecurityError under a locked-down profile. The app is fully usable
-      // without a service worker, so this must not become an unhandled
-      // rejection.
+      // `register()` can reject (missing sw.js, SecurityError); the app works without a SW, so don't leave an unhandled rejection.
     });
 
     return () => {
@@ -130,11 +123,7 @@ export function useServiceWorker(reload = reloadPage) {
     }
 
     updateAcceptedRef.current = true;
-    // `messageSkipWaiting()`은 대답을 약속하지 않는다. 대기 중이던 워커가 이미
-    // redundant가 됐거나 메시지가 유실되면 `controlling`이 끝내 오지 않고, 버튼은
-    // "적용 중"에 disabled로 갇혀 사용자가 빠져나올 길이 없어진다. 그때는 버튼에
-    // 적힌 대로 새로고침한다 — 업데이트가 실제로 적용되지 않았더라도 다음 등록에서
-    // 배너가 다시 떠서 막다른 길로는 남지 않는다.
+    // `messageSkipWaiting()`은 응답을 보장하지 않는다. `controlling`이 안 오면 버튼이 "적용 중"에 갇히므로 그때는 새로고침한다.
     applyTimeoutRef.current = window.setTimeout(
       reload,
       APPLY_UPDATE_TIMEOUT_MS,

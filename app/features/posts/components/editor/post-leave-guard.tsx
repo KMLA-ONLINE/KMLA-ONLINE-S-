@@ -3,15 +3,7 @@ import { useBeforeUnload, useBlocker } from "react-router";
 
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 
-/**
- * 작성 중인 글을 두고 나가려 할 때 막고 확인을 받는다. 그룹·개인 편집기가 같이 쓴다.
- *
- * 경로가 바뀌는 이동은 `useBlocker`가, 탭 닫기와 새로고침은 `beforeunload`가 맡는다.
- * 저장 중에는 저장 뒤의 `navigate`를 막지 않도록 둘 다 풀어 둔다.
- *
- * 나가기를 확인하면 올려 둔 파일부터 치운다(`discard`). 실패해도 나가는 길은 막지 않는다 —
- * 남은 업로드 행은 예약된 정리가 지운다.
- */
+/** 작성 중인 글을 두고 나가려 할 때 확인을 받는다. 저장 중에는 풀어 두고, 나가면 올려 둔 파일을 치운다(실패해도 막지 않는다). */
 export function PostLeaveGuard({
   dirty,
   saving,

@@ -39,13 +39,7 @@ import {
   DialogTitle,
 } from "~/shared/ui/dialog";
 
-/**
- * 모바일은 전체화면, 데스크톱은 가운데 정렬된 모달.
- *
- * 높이를 `h-[90svh]`로 고정한 것이 핵심이다. 내용에 맞춰 늘어나게 두면 짧은 게시물과 긴
- * 게시물 사이를 오갈 때 모달 크기가 매번 달라져서, 목록에서 하나씩 열어볼 때 창이 계속
- * 출렁인다. `svh`는 모바일 주소창이 접히며 높이가 변하는 것까지 막는다.
- */
+/** 모바일은 전체화면, 데스크톱은 가운데 모달. 높이를 `90svh`로 고정해 게시물마다 크기가 출렁이지 않게 한다. */
 const DETAIL_DIALOG_CLASS =
   "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-2xl";
 
@@ -82,13 +76,7 @@ function isTouchPrimaryViewport() {
   return window.matchMedia(TOUCH_PRIMARY_QUERY).matches;
 }
 
-/**
- * 그룹 게시물과 개인 게시물 상세가 공유하는 껍데기.
- *
- * 두 상세가 다른 것은 본문 영역뿐이다 — 댓글 목록, 답글, 입력창, 스크롤 컨테이너와 모달
- * 프레이밍은 같다. 액션 바까지 여기서 그리는 이유는 그것이 방금 쓴 댓글을 더한 개수와 입력창
- * 포커스를 필요로 하는데, 둘 다 이 컴포넌트만 알고 있기 때문이다.
- */
+/** 그룹·개인 게시물 상세가 공유하는 껍데기. 다른 것은 본문 영역뿐이다. */
 export function PostDetailDialog({
   title,
   postId,
@@ -114,10 +102,7 @@ export function PostDetailDialog({
   postAuthorPubId?: string | null;
   error?: string | null;
   onClose: () => void;
-  /**
-   * 본문 아래 액션 바. 댓글 수는 서버가 준 값만 넘기면 된다 — 댓글 생성·삭제 RPC가 돌려준
-   * 정본 수를 `usePostComments`가 화면과 engagement overlay에 얹는다.
-   */
+  /** 본문 아래 액션 바. 댓글 수는 서버 값만 넘기면 `usePostComments`가 정본 수를 얹는다. */
   actionBar: {
     reaction: ReactionSummary;
     sharePath: string;
@@ -127,20 +112,11 @@ export function PostDetailDialog({
   /** 게시물 본문 영역. 종류마다 다른 유일한 부분이다. */
   children: ReactNode;
   anonymousActivityRestriction?: AnonymousActivityRestriction | null;
-  /**
-   * 댓글에서 멘션할 수 있는 그룹. 개인 게시물의 댓글에는 멘션을 두지 않으므로(기능 명세
-   * §8.14) 프로필 쪽 상세는 넘기지 않고, 그러면 버튼이 그려지지 않는다.
-   */
+  /** 댓글에서 멘션할 수 있는 그룹. 개인 게시물 상세는 넘기지 않아 버튼이 없다(기능 명세 §8.14). */
   mentionGroupId?: string | null;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  /**
-   * 스크롤 영역은 ref로도 잡고 상태로도 잡는다.
-   *
-   * 모달 본문은 포털이 나중에 붙여서, 이 컴포넌트의 첫 effect가 도는 시점에는 ref가 아직
-   * 비어 있다. 손짓 리스너를 거기에 걸려면 노드가 생겼다는 사실이 effect를 다시 돌게 해야
-   * 한다 — ref만으로는 아무 일도 일어나지 않는다.
-   */
+  /** 스크롤 영역은 ref와 상태로 함께 잡는다. 포털이 늦게 붙어 첫 effect에는 ref가 비어 있다. */
   const [listElement, setListElement] = useState<HTMLDivElement | null>(null);
   const attachList = useCallback((node: HTMLDivElement | null) => {
     scrollRef.current = node;
@@ -165,12 +141,7 @@ export function PostDetailDialog({
     isTouchPrimaryViewport,
     getServerTabletSheetViewport,
   );
-  /**
-   * 바텀 시트로 그릴 것인가.
-   *
-   * 뷰포트만으로 정하면 안 된다 — 게시물을 열었을 뿐인데 본문이 숨겨진 댓글 서랍이 뜬다.
-   * 댓글만 보러 들어왔다는 의도(`?view=comments`)가 함께 있어야 한다.
-   */
+  /** 바텀 시트로 그릴 것인가. 뷰포트만이 아니라 댓글만 보려는 의도(`?view=comments`)도 있어야 한다. */
   const commentSheet = commentsOnly && sheetViewport;
   const keyboardViewport = useKeyboardViewport(sheetViewport);
   const mobileDetailKeyboardOpen =
@@ -282,17 +253,8 @@ export function PostDetailDialog({
   };
 
   /**
-   * 댓글 목록을 맨 위까지 올린 뒤 이어서 아래로 당겨도 시트를 닫는다.
-   *
-   * 머리글만 끌 수 있으면, 댓글을 다 읽고 목록을 끝까지 올린 사람이 닫으려고 손가락을
-   * 위로 다시 가져가야 한다. 이어서 당기는 쪽이 자연스럽다.
-   *
-   * 포인터 이벤트로는 안 된다. 스크롤 영역 위의 세로 손짓은 브라우저가 스크롤로 가져가면서
-   * `pointercancel`로 끊어 버려서, 머리글에서 쓰는 핸들러를 그대로 붙여도 아무 일도 일어나지
-   * 않는다. `touchmove`를 passive가 아닌 채로 듣고 직접 `preventDefault`를 불러야 손짓이
-   * 우리에게 남는다 — 목록 맨 위에서 아래로 당기기라는 같은 문제를 푸는 `PullToRefresh`가
-   * 같은 이유로 같은 방식을 쓴다. 덤으로 `preventDefault`는 뒤따르는 클릭까지 막아 주므로,
-   * 링크나 버튼 위에서 당기기 시작해도 닫히면서 그쪽으로 넘어가지 않는다.
+   * 목록 맨 위에서 이어 아래로 당겨도 시트를 닫는다. 포인터 이벤트는 브라우저가 스크롤로 가져가 `pointercancel`로 끊기므로
+   * passive 아닌 `touchmove`에서 `preventDefault`한다(`PullToRefresh`와 같다).
    */
   const closeSheet = useEffectEvent(onClose);
 
@@ -491,17 +453,7 @@ export function PostDetailDialog({
           />
         ) : null}
         <CommentComposer
-          /**
-           * 입력창이 시트의 맨 밑이고 시트는 뷰포트 맨 밑에 붙는다. 홈 인디케이터가 있는
-           * 기기에서는 전송 버튼이 그 제스처 띠에 겹쳐, 잘려 보이는 것은 물론 탭도 OS가
-           * 가져간다.
-           *
-           * 키보드가 올라와 있으면 주지 않는다. 그때 입력창 아래는 인디케이터가 아니라
-           * 키보드이고(시트의 `bottom`이 그만큼 올라가 있다), 여백을 얹으면 입력창과
-           * 키보드 사이가 벌어진다. iOS Safari는 키보드가 떠 있어도
-           * `env(safe-area-inset-bottom)`을 0으로 내려 주지 않으므로 CSS만으로는 갈라낼
-           * 수 없고, 우리가 재 둔 `bottomInset`으로 판단한다.
-           */
+          /** 키보드가 없을 때만 홈 인디케이터 여백을 준다. iOS Safari는 키보드가 떠도 `env(safe-area-inset-bottom)`이 0이 아니라 `bottomInset`으로 판단한다. */
           className={cn(
             "border-t p-3",
             keyboardViewport.bottomInset === 0 &&

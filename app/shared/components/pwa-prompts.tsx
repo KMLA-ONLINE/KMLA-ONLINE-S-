@@ -58,7 +58,7 @@ export function PwaPrompts() {
             aria-hidden
             className="size-4 shrink-0 text-muted-foreground"
           />
-          {/* 오프라인 큐가 없다. 쓴 글이 나중에 올라간다는 뜻으로 읽힐 말은 넣지 않는다. */}
+          {/* 오프라인 큐가 없으니 나중에 올라간다는 뜻으로 읽힐 말은 넣지 않는다. */}
           <p className="flex-1 text-sm">인터넷에 연결되어 있지 않아요.</p>
         </div>
       )}

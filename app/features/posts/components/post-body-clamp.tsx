@@ -4,23 +4,10 @@ import { flushSync } from "react-dom";
 import { useScrollContainer } from "~/shared/lib/scroll-container";
 import { cn } from "~/shared/lib/utils";
 
-/**
- * 접힌 본문의 최대 높이. `line-clamp`를 쓰지 않는 이유는 본문이 여러 블록(문단, 제목)으로
- * 이루어져 있어서다 — `-webkit-line-clamp`는 한 덩어리의 인라인 흐름만 자르므로 문단이
- * 두 개면 첫 문단만 잘리고 나머지는 그대로 나온다.
- *
- * 값은 `.post-typography`의 줄 높이에 묶여 있다(24px × 3줄). 본문 크기를 바꾸면 여기도
- * 같이 바꿔야 한다 — 안 그러면 마지막 줄이 반쯤 잘려 보인다.
- */
+/** 접힌 본문 최대 높이(24px × 3줄, `.post-typography` 줄 높이에 묶임). 본문이 여러 블록이라 `line-clamp`를 쓰지 않는다. */
 const COLLAPSED_BODY_CLASS = "max-h-[72px] overflow-hidden";
 
-/**
- * 긴 본문을 읽다가 접으면 줄어든 만큼 아래 글이 딸려 올라와, 읽던 글이 아니라 다음 글이
- * 보인다. 카드 머리가 화면 위로 벗어나 있을 때만 머리가 보이는 자리로 되돌린다.
- *
- * 모바일 sticky 헤더는 화면마다 높이가 달라 스크롤 영역 안의 것을 그때 잰다. 데스크톱은
- * `md:hidden`이라 0이 된다. 대략 머리 언저리면 충분하므로 더 엄밀히 맞추지 않는다.
- */
+/** 접을 때 카드 머리가 화면 위로 벗어나 있으면 머리가 보이는 자리로 되돌린다. 모바일 sticky 헤더 높이는 그때 잰다. */
 function revealCardHead(body: HTMLElement, container: HTMLElement) {
   const card = body.closest("article") ?? body;
   const stickyHeader = container.querySelector<HTMLElement>("header.sticky");
@@ -30,12 +17,7 @@ function revealCardHead(body: HTMLElement, container: HTMLElement) {
   if (overshoot < 0) container.scrollTop += overshoot;
 }
 
-/**
- * 피드 카드의 본문 접기. 그룹 카드와 프로필 타임라인 카드가 함께 쓴다.
- *
- * 실제로 잘렸을 때만 "더 보기"를 그린다. 글자 수로 어림잡으면 폭이 넓은 화면에서 잘리지도
- * 않은 본문에 버튼이 붙는다.
- */
+/** 피드 카드의 본문 접기. 실제로 잘렸을 때만 "더 보기"를 그린다. */
 export function PostBodyClamp({
   testId,
   children,
@@ -69,8 +51,7 @@ export function PostBodyClamp({
 
   return (
     <>
-      {/* 터치에서 본문을 탭해 펼치는 것은 포인터 전용 편의다. 키보드와 낭독기는 바로 아래
-          "더 보기" 버튼을 쓰므로 여기에 role을 얹지 않는다. */}
+      {/* 탭으로 펼치기는 포인터 전용 편의다. 키보드·낭독기는 아래 "더 보기" 버튼을 쓴다. */}
       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
       <div
         data-testid={testId}

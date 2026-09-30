@@ -35,15 +35,7 @@ import {
 import { useModalClose } from "~/shared/hooks/use-modal-close";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 
-/**
- * 개인 게시물 작성·수정 화면.
- *
- * 그룹 편집기와 같은 전체화면 껍데기, 같은 본문 입력기, 같은 첨부 편집기를 쓴다. 입력 항목만
- * 다르다 — 제목·카테고리·작성 신원이 없고 공개 범위가 그 자리에 온다.
- *
- * 공개 범위는 자기 타임라인 글에서만 고를 수 있다. 남의 타임라인에 쓴 글은 언제나 전체
- * 공개이므로 고르게 두면 지킬 수 없는 약속이 된다 — 서버도 같은 이유로 되돌린다.
- */
+/** 개인 게시물 작성·수정 화면. 공개 범위는 자기 타임라인에서만 고른다 — 남의 타임라인 글은 언제나 전체 공개다. */
 export function ProfilePostEditor({
   mode,
   timelinePubId,

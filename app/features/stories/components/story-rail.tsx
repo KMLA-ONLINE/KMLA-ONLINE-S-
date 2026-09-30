@@ -100,7 +100,6 @@ export function StoryRail({
                     {item.name}
                   </span>
 
-                  {/* 두 줄까지만 보여 주고, 넘치는 내용은 눌러서 전문을 본다. */}
                   <span className="mt-0.5 line-clamp-2 w-full text-center text-[11px] leading-4 [overflow-wrap:anywhere] break-keep text-muted-foreground">
                     {item.content}
                   </span>

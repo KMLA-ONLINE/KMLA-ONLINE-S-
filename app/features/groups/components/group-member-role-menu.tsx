@@ -41,16 +41,14 @@ export function MemberRoleMenu({
   // 쉬운데, 관리자 승격은 이후 소유자만 되돌릴 수 있다.
   const [pendingRole, setPendingRole] = useState<GroupMemberRole | null>(null);
   const pending = fetcher.state !== "idle";
-  // 관리자는 새 매니저와 새 관리자를 세울 수 있지만 이미 관리자인 사람은 건드리지 못한다.
-  // 관리자끼리 서로 강등할 수 있으면 둘이 번갈아 내리는 상황을 그룹이 스스로 정리하지 못한다.
-  // 소유자의 역할은 소유권 이전으로만 바뀐다. 매니저 이하는 아무 역할도 바꾸지 못한다.
+  // 관리자는 새 매니저·관리자를 세우지만 기존 관리자는 못 건드린다(서로 강등하면 그룹이 정리하지 못한다).
+  // 소유자의 역할은 소유권 이전으로만 바뀌고, 매니저 이하는 아무 역할도 못 바꾼다.
   const canSetRole =
     member.role !== "owner" &&
     (viewerRole === "owner" ||
       (viewerRole === "admin" && member.role !== "admin"));
   const canTransfer = viewerRole === "owner" && member.role === "admin";
-  // 관리자를 세우는 것도 소유자만 한다. 관리자가 관리자를 만들 수 있으면 늘리는 것은 아무나,
-  // 줄이는 것은 소유자만 할 수 있어서 관리자 수가 한 방향으로만 늘어난다.
+  // 관리자를 세우는 것도 소유자만 한다. 관리자가 만들 수 있으면 관리자 수가 한 방향으로만 늘어난다.
   const assignableRoles = ASSIGNABLE_ROLES.filter(
     (role) => role !== "admin" || viewerRole === "owner",
   );

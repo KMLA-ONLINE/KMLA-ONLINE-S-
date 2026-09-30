@@ -14,16 +14,7 @@ import { UserAvatar } from "~/shared/components/user-avatar";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 
-/**
- * 신고 탭 카드.
- *
- * 헤더에는 판단 근거(총 신고 수, 사유별 집계, 최근 신고 시각)를, 그 아래 인용 블록에는
- * 판단 대상인 게시물을 둔다. 두 층을 시각적으로 분리해야 운영진이 "왜 올라왔는지"와
- * "무엇을 지우는지"를 헷갈리지 않는다.
- *
- * `report_count`는 마지막 무시 이후에 들어온 신고만 센다. 그 전에 무시한 신고가 있으면
- * `dismissed_count`로 함께 표시해 이미 한 번 판단한 게시물이라는 사실을 남긴다.
- */
+/** 신고 탭 카드. 헤더는 판단 근거, 인용 블록은 판단 대상이라 시각적으로 나눈다. */
 export function GroupPostReportCard({
   report,
   groupId,

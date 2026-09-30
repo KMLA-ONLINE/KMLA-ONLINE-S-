@@ -20,14 +20,8 @@ import {
 import { Spinner } from "~/shared/ui/spinner";
 
 /**
- * 정리 상태를 화면에 올리는 이유는 통계가 아니라 침묵을 막기 위해서다. 예전 정리 작업은 Vault
- * 시크릿이 없으면 아무 일도 하지 않고 성공으로 기록해서, 한 번도 돌지 않았다는 사실을 어디에서도
- * 확인할 수 없었다. `secrets_configured`와 마지막 실행 결과를 나란히 두는 것이 이 화면의 본체다.
- *
- * 숫자는 스스로를 설명하지 못한다. `removed`가 게시물이 아니라 Storage 파일 수라는 것, `retrying`이
- * `pending`의 부분집합이라는 것, 그 값들이 마지막 실행 한 번의 결과라는 것은 전부 RPC를 읽어야만
- * 알 수 있었다. 라벨과 보조 설명이 그 셋을 화면에서 직접 말하고, 맨 위 판정이 "지금 괜찮은가"에
- * 한 줄로 답한다.
+ * 정리 상태를 화면에 올리는 이유는 통계가 아니라 침묵을 막기 위해서다. 예전 정리 작업은 Vault 시크릿이 없으면 아무것도 안 하고 성공으로 기록했다.
+ * `secrets_configured`와 마지막 실행 결과를 나란히 두고, 라벨·보조 설명이 각 숫자의 뜻을, 맨 위 판정이 "지금 괜찮은가"를 답한다.
  */
 export function StorageCleanupScreen({
   status,
@@ -77,11 +71,7 @@ export function StorageCleanupScreen({
         </div>
       </div>
 
-      {/*
-        새로고침으로 판정이 뒤집히는 순간이 이 화면에서 가장 중요한 사건이다. 영역이 마운트 때부터
-        있고 안의 글자만 바뀌므로 낭독이 실제로 걸린다. `role="alert"`을 쓰지 않는 것은 판정이
-        읽던 문장을 끊을 만큼 급하지는 않기 때문이다.
-      */}
+      {/* 판정이 뒤집히는 순간을 낭독하려고 영역을 마운트 때부터 둔다. `role="alert"`는 과해서 쓰지 않는다. */}
       <Card className="rounded-none md:rounded-xl" aria-live="polite">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -218,9 +208,7 @@ function summarize(status: StorageCleanupStatus): {
     };
   }
 
-  // 실행 기록 유무를 먼저 가른다. 돌지 않은 실행은 실패할 수도 없다. RPC의 `left join`이
-  // `last_run_*`을 한 덩어리로 채우거나 비우므로 오늘은 어느 순서든 같은 답이 나오지만, 그
-  // 불변식은 DB 쪽에 있다. `LastRunBadge`와 같은 순서로 묻어 두 판정이 구조적으로 어긋나지 않게 한다.
+  // 실행 기록 유무를 먼저 가른다. 돌지 않은 실행은 실패할 수도 없다. `LastRunBadge`와 같은 순서로 물어 두 판정이 어긋나지 않게 한다.
   if (status.last_run_started_at === null) {
     return status.queue_pending > 0
       ? {

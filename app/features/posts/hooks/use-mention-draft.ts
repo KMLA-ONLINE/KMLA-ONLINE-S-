@@ -12,13 +12,8 @@ import {
 } from "~/features/posts/model/mentions";
 
 /**
- * 작성 중인 멘션 대상(기능 명세 §8.14).
- *
- * 고른 사람은 번호를 올려 가며 쌓아 두고, 본문에 실제로 남은 토큰만 제출 직전
- * `normalizeMentions()`가 추려 1부터 다시 매긴다. 그래서 사용자가 본문에서 토큰을 지워도 여기서
- * 따로 지울 필요가 없다 — 본문이 정본이고 이 목록은 번호를 푸는 표다.
- *
- * 같은 사람을 다시 고르면 쓰던 번호를 돌려준다. 그래야 "최대 50명"이 사람 수와 맞는다.
+ * 작성 중인 멘션 대상(기능 명세 §8.14). 번호를 올려 가며 쌓고 제출 직전 `normalizeMentions()`가 남은 토큰만 1부터 다시 매기므로,
+ * 본문에서 토큰을 지워도 따로 지울 필요가 없다. 같은 사람은 쓰던 번호를 돌려준다.
  */
 export function useMentionDraft(initial: PostMention[] = []) {
   const [entries, setEntries] = useState<MentionDraftEntry[]>(() =>

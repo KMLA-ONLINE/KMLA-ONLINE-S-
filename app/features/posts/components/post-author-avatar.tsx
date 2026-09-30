@@ -4,12 +4,7 @@ import type { PostIdentity } from "~/features/posts/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { Avatar, AvatarFallback } from "~/shared/ui/avatar";
 
-/**
- * 게시물 작성 신원에 맞는 아바타.
- *
- * 익명만 별도 아바타를 쓴다. 운영진 명의 게시물은 실제 작성자의 프로필을 표시하고
- * 이름 옆 배지로 운영진 명의임을 구분한다.
- */
+/** 게시물 작성 신원에 맞는 아바타. 익명만 별도 아바타이고, 운영진 명의는 실제 작성자 프로필에 배지를 붙인다. */
 export function PostAuthorAvatar({
   identity,
   name,
@@ -19,10 +14,7 @@ export function PostAuthorAvatar({
 }: {
   identity: PostIdentity;
   name: string | null;
-  /**
-   * 서명된 Storage URL이어야 한다. 원시 object path를 넘기면 `<img src>`가 상대 경로로
-   * 나가 404를 받고, 아바타가 통째로 기본 실루엣이 된다.
-   */
+  /** 서명된 Storage URL이어야 한다. 원시 path는 상대 경로로 나가 404가 된다. */
   avatarUrl: string | null;
   size?: "sm" | "default" | "lg";
   className?: string;
@@ -61,12 +53,7 @@ export function PostAnonymousAvatar({
   );
 }
 
-/**
- * 운영진 명의로 **작성하는 중**임을 알리는 아바타.
- *
- * 이미 올라간 운영진 명의 글과 댓글은 실제 작성자의 사진과 이름을 그대로 보여준다(기능 명세
- * §8.6). 이 방패는 입력창에서 "지금 고른 명의가 운영진"이라는 표시로만 쓴다.
- */
+/** 운영진 명의로 **작성하는 중**임을 알리는 입력창 전용 아바타(기능 명세 §8.6). 올라간 글·댓글은 실제 작성자를 보여준다. */
 export function PostStaffAvatar({
   size = "default",
   className,

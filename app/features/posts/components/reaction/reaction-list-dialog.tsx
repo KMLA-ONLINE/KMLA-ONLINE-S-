@@ -42,13 +42,7 @@ function ReactionTab({
   );
 }
 
-/**
- * 게시물 반응 참여자 목록.
- *
- * 반응자는 최근 반응순으로 한 줄씩 보여준다.
- *
- * 데스크톱은 가운데 모달, 모바일은 풀스크린이다(상세·작성 모달과 같은 패턴).
- */
+/** 게시물 반응 참여자 목록. 데스크톱은 가운데 모달, 모바일은 풀스크린이다. */
 export function ReactionListDialog({
   open,
   onOpenChange,
@@ -99,7 +93,7 @@ export function ReactionListDialog({
         showCloseButton={false}
         className="flex h-[70svh] flex-col gap-0 overflow-hidden p-0 max-sm:top-0 max-sm:left-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 sm:max-w-md"
       >
-        {/* 제목과 설명은 스크린리더용이다. 화면에서 헤더 역할은 아래 탭 줄이 한다. */}
+        {/* 화면의 헤더는 아래 탭 줄이라 제목·설명은 스크린리더용이다. */}
         <DialogTitle className="sr-only">{title}</DialogTitle>
         <DialogDescription className="sr-only">
           반응 종류와 공개된 반응자 목록

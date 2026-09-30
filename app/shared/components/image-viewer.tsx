@@ -1064,12 +1064,7 @@ export function ImageViewer({
       onOpenChange={(open) => !open && onClose()}
     >
       <Dialog.Portal>
-        {/* `forceRender`가 없으면 백드롭이 아예 그려지지 않는다 — Base UI는 중첩된 dialog의
-            백드롭을 기본적으로 건너뛴다(부모 것이 이미 깔려 있다고 보기 때문에). 이 뷰어는
-            게시물 상세 안에서도 열리는데, 거기서는 부모의 옅은 백드롭만 남아 흰 배경에 흰
-            글씨가 되고 사진 뒤로 모달이 비친다. 사진을 보는 화면은 항상 자기 배경을 가져야 한다.
-
-            아래 dialog도 `z-50`이라 같은 층에서 DOM 순서에 기대지 않도록 한 단 올린다. */}
+        {/* `forceRender` 없이는 Base UI가 중첩 dialog의 백드롭을 건너뛰어, 게시물 상세 안에서 옅은 부모 백드롭만 남는다. 아래 dialog도 `z-50`이라 한 단 올린다. */}
         <Dialog.Backdrop
           forceRender
           className="fixed inset-0 z-60 bg-black/95 duration-150 data-open:animate-in data-open:fade-in-0"
@@ -1093,7 +1088,7 @@ export function ImageViewer({
               isChromeCollapsed && "sm:hidden",
             )}
           >
-            {/* 파일 이름은 화면에 띄우지 않는다. 스크린리더용 제목과 저장 파일명에는 그대로 쓴다. */}
+            {/* 파일 이름은 화면에 띄우지 않고 스크린리더 제목과 저장 파일명에만 쓴다. */}
             <div className="min-w-0 flex-1 px-2">
               {images.length > 1 ? (
                 <p className="text-sm text-white/70">
@@ -1197,7 +1192,7 @@ export function ImageViewer({
             ) : null}
           </div>
 
-          {/* 자리를 비울 때는 언마운트한다. 다시 나타나며 마운트될 때 현재 썸네일로 스크롤한다. */}
+          {/* 숨길 때 언마운트해, 다시 마운트되며 현재 썸네일로 스크롤한다. */}
           {isChromeCollapsed ? null : images.length > 1 ? (
             <Filmstrip
               images={images}

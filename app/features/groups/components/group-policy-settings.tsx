@@ -28,10 +28,7 @@ import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 
 type PolicyKind = Exclude<SettingsSection, "basic">;
 
-/**
- * 지금 값에서 `next`로 넘어갈 수 있는지. 서버(`update_group_settings`)가 55000으로 막는 전환을
- * 화면에서도 고를 수 없게 한다 — 저장을 눌러야 실패를 알게 되는 선택지를 남기지 않는다.
- */
+/** `next`로 넘어갈 수 있는지. 서버(`update_group_settings`)가 55000으로 막는 전환은 화면에서도 고르지 못하게 한다. */
 function allowsPolicyChange(
   group: GroupDetail,
   kind: PolicyKind,
