@@ -10,6 +10,7 @@ import {
 
 import type { Route } from "./+types/root";
 import { ErrorPage } from "~/shared/components/error-page";
+import { Spinner } from "~/shared/ui/spinner";
 import { PwaPrompts } from "~/shared/components/pwa-prompts";
 import { QueryProvider } from "~/shared/components/query-provider";
 import { ThemeColor } from "~/shared/components/theme-color";
@@ -137,10 +138,38 @@ export default function App() {
  *
  * 스피너가 아니라 골격을 그리는 이유: 첫 페인트에서 화면 구조가 자리를 잡고 있으면 데이터가
  * 도착할 때 레이아웃이 튀지 않는다. 어차피 정적으로 프리렌더되는 유일한 부분이기도 하다.
+ *
+ * 설치된 PWA에서는 골격 대신 로고를 그린다. OS 스플래시는 첫 페인트에 걷히므로, 그 자리에
+ * 같은 로고를 이어 그려야 JS를 받는 동안 빈 골격이 보이지 않는다. 일부러 붙잡지는 않는다 —
+ * 앱이 준비되는 순간 사라지고, 길어질 때만 스피너가 늦게 나타나 멈춘 화면처럼 보이지 않게 한다.
  */
 export function HydrateFallback() {
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background">
+    <>
+      {/* 로고는 OS 스플래시처럼 정중앙에 둔다. 스피너가 흐름에 끼면 로고가 위로 밀려 넘어갈 때 튄다. */}
+      <div className="hidden h-dvh items-center justify-center bg-background [@media(display-mode:standalone)]:flex">
+        <div className="relative">
+          <img
+            src="/logo.svg"
+            alt="KMLA Online"
+            width={112}
+            height={112}
+            fetchPriority="high"
+            className="size-28"
+          />
+          <span className="absolute top-full left-1/2 mt-8 -translate-x-1/2 animate-splash-hint">
+            <Spinner className="size-5 text-muted-foreground motion-reduce:animate-none" />
+          </span>
+        </div>
+      </div>
+      <ShellSkeleton />
+    </>
+  );
+}
+
+function ShellSkeleton() {
+  return (
+    <div className="flex h-dvh flex-col overflow-hidden bg-background [@media(display-mode:standalone)]:hidden">
       <div className="h-[var(--app-header-h)] shrink-0 border-b max-md:hidden" />
       <div className="flex min-h-0 flex-1">
         <div className="w-[var(--app-rail-w)] shrink-0 border-r max-md:hidden" />
