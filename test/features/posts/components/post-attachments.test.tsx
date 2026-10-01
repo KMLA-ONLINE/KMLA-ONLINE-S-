@@ -204,7 +204,7 @@ describe("PostImageGrid", () => {
 
     await user.click(screen.getByRole("button", { name: /원본 사진.webp/ }));
 
-    const download = screen.getByRole("link", { name: "다운로드" });
+    const download = await screen.findByRole("link", { name: "다운로드" });
     expect(download).toHaveAttribute(
       "href",
       "https://example.com/file?download=image-uuid.webp",
