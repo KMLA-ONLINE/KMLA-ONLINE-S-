@@ -2,6 +2,9 @@
   "name": "kmlaonlinev2",
   "private": true,
   "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
   "engines": {
     "node": ">=22.22.0",
     "npm": ">=11"
