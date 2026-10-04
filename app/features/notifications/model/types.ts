@@ -50,6 +50,14 @@ export interface GroupNotificationPreference {
   newPostPushEnabled: boolean;
 }
 
+/** 차단한 알림 권한을 되돌리는 설정이 있는 곳. 기기와 설치 여부마다 다르다. */
+export type PermissionHelpPlatform =
+  | "ios-app"
+  | "android-app"
+  | "android-browser"
+  | "desktop-app"
+  | "desktop-browser";
+
 export type PushSupport =
   | { state: "unsupported" }
   | { state: "unconfigured" }

@@ -7,7 +7,11 @@ import { renderRoute } from "../../../router";
 const mocks = vi.hoisted(() => ({
   disableWebPush: vi.fn(),
   enableWebPush: vi.fn(),
+  getPermissionHelpPlatform: vi.fn(() => "android-app"),
   getPushSupport: vi.fn(),
+  watchNotificationPermission: vi.fn(
+    (_onChange: () => void) => () => undefined,
+  ),
 }));
 
 vi.mock("~/features/notifications/data/push", () => mocks);
@@ -21,6 +25,54 @@ const preferences = {
 };
 
 describe("NotificationSettings", () => {
+  it("guides a blocked device and restores the switch once allowed", async () => {
+    let notifyChange: (() => void) | null = null;
+    mocks.watchNotificationPermission.mockImplementation(
+      (onChange: () => void) => {
+        notifyChange = onChange;
+        return () => undefined;
+      },
+    );
+    mocks.getPushSupport.mockResolvedValue({
+      state: "available",
+      permission: "default",
+      subscribed: false,
+    });
+
+    renderRoute(() => (
+      <NotificationSettings
+        initialPreferences={preferences}
+        initialPushSupport={{
+          state: "available",
+          permission: "denied",
+          subscribed: false,
+        }}
+        groupPreferences={[]}
+      />
+    ));
+
+    expect(
+      screen.getByText(
+        "홈 화면의 앱 아이콘을 길게 눌러 앱 정보 → 알림에서 허용해 주세요.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("switch", { name: "이 기기의 Web Push" }),
+    ).not.toBeInTheDocument();
+
+    await act(async () => {
+      notifyChange?.();
+      await Promise.resolve();
+    });
+
+    expect(
+      await screen.findByRole("switch", { name: "이 기기의 Web Push" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/앱 정보 → 알림에서 허용해 주세요/),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows progress while enabling Web Push", async () => {
     let finishEnable:
       | ((value: {

@@ -9,7 +9,7 @@ import {
   UsersIcon,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { useFetcher, useFetchers } from "react-router";
 import { toast } from "sonner";
 
@@ -18,13 +18,16 @@ import { GroupNotificationFields } from "~/features/notifications/components/gro
 import {
   disableWebPush,
   enableWebPush,
+  getPermissionHelpPlatform,
   getPushSupport,
+  watchNotificationPermission,
 } from "~/features/notifications/data/push";
 import { isDefaultGroupNotificationPreference } from "~/features/notifications/model/notifications";
 import type {
   GroupNotificationLevel,
   GroupNotificationPreference,
   NotificationPreferences,
+  PermissionHelpPlatform,
   PushSupport,
 } from "~/features/notifications/model/types";
 import { Badge } from "~/shared/ui/badge";
@@ -70,6 +73,18 @@ const PREFERENCE_ROWS = [
   string,
 ])[];
 
+/** 웹은 브라우저·OS 설정 화면을 직접 열 수 없어, 차단을 풀 경로를 기기에 맞춰 글로 안내한다. */
+const PERMISSION_HELP: Record<PermissionHelpPlatform, string> = {
+  "android-browser":
+    "주소창 왼쪽 아이콘을 눌러 권한 → 알림을 허용으로 바꿔 주세요.",
+  "android-app":
+    "홈 화면의 앱 아이콘을 길게 눌러 앱 정보 → 알림에서 허용해 주세요.",
+  "ios-app": "설정 앱 → 알림 → KMLA Online에서 알림 허용을 켜 주세요.",
+  "desktop-browser":
+    "주소창 왼쪽 아이콘을 눌러 사이트 설정에서 알림을 허용으로 바꿔 주세요.",
+  "desktop-app": "창 오른쪽 위 ⋮ 메뉴 → 앱 정보에서 알림을 허용해 주세요.",
+};
+
 type PushTone = "on" | "off" | "blocked";
 interface SettingsActionResult {
   saved?: boolean;
@@ -114,8 +129,7 @@ function describePush(
         return {
           label: "차단됨",
           tone: "blocked",
-          message:
-            "브라우저에서 알림이 차단되어 있습니다. 브라우저 사이트 설정에서 허용해 주세요.",
+          message: "이 기기에서 알림이 차단되어 있습니다.",
         };
       }
       return support.subscribed
@@ -359,6 +373,19 @@ export function NotificationSettings({
 
   const pushEnabled =
     pushSupport.state === "available" && pushSupport.subscribed;
+  const pushBlocked =
+    pushSupport.state === "available" && pushSupport.permission === "denied";
+
+  const recheckPush = useEffectEvent(async () => {
+    const value = await getPushSupport();
+    setPushState({ source: initialPushSupport, value });
+  });
+
+  // 차단은 앱에서 풀 수 없다. 사용자가 설정에서 풀고 돌아오면 새로고침 없이 스위치를 되살린다.
+  useEffect(() => {
+    if (!pushBlocked) return;
+    return watchNotificationPermission(() => void recheckPush());
+  }, [pushBlocked]);
   const preferencePending = activeFetchers.some(
     (item) =>
       item.state !== "idle" &&
@@ -440,6 +467,15 @@ export function NotificationSettings({
               {summary.detail}
             </p>
           </div>
+
+          {pushBlocked ? (
+            <div className="border-t bg-muted/30 px-4 py-3 text-sm">
+              <p>{PERMISSION_HELP[getPermissionHelpPlatform()]}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                허용한 뒤 이 화면으로 돌아오면 자동으로 다시 확인합니다.
+              </p>
+            </div>
+          ) : null}
 
           {pushSupport.state === "ios-browser" ? (
             <div className="flex gap-2 border-t bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
