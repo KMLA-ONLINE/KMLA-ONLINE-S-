@@ -1,4 +1,4 @@
-import { act, fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -202,6 +202,12 @@ describe("ImageViewer", () => {
     await user.click(
       screen.getByRole("menuitem", { name: "모든 사진 다운로드 (3장)" }),
     );
+    // 한 번 더 묻고, 확인해야 내려받는다.
+    const confirm = await screen.findByRole("dialog", {
+      name: "모든 사진을 다운로드할까요?",
+    });
+    expect(append).not.toHaveBeenCalled();
+    await user.click(within(confirm).getByRole("button", { name: "다운로드" }));
     await vi.waitFor(
       () => {
         const sources = append.mock.calls.map(
@@ -211,6 +217,29 @@ describe("ImageViewer", () => {
       },
       { timeout: 2000 },
     );
+  });
+
+  it("downloads nothing when the download-all confirmation is cancelled", async () => {
+    const { user } = renderViewer("b", makeImages(), { downloadAll: true });
+    const append = vi
+      .spyOn(document.body, "append")
+      .mockImplementation(() => undefined);
+
+    await user.click(screen.getByRole("button", { name: "다운로드" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "모든 사진 다운로드 (3장)" }),
+    );
+    const confirm = await screen.findByRole("dialog", {
+      name: "모든 사진을 다운로드할까요?",
+    });
+    await user.click(within(confirm).getByRole("button", { name: "취소" }));
+
+    await vi.waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "모든 사진을 다운로드할까요?" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(append).not.toHaveBeenCalled();
   });
 
   it("closes on the close button", async () => {
@@ -301,7 +330,7 @@ describe("ImageViewer", () => {
       expect(chrome()).not.toHaveAttribute("data-hidden");
     });
 
-    it("enters fullscreen with the chrome hidden and leaves it when shown", () => {
+    it("enters fullscreen once with the chrome hidden and leaves it on close", () => {
       vi.useFakeTimers();
       const root = document.documentElement;
       let fullscreenElement: Element | null = null;
@@ -324,7 +353,7 @@ describe("ImageViewer", () => {
       });
 
       try {
-        renderViewer();
+        const { unmount } = renderViewer();
         tap();
         act(() => {
           vi.advanceTimersByTime(300);
@@ -333,10 +362,18 @@ describe("ImageViewer", () => {
           navigationUI: "hide",
         });
 
-        tap();
-        act(() => {
-          vi.advanceTimersByTime(300);
-        });
+        // 조작부를 다시 보이고 숨겨도 전체화면은 그대로다.
+        for (let i = 0; i < 2; i++) {
+          tap();
+          act(() => {
+            vi.advanceTimersByTime(300);
+          });
+        }
+        expect(chrome()).toHaveAttribute("data-hidden");
+        expect(requestFullscreen).toHaveBeenCalledOnce();
+        expect(exitFullscreen).not.toHaveBeenCalled();
+
+        unmount();
         expect(exitFullscreen).toHaveBeenCalledOnce();
       } finally {
         // 테스트가 붙인 것만 걷어 낸다. jsdom에는 원래 없다.
