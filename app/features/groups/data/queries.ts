@@ -24,6 +24,8 @@ type GroupRow = Database["public"]["Tables"]["groups"]["Row"];
 const GROUP_COLUMNS =
   "id, slug, name, description, kind, join_policy, identity_policy, posting_policy, icon_path, cover_path, member_count" as const;
 const GROUP_DETAIL_COLUMNS = `${GROUP_COLUMNS}, hide_staff_roles` as const;
+/** `create_group`이 비공개 그룹에 붙이는 임의 주소(7바이트 hex). 사용자 지정 주소는 15자까지라 겹칠 수 있다. */
+const GENERATED_SLUG_PATTERN = /^[0-9a-f]{14}$/;
 
 interface MembershipWithGroup {
   role: GroupMemberRole;
@@ -176,28 +178,34 @@ export async function loadGroupDetail(
   slug: string,
 ): Promise<GroupDetail | null> {
   const supabase = getSupabase();
-  const [groupResult, membershipResult, requestResult] = await Promise.all([
-    supabase
-      .from("groups")
-      .select(GROUP_DETAIL_COLUMNS)
-      .eq("slug", slug)
-      .maybeSingle(),
-    supabase
-      .from("group_memberships")
-      .select("role, pinned_at, groups!inner(slug)")
-      .eq("groups.slug", slug)
-      .maybeSingle(),
-    supabase
-      .from("group_join_requests")
-      .select("requested_at, groups!inner(slug)")
-      .eq("groups.slug", slug)
-      .maybeSingle(),
-  ]);
+  // 미리보기는 그룹 행이 RLS에 가려질 때만 쓰지만, 행 조회를 기다렸다가 부르면 순차 요청이 된다.
+  // 비공개 그룹은 언제나 임의 주소라, 그 모양의 주소에만 처음부터 함께 묻는다.
+  const [groupResult, membershipResult, requestResult, preview] =
+    await Promise.all([
+      supabase
+        .from("groups")
+        .select(GROUP_DETAIL_COLUMNS)
+        .eq("slug", slug)
+        .maybeSingle(),
+      supabase
+        .from("group_memberships")
+        .select("role, pinned_at, groups!inner(slug)")
+        .eq("groups.slug", slug)
+        .maybeSingle(),
+      supabase
+        .from("group_join_requests")
+        .select("requested_at, groups!inner(slug)")
+        .eq("groups.slug", slug)
+        .maybeSingle(),
+      GENERATED_SLUG_PATTERN.test(slug)
+        ? loadGroupLinkPreview(slug)
+        : Promise.resolve(null),
+    ]);
 
   if (groupResult.error) throw groupResult.error;
   if (membershipResult.error) throw membershipResult.error;
   if (requestResult.error) throw requestResult.error;
-  if (!groupResult.data) return loadGroupLinkPreview(slug);
+  if (!groupResult.data) return preview;
 
   const membership = membershipResult.data;
   const request = requestResult.data;

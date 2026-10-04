@@ -25,23 +25,27 @@ const result = spawnSync(
 const created = (await readdir(migrations)).filter(
   (file) => !before.has(file) && file.endsWith(`_${name}.sql`),
 );
+// 실패한 실행도 반쯤 쓴 파일을 남길 수 있다. 무엇이든 읽어 둔 뒤 먼저 지운다.
+const drafts = [];
+for (const file of created) {
+  const target = path.join(migrations, file);
+  drafts.push(await readFile(target, "utf8"));
+  await rm(target);
+}
 
 if (result.status !== 0) {
   process.stderr.write(result.stdout + result.stderr);
   process.exit(result.status ?? 1);
 }
 
-if (created.length === 0) {
+if (drafts.length === 0) {
   console.log("  supabase/schemas와 migrations가 같은 스키마를 만듭니다.");
   process.exit(0);
 }
 
-for (const file of created) {
-  const target = path.join(migrations, file);
-  console.error(`supabase/schemas와 migrations가 어긋났습니다. 차이:\n`);
-  console.error(await readFile(target, "utf8"));
-  await rm(target);
-}
+console.error(`supabase/schemas와 migrations가 어긋났습니다. 차이:
+`);
+for (const draft of drafts) console.error(draft);
 console.error(
   "schemas를 먼저 고쳤다면 `npm run db:diff -- <name>`으로 마이그레이션을 만드세요.",
 );

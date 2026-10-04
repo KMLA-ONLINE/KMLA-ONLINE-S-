@@ -96,7 +96,7 @@ select is(
 );
 
 select is(
-  (select name from public.get_group_link_preview('film-circle')),
+  (select name from public.get_group_link_preview('b41f6d2e8a0c97')),
   '필름 서클',
   'a non-member with the exact address sees the request group preview'
 );
@@ -194,7 +194,7 @@ select is(
 );
 
 select isnt(
-  (select requested_at from public.get_group_link_preview('film-circle')),
+  (select requested_at from public.get_group_link_preview('b41f6d2e8a0c97')),
   null,
   'the link preview reports the pending request'
 );
@@ -636,7 +636,7 @@ select throws_ok(
 );
 
 select is(
-  (select name from public.get_group_link_preview('film-circle')),
+  (select name from public.get_group_link_preview('b41f6d2e8a0c97')),
   '필름 서클',
   'teacher with the address sees the preview without a way to request'
 );

@@ -408,7 +408,7 @@ select lives_ok(
 );
 select is(
   (select slug from public.groups where id = '20000000-0000-0000-0000-000000000004'),
-  'dorm-stories',
+  '3c7e1a9b5d2f40',
   'settings keep the slug immutable'
 );
 select is(

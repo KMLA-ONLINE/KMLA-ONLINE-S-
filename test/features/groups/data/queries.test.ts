@@ -117,4 +117,17 @@ describe("group detail link preview", () => {
       member_role: null,
     });
   });
+
+  it("never asks for a preview of a custom address", async () => {
+    const emptyQuery = {
+      select: () => emptyQuery,
+      eq: () => emptyQuery,
+      maybeSingle: () => Promise.resolve({ data: null, error: null }),
+    };
+    const rpc = vi.fn();
+    getSupabase.mockReturnValue({ from: () => emptyQuery, rpc });
+
+    await expect(loadGroupDetail("film-circle")).resolves.toBeNull();
+    expect(rpc).not.toHaveBeenCalled();
+  });
 });
