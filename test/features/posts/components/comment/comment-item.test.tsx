@@ -165,7 +165,7 @@ describe("CommentItem", () => {
       screen.getByRole("button", { name: "댓글 이미지 크게 보기" }),
     );
 
-    const download = screen.getByRole("link", { name: "다운로드" });
+    const download = await screen.findByRole("link", { name: "다운로드" });
     expect(download).toHaveAttribute(
       "href",
       "https://signed/image.webp?download=image-id.webp",

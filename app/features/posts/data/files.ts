@@ -1,5 +1,3 @@
-import { Upload } from "tus-js-client";
-
 import { env } from "~/shared/lib/env";
 import { createSignedUrls } from "~/shared/supabase/signed-urls";
 import { STORAGE_UPLOAD_CACHE_CONTROL } from "~/shared/supabase/storage";
@@ -27,6 +25,8 @@ async function uploadResumable(
     data: { session },
   } = await getSupabase().auth.getSession();
   if (!session) throw new Error("로그인 세션을 확인할 수 없습니다.");
+  // 6MB를 넘는 파일에서만 쓰므로 피드 첫 로딩 번들에서 뺀다.
+  const { Upload } = await import("tus-js-client");
 
   await new Promise<void>((resolve, reject) => {
     const endpoint = resumableEndpoint();
