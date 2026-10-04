@@ -1,0 +1,78 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  hasErrors,
+  validateEmail,
+  validateOtpCode,
+  validatePassword,
+  validatePasswordConfirm,
+  validateProfileForm,
+} from "~/features/auth/model/validation";
+import type { ProfileFormValues } from "~/features/auth/model/types";
+
+const STUDENT: ProfileFormValues = {
+  name: "홍길동",
+  type: "student",
+  studentNumber: "240001",
+  classNo: "1",
+  cohort: "29",
+  gender: "male",
+  academicTrack: "domestic",
+  phoneNumber: "010-1234-5678",
+  birthday: "2007-01-01",
+  dormRoom: "301",
+};
+
+describe("auth validation", () => {
+  it("validates account credentials", () => {
+    expect(validateEmail("invalid")).toBeDefined();
+    expect(validateEmail("student@kmla.hs.kr")).toBeUndefined();
+    expect(validatePassword("1234567")).toBeDefined();
+    expect(validatePassword("12345678")).toBeUndefined();
+    expect(hasErrors({ email: undefined, password: undefined })).toBe(false);
+  });
+
+  it("requires a matching, non-empty password confirmation", () => {
+    expect(validatePasswordConfirm("12345678", "")).toBeDefined();
+    expect(validatePasswordConfirm("12345678", "1234567")).toBeDefined();
+    expect(validatePasswordConfirm("12345678", "12345678")).toBeUndefined();
+  });
+
+  it("accepts only six digits as an OTP", () => {
+    expect(validateOtpCode("12345")).toBeDefined();
+    expect(validateOtpCode("12345a")).toBeDefined();
+    expect(validateOtpCode("123456")).toBeUndefined();
+  });
+
+  it("accepts a complete student profile", () => {
+    expect(validateProfileForm(STUDENT)).toEqual({});
+  });
+
+  it("requires student academic fields", () => {
+    const errors = validateProfileForm({
+      ...STUDENT,
+      studentNumber: "24A001",
+      academicTrack: "",
+    });
+
+    expect(errors.studentNumber).toMatch(/숫자 6자리/);
+    expect(errors.academicTrack).toBeDefined();
+    expect(hasErrors(errors)).toBe(true);
+  });
+
+  it("does not require academic fields for teachers", () => {
+    const errors = validateProfileForm({
+      ...STUDENT,
+      type: "teacher",
+      studentNumber: "",
+      classNo: "",
+      cohort: "",
+      gender: "",
+      academicTrack: "",
+      birthday: "",
+      dormRoom: "",
+    });
+
+    expect(errors).toEqual({});
+  });
+});

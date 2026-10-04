@@ -1,0 +1,191 @@
+-- Migration unit 1: schema_changes
+-- Transaction mode: transactional
+-- Boundary reason: default
+
+-- 공결·병결 기록을 스토리로 바꾼다. 구분 열을 두지 않고 짧은 글 하나만 남기므로 테이블과
+-- RPC 이름도 story로 맞춘다(기능 명세 §6.6, §17.6).
+--
+-- 테이블은 새로 만들지 않고 이름만 바꾼다. 하루짜리 기록이라도 옮기는 중에 버릴 이유가
+-- 없고, drop/create는 grant와 RLS를 다시 세워야 한다.
+
+SET check_function_bodies = false;
+
+-- plpgsql 본문은 텍스트로 저장되어 테이블 이름을 따라가지 않는다. 새 이름으로 다시 만든다.
+DROP FUNCTION public.set_my_absence(text);
+DROP FUNCTION public.list_today_absences();
+DROP FUNCTION public.delete_my_absence();
+
+ALTER TABLE public.student_absences RENAME TO stories;
+
+ALTER TABLE public.stories RENAME COLUMN reason TO content;
+
+ALTER TABLE public.stories
+  RENAME CONSTRAINT student_absences_reason_length TO stories_content_length;
+
+ALTER TABLE public.stories
+  RENAME CONSTRAINT student_absences_pkey TO stories_pkey;
+
+ALTER TABLE public.stories
+  RENAME CONSTRAINT student_absences_profile_id_fkey TO stories_profile_id_fkey;
+
+ALTER SEQUENCE public.student_absences_id_seq RENAME TO stories_id_seq;
+
+ALTER POLICY student_absences_deny_direct_access
+  ON public.stories
+  RENAME TO stories_deny_direct_access;
+
+REVOKE ALL ON TABLE public.stories FROM PUBLIC, anon, authenticated;
+
+CREATE FUNCTION public.set_my_story(p_content text)
+  RETURNS void
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path TO ''
+  AS $function$
+declare
+  caller_profile_id bigint;
+  normalized_content text := btrim(coalesce(p_content, ''));
+  kst_date date;
+  day_start timestamptz;
+  day_end timestamptz;
+begin
+  if char_length(normalized_content) not between 2 and 100 then
+    raise exception 'content must be between 2 and 100 characters'
+      using errcode = '22023';
+  end if;
+
+  -- 쓰기는 재학생과 교사만 한다. 졸업생은 읽기만 하며, 그중에서도 교사 스토리만 본다
+  -- (기능 명세 §17.6).
+  select profile.id
+  into caller_profile_id
+  from public.profiles as profile
+  where profile.auth_user_id = auth.uid()
+    and profile.status = 'accepted'
+    and profile.deleted_at is null
+    and profile.type in ('student', 'teacher');
+
+  if caller_profile_id is null then
+    raise exception 'student or teacher profile required'
+      using errcode = '42501';
+  end if;
+
+  kst_date := (now() at time zone 'Asia/Seoul')::date;
+  day_start := kst_date::timestamp at time zone 'Asia/Seoul';
+  day_end := (kst_date + 1)::timestamp at time zone 'Asia/Seoul';
+
+  delete from public.stories
+  where profile_id = caller_profile_id
+    and created_at >= day_start
+    and created_at < day_end;
+
+  insert into public.stories (profile_id, content)
+  values (caller_profile_id, normalized_content);
+end;
+$function$;
+
+REVOKE ALL ON FUNCTION public.set_my_story(text) FROM PUBLIC, anon;
+
+GRANT EXECUTE ON FUNCTION public.set_my_story(text) TO authenticated;
+
+CREATE FUNCTION public.list_today_stories()
+  RETURNS TABLE (
+    pub_id      text,
+    name        text,
+    avatar_path text,
+    content     text
+  )
+  LANGUAGE plpgsql
+  STABLE
+  SECURITY DEFINER
+  SET search_path TO ''
+  AS $function$
+declare
+  viewer_type public.profile_type;
+  kst_date date;
+  day_start timestamptz;
+  day_end timestamptz;
+begin
+  select profile.type
+  into viewer_type
+  from public.profiles as profile
+  where profile.auth_user_id = auth.uid()
+    and profile.status = 'accepted'
+    and profile.deleted_at is null;
+
+  if viewer_type is null then
+    return;
+  end if;
+
+  kst_date := (now() at time zone 'Asia/Seoul')::date;
+  day_start := kst_date::timestamp at time zone 'Asia/Seoul';
+  day_end := (kst_date + 1)::timestamp at time zone 'Asia/Seoul';
+
+  return query
+  select
+    author.pub_id,
+    author.name,
+    author.avatar_path,
+    story.content
+  from public.stories as story
+  join public.profiles as author
+    on author.id = story.profile_id
+  where author.status = 'accepted'
+    and author.deleted_at is null
+    -- 교사 스토리는 모두가 보고, 재학생 스토리는 학교에 있는 사람만 본다. 기수는 판정에
+    -- 쓰지 않는다 (기능 명세 §6.6).
+    and (
+      author.type = 'teacher'
+      or (
+        author.type = 'student'
+        and viewer_type in ('student', 'teacher')
+      )
+    )
+    and story.created_at >= day_start
+    and story.created_at < day_end
+  order by story.created_at desc, story.id desc;
+end;
+$function$;
+
+REVOKE ALL ON FUNCTION public.list_today_stories() FROM PUBLIC, anon;
+
+GRANT EXECUTE ON FUNCTION public.list_today_stories() TO authenticated;
+
+CREATE FUNCTION public.delete_my_story()
+  RETURNS void
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path TO ''
+  AS $function$
+declare
+  caller_profile_id bigint;
+  kst_date date;
+  day_start timestamptz;
+  day_end timestamptz;
+begin
+  select profile.id
+  into caller_profile_id
+  from public.profiles as profile
+  where profile.auth_user_id = auth.uid()
+    and profile.status = 'accepted'
+    and profile.deleted_at is null
+    and profile.type in ('student', 'teacher');
+
+  if caller_profile_id is null then
+    raise exception 'student or teacher profile required'
+      using errcode = '42501';
+  end if;
+
+  kst_date := (now() at time zone 'Asia/Seoul')::date;
+  day_start := kst_date::timestamp at time zone 'Asia/Seoul';
+  day_end := (kst_date + 1)::timestamp at time zone 'Asia/Seoul';
+
+  delete from public.stories
+  where profile_id = caller_profile_id
+    and created_at >= day_start
+    and created_at < day_end;
+end;
+$function$;
+
+REVOKE ALL ON FUNCTION public.delete_my_story() FROM PUBLIC, anon;
+
+GRANT EXECUTE ON FUNCTION public.delete_my_story() TO authenticated;
