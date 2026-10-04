@@ -36,6 +36,10 @@ jobs:
       - name: Check database security
         run: npm run db:lint && npm run db:advisors
 
+      # supabase/schemas and supabase/migrations must build the same schema.
+      - name: Check schema drift
+        run: npm run db:drift
+
       # lint + format:check + typecheck + test, then the production SPA build
       # (which also runs scripts/build-sw.mjs and so proves the service worker
       # still generates against the real output).
