@@ -206,6 +206,52 @@ describe("Web Push configuration", () => {
     );
   });
 
+  it("asks for permission before waiting on the worker", () => {
+    vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", VALID_VAPID_KEY);
+    getRegistration.mockReturnValue(new Promise(() => undefined));
+    requestPermission.mockResolvedValue("granted");
+
+    void enableWebPush();
+
+    // 첫 await 전에 불려야 탭의 사용자 활성화 안에서 권한 창이 뜬다.
+    expect(requestPermission).toHaveBeenCalledOnce();
+  });
+
+  it("trusts the live permission when the request resolves stale", async () => {
+    vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", VALID_VAPID_KEY);
+    const notification = {
+      permission: "default",
+      requestPermission: vi.fn(() => {
+        notification.permission = "granted";
+        return Promise.resolve("default");
+      }),
+    };
+    vi.stubGlobal("window", { Notification: notification, PushManager });
+    vi.stubGlobal("Notification", notification);
+    const subscription = {
+      endpoint: "https://push.example/new",
+      expirationTime: null,
+      toJSON: () => ({
+        endpoint: "https://push.example/new",
+        keys: { auth: "auth", p256dh: "p256dh" },
+      }),
+    };
+    getRegistration.mockResolvedValue({
+      active: {},
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(null),
+        subscribe: vi.fn().mockResolvedValue(subscription),
+      },
+    });
+    rpc.mockResolvedValue({ data: null, error: null });
+
+    await expect(enableWebPush()).resolves.toEqual({
+      state: "available",
+      permission: "granted",
+      subscribed: true,
+    });
+  });
+
   it("stops waiting for a worker that never becomes ready", async () => {
     vi.useFakeTimers();
     vi.stubEnv("PROD", true);

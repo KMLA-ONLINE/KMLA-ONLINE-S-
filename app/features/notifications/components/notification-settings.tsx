@@ -336,10 +336,12 @@ export function NotificationSettings({
           value: { ...pushSupport, subscribed: false },
         });
       } else {
-        setPushState({
-          source: initialPushSupport,
-          value: await enableWebPush(),
-        });
+        const next = await enableWebPush();
+        setPushState({ source: initialPushSupport, value: next });
+        // 권한 창을 닫기만 하면 스위치가 그대로라 탭이 씹힌 것처럼 보인다.
+        if (next.state === "available" && next.permission === "default") {
+          toast("알림 권한이 허용되지 않았습니다. 다시 눌러 허용해 주세요.");
+        }
       }
     } catch (error) {
       console.error("Failed to update Web Push subscription", error);

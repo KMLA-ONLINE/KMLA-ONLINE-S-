@@ -94,16 +94,27 @@ export async function getPushSupport(): Promise<PushSupport> {
 }
 
 export async function enableWebPush(): Promise<PushSupport> {
+  // 권한은 첫 await보다 먼저 묻는다. 서비스 워커·구독 확인을 기다린 뒤에 물으면 탭의
+  // 사용자 활성화가 식어, 브라우저가 첫 요청을 창 없이 흘려보내고 두 번째 탭에서야 묻는다.
+  const permissionRequest =
+    readVapidKey() &&
+    "Notification" in window &&
+    Notification.permission === "default"
+      ? Notification.requestPermission()
+      : null;
+
   const initial = await getPushSupport();
   if (initial.state !== "available") return initial;
 
   const vapidKey = readVapidKey();
   if (!vapidKey) throw new Error("Web Push public key is not configured");
 
+  const requested = permissionRequest
+    ? await permissionRequest
+    : initial.permission;
+  // 설치형 Android 앱은 OS 권한 창을 거치며 반환값이 실제 상태보다 늦을 수 있어 현재 값도 본다.
   const permission =
-    initial.permission === "default"
-      ? await Notification.requestPermission()
-      : initial.permission;
+    requested === "granted" ? requested : Notification.permission;
   if (permission !== "granted") {
     return { state: "available", permission, subscribed: false };
   }
