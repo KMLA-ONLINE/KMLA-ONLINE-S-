@@ -5,11 +5,9 @@ import "@testing-library/jest-dom/vitest";
 // eslint-disable-next-line testing-library/no-manual-cleanup
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
-import { resetQueryClientForTests } from "~/shared/lib/query-client";
 
 afterEach(() => {
   cleanup();
-  resetQueryClientForTests();
   vi.restoreAllMocks();
 });
 
@@ -29,24 +27,6 @@ if (!window.matchMedia) {
     removeListener: () => {},
     dispatchEvent: () => false,
   });
-}
-
-// jsdom은 레이아웃을 계산하지 않아 스크롤 관련 메서드를 아예 구현하지 않는다. 이미지 뷰어의
-// 필름스트립처럼 활성 항목을 화면 안으로 밀어 넣는 코드는 이것이 없으면 마운트 중에 죽는다.
-if (!Element.prototype.scrollIntoView) {
-  Element.prototype.scrollIntoView = () => {};
-}
-
-if (!Element.prototype.scrollTo) {
-  Element.prototype.scrollTo = () => {};
-}
-
-// 포인터 캡처도 마찬가지다. 바텀 시트를 끌어 닫는 손짓은 손가락이 목록 밖으로 나가도
-// 이어져야 해서 캡처를 잡는데, 없으면 첫 pointerdown에서 죽는다.
-if (!Element.prototype.setPointerCapture) {
-  Element.prototype.setPointerCapture = () => {};
-  Element.prototype.releasePointerCapture = () => {};
-  Element.prototype.hasPointerCapture = () => false;
 }
 
 if (!globalThis.ResizeObserver) {
