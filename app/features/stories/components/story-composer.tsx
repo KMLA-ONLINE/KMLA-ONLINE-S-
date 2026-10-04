@@ -133,12 +133,6 @@ export function StoryComposer({
           linkUrl: normalizedLink,
         });
       }
-
-      await getQueryClient().invalidateQueries({
-        queryKey: storyKeys.all,
-        refetchType: "none",
-      });
-      await onDone();
     } catch (cause) {
       setError(
         isStoryLimitError(cause)
@@ -146,11 +140,22 @@ export function StoryComposer({
           : "올리지 못했습니다.",
       );
       setPending(false);
+      return;
     }
+
+    // 여기부터는 이미 올라간 뒤다. 목록 갱신이 실패해도 "올리지 못했습니다"로 보이면 사용자가
+    // 다시 눌러 같은 스토리를 두 번 올린다.
+    await getQueryClient()
+      .invalidateQueries({ queryKey: storyKeys.all, refetchType: "none" })
+      .catch(() => undefined);
+    await Promise.resolve(onDone()).catch(() => undefined);
   }
 
   return (
     <form
+      // 링크 칸은 모바일 키보드 때문에 `type="url"`이지만, 스킴 없는 주소도 받으므로 브라우저
+      // 검증은 끈다. 판정은 `normalizeStoryLink`가 한다.
+      noValidate
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
@@ -276,7 +281,7 @@ export function StoryComposer({
       <div className="flex min-w-0 flex-col gap-2">
         <div className="flex items-end justify-between gap-4">
           <label htmlFor="story-content" className="text-sm font-medium">
-            {mode === "text" ? "글" : "사진 위 글 (선택)"}
+            글
           </label>
           <span className="text-xs text-muted-foreground">
             {normalizedContent.length}/{STORY_CONTENT_MAX_LENGTH}

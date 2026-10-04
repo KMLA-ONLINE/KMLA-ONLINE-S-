@@ -44,26 +44,30 @@ export function isStoryContentValid(
 
 /**
  * 입력한 링크를 저장할 모양으로 바꾼다. 비어 있으면 `null`(링크 없음), 쓸 수 없는 값이면
- * `undefined`다. 스킴을 생략하면 https로 본다. DB는 http(s)만 받는다.
+ * `undefined`다. `://`가 없으면 스킴을 생략한 것으로 보고 https를 붙인다 — `example.com:8080`의
+ * 콜론을 스킴으로 오인하지 않으려는 것이다.
+ *
+ * 돌려주는 값은 `URL.href`다. 스킴과 호스트가 소문자가 되어 DB check(`^https?://`)와 판정이
+ * 어긋나지 않는다.
  */
 export function normalizeStoryLink(value: string): string | null | undefined {
   const trimmed = value.trim();
 
   if (!trimmed) return null;
-
-  const candidate = /^[a-z][a-z\d+.-]*:/i.test(trimmed)
-    ? trimmed
-    : `https://${trimmed}`;
-
-  if (/\s/.test(candidate) || candidate.length > 2048) return undefined;
+  if (/\s/.test(trimmed)) return undefined;
 
   try {
-    const url = new URL(candidate);
+    const url = new URL(
+      trimmed.includes("://") ? trimmed : `https://${trimmed}`,
+    );
 
     if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+    // `mailto:a@b.com`에 https를 붙이면 사용자 정보가 든 b.com 주소가 된다.
+    if (url.username || url.password) return undefined;
     if (!url.hostname.includes(".")) return undefined;
+    if (url.href.length > 2048) return undefined;
 
-    return candidate;
+    return url.href;
   } catch {
     return undefined;
   }

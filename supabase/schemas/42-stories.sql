@@ -25,7 +25,11 @@ create table public.stories (
   published_at timestamptz,
   expires_at timestamptz,
   constraint stories_content_length
-    check (char_length(content) <= 100 and content = btrim(content)),
+    check (
+      char_length(content) <= 100
+      and content !~ '^[[:space:]]'
+      and content !~ '[[:space:]]$'
+    ),
   constraint stories_background_check
     check (background in ('blue', 'purple', 'pink', 'orange', 'green', 'dark')),
   constraint stories_link_url_check
@@ -51,7 +55,7 @@ create table public.stories (
         and image_size_bytes is null
         and image_width is null
         and image_height is null
-        and char_length(content) >= 1
+        and content ~ '[^[:space:]]'
       )
     ),
   constraint stories_publication_check
@@ -83,6 +87,22 @@ for all
 to public
 using (false)
 with check (false);
+
+-- 앞뒤 공백을 지운다. `btrim`은 스페이스만 지워서 줄바꿈·탭만 적은 글이 빈 카드로 올라간다.
+-- 클라이언트의 `String.prototype.trim()`과 맞춘다.
+create function private.normalize_story_text(p_value text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select pg_catalog.regexp_replace(
+    coalesce(p_value, ''), '^[[:space:]]+|[[:space:]]+$', '', 'g'
+  );
+$$;
+
+revoke all on function private.normalize_story_text(text)
+  from public;
 
 -- 한 사람이 24시간 안에 올려 둘 수 있는 스토리 수의 상한. 아직 publish하지 않은 사진도 센다.
 -- 상한이 없으면 업로드 경로를 반복 호출해 회수되기 전의 파일을 무제한으로 쌓을 수 있다.
@@ -228,7 +248,7 @@ declare
   created_id bigint;
   published timestamptz := now();
 begin
-  if char_length(btrim(coalesce(p_content, ''))) not between 1 and 100 then
+  if char_length(private.normalize_story_text(p_content)) not between 1 and 100 then
     raise exception 'content must be 1 to 100 characters'
       using errcode = '22023';
   end if;
@@ -238,9 +258,9 @@ begin
   ) values (
     caller_profile_id,
     'ready',
-    btrim(p_content),
+    private.normalize_story_text(p_content),
     p_background,
-    nullif(btrim(coalesce(p_link_url, '')), ''),
+    nullif(private.normalize_story_text(p_link_url), ''),
     published,
     published + interval '24 hours'
   )
@@ -274,7 +294,7 @@ declare
   thumbnail text := path || '-thumb';
   created_id bigint;
 begin
-  if char_length(btrim(coalesce(p_content, ''))) > 100 then
+  if char_length(private.normalize_story_text(p_content)) > 100 then
     raise exception 'content must be at most 100 characters'
       using errcode = '22023';
   end if;
@@ -291,13 +311,13 @@ begin
     image_height, link_url
   ) values (
     caller_profile_id,
-    btrim(coalesce(p_content, '')),
+    private.normalize_story_text(p_content),
     path,
     thumbnail,
     p_size_bytes,
     p_width,
     p_height,
-    nullif(btrim(coalesce(p_link_url, '')), '')
+    nullif(private.normalize_story_text(p_link_url), '')
   )
   returning id into created_id;
 
@@ -358,7 +378,8 @@ begin
     raise exception 'uploaded object metadata does not match' using errcode = '22023';
   end if;
 
-  -- 축소본은 크기를 미리 알리지 않는다. 버킷 제한과 MIME만 맞으면 된다.
+  -- 축소본은 크기를 미리 알리지 않지만 레일이 작성자마다 받는 파일이라 클라이언트 압축
+  -- 정책(`card`)의 상한을 여기서도 지킨다. 넘으면 모든 뷰어의 홈이 무거워진다.
   if not exists (
     select 1
     from storage.objects as object
@@ -366,6 +387,7 @@ begin
       and object.name = story.thumbnail_path
       and object.owner_id = caller_id::text
       and object.metadata ->> 'mimetype' = 'image/webp'
+      and nullif(object.metadata ->> 'size', '')::bigint <= 524288
   ) then
     raise exception 'uploaded thumbnail not found' using errcode = 'P0002';
   end if;

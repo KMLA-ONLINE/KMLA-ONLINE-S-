@@ -62,14 +62,19 @@ export function StoryRail({
   }, [missingStory, close]);
 
   async function refresh() {
-    // 작성·삭제 쪽이 이미 캐시를 버렸으므로 여기서는 새로 받아 캐시를 다시 채운다.
-    setUpdatedItems(
-      await getQueryClient().query({
-        queryKey: storyKeys.active(),
-        queryFn: listActiveStories,
-        staleTime: STORY_STALE_TIME,
-      }),
-    );
+    // 작성·삭제 쪽이 이미 캐시를 버렸으므로 여기서는 새로 받아 캐시를 다시 채운다. 실패하면
+    // 지금 목록을 그대로 둔다. 다음 진입에서 캐시가 비어 있으므로 다시 받는다.
+    try {
+      setUpdatedItems(
+        await getQueryClient().query({
+          queryKey: storyKeys.active(),
+          queryFn: listActiveStories,
+          staleTime: STORY_STALE_TIME,
+        }),
+      );
+    } catch {
+      // 위 주석 참고.
+    }
   }
 
   return (
@@ -92,6 +97,7 @@ export function StoryRail({
                   <span className="relative min-h-0 flex-1 overflow-hidden bg-muted">
                     <img
                       src={viewer.avatarUrl ?? "/avatar.svg"}
+                      crossOrigin="anonymous"
                       alt=""
                       loading="lazy"
                       decoding="async"
@@ -137,6 +143,7 @@ export function StoryRail({
                     {cover.thumbnailUrl ? (
                       <img
                         src={cover.thumbnailUrl}
+                        crossOrigin="anonymous"
                         alt=""
                         loading="lazy"
                         decoding="async"

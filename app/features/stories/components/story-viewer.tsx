@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { StoryCaption } from "~/features/stories/components/story-composer";
 import { storyKeys } from "~/features/stories/data/cache";
+import { createStoryMediaUrls } from "~/features/stories/data/files";
 import { deleteMyStory } from "~/features/stories/data/mutations";
 import type { StoryItem } from "~/features/stories/data/queries";
 import {
@@ -55,14 +56,27 @@ export function StoryViewer({
   const [loadedId, setLoadedId] = useState<number | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const progressRef = useRef<HTMLSpanElement>(null);
+  const [imageUrls, setImageUrls] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
+  // 진행 막대 요소는 state로 받는다. 뷰어는 portal 안이라 처음 열린 커밋의 effect 시점에는
+  // 아직 DOM에 붙지 않았을 수 있다. ref 객체로 읽으면 첫 장에서만 애니메이션이 걸리지 않는다.
+  const [progressElement, setProgressElement] =
+    useState<HTMLSpanElement | null>(null);
   const animationRef = useRef<Animation | null>(null);
-  const pressStartRef = useRef(0);
+  const pressRef = useRef<{ startedAt: number } | null>(null);
 
   const group = position ? groups[position.group] : undefined;
   const story = position ? group?.stories[position.story] : undefined;
+  const following = position
+    ? (group?.stories[position.story + 1] ??
+      groups[position.group + 1]?.stories[0])
+    : undefined;
   const isMine = group?.pubId === viewerPubId;
-  const waitingForImage = Boolean(story?.imageUrl) && loadedId !== story?.id;
+  const imageUrl = story?.imagePath
+    ? (imageUrls.get(story.imagePath) ?? null)
+    : null;
+  const waitingForImage = Boolean(story?.imagePath) && loadedId !== story?.id;
   const paused = held || menuOpen || confirmingDelete || waitingForImage;
 
   function next() {
@@ -81,7 +95,7 @@ export function StoryViewer({
 
     const target =
       group.stories[position.story - 1] ??
-      groups[position.group - 1]?.stories[0];
+      groups[position.group - 1]?.stories.at(-1);
 
     if (target) onShow(target.id);
   }
@@ -93,10 +107,49 @@ export function StoryViewer({
     navigationRef.current = { next, previous };
   });
 
+  // 원본은 그 장을 열 때 서명한다. 다음 장 것도 함께 서명하고 미리 받아 두어 넘길 때 바로
+  // 뜨게 한다. 서명에 실패하면 이미지 없이 진행한다 — 기다리면 막대가 영영 멈춘다.
+  const currentPath = story?.imagePath ?? null;
+  const currentId = story?.id;
+  const followingPath = following?.imagePath ?? null;
+
+  useEffect(() => {
+    if (!currentPath && !followingPath) return;
+
+    let cancelled = false;
+
+    void createStoryMediaUrls([currentPath, followingPath]).then(
+      (urls) => {
+        if (cancelled) return;
+
+        setImageUrls((previous) => new Map([...previous, ...urls]));
+
+        const followingUrl = followingPath ? urls.get(followingPath) : null;
+
+        if (followingUrl) {
+          // 뷰어의 <img>와 같은 CORS 모드로 받아야 같은 캐시 항목을 쓴다.
+          const preload = new Image();
+          preload.crossOrigin = "anonymous";
+          preload.src = followingUrl;
+        }
+        if (currentPath && !urls.has(currentPath) && currentId !== undefined) {
+          setLoadedId(currentId);
+        }
+      },
+      () => {
+        if (!cancelled && currentId !== undefined) setLoadedId(currentId);
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPath, currentId, followingPath]);
+
   // 진행 막대는 Web Animations로 돌린다. 멈춤과 재개가 `pause()`·`play()` 한 줄이고, 끝나는
   // 시점이 곧 다음 장으로 넘어가는 시점이라 타이머를 따로 두지 않는다.
   useEffect(() => {
-    const element = progressRef.current;
+    const element = progressElement;
 
     if (!element || typeof element.animate !== "function") return;
 
@@ -112,8 +165,9 @@ export function StoryViewer({
     return () => {
       animation.onfinish = null;
       animation.cancel();
+      animationRef.current = null;
     };
-  }, [story?.id]);
+  }, [progressElement, story?.id]);
 
   useEffect(() => {
     const animation = animationRef.current;
@@ -121,7 +175,7 @@ export function StoryViewer({
     if (!animation) return;
     if (paused) animation.pause();
     else animation.play();
-  }, [paused, story?.id]);
+  }, [paused, progressElement, story?.id]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -155,17 +209,19 @@ export function StoryViewer({
 
     try {
       await deleteMyStory(story.id);
-      await getQueryClient().invalidateQueries({
-        queryKey: storyKeys.all,
-        refetchType: "none",
-      });
-      await onDeleted();
     } catch {
       toast.error("스토리를 삭제하지 못했습니다.");
+      return;
     } finally {
       setDeleting(false);
       setConfirmingDelete(false);
     }
+
+    // 이미 지워졌다. 이후 갱신이 실패해도 삭제 실패로 알리지 않는다.
+    await getQueryClient()
+      .invalidateQueries({ queryKey: storyKeys.all, refetchType: "none" })
+      .catch(() => undefined);
+    await Promise.resolve(onDeleted()).catch(() => undefined);
   }
 
   if (!position || !group || !story) return null;
@@ -187,10 +243,11 @@ export function StoryViewer({
             story.background ? STORY_BACKGROUNDS[story.background] : "bg-black",
           )}
         >
-          {story.imageUrl ? (
+          {imageUrl ? (
             <img
               key={story.id}
-              src={story.imageUrl}
+              src={imageUrl}
+              crossOrigin="anonymous"
               alt={story.content || `${group.stories[0]?.name} 스토리 사진`}
               onLoad={() => setLoadedId(story.id)}
               onError={() => setLoadedId(story.id)}
@@ -202,7 +259,7 @@ export function StoryViewer({
           {story.content ? (
             <StoryCaption
               text={story.content}
-              overlay={story.imageUrl !== null}
+              overlay={story.imagePath !== null}
               size="large"
             />
           ) : null}
@@ -211,13 +268,17 @@ export function StoryViewer({
           <div
             className="absolute inset-0"
             onPointerDown={() => {
-              pressStartRef.current = Date.now();
+              pressRef.current = { startedAt: Date.now() };
               setHeld(true);
             }}
             onPointerUp={(event) => {
+              const press = pressRef.current;
+
+              pressRef.current = null;
               setHeld(false);
 
-              if (Date.now() - pressStartRef.current > HOLD_THRESHOLD_MS) {
+              // 다른 곳(버튼·링크)에서 누르기 시작한 손가락이 여기서 떨어진 것은 탭이 아니다.
+              if (!press || Date.now() - press.startedAt > HOLD_THRESHOLD_MS) {
                 return;
               }
 
@@ -226,8 +287,14 @@ export function StoryViewer({
               if (event.clientX - rect.left < rect.width / 3) previous();
               else next();
             }}
-            onPointerCancel={() => setHeld(false)}
-            onPointerLeave={() => setHeld(false)}
+            onPointerCancel={() => {
+              pressRef.current = null;
+              setHeld(false);
+            }}
+            onPointerLeave={() => {
+              pressRef.current = null;
+              setHeld(false);
+            }}
             aria-hidden
           />
 
@@ -241,7 +308,9 @@ export function StoryViewer({
                   {/* Tailwind 4의 scale-x-* 는 `transform`이 아니라 `scale` 속성을 써서
                       애니메이션의 transform과 곱해진다. 그래서 시작값도 transform으로 둔다. */}
                   <span
-                    ref={index === position.story ? progressRef : undefined}
+                    ref={
+                      index === position.story ? setProgressElement : undefined
+                    }
                     className="block h-full origin-left bg-white"
                     style={{
                       transform: `scaleX(${index < position.story ? 1 : 0})`,

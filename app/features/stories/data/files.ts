@@ -1,3 +1,4 @@
+import { deleteMyStory } from "~/features/stories/data/mutations";
 import { getSupabase } from "~/shared/supabase/client";
 import { createSignedUrls } from "~/shared/supabase/signed-urls";
 import { STORAGE_UPLOAD_CACHE_CONTROL } from "~/shared/supabase/storage";
@@ -11,8 +12,9 @@ export function createStoryMediaUrls(
 }
 
 /**
- * prepare → upload → publish. 중간에 실패하면 `pending` 행과 올라간 파일이 남지만, 둘 다
- * 48시간 뒤 정리 작업이 회수한다. 클라이언트에는 이 버킷의 DELETE 권한이 없다.
+ * prepare → upload → publish. 중간에 실패하면 `pending` 행을 바로 지운다. 남겨 두면 24시간
+ * 동안 올릴 수 있는 수의 상한을 차지해서, 업로드가 몇 번 실패한 사용자는 보이는 스토리가
+ * 없는데도 상한에 걸린다. 그 삭제마저 실패하면 48시간 뒤 정리 작업이 회수한다.
  *
  * `file`은 `compressImage(…, "screen")`, `thumbnail`은 `compressImage(…, "card")`를 거친
  * WebP여야 한다.
@@ -40,6 +42,19 @@ export async function createImageStory(input: {
 
   if (!prepared) throw new Error("Story upload was not prepared");
 
+  try {
+    await uploadAndPublish(prepared, input);
+  } catch (cause) {
+    await deleteMyStory(prepared.story_id).catch(() => undefined);
+    throw cause;
+  }
+}
+
+async function uploadAndPublish(
+  prepared: { story_id: number; object_path: string; thumbnail_path: string },
+  input: { file: File; thumbnail: File },
+): Promise<void> {
+  const supabase = getSupabase();
   const uploads: [string, File][] = [
     [prepared.object_path, input.file],
     [prepared.thumbnail_path, input.thumbnail],
