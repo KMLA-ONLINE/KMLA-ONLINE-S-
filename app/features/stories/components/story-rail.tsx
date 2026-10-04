@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { PlusIcon, XIcon } from "lucide-react";
+import { ImageIcon, PlusIcon, XIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -163,6 +163,12 @@ export function StoryRail({
                         className="absolute inset-0 size-full object-cover"
                         draggable={false}
                       />
+                    ) : cover.imagePath ? (
+                      // 사진 스토리인데 축소본을 서명하지 못했다. 글 스토리 모양으로 그리면 배경도
+                      // 글도 없는 빈 카드가 된다.
+                      <span className="absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground">
+                        <ImageIcon className="size-6" aria-hidden />
+                      </span>
                     ) : (
                       <span className="absolute inset-0 flex items-center justify-center p-3 text-center text-xs leading-4 font-bold [overflow-wrap:anywhere] break-keep text-white">
                         <span className="line-clamp-4">{cover.content}</span>
@@ -243,7 +249,7 @@ function StoryComposerDialog({
     >
       <DialogContent
         showCloseButton={false}
-        className="max-h-[calc(100dvh-2rem)] gap-4 overflow-y-auto max-sm:top-0 max-sm:left-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 max-sm:pt-[max(1.5rem,env(safe-area-inset-top))] max-sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] max-sm:ring-0"
+        className="max-h-[calc(100dvh-2rem)] gap-4 overflow-y-auto max-sm:top-0 max-sm:left-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 max-sm:pt-[max(1.5rem,env(safe-area-inset-top))] max-sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] max-sm:ring-0 md:max-w-2xl"
       >
         <DialogHeader className="flex-row items-center justify-between gap-3">
           <DialogTitle>스토리 만들기</DialogTitle>

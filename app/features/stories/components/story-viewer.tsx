@@ -2,13 +2,15 @@ import { LinkIcon, MoreHorizontalIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { StoryCaption } from "~/features/stories/components/story-composer";
+import {
+  StoryCaption,
+  StoryLinkPill,
+} from "~/features/stories/components/story-canvas";
 import { storyKeys } from "~/features/stories/data/cache";
 import { createStoryMediaUrls } from "~/features/stories/data/files";
 import { deleteMyStory } from "~/features/stories/data/mutations";
 import type { StoryItem } from "~/features/stories/data/queries";
 import {
-  getStoryLinkLabel,
   STORY_BACKGROUNDS,
   STORY_DURATION_MS,
   type StoryAuthorGroup,
@@ -53,6 +55,9 @@ export function StoryViewer({
   const position = findStoryPosition(groups, storyId);
   const [held, setHeld] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // 다른 탭으로 가거나 화면을 끄면 멈춘다. 그러지 않으면 아무도 보지 않는 사이 다음 작성자들의
+  // 스토리로 넘어간다.
+  const [hidden, setHidden] = useState(false);
   const [loadedId, setLoadedId] = useState<number | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -77,7 +82,8 @@ export function StoryViewer({
     ? (imageUrls.get(story.imagePath) ?? null)
     : null;
   const waitingForImage = Boolean(story?.imagePath) && loadedId !== story?.id;
-  const paused = held || menuOpen || confirmingDelete || waitingForImage;
+  const paused =
+    held || hidden || menuOpen || confirmingDelete || waitingForImage;
 
   function next() {
     if (!position || !group) return;
@@ -97,7 +103,18 @@ export function StoryViewer({
       group.stories[position.story - 1] ??
       groups[position.group - 1]?.stories.at(-1);
 
-    if (target) onShow(target.id);
+    if (target) {
+      onShow(target.id);
+      return;
+    }
+
+    // 맨 첫 장에서 이전을 누르면 그 장을 처음부터 다시 보여 준다.
+    const animation = animationRef.current;
+
+    if (animation) {
+      animation.currentTime = 0;
+      if (!paused) animation.play();
+    }
   }
 
   // 애니메이션 콜백과 키 처리기는 장이 바뀔 때만 다시 건다. 그 사이에도 최신 위치로 넘기도록
@@ -184,11 +201,23 @@ export function StoryViewer({
       if (event.key === "ArrowLeft") navigationRef.current.previous();
     }
 
-    if (confirmingDelete) return;
+    // 메뉴가 열려 있으면 화살표는 메뉴 항목을 움직이는 데 쓴다.
+    if (confirmingDelete || menuOpen) return;
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [confirmingDelete]);
+  }, [confirmingDelete, menuOpen]);
+
+  useEffect(() => {
+    function onVisibilityChange() {
+      setHidden(document.visibilityState === "hidden");
+    }
+
+    onVisibilityChange();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, []);
 
   async function copyStoryLink() {
     if (!story) return;
@@ -240,7 +269,7 @@ export function StoryViewer({
       >
         <div
           className={cn(
-            "relative size-full overflow-hidden select-none sm:aspect-[9/16] sm:h-[min(100dvh,56rem)] sm:w-auto sm:rounded-xl",
+            "@container relative size-full overflow-hidden select-none sm:aspect-[9/16] sm:h-[min(100dvh,56rem)] sm:w-auto sm:rounded-xl",
             story.background ? STORY_BACKGROUNDS[story.background] : "bg-black",
           )}
         >
@@ -261,7 +290,7 @@ export function StoryViewer({
             <StoryCaption
               text={story.content}
               overlay={story.imagePath !== null}
-              size="large"
+              hasLink={story.linkUrl !== null}
             />
           ) : null}
 
@@ -380,17 +409,7 @@ export function StoryViewer({
           </div>
 
           {story.linkUrl ? (
-            <a
-              href={story.linkUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 flex max-w-[80%] -translate-x-1/2 items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <LinkIcon className="size-4 shrink-0" aria-hidden />
-              <span className="truncate">
-                {getStoryLinkLabel(story.linkUrl)}
-              </span>
-            </a>
+            <StoryLinkPill url={story.linkUrl} interactive />
           ) : null}
         </div>
 

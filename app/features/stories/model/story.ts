@@ -44,8 +44,9 @@ export function isStoryContentValid(
 
 /**
  * 입력한 링크를 저장할 모양으로 바꾼다. 비어 있으면 `null`(링크 없음), 쓸 수 없는 값이면
- * `undefined`다. `://`가 없으면 스킴을 생략한 것으로 보고 https를 붙인다 — `example.com:8080`의
- * 콜론을 스킴으로 오인하지 않으려는 것이다.
+ * `undefined`다. 맨 앞에 `스킴://`이 없으면 스킴을 생략한 것으로 보고 https를 붙인다 —
+ * `example.com:8080`의 콜론이나 `web.archive.org/web/https://…`처럼 경로 안의 `://`를 스킴으로
+ * 오인하지 않으려는 것이다.
  *
  * 돌려주는 값은 `URL.href`다. 스킴과 호스트가 소문자가 되어 DB check(`^https?://`)와 판정이
  * 어긋나지 않는다.
@@ -58,7 +59,7 @@ export function normalizeStoryLink(value: string): string | null | undefined {
 
   try {
     const url = new URL(
-      trimmed.includes("://") ? trimmed : `https://${trimmed}`,
+      /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`,
     );
 
     if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;

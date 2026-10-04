@@ -21,6 +21,9 @@ describe("normalizeStoryLink", () => {
     expect(normalizeStoryLink("  ")).toBeNull();
     expect(normalizeStoryLink("kmla.kr/notice")).toBe("https://kmla.kr/notice");
     expect(normalizeStoryLink("kmla.kr:8080/a")).toBe("https://kmla.kr:8080/a");
+    expect(normalizeStoryLink("web.archive.org/web/https://kmla.kr")).toBe(
+      "https://web.archive.org/web/https://kmla.kr",
+    );
   });
 
   it("lowercases the scheme so the database check accepts it", () => {

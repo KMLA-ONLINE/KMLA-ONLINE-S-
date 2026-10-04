@@ -125,7 +125,9 @@ begin
     and profile.status = 'accepted'
     and profile.deleted_at is null
     and profile.type in ('student', 'teacher')
-  for update;
+  -- `no key update`면 상한 검사끼리는 순서가 잡히면서도, 이 프로필을 참조하는 다른 행의 외래
+  -- 키 검사(`key share`)는 막지 않는다.
+  for no key update;
 
   if caller_profile_id is null then
     raise exception 'student or teacher profile required'

@@ -12,9 +12,10 @@ export function createStoryMediaUrls(
 }
 
 /**
- * prepare → upload → publish. 중간에 실패하면 `pending` 행을 바로 지운다. 남겨 두면 24시간
- * 동안 올릴 수 있는 수의 상한을 차지해서, 업로드가 몇 번 실패한 사용자는 보이는 스토리가
- * 없는데도 상한에 걸린다. 그 삭제마저 실패하면 48시간 뒤 정리 작업이 회수한다.
+ * prepare → upload → publish. 아직 게시되지 않은 것이 확실할 때만 `pending` 행을 바로 지운다.
+ * 남겨 두면 올릴 수 있는 수의 상한을 차지해서, 업로드가 몇 번 실패한 사용자는 보이는 스토리가
+ * 없는데도 상한에 걸린다. 게시 RPC의 응답이 끊긴 경우는 서버에서 이미 게시됐을 수 있으므로
+ * 지우지 않는다. 남은 행은 48시간 뒤 정리 작업이 회수한다.
  *
  * `file`은 `compressImage(…, "screen")`, `thumbnail`은 `compressImage(…, "card")`를 거친
  * WebP여야 한다.
@@ -45,10 +46,15 @@ export async function createImageStory(input: {
   try {
     await uploadAndPublish(prepared, input);
   } catch (cause) {
-    await deleteMyStory(prepared.story_id).catch(() => undefined);
+    if (!(cause instanceof PublishUnconfirmedError)) {
+      await deleteMyStory(prepared.story_id).catch(() => undefined);
+    }
     throw cause;
   }
 }
+
+/** 게시 요청이 서버에 닿았는지 모르는 실패. 이미 게시됐을 수 있어 되돌리지 않는다. */
+class PublishUnconfirmedError extends Error {}
 
 async function uploadAndPublish(
   prepared: { story_id: number; object_path: string; thumbnail_path: string },
@@ -76,5 +82,11 @@ async function uploadAndPublish(
     p_story_id: prepared.story_id,
   });
 
+  // 서버가 거절한 오류에는 SQLSTATE가 붙는다. 없으면 응답을 받지 못한 것이다.
+  if (publishError && !publishError.code) {
+    throw new PublishUnconfirmedError(publishError.message, {
+      cause: publishError,
+    });
+  }
   if (publishError) throw publishError;
 }

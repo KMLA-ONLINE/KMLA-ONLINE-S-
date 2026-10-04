@@ -1,6 +1,10 @@
 import { CheckIcon, ImageIcon, TypeIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import {
+  StoryCaption,
+  StoryLinkPill,
+} from "~/features/stories/components/story-canvas";
 import { storyKeys } from "~/features/stories/data/cache";
 import { createImageStory } from "~/features/stories/data/files";
 import {
@@ -167,213 +171,190 @@ export function StoryComposer({
         event.preventDefault();
         void submit();
       }}
-      className="flex min-w-0 flex-col gap-5"
+      className="flex min-w-0 flex-col gap-5 md:flex-row md:items-start md:gap-6"
     >
-      <div
-        role="radiogroup"
-        aria-label="스토리 종류"
-        className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1"
-      >
-        {(
-          [
-            ["photo", "사진", ImageIcon],
-            ["text", "글", TypeIcon],
-          ] as const
-        ).map(([value, label, Icon]) => (
-          <button
-            key={value}
-            type="button"
-            role="radio"
-            aria-checked={mode === value}
-            disabled={pending}
-            onClick={() => setMode(value)}
-            className={cn(
-              "flex h-9 items-center justify-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              mode === value && "bg-background text-foreground shadow-sm",
-            )}
-          >
-            <Icon className="size-4" aria-hidden />
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* 휴대폰에서는 두 묶음을 `contents`로 풀어 한 줄로 쌓고(종류 선택이 맨 위), 넓은 화면에서는
+          미리보기를 왼쪽, 입력을 오른쪽에 둔다. 세로로 긴 미리보기 아래에 입력을 이어 붙이면
+          데스크톱 창이 필요 이상으로 길어진다. */}
+      <div className="contents md:flex md:w-60 md:shrink-0 md:flex-col md:gap-3">
+        <div
+          className={cn(
+            "@container relative mx-auto aspect-[9/16] w-full max-w-60 overflow-hidden rounded-xl",
+            mode === "text"
+              ? STORY_BACKGROUNDS[background]
+              : image
+                ? "bg-black"
+                : "bg-muted",
+          )}
+        >
+          {mode === "photo" && image ? (
+            <img
+              src={image.previewUrl}
+              alt=""
+              className="absolute inset-0 size-full object-contain"
+            />
+          ) : null}
 
-      <div
-        className={cn(
-          "relative mx-auto aspect-[9/16] w-full max-w-60 overflow-hidden rounded-xl",
-          mode === "text" ? STORY_BACKGROUNDS[background] : "bg-muted",
-        )}
-      >
+          {mode === "photo" && !image ? (
+            <button
+              type="button"
+              disabled={processing || pending}
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ImageIcon className="size-8" aria-hidden />
+              {processing ? "사진 처리 중" : "사진 선택"}
+            </button>
+          ) : null}
+
+          {normalizedContent ? (
+            <StoryCaption
+              text={normalizedContent}
+              overlay={mode === "photo"}
+              hasLink={Boolean(normalizedLink)}
+            />
+          ) : null}
+
+          {normalizedLink ? (
+            <StoryLinkPill url={normalizedLink} interactive={false} />
+          ) : null}
+        </div>
+
         {mode === "photo" && image ? (
-          <img
-            src={image.previewUrl}
-            alt=""
-            className="absolute inset-0 size-full object-cover"
-          />
-        ) : null}
-
-        {mode === "photo" && !image ? (
-          <button
+          <Button
             type="button"
+            variant="outline"
+            className="self-center"
             disabled={processing || pending}
             onClick={() => fileInputRef.current?.click()}
-            className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <ImageIcon className="size-8" aria-hidden />
-            {processing ? "사진 처리 중" : "사진 선택"}
-          </button>
-        ) : null}
-
-        {normalizedContent ? (
-          <StoryCaption
-            text={normalizedContent}
-            overlay={mode === "photo"}
-            size="small"
-          />
+            {processing ? "사진 처리 중" : "다른 사진"}
+          </Button>
         ) : null}
       </div>
 
-      {mode === "photo" && image ? (
-        <Button
-          type="button"
-          variant="outline"
-          className="self-center"
-          disabled={processing || pending}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          {processing ? "사진 처리 중" : "다른 사진"}
-        </Button>
-      ) : null}
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept={IMAGE_INPUT_ACCEPT}
-        className="hidden"
-        onChange={(event) => {
-          void pickImage(event.currentTarget.files?.[0]);
-          event.currentTarget.value = "";
-        }}
-      />
-
-      {mode === "text" ? (
+      <div className="contents md:flex md:min-w-0 md:flex-1 md:flex-col md:gap-5">
         <div
           role="radiogroup"
-          aria-label="배경"
-          className="flex justify-center gap-2"
+          aria-label="스토리 종류"
+          className="-order-1 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 md:order-none"
         >
-          {STORY_BACKGROUND_KEYS.map((key) => (
+          {(
+            [
+              ["photo", "사진", ImageIcon],
+              ["text", "글", TypeIcon],
+            ] as const
+          ).map(([value, label, Icon]) => (
             <button
-              key={key}
+              key={value}
               type="button"
               role="radio"
-              aria-checked={background === key}
-              aria-label={BACKGROUND_LABELS[key]}
+              aria-checked={mode === value}
               disabled={pending}
-              onClick={() => setBackground(key)}
+              onClick={() => setMode(value)}
               className={cn(
-                "flex size-8 items-center justify-center rounded-full text-white ring-offset-2 ring-offset-background outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                STORY_BACKGROUNDS[key],
-                background === key && "ring-2 ring-foreground",
+                "flex h-9 items-center justify-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                mode === value && "bg-background text-foreground shadow-sm",
               )}
             >
-              {background === key ? (
-                <CheckIcon className="size-4" aria-hidden />
-              ) : null}
+              <Icon className="size-4" aria-hidden />
+              {label}
             </button>
           ))}
         </div>
-      ) : null}
 
-      <div className="flex min-w-0 flex-col gap-2">
-        <div className="flex items-end justify-between gap-4">
-          <label htmlFor="story-content" className="text-sm font-medium">
-            글
-          </label>
-          <span className="text-xs text-muted-foreground">
-            {normalizedContent.length}/{STORY_CONTENT_MAX_LENGTH}
-          </span>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={IMAGE_INPUT_ACCEPT}
+          className="hidden"
+          onChange={(event) => {
+            void pickImage(event.currentTarget.files?.[0]);
+            event.currentTarget.value = "";
+          }}
+        />
+
+        {mode === "text" ? (
+          <div
+            role="radiogroup"
+            aria-label="배경"
+            className="flex justify-center gap-2"
+          >
+            {STORY_BACKGROUND_KEYS.map((key) => (
+              <button
+                key={key}
+                type="button"
+                role="radio"
+                aria-checked={background === key}
+                aria-label={BACKGROUND_LABELS[key]}
+                disabled={pending}
+                onClick={() => setBackground(key)}
+                className={cn(
+                  "flex size-8 items-center justify-center rounded-full text-white ring-offset-2 ring-offset-background outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  STORY_BACKGROUNDS[key],
+                  background === key && "ring-2 ring-foreground",
+                )}
+              >
+                {background === key ? (
+                  <CheckIcon className="size-4" aria-hidden />
+                ) : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="flex min-w-0 flex-col gap-2">
+          <div className="flex items-end justify-between gap-4">
+            <label htmlFor="story-content" className="text-sm font-medium">
+              글
+            </label>
+            <span className="text-xs text-muted-foreground">
+              {normalizedContent.length}/{STORY_CONTENT_MAX_LENGTH}
+            </span>
+          </div>
+          <Textarea
+            id="story-content"
+            value={content}
+            onChange={(event) => setContent(event.currentTarget.value)}
+            maxLength={STORY_CONTENT_MAX_LENGTH}
+            rows={3}
+            placeholder="무슨 일이 있었나요?"
+            disabled={pending}
+            className="[field-sizing:fixed] min-h-20 max-w-full min-w-0 resize-none"
+          />
         </div>
-        <Textarea
-          id="story-content"
-          value={content}
-          onChange={(event) => setContent(event.currentTarget.value)}
-          maxLength={STORY_CONTENT_MAX_LENGTH}
-          rows={3}
-          placeholder="무슨 일이 있었나요?"
-          disabled={pending}
-          className="[field-sizing:fixed] min-h-20 max-w-full min-w-0 resize-none"
-        />
-      </div>
 
-      <div className="flex min-w-0 flex-col gap-2">
-        <label htmlFor="story-link" className="text-sm font-medium">
-          링크 (선택)
-        </label>
-        <Input
-          id="story-link"
-          type="url"
-          inputMode="url"
-          value={link}
-          onChange={(event) => setLink(event.currentTarget.value)}
-          placeholder="https://"
-          aria-invalid={normalizedLink === undefined}
-          disabled={pending}
-        />
-        {normalizedLink === undefined ? (
-          <p className="text-xs text-destructive">
-            http 또는 https 주소를 입력하세요.
+        <div className="flex min-w-0 flex-col gap-2">
+          <label htmlFor="story-link" className="text-sm font-medium">
+            링크 (선택)
+          </label>
+          <Input
+            id="story-link"
+            type="url"
+            inputMode="url"
+            value={link}
+            onChange={(event) => setLink(event.currentTarget.value)}
+            placeholder="https://"
+            aria-invalid={normalizedLink === undefined}
+            disabled={pending}
+          />
+          {normalizedLink === undefined ? (
+            <p className="text-xs text-destructive">
+              http 또는 https 주소를 입력하세요.
+            </p>
+          ) : null}
+        </div>
+
+        {error ? (
+          <p role="alert" className="text-xs text-destructive">
+            {error}
           </p>
         ) : null}
+
+        <Button type="submit" disabled={!ready || pending}>
+          {pending ? "올리는 중" : "공유"}
+        </Button>
       </div>
-
-      {error ? (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      ) : null}
-
-      <Button type="submit" disabled={!ready || pending}>
-        {pending ? "올리는 중" : "공유"}
-      </Button>
     </form>
-  );
-}
-
-/**
- * 사진 위에 얹는 글은 아래쪽 띠에, 글 스토리의 글은 가운데에 크게 놓는다. 작성 미리보기와
- * 뷰어가 같은 모양을 쓰도록 여기 둔다.
- */
-export function StoryCaption({
-  text,
-  overlay,
-  size,
-}: {
-  text: string;
-  overlay: boolean;
-  size: "small" | "large";
-}) {
-  if (overlay) {
-    return (
-      <p
-        className={cn(
-          "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-4 pt-10 text-center font-semibold [overflow-wrap:anywhere] whitespace-pre-wrap text-white",
-          size === "large" ? "pb-24 text-lg leading-7" : "pb-4 text-sm",
-        )}
-      >
-        {text}
-      </p>
-    );
-  }
-
-  return (
-    <p
-      className={cn(
-        "absolute inset-0 flex items-center justify-center p-6 text-center font-bold [overflow-wrap:anywhere] break-keep whitespace-pre-wrap text-white",
-        size === "large" ? "text-2xl leading-9 sm:text-3xl" : "text-lg",
-      )}
-    >
-      {text}
-    </p>
   );
 }
