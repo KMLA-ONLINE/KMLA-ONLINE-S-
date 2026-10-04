@@ -84,18 +84,28 @@ export function StoryRail({
                   onClick={openComposer}
                   className={cn(
                     CARD_CLASS,
-                    "flex flex-col border border-border bg-background",
+                    "flex flex-col bg-card ring-1 ring-border ring-inset",
                   )}
                 >
-                  <span className="flex flex-1 items-center justify-center bg-muted">
-                    <UserAvatar
-                      src={viewer.avatarUrl}
-                      name={viewer.name}
-                      className="size-14"
+                  {/* Facebook처럼 위쪽은 내 프로필 사진으로 채운다. 사진이 없으면 아바타와 같은
+                      실루엣을 쓴다(이니셜을 그리지 않는 이유는 UserAvatar 참고). */}
+                  <span className="relative min-h-0 flex-1 overflow-hidden bg-muted">
+                    <img
+                      src={viewer.avatarUrl ?? "/avatar.svg"}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      draggable={false}
+                      className={cn(
+                        "absolute inset-0 size-full object-cover",
+                        !viewer.avatarUrl &&
+                          "object-contain p-4 opacity-40 dark:opacity-55 dark:invert",
+                      )}
                     />
                   </span>
-                  <span className="relative flex h-14 items-end justify-center pb-2 text-xs font-semibold">
-                    <span className="absolute -top-4 left-1/2 flex size-8 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground ring-4 ring-background">
+
+                  <span className="relative flex h-11 shrink-0 items-end justify-center pb-2 text-xs font-semibold">
+                    <span className="absolute top-0 left-1/2 flex size-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground ring-4 ring-card">
                       <PlusIcon className="size-4" aria-hidden />
                     </span>
                     스토리 만들기
@@ -145,7 +155,7 @@ export function StoryRail({
                       <UserAvatar
                         src={cover.avatarUrl}
                         name={cover.name}
-                        className="size-9 ring-2 ring-black/10"
+                        className="size-8"
                       />
                     </span>
 
