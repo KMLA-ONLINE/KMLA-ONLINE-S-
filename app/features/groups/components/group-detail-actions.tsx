@@ -6,6 +6,7 @@ import {
   MoreHorizontalIcon,
   PinIcon,
   SearchIcon,
+  SettingsIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { useFetcher } from "react-router";
@@ -119,6 +120,7 @@ export function GroupDetailActions({
               >
                 {canAccessSettings ? (
                   <DropdownMenuItem onClick={onSelectSettings}>
+                    <SettingsIcon />
                     그룹 설정
                   </DropdownMenuItem>
                 ) : null}
