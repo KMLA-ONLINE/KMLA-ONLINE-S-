@@ -1,0 +1,69 @@
+import { data, redirect, useNavigation } from "react-router";
+
+import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import {
+  createGroup,
+  getGroupErrorMessage,
+  groupKeys,
+  GroupCreateForm,
+  hasGroupFormErrors,
+  readCreateGroupForm,
+  validateCreateGroup,
+  type CreateGroupErrors,
+} from "~/features/groups";
+import type { Route } from "./+types/create";
+import { getQueryClient } from "~/shared/lib/query-client";
+
+export const handle = defineAppChrome({
+  header: "sticky",
+  bottomNav: "none",
+  contentWidth: "2xl",
+});
+
+export async function clientAction({ request }: Route.ClientActionArgs) {
+  const values = readCreateGroupForm(await request.formData());
+  const errors = validateCreateGroup(values);
+
+  if (hasGroupFormErrors(errors)) {
+    return data({ errors, values }, { status: 400 });
+  }
+
+  try {
+    const group = await createGroup(values);
+    await getQueryClient().invalidateQueries({
+      queryKey: groupKeys.all,
+      refetchType: "none",
+    });
+    throw redirect(`/groups/${group.slug}`);
+  } catch (error) {
+    if (error instanceof Response) throw error;
+    return data(
+      {
+        errors: {
+          form: getGroupErrorMessage(error),
+        } satisfies CreateGroupErrors,
+        values,
+      },
+      { status: 400 },
+    );
+  }
+}
+
+export default function GroupCreatePage({ actionData }: Route.ComponentProps) {
+  const navigation = useNavigation();
+  const { profile } = useAppShell();
+  const canCreateOfficial =
+    profile.role === "admin" && profile.type !== "teacher";
+
+  return (
+    <>
+      <PageHeader title="그룹 만들기" back="/groups" hideOnScroll={false} />
+      <GroupCreateForm
+        canCreateOfficial={canCreateOfficial}
+        values={actionData?.values}
+        errors={actionData?.errors}
+        pending={navigation.state === "submitting"}
+      />
+    </>
+  );
+}
