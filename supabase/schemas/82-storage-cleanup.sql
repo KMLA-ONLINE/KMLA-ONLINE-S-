@@ -33,6 +33,7 @@ create table if not exists private.storage_cleanup_queue (
       'group_media',
       'profile_media',
       'profile_media_activity',
+      'story_media',
       'unreferenced_sweep'
     )
   ),
@@ -112,7 +113,16 @@ select image.storage_bucket, image.object_path
 from public.comment_images as image
 union all
 select 'group-media'::text, media.object_path
-from public.group_media_objects as media;
+from public.group_media_objects as media
+union all
+-- 만료된 스토리도 행이 지워지기 전까지는 참조다. 행 삭제가 경로를 큐로 옮긴다(83-retention.sql).
+select 'story-media'::text, story.image_path
+from public.stories as story
+where story.image_path is not null
+union all
+select 'story-media'::text, story.thumbnail_path
+from public.stories as story
+where story.thumbnail_path is not null;
 alter view private.referenced_storage_objects owner to postgres;
 
 -- 1층. 수명을 다한 행을 지우면서 경로를 큐로 옮긴다. 행 삭제와 큐 적재가 한 문장이라 경로를
@@ -295,7 +305,7 @@ begin
   with unreferenced as (
     select object.bucket_id as bucket, object.name as object_path
     from storage.objects as object
-    where object.bucket_id in ('profile-media', 'group-media', 'post-attachments')
+    where object.bucket_id in ('profile-media', 'group-media', 'post-attachments', 'story-media')
       and object.created_at <= now() - interval '48 hours'
       and not coalesce(object.is_delete_marker, false)
       and not exists (

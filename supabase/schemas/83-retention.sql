@@ -16,11 +16,26 @@ declare
   affected bigint;
   korea_today date := (now() at time zone 'Asia/Seoul')::date;
 begin
-  -- 스토리는 당일분만 조회한다(기능 명세 §17.6). 하루가 지나면 읽는 경로가 없지만, 시간대 경계에서
-  -- 잘리지 않도록 이틀을 준다.
-  delete from public.stories
-  where created_at < ((korea_today - 1)::timestamp at time zone 'Asia/Seoul');
-  get diagnostics affected = row_count;
+  -- 스토리는 만료되면 읽는 경로가 없다(기능 명세 §17.6). publish하지 못한 사진 스토리는 48시간을
+  -- 기다린다. Storage 2층 스윕과 같은 유예라 업로드 중인 행을 지우지 않는다. 행을 지우는 문장이
+  -- 이미지 경로를 정리 큐로 옮긴다.
+  with expired as (
+    delete from public.stories as story
+    where (story.status = 'ready' and story.expires_at <= now())
+      or (story.status = 'pending' and story.created_at <= now() - interval '48 hours')
+    returning story.image_path, story.thumbnail_path
+  ), queued as (
+    insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+    select 'story-media', path.object_path, 'story_media'
+    from expired
+    cross join lateral (
+      values (expired.image_path), (expired.thumbnail_path)
+    ) as path(object_path)
+    where path.object_path is not null
+    on conflict (bucket, object_path) do update
+      set dry_run = queue.dry_run and excluded.dry_run
+  )
+  select count(*) into affected from expired;
   removed := removed + affected;
 
   -- 예약은 끝난 뒤 2주까지 남긴다. 반복 예약은 종료일이 정해지기 전까지 지우지 않는다.

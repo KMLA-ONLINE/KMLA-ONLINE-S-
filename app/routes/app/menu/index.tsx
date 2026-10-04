@@ -4,7 +4,6 @@ import {
   CalendarDaysIcon,
   ChevronRightIcon,
   CircleQuestionMarkIcon,
-  ClipboardListIcon,
   SettingsIcon,
   ShieldCheckIcon,
   SparklesIcon,
@@ -28,8 +27,6 @@ interface Shortcut {
   to: string;
   label: string;
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
-  /** 스토리처럼 재학생·교사만 쓰는 항목. 졸업생에게는 숨긴다. */
-  writersOnly?: boolean;
 }
 
 /**
@@ -44,20 +41,10 @@ const shortcuts: Shortcut[] = [
   { to: "/menu/timetable", label: "시간표", icon: CalendarDaysIcon },
   { to: "/util/gongang", label: "공강 · 노래방", icon: CalendarClockIcon },
   { to: "/menu/birthdays", label: "생일", icon: CakeIcon },
-  {
-    to: "/menu/story",
-    label: "스토리",
-    icon: ClipboardListIcon,
-    writersOnly: true,
-  },
 ];
 
 export default function MenuPage() {
   const { profile } = useAppShell();
-
-  const visibleShortcuts = shortcuts.filter(
-    (shortcut) => !shortcut.writersOnly || profile.type !== "alumni",
-  );
 
   return (
     <>
@@ -90,7 +77,7 @@ export default function MenuPage() {
           aria-label="바로가기"
           className="grid grid-cols-2 gap-2 sm:grid-cols-5"
         >
-          {visibleShortcuts.map(({ to, label, icon: Icon }, index) => (
+          {shortcuts.map(({ to, label, icon: Icon }, index) => (
             <Link
               key={to}
               to={to}
@@ -98,8 +85,8 @@ export default function MenuPage() {
                 "flex min-h-18 flex-col items-center justify-center gap-2 rounded-xl border bg-card px-2 py-3 transition-colors hover:bg-muted/60",
                 // 항목 수는 역할에 따라 넷이거나 다섯이다. 홀수일 때 두 칸 그리드의 마지막
                 // 하나가 옆자리를 비운 채 남으므로, 그 하나만 한 줄을 다 쓰게 해 빈칸을 없앤다.
-                index === visibleShortcuts.length - 1 &&
-                  visibleShortcuts.length % 2 === 1 &&
+                index === shortcuts.length - 1 &&
+                  shortcuts.length % 2 === 1 &&
                   "col-span-2 sm:col-span-1",
               )}
             >

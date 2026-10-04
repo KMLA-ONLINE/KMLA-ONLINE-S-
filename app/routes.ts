@@ -27,7 +27,6 @@ export default [
       route("menu/licenses", "routes/app/menu/licenses.tsx"),
       route("menu/birthdays", "routes/app/menu/birthdays.tsx"),
       route("menu/meal", "routes/app/menu/meal.tsx"),
-      route("menu/story", "routes/app/menu/story.tsx"),
       route("menu/password", "routes/app/menu/password.tsx"),
       route("menu/settings", "routes/app/menu/settings.tsx"),
       route("menu/settings/lab", "routes/app/menu/settings-lab.tsx"),

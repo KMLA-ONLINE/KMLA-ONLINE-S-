@@ -4,7 +4,7 @@ import { Link } from "react-router";
 
 import { StoryRail } from "~/features/stories/components/story-rail";
 import { STORY_STALE_TIME, storyKeys } from "~/features/stories/data/cache";
-import { listTodayStories } from "~/features/stories/data/queries";
+import { listActiveStories } from "~/features/stories/data/queries";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import { hasActiveSession } from "~/features/auth";
 import { FeedScreen, feedQuery } from "~/features/feed";
@@ -48,7 +48,8 @@ export const handle = defineAppChrome({
 });
 
 /**
- * `post`·`kind`·`source`는 게시물 상세 오버레이의 URL 상태이고, loader가 읽지 않는다. 이미지
+ * `post`·`kind`·`source`는 게시물 상세 오버레이의, `story`는 스토리 뷰어·작성 창의 URL
+ * 상태이고, loader가 읽지 않는다. 이미지
  * 뷰어와 댓글 시트는 공용 규칙이 이미 무시한다.
  *
  * 피드에서는 이게 특히 비싸다. 첫 페이지를 다시 읽으면 `list_feed_posts`가 새 세션을 열어
@@ -58,6 +59,7 @@ export const shouldRevalidate = createPostListRevalidation([
   "post",
   "kind",
   "source",
+  "story",
 ]);
 
 // 로더는 화면이 읽을 캐시를 데우는 일만 한다. 피드 자체는 `FeedScreen`이 무한 쿼리로
@@ -92,8 +94,8 @@ export async function clientLoader() {
   const [stories] = await Promise.all([
     queryClient
       .query({
-        queryKey: storyKeys.today(referenceDate),
-        queryFn: listTodayStories,
+        queryKey: storyKeys.active(),
+        queryFn: listActiveStories,
         staleTime: STORY_STALE_TIME,
       })
       .catch(() => []),
@@ -141,9 +143,15 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-4">
         <div className="min-w-0">
-          {stories.length > 0 ? (
-            <StoryRail initialItems={stories} viewerPubId={profile.pub_id} />
-          ) : null}
+          <StoryRail
+            initialItems={stories}
+            viewer={{
+              pubId: profile.pub_id,
+              name: profile.name,
+              avatarUrl: profile.avatar_url,
+            }}
+            canWrite={profile.type !== "alumni"}
+          />
 
           <FeedScreen />
         </div>

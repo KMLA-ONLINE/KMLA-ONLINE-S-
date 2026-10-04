@@ -68,6 +68,17 @@ const PRESETS = {
    * 눈에 덜 띄기 때문이다. 크게 볼 때는 어차피 뷰어가 원본을 연다.
    */
   thumbnail: { maxEdge: 800, maxBytes: 1024 * 1024, quality: 0.8 },
+  /**
+   * 화면 전체에 한 장씩 띄우는 사진(스토리). 세로 휴대폰 화면(약 430 CSS px, DPR 3)의 긴
+   * 변이 2000 device px 안팎이라 2048px이면 충분하다. 용량 상한은 버킷 제한과 같다.
+   */
+  screen: { maxEdge: 2048, maxBytes: 4 * 1024 * 1024, quality: 0.85 },
+  /**
+   * 가로 레일에 세워 까는 세로 카드(스토리 미리보기). 카드는 약 112×200 CSS px이고 사진을
+   * `object-cover`로 채우므로 DPR 3에서 긴 변 600 device px 정도가 필요하다. 레일은 카드
+   * 여러 장을 한꺼번에 받으므로 품질을 `thumbnail`보다 더 낮춘다.
+   */
+  card: { maxEdge: 640, maxBytes: 512 * 1024, quality: 0.75 },
 } as const satisfies Record<string, CompressionPolicy>;
 
 export type ImagePreset = keyof typeof PRESETS;
