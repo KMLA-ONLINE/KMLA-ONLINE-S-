@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(40);
+select plan(56);
 
 insert into public.groups (
   id,
@@ -82,10 +82,35 @@ select set_config(
 );
 set local role authenticated;
 
+-- 승인 가입 그룹(004, 006)은 비공개라, 멤버가 아니면 테이블로 열거되지 않는다(§7.5).
 select is(
   (select count(*) from public.groups),
-  6::bigint,
+  4::bigint,
   'student sees official, public, and own private groups only'
+);
+
+select is(
+  (select count(*) from public.groups where join_policy = 'request'),
+  0::bigint,
+  'non-member cannot enumerate private request groups'
+);
+
+select is(
+  (select name from public.get_group_link_preview('film-circle')),
+  '필름 서클',
+  'a non-member with the exact address sees the request group preview'
+);
+
+select is(
+  (select count(*) from public.get_group_link_preview('8f2a1c4e6b9d7a')),
+  0::bigint,
+  'the link preview never reveals an invite-only group'
+);
+
+select is(
+  (select count(*) from public.get_group_link_preview('makers-lab')),
+  0::bigint,
+  'the link preview is only for private request groups'
 );
 
 select is(
@@ -168,11 +193,39 @@ select is(
   'student reads their own join request'
 );
 
+select isnt(
+  (select requested_at from public.get_group_link_preview('film-circle')),
+  null,
+  'the link preview reports the pending request'
+);
+
 select lives_ok(
   $$delete from public.group_join_requests
     where group_id = '20000000-0000-0000-0000-000000000006'
       and profile_id = private.current_profile_id()$$,
   'student can cancel their own request'
+);
+
+select throws_ok(
+  $$insert into public.group_join_requests (group_id, profile_id)
+    values (
+      '20000000-0000-0000-0000-000000000003',
+      private.current_profile_id()
+    )$$,
+  '55000',
+  'group does not accept join requests',
+  'a public group does not take join requests'
+);
+
+select throws_ok(
+  $$insert into public.group_join_requests (group_id, profile_id)
+    values (
+      '50000000-0000-0000-0000-000000000001',
+      private.current_profile_id()
+    )$$,
+  '55000',
+  'group does not accept join requests',
+  'an invite-only group does not take join requests'
 );
 
 select lives_ok(
@@ -303,6 +356,67 @@ select is(
   (select hide_staff_roles from public.groups where slug = 'db-official'),
   true,
   'group creation stores the requested staff-role visibility'
+);
+
+select throws_ok(
+  $$select * from public.create_group(
+    'official', 'DB 승인 공식 그룹', '', null, 'request', 'identified', 'staff'
+  )$$,
+  '22023',
+  'official groups must be open',
+  'an official group cannot use a private policy'
+);
+
+select throws_ok(
+  $$select * from public.create_group(
+    'unofficial', 'DB 주소 승인 그룹', '', 'db-request', 'request',
+    'optional_anonymous', 'members'
+  )$$,
+  '22023',
+  'private groups cannot use a custom slug',
+  'a private request group cannot take a custom slug'
+);
+
+select lives_ok(
+  $$select * from public.create_group(
+    'unofficial', 'DB 승인 그룹', '', null, 'request',
+    'optional_anonymous', 'members'
+  )$$,
+  'a private request group gets a generated slug'
+);
+
+select lives_ok(
+  $$select * from public.update_group_settings(
+    (select id from public.groups where name = 'DB 승인 그룹'),
+    'DB 승인 그룹', '', 'invite_only', 'optional_anonymous', 'members', false
+  )$$,
+  'a request group can become invite-only'
+);
+
+select lives_ok(
+  $$select * from public.update_group_settings(
+    (select id from public.groups where name = 'DB 승인 그룹'),
+    'DB 승인 그룹', '', 'request', 'optional_anonymous', 'members', false
+  )$$,
+  'an invite-only group can become a request group'
+);
+
+select lives_ok(
+  $$select * from public.update_group_settings(
+    (select id from public.groups where name = 'DB 승인 그룹'),
+    'DB 승인 그룹', '', 'open', 'optional_anonymous', 'members', false
+  )$$,
+  'a private request group can become public'
+);
+
+select throws_ok(
+  $$select * from public.update_group_settings(
+    (select id from public.groups where name = 'DB 승인 그룹'),
+    'DB 승인 그룹', '', 'request', 'optional_anonymous', 'members', false
+  )$$,
+  '55000',
+  'public groups cannot become private',
+  'a public group cannot go back to approval joining'
 );
 
 select is(
@@ -477,7 +591,8 @@ set local role authenticated;
 
 select is(
   (select count(*) from public.groups),
-  5::bigint,
+  -- 위에서 만든 'DB 승인 그룹'이 공개로 바뀌어 소유자로 남아 있다.
+  6::bigint,
   'teacher app admin sees official groups and joined unofficial groups'
 );
 
@@ -507,6 +622,23 @@ select throws_ok(
   '42501',
   null,
   'teacher cannot directly join an open group'
+);
+
+select throws_ok(
+  $$insert into public.group_join_requests (group_id, profile_id)
+    values (
+      '20000000-0000-0000-0000-000000000006',
+      private.current_profile_id()
+    )$$,
+  '42501',
+  null,
+  'teacher cannot request a private request group'
+);
+
+select is(
+  (select name from public.get_group_link_preview('film-circle')),
+  '필름 서클',
+  'teacher with the address sees the preview without a way to request'
 );
 
 select throws_ok(

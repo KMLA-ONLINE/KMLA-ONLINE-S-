@@ -197,7 +197,7 @@ export async function loadGroupDetail(
   if (groupResult.error) throw groupResult.error;
   if (membershipResult.error) throw membershipResult.error;
   if (requestResult.error) throw requestResult.error;
-  if (!groupResult.data) return null;
+  if (!groupResult.data) return loadGroupLinkPreview(slug);
 
   const membership = membershipResult.data;
   const request = requestResult.data;
@@ -218,6 +218,39 @@ export async function loadGroupDetail(
     member_role: membership?.role ?? null,
     pinned_at: membership?.pinned_at ?? null,
     requested_at: request?.requested_at ?? null,
+  };
+}
+
+/**
+ * 비공개 승인 가입 그룹은 비멤버의 RLS에 보이지 않는다. 주소를 아는 사람에게는 초대 미리보기와
+ * 같은 정보만 상세 모양으로 채워 돌려준다(§7.5). 이미지와 명부는 없다.
+ */
+async function loadGroupLinkPreview(slug: string): Promise<GroupDetail | null> {
+  const { data, error } = await getSupabase()
+    .rpc("get_group_link_preview", { p_slug: slug })
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const requestedAt = data.requested_at as string | null;
+  return {
+    id: data.group_id,
+    group_id: data.group_id,
+    slug: data.slug,
+    name: data.name,
+    description: data.description,
+    kind: "unofficial",
+    join_policy: data.join_policy,
+    identity_policy: data.identity_policy,
+    posting_policy: data.posting_policy,
+    icon_path: null,
+    cover_path: null,
+    member_count: data.member_count,
+    hide_staff_roles: false,
+    membership_state: requestedAt ? "requested" : "none",
+    member_role: null,
+    pinned_at: null,
+    requested_at: requestedAt,
   };
 }
 

@@ -54,6 +54,8 @@ export function validateCreateGroup(
   }
   if (!JOIN_POLICIES.has(values.joinPolicy)) {
     errors.joinPolicy = "가입 정책을 선택해 주세요.";
+  } else if (values.kind === "official" && values.joinPolicy !== "open") {
+    errors.joinPolicy = "공식 그룹은 공개 그룹입니다.";
   }
   if (!IDENTITY_POLICIES.has(values.identityPolicy)) {
     errors.identityPolicy = "활동 신원 정책을 선택해 주세요.";
@@ -62,8 +64,8 @@ export function validateCreateGroup(
     errors.postingPolicy = "글쓰기 정책을 선택해 주세요.";
   }
 
-  if (values.joinPolicy === "invite_only" && values.slug) {
-    errors.slug = "초대 전용 그룹의 주소는 안전한 임의 주소로 생성됩니다.";
+  if (values.joinPolicy !== "open" && values.slug) {
+    errors.slug = "비공개 그룹의 주소는 안전한 임의 주소로 생성됩니다.";
   } else if (
     values.slug &&
     (!GROUP_SLUG_PATTERN.test(values.slug) ||

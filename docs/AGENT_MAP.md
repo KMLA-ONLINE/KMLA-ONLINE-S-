@@ -162,6 +162,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `get_accepted_profile`                        | `profiles/data/queries.ts`                                                      | `11-identity.sql`             |
 | `get_group_invite`                            | `groups/data/queries.ts`                                                        | `21-groups.sql`               |
 | `get_group_invite_preview`                    | `groups/data/queries.ts`                                                        | `21-groups.sql`               |
+| `get_group_link_preview`                      | `groups/data/queries.ts`                                                        | `21-groups.sql`               |
 | `get_group_post`                              | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `get_my_group_anonymous_activity_restriction` | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `get_my_group_new_post_counts`                | `groups/data/queries.ts`                                                        | `31-posts.sql`                |

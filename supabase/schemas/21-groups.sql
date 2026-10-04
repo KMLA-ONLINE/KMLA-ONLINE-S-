@@ -126,7 +126,7 @@ CREATE OR REPLACE FUNCTION "private"."can_read_group_media"("p_object_path" "tex
               group_record.kind = 'official'
               or (
                 group_record.kind = 'unofficial'
-                and group_record.join_policy <> 'invite_only'
+                and group_record.join_policy = 'open'
               )
             )
           )
@@ -139,6 +139,26 @@ CREATE OR REPLACE FUNCTION "private"."can_read_group_media"("p_object_path" "tex
 $$;
 
 ALTER FUNCTION "private"."can_read_group_media"("p_object_path" "text") OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "private"."can_request_group_join"("p_group_id" "uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  -- 승인 가입 그룹은 비공개라 요청자의 RLS로는 그룹 행이 보이지 않는다. 그래서 정책 대신 여기서 확인한다.
+  select exists (
+    select 1
+    from public.groups as group_record
+    join public.profiles as profile
+      on profile.id = private.current_profile_id()
+    where group_record.id = p_group_id
+      and group_record.kind = 'unofficial'
+      and group_record.join_policy = 'request'
+      and profile.type in ('student', 'alumni')
+  )
+  and not private.is_group_member(p_group_id);
+$$;
+
+ALTER FUNCTION "private"."can_request_group_join"("p_group_id" "uuid") OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "private"."can_upload_group_media"("p_object_path" "text") RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
@@ -516,11 +536,16 @@ begin
     end
   );
 
-  if chosen_policy = 'invite_only' and nullif(btrim(p_slug), '') is not null then
-    raise exception 'invite-only groups cannot use a custom slug' using errcode = '22023';
+  -- 공개 그룹은 즉시 가입뿐이고, 승인 가입은 비공개 그룹에만 있다(§7.5).
+  if p_kind = 'official' and chosen_policy <> 'open' then
+    raise exception 'official groups must be open' using errcode = '22023';
   end if;
 
-  if chosen_policy = 'invite_only' or nullif(btrim(p_slug), '') is null then
+  if chosen_policy <> 'open' and nullif(btrim(p_slug), '') is not null then
+    raise exception 'private groups cannot use a custom slug' using errcode = '22023';
+  end if;
+
+  if chosen_policy <> 'open' or nullif(btrim(p_slug), '') is null then
     chosen_slug := encode(extensions.gen_random_bytes(7), 'hex');
   else
     chosen_slug := lower(btrim(p_slug));
@@ -532,7 +557,7 @@ begin
   ) values (
     created_group_id,
     chosen_slug,
-    chosen_policy <> 'invite_only' and nullif(btrim(p_slug), '') is not null,
+    chosen_policy = 'open' and nullif(btrim(p_slug), '') is not null,
     p_kind,
     btrim(p_name),
     btrim(coalesce(p_description, '')),
@@ -694,7 +719,7 @@ begin
       on join_request.group_id = group_record.id
       and join_request.profile_id = caller_profile.id
     where group_record.kind = 'unofficial'
-      and group_record.join_policy <> 'invite_only'
+      and group_record.join_policy = 'open'
       and (p_include_joined or membership.profile_id is null)
       and (
         normalized_query = ''
@@ -847,6 +872,43 @@ end;
 $$;
 
 ALTER FUNCTION "public"."get_group_invite_preview"("p_token" "text") OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."get_group_link_preview"("p_slug" "text") RETURNS TABLE("group_id" "uuid", "slug" "text", "name" "text", "description" "text", "join_policy" "public"."group_join_policy", "identity_policy" "public"."group_identity_policy", "posting_policy" "public"."group_posting_policy", "member_count" bigint, "requested_at" timestamp with time zone)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+
+  -- 비공개 승인 가입 그룹은 RLS로 보이지 않는다. 주소를 정확히 아는 비멤버에게만 초대 미리보기와
+  -- 같은 정보를 준다(§7.5). 이미지와 명부는 주지 않는다.
+  return query
+  select
+    group_record.id,
+    group_record.slug,
+    group_record.name,
+    group_record.description,
+    group_record.join_policy,
+    group_record.identity_policy,
+    group_record.posting_policy,
+    group_record.member_count,
+    join_request.requested_at
+  from public.groups as group_record
+  left join public.group_join_requests as join_request
+    on join_request.group_id = group_record.id
+    and join_request.profile_id = caller_profile_id
+  where group_record.slug = p_slug
+    and group_record.kind = 'unofficial'
+    and group_record.join_policy = 'request'
+    and not private.is_group_member(group_record.id);
+end;
+$$;
+
+ALTER FUNCTION "public"."get_group_link_preview"("p_slug" "text") OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer DEFAULT 24, "p_allowed_profile_types" "public"."profile_type"[] DEFAULT ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type", 'teacher'::"public"."profile_type"]) RETURNS TABLE("token" "text", "expires_at" timestamp with time zone, "allowed_profile_types" "public"."profile_type"[])
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -1316,7 +1378,7 @@ begin
   ) then
     raise exception 'group administrator required' using errcode = '42501';
   end if;
-  if current_group.join_policy <> 'invite_only' and p_join_policy = 'invite_only' then
+  if current_group.join_policy = 'open' and p_join_policy <> 'open' then
     raise exception 'public groups cannot become private' using errcode = '55000';
   end if;
   if current_group.join_policy = 'request' and p_join_policy <> 'request' and exists (
@@ -1474,7 +1536,7 @@ CREATE INDEX "groups_discovery_idx" ON "public"."groups" USING "btree" ("kind", 
 
 CREATE UNIQUE INDEX "groups_official_name_unique_idx" ON "public"."groups" USING "btree" ("lower"("btrim"("name"))) WHERE ("kind" = 'official'::"public"."group_kind");
 
-CREATE INDEX "groups_search_name_trgm_idx" ON "public"."groups" USING "gin" ("search_name" "extensions"."gin_trgm_ops") WHERE (("kind" = 'unofficial'::"public"."group_kind") AND ("join_policy" <> 'invite_only'::"public"."group_join_policy"));
+CREATE INDEX "groups_search_name_trgm_idx" ON "public"."groups" USING "gin" ("search_name" "extensions"."gin_trgm_ops") WHERE (("kind" = 'unofficial'::"public"."group_kind") AND ("join_policy" = 'open'::"public"."group_join_policy"));
 
 CREATE OR REPLACE TRIGGER "group_join_requests_lock_group" BEFORE INSERT ON "public"."group_join_requests" FOR EACH ROW EXECUTE FUNCTION "private"."lock_group_for_join_request"();
 
@@ -1518,10 +1580,7 @@ CREATE POLICY "group_invites_deny_client_access" ON "private"."group_invites" US
 
 ALTER TABLE "public"."group_join_requests" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "group_join_requests_create_own" ON "public"."group_join_requests" FOR INSERT TO "authenticated" WITH CHECK ((("profile_id" = "private"."current_profile_id"()) AND (EXISTS ( SELECT 1
-   FROM ("public"."profiles" "profile"
-     JOIN "public"."groups" "group_record" ON (("group_record"."id" = "group_join_requests"."group_id")))
-  WHERE (("profile"."id" = "group_join_requests"."profile_id") AND ("profile"."type" = ANY (ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type"])) AND ("group_record"."join_policy" = 'request'::"public"."group_join_policy")))) AND (NOT "private"."is_group_member"("group_id"))));
+CREATE POLICY "group_join_requests_create_own" ON "public"."group_join_requests" FOR INSERT TO "authenticated" WITH CHECK ((("profile_id" = "private"."current_profile_id"()) AND "private"."can_request_group_join"("group_id")));
 
 CREATE POLICY "group_join_requests_delete_own" ON "public"."group_join_requests" FOR DELETE TO "authenticated" USING (("profile_id" = "private"."current_profile_id"()));
 
@@ -1550,12 +1609,15 @@ ALTER TABLE "public"."groups" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "groups_select_visible" ON "public"."groups" FOR SELECT TO "authenticated" USING (((EXISTS ( SELECT 1
     FROM "public"."profiles" "profile"
-   WHERE (("profile"."id" = "private"."current_profile_id"()) AND ((("profile"."role" = 'admin'::"public"."app_role") AND ("groups"."kind" = 'official'::"public"."group_kind")) OR (("profile"."type" = ANY (ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type"])) AND (("groups"."kind" = 'official'::"public"."group_kind") OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND ("groups"."join_policy" <> 'invite_only'::"public"."group_join_policy")))) OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND "private"."is_group_member"("groups"."id"))))))));
+   WHERE (("profile"."id" = "private"."current_profile_id"()) AND ((("profile"."role" = 'admin'::"public"."app_role") AND ("groups"."kind" = 'official'::"public"."group_kind")) OR (("profile"."type" = ANY (ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type"])) AND (("groups"."kind" = 'official'::"public"."group_kind") OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND ("groups"."join_policy" = 'open'::"public"."group_join_policy")))) OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND "private"."is_group_member"("groups"."id"))))))));
 
 REVOKE ALL ON FUNCTION "private"."assert_group_invite_manager"("p_group_id" "uuid") FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."can_manage_group"("p_group_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."can_manage_group"("p_group_id" "uuid") TO "authenticated";
+
+REVOKE ALL ON FUNCTION "private"."can_request_group_join"("p_group_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."can_request_group_join"("p_group_id" "uuid") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "private"."can_read_group_media"("p_object_path" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."can_read_group_media"("p_object_path" "text") TO "authenticated";
@@ -1587,6 +1649,9 @@ REVOKE ALL ON FUNCTION "public"."approve_group_join_request"("p_group_id" "uuid"
 GRANT ALL ON FUNCTION "public"."approve_group_join_request"("p_group_id" "uuid", "p_request_id" "uuid") TO "authenticated";
 
 
+
+REVOKE ALL ON FUNCTION "public"."get_group_link_preview"("p_slug" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_group_link_preview"("p_slug" "text") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) TO "authenticated";

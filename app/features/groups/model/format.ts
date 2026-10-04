@@ -36,6 +36,11 @@ const INVITE_PROFILE_TYPE_LABELS: Record<GroupInviteProfileType, string> = {
   teacher: "교사",
 };
 
+/** 공개 그룹은 즉시 가입뿐이다. 승인 가입과 초대 전용은 모두 비공개다(§7.5). */
+export function isPrivateJoinPolicy(policy: GroupJoinPolicy): boolean {
+  return policy !== "open";
+}
+
 export function getGroupJoinPolicyLabel(policy: GroupJoinPolicy): string {
   return JOIN_POLICY_LABELS[policy];
 }
@@ -108,6 +113,9 @@ export function getGroupErrorMessage(error: unknown): string {
     }
     if (candidate.message?.includes("invite expired")) {
       return "기한이 지난 초대 링크입니다.";
+    }
+    if (candidate.message?.includes("does not accept join requests")) {
+      return "이 그룹은 지금 가입 요청을 받지 않습니다.";
     }
     if (candidate.message?.includes("cannot be invited to")) {
       return "공식 그룹은 초대 링크를 쓰지 않습니다.";

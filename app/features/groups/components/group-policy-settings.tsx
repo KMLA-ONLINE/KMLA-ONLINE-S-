@@ -13,7 +13,11 @@ import {
   SettingsHidden,
   type SettingsSection,
 } from "~/features/groups/components/group-settings-form";
-import type { GroupDetail } from "~/features/groups/model/types";
+import { isPrivateJoinPolicy } from "~/features/groups/model/format";
+import type {
+  GroupDetail,
+  GroupJoinPolicy,
+} from "~/features/groups/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
@@ -34,9 +38,9 @@ function allowsPolicyChange(
   kind: PolicyKind,
   next: string,
 ): boolean {
-  // 공개된 그룹은 비공개로 돌아갈 수 없다.
-  if (kind === "join" && next === "invite_only") {
-    return group.join_policy === "invite_only";
+  // 공개된 그룹은 비공개로 돌아갈 수 없다. 비공개끼리(승인 가입 ↔ 초대 전용)는 오간다.
+  if (kind === "join" && isPrivateJoinPolicy(next as GroupJoinPolicy)) {
+    return isPrivateJoinPolicy(group.join_policy);
   }
   return true;
 }
@@ -48,9 +52,21 @@ const POLICY = {
     icon: LockKeyholeIcon,
     name: "joinPolicy",
     options: [
-      ["open", "즉시 가입", "누구나 바로 그룹에 가입할 수 있습니다."],
-      ["request", "승인 후 가입", "관리자가 가입 요청을 확인하고 승인합니다."],
-      ["invite_only", "비공개", "초대받은 사용자만 그룹에 들어올 수 있습니다."],
+      [
+        "open",
+        "공개 · 즉시 가입",
+        "그룹 찾기에 표시되고 누구나 바로 가입할 수 있습니다.",
+      ],
+      [
+        "request",
+        "비공개 · 승인 후 가입",
+        "그룹 링크를 받은 사용자가 가입을 요청하고, 관리자가 승인합니다.",
+      ],
+      [
+        "invite_only",
+        "비공개 · 초대 전용",
+        "초대받은 사용자만 그룹에 들어올 수 있습니다.",
+      ],
     ],
   },
   identity: {
@@ -261,8 +277,8 @@ function PolicyRow({
           title={`${config.title} 저장`}
           description={
             kind === "join" &&
-            current === "invite_only" &&
-            pendingForm.get(config.name) !== "invite_only"
+            isPrivateJoinPolicy(group.join_policy) &&
+            pendingForm.get(config.name) === "open"
               ? "그룹을 공개하면 다시 비공개로 변경할 수 없습니다. 선택한 가입 방식을 저장할까요?"
               : `선택한 ${config.title} 정책을 저장할까요?`
           }

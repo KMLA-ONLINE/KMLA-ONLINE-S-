@@ -15,6 +15,7 @@ import {
   getGroupIdentityPolicyLabel,
   getGroupJoinPolicyLabel,
   getGroupPostingPolicyLabel,
+  isPrivateJoinPolicy,
 } from "~/features/groups/model/format";
 import type {
   GroupDetail,
@@ -82,7 +83,7 @@ export function GroupDetailScreen({
   const location = useLocation();
   const navigation = useNavigation();
   const isMember = group.membership_state === "member";
-  const isPrivate = group.join_policy === "invite_only";
+  const isPrivate = isPrivateJoinPolicy(group.join_policy);
   const VisibilityIcon = isPrivate ? LockIcon : Globe2Icon;
   const canManage =
     group.member_role === "owner" || group.member_role === "admin";

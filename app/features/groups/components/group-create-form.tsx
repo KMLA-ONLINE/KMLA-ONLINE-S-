@@ -6,6 +6,7 @@ import { GroupConfirmDialog } from "~/features/groups/components/group-confirm-d
 import {
   getGroupJoinPolicyLabel,
   getGroupKindLabel,
+  isPrivateJoinPolicy,
 } from "~/features/groups/model/format";
 import type {
   CreateGroupErrors,
@@ -59,7 +60,8 @@ export function GroupCreateForm({
   const [joinPolicy, setJoinPolicy] = useState<GroupJoinPolicy>(
     values.joinPolicy,
   );
-  const customSlugAllowed = joinPolicy !== "invite_only";
+  // 공개 그룹만 주소를 직접 정한다. 비공개 그룹의 임의 주소는 승인 가입 링크의 열쇠이기도 하다.
+  const customSlugAllowed = !isPrivateJoinPolicy(joinPolicy);
   // 주소는 거의 모든 그룹이 임의 주소로 두는 선택 항목이다. 접어 두면 폼을 위에서
   // 아래로 읽는 사람이 굳이 판단하지 않고 지나간다. 값이나 오류가 있으면 펴 둔다.
   const [slugOpen, setSlugOpen] = useState(
@@ -104,9 +106,8 @@ export function GroupCreateForm({
 
   function changeKind(nextKind: GroupKind) {
     setKind(nextKind);
-    if (nextKind === "official" && joinPolicy === "invite_only") {
-      setJoinPolicy("open");
-    }
+    // 공식 그룹은 공개 그룹이라 즉시 가입만 있다(§7.5).
+    if (nextKind === "official") setJoinPolicy("open");
   }
 
   return (
@@ -217,12 +218,16 @@ export function GroupCreateForm({
                   disabled={pending}
                   aria-invalid={Boolean(errors.joinPolicy)}
                 >
-                  <NativeSelectOption value="invite_only">
-                    비공개 · 초대 전용
-                  </NativeSelectOption>
-                  <NativeSelectOption value="request">
-                    공개 · 승인 가입
-                  </NativeSelectOption>
+                  {kind === "official" ? null : (
+                    <>
+                      <NativeSelectOption value="invite_only">
+                        비공개 · 초대 전용
+                      </NativeSelectOption>
+                      <NativeSelectOption value="request">
+                        비공개 · 승인 가입
+                      </NativeSelectOption>
+                    </>
+                  )}
                   <NativeSelectOption value="open">공개</NativeSelectOption>
                 </NativeSelect>
                 <FieldError>{errors.joinPolicy}</FieldError>
@@ -397,6 +402,7 @@ export function GroupCreateForm({
               <SummaryRow label="종류">{getGroupKindLabel(kind)}</SummaryRow>
             ) : null}
             <SummaryRow label="가입 정책">
+              {isPrivateJoinPolicy(joinPolicy) ? "비공개" : "공개"} ·{" "}
               {getGroupJoinPolicyLabel(joinPolicy)}
             </SummaryRow>
           </dl>

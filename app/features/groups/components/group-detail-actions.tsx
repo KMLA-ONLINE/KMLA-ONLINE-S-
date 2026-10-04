@@ -1,6 +1,7 @@
 import {
   BellIcon,
   FlagIcon,
+  LinkIcon,
   LogOutIcon,
   MoreHorizontalIcon,
   PinIcon,
@@ -8,6 +9,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useFetcher } from "react-router";
+import { toast } from "sonner";
 
 import { GroupConfirmDialog } from "~/features/groups/components/group-confirm-dialog";
 import { GroupMembershipAction } from "~/features/groups/components/group-membership-action";
@@ -47,7 +49,8 @@ export function GroupDetailActions({
   // 검색창은 `GroupDetailScreen`이 하나만 그린다. 여기서는 URL만 연다.
   const { openSearch } = useSearchDialogParam();
   const isMember = group.membership_state === "member";
-  const isPrivate = group.join_policy === "invite_only";
+  const canManage =
+    group.member_role === "owner" || group.member_role === "admin";
   const canCurate =
     group.member_role === "owner" ||
     group.member_role === "admin" ||
@@ -55,6 +58,23 @@ export function GroupDetailActions({
   // 기능 명세 7.12: 공식 그룹은 나갈 수 없고, 소유자는 소유권을 이전해야 나갈 수 있다.
   const canLeave =
     isMember && group.kind !== "official" && group.member_role !== "owner";
+  // 기능 명세 7.20: 승인 가입 그룹의 주소는 가입 요청 통로라 소유자·관리자만 나눈다.
+  // 초대 전용 그룹은 주소를 받아도 비멤버가 열 수 없어 복사할 이유가 없다.
+  const canCopyLink =
+    isMember &&
+    (group.join_policy === "open" ||
+      (group.join_policy === "request" && canManage));
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        new URL(`/groups/${group.slug}`, window.location.origin).toString(),
+      );
+      toast.success("그룹 링크를 복사했습니다.");
+    } catch {
+      toast.error("그룹 링크를 복사하지 못했습니다.");
+    }
+  };
 
   return (
     <>
@@ -114,6 +134,12 @@ export function GroupDetailActions({
                 {isMember ? (
                   <>
                     <DropdownMenuGroup>
+                      {canCopyLink ? (
+                        <DropdownMenuItem onClick={() => void copyLink()}>
+                          <LinkIcon />
+                          그룹 링크 복사
+                        </DropdownMenuItem>
+                      ) : null}
                       <DropdownMenuItem
                         onClick={() => setNotificationOpen(true)}
                       >
@@ -157,6 +183,11 @@ export function GroupDetailActions({
             </DropdownMenu>
           ) : null}
         </div>
+        {isTeacher && !isMember && group.join_policy === "request" ? (
+          <p className="text-xs text-muted-foreground">
+            교사는 초대 링크로만 가입할 수 있습니다.
+          </p>
+        ) : null}
         {fetcher.data?.error ? (
           <p role="alert" className="text-xs text-destructive">
             {fetcher.data.error}
@@ -176,10 +207,10 @@ export function GroupDetailActions({
         onOpenChange={setLeaveOpen}
         title={group.name}
         description={
-          isPrivate
+          group.join_policy === "invite_only"
             ? "이 그룹에서 탈퇴할까요? 초대 전용 그룹이라 다시 들어오려면 새 초대를 받아야 합니다."
             : group.join_policy === "request"
-              ? "이 그룹에서 탈퇴할까요? 다시 들어오려면 가입 요청과 승인을 거쳐야 합니다."
+              ? "이 그룹에서 탈퇴할까요? 다시 들어오려면 그룹 링크로 가입을 요청하고 승인을 받아야 합니다."
               : "이 그룹에서 탈퇴할까요? 공개 그룹이라 언제든 다시 가입할 수 있습니다."
         }
         confirmLabel="탈퇴"
