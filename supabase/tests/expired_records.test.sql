@@ -110,7 +110,14 @@ select ok(
 );
 
 select is(
-  (select array_agg(content order by content) from public.stories),
+  -- 로컬에서 앱을 쓰며 남긴 스토리가 섞이지 않도록 이 파일이 넣은 행만 본다.
+  (
+    select array_agg(content order by content)
+    from public.stories
+    where content in (
+      '살아 있는 스토리', '만료된 스토리', '만료된 사진 스토리', '업로드 중', '버려진 업로드'
+    )
+  ),
   array['살아 있는 스토리', '업로드 중'],
   'only live stories and recent uploads remain'
 );
@@ -119,6 +126,7 @@ select is(
     select array_agg(object_path order by object_path)
     from private.storage_cleanup_queue
     where reason = 'story_media'
+      and object_path like 'retention/%'
   ),
   array[
     'retention/abandoned',

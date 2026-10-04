@@ -172,7 +172,8 @@ export function StoryViewer({
   useEffect(() => {
     const animation = animationRef.current;
 
-    if (!animation) return;
+    // 마지막 장은 끝난 채로 멈춰 있다. 끝난 애니메이션에 play()를 부르면 처음부터 다시 돈다.
+    if (!animation || animation.playState === "finished") return;
     if (paused) animation.pause();
     else animation.play();
   }, [paused, progressElement, story?.id]);

@@ -138,7 +138,9 @@ begin
   where story.profile_id = caller_profile_id
     and (
       (story.status = 'ready' and story.expires_at > now())
-      or (story.status = 'pending' and story.created_at > now() - interval '24 hours')
+      -- 미완성 업로드는 정리 작업이 지우는 48시간 동안 센다. 24시간만 세면 그 사이에 한도를
+      -- 다시 채워 회수되지 않은 행을 두 배로 쌓을 수 있다.
+      or (story.status = 'pending' and story.created_at > now() - interval '48 hours')
     );
 
   if active_count >= 20 then

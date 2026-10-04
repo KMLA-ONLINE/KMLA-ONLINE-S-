@@ -48,7 +48,8 @@ export const handle = defineAppChrome({
 });
 
 /**
- * `post`·`kind`·`source`는 게시물 상세 오버레이의 URL 상태이고, loader가 읽지 않는다. 이미지
+ * `post`·`kind`·`source`는 게시물 상세 오버레이의, `story`는 스토리 뷰어·작성 창의 URL
+ * 상태이고, loader가 읽지 않는다. 이미지
  * 뷰어와 댓글 시트는 공용 규칙이 이미 무시한다.
  *
  * 피드에서는 이게 특히 비싸다. 첫 페이지를 다시 읽으면 `list_feed_posts`가 새 세션을 열어
@@ -58,6 +59,7 @@ export const shouldRevalidate = createPostListRevalidation([
   "post",
   "kind",
   "source",
+  "story",
 ]);
 
 // 로더는 화면이 읽을 캐시를 데우는 일만 한다. 피드 자체는 `FeedScreen`이 무한 쿼리로

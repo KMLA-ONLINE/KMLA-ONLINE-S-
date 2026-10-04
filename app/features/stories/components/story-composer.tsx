@@ -48,8 +48,11 @@ interface PreparedImage {
 
 export function StoryComposer({
   onDone,
+  onPendingChange,
 }: {
   onDone: () => void | Promise<void>;
+  /** 올리는 동안 부모가 창을 닫지 못하게 막는 데 쓴다. */
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<Mode>("photo");
@@ -59,6 +62,10 @@ export function StoryComposer({
   const [background, setBackground] = useState<StoryBackground>("blue");
   const [link, setLink] = useState("");
   const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    onPendingChange?.(pending);
+  }, [pending, onPendingChange]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(
@@ -86,10 +93,10 @@ export function StoryComposer({
     setError(null);
 
     try {
-      const [compressed, thumbnail] = await Promise.all([
-        compressImage(file, "screen"),
-        compressImage(file, "card"),
-      ]);
+      // 축소본은 이미 줄인 원본에서 만든다. 원래 파일(최대 50메가픽셀)을 두 번 디코딩하면 iOS에서
+      // 메모리 상한에 먼저 닿는다.
+      const compressed = await compressImage(file, "screen");
+      const thumbnail = await compressImage(compressed, "card");
       const [width, height] = await getImageDimensions(compressed);
 
       setImage({

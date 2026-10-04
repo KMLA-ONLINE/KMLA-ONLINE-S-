@@ -1,5 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
 import { PlusIcon, XIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { StoryComposer } from "~/features/stories/components/story-composer";
@@ -40,13 +41,34 @@ export function StoryRail({
   viewer: { pubId: string; name: string; avatarUrl: string | null };
   canWrite: boolean;
 }) {
-  const [updatedItems, setUpdatedItems] = useState<StoryItem[] | null>(null);
+  // 레일은 쿼리 캐시를 구독한다. 로더가 채운 값을 그대로 읽고, 작성·삭제 뒤의 무효화와 당겨서
+  // 새로고침이 다시 받은 값도 같은 경로로 들어온다.
+  const { data } = useQuery({
+    queryKey: storyKeys.active(),
+    queryFn: listActiveStories,
+    staleTime: STORY_STALE_TIME,
+  });
   const { param, openComposer, openStory, showStory, close } = useStoryParam();
+  // 방금 지운 스토리. 목록 갱신이 주소에서 `?story=`가 빠지기 전에 도착해도 "찾을 수 없음"으로
+  // 오인하지 않게 한다.
+  const [deletedIds, setDeletedIds] = useState<ReadonlySet<number>>(
+    () => new Set(),
+  );
+  // 작성 창이 끝나는 시점에는 사용자가 이미 뒤로가기로 닫았을 수 있다. 그때 또 닫으면 홈 밖으로
+  // 나가므로 지금도 열려 있는지 최신 값으로 확인한다.
+  const paramKindRef = useRef(param.kind);
+  const [uploading, setUploading] = useState(false);
 
-  const items = updatedItems ?? initialItems;
+  useLayoutEffect(() => {
+    paramKindRef.current = param.kind;
+  });
+
+  const items = data ?? initialItems;
   const groups = groupStoriesByAuthor(items, viewer.pubId);
   const missingStory =
-    param.kind === "story" && !items.some((item) => item.id === param.id);
+    param.kind === "story" &&
+    !deletedIds.has(param.id) &&
+    !items.some((item) => item.id === param.id);
 
   // 공유 링크로 들어왔는데 이미 만료됐거나 볼 수 없는 스토리면 알리고 param을 걷는다.
   useEffect(() => {
@@ -62,19 +84,10 @@ export function StoryRail({
   }, [missingStory, close]);
 
   async function refresh() {
-    // 작성·삭제 쪽이 이미 캐시를 버렸으므로 여기서는 새로 받아 캐시를 다시 채운다. 실패하면
-    // 지금 목록을 그대로 둔다. 다음 진입에서 캐시가 비어 있으므로 다시 받는다.
-    try {
-      setUpdatedItems(
-        await getQueryClient().query({
-          queryKey: storyKeys.active(),
-          queryFn: listActiveStories,
-          staleTime: STORY_STALE_TIME,
-        }),
-      );
-    } catch {
-      // 위 주석 참고.
-    }
+    // 실패하면 지금 목록을 그대로 둔다. 무효화된 상태라 다음 진입에서 다시 받는다.
+    await getQueryClient()
+      .invalidateQueries({ queryKey: storyKeys.active() })
+      .catch(() => undefined);
   }
 
   return (
@@ -185,6 +198,7 @@ export function StoryRail({
           onShow={showStory}
           onClose={close}
           onDeleted={async () => {
+            setDeletedIds((previous) => new Set(previous).add(param.id));
             close();
             await refresh();
           }}
@@ -194,9 +208,13 @@ export function StoryRail({
       {canWrite ? (
         <StoryComposerDialog
           open={param.kind === "composer"}
-          onClose={close}
+          onClose={() => {
+            // 올리는 중에는 닫지 않는다. 닫아도 업로드는 계속되고, 끝날 때 다시 닫으려 한다.
+            if (!uploading) close();
+          }}
+          onPendingChange={setUploading}
           onDone={async () => {
-            close();
+            if (paramKindRef.current === "composer") close();
             await refresh();
           }}
         />
@@ -208,10 +226,12 @@ export function StoryRail({
 function StoryComposerDialog({
   open,
   onClose,
+  onPendingChange,
   onDone,
 }: {
   open: boolean;
   onClose: () => void;
+  onPendingChange: (pending: boolean) => void;
   onDone: () => void | Promise<void>;
 }) {
   return (
@@ -243,7 +263,9 @@ function StoryComposerDialog({
           </DialogClose>
         </DialogHeader>
 
-        {open ? <StoryComposer onDone={onDone} /> : null}
+        {open ? (
+          <StoryComposer onDone={onDone} onPendingChange={onPendingChange} />
+        ) : null}
       </DialogContent>
     </Dialog>
   );
