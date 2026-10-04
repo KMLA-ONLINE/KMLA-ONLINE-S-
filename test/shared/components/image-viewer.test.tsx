@@ -301,7 +301,7 @@ describe("ImageViewer", () => {
       expect(chrome()).not.toHaveAttribute("data-hidden");
     });
 
-    it("enters fullscreen with the chrome hidden and leaves it when shown", () => {
+    it("enters fullscreen once with the chrome hidden and leaves it on close", () => {
       vi.useFakeTimers();
       const root = document.documentElement;
       let fullscreenElement: Element | null = null;
@@ -324,7 +324,7 @@ describe("ImageViewer", () => {
       });
 
       try {
-        renderViewer();
+        const { unmount } = renderViewer();
         tap();
         act(() => {
           vi.advanceTimersByTime(300);
@@ -333,10 +333,18 @@ describe("ImageViewer", () => {
           navigationUI: "hide",
         });
 
-        tap();
-        act(() => {
-          vi.advanceTimersByTime(300);
-        });
+        // 조작부를 다시 보이고 숨겨도 전체화면은 그대로다.
+        for (let i = 0; i < 2; i++) {
+          tap();
+          act(() => {
+            vi.advanceTimersByTime(300);
+          });
+        }
+        expect(chrome()).toHaveAttribute("data-hidden");
+        expect(requestFullscreen).toHaveBeenCalledOnce();
+        expect(exitFullscreen).not.toHaveBeenCalled();
+
+        unmount();
         expect(exitFullscreen).toHaveBeenCalledOnce();
       } finally {
         // 테스트가 붙인 것만 걷어 낸다. jsdom에는 원래 없다.

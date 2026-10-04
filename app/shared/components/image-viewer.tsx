@@ -530,7 +530,8 @@ function ViewerContent({
   /**
    * 터치 기기에서 조작부를 숨길 때 전체화면에도 들어간다. 안드로이드는 그래야 하단 탐색 바가
    * 사라진다. 요청은 사용자 제스처 안에서만 받아 주므로 탭 처리에서 곧바로 부른다. iPhone처럼
-   * 요소 전체화면이 없는 곳에서는 조작부만 숨긴다.
+   * 요소 전체화면이 없는 곳에서는 조작부만 숨긴다. 한 번 들어가면 뷰어를 닫을 때까지 머문다.
+   * Chrome이 들어갈 때마다 해제 안내를 띄우므로, 탭마다 드나들면 그 안내가 계속 뜬다.
    */
   const enterImmersive = () => {
     const root = document.documentElement;
@@ -566,8 +567,7 @@ function ViewerContent({
     onTap: () => {
       const next = !chromeVisibleRef.current;
       showChrome(next);
-      if (next) leaveImmersive(immersiveRef);
-      else enterImmersive();
+      if (!next) enterImmersive();
     },
     onDismiss: onClose,
     onZoomChange: (zoom) => setZoomScale(zoom.scale),
