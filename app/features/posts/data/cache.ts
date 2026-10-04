@@ -15,12 +15,7 @@ export const postKeys = {
     [...postKeys.all, "anonymous-activity-restriction", groupId] as const,
 };
 
-/**
- * 게시물 본문과 별도로 변하는 댓글 수·반응의 표시용 정본이다.
- *
- * 목록 원본과 미디어 수화본을 고치지 않아도 카드·행·상세가 같은 게시물의 최신 engagement를
- * 읽는다. QueryClient가 계정 전환에서 비워지므로 module-level 상태를 두지 않는다.
- */
+/** 본문과 별도로 변하는 댓글 수·반응의 표시용 정본. QueryClient가 계정 전환에서 비워지므로 module-level 상태를 두지 않는다. */
 export function patchPostEngagement(
   queryClient: QueryClient,
   postId: string,

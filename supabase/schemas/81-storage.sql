@@ -27,3 +27,7 @@ CREATE POLICY "post_attachments_storage_select_reader" ON "storage"."objects" FO
 CREATE POLICY "profile_media_insert_pending_owner" ON "storage"."objects" FOR INSERT TO "authenticated" WITH CHECK ((("bucket_id" = 'profile-media'::"text") AND ("owner_id" = ( SELECT ("auth"."uid"())::"text" AS "uid")) AND "private"."can_upload_profile_media"("name")));
 
 CREATE POLICY "profile_media_select_accepted" ON "storage"."objects" FOR SELECT TO "authenticated" USING ((("bucket_id" = 'profile-media'::"text") AND "storage"."allow_any_operation"(ARRAY['object.get_authenticated_info'::"text", 'object.get_authenticated'::"text", 'object.sign'::"text", 'object.sign_many'::"text"]) AND "private"."can_read_profile_media_path"("name")));
+
+CREATE POLICY "story_media_storage_insert_pending_author" ON "storage"."objects" FOR INSERT TO "authenticated" WITH CHECK ((("bucket_id" = 'story-media'::"text") AND ("owner_id" = ( SELECT ("auth"."uid"())::"text" AS "uid")) AND "private"."can_upload_story_media"("name")));
+
+CREATE POLICY "story_media_storage_select_reader" ON "storage"."objects" FOR SELECT TO "authenticated" USING ((("bucket_id" = 'story-media'::"text") AND "storage"."allow_any_operation"(ARRAY['object.get_authenticated_info'::"text", 'object.get_authenticated'::"text", 'object.sign'::"text", 'object.sign_many'::"text"]) AND "private"."can_read_story_media"("name")));

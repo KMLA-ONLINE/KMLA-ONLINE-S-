@@ -10,6 +10,7 @@ import {
 
 import type { Route } from "./+types/root";
 import { ErrorPage } from "~/shared/components/error-page";
+import { Spinner } from "~/shared/ui/spinner";
 import { PwaPrompts } from "~/shared/components/pwa-prompts";
 import { QueryProvider } from "~/shared/components/query-provider";
 import { ThemeColor } from "~/shared/components/theme-color";
@@ -87,11 +88,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <html lang="ko" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
-        {/* `viewport-fit=cover`는 일부러 뺐다. Android Chrome 135+는 cover를 선언한 페이지를
-            하단 시스템 내비게이션 바 뒤까지 그려서, 탭바 배경이 시스템 바를 덮어 버린다. */}
+        {/* `viewport-fit=cover`는 일부러 뺐다. Android Chrome 135+에서 탭바 배경이 시스템 내비게이션 바를 덮는다. */}
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {/* 하이드레이션 전 기본값. `ThemeProvider`의 `defaultTheme`과 같은 라이트 배경이며,
-            테마가 정해진 뒤에는 `<ThemeColor />`가 실제 배경색으로 덮어쓴다. */}
+        {/* 하이드레이션 전 기본값(라이트). 이후 `<ThemeColor />`가 덮어쓴다. */}
         <meta name="theme-color" content="#ffffff" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -99,11 +98,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      {/* overscroll-none: 셸이 h-dvh라 body는 스크롤하지 않는다. 그래도 남는 고무줄
-          바운스(특히 iOS)를 여기서 끊는다. */}
+      {/* 셸이 h-dvh라 body는 스크롤하지 않지만, iOS 고무줄 바운스는 overscroll-none으로 끊는다. */}
       <body className="overscroll-none">
-        {/* app.css의 dark 변형이 `.dark` 클래스 기준이라(@custom-variant dark (&:is(.dark *)))
-            attribute는 class여야 한다. */}
+        {/* app.css의 dark 변형이 `.dark` 클래스 기준이라 attribute는 class여야 한다. */}
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
@@ -141,10 +138,38 @@ export default function App() {
  *
  * 스피너가 아니라 골격을 그리는 이유: 첫 페인트에서 화면 구조가 자리를 잡고 있으면 데이터가
  * 도착할 때 레이아웃이 튀지 않는다. 어차피 정적으로 프리렌더되는 유일한 부분이기도 하다.
+ *
+ * 설치된 PWA에서는 골격 대신 로고를 그린다. OS 스플래시는 첫 페인트에 걷히므로, 그 자리에
+ * 같은 로고를 이어 그려야 JS를 받는 동안 빈 골격이 보이지 않는다. 일부러 붙잡지는 않는다 —
+ * 앱이 준비되는 순간 사라지고, 길어질 때만 스피너가 늦게 나타나 멈춘 화면처럼 보이지 않게 한다.
  */
 export function HydrateFallback() {
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background">
+    <>
+      {/* 로고는 OS 스플래시처럼 정중앙에 둔다. 스피너가 흐름에 끼면 로고가 위로 밀려 넘어갈 때 튄다. */}
+      <div className="hidden h-dvh items-center justify-center bg-background [@media(display-mode:standalone)]:flex">
+        <div className="relative">
+          <img
+            src="/logo.svg"
+            alt="KMLA Online"
+            width={112}
+            height={112}
+            fetchPriority="high"
+            className="size-28"
+          />
+          <span className="absolute top-full left-1/2 mt-8 -translate-x-1/2 animate-splash-hint">
+            <Spinner className="size-5 text-muted-foreground motion-reduce:animate-none" />
+          </span>
+        </div>
+      </div>
+      <ShellSkeleton />
+    </>
+  );
+}
+
+function ShellSkeleton() {
+  return (
+    <div className="flex h-dvh flex-col overflow-hidden bg-background [@media(display-mode:standalone)]:hidden">
       <div className="h-[var(--app-header-h)] shrink-0 border-b max-md:hidden" />
       <div className="flex min-h-0 flex-1">
         <div className="w-[var(--app-rail-w)] shrink-0 border-r max-md:hidden" />

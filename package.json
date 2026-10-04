@@ -2,6 +2,9 @@
   "name": "kmlaonlinev2",
   "private": true,
   "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
   "engines": {
     "node": ">=22.22.0",
     "npm": ">=11"
@@ -38,7 +41,8 @@
     "db:stop": "supabase stop",
     "db:status": "supabase status",
     "db:reset": "supabase db reset",
-    "db:diff": "supabase db diff -f",
+    "db:diff": "supabase db schema declarative sync --no-apply --name",
+    "db:drift": "node scripts/check-db-drift.mjs",
     "db:lint": "supabase db lint --local --schema public --level warning --fail-on error",
     "db:advisors": "supabase db advisors --local --type security --level info --fail-on error",
     "db:types": "supabase gen types typescript --local > app/shared/supabase/database.types.ts",

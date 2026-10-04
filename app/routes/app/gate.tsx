@@ -29,8 +29,7 @@ import { getQueryClient } from "~/shared/lib/query-client";
  * 아닌 사용자는 에러가 아니라 "빈 결과"를 보게 된다. 세션 유무만 보고 통과시키면 아무것도 없는
  * 앱을 헤매게 되니 status로 갈라야 한다.
  *
- * `Exclude<..., "accepted">`라서 상태가 하나 늘면 여기서 컴파일이 깨진다 — 새 상태를 조용히
- * 통과시키는 일이 없다.
+ * `Exclude<..., "accepted">`라서 상태가 늘면 컴파일이 깨진다.
  */
 const GATE_REDIRECT = {
   draft: "/setup",
@@ -40,20 +39,10 @@ const GATE_REDIRECT = {
 } as const;
 
 export async function clientLoader(): Promise<ShellData> {
-  // 뱃지는 셸 데이터가 아니라 쿼리가 소유하지만, 읽는 시점은 여전히 여기다.
-  //
-  // `staleTime`을 0으로 덮어 항상 새로 읽는다. 게이트 로더가 도는 순간이 곧 뱃지가 틀렸을
-  // 수 있는 순간이기 때문이다 — 특히 Push 알림으로 들어오는 경로에서 그렇다.
-  // `resolve_my_notification_destination()`이 `read_at`을 찍고, 그 라우트는 게이트 밖에
-  // 있어 목적지로 넘어오며 게이트가 새로 마운트된다. 캐시된 값을 그대로 쓰면 방금 읽은
-  // 알림이 최대 1분 동안 안 읽음으로 남는다. 같은 이유로 Realtime 이벤트를 언마운트 구간에
-  // 놓쳤을 때도 여기서 복구된다.
-  //
-  // 매번 읽어도 비싸지 않다. 게이트 로더는 첫 진입과 뮤테이션 뒤에만 다시 돈다.
-  //
-  // `loadShellData()`와 병렬로 띄운다. 순서를 지키면 세션 → 프로필 → 아바타 서명이 끝난
-  // 뒤에야 요청이 나가 왕복이 하나 더 붙는데, 뱃지는 그중 무엇에도 의존하지 않는다.
-  // 세션이 없으면 이 요청은 401로 버려지지만, 그 경로는 곧바로 /login으로 나간다.
+  // `staleTime: 0`으로 항상 새로 읽는다. Push 알림 경로에서 `resolve_my_notification_destination()`이
+  // `read_at`을 찍은 직후 게이트가 마운트되므로, 캐시를 쓰면 읽은 알림이 최대 1분간 안 읽음으로 남는다.
+  // 게이트 로더는 첫 진입과 뮤테이션 뒤에만 돌아 매번 읽어도 비싸지 않다.
+  // 뱃지는 세션·프로필에 의존하지 않으므로 `loadShellData()`와 병렬로 띄운다(세션 없으면 401로 버려지고 /login으로 간다).
   const badge = getQueryClient()
     .fetchQuery({ ...notificationBadgeQuery(), staleTime: 0 })
     // 뱃지 하나 때문에 앱 전체가 에러 화면으로 갈 이유는 없다. 실패하면 0으로 그린다.

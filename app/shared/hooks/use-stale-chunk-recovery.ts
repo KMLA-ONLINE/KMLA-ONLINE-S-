@@ -49,8 +49,7 @@ export function useStaleChunkRecovery(reload = reloadPage) {
     const onPreloadError = (event: Event) => {
       if (recovered) return;
 
-      // 새 빌드에서도 같은 import가 실패하면(청크 자체가 깨진 배포) 새로고침이 끝없이
-      // 돈다. 방금 한 번 되살렸다면 여기서 손을 떼고 `ErrorBoundary`에 넘긴다.
+      // 새 빌드에서도 같은 import가 실패하면 새로고침이 무한히 돈다. 방금 되살렸다면 `ErrorBoundary`에 넘긴다.
       const now = Date.now();
       if (now - readReloadMark() < RELOAD_COOLDOWN_MS) return;
 

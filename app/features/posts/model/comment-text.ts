@@ -10,21 +10,12 @@ export type CommentSegment =
   | { type: "mention"; ordinal: number; label: string }
   | { type: "break" };
 
-/**
- * 저장 직전 정규화.
- *
- * CRLF를 LF로 맞추고 앞뒤 공백만 덜어낸다. 본문 중간의 빈 줄은 사용자가 의도한 간격이므로
- * 건드리지 않는다 — 데이터베이스도 `btrim`만 하므로 양쪽 규칙이 같다.
- */
+/** 저장 직전 정규화. CRLF를 LF로, 앞뒤 공백만 덜어낸다(DB도 `btrim`만 한다). */
 export function normalizeCommentBody(value: string): string {
   return value.replace(/\r\n?/g, "\n").trim();
 }
 
-/**
- * 글자 수는 grapheme cluster 기준이다. 이모지 하나가 코드 유닛 여러 개인데 그걸 여러 글자로
- * 세면 사용자가 보는 길이와 어긋난다. 데이터베이스는 `char_length`로 세므로 두 값이 다를 수
- * 있지만, 클라이언트 검사는 UX용이고 실제 경계는 RPC가 잡는다.
- */
+/** 글자 수는 grapheme cluster 기준이다. DB는 `char_length`라 다를 수 있지만 클라이언트 검사는 UX용이고 경계는 RPC가 잡는다. */
 let graphemeSegmenter: Intl.Segmenter | null | undefined;
 
 /** 생성 비용이 있는 객체다. 글자 수는 입력 한 글자마다 다시 세므로 한 번 만들어 재사용한다. */
@@ -62,10 +53,7 @@ export function validateCommentBody(
 
 const URL_PATTERN = /https?:\/\/[^\s]+/gi;
 
-/**
- * URL 뒤에 따라붙은 문장 부호는 링크에서 뗀다. "자세히는 https://example.com/a. 여기서"의
- * 마침표까지 링크에 넣으면 눌렀을 때 다른 주소로 간다.
- */
+/** URL 뒤 문장 부호는 링크에서 뗀다("https://example.com/a. 여기서"의 마침표). */
 const TRAILING_PUNCTUATION = /[.,!?;:'"]+$/;
 
 function splitTrailingPunctuation(match: string): [string, string] {
@@ -84,12 +72,7 @@ function countChar(value: string, char: string): number {
   return count;
 }
 
-/**
- * 읽기 전용 렌더링용 분해.
- *
- * 평문을 Markdown이나 HTML로 해석하지 않는다. 줄바꿈과 http(s) URL만 알아보고 나머지는 입력
- * 순서 그대로 텍스트로 남긴다(콘텐츠 서식 설계 §7.3).
- */
+/** 읽기 전용 렌더링용 분해. 줄바꿈과 http(s) URL만 알아보고 나머지는 텍스트로 남긴다(콘텐츠 서식 설계 §7.3). */
 export function parseCommentText(value: string): CommentSegment[] {
   const segments: CommentSegment[] = [];
   const lines = value.replace(/\r\n?/g, "\n").split("\n");

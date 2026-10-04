@@ -29,13 +29,6 @@ export function getPostErrorMessage(error: unknown): string {
   return "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
-export function formatPostDate(value: string): string {
-  return new Intl.DateTimeFormat("ko-KR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
 const KIB = 1024;
 const MIB = KIB * KIB;
 
@@ -46,12 +39,7 @@ export function formatFileSize(bytes: number): string {
   return `${(bytes / MIB).toFixed(1)} MB`;
 }
 
-/**
- * 댓글 전용 오류 문구.
- *
- * 코드 집합은 게시물과 같지만 사용자가 읽는 대상이 다르고, 댓글 RPC는 깊이와 신원처럼 게시물에
- * 없는 이유로도 거절한다. 문구를 게시물과 한 함수에 몰면 어느 쪽에도 맞지 않는 말이 된다.
- */
+/** 댓글 전용 오류 문구. 댓글 RPC는 깊이·신원처럼 게시물에 없는 이유로도 거절해 함수를 나눈다. */
 export function getCommentErrorMessage(error: unknown): string {
   if (!error || typeof error !== "object")
     return "댓글을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";

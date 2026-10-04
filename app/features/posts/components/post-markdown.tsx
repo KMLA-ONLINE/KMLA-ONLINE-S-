@@ -14,22 +14,13 @@ import { cn } from "~/shared/lib/utils";
 
 const allowedElements = ["p", "br", "strong", "em", "del", "h2", "h3", "a"];
 
-/**
- * 기본 `urlTransform`은 http/https/mailto 등만 남기고 나머지 주소를 비운다. 멘션은 `m:1`
- * 모양의 링크로 저장하므로(`model/mentions.ts`) 그 하나만 통과시킨다. 다른 주소는 기본
- * 동작에 맡겨야 `javascript:` 같은 것이 그대로 새지 않는다.
- */
+/** 멘션은 `m:1` 모양 링크로 저장하므로(`model/mentions.ts`) 그 주소만 통과시킨다. 나머지는 기본 동작에 맡겨 `javascript:`가 새지 않게 한다. */
 function transformUrl(url: string): string {
   if (isMentionHref(url)) return url;
   return defaultUrlTransform(url);
 }
 
-/**
- * 대상을 못 찾았을 때 그릴 이름.
- *
- * 링크의 안쪽은 보통 문자열 하나지만, 이름에 Markdown 문자가 섞이면 중첩 노드가 된다. 그때
- * 빈 문자열로 떨어뜨리면 `@`만 남으므로 텍스트를 모아 쓴다.
- */
+/** 대상을 못 찾았을 때 그릴 이름. 이름에 Markdown 문자가 섞이면 링크 안쪽이 중첩 노드가 되므로 텍스트를 모아 쓴다. */
 function mentionFallbackLabel(label: ReactNode): string {
   const text = Children.toArray(label)
     .map((child) => (typeof child === "string" ? child : ""))

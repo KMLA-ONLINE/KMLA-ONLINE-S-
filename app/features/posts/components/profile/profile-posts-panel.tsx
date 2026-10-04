@@ -12,16 +12,7 @@ import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 
-/**
- * 프로필 타임라인.
- *
- * "더 보기"는 route를 재검증하지 않고 `data/queries`를 직접 부른다 — 목록을 훑는 동작이라
- * URL에 남길 이유가 없고, loader를 다시 돌리면 프로필 머리까지 함께 깜빡인다. 반대로 삭제는
- * 권한과 revalidate가 걸려 있으므로 프로필 route의 action으로 보낸다.
- *
- * 카드/목록 전환과 카테고리 필터는 두지 않는다. 개인 게시물에는 제목도 카테고리도 없어서
- * 목록 보기의 한 줄에 보여줄 것이 본문 앞동아리뿐이다.
- */
+/** 프로필 타임라인. "더 보기"는 route 재검증 없이 `data/queries`를 직접 부르고, 삭제는 프로필 route action으로 보낸다. */
 export function ProfilePostsPanel({
   timelinePubId,
   canWrite,

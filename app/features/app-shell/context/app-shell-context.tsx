@@ -28,13 +28,7 @@ export function useAppShell(): ShellData {
   return value;
 }
 
-/**
- * 경로별 안 읽은 수. 사이드바와 탭바가 같은 값을 쓴다.
- *
- * 셸 데이터가 아니라 쿼리에서 읽는다. 게이트 로더가 들고 있던 시절에는 뱃지를 갱신하려면
- * 라우트를 재검증해야 했고, 그 재검증이 현재 화면의 로더까지 끌고 돌았다. 지금은
- * `notificationKeys.badge()` 하나만 무효화하면 된다.
- */
+/** 경로별 안 읽은 수. 게이트 로더가 아니라 쿼리에서 읽어 `notificationKeys.badge()` 하나만 무효화하면 된다. */
 export function useNavBadges(): Record<string, number> {
   const { data } = useQuery(notificationBadgeQuery());
 

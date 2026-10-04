@@ -24,6 +24,7 @@
 | `post-attachments`           | 게시물 첨부, 댓글 이미지    | 그룹 또는 개인 게시물의 실제 열람 권한을 가진 사용자가 열람          |
 | `direct-message-attachments` | 1:1 메시지의 암호화된 첨부  | 두 대화 참여자가 암호문에 접근하고 클라이언트에서 복호화             |
 | `group-message-attachments`  | 그룹 메시지의 암호화된 첨부 | 해당 시점에 허용된 그룹 대화 멤버가 클라이언트에서 복호화            |
+| `story-media`                | 사진 스토리                 | 스토리 노출 규칙(기능 명세 §6.6)에 따라 만료 전까지 열람             |
 
 ## 4. 버킷별 규칙
 
@@ -84,6 +85,13 @@
 - 신규 멤버는 참여 이후에 전송된 첨부만 복호화할 수 있다. 참여 이전 object를 내려받을 수 있더라도 해당 암호화 키는 제공하지 않는다.
 - 1:1 대화와 같은 암호문 형식을 사용하되 별도의 버킷과 epoch 키 생명주기를 사용한다.
 
+### 4.6 `story-media`
+
+- 사진 스토리마다 원본(긴 변 2048px, 압축 프리셋 `screen`)과 레일 카드용 축소본(긴 변 640px, `card`) 두 WebP object를 저장한다.
+- path는 원본이 `<auth uid>/<uuid>`, 축소본이 거기에 `-thumb`를 붙인 것이다. `prepare_image_story`가 만든 `pending` 스토리 행이 예고한 정확한 두 path에만 업로드를 허용한다.
+- 읽기는 `publish_image_story`로 `ready`가 되고 만료되지 않은 스토리의 사진만, 스토리 노출 규칙을 통과한 사용자에게 허용한다.
+- 클라이언트에는 DELETE를 허용하지 않는다. 사용자 삭제와 만료 정리가 행을 지우면서 path를 정리 큐에 넣는다(§8.2).
+
 ## 5. Object Path
 
 | 버킷                           | Path 형식                                   |
@@ -116,6 +124,7 @@
 | `post-attachments`           | 30MiB            | 모든 MIME type 허용        |
 | `direct-message-attachments` | 31MiB            | `application/octet-stream` |
 | `group-message-attachments`  | 31MiB            | `application/octet-stream` |
+| `story-media`                | 4MiB             | `image/webp`만 허용        |
 
 Bucket 제한은 object 하나에 적용되는 최종 방어선이다. 이미지 종류별 제한은 클라이언트가 검사하고, 암호화 전 메시지 파일 제한은 클라이언트가 제출한 metadata와 암호문 길이의 일관성을 finalize RPC가 검사한다. 데이터베이스와 일반 API는 메시지 평문 자체를 검사할 수 없다.
 

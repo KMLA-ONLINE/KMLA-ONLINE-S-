@@ -40,14 +40,7 @@ export function commentDomId(commentId: string): string {
   return `comment-${commentId}`;
 }
 
-/**
- * 댓글 한 줄.
- *
- * 이름과 본문을 한 말풍선에 담고 반응·답글·시각은 말풍선 아래 회색 줄에 둔다. 들여쓰기는
- * 목록이 최상위 묶음 단위로 한 번만 준다 — 논리적으로는 10단계까지 중첩되지만(기능 명세 §9.2)
- * 그대로 밀어 넣으면 좁은 화면에서 깊은 답글의 본문 폭이 글자 몇 개로 줄어든다. 대신 부모를
- * 본문 앞 `@작성자` 칩으로 밝히고, 누르면 원래 자리로 이동한다.
- */
+/** 댓글 한 줄. 들여쓰기는 최상위 묶음 단위로 한 번만 주고(기능 명세 §9.2), 깊은 답글의 부모는 `@작성자` 칩으로 밝힌다. */
 export function CommentItem({
   comment,
   viewer,
@@ -125,9 +118,7 @@ export function CommentItem({
     : null;
   const isEffectiveFeedBump = comment.is_effective_feed_bump;
 
-  // 수정은 답글 입력창을 그대로 쓴다. 화면에 입력기가 두 종류 있으면 같은 일을 하는데도
-  // 다르게 생겨서, 한쪽만 고쳐지는 일이 반복된다. 신원은 작성 뒤 바꿀 수 없으므로 선택지를
-  // 원래 신원 하나로 고정해 토글을 감춘다.
+  // 수정도 답글 입력창을 쓴다(입력기가 둘이면 한쪽만 고쳐진다). 신원은 작성 뒤 못 바꾸므로 원래 신원 하나로 고정해 토글을 감춘다.
   if (editing) {
     return (
       <CommentComposer
@@ -199,10 +190,7 @@ export function CommentItem({
                 <p className="truncate text-xs font-semibold">{authorName}</p>
               )}
               {comment.author_identity === "staff" ? <StaffMark /> : null}
-              {/*
-                배지가 아니라 글자다. 누를 수 없는 표시에 배지를 쓰면 hover에서 배경이
-                깔려 눌리는 것처럼 보인다. 이름 옆에 파란 글자로 붙이는 편이 조용하다.
-              */}
+              {/* 배지는 hover 배경이 깔려 눌리는 것처럼 보이므로 글자로 둔다. */}
               {isPostAuthor ? (
                 <span className="shrink-0 text-xs font-medium text-primary">
                   작성자
@@ -365,10 +353,7 @@ export function CommentItem({
   );
 }
 
-/**
- * "· 수정됨". 앞의 가운뎃점까지 이 컴포넌트가 갖는다 — 호출부가 `edited_at` 조건을 구분자와
- * 라벨에 두 번 쓰게 되면 한쪽만 고치는 실수가 반드시 나온다.
- */
+/** "· 수정됨". 구분자까지 여기서 가져 호출부가 `edited_at` 조건을 두 번 쓰지 않게 한다. */
 function CommentEditedMark({ at }: { at: string | null }) {
   if (!at) return null;
   const absolute = formatAbsoluteTime(at);

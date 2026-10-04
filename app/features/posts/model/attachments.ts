@@ -12,17 +12,7 @@ import {
   isSupportedImageInput,
 } from "~/shared/lib/image/compress";
 const DEFAULT_IMAGE_PREPARATION_CONCURRENCY = 3;
-/**
- * 휴대폰과 저사양 기기에서 한 번에 손보는 사진 수.
- *
- * 한때 1이었다. 그때는 WebP 인코딩이 메인 스레드에서 동기로 돌아 두 장을 띄워도 겹칠 것이
- * 없었고, HEIF는 전체 해상도 PNG를 왕복하느라 진행 중인 사진마다 수십 MB를 들고 있었다.
- * 지금은 인코딩이 워커에 있고 그 왕복도 없어져서, 한 장을 인코딩하는 동안 다음 장을
- * 디코딩하는 겹침이 실제로 생긴다.
- *
- * 그래도 데스크톱과 같은 3을 주지는 않는다. iOS는 메모리 압박에서 탭을 통째로 죽이고, 그건
- * 조금 느린 것보다 훨씬 나쁜 실패다.
- */
+/** 휴대폰·저사양 기기에서 한 번에 손보는 사진 수. 인코딩이 워커로 옮겨 겹침이 생겼지만 iOS는 메모리 압박에 탭을 죽이므로 데스크톱(3)만큼 주지 않는다. */
 const LOW_POWER_IMAGE_PREPARATION_CONCURRENCY = 2;
 
 /** 업로드 파이프라인이 사진을 webp로 정규화하므로, 이미지인지 아닌지는 이 한 줄로 갈린다. */
@@ -117,15 +107,7 @@ export async function prepareCommentImage(
   };
 }
 
-/**
- * 이미 `photo`로 정규화한 이미지에서 축소본을 만든다.
- *
- * 원본이 아니라 압축 결과를 입력으로 쓰는 이유는 디코딩할 픽셀이 훨씬 적어 빠르고,
- * `photo`가 이미 EXIF를 털고 방향을 굽혔기 때문이다. 여기서 한 번 더 굽힐 것이 없다.
- *
- * 실패해도 던지지 않는다. 축소본은 데이터를 아끼는 수단이지 게시물의 일부가 아니라서,
- * 만들지 못했다고 업로드를 막을 이유가 없다.
- */
+/** 정규화한 `photo`에서 축소본을 만든다(픽셀이 적고 EXIF·방향이 이미 처리됐다). 실패해도 던지지 않는다 — 축소본은 게시물의 일부가 아니다. */
 async function createThumbnail(
   file: File,
   signal?: AbortSignal,
@@ -134,13 +116,7 @@ async function createThumbnail(
 }
 
 interface PostFilePreparationOptions {
-  /**
-   * 고른 파일들의 key를 고른 순서대로, 준비가 시작되기 전에 알린다.
-   *
-   * 표시 순서를 여기서 잡아야 한다. 압축은 동시에 여러 개가 돌고 큰 사진일수록 늦게 끝나므로,
-   * `onPrepared`가 오는 순서는 고른 순서가 아니다. 그 순서로 목록을 쌓으면 사용자가 고른
-   * 차례와 글에 실리는 차례가 어긋난다.
-   */
+  /** 고른 파일의 key를 고른 순서대로 준비 시작 전에 알린다. 압축 완료 순서(`onPrepared`)는 고른 순서가 아니다. */
   onQueued?: (keys: string[]) => void;
   onPrepared?: (file: PreparedPostFile) => void;
   onError?: (error: Error, key: string) => void;
@@ -231,14 +207,7 @@ export async function preparePostFiles(
   return prepared.filter((item): item is PreparedPostFile => Boolean(item));
 }
 
-/**
- * Supabase Storage의 signed URL에 `download` 쿼리를 붙인다.
- *
- * `<a download>`는 같은 출처에서만 동작한다. 첨부는 Storage 도메인에서 오므로 브라우저가
- * 속성을 무시하고 그냥 탭에서 열어버린다(PDF는 뷰어로, 나머지는 빈 화면으로). Storage가
- * 이 쿼리를 보면 `Content-Disposition: attachment`를 붙여 내려주므로, 저장 여부와 파일명
- * 모두 서버 응답이 결정하게 된다.
- */
+/** signed URL에 `download` 쿼리를 붙인다. Storage는 다른 출처라 `<a download>`가 무시되므로, 서버가 `Content-Disposition: attachment`를 내리게 한다. */
 export function toAttachmentDownloadUrl(
   signedUrl: string,
   filename: string,

@@ -20,7 +20,7 @@ import {
 import { getSupabase } from "~/shared/supabase/client";
 
 export type SignedUrlBucket =
-  "post-attachments" | "profile-media" | "group-media";
+  "post-attachments" | "profile-media" | "group-media" | "story-media";
 
 /** Storage에 요청하는 URL 유효 기간. */
 const SIGNED_URL_TTL_SECONDS = 3600;

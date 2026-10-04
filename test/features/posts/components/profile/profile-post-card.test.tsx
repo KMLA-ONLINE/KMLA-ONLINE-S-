@@ -156,7 +156,7 @@ describe("ProfilePostCard", () => {
       screen.getByRole("button", { name: "프로필 사진 크게 보기" }),
     );
 
-    expect(screen.getByRole("dialog")).toBeVisible();
+    expect(await screen.findByRole("dialog")).toBeVisible();
     const download = screen.getByRole("link", { name: "다운로드" });
     expect(download).toHaveAttribute(
       "href",

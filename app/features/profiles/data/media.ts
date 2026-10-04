@@ -5,22 +5,14 @@ import { STORAGE_UPLOAD_CACHE_CONTROL } from "~/shared/supabase/storage";
 
 const BUCKET = "profile-media";
 
-/**
- * `profiles.avatar_path`와 `cover_path`는 언제나 이 버킷의 object 경로이거나 `null`이다.
- * 두 컬럼에 쓰는 곳은 `finalize_profile_media()`(→ `object_path`)와
- * `remove_my_profile_media()`(→ `null`) 둘뿐이라, 완성된 외부 URL이 들어올 길이 없다.
- */
+/** `avatar_path`·`cover_path`는 항상 이 버킷의 object 경로이거나 `null`이다(쓰는 RPC가 둘뿐이라 외부 URL이 들어올 길이 없다). */
 export function createProfileMediaUrls(
   paths: readonly (string | null | undefined)[],
 ): Promise<Map<string, string>> {
   return createSignedUrls(BUCKET, paths);
 }
 
-/**
- * 교체하고 남은 이전 이미지는 클라이언트가 지우지 않는다. 프로필 슬롯에서 내려와도 그 이미지를
- * 만든 변경 활동 게시물이 계속 참조하고, 그 게시물이 삭제된 뒤에야 지울 수 있기 때문이다.
- * 판단과 삭제는 모두 `private.enqueue_storage_cleanup()`과 정리 큐가 맡는다.
- */
+/** 교체 뒤 이전 이미지는 클라이언트가 지우지 않는다 — 변경 활동 게시물이 계속 참조하므로 판단과 삭제는 정리 큐가 맡는다. */
 export async function replaceProfileMedia(
   slot: ProfileMediaSlot,
   file: File,

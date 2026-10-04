@@ -83,29 +83,4 @@ describe("menu route", () => {
       "/update",
     );
   });
-
-  it("offers the story shortcut to everyone who can post one", () => {
-    const { unmount } = renderMenu("member");
-
-    expect(screen.getByRole("link", { name: "스토리" })).toHaveAttribute(
-      "href",
-      "/menu/story",
-    );
-
-    unmount();
-    const { unmount: unmountTeacher } = renderMenu("member", "teacher");
-
-    expect(screen.getByRole("link", { name: "스토리" })).toHaveAttribute(
-      "href",
-      "/menu/story",
-    );
-
-    // 졸업생은 스토리를 올리지 못하므로 바로가기도 두지 않는다(기능 명세 §17.6).
-    unmountTeacher();
-    renderMenu("member", "alumni");
-
-    expect(
-      screen.queryByRole("link", { name: "스토리" }),
-    ).not.toBeInTheDocument();
-  });
 });

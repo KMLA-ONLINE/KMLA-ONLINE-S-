@@ -33,6 +33,26 @@ describe("group creation validation", () => {
     expect(hasGroupFormErrors(errors)).toBe(true);
   });
 
+  it("rejects custom addresses for private request groups", () => {
+    expect(
+      validateCreateGroup({ ...VALID_GROUP, joinPolicy: "request" }).slug,
+    ).toMatch(/임의 주소/);
+    expect(
+      validateCreateGroup({ ...VALID_GROUP, joinPolicy: "request", slug: "" }),
+    ).toEqual({});
+  });
+
+  it("keeps official groups public", () => {
+    expect(
+      validateCreateGroup({
+        ...VALID_GROUP,
+        kind: "official",
+        joinPolicy: "request",
+        slug: "",
+      }).joinPolicy,
+    ).toBeDefined();
+  });
+
   it("rejects reserved, malformed, and overlong values", () => {
     expect(
       validateCreateGroup({ ...VALID_GROUP, slug: "discover" }).slug,

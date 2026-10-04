@@ -1209,22 +1209,52 @@ export type Database = {
       }
       stories: {
         Row: {
+          background: string | null
           content: string
           created_at: string
+          expires_at: string | null
           id: number
+          image_height: number | null
+          image_path: string | null
+          image_size_bytes: number | null
+          image_width: number | null
+          link_url: string | null
           profile_id: number
+          published_at: string | null
+          status: Database["public"]["Enums"]["story_status"]
+          thumbnail_path: string | null
         }
         Insert: {
-          content: string
-          created_at?: string
-          id?: number
-          profile_id: number
-        }
-        Update: {
+          background?: string | null
           content?: string
           created_at?: string
+          expires_at?: string | null
           id?: number
+          image_height?: number | null
+          image_path?: string | null
+          image_size_bytes?: number | null
+          image_width?: number | null
+          link_url?: string | null
+          profile_id: number
+          published_at?: string | null
+          status?: Database["public"]["Enums"]["story_status"]
+          thumbnail_path?: string | null
+        }
+        Update: {
+          background?: string | null
+          content?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: number
+          image_height?: number | null
+          image_path?: string | null
+          image_size_bytes?: number | null
+          image_width?: number | null
+          link_url?: string | null
           profile_id?: number
+          published_at?: string | null
+          status?: Database["public"]["Enums"]["story_status"]
+          thumbnail_path?: string | null
         }
         Relationships: [
           {
@@ -1627,13 +1657,17 @@ export type Database = {
         }
         Returns: string
       }
+      create_text_story: {
+        Args: { p_background: string; p_content: string; p_link_url?: string }
+        Returns: number
+      }
       delete_group: { Args: { p_group_id: string }; Returns: undefined }
       delete_group_category: {
         Args: { p_category_id: string }
         Returns: undefined
       }
       delete_group_post: { Args: { p_post_id: string }; Returns: undefined }
-      delete_my_story: { Args: never; Returns: undefined }
+      delete_my_story: { Args: { p_story_id: number }; Returns: undefined }
       delete_post_attachment: {
         Args: { p_attachment_id: string }
         Returns: undefined
@@ -1815,6 +1849,20 @@ export type Database = {
           slug: string
         }[]
       }
+      get_group_link_preview: {
+        Args: { p_slug: string }
+        Returns: {
+          description: string
+          group_id: string
+          identity_policy: Database["public"]["Enums"]["group_identity_policy"]
+          join_policy: Database["public"]["Enums"]["group_join_policy"]
+          member_count: number
+          name: string
+          posting_policy: Database["public"]["Enums"]["group_posting_policy"]
+          requested_at: string
+          slug: string
+        }[]
+      }
       get_group_post: {
         Args: { p_post_id: string }
         Returns: {
@@ -1955,6 +2003,23 @@ export type Database = {
           allowed_profile_types: Database["public"]["Enums"]["profile_type"][]
           expires_at: string
           token: string
+        }[]
+      }
+      list_active_stories: {
+        Args: never
+        Returns: {
+          avatar_path: string
+          background: string
+          content: string
+          image_height: number
+          image_path: string
+          image_width: number
+          link_url: string
+          name: string
+          pub_id: string
+          published_at: string
+          story_id: number
+          thumbnail_path: string
         }[]
       }
       list_birthdays: {
@@ -2305,15 +2370,6 @@ export type Database = {
           visibility: Database["public"]["Enums"]["post_visibility"]
         }[]
       }
-      list_today_stories: {
-        Args: never
-        Returns: {
-          avatar_path: string
-          content: string
-          name: string
-          pub_id: string
-        }[]
-      }
       mark_all_my_notifications_read: { Args: never; Returns: number }
       mark_group_posts_visited: {
         Args: { p_group_id: string }
@@ -2384,6 +2440,20 @@ export type Database = {
           object_path: string
         }[]
       }
+      prepare_image_story: {
+        Args: {
+          p_content?: string
+          p_height: number
+          p_link_url?: string
+          p_size_bytes: number
+          p_width: number
+        }
+        Returns: {
+          object_path: string
+          story_id: number
+          thumbnail_path: string
+        }[]
+      }
       prepare_notification_delivery: {
         Args: { p_delivery_id: string; p_lease_id: string }
         Returns: boolean
@@ -2438,6 +2508,7 @@ export type Database = {
           object_path: string
         }[]
       }
+      publish_image_story: { Args: { p_story_id: number }; Returns: undefined }
       register_my_web_push_subscription: {
         Args: {
           p_auth: string
@@ -2595,7 +2666,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      set_my_story: { Args: { p_content: string }; Returns: undefined }
       set_post_reaction: {
         Args: {
           p_post_id: string
@@ -2903,6 +2973,7 @@ export type Database = {
       profile_media_status: "pending" | "ready"
       profile_status: "draft" | "pending" | "accepted" | "blocked" | "withdrawn"
       profile_type: "student" | "alumni" | "teacher"
+      story_status: "pending" | "ready"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2918,12 +2989,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2947,11 +3018,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2972,11 +3043,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2997,11 +3068,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3014,11 +3085,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3109,6 +3180,7 @@ export const Constants = {
       profile_media_status: ["pending", "ready"],
       profile_status: ["draft", "pending", "accepted", "blocked", "withdrawn"],
       profile_type: ["student", "alumni", "teacher"],
+      story_status: ["pending", "ready"],
     },
   },
 } as const

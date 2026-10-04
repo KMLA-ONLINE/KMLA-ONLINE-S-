@@ -2,6 +2,7 @@ import { BadgeCheckIcon, Globe2Icon, LockIcon } from "lucide-react";
 
 import { GroupAvatar } from "~/features/groups/components/group-avatar";
 import { GroupDetailActions } from "~/features/groups/components/group-detail-actions";
+import { isPrivateJoinPolicy } from "~/features/groups/model/format";
 import type { GroupDetail } from "~/features/groups/model/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";
 
@@ -25,7 +26,7 @@ export function GroupDetailHero({
   onSelectReports: () => void;
 }) {
   const isMember = group.membership_state === "member";
-  const isPrivate = group.join_policy === "invite_only";
+  const isPrivate = isPrivateJoinPolicy(group.join_policy);
   const VisibilityIcon = isPrivate ? LockIcon : Globe2Icon;
 
   return (

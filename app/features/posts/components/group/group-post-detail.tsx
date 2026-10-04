@@ -1,28 +1,26 @@
 import { useEffect } from "react";
 import { Link, useFetcher, useLocation } from "react-router";
 
-import { StaffMark } from "~/features/posts/components/staff-mark";
 import type { CommentViewer } from "~/features/posts/components/comment/comment-composer";
 import {
   PostFileList,
   PostImageGrid,
 } from "~/features/posts/components/post-attachments";
 import { splitPostAttachments } from "~/features/posts/model/attachments";
-import { PostAuthorAvatar } from "~/features/posts/components/post-author-avatar";
 import { PostDetailDialog } from "~/features/posts/components/post-detail-dialog";
 import { PostMarkdown } from "~/features/posts/components/post-markdown";
-import { PostMenu } from "~/features/posts/components/post-menu";
 import type {
   GroupPostDetail as GroupPostDetailModel,
   PostCommentPage,
   PostIdentity,
   AnonymousActivityRestriction,
 } from "~/features/posts/model/types";
-import { isFromGroup } from "~/features/posts/model/navigation";
+import { GroupPostHeader } from "~/features/posts/components/group/group-post-header";
+import { GroupPostMenu } from "~/features/posts/components/group/group-post-menu";
+import { postAuthorName } from "~/features/posts/model/identity";
+import { groupPostPath, isFromGroup } from "~/features/posts/model/navigation";
 import { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
-import { RelativeTime } from "~/shared/components/relative-time";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
-import { Badge } from "~/shared/ui/badge";
 
 export function GroupPostDetail({
   post,
@@ -55,17 +53,15 @@ export function GroupPostDetail({
   const defaultClose = useModalClose(`/groups/${slug}`);
   const close = onClose ?? defaultClose;
 
-  // 실명·운영진 게시물의 작성자는 자기 글에 익명 댓글을 달 수 없다(기능 명세 §9.1). 익명
-  // 게시물에서는 작성자도 익명으로 답할 수 있으므로 선택지를 그대로 둔다. DB가 최종 경계지만,
-  // 고를 수 없는 신원을 띄워 두고 거절하는 편보다 아예 지우는 편이 낫다.
+  // 실명·운영진 게시물의 작성자는 자기 글에 익명 댓글을 못 단다(기능 명세 §9.1). DB가 최종 경계지만 고를 수 없는 신원은 아예 지운다.
   const commentIdentities =
     post.is_author && post.author_identity !== "anonymous"
       ? identities.filter((identity) => identity !== "anonymous")
       : identities;
 
   const { images, files } = splitPostAttachments(post.attachments);
-  const authorName = post.author_name || post.author_label;
-  const postPath = `/groups/${slug}/posts/${post.post_id}`;
+  const authorName = postAuthorName(post);
+  const postPath = groupPostPath(slug, post.post_id);
 
   useEffect(() => markVisited(post.post_id), [markVisited, post.post_id]);
 
@@ -97,14 +93,9 @@ export function GroupPostDetail({
     >
       <div className="flex flex-col gap-3 p-4">
         {/*
-          알림이나 공유 링크로 곧장 들어오면 이 글이 어느 그룹의 것인지 화면에 남는 단서가 없다.
-          뒤로가기는 사용자가 온 곳으로 돌려보내야 하므로(`routes/notification-open.tsx`)
-          그룹으로 가는 길은 뒤로가기가 아니라 이 링크가 맡는다.
-
-          카테고리와 고정 표시는 여기 두지 않는다(기능 명세 §8.8). 둘 다 목록에서 이 글을
-          **찾고 가르는** 표시다 — 카드의 "고정된 게시물"은 왜 맨 위에 있는지를, 카테고리
-          badge는 어느 묶음으로 걸러지는지를 말한다. 상세에는 목록이 없어 둘 다 설명할 것이
-          없다. 고정 상태는 고정할 수 있는 사용자에게 `PostMenu`의 "고정 해제"로 남는다.
+          링크로 곧장 들어오면 그룹 단서가 없고 뒤로가기는 온 곳으로 가야 하므로
+          (`routes/notification-open.tsx`) 그룹 이동은 이 링크가 맡는다.
+          카테고리·고정 표시는 목록용이라 상세에 두지 않는다(기능 명세 §8.8).
         */}
         {fromGroup ? null : (
           <Link
@@ -115,78 +106,23 @@ export function GroupPostDetail({
           </Link>
         )}
 
-        <header className="flex items-center gap-3">
-          {post.author_identity !== "anonymous" && post.author_pub_id ? (
-            <Link
-              to={`/profile/${post.author_pub_id}`}
-              aria-label={`${authorName} 프로필`}
-            >
-              <PostAuthorAvatar
-                identity={post.author_identity}
-                name={post.author_name}
-                avatarUrl={post.author_avatar_url}
-                size="lg"
-              />
-            </Link>
-          ) : (
-            <PostAuthorAvatar
-              identity={post.author_identity}
-              name={post.author_name}
-              avatarUrl={post.author_avatar_url}
-              size="lg"
+        <GroupPostHeader
+          post={post}
+          align="center"
+          menu={
+            <GroupPostMenu
+              post={post}
+              slug={slug}
+              onPin={() =>
+                submitIntent({
+                  intent: "pin",
+                  pinned: String(!post.is_pinned),
+                })
+              }
+              onDelete={() => submitIntent({ intent: "delete" })}
             />
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              {post.author_identity !== "anonymous" && post.author_pub_id ? (
-                <Link
-                  to={`/profile/${post.author_pub_id}`}
-                  className="truncate text-sm font-semibold hover:underline"
-                >
-                  {authorName}
-                </Link>
-              ) : (
-                <span className="truncate text-sm font-semibold">
-                  {authorName}
-                </span>
-              )}
-              {post.author_identity === "staff" ? <StaffMark /> : null}
-              {post.is_author && post.author_identity === "anonymous" ? (
-                <Badge variant="secondary" className="shrink-0">
-                  나
-                </Badge>
-              ) : null}
-            </div>
-            <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-              <RelativeTime value={post.published_at} />
-            </div>
-          </div>
-          <PostMenu
-            editTo={`${postPath}/edit`}
-            isPinned={post.is_pinned}
-            canEdit={post.can_edit}
-            canPin={post.can_pin}
-            canDelete={post.can_delete}
-            canReport={!post.is_author}
-            reportPostId={post.post_id}
-            canModerateAnonymous={
-              post.author_identity === "anonymous" &&
-              post.can_moderate_anonymous
-            }
-            anonymousAuthorRestricted={post.anonymous_author_restricted}
-            anonymousAuthorRestrictionExpiresAt={
-              post.anonymous_author_restriction_expires_at
-            }
-            anonymousSourceId={post.post_id}
-            onPin={() =>
-              submitIntent({
-                intent: "pin",
-                pinned: String(!post.is_pinned),
-              })
-            }
-            onDelete={() => submitIntent({ intent: "delete" })}
-          />
-        </header>
+          }
+        />
 
         <div>
           <h2 className="mb-2 text-xl font-semibold">{post.title}</h2>

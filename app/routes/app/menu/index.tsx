@@ -4,7 +4,6 @@ import {
   CalendarDaysIcon,
   ChevronRightIcon,
   CircleQuestionMarkIcon,
-  ClipboardListIcon,
   SettingsIcon,
   ShieldCheckIcon,
   SparklesIcon,
@@ -28,8 +27,6 @@ interface Shortcut {
   to: string;
   label: string;
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
-  /** 스토리처럼 재학생·교사만 쓰는 항목. 졸업생에게는 숨긴다. */
-  writersOnly?: boolean;
 }
 
 /**
@@ -44,20 +41,10 @@ const shortcuts: Shortcut[] = [
   { to: "/menu/timetable", label: "시간표", icon: CalendarDaysIcon },
   { to: "/util/gongang", label: "공강 · 노래방", icon: CalendarClockIcon },
   { to: "/menu/birthdays", label: "생일", icon: CakeIcon },
-  {
-    to: "/menu/story",
-    label: "스토리",
-    icon: ClipboardListIcon,
-    writersOnly: true,
-  },
 ];
 
 export default function MenuPage() {
   const { profile } = useAppShell();
-
-  const visibleShortcuts = shortcuts.filter(
-    (shortcut) => !shortcut.writersOnly || profile.type !== "alumni",
-  );
 
   return (
     <>
@@ -90,7 +77,7 @@ export default function MenuPage() {
           aria-label="바로가기"
           className="grid grid-cols-2 gap-2 sm:grid-cols-5"
         >
-          {visibleShortcuts.map(({ to, label, icon: Icon }, index) => (
+          {shortcuts.map(({ to, label, icon: Icon }, index) => (
             <Link
               key={to}
               to={to}
@@ -98,15 +85,14 @@ export default function MenuPage() {
                 "flex min-h-18 flex-col items-center justify-center gap-2 rounded-xl border bg-card px-2 py-3 transition-colors hover:bg-muted/60",
                 // 항목 수는 역할에 따라 넷이거나 다섯이다. 홀수일 때 두 칸 그리드의 마지막
                 // 하나가 옆자리를 비운 채 남으므로, 그 하나만 한 줄을 다 쓰게 해 빈칸을 없앤다.
-                index === visibleShortcuts.length - 1 &&
-                  visibleShortcuts.length % 2 === 1 &&
+                index === shortcuts.length - 1 &&
+                  shortcuts.length % 2 === 1 &&
                   "col-span-2 sm:col-span-1",
               )}
             >
               <Icon className="size-6 text-muted-foreground" aria-hidden />
 
-              {/* 다섯 칸으로 펴지는 데스크톱에서 "공강 · 노래방"은 두 줄이 된다.
-                  `break-keep`이 없으면 한국어가 어절 가운데서 잘린다. */}
+              {/* `break-keep`이 없으면 두 줄 라벨이 어절 가운데서 잘린다. */}
               <span className="text-center text-xs leading-tight font-medium break-keep">
                 {label}
               </span>
@@ -126,8 +112,7 @@ export default function MenuPage() {
           ) : null}
         </div>
 
-        {/* 내 것을 바꾸는 설정과 달리 이 둘은 서비스에 대해 읽는 화면이고, 여는 빈도도
-            훨씬 낮다. 이 화면의 위계가 빈도이므로 설정 카드에 섞지 않고 한 층 아래 둔다. */}
+        {/* 읽기용이고 여는 빈도가 낮아 설정 카드와 섞지 않는다. */}
         <div className="divide-y overflow-hidden rounded-xl border bg-card">
           <ListLinkRow
             to="/support"
@@ -138,7 +123,7 @@ export default function MenuPage() {
           <ListLinkRow to="/update" label="업데이트 기록" icon={SparklesIcon} />
         </div>
 
-        {/* 로그아웃은 이동이 아니라 동작이라 목록 카드에서 떼어 따로 앉힌다. */}
+        {/* 로그아웃은 이동이 아니라 동작이라 목록 카드에서 뗀다. */}
         <div className="overflow-hidden rounded-xl border bg-card">
           <LogoutButton appearance="row" />
         </div>

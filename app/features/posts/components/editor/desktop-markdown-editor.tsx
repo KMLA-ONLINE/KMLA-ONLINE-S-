@@ -207,9 +207,7 @@ function EditorSurface({
     get()?.action(command);
   };
 
-  // 멘션은 저장 형식이 CommonMark 링크라(`model/mentions.ts`) 편집기에도 링크 mark 로 넣는다.
-  // Markdown 원문을 글자로 흘려 넣으면 WYSIWYG 이 그것을 링크로 다시 읽지 않아 `[@이름](m:1)`이
-  // 그대로 보인다.
+  // 멘션은 CommonMark 링크로 저장하므로(`model/mentions.ts`) link mark로 넣는다. 원문을 글자로 넣으면 WYSIWYG이 다시 링크로 읽지 않는다.
   useImperativeHandle(
     handleRef,
     () => ({
@@ -303,11 +301,7 @@ function EditorSurface({
         name="body"
         defaultValue={sanitizePostMarkdown(initialValue)}
       />
-      {/*
-        툴바는 Tab 순서에서 뺀다. 제목에서 Tab을 누르면 서식 버튼 여덟 개를 지나는 게 아니라
-        본문으로 바로 가야 한다. 서식은 포인터로 누르거나 `aria-keyshortcuts`에 적힌 단축키로
-        적용한다.
-      */}
+      {/* 툴바는 Tab 순서에서 뺀다. 제목에서 Tab은 본문으로 바로 가야 하고, 서식은 포인터나 `aria-keyshortcuts` 단축키로 쓴다. */}
       <div
         className="flex shrink-0 flex-nowrap gap-1 overflow-x-auto border-b bg-muted/50 p-1"
         role="toolbar"
@@ -324,12 +318,7 @@ function EditorSurface({
           </Tool>
         ))}
       </div>
-      {/*
-        본문 영역의 높이는 편집기가 스스로 정한다. 모바일은 바깥 상자의 `clamp` 높이를 flex로
-        나눠 갖고, 데스크톱은 내용을 따라 자라다 상한에서 멈춘다. 데스크톱을 예전처럼 고정
-        높이로 두면 짧은 글에도 열 줄짜리 창 안에서 글을 쓰게 되고, 페이지 스크롤 안에 편집기
-        스크롤이 하나 더 생긴다. 반대로 상한을 없애면 긴 글에서 첨부 영역이 화면 밖으로 밀린다.
-      */}
+      {/* 높이는 편집기가 정한다. 모바일은 바깥 `clamp` 높이를 flex로 나누고, 데스크톱은 내용을 따라 자라다 상한에서 멈춘다(고정이면 중첩 스크롤, 상한이 없으면 첨부가 밀린다). */}
       <div
         className="post-typography flex min-h-0 flex-1 flex-col overflow-y-auto md:h-auto md:max-h-[min(60dvh,40rem)] md:min-h-72 md:flex-none"
         role="presentation"

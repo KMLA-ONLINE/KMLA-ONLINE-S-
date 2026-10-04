@@ -9,7 +9,7 @@ import {
   UsersIcon,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { useFetcher, useFetchers } from "react-router";
 import { toast } from "sonner";
 
@@ -18,13 +18,16 @@ import { GroupNotificationFields } from "~/features/notifications/components/gro
 import {
   disableWebPush,
   enableWebPush,
+  getPermissionHelpPlatform,
   getPushSupport,
+  watchNotificationPermission,
 } from "~/features/notifications/data/push";
 import { isDefaultGroupNotificationPreference } from "~/features/notifications/model/notifications";
 import type {
   GroupNotificationLevel,
   GroupNotificationPreference,
   NotificationPreferences,
+  PermissionHelpPlatform,
   PushSupport,
 } from "~/features/notifications/model/types";
 import { Badge } from "~/shared/ui/badge";
@@ -70,18 +73,25 @@ const PREFERENCE_ROWS = [
   string,
 ])[];
 
+/** 웹은 브라우저·OS 설정 화면을 직접 열 수 없어, 차단을 풀 경로를 기기에 맞춰 글로 안내한다. */
+const PERMISSION_HELP: Record<PermissionHelpPlatform, string> = {
+  "android-browser":
+    "주소창 왼쪽 아이콘을 눌러 권한 → 알림을 허용으로 바꿔 주세요.",
+  "android-app":
+    "홈 화면의 앱 아이콘을 길게 눌러 앱 정보 → 알림에서 허용해 주세요.",
+  "ios-app": "설정 앱 → 알림 → KMLA Online에서 알림 허용을 켜 주세요.",
+  "desktop-browser":
+    "주소창 왼쪽 아이콘을 눌러 사이트 설정에서 알림을 허용으로 바꿔 주세요.",
+  "desktop-app": "창 오른쪽 위 ⋮ 메뉴 → 앱 정보에서 알림을 허용해 주세요.",
+};
+
 type PushTone = "on" | "off" | "blocked";
 interface SettingsActionResult {
   saved?: boolean;
   error?: string;
 }
 
-/**
- * Web Push 상태 하나를 배지 문구·설명·색으로 한 번에 푼다.
- *
- * 상태가 여섯 갈래(미지원, 키 없음, iOS 브라우저, 차단, 꺼짐, 켜짐)라 JSX 안에서 삼항으로
- * 엮으면 어느 가지가 어떤 화면을 그리는지 읽히지 않는다. 분기는 여기 한 곳에만 둔다.
- */
+/** Web Push 상태 여섯 갈래를 배지 문구·설명·색으로 한 곳에서 푼다. JSX 삼항으로 엮으면 읽히지 않는다. */
 function describePush(
   support: PushSupport,
   pending: boolean,
@@ -119,8 +129,7 @@ function describePush(
         return {
           label: "차단됨",
           tone: "blocked",
-          message:
-            "브라우저에서 알림이 차단되어 있습니다. 브라우저 사이트 설정에서 허용해 주세요.",
+          message: "이 기기에서 알림이 차단되어 있습니다.",
         };
       }
       return support.subscribed
@@ -138,14 +147,8 @@ function describePush(
 }
 
 /**
- * 지금 설정이 실제로 무엇을 뜻하는지 한 문장으로 돌려준다.
- *
- * 규칙을 설명하는 대신 결과를 보여주는 쪽을 택했다. 우선순위 체인(권한 → 기기 → 유형 →
- * 그룹)을 글로 가르치면 읽어야 이해되지만, 결과 문장은 스위치를 만지는 동안 같이 바뀌므로
- * "이거 끄면 어떻게 되지?"를 눌러 보고 확인할 수 있다.
- *
- * 목록을 "받습니다" 앞에 두지 않고 대시 뒤에 두는 것은 조사 때문이다 — 마지막 항목에 따라
- * 을/를이 갈리는데, 항목이 설정에 따라 바뀌므로 문장으로 이으면 반드시 어색해진다.
+ * 지금 설정이 실제로 뜻하는 바를 한 문장으로 돌려준다. 규칙을 설명하는 대신 스위치와 함께 바뀌는 결과를 보여준다.
+ * 목록을 대시 뒤에 두는 것은 마지막 항목에 따라 을/를이 갈려 문장으로 잇기 어색하기 때문이다.
  */
 function summarizeDelivery(
   pushEnabled: boolean,
@@ -195,8 +198,6 @@ function SettingsSection({
       <div className="mb-2 px-1">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold">{title}</h2>
-          {/* 어떤 설정이 이 기기에만 적용되고 어떤 것이 계정 전체에 적용되는지는 화면
-              어디에도 드러나지 않던 정보다. 섹션마다 한 번씩 붙여 둔다. */}
         </div>
         <p className="mt-1 text-xs text-muted-foreground">{description}</p>
       </div>
@@ -349,10 +350,12 @@ export function NotificationSettings({
           value: { ...pushSupport, subscribed: false },
         });
       } else {
-        setPushState({
-          source: initialPushSupport,
-          value: await enableWebPush(),
-        });
+        const next = await enableWebPush();
+        setPushState({ source: initialPushSupport, value: next });
+        // 권한 창을 닫기만 하면 스위치가 그대로라 탭이 씹힌 것처럼 보인다.
+        if (next.state === "available" && next.permission === "default") {
+          toast("알림 권한이 허용되지 않았습니다. 다시 눌러 허용해 주세요.");
+        }
       }
     } catch (error) {
       console.error("Failed to update Web Push subscription", error);
@@ -370,6 +373,19 @@ export function NotificationSettings({
 
   const pushEnabled =
     pushSupport.state === "available" && pushSupport.subscribed;
+  const pushBlocked =
+    pushSupport.state === "available" && pushSupport.permission === "denied";
+
+  const recheckPush = useEffectEvent(async () => {
+    const value = await getPushSupport();
+    setPushState({ source: initialPushSupport, value });
+  });
+
+  // 차단은 앱에서 풀 수 없다. 사용자가 설정에서 풀고 돌아오면 새로고침 없이 스위치를 되살린다.
+  useEffect(() => {
+    if (!pushBlocked) return;
+    return watchNotificationPermission(() => void recheckPush());
+  }, [pushBlocked]);
   const preferencePending = activeFetchers.some(
     (item) =>
       item.state !== "idle" &&
@@ -451,6 +467,15 @@ export function NotificationSettings({
               {summary.detail}
             </p>
           </div>
+
+          {pushBlocked ? (
+            <div className="border-t bg-muted/30 px-4 py-3 text-sm">
+              <p>{PERMISSION_HELP[getPermissionHelpPlatform()]}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                허용한 뒤 이 화면으로 돌아오면 자동으로 다시 확인합니다.
+              </p>
+            </div>
+          ) : null}
 
           {pushSupport.state === "ios-browser" ? (
             <div className="flex gap-2 border-t bg-muted/30 px-4 py-3 text-sm text-muted-foreground">

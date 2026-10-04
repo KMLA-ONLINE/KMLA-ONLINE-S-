@@ -87,12 +87,7 @@ export async function listMyGroupNotificationPreferences(): Promise<
 }
 
 /**
- * 그룹 화면의 알림 다이얼로그가 열릴 때만 읽는 한 그룹치 설정.
- *
- * 그룹 상세 loader에 얹지 않는 이유는 이 값을 그리는 화면이 없기 때문이다 — 다이얼로그를
- * 열지 않는 대다수 방문에서 매번 한 번씩 더 왕복할 이유가 없다.
- *
- * 멤버가 아니면 행이 없고, 그때는 `null`을 돌려준다.
+ * 그룹 알림 다이얼로그가 열릴 때만 읽는 한 그룹치 설정. 그룹 상세 loader에 얹으면 안 여는 방문도 왕복한다. 멤버가 아니면 `null`.
  */
 export async function getMyGroupNotificationPreference(
   groupId: string,

@@ -408,7 +408,7 @@ select lives_ok(
 );
 select is(
   (select slug from public.groups where id = '20000000-0000-0000-0000-000000000004'),
-  'dorm-stories',
+  '3c7e1a9b5d2f40',
   'settings keep the slug immutable'
 );
 select is(
@@ -522,18 +522,19 @@ select lives_ok(
   )$$,
   'an official group admin can save its settings'
 );
--- 공식 그룹이라는 이유만으로 정책을 잠그지는 않는다. 남는 제약은 그룹의 현재 상태에서 나온다.
-select lives_ok(
+-- 공식 그룹은 공개 그룹이고, 공개 그룹은 비공개 정책으로 갈 수 없다(§7.5).
+select throws_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000001',
     '학교 공지', '정책 변경', 'request', 'identified', 'staff', false
   )$$,
-  'official group policies can change too'
+  '55000', 'public groups cannot become private',
+  'an official group cannot become a private request group'
 );
 select is(
   (select join_policy from public.groups where id = '20000000-0000-0000-0000-000000000001'),
-  'request'::public.group_join_policy,
-  'the official group keeps its new join policy'
+  'open'::public.group_join_policy,
+  'the official group stays open'
 );
 
 -- 정책은 바꿀 수 있어도 그룹 자체를 없앨 수는 없다. 승인된 재학생이 자동으로 가입하는 공간이
@@ -553,7 +554,7 @@ set local role authenticated;
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000001',
-    '학교 공지', '선택 익명 전환', 'request', 'optional_anonymous', 'staff', false
+    '학교 공지', '선택 익명 전환', 'open', 'optional_anonymous', 'staff', false
   )$$,
   'an official group can enable optional anonymity'
 );

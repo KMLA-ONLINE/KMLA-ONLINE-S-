@@ -11,6 +11,7 @@ vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 import {
   listGroupJoinRequests,
   listGroupMembers,
+  loadGroupDetail,
 } from "~/features/groups/data/queries";
 
 /**
@@ -72,5 +73,61 @@ describe("group roster avatars", () => {
     const [request] = await listGroupJoinRequests("group-id");
 
     expect(request?.avatar_url).toBeNull();
+  });
+});
+
+/** 비공개 승인 가입 그룹은 비멤버 RLS에 보이지 않아, 주소로 미리보기 RPC를 다시 묻는다(§7.5). */
+describe("group detail link preview", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("falls back to the link preview when the group row is hidden", async () => {
+    const emptyQuery = {
+      select: () => emptyQuery,
+      eq: () => emptyQuery,
+      maybeSingle: () => Promise.resolve({ data: null, error: null }),
+    };
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        group_id: "group-id",
+        slug: "8f2a1c4e6b9d7a",
+        name: "필름 서클",
+        description: "설명",
+        join_policy: "request",
+        identity_policy: "optional_anonymous",
+        posting_policy: "members",
+        member_count: 3,
+        requested_at: "2026-01-02T00:00:00Z",
+      },
+      error: null,
+    });
+    const rpc = vi.fn().mockReturnValue({ maybeSingle });
+    getSupabase.mockReturnValue({ from: () => emptyQuery, rpc });
+
+    const group = await loadGroupDetail("8f2a1c4e6b9d7a");
+
+    expect(rpc).toHaveBeenCalledWith("get_group_link_preview", {
+      p_slug: "8f2a1c4e6b9d7a",
+    });
+    expect(group).toMatchObject({
+      group_id: "group-id",
+      kind: "unofficial",
+      icon_path: null,
+      cover_path: null,
+      membership_state: "requested",
+      member_role: null,
+    });
+  });
+
+  it("never asks for a preview of a custom address", async () => {
+    const emptyQuery = {
+      select: () => emptyQuery,
+      eq: () => emptyQuery,
+      maybeSingle: () => Promise.resolve({ data: null, error: null }),
+    };
+    const rpc = vi.fn();
+    getSupabase.mockReturnValue({ from: () => emptyQuery, rpc });
+
+    await expect(loadGroupDetail("film-circle")).resolves.toBeNull();
+    expect(rpc).not.toHaveBeenCalled();
   });
 });

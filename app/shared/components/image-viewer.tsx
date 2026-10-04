@@ -3,124 +3,180 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   DownloadIcon,
+  ImageOffIcon,
   XIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
 } from "lucide-react";
 import {
   forwardRef,
-  useCallback,
   useEffect,
   useEffectEvent,
   useLayoutEffect,
   useRef,
   useState,
   type ComponentProps,
-  type MouseEvent as ReactMouseEvent,
-  type PointerEvent as ReactPointerEvent,
-  type Ref,
+  type RefObject,
+  type SyntheticEvent,
 } from "react";
 
+import {
+  PAGE_GAP,
+  ViewerMotion,
+  ZOOM_STEP,
+  useViewerGestures,
+  type ViewerLayout,
+} from "~/shared/components/image-viewer-gestures";
+import {
+  IDENTITY,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  clamp,
+  clampZoom,
+  fitSize,
+  type Point,
+  type Size,
+} from "~/shared/lib/image-viewer-geometry";
 import { cn } from "~/shared/lib/utils";
+import { Button } from "~/shared/ui/button";
+import {
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/shared/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/shared/ui/dropdown-menu";
+import { Spinner } from "~/shared/ui/spinner";
 
 export interface ViewerImage {
   id: string;
   /** 화면에 그릴 URL. 크게 보는 자리라 언제나 원본이다. */
   src: string;
   /**
-   * 하단 썸네일 목록이 그릴 URL. 없으면 `src`로 떨어진다.
+   * 원본보다 먼저 띄울 축소본이자 하단 썸네일 목록이 그릴 URL. 없으면 `src`로 떨어진다.
    *
-   * 이게 따로 있는 이유는 그 목록이 **묶음의 모든 이미지**를 한 번에 그리기 때문이다.
-   * 사진 열 장짜리 게시물을 열면 56px 칸 열 개를 채우려고 원본 열 장을 받게 된다.
+   * 그 목록은 **묶음의 모든 이미지**를 한 번에 그린다. 사진 열 장짜리 게시물을 열면 56px 칸 열 개를
+   * 채우려고 원본 열 장을 받게 된다.
    */
   thumbSrc?: string;
   /** 저장 버튼이 쓸 URL. 같은 파일이지만 서버가 첨부로 내려주는 주소다. */
   downloadSrc: string;
-  /** alt text이자 헤더 라벨. */
+  /** alt text이자 스크린리더 제목, 저장 파일 이름. */
   name: string;
+  /**
+   * 원본의 픽셀 치수. 알면 불러오기 전에 자리를 잡아 둔다. 모르면 먼저 도착한 이미지에서 잰다.
+   * 축소본이 원본으로 바뀔 때 크기가 튀지 않게 하는 것이 이 값이다.
+   */
+  width?: number;
+  height?: number;
 }
-
-const CONTROL_CLASS =
-  "flex size-10 shrink-0 items-center justify-center rounded-full text-white/80 transition hover:bg-white/15 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-0";
-
-const SLIDE_TRANSITION = "transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1)";
-const SWIPE_MAX_TRIGGER_DISTANCE = 80;
-const SWIPE_TRIGGER_RATIO = 0.2;
-const SWIPE_RUBBER_BAND = 0.25;
-const DRAG_START_TOLERANCE = 12;
-const MAX_ZOOM = 5;
-const DOUBLE_TAP_ZOOM = 2;
-const DOUBLE_TAP_DELAY = 250;
-const CLICK_SUPPRESSION_TIME = 400;
-
-interface Point {
-  x: number;
-  y: number;
-}
-
-interface ZoomState extends Point {
-  scale: number;
-}
-
-interface ZoomMetrics {
-  viewportLeft: number;
-  viewportTop: number;
-  viewportWidth: number;
-  viewportHeight: number;
-  imageWidth: number;
-  imageHeight: number;
-}
-
-type GestureMode = "slide" | "pan" | "pinch" | null;
 
 /**
- * 주변 UI(헤더, 썸네일 목록, 이동 버튼)의 표시 상태.
- *
- * - `faded`: 투명하게만 숨긴다. 확대 제스처가 이걸 쓴다 — 확대 도중에 이미지 영역 크기가
- *   바뀌면 손가락 아래의 이미지가 움직인다.
- * - `collapsed`: 넓은 화면에서 자리까지 비워 이미지가 그만큼 커진다. 탭·클릭 토글이 쓴다.
- *
- * 모바일은 UI가 원래 이미지 위에 겹쳐 있어 두 상태가 똑같이 보인다.
+ * decode까지 마친 원본. 슬라이드는 현재 장에서 두 칸 멀어지면 언마운트되고 뷰어는 닫힐 때마다
+ * 새로 마운트되므로, 되돌아왔을 때 축소본으로 내려가지 않으려면 컴포넌트 밖에서 기억해야 한다.
  */
-type ChromeState = "visible" | "faded" | "collapsed";
+const shownOriginals = new Set<string>();
 
-const DEFAULT_ZOOM: ZoomState = { scale: 1, x: 0, y: 0 };
+const CONTROL_CLASS =
+  "pointer-events-auto flex size-10 shrink-0 items-center justify-center rounded-full text-white/85 transition hover:bg-white/15 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-35";
 
-function readZoomMetrics(
-  viewport: HTMLElement,
-  image: HTMLImageElement,
-): ZoomMetrics {
-  const rect = viewport.getBoundingClientRect();
+const NAV_CLASS =
+  "absolute top-1/2 hidden size-12 -translate-y-1/2 bg-black/45 backdrop-blur-sm hover:bg-black/65 disabled:invisible sm:flex";
+
+interface NaturalSize extends Size {
+  /** 축소본에서 잰 값이다. 비율만 믿을 수 있고 크기는 원본보다 작다. */
+  fromThumb: boolean;
+}
+
+interface StageBox {
+  viewport: Size;
+  origin: Point;
+  /** 1배 이미지를 놓는 영역. 넓은 화면에서 조작부 자리를 뺀 뷰포트다. */
+  stage: { left: number; top: number; width: number; height: number };
+}
+
+function measureStage(element: HTMLElement): StageBox {
+  const rect = element.getBoundingClientRect();
+  const style = getComputedStyle(element);
+  const px = (value: string) => Number.parseFloat(value) || 0;
+  const left = px(style.paddingLeft);
+  const top = px(style.paddingTop);
+
   return {
-    viewportLeft: rect.left,
-    viewportTop: rect.top,
-    viewportWidth: viewport.clientWidth,
-    viewportHeight: viewport.clientHeight,
-    imageWidth: image.clientWidth,
-    imageHeight: image.clientHeight,
+    viewport: { width: rect.width, height: rect.height },
+    origin: { x: rect.left, y: rect.top },
+    stage: {
+      left,
+      top,
+      width: Math.max(0, rect.width - left - px(style.paddingRight)),
+      height: Math.max(0, rect.height - top - px(style.paddingBottom)),
+    },
   };
 }
 
-function clampZoomToMetrics(next: ZoomState, metrics: ZoomMetrics): ZoomState {
-  const scale = Math.max(1, Math.min(MAX_ZOOM, next.scale));
-  if (scale === 1) return DEFAULT_ZOOM;
-
-  const maxX = Math.max(
-    0,
-    (metrics.imageWidth * scale - metrics.viewportWidth) / 2,
+function sameStageBox(left: StageBox, right: StageBox): boolean {
+  return (
+    left.viewport.width === right.viewport.width &&
+    left.viewport.height === right.viewport.height &&
+    left.origin.x === right.origin.x &&
+    left.origin.y === right.origin.y &&
+    left.stage.left === right.stage.left &&
+    left.stage.top === right.stage.top &&
+    left.stage.width === right.stage.width &&
+    left.stage.height === right.stage.height
   );
-  const maxY = Math.max(
-    0,
-    (metrics.imageHeight * scale - metrics.viewportHeight) / 2,
-  );
+}
 
-  return {
-    scale,
-    x: Math.max(-maxX, Math.min(maxX, next.x)),
-    y: Math.max(-maxY, Math.min(maxY, next.y)),
-  };
+/** 1배일 때의 이미지 크기. 원본보다 크게 늘리지 않는다 — 작은 사진을 키우면 흐려 보인다. */
+function frameSizeFor(
+  image: ViewerImage,
+  natural: NaturalSize | undefined,
+  stage: Size,
+): Size {
+  if (image.width && image.height) {
+    return fitSize({ width: image.width, height: image.height }, stage);
+  }
+  if (!natural) return { width: 0, height: 0 };
+  return fitSize(natural, stage, natural.fromThumb ? Infinity : 1);
 }
 
 function hasDistinctThumbnail(image: ViewerImage): boolean {
   return Boolean(image.thumbSrc && image.thumbSrc !== image.src);
+}
+
+/**
+ * 뷰어가 전체화면(안드로이드의 하단 탐색 바까지 숨기는 몰입 모드)에 들어갔다면 빠져나온다.
+ * 사용자나 시스템이 먼저 빠져나왔다면 아무것도 하지 않는다.
+ */
+function leaveImmersive(entered: RefObject<boolean>) {
+  if (!entered.current) return;
+  entered.current = false;
+  if (document.fullscreenElement) {
+    void document.exitFullscreen().catch(() => undefined);
+  }
+}
+
+/**
+ * 모든 사진을 차례로 내려받는다. 숨긴 iframe은 첨부로 내려오는 응답을 받아도 화면을 떠나지
+ * 않고, 팝업 차단에도 걸리지 않는다. 한 번에 몰아 요청하면 브라우저가 뒤의 것을 버리므로 간격을
+ * 둔다. 여러 파일 다운로드를 허용할지는 브라우저가 따로 묻는다.
+ */
+function downloadEach(images: ViewerImage[]) {
+  images.forEach((image, order) => {
+    window.setTimeout(() => {
+      const frame = document.createElement("iframe");
+      frame.hidden = true;
+      frame.src = image.downloadSrc;
+      document.body.append(frame);
+      window.setTimeout(() => frame.remove(), 60_000);
+    }, order * 400);
+  });
 }
 
 const ControlButton = forwardRef<HTMLButtonElement, ComponentProps<"button">>(
@@ -136,128 +192,132 @@ const ControlButton = forwardRef<HTMLButtonElement, ComponentProps<"button">>(
   },
 );
 
-function ViewerSlideImage({
+const MENU_ITEM_CLASS = "py-2.5 focus:bg-white/15 focus:text-white";
+
+function DownloadControl({
   image,
-  imageRef,
-  zoom,
-  isGestureActive,
-  showOriginal,
-  onImageClick,
+  images,
+  downloadAll,
 }: {
   image: ViewerImage;
-  imageRef?: Ref<HTMLImageElement>;
-  zoom: ZoomState;
-  isGestureActive: boolean;
-  /** 원본은 decode까지 끝난 뒤에만 축소본 위로 올린다. */
-  showOriginal: boolean;
-  onImageClick: (event: ReactMouseEvent<HTMLImageElement>) => void;
+  images: ViewerImage[];
+  downloadAll: boolean;
 }) {
-  const thumbnailSrc =
-    image.thumbSrc && image.thumbSrc !== image.src ? image.thumbSrc : undefined;
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  if (!downloadAll || images.length < 2) {
+    return (
+      <a
+        href={image.downloadSrc}
+        download={image.name}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="다운로드"
+        className={CONTROL_CLASS}
+      >
+        <DownloadIcon className="size-5" />
+      </a>
+    );
+  }
 
   return (
-    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
-    <img
-      ref={imageRef}
-      src={showOriginal || !thumbnailSrc ? image.src : thumbnailSrc}
-      alt={image.name}
-      crossOrigin="anonymous"
-      draggable={false}
-      className={cn(
-        "max-h-full max-w-full object-contain will-change-transform select-none sm:cursor-pointer",
-        zoom.scale > 1
-          ? "cursor-grab active:cursor-grabbing"
-          : "cursor-zoom-in",
-      )}
-      style={{
-        transform:
-          "translate3d(var(--image-viewer-zoom-x, 0px), var(--image-viewer-zoom-y, 0px), 0) scale(var(--image-viewer-zoom-scale, 1))",
-        transition: isGestureActive ? "none" : SLIDE_TRANSITION,
-      }}
-      onClick={onImageClick}
-    />
-  );
-}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<ControlButton aria-label="다운로드" />}>
+          <DownloadIcon className="size-5" />
+        </DropdownMenuTrigger>
+        {/* 뷰어가 z-60이라 메뉴는 그보다 위에 떠야 한다. 검은 뷰어 위라 메뉴도 검게 맞춘다. */}
+        <DropdownMenuContent
+          align="end"
+          positionerClassName="z-70"
+          className="min-w-48 bg-black text-white ring-white/15"
+        >
+          <DropdownMenuItem
+            className={MENU_ITEM_CLASS}
+            render={
+              // 내용은 Menu.Item이 children으로 채운다.
+              // eslint-disable-next-line jsx-a11y/anchor-has-content
+              <a
+                href={image.downloadSrc}
+                download={image.name}
+                target="_blank"
+                rel="noopener noreferrer"
+              />
+            }
+          >
+            현재 사진 다운로드
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className={MENU_ITEM_CLASS}
+            onClick={() => setConfirmOpen(true)}
+          >
+            모든 사진 다운로드 ({images.length}장)
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-function Slide({
-  image,
-  imageRef,
-  zoom,
-  isGestureActive,
-  showOriginal,
-  onBackdropClick,
-  onImageClick,
-}: {
-  image?: ViewerImage;
-  imageRef?: Ref<HTMLImageElement>;
-  zoom?: ZoomState;
-  isGestureActive: boolean;
-  showOriginal: boolean;
-  onBackdropClick: () => void;
-  onImageClick: (event: ReactMouseEvent<HTMLImageElement>) => void;
-}) {
-  const imageZoom = zoom ?? DEFAULT_ZOOM;
-
-  return (
-    /* 배경 탭으로 닫는 것은 포인터 전용 편의다. 키보드 사용자에게는 헤더의 닫기 버튼과
-       Esc가 있으므로 이 div에 키 핸들러나 role을 얹지 않는다 — 슬라이드 하나하나가
-       버튼으로 읽히면 낭독 순서가 더 나빠진다. */
-    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
-    <div
-      className="flex h-full w-full shrink-0 items-center justify-center px-2 sm:px-4"
-      onClick={onBackdropClick}
-    >
-      {image ? (
-        <ViewerSlideImage
-          image={image}
-          imageRef={imageRef}
-          zoom={imageZoom}
-          isGestureActive={isGestureActive}
-          showOriginal={showOriginal}
-          onImageClick={onImageClick}
-        />
-      ) : null}
-    </div>
+      {/* 여러 장을 한꺼번에 받으면 되돌릴 수 없고 브라우저도 따로 묻는다. 그 전에 한 번 확인한다.
+          뷰어가 이미 루트 스크롤을 막고 있으므로 Base UI의 스크롤 잠금은 겹쳐 쓰지 않는다. */}
+      <Dialog.Root
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        modal="trap-focus"
+      >
+        <DialogContent
+          className="z-70 max-w-xs"
+          overlayClassName="z-70"
+          showCloseButton={false}
+        >
+          <DialogHeader>
+            <DialogTitle>모든 사진을 다운로드할까요?</DialogTitle>
+            <DialogDescription>
+              사진 {images.length}장을 차례로 내려받습니다.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmOpen(false)}
+            >
+              취소
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setConfirmOpen(false);
+                downloadEach(images);
+              }}
+            >
+              다운로드
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog.Root>
+    </>
   );
 }
 
 function Filmstrip({
   images,
   activeIndex,
+  hidden,
   onSelect,
-  className,
-  testId = "image-viewer-filmstrip",
-  screen,
 }: {
   images: ViewerImage[];
   activeIndex: number;
+  hidden: boolean;
   onSelect: (index: number) => void;
-  className?: string;
-  testId?: string;
-  screen: "desktop" | "mobile";
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const activeThumbnailRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    const isDesktop = window.matchMedia?.("(min-width: 640px)").matches;
-    if (
-      (screen === "desktop" && !isDesktop) ||
-      (screen === "mobile" && isDesktop)
-    ) {
-      return;
-    }
-
     const scroller = scrollerRef.current;
     const thumbnail = activeThumbnailRef.current;
     if (!scroller || !thumbnail) return;
 
-    /*
-      `scrollIntoView`는 스크롤 조상을 전부 훑는다. 모바일 필름스트립은 `overflow-hidden`인
-      슬라이드 뷰포트 안에 놓여 있고, 그 뷰포트는 트랙이 사진 수만큼 넓어서 가로로 밀 자리가
-      있다. 썸네일을 가운데로 보내려다 뷰포트까지 밀면 화면 전체가 옆으로 어긋나는데, 페이징은
-      transform으로 하므로 그 어긋남은 되돌아오지 않는다. 스크롤은 이 목록 안에서만 한다.
-    */
+    // `scrollIntoView`는 스크롤 조상을 전부 훑어 뷰어 자체까지 밀 수 있다. 이 목록 안에서만 민다.
     const scrollerRect = scroller.getBoundingClientRect();
     const thumbnailRect = thumbnail.getBoundingClientRect();
     if (
@@ -266,54 +326,607 @@ function Filmstrip({
     ) {
       return;
     }
-    const toCenter =
-      thumbnailRect.left -
-      scrollerRect.left -
-      (scrollerRect.width - thumbnailRect.width) / 2;
     scroller.scrollTo({
-      left: scroller.scrollLeft + toCenter,
+      left:
+        scroller.scrollLeft +
+        thumbnailRect.left -
+        scrollerRect.left -
+        (scrollerRect.width - thumbnailRect.width) / 2,
       behavior: "smooth",
     });
-  }, [activeIndex, screen]);
+  }, [activeIndex]);
 
   return (
     <div
-      ref={scrollerRef}
-      data-testid={testId}
-      className={cn("shrink-0 scrollbar-none overflow-x-auto", className)}
+      inert={hidden}
+      className={cn(
+        "absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 to-transparent transition-opacity duration-200",
+        hidden && "opacity-0",
+      )}
     >
-      <div className="mx-auto flex w-max gap-2 px-3 pt-3 pb-[calc(0.75rem+var(--app-safe-b))]">
-        {images.map((image, index) => {
-          const isActive = index === activeIndex;
-
-          return (
-            <button
-              key={image.id}
-              ref={isActive ? activeThumbnailRef : undefined}
-              type="button"
-              aria-label={image.name}
-              aria-current={isActive}
-              onClick={() => onSelect(index)}
-              className={cn(
-                "size-14 shrink-0 overflow-hidden rounded-lg ring-2 transition focus-visible:ring-white focus-visible:outline-none",
-                isActive
-                  ? "opacity-100 ring-white"
-                  : "opacity-50 ring-transparent hover:opacity-90",
-              )}
-            >
-              <img
-                src={image.thumbSrc ?? image.src}
-                alt=""
-                crossOrigin="anonymous"
-                draggable={false}
-                loading="lazy"
-                className="size-full object-cover"
-              />
-            </button>
-          );
-        })}
+      <div
+        ref={scrollerRef}
+        data-testid="image-viewer-filmstrip"
+        className="pointer-events-auto scrollbar-none overflow-x-auto overscroll-x-contain"
+      >
+        <div className="mx-auto flex w-max gap-2 px-3 pt-6 pb-[calc(0.75rem+var(--app-safe-b))]">
+          {images.map((image, index) => {
+            const isActive = index === activeIndex;
+            return (
+              <button
+                key={image.id}
+                ref={isActive ? activeThumbnailRef : undefined}
+                type="button"
+                aria-label={`${index + 1}번째 이미지`}
+                aria-current={isActive}
+                onClick={() => onSelect(index)}
+                className={cn(
+                  "size-14 shrink-0 overflow-hidden rounded-lg ring-2 transition focus-visible:ring-white focus-visible:outline-none",
+                  isActive
+                    ? "opacity-100 ring-white"
+                    : "opacity-55 ring-transparent hover:opacity-90",
+                )}
+              >
+                <img
+                  src={image.thumbSrc ?? image.src}
+                  alt=""
+                  crossOrigin="anonymous"
+                  draggable={false}
+                  loading="lazy"
+                  className="size-full object-cover"
+                />
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * 한 장. 축소본을 먼저 깔고, 원본은 decode까지 끝난 뒤 그 위로 겹쳐 올린다. 둘은 같은 틀을
+ * 가득 채우므로 바뀌는 순간 크기도 자리도 그대로다.
+ */
+function Slide({
+  image,
+  isActive,
+  left,
+  width,
+  frame,
+  stage,
+  zoomed,
+  frameRef,
+  slideRef,
+  onNaturalSize,
+}: {
+  image: ViewerImage;
+  isActive: boolean;
+  left: number;
+  width: number;
+  frame: Size;
+  stage: StageBox["stage"];
+  zoomed: boolean;
+  frameRef: (element: HTMLDivElement | null) => void;
+  slideRef: (element: HTMLDivElement | null) => void;
+  onNaturalSize: (id: string, size: NaturalSize) => void;
+}) {
+  const hasThumb = hasDistinctThumbnail(image);
+  const [originalShown, setOriginalShown] = useState(() =>
+    shownOriginals.has(image.src),
+  );
+  const [thumbLoaded, setThumbLoaded] = useState(false);
+  const [originalFailed, setOriginalFailed] = useState(false);
+  const [thumbFailed, setThumbFailed] = useState(false);
+
+  const failed = originalFailed && (!hasThumb || thumbFailed);
+  const loading = !failed && !originalShown && !thumbLoaded;
+
+  const reportSize = (element: HTMLImageElement, fromThumb: boolean) => {
+    if (image.width && image.height) return;
+    if (element.naturalWidth === 0 || element.naturalHeight === 0) return;
+    onNaturalSize(image.id, {
+      width: element.naturalWidth,
+      height: element.naturalHeight,
+      fromThumb,
+    });
+  };
+
+  const handleOriginalLoad = (event: SyntheticEvent<HTMLImageElement>) => {
+    const element = event.currentTarget;
+    reportSize(element, false);
+    const reveal = () => {
+      shownOriginals.add(image.src);
+      setOriginalShown(true);
+    };
+    // decode 전에 올리면 큰 원본을 그리는 동안 한 프레임이 멈춘다.
+    if (typeof element.decode === "function") {
+      element.decode().then(reveal, reveal);
+    } else {
+      reveal();
+    }
+  };
+
+  const frameLeft = stage.left + (stage.width - frame.width) / 2;
+  const frameTop = stage.top + (stage.height - frame.height) / 2;
+
+  return (
+    <div
+      ref={slideRef}
+      data-testid={isActive ? "image-viewer-active-slide" : undefined}
+      className="absolute inset-y-0"
+      style={{ left, width }}
+    >
+      {loading || failed ? (
+        <div
+          className="absolute flex items-center justify-center text-white/70"
+          style={{
+            left: stage.left,
+            top: stage.top,
+            width: stage.width,
+            height: stage.height,
+          }}
+        >
+          {failed ? (
+            <div className="flex flex-col items-center gap-2 text-sm">
+              <ImageOffIcon className="size-8" />
+              이미지를 불러오지 못했습니다
+            </div>
+          ) : (
+            // 금방 뜨는 사진에서 스피너가 번쩍이지 않게 잠깐 기다렸다 보인다.
+            <Spinner className="size-7 animate-in fade-in-0 [--tw-animation-delay:400ms] [--tw-animation-fill-mode:backwards]" />
+          )}
+        </div>
+      ) : null}
+      <div
+        ref={frameRef}
+        data-testid={isActive ? "image-viewer-frame" : undefined}
+        className={cn(
+          "absolute will-change-transform",
+          (frame.width === 0 || failed) && "invisible",
+          isActive &&
+            (zoomed ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"),
+        )}
+        style={{
+          left: frameLeft,
+          top: frameTop,
+          width: frame.width,
+          height: frame.height,
+        }}
+      >
+        {hasThumb ? (
+          <img
+            src={image.thumbSrc}
+            alt=""
+            crossOrigin="anonymous"
+            draggable={false}
+            className="absolute inset-0 size-full"
+            onLoad={(event) => {
+              reportSize(event.currentTarget, true);
+              setThumbLoaded(true);
+            }}
+            onError={() => setThumbFailed(true)}
+          />
+        ) : null}
+        <img
+          src={image.src}
+          alt={image.name}
+          crossOrigin="anonymous"
+          draggable={false}
+          fetchPriority={isActive ? "high" : "low"}
+          data-shown={originalShown || !hasThumb || undefined}
+          className={cn(
+            "absolute inset-0 size-full transition-opacity duration-150",
+            hasThumb && !originalShown && "opacity-0",
+          )}
+          onLoad={handleOriginalLoad}
+          onError={() => setOriginalFailed(true)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ViewerContent({
+  images,
+  initialImageId,
+  open,
+  downloadAll,
+  backdropRef,
+  onClose,
+}: {
+  images: ViewerImage[];
+  initialImageId: string;
+  open: boolean;
+  downloadAll: boolean;
+  backdropRef: RefObject<HTMLDivElement | null>;
+  onClose: () => void;
+}) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const chromeRef = useRef<HTMLDivElement>(null);
+  const frameElements = useRef(new Map<string, HTMLDivElement>());
+  const slideElements = useRef(new Map<string, HTMLDivElement>());
+  const motion = useRef(new ViewerMotion());
+  const layoutRef = useRef<ViewerLayout | null>(null);
+  const animateNextPageRef = useRef(false);
+  const chromeVisibleRef = useRef(true);
+  const immersiveRef = useRef(false);
+
+  const [storedIndex, setStoredIndex] = useState(() =>
+    Math.max(
+      0,
+      images.findIndex((image) => image.id === initialImageId),
+    ),
+  );
+  const [chromeVisible, setChromeVisible] = useState(true);
+  const [zoomScale, setZoomScale] = useState(MIN_ZOOM);
+  const [box, setBox] = useState<StageBox | null>(null);
+  const [naturalSizes, setNaturalSizes] = useState<Record<string, NaturalSize>>(
+    {},
+  );
+
+  // 뷰어가 열려 있는 동안 첨부 목록이 줄어들 수 있다.
+  const index = clamp(storedIndex, 0, images.length - 1);
+  const activeImage = images[index];
+  const activeId = activeImage?.id;
+  const pageWidth = box ? box.viewport.width + PAGE_GAP : 0;
+  const stageSize: Size = box
+    ? { width: box.stage.width, height: box.stage.height }
+    : { width: 0, height: 0 };
+  const { width: frameWidth, height: frameHeight } = activeImage
+    ? frameSizeFor(activeImage, naturalSizes[activeImage.id], stageSize)
+    : stageSize;
+
+  const showChrome = (visible: boolean) => {
+    chromeVisibleRef.current = visible;
+    setChromeVisible(visible);
+  };
+
+  /**
+   * 터치 기기에서 조작부를 숨길 때 전체화면에도 들어간다. 안드로이드는 그래야 하단 탐색 바가
+   * 사라진다. 요청은 사용자 제스처 안에서만 받아 주므로 탭 처리에서 곧바로 부른다. iPhone처럼
+   * 요소 전체화면이 없는 곳에서는 조작부만 숨긴다. 한 번 들어가면 뷰어를 닫을 때까지 머문다.
+   * Chrome이 들어갈 때마다 해제 안내를 띄우므로, 탭마다 드나들면 그 안내가 계속 뜬다.
+   */
+  const enterImmersive = () => {
+    const root = document.documentElement;
+    if (
+      immersiveRef.current ||
+      document.fullscreenElement ||
+      !document.fullscreenEnabled ||
+      typeof root.requestFullscreen !== "function"
+    ) {
+      return;
+    }
+    immersiveRef.current = true;
+    root.requestFullscreen({ navigationUI: "hide" }).catch(() => {
+      immersiveRef.current = false;
+    });
+  };
+
+  const goTo = (next: number) => {
+    if (next < 0 || next >= images.length || next === index) return;
+    // 이웃한 장은 미끄러져 가고, 목록에서 멀리 건너뛸 때는 곧바로 바뀐다.
+    animateNextPageRef.current = Math.abs(next - index) === 1;
+    setStoredIndex(next);
+    setZoomScale(MIN_ZOOM);
+  };
+
+  const gestures = useViewerGestures({
+    motion,
+    viewport: viewportRef,
+    getLayout: () => layoutRef.current,
+    canPage: (direction) =>
+      index + direction >= 0 && index + direction < images.length,
+    onPage: (direction) => goTo(index + direction),
+    onTap: () => {
+      const next = !chromeVisibleRef.current;
+      showChrome(next);
+      if (!next) enterImmersive();
+    },
+    onDismiss: onClose,
+    onZoomChange: (zoom) => setZoomScale(zoom.scale),
+    // 확대하는 동안에는 전체화면을 바꾸지 않는다. 화면 크기가 바뀌면 손가락 아래의 이미지가 움직인다.
+    onZoomGesture: () => showChrome(false),
+  });
+
+  useLayoutEffect(() => {
+    const element = stageRef.current;
+    if (!element) return;
+
+    const update = () =>
+      setBox((current) => {
+        const next = measureStage(element);
+        return current && sameStageBox(current, next) ? current : next;
+      });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    motion.current.reducedMotion =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  }, []);
+
+  // 장이 바뀌면 트랙을 새 자리로 보내고, 확대·끌기 대상을 새 장의 요소로 바꾼다.
+  useLayoutEffect(() => {
+    const current = motion.current;
+    current.track = trackRef.current;
+    current.chrome = chromeRef.current;
+    current.backdrop = backdropRef.current;
+    current.index = index;
+    current.pageWidth = pageWidth;
+
+    const frame = activeId
+      ? (frameElements.current.get(activeId) ?? null)
+      : null;
+    if (current.frame !== frame) {
+      if (current.frame) current.releaseFrame(current.frame);
+      current.frame = frame;
+      current.slide = activeId
+        ? (slideElements.current.get(activeId) ?? null)
+        : null;
+      current.zoom = IDENTITY;
+      current.dismiss = { x: 0, y: 0 };
+    }
+
+    const animate = animateNextPageRef.current;
+    animateNextPageRef.current = false;
+    current.restTrack(animate);
+  }, [activeId, backdropRef, index, pageWidth]);
+
+  // 화면 크기나 이미지 치수가 바뀌면 확대 범위를 다시 잰다. 옛 범위가 남으면 가장자리에 빈 바탕이 드러난다.
+  useLayoutEffect(() => {
+    if (!box || frameWidth === 0) {
+      layoutRef.current = null;
+      return;
+    }
+    const layout: ViewerLayout = {
+      viewport: box.viewport,
+      origin: box.origin,
+      center: {
+        x: box.stage.left + box.stage.width / 2,
+        y: box.stage.top + box.stage.height / 2,
+      },
+      frame: { width: frameWidth, height: frameHeight },
+    };
+    layoutRef.current = layout;
+
+    const current = motion.current;
+    if (current.zoom.scale > MIN_ZOOM) {
+      current.setZoom(clampZoom(current.zoom, layout));
+    }
+  }, [box, frameHeight, frameWidth]);
+
+  useEffect(() => {
+    if (!open) leaveImmersive(immersiveRef);
+  }, [open]);
+
+  useEffect(() => () => leaveImmersive(immersiveRef), []);
+
+  // 뒤로가기 제스처나 시스템이 전체화면을 먼저 끝냈다면 숨겨 둔 조작부도 되돌린다.
+  const handleFullscreenChange = useEffectEvent(() => {
+    if (document.fullscreenElement || !immersiveRef.current) return;
+    immersiveRef.current = false;
+    showChrome(true);
+  });
+
+  useEffect(() => {
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () =>
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
+  // Popup의 onKeyDown을 쓰지 않는 이유는 이 뷰어가 게시물 상세 dialog 위에 열려 포커스가
+  // 여기까지 오지 않을 수 있기 때문이고, capture 단계인 이유는 그 아래 dialog가 방향키를 먼저
+  // 삼켜 bubble까지 오지 않기 때문이다.
+  const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (
+      event.defaultPrevented ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    // 다운로드 메뉴가 열려 있으면 방향키는 메뉴 항목을 옮기고, 확인 창이 떠 있으면 뒤의 사진을 넘기지 않는다.
+    if (
+      (event.target as Element | null)?.closest?.(
+        '[role="menu"], [data-slot="dialog-content"]',
+      )
+    ) {
+      return;
+    }
+
+    switch (event.key) {
+      case "ArrowLeft":
+        goTo(index - 1);
+        break;
+      case "ArrowRight":
+        goTo(index + 1);
+        break;
+      case "+":
+      case "=":
+        gestures.zoomBy(ZOOM_STEP);
+        break;
+      case "-":
+        gestures.zoomBy(1 / ZOOM_STEP);
+        break;
+      case "0":
+        gestures.resetZoom();
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    document.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () =>
+      document.removeEventListener("keydown", handleKeyDown, { capture: true });
+  }, [open]);
+
+  if (!activeImage) return null;
+
+  const hasMany = images.length > 1;
+  const chromeHidden = !chromeVisible;
+
+  return (
+    <>
+      <Dialog.Title className="sr-only">{activeImage.name}</Dialog.Title>
+
+      <div
+        ref={viewportRef}
+        data-testid="image-viewer-viewport"
+        className="absolute inset-0 touch-none overflow-hidden"
+        {...gestures.handlers}
+        onPointerMove={(event) => {
+          // 터치로 숨긴 조작부는 마우스를 움직이면 돌아온다. 마우스로는 숨길 방법이 없다.
+          if (event.pointerType === "mouse" && !chromeVisibleRef.current) {
+            showChrome(true);
+          }
+          gestures.handlers.onPointerMove(event);
+        }}
+      >
+        {/* 1배 이미지를 놓을 자리를 재는 용도. 넓은 화면은 조작부와 겹치지 않게 안쪽으로 들인다. */}
+        <div
+          ref={stageRef}
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute inset-0 sm:px-20 sm:pt-16",
+            hasMany ? "sm:pb-[calc(6rem+var(--app-safe-b))]" : "sm:pb-16",
+          )}
+        />
+        <div
+          ref={trackRef}
+          data-testid="image-viewer-track"
+          className="absolute inset-0 will-change-transform"
+        >
+          {images.map((image, slideIndex) =>
+            // 양옆 한 장씩만 그린다. 넘기는 동안 보일 수 있는 것은 그뿐이다.
+            box && Math.abs(slideIndex - index) <= 1 ? (
+              <Slide
+                key={image.id}
+                image={image}
+                isActive={slideIndex === index}
+                left={slideIndex * pageWidth}
+                width={box.viewport.width}
+                frame={frameSizeFor(image, naturalSizes[image.id], stageSize)}
+                stage={box.stage}
+                zoomed={slideIndex === index && zoomScale > MIN_ZOOM}
+                frameRef={(element) => {
+                  if (element) frameElements.current.set(image.id, element);
+                  else frameElements.current.delete(image.id);
+                }}
+                slideRef={(element) => {
+                  if (element) slideElements.current.set(image.id, element);
+                  else slideElements.current.delete(image.id);
+                }}
+                onNaturalSize={(id, size) =>
+                  setNaturalSizes((current) => {
+                    const known = current[id];
+                    // 원본에서 잰 값이 있으면 축소본 값으로 덮지 않는다.
+                    if (known && (!known.fromThumb || size.fromThumb)) {
+                      return current;
+                    }
+                    return { ...current, [id]: size };
+                  })
+                }
+              />
+            ) : null,
+          )}
+        </div>
+      </div>
+
+      {/* 조작부는 이미지 위에 겹친다. 숨기고 보여도 이미지 자리는 그대로라 화면이 흔들리지 않는다. */}
+      <div
+        ref={chromeRef}
+        data-testid="image-viewer-chrome"
+        data-hidden={chromeHidden || undefined}
+        className="pointer-events-none absolute inset-0"
+      >
+        <header
+          inert={chromeHidden}
+          className={cn(
+            "absolute inset-x-0 top-0 flex items-center gap-1 bg-linear-to-b from-black/60 to-transparent pt-[max(0.5rem,var(--app-safe-t))] pr-[max(0.5rem,var(--app-safe-r))] pb-6 pl-[max(0.5rem,var(--app-safe-l))] transition-opacity duration-200 sm:bg-none sm:pb-2 md:px-4 md:pt-3",
+            chromeHidden && "opacity-0",
+          )}
+        >
+          <p className="min-w-0 flex-1 px-3 text-sm text-white/80 tabular-nums">
+            {hasMany ? `${index + 1} / ${images.length}` : null}
+          </p>
+          <ControlButton
+            aria-label="축소"
+            disabled={zoomScale <= MIN_ZOOM}
+            onClick={() => gestures.zoomBy(1 / ZOOM_STEP)}
+            className="max-sm:hidden"
+          >
+            <ZoomOutIcon className="size-5" />
+          </ControlButton>
+          <ControlButton
+            aria-label="확대"
+            disabled={zoomScale >= MAX_ZOOM}
+            onClick={() => gestures.zoomBy(ZOOM_STEP)}
+            className="max-sm:hidden"
+          >
+            <ZoomInIcon className="size-5" />
+          </ControlButton>
+          <DownloadControl
+            image={activeImage}
+            images={images}
+            downloadAll={downloadAll}
+          />
+          <Dialog.Close render={<ControlButton aria-label="닫기" />}>
+            <XIcon className="size-5" />
+          </Dialog.Close>
+        </header>
+
+        {hasMany ? (
+          <div
+            inert={chromeHidden}
+            className={cn(
+              "transition-opacity duration-200",
+              chromeHidden && "opacity-0",
+            )}
+          >
+            <ControlButton
+              aria-label="이전 이미지"
+              disabled={index === 0}
+              // 누른 뒤 포커스 링이 버튼에 남지 않게 한다. 키보드 사용자는 방향키가 있다.
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => goTo(index - 1)}
+              className={cn(NAV_CLASS, "left-4")}
+            >
+              <ChevronLeftIcon className="size-7" />
+            </ControlButton>
+            <ControlButton
+              aria-label="다음 이미지"
+              disabled={index === images.length - 1}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => goTo(index + 1)}
+              className={cn(NAV_CLASS, "right-4")}
+            >
+              <ChevronRightIcon className="size-7" />
+            </ControlButton>
+          </div>
+        ) : null}
+
+        {hasMany ? (
+          <Filmstrip
+            images={images}
+            activeIndex={index}
+            hidden={chromeHidden}
+            onSelect={goTo}
+          />
+        ) : null}
+      </div>
+    </>
   );
 }
 
@@ -324,899 +937,93 @@ function Filmstrip({
  * 두지 않았다 — 한 장 넘길 때마다 router를 왕복시키면 드래그 도중에 비동기 왕복이 끼어들고,
  * 뒤늦게 도착한 prop이 손가락과 싸운다. 열린 뒤 어느 장을 보고 있는지는 뷰어가 소유한다.
  *
- * 그래서 호출부는 "열렸는지, 무엇으로"와 `onClose`만 책임지면 된다.
+ * 닫히는 애니메이션 동안에는 호출부가 이미 묶음을 내려놓았을 수 있어, 마지막으로 연 묶음을
+ * 직접 들고 있다가 애니메이션이 끝나면 버린다.
  */
 export function ImageViewer({
   images,
   openImageId,
+  downloadAll = false,
   onClose,
 }: {
   images: ViewerImage[];
   openImageId: string | null;
+  /** 다운로드 버튼에 "모든 사진" 항목을 둔다. 게시물 첨부처럼 한 묶음으로 올린 사진에만 켠다. */
+  downloadAll?: boolean;
   onClose: () => void;
 }) {
   const popupRef = useRef<HTMLDivElement>(null);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
-  const activePointersRef = useRef(new Map<number, Point>());
-  const gestureModeRef = useRef<GestureMode>(null);
-  const gestureStartRef = useRef<Point | null>(null);
-  const dragBaseRef = useRef(0);
-  const panBaseRef = useRef<Point>({ x: 0, y: 0 });
-  const pinchStartRef = useRef<{
-    distance: number;
-    midpoint: Point;
-    zoom: ZoomState;
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const open =
+    openImageId !== null && images.some((image) => image.id === openImageId);
+  const [session, setSession] = useState<{
+    images: ViewerImage[];
+    openImageId: string;
+    downloadAll: boolean;
   } | null>(null);
-  const hasDraggedRef = useRef(false);
-  const suppressClicksUntilRef = useRef(0);
-  const pendingTapRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastPointerTypeRef = useRef<string | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const pendingTrackOffsetRef = useRef<number | null>(null);
-  const pendingZoomRef = useRef<ZoomState | null>(null);
-  const zoomMetricsRef = useRef<ZoomMetrics | null>(null);
-  const isGestureActiveRef = useRef(false);
-  const decodedOriginalsRef = useRef(new Set<string>());
-  const pendingOriginalRevealsRef = useRef(new Set<string>());
-  const originalLoadPromisesRef = useRef(new Map<string, Promise<boolean>>());
-  const prefetchedOriginalsRef = useRef(new Set<string>());
-  const appliedOpenImageIdRef = useRef<string | null>(null);
-  // pointermove는 연속 이벤트라 pointerup이 도착할 때까지 setState가 아직 커밋되지 않았을 수
-  // 있다. 놓는 순간의 임계값 판정은 이 ref를 읽는다.
-  const offsetRef = useRef(0);
 
-  const [storedIndex, setStoredIndex] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isGestureActive, setIsGestureActive] = useState(false);
-  const [chrome, setChrome] = useState<ChromeState>("visible");
-  const [zoom, setZoom] = useState<ZoomState>(DEFAULT_ZOOM);
-  const zoomRef = useRef(DEFAULT_ZOOM);
-  const [renderedOpenImageId, setRenderedOpenImageId] = useState<string | null>(
-    null,
-  );
-  // 슬라이드는 현재 장에서 두 칸 멀어지면 언마운트된다. 이미 decode한 원본을 기억하지 않으면
-  // 되돌아올 때마다 축소본으로 내려가므로, 이 기억은 뷰어가 소유한다.
-  const [shownOriginals, setShownOriginals] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  const markOriginalDecoded = useCallback((src: string) => {
-    decodedOriginalsRef.current.add(src);
-    if (isGestureActiveRef.current) {
-      pendingOriginalRevealsRef.current.add(src);
-      return;
-    }
+  if (
+    openImageId !== null &&
+    open &&
+    (session?.images !== images ||
+      session.openImageId !== openImageId ||
+      session.downloadAll !== downloadAll)
+  ) {
+    setSession({ images, openImageId, downloadAll });
+  }
 
-    setShownOriginals((current) =>
-      current.has(src) ? current : new Set(current).add(src),
-    );
-  }, []);
-
-  const revealDecodedOriginals = () => {
-    if (pendingOriginalRevealsRef.current.size === 0) return;
-
-    const pending = pendingOriginalRevealsRef.current;
-    pendingOriginalRevealsRef.current = new Set();
-    setShownOriginals((current) => {
-      const next = new Set(current);
-      pending.forEach((src) => next.add(src));
-      return next;
-    });
-  };
-
-  const preloadOriginal = useCallback((src: string): Promise<boolean> => {
-    const existing = originalLoadPromisesRef.current.get(src);
-    if (existing) return existing;
-
-    const promise = new Promise<boolean>((resolve) => {
-      const original = new Image();
-      original.crossOrigin = "anonymous";
-      original.onload = () => {
-        if (typeof original.decode !== "function") {
-          resolve(true);
-          return;
-        }
-
-        try {
-          void original.decode().then(
-            () => resolve(true),
-            () => resolve(false),
-          );
-        } catch {
-          resolve(false);
-        }
-      };
-      original.onerror = () => resolve(false);
-      original.src = src;
-    });
-    originalLoadPromisesRef.current.set(src, promise);
-    return promise;
-  }, []);
-
-  const writeTrackOffset = (value: number) => {
-    trackRef.current?.style.setProperty(
-      "--image-viewer-track-offset",
-      `${value}px`,
-    );
-  };
-
-  const writeZoom = (value: ZoomState) => {
-    const image = imageRef.current;
-    if (!image) return;
-
-    image.style.setProperty("--image-viewer-zoom-x", `${value.x}px`);
-    image.style.setProperty("--image-viewer-zoom-y", `${value.y}px`);
-    image.style.setProperty("--image-viewer-zoom-scale", `${value.scale}`);
-  };
-
-  const flushPendingTransforms = () => {
-    if (animationFrameRef.current !== null) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-
-    if (pendingTrackOffsetRef.current !== null) {
-      writeTrackOffset(pendingTrackOffsetRef.current);
-      pendingTrackOffsetRef.current = null;
-    }
-    if (pendingZoomRef.current !== null) {
-      writeZoom(pendingZoomRef.current);
-      pendingZoomRef.current = null;
-    }
-  };
-
-  const scheduleTransformFrame = () => {
-    if (animationFrameRef.current !== null) return;
-
-    animationFrameRef.current = requestAnimationFrame(() => {
-      animationFrameRef.current = null;
-      if (pendingTrackOffsetRef.current !== null) {
-        writeTrackOffset(pendingTrackOffsetRef.current);
-        pendingTrackOffsetRef.current = null;
-      }
-      if (pendingZoomRef.current !== null) {
-        writeZoom(pendingZoomRef.current);
-        pendingZoomRef.current = null;
-      }
-    });
-  };
-
-  const setDragOffset = (value: number) => {
-    offsetRef.current = value;
-    pendingTrackOffsetRef.current = value;
-    scheduleTransformFrame();
-  };
-
-  const setDragOffsetImmediately = (value: number) => {
-    offsetRef.current = value;
-    pendingTrackOffsetRef.current = null;
-    writeTrackOffset(value);
-  };
-
-  const setZoomState = (value: ZoomState) => {
-    zoomRef.current = value;
-    pendingZoomRef.current = value;
-    scheduleTransformFrame();
-  };
-
-  const commitZoomState = (value: ZoomState) => {
-    zoomRef.current = value;
-    pendingZoomRef.current = null;
-    writeZoom(value);
-    setZoom(value);
-  };
-
-  const resetZoom = () => {
-    zoomMetricsRef.current = null;
-    commitZoomState(DEFAULT_ZOOM);
-  };
-
-  const setGestureActive = (active: boolean) => {
-    isGestureActiveRef.current = active;
-    setIsGestureActive(active);
-  };
-
-  useEffect(
-    () => () => {
-      if (pendingTapRef.current !== null) clearTimeout(pendingTapRef.current);
-      if (animationFrameRef.current !== null) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    },
-    [],
-  );
+  // 열리자마자 닫히면(화면을 떠나는 렌더 한 번 동안만 `?image=`가 맞아떨어진 경우) Base UI가
+  // 닫힘 완료를 알리지 못하고 멈춘다. 애니메이션보다 넉넉히 기다린 뒤에는 직접 내린다.
+  useEffect(() => {
+    if (open || !session) return;
+    const timer = window.setTimeout(() => setSession(null), 500);
+    return () => window.clearTimeout(timer);
+  }, [open, session]);
 
   useEffect(() => {
-    if (openImageId === null) return;
-
+    if (!open) return;
     const root = document.documentElement;
     root.classList.add("image-viewer-open");
     return () => root.classList.remove("image-viewer-open");
-  }, [openImageId]);
+  }, [open]);
 
-  // 데스크톱에서 좌우 방향키로 넘긴다. Popup의 onKeyDown을 쓰지 않는 이유는 이 뷰어가
-  // 게시물 상세 dialog 위에 열려 포커스가 여기까지 오지 않기 때문이고, capture 단계인
-  // 이유는 그 아래 dialog가 방향키를 먼저 삼켜 bubble까지 오지 않기 때문이다.
-  const handleArrowKey = useEffectEvent((event: KeyboardEvent) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-
-    event.preventDefault();
-    flushPendingTransforms();
-    offsetRef.current = 0;
-    pendingTrackOffsetRef.current = null;
-    resetZoom();
-    setStoredIndex((current) => {
-      const clamped = Math.max(0, Math.min(current, images.length - 1));
-      const next = event.key === "ArrowLeft" ? clamped - 1 : clamped + 1;
-      return Math.max(0, Math.min(next, images.length - 1));
-    });
-  });
-
-  useEffect(() => {
-    if (openImageId === null) return;
-    document.addEventListener("keydown", handleArrowKey, { capture: true });
-    return () =>
-      document.removeEventListener("keydown", handleArrowKey, {
-        capture: true,
-      });
-  }, [openImageId]);
-
-  // 새로 열렸다: 열린 장으로 점프한다. 바깥에서 index를 움직이는 건 이것뿐이다.
-  if (renderedOpenImageId !== openImageId) {
-    setRenderedOpenImageId(openImageId);
-    setStoredIndex(
-      Math.max(
-        0,
-        images.findIndex((image) => image.id === openImageId),
-      ),
-    );
-    setZoom(DEFAULT_ZOOM);
-    setChrome("visible");
-  }
-
-  // 뷰어가 열려 있는 동안 첨부 목록이 바뀔 수 있다.
-  const index = Math.max(0, Math.min(storedIndex, images.length - 1));
-  const activeImage = images[index];
-
-  useLayoutEffect(() => {
-    if (!openImageId) return;
-
-    if (appliedOpenImageIdRef.current !== openImageId) {
-      appliedOpenImageIdRef.current = openImageId;
-      offsetRef.current = 0;
-      pendingTrackOffsetRef.current = null;
-      zoomRef.current = DEFAULT_ZOOM;
-      pendingZoomRef.current = null;
-      zoomMetricsRef.current = null;
-    }
-    if (!isDragging) writeTrackOffset(0);
-    writeZoom(zoomRef.current);
-  }, [index, isDragging, openImageId]);
-
-  const isChromeCollapsed = chrome === "collapsed";
-
-  // 넓은 화면에서 UI가 자리를 비우거나 되찾으면 이미지의 기본 크기가 바뀐다. 확대해 둔 상태라면
-  // 이동 범위를 새 크기로 다시 잰다. 옛 범위가 남으면 이미지가 밀려나 가장자리에 빈 바탕이 보인다.
-  const reclampZoom = useEffectEvent(() => {
-    zoomMetricsRef.current = null;
-    const viewport = viewportRef.current;
-    const image = imageRef.current;
-    if (zoomRef.current.scale === 1 || !viewport || !image) return;
-
-    commitZoomState(
-      clampZoomToMetrics(zoomRef.current, readZoomMetrics(viewport, image)),
-    );
-  });
-
-  useLayoutEffect(() => reclampZoom(), [isChromeCollapsed]);
-
-  useEffect(() => {
-    if (!openImageId || !activeImage || !hasDistinctThumbnail(activeImage)) {
-      return;
-    }
-
-    let cancelled = false;
-    let adjacentPreloadTimer: number | null = null;
-
-    const loadActiveAndPrefetch = async () => {
-      const activeLoaded = await preloadOriginal(activeImage.src);
-      if (cancelled) return;
-      if (!activeLoaded) return;
-
-      markOriginalDecoded(activeImage.src);
-      if (isGestureActiveRef.current) return;
-
-      // 열린 사진을 먼저 decode한 뒤에만 다음 후보 한 장을 낮은 우선순위로 준비한다.
-      const adjacent = [images[index + 1], images[index - 1]].find(
-        (image) =>
-          image !== undefined &&
-          hasDistinctThumbnail(image) &&
-          !prefetchedOriginalsRef.current.has(image.src),
-      );
-      if (!adjacent) return;
-
-      prefetchedOriginalsRef.current.add(adjacent.src);
-      adjacentPreloadTimer = window.setTimeout(() => {
-        if (isGestureActiveRef.current) return;
-        void preloadOriginal(adjacent.src).then((loaded) => {
-          if (!cancelled && loaded) markOriginalDecoded(adjacent.src);
-        });
-      }, 200);
-    };
-
-    void loadActiveAndPrefetch();
-    return () => {
-      cancelled = true;
-      if (adjacentPreloadTimer !== null) {
-        window.clearTimeout(adjacentPreloadTimer);
-      }
-    };
-  }, [
-    activeImage,
-    images,
-    index,
-    markOriginalDecoded,
-    openImageId,
-    preloadOriginal,
-  ]);
-
-  if (!openImageId || !activeImage) return null;
-
-  const getViewportWidth = () => viewportRef.current?.clientWidth ?? 0;
-
-  const goTo = (nextIndex: number) => {
-    flushPendingTransforms();
-    offsetRef.current = 0;
-    pendingTrackOffsetRef.current = null;
-    if (nextIndex >= 0 && nextIndex < images.length) {
-      resetZoom();
-      setStoredIndex(nextIndex);
-    }
-  };
-
-  const chromeOpacityClass =
-    chrome === "visible" ? "opacity-100" : "pointer-events-none opacity-0";
-  // 이동 버튼은 넓은 화면에만 있다. 자리를 비울 때는 포커스도 받지 않도록 아예 내린다.
-  const navButtonClass = isChromeCollapsed
-    ? "hidden"
-    : cn("hidden transition-opacity duration-150 sm:flex", chromeOpacityClass);
-
-  const clearPendingTap = () => {
-    if (pendingTapRef.current === null) return;
-    clearTimeout(pendingTapRef.current);
-    pendingTapRef.current = null;
-  };
-
-  const markDragged = () => {
-    hasDraggedRef.current = true;
-    suppressClicksUntilRef.current = Date.now() + CLICK_SUPPRESSION_TIME;
-    clearPendingTap();
-  };
-
-  const shouldSuppressClick = () => {
-    if (
-      !hasDraggedRef.current &&
-      Date.now() >= suppressClicksUntilRef.current
-    ) {
-      return false;
-    }
-
-    hasDraggedRef.current = false;
-    return true;
-  };
-
-  const measureZoomMetrics = (): ZoomMetrics | null => {
-    const viewport = viewportRef.current;
-    const image = imageRef.current;
-    if (!viewport || !image) return null;
-
-    const metrics = readZoomMetrics(viewport, image);
-    zoomMetricsRef.current = metrics;
-    return metrics;
-  };
-
-  const clampZoom = (next: ZoomState): ZoomState => {
-    const metrics = zoomMetricsRef.current ?? measureZoomMetrics();
-    return metrics ? clampZoomToMetrics(next, metrics) : DEFAULT_ZOOM;
-  };
-
-  const getPointerPair = () => {
-    const [first, second] = Array.from(activePointersRef.current.values());
-    if (!first || !second) return null;
-
-    return {
-      distance: Math.hypot(second.x - first.x, second.y - first.y),
-      midpoint: {
-        x: (first.x + second.x) / 2,
-        y: (first.y + second.y) / 2,
-      },
-    };
-  };
-
-  /**
-   * 지금 트랙이 실제로 놓여 있는 위치를, 현재 index의 정지 위치로부터의 offset으로 읽는다.
-   * 슬라이드 애니메이션이 아직 돌고 있으면 0이 아니고, 드래그를 그 지점에서 이어받는 것이
-   * 손가락을 댔을 때 화면이 튀지 않게 하는 방법이다.
-   */
-  const readRenderedOffset = () => {
-    const track = trackRef.current;
-    const viewportWidth = getViewportWidth();
-    if (!track || viewportWidth === 0) return 0;
-
-    // 변형이 없는 요소는 "none"으로 계산되는데 DOMMatrix가 이를 파싱하지 못한다. 그런 요소는
-    // 어차피 이미 정지 상태다.
-    const renderedTransform = getComputedStyle(track).transform;
-    if (renderedTransform === "none" || typeof DOMMatrix === "undefined") {
-      return offsetRef.current;
-    }
-
-    const { m41: renderedTranslateX } = new DOMMatrix(renderedTransform);
-    return renderedTranslateX + index * viewportWidth;
-  };
-
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    // 컨트롤 위에서는 드래그하지 않고, 마우스로도 드래그하지 않는다 — 마우스의 어포던스는
-    // 좌우 화살표다. 터치 포인터는 브라우저가 암묵적으로 캡처하므로 setPointerCapture가
-    // 필요 없고, 부르면 후속 click이 이 요소로 리타깃돼서 탭-닫기와 화살표 탭이 깨진다.
-    lastPointerTypeRef.current = event.pointerType;
-    if (
-      event.pointerType === "mouse" ||
-      (event.target as HTMLElement).closest("button, a")
-    ) {
-      return;
-    }
-
-    const point = { x: event.clientX, y: event.clientY };
-    activePointersRef.current.set(event.pointerId, point);
-
-    if (activePointersRef.current.size === 2) {
-      const pair = getPointerPair();
-      if (!pair || pair.distance === 0) return;
-
-      markDragged();
-      gestureModeRef.current = "pinch";
-      pinchStartRef.current = { ...pair, zoom: zoomRef.current };
-      measureZoomMetrics();
-      setDragOffsetImmediately(0);
-      setIsDragging(false);
-      setGestureActive(true);
-      fadeChrome();
-      return;
-    }
-
-    if (activePointersRef.current.size > 1) {
-      markDragged();
-      return;
-    }
-
-    gestureStartRef.current = point;
-    setGestureActive(true);
-
-    if (zoomRef.current.scale > 1) {
-      gestureModeRef.current = "pan";
-      panBaseRef.current = { x: zoomRef.current.x, y: zoomRef.current.y };
-      measureZoomMetrics();
-      return;
-    }
-
-    const grabbedOffset = readRenderedOffset();
-
-    gestureModeRef.current = "slide";
-    dragBaseRef.current = grabbedOffset;
-    hasDraggedRef.current = false;
-    setDragOffsetImmediately(grabbedOffset);
-    setIsDragging(true);
-  };
-
-  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!activePointersRef.current.has(event.pointerId)) return;
-    activePointersRef.current.set(event.pointerId, {
-      x: event.clientX,
-      y: event.clientY,
-    });
-
-    if (gestureModeRef.current === "pinch") {
-      const start = pinchStartRef.current;
-      const pair = getPointerPair();
-      const metrics = zoomMetricsRef.current;
-      if (!start || !pair || !metrics || start.distance === 0) return;
-
-      event.preventDefault();
-      const scale = Math.max(
-        1,
-        Math.min(MAX_ZOOM, start.zoom.scale * (pair.distance / start.distance)),
-      );
-      const viewportCenter = {
-        x: metrics.viewportLeft + metrics.viewportWidth / 2,
-        y: metrics.viewportTop + metrics.viewportHeight / 2,
-      };
-      const startMidpoint = {
-        x: start.midpoint.x - viewportCenter.x,
-        y: start.midpoint.y - viewportCenter.y,
-      };
-      const currentMidpoint = {
-        x: pair.midpoint.x - viewportCenter.x,
-        y: pair.midpoint.y - viewportCenter.y,
-      };
-      const scaleRatio = scale / start.zoom.scale;
-
-      setZoomState(
-        clampZoom({
-          scale,
-          x: currentMidpoint.x - (startMidpoint.x - start.zoom.x) * scaleRatio,
-          y: currentMidpoint.y - (startMidpoint.y - start.zoom.y) * scaleRatio,
-        }),
-      );
-      return;
-    }
-
-    const gestureStart = gestureStartRef.current;
-    if (!gestureStart) return;
-
-    const distanceX = event.clientX - gestureStart.x;
-    const distanceY = event.clientY - gestureStart.y;
-    const wasDragging = hasDraggedRef.current;
-    if (
-      !wasDragging &&
-      Math.hypot(distanceX, distanceY) <= DRAG_START_TOLERANCE
-    ) {
-      return;
-    }
-
-    // 손이 움직이는 동안 계속 갱신한다. 클릭 억제 창은 드래그를 시작한 시각이 아니라
-    // 손을 뗀 시각을 기준으로 닫혀야 하기 때문이다.
-    markDragged();
-
-    // 세로로 밀기 시작했다면 슬라이드는 포기한다. 확대한 이미지를 끄는 pan은 세로로도
-    // 움직여야 하므로 여기서 걸러 내면 안 된다.
-    if (
-      !wasDragging &&
-      gestureModeRef.current === "slide" &&
-      Math.abs(distanceX) <= Math.abs(distanceY)
-    ) {
-      gestureModeRef.current = null;
-      return;
-    }
-
-    if (gestureModeRef.current === "pan") {
-      event.preventDefault();
-      setZoomState(
-        clampZoom({
-          scale: zoomRef.current.scale,
-          x: panBaseRef.current.x + distanceX,
-          y: panBaseRef.current.y + distanceY,
-        }),
-      );
-      return;
-    }
-
-    if (gestureModeRef.current !== "slide") return;
-
-    const viewportWidth = getViewportWidth();
-    // 첫 장과 마지막 장의 정지 offset을 현재 index 기준으로 환산한 값.
-    const firstSlideOffset = index * viewportWidth;
-    const lastSlideOffset = (index - (images.length - 1)) * viewportWidth;
-    // 드래그로 인정하는 데 쓴 만큼은 빼고 민다. 그래야 문턱을 넘는 순간 이미지가 튀지 않는다.
-    const draggedDistance =
-      Math.sign(distanceX) *
-      Math.max(0, Math.abs(distanceX) - DRAG_START_TOLERANCE);
-    const draggedOffset = dragBaseRef.current + draggedDistance;
-
-    if (draggedOffset > firstSlideOffset) {
-      setDragOffset(
-        firstSlideOffset +
-          (draggedOffset - firstSlideOffset) * SWIPE_RUBBER_BAND,
-      );
-      return;
-    }
-
-    if (draggedOffset < lastSlideOffset) {
-      setDragOffset(
-        lastSlideOffset + (draggedOffset - lastSlideOffset) * SWIPE_RUBBER_BAND,
-      );
-      return;
-    }
-
-    setDragOffset(draggedOffset);
-  };
-
-  const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!activePointersRef.current.has(event.pointerId)) return;
-    activePointersRef.current.delete(event.pointerId);
-    flushPendingTransforms();
-
-    if (gestureModeRef.current === "pinch") {
-      pinchStartRef.current = null;
-
-      if (activePointersRef.current.size >= 2) {
-        const pair = getPointerPair();
-        if (pair && pair.distance > 0) {
-          pinchStartRef.current = { ...pair, zoom: zoomRef.current };
-        }
-        return;
-      }
-
-      const remainingPointer = activePointersRef.current.values().next().value;
-      if (remainingPointer) {
-        gestureModeRef.current = "pan";
-        gestureStartRef.current = remainingPointer;
-        panBaseRef.current = {
-          x: zoomRef.current.x,
-          y: zoomRef.current.y,
-        };
-        return;
-      }
-
-      gestureModeRef.current = null;
-      gestureStartRef.current = null;
-      commitZoomState(zoomRef.current);
-      setGestureActive(false);
-      revealDecodedOriginals();
-      return;
-    }
-
-    if (activePointersRef.current.size > 0) return;
-
-    const gestureMode = gestureModeRef.current;
-    gestureModeRef.current = null;
-    gestureStartRef.current = null;
-    commitZoomState(zoomRef.current);
-    setGestureActive(false);
-    revealDecodedOriginals();
-    setIsDragging(false);
-
-    if (gestureMode === "pan") return;
-    // 세로로 밀어 슬라이드를 포기한 경우. 정지 상태에서 잡았다면 0을 다시 쓰는 것뿐이지만,
-    // 슬라이드 애니메이션 도중에 잡았다면 그 중간 지점이 offset에 남아 있다. 여기서 되돌리지
-    // 않으면 트랙이 어긋난 자리에 그대로 멈춘다.
-    if (gestureMode !== "slide") {
-      offsetRef.current = 0;
-      pendingTrackOffsetRef.current = null;
-      return;
-    }
-
-    const viewportWidth = getViewportWidth();
-    if (viewportWidth === 0) {
-      offsetRef.current = 0;
-      pendingTrackOffsetRef.current = null;
-      return;
-    }
-
-    const releasedOffset = offsetRef.current;
-    const draggedDistance = releasedOffset - dragBaseRef.current;
-    const triggerDistance = Math.min(
-      SWIPE_MAX_TRIGGER_DISTANCE,
-      viewportWidth * SWIPE_TRIGGER_RATIO,
-    );
-    // 트랙이 놓인 위치를 "장" 단위로 환산한 값. 손가락이 충분히 이동했으면 다음 장으로,
-    // 아니면 가장 가까운 장으로 스냅한다.
-    const position = index - releasedOffset / viewportWidth;
-    const target =
-      Math.abs(draggedDistance) < triggerDistance
-        ? Math.round(position)
-        : draggedDistance < 0
-          ? Math.ceil(position)
-          : Math.floor(position);
-
-    goTo(Math.min(images.length - 1, Math.max(0, target)));
-  };
-
-  // 스와이프는 손가락 아래에 있던 것에 대한 click으로 끝난다. 그걸 배경 탭으로 읽으면 안 된다.
-  const handleBackdropClick = () => {
-    if (shouldSuppressClick()) return;
-    clearPendingTap();
-    onClose();
-  };
-
-  const fadeChrome = () =>
-    setChrome((current) => (current === "visible" ? "faded" : current));
-
-  const toggleChrome = () =>
-    setChrome((current) => (current === "visible" ? "collapsed" : "visible"));
-
-  const handleImageClick = (event: ReactMouseEvent<HTMLImageElement>) => {
-    event.stopPropagation();
-    if (shouldSuppressClick()) return;
-
-    // 마우스·터치패드에는 두 번 눌러 확대하는 동작이 없으니 두 번째 탭을 기다리지 않는다.
-    if (lastPointerTypeRef.current !== "touch") {
-      toggleChrome();
-      return;
-    }
-
-    if (pendingTapRef.current !== null) {
-      clearPendingTap();
-
-      if (zoomRef.current.scale > 1) {
-        resetZoom();
-        return;
-      }
-
-      const viewport = viewportRef.current;
-      if (!viewport) return;
-      const rect = viewport.getBoundingClientRect();
-      const x = event.clientX - rect.left - rect.width / 2;
-      const y = event.clientY - rect.top - rect.height / 2;
-      commitZoomState(
-        clampZoom({
-          scale: DOUBLE_TAP_ZOOM,
-          x: x * (1 - DOUBLE_TAP_ZOOM),
-          y: y * (1 - DOUBLE_TAP_ZOOM),
-        }),
-      );
-      fadeChrome();
-      return;
-    }
-
-    pendingTapRef.current = setTimeout(() => {
-      pendingTapRef.current = null;
-      toggleChrome();
-    }, DOUBLE_TAP_DELAY);
-  };
+  if (!session) return null;
 
   return (
     /* Base UI의 스크롤 잠금은 중첩 dialog에서 폭 보정이 겹치므로 사용하지 않는다. 대신
        뷰어가 열린 동안 루트에 image-viewer-open을 붙여 스크롤과 스크롤바만 직접 막는다. */
     <Dialog.Root
-      open
+      open={open}
       modal="trap-focus"
-      onOpenChange={(open) => !open && onClose()}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      onOpenChangeComplete={(next) => {
+        if (!next) setSession(null);
+      }}
     >
       <Dialog.Portal>
-        {/* `forceRender`가 없으면 백드롭이 아예 그려지지 않는다 — Base UI는 중첩된 dialog의
-            백드롭을 기본적으로 건너뛴다(부모 것이 이미 깔려 있다고 보기 때문에). 이 뷰어는
-            게시물 상세 안에서도 열리는데, 거기서는 부모의 옅은 백드롭만 남아 흰 배경에 흰
-            글씨가 되고 사진 뒤로 모달이 비친다. 사진을 보는 화면은 항상 자기 배경을 가져야 한다.
-
-            아래 dialog도 `z-50`이라 같은 층에서 DOM 순서에 기대지 않도록 한 단 올린다. */}
+        {/* `forceRender` 없이는 Base UI가 중첩 dialog의 백드롭을 건너뛰어, 게시물 상세 안에서 옅은 부모 백드롭만 남는다. 아래 dialog도 `z-50`이라 한 단 올린다. */}
         <Dialog.Backdrop
+          ref={backdropRef}
           forceRender
-          className="fixed inset-0 z-60 bg-black/95 duration-150 data-open:animate-in data-open:fade-in-0"
+          className="fixed inset-0 z-60 bg-black duration-200 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
         />
         <Dialog.Popup
           // 열자마자 닫기/다운로드 버튼에 포커스 링이 박히지 않게 popup 자신으로 보낸다.
-          // 방향키는 window 리스너, Esc는 Base UI가 처리하므로 여기 있는 컨트롤 중
-          // 포커스를 먼저 받아야 하는 것은 없다.
           ref={popupRef}
           initialFocus={popupRef}
-          className="fixed inset-0 z-60 flex flex-col duration-150 outline-none data-open:animate-in data-open:fade-in-0"
+          className="fixed inset-0 z-60 overflow-hidden duration-200 outline-none select-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
         >
-          <Dialog.Title className="sr-only">{activeImage.name}</Dialog.Title>
-
-          <header
-            data-testid="image-viewer-header"
-            className={cn(
-              "absolute inset-x-0 top-0 z-10 flex items-center gap-2 pt-[max(0.5rem,var(--app-safe-t))] pr-[max(0.5rem,var(--app-safe-r))] pb-2 pl-[max(0.5rem,var(--app-safe-l))] transition-opacity duration-150 sm:static sm:z-auto sm:shrink-0 md:p-3",
-              chromeOpacityClass,
-              // 넓은 화면에서는 헤더가 자리를 차지한다. 그 자리까지 이미지에 내준다.
-              isChromeCollapsed && "sm:hidden",
-            )}
-          >
-            {/* 파일 이름은 화면에 띄우지 않는다. 스크린리더용 제목과 저장 파일명에는 그대로 쓴다. */}
-            <div className="min-w-0 flex-1 px-2">
-              {images.length > 1 ? (
-                <p className="text-sm text-white/70">
-                  {index + 1} / {images.length}
-                </p>
-              ) : null}
-            </div>
-            <a
-              href={activeImage.downloadSrc}
-              download={activeImage.name}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="다운로드"
-              className={CONTROL_CLASS}
-            >
-              <DownloadIcon className="size-5" />
-            </a>
-            <Dialog.Close render={<ControlButton aria-label="닫기" />}>
-              <XIcon className="size-5" />
-            </Dialog.Close>
-          </header>
-
-          <div
-            ref={viewportRef}
-            data-testid="image-viewer-viewport"
-            className="relative min-h-0 flex-1 touch-none overflow-hidden"
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-          >
-            <div
-              ref={trackRef}
-              data-testid="image-viewer-track"
-              className="flex h-full w-full"
-              style={{
-                transform: `translateX(calc(${-index * 100}% + var(--image-viewer-track-offset, 0px)))`,
-                transition: isDragging ? "none" : SLIDE_TRANSITION,
-              }}
-            >
-              {images.map((image, slideIndex) => (
-                <Slide
-                  key={image.id}
-                  // 양옆 한 장씩만 그린다. 빈 슬롯도 트랙의 기하는 유지하므로 transform은 계속
-                  // 100%의 정수배로 남고, 원본 decode는 활성 사진부터 별도로 순서를 둔다.
-                  image={Math.abs(slideIndex - index) <= 1 ? image : undefined}
-                  imageRef={slideIndex === index ? imageRef : undefined}
-                  zoom={slideIndex === index ? zoom : undefined}
-                  isGestureActive={isGestureActive}
-                  showOriginal={shownOriginals.has(image.src)}
-                  onBackdropClick={handleBackdropClick}
-                  onImageClick={handleImageClick}
-                />
-              ))}
-            </div>
-
-            <div
-              className={cn(
-                "absolute inset-y-0 left-2 items-center sm:left-4",
-                navButtonClass,
-              )}
-            >
-              <ControlButton
-                aria-label="이전 이미지"
-                disabled={index === 0}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => goTo(index - 1)}
-                className="bg-black/40 backdrop-blur-xs"
-              >
-                <ChevronLeftIcon className="size-6" />
-              </ControlButton>
-            </div>
-            <div
-              className={cn(
-                "absolute inset-y-0 right-2 items-center sm:right-4",
-                navButtonClass,
-              )}
-            >
-              <ControlButton
-                aria-label="다음 이미지"
-                disabled={index === images.length - 1}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => goTo(index + 1)}
-                className="bg-black/40 backdrop-blur-xs"
-              >
-                <ChevronRightIcon className="size-6" />
-              </ControlButton>
-            </div>
-            {images.length > 1 ? (
-              <Filmstrip
-                images={images}
-                activeIndex={index}
-                onSelect={goTo}
-                testId="image-viewer-mobile-filmstrip"
-                screen="mobile"
-                className={cn(
-                  "absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/75 to-transparent transition-opacity duration-150 sm:hidden",
-                  chromeOpacityClass,
-                )}
-              />
-            ) : null}
-          </div>
-
-          {/* 자리를 비울 때는 언마운트한다. 다시 나타나며 마운트될 때 현재 썸네일로 스크롤한다. */}
-          {isChromeCollapsed ? null : images.length > 1 ? (
-            <Filmstrip
-              images={images}
-              activeIndex={index}
-              onSelect={goTo}
-              screen="desktop"
-              className={cn(
-                "hidden transition-opacity duration-150 sm:block",
-                chromeOpacityClass,
-              )}
-            />
-          ) : (
-            // 한 장뿐이어도 필름스트립 높이를 비워둔다. 안 그러면 이미지 영역이 그만큼
-            // 늘어나서, 여러 장짜리 게시물과 한 장짜리 게시물의 크기가 달라 보인다.
-            <div
-              className="hidden h-[calc(2.5rem+var(--app-safe-b))] shrink-0 sm:block"
-              aria-hidden="true"
-            />
-          )}
+          <ViewerContent
+            key={session.openImageId}
+            images={session.images}
+            initialImageId={session.openImageId}
+            open={open}
+            downloadAll={session.downloadAll}
+            backdropRef={backdropRef}
+            onClose={onClose}
+          />
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

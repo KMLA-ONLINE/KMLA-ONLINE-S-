@@ -17,9 +17,7 @@ function subscribe(listener: () => void): () => void {
   listeners.add(listener);
 
   if (intervalId === null) {
-    // 타이머가 멈춰 있던 동안에는 아무도 `clientNow`를 갱신하지 않았다. 다시 시작하는
-    // 지금이 유일하게 그 공백을 메울 수 있는 지점이다. 모듈 최상단 초기값도 마찬가지로
-    // 낡을 수 있다 — 라우트 청크는 `prefetch="intent"`로 실제 사용보다 먼저 로드된다.
+    // 타이머가 멈춰 있던 동안 `clientNow`가 낡았다. 모듈 초기값도 `prefetch="intent"`로 일찍 로드되면 낡을 수 있어 재시작 시 갱신한다.
     clientNow = Date.now();
     intervalId = setInterval(() => {
       clientNow = Date.now();

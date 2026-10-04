@@ -1,6 +1,8 @@
 import {
   createElement,
   createContext,
+  lazy,
+  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -11,10 +13,13 @@ import {
 } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 
-import {
-  ImageViewer,
-  type ViewerImage,
-} from "~/shared/components/image-viewer";
+import type { ViewerImage } from "~/shared/components/image-viewer";
+
+// 뷰어와 제스처 코드는 이 Provider를 거쳐 root에 걸리므로, 모든 화면의 첫 로딩에서 뺀다.
+const loadImageViewer = () => import("~/shared/components/image-viewer");
+const ImageViewer = lazy(() =>
+  loadImageViewer().then((module) => ({ default: module.ImageViewer })),
+);
 
 /** 뷰어를 연 것이 우리라는 표식. 뒤로가기로 닫을 수 있는지 판단하는 근거다. */
 interface ImageViewerLocationState {
@@ -24,12 +29,15 @@ interface ImageViewerLocationState {
 interface ImageViewerRegistration {
   id: string;
   images: ViewerImage[];
+  downloadAll: boolean;
 }
 
 interface ImageViewerRegistry {
   register: (registration: ImageViewerRegistration) => void;
   unregister: (id: string) => void;
 }
+
+const NO_IMAGES: ViewerImage[] = [];
 
 const ImageViewerRegistryContext = createContext<ImageViewerRegistry | null>(
   null,
@@ -44,7 +52,9 @@ function sameImages(left: ViewerImage[], right: ViewerImage[]): boolean {
         image.src === right[index]?.src &&
         image.thumbSrc === right[index]?.thumbSrc &&
         image.downloadSrc === right[index]?.downloadSrc &&
-        image.name === right[index]?.name,
+        image.name === right[index]?.name &&
+        image.width === right[index]?.width &&
+        image.height === right[index]?.height,
     )
   );
 }
@@ -64,7 +74,10 @@ export function ImageViewerProvider({ children }: { children: ReactNode }) {
       if (index === -1) return [...current, registration];
 
       const existing = current[index];
-      if (existing && sameImages(existing.images, registration.images)) {
+      if (
+        existing?.downloadAll === registration.downloadAll &&
+        sameImages(existing.images, registration.images)
+      ) {
         return current;
       }
 
@@ -83,6 +96,12 @@ export function ImageViewerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // 이미지가 있는 화면이 뜨면 미리 받아 둬서, 첫 탭에서 뷰어가 늦게 뜨지 않게 한다.
+  const hasRegistrations = registrations.length > 0;
+  useEffect(() => {
+    if (hasRegistrations) void loadImageViewer();
+  }, [hasRegistrations]);
+
   const requestedImageId = searchParams.get("image");
   const activeRegistration = requestedImageId
     ? registrations.find((registration) =>
@@ -90,6 +109,10 @@ export function ImageViewerProvider({ children }: { children: ReactNode }) {
       )
     : undefined;
   const locationState = location.state as ImageViewerLocationState | null;
+
+  // 한 번 열린 뒤에는 계속 그린다. 닫히는 애니메이션이 마지막 묶음을 들고 끝나야 한다.
+  const [viewerMounted, setViewerMounted] = useState(false);
+  if (activeRegistration && !viewerMounted) setViewerMounted(true);
 
   const close = useCallback(() => {
     if (locationState?.imageViewerPushed) {
@@ -116,12 +139,17 @@ export function ImageViewerProvider({ children }: { children: ReactNode }) {
     ImageViewerRegistryContext.Provider,
     { value: registry },
     children,
-    activeRegistration && requestedImageId
-      ? createElement(ImageViewer, {
-          images: activeRegistration.images,
-          openImageId: requestedImageId,
-          onClose: close,
-        })
+    viewerMounted
+      ? createElement(
+          Suspense,
+          { fallback: null },
+          createElement(ImageViewer, {
+            images: activeRegistration?.images ?? NO_IMAGES,
+            openImageId: activeRegistration ? requestedImageId : null,
+            downloadAll: activeRegistration?.downloadAll,
+            onClose: close,
+          }),
+        )
       : null,
   );
 }
@@ -136,7 +164,10 @@ export function ImageViewerProvider({ children }: { children: ReactNode }) {
  * 이미지 묶음은 앱의 단일 `ImageViewerProvider`에 등록한다. 같은 사진이 카드와 상세에 동시에
  * 있어도 provider가 Dialog 하나만 렌더링하므로 history 닫기가 겹치지 않는다.
  */
-export function useImageViewerParam(images: ViewerImage[]) {
+export function useImageViewerParam(
+  images: ViewerImage[],
+  { downloadAll = false }: { downloadAll?: boolean } = {},
+) {
   const registry = useContext(ImageViewerRegistryContext);
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
@@ -149,9 +180,9 @@ export function useImageViewerParam(images: ViewerImage[]) {
   }
 
   useEffect(() => {
-    registry.register({ id: registrationId, images });
+    registry.register({ id: registrationId, images, downloadAll });
     return () => registry.unregister(registrationId);
-  }, [images, registrationId, registry]);
+  }, [downloadAll, images, registrationId, registry]);
 
   const open = (imageId: string) => {
     const next = new URLSearchParams(searchParams);

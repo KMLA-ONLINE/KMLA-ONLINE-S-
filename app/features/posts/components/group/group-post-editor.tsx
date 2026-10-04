@@ -1,10 +1,5 @@
-import { useCallback, useRef, useState, type FormEvent } from "react";
-import {
-  useBeforeUnload,
-  useBlocker,
-  useNavigate,
-  useRevalidator,
-} from "react-router";
+import { useRef, useState, type FormEvent } from "react";
+import { useNavigate, useRevalidator } from "react-router";
 
 import {
   createGroupPostWithAttachments,
@@ -15,13 +10,12 @@ import {
   updateGroupPostWithAttachments,
 } from "~/features/posts/data/mutations";
 import { releasePostFile } from "~/features/posts/model/attachments";
-import { FROM_GROUP } from "~/features/posts/model/navigation";
+import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import { usePostAttachmentDraft } from "~/features/posts/hooks/use-post-attachment-draft";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
-import {
-  formatPostDate,
-  getPostErrorMessage,
-} from "~/features/posts/model/format";
+import { getPostErrorMessage } from "~/features/posts/model/format";
+import { AnonymousActivityRestrictionNotice } from "~/features/posts/components/anonymous-activity-restriction-notice";
+import { PostLeaveGuard } from "~/features/posts/components/editor/post-leave-guard";
 import { PostAttachmentEditor } from "~/features/posts/components/editor/post-attachment-editor";
 import {
   PostBodyInput,
@@ -86,9 +80,7 @@ export function GroupPostEditor({
   // 그룹으로 `navigate`하면 히스토리에 작성 화면이 남아서, 뒤로 가기를 누른 사용자가 방금
   // 버린 초안을 다시 마주하게 된다. 들어온 경로를 되감는 게 맞다.
   const close = useModalClose(`/groups/${slug}`);
-  // 저장은 이 컴포넌트가 RPC로 직접 돌린다(`AGENTS.md`: 파일 처리·진행률·재시도는 소유
-  // 기능에 둔다). route action으로 왕복하지 않으므로 되돌아온 값이 아니라 게시물 자체가
-  // 언제나 초기값이다.
+  // 저장은 RPC를 직접 돌린다(`AGENTS.md`). route action을 거치지 않으므로 게시물 자체가 언제나 초기값이다.
   const initial: PostFormValues = {
     title: post?.title ?? "",
     body: post?.body ?? "",
@@ -107,7 +99,6 @@ export function GroupPostEditor({
   const [draftCategoryId, setDraftCategoryId] = useState(initial.categoryId);
   const [draftIdentity, setDraftIdentity] = useState(initial.authorIdentity);
   const [saving, setSaving] = useState(false);
-  const [discarding, setDiscarding] = useState(false);
   const [pendingIdentity, setPendingIdentity] = useState<PostFormValues | null>(
     null,
   );
@@ -156,21 +147,6 @@ export function GroupPostEditor({
     authorIdentity: draftIdentity,
     attachmentsChanged: attachmentsChanged || preparingCount > 0,
   });
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      dirty && !saving && currentLocation.pathname !== nextLocation.pathname,
-  );
-
-  useBeforeUnload(
-    useCallback(
-      (event) => {
-        if (!dirty || saving) return;
-        event.preventDefault();
-      },
-      [dirty, saving],
-    ),
-  );
-
   const save = async (nextValues: PostFormValues) => {
     clearPreparationError();
     setSaving(true);
@@ -201,7 +177,7 @@ export function GroupPostEditor({
       await revalidator.revalidate();
       // 새 글은 그룹 → 작성 화면 → 상세라 방금 갈아치운 entry 밑이 그룹이다. 수정은 밑이
       // 이전 상세 entry여서 뒤로가기가 한 번에 그룹에 닿지 않으므로 표식을 심지 않는다.
-      void navigate(`/groups/${slug}/posts/${postId}`, {
+      void navigate(groupPostPath(slug, postId), {
         replace: true,
         state: mode === "create" ? FROM_GROUP : undefined,
       });
@@ -292,12 +268,10 @@ export function GroupPostEditor({
         }}
       >
         {mode === "create" && anonymousActivityRestriction ? (
-          <p className="mb-4 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-            익명 활동이 제한되어 있습니다. 사유:{" "}
-            {anonymousActivityRestriction.reason}
-            {" · "}만료:{" "}
-            {formatPostDate(anonymousActivityRestriction.expires_at)}
-          </p>
+          <AnonymousActivityRestrictionNotice
+            restriction={anonymousActivityRestriction}
+            className="mb-4 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground"
+          />
         ) : null}
         <div className="grid gap-2">
           <div
@@ -372,10 +346,7 @@ export function GroupPostEditor({
                 setDraftBody(value);
               }}
             />
-            {/*
-              익명 글은 멘션할 수 없다(기능 명세 §8.14). 운영진 명의는 실제 작성자의 이름과
-              사진이 그대로 보이므로(§8.6) 익명이 아니고, 여기서 감추지 않는다.
-            */}
+            {/* 익명 글은 멘션 불가(기능 명세 §8.14). 운영진 명의는 익명이 아니다(§8.6). */}
             {draftIdentity === "anonymous" ? null : (
               <div className="flex items-center gap-1">
                 <MentionButton
@@ -440,40 +411,17 @@ export function GroupPostEditor({
           }}
         />
       ) : null}
-      {blocker.state === "blocked" ? (
-        <ConfirmDialog
-          title={
-            mode === "create" ? "작성 중인 게시물" : "저장하지 않은 변경 사항"
-          }
-          description={
-            mode === "create"
-              ? "작성 중인 본문이나 첨부가 있습니다. 저장하지 않고 나갈까요?"
-              : "수정한 내용이 저장되지 않았습니다. 저장하지 않고 나갈까요?"
-          }
-          confirmLabel="나가기"
-          destructive
-          pending={discarding}
-          onCancel={() => {
-            if (!disposedRef.current) blocker.reset();
-          }}
-          onConfirm={() => {
-            if (disposedRef.current) return;
-            setDiscarding(true);
-            disposedRef.current = true;
-            void (async () => {
-              try {
-                if (mode === "create")
-                  await discardPostUploadDraft("group", session.current);
-                else await discardPostUploads(session.current);
-              } catch {
-                // Scheduled cleanup removes any upload rows that could not be deleted now.
-              } finally {
-                blocker.proceed();
-              }
-            })();
-          }}
-        />
-      ) : null}
+      <PostLeaveGuard
+        dirty={dirty}
+        saving={saving}
+        mode={mode}
+        disposedRef={disposedRef}
+        discard={() =>
+          mode === "create"
+            ? discardPostUploadDraft("group", session.current)
+            : discardPostUploads(session.current)
+        }
+      />
     </>
   );
 }

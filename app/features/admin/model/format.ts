@@ -4,13 +4,6 @@ export function formatProfileType(type: string): string {
   return type === "student" ? "학생" : type === "teacher" ? "교직원" : "졸업생";
 }
 
-export function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("ko-KR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
 export function formatApplicationField(
   value: AdminApplication[keyof AdminApplication],
 ): string {

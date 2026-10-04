@@ -39,12 +39,7 @@ export async function getMyGroupAnonymousActivityRestriction(
   return data?.[0] ?? null;
 }
 
-/**
- * 댓글 한 묶음에 이미지와 작성자 아바타를 채운다.
- *
- * 두 버킷을 병렬로 서명한다 — 이미지 목록 RPC와 아바타 서명은 서로를 기다릴 이유가 없다.
- * 아바타는 `author_avatar_url`에만 채우고 원시 경로는 그대로 둔다(모델 타입 주석 참고).
- */
+/** 댓글 한 묶음에 이미지와 작성자 아바타를 채운다. 두 버킷은 병렬로 서명하고 아바타는 `author_avatar_url`에만 채운다. */
 export async function hydratePostComments(
   comments: Omit<PostComment, "images" | "author_avatar_url">[],
 ): Promise<PostComment[]> {
@@ -121,12 +116,7 @@ async function attachFiles<T extends { post_id: string }>(
   }));
 }
 
-/**
- * 아바타와 프로필 미디어 활동 이미지를 한 번에 서명한다.
- *
- * 서명 결과는 언제나 `*_url`에 담고 원시 경로는 건드리지 않는다. 그래야 이미 채워진 목록을
- * 다시 통과시켜도 같은 결과가 나온다(모델 타입 주석 참고).
- */
+/** 아바타와 프로필 미디어 활동 이미지를 한 번에 서명한다. 결과는 `*_url`에만 담아 다시 통과시켜도 같다(멱등). */
 async function attachProfileMedia<
   T extends {
     activity_media_path: string | null;
@@ -241,13 +231,7 @@ export async function listGroupPosts(
   };
 }
 
-/**
- * 그룹 게시물 묶음에 첨부와 아바타의 signed URL을 채운다.
- *
- * 멱등하다 — 서명 결과는 `*_url`/`signedUrl`에만 담고 경로 컬럼은 건드리지 않는다. 로더가
- * 이미 채워 둔 첫 페이지를 화면의 효과가 한 번 더 통과시키므로, 여기서 경로를 덮어쓰면
- * 두 번째 통과에서 서명이 실패해 아바타가 전부 사라진다.
- */
+/** 그룹 게시물 묶음에 첨부와 아바타의 signed URL을 채운다. 멱등하다 — 경로를 덮어쓰면 로더가 채운 첫 페이지를 다시 통과시킬 때 서명이 실패해 아바타가 사라진다. */
 export async function hydrateGroupPostMedia(
   posts: Omit<GroupPost, "author_avatar_url">[],
 ): Promise<GroupPostPage["posts"]> {
@@ -310,15 +294,7 @@ export async function getGroupPost(
   return hydrated;
 }
 
-/**
- * 프로필 타임라인 한 페이지.
- *
- * 그룹 목록과 같은 방식으로 한 건을 더 받아 다음 커서를 정한다. 고정 게시물이 없으므로
- * 커서는 `(published_at, post_id)` 두 값이면 충분하다.
- *
- * 타임라인을 화면과 같은 공개 ID로 가리키므로 loader가 프로필 조회를 기다리지 않는다 —
- * 프로필과 타임라인이 나란히 나간다.
- */
+/** 프로필 타임라인 한 페이지. 한 건을 더 받아 다음 커서를 정하며, 고정이 없어 커서는 `(published_at, post_id)`면 충분하다. */
 export async function listProfilePosts(
   timelinePubId: string,
   cursor?: ProfilePostCursor | null,
@@ -359,12 +335,7 @@ export async function getProfilePost(
   return hydrated;
 }
 
-/**
- * 최상위 댓글 한 페이지.
- *
- * RPC는 오래된 댓글부터 화면 순서대로 돌려준다. 한 건을 더 받아 다음 페이지가 있는지만 확인하고,
- * 현재 페이지의 마지막 댓글을 다음 커서로 쓴다.
- */
+/** 최상위 댓글 한 페이지. 한 건을 더 받아 다음 페이지 유무를 확인하고 마지막 댓글을 커서로 쓴다. */
 export async function listPostComments(
   postId: string,
   cursor?: CommentCursor | null,
@@ -402,10 +373,7 @@ export async function listPostCommentReplies(
   return hydratePostComments((data ?? []).map(withMentions));
 }
 
-/**
- * 반응 참여자 목록. 요약을 누를 때만 부른다 — 목록 화면에서 게시물마다
- * 미리 받으면 반응 하나 보자고 페이지 전체가 무거워진다.
- */
+/** 반응 참여자 목록. 요약을 누를 때만 부른다. */
 export async function listPostReactors(postId: string): Promise<PostReactor[]> {
   const { data, error } = await getSupabase().rpc("list_post_reactors", {
     p_post_id: postId,
@@ -440,13 +408,7 @@ async function signReactorAvatars(
   }));
 }
 
-/**
- * 멘션 후보 한 페이지(기능 명세 §8.14).
- *
- * 정렬은 RPC가 정한다 — 선생님이 먼저, 그다음 최근 기수부터다. 명부(`list_group_members`)와
- * 순서가 다르므로 그쪽을 재사용하지 않는다. 커서를 두지 않는 것은 부를 사람을 찾는 화면이기
- * 때문이다. 목록을 끝까지 훑는 대신 검색어로 좁힌다.
- */
+/** 멘션 후보 한 페이지(기능 명세 §8.14). 정렬은 RPC가 정하고(선생님 먼저, 최근 기수순), 찾는 화면이라 커서 대신 검색어로 좁힌다. */
 export async function searchGroupMentionCandidates(
   groupId: string,
   query = "",

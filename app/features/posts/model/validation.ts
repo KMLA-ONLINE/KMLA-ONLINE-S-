@@ -74,13 +74,7 @@ export function readProfilePostForm(formData: FormData): ProfilePostFormValues {
   };
 }
 
-/**
- * 개인 게시물 폼 검사 (기능 명세 §8.3, §8.4).
- *
- * 제목이 없으므로 본문 또는 첨부가 유일한 필수 항목이다. 공개 범위 선택은 자기 타임라인에서만
- * 열리므로, 타인 타임라인이면 `private`이 들어온 것 자체가 잘못된 폼이다 — 서버도 같은 이유로
- * 전체 공개로 되돌린다.
- */
+/** 개인 게시물 폼 검사(기능 명세 §8.3, §8.4). 본문 또는 첨부가 필수이고, 타인 타임라인의 `private`은 잘못된 폼이다(서버도 전체 공개로 되돌린다). */
 export function validateProfilePostForm(
   values: ProfilePostFormValues,
   attachmentCount = 0,
@@ -129,9 +123,7 @@ export function hasPostFormErrors(errors: PostFormErrors): boolean {
   return Object.keys(errors).length > 0;
 }
 
-/**
- * 익명·운영진 명의는 한 번 더 확인을 받는다. 실명과 달리 되돌릴 수 없는 선택이라서다.
- */
+/** 익명·운영진 명의는 되돌릴 수 없으므로 한 번 더 확인받는다. */
 export function needsPostIdentityConfirmation(identity: PostIdentity): boolean {
   return identity === "staff" || identity === "anonymous";
 }

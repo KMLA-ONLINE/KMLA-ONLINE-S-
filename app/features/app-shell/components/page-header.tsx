@@ -16,13 +16,8 @@ interface PageHeaderProps {
 }
 
 /**
- * 페이지가 자기 스크롤 컨테이너 안에 직접 그리는 sticky 헤더.
- *
- * 모바일 헤더를 셸이 아니라 페이지가 소유한다. 그래서 화면마다 다른 제목·뒤로가기·액션이
- * 자연스럽게 들어가고, 셸에 `showMobileHeader` 같은 축이 생기지 않는다.
- *
- * `sticky`는 부모 스크롤 컨테이너(`ScrollRegion`)를 기준으로 붙는다 — `fixed`가 아니므로
- * z-index 싸움도 없고 콘텐츠 상단 패딩 보정도 없다.
+ * 페이지가 자기 스크롤 컨테이너 안에 그리는 sticky 헤더. 모바일 헤더를 셸이 아닌 페이지가 소유해 화면별 제목·액션이 자연스럽다.
+ * `fixed`가 아니므로 z-index 싸움도 상단 패딩 보정도 없다.
  */
 export function PageHeader({
   title,

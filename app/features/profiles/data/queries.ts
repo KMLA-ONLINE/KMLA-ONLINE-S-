@@ -82,10 +82,7 @@ export async function listBirthdays(
   }));
 }
 
-/**
- * 생일 순환 목록은 먼저 월·일과 안전한 프로필 정보만 읽는다. 화면 밖 아바타의 URL까지
- * 한꺼번에 서명하지 않도록, 보이는 행의 서명은 목록 컴포넌트가 따로 배치한다.
- */
+/** 생일 순환 목록은 월·일과 안전한 정보만 읽는다. 화면 밖 아바타 서명은 목록 컴포넌트가 보이는 행만 따로 배치한다. */
 export async function listBirthdayCalendar(
   referenceDate: string,
 ): Promise<BirthdayCalendarProfile[]> {

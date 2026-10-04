@@ -10,12 +10,7 @@ import {
 } from "~/shared/ui/card";
 import { cn } from "~/shared/lib/utils";
 
-/**
- * 셸 **바깥** 화면의 껍데기.
- *
- * 로그인·가입·승인 대기는 인증 게이트를 통과하기 전이라 셸 데이터(`useAppShell()`)를 쓸 수 없다.
- * 헤더도 사이드바도 탭바도 없는 게 정상이므로 여기서 자체 배치를 갖는다.
- */
+/** 인증 게이트 바깥 화면의 껍데기. 셸 데이터(`useAppShell()`)를 쓸 수 없어 자체 배치를 갖는다. */
 export function AuthCard({
   title,
   description,

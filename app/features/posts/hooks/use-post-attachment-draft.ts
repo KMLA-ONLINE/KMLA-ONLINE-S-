@@ -199,13 +199,7 @@ export function usePostAttachmentDraft({
     existing,
     removedIds,
     additions,
-    /**
-     * 화면에 보이는 순서대로 정렬한 새 첨부. 새 글 작성이 커밋에 넘기는 배열이 이것이다.
-     *
-     * `additions`는 준비가 끝난 순서로 쌓이므로 표시 순서와 다르고, 드래그로 바꾼 순서도
-     * 담고 있지 않다. 수정 경로는 `attachmentOrder`를 따로 넘겨 업로드 뒤에
-     * `resolveAttachmentOrder()`가 같은 변환을 하지만, 작성 경로에는 넘길 자리가 없다.
-     */
+    /** 표시 순서로 정렬한 새 첨부. `additions`는 준비 완료 순이라 표시 순서와 달라, 작성 경로는 이 배열을 커밋에 넘긴다. */
     orderedAdditions,
     attachmentOrder,
     uploadStates,

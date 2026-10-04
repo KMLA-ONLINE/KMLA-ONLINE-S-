@@ -33,13 +33,7 @@ const PROFILE_TYPE_OPTIONS: GroupInviteProfileType[] = [
 ];
 const DEFAULT_ALLOWED_PROFILE_TYPES: GroupInviteProfileType[] = ["student"];
 
-/**
- * 그룹 초대 링크.
- *
- * 링크는 그룹당 하나만 살아 있다. 여러 개를 두면 목록 화면과 개별 취소가 따라붙는데, 그만한
- * 이득이 없다 — 채널을 나눠 추적할 일이 없는 규모다. 대신 재발급이 곧 이전 링크의 무효화가
- * 되므로 "끊고 싶다"와 "다시 만들고 싶다"가 갈린다. 그래서 취소 버튼을 따로 둔다.
- */
+/** 그룹 초대 링크. 그룹당 하나만 살아 있고, 재발급이 곧 이전 링크의 무효화라 취소 버튼을 따로 둔다. */
 export function InviteSettings({
   group,
   invite,

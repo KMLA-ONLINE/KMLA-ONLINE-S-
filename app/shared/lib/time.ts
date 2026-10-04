@@ -49,3 +49,13 @@ export function formatAbsoluteTime(value: string): string | null {
   const ms = parseTimestamp(value);
   return ms === null ? null : ABSOLUTE_FORMAT.format(ms);
 }
+
+const DATE_TIME_FORMAT = new Intl.DateTimeFormat("ko-KR", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+/** 만료·신청 시각처럼 화면에 한 번 적는 짧은 일시. 서버가 준 값이라 파싱 실패는 다루지 않는다. */
+export function formatDateTime(value: string): string {
+  return DATE_TIME_FORMAT.format(new Date(value));
+}

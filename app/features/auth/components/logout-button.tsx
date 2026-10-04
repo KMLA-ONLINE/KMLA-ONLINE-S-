@@ -13,15 +13,8 @@ import {
 import { Spinner } from "~/shared/ui/spinner";
 
 /**
- * 확인 한 단계를 거치는 로그아웃 버튼.
- *
- * `signOut()`을 직접 부르지 않고 `/logout` route에 submit한다 — 세션을 지운 뒤
- * `/login`으로 보내는 것까지가 그 route의 clientAction이 소유하는 흐름이다.
- * shadcn `AlertDialog`는 이 저장소에서 쓰지 않으므로 `Dialog`로 조립한다.
- *
- * `appearance`는 트리거 모양만 고른다 — 확인 단계와 submit 경로는 어느 쪽이든 같다.
- * `block`은 화면 아래에 놓는 버튼, `row`는 메뉴의 목록 카드 안에서 다른 행과 같은 높이로
- * 앉는 모양이다.
+ * `/logout` route에 submit하는 확인 단계 포함 로그아웃 버튼. `appearance`는 트리거 모양만 고른다.
+ * shadcn `AlertDialog`는 저장소에서 쓰지 않아 `Dialog`로 조립한다.
  */
 export function LogoutButton({
   appearance = "block",

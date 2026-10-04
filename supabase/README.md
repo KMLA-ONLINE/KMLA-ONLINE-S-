@@ -13,18 +13,19 @@
 | `41-*`           | Integrated feed                                                |
 | `51-*` to `52-*` | Reservations and timetables                                    |
 | `81-*`           | Policies on Supabase-managed Storage objects                   |
+| `91-*`           | Scheduled `pg_cron` jobs                                       |
 
 Files run in lexicographic order. Add new files with a number that follows their dependencies. Keep one final definition for each object; declarative files must not reproduce the sequence of historical `alter` and `drop` statements.
 
 ## DDL changes
 
 1. Edit `supabase/schemas/*.sql` to describe the final state.
-2. Generate a migration draft with `npm run db:diff -- <descriptive-name>`.
+2. Generate a migration draft with `npm run db:diff -- <descriptive-name>`. It runs `supabase db schema declarative sync --no-apply`, which builds the migrations and the schema files in shadow databases and writes their difference without touching the local database. `supabase db diff` no longer reads `schemas/` since CLI 2.117; it compares migrations with a live database.
 3. Read the entire generated migration and correct it using the checklist below.
 4. Only after that review, apply it with `npx supabase migration up --local`.
 5. Run `npm run db:reset`, `npm run test:db`, `npm run db:lint`, and `npm run db:advisors`.
 6. Regenerate types with `npm run db:types` and inspect the type diff.
-7. Run `npx supabase db diff` again. No output is expected, but a clean diff does not replace migration review.
+7. Run `npm run db:drift`. It fails and prints the difference when the schema files and migrations disagree, and deletes the draft it generated. A clean result does not replace migration review.
 
 Never edit a deployed migration.
 
@@ -75,7 +76,7 @@ Schema files run in lexicographic order. `SET check_function_bodies = false` pos
 - A function signature that returns a table's composite type requires that table to exist first. For example, a function returning `public.group_categories` must run after `public.group_categories` is created.
 - A trigger requires its trigger function to exist. Put a cross-domain trigger no earlier than the file that defines its function, even when the trigger's table belongs to an earlier domain.
 
-After changing file boundaries or numbering, run `npx supabase db diff`; the shadow build tests dependency order.
+After changing file boundaries or numbering, run `npm run db:drift`; the shadow build tests dependency order.
 
 ### Default privileges and missing revokes
 
@@ -127,7 +128,6 @@ Keep these operations in versioned migrations and review them separately:
 
 - All DML, including seed rows, backfills, and cleanup statements
 - Rows in `storage.buckets` and other configuration tables
-- `cron.schedule` and `cron.unschedule`
 - Column-level grants
 - View ownership and grants, security-invoker views, and materialized views
 - Schema privileges, comments, partitions, domains, and publication membership
@@ -138,4 +138,6 @@ Function bodies may contain DML; those bodies remain part of the declarative fun
 
 Keep local service settings in the versioned `supabase/config.toml`, not in database migrations.
 
-For a DML-only or cron-only change, create a migration with `supabase migration new <name>`. If a cleanup function is added, declare the function in its owning schema file, generate and review its DDL migration, then add the cron registration to that migration manually.
+For a DML-only change, create a migration with `supabase migration new <name>`.
+
+Cron jobs are the exception to this list: pg-delta compares them as schema objects. Declare every job in `schemas/91-cron.sql` and generate the migration as for DDL. A job missing from that file shows up in a generated draft as `cron.unschedule`.
