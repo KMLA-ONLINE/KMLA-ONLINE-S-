@@ -1,4 +1,4 @@
-import { act, fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -202,6 +202,12 @@ describe("ImageViewer", () => {
     await user.click(
       screen.getByRole("menuitem", { name: "모든 사진 다운로드 (3장)" }),
     );
+    // 한 번 더 묻고, 확인해야 내려받는다.
+    const confirm = await screen.findByRole("dialog", {
+      name: "모든 사진을 다운로드할까요?",
+    });
+    expect(append).not.toHaveBeenCalled();
+    await user.click(within(confirm).getByRole("button", { name: "다운로드" }));
     await vi.waitFor(
       () => {
         const sources = append.mock.calls.map(
@@ -211,6 +217,29 @@ describe("ImageViewer", () => {
       },
       { timeout: 2000 },
     );
+  });
+
+  it("downloads nothing when the download-all confirmation is cancelled", async () => {
+    const { user } = renderViewer("b", makeImages(), { downloadAll: true });
+    const append = vi
+      .spyOn(document.body, "append")
+      .mockImplementation(() => undefined);
+
+    await user.click(screen.getByRole("button", { name: "다운로드" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "모든 사진 다운로드 (3장)" }),
+    );
+    const confirm = await screen.findByRole("dialog", {
+      name: "모든 사진을 다운로드할까요?",
+    });
+    await user.click(within(confirm).getByRole("button", { name: "취소" }));
+
+    await vi.waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "모든 사진을 다운로드할까요?" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(append).not.toHaveBeenCalled();
   });
 
   it("closes on the close button", async () => {

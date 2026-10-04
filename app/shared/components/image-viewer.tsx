@@ -38,6 +38,14 @@ import {
   type Size,
 } from "~/shared/lib/image-viewer-geometry";
 import { cn } from "~/shared/lib/utils";
+import { Button } from "~/shared/ui/button";
+import {
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/shared/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -184,6 +192,8 @@ const ControlButton = forwardRef<HTMLButtonElement, ComponentProps<"button">>(
   },
 );
 
+const MENU_ITEM_CLASS = "py-2.5 focus:bg-white/15 focus:text-white";
+
 function DownloadControl({
   image,
   images,
@@ -193,6 +203,8 @@ function DownloadControl({
   images: ViewerImage[];
   downloadAll: boolean;
 }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
   if (!downloadAll || images.length < 2) {
     return (
       <a
@@ -209,35 +221,80 @@ function DownloadControl({
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={<ControlButton aria-label="다운로드" />}>
-        <DownloadIcon className="size-5" />
-      </DropdownMenuTrigger>
-      {/* 뷰어가 z-60이라 메뉴는 그보다 위에 떠야 한다. */}
-      <DropdownMenuContent
-        align="end"
-        positionerClassName="z-70"
-        className="min-w-48"
-      >
-        <DropdownMenuItem
-          render={
-            // 내용은 Menu.Item이 children으로 채운다.
-            // eslint-disable-next-line jsx-a11y/anchor-has-content
-            <a
-              href={image.downloadSrc}
-              download={image.name}
-              target="_blank"
-              rel="noopener noreferrer"
-            />
-          }
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<ControlButton aria-label="다운로드" />}>
+          <DownloadIcon className="size-5" />
+        </DropdownMenuTrigger>
+        {/* 뷰어가 z-60이라 메뉴는 그보다 위에 떠야 한다. 검은 뷰어 위라 메뉴도 검게 맞춘다. */}
+        <DropdownMenuContent
+          align="end"
+          positionerClassName="z-70"
+          className="min-w-48 bg-black text-white ring-white/15"
         >
-          현재 사진 다운로드
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => downloadEach(images)}>
-          모든 사진 다운로드 ({images.length}장)
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <DropdownMenuItem
+            className={MENU_ITEM_CLASS}
+            render={
+              // 내용은 Menu.Item이 children으로 채운다.
+              // eslint-disable-next-line jsx-a11y/anchor-has-content
+              <a
+                href={image.downloadSrc}
+                download={image.name}
+                target="_blank"
+                rel="noopener noreferrer"
+              />
+            }
+          >
+            현재 사진 다운로드
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className={MENU_ITEM_CLASS}
+            onClick={() => setConfirmOpen(true)}
+          >
+            모든 사진 다운로드 ({images.length}장)
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* 여러 장을 한꺼번에 받으면 되돌릴 수 없고 브라우저도 따로 묻는다. 그 전에 한 번 확인한다.
+          뷰어가 이미 루트 스크롤을 막고 있으므로 Base UI의 스크롤 잠금은 겹쳐 쓰지 않는다. */}
+      <Dialog.Root
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        modal="trap-focus"
+      >
+        <DialogContent
+          className="z-70 max-w-xs"
+          overlayClassName="z-70"
+          showCloseButton={false}
+        >
+          <DialogHeader>
+            <DialogTitle>모든 사진을 다운로드할까요?</DialogTitle>
+            <DialogDescription>
+              사진 {images.length}장을 차례로 내려받습니다.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmOpen(false)}
+            >
+              취소
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setConfirmOpen(false);
+                downloadEach(images);
+              }}
+            >
+              다운로드
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog.Root>
+    </>
   );
 }
 
@@ -676,8 +733,14 @@ function ViewerContent({
     ) {
       return;
     }
-    // 다운로드 메뉴가 열려 있으면 방향키는 메뉴 항목을 옮긴다.
-    if ((event.target as Element | null)?.closest?.('[role="menu"]')) return;
+    // 다운로드 메뉴가 열려 있으면 방향키는 메뉴 항목을 옮기고, 확인 창이 떠 있으면 뒤의 사진을 넘기지 않는다.
+    if (
+      (event.target as Element | null)?.closest?.(
+        '[role="menu"], [data-slot="dialog-content"]',
+      )
+    ) {
+      return;
+    }
 
     switch (event.key) {
       case "ArrowLeft":

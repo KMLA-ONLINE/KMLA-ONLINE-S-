@@ -46,15 +46,18 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  overlayClassName,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean;
+  /** 이미지 뷰어(z-60)처럼 z-50보다 높은 층 위에 띄울 때 배경도 함께 올린다. */
+  overlayClassName?: string;
 }) {
   const popupRef = React.useRef<HTMLDivElement>(null);
 
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         // 첫 tabbable(닫기 버튼)에 포커스 링이 붙지 않게 팝업 자신으로 보낸다. `false`로 끄면 inert 트랩 안에 갈 곳이 없다.
