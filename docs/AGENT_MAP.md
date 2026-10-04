@@ -51,7 +51,6 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `/menu/licenses`                     | `app/routes/app/menu/licenses.tsx`          | sticky/sticky/4xl             | —     | app-shell                                       | §15.7            | —                                                                                  |
 | `/menu/birthdays`                    | `app/routes/app/menu/birthdays.tsx`         | sticky/none/5xl               | L     | profiles                                        | §17.5, §17.8     | `test/routes/app/menu/birthdays.test.ts`                                           |
 | `/menu/meal`                         | `app/routes/app/menu/meal.tsx`              | sticky/sticky/5xl             | L     | meal                                            | §17.4            | —                                                                                  |
-| `/menu/story`                        | `app/routes/app/menu/story.tsx`             | sticky/sticky/4xl             | L     | stories                                         | §17.6            | —                                                                                  |
 | `/menu/password`                     | `app/routes/app/menu/password.tsx`          | sticky/sticky/4xl             | A     | auth                                            | §4.5             | `test/routes/password.test.tsx`                                                    |
 | `/menu/settings`                     | `app/routes/app/menu/settings.tsx`          | sticky/sticky/4xl             | —     | app-shell                                       | §15.3            | `test/routes/app/menu/settings.test.tsx`                                           |
 | `/menu/settings/lab`                 | `app/routes/app/menu/settings-lab.tsx`      | sticky/sticky/4xl             | —     | posts                                           | §15.4, §15.5     | `test/routes/app/menu/settings-lab.test.tsx`                                       |
@@ -109,7 +108,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `profiles`         | Profile view and edit, profile media, birthdays                                                                                             | §12, §17.5                                          |
 | `school-utilities` | Gongang and karaoke reservations, gongang schedule manager                                                                                  | §17.1–17.3                                          |
 | `search`           | Global search dialog, directory search, recent searches                                                                                     | §3.3, §3.6                                          |
-| `stories`          | Today's story rail and story editor                                                                                                         | §17.6, §6.6                                         |
+| `stories`          | 24-hour photo/text story rail, viewer and composer                                                                                          | §17.6, §6.6                                         |
 | `support`          | FAQ and release notes — static content in `content/`, no Supabase                                                                           | §15.11, §15.12                                      |
 | `timetable`        | Personal timetable, backed by local storage                                                                                                 | §17.7                                               |
 
@@ -146,6 +145,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `create_group_post_upload_draft`              | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `create_post_comment`                         | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `create_profile_post`                         | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
+| `create_text_story`                           | `stories/data/mutations.ts`                                                     | `42-stories.sql`              |
 | `delete_group`                                | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |
 | `delete_group_category`                       | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `delete_group_post`                           | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
@@ -172,6 +172,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `get_my_web_push_status`                      | `notifications/data/push.ts`                                                    | `61-notifications.sql`        |
 | `get_profile_post`                            | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `issue_group_invite`                          | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |
+| `list_active_stories`                         | `stories/data/queries.ts`                                                       | `42-stories.sql`              |
 | `list_birthdays`                              | `profiles/data/queries.ts`                                                      | `11-identity.sql`             |
 | `list_comment_images`                         | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_comment_reactors`                       | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
@@ -187,15 +188,16 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `list_post_comments`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_post_reactors`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_profile_posts`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
-| `list_today_stories`                          | `stories/data/queries.ts`                                                       | `42-stories.sql`              |
 | `mark_all_my_notifications_read`              | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
 | `mark_group_posts_visited`                    | `groups/data/mutations.ts`                                                      | `31-posts.sql`                |
 | `mark_my_notification_read`                   | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
 | `move_group_category`                         | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `prepare_comment_image`                       | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `prepare_group_media`                         | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |
+| `prepare_image_story`                         | `stories/data/files.ts`                                                         | `42-stories.sql`              |
 | `prepare_post_attachment`                     | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `prepare_profile_media`                       | `profiles/data/media.ts`                                                        | `11-identity.sql`             |
+| `publish_image_story`                         | `stories/data/files.ts`                                                         | `42-stories.sql`              |
 | `register_my_web_push_subscription`           | `notifications/data/push.ts`                                                    | `61-notifications.sql`        |
 | `reject_group_join_request`                   | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |
 | `remove_group_media`                          | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |
@@ -210,7 +212,6 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `set_comment_reaction`                        | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `set_group_post_pinned`                       | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `set_my_group_notification_preferences`       | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
-| `set_my_story`                                | `stories/data/mutations.ts`                                                     | `42-stories.sql`              |
 | `set_post_reaction`                           | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `submit_my_profile`                           | `auth/data/mutations.ts`                                                        | `11-identity.sql`             |
 | `transfer_group_ownership`                    | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |

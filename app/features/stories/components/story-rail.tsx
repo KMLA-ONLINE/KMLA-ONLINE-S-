@@ -1,16 +1,22 @@
-import { ChevronRightIcon, XIcon } from "lucide-react";
-import { useState } from "react";
-import { Link } from "react-router";
+import { PlusIcon, XIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
-import { StoryEditor } from "~/features/stories/components/story-editor";
+import { StoryComposer } from "~/features/stories/components/story-composer";
+import { useStoryParam } from "~/features/stories/components/use-story-param";
+import { StoryViewer } from "~/features/stories/components/story-viewer";
 import { STORY_STALE_TIME, storyKeys } from "~/features/stories/data/cache";
 import {
-  listTodayStories,
+  listActiveStories,
   type StoryItem,
 } from "~/features/stories/data/queries";
+import {
+  groupStoriesByAuthor,
+  STORY_BACKGROUNDS,
+} from "~/features/stories/model/story";
 import { UserAvatar } from "~/shared/components/user-avatar";
-import { getKoreaDateIso } from "~/shared/lib/korea-date";
 import { getQueryClient } from "~/shared/lib/query-client";
+import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -20,154 +26,208 @@ import {
   DialogTitle,
 } from "~/shared/ui/dialog";
 
+// 카드는 키보드 포커스 링을 그리지 않는다. 뷰어를 Esc로 닫으면 포커스가 카드로 돌아오면서
+// focus-visible 링이 카드 테두리처럼 남아 보이기 때문이다. 그 대신 포커스 때 살짝 어둡게 한다.
+const CARD_CLASS =
+  "relative h-48 w-28 shrink-0 overflow-hidden rounded-xl bg-muted text-left outline-none focus-visible:brightness-90";
+
 export function StoryRail({
   initialItems,
-  viewerPubId,
+  viewer,
+  canWrite,
 }: {
   initialItems: StoryItem[];
-  viewerPubId: string;
+  viewer: { pubId: string; name: string; avatarUrl: string | null };
+  canWrite: boolean;
 }) {
   const [updatedItems, setUpdatedItems] = useState<StoryItem[] | null>(null);
-  const [editOpen, setEditOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<StoryItem | null>(null);
+  const { param, openComposer, openStory, showStory, close } = useStoryParam();
 
   const items = updatedItems ?? initialItems;
-  const mine = items.find((item) => item.pubId === viewerPubId) ?? null;
+  const groups = groupStoriesByAuthor(items, viewer.pubId);
+  const missingStory =
+    param.kind === "story" && !items.some((item) => item.id === param.id);
 
-  if (items.length === 0) return null;
+  // 공유 링크로 들어왔는데 이미 만료됐거나 볼 수 없는 스토리면 알리고 param을 걷는다.
+  useEffect(() => {
+    if (!missingStory) return;
 
-  async function refreshAfterEdit() {
-    // StoryEditor가 이미 캐시를 버렸으므로 여기서는 새로 받아 캐시를 다시 채운다.
+    toast.error(
+      "스토리를 찾을 수 없습니다. 24시간이 지났거나 볼 수 없는 스토리입니다.",
+      {
+        id: "story-not-found",
+      },
+    );
+    close();
+  }, [missingStory, close]);
+
+  async function refresh() {
+    // 작성·삭제 쪽이 이미 캐시를 버렸으므로 여기서는 새로 받아 캐시를 다시 채운다.
     setUpdatedItems(
-      await getQueryClient().fetchQuery({
-        queryKey: storyKeys.today(getKoreaDateIso()),
-        queryFn: listTodayStories,
+      await getQueryClient().query({
+        queryKey: storyKeys.active(),
+        queryFn: listActiveStories,
         staleTime: STORY_STALE_TIME,
       }),
     );
-    setEditOpen(false);
   }
 
   return (
     <>
-      <section className="border-y border-border bg-background md:border-0">
-        <div className="flex h-11 items-center px-4">
-          <Link
-            to="/menu/story"
-            className="-ml-1 flex items-center gap-0.5 rounded-md px-1 py-1 transition-colors outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <h2 className="text-[15px] font-semibold tracking-tight">스토리</h2>
-
-            <ChevronRightIcon
-              className="size-4 shrink-0 text-muted-foreground"
-              aria-hidden
-            />
-          </Link>
-        </div>
-
-        <div className="[scrollbar-width:none] overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden">
-          <div className="flex w-max gap-3 px-4">
-            {items.map((item) => {
-              const isMine = item.pubId === viewerPubId;
-
-              return (
+      {groups.length > 0 || canWrite ? (
+        <section className="border-b border-border bg-background pt-1 pb-2 md:border-0">
+          <div className="[scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden">
+            <div className="flex w-max gap-1.5 px-2">
+              {canWrite ? (
                 <button
-                  key={item.pubId}
                   type="button"
-                  onClick={() => {
-                    if (isMine) {
-                      setEditOpen(true);
-                    } else {
-                      setSelectedItem(item);
-                    }
-                  }}
-                  className="flex w-20 shrink-0 flex-col items-center py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={
-                    isMine ? "내 스토리 수정" : `${item.name} 스토리 보기`
-                  }
+                  onClick={openComposer}
+                  className={cn(
+                    CARD_CLASS,
+                    "flex flex-col border border-border bg-background",
+                  )}
                 >
-                  <span className="rounded-full bg-border p-[2px]">
-                    <span className="block rounded-full bg-background p-[2px]">
-                      <UserAvatar
-                        src={item.avatarUrl}
-                        name={item.name}
-                        className="size-14"
-                      />
+                  <span className="flex flex-1 items-center justify-center bg-muted">
+                    <UserAvatar
+                      src={viewer.avatarUrl}
+                      name={viewer.name}
+                      className="size-14"
+                    />
+                  </span>
+                  <span className="relative flex h-14 items-end justify-center pb-2 text-xs font-semibold">
+                    <span className="absolute -top-4 left-1/2 flex size-8 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground ring-4 ring-background">
+                      <PlusIcon className="size-4" aria-hidden />
                     </span>
-                  </span>
-
-                  <span className="mt-1.5 max-w-full truncate text-center text-[13px] leading-4 font-semibold">
-                    {item.name}
-                  </span>
-
-                  <span className="mt-0.5 line-clamp-2 w-full text-center text-[11px] leading-4 [overflow-wrap:anywhere] break-keep text-muted-foreground">
-                    {item.content}
+                    스토리 만들기
                   </span>
                 </button>
-              );
-            })}
+              ) : null}
+
+              {groups.map((group) => {
+                const cover = group.stories.at(-1);
+                const isMine = group.pubId === viewer.pubId;
+
+                if (!cover) return null;
+
+                return (
+                  <button
+                    key={group.pubId}
+                    type="button"
+                    onClick={() => openStory(group.stories[0]?.id ?? cover.id)}
+                    className={cn(
+                      CARD_CLASS,
+                      cover.background && STORY_BACKGROUNDS[cover.background],
+                    )}
+                    aria-label={
+                      isMine
+                        ? `내 스토리 ${group.stories.length}개 보기`
+                        : `${cover.name} 스토리 ${group.stories.length}개 보기`
+                    }
+                  >
+                    {cover.thumbnailUrl ? (
+                      <img
+                        src={cover.thumbnailUrl}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        className="absolute inset-0 size-full object-cover"
+                        draggable={false}
+                      />
+                    ) : (
+                      <span className="absolute inset-0 flex items-center justify-center p-3 text-center text-xs leading-4 font-bold [overflow-wrap:anywhere] break-keep text-white">
+                        <span className="line-clamp-4">{cover.content}</span>
+                      </span>
+                    )}
+
+                    <span className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60" />
+
+                    <span className="absolute top-2 left-2 rounded-full bg-primary p-[2px]">
+                      <UserAvatar
+                        src={cover.avatarUrl}
+                        name={cover.name}
+                        className="size-9 ring-2 ring-black/10"
+                      />
+                    </span>
+
+                    <span className="absolute inset-x-2 bottom-2 line-clamp-2 text-xs leading-4 font-semibold text-white">
+                      {isMine ? "내 스토리" : cover.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
-      <Dialog
-        open={selectedItem !== null}
-        onOpenChange={(open) => {
-          if (!open) setSelectedItem(null);
-        }}
-      >
-        <DialogContent showCloseButton={false}>
-          <DialogHeader className="flex-row items-center justify-between gap-4">
-            <DialogTitle>{selectedItem?.name}</DialogTitle>
+      {param.kind === "story" && !missingStory ? (
+        <StoryViewer
+          groups={groups}
+          storyId={param.id}
+          viewerPubId={viewer.pubId}
+          onShow={showStory}
+          onClose={close}
+          onDeleted={async () => {
+            close();
+            await refresh();
+          }}
+        />
+      ) : null}
 
-            <DialogClose
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="shrink-0"
-                  aria-label="닫기"
-                />
-              }
-            >
-              <XIcon />
-            </DialogClose>
-          </DialogHeader>
-
-          {selectedItem ? (
-            <p className="leading-6 [overflow-wrap:anywhere] break-words">
-              {selectedItem.content}
-            </p>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent showCloseButton={false} className="gap-3">
-          <DialogHeader className="flex-row items-center justify-between gap-3">
-            <DialogTitle>스토리 수정</DialogTitle>
-
-            <DialogClose
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="shrink-0"
-                  aria-label="닫기"
-                />
-              }
-            >
-              <XIcon />
-            </DialogClose>
-          </DialogHeader>
-
-          {mine ? (
-            <StoryEditor initial={mine.content} onSaved={refreshAfterEdit} />
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      {canWrite ? (
+        <StoryComposerDialog
+          open={param.kind === "composer"}
+          onClose={close}
+          onDone={async () => {
+            close();
+            await refresh();
+          }}
+        />
+      ) : null}
     </>
+  );
+}
+
+function StoryComposerDialog({
+  open,
+  onClose,
+  onDone,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onDone: () => void | Promise<void>;
+}) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        className="max-h-[calc(100dvh-2rem)] gap-4 overflow-y-auto max-sm:top-0 max-sm:left-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 max-sm:pt-[max(1.5rem,env(safe-area-inset-top))] max-sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] max-sm:ring-0"
+      >
+        <DialogHeader className="flex-row items-center justify-between gap-3">
+          <DialogTitle>스토리 만들기</DialogTitle>
+
+          <DialogClose
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="shrink-0"
+                aria-label="닫기"
+              />
+            }
+          >
+            <XIcon />
+          </DialogClose>
+        </DialogHeader>
+
+        {open ? <StoryComposer onDone={onDone} /> : null}
+      </DialogContent>
+    </Dialog>
   );
 }

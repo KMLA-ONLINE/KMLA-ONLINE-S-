@@ -20,20 +20,31 @@ select today,
   (today - (extract(isodow from today)::integer - 1))::date as monday
 from (select (now() at time zone 'Asia/Seoul')::date as today) as base;
 
-insert into public.stories (profile_id, content, created_at)
+-- 스토리는 게시 후 24시간이 지나면 지운다. 사진을 publish하지 못한 행은 48시간을 기다린다.
+insert into public.stories (
+  profile_id, status, content, background, image_path, thumbnail_path, image_size_bytes,
+  image_width, image_height, created_at, published_at, expires_at
+)
 select
   (select id from public.profiles where pub_id = 'hanbyeol-25'),
-  sample.content,
-  sample.created_at
+  sample.*
 from (
-  select '오늘 스토리' as content,
-    (select today from korea)::timestamp at time zone 'Asia/Seoul' as created_at
-  union all
-  select '어제 스토리',
-    ((select today from korea) - 1)::timestamp at time zone 'Asia/Seoul'
-  union all
-  select '사흘 전 스토리',
-    ((select today from korea) - 3)::timestamp at time zone 'Asia/Seoul'
+  values
+    ('ready'::public.story_status, '살아 있는 스토리', 'blue', null::text, null::text,
+      null::bigint,
+      null::integer, null::integer, now() - interval '23 hours', now() - interval '23 hours',
+      now() + interval '1 hour'),
+    ('ready', '만료된 스토리', 'blue', null, null, null, null, null,
+      now() - interval '25 hours', now() - interval '25 hours', now() - interval '1 hour'),
+    ('ready', '만료된 사진 스토리', null, 'retention/expired-photo',
+      'retention/expired-photo-thumb', 4, 10, 10,
+      now() - interval '25 hours', now() - interval '25 hours', now() - interval '1 hour'),
+    ('pending', '업로드 중', null, 'retention/uploading', 'retention/uploading-thumb', 4,
+      10, 10,
+      now() - interval '1 hour', null, null),
+    ('pending', '버려진 업로드', null, 'retention/abandoned', 'retention/abandoned-thumb', 4,
+      10, 10,
+      now() - interval '49 hours', null, null)
 ) as sample;
 
 -- 단발 예약은 예약일 기준, 반복 예약은 종료일 기준으로 2주를 센다. 예약 규칙 트리거는 지난
@@ -99,13 +110,23 @@ select ok(
 );
 
 select is(
-  (select count(*)::integer from public.stories),
-  2,
-  'stories keep today and yesterday'
+  (select array_agg(content order by content) from public.stories),
+  array['살아 있는 스토리', '업로드 중'],
+  'only live stories and recent uploads remain'
 );
-select ok(
-  not exists (select 1 from public.stories where content = '사흘 전 스토리'),
-  'stories older than two days are gone'
+select is(
+  (
+    select array_agg(object_path order by object_path)
+    from private.storage_cleanup_queue
+    where reason = 'story_media'
+  ),
+  array[
+    'retention/abandoned',
+    'retention/abandoned-thumb',
+    'retention/expired-photo',
+    'retention/expired-photo-thumb'
+  ],
+  'deleted photo stories queue their photos and thumbnails'
 );
 
 select ok(

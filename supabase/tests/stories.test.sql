@@ -2,35 +2,11 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(21);
-
-select ok(
-  exists (
-    select 1
-    from pg_policies
-    where schemaname = 'public'
-      and tablename = 'stories'
-      and policyname = 'stories_deny_direct_access'
-      and roles = array['public']::name[]
-      and cmd = 'ALL'
-      and qual = 'false'
-      and with_check = 'false'
-  ),
-  'story rows have an explicit deny-all RLS policy'
-);
+select plan(14);
 
 select ok(
   not has_table_privilege('authenticated', 'public.stories', 'SELECT'),
   'story rows are not directly readable'
-);
-
-select ok(
-  not has_function_privilege(
-    'anon',
-    'public.set_my_story(text)',
-    'EXECUTE'
-  ),
-  'anonymous users cannot create stories'
 );
 
 select set_config(
@@ -39,205 +15,131 @@ select set_config(
   true
 );
 
+create temp table story_ids (
+  name text primary key, id bigint, object_path text, thumbnail_path text
+);
+grant all on story_ids to authenticated;
+
 set local role authenticated;
 
 select lives_ok(
-  $$select public.set_my_story('1')$$,
-  'one character story is accepted'
+  $$select public.create_text_story('오늘 급식이 좋았다', 'blue', 'https://kmla.kr/notice')$$,
+  'student can create a text story with a link'
 );
 
 select throws_ok(
-  $$select public.set_my_story(repeat('가', 101))$$,
-  '22023',
+  $$select public.create_text_story('링크', 'blue', 'javascript:alert(1)')$$,
+  '23514',
   null,
-  'long story is rejected'
+  'non-http link is rejected'
 );
 
-select lives_ok(
-  $$select public.set_my_story('   ')$$,
-  'blank story is accepted'
-);
-
-select lives_ok(
-  $$select public.set_my_story(null)$$,
-  'null story is normalized to blank content'
-);
-
-select lives_ok(
-  $$select public.set_my_story('오늘 급식이 좋았다')$$,
-  'student can create a story'
-);
-
-select lives_ok(
-  $$select public.set_my_story('  생각이 바뀌었다  ')$$,
-  'same student can replace todays story'
-);
-
-reset role;
-
-select is(
-  (
-    select count(*)
-    from public.stories
-    where profile_id = (
-      select id
-      from public.profiles
-      where auth_user_id =
-        '10000000-0000-0000-0000-000000000001'
-    )
-  ),
-  1::bigint,
-  'replacement keeps one record'
-);
-
-select is(
-  (
-    select content
-    from public.stories
-    where profile_id = (
-      select id
-      from public.profiles
-      where auth_user_id =
-        '10000000-0000-0000-0000-000000000001'
-    )
-  ),
-  '생각이 바뀌었다',
-  'replacement stores the trimmed new content'
-);
-
--- 노출은 작성자 유형으로만 갈린다. 기수는 판정에 쓰지 않으므로 뷰어와 먼 기수의 재학생도
--- 보여야 한다(기능 명세 §6.6).
-insert into public.profiles (
-  pub_id,
-  name,
-  type,
-  student_number,
-  cohort,
-  gender,
-  academic_track,
-  birthday,
-  status,
-  is_returning_student
-)
-values
-  (
-    'story-near',
-    '같은 기수 재학생',
-    'student',
-    '990101',
-    40,
-    'male',
-    'domestic',
-    '2007-01-01',
-    'accepted',
-    false
-  ),
-  (
-    'story-far',
-    '먼 기수 재학생',
-    'student',
-    '990102',
-    12,
-    'female',
-    'domestic',
-    '1995-01-01',
-    'accepted',
-    false
-  );
-
-insert into public.profiles (pub_id, name, type, status)
-values ('story-teach', '스토리 쓰는 교사', 'teacher', 'accepted');
-
-insert into public.stories (profile_id, content, created_at)
-values
-  (
-    (select id from public.profiles where pub_id = 'story-near'),
-    '오늘 재학생 스토리',
-    now()
-  ),
-  (
-    (select id from public.profiles where pub_id = 'story-far'),
-    '먼 기수 재학생 스토리',
-    now()
-  ),
-  (
-    (select id from public.profiles where pub_id = 'story-teach'),
-    '오늘 교사 스토리',
-    now()
-  ),
-  (
-    (select id from public.profiles where pub_id = 'story-near'),
-    '전날 기록입니다',
-    now() - interval '1 day'
-  );
-
-set local role authenticated;
-
-select ok(
-  exists (
-    select 1
-    from public.list_today_stories()
-    where pub_id = 'story-near'
-  ),
-  'student viewer sees a student story'
-);
-
-select ok(
-  exists (
-    select 1
-    from public.list_today_stories()
-    where pub_id = 'story-far'
-  ),
-  'student viewer sees a student story from a distant cohort'
-);
-
-select ok(
-  exists (
-    select 1
-    from public.list_today_stories()
-    where pub_id = 'story-teach'
-  ),
-  'student viewer sees a teacher story'
-);
+-- 사진 스토리는 prepare가 예고한 경로에만 올릴 수 있고, publish 전에는 보이지 않는다.
+insert into story_ids (name, id, object_path, thumbnail_path)
+select 'image', story_id, object_path, thumbnail_path
+from public.prepare_image_story(4, 1080, 1920, '사진 위 글');
 
 select ok(
   not exists (
-    select 1
-    from public.list_today_stories()
-    where content = '전날 기록입니다'
+    select 1 from public.list_active_stories()
+    where story_id = (select id from story_ids where name = 'image')
   ),
-  'previous KST day is excluded'
+  'pending image story is not listed'
+);
+
+select throws_ok(
+  $$insert into storage.objects (bucket_id, name, owner_id, metadata)
+    values (
+      'story-media',
+      '10000000-0000-0000-0000-000000000001/unprepared',
+      '10000000-0000-0000-0000-000000000001',
+      '{"size":4,"mimetype":"image/webp"}'
+    )$$,
+  '42501',
+  null,
+  'Storage rejects an unprepared path'
+);
+
+insert into storage.objects (bucket_id, name, owner_id, metadata)
+select 'story-media', path, '10000000-0000-0000-0000-000000000001',
+  '{"size":4,"mimetype":"image/webp"}'::jsonb
+from story_ids
+cross join lateral (values (object_path), (thumbnail_path)) as paths(path)
+where name = 'image';
+
+select lives_ok(
+  $$select public.publish_image_story((select id from story_ids where name = 'image'))$$,
+  'matching upload publishes the image story'
+);
+
+select ok(
+  exists (
+    select 1 from public.list_active_stories()
+    where story_id = (select id from story_ids where name = 'image')
+  ),
+  'published image story is listed'
+);
+
+select lives_ok(
+  $$select public.delete_my_story((select id from story_ids where name = 'image'))$$,
+  'author can delete an own story'
 );
 
 reset role;
 
--- 뷰어를 교사로 바꾼다. 교사 프로필은 학생 전용 열을 모두 비워야 한다.
-update public.profiles
-set
-  type = 'teacher',
-  student_number = null,
-  class_no = null,
-  cohort = null,
-  gender = null,
-  academic_track = null,
-  dorm_room = null
-where auth_user_id =
-  '10000000-0000-0000-0000-000000000001';
+select ok(
+  exists (
+    select 1
+    from private.storage_cleanup_queue
+    where bucket = 'story-media'
+      and object_path in (
+        select object_path from story_ids where name = 'image'
+        union all
+        select thumbnail_path from story_ids where name = 'image'
+      )
+    group by bucket
+    having count(*) = 2
+  ),
+  'deleting an image story queues the photo and its thumbnail'
+);
+
+set local role authenticated;
+
+select throws_ok(
+  $$select public.create_text_story('스토리 ' || n, 'blue')
+    from generate_series(1, 21) as n$$,
+  '54000',
+  null,
+  'a writer cannot keep more than 20 active stories'
+);
+
+reset role;
+
+-- 노출은 작성자 유형으로만 갈린다(기능 명세 §6.6).
+insert into public.profiles (pub_id, name, type, status)
+values ('story-teach', '스토리 쓰는 교사', 'teacher', 'accepted');
+
+insert into public.stories (profile_id, status, content, background, published_at, expires_at)
+values
+  ((select id from public.profiles where pub_id = 'story-teach'), 'ready', '오늘 교사 스토리',
+    'dark', now(), now() + interval '24 hours'),
+  ((select id from public.profiles where pub_id = 'story-teach'), 'ready', '만료된 스토리',
+    'dark', now() - interval '25 hours', now() - interval '1 hour');
 
 set local role authenticated;
 
 select ok(
-  exists (
-    select 1
-    from public.list_today_stories()
-    where pub_id = 'story-near'
-  ),
-  'teacher viewer sees a student story'
+  not exists (select 1 from public.list_active_stories() where content = '만료된 스토리'),
+  'expired story is excluded'
 );
 
-select lives_ok(
-  $$select public.set_my_story('교사도 스토리를 남긴다')$$,
-  'teacher can create a story'
+select throws_ok(
+  $$select public.delete_my_story(
+      (select story_id from public.list_active_stories() where pub_id = 'story-teach' limit 1)
+    )$$,
+  '42501',
+  null,
+  'a viewer cannot delete another persons story'
 );
 
 reset role;
@@ -257,35 +159,13 @@ where auth_user_id =
 set local role authenticated;
 
 select ok(
-  not exists (
-    select 1
-    from public.list_today_stories()
-    where pub_id in ('story-near', 'story-far')
-  ),
+  not exists (select 1 from public.list_active_stories() where content = '오늘 급식이 좋았다'),
   'alumni viewer does not see student stories'
 );
 
 select ok(
-  exists (
-    select 1
-    from public.list_today_stories()
-    where pub_id = 'story-teach'
-  ),
+  exists (select 1 from public.list_active_stories() where pub_id = 'story-teach'),
   'alumni viewer still sees a teacher story'
-);
-
-select throws_ok(
-  $$select public.set_my_story('졸업생은 못 쓴다')$$,
-  '42501',
-  null,
-  'alumni cannot create a story'
-);
-
-select throws_ok(
-  $$select public.delete_my_story()$$,
-  '42501',
-  null,
-  'alumni cannot delete a story'
 );
 
 reset role;

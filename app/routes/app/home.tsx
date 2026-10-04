@@ -4,7 +4,7 @@ import { Link } from "react-router";
 
 import { StoryRail } from "~/features/stories/components/story-rail";
 import { STORY_STALE_TIME, storyKeys } from "~/features/stories/data/cache";
-import { listTodayStories } from "~/features/stories/data/queries";
+import { listActiveStories } from "~/features/stories/data/queries";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import { hasActiveSession } from "~/features/auth";
 import { FeedScreen, feedQuery } from "~/features/feed";
@@ -92,8 +92,8 @@ export async function clientLoader() {
   const [stories] = await Promise.all([
     queryClient
       .query({
-        queryKey: storyKeys.today(referenceDate),
-        queryFn: listTodayStories,
+        queryKey: storyKeys.active(),
+        queryFn: listActiveStories,
         staleTime: STORY_STALE_TIME,
       })
       .catch(() => []),
@@ -141,9 +141,15 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-4">
         <div className="min-w-0">
-          {stories.length > 0 ? (
-            <StoryRail initialItems={stories} viewerPubId={profile.pub_id} />
-          ) : null}
+          <StoryRail
+            initialItems={stories}
+            viewer={{
+              pubId: profile.pub_id,
+              name: profile.name,
+              avatarUrl: profile.avatar_url,
+            }}
+            canWrite={profile.type !== "alumni"}
+          />
 
           <FeedScreen />
         </div>
