@@ -1,4 +1,7 @@
-import type { PushSupport } from "~/features/notifications/model/types";
+import type {
+  PermissionHelpPlatform,
+  PushSupport,
+} from "~/features/notifications/model/types";
 import { getSupabase } from "~/shared/supabase/client";
 
 function isIOS(): boolean {
@@ -94,16 +97,27 @@ export async function getPushSupport(): Promise<PushSupport> {
 }
 
 export async function enableWebPush(): Promise<PushSupport> {
+  // 권한은 첫 await보다 먼저 묻는다. 서비스 워커·구독 확인을 기다린 뒤에 물으면 탭의
+  // 사용자 활성화가 식어, 브라우저가 첫 요청을 창 없이 흘려보내고 두 번째 탭에서야 묻는다.
+  const permissionRequest =
+    readVapidKey() &&
+    "Notification" in window &&
+    Notification.permission === "default"
+      ? Notification.requestPermission()
+      : null;
+
   const initial = await getPushSupport();
   if (initial.state !== "available") return initial;
 
   const vapidKey = readVapidKey();
   if (!vapidKey) throw new Error("Web Push public key is not configured");
 
+  const requested = permissionRequest
+    ? await permissionRequest
+    : initial.permission;
+  // 설치형 Android 앱은 OS 권한 창을 거치며 반환값이 실제 상태보다 늦을 수 있어 현재 값도 본다.
   const permission =
-    initial.permission === "default"
-      ? await Notification.requestPermission()
-      : initial.permission;
+    requested === "granted" ? requested : Notification.permission;
   if (permission !== "granted") {
     return { state: "available", permission, subscribed: false };
   }
@@ -174,6 +188,50 @@ export async function resyncWebPushSubscription(): Promise<void> {
   } catch {
     // 다음 실행에서 다시 시도한다.
   }
+}
+
+/**
+ * 차단된 알림 권한을 어디서 풀지 고른다. 웹은 그 설정 화면을 직접 열 수 없어 경로를 글로 안내해야 한다.
+ * iOS 브라우저 탭은 Push 자체를 못 쓰므로(`ios-browser`) 여기 오는 iOS는 홈 화면 앱뿐이다.
+ */
+export function getPermissionHelpPlatform(): PermissionHelpPlatform {
+  if (isIOS()) return "ios-app";
+  if (/Android/i.test(navigator.userAgent)) {
+    return isStandalone() ? "android-app" : "android-browser";
+  }
+  return isStandalone() ? "desktop-app" : "desktop-browser";
+}
+
+/**
+ * 알림 권한이 바뀌었을 수 있는 순간마다 `onChange`를 부른다. 브라우저·OS 설정에서 차단을 풀고 돌아온 경우가 대상이다.
+ * `permissions` 변경 이벤트가 정확하지만 모든 브라우저가 알림 권한에 주지는 않아 화면 복귀도 함께 본다.
+ */
+export function watchNotificationPermission(onChange: () => void): () => void {
+  let status: PermissionStatus | null = null;
+  let disposed = false;
+  const onVisible = () => {
+    if (document.visibilityState === "visible") onChange();
+  };
+
+  window.addEventListener("focus", onChange);
+  document.addEventListener("visibilitychange", onVisible);
+  void navigator.permissions
+    ?.query({ name: "notifications" })
+    .then((result) => {
+      if (disposed) return;
+      status = result;
+      status.addEventListener("change", onChange);
+    })
+    .catch(() => {
+      // 질의를 못 하는 브라우저는 화면 복귀만으로 다시 확인한다.
+    });
+
+  return () => {
+    disposed = true;
+    window.removeEventListener("focus", onChange);
+    document.removeEventListener("visibilitychange", onVisible);
+    status?.removeEventListener("change", onChange);
+  };
 }
 
 export async function disableWebPush(): Promise<void> {
