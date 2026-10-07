@@ -7,6 +7,7 @@ import { StoryComposer } from "~/features/stories/components/story-composer";
 import { useStoryParam } from "~/features/stories/components/use-story-param";
 import { StoryViewer } from "~/features/stories/components/story-viewer";
 import { STORY_STALE_TIME, storyKeys } from "~/features/stories/data/cache";
+import { createStoryMediaUrls } from "~/features/stories/data/files";
 import {
   listActiveStories,
   type StoryItem,
@@ -31,6 +32,34 @@ import {
 // focus-visible 링이 카드 테두리처럼 남아 보이기 때문이다. 그 대신 포커스 때 살짝 어둡게 한다.
 const CARD_CLASS =
   "relative h-48 w-28 shrink-0 overflow-hidden rounded-xl bg-muted text-left outline-none focus-visible:brightness-90";
+
+// 첫 화면에 보이는 카드 수. 휴대폰 폭에서 작성 카드 옆으로 서너 장이 보인다. 이 카드들까지
+// lazy로 두면 레이아웃이 끝난 뒤에야 낮은 우선순위로 요청이 나가서 사진이 한 박자 늦게 뜬다.
+const EAGER_CARD_COUNT = 4;
+
+/**
+ * 카드를 누르는 순간 뷰어가 열 첫 장의 원본을 서명하고 받기 시작한다. 뷰어도 같은 서명 캐시를
+ * 지나므로(`createStoryMediaUrls`) 열리면서 다시 요청하지 않고, 클릭까지의 틈만큼 먼저 뜬다.
+ */
+function warmStoryImage(story: StoryItem) {
+  if (!story.imagePath) return;
+
+  const path = story.imagePath;
+
+  void createStoryMediaUrls([path]).then(
+    (urls) => {
+      const url = urls.get(path);
+
+      if (!url) return;
+
+      // 뷰어의 <img>와 같은 CORS 모드로 받아야 같은 캐시 항목을 쓴다.
+      const preload = new Image();
+      preload.crossOrigin = "anonymous";
+      preload.src = url;
+    },
+    () => undefined,
+  );
+}
 
 export function StoryRail({
   initialItems,
@@ -95,14 +124,18 @@ export function StoryRail({
       {groups.length > 0 || canWrite ? (
         <section className="border-b border-border bg-background pt-1 pb-2 md:border-0">
           <div className="[scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden">
-            <div className="flex w-max gap-1.5 px-2">
+            {/* 넓은 화면에서는 아래 피드 카드와 좌우 끝을 맞춘다. 피드 카드는 여백 없이 열을 꽉
+                채우므로 레일도 여백을 두지 않는다. */}
+            <div className="flex w-max gap-1.5 px-2 md:px-0">
               {canWrite ? (
                 <button
                   type="button"
                   onClick={openComposer}
                   className={cn(
                     CARD_CLASS,
-                    "flex flex-col bg-card ring-1 ring-border ring-inset",
+                    // 테두리는 내용 위에 덮는다. 카드 자체에 inset ring을 주면 위를 채운 프로필
+                    // 사진이 그 위로 그려져서 아래 글자 칸에만 테두리가 남는다.
+                    "flex flex-col bg-card after:pointer-events-none after:absolute after:inset-0 after:rounded-xl after:ring-1 after:ring-border after:ring-inset",
                   )}
                 >
                   {/* Facebook처럼 위쪽은 내 프로필 사진으로 채운다. 사진이 없으면 아바타와 같은
@@ -112,7 +145,6 @@ export function StoryRail({
                       src={viewer.avatarUrl ?? "/avatar.svg"}
                       crossOrigin="anonymous"
                       alt=""
-                      loading="lazy"
                       decoding="async"
                       draggable={false}
                       className={cn(
@@ -132,17 +164,19 @@ export function StoryRail({
                 </button>
               ) : null}
 
-              {groups.map((group) => {
+              {groups.map((group, index) => {
                 const cover = group.stories.at(-1);
+                const first = group.stories[0] ?? cover;
                 const isMine = group.pubId === viewer.pubId;
 
-                if (!cover) return null;
+                if (!cover || !first) return null;
 
                 return (
                   <button
                     key={group.pubId}
                     type="button"
-                    onClick={() => openStory(group.stories[0]?.id ?? cover.id)}
+                    onPointerDown={() => warmStoryImage(first)}
+                    onClick={() => openStory(first.id)}
                     className={cn(
                       CARD_CLASS,
                       cover.background && STORY_BACKGROUNDS[cover.background],
@@ -158,7 +192,7 @@ export function StoryRail({
                         src={cover.thumbnailUrl}
                         crossOrigin="anonymous"
                         alt=""
-                        loading="lazy"
+                        loading={index < EAGER_CARD_COUNT ? undefined : "lazy"}
                         decoding="async"
                         className="absolute inset-0 size-full object-cover"
                         draggable={false}

@@ -6,13 +6,17 @@ export interface AppChromeConfig {
   bottomNav: ChromeMode;
   contentWidth: AppContentWidth;
   pullToRefresh: boolean;
+  /** 탭이나 링크로 다시 들어와도 마지막 스크롤 위치로 돌아간다. 뒤로 가기 복원은 모든 화면에 기본이다. */
+  rememberScroll: boolean;
 }
 
 type AppChromeDefinition = Omit<
   AppChromeConfig,
-  "contentWidth" | "pullToRefresh"
+  "contentWidth" | "pullToRefresh" | "rememberScroll"
 > &
-  Partial<Pick<AppChromeConfig, "contentWidth" | "pullToRefresh">>;
+  Partial<
+    Pick<AppChromeConfig, "contentWidth" | "pullToRefresh" | "rememberScroll">
+  >;
 
 export interface AppChromeHandle {
   chrome: AppChromeConfig;
@@ -23,6 +27,7 @@ export const DEFAULT_APP_CHROME: AppChromeConfig = {
   bottomNav: "none",
   contentWidth: "4xl",
   pullToRefresh: false,
+  rememberScroll: false,
 };
 
 export function defineAppChrome(chrome: AppChromeDefinition): AppChromeHandle {
@@ -31,6 +36,7 @@ export function defineAppChrome(chrome: AppChromeDefinition): AppChromeHandle {
       ...chrome,
       contentWidth: chrome.contentWidth ?? DEFAULT_APP_CHROME.contentWidth,
       pullToRefresh: chrome.pullToRefresh ?? false,
+      rememberScroll: chrome.rememberScroll ?? false,
     },
   };
 }
@@ -62,7 +68,9 @@ function isAppChromeHandle(handle: unknown): handle is AppChromeHandle {
     "contentWidth" in chrome &&
     isContentWidth(chrome.contentWidth) &&
     "pullToRefresh" in chrome &&
-    typeof chrome.pullToRefresh === "boolean"
+    typeof chrome.pullToRefresh === "boolean" &&
+    "rememberScroll" in chrome &&
+    typeof chrome.rememberScroll === "boolean"
   );
 }
 

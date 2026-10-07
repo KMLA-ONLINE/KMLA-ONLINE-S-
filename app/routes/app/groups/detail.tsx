@@ -181,13 +181,12 @@ export async function clientLoader({
             : item,
         ),
     );
-    // 성공이든 실패든 다음 진입은 서버 값을 다시 읽는다 — 방문 저장이 실패했다면 위에서 낮춘
-    // 0이 거짓말이고, 무효화하지 않으면 2분 동안 안 읽은 글이 읽은 것으로 보인다.
-    void markGroupPostsVisited(group.group_id)
-      .catch(() => undefined)
-      .finally(() =>
-        queryClient.invalidateQueries({ queryKey: groupKeys.home() }),
-      );
+    // 실패했을 때만 다음 진입이 서버 값을 다시 읽게 한다. 위에서 낮춘 0이 거짓말이 되고,
+    // 무효화하지 않으면 2분 동안 안 읽은 글이 읽은 것으로 보인다. 성공하면 캐시가 이미 서버와
+    // 같으므로 무효화하지 않는다 — 그러면 그룹을 볼 때마다 목록으로 돌아오는 길이 네 요청에 묶인다.
+    void markGroupPostsVisited(group.group_id).catch(() =>
+      queryClient.invalidateQueries({ queryKey: groupKeys.home() }),
+    );
   }
   return {
     group,

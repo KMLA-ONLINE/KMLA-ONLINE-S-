@@ -1,6 +1,8 @@
 import type { GroupDiscoveryCursor } from "~/features/groups/model/types";
 import type { PostCursor } from "~/features/posts/model/types";
-import type { QueryKey } from "@tanstack/react-query";
+import { queryOptions, type QueryKey } from "@tanstack/react-query";
+
+import { loadGroupHome } from "~/features/groups/data/queries";
 
 /**
  * 두 값 모두 2분이다. 짧은 값은 모바일의 앱 왕복 복귀마다 재요청해 데이터 사용량이 컸다.
@@ -38,6 +40,15 @@ export const groupKeys = {
   reports: (groupId: string, sort: "count" | "recent") =>
     [...groupKeys.all, "reports", groupId, sort] as const,
 };
+
+/** 그룹 홈 목록. 로더가 캐시를 데우고 화면이 같은 옵션으로 구독한다. */
+export function groupHomeQuery() {
+  return queryOptions({
+    queryKey: groupKeys.home(),
+    queryFn: loadGroupHome,
+    staleTime: GROUP_STALE_TIME,
+  });
+}
 
 export function isGroupAccessQuery(
   queryKey: QueryKey,

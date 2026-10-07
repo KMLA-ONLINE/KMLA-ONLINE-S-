@@ -3,6 +3,7 @@ export { CommentComposer } from "~/features/posts/components/comment/comment-com
 export { CommentItem } from "~/features/posts/components/comment/comment-item";
 export { CommentText } from "~/features/posts/components/comment/comment-text";
 export { CommentThread } from "~/features/posts/components/comment/comment-thread";
+export { collapseAllPostBodies } from "~/features/posts/components/post-body-clamp";
 export { GroupPostDetail } from "~/features/posts/components/group/group-post-detail";
 export { AnonymousActivityRestrictionNotice } from "~/features/posts/components/anonymous-activity-restriction-notice";
 export { GroupPostEditor } from "~/features/posts/components/group/group-post-editor";
