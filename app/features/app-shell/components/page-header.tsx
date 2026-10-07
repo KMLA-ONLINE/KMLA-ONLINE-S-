@@ -1,6 +1,6 @@
 import { ChevronLeftIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
 import { Button } from "~/shared/ui/button";
@@ -8,6 +8,7 @@ import { cn } from "~/shared/lib/utils";
 
 interface PageHeaderProps {
   title: ReactNode;
+  /** 문자열이면 그 경로로, `true`면 이전 화면으로(없으면 홈) 간다. */
   back?: boolean | string;
   actions?: ReactNode;
   /** 아래로 읽으면 숨긴다. 기본은 고정이고, 긴 목록에서만 켠다. 효과는 모바일에서만 보인다. */
@@ -27,6 +28,7 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const hidden = useHideOnScroll({ enabled: hideOnScroll });
 
   return (
@@ -49,9 +51,15 @@ export function PageHeader({
           size="icon"
           aria-label="뒤로"
           className="-ml-1 shrink-0"
-          onClick={() =>
-            typeof back === "string" ? void navigate(back) : void navigate(-1)
-          }
+          onClick={() => {
+            if (typeof back === "string") {
+              void navigate(back);
+              return;
+            }
+            // 링크로 바로 들어와 앱 안의 이전 화면이 없으면 -1은 앱 밖으로 나간다. 홈으로 보낸다.
+            if (location.key === "default") void navigate("/");
+            else void navigate(-1);
+          }}
         >
           <ChevronLeftIcon />
         </Button>

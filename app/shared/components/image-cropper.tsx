@@ -231,7 +231,7 @@ export function ImageCropper({
         offsetY: shownOffset.y,
       });
       onComplete(
-        await cropImage(file, rect, fitOutputSize(rect, maxOutputEdge)),
+        await cropImage(file, rect, fitOutputSize(rect, maxOutputEdge, aspect)),
       );
     } catch (cause) {
       console.error(

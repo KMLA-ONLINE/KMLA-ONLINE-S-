@@ -4,13 +4,16 @@ import { Link } from "react-router";
 
 import { StoryRail } from "~/features/stories/components/story-rail";
 import { STORY_STALE_TIME, storyKeys } from "~/features/stories/data/cache";
-import { listActiveStories } from "~/features/stories/data/queries";
+import {
+  listActiveStories,
+  type StoryItem,
+} from "~/features/stories/data/queries";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import { hasActiveSession } from "~/features/auth";
 import { FeedScreen, feedQuery } from "~/features/feed";
 import {
-  getKoreaDate,
   getMealDay,
+  getMealReferenceDate,
   HomeMealSummary,
   type MealDay,
 } from "~/features/meal";
@@ -45,6 +48,8 @@ export const handle = defineAppChrome({
   bottomNav: "hide-on-scroll",
   contentWidth: "5xl",
   pullToRefresh: true,
+  // 피드는 하단 탭으로 오가는 화면이라 뒤로 가기만으로는 위치가 안 남는다.
+  rememberScroll: true,
 });
 
 /**
@@ -81,7 +86,9 @@ export async function clientLoader() {
 
   // 급식과 생일은 넓은 화면의 옆 칸에만 보인다. 기다리면 피드 전체가 가장 느린 요청 —
   // 특히 외부 NEIS API — 에 묶이므로 promise째 넘기고 옆 칸만 따로 채운다.
-  const mealDay = getMealDay(getKoreaDate()).catch(() => null);
+  // 끼니는 시간대로 고르므로(19시 이후는 조식) 날짜도 같은 기준으로 넘긴다. 오늘 날짜로 받으면
+  // 저녁에 이미 지난 오늘 아침 조식이 뜬다. 급식 화면과 같은 기준이다.
+  const mealDay = getMealDay(getMealReferenceDate()).catch(() => null);
   const birthdays = queryClient
     .query({
       queryKey: birthdayKeys.today(referenceDate),
@@ -91,14 +98,20 @@ export async function clientLoader() {
     })
     .catch(() => null);
 
+  // 스토리 캐시가 있으면 오래됐어도 그대로 그린다. 기다리면 2분이 지날 때마다 홈 진입이 목록 RPC와
+  // 서명 왕복에 묶인다. 다시 읽는 일은 마운트되는 레일의 `useQuery`가 뒤에서 맡는다.
+  const cachedStories = queryClient.getQueryData<StoryItem[]>(
+    storyKeys.active(),
+  );
   const [stories] = await Promise.all([
-    queryClient
-      .query({
-        queryKey: storyKeys.active(),
-        queryFn: listActiveStories,
-        staleTime: STORY_STALE_TIME,
-      })
-      .catch(() => []),
+    cachedStories ??
+      queryClient
+        .query({
+          queryKey: storyKeys.active(),
+          queryFn: listActiveStories,
+          staleTime: STORY_STALE_TIME,
+        })
+        .catch(() => []),
     // 캐시에 이미 세션이 있으면 그대로 쓴다. 뒤로 가기로 돌아왔을 때 쌓아 둔 페이지를
     // 유지하려는 것이고, 갱신은 당겨서 새로고침처럼 명시적인 경로가 맡는다.
     queryClient.ensureInfiniteQueryData(feedQuery()).catch(() => null),

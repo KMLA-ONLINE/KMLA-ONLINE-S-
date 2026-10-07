@@ -1,8 +1,12 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { PostBodyClamp } from "~/features/posts/components/post-body-clamp";
+import {
+  collapseAllPostBodies,
+  PostBodyClamp,
+} from "~/features/posts/components/post-body-clamp";
 import { ScrollContainerContext } from "~/shared/lib/scroll-container";
 
 /**
@@ -48,6 +52,54 @@ describe("PostBodyClamp", () => {
     await user.click(screen.getByRole("button", { name: "접기" }));
 
     expect(scroller.scrollTop).toBe(400);
+  });
+
+  it("keeps a post expanded across remounts so restored scroll lines up", async () => {
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(400);
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(72);
+    const user = userEvent.setup();
+    const body = (
+      <PostBodyClamp postId="remount-post">
+        <p>긴 본문</p>
+      </PostBodyClamp>
+    );
+
+    const { unmount } = render(body);
+    await user.click(screen.getByRole("button", { name: "더 보기" }));
+    unmount();
+
+    render(body);
+    expect(screen.getByRole("button", { name: "접기" })).toBeInTheDocument();
+  });
+
+  it("shows the clamp button on the first render when the post was measured before", () => {
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(400);
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(72);
+    const body = (
+      <PostBodyClamp postId="measured-post">
+        <p>긴 본문</p>
+      </PostBodyClamp>
+    );
+    render(body).unmount();
+
+    // 측정이 다시 돌기 전 첫 렌더 결과만 본다.
+    expect(renderToString(body)).toContain("더 보기");
+  });
+
+  it("collapses mounted and remembered posts on pull-to-refresh", async () => {
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(400);
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(72);
+    const user = userEvent.setup();
+    render(
+      <PostBodyClamp postId="refreshed-post">
+        <p>긴 본문</p>
+      </PostBodyClamp>,
+    );
+    await user.click(screen.getByRole("button", { name: "더 보기" }));
+
+    act(() => collapseAllPostBodies());
+
+    expect(screen.getByRole("button", { name: "더 보기" })).toBeInTheDocument();
   });
 
   it("leaves the scroll alone when the card head is still in view", async () => {

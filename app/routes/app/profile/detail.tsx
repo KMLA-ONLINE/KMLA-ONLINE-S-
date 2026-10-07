@@ -1,6 +1,6 @@
 import { data, Outlet, redirect } from "react-router";
 
-import { defineAppChrome, useAppShell } from "~/features/app-shell";
+import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import {
   createPostListRevalidation,
   deleteProfilePost,
@@ -74,6 +74,8 @@ export default function ProfilePage({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
+      {/* 모바일은 하단 탭도 전역 머리말도 없어, 이 머리말이 프로필을 빠져나가는 유일한 손잡이다. */}
+      <PageHeader title={loaderData.profile.name} back />
       <ProfileDetail
         profile={loaderData.profile}
         isOwnProfile={isOwnProfile}

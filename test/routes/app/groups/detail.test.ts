@@ -236,6 +236,26 @@ describe("group detail loader", () => {
     ]);
   });
 
+  // 성공하면 캐시가 이미 서버와 같다. 무효화하면 그룹에서 목록으로 돌아올 때마다 네 요청을 다시 기다린다.
+  it("keeps the home cache fresh when the visit RPC succeeds", async () => {
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(groupKeys.home(), [
+      { group_id: "group-id", new_post_count: 3 },
+    ]);
+
+    await load("/groups/test");
+    await vi.waitFor(() =>
+      expect(mutations.markGroupPostsVisited).toHaveBeenCalled(),
+    );
+    // 방문 저장의 후속 처리가 끝날 틈을 준다.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(queryClient.getQueryState(groupKeys.home())?.isInvalidated).toBe(
+      false,
+    );
+  });
+
   it("re-reads the home counts when the visit RPC fails", async () => {
     mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
     mutations.markGroupPostsVisited.mockRejectedValue(new Error("offline"));

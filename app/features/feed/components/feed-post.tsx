@@ -199,7 +199,7 @@ export function FeedPostCard({ post }: { post: FeedPost }) {
                 </Link>
               </h2>
             ) : null}
-            <PostBodyClamp testId="feed-post-body">
+            <PostBodyClamp postId={post.post_id} testId="feed-post-body">
               <PostMarkdown mentions={post.mentions}>{post.body}</PostMarkdown>
             </PostBodyClamp>
           </div>

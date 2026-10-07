@@ -1,7 +1,11 @@
 import { ChevronRightIcon } from "lucide-react";
 import { Link } from "react-router";
 
-import { getDefaultMeal, type MealDay } from "~/features/meal/data/neis";
+import {
+  getDefaultMeal,
+  getKoreaDate,
+  type MealDay,
+} from "~/features/meal/data/neis";
 
 export function HomeMealSummary({ day }: { day: MealDay }) {
   const meal = day.meals.find((item) => item.label === getDefaultMeal());
@@ -13,7 +17,9 @@ export function HomeMealSummary({ day }: { day: MealDay }) {
         className="mb-3 flex items-center justify-between rounded-xl border bg-card px-4 py-3 transition-colors hover:bg-muted/40"
       >
         <div>
-          <p className="text-sm font-semibold">오늘의 급식</p>
+          <p className="text-sm font-semibold">
+            {day.date === getKoreaDate() ? "오늘의 급식" : "내일의 급식"}
+          </p>
           <p className="mt-0.5 text-xs text-muted-foreground">{day.date}</p>
         </div>
         <ChevronRightIcon className="size-4 text-muted-foreground" />

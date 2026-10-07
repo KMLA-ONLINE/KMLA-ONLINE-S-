@@ -7,6 +7,7 @@ export { GroupInviteScreen } from "~/features/groups/components/group-invite-scr
 export {
   GROUP_CONTENT_STALE_TIME,
   GROUP_STALE_TIME,
+  groupHomeQuery,
   groupKeys,
   isGroupAccessQuery,
 } from "~/features/groups/data/cache";

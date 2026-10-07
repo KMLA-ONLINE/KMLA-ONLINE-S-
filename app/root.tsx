@@ -15,6 +15,9 @@ import { PwaPrompts } from "~/shared/components/pwa-prompts";
 import { QueryProvider } from "~/shared/components/query-provider";
 import { ThemeColor } from "~/shared/components/theme-color";
 import { env } from "~/shared/lib/env";
+import { cn } from "~/shared/lib/utils";
+import { isNetworkError } from "~/shared/lib/network-error";
+import { useOffline } from "~/shared/hooks/use-offline";
 import { ImageViewerProvider } from "~/shared/hooks/use-image-viewer-param";
 import { Toaster } from "~/shared/ui/sonner";
 import { TooltipProvider } from "~/shared/ui/tooltip";
@@ -157,13 +160,43 @@ export function HydrateFallback() {
             fetchPriority="high"
             className="size-28"
           />
-          <span className="absolute top-full left-1/2 mt-8 -translate-x-1/2 animate-splash-hint">
-            <Spinner className="size-5 text-muted-foreground motion-reduce:animate-none" />
+          <span className="absolute top-full left-1/2 mt-8 flex -translate-x-1/2 flex-col items-center gap-4">
+            {/* `animate-spin`과 한 요소에 두면 `animation`을 서로 덮어쓰므로 감싸서 건다. */}
+            <span className="animate-splash-hint">
+              <Spinner className="size-5 text-muted-foreground motion-reduce:animate-none" />
+            </span>
+            <SplashConnectionHint />
           </span>
         </div>
       </div>
       <ShellSkeleton />
     </>
+  );
+}
+
+/**
+ * 로고 화면이 길어질 때 원인을 짐작하게 하는 한 줄. 느린 연결은 시간으로만 알 수 있어서
+ * 8초 뒤에 CSS로 띄운다 — JS를 받는 중에도 보이고, 프리렌더에서 `window`를 건드리지 않는다.
+ *
+ * 브라우저가 끊김을 알려 주면 기다리지 않고 바로 바꿔 말한다. 그동안 셸 로더의 쿼리는
+ * React Query가 멈춰 두었다가 연결이 돌아오면 알아서 이어 간다.
+ */
+function SplashConnectionHint() {
+  const offline = useOffline();
+
+  return (
+    // `role="status"`를 주지 않는다. 투명한 동안에도 접근성 트리에 있어서 8초를 기다리지 않고
+    // 곧바로 읽힌다. 기다리는 중이라는 사실은 스피너가 이미 알린다.
+    <p
+      className={cn(
+        "text-sm whitespace-nowrap text-muted-foreground",
+        !offline && "animate-splash-slow",
+      )}
+    >
+      {offline
+        ? "인터넷에 연결되어 있지 않아요."
+        : "Wi-Fi나 데이터 연결을 확인해 주세요."}
+    </p>
   );
 }
 
@@ -194,6 +227,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     <ErrorPage
       status={status}
       stack={stack}
+      network={!isRouteErrorResponse(error) && isNetworkError(error)}
       onRetry={() => window.location.reload()}
     />
   );
