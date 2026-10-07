@@ -4,7 +4,10 @@ import { Link } from "react-router";
 
 import { StoryRail } from "~/features/stories/components/story-rail";
 import { STORY_STALE_TIME, storyKeys } from "~/features/stories/data/cache";
-import { listActiveStories } from "~/features/stories/data/queries";
+import {
+  listActiveStories,
+  type StoryItem,
+} from "~/features/stories/data/queries";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import { hasActiveSession } from "~/features/auth";
 import { FeedScreen, feedQuery } from "~/features/feed";
@@ -91,14 +94,20 @@ export async function clientLoader() {
     })
     .catch(() => null);
 
+  // 스토리 캐시가 있으면 오래됐어도 그대로 그린다. 기다리면 2분이 지날 때마다 홈 진입이 목록 RPC와
+  // 서명 왕복에 묶인다. 다시 읽는 일은 마운트되는 레일의 `useQuery`가 뒤에서 맡는다.
+  const cachedStories = queryClient.getQueryData<StoryItem[]>(
+    storyKeys.active(),
+  );
   const [stories] = await Promise.all([
-    queryClient
-      .query({
-        queryKey: storyKeys.active(),
-        queryFn: listActiveStories,
-        staleTime: STORY_STALE_TIME,
-      })
-      .catch(() => []),
+    cachedStories ??
+      queryClient
+        .query({
+          queryKey: storyKeys.active(),
+          queryFn: listActiveStories,
+          staleTime: STORY_STALE_TIME,
+        })
+        .catch(() => []),
     // 캐시에 이미 세션이 있으면 그대로 쓴다. 뒤로 가기로 돌아왔을 때 쌓아 둔 페이지를
     // 유지하려는 것이고, 갱신은 당겨서 새로고침처럼 명시적인 경로가 맡는다.
     queryClient.ensureInfiniteQueryData(feedQuery()).catch(() => null),

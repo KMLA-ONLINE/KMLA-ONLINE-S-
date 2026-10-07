@@ -88,10 +88,16 @@ export default function MainAppLayout() {
     clearPostEngagement(queryClient);
 
     // 피드는 stale 표시가 아니라 리셋이다. 무한 쿼리에서 무효화는 "쌓인 페이지를 전부 다시
-    // 읽어라"가 되는데, 당겨서 새로고침이 원하는 건 새 세션의 1페이지다.
+    // 읽어라"가 되는데, 당겨서 새로고침이 원하는 건 새 세션의 1페이지다. 스토리는 홈 로더가
+    // 캐시를 기다리지 않으므로 레일 observer가 지금 다시 읽게 하고 끝날 때까지 기다린다.
     await Promise.all([
       location.pathname === "/"
-        ? Promise.all([resetFeed(queryClient), stale(storyKeys.all)])
+        ? Promise.all([
+            resetFeed(queryClient),
+            queryClient
+              .invalidateQueries({ queryKey: storyKeys.all })
+              .catch(() => undefined),
+          ])
         : stale(groupKeys.all),
       stale(notificationKeys.badge()),
     ]);

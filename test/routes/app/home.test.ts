@@ -39,6 +39,7 @@ vi.mock("~/shared/lib/korea-date", () => ({
 
 import { clientLoader, shouldRevalidate } from "~/routes/app/home";
 import { feedKeys } from "~/features/feed";
+import { storyKeys } from "~/features/stories/data/cache";
 import type { BirthdayProfile } from "~/features/profiles";
 import {
   getQueryClient,
@@ -107,6 +108,20 @@ describe("home feed loader", () => {
     await load();
 
     expect(mocks.listFeedPosts).not.toHaveBeenCalled();
+  });
+
+  // 오래된 스토리 캐시라도 홈 진입을 목록 RPC에 묶지 않는다. 다시 읽기는 레일의 observer 몫이다.
+  it("renders cached stories without waiting for a refetch", async () => {
+    const cached = [{ id: 1 }];
+    getQueryClient().setQueryData(storyKeys.active(), cached, {
+      updatedAt: 0,
+    });
+    mocks.listActiveStories.mockReturnValue(new Promise(() => undefined));
+
+    const result = await load();
+
+    expect(result.stories).toBe(cached);
+    expect(mocks.listActiveStories).not.toHaveBeenCalled();
   });
 
   // 게이트와 병렬로 도는 로더다. 세션이 없을 때 요청을 띄우면 authenticated 전용 RPC가
