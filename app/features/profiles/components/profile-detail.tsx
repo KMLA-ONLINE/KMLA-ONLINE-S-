@@ -312,7 +312,8 @@ export function ProfileDetail({
   return (
     <main className="px-3 pb-4 md:px-0 md:pb-10">
       <div className="w-full space-y-2 md:space-y-6">
-        <section className="-mx-3 overflow-hidden bg-background sm:mx-0 sm:rounded-2xl sm:border">
+        {/* `isolate`: 아바타·편집 버튼의 z-index가 모바일 sticky 머리말(z-10) 위로 새지 않게 가둔다. */}
+        <section className="isolate -mx-3 overflow-hidden bg-background sm:mx-0 sm:rounded-2xl sm:border">
           <div
             data-testid="profile-cover"
             className="relative aspect-[3/1] w-full overflow-hidden bg-[#F3F4F7]"
