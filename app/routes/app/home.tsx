@@ -12,8 +12,8 @@ import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import { hasActiveSession } from "~/features/auth";
 import { FeedScreen, feedQuery } from "~/features/feed";
 import {
-  getKoreaDate,
   getMealDay,
+  getMealReferenceDate,
   HomeMealSummary,
   type MealDay,
 } from "~/features/meal";
@@ -84,7 +84,9 @@ export async function clientLoader() {
 
   // 급식과 생일은 넓은 화면의 옆 칸에만 보인다. 기다리면 피드 전체가 가장 느린 요청 —
   // 특히 외부 NEIS API — 에 묶이므로 promise째 넘기고 옆 칸만 따로 채운다.
-  const mealDay = getMealDay(getKoreaDate()).catch(() => null);
+  // 끼니는 시간대로 고르므로(19시 이후는 조식) 날짜도 같은 기준으로 넘긴다. 오늘 날짜로 받으면
+  // 저녁에 이미 지난 오늘 아침 조식이 뜬다. 급식 화면과 같은 기준이다.
+  const mealDay = getMealDay(getMealReferenceDate()).catch(() => null);
   const birthdays = queryClient
     .query({
       queryKey: birthdayKeys.today(referenceDate),

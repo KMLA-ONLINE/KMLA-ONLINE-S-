@@ -24,7 +24,7 @@ vi.mock("~/features/feed/data/queries", async (importOriginal) => ({
 
 vi.mock("~/features/meal", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  getKoreaDate: () => "20260824",
+  getMealReferenceDate: () => "20260824",
   getMealDay: mocks.getMealDay,
 }));
 
