@@ -179,7 +179,7 @@ function GroupRows({
           ))}
         </div>
       ) : (
-        <p className="rounded-xl border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+        <p className="rounded-xl bg-card px-4 py-6 text-center text-sm text-muted-foreground">
           {emptyText}
         </p>
       )}
