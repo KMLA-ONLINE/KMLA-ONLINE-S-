@@ -3,8 +3,10 @@ import {
   LockKeyholeIcon,
   RotateCcwIcon,
   ServerCrashIcon,
+  WifiOffIcon,
   type LucideIcon,
 } from "lucide-react";
+import { useEffect } from "react";
 import { Link } from "react-router";
 
 import { DecryptedText } from "~/shared/components/decrypted-text";
@@ -15,6 +17,8 @@ interface ErrorPageProps {
   status?: number;
   /** 개발 빌드에서만 채운다. 프로덕션 번들에 스택을 노출하지 않기 위함이다. */
   stack?: string;
+  /** 요청이 서버에 닿지 못한 실패(`isNetworkError`). 서버 탓 문구 대신 연결을 확인하라고 한다. */
+  network?: boolean;
   onRetry?: () => void;
 }
 
@@ -48,6 +52,13 @@ const FALLBACK: ErrorMessage = {
   Icon: ServerCrashIcon,
 };
 
+const NETWORK: ErrorMessage = {
+  code: "오프라인 · 연결 확인",
+  title: "인터넷 연결을 확인해 주세요.",
+  detail: "Wi-Fi나 데이터 연결에 문제가 있을 수도 있어요.",
+  Icon: WifiOffIcon,
+};
+
 /**
  * `root.tsx`의 `ErrorBoundary`가 그리는 화면.
  *
@@ -60,9 +71,24 @@ const FALLBACK: ErrorMessage = {
  * 셸 바깥에서도 렌더되므로(셸 로더가 던진 에러는 셸을 그리기 전에 여기로 온다) 셸 데이터나
  * 스크롤 컨텍스트에 의존하지 않는다.
  */
-export function ErrorPage({ status, stack, onRetry }: ErrorPageProps) {
-  const { code, title, detail, Icon } =
-    (status ? MESSAGES[status] : undefined) ?? FALLBACK;
+export function ErrorPage({
+  status,
+  stack,
+  network = false,
+  onRetry,
+}: ErrorPageProps) {
+  const { code, title, detail, Icon } = network
+    ? NETWORK
+    : ((status ? MESSAGES[status] : undefined) ?? FALLBACK);
+
+  // 연결이 돌아오면 사용자가 누르기 전에 다시 시도한다. 브라우저가 끊김을 알아채지 못한
+  // 실패(캡티브 포털 등)에서는 `online`이 오지 않으므로 버튼이 그대로 남는다.
+  useEffect(() => {
+    if (!network || !onRetry) return;
+
+    window.addEventListener("online", onRetry, { once: true });
+    return () => window.removeEventListener("online", onRetry);
+  }, [network, onRetry]);
 
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background px-4 py-12">
@@ -75,7 +101,7 @@ export function ErrorPage({ status, stack, onRetry }: ErrorPageProps) {
           <div className="absolute inset-x-3 top-5 flex h-28 rotate-3 flex-col items-center justify-center rounded-xl border border-border bg-card shadow-sm">
             <Icon className="mb-2 size-8 text-primary" strokeWidth={1.7} />
             <span className="text-xs font-medium tracking-[0.18em] text-muted-foreground tabular-nums">
-              {status ?? "ERROR"}
+              {network ? "OFFLINE" : (status ?? "ERROR")}
             </span>
           </div>
         </div>

@@ -93,6 +93,8 @@
 
   /* 첫 로딩 로고 화면의 스피너. 금방 끝나는 로딩에서는 아예 보이지 않도록 늦게 나타난다. */
   --animate-splash-hint: splash-hint 400ms ease-out 1500ms both;
+  /* 로고 화면의 연결 안내. 스피너보다 한참 늦게, 정말 오래 걸릴 때만 보인다. */
+  --animate-splash-slow: splash-hint 400ms ease-out 8000ms both;
 
   @keyframes splash-hint {
     from {
