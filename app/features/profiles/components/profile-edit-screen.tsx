@@ -460,7 +460,8 @@ function ProfileMediaHeader({
   onSaved: () => Promise<void>;
 }) {
   return (
-    <section aria-label="프로필 사진" className="md:overflow-hidden">
+    // `isolate`: 아바타·편집 버튼의 z-index를 이 안에 가둔다. 없으면 스크롤할 때 sticky 머리말(z-10) 위로 올라온다.
+    <section aria-label="프로필 사진" className="isolate md:overflow-hidden">
       <div className="relative aspect-[3/1] bg-muted md:rounded-xl">
         {profile.cover_url ? (
           <img
