@@ -106,4 +106,24 @@ describe("fitOutputSize", () => {
       height: 300,
     });
   });
+
+  it("aspect를 주면 소수 크롭 영역도 그 비율에 정확히 맞춘다", () => {
+    // 따로 반올림하면 1201×300이 된다. 그룹 커버 DB 검사는 width = height * 4다.
+    expect(fitOutputSize({ width: 1201.2, height: 300.3 }, 2400, 4)).toEqual({
+      width: 1200,
+      height: 300,
+    });
+    expect(fitOutputSize({ width: 2399.6, height: 599.9 }, 2400, 4)).toEqual({
+      width: 2400,
+      height: 600,
+    });
+    expect(fitOutputSize({ width: 5000, height: 1250.2 }, 2400, 4)).toEqual({
+      width: 2400,
+      height: 600,
+    });
+    expect(fitOutputSize({ width: 2.1, height: 0.5 }, 2400, 4)).toEqual({
+      width: 4,
+      height: 1,
+    });
+  });
 });
