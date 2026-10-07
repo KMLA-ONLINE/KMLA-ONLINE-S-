@@ -132,6 +132,7 @@ export default function MainAppLayout() {
           />
           <ScrollRegion
             scrollRef={scrollRef}
+            rememberScroll={chrome.rememberScroll}
             className={cn(
               chrome.bottomNav === "hide-on-scroll" &&
                 "max-md:pb-[calc(var(--app-tabbar-h)+var(--app-safe-b))]",

@@ -48,6 +48,8 @@ export const handle = defineAppChrome({
   bottomNav: "hide-on-scroll",
   contentWidth: "5xl",
   pullToRefresh: true,
+  // 피드는 하단 탭으로 오가는 화면이라 뒤로 가기만으로는 위치가 안 남는다.
+  rememberScroll: true,
 });
 
 /**
