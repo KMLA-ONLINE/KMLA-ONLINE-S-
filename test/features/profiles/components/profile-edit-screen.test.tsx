@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -83,35 +84,50 @@ function renderScreen(actionData?: ProfileEditActionData) {
 }
 
 describe("ProfileEditScreen", () => {
-  it("keeps rarely edited identity fields collapsed behind a summary", () => {
+  it("shows every editable field without collapsing any section", () => {
     renderScreen();
 
-    // 값은 요약 줄로 계속 보인다. 뒤로 미룬 것은 확인이 아니라 편집이다.
-    expect(
-      screen.getByText(
-        "@hanbyeol-26 · 이한별 · 2009년 3월 1일 · 여성 · 국제 계열",
-      ),
-    ).toBeVisible();
-    expect(screen.getByLabelText(/이름/)).not.toBeVisible();
-    expect(screen.getByLabelText(/slug/)).not.toBeVisible();
-
-    // 학기마다 고치는 값은 접지 않는다.
+    expect(screen.getByLabelText(/이름/)).toBeVisible();
+    expect(screen.getByLabelText(/slug/)).toBeVisible();
     expect(screen.getByLabelText("반")).toBeVisible();
     expect(screen.getByLabelText("기숙사 방")).toBeVisible();
   });
 
-  /**
-   * slug는 프로필 주소라 되돌릴 수 없는 값이 아니지만, 예약어나 이미 쓰이는 값은 저장이
-   * 거절된다. 그 오류가 접힌 칸 안에 있으면 아무도 못 본다(기능 명세 §12.2).
-   */
-  it("opens the identity section when the slug is rejected", () => {
+  it("keeps save disabled until something changes", async () => {
+    const user = userEvent.setup();
+    renderScreen();
+
+    const [save] = screen.getAllByRole("button", { name: "저장" });
+    expect(save).toBeDisabled();
+
+    await user.type(screen.getByLabelText("반"), "3");
+
+    expect(save).toBeEnabled();
+  });
+
+  /** 바꾸면 이전 주소로 공유한 링크가 끊긴다는 사실을 저장 전에 알린다(기능 명세 §12.2). */
+  it("warns before a slug change breaks shared links", async () => {
+    const user = userEvent.setup();
+    renderScreen();
+
+    expect(
+      screen.queryByText(/더 이상 열리지 않습니다/),
+    ).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/slug/), "x");
+
+    expect(screen.getByText(/더 이상 열리지 않습니다/)).toBeVisible();
+  });
+
+  it("shows a rejected slug next to its field", () => {
     const actionData = submit({ pubId: "admin" });
 
     expect(actionData.errors?.pubId).toBeDefined();
 
     renderScreen(actionData);
 
-    expect(screen.getByLabelText(/slug/)).toBeVisible();
     expect(screen.getByText(String(actionData.errors?.pubId))).toBeVisible();
+    // 거절당해 돌아온 값은 사용자가 고친 값이라 바로 다시 저장할 수 있다.
+    expect(screen.getAllByRole("button", { name: "저장" })[0]).toBeEnabled();
   });
 });

@@ -21,23 +21,21 @@ import {
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "~/shared/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "~/shared/ui/dialog";
 import { Spinner } from "~/shared/ui/spinner";
 
 export function ProfileMediaEditor({
   profile,
   slot,
   onView,
+  onSaved,
   className,
 }: {
   profile: AcceptedProfile;
   slot: ProfileMediaSlot;
   onView?: () => void;
+  /** 저장 뒤 할 일. 없으면 새로고침해 아바타를 들고 있는 모든 화면과 캐시를 한 번에 맞춘다. */
+  onSaved?: () => Promise<void>;
   className?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,6 +64,17 @@ export function ProfileMediaEditor({
     requestAnimationFrame(() => {
       onView?.();
     });
+  };
+
+  const finish = async () => {
+    if (!onSaved) {
+      window.location.reload();
+      return;
+    }
+
+    await onSaved();
+    setActionsOpen(false);
+    setPending(false);
   };
 
   const upload = async (cropped: File) => {
@@ -98,7 +107,7 @@ export function ProfileMediaEditor({
           : null,
       );
 
-      window.location.reload();
+      await finish();
     } catch {
       setPending(false);
       setError("이미지를 저장하지 못했습니다.");
@@ -111,7 +120,7 @@ export function ProfileMediaEditor({
 
     try {
       await removeProfileMedia(slot);
-      window.location.reload();
+      await finish();
     } catch {
       setPending(false);
       setActionsOpen(false);
@@ -220,17 +229,22 @@ export function ProfileMediaEditor({
           if (!pending) setActionsOpen(open);
         }}
       >
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{isAvatar ? "프로필 사진" : "커버 사진"}</DialogTitle>
-          </DialogHeader>
+        {/* 창보다 선택지 목록으로 읽히게 제목과 여백을 걷어 낸다. 제목은 스크린리더용으로만 남긴다. */}
+        <DialogContent
+          className="gap-0 p-1.5 sm:max-w-xs"
+          showCloseButton={false}
+        >
+          <DialogTitle className="sr-only">
+            {isAvatar ? "프로필 사진" : "커버 사진"}
+          </DialogTitle>
 
-          <div className="grid gap-2">
+          {/* 액션 시트처럼 같은 무게의 목록으로 둔다. 하나만 채운 버튼은 "권장"처럼 읽힌다. 되돌리기만 색으로 구분한다. */}
+          <div className="flex flex-col">
             {onView ? (
               <Button
                 type="button"
-                variant="outline"
-                className="w-full justify-start"
+                variant="ghost"
+                className="h-11 w-full justify-start gap-3 px-3"
                 disabled={pending}
                 onClick={openViewer}
               >
@@ -241,7 +255,8 @@ export function ProfileMediaEditor({
 
             <Button
               type="button"
-              className="w-full justify-start"
+              variant="ghost"
+              className="h-11 w-full justify-start gap-3 px-3"
               disabled={pending}
               onClick={openPicker}
             >
@@ -251,8 +266,8 @@ export function ProfileMediaEditor({
 
             <Button
               type="button"
-              variant="outline"
-              className="w-full justify-start"
+              variant="ghost"
+              className="h-11 w-full justify-start gap-3 px-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
               disabled={pending}
               onClick={() => {
                 void reset();

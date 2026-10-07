@@ -1,6 +1,6 @@
 import { data, redirect } from "react-router";
 
-import { defineAppChrome, PageHeader } from "~/features/app-shell";
+import { defineAppChrome } from "~/features/app-shell";
 import {
   birthdayKeys,
   loadMyEditableProfile,
@@ -77,16 +77,10 @@ export default function ProfileEditPage({
   actionData,
 }: Route.ComponentProps) {
   return (
-    <>
-      <PageHeader
-        title="프로필 편집"
-        back={`/profile/${loaderData.profile.pub_id}`}
-      />
-      <ProfileEditScreen
-        profile={loaderData.profile}
-        departments={loaderData.departments}
-        actionData={actionData}
-      />
-    </>
+    <ProfileEditScreen
+      profile={loaderData.profile}
+      departments={loaderData.departments}
+      actionData={actionData}
+    />
   );
 }
