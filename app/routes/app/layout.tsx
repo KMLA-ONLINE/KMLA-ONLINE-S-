@@ -24,7 +24,7 @@ import {
 import { resetFeed } from "~/features/feed";
 import { groupKeys } from "~/features/groups";
 import { notificationKeys } from "~/features/notifications";
-import { clearPostEngagement } from "~/features/posts";
+import { clearPostEngagement, collapseAllPostBodies } from "~/features/posts";
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
 import { useDelayedPending } from "~/shared/hooks/use-delayed-pending";
 import { getQueryClient } from "~/shared/lib/query-client";
@@ -86,6 +86,8 @@ export default function MainAppLayout() {
 
     // 새 서버 snapshot이 기준이 되어야 하므로, 명시적 새로고침 전에 표시용 뮤테이션 값을 버린다.
     clearPostEngagement(queryClient);
+    // 새로 읽은 목록은 접힌 채로 시작한다. 펼침 상태는 돌아왔을 때 위치를 맞추려고 기억해 둔 것이다.
+    collapseAllPostBodies();
 
     // 피드는 stale 표시가 아니라 리셋이다. 무한 쿼리에서 무효화는 "쌓인 페이지를 전부 다시
     // 읽어라"가 되는데, 당겨서 새로고침이 원하는 건 새 세션의 1페이지다. 스토리는 홈 로더가

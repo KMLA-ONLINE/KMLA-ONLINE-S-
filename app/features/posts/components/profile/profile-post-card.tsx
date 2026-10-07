@@ -47,7 +47,7 @@ export function ProfilePostCard({
       ) : (
         <>
           <div className="px-4">
-            <PostBodyClamp testId="profile-post-body">
+            <PostBodyClamp postId={post.post_id} testId="profile-post-body">
               <PostMarkdown>{post.body}</PostMarkdown>
             </PostBodyClamp>
           </div>
