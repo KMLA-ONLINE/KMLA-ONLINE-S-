@@ -2,6 +2,7 @@ import { useCallback, useState, type RefObject } from "react";
 import { useBeforeUnload, useBlocker } from "react-router";
 
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import { useReportUnsavedWork } from "~/shared/lib/unsaved-work";
 
 /** 작성 중인 글을 두고 나가려 할 때 확인을 받는다. 저장 중에는 풀어 두고, 나가면 올려 둔 파일을 치운다(실패해도 막지 않는다). */
 export function PostLeaveGuard({
@@ -23,6 +24,7 @@ export function PostLeaveGuard({
     ({ currentLocation, nextLocation }) =>
       dirty && !saving && currentLocation.pathname !== nextLocation.pathname,
   );
+  useReportUnsavedWork(dirty && !saving);
 
   useBeforeUnload(
     useCallback(

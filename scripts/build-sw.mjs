@@ -202,8 +202,10 @@ const { count, size, warnings } = await generateSW({
   dontCacheBustURLsMatching: /^assets\//,
   cleanupOutdatedCaches: true,
   clientsClaim: true,
-  // The app prompts before activating; see app/pwa/use-service-worker.ts.
-  skipWaiting: false,
+  // A new build activates as soon as it installs. Open pages keep running the
+  // old build until app/shared/hooks/use-service-worker.ts reloads them at a
+  // moment that loses nothing.
+  skipWaiting: true,
   sourcemap: false,
   maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
 });

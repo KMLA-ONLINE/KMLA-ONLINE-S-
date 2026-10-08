@@ -29,6 +29,10 @@ Files run in lexicographic order. Add new files with a number that follows their
 
 Never edit a deployed migration.
 
+## Changes that break open clients
+
+Production applies migrations before the new app is live, and installed apps keep running the old build until they update. When a migration drops or renames an RPC, an argument, or a column the previous build calls, raise `public.min_client_version()` in `schemas/01-foundation.sql` and `CLIENT_COMPAT_VERSION` in `app/features/app-version/model/client-version.ts` to the same value in that change. Older builds are then blocked until they update. A test fails when the two differ. Prefer additive migrations that need no bump.
+
 ## Remote projects
 
 `trftjcieogrewqptgidd` (dev, Vercel Preview) and `nvgtzkylunpefdvonioo` (prod, Production). Dev first, prod after it is checked in the deployed app.

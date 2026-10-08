@@ -9,6 +9,7 @@ import {
 } from "react-router";
 
 import type { Route } from "./+types/root";
+import { useUpdateRequired } from "~/features/app-version";
 import { ErrorPage } from "~/shared/components/error-page";
 import { Spinner } from "~/shared/ui/spinner";
 import { PwaPrompts } from "~/shared/components/pwa-prompts";
@@ -123,11 +124,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const updateRequired = useUpdateRequired();
+
   return (
     <QueryProvider>
       <ImageViewerProvider>
         <Outlet />
-        <PwaPrompts />
+        <PwaPrompts updateRequired={updateRequired} />
       </ImageViewerProvider>
     </QueryProvider>
   );
