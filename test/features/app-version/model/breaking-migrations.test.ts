@@ -28,7 +28,7 @@ const BREAKING_PATTERNS = [
     "i",
   ),
   new RegExp(
-    String.raw`\balter\s+(table|function|view|type)\s+(if\s+exists\s+)?(only\s+)?${PUBLIC}[\s\S]*\b(drop\s+(column\b|(?!constraint|default|not\s+null)\w)|rename\b)`,
+    String.raw`\balter\s+(table|function|view|type)\s+(if\s+exists\s+)?(only\s+)?${PUBLIC}[\s\S]*\b(drop\s+(column\b|(?!constraint|default|not\s+null)\w)|rename\b|(set\s+data\s+)?type\s|set\s+not\s+null\b)`,
     "i",
   ),
 ];
@@ -38,13 +38,20 @@ const BUMP = new RegExp(
 );
 const SAFE = /--[ \t]*client-compat:[ \t]*safe[ \t]+\S/i;
 
-/** 옛 앱을 깰 수 있는 문장들. 함수 본문과 주석은 실행되는 DDL이 아니므로 빼고 본다. */
-export function findBreakingStatements(sql: string): string[] {
-  const code = sql
-    .replace(/\$(\w*)\$[\s\S]*?\$\1\$/g, "")
-    .replace(/--[^\n]*/g, "");
+/**
+ * 실제로 실행되는 DDL만 남긴다. 함수 본문(달러 인용)과 주석은 지우고 문자열은 비운다.
+ * 한 번에 왼쪽부터 훑어야 문자열 안의 `--`나 `;`, 주석 안의 `'`에 속지 않는다.
+ */
+function executableSql(sql: string): string {
+  return sql.replace(
+    /\$(\w*)\$[\s\S]*?\$\1\$|'(?:[^']|'')*'|--[^\n]*|\/\*[\s\S]*?\*\//g,
+    (token) => (token.startsWith("'") ? "''" : ""),
+  );
+}
 
-  return code
+/** 옛 앱을 깰 수 있는 문장들. */
+export function findBreakingStatements(sql: string): string[] {
+  return executableSql(sql)
     .split(";")
     .map((statement) => statement.replace(/\s+/g, " ").trim())
     .filter((statement) =>
@@ -53,7 +60,7 @@ export function findBreakingStatements(sql: string): string[] {
 }
 
 export function needsClientCompatBump(sql: string): string[] {
-  if (BUMP.test(sql) || SAFE.test(sql)) return [];
+  if (BUMP.test(executableSql(sql)) || SAFE.test(sql)) return [];
   return findBreakingStatements(sql);
 }
 
@@ -63,6 +70,9 @@ describe("findBreakingStatements", () => {
     'alter table "public"."posts" drop column "legacy_title";',
     'ALTER TABLE ONLY "public"."posts"\n  RENAME COLUMN "body" TO "content";',
     "drop table public.old_things;",
+    'ALTER TABLE "public"."posts" ALTER COLUMN "author_id" TYPE uuid USING author_id::uuid;',
+    "alter table public.posts alter column title set not null;",
+    "comment on column public.t.c is 'old -- legacy'; drop table public.old;",
   ])("옛 앱을 깨는 문장을 잡는다: %s", (sql) => {
     expect(findBreakingStatements(sql)).toHaveLength(1);
   });
@@ -75,6 +85,8 @@ describe("findBreakingStatements", () => {
     'drop function if exists "private"."helper"();',
     "create function public.f() returns void language plpgsql as $$ begin drop table public.t; end $$;",
     "-- drop table public.t;\nselect 1;",
+    "comment on table public.t is 'drop table public.t; rename';",
+    "-- don't\nalter table public.t add column x text;",
   ])("깨지 않는 문장은 넘긴다: %s", (sql) => {
     expect(findBreakingStatements(sql)).toEqual([]);
   });
@@ -96,14 +108,44 @@ describe("findBreakingStatements", () => {
     expect(
       needsClientCompatBump(`-- client-compat: safe\n${drop}`),
     ).toHaveLength(1);
+    expect(
+      needsClientCompatBump(
+        `${drop}\n-- create or replace function public.min_client_version(`,
+      ),
+    ).toHaveLength(1);
   });
 });
 
+const DEFINED_VERSION = new RegExp(
+  String.raw`\bcreate\s+or\s+replace\s+function\s+${PUBLIC}"?min_client_version"?\s*\(\s*\)[\s\S]*?\$(\w*)\$\s*select\s+(\d+)\s*;?\s*\$\1\$`,
+  "i",
+);
+
 describe("supabase/migrations", () => {
   const dir = resolve(process.cwd(), "supabase/migrations");
-  const files = readdirSync(dir)
-    .filter((name) => name.endsWith(".sql") && name.slice(0, 14) > BASELINE)
+  const allFiles = readdirSync(dir)
+    .filter((name) => name.endsWith(".sql"))
     .sort();
+  const files = allFiles.filter((name) => name.slice(0, 14) > BASELINE);
+
+  it("최소 클라이언트 버전은 다시 정의될 때마다 올라간다", () => {
+    let previous = 0;
+    for (const name of allFiles) {
+      const sql = readFileSync(resolve(dir, name), "utf8");
+      if (!BUMP.test(executableSql(sql))) continue;
+
+      const version = Number(DEFINED_VERSION.exec(sql)?.[2]);
+      expect(
+        version,
+        `${name}: min_client_version()은 이전 값(${previous})보다 커야 합니다.`,
+      ).toBeGreaterThan(previous);
+      previous = version;
+    }
+    expect(
+      previous,
+      "min_client_version()을 정의한 마이그레이션이 없습니다.",
+    ).toBeGreaterThan(0);
+  });
 
   it.each(files.length > 0 ? files : ["(없음)"])(
     "%s는 옛 앱을 깨면 최소 클라이언트 버전을 올린다",

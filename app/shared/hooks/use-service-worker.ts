@@ -17,11 +17,15 @@ const UPDATE_CHECK_THROTTLE_MS = 5 * 60 * 1000;
  * 새 빌드는 묻지 않고 바로 활성화된다(`skipWaiting: true`). 그 순간부터 이 페이지가 돌리는
  * JS는 옛 빌드이고, 새 워커는 옛 청크를 precache에서 지운다. 남은 일은 페이지를 다시
  * 불러오는 것뿐이라 잃을 것이 없는 순간에 한다 — 앱을 연 뒤 아직 아무것도 만지지 않았을
- * 때, 앱이 화면에서 내려갈 때. 그 밖에는 `updateActivated`를 보고 다음 화면 이동이
- * 새로 불러온다(`useReloadOnNavigation`).
+ * 때는 여기서, 그 밖에는 `updateActivated`를 보고 다음 화면 이동 때
+ * (`useReloadOnNavigation`).
+ *
+ * 앱이 화면에서 내려갈 때는 새로고침하지 않는다. 안드로이드에서는 사진 선택창이나 카메라를
+ * 여는 것만으로 페이지가 숨겨져, 그때 다시 불러오면 업로드 흐름이 통째로 끊긴다.
  */
 export function useServiceWorker(reload = reloadPage) {
   const [updateActivated, setUpdateActivated] = useState(false);
+  const [updateChecksRunning, setUpdateChecksRunning] = useState(false);
   const checkNowRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -30,12 +34,7 @@ export function useServiceWorker(reload = reloadPage) {
 
     let cancelled = false;
     let interacted = false;
-    let activated = false;
     let stopUpdateChecks: (() => void) | null = null;
-
-    const reloadIfQuiet = () => {
-      if (activated && !hasUnsavedWork()) reload();
-    };
 
     // 앱을 연 직후에는 옛 화면이 먼저 뜨고 새 워커 설치가 몇 초 뒤에 끝난다. 그때까지
     // 사용자가 아무것도 만지지 않았다면 다시 불러와도 잃는 것이 없다.
@@ -46,12 +45,6 @@ export function useServiceWorker(reload = reloadPage) {
     };
     window.addEventListener("pointerdown", markInteracted, true);
     window.addEventListener("keydown", markInteracted, true);
-
-    // 다른 앱·탭으로 넘어가는 순간은 다시 불러와도 사용자가 보지 못한다.
-    const onHidden = () => {
-      if (document.visibilityState === "hidden") reloadIfQuiet();
-    };
-    document.addEventListener("visibilitychange", onHidden);
 
     void (async () => {
       const { Workbox } = await import("workbox-window");
@@ -68,11 +61,8 @@ export function useServiceWorker(reload = reloadPage) {
         // already runs the build the worker precached.
         if (!event.isUpdate) return;
 
-        activated = true;
         setUpdateActivated(true);
-        if (!interacted || document.visibilityState === "hidden") {
-          reloadIfQuiet();
-        }
+        if (!interacted && !hasUnsavedWork()) reload();
       });
 
       await wb.register();
@@ -87,13 +77,14 @@ export function useServiceWorker(reload = reloadPage) {
         });
       };
       const checkForUpdate = () => {
-        // A hidden tab reloads on its own once the worker changes, but checking
-        // costs a request for nobody; the visible check below covers the return.
+        // A hidden tab has nobody to show the new build to; the visible check
+        // below fires the moment it comes back.
         if (document.visibilityState !== "visible") return;
         if (Date.now() - lastCheckedAt < UPDATE_CHECK_THROTTLE_MS) return;
         runCheck();
       };
       checkNowRef.current = runCheck;
+      setUpdateChecksRunning(true);
 
       const pollTimer = window.setInterval(
         checkForUpdate,
@@ -117,7 +108,6 @@ export function useServiceWorker(reload = reloadPage) {
     return () => {
       cancelled = true;
       markInteracted();
-      document.removeEventListener("visibilitychange", onHidden);
       stopUpdateChecks?.();
     };
   }, [reload]);
@@ -127,5 +117,5 @@ export function useServiceWorker(reload = reloadPage) {
     checkNowRef.current?.();
   }, []);
 
-  return { updateActivated, checkForUpdateNow };
+  return { updateActivated, updateChecksRunning, checkForUpdateNow };
 }

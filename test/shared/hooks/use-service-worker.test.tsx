@@ -137,33 +137,33 @@ describe("useServiceWorker", () => {
     expect(result.current.updateActivated).toBe(true);
   });
 
-  it("앱이 화면에서 내려가면 새로고침한다", async () => {
+  it("앱이 화면에서 내려가도 새로고침하지 않는다", async () => {
+    // 안드로이드에서는 사진 선택창만 열어도 페이지가 숨겨진다. 업로드 흐름을 끊지 않는다.
     const { emit, reload } = await setupHook();
 
     emit("controlling", { isUpdate: true });
     hideDocument();
 
-    expect(reload).toHaveBeenCalledOnce();
+    expect(reload).not.toHaveBeenCalled();
   });
 
-  it("작성 중인 입력이 있으면 내려가도 새로고침하지 않는다", async () => {
-    const textarea = document.createElement("textarea");
-    textarea.value = "쓰던 댓글";
-    document.body.append(textarea);
-    const { emit, reload } = await setupHook({ interacted: false });
+  it("앱을 연 직후라도 작성 중인 입력이 있으면 새로고침하지 않는다", async () => {
+    const input = document.createElement("input");
+    input.type = "password";
+    input.value = "입력 중";
+    document.body.append(input);
+    const { emit, reload, result } = await setupHook({ interacted: false });
 
     emit("controlling", { isUpdate: true });
-    hideDocument();
 
     expect(reload).not.toHaveBeenCalled();
+    expect(result.current.updateActivated).toBe(true);
   });
 
-  it("새 빌드가 없으면 내려가도 새로고침하지 않는다", async () => {
-    const { reload } = await setupHook();
+  it("등록이 끝나야 새 빌드 확인이 돈다고 알린다", async () => {
+    const { result } = await setupHook();
 
-    hideDocument();
-
-    expect(reload).not.toHaveBeenCalled();
+    expect(result.current.updateChecksRunning).toBe(true);
   });
 
   it("탭이 다시 보이면 새 빌드가 나왔는지 확인한다", async () => {

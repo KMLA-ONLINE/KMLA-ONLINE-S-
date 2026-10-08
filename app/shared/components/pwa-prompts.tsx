@@ -1,5 +1,6 @@
 import { WifiOffIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 import { InstallPrompt } from "~/shared/components/install-prompt";
 import { useOffline } from "~/shared/hooks/use-offline";
@@ -36,11 +37,11 @@ export function PwaPrompts({
 }: {
   updateRequired?: boolean;
 }) {
-  useStaleChunkRecovery();
-
   const offline = useOffline();
-  const { updateActivated, checkForUpdateNow } = useServiceWorker();
-  useReloadOnNavigation(updateActivated);
+  const { updateActivated, updateChecksRunning, checkForUpdateNow } =
+    useServiceWorker();
+  const pendingNavigation = useReloadOnNavigation(updateActivated);
+  useStaleChunkRecovery(undefined, pendingNavigation);
 
   // 한 번만 자동으로 새로 불러온다. 작성 화면의 떠나기 확인에서 사용자가 머물기를 고르면
   // 그 뒤는 버튼에 맡긴다 — 다시 시도하면 확인 창이 끝없이 뜬다.
@@ -69,33 +70,10 @@ export function PwaPrompts({
 
   if (updateRequired) {
     return (
-      <div
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="update-required-title"
-        aria-describedby="update-required-description"
-        className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-background px-6 pt-[var(--app-safe-t)] pb-[var(--app-safe-b)] text-center"
-      >
-        <h2 id="update-required-title" className="text-lg font-semibold">
-          업데이트가 필요합니다
-        </h2>
-        <p
-          id="update-required-description"
-          className="max-w-xs text-sm text-muted-foreground"
-        >
-          {offline
-            ? "인터넷에 연결되면 새 버전을 받아 옵니다."
-            : "지금 버전은 더 이상 쓸 수 없습니다. 새 버전을 준비하는 대로 자동으로 바뀝니다."}
-        </p>
-        {!offline && <Spinner />}
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-        >
-          새로고침
-        </button>
-      </div>
+      <UpdateRequiredScreen
+        offline={offline}
+        waitsForNewBuild={updateChecksRunning}
+      />
     );
   }
 
@@ -113,5 +91,71 @@ export function PwaPrompts({
       )}
       <InstallPrompt blocked={offline} />
     </>
+  );
+}
+
+/**
+ * 지원이 끝난 버전을 막는 화면. 뒤의 앱은 보이지 않을 뿐 아니라 `inert`로 손이 닿지 않게
+ * 한다 — 덮기만 하면 키보드 사용자는 Tab으로 가려진 앱에 들어간다. 그래서 앱 트리 밖
+ * `body`에 붙이고 나머지 형제를 모두 잠근다.
+ *
+ * 서비스 워커가 없으면(지원하지 않는 브라우저, 등록 실패) 새 빌드를 기다려 줄 것이 없으므로
+ * 자동으로 바뀐다고 말하지 않고 새로고침을 권한다. 그때 새로고침은 서버에서 새 앱을 받는다.
+ */
+function UpdateRequiredScreen({
+  offline,
+  waitsForNewBuild,
+}: {
+  offline: boolean;
+  waitsForNewBuild: boolean;
+}) {
+  const screenRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const screen = screenRef.current;
+    if (!screen) return;
+
+    const locked = [...document.body.children].filter(
+      (element): element is HTMLElement =>
+        element instanceof HTMLElement && element !== screen && !element.inert,
+    );
+    for (const element of locked) element.inert = true;
+    return () => {
+      for (const element of locked) element.inert = false;
+    };
+  }, []);
+
+  return createPortal(
+    <div
+      ref={screenRef}
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="update-required-title"
+      aria-describedby="update-required-description"
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-background px-6 pt-[var(--app-safe-t)] pb-[var(--app-safe-b)] text-center"
+    >
+      <h2 id="update-required-title" className="text-lg font-semibold">
+        업데이트가 필요합니다
+      </h2>
+      <p
+        id="update-required-description"
+        className="max-w-xs text-sm text-muted-foreground"
+      >
+        {offline
+          ? "인터넷에 연결되면 새 버전을 받을 수 있습니다."
+          : waitsForNewBuild
+            ? "지금 버전은 더 이상 쓸 수 없습니다. 새 버전을 준비하는 대로 자동으로 바뀝니다."
+            : "지금 버전은 더 이상 쓸 수 없습니다. 새로고침해서 새 버전을 받아 주세요."}
+      </p>
+      {!offline && waitsForNewBuild && <Spinner />}
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+      >
+        새로고침
+      </button>
+    </div>,
+    document.body,
   );
 }

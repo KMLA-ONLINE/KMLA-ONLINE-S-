@@ -36,7 +36,7 @@ Production applies migrations before the new app is live, and open apps keep run
 - The previous build calls it in a way that now fails: raise `public.min_client_version()` in `schemas/01-foundation.sql` and `CLIENT_COMPAT_VERSION` in `app/features/app-version/model/client-version.ts` to the same new value. `npm run db:diff` puts the function change into the same draft. Older builds are blocked until they update.
 - It does not, for example an added defaulted argument or an RPC no build calls: add `-- client-compat: safe <reason>` to the migration.
 
-`test/features/app-version/model/breaking-migrations.test.ts` fails on a migration that does neither, and `client-version.test.ts` fails when the two values differ. The number only ever goes up; how high it gets does not matter. Prefer additive migrations, which need neither.
+`test/features/app-version/model/breaking-migrations.test.ts` fails on a migration that does neither, and `client-version.test.ts` fails when the two values differ. The number only ever goes up, which the same test checks; how high it gets does not matter. Never roll the app back past a bump: the older deployment is below the minimum, so every user stays blocked. Fix forward instead. Prefer additive migrations, which need neither.
 
 ## Remote projects
 

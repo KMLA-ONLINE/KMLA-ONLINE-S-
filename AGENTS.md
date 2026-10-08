@@ -97,4 +97,4 @@
 ## Deployment
 
 - Vercel serves static `build/client` with an SPA rewrite from `vercel.json`; there are no Vercel React Router server functions. Production requires `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
-- The PWA caches only the app shell, not feed data. A new service worker activates as soon as it installs, with no prompt; open pages reload when that loses nothing — on launch before any input, when hidden, or on the next route change.
+- The PWA caches only the app shell, not feed data. A new service worker activates as soon as it installs, with no prompt; open pages reload when that loses nothing — on launch before any input, or once the next route change lands. Never on `hidden`: opening a photo picker hides the page on Android.
