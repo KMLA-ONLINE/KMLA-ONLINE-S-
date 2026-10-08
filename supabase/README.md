@@ -31,12 +31,11 @@ Never edit a deployed migration.
 
 ## Changes that break open clients
 
-Production applies migrations before the new app is live, and open apps keep running the old build until they reload. When a migration drops, renames, or drop-and-recreates a `public` function, table, view, type, or column, decide in that migration:
+Production applies migrations before the new app is live, and open apps keep running the old build until they reload. `npm run check:compat` compares the generated `database.types.ts` with the one on `origin/main`. When something the deployed app could use is gone or changed (a removed function, table, column, or enum value; a new required argument or insert column; a changed type), `CLIENT_COMPAT_VERSION` must be higher than on `origin/main`.
 
-- The previous build calls it in a way that now fails: raise `public.min_client_version()` in `schemas/01-foundation.sql` and `CLIENT_COMPAT_VERSION` in `app/features/app-version/model/client-version.ts` to the same new value. `npm run db:diff` puts the function change into the same draft. Older builds are blocked until they update.
-- It does not, for example an added defaulted argument or an RPC no build calls: add `-- client-compat: safe <reason>` to the migration.
+When it fails, run `npm run client-compat:bump`. It raises `public.min_client_version()` in `schemas/01-foundation.sql` and `CLIENT_COMPAT_VERSION` together and drafts the migration; review and apply that draft like any other. A branch bumps once per release however many breaking changes it carries. Older builds are then blocked until they update.
 
-`test/features/app-version/model/breaking-migrations.test.ts` fails on a migration that does neither, and `client-version.test.ts` fails when the two values differ. The number only ever goes up, which the same test checks; how high it gets does not matter. Never roll the app back past a bump: the older deployment is below the minimum, so every user stays blocked. Fix forward instead. Prefer additive migrations, which need neither.
+Nobody decides by hand whether a change breaks: bumps are cheap, so anything doubtful counts. The check runs on commit (when the types or either version file is staged), in `npm run check`, and in CI, which also regenerates the types and fails when the committed file is stale. It cannot see behavior inside an unchanged signature, such as a function body or RLS policy that now rejects what the old app sends; bump by hand for those. Never roll the app back past a bump: the older deployment is below the minimum, so every user stays blocked. Fix forward instead.
 
 ## Remote projects
 

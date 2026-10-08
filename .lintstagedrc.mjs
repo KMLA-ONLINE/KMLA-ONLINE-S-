@@ -8,13 +8,13 @@
  * generated `database.types.ts`) would otherwise emit a warning that
  * `--max-warnings 0` turns into a failed commit.
  *
- * A staged migration or client-version file runs the client-compat tests, so a
- * migration that breaks open apps without a version decision fails at commit
- * rather than at push. Vitest's startup makes it about six seconds, paid only
- * on those commits. The function form drops the file list: the tests read the
- * migrations directory themselves.
+ * Staging the generated database types or the client version runs the
+ * client-compat check, so a contract break without a version bump fails at
+ * commit rather than at push. It compares committed files and takes about a
+ * second. The function form drops the file list: the check reads both files
+ * itself.
  */
-const CLIENT_COMPAT_TESTS = () => "vitest run test/features/app-version/model";
+const CLIENT_COMPAT_CHECK = () => "node scripts/check-client-compat.mjs";
 
 export default {
   "*.{ts,tsx,mjs}": [
@@ -22,7 +22,7 @@ export default {
     "prettier --write",
   ],
   "*.{json,jsonc,md,css,html,webmanifest,yml,yaml}": "prettier --write",
-  // One pattern, so staging both kinds of file still runs the tests once.
-  "{supabase/migrations/*.sql,supabase/schemas/01-foundation.sql,app/features/app-version/model/client-version.ts}":
-    CLIENT_COMPAT_TESTS,
+  // One pattern, so staging several of these still runs the check once.
+  "{app/shared/supabase/database.types.ts,app/features/app-version/model/client-version.ts,supabase/schemas/01-foundation.sql}":
+    CLIENT_COMPAT_CHECK,
 };

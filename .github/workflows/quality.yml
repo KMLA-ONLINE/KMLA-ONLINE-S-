@@ -27,6 +27,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The client-compat check in `npm run verify` compares the database types
+      # with what production runs. A shallow checkout has no main to compare to.
+      - name: Fetch main for the client-compat check
+        run: git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main
+
       - name: Start local Supabase
         run: npm run db:start
 
@@ -39,6 +44,11 @@ jobs:
       # supabase/schemas and supabase/migrations must build the same schema.
       - name: Check schema drift
         run: npm run db:drift
+
+      # The client-compat check trusts the committed types to match the
+      # migrations. Regenerate them from the migrated database and fail on drift.
+      - name: Check generated database types
+        run: npm run db:types && git diff --exit-code -- app/shared/supabase/database.types.ts
 
       # lint + format:check + typecheck + test, then the production SPA build
       # (which also runs scripts/build-sw.mjs and so proves the service worker
