@@ -31,7 +31,12 @@ Never edit a deployed migration.
 
 ## Changes that break open clients
 
-Production applies migrations before the new app is live, and installed apps keep running the old build until they update. When a migration drops or renames an RPC, an argument, or a column the previous build calls, raise `public.min_client_version()` in `schemas/01-foundation.sql` and `CLIENT_COMPAT_VERSION` in `app/features/app-version/model/client-version.ts` to the same value in that change. Older builds are then blocked until they update. A test fails when the two differ. Prefer additive migrations that need no bump.
+Production applies migrations before the new app is live, and open apps keep running the old build until they reload. When a migration drops, renames, or drop-and-recreates a `public` function, table, view, type, or column, decide in that migration:
+
+- The previous build calls it in a way that now fails: raise `public.min_client_version()` in `schemas/01-foundation.sql` and `CLIENT_COMPAT_VERSION` in `app/features/app-version/model/client-version.ts` to the same new value. `npm run db:diff` puts the function change into the same draft. Older builds are blocked until they update.
+- It does not, for example an added defaulted argument or an RPC no build calls: add `-- client-compat: safe <reason>` to the migration.
+
+`test/features/app-version/model/breaking-migrations.test.ts` fails on a migration that does neither, and `client-version.test.ts` fails when the two values differ. The number only ever goes up; how high it gets does not matter. Prefer additive migrations, which need neither.
 
 ## Remote projects
 
