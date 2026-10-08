@@ -27,6 +27,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The client-compat check in `npm run verify` compares the database types
+      # with what production runs. A shallow checkout has no main to compare to.
+      - name: Fetch main for the client-compat check
+        run: git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main
+
       - name: Start local Supabase
         run: npm run db:start
 
@@ -39,6 +44,11 @@ jobs:
       # supabase/schemas and supabase/migrations must build the same schema.
       - name: Check schema drift
         run: npm run db:drift
+
+      # The client-compat check trusts the committed types to match the
+      # migrations. Regenerate them from the migrated database and fail on drift.
+      - name: Check generated database types
+        run: npm run db:types && git diff --exit-code -- app/shared/supabase/database.types.ts
 
       # lint + format:check + typecheck + test, then the production SPA build
       # (which also runs scripts/build-sw.mjs and so proves the service worker
@@ -247,3 +257,22 @@ jobs:
 
           echo "Timed out waiting for Vercel deployment $deployment_id." >&2
           exit 1
+
+      # A deployment older than the last client-compat bump is below the
+      # database's minimum version, so rolling Vercel back to it blocks every
+      # user behind the update screen. Name that floor where the person rolling
+      # back will look.
+      - name: Report rollback floor
+        shell: bash
+        run: |
+          git fetch --no-tags --unshallow origin
+          version_file=app/features/app-version/model/client-version.ts
+          version="$(grep -oE 'CLIENT_COMPAT_VERSION = [0-9]+' "$version_file" | grep -oE '[0-9]+$')"
+          floor="$(git log -1 --format='%H' -G'CLIENT_COMPAT_VERSION = [0-9]+' -- "$version_file")"
+          {
+            echo "### 롤백 하한"
+            echo
+            echo "CLIENT_COMPAT_VERSION ${version}은 [\`${floor:0:7}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${floor}) — $(git log -1 --format='%s (%cs)' "$floor")에서 정해졌습니다."
+            echo
+            echo "**Vercel 롤백은 이 커밋 이후의 배포까지만 하세요.** 그 이전 배포는 지금 DB와 호환되지 않아 모든 사용자가 업데이트 화면에 막힙니다. 더 앞으로 되돌려야 하면 문제 커밋을 \`git revert\`해서 다시 배포하세요."
+          } >> "$GITHUB_STEP_SUMMARY"

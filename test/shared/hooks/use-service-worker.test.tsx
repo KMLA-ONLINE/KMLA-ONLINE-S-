@@ -11,7 +11,6 @@ type EventListener = (event: WorkboxEvent) => void;
 const workboxMock = vi.hoisted(() => ({
   instances: [] as {
     listeners: Map<string, EventListener[]>;
-    messageSkipWaiting: () => void;
     options: RegistrationOptions;
     update: () => Promise<void>;
   }[],
@@ -20,7 +19,6 @@ const workboxMock = vi.hoisted(() => ({
 vi.mock("workbox-window", () => ({
   Workbox: class {
     listeners = new Map<string, EventListener[]>();
-    messageSkipWaiting = vi.fn();
     options: RegistrationOptions;
 
     constructor(_scriptUrl: string, options: RegistrationOptions) {
@@ -48,12 +46,22 @@ const serviceWorkerDescriptor = Object.getOwnPropertyDescriptor(
 const STARTED_AT = 1_800_000_000_000;
 const PAST_THROTTLE_MS = 6 * 60 * 1000;
 
-/** 훅의 `APPLY_UPDATE_TIMEOUT_MS`와 같은 값. 바뀌면 이쪽도 따라와야 한다. */
-const APPLY_UPDATE_TIMEOUT_MS = 5000;
+function hideDocument() {
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: "hidden",
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
+}
 
-async function setupHook() {
+/**
+ * 기본은 사용자가 이미 화면을 만진 상태다. 앱을 연 직후의 새로고침은 그것을 보는
+ * 테스트에서만 일어나게 한다.
+ */
+async function setupHook({ interacted = true } = {}) {
   const reload = vi.fn();
   const view = renderHook(() => useServiceWorker(reload));
+  if (interacted) window.dispatchEvent(new Event("pointerdown"));
 
   await waitFor(() => expect(workboxMock.instances).toHaveLength(1));
 
@@ -84,6 +92,7 @@ describe("useServiceWorker", () => {
   });
 
   afterEach(() => {
+    document.body.innerHTML = "";
     vi.useRealTimers();
     vi.unstubAllEnvs();
     Reflect.deleteProperty(document, "visibilityState");
@@ -99,85 +108,62 @@ describe("useServiceWorker", () => {
   });
 
   it("첫 설치에서 현재 페이지를 새로고침하지 않는다", async () => {
-    const { emit, reload, workbox } = await setupHook();
+    const { emit, reload, result, workbox } = await setupHook({
+      interacted: false,
+    });
 
     expect(workbox.options).toEqual({ scope: "/", updateViaCache: "none" });
 
     emit("controlling", { isUpdate: false });
 
     expect(reload).not.toHaveBeenCalled();
+    expect(result.current.updateActivated).toBe(false);
   });
 
-  it("현재 탭이 수락한 업데이트가 제어권을 얻은 뒤 새로고침한다", async () => {
-    const { emit, reload, result, workbox } = await setupHook();
-
-    emit("waiting", { isUpdate: true });
-    act(() => result.current.applyUpdate());
-
-    expect(workbox.messageSkipWaiting).toHaveBeenCalledOnce();
-    expect(result.current.applyingUpdate).toBe(true);
-    expect(reload).not.toHaveBeenCalled();
+  it("앱을 연 뒤 아직 만지지 않았으면 새 빌드가 활성화되자마자 새로고침한다", async () => {
+    const { emit, reload } = await setupHook({ interacted: false });
 
     emit("controlling", { isUpdate: true });
+
     expect(reload).toHaveBeenCalledOnce();
   });
 
-  it("다른 탭이 적용한 업데이트는 사용자 수락 전까지 새로고침하지 않는다", async () => {
-    const { emit, reload, result, workbox } = await setupHook();
-
-    emit("controlling", { isUpdate: true });
-
-    expect(result.current.updateReady).toBe(true);
-    expect(result.current.updateAppliedElsewhere).toBe(true);
-    expect(reload).not.toHaveBeenCalled();
-
-    act(() => result.current.applyUpdate());
-
-    expect(reload).toHaveBeenCalledOnce();
-    expect(workbox.messageSkipWaiting).not.toHaveBeenCalled();
-  });
-
-  it("외부 적용 뒤 새 업데이트가 대기하면 최신 SW를 적용한다", async () => {
-    const { emit, reload, result, workbox } = await setupHook();
-
-    emit("controlling", { isUpdate: true });
-    emit("waiting", { isUpdate: true });
-
-    expect(result.current.updateAppliedElsewhere).toBe(false);
-    act(() => result.current.applyUpdate());
-
-    expect(workbox.messageSkipWaiting).toHaveBeenCalledOnce();
-    expect(reload).not.toHaveBeenCalled();
-  });
-
-  it("적용이 응답 없이 멈추면 새로고침으로 빠져나온다", async () => {
+  it("사용 중이면 새로고침하지 않고 활성화만 알린다", async () => {
     const { emit, reload, result } = await setupHook();
 
-    emit("waiting", { isUpdate: true });
-
-    vi.useFakeTimers();
-    act(() => result.current.applyUpdate());
-    expect(reload).not.toHaveBeenCalled();
-
-    act(() => void vi.advanceTimersByTime(APPLY_UPDATE_TIMEOUT_MS));
-
-    expect(reload).toHaveBeenCalledOnce();
-  });
-
-  it("제때 적용되면 예비 새로고침을 취소한다", async () => {
-    const { emit, reload, result } = await setupHook();
-
-    emit("waiting", { isUpdate: true });
-
-    vi.useFakeTimers();
-    act(() => result.current.applyUpdate());
     emit("controlling", { isUpdate: true });
 
-    expect(reload).toHaveBeenCalledOnce();
+    expect(reload).not.toHaveBeenCalled();
+    expect(result.current.updateActivated).toBe(true);
+  });
 
-    act(() => void vi.advanceTimersByTime(APPLY_UPDATE_TIMEOUT_MS * 2));
+  it("앱이 화면에서 내려가도 새로고침하지 않는다", async () => {
+    // 안드로이드에서는 사진 선택창만 열어도 페이지가 숨겨진다. 업로드 흐름을 끊지 않는다.
+    const { emit, reload } = await setupHook();
 
-    expect(reload).toHaveBeenCalledOnce();
+    emit("controlling", { isUpdate: true });
+    hideDocument();
+
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("앱을 연 직후라도 작성 중인 입력이 있으면 새로고침하지 않는다", async () => {
+    const input = document.createElement("input");
+    input.type = "password";
+    input.value = "입력 중";
+    document.body.append(input);
+    const { emit, reload, result } = await setupHook({ interacted: false });
+
+    emit("controlling", { isUpdate: true });
+
+    expect(reload).not.toHaveBeenCalled();
+    expect(result.current.updateActivated).toBe(true);
+  });
+
+  it("등록이 끝나야 새 빌드 확인이 돈다고 알린다", async () => {
+    const { result } = await setupHook();
+
+    expect(result.current.updateChecksRunning).toBe(true);
   });
 
   it("탭이 다시 보이면 새 빌드가 나왔는지 확인한다", async () => {
@@ -220,5 +206,14 @@ describe("useServiceWorker", () => {
     document.dispatchEvent(new Event("visibilitychange"));
 
     expect(workbox.update).not.toHaveBeenCalled();
+  });
+
+  it("지금 확인은 쓰로틀을 건너뛴다", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(STARTED_AT);
+    const { result, workbox } = await setupHook();
+
+    act(() => result.current.checkForUpdateNow());
+
+    expect(workbox.update).toHaveBeenCalledOnce();
   });
 });

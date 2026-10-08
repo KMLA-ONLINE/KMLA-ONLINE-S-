@@ -2379,6 +2379,7 @@ export type Database = {
         Args: { p_notification_id: string }
         Returns: boolean
       }
+      min_client_version: { Args: never; Returns: number }
       move_group_category: {
         Args: { p_category_id: string; p_direction: number }
         Returns: {

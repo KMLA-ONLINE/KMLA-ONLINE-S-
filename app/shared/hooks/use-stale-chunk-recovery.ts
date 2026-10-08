@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, type RefObject } from "react";
+import { createPath, type Location } from "react-router";
 
 const reloadPage = () => window.location.reload();
 
@@ -38,7 +39,31 @@ function writeReloadMark(at: number): void {
  * 닿지만 그 전에 오류 화면이 한 번 지나간다 — 사용자가 한 일은 링크를 누른 것뿐이라
  * 조용히 넘기는 편이 맞다.
  */
-export function useStaleChunkRecovery(reload = reloadPage) {
+/**
+ * 이동하려던 화면을 새로 연다. 지금 화면을 새로고침하면 링크를 누른 것이 없던 일이 된다.
+ *
+ * React Router의 브라우저 기록 형식(`{ usr, key, idx }`)으로 항목을 쌓은 뒤 새로고침해서,
+ * 실어 보낸 `location.state`가 새 페이지에서도 살아 있게 한다. `replace` 이동이었는지는
+ * 알 수 없어 항목을 하나 더 쌓는다. 청크가 사라졌을 때만 오는 길이라 그 정도는 감수한다.
+ */
+function openFresh(location: Location, reload: () => void): void {
+  const current = window.history.state as { idx?: number } | null;
+  window.history.pushState(
+    {
+      usr: location.state as unknown,
+      key: location.key,
+      idx: (current?.idx ?? 0) + 1,
+    },
+    "",
+    createPath(location),
+  );
+  reload();
+}
+
+export function useStaleChunkRecovery(
+  reload = reloadPage,
+  pendingNavigation?: RefObject<Location | null>,
+) {
   useEffect(() => {
     // 개발 서버에서는 청크가 사라지지 않는다. HMR이 낸 오류를 새로고침으로 덮으면
     // 고쳐야 할 것이 안 보인다.
@@ -58,11 +83,13 @@ export function useStaleChunkRecovery(reload = reloadPage) {
       event.preventDefault();
       recovered = true;
       writeReloadMark(now);
-      reload();
+      const target = pendingNavigation?.current;
+      if (target) openFresh(target, reload);
+      else reload();
     };
 
     window.addEventListener("vite:preloadError", onPreloadError);
     return () =>
       window.removeEventListener("vite:preloadError", onPreloadError);
-  }, [reload]);
+  }, [pendingNavigation, reload]);
 }

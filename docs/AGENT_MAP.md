@@ -98,6 +98,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | `admin`            | Approval review, admin roster, permission-based managers, storage cleanup status                                                            | §16                                                 |
 | `app-shell`        | Header, sidebar, tab bar, `PageHeader`, `ScrollRegion`, pull-to-refresh, shell data, `handle.chrome`                                        | §3                                                  |
+| `app-version`      | Minimum client version check that blocks builds the database no longer supports                                                             | §3.9                                                |
 | `auth`             | Sign-up, login, OTP, password reset and change, profile setup, signup draft                                                                 | §4, §5                                              |
 | `feed`             | Home integrated feed, infinite feed session, feed cache surgery                                                                             | §6 and `docs/FEED_ALGORITHM.md`                     |
 | `groups`           | Group home, discover, detail, membership, roles, invites, group settings, group media                                                       | §7                                                  |
@@ -191,6 +192,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `mark_all_my_notifications_read`              | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
 | `mark_group_posts_visited`                    | `groups/data/mutations.ts`                                                      | `31-posts.sql`                |
 | `mark_my_notification_read`                   | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
+| `min_client_version`                          | `app-version/data/queries.ts`                                                   | `01-foundation.sql`           |
 | `move_group_category`                         | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `prepare_comment_image`                       | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `prepare_group_media`                         | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |

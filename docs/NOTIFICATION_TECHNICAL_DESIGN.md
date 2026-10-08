@@ -238,7 +238,7 @@ badge를 갱신하며 창 복귀 시 revalidation을 fallback으로 사용한다
 granted로 남은 채 구독만 해지되므로, 새로 구독하면 사용자가 끈 알림이 저절로 켜진다.
 
 Push 권한 설명은 승인 사용자의 gate 아래에서 표시한다. 사용자 동작 안에서만 브라우저 권한을 요청하고,
-기기·계정별 prompt 상태는 versioned localStorage key에 저장한다. 서비스 워커 업데이트, iOS 설치 안내,
+기기·계정별 prompt 상태는 versioned localStorage key에 저장한다. 연결 끊김, iOS 설치 안내,
 Push 권한과 일반 설치 안내가 겹치지 않도록 전역 PWA prompt 우선순위를 둔다.
 
 ## 9. 지원 환경

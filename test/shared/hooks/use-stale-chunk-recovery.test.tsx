@@ -31,6 +31,33 @@ describe("useStaleChunkRecovery", () => {
     expect(reload).toHaveBeenCalledOnce();
   });
 
+  it("이동 중에 실패하면 지금 화면 대신 가려던 화면을 연다", () => {
+    const reload = vi.fn();
+    const pending = {
+      current: {
+        pathname: "/groups/a",
+        search: "?tab=posts",
+        hash: "",
+        state: { from: "group" },
+        key: "next",
+      },
+    };
+    window.history.replaceState({ usr: null, key: "default", idx: 3 }, "", "/");
+    renderHook(() => useStaleChunkRecovery(reload, pending));
+
+    firePreloadError();
+
+    expect(window.location.pathname + window.location.search).toBe(
+      "/groups/a?tab=posts",
+    );
+    expect(window.history.state).toEqual({
+      usr: { from: "group" },
+      key: "next",
+      idx: 4,
+    });
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
   it("되살린 직후 또 실패하면 손을 떼고 오류를 흘려보낸다", () => {
     const { unmount } = renderHook(() => useStaleChunkRecovery(vi.fn()));
     firePreloadError();

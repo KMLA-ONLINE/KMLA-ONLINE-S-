@@ -29,6 +29,14 @@ Files run in lexicographic order. Add new files with a number that follows their
 
 Never edit a deployed migration.
 
+## Changes that break open clients
+
+Production applies migrations before the new app is live, and open apps keep running the old build until they reload. `npm run check:compat` compares the generated `database.types.ts` with the one on `origin/main`. When something the deployed app could use is gone or changed (a removed function, table, column, or enum value; a new required argument or insert column; a changed type), `CLIENT_COMPAT_VERSION` must be higher than on `origin/main`.
+
+When it fails, run `npm run client-compat:bump`. It raises `public.min_client_version()` in `schemas/01-foundation.sql` and `CLIENT_COMPAT_VERSION` together and drafts the migration; review and apply that draft like any other. A branch bumps once per release however many breaking changes it carries. Older builds are then blocked until they update.
+
+Nobody decides by hand whether a change breaks: bumps are cheap, so anything doubtful counts. The check runs on commit (when the types or either version file is staged), in `npm run check`, and in CI, which also regenerates the types and fails when the committed file is stale. It cannot see behavior inside an unchanged signature, such as a function body or RLS policy that now rejects what the old app sends; bump by hand for those. Never roll the app back past a bump: the older deployment is below the minimum, so every user stays blocked. Fix forward instead.
+
 ## Remote projects
 
 `trftjcieogrewqptgidd` (dev, Vercel Preview) and `nvgtzkylunpefdvonioo` (prod, Production). Dev first, prod after it is checked in the deployed app.

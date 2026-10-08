@@ -24,6 +24,7 @@ import type {
 } from "~/features/profiles/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useReportUnsavedWork } from "~/shared/lib/unsaved-work";
 import { Button, buttonVariants } from "~/shared/ui/button";
 import { DateSelect } from "~/shared/ui/date-select";
 import {
@@ -578,6 +579,7 @@ function LeaveGuard({
   enabled: boolean;
 }) {
   const blocker = useBlocker(when);
+  useReportUnsavedWork(enabled);
 
   useBeforeUnload(
     useCallback(

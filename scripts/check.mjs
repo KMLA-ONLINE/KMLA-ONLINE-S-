@@ -27,11 +27,16 @@ const FORMAT = { name: "prettier", script: "format:check" };
 // 한다. 검사가 100ms 남짓이라 편집 루프(`--static`)에도 같이 둔다 — 라우트나 Supabase 호출을
 // 추가한 순간에 알려 주는 것이 나중에 찾는 것보다 싸다.
 const MAP = { name: "agent-map", script: "check:map" };
+// 배포된 앱이 쓰는 DB 계약이 깨졌는데 최소 클라이언트 버전을 안 올렸는지. 커밋된 파일 둘을
+// 비교할 뿐이라 1초 남짓이다.
+const COMPAT = { name: "client-compat", script: "check:compat" };
 const TEST = { name: "vitest", script: "test" };
 
 // `--static`은 편집 루프용이라 포맷 검사를 뺀다. 커밋할 때 lint-staged가 `prettier --write`로
 // 이미 고쳐 주므로, 여기서 같은 것을 다시 물어봐야 손으로 할 일이 생기지 않는다.
-const PARALLEL = staticOnly ? [LINT, TYPES, MAP] : [LINT, FORMAT, TYPES, MAP];
+const PARALLEL = staticOnly
+  ? [LINT, TYPES, MAP, COMPAT]
+  : [LINT, FORMAT, TYPES, MAP, COMPAT];
 
 const width = Math.max(...[...PARALLEL, TEST].map((task) => task.name.length));
 

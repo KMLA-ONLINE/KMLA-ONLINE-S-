@@ -47,3 +47,20 @@ GRANT USAGE ON SCHEMA "public" TO "postgres";
 GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
 GRANT USAGE ON SCHEMA "public" TO "service_role";
+
+-- 열려 있는 옛 앱이 이 DB와 함께 쓰일 수 있는 최소 클라이언트 버전. 이보다 낮은 앱은 업데이트 전까지
+-- 화면이 막힌다. 로그인 전 화면도 확인하므로 anon에게 연다.
+-- 손으로 고치지 않는다. `npm run client-compat:bump`가 앱의 `CLIENT_COMPAT_VERSION`과 함께 올린다.
+CREATE OR REPLACE FUNCTION "public"."min_client_version"() RETURNS integer
+    LANGUAGE "sql" IMMUTABLE
+    SET "search_path" TO ''
+    AS $$
+  select 1;
+$$;
+
+ALTER FUNCTION "public"."min_client_version"() OWNER TO "postgres";
+
+REVOKE ALL ON FUNCTION "public"."min_client_version"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."min_client_version"() TO "anon";
+GRANT ALL ON FUNCTION "public"."min_client_version"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."min_client_version"() TO "service_role";
