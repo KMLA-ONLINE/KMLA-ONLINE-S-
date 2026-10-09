@@ -177,7 +177,8 @@ export function CommentItem({
 
       <div className="flex min-w-0 flex-1 items-start gap-1">
         <div className="min-w-0 flex-1">
-          <div className="w-fit">
+          {/* `wrap-break-word`는 min-content에 반영되지 않아, 상한이 없으면 공백 없는 긴 낱말만큼 `w-fit`이 넓어진다. */}
+          <div className="w-fit max-w-full">
             <div className="flex items-center gap-1.5">
               {linksToProfile ? (
                 <Link
