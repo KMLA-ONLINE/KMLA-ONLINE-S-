@@ -4,14 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   listNotifications: vi.fn(),
   markAllNotificationsRead: vi.fn(),
-  markNotificationRead: vi.fn(),
 }));
 
 vi.mock("~/features/notifications", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   listNotifications: mocks.listNotifications,
   markAllNotificationsRead: mocks.markAllNotificationsRead,
-  markNotificationRead: mocks.markNotificationRead,
 }));
 
 import { clientAction, clientLoader } from "~/routes/app/notifications";
@@ -62,18 +60,13 @@ describe("notification inbox route", () => {
     });
   });
 
-  it("dispatches one and all read intents", async () => {
-    mocks.markNotificationRead.mockResolvedValue(true);
+  it("dispatches the mark-all intent", async () => {
     mocks.markAllNotificationsRead.mockResolvedValue(3);
 
-    await expect(
-      actionRequest({ intent: "mark-one", notificationId: "notification-id" }),
-    ).resolves.toEqual({ marked: 1 });
     await expect(actionRequest({ intent: "mark-all" })).resolves.toEqual({
       marked: 3,
     });
 
-    expect(mocks.markNotificationRead).toHaveBeenCalledWith("notification-id");
     expect(mocks.markAllNotificationsRead).toHaveBeenCalledOnce();
   });
 });

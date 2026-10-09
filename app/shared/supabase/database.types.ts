@@ -2375,10 +2375,6 @@ export type Database = {
         Args: { p_group_id: string }
         Returns: undefined
       }
-      mark_my_notification_read: {
-        Args: { p_notification_id: string }
-        Returns: boolean
-      }
       move_group_category: {
         Args: { p_category_id: string; p_direction: number }
         Returns: {

@@ -108,12 +108,12 @@ select is(
   'recent unread count includes unread activity from the last day'
 );
 select ok(
-  public.mark_my_notification_read('70000000-0000-0000-0000-000000000001'),
-  'a recipient can mark one notification read'
+  public.resolve_my_notification_destination('70000000-0000-0000-0000-000000000001') is not null,
+  'a recipient can open one notification'
 );
 select ok(
   (select read_at is not null from public.notifications where id = '70000000-0000-0000-0000-000000000001'),
-  'mark read stores the read timestamp'
+  'opening a notification stores the read timestamp'
 );
 select is(
   public.get_my_recent_unread_notification_count(),

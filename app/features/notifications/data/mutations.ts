@@ -4,14 +4,6 @@ import type {
 } from "~/features/notifications/model/types";
 import { getSupabase } from "~/shared/supabase/client";
 
-export async function markNotificationRead(id: string): Promise<boolean> {
-  const { data, error } = await getSupabase().rpc("mark_my_notification_read", {
-    p_notification_id: id,
-  });
-  if (error) throw error;
-  return data;
-}
-
 export async function markAllNotificationsRead(): Promise<number> {
   const { data, error } = await getSupabase().rpc(
     "mark_all_my_notifications_read",

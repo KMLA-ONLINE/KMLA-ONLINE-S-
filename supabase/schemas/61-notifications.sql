@@ -590,24 +590,6 @@ end;
 $$;
 alter function public.list_my_notifications(timestamptz, uuid, integer) owner to postgres;
 
-create or replace function public.mark_my_notification_read(p_notification_id uuid)
-returns boolean
-language plpgsql security definer
-set search_path = ''
-as $$
-begin
-  if auth.uid() is null or private.current_profile_id() is null then
-    raise exception 'accepted profile required' using errcode = '42501';
-  end if;
-  update public.notifications
-  set read_at = coalesce(read_at, now())
-  where id = p_notification_id
-    and recipient_profile_id = private.current_profile_id();
-  return found;
-end;
-$$;
-alter function public.mark_my_notification_read(uuid) owner to postgres;
-
 create or replace function public.mark_all_my_notifications_read()
 returns bigint
 language plpgsql security definer
@@ -1716,8 +1698,6 @@ revoke all on function private.notify_group_anonymous_activity_restricted() from
 
 revoke all on function public.list_my_notifications(timestamptz, uuid, integer) from public;
 grant execute on function public.list_my_notifications(timestamptz, uuid, integer) to authenticated;
-revoke all on function public.mark_my_notification_read(uuid) from public;
-grant execute on function public.mark_my_notification_read(uuid) to authenticated;
 revoke all on function public.mark_all_my_notifications_read() from public;
 grant execute on function public.mark_all_my_notifications_read() to authenticated;
 revoke all on function public.get_my_recent_unread_notification_count() from public;

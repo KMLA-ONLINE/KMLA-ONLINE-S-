@@ -24,7 +24,10 @@ export const groupKeys = {
   detail: (slug: string) => [...groupKeys.details(), slug] as const,
   categories: (groupId: string) =>
     [...groupKeys.all, "categories", groupId] as const,
-  postPages: (groupId: string) => [...groupKeys.all, "posts", groupId] as const,
+  /** 모든 그룹의 게시물 목록. 어느 그룹이 바뀌었는지 모를 때 한꺼번에 stale로 둔다. */
+  postPageLists: () => [...groupKeys.all, "posts"] as const,
+  postPages: (groupId: string) =>
+    [...groupKeys.postPageLists(), groupId] as const,
   posts: (
     groupId: string,
     categoryId: string | null,

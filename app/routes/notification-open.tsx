@@ -2,9 +2,11 @@ import { useEffect, useRef } from "react";
 import { replace, useNavigate } from "react-router";
 
 import {
+  invalidateOpenedNotification,
   resolveNotificationDestination,
   sanitizeNotificationDestination,
 } from "~/features/notifications";
+import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/notification-open";
 import {
   hasBackEntry,
@@ -40,6 +42,7 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   }
 
   const target = sanitizeNotificationDestination(destination);
+  await invalidateOpenedNotification(getQueryClient());
   return { target };
 }
 

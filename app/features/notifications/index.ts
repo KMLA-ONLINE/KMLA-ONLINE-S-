@@ -1,5 +1,6 @@
 export {
   notificationBadgeQuery,
+  invalidateOpenedNotification,
   notificationKeys,
 } from "~/features/notifications/data/cache";
 export {
@@ -12,7 +13,6 @@ export {
 } from "~/features/notifications/data/queries";
 export {
   markAllNotificationsRead,
-  markNotificationRead,
   updateGroupNotificationPreferences,
   updateNotificationPreferences,
 } from "~/features/notifications/data/mutations";
