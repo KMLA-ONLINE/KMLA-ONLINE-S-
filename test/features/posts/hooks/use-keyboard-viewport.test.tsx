@@ -48,7 +48,11 @@ describe("useKeyboardViewport", () => {
 
     const { result } = renderHook(() => useKeyboardViewport(true));
 
-    expect(result.current).toEqual({ bottomInset: 300, height: 500 });
+    expect(result.current).toEqual({
+      keyboardOpen: true,
+      bottomInset: 300,
+      height: 500,
+    });
   });
 
   it("does not double-correct a resized layout viewport", () => {
@@ -63,7 +67,11 @@ describe("useKeyboardViewport", () => {
       visualViewport.dispatchEvent(new Event("resize"));
     });
 
-    expect(result.current).toEqual({ bottomInset: 0, height: 500 });
+    expect(result.current).toEqual({
+      keyboardOpen: false,
+      bottomInset: 0,
+      height: 500,
+    });
   });
 
   it("accounts for a visual viewport panned by the browser", () => {
@@ -75,20 +83,49 @@ describe("useKeyboardViewport", () => {
       visualViewport.dispatchEvent(new Event("scroll"));
     });
 
-    expect(result.current).toEqual({ bottomInset: 200, height: 500 });
+    expect(result.current).toEqual({
+      keyboardOpen: true,
+      bottomInset: 200,
+      height: 500,
+    });
+  });
+
+  it("still reports the keyboard once the browser pans it fully into view", () => {
+    const { result } = renderHook(() => useKeyboardViewport(true));
+
+    // 안드로이드 Chrome: 키보드 높이만큼 화면을 끌어올려 가려진 아래쪽이 남지 않는다.
+    visualViewport.height = 500;
+    visualViewport.offsetTop = 300;
+    act(() => {
+      visualViewport.dispatchEvent(new Event("resize"));
+    });
+
+    expect(result.current).toEqual({
+      keyboardOpen: true,
+      bottomInset: 0,
+      height: 500,
+    });
   });
 
   it("ignores browser chrome changes and pinch zoom", () => {
     visualViewport.height = 760;
     const { result } = renderHook(() => useKeyboardViewport(true));
 
-    expect(result.current).toEqual({ bottomInset: 0, height: 760 });
+    expect(result.current).toEqual({
+      keyboardOpen: false,
+      bottomInset: 0,
+      height: 760,
+    });
 
     visualViewport.scale = 1.5;
     act(() => {
       visualViewport.dispatchEvent(new Event("resize"));
     });
-    expect(result.current).toEqual({ bottomInset: 0, height: null });
+    expect(result.current).toEqual({
+      keyboardOpen: false,
+      bottomInset: 0,
+      height: null,
+    });
   });
 
   it("does nothing while disabled", () => {
@@ -96,6 +133,10 @@ describe("useKeyboardViewport", () => {
 
     const { result } = renderHook(() => useKeyboardViewport(false));
 
-    expect(result.current).toEqual({ bottomInset: 0, height: null });
+    expect(result.current).toEqual({
+      keyboardOpen: false,
+      bottomInset: 0,
+      height: null,
+    });
   });
 });
