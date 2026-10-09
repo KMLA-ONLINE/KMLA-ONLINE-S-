@@ -28,11 +28,12 @@ export function NotificationPermissionCard({
     if (hasHandledNotificationPrompt(profileId)) return;
     let cancelled = false;
     void getPushSupport().then((support) => {
+      // 아직 한 번도 묻지 않은 기기에만 띄운다(기능 명세 §14.10). 허용한 기기의 서버 구독 확인은
+      // 앱을 열 때 빠진 기록을 다시 등록하는 중이거나 요청이 실패하면 "아니오"로 올 수 있어 믿지 않는다.
+      // 허용한 뒤 끈 사람은 알림 설정에서 다시 켠다. 거절한 기기에는 묻기를 반복하지 않는다.
       if (!cancelled) {
         setEligible(
-          support.state === "available" &&
-            support.permission !== "denied" &&
-            !support.subscribed,
+          support.state === "available" && support.permission === "default",
         );
       }
     });

@@ -15,6 +15,7 @@ vi.mock("~/features/notifications", async (importOriginal) => ({
   resolveNotificationDestination: mocks.resolveNotificationDestination,
 }));
 
+import { getQueryClient } from "~/shared/lib/query-client";
 import NotificationOpenRoute, {
   clientLoader,
 } from "~/routes/notification-open";
@@ -83,6 +84,27 @@ describe("notification open route", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     Reflect.deleteProperty(window.history, "length");
+  });
+
+  /**
+   * 회귀: 그룹을 본 지 2분이 안 됐으면 상세 밑에 깔리는 그룹 loader가 캐시된 옛 목록을 썼다. 상세를
+   * 닫으면 그 목록이 남아, 알림으로 연 새 글이 그룹에서 안 보였다.
+   */
+  it("marks cached group post lists stale before opening the destination", async () => {
+    mocks.resolveNotificationDestination.mockResolvedValue(
+      "/groups/test/posts/post-id",
+    );
+    const key = [
+      "groups",
+      "posts",
+      "group-id",
+      { categoryId: null, cursor: null },
+    ];
+    getQueryClient().setQueryData(key, { posts: [], nextCursor: null });
+
+    await load();
+
+    expect(getQueryClient().getQueryState(key)?.isInvalidated).toBe(true);
   });
 
   it("redirects an authenticated user only to a safe resolved path", async () => {

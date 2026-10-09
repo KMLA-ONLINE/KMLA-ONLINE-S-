@@ -109,7 +109,6 @@ Push 발송 직전에 기기 상태, 최신 유형·그룹 설정과 현재 대�
 클라이언트는 다음의 좁은 authenticated RPC만 사용한다.
 
 - `list_my_notifications`
-- `mark_my_notification_read`
 - `mark_all_my_notifications_read`
 - `get_my_recent_unread_notification_count`
 - `get_my_notification_preferences`

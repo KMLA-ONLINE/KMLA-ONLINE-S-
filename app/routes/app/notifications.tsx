@@ -5,7 +5,6 @@ import {
   getNotificationCursor,
   listNotifications,
   markAllNotificationsRead,
-  markNotificationRead,
 } from "~/features/notifications";
 import { NotificationInbox } from "~/features/notifications/components/notification-inbox";
 import type { NotificationCursor } from "~/features/notifications";
@@ -40,14 +39,6 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   // 다시 invalidate하면 그 RPC를 한 번 더 끝낸 뒤 gate가 또 요청하게 된다.
   if (intent === "mark-all") {
     const marked = await markAllNotificationsRead();
-    return { marked };
-  }
-  if (intent === "mark-one") {
-    const notificationId = formData.get("notificationId");
-    if (typeof notificationId !== "string" || !notificationId) {
-      return data({ error: "알림을 찾을 수 없습니다." }, { status: 400 });
-    }
-    const marked = (await markNotificationRead(notificationId)) ? 1 : 0;
     return { marked };
   }
 

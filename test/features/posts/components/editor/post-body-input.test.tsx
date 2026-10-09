@@ -8,7 +8,7 @@ import {
   type PostBodyInputHandle,
 } from "~/features/posts/components/editor/post-body-input";
 
-const { insertMention } = vi.hoisted(() => ({ insertMention: vi.fn() }));
+const { insertMentions } = vi.hoisted(() => ({ insertMentions: vi.fn() }));
 
 vi.mock(
   "~/features/posts/components/editor/desktop-markdown-editor",
@@ -21,14 +21,14 @@ vi.mock(
       initialValue: string;
       handleRef?: React.RefObject<PostBodyInputHandle | null>;
     }) {
-      useImperativeHandle(handleRef, () => ({ insertMention }));
+      useImperativeHandle(handleRef, () => ({ insertMentions }));
       return <div aria-label="Milkdown 본문">{initialValue}</div>;
     }
     return { default: MockMarkdownEditor };
   },
 );
 
-beforeEach(() => insertMention.mockClear());
+beforeEach(() => insertMentions.mockClear());
 
 function InputWithExternalHandle() {
   const handle = useRef<PostBodyInputHandle>(null);
@@ -37,7 +37,9 @@ function InputWithExternalHandle() {
       <PostBodyInput value="**서식 본문**" handleRef={handle} />
       <button
         type="button"
-        onClick={() => handle.current?.insertMention("한별", 7)}
+        onClick={() =>
+          handle.current?.insertMentions([{ label: "한별", ordinal: 7 }])
+        }
       >
         멘션 넣기
       </button>
@@ -60,6 +62,8 @@ describe("PostBodyInput", () => {
     );
     await user.click(screen.getByRole("button", { name: "멘션 넣기" }));
 
-    expect(insertMention).toHaveBeenCalledWith("한별", 7);
+    expect(insertMentions).toHaveBeenCalledWith([
+      { label: "한별", ordinal: 7 },
+    ]);
   });
 });

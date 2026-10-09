@@ -145,7 +145,7 @@ export function PostDetailDialog({
   const commentSheet = commentsOnly && sheetViewport;
   const keyboardViewport = useKeyboardViewport(sheetViewport);
   const mobileDetailKeyboardOpen =
-    !commentSheet && keyboardViewport.bottomInset > 0;
+    !commentSheet && keyboardViewport.keyboardOpen;
 
   useEffect(() => {
     if (!replyingTo || keyboardViewport.height === null) return;
@@ -167,7 +167,12 @@ export function PostDetailDialog({
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [keyboardViewport.bottomInset, keyboardViewport.height, replyingTo]);
+  }, [
+    keyboardViewport.bottomInset,
+    keyboardViewport.height,
+    keyboardViewport.keyboardOpen,
+    replyingTo,
+  ]);
 
   // 본문 영역이 액션 바에서 부르는 핸들러다. JSX 안에서 즉석 클로저로 만들면 render 중에
   // ref를 읽는 것으로 잡힌다.
@@ -336,10 +341,11 @@ export function PostDetailDialog({
         style={
           sheetViewport
             ? ({
-                bottom:
-                  keyboardViewport.bottomInset > 0
-                    ? `${keyboardViewport.bottomInset}px`
-                    : undefined,
+                // 보이는 영역의 아래에 붙인다. 화면이 끌어올려졌으면 가려진 아래쪽이 0이라
+                // 레이아웃 바닥에 붙고, 그 자리가 곧 보이는 영역의 바닥이다.
+                bottom: keyboardViewport.keyboardOpen
+                  ? `${keyboardViewport.bottomInset}px`
+                  : undefined,
                 top: mobileDetailKeyboardOpen ? "auto" : undefined,
                 maxHeight:
                   keyboardViewport.height === null
@@ -453,10 +459,10 @@ export function PostDetailDialog({
           />
         ) : null}
         <CommentComposer
-          /** 키보드가 없을 때만 홈 인디케이터 여백을 준다. iOS Safari는 키보드가 떠도 `env(safe-area-inset-bottom)`이 0이 아니라 `bottomInset`으로 판단한다. */
+          /** 키보드가 없을 때만 홈 인디케이터 여백을 준다. iOS Safari는 키보드가 떠도 `env(safe-area-inset-bottom)`이 0이 아니라 `keyboardOpen`으로 판단한다. */
           className={cn(
             "border-t p-3",
-            keyboardViewport.bottomInset === 0 &&
+            !keyboardViewport.keyboardOpen &&
               "pb-[calc(0.75rem+var(--app-safe-b))]",
           )}
           viewer={viewer}

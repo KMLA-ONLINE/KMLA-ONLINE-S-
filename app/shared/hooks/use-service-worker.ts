@@ -1,10 +1,65 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { Workbox } from "workbox-window";
 
 const reloadPage = () => window.location.reload();
 const APPLY_UPDATE_TIMEOUT_MS = 5000;
 const UPDATE_POLL_INTERVAL_MS = 60 * 60 * 1000;
 const UPDATE_CHECK_THROTTLE_MS = 5 * 60 * 1000;
+
+/** 수동 확인의 결과. `found`는 새 빌드를 받는 중이라 곧 `updateReady`가 된다. */
+export type UpdateCheckResult = "latest" | "found" | "failed";
+
+export interface AppUpdateState {
+  updateReady: boolean;
+  applyingUpdate: boolean;
+  updateAppliedElsewhere: boolean;
+  /** 서비스 워커가 없으면(개발 서버, 미지원 브라우저) null이다. */
+  checkForUpdate: (() => Promise<UpdateCheckResult>) | null;
+  applyUpdate: () => void;
+}
+
+/**
+ * 워커는 루트의 `useServiceWorker` 하나가 소유한다. 설정·업데이트 기록 화면의 버전 카드가 같은 상태를
+ * 읽고 같은 확인·적용을 부르도록 그 훅이 여기에 내놓는다. 두 번째 Workbox를 만들면 이벤트가 갈라진다.
+ */
+const INITIAL_APP_UPDATE: AppUpdateState = {
+  updateReady: false,
+  applyingUpdate: false,
+  updateAppliedElsewhere: false,
+  checkForUpdate: null,
+  applyUpdate: () => undefined,
+};
+let appUpdate = INITIAL_APP_UPDATE;
+const appUpdateListeners = new Set<() => void>();
+
+function publishAppUpdate(next: Partial<AppUpdateState>) {
+  appUpdate = { ...appUpdate, ...next };
+  appUpdateListeners.forEach((listener) => listener());
+}
+
+function subscribeAppUpdate(listener: () => void) {
+  appUpdateListeners.add(listener);
+  return () => appUpdateListeners.delete(listener);
+}
+
+/** 루트의 `useServiceWorker`가 내놓은 업데이트 상태와 동작. */
+export function useAppUpdate(): AppUpdateState {
+  return useSyncExternalStore(
+    subscribeAppUpdate,
+    () => appUpdate,
+    () => INITIAL_APP_UPDATE,
+  );
+}
+
+export function resetAppUpdateForTests(): void {
+  appUpdate = INITIAL_APP_UPDATE;
+}
 
 /**
  * Registers the Workbox service worker that `scripts/build-sw.mjs` emits.
@@ -78,6 +133,23 @@ export function useServiceWorker(reload = reloadPage) {
 
       // sw.js is only refetched on a document navigation, which an SPA never does, so poll for updates ourselves.
       let lastCheckedAt = Date.now();
+
+      // 사람이 누른 확인은 쓰로틀을 건너뛴다. 새 빌드를 찾으면 `waiting`이 이어서 와 배너와 카드가 함께 바뀐다.
+      publishAppUpdate({
+        checkForUpdate: async () => {
+          lastCheckedAt = Date.now();
+          try {
+            await wb.update();
+          } catch {
+            return "failed";
+          }
+          const registration = await navigator.serviceWorker.getRegistration();
+          return registration?.installing || registration?.waiting
+            ? "found"
+            : "latest";
+        },
+      });
+
       const checkForUpdate = () => {
         // A background tab cannot show the banner anyway, and the visible check
         // below fires the moment it comes back.
@@ -111,6 +183,7 @@ export function useServiceWorker(reload = reloadPage) {
       cancelled = true;
       stopUpdateChecks?.();
       clearApplyTimeout();
+      publishAppUpdate({ checkForUpdate: null });
     };
   }, [clearApplyTimeout, reload]);
 
@@ -130,6 +203,15 @@ export function useServiceWorker(reload = reloadPage) {
     );
     void wbRef.current?.messageSkipWaiting();
   }, [reload]);
+
+  useEffect(() => {
+    publishAppUpdate({
+      updateReady,
+      applyingUpdate,
+      updateAppliedElsewhere,
+      applyUpdate,
+    });
+  }, [updateReady, applyingUpdate, updateAppliedElsewhere, applyUpdate]);
 
   return {
     updateReady,

@@ -1,3 +1,5 @@
+import { execSync } from "node:child_process";
+
 import { reactRouter } from "@react-router/dev/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, loadEnv } from "vite";
@@ -27,10 +29,36 @@ function fillSiteUrlFromVercel(mode: string): void {
   process.env.VITE_SITE_URL = `https://${host}`;
 }
 
+/**
+ * 앱이 보여주는 버전. 사람이 번호를 매기지 않고 빌드한 커밋과 시각으로 대신한다(기능 명세 §15.12).
+ *
+ * Vercel 빌드는 커밋을 환경 변수로 넣어 준다. 얕은 clone이라 `git`에 기대지 않고 그 값을 먼저 쓰며,
+ * 로컬 빌드에서만 `git`으로 읽는다. 둘 다 없으면 커밋 없이 시각만 남긴다.
+ */
+function readBuildCommit(): string | null {
+  const fromVercel = process.env.VERCEL_GIT_COMMIT_SHA;
+  if (fromVercel) return fromVercel.slice(0, 7);
+  try {
+    return execSync("git rev-parse --short=7 HEAD", {
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+  } catch {
+    return null;
+  }
+}
+
 export default defineConfig(({ mode }) => {
   fillSiteUrlFromVercel(mode);
 
   return {
+    define: {
+      __APP_BUILD__: JSON.stringify({
+        commit: readBuildCommit(),
+        builtAt: new Date().toISOString(),
+      }),
+    },
     plugins: [tailwindcss(), reactRouter()],
     resolve: {
       tsconfigPaths: true,

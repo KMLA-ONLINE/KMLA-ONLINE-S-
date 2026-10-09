@@ -590,6 +590,8 @@ end;
 $$;
 alter function public.list_my_notifications(timestamptz, uuid, integer) owner to postgres;
 
+-- 지금 앱은 부르지 않는다. 알림을 열면 resolve_my_notification_destination이 읽음까지 처리한다.
+-- 업데이트를 수락하지 않은 PWA가 아직 이 함수를 부르므로, 그 번들이 사라진 뒤의 릴리스에서 지운다.
 create or replace function public.mark_my_notification_read(p_notification_id uuid)
 returns boolean
 language plpgsql security definer

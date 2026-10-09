@@ -45,6 +45,26 @@ describe("shouldRevalidatePostDetail", () => {
     ).toBe(false);
   });
 
+  it("keeps a list of posts while a reaction list opens and closes", () => {
+    const list = createPostListRevalidation();
+    expect(
+      list(
+        args(
+          "https://kmla.online/groups/test",
+          "https://kmla.online/groups/test?reactions=post%3Apost-id",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      shouldRevalidatePostDetail(
+        args(
+          "https://kmla.online/groups/test/posts/post-id?reactions=comment%3Ac1",
+          "https://kmla.online/groups/test/posts/post-id",
+        ),
+      ),
+    ).toBe(false);
+  });
+
   it("still revalidates for other query changes and mutations", () => {
     expect(
       shouldRevalidatePostDetail(

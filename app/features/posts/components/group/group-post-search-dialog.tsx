@@ -6,8 +6,9 @@ import {
   type FormEvent,
   type RefObject,
 } from "react";
-import { Link } from "react-router";
+import { Link, useNavigation } from "react-router";
 
+import { groupKeys } from "~/features/groups/data/cache";
 import { searchGroupPosts } from "~/features/posts/data/queries";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { postAuthorName } from "~/features/posts/model/identity";
@@ -15,6 +16,7 @@ import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
 import type { GroupPostSearchResult } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
+import { getQueryClient } from "~/shared/lib/query-client";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 import {
@@ -26,6 +28,7 @@ import {
 } from "~/shared/ui/dialog";
 import { Input } from "~/shared/ui/input";
 import { Spinner } from "~/shared/ui/spinner";
+import { cn } from "~/shared/lib/utils";
 
 /** 모바일은 전체화면, 데스크톱은 가운데 dialog. `svh`는 주소창이 접힐 때 화면이 튀지 않게 한다. */
 const SEARCH_DIALOG_CLASS =
@@ -66,6 +69,19 @@ export function GroupPostSearchDialog({
   );
 }
 
+/**
+ * 검색 결과를 기억해 두되 믿지는 않는다. 결과에서 게시물을 열었다 돌아오면 이 패널이 다시 마운트되는데, 기억한
+ * 결과로 첫 화면을 바로 그리고 같은 검색을 뒤에서 다시 돌려 갈아 끼운다. 기억만 쓰면 그사이 올라온 글이나
+ * 볼 수 없게 된 글이 반영되지 않는다.
+ */
+function searchQuery(groupId: string, query: string) {
+  return {
+    queryKey: groupKeys.postSearch(groupId, query),
+    queryFn: () => searchGroupPosts(groupId, query),
+    staleTime: 0,
+  };
+}
+
 /** 끝난 검색 한 번. 어느 검색어의 결과인지 함께 들고 있어야 지금 검색어의 것인지 가릴 수 있다. */
 interface SettledSearch {
   query: string;
@@ -91,7 +107,17 @@ function SearchPanel({
 }) {
   const [query, setQuery] = useState(submittedQuery);
   const [composing, setComposing] = useState(false);
-  const [settled, setSettled] = useState<SettledSearch | null>(null);
+  // 돌아온 길이면 기억해 둔 결과로 첫 화면부터 그린다.
+  const [settled, setSettled] = useState<SettledSearch | null>(() => {
+    if (!submittedQuery) return null;
+    const results = getQueryClient().getQueryData<GroupPostSearchResult[]>(
+      groupKeys.postSearch(groupId, submittedQuery),
+    );
+    return results ? { query: submittedQuery, results, error: null } : null;
+  });
+  const navigation = useNavigation();
+  const openingPath =
+    navigation.state === "loading" ? navigation.location.pathname : null;
 
   useEffect(() => {
     if (!submittedQuery) return;
@@ -99,16 +125,23 @@ function SearchPanel({
     let current = true;
     void (async () => {
       try {
-        const results = await searchGroupPosts(groupId, submittedQuery);
+        const results = await getQueryClient().fetchQuery(
+          searchQuery(groupId, submittedQuery),
+        );
         if (current)
           setSettled({ query: submittedQuery, results, error: null });
       } catch {
-        if (current)
-          setSettled({
-            query: submittedQuery,
-            results: [],
-            error: "검색 결과를 불러오지 못했습니다.",
-          });
+        if (!current) return;
+        // 기억한 결과를 보여주는 중이면 다시 읽기가 실패했다고 지우지 않는다.
+        setSettled((previous) =>
+          previous?.query === submittedQuery && !previous.error
+            ? previous
+            : {
+                query: submittedQuery,
+                results: [],
+                error: "검색 결과를 불러오지 못했습니다.",
+              },
+        );
       }
     })();
 
@@ -190,35 +223,45 @@ function SearchPanel({
           </p>
         ) : (
           <ul className="flex flex-col divide-y divide-border/70">
-            {current.results.map((post) => (
-              <li key={post.post_id}>
-                {/* 게시물 주소엔 검색 param이 없어 이동하면 검색이 닫히고, 뒤로가기로 URL의 검색어가 복원된다. */}
-                <Link
-                  to={groupPostPath(slug, post.post_id)}
-                  state={FROM_GROUP}
-                  className="flex flex-col gap-1 px-4 py-3 transition-colors hover:bg-muted/60"
-                >
-                  <div className="flex items-center gap-2">
-                    {post.category_name ? (
-                      <Badge variant="secondary" className="shrink-0">
-                        {post.category_name}
-                      </Badge>
-                    ) : null}
-                    <p className="line-clamp-1 text-sm font-medium">
-                      {post.title}
+            {current.results.map((post) => {
+              const path = groupPostPath(slug, post.post_id);
+              // 그룹 위에 뜨는 상세라 레이아웃이 skeleton을 그리지 않는다. 불러오는 동안 누른 행이 알린다.
+              const opening = openingPath === path;
+              return (
+                <li key={post.post_id}>
+                  {/* 게시물 주소엔 검색 param이 없어 이동하면 검색이 닫히고, 뒤로가기로 URL의 검색어가 복원된다. */}
+                  <Link
+                    to={path}
+                    state={FROM_GROUP}
+                    aria-busy={opening || undefined}
+                    className={cn(
+                      "flex flex-col gap-1 px-4 py-3 transition-colors hover:bg-muted/60",
+                      opening && "bg-muted/60",
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      {post.category_name ? (
+                        <Badge variant="secondary" className="shrink-0">
+                          {post.category_name}
+                        </Badge>
+                      ) : null}
+                      <p className="line-clamp-1 min-w-0 flex-1 text-sm font-medium">
+                        {post.title}
+                      </p>
+                      {opening ? <Spinner className="shrink-0" /> : null}
+                    </div>
+                    <p className="line-clamp-2 text-xs text-muted-foreground">
+                      {extractPostPlainText(post.body)}
                     </p>
-                  </div>
-                  <p className="line-clamp-2 text-xs text-muted-foreground">
-                    {extractPostPlainText(post.body)}
-                  </p>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="truncate">{postAuthorName(post)}</span>
-                    <span aria-hidden="true">·</span>
-                    <RelativeTime value={post.published_at} />
-                  </div>
-                </Link>
-              </li>
-            ))}
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="truncate">{postAuthorName(post)}</span>
+                      <span aria-hidden="true">·</span>
+                      <RelativeTime value={post.published_at} />
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

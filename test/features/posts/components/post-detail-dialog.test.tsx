@@ -219,6 +219,28 @@ describe("PostDetailDialog", () => {
     );
   });
 
+  /**
+   * 회귀: 안드로이드 Chrome은 키보드를 띄우며 화면을 키보드 높이만큼 끌어올린다. 그러면 가려진
+   * 아래쪽이 0이라 키보드가 없는 것으로 읽혀, 위에 붙은 상세 모달의 윗부분이 화면 밖으로 밀리고
+   * 답글 대상이 보이는 것으로 계산되어 스크롤도 하지 않았다.
+   */
+  it("keeps a mobile post detail inside a visual viewport the keyboard pushed up", async () => {
+    stubPostDetailViewport({ sheet: true });
+    stubVisualViewport(500, 300);
+    renderRoute(Detail, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id"],
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole("dialog")).toHaveStyle({
+        bottom: "0px",
+        top: "auto",
+        maxHeight: "500px",
+      }),
+    );
+  });
+
   it("scrolls only enough to reveal a reply target after resizing", async () => {
     stubPostDetailViewport({ sheet: true });
     stubVisualViewport(500);

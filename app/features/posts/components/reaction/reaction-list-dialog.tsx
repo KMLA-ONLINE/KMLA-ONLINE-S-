@@ -150,8 +150,11 @@ export function ReactionListDialog({
                   className="flex items-center gap-3 rounded-lg px-2 py-1.5"
                 >
                   {row.reactor_pub_id && row.reactor_name ? (
+                    // 목록이 push한 entry를 프로필로 바꾼다. 돌아왔을 때 화면이 다시 그려지면
+                    // 목록을 연 버튼을 찾지 못해, 목록 없는 entry에서 뒤로가기를 한 번 헛누르게 된다.
                     <Link
                       to={`/profile/${row.reactor_pub_id}`}
+                      replace
                       className="flex min-w-0 flex-1 items-center gap-3 rounded-lg hover:underline"
                     >
                       <ReactorAvatar reaction={row.reaction}>

@@ -72,6 +72,30 @@ describe("PostBodyClamp", () => {
     expect(screen.getByRole("button", { name: "접기" })).toBeInTheDocument();
   });
 
+  it("re-measures an expanded post after its body was edited shorter", async () => {
+    const scrollHeight = vi
+      .spyOn(HTMLElement.prototype, "scrollHeight", "get")
+      .mockReturnValue(400);
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(72);
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <PostBodyClamp postId="edited-post">
+        <p>긴 본문</p>
+      </PostBodyClamp>,
+    );
+    await user.click(screen.getByRole("button", { name: "더 보기" }));
+    unmount();
+
+    scrollHeight.mockReturnValue(48);
+    render(
+      <PostBodyClamp postId="edited-post">
+        <p>짧은 본문</p>
+      </PostBodyClamp>,
+    );
+
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
   it("shows the clamp button on the first render when the post was measured before", () => {
     vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(400);
     vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(72);

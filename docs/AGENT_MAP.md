@@ -190,7 +190,6 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `list_profile_posts`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `mark_all_my_notifications_read`              | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
 | `mark_group_posts_visited`                    | `groups/data/mutations.ts`                                                      | `31-posts.sql`                |
-| `mark_my_notification_read`                   | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
 | `move_group_category`                         | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `prepare_comment_image`                       | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `prepare_group_media`                         | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |

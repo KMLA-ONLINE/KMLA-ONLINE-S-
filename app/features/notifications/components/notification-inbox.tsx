@@ -1,10 +1,13 @@
 import { BellIcon, CheckCheckIcon, SettingsIcon } from "lucide-react";
-import { useState } from "react";
-import { Link, useFetcher } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState, type MouseEvent } from "react";
+import { Link, useFetcher, useNavigate } from "react-router";
 
 import { PageHeader } from "~/features/app-shell";
 import { NotificationAvatar } from "~/features/notifications/components/notification-avatar";
 import { NotificationPermissionCard } from "~/features/notifications/components/notification-permission-card";
+import { invalidateOpenedNotification } from "~/features/notifications/data/cache";
+import { resolveNotificationDestination } from "~/features/notifications/data/queries";
 import {
   getNotificationMessage,
   groupNotifications,
@@ -59,11 +62,48 @@ function NotificationRow({
   item: NotificationItem;
   forceRead: boolean;
 }) {
-  const readFetcher = useFetcher();
-  const unread =
-    !forceRead &&
-    !isRead(item) &&
-    readFetcher.formData?.get("notificationId") !== item.id;
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [opening, setOpening] = useState(false);
+  const unread = !forceRead && !isRead(item) && !opening;
+  const landingPath = `/noti/open/${encodeURIComponent(item.id)}`;
+
+  /**
+   * 목적지를 여기서 풀고 곧장 간다. `/noti/open`은 앱 셸 밖이라 거쳐 가면 셸이 내려가고, 목적지 loader가
+   * 게이트부터 다시 도는 동안 흰 화면이 남는다. 그 route는 Push처럼 앱 밖에서 들어오는 길에만 쓴다.
+   * 목적지 RPC가 읽음 처리까지 하므로 따로 읽음 요청을 보내지 않는다.
+   */
+  const open = async (event: MouseEvent<HTMLAnchorElement>) => {
+    // 새 탭·새 창으로 여는 손짓은 브라우저에 맡긴다.
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
+    event.preventDefault();
+    if (opening) return;
+    setOpening(true);
+
+    let destination: string | null = null;
+    try {
+      destination = await resolveNotificationDestination(item.id);
+    } catch {
+      // 풀지 못했으면 착지 route가 재시도와 로그인 이동을 맡는다.
+    }
+    if (destination === null) {
+      void navigate(landingPath);
+      return;
+    }
+    // 목적지 loader보다 먼저 stale로 둬야 그 loader가 옛 그룹 목록을 쓰지 않는다.
+    await invalidateOpenedNotification(queryClient);
+    // 글이 지워졌거나 볼 수 없게 되면 목적지가 알림함 자신이다. 화면이 그대로 남으므로 눌림 표시를
+    // 풀어야 다시 누를 수 있다. 같은 주소로의 이동은 알림함을 다시 읽어 읽음 표시도 맞춘다.
+    await navigate(destination, { replace: destination === "/noti" });
+    setOpening(false);
+  };
   const name = actorName(item);
   const others = item.actor_count > 1 ? ` 외 ${item.actor_count - 1}명` : "";
   // 생성 타입은 RPC의 모든 열을 non-null로 적지만, 그룹과 무관한 알림은 실제로 비어서 온다.
@@ -71,18 +111,13 @@ function NotificationRow({
 
   return (
     <Link
-      to={`/noti/open/${encodeURIComponent(item.id)}`}
-      onClick={() => {
-        if (unread) {
-          void readFetcher.submit(
-            { intent: "mark-one", notificationId: item.id },
-            { method: "post", action: "/noti" },
-          );
-        }
-      }}
+      to={landingPath}
+      aria-busy={opening || undefined}
+      onClick={(event) => void open(event)}
       className={cn(
         "flex gap-3 px-4 py-3 transition-colors outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
         unread && "bg-primary/5 hover:bg-primary/10",
+        opening && "bg-muted/50",
       )}
     >
       <NotificationAvatar item={item} name={name} />
@@ -232,15 +267,29 @@ export function NotificationInbox({
         hideOnScroll
         title="알림"
         actions={
-          <Button
-            variant="ghost"
-            size="icon"
-            nativeButton={false}
-            aria-label="알림 설정"
-            render={<Link to="/noti/settings" />}
-          >
-            <SettingsIcon />
-          </Button>
+          <>
+            <markAllFetcher.Form method="post" action="/noti">
+              <input type="hidden" name="intent" value="mark-all" />
+              <Button
+                type="submit"
+                variant="ghost"
+                size="icon"
+                aria-label="모두 읽음"
+                disabled={markAllPending || allLoadedRead}
+              >
+                <CheckCheckIcon />
+              </Button>
+            </markAllFetcher.Form>
+            <Button
+              variant="ghost"
+              size="icon"
+              nativeButton={false}
+              aria-label="알림 설정"
+              render={<Link to="/noti/settings" />}
+            >
+              <SettingsIcon />
+            </Button>
+          </>
         }
       />
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
@@ -262,7 +311,7 @@ export function NotificationInbox({
                 <CheckCheckIcon /> 모두 읽음
               </Button>
             </markAllFetcher.Form>
-            {/* 데스크톱에서는 PageHeader가 숨겨져 설정 링크를 여기에도 둔다. */}
+            {/* 데스크톱에서는 PageHeader가 숨겨져 모두 읽음과 설정 링크를 여기에도 둔다. */}
             <Button
               variant="ghost"
               size="icon-sm"

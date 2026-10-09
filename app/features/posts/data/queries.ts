@@ -279,9 +279,20 @@ export async function searchGroupPosts(
   return data ?? [];
 }
 
+/**
+ * 첨부 목록은 게시물 RPC의 결과가 필요 없으므로 같이 띄운다. 기다렸다 부르면 상세를 열 때마다 왕복 하나가 더 붙는다.
+ * 게시물이 없으면 첨부 쪽 실패는 의미가 없으니 버린다 — 읽을 수 없는 글의 첨부 RPC는 거절될 수 있다.
+ */
+function startPostAttachments(postId: string): Promise<PostAttachment[]> {
+  const attachments = listPostAttachments(postId);
+  attachments.catch(() => undefined);
+  return attachments;
+}
+
 export async function getGroupPost(
   postId: string,
 ): Promise<GroupPostDetail | null> {
+  const attachments = startPostAttachments(postId);
   const { data, error } = await getSupabase().rpc("get_group_post", {
     p_post_id: postId,
   });
@@ -289,7 +300,7 @@ export async function getGroupPost(
   const post = data?.[0];
   if (!post) return null;
   const [hydrated] = await hydrateGroupPostMedia([
-    { ...withMentions(post), attachments: await listPostAttachments(postId) },
+    { ...withMentions(post), attachments: await attachments },
   ]);
   return hydrated;
 }
@@ -323,6 +334,7 @@ export async function listProfilePosts(
 export async function getProfilePost(
   postId: string,
 ): Promise<ProfilePost | null> {
+  const attachments = startPostAttachments(postId);
   const { data, error } = await getSupabase().rpc("get_profile_post", {
     p_post_id: postId,
   });
@@ -330,7 +342,7 @@ export async function getProfilePost(
   const post = data?.[0];
   if (!post) return null;
   const [hydrated] = await attachProfileMedia([
-    { ...post, attachments: await listPostAttachments(postId) },
+    { ...post, attachments: await attachments },
   ]);
   return hydrated;
 }

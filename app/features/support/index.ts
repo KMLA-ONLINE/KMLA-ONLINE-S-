@@ -1,3 +1,4 @@
+export { AppVersionCard } from "./components/app-version-card";
 export { FaqScreen } from "./components/faq-screen";
 export { ReleaseNotesScreen } from "./components/release-notes-screen";
 export { faqSections, supportContacts, supportNote } from "./content/faq";
