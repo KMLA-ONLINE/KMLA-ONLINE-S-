@@ -1,7 +1,7 @@
 import { StaffMark } from "~/features/posts/components/staff-mark";
 import type { MentionDraftEntry } from "~/features/posts/model/mentions";
 import { MoreHorizontalIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { Link } from "react-router";
 
 import {
@@ -18,6 +18,7 @@ import { CommentText } from "~/features/posts/components/comment/comment-text";
 import { CommentImage } from "~/features/posts/components/comment/comment-image";
 import { PostAuthorAvatar } from "~/features/posts/components/post-author-avatar";
 import { useCommentReactors } from "~/features/posts/hooks/use-comment-reactors";
+import { useReactionListParam } from "~/features/posts/hooks/use-reaction-list-param";
 import type {
   CommentImageInput,
   PostComment,
@@ -81,7 +82,6 @@ export function CommentItem({
 }) {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [reactorsOpen, setReactorsOpen] = useState(false);
   const [restrictionOpen, setRestrictionOpen] = useState(false);
   const [restricted, setRestricted] = useState(
     comment.anonymous_author_restricted,
@@ -90,6 +90,12 @@ export function CommentItem({
     comment.anonymous_author_restriction_expires_at,
   );
   const reactors = useCommentReactors(comment.comment_id);
+  const reactorList = useReactionListParam(`comment:${comment.comment_id}`);
+  const loadReactors = useEffectEvent(reactors.load);
+  // 뒤로 갔다가 앞으로 와서 다시 열려도 목록이 비지 않게, 누를 때가 아니라 열릴 때 받는다.
+  useEffect(() => {
+    if (reactorList.open) loadReactors();
+  }, [reactorList.open]);
 
   // 삭제된 댓글은 답글이 살아 있는 동안만 자리를 지킨다(없애면 답글 사슬이 끊긴다). 본문과
   // 작성자, 반응과 메뉴는 전부 사라지고 자국만 남는다.
@@ -261,16 +267,15 @@ export function CommentItem({
             ) : null}
             <CommentReactionSummary
               summary={comment}
-              onOpen={() => {
-                setReactorsOpen(true);
-                reactors.load();
-              }}
+              onOpen={reactorList.show}
             />
           </div>
 
           <ReactionListDialog
-            open={reactorsOpen}
-            onOpenChange={setReactorsOpen}
+            open={reactorList.open}
+            onOpenChange={(open) => {
+              if (!open) reactorList.close();
+            }}
             reactors={reactors.reactors}
             loading={reactors.loading}
             title="댓글 반응"

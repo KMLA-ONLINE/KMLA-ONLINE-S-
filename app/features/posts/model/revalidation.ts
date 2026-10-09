@@ -4,10 +4,10 @@ import type {
 } from "react-router";
 
 /**
- * loader가 읽지 않는 UI 전용 URL 상태(이미지 뷰어 `image`, 댓글 시트 `view`). 안드로이드 뒤로가기로 닫히도록 URL에 산다.
+ * loader가 읽지 않는 UI 전용 URL 상태(이미지 뷰어 `image`, 댓글 시트 `view`, 반응 목록 `reactions`). 안드로이드 뒤로가기로 닫히도록 URL에 산다.
  * 목록 화면의 오버레이 파라미터가 하나라도 빠지면 여닫기만으로 loader가 다시 돌아 쌓은 페이지가 버려진다.
  */
-const POST_UI_SEARCH_PARAMS = ["image", "view"] as const;
+const POST_UI_SEARCH_PARAMS = ["image", "view", "reactions"] as const;
 
 /** `ignoredKeys`를 뺀 나머지 검색 파라미터가 두 URL에서 같은가. 키 순서는 보지 않는다. */
 function isUiOnlySearchChange(

@@ -1,5 +1,5 @@
 import { MessageCircleIcon, SendIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useEffectEvent } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 
@@ -7,6 +7,7 @@ import { PostReactionButton } from "~/features/posts/components/reaction/post-re
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { ReactionListDialog } from "~/features/posts/components/reaction/reaction-list-dialog";
 import { usePostReaction } from "~/features/posts/hooks/use-post-reaction";
+import { useReactionListParam } from "~/features/posts/hooks/use-reaction-list-param";
 import { usePostEngagement } from "~/features/posts/hooks/use-post-engagement";
 import type { ReactionSummary } from "~/features/posts/model/types";
 import { cn } from "~/shared/lib/utils";
@@ -49,7 +50,12 @@ export function PostActionBar({
     ...reaction,
     comment_count: commentCount,
   });
-  const [reactorsOpen, setReactorsOpen] = useState(false);
+  const reactorList = useReactionListParam(`post:${postId}`);
+  const loadReactors = useEffectEvent(reactions.loadReactors);
+  // 뒤로 갔다가 앞으로 와서 다시 열려도 목록이 비지 않게, 누를 때가 아니라 열릴 때 받는다.
+  useEffect(() => {
+    if (reactorList.open) loadReactors();
+  }, [reactorList.open]);
 
   const share = async () => {
     try {
@@ -124,10 +130,7 @@ export function PostActionBar({
           type="button"
           aria-label={`반응 ${reactions.summary.reaction_count}개 보기`}
           className="-mr-1 flex items-center gap-0.5 rounded-md px-2 py-1 text-sm transition-colors hover:bg-muted"
-          onClick={() => {
-            setReactorsOpen(true);
-            reactions.loadReactors();
-          }}
+          onClick={reactorList.show}
         >
           {reactions.summary.top_reactions.map((item) => (
             <ReactionEmoji key={item} reaction={item} />
@@ -136,8 +139,10 @@ export function PostActionBar({
       ) : null}
 
       <ReactionListDialog
-        open={reactorsOpen}
-        onOpenChange={setReactorsOpen}
+        open={reactorList.open}
+        onOpenChange={(open) => {
+          if (!open) reactorList.close();
+        }}
         reactors={reactions.reactors}
         loading={reactions.loadingReactors}
       />
