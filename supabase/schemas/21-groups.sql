@@ -1098,6 +1098,8 @@ begin
   from public.group_memberships as membership
   join public.profiles as profile on profile.id = membership.profile_id
   where membership.group_id = p_group_id
+    -- 자기 자신은 부를 일이 없어 후보에서 뺀다. 본문에 이미 있는 자기 멘션은 그대로 저장된다.
+    and profile.id <> caller_profile_id
     and profile.status = 'accepted'
     and profile.deleted_at is null
     and (
