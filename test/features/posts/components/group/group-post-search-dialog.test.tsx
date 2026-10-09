@@ -6,6 +6,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { GroupPostSearchDialog } from "~/features/posts/components/group/group-post-search-dialog";
 import { searchGroupPosts } from "~/features/posts/data/queries";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
+import { getQueryClient } from "~/shared/lib/query-client";
 import type { GroupPostSearchResult } from "~/features/posts/model/types";
 import { renderRoute } from "../../../../router";
 
@@ -71,8 +72,27 @@ const searchInput = () =>
 
 describe("GroupPostSearchDialog", () => {
   beforeEach(() => {
+    // 결과는 앱 전역 query cache에 기억되므로 테스트끼리 섞이지 않게 비운다.
+    getQueryClient().clear();
     vi.mocked(searchGroupPosts).mockReset();
     vi.mocked(searchGroupPosts).mockResolvedValue([]);
+  });
+
+  /** 회귀: 결과에서 게시물을 열었다 돌아오면 같은 검색을 다시 돌려 스피너부터 보였다. */
+  it("shows remembered results at once when coming back to a search", async () => {
+    vi.mocked(searchGroupPosts).mockResolvedValue([
+      result({ post_id: "post-1", title: "기억된 결과" }),
+    ]);
+    const { unmount } = renderSearch(
+      "/groups/group?search=1&q=%EA%B8%B0%EC%96%B5",
+    );
+    expect(await screen.findByText("기억된 결과")).toBeInTheDocument();
+    unmount();
+
+    renderSearch("/groups/group?search=1&q=%EA%B8%B0%EC%96%B5");
+
+    expect(screen.getByText("기억된 결과")).toBeInTheDocument();
+    expect(searchGroupPosts).toHaveBeenCalledOnce();
   });
 
   it("searches only after the query is submitted", async () => {

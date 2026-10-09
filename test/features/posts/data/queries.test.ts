@@ -12,6 +12,7 @@ vi.mock("~/features/profiles/data/media", () => ({ createProfileMediaUrls }));
 vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 
 import {
+  getGroupPost,
   getProfilePost,
   getMyGroupAnonymousActivityRestriction,
   hydrateGroupPostMedia,
@@ -42,6 +43,40 @@ describe("post queries", () => {
       "get_my_group_anonymous_activity_restriction",
       { p_group_id: "group-id" },
     );
+  });
+
+  it("asks for a post and its attachments at the same time", async () => {
+    let resolvePost: (value: unknown) => void = () => undefined;
+    const rpc = vi.fn((name: string) =>
+      name === "get_group_post"
+        ? new Promise((resolve) => {
+            resolvePost = resolve;
+          })
+        : Promise.resolve({ data: [], error: null }),
+    );
+    getSupabase.mockReturnValue({ rpc });
+
+    const loading = getGroupPost("post-id");
+    // 게시물 응답을 기다리지 않고 첨부 목록 요청이 이미 나가 있어야 한다.
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual([
+      "list_post_attachments",
+      "get_group_post",
+    ]);
+    resolvePost({ data: [{ post_id: "post-id", mentions: [] }], error: null });
+    await expect(loading).resolves.toMatchObject({ post_id: "post-id" });
+  });
+
+  it("still reports a missing post when its attachments are refused", async () => {
+    const rpc = vi.fn((name: string) =>
+      Promise.resolve(
+        name === "get_group_post"
+          ? { data: [], error: null }
+          : { data: null, error: { code: "42501" } },
+      ),
+    );
+    getSupabase.mockReturnValue({ rpc });
+
+    await expect(getGroupPost("post-id")).resolves.toBeNull();
   });
 
   it("does not load or sign attachments for search results", async () => {
@@ -198,8 +233,10 @@ describe("post queries", () => {
     getSupabase.mockReturnValue({ rpc, from: vi.fn() });
 
     await expect(getProfilePost("post-id")).resolves.toBeNull();
-    // 첨부를 이어 부르지 않는다 — 읽을 수 없는 게시물의 첨부를 물어볼 이유가 없다.
-    expect(rpc).toHaveBeenCalledTimes(1);
+    // 첨부는 게시물과 함께 물어본다. 읽을 수 없는 글이면 RLS가 빈 목록을 주고, 결과는 버린다.
+    expect(createPostAttachmentUrls).not.toHaveBeenCalledWith(
+      expect.arrayContaining([expect.any(String)]),
+    );
   });
 
   it("uses pinned state as part of the next-page cursor", async () => {
