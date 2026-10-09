@@ -11,6 +11,7 @@ import { useScrollContainer } from "~/shared/lib/scroll-container";
 import { cn } from "~/shared/lib/utils";
 
 /** 접힌 본문 최대 높이(24px × 3줄, `.post-typography` 줄 높이에 묶임). 본문이 여러 블록이라 `line-clamp`를 쓰지 않는다. */
+const COLLAPSED_BODY_HEIGHT = 72;
 const COLLAPSED_BODY_CLASS = "max-h-[72px] overflow-hidden";
 
 /**
@@ -89,6 +90,11 @@ export function PostBodyClamp({
     (patch: Partial<typeof state>) =>
       setState((current) => {
         const next = { ...current, ...patch };
+        if (
+          next.expanded === current.expanded &&
+          next.clampable === current.clampable
+        )
+          return current;
         if (postId) clampMemory.set(postId, next);
         return next;
       }),
@@ -97,14 +103,22 @@ export function PostBodyClamp({
   const setExpanded = (value: boolean) => update({ expanded: value });
 
   const measureBody = useCallback(
-    (node: HTMLDivElement | null) => {
+    (node: HTMLDivElement) => {
       bodyRef.current = node;
-      if (!node) return;
-      // 펼친 채로 다시 마운트되면 잘리지 않아 잴 수 없다. 기억해 둔 값을 그대로 쓴다.
-      if (postId && clampMemory.get(postId)?.expanded) return;
-      update({ clampable: node.scrollHeight > node.clientHeight });
+      // `scrollHeight`는 접혀 있어도 본문 전체 높이라 펼친 상태에서도 잴 수 있다. 글을 수정해
+      // 본문이 바뀌면 상자 크기도 바뀌므로 그때마다 다시 잰다. 한 번만 재면 수정 전 판정이 남는다.
+      const measure = () =>
+        update({ clampable: node.scrollHeight > COLLAPSED_BODY_HEIGHT });
+      measure();
+      if (typeof ResizeObserver === "undefined") return;
+      const observer = new ResizeObserver(measure);
+      observer.observe(node);
+      return () => {
+        observer.disconnect();
+        bodyRef.current = null;
+      };
     },
-    [postId, update],
+    [update],
   );
 
   const toggle = () => {
@@ -130,18 +144,18 @@ export function PostBodyClamp({
         onClick={(event) => {
           if (!window.matchMedia("(pointer: coarse)").matches) return;
           if ((event.target as Element).closest("a, button")) return;
-          if (clampable || expanded) toggle();
+          if (clampable) toggle();
         }}
         className={cn(
           !expanded && COLLAPSED_BODY_CLASS,
           // 터치 기기에서는 본문을 탭해도 펼쳐진다. 마우스에서는 버튼만 반응한다 —
           // 본문의 텍스트를 드래그해 선택하는 동작과 부딪히기 때문이다.
-          (clampable || expanded) && "pointer-coarse:cursor-pointer",
+          clampable && "pointer-coarse:cursor-pointer",
         )}
       >
         {children}
       </div>
-      {clampable || expanded ? (
+      {clampable ? (
         <button
           type="button"
           onClick={toggle}
