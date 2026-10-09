@@ -232,15 +232,29 @@ export function NotificationInbox({
         hideOnScroll
         title="알림"
         actions={
-          <Button
-            variant="ghost"
-            size="icon"
-            nativeButton={false}
-            aria-label="알림 설정"
-            render={<Link to="/noti/settings" />}
-          >
-            <SettingsIcon />
-          </Button>
+          <>
+            <markAllFetcher.Form method="post" action="/noti">
+              <input type="hidden" name="intent" value="mark-all" />
+              <Button
+                type="submit"
+                variant="ghost"
+                size="icon"
+                aria-label="모두 읽음"
+                disabled={markAllPending || allLoadedRead}
+              >
+                <CheckCheckIcon />
+              </Button>
+            </markAllFetcher.Form>
+            <Button
+              variant="ghost"
+              size="icon"
+              nativeButton={false}
+              aria-label="알림 설정"
+              render={<Link to="/noti/settings" />}
+            >
+              <SettingsIcon />
+            </Button>
+          </>
         }
       />
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
@@ -262,7 +276,7 @@ export function NotificationInbox({
                 <CheckCheckIcon /> 모두 읽음
               </Button>
             </markAllFetcher.Form>
-            {/* 데스크톱에서는 PageHeader가 숨겨져 설정 링크를 여기에도 둔다. */}
+            {/* 데스크톱에서는 PageHeader가 숨겨져 모두 읽음과 설정 링크를 여기에도 둔다. */}
             <Button
               variant="ghost"
               size="icon-sm"
