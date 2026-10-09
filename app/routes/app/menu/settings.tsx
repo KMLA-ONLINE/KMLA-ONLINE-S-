@@ -7,6 +7,7 @@ import {
 import { Link } from "react-router";
 
 import { defineAppChrome, PageHeader } from "~/features/app-shell";
+import { AppVersionCard } from "~/features/support";
 import { ListLinkRow } from "~/shared/components/list-link-row";
 import { useExperimentalFeatures } from "~/shared/hooks/use-experimental-features";
 import {
@@ -95,6 +96,8 @@ export default function SettingsPage() {
             ) : null}
           </div>
         </section>
+
+        <AppVersionCard />
       </div>
     </>
   );

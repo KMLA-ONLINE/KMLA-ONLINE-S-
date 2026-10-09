@@ -3,6 +3,7 @@ import { SparklesIcon } from "lucide-react";
 import { Badge } from "~/shared/ui/badge";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "~/shared/ui/empty";
 import type { Release, ReleaseChangeKind } from "../model/types";
+import { AppVersionCard } from "./app-version-card";
 
 /**
  * 변경 종류별 꼬리표. 세 종류를 같은 색으로 두면 결국 글자를 읽어야 하므로, 눈으로 훑을 수
@@ -45,6 +46,9 @@ export function ReleaseNotesScreen({ releases }: { releases: Release[] }) {
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4 md:p-0">
       <h1 className="hidden text-2xl font-semibold md:block">업데이트 기록</h1>
 
+      {/* 기록은 큰 변경이 있을 때만 쌓이므로, 이 화면이 늘 쓸모 있게 지금 버전을 맨 위에 둔다. */}
+      <AppVersionCard />
+
       {ordered.length === 0 ? (
         <Empty className="border">
           <EmptyHeader>
@@ -59,18 +63,12 @@ export function ReleaseNotesScreen({ releases }: { releases: Release[] }) {
           {ordered.map((release) => (
             <li key={`${release.date}-${release.title}`}>
               <article className="rounded-xl border bg-card p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <time
-                    dateTime={release.date}
-                    className="text-xs font-medium text-muted-foreground"
-                  >
-                    {formatReleaseDate(release.date)}
-                  </time>
-
-                  {release.version ? (
-                    <Badge variant="ghost">{release.version}</Badge>
-                  ) : null}
-                </div>
+                <time
+                  dateTime={release.date}
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  {formatReleaseDate(release.date)}
+                </time>
 
                 <h2 className="mt-1 font-semibold break-keep">
                   {release.title}
