@@ -33,7 +33,7 @@ export const groupKeys = {
     categoryId: string | null,
     cursor: PostCursor | null,
   ) => [...groupKeys.postPages(groupId), { categoryId, cursor }] as const,
-  /** 게시물 검색 결과. 목록 아래에 둬서 글이 바뀌어 목록이 무효화되면 함께 낡는다. */
+  /** 게시물 검색 결과. 돌아왔을 때 첫 화면을 그리는 데만 쓰고 매번 다시 읽는다. */
   postSearch: (groupId: string, query: string) =>
     [...groupKeys.postPages(groupId), "search", query] as const,
   memberLists: (groupId: string) =>

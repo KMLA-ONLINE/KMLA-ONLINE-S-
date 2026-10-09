@@ -198,6 +198,30 @@ describe("NotificationInbox", () => {
     expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
   });
 
+  /** 회귀: 목적지가 알림함 자신이면 화면이 그대로라 눌림 표시가 남고 그 행을 다시 누를 수 없었다. */
+  it("lets a row be pressed again when its destination is the inbox itself", async () => {
+    resolveNotificationDestination.mockResolvedValue("/noti");
+    const { user } = renderRoute(
+      () => (
+        <NotificationInbox
+          initialPage={{ items: [restrictedNotification()], nextCursor: null }}
+          profileId={1}
+        />
+      ),
+      { path: "/noti" },
+    );
+    const row = () => screen.getByRole("link", { name: /익명 활동이 제한/ });
+
+    const before = resolveNotificationDestination.mock.calls.length;
+    await user.click(row());
+    await waitFor(() => expect(row()).not.toHaveAttribute("aria-busy"));
+    await user.click(row());
+
+    await waitFor(() =>
+      expect(resolveNotificationDestination).toHaveBeenCalledTimes(before + 2),
+    );
+  });
+
   it("falls back to the landing route when the destination cannot be resolved", async () => {
     resolveNotificationDestination.mockRejectedValue(new Error("offline"));
     const { user } = renderRoute(

@@ -8,10 +8,7 @@ import {
 } from "react";
 import { Link, useNavigation } from "react-router";
 
-import {
-  GROUP_CONTENT_STALE_TIME,
-  groupKeys,
-} from "~/features/groups/data/cache";
+import { groupKeys } from "~/features/groups/data/cache";
 import { searchGroupPosts } from "~/features/posts/data/queries";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { postAuthorName } from "~/features/posts/model/identity";
@@ -73,14 +70,15 @@ export function GroupPostSearchDialog({
 }
 
 /**
- * 검색 결과를 그룹 목록과 같은 2분 동안 기억한다. 결과에서 게시물을 열었다 돌아오면 이 패널이 다시 마운트되는데,
- * 기억하지 않으면 같은 검색을 처음부터 다시 돌려 스피너부터 본다.
+ * 검색 결과를 기억해 두되 믿지는 않는다. 결과에서 게시물을 열었다 돌아오면 이 패널이 다시 마운트되는데, 기억한
+ * 결과로 첫 화면을 바로 그리고 같은 검색을 뒤에서 다시 돌려 갈아 끼운다. 기억만 쓰면 그사이 올라온 글이나
+ * 볼 수 없게 된 글이 반영되지 않는다.
  */
 function searchQuery(groupId: string, query: string) {
   return {
     queryKey: groupKeys.postSearch(groupId, query),
     queryFn: () => searchGroupPosts(groupId, query),
-    staleTime: GROUP_CONTENT_STALE_TIME,
+    staleTime: 0,
   };
 }
 
@@ -133,12 +131,17 @@ function SearchPanel({
         if (current)
           setSettled({ query: submittedQuery, results, error: null });
       } catch {
-        if (current)
-          setSettled({
-            query: submittedQuery,
-            results: [],
-            error: "검색 결과를 불러오지 못했습니다.",
-          });
+        if (!current) return;
+        // 기억한 결과를 보여주는 중이면 다시 읽기가 실패했다고 지우지 않는다.
+        setSettled((previous) =>
+          previous?.query === submittedQuery && !previous.error
+            ? previous
+            : {
+                query: submittedQuery,
+                results: [],
+                error: "검색 결과를 불러오지 못했습니다.",
+              },
+        );
       }
     })();
 

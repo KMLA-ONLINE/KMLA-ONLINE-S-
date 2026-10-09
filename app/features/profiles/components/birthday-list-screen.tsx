@@ -1,5 +1,5 @@
 import { CakeIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
@@ -260,11 +260,16 @@ export function BirthdayListScreen({
   const listRef = useRef<HTMLDivElement>(null);
   const startMonthRef = useRef<HTMLDivElement>(null);
   const [selectedFilter, setSelectedFilter] = useState<BirthdayFilter>("all");
-  const filters = birthdayFilterOptions(birthdays);
-  const listItems = birthdayListItems(
-    birthdays.filter((birthday) =>
-      matchesBirthdayFilter(birthday, selectedFilter),
-    ),
+  const filters = useMemo(() => birthdayFilterOptions(birthdays), [birthdays]);
+  // 스크롤할 때마다 보이는 범위가 바뀌어 다시 렌더된다. 학교 전체를 걸러 정렬하는 일을 그때마다 되풀이하지 않는다.
+  const listItems = useMemo(
+    () =>
+      birthdayListItems(
+        birthdays.filter((birthday) =>
+          matchesBirthdayFilter(birthday, selectedFilter),
+        ),
+      ),
+    [birthdays, selectedFilter],
   );
   // 첫 화면은 이번 달에서 시작한다. 그 행이 처음부터 그려져 있어야 위치를 잴 수 있다.
   const [startIndex] = useState(() =>
@@ -444,7 +449,12 @@ export function BirthdayListScreen({
             {items.map((item) => (
               <div
                 key={`${item.kind}-${item.index}`}
-                ref={item.index === startIndex ? startMonthRef : undefined}
+                // 번호는 처음 목록(전체) 기준이다. 필터를 바꾸면 같은 번호가 다른 행이므로 붙이지 않는다.
+                ref={
+                  selectedFilter === "all" && item.index === startIndex
+                    ? startMonthRef
+                    : undefined
+                }
                 role={item.kind === "birthday" ? "listitem" : undefined}
                 className={cn(
                   isVirtualized && "absolute inset-x-0",
