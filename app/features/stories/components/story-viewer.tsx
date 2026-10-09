@@ -1,5 +1,6 @@
 import { LinkIcon, MoreHorizontalIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Link } from "react-router";
 import { toast } from "sonner";
 
 import {
@@ -351,7 +352,14 @@ export function StoryViewer({
             </div>
 
             <div className="mt-3 flex items-center gap-2">
-              <UserAvatar src={story.avatarUrl} name={story.name} size="sm" />
+              {/* 뷰어를 띄운 `?story=` 기록 항목은 남으므로 뒤로 가면 이 장으로 돌아온다. */}
+              <Link
+                to={`/profile/${group.pubId}`}
+                aria-label={`${story.name} 프로필`}
+                className="pointer-events-auto shrink-0 rounded-full focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+              >
+                <UserAvatar src={story.avatarUrl} name={story.name} size="sm" />
+              </Link>
               <DialogTitle className="truncate text-sm font-semibold text-white">
                 {story.name}
               </DialogTitle>
