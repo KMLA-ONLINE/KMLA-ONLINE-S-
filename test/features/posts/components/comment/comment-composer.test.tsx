@@ -7,7 +7,8 @@ const { prepareCommentImage, releasePostFile } = vi.hoisted(() => ({
   releasePostFile: vi.fn(),
 }));
 const { mentionState, mentionCandidates } = vi.hoisted(() => ({
-  mentionState: { index: 0 },
+  /** 한 번 누를 때 함께 고르는 사람 수. */
+  mentionState: { index: 0, batch: 1 },
   mentionCandidates: [
     {
       pub_id: "member-1",
@@ -47,15 +48,19 @@ vi.mock("~/features/posts/components/mention-button", () => ({
   MentionButton: ({
     onSelect,
   }: {
-    onSelect: (candidate: (typeof mentionCandidates)[number]) => void;
+    onSelect: (candidates: (typeof mentionCandidates)[number][]) => void;
   }) => (
     <button
       type="button"
       onClick={() =>
         onSelect(
-          mentionCandidates[
-            Math.min(mentionState.index++, mentionCandidates.length - 1)
-          ],
+          Array.from(
+            { length: mentionState.batch },
+            () =>
+              mentionCandidates[
+                Math.min(mentionState.index++, mentionCandidates.length - 1)
+              ],
+          ),
         )
       }
     >
@@ -106,6 +111,7 @@ describe("CommentComposer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mentionState.index = 0;
+    mentionState.batch = 1;
   });
 
   it("submits on Enter and inserts a newline on Shift+Enter", async () => {
@@ -329,6 +335,29 @@ describe("CommentComposer", () => {
       "[@첫 멤버](m:1) 확인 부탁",
       undefined,
       [{ ordinal: 1, pubId: "member-1", name: "첫 멤버" }],
+    );
+  });
+
+  it("inserts several members picked together at the caret in the order picked", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
+    const { user, input } = renderComposer({ onSubmit, mentionGroupId: "g" });
+    mentionState.batch = 2;
+
+    await user.click(screen.getByRole("button", { name: "멘션 추가" }));
+    expect(input).toHaveValue(
+      `${mentionDisplayText("첫 멤버", 1)} ${mentionDisplayText("둘째 멤버", 2)} `,
+    );
+
+    await user.type(input, "확인 부탁");
+    await user.click(screen.getByRole("button", { name: "댓글 게시" }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      "[@첫 멤버](m:1) [@둘째 멤버](m:2) 확인 부탁",
+      undefined,
+      [
+        { ordinal: 1, pubId: "member-1", name: "첫 멤버" },
+        { ordinal: 2, pubId: "member-2", name: "둘째 멤버" },
+      ],
     );
   });
 

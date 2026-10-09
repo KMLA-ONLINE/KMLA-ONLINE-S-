@@ -549,15 +549,20 @@ export function CommentComposer({
                   mentionDraft.entries,
                 )}
                 className="m-0.5 shrink-0 text-muted-foreground"
-                onSelect={(candidate) => {
+                onSelect={(candidates) => {
                   // 번호는 원문의 토큰을 보고 고른다. 표시형에는 토큰이 없어 언제나 1이
                   // 나오고, 두 번째로 고른 사람이 첫 번째를 덮는다.
-                  const ordinal = mentionDraft.register(candidate, body);
-                  if (ordinal === null) return;
+                  const assigned = mentionDraft.register(candidates, body);
+                  if (assigned.length === 0) return;
                   const element = input.current;
                   // 이름이 같은 사람이 여럿이면 표시가 누구인지를 들고 다닌다. 어느
                   // 표시인지는 ordinal이 정하므로 초안의 다른 항목을 보지 않는다.
-                  const label = `${mentionDisplayText(candidate.name, ordinal)} `;
+                  const label = assigned
+                    .map(
+                      ({ name, ordinal }) =>
+                        `${mentionDisplayText(name, ordinal)} `,
+                    )
+                    .join("");
                   const start = element?.selectionStart ?? draft.length;
                   const end = element?.selectionEnd ?? start;
                   replaceDraft(

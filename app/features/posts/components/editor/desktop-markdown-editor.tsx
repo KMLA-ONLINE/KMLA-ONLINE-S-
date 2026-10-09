@@ -211,18 +211,20 @@ function EditorSurface({
   useImperativeHandle(
     handleRef,
     () => ({
-      insertMention(label: string, ordinal: number) {
+      insertMentions(mentions: { label: string; ordinal: number }[]) {
+        if (mentions.length === 0) return;
         get()?.action((ctx) => {
           const view = ctx.get(editorViewCtx);
           const { state, dispatch } = view;
-          const mark = linkSchema.type(ctx).create({ href: `m:${ordinal}` });
-          const mention = state.schema.text(`@${sanitizeMentionLabel(label)}`, [
-            mark,
+          // 뒤에 이어 쓸 때 링크 안으로 빨려 들어가지 않도록 멘션마다 mark 없는 공백을 함께 넣는다.
+          const nodes = mentions.flatMap(({ label, ordinal }) => [
+            state.schema.text(`@${sanitizeMentionLabel(label)}`, [
+              linkSchema.type(ctx).create({ href: `m:${ordinal}` }),
+            ]),
+            state.schema.text(" "),
           ]);
-          // 뒤에 이어 쓸 때 링크 안으로 빨려 들어가지 않도록 mark 없는 공백을 함께 넣는다.
-          const trailing = state.schema.text(" ");
           const { from, to } = state.selection;
-          dispatch(state.tr.replaceWith(from, to, [mention, trailing]));
+          dispatch(state.tr.replaceWith(from, to, nodes));
           view.focus();
         });
       },
