@@ -85,17 +85,10 @@ interface BirthdayEntry {
   index: number;
 }
 
-type BirthdayCycleItem =
-  | {
-      kind: "month";
-      birthday: BirthdayCalendarProfile;
-      index: number;
-    }
-  | ({ kind: "birthday" } & BirthdayEntry);
-
 type BirthdayListItem =
   | {
       kind: "month";
+      month: number;
       birthdayDate: string;
       index: number;
     }
@@ -161,55 +154,57 @@ function BirthdayRow({
   );
 }
 
-function birthdayCycleItems(birthdays: BirthdayCalendarProfile[]) {
-  const items: BirthdayCycleItem[] = [];
+/** 1월부터 12월까지 월 제목을 끼워 넣는다. `birthday_date`는 오늘 이후 다가오는 날이라 1월이 다음 해일 수 있다. */
+function birthdayListItems(birthdays: BirthdayCalendarProfile[]) {
+  const items: BirthdayListItem[] = [];
   let previousMonth: number | null = null;
 
-  birthdays.forEach((birthday, index) => {
-    if (birthday.birthday_month !== previousMonth) {
-      items.push({ kind: "month", birthday, index });
-      previousMonth = birthday.birthday_month;
-    }
+  [...birthdays]
+    .sort(
+      (left, right) =>
+        left.birthday_month - right.birthday_month ||
+        left.birthday_day - right.birthday_day,
+    )
+    .forEach((birthday) => {
+      if (birthday.birthday_month !== previousMonth) {
+        items.push({
+          kind: "month",
+          month: birthday.birthday_month,
+          birthdayDate: birthday.birthday_date,
+          index: items.length,
+        });
+        previousMonth = birthday.birthday_month;
+      }
 
-    items.push({
-      kind: "birthday",
-      birthday,
-      birthdayDate: birthday.birthday_date,
-      index,
+      items.push({
+        kind: "birthday",
+        birthday,
+        birthdayDate: birthday.birthday_date,
+        index: items.length,
+      });
     });
-  });
 
   return items;
 }
 
-function birthdayListItems(
-  cycleItems: BirthdayCycleItem[],
-  start: number,
-  end: number,
-  cycleOffset: number,
-  totalItems: number,
-): BirthdayListItem[] {
-  const itemStart = Math.max(0, start);
-  const itemEnd = Math.min(end, totalItems);
+/**
+ * 이번 달 제목. 이번 달에 생일이 없으면 다음으로 생일이 있는 달이다. 그런 달이 없거나 이미
+ * 맨 앞이면 움직이지 않는다.
+ */
+function startMonthIndex(items: BirthdayListItem[], referenceDate: string) {
+  const month = Number(referenceDate.slice(5, 7));
+  const index = items.find(
+    (item) => item.kind === "month" && item.month >= month,
+  )?.index;
 
-  return Array.from(
-    { length: Math.max(0, itemEnd - itemStart) },
-    (_, offset) => {
-      const index = itemStart + offset;
-      const cycleItem = cycleItems[index % cycleItems.length];
-      const yearOffset = cycleOffset + Math.floor(index / cycleItems.length);
-      const birthdayDate = toBirthdayDate(cycleItem.birthday, yearOffset);
+  return index === undefined || index === 0 ? null : index;
+}
 
-      return cycleItem.kind === "month"
-        ? { kind: "month", birthdayDate, index }
-        : {
-            kind: "birthday",
-            birthday: cycleItem.birthday,
-            birthdayDate,
-            index,
-          };
-    },
-  );
+function visibleRangeAround(index: number) {
+  return {
+    start: Math.max(0, index - BIRTHDAY_OVERSCAN),
+    end: index + BIRTHDAY_OVERSCAN * 2,
+  };
 }
 
 function birthdayFilterOptions(birthdays: BirthdayCalendarProfile[]) {
@@ -263,36 +258,29 @@ export function BirthdayListScreen({
 }) {
   const scrollRef = useScrollContainer();
   const listRef = useRef<HTMLDivElement>(null);
-  const cycleOffsetRef = useRef(0);
-  const [cycleOffset, setCycleOffset] = useState(0);
-  // 목록을 몇 바퀴 깔아 둘지. 순환이 일어나려면 다음 바퀴가 미리 깔려 있어야 하지만, 한
-  // 바퀴가 화면보다 짧으면 그 두 번째 바퀴가 같은 사람을 한 화면에 두 번 보여 준다.
-  // 측정 전에는 1로 두어 겹쳐 보이는 상태로 먼저 그리지 않는다.
-  const [cycleRepeat, setCycleRepeat] = useState(1);
+  const startMonthRef = useRef<HTMLDivElement>(null);
   const [selectedFilter, setSelectedFilter] = useState<BirthdayFilter>("all");
   const filters = birthdayFilterOptions(birthdays);
-  const filteredBirthdays = birthdays.filter((birthday) =>
-    matchesBirthdayFilter(birthday, selectedFilter),
+  const listItems = birthdayListItems(
+    birthdays.filter((birthday) =>
+      matchesBirthdayFilter(birthday, selectedFilter),
+    ),
   );
-  const cycleItems = birthdayCycleItems(filteredBirthdays);
-  const [visibleRange, setVisibleRange] = useState({
-    start: 0,
-    end: BIRTHDAY_OVERSCAN * 2,
-  });
+  // 첫 화면은 이번 달에서 시작한다. 그 행이 처음부터 그려져 있어야 위치를 잴 수 있다.
+  const [startIndex] = useState(() =>
+    startMonthIndex(listItems, referenceDate),
+  );
+  const [visibleRange, setVisibleRange] = useState(() =>
+    visibleRangeAround(startIndex ?? 0),
+  );
   const [avatarUrls, setAvatarUrls] = useState<Map<string, string>>(
     () => new Map(),
   );
-  const totalRows = cycleItems.length * cycleRepeat;
+  const totalRows = listItems.length;
   const isVirtualized = scrollRef !== null;
   const items = isVirtualized
-    ? birthdayListItems(
-        cycleItems,
-        visibleRange.start,
-        visibleRange.end,
-        cycleOffset,
-        totalRows,
-      )
-    : birthdayListItems(cycleItems, 0, cycleItems.length, 0, cycleItems.length);
+    ? listItems.slice(visibleRange.start, visibleRange.end)
+    : listItems;
   const visiblePathsKey = Array.from(
     new Set(
       items.flatMap((item) =>
@@ -303,23 +291,36 @@ export function BirthdayListScreen({
     ),
   ).join("\n");
 
+  // 셸의 위치 복원(layout effect)이 끝난 뒤에 돈다. 뒤로 가기로 돌아와 보던 위치가 되살아났다면
+  // 그대로 둔다.
+  useEffect(() => {
+    const container = scrollRef?.current;
+    const month = startMonthRef.current;
+    if (!container || !month || container.scrollTop !== 0) return;
+
+    container.scrollTo({
+      top:
+        month.getBoundingClientRect().top -
+        container.getBoundingClientRect().top -
+        Number.parseFloat(getComputedStyle(month).scrollMarginTop || "0"),
+    });
+  }, [scrollRef]);
+
   useEffect(() => {
     const container = scrollRef?.current;
     const list = listRef.current;
-    if (!container || !list || cycleItems.length === 0) return;
+    if (!container || !list || totalRows === 0) return;
 
-    const cycleHeight = cycleItems.length * BIRTHDAY_ROW_HEIGHT;
     let frameId = 0;
-    let lastTop = container.scrollTop;
-    const listTop =
-      container.scrollTop +
-      list.getBoundingClientRect().top -
-      container.getBoundingClientRect().top;
 
-    const updateVisibleRange = (top: number) => {
+    const update = () => {
+      frameId = 0;
+      const listTop =
+        list.getBoundingClientRect().top -
+        container.getBoundingClientRect().top;
       const firstVisible = Math.max(
         0,
-        Math.floor((top - listTop) / BIRTHDAY_ROW_HEIGHT),
+        Math.floor(-listTop / BIRTHDAY_ROW_HEIGHT),
       );
       const visibleCount = Math.ceil(
         container.clientHeight / BIRTHDAY_ROW_HEIGHT,
@@ -337,55 +338,11 @@ export function BirthdayListScreen({
       );
     };
 
-    // 순환 조건과 같다. 한 바퀴가 화면을 넘어야 두 번째 바퀴의 같은 행이 화면 밖에 남는다.
-    // 이미 다음 바퀴로 넘어가 있다면 화면이 커져도 되돌리지 않는다. 지금 보고 있는 연도가
-    // 통째로 사라지기 때문이다.
-    const syncCycleRepeat = () => {
-      const repeat =
-        cycleHeight > container.clientHeight || cycleOffsetRef.current > 0
-          ? 2
-          : 1;
-
-      setCycleRepeat((current) => (current === repeat ? current : repeat));
-    };
-
-    const recenter = (direction: 1 | -1) => {
-      const nextTop = container.scrollTop - direction * cycleHeight;
-      cycleOffsetRef.current += direction;
-      setCycleOffset(cycleOffsetRef.current);
-      container.scrollTop = nextTop;
-      lastTop = nextTop;
-      updateVisibleRange(nextTop);
-    };
-
-    const update = () => {
-      frameId = 0;
-      const top = container.scrollTop;
-      const delta = top - lastTop;
-      lastTop = top;
-      syncCycleRepeat();
-
-      if (cycleHeight > container.clientHeight) {
-        if (delta > 0 && top >= listTop + cycleHeight) {
-          recenter(1);
-          return;
-        }
-
-        if (delta < 0 && cycleOffsetRef.current > 0 && top <= listTop) {
-          recenter(-1);
-          return;
-        }
-      }
-
-      updateVisibleRange(top);
-    };
-
     const onScroll = () => {
       if (frameId === 0) frameId = window.requestAnimationFrame(update);
     };
 
-    syncCycleRepeat();
-    updateVisibleRange(container.scrollTop);
+    update();
     container.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
 
@@ -394,7 +351,7 @@ export function BirthdayListScreen({
       window.removeEventListener("resize", onScroll);
       if (frameId !== 0) window.cancelAnimationFrame(frameId);
     };
-  }, [cycleItems.length, scrollRef, totalRows]);
+  }, [scrollRef, totalRows]);
 
   useEffect(() => {
     if (!isVirtualized || visiblePathsKey.length === 0) return;
@@ -437,9 +394,7 @@ export function BirthdayListScreen({
       });
     }
 
-    cycleOffsetRef.current = 0;
-    setCycleOffset(0);
-    setVisibleRange({ start: 0, end: BIRTHDAY_OVERSCAN * 2 });
+    setVisibleRange(visibleRangeAround(0));
     setSelectedFilter(filter);
   };
 
@@ -488,9 +443,14 @@ export function BirthdayListScreen({
           >
             {items.map((item) => (
               <div
-                key={`${cycleOffset}-${item.kind}-${item.index}`}
+                key={`${item.kind}-${item.index}`}
+                ref={item.index === startIndex ? startMonthRef : undefined}
                 role={item.kind === "birthday" ? "listitem" : undefined}
-                className={isVirtualized ? "absolute inset-x-0" : undefined}
+                className={cn(
+                  isVirtualized && "absolute inset-x-0",
+                  // 모바일 PageHeader에 가리지 않게 첫 위치를 그만큼 내린다.
+                  "scroll-mt-[calc(var(--app-page-header-h)+var(--app-safe-t))] md:scroll-mt-0",
+                )}
                 style={
                   isVirtualized
                     ? {
