@@ -21,6 +21,7 @@ import type {
 } from "~/features/posts/model/types";
 import type { PostAttachment } from "~/features/posts/model/types";
 import { createPostAttachmentUrls } from "~/features/posts/data/files";
+import { readAttachmentsJson } from "~/features/posts/model/attachment-json";
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import { getSupabase } from "~/shared/supabase/client";
 
@@ -69,50 +70,27 @@ export async function hydratePostComments(
   }));
 }
 
-async function attachFiles<T extends { post_id: string }>(
+/** 첨부의 원본과 축소본을 한 번에 서명한다. 경로를 나눠 두 번 부르면 배치가 갈라져 왕복이 는다. */
+async function signAttachments<T extends { attachments: PostAttachment[] }>(
   posts: T[],
-  signUrls = true,
-): Promise<(T & { attachments: PostAttachment[] })[]> {
-  if (posts.length === 0) return [];
-  const { data, error } = await getSupabase()
-    .from("post_attachments")
-    .select(
-      "id,post_id,storage_bucket,object_path,thumbnail_path,original_filename,position,mime_type,size_bytes,width,height",
-    )
-    .in(
-      "post_id",
-      posts.map((post) => post.post_id),
-    )
-    .eq("status", "ready")
-    .order("position");
-  if (error) throw error;
-  // 원본과 축소본을 한 번에 서명한다. 경로를 나눠 두 번 부르면 배치가 갈라져 왕복이 는다.
-  const urls = signUrls
-    ? await createPostAttachmentUrls(
-        (data ?? []).flatMap((item) => [item.object_path, item.thumbnail_path]),
-      )
-    : new Map<string, string>();
+): Promise<T[]> {
+  const urls = await createPostAttachmentUrls(
+    posts.flatMap((post) =>
+      post.attachments.flatMap((attachment) => [
+        attachment.object_path,
+        attachment.thumbnail_path,
+      ]),
+    ),
+  );
   return posts.map((post) => ({
     ...post,
-    attachments: (data ?? [])
-      .filter((item) => item.post_id === post.post_id)
-      .map((item) => ({
-        attachment_id: item.id,
-        post_id: item.post_id,
-        storage_bucket: item.storage_bucket,
-        object_path: item.object_path,
-        original_filename: item.original_filename,
-        position: item.position,
-        mime_type: item.mime_type,
-        size_bytes: item.size_bytes,
-        width: item.width,
-        height: item.height,
-        signedUrl: urls.get(item.object_path) ?? null,
-        thumbnail_path: item.thumbnail_path,
-        thumbnailUrl: item.thumbnail_path
-          ? (urls.get(item.thumbnail_path) ?? null)
-          : null,
-      })),
+    attachments: post.attachments.map((attachment) => ({
+      ...attachment,
+      signedUrl: urls.get(attachment.object_path) ?? null,
+      thumbnailUrl: attachment.thumbnail_path
+        ? (urls.get(attachment.thumbnail_path) ?? null)
+        : null,
+    })),
   }));
 }
 
@@ -207,10 +185,11 @@ export async function listGroupPosts(
   });
   if (error) throw error;
   const rows = (data ?? []).map(withMentions);
-  const postsWithFiles = await attachFiles(
-    rows.slice(0, GROUP_POST_PAGE_SIZE),
-    false,
-  );
+  // 첨부는 목록 RPC가 같이 내려준다. 서명은 아래에서 아바타와 함께 한 번에 한다.
+  const postsWithFiles = rows.slice(0, GROUP_POST_PAGE_SIZE).map((row) => ({
+    ...row,
+    attachments: readAttachmentsJson(row.attachments, row.post_id),
+  }));
   const posts =
     options.hydrateMedia === false
       ? // 목록 보기는 아바타도 첨부도 그리지 않는다. 서명은 카드 보기로 바꿀 때
@@ -318,9 +297,20 @@ export async function listProfilePosts(
   });
   if (error) throw error;
   const rows = data ?? [];
-  const posts = await attachProfileMedia(
-    await attachFiles(rows.slice(0, PROFILE_POST_PAGE_SIZE)),
-  );
+  // 첨부는 목록 RPC가 같이 내려준다. 첨부와 아바타·프로필 미디어는 버킷이 달라 따로 서명하므로
+  // 나란히 띄운다. 하나씩 기다리면 타임라인을 열 때마다 서명 왕복이 하나 더 쌓인다.
+  const pagePosts = rows.slice(0, PROFILE_POST_PAGE_SIZE).map((row) => ({
+    ...row,
+    attachments: readAttachmentsJson(row.attachments, row.post_id),
+  }));
+  const [withFiles, withMedia] = await Promise.all([
+    signAttachments(pagePosts),
+    attachProfileMedia(pagePosts),
+  ]);
+  const posts = withMedia.map((post, index) => ({
+    ...post,
+    attachments: withFiles[index]?.attachments ?? post.attachments,
+  }));
   const last = posts.at(-1);
   return {
     posts,

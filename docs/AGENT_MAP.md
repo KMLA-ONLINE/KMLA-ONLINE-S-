@@ -240,7 +240,6 @@ browser reads or writes directly.
 | `group_join_requests`  | `groups/data/mutations.ts`, `groups/data/queries.ts`                                  |
 | `group_memberships`    | `groups/data/mutations.ts`, `groups/data/queries.ts`, `notifications/data/queries.ts` |
 | `groups`               | `groups/data/queries.ts`                                                              |
-| `post_attachments`     | `posts/data/queries.ts`                                                               |
 | `profile_departments`  | `profiles/data/queries.ts`                                                            |
 | `profile_permissions`  | `school-utilities/data/gongang-schedule.ts`                                           |
 | `user_timetables`      | `timetable/data/timetable.ts`                                                         |

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(58);
+select plan(59);
 
 -- 시드에는 로그인 가능한 계정이 하나뿐이라 타임라인 당사자·작성자·제3자를 함께 볼 수 없다.
 -- 시드를 건드리지 않고 트랜잭션 안에서만 두 계정을 더 붙인다.
@@ -445,6 +445,19 @@ select is(
   ),
   1::bigint,
   'the published profile post lists its attachment'
+);
+select is(
+  (
+    select jsonb_array_length(entry.attachments)
+    from public.list_profile_posts(
+      (select profile.pub_id from public.profiles as profile
+       join public.posts as post on post.timeline_profile_id = profile.id
+       where post.id = (select id from ids where name = 'photo'))
+    ) as entry
+    where entry.post_id = (select id from ids where name = 'photo')
+  ),
+  1,
+  'the timeline list carries the ready attachment'
 );
 select is(
   (
