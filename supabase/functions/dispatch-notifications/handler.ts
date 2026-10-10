@@ -44,11 +44,81 @@ export function pushUrgency(
   return importance === "high" ? "high" : "normal";
 }
 
-function classify(status: number): DeliveryResult["outcome"] {
+/**
+ * 401/403은 이 구독이 지금 VAPID 키로 만들어지지 않았다는 응답이다(키 교체 등). 다시 보내도
+ * 영영 실패하므로 404/410처럼 `gone`으로 보내 클라이언트가 새로 구독하게 한다. 이메일의
+ * 401/403은 우리 쪽 키 문제라 구독과 무관하다.
+ */
+function classify(
+  status: number,
+  channel: Delivery["channel"],
+): DeliveryResult["outcome"] {
   if (status >= 200 && status < 300) return "sent";
   if (status === 404 || status === 410) return "gone";
+  if (channel === "web_push" && (status === 401 || status === 403)) {
+    return "gone";
+  }
   if (status === 429 || status >= 500) return "retry";
   return "dead";
+}
+
+// 한 배치를 순서대로 보내면 느린 Push service 몇 곳만으로 lease(120초)를 넘겨, 다음 실행이
+// 같은 항목을 다시 가져가 중복 발송한다. 외부 서비스에 몰리지 않을 만큼만 겹친다.
+const SEND_CONCURRENCY = 10;
+
+type Tally = "sent" | "suppressed" | "retry" | "gone" | "dead";
+
+async function processDelivery(
+  deps: DispatchDependencies,
+  delivery: Delivery,
+): Promise<Tally> {
+  try {
+    if (!(await deps.prepare(delivery))) return "suppressed";
+  } catch {
+    return "retry";
+  }
+
+  let result: DeliveryResult;
+  try {
+    const response =
+      delivery.channel === "web_push"
+        ? await deps.sendPush(
+            delivery,
+            JSON.stringify({
+              notificationId: delivery.notification_id,
+              deliveryId: delivery.delivery_id,
+              importance: delivery.importance,
+              category: delivery.category,
+              groupingKey: delivery.grouping_key,
+              title: delivery.title,
+              body: delivery.body,
+              tag: delivery.tag,
+            }),
+          )
+        : await deps.sendEmail(delivery);
+    result = {
+      delivery_id: delivery.delivery_id,
+      lease_id: delivery.lease_id,
+      outcome: classify(response.status, delivery.channel),
+      status_code: response.status,
+      error_code: null,
+    };
+  } catch {
+    result = {
+      delivery_id: delivery.delivery_id,
+      lease_id: delivery.lease_id,
+      outcome: "retry",
+      status_code: null,
+      error_code: "transport_error",
+    };
+  }
+
+  try {
+    if (!(await deps.complete(result))) return "retry";
+  } catch {
+    return "retry";
+  }
+  return result.outcome;
 }
 
 export function createDispatchHandler(deps: DispatchDependencies) {
@@ -78,62 +148,19 @@ export function createDispatchHandler(deps: DispatchDependencies) {
       gone: 0,
       dead: 0,
     };
-    for (const delivery of deliveries) {
-      try {
-        if (!(await deps.prepare(delivery))) {
-          totals.suppressed += 1;
-          continue;
-        }
-      } catch {
-        totals.retry += 1;
-        continue;
+    let next = 0;
+    const worker = async () => {
+      while (next < deliveries.length) {
+        const delivery = deliveries[next++];
+        totals[await processDelivery(deps, delivery)] += 1;
       }
-
-      let result: DeliveryResult;
-      try {
-        const response =
-          delivery.channel === "web_push"
-            ? await deps.sendPush(
-                delivery,
-                JSON.stringify({
-                  notificationId: delivery.notification_id,
-                  deliveryId: delivery.delivery_id,
-                  importance: delivery.importance,
-                  category: delivery.category,
-                  groupingKey: delivery.grouping_key,
-                  title: delivery.title,
-                  body: delivery.body,
-                  tag: delivery.tag,
-                }),
-              )
-            : await deps.sendEmail(delivery);
-        result = {
-          delivery_id: delivery.delivery_id,
-          lease_id: delivery.lease_id,
-          outcome: classify(response.status),
-          status_code: response.status,
-          error_code: null,
-        };
-      } catch {
-        result = {
-          delivery_id: delivery.delivery_id,
-          lease_id: delivery.lease_id,
-          outcome: "retry",
-          status_code: null,
-          error_code: "transport_error",
-        };
-      }
-
-      try {
-        if (!(await deps.complete(result))) result.outcome = "retry";
-      } catch {
-        result.outcome = "retry";
-      }
-      if (result.outcome === "sent") totals.sent += 1;
-      else if (result.outcome === "retry") totals.retry += 1;
-      else if (result.outcome === "gone") totals.gone += 1;
-      else totals.dead += 1;
-    }
+    };
+    await Promise.all(
+      Array.from(
+        { length: Math.min(SEND_CONCURRENCY, deliveries.length) },
+        worker,
+      ),
+    );
 
     console.log("notification dispatch completed", totals);
     return Response.json(totals);

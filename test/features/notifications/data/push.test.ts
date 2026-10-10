@@ -8,6 +8,7 @@ const { getSupabase, rpc } = vi.hoisted(() => ({
 vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 
 import {
+  disconnectWebPushForLogout,
   enableWebPush,
   getPushSupport,
   resyncWebPushSubscription,
@@ -191,11 +192,7 @@ describe("Web Push configuration", () => {
         data: [{ subscribed: false, gone: false }],
         error: null,
       })
-      .mockResolvedValueOnce({
-        data: [{ subscribed: false, gone: false }],
-        error: null,
-      })
-      .mockResolvedValueOnce({ data: null, error: null });
+      .mockResolvedValueOnce({ data: true, error: null });
 
     await expect(enableWebPush()).resolves.toEqual({
       state: "available",
@@ -203,7 +200,7 @@ describe("Web Push configuration", () => {
       subscribed: true,
     });
     expect(rpc).toHaveBeenNthCalledWith(
-      3,
+      2,
       "register_my_web_push_subscription",
       {
         p_auth: "auth",
@@ -243,11 +240,12 @@ describe("Web Push configuration", () => {
           subscribe,
         },
       });
-      rpc.mockImplementation((name: string) =>
+      // 서버는 같은 키로 다시 올라온 gone endpoint를 살리지 않고 false로 답한다.
+      rpc.mockImplementation((name: string, args: { p_endpoint: string }) =>
         Promise.resolve(
           name === "get_my_web_push_status"
             ? { data: [{ subscribed: false, gone: true }], error: null }
-            : { data: null, error: null },
+            : { data: args.p_endpoint === fresh.endpoint, error: null },
         ),
       );
       return { stale, fresh, subscribe };
@@ -267,22 +265,35 @@ describe("Web Push configuration", () => {
       );
     });
 
-    it("is replaced in the background instead of being re-registered", async () => {
+    it("is replaced in the background once the server refuses it", async () => {
       const { stale, fresh, subscribe } = goneSetup();
 
       await resyncWebPushSubscription();
 
       expect(stale.unsubscribe).toHaveBeenCalledOnce();
       expect(subscribe).toHaveBeenCalledOnce();
-      expect(rpc).toHaveBeenCalledWith(
+      expect(rpc).toHaveBeenLastCalledWith(
         "register_my_web_push_subscription",
         expect.objectContaining({ p_endpoint: fresh.endpoint }),
       );
-      expect(rpc).not.toHaveBeenCalledWith(
-        "register_my_web_push_subscription",
-        expect.objectContaining({ p_endpoint: stale.endpoint }),
-      );
     });
+  });
+
+  it("still drops the browser subscription when server cleanup fails on logout", async () => {
+    const unsubscribe = vi.fn().mockResolvedValue(true);
+    getRegistration.mockResolvedValue({
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue({
+          endpoint: "https://push.example/logout",
+          unsubscribe,
+        }),
+      },
+    });
+    const failure = new Error("expired session");
+    rpc.mockResolvedValue({ data: null, error: failure });
+
+    await expect(disconnectWebPushForLogout()).rejects.toBe(failure);
+    expect(unsubscribe).toHaveBeenCalledOnce();
   });
 
   it("asks for permission before waiting on the worker", () => {
@@ -322,7 +333,7 @@ describe("Web Push configuration", () => {
         subscribe: vi.fn().mockResolvedValue(subscription),
       },
     });
-    rpc.mockResolvedValue({ data: null, error: null });
+    rpc.mockResolvedValue({ data: true, error: null });
 
     await expect(enableWebPush()).resolves.toEqual({
       state: "available",

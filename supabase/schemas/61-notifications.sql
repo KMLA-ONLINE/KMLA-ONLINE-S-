@@ -760,12 +760,13 @@ create or replace function public.register_my_web_push_subscription(
   p_p256dh text,
   p_auth text,
   p_expiration_time double precision default null
-) returns void
+) returns boolean
 language plpgsql security definer
 set search_path = ''
 as $$
 declare
   caller_profile_id bigint := private.current_profile_id();
+  live boolean;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -798,7 +799,11 @@ begin
         and subscription.auth = excluded.auth
         then subscription.gone_at
     end,
-    updated_at = now();
+    updated_at = now()
+  returning subscription.gone_at is null into live;
+  -- false면 클라이언트는 새로 구독해 다시 올린다. 상태를 따로 읽다 실패하거나, 다른 계정이 쓰던
+  -- gone endpoint를 넘겨받은 경우에도 이 답 하나로 걸러진다.
+  return live;
 end;
 $$;
 alter function public.register_my_web_push_subscription(text, text, text, double precision) owner to postgres;

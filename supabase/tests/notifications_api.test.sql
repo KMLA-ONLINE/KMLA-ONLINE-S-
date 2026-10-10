@@ -222,13 +222,14 @@ reset role;
 update private.web_push_subscriptions set gone_at = now()
 where endpoint = 'https://push.example.test/subscription/one';
 set local role authenticated;
-select lives_ok(
-  $$select public.register_my_web_push_subscription(
-      'https://push.example.test/subscription/one',
-      'BNcRdreALRFXTkA0bP8M5bq6fP6w6uLqFhKxqv2QdA',
-      'dGVzdC1hdXRoLWtleQ'
-    )$$,
-  'a browser can resend an endpoint the push service already ended'
+select is(
+  public.register_my_web_push_subscription(
+    'https://push.example.test/subscription/one',
+    'BNcRdreALRFXTkA0bP8M5bq6fP6w6uLqFhKxqv2QdA',
+    'dGVzdC1hdXRoLWtleQ'
+  ),
+  false,
+  'resending an ended endpoint tells the browser it is still dead'
 );
 select is(
   (select row(subscribed, gone)::text from public.get_my_web_push_status(
@@ -237,13 +238,14 @@ select is(
   '(f,t)',
   'a resent gone endpoint stays gone instead of reading as subscribed'
 );
-select lives_ok(
-  $$select public.register_my_web_push_subscription(
-      'https://push.example.test/subscription/one',
-      'BNcRdreALRFXTkA0bP8M5bq6fP6w6uLqFhKxqv2QdB',
-      'dGVzdC1hdXRoLWtleR'
-    )$$,
-  'a fresh subscription can land on the same endpoint with new keys'
+select is(
+  public.register_my_web_push_subscription(
+    'https://push.example.test/subscription/one',
+    'BNcRdreALRFXTkA0bP8M5bq6fP6w6uLqFhKxqv2QdB',
+    'dGVzdC1hdXRoLWtleR'
+  ),
+  true,
+  'a fresh subscription on the same endpoint with new keys is live'
 );
 select is(
   (select row(subscribed, gone)::text from public.get_my_web_push_status(

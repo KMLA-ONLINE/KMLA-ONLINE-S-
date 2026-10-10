@@ -68,22 +68,13 @@ async function getRegistration(): Promise<ServiceWorkerRegistration | null> {
   }
 }
 
-interface ServerPushStatus {
-  subscribed: boolean;
-  gone: boolean;
-}
-
-async function readServerPushStatus(
-  endpoint: string,
-): Promise<ServerPushStatus | null> {
+/** 이 endpoint로 지금 발송되는지. 읽지 못하면 null이다. */
+async function readServerSubscribed(endpoint: string): Promise<boolean | null> {
   const { data, error } = await getSupabase().rpc("get_my_web_push_status", {
     p_endpoint: endpoint,
   });
   if (error) return null;
-  return {
-    subscribed: data?.[0]?.subscribed === true,
-    gone: data?.[0]?.gone === true,
-  };
+  return data?.[0]?.subscribed === true;
 }
 
 /**
@@ -102,6 +93,42 @@ async function replaceGoneSubscription(
   });
 }
 
+/** 서버에 올리고 그 구독으로 실제 발송되는지 돌려준다. */
+async function registerSubscription(
+  subscription: PushSubscription,
+): Promise<boolean> {
+  const json = subscription.toJSON();
+  if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) {
+    throw new Error("Browser returned an incomplete Push subscription");
+  }
+  const { data, error } = await getSupabase().rpc(
+    "register_my_web_push_subscription",
+    {
+      p_endpoint: json.endpoint,
+      p_p256dh: json.keys.p256dh,
+      p_auth: json.keys.auth,
+      p_expiration_time: subscription.expirationTime ?? undefined,
+    },
+  );
+  if (error) throw error;
+  return data === true;
+}
+
+/**
+ * 등록하고, 서버가 이미 죽은 endpoint라고 답하면 새로 구독해 한 번 더 올린다. 같은 키로 다시
+ * 올라온 gone endpoint는 서버가 살리지 않으므로, 등록 결과만 보면 상태를 미리 읽지 않아도 된다.
+ */
+async function registerLiveSubscription(
+  registration: ServiceWorkerRegistration,
+  subscription: PushSubscription,
+  vapidKey: Uint8Array<ArrayBuffer>,
+): Promise<boolean> {
+  if (await registerSubscription(subscription)) return true;
+  return registerSubscription(
+    await replaceGoneSubscription(registration, subscription, vapidKey),
+  );
+}
+
 export async function getPushSupport(): Promise<PushSupport> {
   if (
     !("Notification" in window) ||
@@ -117,7 +144,7 @@ export async function getPushSupport(): Promise<PushSupport> {
   if (!registration) return { state: "unsupported" };
   const subscription = await registration.pushManager.getSubscription();
   const subscribed = subscription
-    ? (await readServerPushStatus(subscription.endpoint))?.subscribed === true
+    ? (await readServerSubscribed(subscription.endpoint)) === true
     : false;
   return {
     state: "available",
@@ -154,39 +181,22 @@ export async function enableWebPush(): Promise<PushSupport> {
 
   const registration = await getRegistration();
   if (!registration) throw new Error("Service worker is not ready");
-  let subscription = await registration.pushManager.getSubscription();
-  if (!subscription) {
-    subscription = await registration.pushManager.subscribe({
+  const subscription =
+    (await registration.pushManager.getSubscription()) ??
+    (await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: vapidKey,
-    });
-  } else if ((await readServerPushStatus(subscription.endpoint))?.gone) {
-    subscription = await replaceGoneSubscription(
-      registration,
-      subscription,
-      vapidKey,
-    );
-  }
-  const json = subscription.toJSON();
-  if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) {
-    throw new Error("Browser returned an incomplete Push subscription");
-  }
-
-  const { error } = await getSupabase().rpc(
-    "register_my_web_push_subscription",
-    {
-      p_endpoint: json.endpoint,
-      p_p256dh: json.keys.p256dh,
-      p_auth: json.keys.auth,
-      p_expiration_time: subscription.expirationTime ?? undefined,
-    },
+    }));
+  const subscribed = await registerLiveSubscription(
+    registration,
+    subscription,
+    vapidKey,
   );
-  if (error) throw error;
-  return { state: "available", permission, subscribed: true };
+  return { state: "available", permission, subscribed };
 }
 
 /**
- * 브라우저의 구독을 서버가 모르면 다시 등록한다. 서비스 워커의 `pushsubscriptionchange`는 로그인 세션이 없어 새 endpoint를 못 올리므로 그 나머지 절반이다.
+ * 브라우저의 구독을 서버가 모르거나 죽은 endpoint로 알고 있으면 다시 등록한다(죽었으면 새로 구독해서). 서비스 워커의 `pushsubscriptionchange`는 로그인 세션이 없어 새 endpoint를 못 올리므로 그 나머지 절반이다.
  * 없는 구독은 만들지 않는다 — `disableWebPush()`가 권한은 남기고 구독만 해지하기 때문이다.
  * 배경 정비라 실패는 삼키고 다음 실행에서 다시 시도한다.
  */
@@ -208,21 +218,9 @@ export async function resyncWebPushSubscription(): Promise<void> {
     if (!registration || !existing) return;
 
     // 흔한 경우는 "이미 맞다"이므로 읽기 한 번으로 끝내고, 어긋난 경우에만 쓴다.
-    const status = await readServerPushStatus(existing.endpoint);
-    if (!status || status.subscribed) return;
+    if ((await readServerSubscribed(existing.endpoint)) !== false) return;
 
-    const subscription = status.gone
-      ? await replaceGoneSubscription(registration, existing, vapidKey)
-      : existing;
-    const json = subscription.toJSON();
-    if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) return;
-
-    await getSupabase().rpc("register_my_web_push_subscription", {
-      p_endpoint: json.endpoint,
-      p_p256dh: json.keys.p256dh,
-      p_auth: json.keys.auth,
-      p_expiration_time: subscription.expirationTime ?? undefined,
-    });
+    await registerLiveSubscription(registration, existing, vapidKey);
   } catch {
     // 다음 실행에서 다시 시도한다.
   }
@@ -294,9 +292,12 @@ export async function disconnectWebPushForLogout(): Promise<void> {
   if (!subscription) return;
 
   try {
-    await getSupabase().rpc("unregister_my_web_push_subscription", {
-      p_endpoint: subscription.endpoint,
-    });
+    // rpc는 실패해도 throw하지 않고 `error`로 돌려준다. 호출부가 실패를 알 수 있게 던진다.
+    const { error } = await getSupabase().rpc(
+      "unregister_my_web_push_subscription",
+      { p_endpoint: subscription.endpoint },
+    );
+    if (error) throw error;
   } finally {
     await subscription.unsubscribe();
   }

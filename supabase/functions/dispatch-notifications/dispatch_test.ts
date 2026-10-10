@@ -205,3 +205,59 @@ Deno.test(
     assertEquals(pushUrgency("low"), "normal");
   },
 );
+
+function post() {
+  return new Request("http://localhost", {
+    method: "POST",
+    headers: { "x-dispatch-secret": "dispatch-secret" },
+  });
+}
+
+Deno.test(
+  "a push rejected for its VAPID key is gone so the browser resubscribes",
+  async () => {
+    const { deps, completions } = dependencies([delivery()]);
+    deps.sendPush = () => Promise.resolve({ status: 403 });
+    await createDispatchHandler(deps)(post());
+    assertEquals(completions[0]?.outcome, "gone");
+  },
+);
+
+Deno.test("an email rejected for our API key is dead, not gone", async () => {
+  const { deps, completions } = dependencies([
+    delivery({
+      channel: "email",
+      endpoint: null,
+      p256dh: null,
+      auth: null,
+      recipient_email: "member@example.test",
+    }),
+  ]);
+  deps.sendEmail = () => Promise.resolve({ status: 403 });
+  await createDispatchHandler(deps)(post());
+  assertEquals(completions[0]?.outcome, "dead");
+});
+
+Deno.test(
+  "a batch is sent with bounded overlap and every item is counted",
+  async () => {
+    const items = Array.from({ length: 25 }, (_, index) =>
+      delivery({
+        delivery_id: `11111111-1111-4111-8111-${String(index).padStart(12, "0")}`,
+      }),
+    );
+    const { deps } = dependencies(items);
+    let inFlight = 0;
+    let peak = 0;
+    deps.sendPush = async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      inFlight -= 1;
+      return { status: 201 };
+    };
+    const response = await createDispatchHandler(deps)(post());
+    assertEquals((await response.json()).sent, 25);
+    assertEquals(peak, 10);
+  },
+);

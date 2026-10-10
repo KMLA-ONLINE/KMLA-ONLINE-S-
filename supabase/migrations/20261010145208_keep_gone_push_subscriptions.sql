@@ -2,6 +2,8 @@ SET local check_function_bodies = off;
 
 DROP FUNCTION "public"."get_my_web_push_status"(text);
 
+DROP FUNCTION "public"."register_my_web_push_subscription"(text, text, text, double precision);
+
 ALTER TABLE "private"."web_push_subscriptions"
   ADD COLUMN "gone_at" timestamp WITH time zone;
 
@@ -209,13 +211,14 @@ CREATE OR REPLACE FUNCTION public.register_my_web_push_subscription (
   p_auth            text,
   p_expiration_time double precision DEFAULT NULL::double precision
 )
-  RETURNS void
+  RETURNS boolean
   LANGUAGE plpgsql
   SECURITY DEFINER
   SET search_path TO ''
   AS $function$
 declare
   caller_profile_id bigint := private.current_profile_id();
+  live boolean;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -248,8 +251,16 @@ begin
         and subscription.auth = excluded.auth
         then subscription.gone_at
     end,
-    updated_at = now();
+    updated_at = now()
+  returning subscription.gone_at is null into live;
+  -- false면 클라이언트는 새로 구독해 다시 올린다. 상태를 따로 읽다 실패하거나, 다른 계정이 쓰던
+  -- gone endpoint를 넘겨받은 경우에도 이 답 하나로 걸러진다.
+  return live;
 end;
 $function$;
 
+REVOKE ALL ON FUNCTION "public"."register_my_web_push_subscription"(text, text, text, double precision) FROM PUBLIC, "anon", "service_role";
+
 GRANT EXECUTE ON FUNCTION "public"."get_my_web_push_status"(text) TO "authenticated";
+
+GRANT EXECUTE ON FUNCTION "public"."register_my_web_push_subscription"(text, text, text, double precision) TO "authenticated";
