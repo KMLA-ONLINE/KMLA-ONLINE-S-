@@ -68,6 +68,7 @@ export function createDispatchHandler(deps: DispatchDependencies) {
       sent: 0,
       suppressed: 0,
       retry: 0,
+      gone: 0,
       dead: 0,
     };
     for (const delivery of deliveries) {
@@ -123,6 +124,7 @@ export function createDispatchHandler(deps: DispatchDependencies) {
       }
       if (result.outcome === "sent") totals.sent += 1;
       else if (result.outcome === "retry") totals.retry += 1;
+      else if (result.outcome === "gone") totals.gone += 1;
       else totals.dead += 1;
     }
 
