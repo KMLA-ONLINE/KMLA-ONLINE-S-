@@ -40,6 +40,9 @@ import {
 /** 누르고 있는 동안은 멈춘다. 이보다 짧게 눌렀다 떼면 탭으로 보고 장을 넘긴다. */
 const HOLD_THRESHOLD_MS = 250;
 
+/** 화면을 위나 아래로 이만큼 쓸고 떼면 뷰어를 닫는다. */
+const SWIPE_CLOSE_DISTANCE_PX = 80;
+
 /**
  * 지금 보는 장은 부모가 쥔다(URL의 `?story=<id>`). 뷰어는 그 id가 어느 작성자의 몇 번째 장인지
  * 찾아 그리고, 넘길 때는 다음 장의 id를 `onShow`로 알린다. 부모가 그 id를 찾지 못하는 경우
@@ -77,7 +80,10 @@ export function StoryViewer({
   const [progressElement, setProgressElement] =
     useState<HTMLSpanElement | null>(null);
   const animationRef = useRef<Animation | null>(null);
-  const pressRef = useRef<{ startedAt: number } | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const pressRef = useRef<{ startedAt: number; x: number; y: number } | null>(
+    null,
+  );
 
   const group = position ? groups[position.group] : undefined;
   const story = position ? group?.stories[position.story] : undefined;
@@ -105,6 +111,28 @@ export function StoryViewer({
 
     // 마지막 장이 끝나면 닫지 않고 그 자리에 멈춘다. 닫기는 사용자가 한다.
     if (target) onShow(target.id);
+  }
+
+  /**
+   * 쓰는 동안 카드가 손가락을 따라 움직이고 조금 작아진다. 움직이지 않으면 사용자는 쓸기가
+   * 닫기 동작이라는 걸 알 수 없다. 프레임마다 React를 다시 그리지 않도록 style을 직접 쓴다.
+   */
+  function dragCard(dy: number) {
+    const card = cardRef.current;
+    if (!card) return;
+
+    const shrink = Math.min(Math.abs(dy) / 1000, 0.1);
+    card.style.transition = "none";
+    card.style.transform = `translateY(${dy}px) scale(${1 - shrink})`;
+  }
+
+  /** 닫을 만큼 쓸지 않고 떼면 제자리로 돌아간다. */
+  function settleCard() {
+    const card = cardRef.current;
+    if (!card?.style.transform) return;
+
+    card.style.transition = "transform 200ms ease-out";
+    card.style.transform = "";
   }
 
   function previous() {
@@ -289,6 +317,7 @@ export function StoryViewer({
             <ChevronLeftIcon />
           </StoryNavButton>
           <div
+            ref={cardRef}
             className={cn(
               "@container relative size-full overflow-hidden select-none sm:aspect-[9/16] sm:h-[min(100dvh,56rem)] sm:w-auto sm:rounded-xl",
               story.background
@@ -317,12 +346,29 @@ export function StoryViewer({
               />
             ) : null}
 
-            {/* 탭 영역. 왼쪽 3분의 1은 이전, 나머지는 다음이다. 누르고 있으면 멈춘다. */}
+            {/* 탭 영역. 왼쪽 3분의 1은 이전, 나머지는 다음이다. 누르고 있으면 멈추고, 위나 아래로
+                쓸면 닫는다. `touch-none`이 없으면 브라우저가 쓸기를 스크롤로 가져가며
+                pointercancel을 보내 떼는 순간을 받지 못한다. */}
             <div
-              className="absolute inset-0"
-              onPointerDown={() => {
-                pressRef.current = { startedAt: Date.now() };
+              className="absolute inset-0 touch-none"
+              onPointerDown={(event) => {
+                // 마우스로 끌다 카드 밖으로 나가도 떼는 순간을 받는다. 터치는 원래 이렇게 묶인다.
+                event.currentTarget.setPointerCapture(event.pointerId);
+                pressRef.current = {
+                  startedAt: Date.now(),
+                  x: event.clientX,
+                  y: event.clientY,
+                };
                 setHeld(true);
+              }}
+              onPointerMove={(event) => {
+                const press = pressRef.current;
+                if (!press) return;
+
+                const dx = event.clientX - press.x;
+                const dy = event.clientY - press.y;
+
+                dragCard(Math.abs(dy) > Math.abs(dx) ? dy : 0);
               }}
               onPointerUp={(event) => {
                 const press = pressRef.current;
@@ -331,12 +377,20 @@ export function StoryViewer({
                 setHeld(false);
 
                 // 다른 곳(버튼·링크)에서 누르기 시작한 손가락이 여기서 떨어진 것은 탭이 아니다.
+                if (!press) return;
+
+                const dx = event.clientX - press.x;
+                const dy = event.clientY - press.y;
+
                 if (
-                  !press ||
-                  Date.now() - press.startedAt > HOLD_THRESHOLD_MS
+                  Math.abs(dy) >= SWIPE_CLOSE_DISTANCE_PX &&
+                  Math.abs(dy) > Math.abs(dx)
                 ) {
+                  onClose();
                   return;
                 }
+                settleCard();
+                if (Date.now() - press.startedAt > HOLD_THRESHOLD_MS) return;
 
                 const rect = event.currentTarget.getBoundingClientRect();
 
@@ -346,10 +400,12 @@ export function StoryViewer({
               onPointerCancel={() => {
                 pressRef.current = null;
                 setHeld(false);
+                settleCard();
               }}
               onPointerLeave={() => {
                 pressRef.current = null;
                 setHeld(false);
+                settleCard();
               }}
               aria-hidden
             />
