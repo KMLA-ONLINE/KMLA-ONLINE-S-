@@ -1,4 +1,12 @@
-import type { Content, PhrasingContent, Root, RootContent, Text } from "mdast";
+import type {
+  Content,
+  Delete,
+  PhrasingContent,
+  Root,
+  RootContent,
+  Text,
+} from "mdast";
+import type { ConstructName, Handle } from "mdast-util-to-markdown";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkStringify from "remark-stringify";
@@ -14,11 +22,70 @@ const parser = unified()
   .use(remarkParse)
   .use(remarkGfm)
   .use(remarkPostUnderline);
+/** `micromark-util-classify-character`와 같은 분류: 없음(글자) / 1(공백) / 2(문장부호). */
+function classify(code: number): 1 | 2 | undefined {
+  if (Number.isNaN(code)) return 1;
+  const char = String.fromCharCode(code);
+  if (/\s/u.test(char)) return 1;
+  if (/[\p{P}\p{S}]/u.test(char)) return 2;
+  return undefined;
+}
+
+/** 표식 바로 안쪽·바깥쪽 글자 중 어느 쪽을 문자 참조로 바꿔야 표식이 열리고 닫히는지. */
+function encodeInfo(outside: number, inside: number) {
+  const outsideKind = classify(outside);
+  const insideKind = classify(inside);
+  if (outsideKind === undefined)
+    return insideKind === undefined
+      ? { inside: false, outside: false }
+      : { inside: insideKind === 1, outside: true };
+  if (outsideKind === 1)
+    return { inside: insideKind === 1, outside: insideKind === 1 };
+  return { inside: insideKind === 1, outside: false };
+}
+
+function characterReference(code: number): string {
+  return `&#x${code.toString(16).toUpperCase()};`;
+}
+
+/**
+ * GFM 취소선 직렬화. `mdast-util-gfm-strikethrough`는 `**`·`*`와 달리 표식 경계를 맞추지 않아
+ * `가~~(나)~~다`처럼 문장부호와 한글이 붙은 자리에서 `~~`가 닫히지 않고 글자로 남는다. 기본
+ * `strong` 처리기와 같은 방식으로 경계 글자 하나를 문자 참조로 바꾼다.
+ */
+export const handleStrikethrough: Handle = (node: Delete, _, state, info) => {
+  const tracker = state.createTracker(info);
+  // 구성 이름은 `mdast-util-gfm-strikethrough`의 타입 확장에만 있다(직접 의존하지 않는다).
+  const exit = state.enter("strikethrough" as ConstructName);
+  const before = tracker.move("~~");
+  let between = tracker.move(
+    state.containerPhrasing(node, {
+      ...tracker.current(),
+      before,
+      after: "~",
+    }),
+  );
+  const head = between.charCodeAt(0);
+  const open = encodeInfo(info.before.charCodeAt(info.before.length - 1), head);
+  if (open.inside) between = characterReference(head) + between.slice(1);
+  const tail = between.charCodeAt(between.length - 1);
+  const close = encodeInfo(info.after.charCodeAt(0), tail);
+  if (close.inside) between = between.slice(0, -1) + characterReference(tail);
+  const after = tracker.move("~~");
+  exit();
+  state.attentionEncodeSurroundingInfo = {
+    after: close.outside,
+    before: open.outside,
+  };
+  return before + between + after;
+};
+
 const serializer = unified()
   .use(remarkStringify, {
     bullet: "-",
     emphasis: "*",
     fences: false,
+    handlers: { delete: handleStrikethrough },
     listItemIndent: "one",
     strong: "*",
   })

@@ -12,7 +12,26 @@ import { cn } from "~/shared/lib/utils";
 
 /** 접힌 본문 최대 높이(24px × 3줄, `.post-typography` 줄 높이에 묶임). 본문이 여러 블록이라 `line-clamp`를 쓰지 않는다. */
 const COLLAPSED_BODY_HEIGHT = 72;
-const COLLAPSED_BODY_CLASS = "max-h-[72px] overflow-hidden";
+
+/**
+ * 접힌 상자의 실제 높이. 제목은 줄 높이와 여백이 문단과 달라서 72px에서 그대로 자르면 줄이
+ * 가로로 반쯤 잘려 보인다. 그 안에 온전히 들어가는 마지막 줄의 아래끝에서 자른다.
+ */
+function measureCollapsedHeight(node: HTMLElement): number {
+  const range = document.createRange();
+  // jsdom처럼 레이아웃이 없는 환경에는 Range의 줄 상자가 없다.
+  if (typeof range.getClientRects !== "function") return COLLAPSED_BODY_HEIGHT;
+  range.selectNodeContents(node);
+  const top = node.getBoundingClientRect().top;
+  let cut = 0;
+  for (const rect of range.getClientRects()) {
+    const bottom = rect.bottom - top;
+    if (bottom <= COLLAPSED_BODY_HEIGHT + 0.5 && bottom > cut) cut = bottom;
+  }
+  return cut > 0
+    ? Math.min(Math.ceil(cut), COLLAPSED_BODY_HEIGHT)
+    : COLLAPSED_BODY_HEIGHT;
+}
 
 /**
  * 게시물별 접기 상태. 목록을 떠났다 돌아오면 카드가 다시 마운트되는데, 그때 펼친 글이 접히거나
@@ -20,7 +39,7 @@ const COLLAPSED_BODY_CLASS = "max-h-[72px] overflow-hidden";
  */
 const clampMemory = new Map<
   string,
-  { expanded: boolean; clampable: boolean }
+  { expanded: boolean; clampable: boolean; collapsedHeight: number }
 >();
 
 /** 당겨서 새로고침은 새로 읽은 목록이라 펼쳐 둔 글을 모두 접는다. 화면에 남아 있는 카드도 이 세대 번호로 알아챈다. */
@@ -70,9 +89,10 @@ export function PostBodyClamp({
       (postId ? clampMemory.get(postId) : undefined) ?? {
         expanded: false,
         clampable: false,
+        collapsedHeight: COLLAPSED_BODY_HEIGHT,
       },
   );
-  const { expanded, clampable } = state;
+  const { expanded, clampable, collapsedHeight } = state;
   const generation = useSyncExternalStore(
     subscribeCollapse,
     getCollapseGeneration,
@@ -92,7 +112,8 @@ export function PostBodyClamp({
         const next = { ...current, ...patch };
         if (
           next.expanded === current.expanded &&
-          next.clampable === current.clampable
+          next.clampable === current.clampable &&
+          next.collapsedHeight === current.collapsedHeight
         )
           return current;
         if (postId) clampMemory.set(postId, next);
@@ -108,7 +129,10 @@ export function PostBodyClamp({
       // `scrollHeight`는 접혀 있어도 본문 전체 높이라 펼친 상태에서도 잴 수 있다. 글을 수정해
       // 본문이 바뀌면 상자 크기도 바뀌므로 그때마다 다시 잰다. 한 번만 재면 수정 전 판정이 남는다.
       const measure = () =>
-        update({ clampable: node.scrollHeight > COLLAPSED_BODY_HEIGHT });
+        update({
+          clampable: node.scrollHeight > COLLAPSED_BODY_HEIGHT,
+          collapsedHeight: measureCollapsedHeight(node),
+        });
       measure();
       if (typeof ResizeObserver === "undefined") return;
       const observer = new ResizeObserver(measure);
@@ -146,8 +170,9 @@ export function PostBodyClamp({
           if ((event.target as Element).closest("a, button")) return;
           if (clampable) toggle();
         }}
+        style={expanded ? undefined : { maxHeight: collapsedHeight }}
         className={cn(
-          !expanded && COLLAPSED_BODY_CLASS,
+          !expanded && "overflow-hidden",
           // 터치 기기에서는 본문을 탭해도 펼쳐진다. 마우스에서는 버튼만 반응한다 —
           // 본문의 텍스트를 드래그해 선택하는 동작과 부딪히기 때문이다.
           clampable && "pointer-coarse:cursor-pointer",

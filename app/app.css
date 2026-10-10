@@ -54,6 +54,11 @@
   .post-typography h2 {
     @apply mt-6 text-xl leading-8 font-bold;
   }
+  /* 첫 블록의 위 여백은 카드·편집기 위쪽을 띄울 뿐이고, 접힌 세 줄 높이를 제목 여백이 먹는다. */
+  .post-typography > :first-child,
+  .post-typography .ProseMirror > :first-child {
+    @apply mt-0;
+  }
   .post-typography h3 {
     @apply mt-5 text-lg leading-[22px] font-semibold;
   }

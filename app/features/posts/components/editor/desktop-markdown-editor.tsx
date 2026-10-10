@@ -2,6 +2,7 @@ import {
   defaultValueCtx,
   Editor as MilkdownEditor,
   editorViewCtx,
+  remarkStringifyOptionsCtx,
   rootCtx,
 } from "@milkdown/core";
 import { history, redoCommand, undoCommand } from "@milkdown/plugin-history";
@@ -64,6 +65,7 @@ import { useEffect, useImperativeHandle, useRef, type RefObject } from "react";
 
 import {
   fromPostEditorMarkdown,
+  handleStrikethrough,
   isSafePostLink,
   sanitizePostMarkdown,
   toMilkdownMarkdown,
@@ -189,6 +191,13 @@ const imeSafeShortcuts = $prose(
             return redo(view.state, view.dispatch, view);
           return false;
         },
+        // 편집기는 원문의 줄 하나를 문단 하나로 든다(`toMilkdownMarkdown()`). 기본 복사는 문단
+        // 사이를 빈 줄로 이어서 다른 곳에 붙이면 줄마다 엔터가 두 번 들어간다. 빈 줄은 빈 문단이라
+        // 줄바꿈 하나로 이어도 그대로 남는다.
+        clipboardTextSerializer: (slice) =>
+          slice.content.textBetween(0, slice.content.size, "\n", (leaf) =>
+            leaf.type.name === "hardbreak" ? "\n" : "",
+          ),
       },
     }),
 );
@@ -241,6 +250,13 @@ function EditorSurface({
         .config((ctx) => {
           ctx.set(rootCtx, root);
           ctx.set(defaultValueCtx, lastValue.current);
+          // Milkdown 기본 처리기는 `text`·`strong`·`emphasis`를 덮어써서 문단 머리 `- `를 escape하지
+          // 않고(정화가 목록으로 읽어 `-`를 지운다) `**끝.**다음`처럼 닫히지 않는 표식을 쓴다. 표준
+          // 처리기로 되돌리고 취소선만 같은 경계 처리를 더한다.
+          ctx.update(remarkStringifyOptionsCtx, (options) => ({
+            ...options,
+            handlers: { delete: handleStrikethrough },
+          }));
           ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
             const safe = sanitizePostMarkdown(fromPostEditorMarkdown(markdown));
             if (input.current) input.current.value = safe;

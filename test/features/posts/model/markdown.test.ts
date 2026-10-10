@@ -184,3 +184,12 @@ describe("underline", () => {
     expect(extractPostPlainText(safe)).toBe(":u[글자]");
   });
 });
+
+describe("strikethrough", () => {
+  it("stays closed next to Korean letters and punctuation", () => {
+    const safe = sanitizePostMarkdown("&#xAC00;~~(나)~~&#xB2E4; 가~~나~~다");
+
+    expect(safe).toBe("&#xAC00;~~(나)~~&#xB2E4; 가~~나~~다");
+    expect(extractPostPlainText(safe)).toBe("가(나)다 가나다");
+  });
+});
