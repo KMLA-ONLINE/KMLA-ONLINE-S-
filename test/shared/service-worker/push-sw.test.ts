@@ -289,6 +289,18 @@ describe("public push service worker", () => {
     );
   });
 
+  it("re-alerts and counts the inbox card toward the app badge", async () => {
+    const worker = loadPushWorker();
+
+    await worker.dispatch("push", { data: undefined });
+
+    expect(worker.showNotification).toHaveBeenCalledWith(
+      "새 알림",
+      expect.objectContaining({ renotify: true }),
+    );
+    expect(worker.setAppBadge).toHaveBeenCalledWith(1);
+  });
+
   it("accepts a title as long as the server allows", async () => {
     const worker = loadPushWorker();
     const title = "가".repeat(160);

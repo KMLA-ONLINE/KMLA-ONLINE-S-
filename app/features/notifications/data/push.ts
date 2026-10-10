@@ -68,20 +68,49 @@ async function getRegistration(): Promise<ServiceWorkerRegistration | null> {
   }
 }
 
-/** 이 endpoint로 지금 발송되는지. 읽지 못하면 null이다. */
-async function readServerSubscribed(endpoint: string): Promise<boolean | null> {
+interface ServerPushStatus {
+  subscribed: boolean;
+  gone: boolean;
+}
+
+/** 이 endpoint로 지금 발송되는지, 서버가 죽은 endpoint로 알고 있는지. 읽지 못하면 null이다. */
+async function readServerPushStatus(
+  endpoint: string,
+): Promise<ServerPushStatus | null> {
   const { data, error } = await getSupabase().rpc("get_my_web_push_status", {
     p_endpoint: endpoint,
   });
   if (error) return null;
-  return data?.[0]?.subscribed === true;
+  return {
+    subscribed: data?.[0]?.subscribed === true,
+    gone: data?.[0]?.gone === true,
+  };
 }
 
 /**
- * Push service가 404/410으로 죽었다고 답한 endpoint를 브라우저는 `pushsubscriptionchange` 없이
- * 계속 돌려줄 수 있다. 그대로 다시 올리면 다음 발송에서 또 죽으니 버리고 새로 구독한다.
+ * VAPID 키를 바꾸면 옛 키로 만든 구독은 Push service가 401/403으로 거부한다. 서버는 그 응답을
+ * 설정 실수와 구별할 수 없어 구독을 죽은 것으로 표시하지 않으므로, 여기서 비교해 교체한다.
  */
-async function replaceGoneSubscription(
+function isSubscribedWithKey(
+  subscription: PushSubscription,
+  vapidKey: Uint8Array<ArrayBuffer>,
+): boolean {
+  const key = subscription.options?.applicationServerKey;
+  // 옵션을 알려주지 않는 브라우저는 비교할 수 없으니 맞는 것으로 둔다.
+  if (!key) return true;
+  const bytes = new Uint8Array(key);
+  return (
+    bytes.length === vapidKey.length &&
+    bytes.every((byte, index) => byte === vapidKey[index])
+  );
+}
+
+/**
+ * 쓸 수 없는 브라우저 구독을 버리고 새로 구독한다. Push service가 404/410으로 죽었다고 답한
+ * endpoint를 브라우저는 `pushsubscriptionchange` 없이 계속 돌려줄 수 있고, VAPID 키를 바꾸면 옛 키로
+ * 만든 구독은 거부된다. 어느 쪽이든 그대로 다시 올리면 다음 발송에서 또 실패한다.
+ */
+async function replaceSubscription(
   registration: ServiceWorkerRegistration,
   subscription: PushSubscription,
   vapidKey: Uint8Array<ArrayBuffer>,
@@ -125,7 +154,7 @@ async function registerLiveSubscription(
 ): Promise<boolean> {
   if (await registerSubscription(subscription)) return true;
   return registerSubscription(
-    await replaceGoneSubscription(registration, subscription, vapidKey),
+    await replaceSubscription(registration, subscription, vapidKey),
   );
 }
 
@@ -144,7 +173,7 @@ export async function getPushSupport(): Promise<PushSupport> {
   if (!registration) return { state: "unsupported" };
   const subscription = await registration.pushManager.getSubscription();
   const subscribed = subscription
-    ? (await readServerSubscribed(subscription.endpoint)) === true
+    ? (await readServerPushStatus(subscription.endpoint))?.subscribed === true
     : false;
   return {
     state: "available",
@@ -181,18 +210,20 @@ export async function enableWebPush(): Promise<PushSupport> {
 
   const registration = await getRegistration();
   if (!registration) throw new Error("Service worker is not ready");
-  const subscription =
-    (await registration.pushManager.getSubscription()) ??
-    (await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: vapidKey,
-    }));
-  const subscribed = await registerLiveSubscription(
-    registration,
-    subscription,
-    vapidKey,
-  );
-  return { state: "available", permission, subscribed };
+  const existing = await registration.pushManager.getSubscription();
+  const subscription = !existing
+    ? await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidKey,
+      })
+    : isSubscribedWithKey(existing, vapidKey)
+      ? existing
+      : await replaceSubscription(registration, existing, vapidKey);
+  // 새로 구독한 것까지 서버가 거부하면 스위치만 꺼진 채 남지 않도록 실패로 알린다.
+  if (!(await registerLiveSubscription(registration, subscription, vapidKey))) {
+    throw new Error("Push subscription was refused by the server");
+  }
+  return { state: "available", permission, subscribed: true };
 }
 
 /**
@@ -217,10 +248,26 @@ export async function resyncWebPushSubscription(): Promise<void> {
     const existing = await registration?.pushManager.getSubscription();
     if (!registration || !existing) return;
 
-    // 흔한 경우는 "이미 맞다"이므로 읽기 한 번으로 끝내고, 어긋난 경우에만 쓴다.
-    if ((await readServerSubscribed(existing.endpoint)) !== false) return;
+    if (!isSubscribedWithKey(existing, vapidKey)) {
+      await registerLiveSubscription(
+        registration,
+        await replaceSubscription(registration, existing, vapidKey),
+        vapidKey,
+      );
+      return;
+    }
 
-    await registerLiveSubscription(registration, existing, vapidKey);
+    // 흔한 경우는 "이미 맞다"이므로 읽기 한 번으로 끝내고, 어긋난 경우에만 쓴다.
+    const status = await readServerPushStatus(existing.endpoint);
+    if (!status || status.subscribed) return;
+
+    await registerLiveSubscription(
+      registration,
+      status.gone
+        ? await replaceSubscription(registration, existing, vapidKey)
+        : existing,
+      vapidKey,
+    );
   } catch {
     // 다음 실행에서 다시 시도한다.
   }

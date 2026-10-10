@@ -74,7 +74,13 @@ async function sendPush(delivery: Delivery, payload: string) {
         keys: { p256dh: delivery.p256dh, auth: delivery.auth },
       },
       payload,
-      { TTL: 86400, urgency: pushUrgency(delivery.importance) },
+      {
+        TTL: 86400,
+        urgency: pushUrgency(delivery.importance),
+        // 응답 없는 Push service 하나가 worker를 붙잡으면 배치가 lease를 넘겨 중복 발송된다.
+        // 시간 초과는 transport_error로 재시도된다.
+        timeout: 10_000,
+      },
     );
     return { status: response.statusCode };
   } catch (error) {

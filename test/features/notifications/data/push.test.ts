@@ -279,6 +279,87 @@ describe("Web Push configuration", () => {
     });
   });
 
+  it("fails loudly when the server refuses even a fresh subscription", async () => {
+    vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", VALID_VAPID_KEY);
+    const notification = { permission: "granted", requestPermission };
+    vi.stubGlobal("window", { Notification: notification, PushManager });
+    vi.stubGlobal("Notification", notification);
+    const subscription = (endpoint: string) => ({
+      endpoint,
+      expirationTime: null,
+      unsubscribe: vi.fn().mockResolvedValue(true),
+      toJSON: () => ({ endpoint, keys: { auth: "auth", p256dh: "p256dh" } }),
+    });
+    getRegistration.mockResolvedValue({
+      active: {},
+      pushManager: {
+        getSubscription: vi
+          .fn()
+          .mockResolvedValue(subscription("https://push.example/a")),
+        subscribe: vi
+          .fn()
+          .mockResolvedValue(subscription("https://push.example/b")),
+      },
+    });
+    rpc.mockImplementation((name: string) =>
+      Promise.resolve(
+        name === "get_my_web_push_status"
+          ? { data: [{ subscribed: false, gone: true }], error: null }
+          : { data: false, error: null },
+      ),
+    );
+
+    await expect(enableWebPush()).rejects.toThrow(/refused/);
+  });
+
+  it("replaces a subscription made with a previous VAPID key", async () => {
+    vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", VALID_VAPID_KEY);
+    const notification = { permission: "granted", requestPermission };
+    vi.stubGlobal("window", { Notification: notification, PushManager });
+    vi.stubGlobal("Notification", notification);
+    const oldKey = new Uint8Array(65).fill(4).buffer;
+    const stale = {
+      endpoint: "https://push.example/old-key",
+      expirationTime: null,
+      options: { applicationServerKey: oldKey },
+      unsubscribe: vi.fn().mockResolvedValue(true),
+      toJSON: () => ({
+        endpoint: "https://push.example/old-key",
+        keys: { auth: "auth", p256dh: "p256dh" },
+      }),
+    };
+    const fresh = {
+      endpoint: "https://push.example/new-key",
+      expirationTime: null,
+      toJSON: () => ({
+        endpoint: "https://push.example/new-key",
+        keys: { auth: "auth2", p256dh: "p256dh2" },
+      }),
+    };
+    const subscribe = vi.fn().mockResolvedValue(fresh);
+    getRegistration.mockResolvedValue({
+      active: {},
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(stale),
+        subscribe,
+      },
+    });
+    rpc.mockResolvedValue({ data: true, error: null });
+
+    await resyncWebPushSubscription();
+
+    expect(stale.unsubscribe).toHaveBeenCalledOnce();
+    // 서버 상태를 읽을 필요 없이 키만 보고 교체한다.
+    expect(rpc).not.toHaveBeenCalledWith(
+      "get_my_web_push_status",
+      expect.anything(),
+    );
+    expect(rpc).toHaveBeenCalledWith(
+      "register_my_web_push_subscription",
+      expect.objectContaining({ p_endpoint: fresh.endpoint }),
+    );
+  });
+
   it("still drops the browser subscription when server cleanup fails on logout", async () => {
     const unsubscribe = vi.fn().mockResolvedValue(true);
     getRegistration.mockResolvedValue({

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(29);
 
 select is(
   (
@@ -276,6 +276,37 @@ select is(
   private.enqueue_notification_push('70000000-0000-0000-0000-000000000013'),
   0,
   'new notifications are not queued for a gone subscription'
+);
+
+-- delivery가 쌓인 뒤 구독이 새 키로 다시 등록됐다면 그 410은 옛 키에 대한 답이다. 방금 살아난
+-- 구독을 다시 죽이면 안 된다.
+update private.web_push_subscriptions
+set gone_at = null, updated_at = now() + interval '1 second'
+where id = '71000000-0000-0000-0000-000000000001';
+insert into private.notification_delivery_outbox (
+  id, notification_id, recipient_profile_id, subscription_id, channel,
+  status, attempt_count, lease_id, lease_expires_at
+) values (
+  '72000000-0000-0000-0000-000000000013',
+  '70000000-0000-0000-0000-000000000013',
+  (select id from public.profiles where pub_id = 'hanbyeol-25'),
+  '71000000-0000-0000-0000-000000000001', 'web_push',
+  'leased', 1, '73000000-0000-0000-0000-000000000013',
+  now() + interval '1 minute'
+);
+set local role service_role;
+select ok(
+  public.complete_notification_delivery(
+    '72000000-0000-0000-0000-000000000013',
+    '73000000-0000-0000-0000-000000000013',
+    'gone', 410, null
+  ),
+  'a gone result for an older key is still recorded'
+);
+reset role;
+select ok(
+  (select gone_at is null from private.web_push_subscriptions where id = '71000000-0000-0000-0000-000000000001'),
+  'a gone result for an older key does not kill a re-registered subscription'
 );
 
 insert into public.notifications (

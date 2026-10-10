@@ -1069,10 +1069,13 @@ begin
     delivery_id, outcome, status_code, error_code
   ) values (target.id, p_outcome, p_status_code, left(p_error_code, 80));
 
+  -- 이 delivery가 쌓인 뒤 구독이 새 키로 다시 등록됐다면 404/410은 옛 키에 대한 답이다.
+  -- 그대로 표시하면 방금 살아난 구독을 다시 죽인다.
   if p_outcome = 'gone' then
     update private.web_push_subscriptions
     set gone_at = coalesce(gone_at, now())
-    where id = target.subscription_id;
+    where id = target.subscription_id
+      and updated_at <= target.created_at;
   end if;
 
   if p_outcome = 'retry' and target.attempt_count < 5 then

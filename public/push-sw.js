@@ -93,6 +93,8 @@ async function showInboxCard() {
     badge: "/badge-96x96.png",
     lang: "ko",
     tag: "notification-inbox",
+    // 같은 tag로 덮어쓰므로, 다시 알리지 않으면 두 번째부터는 아무 표시 없이 바뀐다.
+    renotify: true,
     data: INBOX_CARD_DATA,
   });
 }
@@ -130,7 +132,12 @@ async function syncAppBadge() {
     const shown = await self.registration.getNotifications();
     const total = shown.reduce(
       (sum, notification) =>
-        sum + (isClickData(notification.data) ? notification.data.count : 0),
+        sum +
+        (isClickData(notification.data)
+          ? notification.data.count
+          : isInboxCardData(notification.data)
+            ? 1
+            : 0),
       0,
     );
     if (total > 0) await badging.setAppBadge(total);
@@ -150,6 +157,7 @@ async function showPush(data) {
 
   if (!isPushPayload(payload)) {
     await showInboxCard();
+    await syncAppBadge();
     return;
   }
 

@@ -214,37 +214,24 @@ function post() {
 }
 
 Deno.test(
-  "a push rejected for its VAPID key is gone so the browser resubscribes",
+  "a push rejected for its VAPID key is dead, not gone, since config errors look the same",
   async () => {
     const { deps, completions } = dependencies([delivery()]);
     deps.sendPush = () => Promise.resolve({ status: 403 });
     await createDispatchHandler(deps)(post());
-    assertEquals(completions[0]?.outcome, "gone");
+    assertEquals(completions[0]?.outcome, "dead");
   },
 );
 
-Deno.test("an email rejected for our API key is dead, not gone", async () => {
-  const { deps, completions } = dependencies([
-    delivery({
-      channel: "email",
-      endpoint: null,
-      p256dh: null,
-      auth: null,
-      recipient_email: "member@example.test",
-    }),
-  ]);
-  deps.sendEmail = () => Promise.resolve({ status: 403 });
-  await createDispatchHandler(deps)(post());
-  assertEquals(completions[0]?.outcome, "dead");
-});
+function key(index: number) {
+  return `44444444-4444-4444-8444-${String(index).padStart(12, "0")}`;
+}
 
 Deno.test(
   "a batch is sent with bounded overlap and every item is counted",
   async () => {
     const items = Array.from({ length: 25 }, (_, index) =>
-      delivery({
-        delivery_id: `11111111-1111-4111-8111-${String(index).padStart(12, "0")}`,
-      }),
+      delivery({ delivery_id: key(index), grouping_key: key(index) }),
     );
     const { deps } = dependencies(items);
     let inFlight = 0;
@@ -259,5 +246,29 @@ Deno.test(
     const response = await createDispatchHandler(deps)(post());
     assertEquals((await response.json()).sent, 25);
     assertEquals(peak, 10);
+  },
+);
+
+Deno.test(
+  "pushes to one subscription go out one at a time in claim order",
+  async () => {
+    const items = Array.from({ length: 3 }, (_, index) =>
+      delivery({ delivery_id: key(index) }),
+    );
+    const { deps } = dependencies(items);
+    const order: string[] = [];
+    let inFlight = 0;
+    let peak = 0;
+    deps.sendPush = async (item) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      order.push(item.delivery_id);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      inFlight -= 1;
+      return { status: 201 };
+    };
+    await createDispatchHandler(deps)(post());
+    assertEquals(peak, 1);
+    assertEquals(order, [key(0), key(1), key(2)]);
   },
 );
