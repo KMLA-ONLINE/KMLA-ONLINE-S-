@@ -11,8 +11,13 @@
 | `21-*`           | Groups and membership                                          |
 | `31-*` to `35-*` | Posts, comments, reactions, cross-content APIs, and moderation |
 | `41-*`           | Integrated feed                                                |
+| `42-*`           | Stories                                                        |
 | `51-*` to `52-*` | Reservations and timetables                                    |
+| `53-*`           | Directory search                                               |
+| `61-*`           | Notifications, delivery preferences, and outbox                |
 | `81-*`           | Policies on Supabase-managed Storage objects                   |
+| `82-*`           | Storage cleanup queue, worker APIs, and observability          |
+| `83-*`           | Record retention and cleanup                                   |
 | `91-*`           | Scheduled `pg_cron` jobs                                       |
 
 Files run in lexicographic order. Add new files with a number that follows their dependencies. Keep one final definition for each object; declarative files must not reproduce the sequence of historical `alter` and `drop` statements.
@@ -45,7 +50,7 @@ Never `--include-seed` a remote push (`seed.sql` inserts into `auth.users`), and
 
 Migrations do not carry these. Set them per project before scheduled work functions.
 
-**Vault.** `seed.sql` covers the local stack only. Elsewhere the cron helpers read `vault.decrypted_secrets` and return `null` when a name is missing.
+**Vault.** `seed.sql` covers the local stack only. Elsewhere the cron helpers read `vault.decrypted_secrets`; missing-secret behavior differs by helper as described below.
 
 | Name                           | Read by                                   |
 | ------------------------------ | ----------------------------------------- |

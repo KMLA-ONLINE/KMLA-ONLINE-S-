@@ -5,8 +5,9 @@ Generated lookup tables. Rules live in `AGENTS.md`, product behavior in
 `grep -n list_feed_posts docs/AGENT_MAP.md` — rather than reading it through.
 
 Every table below is derived from the code and checked by `scripts/check-agent-map.mjs` during
-`npm run check` and `npm run check:static`; `node scripts/check-agent-map.mjs --print` regenerates
-them. A failure names the exact row to fix. Two exceptions are hand-written and **not** checked:
+`npm run check` and `npm run check:static`; neither edits this file.
+`node scripts/check-agent-map.mjs --print` prints route URL/module, RPC, and direct-table rows for updates.
+A failure names the exact row to fix. The following columns are hand-written and **not** checked:
 the **Spec** and **Features** columns of the route table, and the **Owns** column of the feature
 table. Spec chapter numbers are stable identifiers by design, so they age slowly.
 
@@ -111,7 +112,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `search`           | Global search dialog, directory search, recent searches                                                                                     | §3.3, §3.6                                          |
 | `stories`          | 24-hour photo/text story rail, viewer and composer                                                                                          | §17.6, §6.6                                         |
 | `support`          | FAQ and release notes — static content in `content/`, no Supabase                                                                           | §15.11, §15.12                                      |
-| `timetable`        | Personal timetable, backed by local storage                                                                                                 | §17.7                                               |
+| `timetable`        | Personal timetable, stored per account in the database with a device-local cache                                                            | §17.7                                               |
 
 <!-- features:end -->
 
