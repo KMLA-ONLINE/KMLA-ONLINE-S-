@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { reservationCreateErrorMessage } from "~/features/school-utilities/model/reservation-error";
+import {
+  reservationCancelErrorMessage,
+  reservationCreateErrorMessage,
+} from "~/features/school-utilities/model/reservation-error";
 
 describe("reservationCreateErrorMessage", () => {
   it("separates a manager hold from a slot another user took first", () => {
@@ -50,6 +53,44 @@ describe("reservationCreateErrorMessage", () => {
   it("falls back to a retry message for anything else", () => {
     expect(reservationCreateErrorMessage(new Error("boom"), false)).toBe(
       "신청하지 못했습니다. 잠시 후 다시 시도해주세요.",
+    );
+  });
+});
+
+describe("reservationCancelErrorMessage", () => {
+  it("treats a missing or foreign reservation as already gone", () => {
+    expect(
+      reservationCancelErrorMessage({
+        code: "42501",
+        message: "reservation not found",
+      }),
+    ).toBe("이미 취소됐거나 본인의 예약이 아닙니다.");
+    expect(
+      reservationCancelErrorMessage({
+        code: "42501",
+        message: "accepted profile required",
+      }),
+    ).toBe("취소할 권한이 없습니다.");
+  });
+
+  it("separates a past one-off from a bad recurring end date", () => {
+    expect(
+      reservationCancelErrorMessage({
+        code: "22023",
+        message: "past utility reservations cannot be cancelled",
+      }),
+    ).toBe("지난 예약은 취소할 수 없습니다.");
+    expect(
+      reservationCancelErrorMessage({
+        code: "22023",
+        message: "invalid recurring cancellation date",
+      }),
+    ).toBe("장기 예약은 오늘 이후 날짜부터만 종료할 수 있습니다.");
+  });
+
+  it("falls back to a retry message for anything else", () => {
+    expect(reservationCancelErrorMessage(new Error("boom"))).toBe(
+      "취소하지 못했습니다. 잠시 후 다시 시도해주세요.",
     );
   });
 });

@@ -20,7 +20,10 @@ import {
   startOfKoreaWeek,
   useKoreaToday,
 } from "~/features/school-utilities/model/korea-date";
-import { reservationCreateErrorMessage } from "~/features/school-utilities/model/reservation-error";
+import {
+  reservationCancelErrorMessage,
+  reservationCreateErrorMessage,
+} from "~/features/school-utilities/model/reservation-error";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -838,7 +841,7 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
       setOpenKey(null);
     } catch (error) {
       console.error("Failed to delete utility reservation", error);
-      setError("예약을 취소할 수 없습니다. 새로고침 후 다시 시도해주세요.");
+      setError(reservationCancelErrorMessage(error));
       setRefreshVersion((current) => current + 1);
     } finally {
       setMutationKey(null);
