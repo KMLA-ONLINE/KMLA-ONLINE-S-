@@ -104,6 +104,7 @@ Deno.test(
       sent: 0,
       suppressed: 1,
       retry: 0,
+      gone: 0,
       dead: 0,
     });
     assertEquals(pushCalls, 0);
@@ -124,7 +125,7 @@ Deno.test(
     ]);
     let call = 0;
     deps.sendPush = () => Promise.resolve({ status: call++ === 0 ? 410 : 503 });
-    await createDispatchHandler(deps)(
+    const response = await createDispatchHandler(deps)(
       new Request("http://localhost", {
         method: "POST",
         headers: { "x-dispatch-secret": "dispatch-secret" },
@@ -134,6 +135,14 @@ Deno.test(
       completions.map((item) => item.outcome),
       ["gone", "retry"],
     );
+    assertEquals(await response.json(), {
+      claimed: 2,
+      sent: 0,
+      suppressed: 0,
+      retry: 1,
+      gone: 1,
+      dead: 0,
+    });
   },
 );
 
@@ -182,6 +191,7 @@ Deno.test(
       sent: 0,
       suppressed: 0,
       retry: 1,
+      gone: 0,
       dead: 0,
     });
   },
