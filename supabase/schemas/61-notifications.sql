@@ -777,8 +777,9 @@ begin
     or p_expiration_time > 253402300799999 then
     raise exception 'invalid web push subscription' using errcode = '22023';
   end if;
-  -- gone_at은 풀지 않는다. 죽은 endpoint를 브라우저가 계속 들고 있다가 다시 올려도 살아나지
-  -- 않아야 클라이언트가 `gone`을 보고 새로 구독한다.
+  -- 같은 키로 다시 올라온 gone endpoint는 브라우저가 들고 있던 죽은 구독이라 살리지 않는다.
+  -- 그래야 클라이언트가 `gone`을 보고 새로 구독한다. 새 구독은 키가 반드시 바뀌므로, endpoint가
+  -- 우연히 같아도 키가 다르면 살린다.
   insert into private.web_push_subscriptions as subscription (
     profile_id, endpoint, p256dh, auth, expiration_time
   ) values (
@@ -792,6 +793,11 @@ begin
     p256dh = excluded.p256dh,
     auth = excluded.auth,
     expiration_time = excluded.expiration_time,
+    gone_at = case
+      when subscription.p256dh = excluded.p256dh
+        and subscription.auth = excluded.auth
+        then subscription.gone_at
+    end,
     updated_at = now();
 end;
 $$;

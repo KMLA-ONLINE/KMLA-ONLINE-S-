@@ -37,6 +37,13 @@ export interface DispatchDependencies {
   sendEmail: (delivery: Delivery) => Promise<TransportResponse>;
 }
 
+/** Android 절전 상태에서 normal은 기기가 깰 때까지 미뤄질 수 있다. */
+export function pushUrgency(
+  importance: Delivery["importance"],
+): "high" | "normal" {
+  return importance === "high" ? "high" : "normal";
+}
+
 function classify(status: number): DeliveryResult["outcome"] {
   if (status >= 200 && status < 300) return "sent";
   if (status === 404 || status === 410) return "gone";

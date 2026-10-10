@@ -7,6 +7,7 @@ import {
   createDispatchHandler,
   type Delivery,
   type DeliveryResult,
+  pushUrgency,
 } from "./handler.ts";
 
 const url = Deno.env.get("SUPABASE_URL") ?? "";
@@ -73,11 +74,7 @@ async function sendPush(delivery: Delivery, payload: string) {
         keys: { p256dh: delivery.p256dh, auth: delivery.auth },
       },
       payload,
-      {
-        TTL: 86400,
-        // Android 절전 상태에서 normal은 기기가 깰 때까지 미뤄질 수 있다.
-        urgency: delivery.importance === "high" ? "high" : "normal",
-      },
+      { TTL: 86400, urgency: pushUrgency(delivery.importance) },
     );
     return { status: response.statusCode };
   } catch (error) {

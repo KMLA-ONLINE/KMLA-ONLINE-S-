@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(36);
+select plan(38);
 
 select ok(
   (select relrowsecurity from pg_class where oid = 'public.notifications'::regclass),
@@ -236,6 +236,21 @@ select is(
   )),
   '(f,t)',
   'a resent gone endpoint stays gone instead of reading as subscribed'
+);
+select lives_ok(
+  $$select public.register_my_web_push_subscription(
+      'https://push.example.test/subscription/one',
+      'BNcRdreALRFXTkA0bP8M5bq6fP6w6uLqFhKxqv2QdB',
+      'dGVzdC1hdXRoLWtleR'
+    )$$,
+  'a fresh subscription can land on the same endpoint with new keys'
+);
+select is(
+  (select row(subscribed, gone)::text from public.get_my_web_push_status(
+    'https://push.example.test/subscription/one'
+  )),
+  '(t,f)',
+  'new keys on a gone endpoint revive it'
 );
 select is(
   public.unregister_my_web_push_subscription('https://push.example.test/subscription/one'),

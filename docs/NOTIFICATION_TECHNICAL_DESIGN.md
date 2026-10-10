@@ -159,7 +159,9 @@ dispatcher는 만료되지 않은 lease를 suppress하거나 가져가지 않는
 없는 항목은 외부 호출 없이 suppress한다.
 
 - Web Push 2xx는 성공 처리한다.
-- 404와 410은 subscription을 폐기한다.
+- 404와 410은 subscription에 `gone_at`을 표시하고 delivery를 dead로 끝낸다. 행을 바로 지우면 outbox와
+  시도 기록이 CASCADE로 사라져 진단 근거가 없어지므로 표시만 하고, `gone` 구독은 큐잉과 전달에서
+  제외한 뒤 30일 보관 후 정리한다.
 - 429와 5xx는 제한된 exponential backoff로 재시도한다.
 - 영구 payload·key 오류는 dead-letter 처리한다.
 - 로그에는 안정적인 내부 작업 ID와 집계만 남기고 endpoint·키·이메일 주소를 남기지 않는다.
@@ -192,7 +194,7 @@ badge를 쓰므로, 주지 않으면 브라우저 기본 도형이 대신 나간
 
 `pushsubscriptionchange`에서는 `oldSubscription.options`로 다시 구독하기만 한다. 서비스
 워커에는 로그인 세션이 없어 새 endpoint를 서버에 올릴 수 없고, 그 절반은 앱이 다음에 뜰 때
-§8의 재동기화가 맡는다. 죽은 옛 endpoint는 전달 worker가 410으로 정리한다. 이 파일은 Vite가
+§8의 재동기화가 맡는다. 죽은 옛 endpoint는 전달 worker가 410을 받아 `gone`으로 표시한다(§6). 이 파일은 Vite가
 빌드하지 않는 정적 파일이라 VAPID 공개키를 읽을 수 없고, 옛 구독의 생성 옵션이 그 자리를
 대신한다.
 
@@ -240,6 +242,9 @@ badge를 갱신하며 창 복귀 시 revalidation을 fallback으로 사용한다
 구독이 서버에도 있는지 한 번 확인하고, 없으면 다시 등록한다 — §7의 `pushsubscriptionchange`가
 브라우저 쪽만 되살리기 때문이다. 구독이 아예 없으면 새로 만들지 않는다. 앱에서 알림을 끄면 권한은
 granted로 남은 채 구독만 해지되므로, 새로 구독하면 사용자가 끈 알림이 저절로 켜진다.
+서버가 그 endpoint를 `gone`으로 알고 있으면 다시 등록하지 않고 해지 후 새로 구독해 올린다. 브라우저는
+`pushsubscriptionchange` 없이 죽은 구독을 계속 돌려줄 수 있고, 같은 키로 다시 올라온 `gone` endpoint는
+서버가 살리지 않는다. 사용자가 알림을 켤 때도 같은 교체를 거친다.
 
 Push 권한 설명은 승인 사용자의 gate 아래에서 표시한다. 사용자 동작 안에서만 브라우저 권한을 요청하고,
 기기·계정별 prompt 상태는 versioned localStorage key에 저장한다. 서비스 워커 업데이트, iOS 설치 안내,

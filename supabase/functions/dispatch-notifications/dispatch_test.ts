@@ -4,6 +4,7 @@ import {
   type Delivery,
   type DeliveryResult,
   type DispatchDependencies,
+  pushUrgency,
 } from "./handler.ts";
 
 function delivery(overrides: Partial<Delivery> = {}): Delivery {
@@ -112,7 +113,7 @@ Deno.test(
 );
 
 Deno.test(
-  "dispatcher removes gone subscriptions and retries transient push failures",
+  "dispatcher reports gone subscriptions and retries transient push failures",
   async () => {
     const { deps, completions } = dependencies([
       delivery(),
@@ -183,5 +184,14 @@ Deno.test(
       retry: 1,
       dead: 0,
     });
+  },
+);
+
+Deno.test(
+  "only high-importance pushes ask the push service to wake the device",
+  () => {
+    assertEquals(pushUrgency("high"), "high");
+    assertEquals(pushUrgency("normal"), "normal");
+    assertEquals(pushUrgency("low"), "normal");
   },
 );
