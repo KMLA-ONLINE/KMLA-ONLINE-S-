@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import { NavLink, useLocation } from "react-router";
 
 import { NavBadge } from "~/features/app-shell/components/nav-badge";
@@ -6,13 +7,23 @@ import {
   isNavItemActive,
   navItems,
 } from "~/features/app-shell/model/nav-items";
+import { scrollToTop } from "~/shared/lib/scroll-container";
 import { cn } from "~/shared/lib/utils";
 
 /**
  * 모바일 하단 탭바. `fixed`가 아니라 셸 flex 흐름의 마지막 행이라 콘텐츠 하단 패딩 보정이 없다.
  * 표시·자동 숨김은 현재 route의 `handle.chrome.bottomNav`가 정한다.
+ *
+ * 이미 그 탭의 첫 화면에 있을 때 탭을 다시 누르면 이동하지 않고 `scrollRef`를 맨 위로 올린다.
+ * 같은 경로로 다시 이동하면 loader가 다시 돌아 새로고침이 되는데, 원하는 건 위치뿐이다.
  */
-export function MobileTabBar({ className }: { className?: string }) {
+export function MobileTabBar({
+  className,
+  scrollRef,
+}: {
+  className?: string;
+  scrollRef: RefObject<HTMLElement | null>;
+}) {
   const location = useLocation();
   const badges = useNavBadges();
 
@@ -36,6 +47,11 @@ export function MobileTabBar({ className }: { className?: string }) {
                 to={item.to}
                 end={item.end}
                 prefetch="intent"
+                onClick={(event) => {
+                  if (location.pathname !== item.to) return;
+                  event.preventDefault();
+                  scrollToTop(scrollRef.current);
+                }}
                 aria-label={
                   unread > 0
                     ? `${item.label} (안 읽음 ${unread}개)`

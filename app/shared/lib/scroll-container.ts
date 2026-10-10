@@ -19,3 +19,12 @@ export const ScrollContainerContext =
 export function useScrollContainer(): RefObject<HTMLElement | null> | null {
   return use(ScrollContainerContext);
 }
+
+/** 탭이나 헤더를 눌러 맨 위로 올린다. 동작 줄이기 설정이면 미끄러지지 않고 바로 간다. */
+export function scrollToTop(element: HTMLElement | null | undefined) {
+  if (!element) return;
+  const reduceMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+  element.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+}

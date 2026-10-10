@@ -160,6 +160,7 @@ export default function MainAppLayout() {
 
           {chrome.bottomNav === "none" ? null : (
             <MobileTabBar
+              scrollRef={scrollRef}
               className={cn(
                 "md:hidden",
                 // 키보드 포커스 중에는 숨기지 않는다. `focus-within`은 탭을 눌러도 포커스가 남아
