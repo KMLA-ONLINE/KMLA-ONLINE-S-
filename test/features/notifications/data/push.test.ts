@@ -10,6 +10,7 @@ vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 import {
   enableWebPush,
   getPushSupport,
+  resyncWebPushSubscription,
 } from "~/features/notifications/data/push";
 
 describe("Web Push configuration", () => {
@@ -186,7 +187,14 @@ describe("Web Push configuration", () => {
       },
     });
     rpc
-      .mockResolvedValueOnce({ data: [{ subscribed: false }], error: null })
+      .mockResolvedValueOnce({
+        data: [{ subscribed: false, gone: false }],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [{ subscribed: false, gone: false }],
+        error: null,
+      })
       .mockResolvedValueOnce({ data: null, error: null });
 
     await expect(enableWebPush()).resolves.toEqual({
@@ -195,7 +203,7 @@ describe("Web Push configuration", () => {
       subscribed: true,
     });
     expect(rpc).toHaveBeenNthCalledWith(
-      2,
+      3,
       "register_my_web_push_subscription",
       {
         p_auth: "auth",
@@ -204,6 +212,77 @@ describe("Web Push configuration", () => {
         p_p256dh: "p256dh",
       },
     );
+  });
+
+  describe("an endpoint the push service already ended", () => {
+    function grantPermission() {
+      vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", VALID_VAPID_KEY);
+      const notification = { permission: "granted", requestPermission };
+      vi.stubGlobal("window", { Notification: notification, PushManager });
+      vi.stubGlobal("Notification", notification);
+    }
+
+    function pushSubscription(endpoint: string) {
+      return {
+        endpoint,
+        expirationTime: null,
+        unsubscribe: vi.fn().mockResolvedValue(true),
+        toJSON: () => ({ endpoint, keys: { auth: "auth", p256dh: "p256dh" } }),
+      };
+    }
+
+    function goneSetup() {
+      grantPermission();
+      const stale = pushSubscription("https://push.example/stale");
+      const fresh = pushSubscription("https://push.example/fresh");
+      const subscribe = vi.fn().mockResolvedValue(fresh);
+      getRegistration.mockResolvedValue({
+        active: {},
+        pushManager: {
+          getSubscription: vi.fn().mockResolvedValue(stale),
+          subscribe,
+        },
+      });
+      rpc.mockImplementation((name: string) =>
+        Promise.resolve(
+          name === "get_my_web_push_status"
+            ? { data: [{ subscribed: false, gone: true }], error: null }
+            : { data: null, error: null },
+        ),
+      );
+      return { stale, fresh, subscribe };
+    }
+
+    it("is replaced with a new subscription when Push is turned on", async () => {
+      const { stale, fresh, subscribe } = goneSetup();
+
+      await expect(enableWebPush()).resolves.toMatchObject({
+        subscribed: true,
+      });
+      expect(stale.unsubscribe).toHaveBeenCalledOnce();
+      expect(subscribe).toHaveBeenCalledOnce();
+      expect(rpc).toHaveBeenCalledWith(
+        "register_my_web_push_subscription",
+        expect.objectContaining({ p_endpoint: fresh.endpoint }),
+      );
+    });
+
+    it("is replaced in the background instead of being re-registered", async () => {
+      const { stale, fresh, subscribe } = goneSetup();
+
+      await resyncWebPushSubscription();
+
+      expect(stale.unsubscribe).toHaveBeenCalledOnce();
+      expect(subscribe).toHaveBeenCalledOnce();
+      expect(rpc).toHaveBeenCalledWith(
+        "register_my_web_push_subscription",
+        expect.objectContaining({ p_endpoint: fresh.endpoint }),
+      );
+      expect(rpc).not.toHaveBeenCalledWith(
+        "register_my_web_push_subscription",
+        expect.objectContaining({ p_endpoint: stale.endpoint }),
+      );
+    });
   });
 
   it("asks for permission before waiting on the worker", () => {

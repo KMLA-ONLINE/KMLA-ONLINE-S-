@@ -73,7 +73,11 @@ async function sendPush(delivery: Delivery, payload: string) {
         keys: { p256dh: delivery.p256dh, auth: delivery.auth },
       },
       payload,
-      { TTL: 86400, urgency: "normal" },
+      {
+        TTL: 86400,
+        // Android 절전 상태에서 normal은 기기가 깰 때까지 미뤄질 수 있다.
+        urgency: delivery.importance === "high" ? "high" : "normal",
+      },
     );
     return { status: response.statusCode };
   } catch (error) {

@@ -68,6 +68,40 @@ async function getRegistration(): Promise<ServiceWorkerRegistration | null> {
   }
 }
 
+interface ServerPushStatus {
+  subscribed: boolean;
+  gone: boolean;
+}
+
+async function readServerPushStatus(
+  endpoint: string,
+): Promise<ServerPushStatus | null> {
+  const { data, error } = await getSupabase().rpc("get_my_web_push_status", {
+    p_endpoint: endpoint,
+  });
+  if (error) return null;
+  return {
+    subscribed: data?.[0]?.subscribed === true,
+    gone: data?.[0]?.gone === true,
+  };
+}
+
+/**
+ * Push service가 404/410으로 죽었다고 답한 endpoint를 브라우저는 `pushsubscriptionchange` 없이
+ * 계속 돌려줄 수 있다. 그대로 다시 올리면 다음 발송에서 또 죽으니 버리고 새로 구독한다.
+ */
+async function replaceGoneSubscription(
+  registration: ServiceWorkerRegistration,
+  subscription: PushSubscription,
+  vapidKey: Uint8Array<ArrayBuffer>,
+): Promise<PushSubscription> {
+  await subscription.unsubscribe();
+  return registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: vapidKey,
+  });
+}
+
 export async function getPushSupport(): Promise<PushSupport> {
   if (
     !("Notification" in window) ||
@@ -82,13 +116,9 @@ export async function getPushSupport(): Promise<PushSupport> {
   const registration = await getRegistration();
   if (!registration) return { state: "unsupported" };
   const subscription = await registration.pushManager.getSubscription();
-  let subscribed = false;
-  if (subscription) {
-    const { data, error } = await getSupabase().rpc("get_my_web_push_status", {
-      p_endpoint: subscription.endpoint,
-    });
-    if (!error) subscribed = data?.[0]?.subscribed === true;
-  }
+  const subscribed = subscription
+    ? (await readServerPushStatus(subscription.endpoint))?.subscribed === true
+    : false;
   return {
     state: "available",
     permission: Notification.permission,
@@ -124,12 +154,19 @@ export async function enableWebPush(): Promise<PushSupport> {
 
   const registration = await getRegistration();
   if (!registration) throw new Error("Service worker is not ready");
-  const subscription =
-    (await registration.pushManager.getSubscription()) ??
-    (await registration.pushManager.subscribe({
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: vapidKey,
-    }));
+    });
+  } else if ((await readServerPushStatus(subscription.endpoint))?.gone) {
+    subscription = await replaceGoneSubscription(
+      registration,
+      subscription,
+      vapidKey,
+    );
+  }
   const json = subscription.toJSON();
   if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) {
     throw new Error("Browser returned an incomplete Push subscription");
@@ -159,27 +196,28 @@ export async function resyncWebPushSubscription(): Promise<void> {
       !("Notification" in window) ||
       !("serviceWorker" in navigator) ||
       !("PushManager" in window) ||
-      Notification.permission !== "granted" ||
-      !readVapidKey()
+      Notification.permission !== "granted"
     ) {
       return;
     }
+    const vapidKey = readVapidKey();
+    if (!vapidKey) return;
 
     const registration = await getRegistration();
-    const subscription = await registration?.pushManager.getSubscription();
-    if (!subscription) return;
+    const existing = await registration?.pushManager.getSubscription();
+    if (!registration || !existing) return;
 
+    // 흔한 경우는 "이미 맞다"이므로 읽기 한 번으로 끝내고, 어긋난 경우에만 쓴다.
+    const status = await readServerPushStatus(existing.endpoint);
+    if (!status || status.subscribed) return;
+
+    const subscription = status.gone
+      ? await replaceGoneSubscription(registration, existing, vapidKey)
+      : existing;
     const json = subscription.toJSON();
     if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) return;
 
-    const supabase = getSupabase();
-    // 흔한 경우는 "이미 맞다"이므로 읽기 한 번으로 끝내고, 어긋난 경우에만 쓴다.
-    const { data, error } = await supabase.rpc("get_my_web_push_status", {
-      p_endpoint: json.endpoint,
-    });
-    if (error || data?.[0]?.subscribed === true) return;
-
-    await supabase.rpc("register_my_web_push_subscription", {
+    await getSupabase().rpc("register_my_web_push_subscription", {
       p_endpoint: json.endpoint,
       p_p256dh: json.keys.p256dh,
       p_auth: json.keys.auth,

@@ -1966,6 +1966,7 @@ export type Database = {
       get_my_web_push_status: {
         Args: { p_endpoint: string }
         Returns: {
+          gone: boolean
           subscribed: boolean
         }[]
       }

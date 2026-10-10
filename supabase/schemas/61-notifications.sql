@@ -137,6 +137,10 @@ create table private.web_push_subscriptions (
   expiration_time timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  -- Push service가 404/410으로 끝났다고 답한 시각. 행을 바로 지우면 outbox와 시도 기록이
+  -- cascade로 함께 사라져 진단할 근거가 없어지고, 같은 endpoint가 다시 등록돼도 죽은 줄
+  -- 모른다. 그래서 표시만 하고 보관 기간이 지나면 정리한다.
+  gone_at timestamptz,
   constraint web_push_subscriptions_endpoint_length check (
     char_length(endpoint) between 12 and 2048
   ),
@@ -280,6 +284,7 @@ as $$
         on subscription.id = p_delivery.subscription_id
       where notification.id = p_delivery.notification_id
         and subscription.profile_id = p_delivery.recipient_profile_id
+        and subscription.gone_at is null
         and private.notification_push_allowed(
           notification, subscription.created_at, subscription.expiration_time
         )
@@ -345,6 +350,7 @@ begin
   select target.id, target.recipient_profile_id, subscription.id, 'web_push'
   from private.web_push_subscriptions as subscription
   where subscription.profile_id = target.recipient_profile_id
+    and subscription.gone_at is null
     and private.notification_push_allowed(
       target, subscription.created_at, subscription.expiration_time
     )
@@ -771,6 +777,8 @@ begin
     or p_expiration_time > 253402300799999 then
     raise exception 'invalid web push subscription' using errcode = '22023';
   end if;
+  -- gone_at은 풀지 않는다. 죽은 endpoint를 브라우저가 계속 들고 있다가 다시 올려도 살아나지
+  -- 않아야 클라이언트가 `gone`을 보고 새로 구독한다.
   insert into private.web_push_subscriptions as subscription (
     profile_id, endpoint, p256dh, auth, expiration_time
   ) values (
@@ -806,7 +814,7 @@ $$;
 alter function public.unregister_my_web_push_subscription(text) owner to postgres;
 
 create or replace function public.get_my_web_push_status(p_endpoint text)
-returns table (subscribed boolean)
+returns table (subscribed boolean, gone boolean)
 language plpgsql stable security definer
 set search_path = ''
 as $$
@@ -814,11 +822,12 @@ begin
   if auth.uid() is null or private.current_profile_id() is null then
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
-  return query select exists (
-    select 1 from private.web_push_subscriptions as subscription
-    where subscription.endpoint = p_endpoint
-      and subscription.profile_id = private.current_profile_id()
-  );
+  return query
+  select coalesce(bool_or(subscription.gone_at is null), false),
+    coalesce(bool_or(subscription.gone_at is not null), false)
+  from private.web_push_subscriptions as subscription
+  where subscription.endpoint = p_endpoint
+    and subscription.profile_id = private.current_profile_id();
 end;
 $$;
 alter function public.get_my_web_push_status(text) owner to postgres;
@@ -1050,9 +1059,12 @@ begin
   ) values (target.id, p_outcome, p_status_code, left(p_error_code, 80));
 
   if p_outcome = 'gone' then
-    delete from private.web_push_subscriptions where id = target.subscription_id;
-    return true;
-  elsif p_outcome = 'retry' and target.attempt_count < 5 then
+    update private.web_push_subscriptions
+    set gone_at = coalesce(gone_at, now())
+    where id = target.subscription_id;
+  end if;
+
+  if p_outcome = 'retry' and target.attempt_count < 5 then
     update private.notification_delivery_outbox
     set status = 'pending', lease_id = null, lease_expires_at = null,
       available_at = now() + make_interval(secs => least(3600, 15 * (2 ^ target.attempt_count)::integer)),
@@ -1087,6 +1099,8 @@ begin
   get diagnostics removed = row_count;
   delete from private.notification_event_keys
   where notification_id is null and created_at < now() - interval '30 days';
+  delete from private.web_push_subscriptions
+  where gone_at < now() - interval '30 days';
   return removed;
 end;
 $$;
