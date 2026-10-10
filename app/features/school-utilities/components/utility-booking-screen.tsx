@@ -20,6 +20,7 @@ import {
   startOfKoreaWeek,
   useKoreaToday,
 } from "~/features/school-utilities/model/korea-date";
+import { reservationCreateErrorMessage } from "~/features/school-utilities/model/reservation-error";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -772,7 +773,12 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
       setOpenKey(null);
     } catch (error) {
       console.error("Failed to create utility reservation", error);
-      setError("다른 사용자가 먼저 신청했거나 신청할 수 없는 일정입니다.");
+      setError(
+        reservationCreateErrorMessage(
+          error,
+          mode === "gongang" && draft.recurring,
+        ),
+      );
       setRefreshVersion((current) => current + 1);
     } finally {
       setMutationKey(null);
@@ -849,6 +855,7 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
     );
 
     setOpenKey(null);
+    setError(null);
   };
 
   const rows =
@@ -942,6 +949,7 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
             onSelect={(slot) => {
               setSelectedSlot(slot);
               setOpenKey(null);
+              setError(null);
             }}
           />
         </div>
@@ -970,7 +978,10 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
                 reservation={row.reservation}
                 draft={drafts[row.key] ?? emptyDraft()}
                 open={openKey === row.key}
-                onOpen={() => setOpenKey(row.key)}
+                onOpen={() => {
+                  setOpenKey(row.key);
+                  setError(null);
+                }}
                 onDraftChange={(draft) => updateDraft(row.key, draft)}
                 onClose={() => setOpenKey(null)}
                 onSave={() => {
