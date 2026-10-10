@@ -4,6 +4,7 @@ import {
   CalendarDaysIcon,
   ChevronRightIcon,
   CircleQuestionMarkIcon,
+  LinkIcon,
   SettingsIcon,
   ShieldCheckIcon,
   SparklesIcon,
@@ -121,6 +122,8 @@ export default function MenuPage() {
           />
 
           <ListLinkRow to="/update" label="업데이트 기록" icon={SparklesIcon} />
+
+          <ListLinkRow to="/menu/links" label="바로가기" icon={LinkIcon} />
         </div>
 
         {/* 로그아웃은 이동이 아니라 동작이라 목록 카드에서 뗀다. */}
