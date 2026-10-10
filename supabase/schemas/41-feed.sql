@@ -215,7 +215,21 @@ begin
   -- 접근 조건은 `can_access_feed_post()`를 집합 조건으로 옮긴 것이다. 후보마다 그 함수를 부르면
   -- security definer 호출 비용이 후보 수만큼 쌓인다. 두 조건이 같은 게시물을 고르는지는
   -- `integrated_feed.test.sql`이 확인한다.
-  with candidates as (
+  --
+  -- 생탐 판정에 쓰는 타임라인 주인의 관련 기수도 게시물마다 구하지 않고 주인마다 한 번만 구한다.
+  -- 보는 사람에게 관련 기수가 없으면 생탐은 어차피 들어오지 않으므로 아무도 구하지 않는다.
+  with timeline_cohorts as materialized (
+    select timeline.profile_id, private.feed_profile_cohorts(timeline.profile_id) as cohorts
+    from (
+      select distinct post.timeline_profile_id as profile_id
+      from public.posts as post
+      where post.kind = 'profile'
+        and post.timeline_profile_id is not null
+        and post.published_at is not null
+        and coalesce(cardinality(viewer_cohorts), 0) > 0
+    ) as timeline
+  ),
+  candidates as (
     select
       post.id as post_id,
       post.published_at,
@@ -249,6 +263,8 @@ begin
       on viewer.id = p_profile_id
       and viewer.status = 'accepted'
       and viewer.deleted_at is null
+    left join timeline_cohorts
+      on timeline_cohorts.profile_id = post.timeline_profile_id
     left join lateral (
       select event.effective_at
       from private.feed_bump_events as event
@@ -291,7 +307,7 @@ begin
           and (
             author.profile_id = post.timeline_profile_id
             or (
-              (viewer_cohorts && private.feed_profile_cohorts(post.timeline_profile_id))
+              (viewer_cohorts && timeline_cohorts.cohorts)
               and viewer.gender = timeline.gender
             )
           )

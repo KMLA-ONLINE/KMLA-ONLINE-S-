@@ -1,3 +1,4 @@
+import { useLocation } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
 import { MobileTabBar } from "~/features/app-shell/components/mobile-tab-bar";
@@ -11,14 +12,17 @@ function renderTabBar(path: string) {
   const scroller = document.createElement("main");
   const scrollTo = vi.spyOn(scroller, "scrollTo");
 
-  const view = renderRoute(
-    () => <MobileTabBar scrollRef={{ current: scroller }} />,
-    {
-      path: "*",
-      initialEntries: [path],
-      routes: [{ path: "/groups", Component: () => <p>그룹 목록</p> }],
-    },
-  );
+  function Screen() {
+    const location = useLocation();
+    return (
+      <>
+        <p data-testid="location">{location.pathname + location.search}</p>
+        <MobileTabBar scrollRef={{ current: scroller }} />
+      </>
+    );
+  }
+
+  const view = renderRoute(Screen, { path: "*", initialEntries: [path] });
 
   return { ...view, scrollTo };
 }
@@ -37,7 +41,30 @@ describe("MobileTabBar", () => {
 
     await user.click(screen.getByRole("link", { name: "그룹" }));
 
-    expect(await screen.findByText("그룹 목록")).toBeInTheDocument();
+    expect(await screen.findByTestId("location")).toHaveTextContent(
+      /^\/groups$/,
+    );
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("returns to the tab's first screen when the URL carries extra state", async () => {
+    const { user, scrollTo } = renderTabBar("/groups?tab=members");
+
+    await user.click(screen.getByRole("link", { name: "그룹" }));
+
+    expect(await screen.findByTestId("location")).toHaveTextContent(
+      /^\/groups$/,
+    );
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("leaves modified clicks to the browser", async () => {
+    const { user, scrollTo } = renderTabBar("/");
+
+    await user.keyboard("{Control>}");
+    await user.click(screen.getByRole("link", { name: "홈" }));
+    await user.keyboard("{/Control}");
+
     expect(scrollTo).not.toHaveBeenCalled();
   });
 });

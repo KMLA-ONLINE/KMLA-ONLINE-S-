@@ -63,4 +63,25 @@ describe("PageHeader", () => {
 
     expect(scrollTo).not.toHaveBeenCalled();
   });
+
+  it("leaves non-button header controls to their own action", async () => {
+    const scroller = document.createElement("main");
+    const scrollTo = vi.spyOn(scroller, "scrollTo");
+    const { user } = renderRoute(() => (
+      <ScrollContainerContext value={{ current: scroller }}>
+        <PageHeader
+          title="KMLA Online"
+          actions={
+            <div role="tab" aria-selected="true" tabIndex={0}>
+              전체
+            </div>
+          }
+        />
+      </ScrollContainerContext>
+    ));
+
+    await user.click(screen.getByRole("tab", { name: "전체" }));
+
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
 });

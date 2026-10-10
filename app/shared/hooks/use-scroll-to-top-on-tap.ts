@@ -2,8 +2,30 @@ import type { MouseEvent } from "react";
 
 import { scrollToTop, useScrollContainer } from "~/shared/lib/scroll-container";
 
-/** 헤더 안에서 제 동작이 따로 있는 것. 이것들을 누르면 맨 위로 가지 않는다. */
-const INTERACTIVE = "a, button, input, textarea, select, [role='button']";
+/**
+ * 헤더 안에서 제 동작이 따로 있는 것. 이것들을 누르면 맨 위로 가지 않는다. 목록에 없는 모양의
+ * 컨트롤을 헤더에 넣으면 `data-no-scroll-top`을 붙인다.
+ */
+const INTERACTIVE = [
+  "a",
+  "button",
+  "input",
+  "textarea",
+  "select",
+  "label",
+  "summary",
+  "[contenteditable]",
+  "[tabindex]",
+  "[role='button']",
+  "[role='link']",
+  "[role='tab']",
+  "[role='switch']",
+  "[role='checkbox']",
+  "[role='radio']",
+  "[role='menuitem']",
+  "[role='option']",
+  "[data-no-scroll-top]",
+].join(", ");
 
 /**
  * 모바일 헤더의 빈 곳이나 제목을 누르면 스크롤 영역을 맨 위로 올리는 클릭 핸들러.
