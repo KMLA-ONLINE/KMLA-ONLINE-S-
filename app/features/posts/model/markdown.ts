@@ -5,8 +5,15 @@ import remarkStringify from "remark-stringify";
 import { unified } from "unified";
 
 import { isMentionHref } from "~/features/posts/model/mentions";
+import {
+  remarkPostUnderline,
+  UNDERLINE_DIRECTIVE,
+} from "~/features/posts/model/underline";
 
-const parser = unified().use(remarkParse).use(remarkGfm);
+const parser = unified()
+  .use(remarkParse)
+  .use(remarkGfm)
+  .use(remarkPostUnderline);
 const serializer = unified()
   .use(remarkStringify, {
     bullet: "-",
@@ -15,7 +22,13 @@ const serializer = unified()
     listItemIndent: "one",
     strong: "*",
   })
-  .use(remarkGfm);
+  .use(remarkGfm)
+  .use(remarkPostUnderline);
+
+/** 밑줄 플러그인은 파싱 뒤 변환 단계에서 원문을 보고 밑줄 아닌 지시어를 되돌린다. `parse`만으로는 그 단계가 돌지 않는다. */
+function parse(markdown: string): Root {
+  return parser.runSync(parser.parse(markdown), markdown) as Root;
+}
 
 const EMPTY_LINE_MARKER = "<br />";
 
@@ -49,6 +62,14 @@ function inline(nodes: Content[]): PhrasingContent[] {
       case "emphasis":
       case "delete":
         return [{ ...node, children: inline(node.children) }];
+      case "textDirective": {
+        // 파서는 `:u[`만 지시어로 읽는다(`model/underline.ts`). 다른 이름이 오면 직렬화가 그
+        // 이름을 그대로 `:이름[…]`로 쓰지 않도록 글자만 남긴다.
+        const children = inline(node.children);
+        return node.name === UNDERLINE_DIRECTIVE
+          ? [{ ...node, attributes: {}, children }]
+          : children;
+      }
       case "link": {
         const children = inline(node.children);
         // 멘션은 CommonMark 링크 모양으로 저장한다(`model/mentions.ts`). 주소가 HTTP(S)가
@@ -109,7 +130,7 @@ function blocks(nodes: RootContent[]): RootContent[] {
 }
 
 export function parsePostMarkdown(markdown: string): Root {
-  const parsed = parser.parse(markdown);
+  const parsed = parse(markdown);
   return { type: "root", children: blocks(parsed.children) };
 }
 
@@ -117,7 +138,7 @@ export function sanitizePostMarkdown(markdown: string): string {
   const editorSource = toPostEditorMarkdown(
     normalizePostMarkdownSource(markdown),
   );
-  const parsed = parser.parse(editorSource);
+  const parsed = parse(editorSource);
   const safe = serializer.stringify({
     type: "root",
     children: blocks(parsed.children),

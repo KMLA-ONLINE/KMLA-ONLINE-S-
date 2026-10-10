@@ -25,6 +25,15 @@ describe("PostMarkdown", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("renders underline and keeps other directive-like text literal", () => {
+    render(<PostMarkdown>{":u[밑줄 **굵게**] 시간 10:30am"}</PostMarkdown>);
+
+    expect(
+      screen.getByText("밑줄", { exact: false, selector: "u" }),
+    ).toContainElement(screen.getByText("굵게"));
+    expect(screen.getByText(/시간 10:30am/)).toBeInTheDocument();
+  });
+
   it("renders emoji as the original Unicode text", () => {
     render(<PostMarkdown>{"이모지 👍🏽 🇰🇷 👨‍👩‍👧‍👦"}</PostMarkdown>);
 

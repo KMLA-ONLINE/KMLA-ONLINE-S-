@@ -114,3 +114,73 @@ describe("Markdown v1", () => {
     );
   });
 });
+
+describe("underline", () => {
+  it("round-trips underline with nested formatting and mentions", () => {
+    expect(sanitizePostMarkdown(":u[밑줄 **굵게**] 끝")).toBe(
+      ":u[밑줄 **굵게**] 끝",
+    );
+    expect(sanitizePostMarkdown(":u[[@홍길동](m:1)]")).toBe(
+      ":u[[@홍길동](m:1)]",
+    );
+    expect(extractPostPlainText(":u[밑줄] 끝")).toBe("밑줄 끝");
+  });
+
+  it("drops attributes and keeps a following brace as text", () => {
+    expect(sanitizePostMarkdown(':u[a]{class="x"}')).toBe(":u[a]");
+    expect(sanitizePostMarkdown(":u[a]{}{b}")).toBe(":u[a]{}{b}");
+    expect(extractPostPlainText(":u[a]{}{b}")).toBe("a{b}");
+  });
+
+  it("keeps text that only looks like another directive", () => {
+    // 지시어 문법은 `:영문`이면 다 잡는다. `:u[` 밖은 예전과 같은 글자로 남아야 한다.
+    for (const source of [
+      "예:abc 입니다",
+      "시간 10:30am",
+      "참고:abc[1]",
+      "참고:abc[**1**]{x}",
+      "a::b",
+      "::leaf",
+      ":::box",
+      ":u",
+      ":u[]",
+    ]) {
+      expect(extractPostPlainText(source)).toBe(source.replace(/\*\*/g, ""));
+      expect(sanitizePostMarkdown(sanitizePostMarkdown(source))).toBe(
+        sanitizePostMarkdown(source),
+      );
+    }
+    expect(sanitizePostMarkdown("예:abc 입니다")).toBe("예:abc 입니다");
+    // 원래 Markdown 직렬화가 하던 escape 그대로다.
+    expect(sanitizePostMarkdown("참고:abc[**1**]")).toBe(
+      String.raw`참고:abc\[**1**]`,
+    );
+  });
+
+  it("keeps links and formatting that follow a directive-like prefix", () => {
+    // 지시어 라벨이 `[a]`를 먼저 가져가면 링크가 깨진다. 예전 출력과 같아야 한다.
+    expect(sanitizePostMarkdown("x:y[a](http://b.com)")).toBe(
+      "x:y[a](http://b.com)",
+    );
+    expect(sanitizePostMarkdown("a:b[:c[x] **y**]")).toBe(
+      String.raw`a:b\[:c\[x] **y**]`,
+    );
+  });
+
+  it("escapes a literal `:u` followed by a link", () => {
+    const source = String.raw`글자 \:u[@한별](m:1)`;
+    expect(sanitizePostMarkdown(source)).toBe(source);
+  });
+
+  it("does not escape colons in mention destinations", () => {
+    expect(sanitizePostMarkdown("[@홍길동](m:1) 이모티콘 :smile:")).toBe(
+      "[@홍길동](m:1) 이모티콘 :smile:",
+    );
+  });
+
+  it("escapes literal underline syntax written as text", () => {
+    const safe = sanitizePostMarkdown(String.raw`\:u[글자]`);
+    expect(safe).toBe(String.raw`\:u\[글자]`);
+    expect(extractPostPlainText(safe)).toBe(":u[글자]");
+  });
+});

@@ -42,7 +42,13 @@ import { Milkdown, MilkdownProvider, useEditor } from "@milkdown/react";
 import { toggleMark } from "@milkdown/prose/commands";
 import { redo, undo } from "@milkdown/prose/history";
 import { Plugin } from "@milkdown/prose/state";
-import { $prose, callCommand } from "@milkdown/utils";
+import {
+  $command,
+  $markSchema,
+  $prose,
+  $remark,
+  callCommand,
+} from "@milkdown/utils";
 import {
   BoldIcon,
   Heading2Icon,
@@ -51,6 +57,7 @@ import {
   LinkIcon,
   Redo2Icon,
   StrikethroughIcon,
+  UnderlineIcon,
   Undo2Icon,
 } from "lucide-react";
 import { useEffect, useImperativeHandle, useRef, type RefObject } from "react";
@@ -63,8 +70,45 @@ import {
 } from "~/features/posts/model/markdown";
 import type { PostBodyInputHandle } from "~/features/posts/components/editor/post-body-input";
 import { sanitizeMentionLabel } from "~/features/posts/model/mentions";
+import {
+  remarkPostUnderline,
+  UNDERLINE_DIRECTIVE,
+} from "~/features/posts/model/underline";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
+
+// 밑줄은 preset에 없다. 저장 문법 `:u[…]`는 `model/underline.ts`의 remark 플러그인이 읽고 쓴다.
+const underlineRemark = $remark(
+  "remarkPostUnderline",
+  () => remarkPostUnderline,
+);
+
+const underlineSchema = $markSchema("underline", () => ({
+  parseDOM: [{ tag: "u" }],
+  toDOM: () => ["u", 0],
+  parseMarkdown: {
+    match: (node) =>
+      node.type === "textDirective" && node.name === UNDERLINE_DIRECTIVE,
+    runner: (state, node, markType) => {
+      state.openMark(markType);
+      state.next(node.children);
+      state.closeMark(markType);
+    },
+  },
+  toMarkdown: {
+    match: (mark) => mark.type.name === "underline",
+    runner: (state, mark) => {
+      state.withMark(mark, "textDirective", undefined, {
+        name: UNDERLINE_DIRECTIVE,
+      });
+    },
+  },
+}));
+
+const toggleUnderlineCommand = $command(
+  "ToggleUnderline",
+  (ctx) => () => toggleMark(underlineSchema.type(ctx)),
+);
 
 const markdownSchema = [
   docSchema,
@@ -90,6 +134,9 @@ const markdownSchema = [
   strikethroughAttr,
   strikethroughSchema,
   toggleStrikethroughCommand,
+  underlineRemark,
+  underlineSchema,
+  toggleUnderlineCommand,
   textSchema,
   remarkGFMPlugin,
   remarkLineBreak,
@@ -120,6 +167,12 @@ const imeSafeShortcuts = $prose(
             );
           if (key === "i" && !event.shiftKey)
             return toggleMark(emphasisSchema.type(ctx))(
+              view.state,
+              view.dispatch,
+              view,
+            );
+          if (key === "u" && !event.shiftKey)
+            return toggleMark(underlineSchema.type(ctx))(
               view.state,
               view.dispatch,
               view,
@@ -258,6 +311,12 @@ function EditorSurface({
       keys: "Control+I Meta+I",
       icon: <ItalicIcon />,
       run: () => run(callCommand(toggleEmphasisCommand.key)),
+    },
+    {
+      label: "밑줄",
+      keys: "Control+U Meta+U",
+      icon: <UnderlineIcon />,
+      run: () => run(callCommand(toggleUnderlineCommand.key)),
     },
     {
       label: "취소선",

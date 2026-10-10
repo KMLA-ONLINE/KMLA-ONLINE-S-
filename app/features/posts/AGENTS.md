@@ -110,6 +110,10 @@
   주고 remark 왕복도 그대로 통과한다. 대신 `sanitizePostMarkdown()`의 링크 허용과
   `PostMarkdown`의 `urlTransform`이 `m:` 하나를 함께 열어 줘야 한다 — 둘 중 하나만 빠뜨리면
   정화가 링크를 풀어 멘션이 평문이 된다.
+- 밑줄(`:u[…]`) 직렬화에 `remark-directive`를 그대로 붙이지 마라. 그 직렬화 규칙은 글자 앞
+  `:`를 모두 escape해서 저장된 토큰이 `[@이름](m\:1)`이 되고, `private.parse_mention_ordinals()`의
+  정규식이 멘션을 놓쳐 알림과 대상이 사라진다. `model/underline.ts`가 파싱만 빌리고 escape는
+  `:u[` 하나로 좁혔다.
 - **수신자는 클라이언트가 준 목록이 아니라 본문에서 파생한다.** `private.sync_post_mentions()`가
   본문을 정규식으로 훑어 ordinal을 뽑고 그 자리의 `pub_id`만 해석한다. 목록을 그대로 믿으면
   본문에 없는 사람에게 알림을 보내게 할 수 있다.
