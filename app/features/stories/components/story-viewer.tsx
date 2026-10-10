@@ -27,6 +27,7 @@ import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { getQueryClient } from "~/shared/lib/query-client";
+import { resistDrag } from "~/shared/lib/drag-resistance";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "~/shared/ui/dialog";
@@ -42,6 +43,9 @@ const HOLD_THRESHOLD_MS = 250;
 
 /** 화면을 위나 아래로 이만큼 쓸고 떼면 뷰어를 닫는다. */
 const SWIPE_CLOSE_DISTANCE_PX = 80;
+
+/** 쓰는 동안 카드가 움직여 보이는 최대 거리. 놓으면 닫힌다는 걸 알릴 만큼만 움직인다. */
+const SWIPE_DRAG_LIMIT_PX = 48;
 
 /**
  * 지금 보는 장은 부모가 쥔다(URL의 `?story=<id>`). 뷰어는 그 id가 어느 작성자의 몇 번째 장인지
@@ -114,16 +118,18 @@ export function StoryViewer({
   }
 
   /**
-   * 쓰는 동안 카드가 손가락을 따라 움직이고 조금 작아진다. 움직이지 않으면 사용자는 쓸기가
-   * 닫기 동작이라는 걸 알 수 없다. 프레임마다 React를 다시 그리지 않도록 style을 직접 쓴다.
+   * 쓰는 동안 카드가 손가락 쪽으로 조금 밀리고 작아진다. 움직이지 않으면 사용자는 쓸기가
+   * 닫기 동작이라는 걸 알 수 없고, 끝까지 따라가면 어색하다. 그래서 저항을 두어
+   * `SWIPE_DRAG_LIMIT_PX` 근처에서 멈추게 한다. 프레임마다 React를 다시 그리지 않도록 style을
+   * 직접 쓴다.
    */
   function dragCard(dy: number) {
     const card = cardRef.current;
     if (!card) return;
 
-    const shrink = Math.min(Math.abs(dy) / 1000, 0.1);
+    const shrink = Math.min(Math.abs(dy) / 2000, 0.04);
     card.style.transition = "none";
-    card.style.transform = `translateY(${dy}px) scale(${1 - shrink})`;
+    card.style.transform = `translateY(${resistDrag(dy, SWIPE_DRAG_LIMIT_PX)}px) scale(${1 - shrink})`;
   }
 
   /** 닫을 만큼 쓸지 않고 떼면 제자리로 돌아간다. */
