@@ -1,13 +1,14 @@
 # app-shell feature
 
-로그인한 사용자가 보는 앱 chrome과 bootstrap 데이터를 소유한다. 인증/승인 redirect와 React Router
-레이아웃 자체는 `app/routes/app/layout.tsx`와 `app/routes/messenger/layout.tsx`가 담당한다.
+로그인한 사용자가 보는 앱 chrome과 bootstrap 데이터를 소유한다. 인증/승인 redirect는
+`app/routes/app/gate.tsx`, React Router 레이아웃은 `app/routes/app/layout.tsx`와
+`app/routes/messenger/layout.tsx`가 담당한다.
 
 ## 불변조건
 
 - `app/routes.ts`가 인증 게이트 아래에 일반 앱과 메신저 layout branch를 명시한다.
 - 일반 앱 route는 typed `handle.chrome`으로 전역 헤더와 모바일 하단 nav를 설정한다.
-- 일반 앱의 데스크톱 콘텐츠 폭도 `handle.chrome.contentWidth`가 소유한다. 기본은 `5xl`이고 폼처럼 좁은 폭이 필요한 route만 명시적으로 override한다.
+- 일반 앱의 데스크톱 콘텐츠 폭도 `handle.chrome.contentWidth`가 소유한다. 기본은 `model/chrome.ts`의 `DEFAULT_APP_CHROME.contentWidth`(`4xl`)이고, 목록이나 폼처럼 다른 폭이 필요한 route만 명시적으로 override한다.
 - 메신저 layout은 데스크톱 전역 헤더를 유지하지만 사이드바와 하단 nav를 렌더하지 않는다.
 - 인증/승인 게이트는 `app/routes/app/gate.tsx` 한 곳에만 둔다.
 - 셸 loader는 첫 진입과 mutation 이후에만 다시 실행한다. 자식 route의 명시적 revalidation은 셸 프로필을 다시 읽지 않는다.
@@ -22,5 +23,5 @@
 - 당겨서 새로고침은 typed `handle.chrome.pullToRefresh`로 route가 명시적으로 허용하며, 모바일과 태블릿의 터치 입력에서만 시작한다. 입력기·다이얼로그·중첩 스크롤 영역과 데스크톱 마우스·트랙패드에서는 시작하지 않는다.
 - `AppShellProvider`는 `routes/app/gate.tsx`의 loader data를 받는다. 물리적 route ID에 의존하지 않는다.
 
-`model/types.ts`와 `mock.ts`는 아직 Supabase schema가 없어서 존재한다. schema와 RPC가 추가되면
-generated database type에서 모델을 파생하고 `data/queries.ts`만 실제 호출로 교체한 뒤 mock을 삭제한다.
+`model/types.ts`는 generated database type의 `get_my_profile` 반환형에서 셸에 필요한 필드를
+파생한다. `data/queries.ts`는 실제 세션과 프로필 RPC를 읽으며 mock을 사용하지 않는다.

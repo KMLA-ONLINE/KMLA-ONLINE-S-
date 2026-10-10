@@ -8,6 +8,7 @@ const pureLayers = [
   "test/routes/**/*.{test,spec}.ts",
   "test/eslint/**/*.{test,spec}.ts",
   "test/shared/service-worker/**/*.{test,spec}.ts",
+  "test/scripts/**/*.{test,spec}.ts",
 ];
 
 const domDependent = [

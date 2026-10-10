@@ -19,18 +19,18 @@ npm run dev           # http://localhost:5173
 
 ## 자주 쓰는 명령
 
-| 명령                           | 설명                                   |
-| ------------------------------ | -------------------------------------- |
-| `npm run dev`                  | 개발 서버                              |
-| `npm run check`                | lint + format + typecheck + test       |
-| `npm run verify`               | `check` + 프로덕션 빌드 (CI와 동일)    |
-| `npm run fix`                  | ESLint `--fix` + Prettier              |
-| `npm test` / `npm run test:db` | Vitest / pgTAP                         |
-| `npm run e2e`                  | Playwright                             |
-| `npm run db:reset`             | migration + seed 재적용                |
-| `npm run db:diff -- <name>`    | `supabase/schemas/` 변경분 → migration |
+| 명령                           | 설명                                         |
+| ------------------------------ | -------------------------------------------- |
+| `npm run dev`                  | 개발 서버                                    |
+| `npm run check`                | lint + format + typecheck + 문서 검사 + test |
+| `npm run verify`               | `check` + 프로덕션 빌드 (CI와 동일)          |
+| `npm run fix`                  | ESLint `--fix` + Prettier                    |
+| `npm test` / `npm run test:db` | Vitest / pgTAP                               |
+| `npm run e2e`                  | Playwright                                   |
+| `npm run db:reset`             | migration + seed 재적용                      |
+| `npm run db:diff -- <name>`    | `supabase/schemas/` 변경분 → migration       |
 
-전체 목록은 `package.json`의 `scripts`를 보세요.
+전체 목록은 [package.json](package.json)의 `scripts`를 보세요.
 
 ## 환경 변수
 
@@ -43,7 +43,8 @@ npm run dev           # http://localhost:5173
 | `VITE_WEB_PUSH_VAPID_PUBLIC_KEY` |      | Web Push 공개 키 (`npm run web-push:keys`로 생성)           |
 | `VITE_SITE_URL`                  |      | 링크 미리보기 `og:image`용 원본. Vercel에서는 자동으로 채움 |
 
-Edge Function 시크릿은 `supabase/.env.example`, Vault 시크릿은 `supabase/README.md`를 참고하세요.
+Edge Function 시크릿은 [supabase/.env.example](supabase/.env.example), Vault 시크릿은
+[DB 가이드](supabase/README.md#remote-project-secrets)를 참고하세요.
 
 ## 환경 (prod / dev)
 
@@ -59,11 +60,14 @@ Edge Function 시크릿은 `supabase/.env.example`, Vault 시크릿은 `supabase
   - Variables: `SUPABASE_PROJECT_ID`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
   - Reviewer: `cjeonguk`, `kmlaswtech`, `survibo` 중 한 명
 
-자세한 절차는 `docs/DOCKER.md`에 있습니다.
+GitHub의 `Production` Environment에 required reviewers를 설정해야 승인 대기가 적용됩니다.
+자세한 절차는 [Supabase 환경 가이드](docs/DOCKER.md)에 있습니다.
 
 ## 더 읽을거리
 
-- `AGENTS.md` — 구조, 규칙, 검증 방법 (사람에게도 유효)
-- `docs/KMLA_SPEC_INDEX.md` — 기능 명세 진입점
-- `docs/AGENT_MAP.md` — 기능별 코드·테스트 위치
-- `supabase/README.md` — DB 작업 체크리스트
+- [문서 안내](docs/README.md) — 작업별 읽기 순서와 문서 작성 규칙
+- [소스 구조](docs/structure.md) — 아키텍처와 데이터 접근 규칙
+- [Repository Guide](AGENTS.md) — 작업 규칙과 검증 방법 (사람에게도 유효)
+- [기능 명세](docs/KMLA_SPEC_INDEX.md) — 도메인별 제품 요구사항
+- [Agent Map](docs/AGENT_MAP.md) — 기능별 코드·테스트·RPC 위치
+- [DB 가이드](supabase/README.md) — DB 작업 체크리스트
