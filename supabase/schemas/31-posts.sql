@@ -393,6 +393,36 @@ $$;
 
 ALTER FUNCTION "private"."post_mentions_json"("p_post_id" "uuid") OWNER TO "postgres";
 
+-- 목록 RPC가 게시물 옆에 실어 보내는 첨부 목록. 피드·그룹·타임라인 목록이 같은 모양을 쓰고
+-- 클라이언트의 `readAttachmentsJson()`이 읽는다. 필드를 바꾸면 그 파서도 함께 바꾼다.
+CREATE OR REPLACE FUNCTION "private"."post_attachments_json"("p_post_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO ''
+    AS $$
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'attachment_id', attachment.id,
+        'storage_bucket', attachment.storage_bucket,
+        'object_path', attachment.object_path,
+        'thumbnail_path', attachment.thumbnail_path,
+        'original_filename', attachment.original_filename,
+        'position', attachment.position,
+        'mime_type', attachment.mime_type,
+        'size_bytes', attachment.size_bytes,
+        'width', attachment.width,
+        'height', attachment.height
+      )
+      order by attachment.position, attachment.id
+    ),
+    '[]'::jsonb
+  )
+  from public.post_attachments as attachment
+  where attachment.post_id = p_post_id and attachment.status = 'ready';
+$$;
+
+ALTER FUNCTION "private"."post_attachments_json"("p_post_id" "uuid") OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "private"."prevent_post_immutable_changes"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO ''
@@ -736,6 +766,8 @@ REVOKE ALL ON FUNCTION "private"."parse_mention_ordinals"("p_body" "text") FROM 
 REVOKE ALL ON FUNCTION "private"."sync_post_mentions"("p_post_id" "uuid", "p_body" "text", "p_mention_pub_ids" "text"[]) FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."post_mentions_json"("p_post_id" "uuid") FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "private"."post_attachments_json"("p_post_id" "uuid") FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."prevent_post_immutable_changes"() FROM PUBLIC;
 

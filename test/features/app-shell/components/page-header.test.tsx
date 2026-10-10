@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { PageHeader } from "~/features/app-shell/components/page-header";
@@ -40,6 +41,26 @@ describe("PageHeader", () => {
     await user.click(screen.getByRole("button", { name: "검색" }));
 
     expect(onAction).toHaveBeenCalled();
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("ignores clicks that bubble up from a portalled menu", async () => {
+    const scroller = document.createElement("main");
+    const scrollTo = vi.spyOn(scroller, "scrollTo");
+    const { user } = renderRoute(() => (
+      <ScrollContainerContext value={{ current: scroller }}>
+        <PageHeader
+          title="KMLA Online"
+          actions={createPortal(
+            <div role="menuitem">메뉴 항목</div>,
+            document.body,
+          )}
+        />
+      </ScrollContainerContext>
+    ));
+
+    await user.click(screen.getByRole("menuitem", { name: "메뉴 항목" }));
+
     expect(scrollTo).not.toHaveBeenCalled();
   });
 });

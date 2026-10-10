@@ -651,7 +651,7 @@ begin
     reaction_summary.total,
     reaction_summary.top,
     mine.reaction,
-    attachment_summary.items,
+    private.post_attachments_json(post.id),
     author.profile_id = caller_profile_id,
     private.post_mentions_json(post.id)
   from unnest(selected_positions, selected_post_ids, selected_rank_times)
@@ -689,27 +689,6 @@ begin
       group by entry.reaction
     ) as tally
   ) as reaction_summary on true
-  left join lateral (
-    select coalesce(
-      jsonb_agg(
-        jsonb_build_object(
-          'attachment_id', attachment.id,
-          'storage_bucket', attachment.storage_bucket,
-          'object_path', attachment.object_path,
-          'thumbnail_path', attachment.thumbnail_path,
-          'original_filename', attachment.original_filename,
-          'position', attachment.position,
-          'mime_type', attachment.mime_type,
-          'size_bytes', attachment.size_bytes,
-          'width', attachment.width,
-          'height', attachment.height
-        ) order by attachment.position, attachment.id
-      ),
-      '[]'::jsonb
-    ) as items
-    from public.post_attachments as attachment
-    where attachment.post_id = post.id and attachment.status = 'ready'
-  ) as attachment_summary on true
   order by selected.position;
 end;
 $$;

@@ -1,6 +1,10 @@
 import { parseMentions } from "~/features/posts/model/mentions";
 import { createPostAttachmentUrls } from "~/features/posts/data/files";
-import { readAttachmentsJson } from "~/features/posts/model/attachment-json";
+import {
+  applyAttachmentUrls,
+  attachmentPaths,
+  readAttachmentsJson,
+} from "~/features/posts/model/attachment-json";
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import type { FeedPage, FeedPost } from "~/features/feed/model/types";
 import { getSupabase } from "~/shared/supabase/client";
@@ -101,12 +105,7 @@ export async function hydrateFeedPostMedia(
 ): Promise<FeedPost[]> {
   const [attachmentUrls, profileUrls] = await Promise.all([
     createPostAttachmentUrls(
-      posts.flatMap((post) =>
-        post.attachments.flatMap((attachment) => [
-          attachment.object_path,
-          attachment.thumbnail_path,
-        ]),
-      ),
+      attachmentPaths(posts.flatMap((post) => post.attachments)),
     ),
     createProfileMediaUrls(
       posts.flatMap((post) => [
@@ -120,13 +119,7 @@ export async function hydrateFeedPostMedia(
     const authorAvatarUrl = post.author_avatar_path
       ? (profileUrls.get(post.author_avatar_path) ?? null)
       : null;
-    const attachments = post.attachments.map((attachment) => ({
-      ...attachment,
-      signedUrl: attachmentUrls.get(attachment.object_path) ?? null,
-      thumbnailUrl: attachment.thumbnail_path
-        ? (attachmentUrls.get(attachment.thumbnail_path) ?? null)
-        : null,
-    }));
+    const attachments = applyAttachmentUrls(post.attachments, attachmentUrls);
     if (post.kind === "group")
       return {
         ...post,

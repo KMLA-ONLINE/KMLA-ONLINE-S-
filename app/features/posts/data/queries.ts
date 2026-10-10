@@ -21,7 +21,11 @@ import type {
 } from "~/features/posts/model/types";
 import type { PostAttachment } from "~/features/posts/model/types";
 import { createPostAttachmentUrls } from "~/features/posts/data/files";
-import { readAttachmentsJson } from "~/features/posts/model/attachment-json";
+import {
+  applyAttachmentUrls,
+  attachmentPaths,
+  readAttachmentsJson,
+} from "~/features/posts/model/attachment-json";
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import { getSupabase } from "~/shared/supabase/client";
 
@@ -70,52 +74,24 @@ export async function hydratePostComments(
   }));
 }
 
-/** 첨부의 원본과 축소본을 한 번에 서명한다. 경로를 나눠 두 번 부르면 배치가 갈라져 왕복이 는다. */
-async function signAttachments<T extends { attachments: PostAttachment[] }>(
-  posts: T[],
-): Promise<T[]> {
-  const urls = await createPostAttachmentUrls(
-    posts.flatMap((post) =>
-      post.attachments.flatMap((attachment) => [
-        attachment.object_path,
-        attachment.thumbnail_path,
-      ]),
-    ),
-  );
-  return posts.map((post) => ({
-    ...post,
-    attachments: post.attachments.map((attachment) => ({
-      ...attachment,
-      signedUrl: urls.get(attachment.object_path) ?? null,
-      thumbnailUrl: attachment.thumbnail_path
-        ? (urls.get(attachment.thumbnail_path) ?? null)
-        : null,
-    })),
-  }));
+interface ProfileMediaPaths {
+  activity_media_path: string | null;
+  author_avatar_path: string | null;
 }
 
-/** 아바타와 프로필 미디어 활동 이미지를 한 번에 서명한다. 결과는 `*_url`에만 담아 다시 통과시켜도 같다(멱등). */
-async function attachProfileMedia<
-  T extends {
-    activity_media_path: string | null;
-    author_avatar_path: string | null;
-  },
->(
-  posts: T[],
-): Promise<
-  (T & {
-    activity_media_url: string | null;
-    author_avatar_url: string | null;
-  })[]
-> {
-  const urls = await createProfileMediaUrls(
-    posts.flatMap((post) => [
-      post.author_avatar_path,
-      post.activity_media_path,
-    ]),
-  );
+function profileMediaPaths(posts: readonly ProfileMediaPaths[]) {
+  return posts.flatMap((post) => [
+    post.author_avatar_path,
+    post.activity_media_path,
+  ]);
+}
 
-  return posts.map((post) => ({
+/** 결과는 `*_url`에만 담는다. 경로를 덮어쓰지 않으므로 다시 통과시켜도 같다(멱등). */
+function applyProfileMediaUrls<T extends ProfileMediaPaths>(
+  post: T,
+  urls: Map<string, string>,
+): T & { activity_media_url: string | null; author_avatar_url: string | null } {
+  return {
     ...post,
     author_avatar_url: post.author_avatar_path
       ? (urls.get(post.author_avatar_path) ?? null)
@@ -123,7 +99,7 @@ async function attachProfileMedia<
     activity_media_url: post.activity_media_path
       ? (urls.get(post.activity_media_path) ?? null)
       : null,
-  }));
+  };
 }
 
 async function listPostAttachments(postId: string): Promise<PostAttachment[]> {
@@ -216,12 +192,7 @@ export async function hydrateGroupPostMedia(
 ): Promise<GroupPostPage["posts"]> {
   const [attachmentUrls, profileUrls] = await Promise.all([
     createPostAttachmentUrls(
-      posts.flatMap((post) =>
-        post.attachments.flatMap((attachment) => [
-          attachment.object_path,
-          attachment.thumbnail_path,
-        ]),
-      ),
+      attachmentPaths(posts.flatMap((post) => post.attachments)),
     ),
     createProfileMediaUrls(posts.map((post) => post.author_avatar_path)),
   ]);
@@ -233,13 +204,7 @@ export async function hydrateGroupPostMedia(
     author_avatar_url: post.author_avatar_path
       ? (profileUrls.get(post.author_avatar_path) ?? null)
       : null,
-    attachments: post.attachments.map((attachment) => ({
-      ...attachment,
-      signedUrl: attachmentUrls.get(attachment.object_path) ?? null,
-      thumbnailUrl: attachment.thumbnail_path
-        ? (attachmentUrls.get(attachment.thumbnail_path) ?? null)
-        : null,
-    })),
+    attachments: applyAttachmentUrls(post.attachments, attachmentUrls),
   }));
 }
 
@@ -303,14 +268,21 @@ export async function listProfilePosts(
     ...row,
     attachments: readAttachmentsJson(row.attachments, row.post_id),
   }));
-  const [withFiles, withMedia] = await Promise.all([
-    signAttachments(pagePosts),
-    attachProfileMedia(pagePosts),
+  const [attachmentUrls, mediaUrls] = await Promise.all([
+    createPostAttachmentUrls(
+      attachmentPaths(pagePosts.flatMap((post) => post.attachments)),
+    ),
+    createProfileMediaUrls(profileMediaPaths(pagePosts)),
   ]);
-  const posts = withMedia.map((post, index) => ({
-    ...post,
-    attachments: withFiles[index]?.attachments ?? post.attachments,
-  }));
+  const posts = pagePosts.map((post) =>
+    applyProfileMediaUrls(
+      {
+        ...post,
+        attachments: applyAttachmentUrls(post.attachments, attachmentUrls),
+      },
+      mediaUrls,
+    ),
+  );
   const last = posts.at(-1);
   return {
     posts,
@@ -331,10 +303,11 @@ export async function getProfilePost(
   if (error) throw error;
   const post = data?.[0];
   if (!post) return null;
-  const [hydrated] = await attachProfileMedia([
+  const mediaUrls = await createProfileMediaUrls(profileMediaPaths([post]));
+  return applyProfileMediaUrls(
     { ...post, attachments: await attachments },
-  ]);
-  return hydrated;
+    mediaUrls,
+  );
 }
 
 /** 최상위 댓글 한 페이지. 한 건을 더 받아 다음 페이지 유무를 확인하고 마지막 댓글을 커서로 쓴다. */

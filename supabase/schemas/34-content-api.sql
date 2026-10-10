@@ -1840,7 +1840,7 @@ begin
     active_restriction.expires_at is not null,
     active_restriction.expires_at,
     private.post_mentions_json(post.id),
-    attachment_summary.items
+    private.post_attachments_json(post.id)
   from public.posts as post
   join private.post_authors as author on author.post_id = post.id
   left join public.group_categories as category on category.id = post.category_id
@@ -1883,28 +1883,6 @@ begin
       group by entry.reaction
     ) as tally
   ) as summary on true
-  -- 첨부를 같이 담는다. 목록을 받은 뒤 첨부를 따로 물으면 그룹 화면마다 왕복이 하나 더 붙는다.
-  left join lateral (
-    select coalesce(
-      jsonb_agg(
-        jsonb_build_object(
-          'attachment_id', attachment.id,
-          'storage_bucket', attachment.storage_bucket,
-          'object_path', attachment.object_path,
-          'thumbnail_path', attachment.thumbnail_path,
-          'original_filename', attachment.original_filename,
-          'position', attachment.position,
-          'mime_type', attachment.mime_type,
-          'size_bytes', attachment.size_bytes,
-          'width', attachment.width,
-          'height', attachment.height
-        ) order by attachment.position, attachment.id
-      ),
-      '[]'::jsonb
-    ) as items
-    from public.post_attachments as attachment
-    where attachment.post_id = post.id and attachment.status = 'ready'
-  ) as attachment_summary on true
   where post.group_id = p_group_id and post.kind = 'group'
     and post.published_at is not null
     and (p_category_id is null or post.category_id = p_category_id)
@@ -2137,31 +2115,10 @@ begin
 
   -- 첨부를 같이 담는다. 목록을 받은 뒤 첨부를 따로 물으면 타임라인을 열 때마다 왕복이 하나 더 붙는다.
   return query
-  select entry.*, attachment_summary.items
+  select entry.*, private.post_attachments_json(entry.post_id)
   from private.read_profile_posts(
     coalesce(page_ids, '{}'::uuid[]), caller_profile_id
   ) as entry
-  left join lateral (
-    select coalesce(
-      jsonb_agg(
-        jsonb_build_object(
-          'attachment_id', attachment.id,
-          'storage_bucket', attachment.storage_bucket,
-          'object_path', attachment.object_path,
-          'thumbnail_path', attachment.thumbnail_path,
-          'original_filename', attachment.original_filename,
-          'position', attachment.position,
-          'mime_type', attachment.mime_type,
-          'size_bytes', attachment.size_bytes,
-          'width', attachment.width,
-          'height', attachment.height
-        ) order by attachment.position, attachment.id
-      ),
-      '[]'::jsonb
-    ) as items
-    from public.post_attachments as attachment
-    where attachment.post_id = entry.post_id and attachment.status = 'ready'
-  ) as attachment_summary on true
   order by entry.published_at desc, entry.post_id desc;
 end;
 $$;

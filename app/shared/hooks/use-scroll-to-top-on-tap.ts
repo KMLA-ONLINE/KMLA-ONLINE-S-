@@ -15,10 +15,11 @@ export function useScrollToTopOnTap() {
 
   return (event: MouseEvent<HTMLElement>) => {
     const target = event.target;
-    if (target instanceof Element) {
-      const interactive = target.closest(INTERACTIVE);
-      if (interactive && event.currentTarget.contains(interactive)) return;
-    }
+    // React 이벤트는 portal을 넘어 컴포넌트 트리를 따라 올라온다. 헤더 버튼이 연 메뉴·다이얼로그는
+    // DOM으로는 헤더 밖이지만 그 안의 클릭이 여기 닿으므로, 실제로 헤더 안을 누른 것만 받는다.
+    if (!(target instanceof Element) || !event.currentTarget.contains(target))
+      return;
+    if (target.closest(INTERACTIVE)) return;
     scrollToTop(container?.current);
   };
 }
