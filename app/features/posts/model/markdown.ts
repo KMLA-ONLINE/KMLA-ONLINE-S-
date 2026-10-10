@@ -1,16 +1,10 @@
-import type {
-  Content,
-  Delete,
-  PhrasingContent,
-  Root,
-  RootContent,
-  Text,
-} from "mdast";
-import type { ConstructName, Handle } from "mdast-util-to-markdown";
+import type { Content, PhrasingContent, Root, RootContent, Text } from "mdast";
+import remarkCjkFriendly from "remark-cjk-friendly/bidi";
+import remarkCjkFriendlyStrikethrough from "remark-cjk-friendly-gfm-strikethrough/bidi";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkStringify from "remark-stringify";
-import { unified } from "unified";
+import { unified, type Pluggable } from "unified";
 
 import { isMentionHref } from "~/features/posts/model/mentions";
 import {
@@ -18,79 +12,30 @@ import {
   UNDERLINE_DIRECTIVE,
 } from "~/features/posts/model/underline";
 
-const parser = unified()
-  .use(remarkParse)
-  .use(remarkGfm)
-  .use(remarkPostUnderline);
-/** `micromark-util-classify-character`와 같은 분류: 없음(글자) / 1(공백) / 2(문장부호). */
-function classify(code: number): 1 | 2 | undefined {
-  if (Number.isNaN(code)) return 1;
-  const char = String.fromCharCode(code);
-  if (/\s/u.test(char)) return 1;
-  if (/[\p{P}\p{S}]/u.test(char)) return 2;
-  return undefined;
-}
-
-/** 표식 바로 안쪽·바깥쪽 글자 중 어느 쪽을 문자 참조로 바꿔야 표식이 열리고 닫히는지. */
-function encodeInfo(outside: number, inside: number) {
-  const outsideKind = classify(outside);
-  const insideKind = classify(inside);
-  if (outsideKind === undefined)
-    return insideKind === undefined
-      ? { inside: false, outside: false }
-      : { inside: insideKind === 1, outside: true };
-  if (outsideKind === 1)
-    return { inside: insideKind === 1, outside: insideKind === 1 };
-  return { inside: insideKind === 1, outside: false };
-}
-
-function characterReference(code: number): string {
-  return `&#x${code.toString(16).toUpperCase()};`;
-}
-
 /**
- * GFM 취소선 직렬화. `mdast-util-gfm-strikethrough`는 `**`·`*`와 달리 표식 경계를 맞추지 않아
- * `가~~(나)~~다`처럼 문장부호와 한글이 붙은 자리에서 `~~`가 닫히지 않고 글자로 남는다. 기본
- * `strong` 처리기와 같은 방식으로 경계 글자 하나를 문자 참조로 바꾼다.
+ * 게시물 Markdown 문법. 정화·읽기 화면이 함께 쓰고, 편집기(Milkdown)도 같은 플러그인을 단다.
+ *
+ * CJK 플러그인은 CommonMark가 `**끝.**다음`처럼 문장부호와 한글이 붙은 자리에서 `**`·`*`·`~~`를
+ * 닫지 않는 규칙을 한중일 글자 옆에서만 푼다(`docs/CONTENT_FORMATTING.md`). 직렬화도 같은 규칙을 써서
+ * 그 자리를 문자 참조 없이 그대로 쓴다. 한 곳에서만 빼면 저장된 `**`가 글자로 보인다.
  */
-export const handleStrikethrough: Handle = (node: Delete, _, state, info) => {
-  const tracker = state.createTracker(info);
-  // 구성 이름은 `mdast-util-gfm-strikethrough`의 타입 확장에만 있다(직접 의존하지 않는다).
-  const exit = state.enter("strikethrough" as ConstructName);
-  const before = tracker.move("~~");
-  let between = tracker.move(
-    state.containerPhrasing(node, {
-      ...tracker.current(),
-      before,
-      after: "~",
-    }),
-  );
-  const head = between.charCodeAt(0);
-  const open = encodeInfo(info.before.charCodeAt(info.before.length - 1), head);
-  if (open.inside) between = characterReference(head) + between.slice(1);
-  const tail = between.charCodeAt(between.length - 1);
-  const close = encodeInfo(info.after.charCodeAt(0), tail);
-  if (close.inside) between = between.slice(0, -1) + characterReference(tail);
-  const after = tracker.move("~~");
-  exit();
-  state.attentionEncodeSurroundingInfo = {
-    after: close.outside,
-    before: open.outside,
-  };
-  return before + between + after;
-};
+export const postMarkdownPlugins: Pluggable[] = [
+  remarkGfm,
+  remarkCjkFriendly,
+  remarkCjkFriendlyStrikethrough,
+  remarkPostUnderline,
+];
 
+const parser = unified().use(remarkParse).use(postMarkdownPlugins);
 const serializer = unified()
   .use(remarkStringify, {
     bullet: "-",
     emphasis: "*",
     fences: false,
-    handlers: { delete: handleStrikethrough },
     listItemIndent: "one",
     strong: "*",
   })
-  .use(remarkGfm)
-  .use(remarkPostUnderline);
+  .use(postMarkdownPlugins);
 
 /** 밑줄 플러그인은 파싱 뒤 변환 단계에서 원문을 보고 밑줄 아닌 지시어를 되돌린다. `parse`만으로는 그 단계가 돌지 않는다. */
 function parse(markdown: string): Root {

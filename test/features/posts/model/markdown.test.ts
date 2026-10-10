@@ -185,11 +185,15 @@ describe("underline", () => {
   });
 });
 
-describe("strikethrough", () => {
-  it("stays closed next to Korean letters and punctuation", () => {
-    const safe = sanitizePostMarkdown("&#xAC00;~~(나)~~&#xB2E4; 가~~나~~다");
+describe("CJK emphasis", () => {
+  it("closes markers between punctuation and Korean letters without character references", () => {
+    const markdown = '**끝.**다음 가*(나)*다 가~~"나"~~다';
 
-    expect(safe).toBe("&#xAC00;~~(나)~~&#xB2E4; 가~~나~~다");
-    expect(extractPostPlainText(safe)).toBe("가(나)다 가나다");
+    expect(sanitizePostMarkdown(markdown)).toBe(markdown);
+    expect(extractPostPlainText(markdown)).toBe('끝.다음 가(나)다 가"나"다');
+  });
+
+  it("keeps CommonMark rules between Latin letters", () => {
+    expect(sanitizePostMarkdown("a**(b)**c")).toBe("a\\*\\*(b)\\*\\*c");
   });
 });

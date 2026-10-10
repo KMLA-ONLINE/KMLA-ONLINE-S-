@@ -50,10 +50,10 @@ describe("DesktopMarkdownEditor", () => {
     // 문단 머리 `- ` 뒤에 서식이 오면 Milkdown 기본 처리기가 escape하지 않아 정화가 목록으로 읽고 `-`를 지웠다.
     ["<p>- <strong>굵게</strong></p>", "\\- **굵게**"],
     ['<p>- <a href="m:1">@한별</a></p>', "\\- [@한별](m:1)"],
-    // 문장부호로 끝나는 굵게 뒤에 한글이 붙으면 `**`가 닫히지 않아 글자로 남았다.
-    ["<p><strong>끝.</strong>다음</p>", "**끝.**&#xB2E4;음"],
-    ["<p>가<em>(나)</em>다</p>", "&#xAC00;*(나)*&#xB2E4;"],
-    ["<p>가<del>(나)</del>다</p>", "&#xAC00;~~(나)~~&#xB2E4;"],
+    // 문장부호로 끝나는 굵게 뒤에 한글이 붙으면 CommonMark에서는 `**`가 닫히지 않아 글자로 남았다.
+    ["<p><strong>끝.</strong>다음</p>", "**끝.**다음"],
+    ["<p>가<em>(나)</em>다</p>", "가*(나)*다"],
+    ["<p>가<del>(나)</del>다</p>", "가~~(나)~~다"],
   ])("serializes %s so it reads back the same", async (html, markdown) => {
     const onValueChange = vi.fn();
     render(
