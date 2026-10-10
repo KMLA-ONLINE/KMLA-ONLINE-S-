@@ -119,6 +119,7 @@ export function GroupPostEditor({
     disposedRef,
     isDragging,
     dropHandlers,
+    pasteHandlers,
     addFiles,
     removeExisting,
     removeAddition,
@@ -265,6 +266,7 @@ export function GroupPostEditor({
             }
           },
           ...dropHandlers,
+          ...pasteHandlers,
         }}
       >
         {mode === "create" && anonymousActivityRestriction ? (

@@ -60,6 +60,7 @@ import {
   DialogTitle,
 } from "~/shared/ui/dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { clipboardImageFiles } from "~/shared/lib/clipboard";
 import { cn } from "~/shared/lib/utils";
 import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
 import { Button } from "~/shared/ui/button";
@@ -485,13 +486,10 @@ export function CommentComposer({
                 if (localError) setLocalError(null);
               }}
               onPaste={(event) => {
-                const pasted = Array.from(event.clipboardData.items).find(
-                  (item) =>
-                    item.kind === "file" && item.type.startsWith("image/"),
-                );
+                const [pasted] = clipboardImageFiles(event.clipboardData);
                 if (!pasted) return;
                 event.preventDefault();
-                void selectImage(pasted.getAsFile() ?? undefined);
+                void selectImage(pasted);
               }}
               onCompositionStart={() => (composing.current = true)}
               onCompositionEnd={(event) => {
