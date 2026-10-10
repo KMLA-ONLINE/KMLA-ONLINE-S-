@@ -21,6 +21,7 @@ import {
   type Point,
   type ZoomTransform,
 } from "~/shared/lib/image-viewer-geometry";
+import { resistDrag } from "~/shared/lib/drag-resistance";
 
 /** 슬라이드 사이의 간격. 넘기는 동안 두 사진이 맞붙어 보이지 않게 한다. */
 export const PAGE_GAP = 16;
@@ -49,6 +50,10 @@ const PAGE_DISTANCE_RATIO = 0.2;
 const FLICK_VELOCITY = 0.35;
 const DISMISS_DISTANCE_RATIO = 0.18;
 const DISMISS_VELOCITY = 0.6;
+/** 끌어 닫는 동안 사진이 움직여 보이는 최대 거리. 닫힌다는 걸 알릴 만큼만 움직인다. */
+const DISMISS_DRAG_LIMIT = 72;
+/** 끄는 동안의 진행도 상한. 손을 떼기 전에는 바탕이 절반까지만 옅어진다. */
+const DISMISS_DRAG_PROGRESS = 0.5;
 
 /** 제스처가 알아야 하는 현재 기하. `origin`은 뷰포트의 client 좌표 원점이다. */
 export interface ViewerLayout extends FrameLayout {
@@ -182,6 +187,8 @@ interface GestureState {
   /** 이번 제스처 중에 손가락이 둘 이상 닿았다. 그 뒤의 손 떼기는 탭이 아니다. */
   multiTouch: boolean;
   mouseMoved: boolean;
+  /** 끌어 닫기에서 손가락이 실제로 움직인 세로 거리. 화면의 사진은 저항 때문에 덜 움직인다. */
+  dismissTravel: number;
   lastTap: Sample | null;
   tapTimer: ReturnType<typeof setTimeout> | null;
 }
@@ -244,6 +251,7 @@ export function useViewerGestures(options: ViewerGestureOptions) {
     samples: [],
     multiTouch: false,
     mouseMoved: false,
+    dismissTravel: 0,
     lastTap: null,
     tapTimer: null,
   });
@@ -422,6 +430,7 @@ export function useViewerGestures(options: ViewerGestureOptions) {
         state.base = { ...IDENTITY, x: current.offset };
       } else {
         state.mode = "dismiss";
+        state.dismissTravel = 0;
       }
       return;
     }
@@ -440,9 +449,10 @@ export function useViewerGestures(options: ViewerGestureOptions) {
 
     if (state.mode === "dismiss") {
       const height = layout?.viewport.height ?? window.innerHeight;
+      state.dismissTravel = dy;
       current.setDismiss(
-        { x: dx, y: dy },
-        Math.min(1, Math.abs(dy) / (height * 0.6)),
+        { x: 0, y: resistDrag(dy, DISMISS_DRAG_LIMIT) },
+        Math.min(DISMISS_DRAG_PROGRESS, Math.abs(dy) / (height * 0.6)),
       );
       return;
     }
@@ -489,7 +499,8 @@ export function useViewerGestures(options: ViewerGestureOptions) {
   const finishDismiss = (cancelled: boolean) => {
     const current = motion.current;
     const height = getLayout()?.viewport.height ?? window.innerHeight;
-    const { x, y } = current.dismiss;
+    const { x } = current.dismiss;
+    const y = gesture.current.dismissTravel;
     const speed = velocity(gesture.current.samples).y;
     const shouldClose =
       !cancelled &&

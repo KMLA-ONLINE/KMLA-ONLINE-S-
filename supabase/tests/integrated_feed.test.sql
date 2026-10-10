@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(58);
+select plan(59);
 
 select ok(
   has_function_privilege('authenticated', 'public.list_feed_posts(uuid)', 'execute'),
@@ -826,6 +826,42 @@ select ok(
       where post_id = '90000000-0000-0000-0000-0000000000ff'
     ),
   'cascading a post deletion removes both kinds of ranking event'
+);
+
+-- `create_feed_session()`은 접근 조건을 `can_access_feed_post()`와 따로 집합 조건으로 쓴다. 두 조건이
+-- 어긋나면 세션에 볼 수 없는 글이 들어가거나 볼 수 있는 글이 빠지므로, 픽스처의 모든 승인 프로필에서
+-- 같은 게시물을 고르는지 확인한다. 앞선 검사가 만든 세션은 5초 재사용에 걸리므로 먼저 지운다.
+delete from private.feed_sessions;
+create temporary table feed_access_sessions as
+select profile.id as profile_id, private.create_feed_session(profile.id) as session_id
+from public.profiles as profile
+where profile.status = 'accepted' and profile.deleted_at is null;
+
+select is_empty(
+  $$
+    (
+      select session.profile_id, entry.post_id
+      from feed_access_sessions as session
+      join private.feed_session_posts as entry on entry.session_id = session.session_id
+      except
+      select session.profile_id, post.id
+      from feed_access_sessions as session
+      cross join public.posts as post
+      where private.can_access_feed_post(post.id, session.profile_id)
+    )
+    union all
+    (
+      select session.profile_id, post.id
+      from feed_access_sessions as session
+      cross join public.posts as post
+      where private.can_access_feed_post(post.id, session.profile_id)
+      except
+      select session.profile_id, entry.post_id
+      from feed_access_sessions as session
+      join private.feed_session_posts as entry on entry.session_id = session.session_id
+    )
+  $$,
+  'feed sessions hold exactly the posts can_access_feed_post allows for every profile'
 );
 
 select * from finish();

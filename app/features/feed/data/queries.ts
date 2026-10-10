@@ -1,50 +1,13 @@
 import { parseMentions } from "~/features/posts/model/mentions";
 import { createPostAttachmentUrls } from "~/features/posts/data/files";
-import type { PostAttachment } from "~/features/posts/model/types";
+import {
+  applyAttachmentUrls,
+  attachmentPaths,
+  readAttachmentsJson,
+} from "~/features/posts/model/attachment-json";
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import type { FeedPage, FeedPost } from "~/features/feed/model/types";
 import { getSupabase } from "~/shared/supabase/client";
-import type { Json } from "~/shared/supabase/database.types";
-
-function readAttachments(value: Json, postId: string): PostAttachment[] {
-  if (!Array.isArray(value)) return [];
-
-  return value.flatMap((item) => {
-    if (
-      !item ||
-      Array.isArray(item) ||
-      typeof item !== "object" ||
-      typeof item.attachment_id !== "string" ||
-      typeof item.object_path !== "string" ||
-      typeof item.original_filename !== "string" ||
-      typeof item.storage_bucket !== "string" ||
-      typeof item.mime_type !== "string" ||
-      typeof item.position !== "number" ||
-      typeof item.size_bytes !== "number"
-    ) {
-      return [];
-    }
-
-    return [
-      {
-        attachment_id: item.attachment_id,
-        post_id: postId,
-        storage_bucket: item.storage_bucket,
-        object_path: item.object_path,
-        original_filename: item.original_filename,
-        position: item.position,
-        mime_type: item.mime_type,
-        size_bytes: item.size_bytes,
-        width: typeof item.width === "number" ? item.width : null,
-        height: typeof item.height === "number" ? item.height : null,
-        signedUrl: null,
-        thumbnail_path:
-          typeof item.thumbnail_path === "string" ? item.thumbnail_path : null,
-        thumbnailUrl: null,
-      },
-    ];
-  });
-}
 
 export async function listFeedPosts(
   pageToken: string | null = null,
@@ -58,7 +21,7 @@ export async function listFeedPosts(
   const rows = data ?? [];
   const withAttachments = rows.map((row) => ({
     ...row,
-    attachments: readAttachments(row.attachments, row.post_id),
+    attachments: readAttachmentsJson(row.attachments, row.post_id),
   }));
   const posts = withAttachments.flatMap((row): FeedPost[] => {
     const common = {
@@ -142,12 +105,7 @@ export async function hydrateFeedPostMedia(
 ): Promise<FeedPost[]> {
   const [attachmentUrls, profileUrls] = await Promise.all([
     createPostAttachmentUrls(
-      posts.flatMap((post) =>
-        post.attachments.flatMap((attachment) => [
-          attachment.object_path,
-          attachment.thumbnail_path,
-        ]),
-      ),
+      attachmentPaths(posts.flatMap((post) => post.attachments)),
     ),
     createProfileMediaUrls(
       posts.flatMap((post) => [
@@ -161,13 +119,7 @@ export async function hydrateFeedPostMedia(
     const authorAvatarUrl = post.author_avatar_path
       ? (profileUrls.get(post.author_avatar_path) ?? null)
       : null;
-    const attachments = post.attachments.map((attachment) => ({
-      ...attachment,
-      signedUrl: attachmentUrls.get(attachment.object_path) ?? null,
-      thumbnailUrl: attachment.thumbnail_path
-        ? (attachmentUrls.get(attachment.thumbnail_path) ?? null)
-        : null,
-    }));
+    const attachments = applyAttachmentUrls(post.attachments, attachmentUrls);
     if (post.kind === "group")
       return {
         ...post,

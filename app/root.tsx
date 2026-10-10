@@ -13,7 +13,6 @@ import { ErrorPage } from "~/shared/components/error-page";
 import { Spinner } from "~/shared/ui/spinner";
 import { PwaPrompts } from "~/shared/components/pwa-prompts";
 import { QueryProvider } from "~/shared/components/query-provider";
-import { ThemeColor } from "~/shared/components/theme-color";
 import { env } from "~/shared/lib/env";
 import { cn } from "~/shared/lib/utils";
 import { isNetworkError } from "~/shared/lib/network-error";
@@ -93,11 +92,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta charSet="utf-8" />
         {/* `viewport-fit=cover`는 일부러 뺐다. Android Chrome 135+에서 탭바 배경이 시스템 내비게이션 바를 덮는다. */}
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {/* 하이드레이션 전 기본값(라이트). 이후 `<ThemeColor />`가 덮어쓴다. */}
-        <meta name="theme-color" content="#ffffff" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <Meta />
         <Links />
       </head>
@@ -109,7 +105,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           defaultTheme="light"
           disableTransitionOnChange
         >
-          <ThemeColor />
           <TooltipProvider>
             {children}
             <Toaster />

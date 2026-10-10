@@ -25,6 +25,7 @@ export default [
       route("noti/settings", "routes/app/notification-settings.tsx"),
       route("menu", "routes/app/menu/index.tsx"),
       route("menu/licenses", "routes/app/menu/licenses.tsx"),
+      route("menu/links", "routes/app/menu/links.tsx"),
       route("menu/birthdays", "routes/app/menu/birthdays.tsx"),
       route("menu/meal", "routes/app/menu/meal.tsx"),
       route("menu/password", "routes/app/menu/password.tsx"),

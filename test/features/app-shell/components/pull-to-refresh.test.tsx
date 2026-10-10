@@ -28,12 +28,21 @@ function finishPull(scroller: HTMLElement) {
   fireEvent.touchEnd(scroller);
 }
 
-function Subject({ onRefresh }: { onRefresh: () => Promise<void> }) {
+function Subject({
+  onRefresh,
+  onButtonClick,
+}: {
+  onRefresh: () => Promise<void>;
+  onButtonClick?: () => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   return (
     <div ref={ref} data-testid="scroller">
       <PullToRefresh containerRef={ref} enabled onRefresh={onRefresh} />
       <div>content</div>
+      <button type="button" onClick={onButtonClick}>
+        action
+      </button>
     </div>
   );
 }
@@ -115,6 +124,31 @@ describe("PullToRefresh", () => {
     finishPull(input);
 
     expect(onRefresh).not.toHaveBeenCalled();
+  });
+
+  it("swallows the click right after a pull but not a later tap", async () => {
+    vi.useFakeTimers();
+    const onRefresh = vi.fn().mockResolvedValue(undefined);
+    const onButtonClick = vi.fn();
+    render(<Subject onRefresh={onRefresh} onButtonClick={onButtonClick} />);
+    const scroller = screen.getByTestId("scroller");
+    const button = screen.getByRole("button", { name: "action" });
+
+    beginPull(scroller);
+    movePull(scroller, 180);
+    finishPull(scroller);
+    fireEvent.click(button);
+    expect(onButtonClick).not.toHaveBeenCalled();
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+
+    // 끌고 떼면 브라우저가 click을 보내지 않는 경우가 많다. 그래도 새로고침이 끝난 뒤의 탭은
+    // 먹히지 않아야 한다.
+    beginPull(scroller);
+    movePull(scroller, 180);
+    finishPull(scroller);
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    fireEvent.click(button);
+    expect(onButtonClick).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the refreshing status visible for at least 300ms", async () => {

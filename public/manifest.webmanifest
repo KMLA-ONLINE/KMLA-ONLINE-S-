@@ -10,8 +10,6 @@
   "lang": "ko",
   "dir": "ltr",
   "categories": ["social", "education"],
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
   "icons": [
     {
       "src": "/pwa-64x64.png",

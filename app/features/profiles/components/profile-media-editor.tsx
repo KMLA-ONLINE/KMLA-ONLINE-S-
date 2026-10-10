@@ -1,5 +1,6 @@
 import { EyeIcon, ImageIcon, RotateCcwIcon } from "lucide-react";
 import { useRef, useState } from "react";
+import { toast } from "sonner";
 
 import {
   removeProfileMedia,
@@ -19,6 +20,7 @@ import {
   prepareImageInput,
 } from "~/shared/lib/image/compress";
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
+import { isNetworkError } from "~/shared/lib/network-error";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "~/shared/ui/dialog";
@@ -42,7 +44,6 @@ export function ProfileMediaEditor({
 
   const [pending, setPending] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const isAvatar = slot === "avatar";
 
@@ -79,7 +80,6 @@ export function ProfileMediaEditor({
 
   const upload = async (cropped: File) => {
     setPending(true);
-    setError(null);
 
     try {
       const activityFile = isAvatar
@@ -108,23 +108,28 @@ export function ProfileMediaEditor({
       );
 
       await finish();
-    } catch {
+    } catch (cause) {
+      console.error("Failed to save profile media", cause);
       setPending(false);
-      setError("이미지를 저장하지 못했습니다.");
+      toast.error(
+        isNetworkError(cause)
+          ? "인터넷 연결을 확인한 뒤 다시 시도해 주세요."
+          : "이미지를 저장하지 못했습니다.",
+      );
     }
   };
 
   const reset = async () => {
     setPending(true);
-    setError(null);
 
     try {
       await removeProfileMedia(slot);
       await finish();
-    } catch {
+    } catch (cause) {
+      console.error("Failed to reset profile media", cause);
       setPending(false);
       setActionsOpen(false);
-      setError("기본 이미지로 변경하지 못했습니다.");
+      toast.error("기본 이미지로 변경하지 못했습니다.");
     }
   };
 
@@ -136,17 +141,16 @@ export function ProfileMediaEditor({
     if (!file) return;
 
     if (!isSupportedImageInput(file) || file.size > MAX_INPUT_FILE_BYTES) {
-      setError(
+      toast.error(
         "JPEG, PNG, WebP, HEIC, HEIF 이미지를 30MB 이하로 선택해 주세요.",
       );
       return;
     }
 
-    setError(null);
     try {
       crop.start(await prepareImageInput(file));
     } catch (cause) {
-      setError(
+      toast.error(
         cause instanceof Error
           ? cause.message
           : "이미지를 처리하지 못했습니다.",
@@ -155,8 +159,6 @@ export function ProfileMediaEditor({
   };
 
   const handleEditorClick = () => {
-    setError(null);
-
     if (hasCurrentMedia) {
       setActionsOpen(true);
       return;
@@ -212,15 +214,6 @@ export function ProfileMediaEditor({
         >
           {pending ? <Spinner /> : <ImageIcon aria-hidden="true" />}
         </Button>
-
-        {error ? (
-          <p
-            role="alert"
-            className="absolute top-full right-0 z-30 mt-2 w-56 rounded-md border bg-background p-2 text-xs text-destructive shadow-md"
-          >
-            {error}
-          </p>
-        ) : null}
       </div>
 
       <Dialog

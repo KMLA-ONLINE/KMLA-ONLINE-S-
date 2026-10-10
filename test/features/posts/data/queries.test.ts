@@ -140,33 +140,71 @@ describe("post queries", () => {
     });
   });
 
-  it("propagates attachment metadata query failures", async () => {
+  it("reads timeline attachments from the list RPC without a second query", async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: [
         {
           post_id: "post-id",
           published_at: "2026-08-13T00:00:00Z",
+          attachments: [
+            {
+              attachment_id: "attachment-1",
+              storage_bucket: "post-attachments",
+              object_path: "post-id/attachment-1",
+              original_filename: "photo.webp",
+              position: 0,
+              mime_type: "image/webp",
+              size_bytes: 100,
+              width: 100,
+              height: 100,
+            },
+          ],
         },
       ],
       error: null,
     });
-    const attachmentError = new Error("attachment metadata failed");
-    const query = {
-      select: vi.fn(),
-      in: vi.fn(),
-      eq: vi.fn(),
-      order: vi.fn().mockResolvedValue({ data: null, error: attachmentError }),
-    };
-    query.select.mockReturnValue(query);
-    query.in.mockReturnValue(query);
-    query.eq.mockReturnValue(query);
-    getSupabase.mockReturnValue({
-      rpc,
-      from: vi.fn().mockReturnValue(query),
-    });
+    const from = vi.fn();
+    getSupabase.mockReturnValue({ rpc, from });
+    createPostAttachmentUrls.mockResolvedValue(
+      new Map([["post-id/attachment-1", "https://signed/attachment-1"]]),
+    );
 
-    await expect(listGroupPosts("group-id")).rejects.toBe(attachmentError);
-    expect(createPostAttachmentUrls).not.toHaveBeenCalled();
+    const page = await listProfilePosts("jieun-29");
+
+    expect(from).not.toHaveBeenCalled();
+    expect(page.posts[0].attachments[0]).toMatchObject({
+      attachment_id: "attachment-1",
+      signedUrl: "https://signed/attachment-1",
+    });
+  });
+
+  it("signs timeline attachments and avatars at the same time", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          post_id: "post-id",
+          published_at: "2026-08-13T00:00:00Z",
+          author_avatar_path: "profiles/avatar.webp",
+          attachments: [],
+        },
+      ],
+      error: null,
+    });
+    getSupabase.mockReturnValue({ rpc, from: vi.fn() });
+    let resolveAttachments: (value: Map<string, string>) => void = () =>
+      undefined;
+    createPostAttachmentUrls.mockReturnValue(
+      new Promise((resolve) => {
+        resolveAttachments = resolve;
+      }),
+    );
+
+    const loading = listProfilePosts("jieun-29");
+    await vi.waitFor(() => expect(createPostAttachmentUrls).toHaveBeenCalled());
+    // 첨부 서명이 끝나기 전에 아바타 서명도 이미 나가 있어야 한다.
+    expect(createProfileMediaUrls).toHaveBeenCalled();
+    resolveAttachments(new Map());
+    await expect(loading).resolves.toMatchObject({ nextCursor: null });
   });
 
   it("asks for the timeline by public id so the loader need not resolve it first", async () => {
@@ -265,6 +303,49 @@ describe("post queries", () => {
     });
   });
 
+  it("reads group post attachments from the list RPC without a second query", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          post_id: "post-1",
+          published_at: "2026-08-13T00:00:00Z",
+          is_pinned: false,
+          author_avatar_path: "avatars/author",
+          attachments: [
+            {
+              attachment_id: "attachment-1",
+              storage_bucket: "post-attachments",
+              object_path: "post-1/attachment-1",
+              thumbnail_path: "post-1/attachment-1-thumb",
+              original_filename: "photo.webp",
+              position: 0,
+              mime_type: "image/webp",
+              size_bytes: 100,
+              width: 100,
+              height: 100,
+            },
+          ],
+        },
+      ],
+      error: null,
+    });
+    const from = vi.fn();
+    getSupabase.mockReturnValue({ rpc, from });
+    createPostAttachmentUrls.mockResolvedValue(
+      new Map([["post-1/attachment-1", "https://signed/attachment-1"]]),
+    );
+
+    const page = await listGroupPosts("group-id");
+
+    expect(from).not.toHaveBeenCalled();
+    expect(createPostAttachmentUrls).toHaveBeenCalledOnce();
+    expect(page.posts[0].attachments[0]).toMatchObject({
+      attachment_id: "attachment-1",
+      post_id: "post-1",
+      signedUrl: "https://signed/attachment-1",
+    });
+  });
+
   it("does not sign group post media for list-mode reads", async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: [
@@ -273,36 +354,24 @@ describe("post queries", () => {
           published_at: "2026-08-13T00:00:00Z",
           is_pinned: false,
           author_avatar_path: "avatars/author",
+          attachments: [
+            {
+              attachment_id: "attachment-1",
+              storage_bucket: "post-attachments",
+              object_path: "post-1/attachment-1",
+              original_filename: "photo.webp",
+              position: 0,
+              mime_type: "image/webp",
+              size_bytes: 100,
+              width: 100,
+              height: 100,
+            },
+          ],
         },
       ],
       error: null,
     });
-    const query = {
-      select: vi.fn(),
-      in: vi.fn(),
-      eq: vi.fn(),
-      order: vi.fn().mockResolvedValue({
-        data: [
-          {
-            id: "attachment-1",
-            post_id: "post-1",
-            storage_bucket: "post-attachments",
-            object_path: "post-1/attachment-1",
-            original_filename: "photo.webp",
-            position: 0,
-            mime_type: "image/webp",
-            size_bytes: 100,
-            width: 100,
-            height: 100,
-          },
-        ],
-        error: null,
-      }),
-    };
-    query.select.mockReturnValue(query);
-    query.in.mockReturnValue(query);
-    query.eq.mockReturnValue(query);
-    getSupabase.mockReturnValue({ rpc, from: vi.fn().mockReturnValue(query) });
+    getSupabase.mockReturnValue({ rpc, from: vi.fn() });
 
     const page = await listGroupPosts("group-id", { hydrateMedia: false });
 

@@ -49,6 +49,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `/noti/settings`                     | `app/routes/app/notification-settings.tsx`  | sticky/none/2xl               | L A   | notifications                                   | §15.2, §7.16     | `test/routes/app/notification-settings.test.ts`                                    |
 | `/menu`                              | `app/routes/app/menu/index.tsx`             | sticky/sticky/4xl             | —     | app-shell, auth                                 | §15.1            | `test/routes/app/menu.test.tsx`                                                    |
 | `/menu/licenses`                     | `app/routes/app/menu/licenses.tsx`          | sticky/sticky/4xl             | —     | app-shell                                       | §15.7            | —                                                                                  |
+| `/menu/links`                        | `app/routes/app/menu/links.tsx`             | sticky/sticky/4xl             | —     | app-shell                                       | §15.13           | `test/routes/app/menu/links.test.tsx`                                              |
 | `/menu/birthdays`                    | `app/routes/app/menu/birthdays.tsx`         | sticky/none/5xl               | L     | profiles                                        | §17.5, §17.8     | `test/routes/app/menu/birthdays.test.ts`                                           |
 | `/menu/meal`                         | `app/routes/app/menu/meal.tsx`              | sticky/sticky/5xl             | L     | meal                                            | §17.4            | —                                                                                  |
 | `/menu/password`                     | `app/routes/app/menu/password.tsx`          | sticky/sticky/4xl             | A     | auth                                            | §4.5             | `test/routes/password.test.tsx`                                                    |
@@ -239,7 +240,6 @@ browser reads or writes directly.
 | `group_join_requests`  | `groups/data/mutations.ts`, `groups/data/queries.ts`                                  |
 | `group_memberships`    | `groups/data/mutations.ts`, `groups/data/queries.ts`, `notifications/data/queries.ts` |
 | `groups`               | `groups/data/queries.ts`                                                              |
-| `post_attachments`     | `posts/data/queries.ts`                                                               |
 | `profile_departments`  | `profiles/data/queries.ts`                                                            |
 | `profile_permissions`  | `school-utilities/data/gongang-schedule.ts`                                           |
 | `user_timetables`      | `timetable/data/timetable.ts`                                                         |

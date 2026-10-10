@@ -82,5 +82,9 @@ describe("menu route", () => {
       "href",
       "/update",
     );
+    expect(screen.getByRole("link", { name: "바로가기" })).toHaveAttribute(
+      "href",
+      "/menu/links",
+    );
   });
 });

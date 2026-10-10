@@ -2186,6 +2186,7 @@ export type Database = {
         Returns: {
           anonymous_author_restricted: boolean
           anonymous_author_restriction_expires_at: string
+          attachments: Json
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -2351,6 +2352,7 @@ export type Database = {
         Returns: {
           activity_kind: Database["public"]["Enums"]["profile_media_activity_kind"]
           activity_media_path: string
+          attachments: Json
           author_avatar_path: string
           author_name: string
           author_pub_id: string
