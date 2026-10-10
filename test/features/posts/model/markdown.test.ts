@@ -184,3 +184,16 @@ describe("underline", () => {
     expect(extractPostPlainText(safe)).toBe(":u[글자]");
   });
 });
+
+describe("CJK emphasis", () => {
+  it("closes markers between punctuation and Korean letters without character references", () => {
+    const markdown = '**끝.**다음 가*(나)*다 가~~"나"~~다';
+
+    expect(sanitizePostMarkdown(markdown)).toBe(markdown);
+    expect(extractPostPlainText(markdown)).toBe('끝.다음 가(나)다 가"나"다');
+  });
+
+  it("keeps CommonMark rules between Latin letters", () => {
+    expect(sanitizePostMarkdown("a**(b)**c")).toBe("a\\*\\*(b)\\*\\*c");
+  });
+});

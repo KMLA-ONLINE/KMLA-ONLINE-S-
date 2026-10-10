@@ -76,7 +76,8 @@ for (const relative of files) {
     checked++;
     const report = (message) =>
       errors.push(
-        `${relative}:${link.position.start.line}: ${message} — ${url}`,
+        // Windows lists files with `\`; report the same path on every OS.
+        `${relative.split(path.sep).join("/")}:${link.position.start.line}: ${message} — ${url}`,
       );
     const hash = url.indexOf("#");
     const target = hash === -1 ? url : url.slice(0, hash);

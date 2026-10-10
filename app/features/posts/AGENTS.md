@@ -253,6 +253,7 @@
 ## 그 밖에
 
 - 댓글 본문은 평문이다. 게시물의 Markdown 파이프라인(`model/markdown.ts`)을 타지 않는다.
+- 게시물 Markdown을 읽는 곳은 정화(`model/markdown.ts`), 읽기 화면(`PostMarkdown`), 편집기 셋이고 remark 플러그인이 같아야 한다. 앞의 둘은 `postMarkdownPlugins`를 함께 쓰지만 Milkdown은 `$remark`로 따로 단다. 특히 CJK 강조 플러그인을 한 곳에서만 빼면 그곳만 `**끝.**다음`을 글자로 읽는다. 편집기는 Milkdown이 덮어쓴 `text`·`strong`·`emphasis` 직렬화 처리기도 걷어 낸다 — 남겨 두면 문단 머리 `- `가 escape되지 않아 정화가 목록으로 읽고 `-`를 지운다.
 - 줄바꿈 하나를 문단으로 가르는 `toMilkdownMarkdown()`은 편집기에 넣을 때만 쓴다. 이 변환을 공용 `toPostEditorMarkdown()`에 옮기지 마라 — `sanitizePostMarkdown()`과 `toPostRenderMarkdown()`이 같은 함수를 써서 정화 결과와 읽기 화면까지 함께 바뀐다.
 - `model/reactions.ts`의 `REACTION_TYPES` 순서를 `public.post_reaction` enum과 맞춰 두어라. 서버가 같은 수의 상위 반응을 enum 순서로 가르므로, 어긋나면 화면과 서버의 "많이 쓰인 순"이 달라진다.
 - 반응 그래픽은 `public/twemoji/15.1.0/<codepoint>.svg`에 담아 둔 Twemoji다. 서비스 워커가 `public/`을 프리캐시하므로 오프라인에서도 보인다. 실행 시점에 CDN에서 받지 마라.

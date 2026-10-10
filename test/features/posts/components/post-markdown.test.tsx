@@ -34,6 +34,13 @@ describe("PostMarkdown", () => {
     expect(screen.getByText(/시간 10:30am/)).toBeInTheDocument();
   });
 
+  it("closes emphasis between punctuation and Korean letters", () => {
+    render(<PostMarkdown>{'**끝.**다음 가~~"나"~~다'}</PostMarkdown>);
+
+    expect(screen.getByText("끝.", { selector: "strong" })).toBeVisible();
+    expect(screen.getByText('"나"', { selector: "del" })).toBeVisible();
+  });
+
   it("renders emoji as the original Unicode text", () => {
     render(<PostMarkdown>{"이모지 👍🏽 🇰🇷 👨‍👩‍👧‍👦"}</PostMarkdown>);
 

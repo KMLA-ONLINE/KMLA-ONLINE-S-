@@ -1,16 +1,17 @@
 import { Children, type ComponentPropsWithoutRef, type ReactNode } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
-import remarkGfm from "remark-gfm";
 
 import { MentionChip } from "~/features/posts/components/mention-chip";
-import { toPostRenderMarkdown } from "~/features/posts/model/markdown";
+import {
+  postMarkdownPlugins,
+  toPostRenderMarkdown,
+} from "~/features/posts/model/markdown";
 import {
   isMentionHref,
   mentionOrdinalFromHref,
   mentionsByOrdinal,
   type PostMention,
 } from "~/features/posts/model/mentions";
-import { remarkPostUnderline } from "~/features/posts/model/underline";
 import { cn } from "~/shared/lib/utils";
 
 const allowedElements = [
@@ -83,7 +84,7 @@ export function PostMarkdown({
   return (
     <div className={cn("post-typography", className)}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkPostUnderline]}
+        remarkPlugins={postMarkdownPlugins}
         allowedElements={allowedElements}
         urlTransform={transformUrl}
         components={{

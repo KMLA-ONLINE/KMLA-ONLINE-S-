@@ -2,6 +2,7 @@ import {
   defaultValueCtx,
   Editor as MilkdownEditor,
   editorViewCtx,
+  remarkStringifyOptionsCtx,
   rootCtx,
 } from "@milkdown/core";
 import { history, redoCommand, undoCommand } from "@milkdown/plugin-history";
@@ -74,6 +75,9 @@ import {
   remarkPostUnderline,
   UNDERLINE_DIRECTIVE,
 } from "~/features/posts/model/underline";
+import remarkCjkFriendly from "remark-cjk-friendly/bidi";
+import remarkCjkFriendlyStrikethrough from "remark-cjk-friendly-gfm-strikethrough/bidi";
+
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 
@@ -82,6 +86,15 @@ const underlineRemark = $remark(
   "remarkPostUnderline",
   () => remarkPostUnderline,
 );
+
+// 정화·읽기 화면과 같은 CJK 강조 규칙(`postMarkdownPlugins`). 빠지면 `**끝.**다음`을 편집기만 글자로 읽는다.
+const cjkFriendlyRemark = [
+  $remark("remarkCjkFriendly", () => remarkCjkFriendly),
+  $remark(
+    "remarkCjkFriendlyStrikethrough",
+    () => remarkCjkFriendlyStrikethrough,
+  ),
+];
 
 const underlineSchema = $markSchema("underline", () => ({
   parseDOM: [{ tag: "u" }],
@@ -139,6 +152,7 @@ const markdownSchema = [
   toggleUnderlineCommand,
   textSchema,
   remarkGFMPlugin,
+  ...cjkFriendlyRemark,
   remarkLineBreak,
   remarkHtmlTransformer,
   remarkPreserveEmptyLinePlugin,
@@ -189,6 +203,13 @@ const imeSafeShortcuts = $prose(
             return redo(view.state, view.dispatch, view);
           return false;
         },
+        // 편집기는 원문의 줄 하나를 문단 하나로 든다(`toMilkdownMarkdown()`). 기본 복사는 문단
+        // 사이를 빈 줄로 이어서 다른 곳에 붙이면 줄마다 엔터가 두 번 들어간다. 빈 줄은 빈 문단이라
+        // 줄바꿈 하나로 이어도 그대로 남는다.
+        clipboardTextSerializer: (slice) =>
+          slice.content.textBetween(0, slice.content.size, "\n", (leaf) =>
+            leaf.type.name === "hardbreak" ? "\n" : "",
+          ),
       },
     }),
 );
@@ -241,6 +262,13 @@ function EditorSurface({
         .config((ctx) => {
           ctx.set(rootCtx, root);
           ctx.set(defaultValueCtx, lastValue.current);
+          // Milkdown 기본 처리기는 `text`·`strong`·`emphasis`를 덮어써서 문단 머리 `- `를 escape하지
+          // 않고(정화가 목록으로 읽어 `-`를 지운다) 강조 표식 경계도 맞추지 않는다. 덮어쓴 것을 걷어
+          // 표준 처리기와 CJK 플러그인의 직렬화 규칙을 쓴다.
+          ctx.update(remarkStringifyOptionsCtx, (options) => ({
+            ...options,
+            handlers: {},
+          }));
           ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
             const safe = sanitizePostMarkdown(fromPostEditorMarkdown(markdown));
             if (input.current) input.current.value = safe;
