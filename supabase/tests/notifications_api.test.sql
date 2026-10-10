@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(38);
 
 select ok(
   (select relrowsecurity from pg_class where oid = 'public.notifications'::regclass),
@@ -215,6 +215,44 @@ select ok(
     'https://push.example.test/subscription/one'
   )),
   'push status confirms a registered endpoint without returning its keys'
+);
+-- Push service가 404/410으로 끝낸 endpoint는 브라우저가 다시 올려도 살아나지 않아야
+-- 클라이언트가 `gone`을 보고 새로 구독한다.
+reset role;
+update private.web_push_subscriptions set gone_at = now()
+where endpoint = 'https://push.example.test/subscription/one';
+set local role authenticated;
+select is(
+  public.register_my_web_push_subscription(
+    'https://push.example.test/subscription/one',
+    'BNcRdreALRFXTkA0bP8M5bq6fP6w6uLqFhKxqv2QdA',
+    'dGVzdC1hdXRoLWtleQ'
+  ),
+  false,
+  'resending an ended endpoint tells the browser it is still dead'
+);
+select is(
+  (select row(subscribed, gone)::text from public.get_my_web_push_status(
+    'https://push.example.test/subscription/one'
+  )),
+  '(f,t)',
+  'a resent gone endpoint stays gone instead of reading as subscribed'
+);
+select is(
+  public.register_my_web_push_subscription(
+    'https://push.example.test/subscription/one',
+    'BNcRdreALRFXTkA0bP8M5bq6fP6w6uLqFhKxqv2QdB',
+    'dGVzdC1hdXRoLWtleR'
+  ),
+  true,
+  'a fresh subscription on the same endpoint with new keys is live'
+);
+select is(
+  (select row(subscribed, gone)::text from public.get_my_web_push_status(
+    'https://push.example.test/subscription/one'
+  )),
+  '(t,f)',
+  'new keys on a gone endpoint revive it'
 );
 select is(
   public.unregister_my_web_push_subscription('https://push.example.test/subscription/one'),

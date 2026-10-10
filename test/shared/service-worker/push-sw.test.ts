@@ -274,12 +274,97 @@ describe("public push service worker", () => {
       "arbitrary URL field",
       { json: () => ({ ...validPayload, url: "https://evil.example" }) },
     ],
-  ])("ignores %s", async (_case, data) => {
+  ])("shows only an inbox card for %s", async (_case, data) => {
     const worker = loadPushWorker();
 
     await worker.dispatch("push", { data });
 
-    expect(worker.showNotification).not.toHaveBeenCalled();
+    expect(worker.showNotification).toHaveBeenCalledOnce();
+    expect(worker.showNotification).toHaveBeenCalledWith(
+      "새 알림",
+      expect.objectContaining({
+        tag: "notification-inbox",
+        data: { inbox: true },
+      }),
+    );
+  });
+
+  it("re-alerts and counts the inbox card toward the app badge", async () => {
+    const worker = loadPushWorker();
+
+    await worker.dispatch("push", { data: undefined });
+
+    expect(worker.showNotification).toHaveBeenCalledWith(
+      "새 알림",
+      expect.objectContaining({ renotify: true }),
+    );
+    expect(worker.setAppBadge).toHaveBeenCalledWith(1);
+  });
+
+  it("accepts a title as long as the server allows", async () => {
+    const worker = loadPushWorker();
+    const title = "가".repeat(160);
+
+    await worker.dispatch("push", {
+      data: { json: () => ({ ...validPayload, title }) },
+    });
+
+    expect(worker.showNotification).toHaveBeenCalledWith(
+      title,
+      expect.objectContaining({ tag: validPayload.tag }),
+    );
+  });
+
+  it("opens the inbox from an inbox card", async () => {
+    const worker = loadPushWorker();
+
+    await worker.dispatch("notificationclick", {
+      notification: { close: vi.fn(), data: { inbox: true } },
+    });
+
+    expect(worker.openWindow).toHaveBeenCalledWith("/noti");
+  });
+
+  it("opens a new window when the app window refuses to navigate", async () => {
+    const worker = loadPushWorker([
+      {
+        url: "https://kmla.example/groups/1",
+        focus: vi.fn(() => Promise.resolve()),
+        navigate: vi.fn(() => Promise.reject(new TypeError("not controlled"))),
+      },
+    ]);
+
+    await worker.dispatch("notificationclick", {
+      notification: { close: vi.fn(), data: validClickData },
+    });
+
+    expect(worker.openWindow).toHaveBeenCalledWith(
+      `/noti/open/${validPayload.notificationId}`,
+    );
+  });
+
+  it("prefers a visible app window over a hidden one", async () => {
+    const hidden = {
+      url: "https://kmla.example/a",
+      visibilityState: "hidden",
+      focus: vi.fn(() => Promise.resolve()),
+      navigate: vi.fn(() => Promise.resolve()),
+    };
+    const visible = {
+      ...hidden,
+      url: "https://kmla.example/b",
+      visibilityState: "visible",
+      focus: vi.fn(() => Promise.resolve()),
+      navigate: vi.fn(() => Promise.resolve()),
+    };
+    const worker = loadPushWorker([hidden, visible]);
+
+    await worker.dispatch("notificationclick", {
+      notification: { close: vi.fn(), data: validClickData },
+    });
+
+    expect(visible.navigate).toHaveBeenCalledOnce();
+    expect(hidden.navigate).not.toHaveBeenCalled();
   });
 
   it("focuses and navigates an existing app window to the local resolver", async () => {

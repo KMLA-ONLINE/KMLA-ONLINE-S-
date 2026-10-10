@@ -151,7 +151,8 @@ Push 발송 직전에 기기 상태, 최신 유형·그룹 설정과 현재 대�
 ## 6. 전달 worker
 
 Supabase Cron이 30초마다 `pg_net`으로 `dispatch-notifications` Edge Function을 호출한다. worker는 전용
-shared secret을 검증하고 service role로 bounded batch를 처리한다.
+shared secret을 검증하고 service role로 bounded batch를 처리한다. 배치 안의 항목은 최대 10개씩 겹쳐
+보낸다. 같은 구독으로 가는 항목은 한 줄로 보내 기기에 도착하는 순서를 지킨다. 순서대로 보내면 느린 Push service 몇 곳만으로 lease를 넘겨 다음 실행이 같은 항목을 다시 보낸다.
 
 worker는 delivery를 lease한 뒤 각 항목을 외부 서비스로 보내기 직전에
 `prepare_notification_delivery`로 lease 소유권, 최신 설정과 대상 접근 권한을 다시 확인한다. 다른
@@ -159,7 +160,18 @@ dispatcher는 만료되지 않은 lease를 suppress하거나 가져가지 않는
 없는 항목은 외부 호출 없이 suppress한다.
 
 - Web Push 2xx는 성공 처리한다.
-- 404와 410은 subscription을 폐기한다.
+- 404와 410은 subscription에 `gone_at`을 표시하고 delivery를 dead로 끝낸다. 행을 바로 지우면 outbox와
+  시도 기록이 CASCADE로 사라져 진단 근거가 없어지므로 표시만 하고, `gone` 구독은 큐잉과 전달에서
+  제외한 뒤 30일 보관 후 정리한다.
+- Web Push 401과 403은 `gone`이 아니라 dead로 둔다. 서버 VAPID 설정이 잘못돼도 같은 응답이 와서, 구독
+  탓으로 돌리면 설정 실수 한 번에 모든 구독이 죽은 것으로 표시된다. VAPID 키를 바꿔 어긋난 구독은
+  클라이언트가 구독의 `applicationServerKey`를 현재 키와 비교해 교체한다(§8).
+- delivery가 쌓인 뒤 구독이 새 키로 다시 등록됐다면 그 404·410은 옛 키에 대한 답이라 `gone_at`을
+  표시하지 않는다.
+- Push는 모두 `urgency: high`로 보낸다. 사용자가 켜 둔 알림만 Push로 나가고 카드가 실제로 뜨므로, normal로
+  보내 Android 절전 상태에서 기기가 깰 때까지 미뤄지게 둘 이유가 없다.
+- Push 요청은 10초에서 끊고 재시도한다. 응답 없는 Push service 하나가 worker를 붙잡으면 배치가 lease를
+  넘긴다.
 - 429와 5xx는 제한된 exponential backoff로 재시도한다.
 - 영구 payload·key 오류는 dead-letter 처리한다.
 - 로그에는 안정적인 내부 작업 ID와 집계만 남기고 endpoint·키·이메일 주소를 남기지 않는다.
@@ -171,7 +183,10 @@ Production 앱 이벤트 이메일은 Resend를 사용한다. 로컬은 Supabase
 
 기존 Workbox `generateSW`의 app shell·업데이트 정책을 유지하고 `importScripts`로 Push handler를 추가한다.
 handler는 `push`와 `notificationclick`을 처리한다. 높음 중요도는 notification ID tag를, 낮음·보통은
-카테고리 tag를 사용한다. 동일 delivery ID는 기존 카드의 집계 수를 다시 늘리지 않는다.
+카테고리 tag를 사용한다. 동일 delivery ID는 기존 카드의 집계 수를 다시 늘리지 않는다. payload 검증의
+제목 한도는 서버의 `notifications_title_length`(160자)와 같다. 검증에 실패한 Push는 버리지 않고 내용
+없는 "새 알림" 카드를 띄우며, 이 카드는 알림함만 연다. 같은 tag로 덮어쓰되 다시 알리고, 홈 화면 배지에 1로 센다. `userVisibleOnly` 구독에서 카드를 띄우지 않으면
+브라우저 기본 카드가 뜨거나 알림이 흔적 없이 사라진다.
 
 카테고리 tag는 같은 브라우저에서 계정을 바꿔도 카드가 섞이지 않도록 opaque subscription ID로 범위를
 나눈다. 기존 알림은 `getNotifications()`로 읽어 최신 알림과 누적 개수로 교체하고, 동시에 도착한 Push는
@@ -192,12 +207,13 @@ badge를 쓰므로, 주지 않으면 브라우저 기본 도형이 대신 나간
 
 `pushsubscriptionchange`에서는 `oldSubscription.options`로 다시 구독하기만 한다. 서비스
 워커에는 로그인 세션이 없어 새 endpoint를 서버에 올릴 수 없고, 그 절반은 앱이 다음에 뜰 때
-§8의 재동기화가 맡는다. 죽은 옛 endpoint는 전달 worker가 410으로 정리한다. 이 파일은 Vite가
+§8의 재동기화가 맡는다. 죽은 옛 endpoint는 전달 worker가 410을 받아 `gone`으로 표시한다(§6). 이 파일은 Vite가
 빌드하지 않는 정적 파일이라 VAPID 공개키를 읽을 수 없고, 옛 구독의 생성 옵션이 그 자리를
 대신한다.
 
 클릭 시 payload URL을 열지 않고 `/noti/open/:notificationId`만 구성한다. 기존 앱 창이 있으면 focus와
-navigate를 사용하고 없으면 새 창을 연다. resolver route는 인증, 현재 계정, 대상 접근 권한과 읽음
+navigate를 사용하고 없으면 새 창을 연다. 보이는 창을 숨은 탭보다 먼저 고르고, 이 워커가 제어하지 않는
+창이라 navigate가 거부되면 새 창으로 연다. resolver route는 인증, 현재 계정, 대상 접근 권한과 읽음
 처리를 다시 확인한다. 로그인하지 않았다면 안전하게 검증한 상대 `next` 경로를 로그인 후 복원한다.
 
 resolver route는 history에 남지 않는다. 남으면 뒤로가기가 resolver의 loader를 다시 돌려 목적지로
@@ -240,6 +256,9 @@ badge를 갱신하며 창 복귀 시 revalidation을 fallback으로 사용한다
 구독이 서버에도 있는지 한 번 확인하고, 없으면 다시 등록한다 — §7의 `pushsubscriptionchange`가
 브라우저 쪽만 되살리기 때문이다. 구독이 아예 없으면 새로 만들지 않는다. 앱에서 알림을 끄면 권한은
 granted로 남은 채 구독만 해지되므로, 새로 구독하면 사용자가 끈 알림이 저절로 켜진다.
+브라우저는 `pushsubscriptionchange` 없이 죽은 구독을 계속 돌려줄 수 있고, 같은 키로 다시 올라온 `gone`
+endpoint는 서버가 살리지 않는다. 등록 RPC는 그 구독으로 실제 발송되는지를 돌려주며, false면 해지 후 새로
+구독해 한 번 더 올린다. 사용자가 알림을 켤 때도 같은 경로를 거친다. 구독이 이전 VAPID 키로 만들어졌으면 서버 상태를 읽지 않고 바로 교체한다. 알림을 켤 때 새 구독까지 거부되면 스위치만 꺼진 채 두지 않고 오류로 알린다.
 
 Push 권한 설명은 승인 사용자의 gate 아래에서 표시한다. 사용자 동작 안에서만 브라우저 권한을 요청하고,
 기기·계정별 prompt 상태는 versioned localStorage key에 저장한다. 서비스 워커 업데이트, iOS 설치 안내,

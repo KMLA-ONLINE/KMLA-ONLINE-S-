@@ -139,12 +139,12 @@ object를 가지므로(기능 명세 §18.6) 둘 다 같은 트랜잭션에서 �
 
 ### 5.5 알림
 
-| 대상                             | 규칙                                      | 상태 |
-| -------------------------------- | ----------------------------------------- | ---- |
-| `notifications`                  | `last_activity_at` 기준 30일 후 예약 삭제 | 적용 |
-| outbox·시도 기록·이벤트 키       | 알림 CASCADE                              | 적용 |
-| `private.web_push_subscriptions` | 구독 해제 시, `410 Gone` 응답 시 즉시     | 적용 |
-| `post_id` / `comment_id` 외래 키 | `SET NULL`이 아니라 CASCADE               | 적용 |
+| 대상                             | 규칙                                        | 상태 |
+| -------------------------------- | ------------------------------------------- | ---- |
+| `notifications`                  | `last_activity_at` 기준 30일 후 예약 삭제   | 적용 |
+| outbox·시도 기록·이벤트 키       | 알림 CASCADE                                | 적용 |
+| `private.web_push_subscriptions` | 구독 해제 시 즉시, `404`/`410` 응답 후 30일 | 적용 |
+| `post_id` / `comment_id` 외래 키 | `SET NULL`이 아니라 CASCADE                 | 적용 |
 
 게시물이 하드 삭제되면 그 게시물을 가리키던 알림은 외래 키 CASCADE로 함께 사라진다. 운영 조치 알림(`post_moderated`)은 애초에 `post_id`를 싣지 않고 그룹 ID만 싣기 때문에 "내 글이 삭제되었다"는 알림은 남는다.
 

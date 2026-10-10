@@ -1966,6 +1966,7 @@ export type Database = {
       get_my_web_push_status: {
         Args: { p_endpoint: string }
         Returns: {
+          gone: boolean
           subscribed: boolean
         }[]
       }
@@ -2518,7 +2519,7 @@ export type Database = {
           p_expiration_time?: number
           p_p256dh: string
         }
-        Returns: undefined
+        Returns: boolean
       }
       reject_group_join_request: {
         Args: { p_group_id: string; p_request_id: string }

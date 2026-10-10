@@ -63,10 +63,40 @@ function isPushPayload(value) {
     ID_PATTERN.test(value.groupingKey) &&
     IMPORTANCES.includes(value.importance) &&
     CATEGORIES.includes(value.category) &&
-    isBoundedText(value.title, 120) &&
+    // 서버 제목 한도(`notifications_title_length`)와 같다. 더 좁으면 긴 게시물 제목을 담은
+    // 운영 조치 알림이 검증에서 떨어진다.
+    isBoundedText(value.title, 160) &&
     isBoundedText(value.body, 240) &&
     value.tag === expectedTag
   );
+}
+
+// 검증을 통과하지 못한 Push에 띄우는 카드의 data. 내용은 믿을 수 없으니 아무것도 싣지 않고
+// 누르면 알림함만 연다.
+const INBOX_CARD_DATA = { inbox: true };
+
+function isInboxCardData(value) {
+  return (
+    isRecord(value) && hasExactKeys(value, ["inbox"]) && value.inbox === true
+  );
+}
+
+/**
+ * `userVisibleOnly` 구독은 Push마다 카드를 띄워야 한다. 그냥 버리면 브라우저가 "백그라운드에서
+ * 업데이트됨" 같은 기본 카드를 대신 띄우거나, 실제 알림이 아무 흔적 없이 사라진다. 형식이 어긋난
+ * 경우(서버와 이 파일의 한도가 어긋나는 등)에도 무언가 왔다는 것은 알린다.
+ */
+async function showInboxCard() {
+  await self.registration.showNotification("새 알림", {
+    body: "새 알림이 있습니다. 알림함에서 확인해 주세요.",
+    icon: "/pwa-192x192.png",
+    badge: "/badge-96x96.png",
+    lang: "ko",
+    tag: "notification-inbox",
+    // 같은 tag로 덮어쓰므로, 다시 알리지 않으면 두 번째부터는 아무 표시 없이 바뀐다.
+    renotify: true,
+    data: INBOX_CARD_DATA,
+  });
 }
 
 function isClickData(value) {
@@ -102,7 +132,12 @@ async function syncAppBadge() {
     const shown = await self.registration.getNotifications();
     const total = shown.reduce(
       (sum, notification) =>
-        sum + (isClickData(notification.data) ? notification.data.count : 0),
+        sum +
+        (isClickData(notification.data)
+          ? notification.data.count
+          : isInboxCardData(notification.data)
+            ? 1
+            : 0),
       0,
     );
     if (total > 0) await badging.setAppBadge(total);
@@ -113,16 +148,18 @@ async function syncAppBadge() {
 }
 
 async function showPush(data) {
-  if (!data) return;
-
   let payload;
   try {
-    payload = data.json();
+    payload = data?.json();
   } catch {
-    return;
+    payload = undefined;
   }
 
-  if (!isPushPayload(payload)) return;
+  if (!isPushPayload(payload)) {
+    await showInboxCard();
+    await syncAppBadge();
+    return;
+  }
 
   const existing = (
     await self.registration.getNotifications({ tag: payload.tag })
@@ -173,26 +210,39 @@ function enqueuePush(data) {
 }
 
 async function openNotification(data) {
-  if (!isClickData(data)) return;
+  let path;
+  if (isInboxCardData(data)) path = "/noti";
+  else if (isClickData(data)) {
+    path = data.count > 1 ? "/noti" : `/noti/open/${data.notificationId}`;
+  } else return;
 
-  const path = data.count > 1 ? "/noti" : `/noti/open/${data.notificationId}`;
   const destination = new URL(path, self.location.origin).href;
   const windows = await self.clients.matchAll({
     type: "window",
     includeUncontrolled: true,
   });
-  const appWindow = windows.find((client) => {
+  const appWindows = windows.filter((client) => {
     try {
       return new URL(client.url).origin === self.location.origin;
     } catch {
       return false;
     }
   });
+  // 보이는 창을 먼저 쓴다. 숨은 탭을 고르면 앱이 열린 것처럼 보이지 않는다.
+  const appWindow =
+    appWindows.find((client) => client.visibilityState === "visible") ??
+    appWindows[0];
 
   if (appWindow) {
-    await appWindow.focus();
-    await appWindow.navigate(destination);
-    return;
+    // 이 워커가 제어하지 않는 창(업데이트 대기 중 등)에서는 navigate가 거부된다. 그때 카드는
+    // 이미 닫혔으므로 새 창으로라도 열어야 탭이 허공에 사라지지 않는다.
+    try {
+      await appWindow.focus();
+      await appWindow.navigate(destination);
+      return;
+    } catch {
+      // 아래에서 새 창을 연다.
+    }
   }
 
   await self.clients.openWindow(path);
