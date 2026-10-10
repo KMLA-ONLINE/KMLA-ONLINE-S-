@@ -73,6 +73,32 @@ describe("DesktopMarkdownEditor", () => {
     );
   });
 
+  it.each([
+    ["hello \nnext", "hello\nnext"],
+    [" lead", "lead"],
+    ["   ", ""],
+  ])(
+    "drops edge spaces of %j instead of saving character references",
+    async (text, markdown) => {
+      const onValueChange = vi.fn();
+      render(
+        <DesktopMarkdownEditor initialValue="" onValueChange={onValueChange} />,
+      );
+      const editor = await screen.findByLabelText("본문");
+
+      fireEvent.paste(editor, {
+        clipboardData: {
+          types: ["text/plain"],
+          getData: (type: string) => (type === "text/plain" ? text : ""),
+        },
+      });
+
+      await waitFor(() =>
+        expect(onValueChange).toHaveBeenLastCalledWith(markdown),
+      );
+    },
+  );
+
   it("copies one stored line per line instead of a blank line between each", async () => {
     render(
       <DesktopMarkdownEditor initialValue={"첫 줄\n둘째 줄\n\n넷째 줄"} />,

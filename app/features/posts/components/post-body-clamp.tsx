@@ -137,6 +137,9 @@ export function PostBodyClamp({
       if (typeof ResizeObserver === "undefined") return;
       const observer = new ResizeObserver(measure);
       observer.observe(node);
+      // 접힌 상자는 높이가 고정이라 글꼴이 늦게 바뀌어 줄이 옮겨 가도 자기 크기는 그대로다.
+      // 안쪽 본문의 크기 변화로 자를 자리를 다시 잰다.
+      for (const child of node.children) observer.observe(child);
       return () => {
         observer.disconnect();
         bodyRef.current = null;

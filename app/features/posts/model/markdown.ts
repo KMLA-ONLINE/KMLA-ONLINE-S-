@@ -109,12 +109,37 @@ function blockText(node: Content): PhrasingContent[] {
   return [];
 }
 
+/**
+ * 줄 머리·끝 공백을 걷는다. Markdown 파서도 원래 버리는 공백인데, 편집기가 넘긴 그대로 직렬화하면
+ * 표준 규칙이 `&#x20;`로 바꿔 저장하고 공백뿐인 본문이 빈 글이 아니게 된다.
+ */
+function trimEdges(children: PhrasingContent[]): PhrasingContent[] {
+  // 편집기의 문단은 저장할 때 한 줄로 이어 붙어 한 문단 안의 줄바꿈이 되므로, 그 앞뒤 공백도 줄 끝이다.
+  const result = children.map((node) =>
+    node.type === "text"
+      ? { ...node, value: node.value.replace(/[ \t]*\n[ \t]*/g, "\n") }
+      : node,
+  );
+  const first = result[0];
+  if (first?.type === "text")
+    result[0] = { ...first, value: first.value.replace(/^[ \t]+/, "") };
+  const last = result.at(-1);
+  if (last?.type === "text")
+    result[result.length - 1] = {
+      ...last,
+      value: last.value.replace(/[ \t]+$/, ""),
+    };
+  return result.filter((node) => node.type !== "text" || node.value !== "");
+}
+
 function blocks(nodes: RootContent[]): RootContent[] {
   return nodes.flatMap((node): RootContent[] => {
     if (node.type === "paragraph")
-      return [{ type: "paragraph", children: inline(node.children) }];
+      return [
+        { type: "paragraph", children: trimEdges(inline(node.children)) },
+      ];
     if (node.type === "heading") {
-      const children = inline(node.children);
+      const children = trimEdges(inline(node.children));
       return node.depth === 2 || node.depth === 3
         ? [{ type: "heading", depth: node.depth, children }]
         : [{ type: "paragraph", children }];
