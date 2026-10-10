@@ -7,7 +7,6 @@ import {
   createDispatchHandler,
   type Delivery,
   type DeliveryResult,
-  pushUrgency,
 } from "./handler.ts";
 
 const url = Deno.env.get("SUPABASE_URL") ?? "";
@@ -76,7 +75,9 @@ async function sendPush(delivery: Delivery, payload: string) {
       payload,
       {
         TTL: 86400,
-        urgency: pushUrgency(delivery.importance),
+        // Push로 나가는 알림은 모두 사용자가 켜 둔 것이고 카드가 실제로 뜬다. normal은 Android
+        // 절전 상태에서 기기가 깰 때까지 미뤄져, 화면을 켜거나 앱을 열어야 몰려 온다.
+        urgency: "high",
         // 응답 없는 Push service 하나가 worker를 붙잡으면 배치가 lease를 넘겨 중복 발송된다.
         // 시간 초과는 transport_error로 재시도된다.
         timeout: 10_000,

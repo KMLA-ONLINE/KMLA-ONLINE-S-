@@ -37,13 +37,6 @@ export interface DispatchDependencies {
   sendEmail: (delivery: Delivery) => Promise<TransportResponse>;
 }
 
-/** Android 절전 상태에서 normal은 기기가 깰 때까지 미뤄질 수 있다. */
-export function pushUrgency(
-  importance: Delivery["importance"],
-): "high" | "normal" {
-  return importance === "high" ? "high" : "normal";
-}
-
 // 401/403은 `gone`이 아니다. 서버 VAPID 설정이 잘못돼도 같은 응답이 오므로, 그걸 구독 탓으로
 // 돌리면 설정 실수 한 번에 모든 구독이 죽은 것으로 표시된다. 키 교체로 어긋난 구독은 클라이언트가
 // 구독의 applicationServerKey를 현재 키와 비교해 직접 교체한다.

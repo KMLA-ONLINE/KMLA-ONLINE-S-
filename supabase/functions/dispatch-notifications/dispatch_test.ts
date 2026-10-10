@@ -4,7 +4,6 @@ import {
   type Delivery,
   type DeliveryResult,
   type DispatchDependencies,
-  pushUrgency,
 } from "./handler.ts";
 
 function delivery(overrides: Partial<Delivery> = {}): Delivery {
@@ -194,15 +193,6 @@ Deno.test(
       gone: 0,
       dead: 0,
     });
-  },
-);
-
-Deno.test(
-  "only high-importance pushes ask the push service to wake the device",
-  () => {
-    assertEquals(pushUrgency("high"), "high");
-    assertEquals(pushUrgency("normal"), "normal");
-    assertEquals(pushUrgency("low"), "normal");
   },
 );
 

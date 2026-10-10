@@ -168,6 +168,8 @@ dispatcher는 만료되지 않은 lease를 suppress하거나 가져가지 않는
   클라이언트가 구독의 `applicationServerKey`를 현재 키와 비교해 교체한다(§8).
 - delivery가 쌓인 뒤 구독이 새 키로 다시 등록됐다면 그 404·410은 옛 키에 대한 답이라 `gone_at`을
   표시하지 않는다.
+- Push는 모두 `urgency: high`로 보낸다. 사용자가 켜 둔 알림만 Push로 나가고 카드가 실제로 뜨므로, normal로
+  보내 Android 절전 상태에서 기기가 깰 때까지 미뤄지게 둘 이유가 없다.
 - Push 요청은 10초에서 끊고 재시도한다. 응답 없는 Push service 하나가 worker를 붙잡으면 배치가 lease를
   넘긴다.
 - 429와 5xx는 제한된 exponential backoff로 재시도한다.
