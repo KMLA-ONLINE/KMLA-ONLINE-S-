@@ -17,10 +17,12 @@ import {
 } from "lucide-react";
 import {
   type Dispatch,
+  memo,
   type RefObject,
   type SetStateAction,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -49,6 +51,7 @@ import {
 import type {
   Conversation,
   ConversationMessage,
+  MessageParticipant,
 } from "~/features/messaging/model/types";
 import {
   countMessageGraphemes,
@@ -357,6 +360,33 @@ function MessageThread({
   // 벗어났다가 다시 올라오면 한 번 더 시도한다.
   const olderLoadFailed = useRef(false);
   const oldestMessageId = messages[0]?.id;
+  // 부모가 렌더마다 새로 만드는 콜백을 그대로 넘기면 `ThreadMessage`의 memo가 매번 깨진다.
+  // 행에는 한 번 만든 객체를 넘기고, 호출 시점에 최신 콜백을 읽는다.
+  const latestHandlers = useRef({
+    onSelectReaction,
+    onReply,
+    onTogglePinned,
+    onViewMessage,
+  });
+  useLayoutEffect(() => {
+    latestHandlers.current = {
+      onSelectReaction,
+      onReply,
+      onTogglePinned,
+      onViewMessage,
+    };
+  });
+  const actions = useMemo<ThreadMessageActions>(
+    () => ({
+      selectReaction: (message, reaction) =>
+        latestHandlers.current.onSelectReaction(message, reaction),
+      reply: (message) => latestHandlers.current.onReply(message),
+      togglePinned: (message) => latestHandlers.current.onTogglePinned(message),
+      viewMessage: (messageId) =>
+        latestHandlers.current.onViewMessage(messageId),
+    }),
+    [],
+  );
 
   useLayoutEffect(() => {
     const messageThread = messageThreadRef.current;
@@ -461,9 +491,8 @@ function MessageThread({
             const sender = message.senderId
               ? participantById.get(message.senderId)
               : undefined;
-            const replyTarget = message.replyTo;
-            const replyTargetAuthor = replyTarget?.senderId
-              ? participantById.get(replyTarget.senderId)?.name
+            const replyTargetAuthor = message.replyTo?.senderId
+              ? participantById.get(message.replyTo.senderId)?.name
               : undefined;
 
             return (
@@ -480,70 +509,18 @@ function MessageThread({
                     {message.body}
                   </p>
                 ) : (
-                  <MessageRow
+                  <ThreadMessage
                     message={message}
                     sender={sender}
+                    replyTargetAuthor={replyTargetAuthor}
                     isOwn={message.senderId === conversation.viewerId}
                     isGroup={conversation.type === "group"}
-                    unreadParticipantCount={message.unreadMemberCount ?? 0}
                     startsGroup={startsGroup}
                     endsGroup={endsGroup}
-                    isPinned={message.pinned ?? false}
                     highlighted={highlightedMessageId === message.id}
-                    elementId={`message-${message.id}`}
                     contextViewportRef={messageThreadRef}
                     contextPortalRef={contextPortalRef}
-                    replyTarget={replyTarget}
-                    replyTargetAuthor={replyTargetAuthor}
-                    onViewReply={
-                      replyTarget
-                        ? () => onViewMessage(replyTarget.id)
-                        : undefined
-                    }
-                    onReply={
-                      message.deleted ? undefined : () => onReply(message)
-                    }
-                    onSelectReaction={(reaction) =>
-                      onSelectReaction(message, reaction)
-                    }
-                    contextActions={[
-                      ...(message.deleted
-                        ? []
-                        : [
-                            {
-                              label: "답장",
-                              icon: <ReplyIcon aria-hidden />,
-                              onSelect: () => onReply(message),
-                            },
-                          ]),
-                      ...(message.deleted
-                        ? []
-                        : [
-                            {
-                              label: "복사",
-                              icon: <CopyIcon aria-hidden />,
-                              onSelect: () =>
-                                void copyMessageText(message.body),
-                            },
-                          ]),
-                      {
-                        label: message.pinned ? "고정 해제" : "고정",
-                        icon: <PinIcon aria-hidden />,
-                        onSelect: () => onTogglePinned(message),
-                      },
-                    ]}
-                    actionRail={
-                      <MessageActions
-                        isOwn={message.senderId === conversation.viewerId}
-                        message={message}
-                        isPinned={message.pinned ?? false}
-                        onSelectReaction={(reaction) =>
-                          onSelectReaction(message, reaction)
-                        }
-                        onReply={() => onReply(message)}
-                        onTogglePinned={() => onTogglePinned(message)}
-                      />
-                    }
+                    actions={actions}
                   />
                 )}
               </div>
@@ -570,6 +547,106 @@ function MessageThread({
     </div>
   );
 }
+
+interface ThreadMessageActions {
+  selectReaction: (
+    message: ConversationMessage,
+    reaction: PostReaction,
+  ) => void;
+  reply: (message: ConversationMessage) => void;
+  togglePinned: (message: ConversationMessage) => void;
+  viewMessage: (messageId: string) => void;
+}
+
+/**
+ * 메시지 한 건. 긴 대화방에서 스크롤, 강조, 반응 하나가 바뀔 때마다 모든 행이 다시 그려지지 않도록
+ * memo로 감싼다. 넘기는 값은 모두 원시값이거나 그대로 유지되는 참조여야 한다. `message`는 cache가
+ * 바뀐 메시지만 새 객체로 바꾸고, `sender`는 대화의 참여자 객체, `actions`는 한 번 만든 객체다.
+ */
+const ThreadMessage = memo(function ThreadMessage({
+  message,
+  sender,
+  replyTargetAuthor,
+  isOwn,
+  isGroup,
+  startsGroup,
+  endsGroup,
+  highlighted,
+  contextViewportRef,
+  contextPortalRef,
+  actions,
+}: {
+  message: ConversationMessage;
+  sender?: MessageParticipant;
+  replyTargetAuthor?: string;
+  isOwn: boolean;
+  isGroup: boolean;
+  startsGroup: boolean;
+  endsGroup: boolean;
+  highlighted: boolean;
+  contextViewportRef: RefObject<HTMLDivElement | null>;
+  contextPortalRef: RefObject<HTMLDivElement | null>;
+  actions: ThreadMessageActions;
+}) {
+  const replyTarget = message.replyTo;
+
+  return (
+    <MessageRow
+      message={message}
+      sender={sender}
+      isOwn={isOwn}
+      isGroup={isGroup}
+      unreadParticipantCount={message.unreadMemberCount ?? 0}
+      startsGroup={startsGroup}
+      endsGroup={endsGroup}
+      isPinned={message.pinned ?? false}
+      highlighted={highlighted}
+      elementId={`message-${message.id}`}
+      contextViewportRef={contextViewportRef}
+      contextPortalRef={contextPortalRef}
+      replyTarget={replyTarget}
+      replyTargetAuthor={replyTargetAuthor}
+      onViewReply={
+        replyTarget ? () => actions.viewMessage(replyTarget.id) : undefined
+      }
+      onReply={message.deleted ? undefined : () => actions.reply(message)}
+      onSelectReaction={(reaction) => actions.selectReaction(message, reaction)}
+      contextActions={[
+        ...(message.deleted
+          ? []
+          : [
+              {
+                label: "답장",
+                icon: <ReplyIcon aria-hidden />,
+                onSelect: () => actions.reply(message),
+              },
+              {
+                label: "복사",
+                icon: <CopyIcon aria-hidden />,
+                onSelect: () => void copyMessageText(message.body),
+              },
+            ]),
+        {
+          label: message.pinned ? "고정 해제" : "고정",
+          icon: <PinIcon aria-hidden />,
+          onSelect: () => actions.togglePinned(message),
+        },
+      ]}
+      actionRail={
+        <MessageActions
+          isOwn={isOwn}
+          message={message}
+          isPinned={message.pinned ?? false}
+          onSelectReaction={(reaction) =>
+            actions.selectReaction(message, reaction)
+          }
+          onReply={() => actions.reply(message)}
+          onTogglePinned={() => actions.togglePinned(message)}
+        />
+      }
+    />
+  );
+});
 
 function MessageActions({
   isOwn,
