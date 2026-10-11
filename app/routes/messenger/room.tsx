@@ -4,8 +4,10 @@ import { defineAppChrome } from "~/features/app-shell";
 import {
   loadConversation,
   RoomScreen,
+  seedConversationCache,
   type DesktopDetailsContext,
 } from "~/features/messaging";
+import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/room";
 
 // 대화방은 입력창이 바닥에 붙으므로 모바일 하단 nav를 숨긴다.
@@ -20,6 +22,7 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   if (!conversation) {
     throw new Response("대화를 찾을 수 없습니다.", { status: 404 });
   }
+  seedConversationCache(getQueryClient(), conversation);
   return { conversation };
 }
 

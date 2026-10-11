@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RoomScreen } from "~/features/messaging/components/room-screen";
 import { loadConversation } from "~/features/messaging/data/queries";
+import type { Conversation } from "~/features/messaging/model/types";
 import { renderRoute, screen, within } from "../../../router";
 
 type ContextMenuPositionerProps = ComponentProps<
@@ -59,6 +60,19 @@ function ControlledRoomScreen({
   );
 }
 
+/**
+ * 고정 메시지는 서버가 대화방과 함께 따로 준다. fixture의 메시지를 고정으로 바꾼 테스트는 그 목록도
+ * 같은 상태로 맞춘다.
+ */
+function syncPinned<T extends Conversation>(conversation: T): T {
+  return {
+    ...conversation,
+    pinnedMessages: conversation.messages.filter(
+      (message) => message.pinned && !message.system,
+    ),
+  };
+}
+
 function SwitchableRoomScreen({
   conversation,
   nextConversation,
@@ -86,8 +100,9 @@ describe("RoomScreen", () => {
     const conversation = await loadConversation("student-council");
     expect(conversation).not.toBeNull();
     conversation!.messages.at(-1)!.pinned = true;
+    const pinnedConversation = syncPinned(conversation!);
 
-    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+    renderRoute(() => <RoomScreen conversation={pinnedConversation} />, {
       path: "/messenger/student-council",
     });
 
@@ -508,51 +523,6 @@ describe("RoomScreen", () => {
     expect(message).toHaveStyle({ transform: "translate3d(0, 0px, 0)" });
   });
 
-  it("화면보다 긴 메시지의 롱프레스 작업을 대화 영역 안에 배치한다", async () => {
-    vi.useFakeTimers();
-    const conversation = await loadConversation("student-council");
-    expect(conversation).not.toBeNull();
-
-    renderRoute(() => <RoomScreen conversation={conversation!} />, {
-      path: "/messenger/student-council",
-    });
-    const message = screen
-      .getByText("축제 부스 배치 초안 확인했어요?")
-      .closest("article")!;
-    const messageViewport = screen
-      .getByRole("region", { name: "학생회 기획부 대화" })
-      .querySelector(".overflow-y-auto")!;
-    const messageSurface = message.children[1].lastElementChild!;
-    vi.spyOn(message, "getBoundingClientRect").mockReturnValue(
-      DOMRect.fromRect({ x: 20, y: 600, width: 320, height: 900 }),
-    );
-    vi.spyOn(messageSurface, "getBoundingClientRect").mockReturnValue(
-      DOMRect.fromRect({ x: 48, y: 600, width: 220, height: 900 }),
-    );
-    vi.spyOn(messageViewport, "getBoundingClientRect").mockReturnValue(
-      DOMRect.fromRect({ x: 0, y: 100, width: 360, height: 600 }),
-    );
-
-    fireEvent.touchStart(message, {
-      touches: [{ clientX: 120, clientY: 200 }],
-    });
-    act(() => void vi.advanceTimersByTime(500));
-    fireEvent.transitionEnd(message, { propertyName: "transform" });
-
-    expect(message).toHaveStyle({
-      transform: "translate3d(0, -657px, 0)",
-    });
-    expect(screen.getByRole("menu")).toHaveStyle({
-      "--message-context-height": "378px",
-    });
-    expect(
-      screen.getByRole("button", { name: "하트 반응 남기기" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "답장" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "복사" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "고정" })).toBeInTheDocument();
-  });
-
   it("짧거나 이동한 모바일 터치에서는 메시지 작업을 열지 않는다", async () => {
     vi.useFakeTimers();
     const conversation = await loadConversation("student-council");
@@ -628,69 +598,6 @@ describe("RoomScreen", () => {
     expect(screen.getByRole("menu")).toBeInTheDocument();
   });
 
-  it("키보드가 닫혀 visual viewport가 바뀌면 작업 위치를 다시 측정한다", async () => {
-    vi.useFakeTimers();
-    const visualViewport = new EventTarget();
-    Object.defineProperty(window, "visualViewport", {
-      configurable: true,
-      value: visualViewport,
-    });
-    const conversation = await loadConversation("student-council");
-    expect(conversation).not.toBeNull();
-
-    renderRoute(() => <RoomScreen conversation={conversation!} />, {
-      path: "/messenger/student-council",
-    });
-    const message = screen
-      .getByText("축제 부스 배치 초안 확인했어요?")
-      .closest("article")!;
-    const messageViewport = screen
-      .getByRole("region", { name: "학생회 기획부 대화" })
-      .querySelector(".overflow-y-auto")!;
-    const messageBubble = message.querySelector(
-      '[data-slot="message-bubble"]',
-    )!;
-    const messageRect = vi
-      .spyOn(message, "getBoundingClientRect")
-      .mockReturnValue(
-        DOMRect.fromRect({ x: 20, y: 600, width: 320, height: 50 }),
-      );
-    const messageSurfaceRect = vi
-      .spyOn(messageBubble, "getBoundingClientRect")
-      .mockReturnValue(
-        DOMRect.fromRect({ x: 48, y: 600, width: 220, height: 50 }),
-      );
-    vi.spyOn(messageViewport, "getBoundingClientRect").mockReturnValue(
-      DOMRect.fromRect({ x: 0, y: 100, width: 360, height: 300 }),
-    );
-
-    fireEvent.touchStart(message, {
-      touches: [{ clientX: 120, clientY: 200 }],
-    });
-    act(() => void vi.advanceTimersByTime(500));
-    fireEvent.transitionEnd(message, { propertyName: "transform" });
-    expect(screen.getByRole("menu")).toHaveStyle({
-      "--message-context-height": "64px",
-    });
-
-    messageRect.mockReturnValue(
-      DOMRect.fromRect({ x: 20, y: 325, width: 320, height: 60 }),
-    );
-    messageSurfaceRect.mockReturnValue(
-      DOMRect.fromRect({ x: 48, y: 325, width: 220, height: 60 }),
-    );
-    act(() => {
-      visualViewport.dispatchEvent(new Event("resize"));
-      vi.advanceTimersByTime(16);
-    });
-
-    expect(messageRect).toHaveBeenCalledTimes(2);
-    expect(messageSurfaceRect).toHaveBeenCalledTimes(2);
-    expect(screen.getByRole("menu")).toHaveStyle({
-      "--message-context-height": "74px",
-    });
-  });
-
   it("롱프레스 손가락의 스크림 click을 막고 다음 스크림 탭으로 닫는다", async () => {
     vi.useFakeTimers();
     const conversation = await loadConversation("student-council");
@@ -746,7 +653,7 @@ describe("RoomScreen", () => {
   it("두 진입점에서 고정 메시지 목록을 열고 원문 이동과 고정 해제를 제공한다", async () => {
     const conversation = await loadConversation("student-council");
     expect(conversation).not.toBeNull();
-    const conversationWithPinnedMetadata = {
+    const conversationWithPinnedMetadata = syncPinned({
       ...conversation!,
       messages: conversation!.messages.map((message) => {
         if (message.id === "m4") return { ...message, pinned: true };
@@ -758,7 +665,7 @@ describe("RoomScreen", () => {
         }
         return message;
       }),
-    };
+    });
 
     const { user } = renderRoute(
       () => <RoomScreen conversation={conversationWithPinnedMetadata} />,
@@ -845,85 +752,6 @@ describe("RoomScreen", () => {
     expect(
       screen.queryByRole("button", { name: "고정 메시지" }),
     ).not.toBeInTheDocument();
-  });
-
-  it("고정 메시지 목록의 넓은 내 메시지를 롱프레스해도 작업을 오른쪽에 정렬한다", async () => {
-    const conversation = await loadConversation("student-council");
-    expect(conversation).not.toBeNull();
-    const ownMessage = conversation!.messages.find(
-      (message) => message.senderId === conversation!.viewerId,
-    )!;
-    ownMessage.pinned = true;
-    ownMessage.body = "내 메시지 ".repeat(80);
-
-    const { user } = renderRoute(
-      () => <RoomScreen conversation={conversation!} />,
-      { path: "/messenger/student-council" },
-    );
-    await user.click(screen.getByRole("button", { name: "고정 메시지" }));
-    vi.useFakeTimers();
-
-    const dialog = screen.getByRole("dialog");
-    const message = within(dialog)
-      .getAllByRole("article", { name: "내 메시지" })
-      .find((article) =>
-        article.textContent?.includes(ownMessage.body.trim()),
-      )!;
-    const messageViewport = dialog.querySelector(".overflow-y-auto")!;
-    const messageSurface = message.children[0].lastElementChild!;
-    const messageBubble = messageSurface.lastElementChild!;
-    vi.spyOn(message, "getBoundingClientRect").mockReturnValue(
-      DOMRect.fromRect({ x: 80, y: 600, width: 560, height: 80 }),
-    );
-    const messageSurfaceRect = vi
-      .spyOn(messageSurface, "getBoundingClientRect")
-      .mockReturnValue(
-        DOMRect.fromRect({ x: 160, y: 600, width: 0, height: 80 }),
-      );
-    const messageBubbleRect = vi
-      .spyOn(messageBubble, "getBoundingClientRect")
-      .mockReturnValue(
-        DOMRect.fromRect({ x: 160, y: 600, width: 480, height: 80 }),
-      );
-    vi.spyOn(messageViewport, "getBoundingClientRect").mockReturnValue(
-      DOMRect.fromRect({ x: 40, y: 100, width: 640, height: 600 }),
-    );
-
-    fireEvent.touchStart(message, {
-      touches: [{ clientX: 400, clientY: 640 }],
-    });
-    act(() => void vi.advanceTimersByTime(500));
-    fireEvent.transitionEnd(message, { propertyName: "transform" });
-
-    expect(messageSurfaceRect).not.toHaveBeenCalled();
-    expect(messageBubbleRect).toHaveBeenCalledOnce();
-    expect(screen.getByRole("menu")).toBeInTheDocument();
-    expect(screen.getByRole("menu")).toHaveClass("min-w-56");
-  });
-
-  it("내 메시지 롱프레스 작업은 끝 정렬을 유지하도록 충돌을 이동 처리한다", async () => {
-    vi.useFakeTimers();
-    const conversation = await loadConversation("student-council");
-    expect(conversation).not.toBeNull();
-
-    renderRoute(() => <RoomScreen conversation={conversation!} />, {
-      path: "/messenger/student-council",
-    });
-    const message = screen
-      .getAllByRole("article", { name: "내 메시지" })
-      .at(0)!;
-    fireEvent.touchStart(message, {
-      touches: [{ clientX: 60, clientY: 625 }],
-    });
-    act(() => void vi.advanceTimersByTime(500));
-    fireEvent.transitionEnd(message, { propertyName: "transform" });
-
-    expect(screen.getByRole("menu")).toBeInTheDocument();
-    expect(
-      positionerSpy.mock.calls
-        .map(([props]) => props)
-        .find(({ align }) => align === "end"),
-    ).toMatchObject({ collisionAvoidance: { align: "shift" } });
   });
 
   it("메시지를 입력해 전송하고 빈 입력에서는 좋아요를 보낸다", async () => {

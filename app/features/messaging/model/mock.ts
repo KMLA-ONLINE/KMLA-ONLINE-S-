@@ -3,9 +3,14 @@ import type {
   ConversationSummary,
 } from "~/features/messaging/model/types";
 
+/** 메시지 테이블 자리. 답장은 원문 ID만 저장하고, 인용은 `data/queries.ts`가 붙인다. */
+export type MockMessage = Omit<ConversationMessage, "replyTo"> & {
+  replyToMessageId?: string;
+};
+
 /** 대화 테이블과 메시지 테이블 자리. 대화방 RPC가 이 둘을 한 번에 돌려주는 모양은 `data/queries.ts`가 만든다. */
 export interface MockConversation extends ConversationSummary {
-  messages: ConversationMessage[];
+  messages: MockMessage[];
   sharedMediaCount: number;
   sharedFileCount: number;
   sharedLinkCount: number;
@@ -18,14 +23,14 @@ const viewer = {
 };
 
 /** 서버가 마지막 메시지 미리보기를 따로 주는 모양을 흉내 낸다. */
-function lastMessageOf(messages: ConversationMessage[]) {
+function lastMessageOf(messages: MockMessage[]) {
   const last = messages.at(-1);
   return last
     ? { senderId: last.senderId, body: last.body, sentAt: last.sentAt }
     : null;
 }
 
-const studentCouncilMessages: ConversationMessage[] = [
+const studentCouncilMessages: MockMessage[] = [
   {
     id: "m1",
     senderId: null,
@@ -89,7 +94,7 @@ const studentCouncilMessages: ConversationMessage[] = [
   },
 ];
 
-const hyunwooMessages: ConversationMessage[] = [
+const hyunwooMessages: MockMessage[] = [
   {
     id: "h1",
     senderId: "hyunwoo-user",
@@ -111,7 +116,7 @@ const hyunwooMessages: ConversationMessage[] = [
   },
 ];
 
-const scienceProjectMessages: ConversationMessage[] = [
+const scienceProjectMessages: MockMessage[] = [
   {
     id: "s1",
     senderId: "eun",
@@ -120,7 +125,7 @@ const scienceProjectMessages: ConversationMessage[] = [
   },
 ];
 
-const room203Messages: ConversationMessage[] = [
+const room203Messages: MockMessage[] = [
   {
     id: "r1",
     senderId: "do",
@@ -129,7 +134,7 @@ const room203Messages: ConversationMessage[] = [
   },
 ];
 
-const broadcastingMessages: ConversationMessage[] = [
+const broadcastingMessages: MockMessage[] = [
   {
     id: "b1",
     senderId: "jae",

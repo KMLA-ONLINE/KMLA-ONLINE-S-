@@ -30,7 +30,10 @@ describe("useConversationMessages", () => {
 
     let sent: boolean | undefined;
     await act(async () => {
-      sent = await result.current.send("안녕", "m9");
+      sent = await result.current.send({
+        body: "안녕",
+        replyTo: { id: "m9", senderId: "seo", body: "원문" },
+      });
     });
 
     expect(sent).toBe(true);
@@ -39,7 +42,7 @@ describe("useConversationMessages", () => {
       expect(result.current.messages.at(-1)).toMatchObject({
         body: "안녕",
         senderId: "viewer",
-        replyToMessageId: "m9",
+        replyTo: { id: "m9", senderId: "seo", body: "원문" },
       }),
     );
   });
@@ -51,7 +54,7 @@ describe("useConversationMessages", () => {
 
     let sent: boolean | undefined;
     await act(async () => {
-      sent = await result.current.send("안녕");
+      sent = await result.current.send({ body: "안녕" });
     });
 
     expect(sent).toBe(false);
@@ -75,5 +78,51 @@ describe("useConversationMessages", () => {
     act(() => result.current.react(target(), "haha"));
     await waitFor(() => expect(target().myReaction).toBeNull());
     expect(target().reactions).toEqual([{ reaction: "like", count: 3 }]);
+  });
+
+  it("같은 메시지에 반응이 겹치면 먼저 보낸 요청의 응답이 나중 선택을 덮지 않는다", async () => {
+    let resolveFirst!: () => void;
+    const spy = vi
+      .spyOn(mutations, "setMessageReaction")
+      .mockImplementationOnce(
+        (message, reaction) =>
+          new Promise((resolve) => {
+            resolveFirst = () =>
+              resolve({
+                reactions: [{ reaction: reaction!, count: 1 }],
+                myReaction: reaction,
+              });
+          }),
+      );
+    const { result } = await renderMessages();
+    const target = () => result.current.messages.find(({ id }) => id === "m2")!;
+
+    act(() => result.current.react(target(), "love"));
+    await waitFor(() => expect(target().myReaction).toBe("love"));
+    act(() => result.current.react(target(), "haha"));
+    await waitFor(() => expect(target().myReaction).toBe("haha"));
+
+    await act(async () => {
+      resolveFirst();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
+    expect(target().myReaction).toBe("haha");
+    expect(target().reactions).toEqual([{ reaction: "haha", count: 1 }]);
+  });
+
+  it("고정과 해제를 고정 메시지 목록에도 대화 순서대로 반영한다", async () => {
+    const { result } = await renderMessages();
+    const ids = () => result.current.pinnedMessages.map(({ id }) => id);
+    const message = (id: string) =>
+      result.current.messages.find((item) => item.id === id)!;
+
+    expect(ids()).toEqual(["m5"]);
+    act(() => result.current.togglePinned(message("m8")));
+    act(() => result.current.togglePinned(message("m2")));
+    await waitFor(() => expect(ids()).toEqual(["m2", "m5", "m8"]));
+
+    act(() => result.current.togglePinned(message("m5")));
+    await waitFor(() => expect(ids()).toEqual(["m2", "m8"]));
   });
 });

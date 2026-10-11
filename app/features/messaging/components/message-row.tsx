@@ -16,6 +16,7 @@ import { formatMessageTime } from "~/features/messaging/model/message-time";
 import type {
   ConversationMessage,
   MessageParticipant,
+  MessageReplyPreview,
 } from "~/features/messaging/model/types";
 import type { PostReaction } from "~/features/posts/model/types";
 import { QuickReactionBar } from "~/features/posts/components/reaction/quick-reaction-bar";
@@ -83,7 +84,7 @@ export function MessageRow({
   showUnreadCount?: boolean;
   showReactions?: boolean;
   showTimestamp?: boolean;
-  replyTarget?: ConversationMessage;
+  replyTarget?: MessageReplyPreview;
   replyTargetAuthor?: string;
   onViewReply?: () => void;
   onReply?: () => void;

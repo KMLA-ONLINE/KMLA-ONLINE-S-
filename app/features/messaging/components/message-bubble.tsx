@@ -6,7 +6,10 @@ import {
   parseMessageText,
 } from "~/features/messaging/model/message-text";
 import { formatMessageTime } from "~/features/messaging/model/message-time";
-import type { ConversationMessage } from "~/features/messaging/model/types";
+import type {
+  ConversationMessage,
+  MessageReplyPreview,
+} from "~/features/messaging/model/types";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
@@ -31,7 +34,7 @@ export function MessageBubble({
   endsGroup?: boolean;
   showReactions?: boolean;
   showTimestamp?: boolean;
-  replyTarget?: ConversationMessage;
+  replyTarget?: MessageReplyPreview;
   replyTargetAuthor?: string;
   onViewReply?: () => void;
   anchorRef?: Ref<HTMLDivElement>;

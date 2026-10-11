@@ -20,7 +20,8 @@ export interface ConversationMessage {
   senderId: string | null;
   body: string;
   sentAt: string;
-  replyToMessageId?: string;
+  /** 답장 원문. 원문이 아직 불러오지 않은 페이지에 있어도 인용을 그릴 수 있게 서버가 함께 준다. */
+  replyTo?: MessageReplyPreview;
   deleted?: boolean;
   /** 내 반응을 포함한 반응 종류별 총수. */
   reactions?: MessageReaction[];
@@ -29,6 +30,14 @@ export interface ConversationMessage {
   unreadMemberCount?: number;
   pinned?: boolean;
   system?: boolean;
+}
+
+export interface MessageReplyPreview {
+  id: string;
+  senderId: string | null;
+  /** 원문이 삭제됐으면 서버가 비워 준다. */
+  body: string;
+  deleted?: boolean;
 }
 
 /** 메시지 목록의 페이지 경계. `(sentAt, id)` 순서로 이보다 앞선 메시지를 읽는다. */
@@ -66,6 +75,8 @@ export interface ConversationSummary {
  * 요청이 하나만 들도록 한다. 더 앞선 메시지는 `listMessages`가 `olderCursor`부터 읽는다.
  */
 export interface Conversation extends ConversationSummary, MessagePage {
+  /** 대화 순서대로의 고정 메시지 전체. 고정 메시지는 불러온 페이지 밖에 있을 수 있다. */
+  pinnedMessages: ConversationMessage[];
   sharedMediaCount: number;
   sharedFileCount: number;
   sharedLinkCount: number;

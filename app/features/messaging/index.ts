@@ -3,6 +3,7 @@ export {
   RoomScreen,
   type DesktopDetailsContext,
 } from "~/features/messaging/components/room-screen";
+export { seedConversationCache } from "~/features/messaging/data/cache";
 export {
   listConversations,
   loadConversation,

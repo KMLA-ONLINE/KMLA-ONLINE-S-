@@ -34,7 +34,10 @@ import {
   MessageRow,
 } from "~/features/messaging/components/message-row";
 import { PinnedMessagesDialog } from "~/features/messaging/components/pinned-messages-dialog";
-import { useConversationMessages } from "~/features/messaging/hooks/use-conversation-messages";
+import {
+  useConversationMessages,
+  type OlderMessagesResult,
+} from "~/features/messaging/hooks/use-conversation-messages";
 import {
   canConnectMessages,
   hasVisibleMessageReaction,
@@ -92,6 +95,7 @@ export function RoomScreen({
   >(null);
   const {
     messages,
+    pinnedMessages,
     hasOlderMessages,
     loadingOlderMessages,
     loadOlderMessages,
@@ -99,16 +103,17 @@ export function RoomScreen({
     react,
     togglePinned,
   } = useConversationMessages(conversation);
-  const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ConversationMessage | null>(
+    null,
+  );
   const messageThreadRef = useRef<HTMLDivElement>(null);
-  const scrollToBottomAfterSend = useRef(false);
-  const pinnedMessages = messages.filter((message) => message.pinned);
+  /** 방금 보낸 메시지. 그 메시지가 화면에 나타날 때 맨 아래로 내린다. */
+  const sentMessageId = useRef<string | null>(null);
   const pinnedMessage = pinnedMessages.at(-1);
   const pinnedMessageAuthor = pinnedMessage?.senderId
     ? (conversation.participants.find(({ id }) => id === pinnedMessage.senderId)
         ?.name ?? "알 수 없는 사용자")
     : null;
-  const replyTarget = messages.find(({ id }) => id === replyTargetId);
   const replyAuthor = replyTarget?.senderId
     ? (conversation.participants.find(({ id }) => id === replyTarget.senderId)
         ?.name ?? "알 수 없는 사용자")
@@ -128,11 +133,14 @@ export function RoomScreen({
     if (messageThread) messageThread.scrollTop = messageThread.scrollHeight;
   }, [conversation.id]);
 
+  // 다음 변경이 아니라 보낸 메시지 자체를 기다린다. 앞선 페이지가 먼저 붙으면 그 변경에
+  // 반응해 내려가고 정작 보낸 메시지가 나타날 때는 아무것도 하지 않게 된다.
   useEffect(() => {
-    if (!scrollToBottomAfterSend.current) return;
+    const id = sentMessageId.current;
+    if (!id || !messages.some((message) => message.id === id)) return;
     const messageThread = messageThreadRef.current;
     if (messageThread) messageThread.scrollTop = messageThread.scrollHeight;
-    scrollToBottomAfterSend.current = false;
+    sentMessageId.current = null;
   }, [messages]);
 
   function viewMessage(messageId: string) {
@@ -146,11 +154,26 @@ export function RoomScreen({
     });
   }
 
-  function sendMessage(body: string) {
-    scrollToBottomAfterSend.current = true;
-    const sending = send(body, replyTargetId ?? undefined);
-    setReplyTargetId(null);
-    return sending;
+  async function sendMessage(body: string) {
+    const id = crypto.randomUUID();
+    const target = replyTarget;
+    sentMessageId.current = id;
+    setReplyTarget(null);
+    const sent = await send({
+      id,
+      body,
+      replyTo: target
+        ? {
+            id: target.id,
+            senderId: target.senderId,
+            body: target.body,
+            deleted: target.deleted,
+          }
+        : undefined,
+    });
+    // 작성창이 입력을 되살리므로 답장 대상도 함께 되살린다. 그새 다른 답장을 골랐으면 두지 않는다.
+    if (!sent && target) setReplyTarget((current) => current ?? target);
+    return sent;
   }
 
   return (
@@ -243,15 +266,15 @@ export function RoomScreen({
           onLoadOlderMessages={loadOlderMessages}
           onSelectReaction={react}
           onReply={(message) => {
-            if (!message.deleted) setReplyTargetId(message.id);
+            if (!message.deleted) setReplyTarget(message);
           }}
           onTogglePinned={togglePinned}
           onViewMessage={viewMessage}
         />
         <ComposerShell
-          replyTarget={replyTarget}
+          replyTarget={replyTarget ?? undefined}
           replyAuthor={replyAuthor}
-          onCancelReply={() => setReplyTargetId(null)}
+          onCancelReply={() => setReplyTarget(null)}
           onSend={sendMessage}
           desktopDetailsOpen={desktopDetailsOpen}
         />
@@ -271,7 +294,7 @@ export function RoomScreen({
       />
       <PinnedMessagesDialog
         open={pinnedDialogOpen}
-        messages={messages}
+        messages={pinnedMessages}
         participants={conversation.participants}
         viewerId={conversation.viewerId}
         isGroup={conversation.type === "group"}
@@ -304,7 +327,7 @@ function MessageThread({
   desktopDetailsOpen: boolean;
   hasOlderMessages: boolean;
   loadingOlderMessages: boolean;
-  onLoadOlderMessages: () => void;
+  onLoadOlderMessages: () => Promise<OlderMessagesResult>;
   onSelectReaction: (
     message: ConversationMessage,
     reaction: PostReaction,
@@ -323,32 +346,50 @@ function MessageThread({
       participant,
     ]),
   );
-  const messageById = new Map(messages.map((message) => [message.id, message]));
   // 앞선 페이지를 위에 붙이면 scrollHeight만 늘고 scrollTop은 그대로라 보던 메시지가 아래로
-  // 밀린다. 붙이기 전 바닥에서의 거리를 기억했다가 붙인 뒤 같은 거리로 되돌린다.
-  const distanceFromBottomBeforeOlder = useRef<number | null>(null);
+  // 밀린다. 붙이기 전 바닥에서의 거리와 그때의 맨 위 메시지를 기억했다가, 맨 위가 실제로 바뀐
+  // 렌더에서만 같은 거리로 되돌린다. 읽기가 실패하거나 빈 페이지가 오면 버린다.
+  const olderAnchor = useRef<{
+    distanceFromBottom: number;
+    oldestMessageId: string | undefined;
+  } | null>(null);
+  // 읽기가 실패한 뒤에는 맨 위 근처에서 스크롤할 때마다 다시 부르지 않는다. 사용자가 그 구간을
+  // 벗어났다가 다시 올라오면 한 번 더 시도한다.
+  const olderLoadFailed = useRef(false);
   const oldestMessageId = messages[0]?.id;
 
   useLayoutEffect(() => {
     const messageThread = messageThreadRef.current;
-    const distance = distanceFromBottomBeforeOlder.current;
-    if (!messageThread || distance === null) return;
-    messageThread.scrollTop = messageThread.scrollHeight - distance;
-    distanceFromBottomBeforeOlder.current = null;
+    const anchor = olderAnchor.current;
+    if (!messageThread || !anchor) return;
+    if (anchor.oldestMessageId === oldestMessageId) return;
+    messageThread.scrollTop =
+      messageThread.scrollHeight - anchor.distanceFromBottom;
+    olderAnchor.current = null;
   }, [oldestMessageId, messageThreadRef]);
 
   function maybeLoadOlderMessages() {
     const messageThread = messageThreadRef.current;
-    if (
-      !messageThread ||
-      !hasOlderMessages ||
-      loadingOlderMessages ||
-      messageThread.scrollTop > OLDER_MESSAGES_THRESHOLD
-    )
+    if (!messageThread) return;
+    if (messageThread.scrollTop > OLDER_MESSAGES_THRESHOLD) {
+      olderLoadFailed.current = false;
       return;
-    distanceFromBottomBeforeOlder.current =
-      messageThread.scrollHeight - messageThread.scrollTop;
-    onLoadOlderMessages();
+    }
+    if (!hasOlderMessages || loadingOlderMessages || olderLoadFailed.current)
+      return;
+
+    const anchor = {
+      distanceFromBottom: messageThread.scrollHeight - messageThread.scrollTop,
+      oldestMessageId,
+    };
+    olderAnchor.current = anchor;
+    void onLoadOlderMessages().then((result) => {
+      if (result === "failed") olderLoadFailed.current = true;
+      // 붙인 메시지가 없으면 맨 위가 바뀌지 않아 layout effect가 거두지 않으므로 여기서 버린다.
+      if (result !== "loaded" && olderAnchor.current === anchor) {
+        olderAnchor.current = null;
+      }
+    });
   }
 
   function updateScrollToBottomVisibility() {
@@ -420,9 +461,7 @@ function MessageThread({
             const sender = message.senderId
               ? participantById.get(message.senderId)
               : undefined;
-            const replyTarget = message.replyToMessageId
-              ? messageById.get(message.replyToMessageId)
-              : undefined;
+            const replyTarget = message.replyTo;
             const replyTargetAuthor = replyTarget?.senderId
               ? participantById.get(replyTarget.senderId)?.name
               : undefined;
