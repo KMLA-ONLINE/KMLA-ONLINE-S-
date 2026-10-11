@@ -21,7 +21,7 @@ function renderMenu(
       role,
       type,
       status: "accepted",
-      avatar_url: null,
+      avatar_path: null,
     },
   } satisfies ShellData;
 

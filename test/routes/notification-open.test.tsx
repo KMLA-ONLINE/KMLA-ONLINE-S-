@@ -8,6 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   resolveNotificationDestination: vi.fn(),
+  prefetchShellData: vi.fn(),
+}));
+
+vi.mock("~/features/app-shell/data/queries", () => ({
+  prefetchShellData: mocks.prefetchShellData,
 }));
 
 vi.mock("~/features/notifications", async (importOriginal) => ({
@@ -105,6 +110,22 @@ describe("notification open route", () => {
     await load();
 
     expect(getQueryClient().getQueryState(key)?.isInvalidated).toBe(true);
+  });
+
+  // 목적지는 게이트 아래에 있다. 셸 데이터를 목적지 RPC 뒤에 읽으면 왕복이 줄로 선다.
+  it("starts the shell data before resolving the destination", async () => {
+    let resolveDestination: (value: string) => void = () => undefined;
+    mocks.resolveNotificationDestination.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveDestination = resolve;
+      }),
+    );
+
+    const loading = load();
+    expect(mocks.prefetchShellData).toHaveBeenCalledOnce();
+
+    resolveDestination("/noti");
+    await loading;
   });
 
   it("redirects an authenticated user only to a safe resolved path", async () => {
