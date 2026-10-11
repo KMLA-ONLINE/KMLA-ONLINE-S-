@@ -1,9 +1,4 @@
-import {
-  data,
-  Outlet,
-  redirect,
-  type ShouldRevalidateFunctionArgs,
-} from "react-router";
+import { data, Outlet, redirect } from "react-router";
 
 import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import {
@@ -66,20 +61,9 @@ export const handle = defineAppChrome({
 });
 
 /** 게시물 검색 오버레이의 URL 상태. loader가 읽지 않으므로 이것만 바뀌면 다시 읽을 것이 없다. */
-const shouldRevalidateList = createPostListRevalidation(["search", "q"]);
-const GROUP_PATH_PATTERN = /^\/groups\/[^/]+/;
-
-export function shouldRevalidate(args: ShouldRevalidateFunctionArgs) {
-  const groupPath = GROUP_PATH_PATTERN.exec(args.currentUrl.pathname)?.[0];
-  const isDetailTransition =
-    groupPath !== undefined &&
-    args.formMethod === undefined &&
-    ((args.currentUrl.pathname === groupPath &&
-      args.nextUrl.pathname.startsWith(`${groupPath}/posts/`)) ||
-      (args.nextUrl.pathname === groupPath &&
-        args.currentUrl.pathname.startsWith(`${groupPath}/posts/`)));
-  return isDetailTransition ? false : shouldRevalidateList(args);
-}
+export const shouldRevalidate = createPostListRevalidation(["search", "q"], {
+  detailParent: /^\/groups\/[^/]+/,
+});
 
 /**
  * `groups/:slug`. 게시물 상세(`posts/:postId`)를 자식으로 가지므로 `<Outlet />`을 그린다 —
@@ -115,6 +99,16 @@ export async function clientLoader({
   const reportSort =
     searchParams.get("reportSort") === "recent" ? "recent" : "count";
   const isGroupPage = url.pathname === `/groups/${group.slug}`;
+  // 글쓰기·수정 화면은 부모의 카테고리를 그대로 쓴다. 게시물 상세는 쓰지 않는다.
+  const isEditorRoute = /\/posts\/(?:new|[^/]+\/edit)$/.test(url.pathname);
+  const categoriesRequest =
+    postsTab || settingsTab
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.categories(group.group_id),
+          queryFn: () => listGroupCategories(group.group_id),
+          staleTime: GROUP_CONTENT_STALE_TIME,
+        })
+      : Promise.resolve([]);
   const postsRequest = postsTab
     ? queryClient.fetchQuery({
         queryKey: groupKeys.posts(group.group_id, null, null),
@@ -126,10 +120,12 @@ export async function clientLoader({
       })
     : Promise.resolve({ posts: [], nextCursor: null });
   // 게시물 상세처럼 자식 route로 바로 들어오면 목록은 그 뒤에 깔릴 뿐이다. 기다리면 상세가
-  // 목록 RPC와 20건 서명 왕복에 묶이므로 promise째 넘긴다. 실패해도 상세까지 에러 화면으로
-  // 덮지 않도록 null로 받아 목록 자리에만 알린다. catch는 아래 await보다 먼저 붙여야 그사이
-  // 거절이 처리되지 않은 rejection으로 새지 않는다.
-  const deferredPosts = postsRequest.catch(() => null);
+  // 목록 RPC와 20건 서명 왕복에 묶이므로 목록 칸이 쓰는 카테고리와 함께 promise째 넘긴다.
+  // 실패해도 상세까지 에러 화면으로 덮지 않도록 null로 받아 목록 자리에만 알린다. catch는 아래
+  // await보다 먼저 붙여야 그사이 거절이 처리되지 않은 rejection으로 새지 않는다.
+  const deferredPosts = Promise.all([postsRequest, categoriesRequest])
+    .then(([page, categories]) => ({ page, categories }))
+    .catch(() => null);
   const [
     categories,
     loadedPosts,
@@ -138,14 +134,7 @@ export async function clientLoader({
     invite,
     reportPage,
   ] = await Promise.all([
-    // 글쓰기·수정 자식 route가 부모의 카테고리를 그대로 쓰므로 자식 route에서도 기다린다.
-    postsTab || settingsTab
-      ? queryClient.fetchQuery({
-          queryKey: groupKeys.categories(group.group_id),
-          queryFn: () => listGroupCategories(group.group_id),
-          staleTime: GROUP_CONTENT_STALE_TIME,
-        })
-      : Promise.resolve([]),
+    isGroupPage || isEditorRoute || settingsTab ? categoriesRequest : [],
     isGroupPage ? postsRequest : null,
     memberTab
       ? queryClient.fetchQuery({

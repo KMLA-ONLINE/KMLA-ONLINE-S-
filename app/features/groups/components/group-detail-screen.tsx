@@ -6,7 +6,6 @@ import {
   MessageSquareTextIcon,
   UsersIcon,
 } from "lucide-react";
-import { Suspense, use } from "react";
 import { useLocation, useNavigation, useSearchParams } from "react-router";
 
 import { GroupDetailHero } from "~/features/groups/components/group-detail-hero";
@@ -30,14 +29,17 @@ import {
   AnonymousActivityRestrictionNotice,
   GroupPostSearchDialog,
   GroupPostsPanel,
+  PostListSkeleton,
   PostWriteRow,
   type GroupCategory,
   type GroupPostPage,
   type AnonymousActivityRestriction,
 } from "~/features/posts";
+import { Deferred } from "~/shared/components/deferred";
 import { cn } from "~/shared/lib/utils";
 import { useDelayedPending } from "~/shared/hooks/use-delayed-pending";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
+import { PendingRegion, Skeleton } from "~/shared/ui/skeleton";
 
 type GroupTab = "posts" | "members" | "settings" | "reports";
 
@@ -73,8 +75,13 @@ export function GroupDetailScreen({
   isTeacher: boolean;
   canDeleteOfficial?: boolean;
   categories?: GroupCategory[];
-  /** 자식 route로 바로 들어왔을 때는 loader가 기다리지 않고 promise째 넘긴다. null은 불러오기 실패다. */
-  posts?: GroupPostPage | Promise<GroupPostPage | null>;
+  /**
+   * 자식 route로 바로 들어왔을 때는 loader가 기다리지 않고 목록 칸의 카테고리와 함께 promise째
+   * 넘긴다. null은 불러오기 실패다.
+   */
+  posts?:
+    | GroupPostPage
+    | Promise<{ page: GroupPostPage; categories: GroupCategory[] } | null>;
   memberPage?: GroupMemberPage;
   joinRequests?: GroupJoinRequest[];
   invite?: GroupInvite | null;
@@ -181,23 +188,29 @@ export function GroupDetailScreen({
                   ) : null}
                 </>
               ) : null}
-              {posts instanceof Promise ? (
-                <Suspense fallback={<GroupTabSkeleton tab="posts" />}>
-                  <DeferredGroupPostsPanel
-                    groupId={group.group_id}
-                    slug={group.slug}
-                    categories={categories}
-                    posts={posts}
-                  />
-                </Suspense>
-              ) : (
-                <KeyedGroupPostsPanel
-                  groupId={group.group_id}
-                  slug={group.slug}
-                  categories={categories}
-                  initialPage={posts}
-                />
-              )}
+              <Deferred
+                value={
+                  posts instanceof Promise ? posts : { page: posts, categories }
+                }
+                fallback={<PostListSkeleton />}
+              >
+                {(content) =>
+                  content === null ? (
+                    <EmptyTabCard
+                      icon={<MessageSquareTextIcon aria-hidden />}
+                      title="게시물"
+                      description="게시물 목록을 불러오지 못했습니다."
+                    />
+                  ) : (
+                    <KeyedGroupPostsPanel
+                      groupId={group.group_id}
+                      slug={group.slug}
+                      categories={content.categories}
+                      initialPage={content.page}
+                    />
+                  )
+                }
+              </Deferred>
             </div>
           ) : tab === "members" ? (
             memberPage ? (
@@ -284,45 +297,20 @@ function KeyedGroupPostsPanel(props: GroupPostsPanelProps) {
   );
 }
 
-function DeferredGroupPostsPanel({
-  posts,
-  ...props
-}: Omit<GroupPostsPanelProps, "initialPage"> & {
-  posts: Promise<GroupPostPage | null>;
-}) {
-  const page = use(posts);
-  if (!page) {
-    return (
-      <EmptyTabCard
-        icon={<MessageSquareTextIcon aria-hidden />}
-        title="게시물"
-        description="게시물 목록을 불러오지 못했습니다."
-      />
-    );
-  }
-  return <KeyedGroupPostsPanel {...props} initialPage={page} />;
-}
-
 function GroupTabSkeleton({ tab }: { tab: GroupTab }) {
   const rows = tab === "members" ? 6 : tab === "posts" ? 3 : 4;
+  const label = GROUP_TABS.find((item) => item.id === tab)?.label ?? "그룹";
 
   return (
-    <section
-      aria-busy="true"
-      aria-label={`${GROUP_TABS.find((item) => item.id === tab)?.label ?? "그룹"} 탭을 불러오는 중`}
-      className="space-y-3 px-4 md:px-0"
-    >
+    <PendingRegion label={`${label} 탭을`} className="space-y-3 px-4 md:px-0">
       {Array.from({ length: rows }, (_, index) => (
         <div key={index} className="space-y-3 rounded-xl border bg-card p-4">
-          <div className="h-4 w-2/5 animate-pulse rounded bg-muted motion-reduce:animate-none" />
-          <div className="h-3 w-full animate-pulse rounded bg-muted motion-reduce:animate-none" />
-          <div className="h-3 w-3/4 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+          <Skeleton className="h-4 w-2/5" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-3/4" />
         </div>
       ))}
-      <span className="sr-only" aria-live="polite">
-        그룹 탭 내용을 불러오는 중입니다.
-      </span>
-    </section>
+    </PendingRegion>
   );
 }
 

@@ -204,7 +204,22 @@ describe("group detail loader", () => {
       hydrateMedia: expect.any(Boolean),
     });
     expect(result.posts).toBeInstanceOf(Promise);
-    await expect(result.posts).resolves.toBe(page);
+    await expect(result.posts).resolves.toEqual({ page, categories: [] });
+  });
+
+  // 상세는 카테고리를 쓰지 않는다. 글쓰기·수정은 부모의 카테고리를 그대로 쓰므로 기다린다.
+  it("waits for categories only on the editor child routes", async () => {
+    const category = { id: "category-id", name: "공지" };
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    mutations.listGroupCategories.mockReturnValue(new Promise(() => undefined));
+
+    const detail = await load("/groups/test/posts/post-id");
+    expect(detail.categories).toEqual([]);
+
+    getQueryClient().clear();
+    mutations.listGroupCategories.mockResolvedValue([category]);
+    const editor = await load("/groups/test/posts/post-id/edit");
+    expect(editor.categories).toEqual([category]);
   });
 
   // 목록은 dialog 뒤에 깔릴 뿐이라, 상세가 목록 RPC를 기다리면 열리는 시간이 그만큼 늘어난다.
@@ -337,7 +352,10 @@ describe("group detail loader", () => {
     const result = await load("/groups/test/posts/new-post");
 
     expect(mutations.listGroupPosts).toHaveBeenCalledTimes(2);
-    await expect(result.posts).resolves.toBe(refreshedPage);
+    await expect(result.posts).resolves.toEqual({
+      page: refreshedPage,
+      categories: [],
+    });
   });
 });
 
