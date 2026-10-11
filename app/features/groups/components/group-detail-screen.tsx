@@ -6,6 +6,7 @@ import {
   MessageSquareTextIcon,
   UsersIcon,
 } from "lucide-react";
+import { Suspense, use } from "react";
 import { useLocation, useNavigation, useSearchParams } from "react-router";
 
 import { GroupDetailHero } from "~/features/groups/components/group-detail-hero";
@@ -72,7 +73,8 @@ export function GroupDetailScreen({
   isTeacher: boolean;
   canDeleteOfficial?: boolean;
   categories?: GroupCategory[];
-  posts?: GroupPostPage;
+  /** 자식 route로 바로 들어왔을 때는 loader가 기다리지 않고 promise째 넘긴다. null은 불러오기 실패다. */
+  posts?: GroupPostPage | Promise<GroupPostPage | null>;
   memberPage?: GroupMemberPage;
   joinRequests?: GroupJoinRequest[];
   invite?: GroupInvite | null;
@@ -179,15 +181,23 @@ export function GroupDetailScreen({
                   ) : null}
                 </>
               ) : null}
-              <GroupPostsPanel
-                key={posts.posts
-                  .map((post) => `${post.post_id}:${post.is_pinned}`)
-                  .join("|")}
-                groupId={group.group_id}
-                slug={group.slug}
-                categories={categories}
-                initialPage={posts}
-              />
+              {posts instanceof Promise ? (
+                <Suspense fallback={<GroupTabSkeleton tab="posts" />}>
+                  <DeferredGroupPostsPanel
+                    groupId={group.group_id}
+                    slug={group.slug}
+                    categories={categories}
+                    posts={posts}
+                  />
+                </Suspense>
+              ) : (
+                <KeyedGroupPostsPanel
+                  groupId={group.group_id}
+                  slug={group.slug}
+                  categories={categories}
+                  initialPage={posts}
+                />
+              )}
             </div>
           ) : tab === "members" ? (
             memberPage ? (
@@ -258,6 +268,39 @@ export function GroupDetailScreen({
       ) : null}
     </div>
   );
+}
+
+type GroupPostsPanelProps = Parameters<typeof GroupPostsPanel>[0];
+
+/** loader가 새 첫 페이지를 주면 더 불러온 페이지를 버리고 다시 시작한다. 고정 변경도 순서를 바꾸므로 key에 넣는다. */
+function KeyedGroupPostsPanel(props: GroupPostsPanelProps) {
+  return (
+    <GroupPostsPanel
+      key={props.initialPage.posts
+        .map((post) => `${post.post_id}:${post.is_pinned}`)
+        .join("|")}
+      {...props}
+    />
+  );
+}
+
+function DeferredGroupPostsPanel({
+  posts,
+  ...props
+}: Omit<GroupPostsPanelProps, "initialPage"> & {
+  posts: Promise<GroupPostPage | null>;
+}) {
+  const page = use(posts);
+  if (!page) {
+    return (
+      <EmptyTabCard
+        icon={<MessageSquareTextIcon aria-hidden />}
+        title="게시물"
+        description="게시물 목록을 불러오지 못했습니다."
+      />
+    );
+  }
+  return <KeyedGroupPostsPanel {...props} initialPage={page} />;
 }
 
 function GroupTabSkeleton({ tab }: { tab: GroupTab }) {

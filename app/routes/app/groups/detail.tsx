@@ -114,62 +114,77 @@ export async function clientLoader({
   const canCurate = canModerate || group.member_role === "manager";
   const reportSort =
     searchParams.get("reportSort") === "recent" ? "recent" : "count";
-  const [categories, posts, memberPage, joinRequests, invite, reportPage] =
-    await Promise.all([
-      postsTab || settingsTab
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.categories(group.group_id),
-            queryFn: () => listGroupCategories(group.group_id),
-            staleTime: GROUP_CONTENT_STALE_TIME,
-          })
-        : Promise.resolve([]),
-      postsTab
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.posts(group.group_id, null, null),
-            queryFn: () =>
-              listGroupPosts(group.group_id, {
-                hydrateMedia: readPostViewMode() === "card",
-              }),
-            staleTime: GROUP_CONTENT_STALE_TIME,
-          })
-        : Promise.resolve({ posts: [], nextCursor: null }),
-      memberTab
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.members(
+  const isGroupPage = url.pathname === `/groups/${group.slug}`;
+  const postsRequest = postsTab
+    ? queryClient.fetchQuery({
+        queryKey: groupKeys.posts(group.group_id, null, null),
+        queryFn: () =>
+          listGroupPosts(group.group_id, {
+            hydrateMedia: readPostViewMode() === "card",
+          }),
+        staleTime: GROUP_CONTENT_STALE_TIME,
+      })
+    : Promise.resolve({ posts: [], nextCursor: null });
+  // 게시물 상세처럼 자식 route로 바로 들어오면 목록은 그 뒤에 깔릴 뿐이다. 기다리면 상세가
+  // 목록 RPC와 20건 서명 왕복에 묶이므로 promise째 넘긴다. 실패해도 상세까지 에러 화면으로
+  // 덮지 않도록 null로 받아 목록 자리에만 알린다. catch는 아래 await보다 먼저 붙여야 그사이
+  // 거절이 처리되지 않은 rejection으로 새지 않는다.
+  const deferredPosts = postsRequest.catch(() => null);
+  const [
+    categories,
+    loadedPosts,
+    memberPage,
+    joinRequests,
+    invite,
+    reportPage,
+  ] = await Promise.all([
+    // 글쓰기·수정 자식 route가 부모의 카테고리를 그대로 쓰므로 자식 route에서도 기다린다.
+    postsTab || settingsTab
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.categories(group.group_id),
+          queryFn: () => listGroupCategories(group.group_id),
+          staleTime: GROUP_CONTENT_STALE_TIME,
+        })
+      : Promise.resolve([]),
+    isGroupPage ? postsRequest : null,
+    memberTab
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.members(
+            group.group_id,
+            searchParams.get("memberQuery") ?? "",
+          ),
+          queryFn: () =>
+            listGroupMembers(
               group.group_id,
               searchParams.get("memberQuery") ?? "",
             ),
-            queryFn: () =>
-              listGroupMembers(
-                group.group_id,
-                searchParams.get("memberQuery") ?? "",
-              ),
-          })
-        : Promise.resolve(undefined),
-      memberTab && canModerate
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.joinRequests(group.group_id),
-            queryFn: () => listGroupJoinRequests(group.group_id),
-          })
-        : Promise.resolve([]),
-      // 초대 링크는 설정 탭의 운영진에게만 보이고, 다른 사람이 부르면 서버가 42501로 막는다.
-      settingsTab && canModerate && group.kind !== "official"
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.invite(group.group_id),
-            queryFn: () => getGroupInvite(group.group_id),
-          })
-        : Promise.resolve(null),
-      reportsTab && canCurate
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.reports(group.group_id, reportSort),
-            queryFn: () =>
-              listGroupPostReportSummaries(group.group_id, reportSort),
-          })
-        : Promise.resolve(undefined),
-    ]);
+        })
+      : Promise.resolve(undefined),
+    memberTab && canModerate
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.joinRequests(group.group_id),
+          queryFn: () => listGroupJoinRequests(group.group_id),
+        })
+      : Promise.resolve([]),
+    // 초대 링크는 설정 탭의 운영진에게만 보이고, 다른 사람이 부르면 서버가 42501로 막는다.
+    settingsTab && canModerate && group.kind !== "official"
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.invite(group.group_id),
+          queryFn: () => getGroupInvite(group.group_id),
+        })
+      : Promise.resolve(null),
+    reportsTab && canCurate
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.reports(group.group_id, reportSort),
+          queryFn: () =>
+            listGroupPostReportSummaries(group.group_id, reportSort),
+        })
+      : Promise.resolve(undefined),
+  ]);
+  const posts = loadedPosts ?? deferredPosts;
 
   // A post detail is a child route, so only the group's exact posts tab advances §7.19.
-  if (postsTab && url.pathname === `/groups/${group.slug}`) {
+  if (postsTab && isGroupPage) {
     // 그룹 홈에는 활성 observer가 없어 무효화가 화면을 다시 그리지 않는다. 배지를 먼저 0으로
     // 낮춰야 RPC보다 먼저 목록으로 돌아와도 옛 숫자가 남지 않는다(§7.19).
     queryClient.setQueryData(

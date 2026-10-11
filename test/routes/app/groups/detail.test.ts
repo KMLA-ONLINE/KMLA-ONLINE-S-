@@ -203,7 +203,26 @@ describe("group detail loader", () => {
     expect(mutations.listGroupPosts).toHaveBeenCalledWith("group-id", {
       hydrateMedia: expect.any(Boolean),
     });
-    expect(result.posts).toBe(page);
+    expect(result.posts).toBeInstanceOf(Promise);
+    await expect(result.posts).resolves.toBe(page);
+  });
+
+  // 목록은 dialog 뒤에 깔릴 뿐이라, 상세가 목록 RPC를 기다리면 열리는 시간이 그만큼 늘어난다.
+  it("does not hold a direct post detail on the post list", async () => {
+    mutations.listGroupPosts.mockReturnValue(new Promise(() => undefined));
+
+    const result = await load("/groups/test/posts/post-id");
+
+    expect(result.group).toBe(group);
+    expect(result.posts).toBeInstanceOf(Promise);
+  });
+
+  it("keeps a direct post detail when the background post list fails", async () => {
+    mutations.listGroupPosts.mockRejectedValue(new Error("offline"));
+
+    const result = await load("/groups/test/posts/post-id");
+
+    await expect(result.posts).resolves.toBeNull();
   });
 
   it("marks posts visited only when the group post list itself loads", async () => {
@@ -318,7 +337,7 @@ describe("group detail loader", () => {
     const result = await load("/groups/test/posts/new-post");
 
     expect(mutations.listGroupPosts).toHaveBeenCalledTimes(2);
-    expect(result.posts).toBe(refreshedPage);
+    await expect(result.posts).resolves.toBe(refreshedPage);
   });
 });
 
