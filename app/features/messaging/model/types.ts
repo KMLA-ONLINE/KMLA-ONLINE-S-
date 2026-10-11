@@ -20,6 +20,8 @@ export interface ConversationMessage {
   senderId: string | null;
   body: string;
   sentAt: string;
+  /** 고친 시각. 고친 적이 없으면 비어 있다. */
+  editedAt?: string | null;
   /** 답장 원문. 원문이 아직 불러오지 않은 페이지에 있어도 인용을 그릴 수 있게 서버가 함께 준다. */
   replyTo?: MessageReplyPreview;
   deleted?: boolean;
@@ -30,6 +32,8 @@ export interface ConversationMessage {
   unreadMemberCount?: number;
   pinned?: boolean;
   system?: boolean;
+  /** 보냈지만 서버가 아직 확정하지 않은 내 메시지. 확정 전에는 서버에 없어 다른 작업을 받지 않는다. */
+  pending?: boolean;
 }
 
 export interface MessageReplyPreview {

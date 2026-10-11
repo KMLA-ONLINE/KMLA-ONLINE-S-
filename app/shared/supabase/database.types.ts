@@ -1761,6 +1761,7 @@ export type Database = {
         Returns: undefined
       }
       delete_group_post: { Args: { p_post_id: string }; Returns: undefined }
+      delete_messages: { Args: { p_message_ids: string[] }; Returns: undefined }
       delete_my_story: { Args: { p_story_id: number }; Returns: undefined }
       delete_post_attachment: {
         Args: { p_attachment_id: string }
@@ -1796,6 +1797,10 @@ export type Database = {
       dismiss_group_post_reports: {
         Args: { p_post_id: string }
         Returns: undefined
+      }
+      edit_message: {
+        Args: { p_body: string; p_message_id: string }
+        Returns: string
       }
       finalize_comment_image: {
         Args: { p_image_id: string }
@@ -2338,6 +2343,9 @@ export type Database = {
           deleted: boolean
           edited_at: string
           id: string
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          pinned: boolean
+          reactions: Json
           reply_body: string
           reply_deleted: boolean
           reply_sender_id: number
@@ -2376,6 +2384,25 @@ export type Database = {
           restriction_expires_at: string
           target_profile_id: number
           title: string
+        }[]
+      }
+      list_pinned_messages: {
+        Args: { p_conversation_id: string }
+        Returns: {
+          body: string
+          deleted: boolean
+          edited_at: string
+          id: string
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          pinned: boolean
+          reactions: Json
+          reply_body: string
+          reply_deleted: boolean
+          reply_sender_id: number
+          reply_to_id: string
+          sender_id: number
+          sent_at: string
+          unread_member_count: number
         }[]
       }
       list_post_attachments: {
@@ -2812,6 +2839,20 @@ export type Database = {
       set_group_post_pinned: {
         Args: { p_pinned: boolean; p_post_id: string }
         Returns: string
+      }
+      set_message_pinned: {
+        Args: { p_message_id: string; p_pinned: boolean }
+        Returns: undefined
+      }
+      set_message_reaction: {
+        Args: {
+          p_message_id: string
+          p_reaction?: Database["public"]["Enums"]["post_reaction"]
+        }
+        Returns: {
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          reactions: Json
+        }[]
       }
       set_my_group_notification_preferences: {
         Args: {

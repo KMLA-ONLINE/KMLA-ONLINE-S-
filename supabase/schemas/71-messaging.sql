@@ -90,13 +90,37 @@ create table private.messages (
 create index messages_conversation_sent_idx
   on private.messages (conversation_id, sent_at desc, id desc);
 
+-- 반응은 메시지와 프로필마다 하나다. 평문이지만 메시지를 볼 수 있는 사람만 보도록 같은 RPC 경계에 둔다.
+create table private.message_reactions (
+  message_id uuid not null references private.messages(id) on delete cascade,
+  profile_id bigint not null references public.profiles(id) on delete cascade,
+  reaction public.post_reaction not null,
+  created_at timestamptz not null default now(),
+  primary key (message_id, profile_id)
+);
+
+-- 고정은 대화 전체의 상태라 메시지마다 하나다. 어느 멤버든 고정하고 해제할 수 있다(기능 명세 §13.12).
+create table private.message_pins (
+  message_id uuid primary key references private.messages(id) on delete cascade,
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  pinned_by bigint references public.profiles(id) on delete set null,
+  pinned_at timestamptz not null default now()
+);
+
+create index message_pins_conversation_idx
+  on private.message_pins (conversation_id);
+
 alter table public.conversations enable row level security;
 alter table public.conversation_members enable row level security;
 alter table private.messages enable row level security;
+alter table private.message_reactions enable row level security;
+alter table private.message_pins enable row level security;
 
 revoke all on table public.conversations from public, anon, authenticated;
 revoke all on table public.conversation_members from public, anon, authenticated;
 revoke all on table private.messages from public, anon, authenticated;
+revoke all on table private.message_reactions from public, anon, authenticated;
+revoke all on table private.message_pins from public, anon, authenticated;
 
 create policy "conversations_deny_direct_access"
 on public.conversations
@@ -114,6 +138,20 @@ with check (false);
 
 create policy "messages_deny_direct_access"
 on private.messages
+for all
+to public
+using (false)
+with check (false);
+
+create policy "message_reactions_deny_direct_access"
+on private.message_reactions
+for all
+to public
+using (false)
+with check (false);
+
+create policy "message_pins_deny_direct_access"
+on private.message_pins
 for all
 to public
 using (false)
@@ -318,6 +356,113 @@ revoke all on function public.list_conversations(uuid)
 grant execute on function public.list_conversations(uuid)
   to authenticated;
 
+-- 화면에 그릴 메시지 행. 호출하는 RPC가 호출자가 볼 수 있는 메시지 ID만 골라 넘긴다. 반응 집계, 내
+-- 반응, 고정 여부, 답장 원문의 앞부분을 함께 붙여 행마다 추가 조회가 없게 한다. 원문이 호출자의 참여
+-- 기간 밖이면 인용을 붙이지 않는다. 참여 이전 메시지를 답장으로 엿보지 못하게 한다.
+create function private.message_rows(
+  p_caller_profile_id bigint,
+  p_conversation_id uuid,
+  p_message_ids uuid[],
+  p_keys jsonb
+)
+returns table (
+  id uuid,
+  sender_id bigint,
+  body text,
+  sent_at timestamptz,
+  edited_at timestamptz,
+  deleted boolean,
+  reply_to_id uuid,
+  reply_sender_id bigint,
+  -- 답장 원문의 앞부분. 원문이 삭제됐으면 비운다.
+  reply_body text,
+  reply_deleted boolean,
+  -- 내 메시지에서만 채운다. 이 메시지를 아직 읽지 않은 현재 멤버 수.
+  unread_member_count integer,
+  -- `{reaction, count}`를 많은 순서로. 내 반응을 포함한다.
+  reactions jsonb,
+  my_reaction public.post_reaction,
+  pinned boolean
+)
+language sql
+stable
+set search_path = ''
+as $$
+  with period as (
+    select member.joined_at, member.left_at
+    from public.conversation_members as member
+    where member.conversation_id = p_conversation_id
+      and member.profile_id = p_caller_profile_id
+  )
+  select
+    message.id,
+    message.sender_id,
+    case
+      when message.deleted_at is null
+        then private.decrypt_message_text(message.body_ciphertext, message.key_version, p_keys)
+      else ''
+    end,
+    message.sent_at,
+    message.edited_at,
+    message.deleted_at is not null,
+    original.id,
+    original.sender_id,
+    case
+      when original.id is not null and original.deleted_at is null
+        then left(
+          private.decrypt_message_text(original.body_ciphertext, original.key_version, p_keys),
+          200
+        )
+      when original.id is not null then ''
+    end,
+    original.deleted_at is not null,
+    case
+      when message.sender_id = p_caller_profile_id then (
+        select count(*)::integer
+        from public.conversation_members as other
+        where other.conversation_id = p_conversation_id
+          and other.profile_id <> p_caller_profile_id
+          and other.left_at is null
+          and other.joined_at <= message.sent_at
+          and (other.last_read_sent_at, other.last_read_message_id) < (message.sent_at, message.id)
+      )
+    end,
+    coalesce(tally.list, '[]'::jsonb),
+    mine.reaction,
+    pin.message_id is not null
+  from private.messages as message
+  left join private.messages as original
+    on original.id = message.reply_to_id
+    and exists (
+      select 1
+      from period
+      where original.sent_at >= period.joined_at
+        and (period.left_at is null or original.sent_at < period.left_at)
+    )
+  left join lateral (
+    select jsonb_agg(
+      jsonb_build_object('reaction', counted.reaction, 'count', counted.n)
+      order by counted.n desc, counted.reaction
+    ) as list
+    from (
+      select entry.reaction, count(*)::integer as n
+      from private.message_reactions as entry
+      where entry.message_id = message.id
+      group by entry.reaction
+    ) as counted
+  ) as tally on true
+  left join private.message_reactions as mine
+    on mine.message_id = message.id
+    and mine.profile_id = p_caller_profile_id
+  left join private.message_pins as pin on pin.message_id = message.id
+  where message.conversation_id = p_conversation_id
+    and message.id = any(p_message_ids)
+  order by message.sent_at, message.id;
+$$;
+
+revoke all on function private.message_rows(bigint, uuid, uuid[], jsonb)
+  from public;
+
 -- `(p_before_sent_at, p_before_id)`보다 앞선 메시지를 최신부터 `p_limit`개 골라 오래된 것부터
 -- 돌려준다. 커서가 없으면 최신 페이지다. 커서 행을 찾지 않고 비교로 자르므로 커서의 메시지가
 -- 사라져도 결과가 어긋나지 않는다. 더 앞선 메시지가 있는지는 호출하는 쪽이 한 개 더 요청해 안다.
@@ -336,11 +481,12 @@ returns table (
   deleted boolean,
   reply_to_id uuid,
   reply_sender_id bigint,
-  -- 답장 원문의 앞부분. 원문이 삭제됐으면 비운다.
   reply_body text,
   reply_deleted boolean,
-  -- 내 메시지에서만 채운다. 이 메시지를 아직 읽지 않은 현재 멤버 수.
-  unread_member_count integer
+  unread_member_count integer,
+  reactions jsonb,
+  my_reaction public.post_reaction,
+  pinned boolean
 )
 language plpgsql
 stable
@@ -349,7 +495,7 @@ set search_path = ''
 as $$
 declare
   caller_profile_id bigint := private.current_profile_id();
-  keys jsonb;
+  page_ids uuid[];
 begin
   if caller_profile_id is null then
     raise exception 'accepted profile required'
@@ -360,16 +506,10 @@ begin
       using errcode = '22023';
   end if;
 
-  keys := private.message_keys();
-
-  return query
-  with period as (
-    select member.joined_at, member.left_at
-    from public.conversation_members as member
-    where member.conversation_id = p_conversation_id
-      and member.profile_id = caller_profile_id
-  ), page as (
-    select message.*
+  select array_agg(page.id)
+  into page_ids
+  from (
+    select message.id
     from private.messages as message
     where message.conversation_id = p_conversation_id
       and (
@@ -378,57 +518,25 @@ begin
       )
       and exists (
         select 1
-        from period
-        where message.sent_at >= period.joined_at
+        from public.conversation_members as period
+        where period.conversation_id = p_conversation_id
+          and period.profile_id = caller_profile_id
+          and message.sent_at >= period.joined_at
           and (period.left_at is null or message.sent_at < period.left_at)
       )
     order by message.sent_at desc, message.id desc
     limit least(greatest(coalesce(p_limit, 50), 1), 101)
-  )
-  select
-    page.id,
-    page.sender_id,
-    case
-      when page.deleted_at is null
-        then private.decrypt_message_text(page.body_ciphertext, page.key_version, keys)
-      else ''
-    end,
-    page.sent_at,
-    page.edited_at,
-    page.deleted_at is not null,
-    original.id,
-    original.sender_id,
-    case
-      when original.id is not null and original.deleted_at is null
-        then left(
-          private.decrypt_message_text(original.body_ciphertext, original.key_version, keys),
-          200
-        )
-      when original.id is not null then ''
-    end,
-    original.deleted_at is not null,
-    case
-      when page.sender_id = caller_profile_id then (
-        select count(*)::integer
-        from public.conversation_members as other
-        where other.conversation_id = p_conversation_id
-          and other.profile_id <> caller_profile_id
-          and other.left_at is null
-          and other.joined_at <= page.sent_at
-          and (other.last_read_sent_at, other.last_read_message_id) < (page.sent_at, page.id)
-      )
-    end
-  from page
-  -- 원문이 내 참여 기간 밖이면 인용을 붙이지 않는다. 참여 이전 메시지를 답장으로 엿보지 못하게 한다.
-  left join private.messages as original
-    on original.id = page.reply_to_id
-    and exists (
-      select 1
-      from period
-      where original.sent_at >= period.joined_at
-        and (period.left_at is null or original.sent_at < period.left_at)
-    )
-  order by page.sent_at, page.id;
+  ) as page;
+
+  if page_ids is null then
+    return;
+  end if;
+
+  return query
+  select *
+  from private.message_rows(
+    caller_profile_id, p_conversation_id, page_ids, private.message_keys()
+  );
 end;
 $$;
 
@@ -438,10 +546,97 @@ revoke all on function public.list_messages(uuid, timestamptz, uuid, integer)
 grant execute on function public.list_messages(uuid, timestamptz, uuid, integer)
   to authenticated;
 
+-- 대화 순서대로의 고정 메시지 전체. 고정 메시지는 아직 불러오지 않은 페이지에 있을 수 있어
+-- 페이지와 따로 준다. 내 참여 기간 밖의 고정은 보이지 않는다.
+create function public.list_pinned_messages(p_conversation_id uuid)
+returns table (
+  id uuid,
+  sender_id bigint,
+  body text,
+  sent_at timestamptz,
+  edited_at timestamptz,
+  deleted boolean,
+  reply_to_id uuid,
+  reply_sender_id bigint,
+  reply_body text,
+  reply_deleted boolean,
+  unread_member_count integer,
+  reactions jsonb,
+  my_reaction public.post_reaction,
+  pinned boolean
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  pinned_ids uuid[];
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+
+  select array_agg(pin.message_id)
+  into pinned_ids
+  from private.message_pins as pin
+  join private.messages as message on message.id = pin.message_id
+  where pin.conversation_id = p_conversation_id
+    and exists (
+      select 1
+      from public.conversation_members as period
+      where period.conversation_id = p_conversation_id
+        and period.profile_id = caller_profile_id
+        and message.sent_at >= period.joined_at
+        and (period.left_at is null or message.sent_at < period.left_at)
+    );
+
+  if pinned_ids is null then
+    return;
+  end if;
+
+  return query
+  select *
+  from private.message_rows(
+    caller_profile_id, p_conversation_id, pinned_ids, private.message_keys()
+  );
+end;
+$$;
+
+revoke all on function public.list_pinned_messages(uuid)
+  from public, anon;
+
+grant execute on function public.list_pinned_messages(uuid)
+  to authenticated;
+
+-- 끝의 연속 줄바꿈을 지우고(기능 명세 §13.4) 길이를 검사한다. 본문 상한은 grapheme 5,000자이지만
+-- Postgres는 grapheme을 세지 못하므로, 클라이언트가 그 상한을 지키고 서버는 code point 20,000개로
+-- 막는다. 전송과 편집이 같은 규칙을 쓴다.
+create function private.normalize_message_body(p_body text)
+returns text
+language plpgsql
+immutable
+set search_path = ''
+as $$
+declare
+  normalized text := pg_catalog.regexp_replace(coalesce(p_body, ''), '[\r\n]+$', '');
+begin
+  if normalized !~ '[^[:space:]]' or char_length(normalized) > 20000 then
+    raise exception 'body must be 1 to 20000 characters'
+      using errcode = '22023';
+  end if;
+  return normalized;
+end;
+$$;
+
+revoke all on function private.normalize_message_body(text)
+  from public;
+
 -- 메시지를 보낸다. `p_message_id`는 클라이언트 UUID이며, 같은 값으로 다시 부르면 저장하지 않고
--- 처음 저장한 행을 돌려준다. 끝의 연속 줄바꿈은 지운다(기능 명세 §13.4). 본문 상한은 grapheme
--- 5,000자이지만 Postgres는 grapheme을 세지 못하므로, 클라이언트가 그 상한을 지키고 서버는 code
--- point 20,000개로 막는다. 보낸 사람의 읽음 위치는 이 메시지로 옮긴다.
+-- 처음 저장한 행을 돌려준다. 본문 규칙은 `private.normalize_message_body`다. 보낸 사람의 읽음
+-- 위치는 이 메시지로 옮긴다.
 create function public.send_message(
   p_conversation_id uuid,
   p_message_id uuid,
@@ -455,7 +650,7 @@ set search_path = ''
 as $$
 declare
   caller_profile_id bigint := private.current_profile_id();
-  normalized_body text := pg_catalog.regexp_replace(coalesce(p_body, ''), '[\r\n]+$', '');
+  normalized_body text;
   encrypted record;
   saved private.messages;
 begin
@@ -474,10 +669,7 @@ begin
   where message.id = p_message_id;
 
   if saved.id is null then
-    if normalized_body !~ '[^[:space:]]' or char_length(normalized_body) > 20000 then
-      raise exception 'body must be 1 to 20000 characters'
-        using errcode = '22023';
-    end if;
+    normalized_body := private.normalize_message_body(p_body);
 
     -- 나가기와 겹치지 않도록 내 현재 참여 기간을 잠근다.
     perform 1
@@ -597,4 +789,259 @@ revoke all on function public.mark_conversation_read(uuid, uuid)
   from public, anon;
 
 grant execute on function public.mark_conversation_read(uuid, uuid)
+  to authenticated;
+
+-- 반응·고정·편집이 대상으로 삼을 수 있는 메시지. 호출자가 지금 대화 멤버이고, 메시지가 호출자의
+-- 참여 기간 안에 있으며, 삭제되지 않아야 한다. 메시지 행을 잠가 삭제와 겹치지 않게 한다.
+create function private.lock_actionable_message(
+  p_caller_profile_id bigint,
+  p_message_id uuid
+)
+returns private.messages
+language plpgsql
+set search_path = ''
+as $$
+declare
+  target private.messages;
+begin
+  select message.*
+  into target
+  from private.messages as message
+  where message.id = p_message_id
+    and message.deleted_at is null
+    and exists (
+      select 1
+      from public.conversation_members as member
+      where member.conversation_id = message.conversation_id
+        and member.profile_id = p_caller_profile_id
+        and member.left_at is null
+    )
+    and exists (
+      select 1
+      from public.conversation_members as period
+      where period.conversation_id = message.conversation_id
+        and period.profile_id = p_caller_profile_id
+        and message.sent_at >= period.joined_at
+        and (period.left_at is null or message.sent_at < period.left_at)
+    )
+  -- 키를 바꾸지 않으므로 `no key update`면 된다. 이 메시지에 답장하는 전송의 외래 키 검사
+  -- (`key share`)를 막지 않으면서 삭제와는 순서가 잡힌다.
+  for no key update;
+
+  if target.id is null then
+    raise exception 'message unavailable'
+      using errcode = 'P0002';
+  end if;
+
+  return target;
+end;
+$$;
+
+revoke all on function private.lock_actionable_message(bigint, uuid)
+  from public;
+
+-- 내 반응을 정하거나(`p_reaction`) 지운다(`null`). 바뀐 뒤의 반응 집계를 돌려준다.
+create function public.set_message_reaction(
+  p_message_id uuid,
+  p_reaction public.post_reaction default null
+)
+returns table (reactions jsonb, my_reaction public.post_reaction)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+
+  perform private.lock_actionable_message(caller_profile_id, p_message_id);
+
+  if p_reaction is null then
+    delete from private.message_reactions as entry
+    where entry.message_id = p_message_id
+      and entry.profile_id = caller_profile_id;
+  else
+    insert into private.message_reactions (message_id, profile_id, reaction)
+    values (p_message_id, caller_profile_id, p_reaction)
+    on conflict (message_id, profile_id) do update
+    set reaction = excluded.reaction,
+      created_at = now();
+  end if;
+
+  return query
+  select
+    coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object('reaction', counted.reaction, 'count', counted.n)
+          order by counted.n desc, counted.reaction
+        )
+        from (
+          select entry.reaction, count(*)::integer as n
+          from private.message_reactions as entry
+          where entry.message_id = p_message_id
+          group by entry.reaction
+        ) as counted
+      ),
+      '[]'::jsonb
+    ),
+    p_reaction;
+end;
+$$;
+
+revoke all on function public.set_message_reaction(uuid, public.post_reaction)
+  from public, anon;
+
+grant execute on function public.set_message_reaction(uuid, public.post_reaction)
+  to authenticated;
+
+-- 메시지를 고정하거나 해제한다. 이미 그 상태면 아무것도 하지 않는다.
+create function public.set_message_pinned(p_message_id uuid, p_pinned boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  target private.messages;
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  if p_pinned is null then
+    raise exception 'pinned state required'
+      using errcode = '22023';
+  end if;
+
+  target := private.lock_actionable_message(caller_profile_id, p_message_id);
+
+  if p_pinned then
+    insert into private.message_pins (message_id, conversation_id, pinned_by)
+    values (target.id, target.conversation_id, caller_profile_id)
+    on conflict (message_id) do nothing;
+  else
+    delete from private.message_pins as pin
+    where pin.message_id = target.id;
+  end if;
+end;
+$$;
+
+revoke all on function public.set_message_pinned(uuid, boolean)
+  from public, anon;
+
+grant execute on function public.set_message_pinned(uuid, boolean)
+  to authenticated;
+
+-- 내 메시지를 보낸 지 15분 안에 고친다(기능 명세 §13.10). 지금 대화 멤버여야 한다. 고친 시각을
+-- 돌려준다.
+create function public.edit_message(p_message_id uuid, p_body text)
+returns timestamptz
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  normalized_body text := private.normalize_message_body(p_body);
+  target private.messages;
+  encrypted record;
+  edited timestamptz;
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+
+  target := private.lock_actionable_message(caller_profile_id, p_message_id);
+  edited := clock_timestamp();
+
+  if target.sender_id is distinct from caller_profile_id then
+    raise exception 'message sender required'
+      using errcode = '42501';
+  end if;
+  if edited > target.sent_at + interval '15 minutes' then
+    raise exception 'edit window has passed'
+      using errcode = '22023';
+  end if;
+
+  select * into encrypted
+  from private.encrypt_message_text(normalized_body, private.message_keys());
+
+  update private.messages
+  set body_ciphertext = encrypted.ciphertext,
+    key_version = encrypted.key_version,
+    edited_at = edited
+  where id = target.id;
+
+  return edited;
+end;
+$$;
+
+revoke all on function public.edit_message(uuid, text)
+  from public, anon;
+
+grant execute on function public.edit_message(uuid, text)
+  to authenticated;
+
+-- 내 메시지를 지운다(기능 명세 §13.11). 행은 답장 인용이 가리키므로 남기고 본문, 반응, 고정을
+-- 지운다. 하나라도 내 메시지가 아니면 아무것도 지우지 않고, 이미 지운 메시지는 건너뛴다. 나간
+-- 대화의 내 메시지도 지울 수 있다.
+create function public.delete_messages(p_message_ids uuid[])
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  if coalesce(cardinality(p_message_ids), 0) not between 1 and 100 then
+    raise exception 'between 1 and 100 messages required'
+      using errcode = '22023';
+  end if;
+
+  perform 1
+  from private.messages as message
+  where message.id = any(p_message_ids)
+  for update;
+
+  if exists (
+    select 1
+    from unnest(p_message_ids) as requested(id)
+    left join private.messages as message on message.id = requested.id
+    where message.sender_id is distinct from caller_profile_id
+  ) then
+    raise exception 'message sender required'
+      using errcode = '42501';
+  end if;
+
+  delete from private.message_reactions as entry
+  where entry.message_id = any(p_message_ids);
+
+  delete from private.message_pins as pin
+  where pin.message_id = any(p_message_ids);
+
+  update private.messages as message
+  set deleted_at = clock_timestamp(),
+    body_ciphertext = null,
+    key_version = null
+  where message.id = any(p_message_ids)
+    and message.deleted_at is null;
+end;
+$$;
+
+revoke all on function public.delete_messages(uuid[])
+  from public, anon;
+
+grant execute on function public.delete_messages(uuid[])
   to authenticated;

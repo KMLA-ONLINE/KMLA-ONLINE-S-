@@ -171,3 +171,14 @@ export function setMessagePinned(
 ): Promise<Pick<ConversationMessage, "pinned">> {
   return Promise.resolve({ pinned });
 }
+
+export function editMessage(
+  _messageId: string,
+  body: string,
+): Promise<Pick<ConversationMessage, "body" | "editedAt">> {
+  return Promise.resolve({ body, editedAt: new Date().toISOString() });
+}
+
+export function deleteMessages(_messageIds: string[]): Promise<void> {
+  return Promise.resolve();
+}

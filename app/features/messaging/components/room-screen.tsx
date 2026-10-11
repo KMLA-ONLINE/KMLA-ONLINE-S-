@@ -7,12 +7,14 @@ import {
   ImageIcon,
   InfoIcon,
   PaperclipIcon,
+  PencilIcon,
   PinIcon,
   ReplyIcon,
   SearchIcon,
   SendIcon,
   SmileIcon,
   ThumbsUpIcon,
+  Trash2Icon,
   XIcon,
 } from "lucide-react";
 import {
@@ -40,6 +42,7 @@ import {
   useConversationMessages,
   type OlderMessagesResult,
 } from "~/features/messaging/hooks/use-conversation-messages";
+import { canEditMessage } from "~/features/messaging/model/message-edit";
 import {
   canConnectMessages,
   hasVisibleMessageReaction,
@@ -63,6 +66,7 @@ import {
   ReactionPickerSurface,
 } from "~/features/posts/components/reaction/quick-reaction-bar";
 import type { PostReaction } from "~/features/posts/model/types";
+import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { Button } from "~/shared/ui/button";
 import {
   DropdownMenu,
@@ -105,8 +109,14 @@ export function RoomScreen({
     send,
     react,
     togglePinned,
+    edit,
+    remove,
   } = useConversationMessages(conversation);
   const [replyTarget, setReplyTarget] = useState<ConversationMessage | null>(
+    null,
+  );
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ConversationMessage | null>(
     null,
   );
   const messageThreadRef = useRef<HTMLDivElement>(null);
@@ -177,6 +187,19 @@ export function RoomScreen({
     // 작성창이 입력을 되살리므로 답장 대상도 함께 되살린다. 그새 다른 답장을 골랐으면 두지 않는다.
     if (!sent && target) setReplyTarget((current) => current ?? target);
     return sent;
+  }
+
+  // 고친 내용은 먼저 그린다. 실패하면 hook이 메시지를 되돌리고, 여기서는 고치던 입력과 함께
+  // 수정 모드를 되살린다. 그새 다른 수정을 시작했으면 두지 않는다.
+  async function submitEdit(body: string) {
+    const target = editTarget?.message;
+    if (!target) return;
+    setEditTarget(null);
+    if (body === target.body) return;
+    const edited = await edit(target, body);
+    if (!edited) {
+      setEditTarget((current) => current ?? { message: target, draft: body });
+    }
   }
 
   return (
@@ -269,15 +292,25 @@ export function RoomScreen({
           onLoadOlderMessages={loadOlderMessages}
           onSelectReaction={react}
           onReply={(message) => {
-            if (!message.deleted) setReplyTarget(message);
+            if (message.deleted) return;
+            setEditTarget(null);
+            setReplyTarget(message);
           }}
           onTogglePinned={togglePinned}
+          onEdit={(message) => {
+            setReplyTarget(null);
+            setEditTarget({ message, draft: message.body });
+          }}
+          onDelete={setDeleteTarget}
           onViewMessage={viewMessage}
         />
         <ComposerShell
           replyTarget={replyTarget ?? undefined}
           replyAuthor={replyAuthor}
           onCancelReply={() => setReplyTarget(null)}
+          editTarget={editTarget ?? undefined}
+          onCancelEdit={() => setEditTarget(null)}
+          onEdit={submitEdit}
           onSend={sendMessage}
           desktopDetailsOpen={desktopDetailsOpen}
         />
@@ -305,6 +338,20 @@ export function RoomScreen({
         onViewMessage={viewMessage}
         onUnpin={togglePinned}
       />
+      {deleteTarget ? (
+        <ConfirmDialog
+          title="메시지를 삭제할까요?"
+          description="모든 참여자에게 '삭제된 메시지입니다'로 표시되고 반응과 고정도 사라집니다."
+          confirmLabel="삭제"
+          destructive
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => {
+            remove(deleteTarget);
+            if (editTarget?.message.id === deleteTarget.id) setEditTarget(null);
+            setDeleteTarget(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -321,6 +368,8 @@ function MessageThread({
   onSelectReaction,
   onReply,
   onTogglePinned,
+  onEdit,
+  onDelete,
   onViewMessage,
 }: {
   conversation: Conversation;
@@ -337,6 +386,8 @@ function MessageThread({
   ) => void;
   onReply: (message: ConversationMessage) => void;
   onTogglePinned: (message: ConversationMessage) => void;
+  onEdit: (message: ConversationMessage) => void;
+  onDelete: (message: ConversationMessage) => void;
   onViewMessage: (messageId: string) => void;
 }) {
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
@@ -366,6 +417,8 @@ function MessageThread({
     onSelectReaction,
     onReply,
     onTogglePinned,
+    onEdit,
+    onDelete,
     onViewMessage,
   });
   useLayoutEffect(() => {
@@ -373,6 +426,8 @@ function MessageThread({
       onSelectReaction,
       onReply,
       onTogglePinned,
+      onEdit,
+      onDelete,
       onViewMessage,
     };
   });
@@ -382,6 +437,8 @@ function MessageThread({
         latestHandlers.current.onSelectReaction(message, reaction),
       reply: (message) => latestHandlers.current.onReply(message),
       togglePinned: (message) => latestHandlers.current.onTogglePinned(message),
+      edit: (message) => latestHandlers.current.onEdit(message),
+      delete: (message) => latestHandlers.current.onDelete(message),
       viewMessage: (messageId) =>
         latestHandlers.current.onViewMessage(messageId),
     }),
@@ -514,6 +571,7 @@ function MessageThread({
                     sender={sender}
                     replyTargetAuthor={replyTargetAuthor}
                     isOwn={message.senderId === conversation.viewerId}
+                    canEdit={canEditMessage(message, conversation.viewerId)}
                     isGroup={conversation.type === "group"}
                     startsGroup={startsGroup}
                     endsGroup={endsGroup}
@@ -548,6 +606,12 @@ function MessageThread({
   );
 }
 
+/** 고치는 중인 내 메시지와 작성창에 올릴 입력. 실패한 수정을 되살릴 때는 입력이 원문과 다르다. */
+interface EditTarget {
+  message: ConversationMessage;
+  draft: string;
+}
+
 interface ThreadMessageActions {
   selectReaction: (
     message: ConversationMessage,
@@ -555,6 +619,8 @@ interface ThreadMessageActions {
   ) => void;
   reply: (message: ConversationMessage) => void;
   togglePinned: (message: ConversationMessage) => void;
+  edit: (message: ConversationMessage) => void;
+  delete: (message: ConversationMessage) => void;
   viewMessage: (messageId: string) => void;
 }
 
@@ -568,6 +634,7 @@ const ThreadMessage = memo(function ThreadMessage({
   sender,
   replyTargetAuthor,
   isOwn,
+  canEdit,
   isGroup,
   startsGroup,
   endsGroup,
@@ -580,6 +647,8 @@ const ThreadMessage = memo(function ThreadMessage({
   sender?: MessageParticipant;
   replyTargetAuthor?: string;
   isOwn: boolean;
+  /** 15분 기한은 렌더 시점에 판정한다. 기한이 지나면 다음 렌더에서 메뉴가 빠지고, 서버가 최종 판정한다. */
+  canEdit: boolean;
   isGroup: boolean;
   startsGroup: boolean;
   endsGroup: boolean;
@@ -589,6 +658,56 @@ const ThreadMessage = memo(function ThreadMessage({
   actions: ThreadMessageActions;
 }) {
   const replyTarget = message.replyTo;
+  // 삭제된 메시지는 반응, 고정, 수정, 삭제를 받지 않는다. 전송 중인 메시지는 아직 서버에 없어
+  // 복사만 된다. 남는 작업이 없으면 메뉴를 열지 않는다.
+  const actionable = !message.deleted && !message.pending;
+  const contextActions = [
+    ...(actionable
+      ? [
+          {
+            label: "답장",
+            icon: <ReplyIcon aria-hidden />,
+            onSelect: () => actions.reply(message),
+          },
+        ]
+      : []),
+    ...(message.deleted
+      ? []
+      : [
+          {
+            label: "복사",
+            icon: <CopyIcon aria-hidden />,
+            onSelect: () => void copyMessageText(message.body),
+          },
+        ]),
+    ...(actionable
+      ? [
+          {
+            label: message.pinned ? "고정 해제" : "고정",
+            icon: <PinIcon aria-hidden />,
+            onSelect: () => actions.togglePinned(message),
+          },
+        ]
+      : []),
+    ...(canEdit
+      ? [
+          {
+            label: "수정",
+            icon: <PencilIcon aria-hidden />,
+            onSelect: () => actions.edit(message),
+          },
+        ]
+      : []),
+    ...(isOwn && actionable
+      ? [
+          {
+            label: "삭제",
+            icon: <Trash2Icon aria-hidden />,
+            onSelect: () => actions.delete(message),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <MessageRow
@@ -609,29 +728,13 @@ const ThreadMessage = memo(function ThreadMessage({
       onViewReply={
         replyTarget ? () => actions.viewMessage(replyTarget.id) : undefined
       }
-      onReply={message.deleted ? undefined : () => actions.reply(message)}
-      onSelectReaction={(reaction) => actions.selectReaction(message, reaction)}
-      contextActions={[
-        ...(message.deleted
-          ? []
-          : [
-              {
-                label: "답장",
-                icon: <ReplyIcon aria-hidden />,
-                onSelect: () => actions.reply(message),
-              },
-              {
-                label: "복사",
-                icon: <CopyIcon aria-hidden />,
-                onSelect: () => void copyMessageText(message.body),
-              },
-            ]),
-        {
-          label: message.pinned ? "고정 해제" : "고정",
-          icon: <PinIcon aria-hidden />,
-          onSelect: () => actions.togglePinned(message),
-        },
-      ]}
+      onReply={actionable ? () => actions.reply(message) : undefined}
+      onSelectReaction={
+        actionable
+          ? (reaction) => actions.selectReaction(message, reaction)
+          : undefined
+      }
+      contextActions={contextActions.length ? contextActions : undefined}
       actionRail={
         <MessageActions
           isOwn={isOwn}
@@ -642,6 +745,10 @@ const ThreadMessage = memo(function ThreadMessage({
           }
           onReply={() => actions.reply(message)}
           onTogglePinned={() => actions.togglePinned(message)}
+          onEdit={canEdit ? () => actions.edit(message) : undefined}
+          onDelete={
+            isOwn && actionable ? () => actions.delete(message) : undefined
+          }
         />
       }
     />
@@ -655,6 +762,8 @@ function MessageActions({
   onSelectReaction,
   onReply,
   onTogglePinned,
+  onEdit,
+  onDelete,
 }: {
   isOwn: boolean;
   message: ConversationMessage;
@@ -662,6 +771,8 @@ function MessageActions({
   onSelectReaction: (reaction: PostReaction) => void;
   onReply: () => void;
   onTogglePinned: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const [reactionOpen, setReactionOpen] = useState(false);
 
@@ -724,36 +835,53 @@ function MessageActions({
         className="shadow-sm duration-0 data-open:animate-none data-closed:animate-none"
       >
         <DropdownMenuGroup>
-          {!message.deleted ? (
-            <DropdownMenuItem
-              className="cursor-pointer"
-              onClick={() => void copyMessageText(message.body)}
-            >
-              <CopyIcon aria-hidden />
-              복사
-            </DropdownMenuItem>
-          ) : null}
+          <DropdownMenuItem
+            className="cursor-pointer"
+            onClick={() => void copyMessageText(message.body)}
+          >
+            <CopyIcon aria-hidden />
+            복사
+          </DropdownMenuItem>
           <DropdownMenuItem className="cursor-pointer" onClick={onTogglePinned}>
             <PinIcon aria-hidden />
             {isPinned ? "고정 해제" : "고정"}
           </DropdownMenuItem>
+          {onEdit ? (
+            <DropdownMenuItem className="cursor-pointer" onClick={onEdit}>
+              <PencilIcon aria-hidden />
+              수정
+            </DropdownMenuItem>
+          ) : null}
+          {onDelete ? (
+            <DropdownMenuItem
+              className="cursor-pointer"
+              variant="destructive"
+              onClick={onDelete}
+            >
+              <Trash2Icon aria-hidden />
+              삭제
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
+
+  // 삭제된 메시지에는 할 수 있는 작업이 없고, 전송 중인 메시지는 아직 서버에 없다.
+  if (message.deleted || message.pending) return null;
 
   return (
     <MessageActionRail>
       {isOwn ? (
         <>
           {moreAction}
-          {!message.deleted ? replyAction : null}
+          {replyAction}
           {reactionAction}
         </>
       ) : (
         <>
           {reactionAction}
-          {!message.deleted ? replyAction : null}
+          {replyAction}
           {moreAction}
         </>
       )}
@@ -765,17 +893,41 @@ function ComposerShell({
   replyTarget,
   replyAuthor,
   onCancelReply,
+  editTarget,
+  onCancelEdit,
+  onEdit,
   onSend,
   desktopDetailsOpen,
 }: {
   replyTarget?: ConversationMessage;
   replyAuthor: string | null;
   onCancelReply: () => void;
+  /** 고치는 중인 내 메시지. 작성창이 그 입력으로 바뀌고, 보내면 `onEdit`을 부른다. */
+  editTarget?: EditTarget;
+  onCancelEdit: () => void;
+  onEdit: (body: string) => Promise<void>;
   /** 실패하면 false로 끝난다. 작성창은 비워 둔 입력을 되살린다. */
   onSend: (body: string) => Promise<boolean>;
   desktopDetailsOpen: boolean;
 }) {
   const [draft, setDraft] = useState("");
+  // 고치기를 시작하면 쓰던 입력을 맡겨 두고 메시지 본문을 올린다. 끝나면 맡긴 입력을 되돌린다.
+  const [editingId, setEditingId] = useState<string | undefined>();
+  const [heldDraft, setHeldDraft] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  if (editTarget?.message.id !== editingId) {
+    setEditingId(editTarget?.message.id);
+    if (editTarget) {
+      if (editingId === undefined) setHeldDraft(draft);
+      setDraft(editTarget.draft);
+    } else {
+      setDraft(heldDraft);
+      setHeldDraft("");
+    }
+  }
+  useEffect(() => {
+    if (editingId) textareaRef.current?.focus();
+  }, [editingId]);
   const [attachmentActionsExpanded, setAttachmentActionsExpanded] =
     useState(false);
   const composing = useRef(false);
@@ -788,6 +940,10 @@ function ComposerShell({
   function sendDraft(): boolean {
     if (!hasDraft || overLimit) return false;
     const body = normalizedDraft;
+    if (editTarget) {
+      void onEdit(body);
+      return true;
+    }
     void onSend(body).then((sent) => {
       // 그새 새로 쓰기 시작했으면 덮어쓰지 않는다.
       if (!sent) setDraft((current) => (current === "" ? body : current));
@@ -806,6 +962,30 @@ function ComposerShell({
 
   return (
     <footer className="shrink-0 bg-background px-2 pt-2 pb-[calc(0.5rem+var(--app-safe-b))] md:px-3 md:pb-3">
+      {editTarget ? (
+        <div
+          className={cn(
+            "mx-auto mb-2 flex max-w-3xl items-center gap-2 border-l-2 border-primary px-3 py-1",
+            !desktopDetailsOpen && "xl:max-w-none",
+          )}
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-primary">메시지 수정</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {editTarget.message.body}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="rounded-full"
+            aria-label="수정 취소"
+            onClick={onCancelEdit}
+          >
+            <XIcon aria-hidden />
+          </Button>
+        </div>
+      ) : null}
       {replyTarget ? (
         <div
           className={cn(
@@ -879,6 +1059,7 @@ function ComposerShell({
         ) : null}
         <div className="flex min-h-10 min-w-0 flex-1 items-end gap-2 rounded-3xl bg-muted py-2 pr-3 pl-4">
           <textarea
+            ref={textareaRef}
             rows={1}
             value={draft}
             aria-label="메시지 입력"
@@ -888,15 +1069,20 @@ function ComposerShell({
             onCompositionStart={() => (composing.current = true)}
             onCompositionEnd={() => (composing.current = false)}
             onKeyDown={(event) => {
+              const composingText =
+                composing.current ||
+                event.nativeEvent.isComposing ||
+                event.keyCode === 229;
+              // 조합 중 Esc는 IME가 조합을 취소하는 키다. 수정을 취소하지 않는다.
+              if (event.key === "Escape" && editTarget && !composingText) {
+                event.preventDefault();
+                onCancelEdit();
+                return;
+              }
               if (event.key !== "Enter" || event.shiftKey) return;
               // Safari는 compositionend를 Enter keydown보다 먼저 보내 isComposing도 false다.
               // 그 keydown은 keyCode 229로 온다.
-              if (
-                composing.current ||
-                event.nativeEvent.isComposing ||
-                event.keyCode === 229
-              )
-                return;
+              if (composingText) return;
               event.preventDefault();
               sendDraft();
             }}
@@ -916,10 +1102,16 @@ function ComposerShell({
           variant="ghost"
           size="icon"
           className="mb-0.5 rounded-full text-primary"
-          aria-label={hasDraft ? "메시지 보내기" : "좋아요 보내기"}
-          disabled={overLimit}
+          aria-label={
+            editTarget
+              ? "수정한 메시지 저장"
+              : hasDraft
+                ? "메시지 보내기"
+                : "좋아요 보내기"
+          }
+          disabled={overLimit || (editTarget !== undefined && !hasDraft)}
           onClick={() => {
-            if (hasDraft) {
+            if (hasDraft || editTarget) {
               sendDraft();
               return;
             }
@@ -928,7 +1120,7 @@ function ComposerShell({
             setDraft("");
           }}
         >
-          {hasDraft ? (
+          {hasDraft || editTarget ? (
             <SendIcon aria-hidden className="size-5" />
           ) : (
             <ThumbsUpIcon aria-hidden className="size-5" />

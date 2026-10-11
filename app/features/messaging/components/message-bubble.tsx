@@ -121,6 +121,18 @@ export function MessageBubble({
           ) : (
             <MessageBody body={messageBody} isOwn={isOwn} />
           )}
+          {message.editedAt && !message.deleted ? (
+            <span
+              className={cn(
+                "ml-1.5 align-baseline text-[11px] leading-none whitespace-nowrap",
+                !isEmojiOnly && isOwn
+                  ? "text-primary-foreground/75"
+                  : "text-muted-foreground",
+              )}
+            >
+              수정됨
+            </span>
+          ) : null}
           {showTimestamp ? (
             <time
               dateTime={message.sentAt}

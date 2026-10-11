@@ -14,9 +14,12 @@ import {
   invalidateConversationList,
   messagingKeys,
   patchMessage,
+  patchReplyPreviews,
   removeMessage,
 } from "~/features/messaging/data/cache";
 import {
+  deleteMessages,
+  editMessage,
   markConversationRead,
   sendMessage,
   setMessagePinned,
@@ -37,6 +40,11 @@ import type { PostReaction } from "~/features/posts/model/types";
 
 /** 앞선 페이지 읽기 결과. `empty`면 붙인 메시지가 없다. */
 export type OlderMessagesResult = "loaded" | "empty" | "failed";
+
+type RequestField = "reaction" | "pin" | "content";
+
+/** 답장 인용에 담는 원문 길이. 서버 `private.message_rows`의 `reply_body`와 같다. */
+const REPLY_PREVIEW_LENGTH = 200;
 
 export interface SendDraft {
   /** 호출하는 쪽이 정해 두면, 이 메시지가 화면에 나타나는 순간을 그 ID로 기다릴 수 있다. */
@@ -109,11 +117,16 @@ export function useConversationMessages(conversation: Conversation) {
     return () => document.removeEventListener("visibilitychange", mark);
   }, [conversationId, unreadLatestId, queryClient]);
 
-  /** 이 메시지에 대한 새 요청 번호. 응답이 왔을 때 아직 마지막 요청인지 비교한다. */
-  function beginRequest(messageId: string) {
-    const request = (latestRequest.current.get(messageId) ?? 0) + 1;
-    latestRequest.current.set(messageId, request);
-    return () => latestRequest.current.get(messageId) === request;
+  /**
+   * 이 메시지의 한 필드 묶음에 대한 새 요청 번호. 응답이 왔을 때 아직 마지막 요청인지 비교한다.
+   * 반응, 고정, 본문은 서로 다른 필드를 바꾸므로 번호를 따로 센다. 하나로 세면 그 사이에 낀
+   * 반응 때문에 실패한 수정이 되돌아가지 않는다.
+   */
+  function beginRequest(messageId: string, field: RequestField) {
+    const key = `${messageId}:${field}`;
+    const request = (latestRequest.current.get(key) ?? 0) + 1;
+    latestRequest.current.set(key, request);
+    return () => latestRequest.current.get(key) === request;
   }
 
   function current(message: ConversationMessage) {
@@ -130,6 +143,7 @@ export function useConversationMessages(conversation: Conversation) {
       sentAt: new Date().toISOString(),
       replyTo,
       unreadMemberCount: conversation.participants.length - 1,
+      pending: true,
     };
     appendMessage(queryClient, conversationId, draft);
     try {
@@ -142,7 +156,10 @@ export function useConversationMessages(conversation: Conversation) {
         },
         draft,
       );
-      patchMessage(queryClient, conversationId, draft.id, sent);
+      patchMessage(queryClient, conversationId, draft.id, {
+        ...sent,
+        pending: false,
+      });
       void invalidateConversationList(queryClient);
       return true;
     } catch {
@@ -160,7 +177,7 @@ export function useConversationMessages(conversation: Conversation) {
       reactions: message.reactions,
       myReaction: message.myReaction,
     };
-    const isLatest = beginRequest(message.id);
+    const isLatest = beginRequest(message.id, "reaction");
     patchMessage(
       queryClient,
       conversationId,
@@ -181,7 +198,7 @@ export function useConversationMessages(conversation: Conversation) {
   const togglePinned = async (target: ConversationMessage) => {
     const message = current(target);
     const pinned = !message.pinned;
-    const isLatest = beginRequest(message.id);
+    const isLatest = beginRequest(message.id, "pin");
     patchMessage(queryClient, conversationId, message.id, { pinned });
     try {
       const saved = await setMessagePinned(message.id, pinned);
@@ -195,6 +212,69 @@ export function useConversationMessages(conversation: Conversation) {
       toast.error(
         pinned ? "고정하지 못했습니다." : "고정을 해제하지 못했습니다.",
       );
+    }
+  };
+
+  /** 내 메시지를 고친다. 실패하면 되돌리고 false로 끝난다. 고치던 입력은 화면이 되살린다. */
+  const edit = async (target: ConversationMessage, body: string) => {
+    const message = current(target);
+    const previous = { body: message.body, editedAt: message.editedAt };
+    const isLatest = beginRequest(message.id, "content");
+    const apply = (patch: Pick<ConversationMessage, "body" | "editedAt">) => {
+      patchMessage(queryClient, conversationId, message.id, patch);
+      patchReplyPreviews(queryClient, conversationId, message.id, {
+        body: patch.body.slice(0, REPLY_PREVIEW_LENGTH),
+      });
+    };
+    apply({ body, editedAt: new Date().toISOString() });
+    try {
+      const saved = await editMessage(message.id, body);
+      if (isLatest()) apply(saved);
+      void invalidateConversationList(queryClient);
+      return true;
+    } catch {
+      if (isLatest()) apply(previous);
+      toast.error("메시지를 고치지 못했습니다.");
+      return false;
+    }
+  };
+
+  /** 내 메시지를 지운다. 자리는 남기고 본문, 반응, 고정을 거두며 이 메시지를 인용한 답장도 고친다. */
+  const remove = async (target: ConversationMessage) => {
+    const message = current(target);
+    const previous = {
+      body: message.body,
+      deleted: message.deleted,
+      reactions: message.reactions,
+      myReaction: message.myReaction,
+      pinned: message.pinned,
+    };
+    const isLatest = beginRequest(message.id, "content");
+    // 진행 중인 반응·고정의 응답이나 되돌림이 지운 메시지에 다시 붙지 않게 한다.
+    beginRequest(message.id, "reaction");
+    beginRequest(message.id, "pin");
+    patchMessage(queryClient, conversationId, message.id, {
+      body: "",
+      deleted: true,
+      reactions: [],
+      myReaction: null,
+      pinned: false,
+    });
+    patchReplyPreviews(queryClient, conversationId, message.id, {
+      body: "",
+      deleted: true,
+    });
+    try {
+      await deleteMessages([message.id]);
+      void invalidateConversationList(queryClient);
+    } catch {
+      if (!isLatest()) return;
+      patchMessage(queryClient, conversationId, message.id, previous);
+      patchReplyPreviews(queryClient, conversationId, message.id, {
+        body: message.body.slice(0, REPLY_PREVIEW_LENGTH),
+        deleted: message.deleted,
+      });
+      toast.error("메시지를 삭제하지 못했습니다.");
     }
   };
 
@@ -212,5 +292,7 @@ export function useConversationMessages(conversation: Conversation) {
     react: (message: ConversationMessage, reaction: PostReaction) =>
       void react(message, reaction),
     togglePinned: (message: ConversationMessage) => void togglePinned(message),
+    edit,
+    remove: (message: ConversationMessage) => void remove(message),
   };
 }

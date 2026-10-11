@@ -5,6 +5,7 @@ import type * as ContextMenuModule from "@base-ui/react/context-menu";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RoomScreen } from "~/features/messaging/components/room-screen";
+import * as mutations from "~/features/messaging/data/mutations";
 import { loadConversation } from "~/features/messaging/data/queries";
 import type { Conversation } from "~/features/messaging/model/types";
 import { renderRoute, screen, within } from "../../../router";
@@ -295,6 +296,83 @@ describe("RoomScreen", () => {
     await user.click(await screen.findByRole("menuitem", { name: "고정" }));
     expect(within(ownMessage).getByText("고정됨")).toBeInTheDocument();
     expect(screen.getAllByText("고마워요 🙌")).toHaveLength(2);
+  });
+
+  it("내 메시지를 15분 안에 고치고, 확인을 거쳐 삭제한다", async () => {
+    // 목 메시지는 고정된 시각에 보냈으므로 그 직후로 시계를 맞춘다.
+    // 이 파일은 spy를 일괄 복원하지 않으므로 테스트 끝에서 직접 되돌린다.
+    const now = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(Date.parse("2026-08-28T15:32:00+09:00"));
+    const conversation = await loadConversation("student-council");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+    const ownMessage = () => document.getElementById("message-m6")!;
+
+    await user.click(
+      within(ownMessage()).getByRole("button", { name: "메시지 기타 작업" }),
+    );
+    await user.click(await screen.findByRole("menuitem", { name: "수정" }));
+    expect(screen.getByText("메시지 수정")).toBeInTheDocument();
+    const input = screen.getByRole("textbox", { name: "메시지 입력" });
+    expect(input).toHaveValue("고마워요 🙌");
+
+    await user.clear(input);
+    await user.type(input, "고쳤어요{Enter}");
+    expect(await within(ownMessage()).findByText("수정됨")).toBeInTheDocument();
+    expect(screen.queryByText("메시지 수정")).not.toBeInTheDocument();
+    expect(input).toHaveValue("");
+
+    await user.click(
+      within(ownMessage()).getByRole("button", { name: "메시지 기타 작업" }),
+    );
+    await user.click(await screen.findByRole("menuitem", { name: "삭제" }));
+    await user.click(await screen.findByRole("button", { name: "삭제" }));
+    expect(
+      await within(ownMessage()).findByText("삭제된 메시지입니다"),
+    ).toBeInTheDocument();
+    expect(
+      within(ownMessage()).queryByRole("button", { name: "메시지 기타 작업" }),
+    ).not.toBeInTheDocument();
+    now.mockRestore();
+  });
+
+  it("수정 저장에 실패하면 고치던 입력과 수정 모드를 되살리고, 조합 중 Esc로는 취소하지 않는다", async () => {
+    // 이 파일은 spy를 일괄 복원하지 않으므로 테스트 끝에서 직접 되돌린다.
+    const now = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(Date.parse("2026-08-28T15:32:00+09:00"));
+    vi.spyOn(mutations, "editMessage").mockRejectedValueOnce(
+      new Error("offline"),
+    );
+    const conversation = await loadConversation("student-council");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+    const ownMessage = () => document.getElementById("message-m6")!;
+
+    await user.click(
+      within(ownMessage()).getByRole("button", { name: "메시지 기타 작업" }),
+    );
+    await user.click(await screen.findByRole("menuitem", { name: "수정" }));
+    const input = screen.getByRole("textbox", { name: "메시지 입력" });
+    await user.clear(input);
+    await user.type(input, "실패할 수정{Enter}");
+
+    expect(await screen.findByText("메시지 수정")).toBeInTheDocument();
+    expect(input).toHaveValue("실패할 수정");
+    expect(within(ownMessage()).queryByText("수정됨")).not.toBeInTheDocument();
+
+    fireEvent.compositionStart(input);
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.getByText("메시지 수정")).toBeInTheDocument();
+    fireEvent.compositionEnd(input);
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByText("메시지 수정")).not.toBeInTheDocument();
+    now.mockRestore();
   });
 
   it("답장을 전송하고 인용 원문으로 이동하며 삭제된 원문을 표시한다", async () => {

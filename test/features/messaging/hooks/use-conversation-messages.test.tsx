@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as mutations from "~/features/messaging/data/mutations";
@@ -147,5 +148,129 @@ describe("useConversationMessages", () => {
 
     act(() => result.current.togglePinned(message("m5")));
     await waitFor(() => expect(ids()).toEqual(["m2", "m8"]));
+  });
+
+  it("고친 본문을 먼저 그리고 인용한 답장도 고치며, 실패하면 되돌린다", async () => {
+    const { result } = await renderMessages();
+    const message = (id: string) =>
+      result.current.messages.find((item) => item.id === id)!;
+
+    await act(async () => {
+      await result.current.edit(message("m7"), "고친 원문");
+    });
+    await waitFor(() => expect(message("m7").body).toBe("고친 원문"));
+    expect(message("m7").editedAt).toEqual(expect.any(String));
+    expect(message("m8").replyTo?.body).toBe("고친 원문");
+
+    vi.spyOn(mutations, "editMessage").mockRejectedValue(new Error("offline"));
+    let edited: boolean | undefined;
+    await act(async () => {
+      edited = await result.current.edit(message("m4"), "실패할 수정");
+    });
+    expect(edited).toBe(false);
+    await waitFor(() => expect(message("m4").editedAt).toBeUndefined());
+    expect(message("m4").body).not.toBe("실패할 수정");
+  });
+
+  it("지운 메시지는 자리를 남기고 반응과 고정을 거두며, 실패하면 되돌린다", async () => {
+    const { result } = await renderMessages();
+    const message = (id: string) =>
+      result.current.messages.find((item) => item.id === id)!;
+
+    act(() => result.current.remove(message("m5")));
+    await waitFor(() =>
+      expect(message("m5")).toMatchObject({
+        deleted: true,
+        body: "",
+        reactions: [],
+        pinned: false,
+      }),
+    );
+    expect(result.current.pinnedMessages).toEqual([]);
+
+    vi.spyOn(mutations, "deleteMessages").mockRejectedValue(
+      new Error("offline"),
+    );
+    vi.mocked(toast.error).mockClear();
+    const body = message("m3").body;
+    act(() => result.current.remove(message("m3")));
+    // 먼저 그린 삭제는 거절이 곧바로 와서 같은 tick에 되돌아간다. 최종 상태만 본다.
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(message("m3").deleted).toBeFalsy();
+    expect(message("m3").body).toBe(body);
+    expect(message("m3").reactions).toEqual([{ reaction: "like", count: 3 }]);
+  });
+
+  it("보낸 메시지는 서버가 확정할 때까지 전송 중으로 표시한다", async () => {
+    let resolveSend!: () => void;
+    vi.spyOn(mutations, "sendMessage").mockImplementationOnce(
+      (input, draft) =>
+        new Promise((resolve) => {
+          resolveSend = () => resolve({ ...draft, id: input.id });
+        }),
+    );
+    const { result } = await renderMessages();
+
+    let sending!: Promise<boolean>;
+    act(() => {
+      sending = result.current.send({ id: "new", body: "안녕" });
+    });
+    await waitFor(() =>
+      expect(result.current.messages.at(-1)).toMatchObject({
+        id: "new",
+        pending: true,
+      }),
+    );
+
+    await act(async () => {
+      resolveSend();
+      await sending;
+    });
+    await waitFor(() =>
+      expect(result.current.messages.at(-1)?.pending).toBe(false),
+    );
+  });
+
+  it("수정 도중 같은 메시지에 반응해도 실패한 수정은 되돌린다", async () => {
+    let rejectEdit!: () => void;
+    vi.spyOn(mutations, "editMessage").mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectEdit = () => reject(new Error("offline"));
+        }),
+    );
+    const { result } = await renderMessages();
+    const message = () =>
+      result.current.messages.find(({ id }) => id === "m4")!;
+    const body = message().body;
+
+    let editing!: Promise<boolean>;
+    act(() => {
+      editing = result.current.edit(message(), "고친 본문");
+    });
+    await waitFor(() => expect(message().body).toBe("고친 본문"));
+    act(() => result.current.react(message(), "love"));
+    await waitFor(() => expect(message().myReaction).toBe("love"));
+
+    await act(async () => {
+      rejectEdit();
+      await editing;
+    });
+    await waitFor(() => expect(message().body).toBe(body));
+    expect(message().myReaction).toBe("love");
+  });
+
+  it("답장 인용에는 고친 원문의 앞 200자만 담는다", async () => {
+    const { result } = await renderMessages();
+    const message = (id: string) =>
+      result.current.messages.find((item) => item.id === id)!;
+
+    await act(async () => {
+      await result.current.edit(message("m7"), "가".repeat(300));
+    });
+
+    await waitFor(() =>
+      expect(message("m8").replyTo?.body).toBe("가".repeat(200)),
+    );
   });
 });

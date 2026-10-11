@@ -5,6 +5,7 @@ import type {
   MessageCursor,
   MessagePage,
   MessageParticipant,
+  MessageReaction,
 } from "~/features/messaging/model/types";
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import type { Database } from "~/shared/supabase/database.types";
@@ -98,11 +99,20 @@ export async function listMessages(
   };
 }
 
-/** 대화 순서대로의 고정 메시지 전체. 고정은 아직 저장하지 않으므로(기술 설계 §3의 다음 단계) 비어 있다. */
-export function listPinnedMessages(
-  _conversationId: string,
+/** 대화 순서대로의 고정 메시지 전체. 고정 메시지는 불러온 페이지 밖에 있을 수 있다. */
+export async function listPinnedMessages(
+  conversationId: string,
 ): Promise<ConversationMessage[]> {
-  return Promise.resolve([]);
+  const { data, error } = await getSupabase().rpc("list_pinned_messages", {
+    p_conversation_id: conversationId,
+  });
+  if (error) throw error;
+  return (data ?? []).map(toMessage);
+}
+
+/** 서버의 반응 집계(`[{reaction, count}]`, 많은 순서). */
+export function toReactions(value: unknown): MessageReaction[] {
+  return Array.isArray(value) ? (value as MessageReaction[]) : [];
 }
 
 async function toSummaries(
@@ -153,6 +163,7 @@ function toMessage(row: MessageRow): ConversationMessage {
     senderId: toProfileId(row.sender_id),
     body: row.body,
     sentAt: row.sent_at,
+    editedAt: row.edited_at,
     deleted: row.deleted,
     replyTo: row.reply_to_id
       ? {
@@ -163,6 +174,9 @@ function toMessage(row: MessageRow): ConversationMessage {
         }
       : undefined,
     unreadMemberCount: row.unread_member_count ?? undefined,
+    reactions: toReactions(row.reactions),
+    myReaction: row.my_reaction,
+    pinned: row.pinned,
   };
 }
 

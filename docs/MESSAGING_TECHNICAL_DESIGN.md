@@ -1,8 +1,8 @@
 # 메시지 기술 설계
 
-> **상태**: 일부 구현. 대화·멤버·메시지 테이블, 본문 암호화, 대화 목록·메시지 페이지·전송·읽음 위치
-> RPC가 있다(`supabase/schemas/71-messaging.sql`). 반응, 고정, 편집, 삭제, Realtime, 메시지 Push, 대화
-> 생성과 멤버 관리, 첨부, 검색은 아직 없으며 아래는 그 도입 시 설계다.
+> **상태**: 일부 구현. 대화·멤버·메시지·반응·고정 테이블, 본문 암호화, 대화 목록·메시지 페이지·고정
+> 목록·전송·읽음 위치·반응·고정·편집·삭제 RPC가 있다(`supabase/schemas/71-messaging.sql`). Realtime,
+> 메시지 Push, 대화 생성과 멤버 관리, 첨부, 검색은 아직 없으며 아래는 그 도입 시 설계다.
 
 이 문서는 [메시지 기능 명세](functional-spec/messaging.md)를 구현하기 위한 데이터, 암호화, 동기화와 전달
 경계를 정의한다. 제품 동작은 기능 명세가 정본이다. 메시지 Push 전달은
@@ -30,8 +30,9 @@
   시스템 메시지 종류. 클라이언트가 만든 UUID를 기본 키로 받아 재전송을 멱등으로 만든다.
 - `private.message_attachments`: 메시지, 버킷, object path, MIME type, 크기, 이미지 치수, 파일 이름
   암호문과 키 버전. 상태는 다른 첨부와 같은 prepare-upload-finalize를 따른다(Storage 설계 §7).
-- `private.message_reactions`, `private.message_pins`: 메시지와 프로필 기준 한 행. 평문이므로 암호화하지
-  않지만, 메시지를 볼 수 있는 사람만 보도록 메시지와 같은 RPC 경계 안에 둔다.
+- `private.message_reactions`: 메시지와 프로필 기준 한 행. `private.message_pins`: 고정은 대화 전체의
+  상태이므로 메시지 기준 한 행에 고정한 사람과 시각을 둔다. 둘 다 평문이므로 암호화하지 않지만, 메시지를
+  볼 수 있는 사람만 보도록 메시지와 같은 RPC 경계 안에 둔다.
 
 볼 수 있는 메시지는 "읽는 사람의 참여 기간 중 하나에 `sent_at`이 들어가는 메시지"다. 새 멤버의 참여 이전
 메시지와 나간 멤버의 이후 메시지는 이 조건 하나로 함께 막는다. 첨부 object의 Storage RLS도 같은 조건을

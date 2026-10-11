@@ -29,6 +29,9 @@ function messageRow(id: string, sentAt: string) {
     reply_body: null,
     reply_deleted: false,
     unread_member_count: null,
+    reactions: [],
+    my_reaction: null,
+    pinned: false,
   };
 }
 
@@ -158,20 +161,26 @@ describe("messaging queries", () => {
       Promise.resolve(
         name === "list_conversations"
           ? { data: [conversationRow()], error: null }
-          : {
-              data: [
-                {
-                  ...messageRow("b", "2026-08-28T06:01:00+00:00"),
-                  sender_id: 1,
-                  reply_to_id: "a",
-                  reply_sender_id: 2,
-                  reply_body: "",
-                  reply_deleted: true,
-                  unread_member_count: 1,
-                },
-              ],
-              error: null,
-            },
+          : name === "list_pinned_messages"
+            ? { data: [], error: null }
+            : {
+                data: [
+                  {
+                    ...messageRow("b", "2026-08-28T06:01:00+00:00"),
+                    sender_id: 1,
+                    reply_to_id: "a",
+                    reply_sender_id: 2,
+                    reply_body: "",
+                    reply_deleted: true,
+                    unread_member_count: 1,
+                    reactions: [{ reaction: "love", count: 2 }],
+                    my_reaction: "love",
+                    pinned: true,
+                    edited_at: "2026-08-28T06:05:00+00:00",
+                  },
+                ],
+                error: null,
+              },
       ),
     );
 
@@ -188,6 +197,10 @@ describe("messaging queries", () => {
           id: "b",
           senderId: "1",
           unreadMemberCount: 1,
+          reactions: [{ reaction: "love", count: 2 }],
+          myReaction: "love",
+          pinned: true,
+          editedAt: "2026-08-28T06:05:00+00:00",
           replyTo: { id: "a", senderId: "2", body: "", deleted: true },
         },
       ],

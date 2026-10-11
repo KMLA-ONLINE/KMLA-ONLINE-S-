@@ -1,4 +1,4 @@
-import { applyMessageReaction } from "~/features/messaging/model/message-reactions";
+import { toReactions } from "~/features/messaging/data/queries";
 import type { ConversationMessage } from "~/features/messaging/model/types";
 import type { PostReaction } from "~/features/posts/model/types";
 import { getSupabase } from "~/shared/supabase/client";
@@ -41,19 +41,54 @@ export async function markConversationRead(
   if (error) throw error;
 }
 
-// 반응과 고정은 아직 저장하지 않는다(기술 설계 §3의 다음 단계). 서버가 확정해 돌려줄 정본 모양만
-// 흉내 내므로 새로고침하면 사라진다. RPC가 생기면 시그니처는 두고 본문만 바꾼다.
-
-export function setMessageReaction(
+/** 내 반응을 정하거나 지우고(`null`), 서버가 확정한 집계를 돌려준다. */
+export async function setMessageReaction(
   message: ConversationMessage,
   reaction: PostReaction | null,
 ): Promise<Pick<ConversationMessage, "reactions" | "myReaction">> {
-  return Promise.resolve(applyMessageReaction(message, reaction));
+  const { data, error } = await getSupabase().rpc("set_message_reaction", {
+    p_message_id: message.id,
+    p_reaction: reaction ?? undefined,
+  });
+  if (error) throw error;
+  const saved = data?.[0];
+  if (!saved) throw new Error("Reaction was not saved");
+
+  return {
+    reactions: toReactions(saved.reactions),
+    myReaction: saved.my_reaction,
+  };
 }
 
-export function setMessagePinned(
-  _messageId: string,
+export async function setMessagePinned(
+  messageId: string,
   pinned: boolean,
 ): Promise<Pick<ConversationMessage, "pinned">> {
-  return Promise.resolve({ pinned });
+  const { error } = await getSupabase().rpc("set_message_pinned", {
+    p_message_id: messageId,
+    p_pinned: pinned,
+  });
+  if (error) throw error;
+  return { pinned };
+}
+
+/** 보낸 지 15분 안의 내 메시지를 고친다. 서버가 정한 고친 시각을 돌려준다. */
+export async function editMessage(
+  messageId: string,
+  body: string,
+): Promise<Pick<ConversationMessage, "body" | "editedAt">> {
+  const { data, error } = await getSupabase().rpc("edit_message", {
+    p_message_id: messageId,
+    p_body: body,
+  });
+  if (error) throw error;
+  return { body, editedAt: data };
+}
+
+/** 내 메시지를 지운다. 하나라도 내 메시지가 아니면 아무것도 지우지 않는다. */
+export async function deleteMessages(messageIds: string[]): Promise<void> {
+  const { error } = await getSupabase().rpc("delete_messages", {
+    p_message_ids: messageIds,
+  });
+  if (error) throw error;
 }

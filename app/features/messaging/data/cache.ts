@@ -11,6 +11,7 @@ import type {
   ConversationMessage,
   MessageCursor,
   MessagePage,
+  MessageReplyPreview,
 } from "~/features/messaging/model/types";
 
 export const messagingKeys = {
@@ -165,6 +166,24 @@ export function patchMessage(
           (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
       );
     },
+  );
+}
+
+/** 이 메시지를 인용한 답장들의 인용을 고친다. 원문을 고치거나 지웠을 때 쓴다. */
+export function patchReplyPreviews(
+  queryClient: QueryClient,
+  conversationId: string,
+  messageId: string,
+  patch: Partial<MessageReplyPreview>,
+) {
+  const update = (message: ConversationMessage) =>
+    message.replyTo?.id === messageId
+      ? { ...message, replyTo: { ...message.replyTo, ...patch } }
+      : message;
+  updatePages(queryClient, conversationId, (messages) => messages.map(update));
+  queryClient.setQueryData<ConversationMessage[]>(
+    messagingKeys.pinned(conversationId),
+    (pinned) => pinned?.map(update),
   );
 }
 
