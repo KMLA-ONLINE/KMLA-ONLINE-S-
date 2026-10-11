@@ -50,7 +50,6 @@ export function MessageRow({
   isGroup,
   startsGroup = true,
   endsGroup = true,
-  selectedReaction,
   isPinned,
   highlighted = false,
   elementId,
@@ -75,7 +74,6 @@ export function MessageRow({
   isGroup: boolean;
   startsGroup?: boolean;
   endsGroup?: boolean;
-  selectedReaction?: PostReaction | null;
   isPinned: boolean;
   highlighted?: boolean;
   elementId?: string;
@@ -106,8 +104,7 @@ export function MessageRow({
   const bubbleRef = useRef<HTMLDivElement>(null);
   const replySwipeStart = useRef<{ x: number; y: number } | null>(null);
   const hasVisibleReactions =
-    showReactions &&
-    ((message.reactions?.length ?? 0) > 0 || selectedReaction != null);
+    showReactions && (message.reactions?.length ?? 0) > 0;
 
   function startReplySwipe(event: PointerEvent<HTMLElement>) {
     if (event.pointerType !== "touch" || !onReply || message.deleted) return;
@@ -453,7 +450,6 @@ export function MessageRow({
               highlighted={highlighted}
               startsGroup={startsGroup}
               endsGroup={endsGroup}
-              selectedReaction={selectedReaction}
               showReactions={showReactions}
               showTimestamp={showTimestamp || contextOpenedByTouch}
               replyTarget={replyTarget}
@@ -512,7 +508,7 @@ export function MessageRow({
               {onSelectReaction ? (
                 <div className="rounded-full bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10">
                   <QuickReactionBar
-                    current={selectedReaction}
+                    current={message.myReaction}
                     onSelect={(reaction) => {
                       onSelectReaction(reaction);
                       changeContextMenuOpen(false);

@@ -8,7 +8,6 @@ import {
 import { formatMessageTime } from "~/features/messaging/model/message-time";
 import type { ConversationMessage } from "~/features/messaging/model/types";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
-import type { PostReaction } from "~/features/posts/model/types";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 
@@ -18,7 +17,6 @@ export function MessageBubble({
   highlighted = false,
   startsGroup = true,
   endsGroup = true,
-  selectedReaction,
   showReactions = true,
   showTimestamp = false,
   replyTarget,
@@ -31,7 +29,6 @@ export function MessageBubble({
   highlighted?: boolean;
   startsGroup?: boolean;
   endsGroup?: boolean;
-  selectedReaction?: PostReaction | null;
   showReactions?: boolean;
   showTimestamp?: boolean;
   replyTarget?: ConversationMessage;
@@ -42,9 +39,6 @@ export function MessageBubble({
   const reactions = new Map(
     message.reactions?.map(({ reaction, count }) => [reaction, count]) ?? [],
   );
-  if (selectedReaction) {
-    reactions.set(selectedReaction, (reactions.get(selectedReaction) ?? 0) + 1);
-  }
   const messageBody = message.deleted ? "삭제된 메시지입니다" : message.body;
   const emojiGraphemes = getEmojiOnlyMessageGraphemes(messageBody);
   const isEmojiOnly = emojiGraphemes !== null;

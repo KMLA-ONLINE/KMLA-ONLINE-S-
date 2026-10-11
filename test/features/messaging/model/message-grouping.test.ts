@@ -67,6 +67,10 @@ describe("message grouping", () => {
 
     expect(hasVisibleMessageReaction(previous)).toBe(true);
     expect(canConnectMessages(previous, next, true)).toBe(false);
-    expect(hasVisibleMessageReaction(next, "love")).toBe(true);
+    expect(
+      hasVisibleMessageReaction(
+        message({ reactions: [{ reaction: "love", count: 1 }] }),
+      ),
+    ).toBe(true);
   });
 });

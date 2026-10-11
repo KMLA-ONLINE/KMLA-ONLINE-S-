@@ -22,11 +22,25 @@ export interface ConversationMessage {
   sentAt: string;
   replyToMessageId?: string;
   deleted?: boolean;
+  /** 내 반응을 포함한 반응 종류별 총수. */
   reactions?: MessageReaction[];
+  myReaction?: PostReaction | null;
   /** 내 메시지에서만 의미가 있다. 이 메시지를 아직 읽지 않은 다른 멤버 수. */
   unreadMemberCount?: number;
   pinned?: boolean;
   system?: boolean;
+}
+
+/** 메시지 목록의 페이지 경계. `(sentAt, id)` 순서로 이보다 앞선 메시지를 읽는다. */
+export interface MessageCursor {
+  sentAt: string;
+  id: string;
+}
+
+/** 메시지 한 페이지. 오래된 것부터 정렬하며, 더 앞선 메시지가 있으면 `olderCursor`를 준다. */
+export interface MessagePage {
+  messages: ConversationMessage[];
+  olderCursor: MessageCursor | null;
 }
 
 export interface MessagePreview {
@@ -47,8 +61,11 @@ export interface ConversationSummary {
   muted: boolean;
 }
 
-export interface Conversation extends ConversationSummary {
-  messages: ConversationMessage[];
+/**
+ * 대화방을 열 때 한 번에 받는 값. 대화 정보와 최신 메시지 한 페이지를 함께 받아 첫 화면에
+ * 요청이 하나만 들도록 한다. 더 앞선 메시지는 `listMessages`가 `olderCursor`부터 읽는다.
+ */
+export interface Conversation extends ConversationSummary, MessagePage {
   sharedMediaCount: number;
   sharedFileCount: number;
   sharedLinkCount: number;

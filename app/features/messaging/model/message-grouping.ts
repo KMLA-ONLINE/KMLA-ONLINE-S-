@@ -1,15 +1,10 @@
 import { isSameMessageMinute } from "~/features/messaging/model/message-time";
 import type { ConversationMessage } from "~/features/messaging/model/types";
-import type { PostReaction } from "~/features/posts/model/types";
 
 export function hasVisibleMessageReaction(
   message: ConversationMessage,
-  selectedReaction?: PostReaction | null,
 ): boolean {
-  return (
-    Boolean(selectedReaction) ||
-    Boolean(message.reactions?.some(({ count }) => count > 0))
-  );
+  return Boolean(message.reactions?.some(({ count }) => count > 0));
 }
 
 export function canConnectMessages(

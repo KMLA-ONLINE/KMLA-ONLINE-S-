@@ -1,7 +1,15 @@
 import type {
-  Conversation,
   ConversationMessage,
+  ConversationSummary,
 } from "~/features/messaging/model/types";
+
+/** 대화 테이블과 메시지 테이블 자리. 대화방 RPC가 이 둘을 한 번에 돌려주는 모양은 `data/queries.ts`가 만든다. */
+export interface MockConversation extends ConversationSummary {
+  messages: ConversationMessage[];
+  sharedMediaCount: number;
+  sharedFileCount: number;
+  sharedLinkCount: number;
+}
 
 const viewer = {
   id: "viewer",
@@ -130,7 +138,7 @@ const broadcastingMessages: ConversationMessage[] = [
   },
 ];
 
-export const mockConversations: Conversation[] = [
+export const mockConversations: MockConversation[] = [
   {
     id: "student-council",
     type: "group",

@@ -1,5 +1,5 @@
 /* eslint-disable testing-library/no-node-access */
-import { act, fireEvent } from "@testing-library/react";
+import { act, fireEvent, waitFor } from "@testing-library/react";
 import { type ComponentProps, useState } from "react";
 import type * as ContextMenuModule from "@base-ui/react/context-menu";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -496,6 +496,10 @@ describe("RoomScreen", () => {
     });
     fireEvent.touchEnd(heartReaction);
     fireEvent.click(heartReaction, { pointerType: "touch" });
+    // 반응은 Query cache를 거쳐 그려지고, cache 알림은 다음 tick에 묶여 나간다.
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
     expect(
       within(message).getByRole("img", { name: "하트" }),
     ).toBeInTheDocument();
@@ -948,13 +952,16 @@ describe("RoomScreen", () => {
     ).toBeEnabled();
     fireEvent.keyDown(input, { key: "Enter" });
 
-    expect(
-      screen.getAllByRole("article", { name: "내 메시지" }).at(-1),
-    ).toHaveTextContent(/첫 줄\s*둘째 줄/);
+    // 보낸 메시지는 Query cache를 거쳐 그려지고, cache 알림은 다음 tick에 묶여 나간다.
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("article", { name: "내 메시지" }).at(-1),
+      ).toHaveTextContent(/첫 줄\s*둘째 줄/),
+    );
     expect(messageThread.scrollTop).toBe(500);
     expect(screen.getByRole("button", { name: "좋아요 보내기" })).toBeEnabled();
     await user.click(likeButton);
-    const sentLike = screen.getByLabelText("좋아요");
+    const sentLike = await screen.findByLabelText("좋아요");
     expect(sentLike.querySelector("svg")).toHaveClass("size-[1em]");
     const sentLikeSurface = sentLike.parentElement!;
     expect(sentLikeSurface).toHaveClass("text-5xl");
@@ -962,11 +969,11 @@ describe("RoomScreen", () => {
 
     await user.type(input, "😀😃😄😁😆");
     await user.click(screen.getByRole("button", { name: "메시지 보내기" }));
-    expect(screen.getByText("😀😃😄😁😆")).toHaveClass("text-5xl");
+    expect(await screen.findByText("😀😃😄😁😆")).toHaveClass("text-5xl");
 
     await user.type(input, "😀😃😄😁😆😅");
     await user.click(screen.getByRole("button", { name: "메시지 보내기" }));
-    expect(screen.getByText("😀😃😄😁😆😅")).toHaveClass(
+    expect(await screen.findByText("😀😃😄😁😆😅")).toHaveClass(
       "rounded-2xl",
       "bg-primary",
     );
@@ -1095,9 +1102,11 @@ describe("RoomScreen", () => {
     expect(screen.getAllByRole("article")).toHaveLength(3);
 
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(
-      screen.getAllByRole("article", { name: "내 메시지" }).at(-1),
-    ).toHaveTextContent("안녕하세");
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("article", { name: "내 메시지" }).at(-1),
+      ).toHaveTextContent("안녕하세"),
+    );
   });
 
   it("넓은 화면의 대화 상세 패널을 접고 다시 펼친다", async () => {

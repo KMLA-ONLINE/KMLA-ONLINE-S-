@@ -20,6 +20,7 @@ import {
   type RefObject,
   type SetStateAction,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -33,6 +34,7 @@ import {
   MessageRow,
 } from "~/features/messaging/components/message-row";
 import { PinnedMessagesDialog } from "~/features/messaging/components/pinned-messages-dialog";
+import { useConversationMessages } from "~/features/messaging/hooks/use-conversation-messages";
 import {
   canConnectMessages,
   hasVisibleMessageReaction,
@@ -71,6 +73,8 @@ export interface DesktopDetailsContext {
 }
 
 const BOTTOM_SCROLL_BUTTON_THRESHOLD = 200;
+/** 맨 위에서 이만큼 남았을 때 앞선 메시지를 미리 읽는다. */
+const OLDER_MESSAGES_THRESHOLD = 400;
 
 export function RoomScreen({
   conversation,
@@ -86,10 +90,15 @@ export function RoomScreen({
   const [highlightedMessageId, setHighlightedMessageId] = useState<
     string | null
   >(null);
-  const [messages, setMessages] = useState(conversation.messages);
-  const [selectedReactions, setSelectedReactions] = useState<
-    Record<string, PostReaction | null>
-  >({});
+  const {
+    messages,
+    hasOlderMessages,
+    loadingOlderMessages,
+    loadOlderMessages,
+    send,
+    react,
+    togglePinned,
+  } = useConversationMessages(conversation);
   const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
   const messageThreadRef = useRef<HTMLDivElement>(null);
   const scrollToBottomAfterSend = useRef(false);
@@ -126,21 +135,6 @@ export function RoomScreen({
     scrollToBottomAfterSend.current = false;
   }, [messages]);
 
-  function selectReaction(messageId: string, reaction: PostReaction) {
-    setSelectedReactions((current) => ({
-      ...current,
-      [messageId]: current[messageId] === reaction ? null : reaction,
-    }));
-  }
-
-  function togglePinned(message: ConversationMessage) {
-    setMessages((current) =>
-      current.map((item) =>
-        item.id === message.id ? { ...item, pinned: !item.pinned } : item,
-      ),
-    );
-  }
-
   function viewMessage(messageId: string) {
     setPinnedDialogOpen(false);
     setCompactDetailsOpen(false);
@@ -154,18 +148,9 @@ export function RoomScreen({
 
   function sendMessage(body: string) {
     scrollToBottomAfterSend.current = true;
-    setMessages((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        senderId: conversation.viewerId,
-        body,
-        sentAt: new Date().toISOString(),
-        replyToMessageId: replyTargetId ?? undefined,
-        unreadMemberCount: conversation.participants.length - 1,
-      },
-    ]);
+    const sending = send(body, replyTargetId ?? undefined);
     setReplyTargetId(null);
+    return sending;
   }
 
   return (
@@ -250,11 +235,13 @@ export function RoomScreen({
         <MessageThread
           conversation={conversation}
           messages={messages}
-          selectedReactions={selectedReactions}
           highlightedMessageId={highlightedMessageId}
           messageThreadRef={messageThreadRef}
           desktopDetailsOpen={desktopDetailsOpen}
-          onSelectReaction={selectReaction}
+          hasOlderMessages={hasOlderMessages}
+          loadingOlderMessages={loadingOlderMessages}
+          onLoadOlderMessages={loadOlderMessages}
+          onSelectReaction={react}
           onReply={(message) => {
             if (!message.deleted) setReplyTargetId(message.id);
           }}
@@ -299,10 +286,12 @@ export function RoomScreen({
 function MessageThread({
   conversation,
   messages,
-  selectedReactions,
   highlightedMessageId,
   messageThreadRef,
   desktopDetailsOpen,
+  hasOlderMessages,
+  loadingOlderMessages,
+  onLoadOlderMessages,
   onSelectReaction,
   onReply,
   onTogglePinned,
@@ -310,11 +299,16 @@ function MessageThread({
 }: {
   conversation: Conversation;
   messages: ConversationMessage[];
-  selectedReactions: Record<string, PostReaction | null>;
   highlightedMessageId: string | null;
   messageThreadRef: RefObject<HTMLDivElement | null>;
   desktopDetailsOpen: boolean;
-  onSelectReaction: (messageId: string, reaction: PostReaction) => void;
+  hasOlderMessages: boolean;
+  loadingOlderMessages: boolean;
+  onLoadOlderMessages: () => void;
+  onSelectReaction: (
+    message: ConversationMessage,
+    reaction: PostReaction,
+  ) => void;
   onReply: (message: ConversationMessage) => void;
   onTogglePinned: (message: ConversationMessage) => void;
   onViewMessage: (messageId: string) => void;
@@ -330,6 +324,32 @@ function MessageThread({
     ]),
   );
   const messageById = new Map(messages.map((message) => [message.id, message]));
+  // 앞선 페이지를 위에 붙이면 scrollHeight만 늘고 scrollTop은 그대로라 보던 메시지가 아래로
+  // 밀린다. 붙이기 전 바닥에서의 거리를 기억했다가 붙인 뒤 같은 거리로 되돌린다.
+  const distanceFromBottomBeforeOlder = useRef<number | null>(null);
+  const oldestMessageId = messages[0]?.id;
+
+  useLayoutEffect(() => {
+    const messageThread = messageThreadRef.current;
+    const distance = distanceFromBottomBeforeOlder.current;
+    if (!messageThread || distance === null) return;
+    messageThread.scrollTop = messageThread.scrollHeight - distance;
+    distanceFromBottomBeforeOlder.current = null;
+  }, [oldestMessageId, messageThreadRef]);
+
+  function maybeLoadOlderMessages() {
+    const messageThread = messageThreadRef.current;
+    if (
+      !messageThread ||
+      !hasOlderMessages ||
+      loadingOlderMessages ||
+      messageThread.scrollTop > OLDER_MESSAGES_THRESHOLD
+    )
+      return;
+    distanceFromBottomBeforeOlder.current =
+      messageThread.scrollHeight - messageThread.scrollTop;
+    onLoadOlderMessages();
+  }
 
   function updateScrollToBottomVisibility() {
     const messageThread = messageThreadRef.current;
@@ -373,7 +393,10 @@ function MessageThread({
       <div
         ref={messageThreadRef}
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 md:px-5"
-        onScroll={updateScrollToBottomVisibility}
+        onScroll={() => {
+          updateScrollToBottomVisibility();
+          maybeLoadOlderMessages();
+        }}
       >
         <div
           className={cn(
@@ -387,17 +410,12 @@ function MessageThread({
             const startsGroup = !canConnectMessages(
               previous,
               message,
-              previous
-                ? hasVisibleMessageReaction(
-                    previous,
-                    selectedReactions[previous.id],
-                  )
-                : false,
+              previous ? hasVisibleMessageReaction(previous) : false,
             );
             const endsGroup = !canConnectMessages(
               message,
               next,
-              hasVisibleMessageReaction(message, selectedReactions[message.id]),
+              hasVisibleMessageReaction(message),
             );
             const sender = message.senderId
               ? participantById.get(message.senderId)
@@ -431,7 +449,6 @@ function MessageThread({
                     unreadParticipantCount={message.unreadMemberCount ?? 0}
                     startsGroup={startsGroup}
                     endsGroup={endsGroup}
-                    selectedReaction={selectedReactions[message.id]}
                     isPinned={message.pinned ?? false}
                     highlighted={highlightedMessageId === message.id}
                     elementId={`message-${message.id}`}
@@ -448,7 +465,7 @@ function MessageThread({
                       message.deleted ? undefined : () => onReply(message)
                     }
                     onSelectReaction={(reaction) =>
-                      onSelectReaction(message.id, reaction)
+                      onSelectReaction(message, reaction)
                     }
                     contextActions={[
                       ...(message.deleted
@@ -480,10 +497,9 @@ function MessageThread({
                       <MessageActions
                         isOwn={message.senderId === conversation.viewerId}
                         message={message}
-                        selectedReaction={selectedReactions[message.id]}
                         isPinned={message.pinned ?? false}
                         onSelectReaction={(reaction) =>
-                          onSelectReaction(message.id, reaction)
+                          onSelectReaction(message, reaction)
                         }
                         onReply={() => onReply(message)}
                         onTogglePinned={() => onTogglePinned(message)}
@@ -519,7 +535,6 @@ function MessageThread({
 function MessageActions({
   isOwn,
   message,
-  selectedReaction,
   isPinned,
   onSelectReaction,
   onReply,
@@ -527,7 +542,6 @@ function MessageActions({
 }: {
   isOwn: boolean;
   message: ConversationMessage;
-  selectedReaction?: PostReaction | null;
   isPinned: boolean;
   onSelectReaction: (reaction: PostReaction) => void;
   onReply: () => void;
@@ -543,7 +557,7 @@ function MessageActions({
           className="left-1/2 mb-2 -translate-x-1/2"
         >
           <QuickReactionBar
-            current={selectedReaction}
+            current={message.myReaction}
             onSelect={(reaction) => {
               setReactionOpen(false);
               onSelectReaction(reaction);
@@ -641,7 +655,8 @@ function ComposerShell({
   replyTarget?: ConversationMessage;
   replyAuthor: string | null;
   onCancelReply: () => void;
-  onSend: (body: string) => void;
+  /** 실패하면 false로 끝난다. 작성창은 비워 둔 입력을 되살린다. */
+  onSend: (body: string) => Promise<boolean>;
   desktopDetailsOpen: boolean;
 }) {
   const [draft, setDraft] = useState("");
@@ -656,7 +671,11 @@ function ComposerShell({
 
   function sendDraft(): boolean {
     if (!hasDraft || overLimit) return false;
-    onSend(normalizedDraft);
+    const body = normalizedDraft;
+    void onSend(body).then((sent) => {
+      // 그새 새로 쓰기 시작했으면 덮어쓰지 않는다.
+      if (!sent) setDraft((current) => (current === "" ? body : current));
+    });
     setDraft("");
     setAttachmentActionsExpanded(false);
     return true;
@@ -788,7 +807,7 @@ function ComposerShell({
               sendDraft();
               return;
             }
-            onSend("👍");
+            void onSend("👍");
             // 공백만 있던 입력은 좋아요와 함께 비운다.
             setDraft("");
           }}
