@@ -25,9 +25,11 @@ import {
   applyAttachmentUrls,
   attachmentPaths,
   readAttachmentsJson,
+  readCommentImagesJson,
 } from "~/features/posts/model/attachment-json";
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import { getSupabase } from "~/shared/supabase/client";
+import type { Json } from "~/shared/supabase/database.types";
 
 const GROUP_POST_PAGE_SIZE = 12;
 const PROFILE_POST_PAGE_SIZE = 12;
@@ -44,18 +46,34 @@ export async function getMyGroupAnonymousActivityRestriction(
   return data?.[0] ?? null;
 }
 
-/** 댓글 한 묶음에 이미지와 작성자 아바타를 채운다. 두 버킷은 병렬로 서명하고 아바타는 `author_avatar_url`에만 채운다. */
-export async function hydratePostComments(
-  comments: Omit<PostComment, "images" | "author_avatar_url">[],
-): Promise<PostComment[]> {
-  if (comments.length === 0) return [];
+type UnhydratedComment = Omit<PostComment, "images" | "author_avatar_url"> & {
+  /** 목록 RPC가 함께 내려준 이미지. 없으면(작성·수정 응답) `list_comment_images`로 따로 읽는다. */
+  images?: Json;
+};
+
+async function readCommentImages(
+  comments: UnhydratedComment[],
+): Promise<CommentImage[]> {
+  if (comments.every((comment) => comment.images !== undefined)) {
+    return comments.flatMap((comment) =>
+      readCommentImagesJson(comment.images, comment),
+    );
+  }
   const { data, error } = await getSupabase().rpc("list_comment_images", {
     p_comment_ids: comments.map((comment) => comment.comment_id),
   });
   if (error) throw error;
-  const rows = data ?? [];
+  return (data ?? []).map((image) => ({ ...image, signedUrl: null }));
+}
+
+/** 댓글 한 묶음에 이미지와 작성자 아바타를 채운다. 두 버킷은 병렬로 서명하고 아바타는 `author_avatar_url`에만 채운다. */
+export async function hydratePostComments(
+  comments: UnhydratedComment[],
+): Promise<PostComment[]> {
+  if (comments.length === 0) return [];
+  const images = await readCommentImages(comments);
   const [urls, avatarUrls] = await Promise.all([
-    createPostAttachmentUrls(rows.map((image) => image.object_path)),
+    createPostAttachmentUrls(images.map((image) => image.object_path)),
     createProfileMediaUrls(
       comments.map((comment) => comment.author_avatar_path),
     ),
@@ -65,9 +83,9 @@ export async function hydratePostComments(
     author_avatar_url: comment.author_avatar_path
       ? (avatarUrls.get(comment.author_avatar_path) ?? null)
       : null,
-    images: rows
+    images: images
       .filter((image) => image.comment_id === comment.comment_id)
-      .map((image): CommentImage => ({
+      .map((image) => ({
         ...image,
         signedUrl: urls.get(image.object_path) ?? null,
       })),

@@ -234,6 +234,7 @@ export type PostComment = WithReactions<
     PostCommentRow,
     | "anonymous_author_restriction_expires_at"
     | "author_avatar_path"
+    | "images"
     | "mentions"
   >
 > & {

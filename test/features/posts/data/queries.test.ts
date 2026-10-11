@@ -94,34 +94,35 @@ describe("post queries", () => {
     expect(createPostAttachmentUrls).not.toHaveBeenCalled();
   });
 
-  it("hydrates a comment page with one batched image lookup and signing call", async () => {
-    const rpc = vi
-      .fn()
-      .mockResolvedValueOnce({
-        data: [
-          {
-            comment_id: "comment-1",
-            post_id: "post-id",
-            created_at: "2026-08-24T00:00:00Z",
-          },
-          {
-            comment_id: "comment-2",
-            post_id: "post-id",
-            created_at: "2026-08-24T00:01:00Z",
-          },
-        ],
-        error: null,
-      })
-      .mockResolvedValueOnce({
-        data: [
-          {
-            image_id: "image-2",
-            comment_id: "comment-2",
-            object_path: "comments/post-id/image-2",
-          },
-        ],
-        error: null,
-      });
+  it("reads comment images from the list RPC and signs them in one call", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          comment_id: "comment-1",
+          post_id: "post-id",
+          created_at: "2026-08-24T00:00:00Z",
+          images: [],
+        },
+        {
+          comment_id: "comment-2",
+          post_id: "post-id",
+          created_at: "2026-08-24T00:01:00Z",
+          images: [
+            {
+              image_id: "image-2",
+              storage_bucket: "post-attachments",
+              object_path: "comments/post-id/image-2",
+              mime_type: "image/webp",
+              size_bytes: 100,
+              width: 100,
+              height: 100,
+              ready_at: "2026-08-24T00:01:00Z",
+            },
+          ],
+        },
+      ],
+      error: null,
+    });
     createPostAttachmentUrls.mockResolvedValue(
       new Map([["comments/post-id/image-2", "https://signed/image-2"]]),
     );
@@ -129,13 +130,14 @@ describe("post queries", () => {
 
     const page = await listPostComments("post-id");
 
-    expect(rpc).toHaveBeenNthCalledWith(2, "list_comment_images", {
-      p_comment_ids: ["comment-1", "comment-2"],
-    });
+    // 이미지를 따로 묻지 않는다 — 그 왕복이 상세를 열 때마다 붙던 것이다.
+    expect(rpc).toHaveBeenCalledOnce();
     expect(createPostAttachmentUrls).toHaveBeenCalledOnce();
     expect(page.comments[0].images).toEqual([]);
     expect(page.comments[1].images[0]).toMatchObject({
       image_id: "image-2",
+      comment_id: "comment-2",
+      post_id: "post-id",
       signedUrl: "https://signed/image-2",
     });
   });

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(38);
+select plan(40);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -166,6 +166,13 @@ select is(
   1::bigint,
   'the batch RPC returns a committed ready image'
 );
+select is(
+  (select images -> 0 ->> 'image_id'
+    from public.list_post_comments('90000000-0000-0000-0000-000000000003')
+    where comment_id = (select id from comment_ids where name = 'image_only')),
+  (select id::text from image_ids where name = 'first'),
+  'the comment list carries the committed image without a second lookup'
+);
 select set_config('storage.operation', 'storage.object.sign_many', true);
 select is(
   (select count(*) from storage.objects
@@ -212,6 +219,14 @@ select is(
     array[(select id from comment_ids where name = 'image_only')])),
   (select id from image_ids where name = 'replacement'),
   'the replacement is the only readable comment image'
+);
+select is(
+  (select array_agg(image ->> 'image_id')
+    from public.list_post_comments('90000000-0000-0000-0000-000000000003') as entry,
+      jsonb_array_elements(entry.images) as image
+    where entry.comment_id = (select id from comment_ids where name = 'image_only')),
+  array[(select id::text from image_ids where name = 'replacement')],
+  'the comment list drops the tombstoned image'
 );
 select lives_ok(
   $$select * from public.update_post_comment(

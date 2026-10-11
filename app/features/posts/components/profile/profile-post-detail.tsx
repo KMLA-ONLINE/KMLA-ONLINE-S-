@@ -31,7 +31,8 @@ export function ProfilePostDetail({
 }: {
   post: ProfilePost;
   viewer: CommentViewer;
-  comments: PostCommentPage;
+  /** null이면 댓글을 불러오는 중이다. */
+  comments: PostCommentPage | null;
   onClose?: () => void;
   action?: string;
 }) {

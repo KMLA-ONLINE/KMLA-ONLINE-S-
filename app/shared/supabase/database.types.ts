@@ -2283,6 +2283,7 @@ export type Database = {
           depth: number
           edited_at: string
           is_author: boolean
+          images: Json
           is_deleted: boolean
           is_effective_feed_bump: boolean
           mentions: Json
@@ -2320,6 +2321,7 @@ export type Database = {
           depth: number
           edited_at: string
           is_author: boolean
+          images: Json
           is_deleted: boolean
           is_effective_feed_bump: boolean
           mentions: Json

@@ -1,11 +1,15 @@
-import { loadGroupDetail } from "~/features/groups";
+import {
+  GROUP_STALE_TIME,
+  groupKeys,
+  loadGroupDetail,
+} from "~/features/groups";
 import type { FeedPostDetailResult } from "~/features/feed";
 import {
   getGroupPost,
   getProfilePost,
   listPostComments,
-  resolveIdentityOptions,
 } from "~/features/posts";
+import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/post-data";
 
 export async function clientLoader({
@@ -21,7 +25,12 @@ export async function clientLoader({
       const [post, comments, group] = await Promise.all([
         getGroupPost(params.postId),
         listPostComments(params.postId),
-        loadGroupDetail(source),
+        // 그룹 화면과 같은 캐시를 쓴다. 상세 창은 이름과 작성 신원 정책만 읽는다.
+        getQueryClient().fetchQuery({
+          queryKey: groupKeys.detail(source),
+          queryFn: () => loadGroupDetail(source),
+          staleTime: GROUP_STALE_TIME,
+        }),
       ]);
       if (
         !post ||
@@ -39,10 +48,11 @@ export async function clientLoader({
           comments,
           slug: group.slug,
           groupName: group.name,
-          identities: resolveIdentityOptions(
-            group.identity_policy,
-            group.member_role,
-          ),
+          group: {
+            groupId: group.group_id,
+            identityPolicy: group.identity_policy,
+            memberRole: group.member_role,
+          },
         },
         error: null,
       };
