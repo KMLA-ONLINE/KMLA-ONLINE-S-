@@ -294,7 +294,7 @@ export function FeedScreen() {
               </p>
             ) : (
               <>
-                <Spinner />
+                <Spinner aria-hidden />
                 <p className="text-sm text-muted-foreground">
                   게시물을 불러오는 중입니다.
                 </p>

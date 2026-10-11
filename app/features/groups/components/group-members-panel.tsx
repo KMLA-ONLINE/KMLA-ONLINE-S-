@@ -151,7 +151,11 @@ export function GroupMembersPanel({
                 aria-label="멤버 검색"
                 aria-busy={searching || undefined}
               >
-                {searching ? <Spinner /> : <SearchIcon aria-hidden />}
+                {searching ? (
+                  <Spinner aria-hidden />
+                ) : (
+                  <SearchIcon aria-hidden />
+                )}
               </Button>
             </div>
             {searchError ? (
