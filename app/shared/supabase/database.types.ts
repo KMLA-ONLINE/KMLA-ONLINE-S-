@@ -36,8 +36,6 @@ export type Database = {
     Tables: {
       comment_images: {
         Row: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
           comment_id: string | null
           created_at: string
           deleted_at: string | null
@@ -54,8 +52,6 @@ export type Database = {
           width: number
         }
         Insert: {
-          cleanup_lease_expires_at?: string | null
-          cleanup_lease_id?: string | null
           comment_id?: string | null
           created_at?: string
           deleted_at?: string | null
@@ -72,8 +68,6 @@ export type Database = {
           width: number
         }
         Update: {
-          cleanup_lease_expires_at?: string | null
-          cleanup_lease_id?: string | null
           comment_id?: string | null
           created_at?: string
           deleted_at?: string | null
@@ -102,6 +96,39 @@ export type Database = {
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comment_mentions: {
+        Row: {
+          comment_id: string
+          ordinal: number
+          profile_id: number
+        }
+        Insert: {
+          comment_id: string
+          ordinal: number
+          profile_id: number
+        }
+        Update: {
+          comment_id?: string
+          ordinal?: number
+          profile_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_mentions_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "post_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_mentions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -256,8 +283,6 @@ export type Database = {
       }
       group_media_objects: {
         Row: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
           created_at: string
           deleted_at: string | null
           group_id: string
@@ -271,8 +296,6 @@ export type Database = {
           width: number
         }
         Insert: {
-          cleanup_lease_expires_at?: string | null
-          cleanup_lease_id?: string | null
           created_at?: string
           deleted_at?: string | null
           group_id: string
@@ -286,8 +309,6 @@ export type Database = {
           width: number
         }
         Update: {
-          cleanup_lease_expires_at?: string | null
-          cleanup_lease_id?: string | null
           created_at?: string
           deleted_at?: string | null
           group_id?: string
@@ -319,6 +340,7 @@ export type Database = {
           new_post_push_enabled: boolean
           notification_level: Database["public"]["Enums"]["group_notification_level"]
           pinned_at: string | null
+          posts_visited_at: string
           profile_id: number
           role: Database["public"]["Enums"]["group_member_role"]
         }
@@ -330,6 +352,7 @@ export type Database = {
           new_post_push_enabled?: boolean
           notification_level?: Database["public"]["Enums"]["group_notification_level"]
           pinned_at?: string | null
+          posts_visited_at?: string
           profile_id: number
           role?: Database["public"]["Enums"]["group_member_role"]
         }
@@ -341,6 +364,7 @@ export type Database = {
           new_post_push_enabled?: boolean
           notification_level?: Database["public"]["Enums"]["group_notification_level"]
           pinned_at?: string | null
+          posts_visited_at?: string
           profile_id?: number
           role?: Database["public"]["Enums"]["group_member_role"]
         }
@@ -366,8 +390,8 @@ export type Database = {
           cover_path: string | null
           created_at: string
           created_by: number
-          deleted_at: string | null
           description: string
+          hide_staff_roles: boolean
           icon_path: string | null
           id: string
           identity_policy: Database["public"]["Enums"]["group_identity_policy"]
@@ -385,8 +409,8 @@ export type Database = {
           cover_path?: string | null
           created_at?: string
           created_by: number
-          deleted_at?: string | null
           description?: string
+          hide_staff_roles?: boolean
           icon_path?: string | null
           id?: string
           identity_policy: Database["public"]["Enums"]["group_identity_policy"]
@@ -404,8 +428,8 @@ export type Database = {
           cover_path?: string | null
           created_at?: string
           created_by?: number
-          deleted_at?: string | null
           description?: string
+          hide_staff_roles?: boolean
           icon_path?: string | null
           id?: string
           identity_policy?: Database["public"]["Enums"]["group_identity_policy"]
@@ -477,6 +501,7 @@ export type Database = {
           category: Database["public"]["Enums"]["notification_category"]
           comment_id: string | null
           created_at: string
+          detail: string | null
           group_id: string | null
           id: string
           importance: Database["public"]["Enums"]["notification_importance"]
@@ -486,6 +511,7 @@ export type Database = {
           read_at: string | null
           recipient_profile_id: number
           reservation_id: number | null
+          restriction_expires_at: string | null
           target_profile_id: number | null
           title: string
         }
@@ -498,6 +524,7 @@ export type Database = {
           category: Database["public"]["Enums"]["notification_category"]
           comment_id?: string | null
           created_at?: string
+          detail?: string | null
           group_id?: string | null
           id?: string
           importance: Database["public"]["Enums"]["notification_importance"]
@@ -507,6 +534,7 @@ export type Database = {
           read_at?: string | null
           recipient_profile_id: number
           reservation_id?: number | null
+          restriction_expires_at?: string | null
           target_profile_id?: number | null
           title: string
         }
@@ -519,6 +547,7 @@ export type Database = {
           category?: Database["public"]["Enums"]["notification_category"]
           comment_id?: string | null
           created_at?: string
+          detail?: string | null
           group_id?: string | null
           id?: string
           importance?: Database["public"]["Enums"]["notification_importance"]
@@ -528,6 +557,7 @@ export type Database = {
           read_at?: string | null
           recipient_profile_id?: number
           reservation_id?: number | null
+          restriction_expires_at?: string | null
           target_profile_id?: number | null
           title?: string
         }
@@ -606,8 +636,6 @@ export type Database = {
       }
       post_attachments: {
         Row: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
           created_at: string
           deleted_at: string | null
           height: number | null
@@ -621,11 +649,10 @@ export type Database = {
           size_bytes: number
           status: Database["public"]["Enums"]["post_attachment_status"]
           storage_bucket: string
+          thumbnail_path: string | null
           width: number | null
         }
         Insert: {
-          cleanup_lease_expires_at?: string | null
-          cleanup_lease_id?: string | null
           created_at?: string
           deleted_at?: string | null
           height?: number | null
@@ -639,11 +666,10 @@ export type Database = {
           size_bytes: number
           status?: Database["public"]["Enums"]["post_attachment_status"]
           storage_bucket?: string
+          thumbnail_path?: string | null
           width?: number | null
         }
         Update: {
-          cleanup_lease_expires_at?: string | null
-          cleanup_lease_id?: string | null
           created_at?: string
           deleted_at?: string | null
           height?: number | null
@@ -657,6 +683,7 @@ export type Database = {
           size_bytes?: number
           status?: Database["public"]["Enums"]["post_attachment_status"]
           storage_bucket?: string
+          thumbnail_path?: string | null
           width?: number | null
         }
         Relationships: [
@@ -736,6 +763,39 @@ export type Database = {
           },
         ]
       }
+      post_mentions: {
+        Row: {
+          ordinal: number
+          post_id: string
+          profile_id: number
+        }
+        Insert: {
+          ordinal: number
+          post_id: string
+          profile_id: number
+        }
+        Update: {
+          ordinal?: number
+          post_id?: string
+          profile_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_mentions_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_mentions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_reactions: {
         Row: {
           created_at: string
@@ -784,7 +844,6 @@ export type Database = {
           category_id: string | null
           comment_count: number
           created_at: string
-          deleted_at: string | null
           display_author_profile_id: number | null
           edited_at: string | null
           group_id: string | null
@@ -808,7 +867,6 @@ export type Database = {
           category_id?: string | null
           comment_count?: number
           created_at?: string
-          deleted_at?: string | null
           display_author_profile_id?: number | null
           edited_at?: string | null
           group_id?: string | null
@@ -832,7 +890,6 @@ export type Database = {
           category_id?: string | null
           comment_count?: number
           created_at?: string
-          deleted_at?: string | null
           display_author_profile_id?: number | null
           edited_at?: string | null
           group_id?: string | null
@@ -894,6 +951,113 @@ export type Database = {
         }
         Relationships: []
       }
+      profile_media_activity_objects: {
+        Row: {
+          auth_user_id: string
+          created_at: string
+          height: number
+          id: string
+          object_path: string
+          profile_id: number
+          ready_at: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["profile_media_status"]
+          width: number
+        }
+        Insert: {
+          auth_user_id: string
+          created_at?: string
+          height: number
+          id?: string
+          object_path: string
+          profile_id: number
+          ready_at?: string | null
+          size_bytes: number
+          status?: Database["public"]["Enums"]["profile_media_status"]
+          width: number
+        }
+        Update: {
+          auth_user_id?: string
+          created_at?: string
+          height?: number
+          id?: string
+          object_path?: string
+          profile_id?: number
+          ready_at?: string | null
+          size_bytes?: number
+          status?: Database["public"]["Enums"]["profile_media_status"]
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_media_activity_objects_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profile_media_objects: {
+        Row: {
+          activity_media_id: string | null
+          auth_user_id: string
+          created_at: string
+          height: number
+          id: string
+          object_path: string
+          profile_id: number
+          ready_at: string | null
+          size_bytes: number
+          slot: Database["public"]["Enums"]["profile_media_slot"]
+          status: Database["public"]["Enums"]["profile_media_status"]
+          width: number
+        }
+        Insert: {
+          activity_media_id?: string | null
+          auth_user_id: string
+          created_at?: string
+          height: number
+          id?: string
+          object_path: string
+          profile_id: number
+          ready_at?: string | null
+          size_bytes: number
+          slot: Database["public"]["Enums"]["profile_media_slot"]
+          status?: Database["public"]["Enums"]["profile_media_status"]
+          width: number
+        }
+        Update: {
+          activity_media_id?: string | null
+          auth_user_id?: string
+          created_at?: string
+          height?: number
+          id?: string
+          object_path?: string
+          profile_id?: number
+          ready_at?: string | null
+          size_bytes?: number
+          slot?: Database["public"]["Enums"]["profile_media_slot"]
+          status?: Database["public"]["Enums"]["profile_media_status"]
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_media_objects_activity_media_id_fkey"
+            columns: ["activity_media_id"]
+            isOneToOne: false
+            referencedRelation: "profile_media_activity_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_media_objects_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profile_permissions: {
         Row: {
           created_at: string
@@ -954,6 +1118,7 @@ export type Database = {
           phone_number: string | null
           pub_id: string
           role: Database["public"]["Enums"]["app_role"]
+          search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
           status_updated_by: number | null
@@ -988,6 +1153,7 @@ export type Database = {
           phone_number?: string | null
           pub_id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          search_name?: string | null
           status?: Database["public"]["Enums"]["profile_status"]
           status_updated_at?: string
           status_updated_by?: number | null
@@ -1022,6 +1188,7 @@ export type Database = {
           phone_number?: string | null
           pub_id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          search_name?: string | null
           status?: Database["public"]["Enums"]["profile_status"]
           status_updated_at?: string
           status_updated_by?: number | null
@@ -1040,28 +1207,58 @@ export type Database = {
           },
         ]
       }
-      student_absences: {
+      stories: {
         Row: {
+          background: string | null
+          content: string
           created_at: string
+          expires_at: string | null
           id: number
+          image_height: number | null
+          image_path: string | null
+          image_size_bytes: number | null
+          image_width: number | null
+          link_url: string | null
           profile_id: number
-          reason: string
+          published_at: string | null
+          status: Database["public"]["Enums"]["story_status"]
+          thumbnail_path: string | null
         }
         Insert: {
+          background?: string | null
+          content?: string
           created_at?: string
+          expires_at?: string | null
           id?: number
+          image_height?: number | null
+          image_path?: string | null
+          image_size_bytes?: number | null
+          image_width?: number | null
+          link_url?: string | null
           profile_id: number
-          reason: string
+          published_at?: string | null
+          status?: Database["public"]["Enums"]["story_status"]
+          thumbnail_path?: string | null
         }
         Update: {
+          background?: string | null
+          content?: string
           created_at?: string
+          expires_at?: string | null
           id?: number
+          image_height?: number | null
+          image_path?: string | null
+          image_size_bytes?: number | null
+          image_width?: number | null
+          link_url?: string | null
           profile_id?: number
-          reason?: string
+          published_at?: string | null
+          status?: Database["public"]["Enums"]["story_status"]
+          thumbnail_path?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "student_absences_profile_id_fkey"
+            foreignKeyName: "stories_profile_id_fkey"
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -1182,21 +1379,13 @@ export type Database = {
           p_status: Database["public"]["Enums"]["profile_status"]
         }
         Returns: {
-          academic_track: Database["public"]["Enums"]["profile_academic_track"]
           birthday: string
-          class_no: number
           cohort: number
-          department: string
-          description: string
-          dorm_room: number
           gender: Database["public"]["Enums"]["profile_gender"]
           is_returning_student: boolean
           name: string
-          phone_number: string
           profile_id: number
           profile_type: Database["public"]["Enums"]["profile_type"]
-          pub_id: string
-          status_updated_at: string
           student_number: string
           submitted_at: string
           total_count: number
@@ -1246,6 +1435,24 @@ export type Database = {
           profile_id: number
         }[]
       }
+      admin_storage_cleanup_status: {
+        Args: never
+        Returns: {
+          last_cron_at: string
+          last_cron_status: string
+          last_run_error: string
+          last_run_failed: number
+          last_run_finished_at: string
+          last_run_removed: number
+          last_run_started_at: string
+          last_run_status_code: number
+          queue_dry_run: number
+          queue_oldest_enqueued_at: string
+          queue_pending: number
+          queue_retrying: number
+          secrets_configured: boolean
+        }[]
+      }
       admin_unblock_application: {
         Args: { p_profile_id: number }
         Returns: {
@@ -1258,26 +1465,25 @@ export type Database = {
         Args: { p_group_id: string; p_request_id: string }
         Returns: undefined
       }
+      cancel_group_anonymous_activity_restriction: {
+        Args: { p_source_id: string; p_source_kind: string }
+        Returns: string
+      }
       cancel_utility_reservation: {
         Args: { p_effective_date?: string; p_reservation_id: number }
         Returns: undefined
-      }
-      claim_group_media_cleanup: {
-        Args: { p_lease_seconds?: number; p_limit?: number }
-        Returns: {
-          lease_id: string
-          media_id: string
-          object_path: string
-        }[]
       }
       claim_notification_deliveries: {
         Args: { p_lease_seconds?: number; p_limit?: number }
         Returns: {
           auth: string
           body: string
+          category: Database["public"]["Enums"]["notification_category"]
           channel: "web_push" | "email"
           delivery_id: string
           endpoint: string
+          grouping_key: string
+          importance: Database["public"]["Enums"]["notification_importance"]
           lease_id: string
           notification_id: string
           p256dh: string
@@ -1286,13 +1492,13 @@ export type Database = {
           title: string
         }[]
       }
-      claim_post_attachment_cleanup: {
+      claim_storage_cleanup: {
         Args: { p_lease_seconds?: number; p_limit?: number }
         Returns: {
-          attachment_id: string
+          bucket: string
+          id: string
           lease_id: string
           object_path: string
-          storage_bucket: string
         }[]
       }
       clear_comment_reaction: {
@@ -1316,6 +1522,7 @@ export type Database = {
           p_attachment_ids: string[]
           p_body: string
           p_category_id?: string
+          p_mention_pub_ids?: string[]
           p_post_id: string
           p_publish?: boolean
           p_title: string
@@ -1332,14 +1539,6 @@ export type Database = {
         }
         Returns: string
       }
-      complete_group_media_cleanup: {
-        Args: {
-          p_lease_id: string
-          p_media_id: string
-          p_object_deleted: boolean
-        }
-        Returns: boolean
-      }
       complete_notification_delivery: {
         Args: {
           p_delivery_id: string
@@ -1350,17 +1549,19 @@ export type Database = {
         }
         Returns: boolean
       }
-      complete_post_attachment_cleanup: {
+      complete_storage_cleanup: {
         Args: {
-          p_attachment_id: string
+          p_error?: string
+          p_ids: string[]
           p_lease_id: string
-          p_object_deleted: boolean
+          p_removed_ids?: string[]
         }
-        Returns: boolean
+        Returns: number
       }
       create_group: {
         Args: {
           p_description?: string
+          p_hide_staff_roles?: boolean
           p_identity_policy?: Database["public"]["Enums"]["group_identity_policy"]
           p_join_policy?: Database["public"]["Enums"]["group_join_policy"]
           p_kind: Database["public"]["Enums"]["group_kind"]
@@ -1396,8 +1597,16 @@ export type Database = {
           p_body: string
           p_category_id?: string
           p_group_id: string
+          p_mention_pub_ids?: string[]
           p_publish?: boolean
           p_title: string
+        }
+        Returns: string
+      }
+      create_group_post_upload_draft: {
+        Args: {
+          p_author_identity: Database["public"]["Enums"]["post_identity"]
+          p_group_id: string
         }
         Returns: string
       }
@@ -1406,10 +1615,13 @@ export type Database = {
           p_author_identity: Database["public"]["Enums"]["post_identity"]
           p_body: string
           p_image_id?: string
+          p_mention_pub_ids?: string[]
           p_parent_comment_id?: string
           p_post_id: string
         }
         Returns: {
+          anonymous_author_restricted: boolean
+          anonymous_author_restriction_expires_at: string
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -1418,6 +1630,7 @@ export type Database = {
           body: string
           can_delete: boolean
           can_edit: boolean
+          can_moderate_anonymous: boolean
           comment_id: string
           created_at: string
           depth: number
@@ -1425,9 +1638,11 @@ export type Database = {
           is_author: boolean
           is_deleted: boolean
           is_effective_feed_bump: boolean
+          mentions: Json
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
+          post_comment_count: number
           post_id: string
           reaction_count: number
           reply_count: number
@@ -1442,21 +1657,22 @@ export type Database = {
         }
         Returns: string
       }
+      create_text_story: {
+        Args: { p_background: string; p_content: string; p_link_url?: string }
+        Returns: number
+      }
       delete_group: { Args: { p_group_id: string }; Returns: undefined }
       delete_group_category: {
         Args: { p_category_id: string }
         Returns: undefined
       }
       delete_group_post: { Args: { p_post_id: string }; Returns: undefined }
-      delete_my_absence: { Args: never; Returns: undefined }
+      delete_my_story: { Args: { p_story_id: number }; Returns: undefined }
       delete_post_attachment: {
         Args: { p_attachment_id: string }
         Returns: undefined
       }
-      delete_post_comment: {
-        Args: { p_comment_id: string }
-        Returns: undefined
-      }
+      delete_post_comment: { Args: { p_comment_id: string }; Returns: number }
       delete_profile_post: { Args: { p_post_id: string }; Returns: undefined }
       discover_groups: {
         Args: {
@@ -1490,8 +1706,6 @@ export type Database = {
       finalize_comment_image: {
         Args: { p_image_id: string }
         Returns: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
           comment_id: string | null
           created_at: string
           deleted_at: string | null
@@ -1518,8 +1732,6 @@ export type Database = {
       finalize_post_attachment: {
         Args: { p_attachment_id: string }
         Returns: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
           created_at: string
           deleted_at: string | null
           height: number | null
@@ -1533,11 +1745,56 @@ export type Database = {
           size_bytes: number
           status: Database["public"]["Enums"]["post_attachment_status"]
           storage_bucket: string
+          thumbnail_path: string | null
           width: number | null
         }
         SetofOptions: {
           from: "*"
           to: "post_attachments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      finalize_profile_media: {
+        Args: { p_media_id: string }
+        Returns: {
+          academic_track:
+            | Database["public"]["Enums"]["profile_academic_track"]
+            | null
+          allow_timeline_posts: boolean
+          anonymous_username: string | null
+          auth_user_id: string | null
+          avatar_path: string | null
+          birthday: string | null
+          class_no: number | null
+          cohort: number | null
+          contact_email: string | null
+          cover_path: string | null
+          created_at: string
+          deleted_at: string | null
+          department: string | null
+          description: string | null
+          dorm_room: number | null
+          gender: Database["public"]["Enums"]["profile_gender"] | null
+          id: number
+          is_returning_student: boolean
+          name: string
+          onboarding_completed_at: string
+          phone_number: string | null
+          pub_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          search_name: string | null
+          status: Database["public"]["Enums"]["profile_status"]
+          status_updated_at: string
+          status_updated_by: number | null
+          student_number: string | null
+          submitted_at: string
+          type: Database["public"]["Enums"]["profile_type"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -1570,6 +1827,7 @@ export type Database = {
       get_group_invite: {
         Args: { p_group_id: string }
         Returns: {
+          allowed_profile_types: Database["public"]["Enums"]["profile_type"][]
           expires_at: string
           token: string
         }[]
@@ -1577,6 +1835,7 @@ export type Database = {
       get_group_invite_preview: {
         Args: { p_token: string }
         Returns: {
+          allowed_profile_types: Database["public"]["Enums"]["profile_type"][]
           already_member: boolean
           description: string
           expires_at: string
@@ -1586,12 +1845,29 @@ export type Database = {
           member_count: number
           name: string
           posting_policy: Database["public"]["Enums"]["group_posting_policy"]
+          profile_type_allowed: boolean
+          slug: string
+        }[]
+      }
+      get_group_link_preview: {
+        Args: { p_slug: string }
+        Returns: {
+          description: string
+          group_id: string
+          identity_policy: Database["public"]["Enums"]["group_identity_policy"]
+          join_policy: Database["public"]["Enums"]["group_join_policy"]
+          member_count: number
+          name: string
+          posting_policy: Database["public"]["Enums"]["group_posting_policy"]
+          requested_at: string
           slug: string
         }[]
       }
       get_group_post: {
         Args: { p_post_id: string }
         Returns: {
+          anonymous_author_restricted: boolean
+          anonymous_author_restriction_expires_at: string
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -1600,6 +1876,7 @@ export type Database = {
           body: string
           can_delete: boolean
           can_edit: boolean
+          can_moderate_anonymous: boolean
           can_pin: boolean
           category_id: string
           category_name: string
@@ -1608,12 +1885,27 @@ export type Database = {
           group_id: string
           is_author: boolean
           is_pinned: boolean
+          mentions: Json
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           post_id: string
           published_at: string
           reaction_count: number
           title: string
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
+        }[]
+      }
+      get_my_group_anonymous_activity_restriction: {
+        Args: { p_group_id: string }
+        Returns: {
+          expires_at: string
+          reason: string
+        }[]
+      }
+      get_my_group_new_post_counts: {
+        Args: never
+        Returns: {
+          group_id: string
+          new_post_count: number
         }[]
       }
       get_my_notification_preferences: {
@@ -1654,6 +1946,7 @@ export type Database = {
           phone_number: string | null
           pub_id: string
           role: Database["public"]["Enums"]["app_role"]
+          search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
           status_updated_by: number | null
@@ -1673,6 +1966,7 @@ export type Database = {
       get_my_web_push_status: {
         Args: { p_endpoint: string }
         Returns: {
+          gone: boolean
           subscribed: boolean
         }[]
       }
@@ -1701,10 +1995,32 @@ export type Database = {
         }[]
       }
       issue_group_invite: {
-        Args: { p_group_id: string; p_hours?: number }
+        Args: {
+          p_allowed_profile_types?: Database["public"]["Enums"]["profile_type"][]
+          p_group_id: string
+          p_hours?: number
+        }
         Returns: {
+          allowed_profile_types: Database["public"]["Enums"]["profile_type"][]
           expires_at: string
           token: string
+        }[]
+      }
+      list_active_stories: {
+        Args: never
+        Returns: {
+          avatar_path: string
+          background: string
+          content: string
+          image_height: number
+          image_path: string
+          image_width: number
+          link_url: string
+          name: string
+          pub_id: string
+          published_at: string
+          story_id: number
+          thumbnail_path: string
         }[]
       }
       list_birthdays: {
@@ -1714,6 +2030,8 @@ export type Database = {
           birthday_date: string
           birthday_day: number
           birthday_month: number
+          cohort: number
+          is_returning_student: boolean
           name: string
           pub_id: string
         }[]
@@ -1766,6 +2084,7 @@ export type Database = {
           is_author: boolean
           is_pinned: boolean
           kind: Database["public"]["Enums"]["post_kind"]
+          mentions: Json
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           next_page_token: string
           post_id: string
@@ -1784,6 +2103,7 @@ export type Database = {
         Returns: {
           avatar_path: string
           cohort: number
+          is_returning_student: boolean
           name: string
           pub_id: string
           request_id: string
@@ -1802,6 +2122,7 @@ export type Database = {
         Returns: {
           avatar_path: string
           cohort: number
+          is_returning_student: boolean
           joined_at: string
           membership_id: string
           name: string
@@ -1864,6 +2185,9 @@ export type Database = {
           p_limit?: number
         }
         Returns: {
+          anonymous_author_restricted: boolean
+          anonymous_author_restriction_expires_at: string
+          attachments: Json
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -1872,6 +2196,7 @@ export type Database = {
           body: string
           can_delete: boolean
           can_edit: boolean
+          can_moderate_anonymous: boolean
           can_pin: boolean
           category_id: string
           category_name: string
@@ -1880,6 +2205,7 @@ export type Database = {
           group_id: string
           is_author: boolean
           is_pinned: boolean
+          mentions: Json
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           post_id: string
           published_at: string
@@ -1900,8 +2226,10 @@ export type Database = {
           actor_display_name: string
           actor_identity: Database["public"]["Enums"]["notification_actor_identity"]
           category: Database["public"]["Enums"]["notification_category"]
+          comment_excerpt: string
           comment_id: string
           created_at: string
+          detail: string
           group_id: string
           group_name: string
           id: string
@@ -1909,8 +2237,10 @@ export type Database = {
           kind: Database["public"]["Enums"]["notification_kind"]
           last_activity_at: string
           post_id: string
+          reaction: Database["public"]["Enums"]["post_reaction"]
           read_at: string
           reservation_id: number
+          restriction_expires_at: string
           target_profile_id: number
           title: string
         }[]
@@ -1930,12 +2260,15 @@ export type Database = {
           size_bytes: number
           status: Database["public"]["Enums"]["post_attachment_status"]
           storage_bucket: string
+          thumbnail_path: string
           width: number
         }[]
       }
       list_post_comment_replies: {
         Args: { p_root_comment_id: string }
         Returns: {
+          anonymous_author_restricted: boolean
+          anonymous_author_restriction_expires_at: string
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -1944,13 +2277,16 @@ export type Database = {
           body: string
           can_delete: boolean
           can_edit: boolean
+          can_moderate_anonymous: boolean
           comment_id: string
           created_at: string
           depth: number
           edited_at: string
           is_author: boolean
+          images: Json
           is_deleted: boolean
           is_effective_feed_bump: boolean
+          mentions: Json
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -1969,6 +2305,8 @@ export type Database = {
           p_post_id: string
         }
         Returns: {
+          anonymous_author_restricted: boolean
+          anonymous_author_restriction_expires_at: string
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -1977,13 +2315,16 @@ export type Database = {
           body: string
           can_delete: boolean
           can_edit: boolean
+          can_moderate_anonymous: boolean
           comment_id: string
           created_at: string
           depth: number
           edited_at: string
           is_author: boolean
+          images: Json
           is_deleted: boolean
           is_effective_feed_bump: boolean
+          mentions: Json
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -2014,6 +2355,7 @@ export type Database = {
         Returns: {
           activity_kind: Database["public"]["Enums"]["profile_media_activity_kind"]
           activity_media_path: string
+          attachments: Json
           author_avatar_path: string
           author_name: string
           author_pub_id: string
@@ -2033,16 +2375,11 @@ export type Database = {
           visibility: Database["public"]["Enums"]["post_visibility"]
         }[]
       }
-      list_today_absences: {
-        Args: never
-        Returns: {
-          avatar_path: string
-          name: string
-          pub_id: string
-          reason: string
-        }[]
-      }
       mark_all_my_notifications_read: { Args: never; Returns: number }
+      mark_group_posts_visited: {
+        Args: { p_group_id: string }
+        Returns: undefined
+      }
       mark_my_notification_read: {
         Args: { p_notification_id: string }
         Returns: boolean
@@ -2073,8 +2410,6 @@ export type Database = {
           p_width: number
         }
         Returns: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
           comment_id: string | null
           created_at: string
           deleted_at: string | null
@@ -2110,6 +2445,20 @@ export type Database = {
           object_path: string
         }[]
       }
+      prepare_image_story: {
+        Args: {
+          p_content?: string
+          p_height: number
+          p_link_url?: string
+          p_size_bytes: number
+          p_width: number
+        }
+        Returns: {
+          object_path: string
+          story_id: number
+          thumbnail_path: string
+        }[]
+      }
       prepare_notification_delivery: {
         Args: { p_delivery_id: string; p_lease_id: string }
         Returns: boolean
@@ -2124,8 +2473,6 @@ export type Database = {
           p_width?: number
         }
         Returns: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
           created_at: string
           deleted_at: string | null
           height: number | null
@@ -2139,6 +2486,7 @@ export type Database = {
           size_bytes: number
           status: Database["public"]["Enums"]["post_attachment_status"]
           storage_bucket: string
+          thumbnail_path: string | null
           width: number | null
         }
         SetofOptions: {
@@ -2148,7 +2496,24 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      publish_group_post: { Args: { p_post_id: string }; Returns: string }
+      prepare_profile_media: {
+        Args: {
+          p_activity_height?: number
+          p_activity_size_bytes?: number
+          p_activity_width?: number
+          p_height: number
+          p_size_bytes: number
+          p_slot: Database["public"]["Enums"]["profile_media_slot"]
+          p_width: number
+        }
+        Returns: {
+          activity_media_id: string
+          activity_object_path: string
+          media_id: string
+          object_path: string
+        }[]
+      }
+      publish_image_story: { Args: { p_story_id: number }; Returns: undefined }
       register_my_web_push_subscription: {
         Args: {
           p_auth: string
@@ -2156,7 +2521,7 @@ export type Database = {
           p_expiration_time?: number
           p_p256dh: string
         }
-        Returns: undefined
+        Returns: boolean
       }
       reject_group_join_request: {
         Args: { p_group_id: string; p_request_id: string }
@@ -2197,6 +2562,7 @@ export type Database = {
           phone_number: string | null
           pub_id: string
           role: Database["public"]["Enums"]["app_role"]
+          search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
           status_updated_by: number | null
@@ -2212,33 +2578,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      reorder_post_attachments: {
-        Args: { p_attachment_ids: string[]; p_post_id: string }
-        Returns: {
-          cleanup_lease_expires_at: string | null
-          cleanup_lease_id: string | null
-          created_at: string
-          deleted_at: string | null
-          height: number | null
-          id: string
-          mime_type: string
-          object_path: string
-          original_filename: string
-          position: number
-          post_id: string
-          ready_at: string | null
-          size_bytes: number
-          status: Database["public"]["Enums"]["post_attachment_status"]
-          storage_bucket: string
-          width: number | null
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "post_attachments"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
       report_group_post: {
         Args: {
           p_description?: string
@@ -2251,7 +2590,40 @@ export type Database = {
         Args: { p_notification_id: string }
         Returns: string
       }
+      restrict_group_anonymous_activity: {
+        Args: {
+          p_duration_days: number
+          p_reason: string
+          p_source_id: string
+          p_source_kind: string
+        }
+        Returns: {
+          expires_at: string
+          restriction_id: string
+        }[]
+      }
       revoke_group_invite: { Args: { p_group_id: string }; Returns: undefined }
+      search_directory: {
+        Args: { p_query?: string }
+        Returns: {
+          avatar_path: string
+          result_id: string
+          result_kind: string
+          result_name: string
+          sort_rank: number
+        }[]
+      }
+      search_group_mention_candidates: {
+        Args: { p_group_id: string; p_limit?: number; p_query?: string }
+        Returns: {
+          avatar_path: string
+          cohort: number
+          is_returning_student: boolean
+          name: string
+          profile_type: Database["public"]["Enums"]["profile_type"]
+          pub_id: string
+        }[]
+      }
       search_group_posts: {
         Args: { p_group_id: string; p_limit?: number; p_query: string }
         Returns: {
@@ -2290,7 +2662,6 @@ export type Database = {
         Args: { p_pinned: boolean; p_post_id: string }
         Returns: string
       }
-      set_my_absence: { Args: { p_reason: string }; Returns: undefined }
       set_my_group_notification_preferences: {
         Args: {
           p_content_push_enabled: boolean
@@ -2299,49 +2670,6 @@ export type Database = {
           p_notification_level: Database["public"]["Enums"]["group_notification_level"]
         }
         Returns: undefined
-      }
-      set_my_profile_media: {
-        Args: { p_object_path: string; p_slot: string }
-        Returns: {
-          academic_track:
-            | Database["public"]["Enums"]["profile_academic_track"]
-            | null
-          allow_timeline_posts: boolean
-          anonymous_username: string | null
-          auth_user_id: string | null
-          avatar_path: string | null
-          birthday: string | null
-          class_no: number | null
-          cohort: number | null
-          contact_email: string | null
-          cover_path: string | null
-          created_at: string
-          deleted_at: string | null
-          department: string | null
-          description: string | null
-          dorm_room: number | null
-          gender: Database["public"]["Enums"]["profile_gender"] | null
-          id: number
-          is_returning_student: boolean
-          name: string
-          onboarding_completed_at: string
-          phone_number: string | null
-          pub_id: string
-          role: Database["public"]["Enums"]["app_role"]
-          status: Database["public"]["Enums"]["profile_status"]
-          status_updated_at: string
-          status_updated_by: number | null
-          student_number: string | null
-          submitted_at: string
-          type: Database["public"]["Enums"]["profile_type"]
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "profiles"
-          isOneToOne: true
-          isSetofReturn: false
-        }
       }
       set_post_reaction: {
         Args: {
@@ -2393,6 +2721,7 @@ export type Database = {
           phone_number: string | null
           pub_id: string
           role: Database["public"]["Enums"]["app_role"]
+          search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
           status_updated_by: number | null
@@ -2441,12 +2770,10 @@ export type Database = {
         }
         Returns: undefined
       }
-      update_group_post: {
+      update_group_post_draft_identity: {
         Args: {
-          p_body: string
-          p_category_id?: string
+          p_author_identity: Database["public"]["Enums"]["post_identity"]
           p_post_id: string
-          p_title: string
         }
         Returns: string
       }
@@ -2454,6 +2781,7 @@ export type Database = {
         Args: {
           p_description: string
           p_group_id: string
+          p_hide_staff_roles: boolean
           p_identity_policy: Database["public"]["Enums"]["group_identity_policy"]
           p_join_policy: Database["public"]["Enums"]["group_join_policy"]
           p_name: string
@@ -2461,6 +2789,7 @@ export type Database = {
         }
         Returns: {
           description: string
+          hide_staff_roles: boolean
           identity_policy: Database["public"]["Enums"]["group_identity_policy"]
           join_policy: Database["public"]["Enums"]["group_join_policy"]
           name: string
@@ -2493,6 +2822,7 @@ export type Database = {
           p_is_returning_student?: boolean
           p_name: string
           p_phone_number?: string
+          p_pub_id?: string
         }
         Returns: {
           academic_track:
@@ -2520,6 +2850,7 @@ export type Database = {
           phone_number: string | null
           pub_id: string
           role: Database["public"]["Enums"]["app_role"]
+          search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
           status_updated_at: string
           status_updated_by: number | null
@@ -2540,9 +2871,12 @@ export type Database = {
           p_body: string
           p_comment_id: string
           p_image_id?: string
+          p_mention_pub_ids?: string[]
           p_remove_image?: boolean
         }
         Returns: {
+          anonymous_author_restricted: boolean
+          anonymous_author_restriction_expires_at: string
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -2551,6 +2885,7 @@ export type Database = {
           body: string
           can_delete: boolean
           can_edit: boolean
+          can_moderate_anonymous: boolean
           comment_id: string
           created_at: string
           depth: number
@@ -2558,6 +2893,7 @@ export type Database = {
           is_author: boolean
           is_deleted: boolean
           is_effective_feed_bump: boolean
+          mentions: Json
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           parent_author_label: string
           parent_comment_id: string
@@ -2618,6 +2954,7 @@ export type Database = {
         | "group_deleted"
         | "post_moderated"
         | "comment_moderated"
+        | "anonymous_activity_restricted"
         | "application_submitted"
         | "account_approved"
         | "account_blocked"
@@ -2627,6 +2964,8 @@ export type Database = {
         | "gongang_manager_granted"
         | "gongang_manager_revoked"
         | "gongang_preempted"
+        | "post_mentioned"
+        | "comment_mentioned"
       post_attachment_status: "pending" | "ready" | "deleted"
       post_identity: "identified" | "anonymous" | "staff"
       post_kind: "group" | "profile"
@@ -2635,8 +2974,11 @@ export type Database = {
       profile_academic_track: "domestic" | "international"
       profile_gender: "male" | "female"
       profile_media_activity_kind: "avatar_changed" | "cover_changed"
+      profile_media_slot: "avatar" | "cover"
+      profile_media_status: "pending" | "ready"
       profile_status: "draft" | "pending" | "accepted" | "blocked" | "withdrawn"
       profile_type: "student" | "alumni" | "teacher"
+      story_status: "pending" | "ready"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2652,12 +2994,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2681,11 +3023,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2706,11 +3048,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2731,11 +3073,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2748,11 +3090,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2818,6 +3160,7 @@ export const Constants = {
         "group_deleted",
         "post_moderated",
         "comment_moderated",
+        "anonymous_activity_restricted",
         "application_submitted",
         "account_approved",
         "account_blocked",
@@ -2827,6 +3170,8 @@ export const Constants = {
         "gongang_manager_granted",
         "gongang_manager_revoked",
         "gongang_preempted",
+        "post_mentioned",
+        "comment_mentioned",
       ],
       post_attachment_status: ["pending", "ready", "deleted"],
       post_identity: ["identified", "anonymous", "staff"],
@@ -2836,8 +3181,11 @@ export const Constants = {
       profile_academic_track: ["domestic", "international"],
       profile_gender: ["male", "female"],
       profile_media_activity_kind: ["avatar_changed", "cover_changed"],
+      profile_media_slot: ["avatar", "cover"],
+      profile_media_status: ["pending", "ready"],
       profile_status: ["draft", "pending", "accepted", "blocked", "withdrawn"],
       profile_type: ["student", "alumni", "teacher"],
+      story_status: ["pending", "ready"],
     },
   },
 } as const

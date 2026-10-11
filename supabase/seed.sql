@@ -11,14 +11,14 @@ where not exists (
 );
 
 select vault.create_secret(
-  'local-post-attachment-cleanup-only',
-  'post_attachment_cleanup_secret',
-  'Development-only cleanup function secret'
+  'local-storage-cleanup-only',
+  'storage_cleanup_secret',
+  'Development-only storage cleanup function secret'
 )
 where not exists (
   select 1
   from vault.decrypted_secrets
-  where name = 'post_attachment_cleanup_secret'
+  where name = 'storage_cleanup_secret'
 );
 
 select vault.create_secret(
@@ -448,6 +448,7 @@ insert into public.groups (
   join_policy,
   identity_policy,
   posting_policy,
+  hide_staff_roles,
   created_by
 )
 values
@@ -461,6 +462,7 @@ values
     'open',
     'identified',
     'staff',
+    false,
     (select id from public.profiles where pub_id = 'kim-admin')
   ),
   (
@@ -473,6 +475,7 @@ values
     'invite_only',
     'optional_anonymous',
     'members',
+    false,
     (select id from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001')
   ),
   (
@@ -485,18 +488,20 @@ values
     'open',
     'optional_anonymous',
     'members',
+    false,
     (select id from public.profiles where pub_id = 'kim-admin')
   ),
   (
     '20000000-0000-0000-0000-000000000004',
-    'dorm-stories',
-    true,
+    '3c7e1a9b5d2f40',
+    false,
     'unofficial',
     '기숙사 이야기',
     '기숙사 생활의 팁과 이야기를 편하게 나누는 공간입니다.',
     'request',
     'optional_anonymous',
     'members',
+    false,
     (select id from public.profiles where pub_id = 'hanbyeol-25')
   ),
   (
@@ -509,18 +514,20 @@ values
     'open',
     'identified',
     'members',
+    false,
     (select id from public.profiles where pub_id = 'saebyeok-24')
   ),
   (
     '20000000-0000-0000-0000-000000000006',
-    'film-circle',
-    true,
+    'b41f6d2e8a0c97',
+    false,
     'unofficial',
     '필름 서클',
     '한 편의 영화를 깊게 보고 감상을 나눕니다.',
     'request',
     'optional_anonymous',
     'members',
+    false,
     (select id from public.profiles where pub_id = 'pureum-23')
   )
 on conflict (id) do update set
@@ -529,6 +536,7 @@ on conflict (id) do update set
   join_policy = excluded.join_policy,
   identity_policy = excluded.identity_policy,
   posting_policy = excluded.posting_policy,
+  hide_staff_roles = excluded.hide_staff_roles,
   updated_at = now();
 
 insert into public.group_memberships (group_id, profile_id, role, pinned_at)

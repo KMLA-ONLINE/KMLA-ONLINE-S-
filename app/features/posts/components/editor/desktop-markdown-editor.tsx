@@ -1,0 +1,456 @@
+import {
+  defaultValueCtx,
+  Editor as MilkdownEditor,
+  editorViewCtx,
+  remarkStringifyOptionsCtx,
+  rootCtx,
+} from "@milkdown/core";
+import { history, redoCommand, undoCommand } from "@milkdown/plugin-history";
+import { listener, listenerCtx } from "@milkdown/plugin-listener";
+import {
+  docSchema,
+  emphasisAttr,
+  emphasisSchema,
+  hardbreakAttr,
+  hardbreakSchema,
+  headingAttr,
+  headingIdGenerator,
+  headingSchema,
+  htmlAttr,
+  htmlSchema,
+  linkAttr,
+  linkSchema,
+  paragraphAttr,
+  paragraphSchema,
+  remarkHtmlTransformer,
+  remarkLineBreak,
+  remarkPreserveEmptyLinePlugin,
+  strongAttr,
+  strongSchema,
+  textSchema,
+  toggleEmphasisCommand,
+  toggleLinkCommand,
+  toggleStrongCommand,
+  wrapInHeadingCommand,
+} from "@milkdown/preset-commonmark";
+import {
+  remarkGFMPlugin,
+  strikethroughAttr,
+  strikethroughSchema,
+  toggleStrikethroughCommand,
+} from "@milkdown/preset-gfm";
+import { Milkdown, MilkdownProvider, useEditor } from "@milkdown/react";
+import { toggleMark } from "@milkdown/prose/commands";
+import { redo, undo } from "@milkdown/prose/history";
+import { Plugin } from "@milkdown/prose/state";
+import {
+  $command,
+  $markSchema,
+  $prose,
+  $remark,
+  callCommand,
+} from "@milkdown/utils";
+import {
+  BoldIcon,
+  Heading2Icon,
+  Heading3Icon,
+  ItalicIcon,
+  LinkIcon,
+  Redo2Icon,
+  StrikethroughIcon,
+  UnderlineIcon,
+  Undo2Icon,
+} from "lucide-react";
+import { useEffect, useImperativeHandle, useRef, type RefObject } from "react";
+
+import {
+  fromPostEditorMarkdown,
+  isSafePostLink,
+  sanitizePostMarkdown,
+  toMilkdownMarkdown,
+} from "~/features/posts/model/markdown";
+import type { PostBodyInputHandle } from "~/features/posts/components/editor/post-body-input";
+import { sanitizeMentionLabel } from "~/features/posts/model/mentions";
+import {
+  remarkPostUnderline,
+  UNDERLINE_DIRECTIVE,
+} from "~/features/posts/model/underline";
+import remarkCjkFriendly from "remark-cjk-friendly/bidi";
+import remarkCjkFriendlyStrikethrough from "remark-cjk-friendly-gfm-strikethrough/bidi";
+
+import { cn } from "~/shared/lib/utils";
+import { Button } from "~/shared/ui/button";
+
+// 밑줄은 preset에 없다. 저장 문법 `:u[…]`는 `model/underline.ts`의 remark 플러그인이 읽고 쓴다.
+const underlineRemark = $remark(
+  "remarkPostUnderline",
+  () => remarkPostUnderline,
+);
+
+// 정화·읽기 화면과 같은 CJK 강조 규칙(`postMarkdownPlugins`). 빠지면 `**끝.**다음`을 편집기만 글자로 읽는다.
+const cjkFriendlyRemark = [
+  $remark("remarkCjkFriendly", () => remarkCjkFriendly),
+  $remark(
+    "remarkCjkFriendlyStrikethrough",
+    () => remarkCjkFriendlyStrikethrough,
+  ),
+];
+
+const underlineSchema = $markSchema("underline", () => ({
+  parseDOM: [{ tag: "u" }],
+  toDOM: () => ["u", 0],
+  parseMarkdown: {
+    match: (node) =>
+      node.type === "textDirective" && node.name === UNDERLINE_DIRECTIVE,
+    runner: (state, node, markType) => {
+      state.openMark(markType);
+      state.next(node.children);
+      state.closeMark(markType);
+    },
+  },
+  toMarkdown: {
+    match: (mark) => mark.type.name === "underline",
+    runner: (state, mark) => {
+      state.withMark(mark, "textDirective", undefined, {
+        name: UNDERLINE_DIRECTIVE,
+      });
+    },
+  },
+}));
+
+const toggleUnderlineCommand = $command(
+  "ToggleUnderline",
+  (ctx) => () => toggleMark(underlineSchema.type(ctx)),
+);
+
+const markdownSchema = [
+  docSchema,
+  paragraphAttr,
+  paragraphSchema,
+  headingIdGenerator,
+  headingAttr,
+  headingSchema,
+  hardbreakAttr,
+  hardbreakSchema,
+  htmlAttr,
+  htmlSchema,
+  emphasisAttr,
+  emphasisSchema,
+  strongAttr,
+  strongSchema,
+  linkAttr,
+  linkSchema,
+  toggleEmphasisCommand,
+  toggleLinkCommand,
+  toggleStrongCommand,
+  wrapInHeadingCommand,
+  strikethroughAttr,
+  strikethroughSchema,
+  toggleStrikethroughCommand,
+  underlineRemark,
+  underlineSchema,
+  toggleUnderlineCommand,
+  textSchema,
+  remarkGFMPlugin,
+  ...cjkFriendlyRemark,
+  remarkLineBreak,
+  remarkHtmlTransformer,
+  remarkPreserveEmptyLinePlugin,
+].flat();
+
+const imeSafeShortcuts = $prose(
+  (ctx) =>
+    new Plugin({
+      props: {
+        attributes: {
+          "aria-label": "본문",
+          "data-placeholder": "본문을 입력하세요",
+        },
+        handleKeyDown(view, event) {
+          if (event.isComposing || view.composing || event.keyCode === 229)
+            return false;
+          const mod = event.ctrlKey || event.metaKey;
+          if (!mod || event.altKey) return false;
+          const key = event.key.toLowerCase();
+
+          if (key === "b" && !event.shiftKey)
+            return toggleMark(strongSchema.type(ctx))(
+              view.state,
+              view.dispatch,
+              view,
+            );
+          if (key === "i" && !event.shiftKey)
+            return toggleMark(emphasisSchema.type(ctx))(
+              view.state,
+              view.dispatch,
+              view,
+            );
+          if (key === "u" && !event.shiftKey)
+            return toggleMark(underlineSchema.type(ctx))(
+              view.state,
+              view.dispatch,
+              view,
+            );
+          if (key === "x" && event.shiftKey)
+            return toggleMark(strikethroughSchema.type(ctx))(
+              view.state,
+              view.dispatch,
+              view,
+            );
+          if (key === "z" && !event.shiftKey)
+            return undo(view.state, view.dispatch, view);
+          if (key === "y" || (key === "z" && event.shiftKey))
+            return redo(view.state, view.dispatch, view);
+          return false;
+        },
+        // 편집기는 원문의 줄 하나를 문단 하나로 든다(`toMilkdownMarkdown()`). 기본 복사는 문단
+        // 사이를 빈 줄로 이어서 다른 곳에 붙이면 줄마다 엔터가 두 번 들어간다. 빈 줄은 빈 문단이라
+        // 줄바꿈 하나로 이어도 그대로 남는다.
+        clipboardTextSerializer: (slice) =>
+          slice.content.textBetween(0, slice.content.size, "\n", (leaf) =>
+            leaf.type.name === "hardbreak" ? "\n" : "",
+          ),
+      },
+    }),
+);
+
+export default function DesktopMarkdownEditor({
+  initialValue,
+  onValueChange,
+  handleRef,
+  className,
+}: {
+  initialValue: string;
+  onValueChange?: (value: string) => void;
+  handleRef?: RefObject<PostBodyInputHandle | null>;
+  className?: string;
+}) {
+  return (
+    <MilkdownProvider>
+      <EditorSurface
+        initialValue={initialValue}
+        onValueChange={onValueChange}
+        handleRef={handleRef}
+        className={className}
+      />
+    </MilkdownProvider>
+  );
+}
+
+function EditorSurface({
+  initialValue,
+  onValueChange,
+  handleRef,
+  className,
+}: {
+  initialValue: string;
+  onValueChange?: (value: string) => void;
+  handleRef?: RefObject<PostBodyInputHandle | null>;
+  className?: string;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const lastValue = useRef(
+    toMilkdownMarkdown(sanitizePostMarkdown(initialValue)),
+  );
+  const onValueChangeRef = useRef(onValueChange);
+  useEffect(() => {
+    onValueChangeRef.current = onValueChange;
+  }, [onValueChange]);
+  const { get } = useEditor(
+    (root) =>
+      MilkdownEditor.make()
+        .config((ctx) => {
+          ctx.set(rootCtx, root);
+          ctx.set(defaultValueCtx, lastValue.current);
+          // Milkdown 기본 처리기는 `text`·`strong`·`emphasis`를 덮어써서 문단 머리 `- `를 escape하지
+          // 않고(정화가 목록으로 읽어 `-`를 지운다) 강조 표식 경계도 맞추지 않는다. 덮어쓴 것을 걷어
+          // 표준 처리기와 CJK 플러그인의 직렬화 규칙을 쓴다.
+          ctx.update(remarkStringifyOptionsCtx, (options) => ({
+            ...options,
+            handlers: {},
+          }));
+          ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
+            const safe = sanitizePostMarkdown(fromPostEditorMarkdown(markdown));
+            if (input.current) input.current.value = safe;
+            onValueChangeRef.current?.(safe);
+          });
+        })
+        .use(markdownSchema)
+        .use(history)
+        .use(imeSafeShortcuts)
+        .use(listener),
+    [],
+  );
+
+  const run = (
+    command: Parameters<NonNullable<ReturnType<typeof get>>["action"]>[0],
+  ) => {
+    get()?.action(command);
+  };
+
+  // 멘션은 CommonMark 링크로 저장하므로(`model/mentions.ts`) link mark로 넣는다. 원문을 글자로 넣으면 WYSIWYG이 다시 링크로 읽지 않는다.
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      insertMentions(mentions: { label: string; ordinal: number }[]) {
+        if (mentions.length === 0) return;
+        get()?.action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          const { state, dispatch } = view;
+          // 뒤에 이어 쓸 때 링크 안으로 빨려 들어가지 않도록 멘션마다 mark 없는 공백을 함께 넣는다.
+          const nodes = mentions.flatMap(({ label, ordinal }) => [
+            state.schema.text(`@${sanitizeMentionLabel(label)}`, [
+              linkSchema.type(ctx).create({ href: `m:${ordinal}` }),
+            ]),
+            state.schema.text(" "),
+          ]);
+          const { from, to } = state.selection;
+          dispatch(state.tr.replaceWith(from, to, nodes));
+          view.focus();
+        });
+      },
+    }),
+    [get],
+  );
+  const link = () => {
+    const value = window.prompt("링크 URL (https:// 또는 http://)");
+    if (!value) return;
+    if (!isSafePostLink(value)) {
+      window.alert("절대 HTTP(S) 주소만 사용할 수 있습니다.");
+      return;
+    }
+    run(callCommand(toggleLinkCommand.key, { href: value }));
+  };
+
+  const tools: {
+    label: string;
+    keys?: string;
+    icon: React.ReactNode;
+    run: () => void;
+  }[] = [
+    {
+      label: "굵게",
+      keys: "Control+B Meta+B",
+      icon: <BoldIcon />,
+      run: () => run(callCommand(toggleStrongCommand.key)),
+    },
+    {
+      label: "기울임",
+      keys: "Control+I Meta+I",
+      icon: <ItalicIcon />,
+      run: () => run(callCommand(toggleEmphasisCommand.key)),
+    },
+    {
+      label: "밑줄",
+      keys: "Control+U Meta+U",
+      icon: <UnderlineIcon />,
+      run: () => run(callCommand(toggleUnderlineCommand.key)),
+    },
+    {
+      label: "취소선",
+      keys: "Control+Shift+X Meta+Shift+X",
+      icon: <StrikethroughIcon />,
+      run: () => run(callCommand(toggleStrikethroughCommand.key)),
+    },
+    {
+      label: "큰 제목",
+      icon: <Heading2Icon />,
+      run: () => run(callCommand(wrapInHeadingCommand.key, 2)),
+    },
+    {
+      label: "작은 제목",
+      icon: <Heading3Icon />,
+      run: () => run(callCommand(wrapInHeadingCommand.key, 3)),
+    },
+    { label: "링크", icon: <LinkIcon />, run: link },
+    {
+      label: "실행 취소",
+      keys: "Control+Z Meta+Z",
+      icon: <Undo2Icon />,
+      run: () => run(callCommand(undoCommand.key)),
+    },
+    {
+      label: "다시 실행",
+      keys: "Control+Shift+Z Meta+Shift+Z",
+      icon: <Redo2Icon />,
+      run: () => run(callCommand(redoCommand.key)),
+    },
+  ];
+
+  return (
+    <div
+      className={cn(
+        "flex h-[clamp(18rem,50dvh,32rem)] flex-none flex-col overflow-hidden rounded-md border bg-background md:h-auto",
+        className,
+      )}
+    >
+      <input
+        ref={input}
+        type="hidden"
+        name="body"
+        defaultValue={sanitizePostMarkdown(initialValue)}
+      />
+      {/* 툴바는 Tab 순서에서 뺀다. 제목에서 Tab은 본문으로 바로 가야 하고, 서식은 포인터나 `aria-keyshortcuts` 단축키로 쓴다. */}
+      <div
+        className="flex shrink-0 flex-nowrap gap-1 overflow-x-auto border-b bg-muted/50 p-1"
+        role="toolbar"
+        aria-label="본문 서식"
+      >
+        {tools.map((tool) => (
+          <Tool
+            key={tool.label}
+            label={tool.label}
+            keys={tool.keys}
+            onClick={tool.run}
+          >
+            {tool.icon}
+          </Tool>
+        ))}
+      </div>
+      {/* 높이는 편집기가 정한다. 모바일은 바깥 `clamp` 높이를 flex로 나누고, 데스크톱은 내용을 따라 자라다 상한에서 멈춘다(고정이면 중첩 스크롤, 상한이 없으면 첨부가 밀린다). */}
+      <div
+        className="post-typography flex min-h-0 flex-1 flex-col overflow-y-auto md:h-auto md:max-h-[min(60dvh,40rem)] md:min-h-72 md:flex-none"
+        role="presentation"
+        onClick={(event) => {
+          if (!(event.ctrlKey || event.metaKey)) return;
+          const anchor = (event.target as HTMLElement).closest("a");
+          if (
+            anchor instanceof HTMLAnchorElement &&
+            isSafePostLink(anchor.href)
+          ) {
+            event.preventDefault();
+            window.open(anchor.href, "_blank", "noopener,noreferrer");
+          }
+        }}
+      >
+        <Milkdown />
+      </div>
+    </div>
+  );
+}
+
+function Tool({
+  label,
+  keys,
+  onClick,
+  children,
+}: {
+  label: string;
+  keys?: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Button
+      type="button"
+      size="icon-sm"
+      variant="ghost"
+      aria-label={label}
+      aria-keyshortcuts={keys}
+      tabIndex={-1}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  );
+}

@@ -128,7 +128,7 @@ test("가입 요청, 고정, 초대 전용 그룹 생성을 실제로 반영한�
 }) => {
   await loginAsAcceptedStudent(page);
 
-  await page.goto("/groups/film-circle");
+  await page.goto("/groups/b41f6d2e8a0c97");
   // 승인제 그룹은 확인 다이얼로그를 한 번 거친다.
   await page.getByRole("button", { name: "가입 요청" }).click();
   await page

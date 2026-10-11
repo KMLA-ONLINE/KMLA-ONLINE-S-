@@ -1,16 +1,24 @@
+import {
+  normalizeMentions,
+  withMentions,
+  type MentionDraftEntry,
+} from "~/features/posts/model/mentions";
 import type {
   GroupCategory,
   CommentImageInput,
+  CreatedPostComment,
   PostAttachment,
   PostComment,
   PostFormValues,
   PostIdentity,
+  PostFileUploadState,
   PostReaction,
   PostSaveProgress,
   PreparedCommentImage,
   PreparedPostFile,
   ProfilePostFormValues,
   ReactionSummary,
+  AnonymousActivitySourceKind,
 } from "~/features/posts/model/types";
 import { uploadPostAttachment } from "~/features/posts/data/files";
 import { hydratePostComments } from "~/features/posts/data/queries";
@@ -63,18 +71,52 @@ export async function deleteGroupCategory(categoryId: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function createGroupPost(
+export async function restrictGroupAnonymousActivity(
+  sourceKind: AnonymousActivitySourceKind,
+  sourceId: string,
+  reason: string,
+  durationDays: number,
+) {
+  const { data, error } = await getSupabase().rpc(
+    "restrict_group_anonymous_activity",
+    {
+      p_source_kind: sourceKind,
+      p_source_id: sourceId,
+      p_reason: reason,
+      p_duration_days: durationDays,
+    },
+  );
+  if (error) throw error;
+  const restriction = data?.[0];
+  if (!restriction) throw new Error("익명 활동을 차단하지 못했습니다.");
+  return restriction;
+}
+
+export async function cancelGroupAnonymousActivityRestriction(
+  sourceKind: AnonymousActivitySourceKind,
+  sourceId: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc(
+    "cancel_group_anonymous_activity_restriction",
+    { p_source_kind: sourceKind, p_source_id: sourceId },
+  );
+  if (error) throw error;
+}
+
+async function createGroupPost(
   groupId: string,
   values: PostFormValues,
   publish = true,
 ): Promise<string> {
+  const mentions = normalizeMentions(values.body, values.mentions);
   const { data, error } = await getSupabase().rpc("create_group_post", {
     p_group_id: groupId,
     p_title: values.title,
-    p_body: values.body,
+    p_body: mentions.body,
     p_category_id: values.categoryId || undefined,
     p_author_identity: values.authorIdentity,
     p_publish: publish,
+    p_mention_pub_ids: mentions.pubIds,
   });
   if (error) throw error;
   return data;
@@ -82,17 +124,123 @@ export async function createGroupPost(
 
 type PreparedAttachmentRow = Awaited<ReturnType<typeof preparePostAttachment>>;
 
+interface PostUploadFileState extends PostFileUploadState {
+  attachment?: PreparedAttachmentRow;
+  uploaded: boolean;
+  finalized: boolean;
+  promise?: Promise<string>;
+  removed?: boolean;
+}
+
+type PostUploadListener = (
+  key: string,
+  state: PostFileUploadState | undefined,
+) => void;
+
+interface QueuedUpload {
+  key: string;
+  run: () => Promise<string>;
+  resolve: (id: string) => void;
+  reject: (error: unknown) => void;
+}
+
 export interface PostUploadSession {
   postId?: string;
+  postPromise?: Promise<string>;
   authorIdentity?: PostFormValues["authorIdentity"];
-  files: Map<
-    string,
-    { attachment: PreparedAttachmentRow; uploaded: boolean; finalized: boolean }
-  >;
+  files: Map<string, PostUploadFileState>;
+  listeners: Set<PostUploadListener>;
+  queue: QueuedUpload[];
+  activeUploads: number;
+  cancelled: boolean;
+  controllers: Map<string, AbortController>;
 }
 
 export function createPostUploadSession(): PostUploadSession {
-  return { files: new Map() };
+  return {
+    files: new Map(),
+    listeners: new Set(),
+    queue: [],
+    activeUploads: 0,
+    cancelled: false,
+    controllers: new Map(),
+  };
+}
+
+export function subscribePostUploadSession(
+  session: PostUploadSession,
+  listener: PostUploadListener,
+): () => void {
+  session.listeners.add(listener);
+  session.files.forEach((state, key) => listener(key, state));
+  return () => session.listeners.delete(listener);
+}
+
+function notifyPostUpload(
+  session: PostUploadSession,
+  key: string,
+  state: PostUploadFileState | undefined,
+) {
+  session.listeners.forEach((listener) => listener(key, state));
+}
+
+function updatePostUpload(
+  session: PostUploadSession,
+  key: string,
+  patch: Partial<PostUploadFileState>,
+) {
+  const state = session.files.get(key);
+  if (!state) return;
+  Object.assign(state, patch);
+  notifyPostUpload(session, key, { ...state });
+}
+
+function registerPostFiles(
+  files: PreparedPostFile[],
+  session: PostUploadSession,
+) {
+  files.forEach((item) => {
+    if (session.files.has(item.key)) return;
+    const state: PostUploadFileState = {
+      status: "queued",
+      progress: 0,
+      uploaded: false,
+      finalized: false,
+    };
+    session.files.set(item.key, state);
+    notifyPostUpload(session, item.key, { ...state });
+  });
+}
+
+function drainPostUploadQueue(session: PostUploadSession) {
+  if (session.cancelled) {
+    const error = new DOMException("Upload aborted", "AbortError");
+    session.queue.splice(0).forEach((task) => task.reject(error));
+    return;
+  }
+  while (session.activeUploads < 3 && session.queue.length > 0) {
+    const task = session.queue.shift()!;
+    session.activeUploads += 1;
+    void task
+      .run()
+      .then(task.resolve, task.reject)
+      .finally(() => {
+        session.activeUploads -= 1;
+        drainPostUploadQueue(session);
+      });
+  }
+}
+
+function enqueuePostUpload(
+  key: string,
+  session: PostUploadSession,
+  run: () => Promise<string>,
+): Promise<string> {
+  const promise = new Promise<string>((resolve, reject) => {
+    session.queue.push({ key, run, resolve, reject });
+  });
+  drainPostUploadQueue(session);
+  return promise;
 }
 
 type PreparedCommentImageRow = Awaited<
@@ -148,6 +296,8 @@ async function uploadCommentImage(
       await uploadPostAttachment(state.image.object_path, item.file);
       state.uploaded = true;
     } catch (uploadError) {
+      // 첨부와 같은 이유로 finalize를 한 번 더 믿는다 — `finalize_comment_image`도
+      // storage.objects를 대조하므로, 통과했다면 응답만 잃었던 것이다.
       try {
         const { error } = await getSupabase().rpc("finalize_comment_image", {
           p_image_id: state.image.id,
@@ -171,14 +321,14 @@ async function uploadCommentImage(
 }
 
 async function hydrateCommittedComment(
-  comment: Omit<PostComment, "images">,
+  comment: Omit<PostComment, "images" | "author_avatar_url">,
 ): Promise<PostComment> {
   try {
     return (await hydratePostComments([comment]))[0];
   } catch {
     // The database commit already succeeded. Treat a follow-up metadata/signing
     // failure as a temporary missing preview rather than inviting a duplicate retry.
-    return { ...comment, images: [] };
+    return { ...comment, author_avatar_url: null, images: [] };
   }
 }
 
@@ -188,13 +338,17 @@ async function commitGroupPost(
   attachmentIds: string[],
   publish: boolean,
 ): Promise<void> {
+  // 편집기가 매긴 번호를 본문에 남은 토큰 기준으로 다시 매긴다. 서버는 ordinal 을 배열 첨자로
+  // 쓰고 1~50 만 받으므로, 넣었다 지우기를 반복한 본문을 그대로 보내면 상한에 걸린다.
+  const mentions = normalizeMentions(values.body, values.mentions);
   const { error } = await getSupabase().rpc("commit_group_post", {
     p_post_id: postId,
     p_title: values.title,
-    p_body: values.body,
+    p_body: mentions.body,
     p_category_id: values.categoryId || undefined,
     p_attachment_ids: attachmentIds,
     p_publish: publish,
+    p_mention_pub_ids: mentions.pubIds,
   });
   if (error) throw error;
 }
@@ -219,33 +373,63 @@ async function finalizePostAttachment(attachmentId: string): Promise<void> {
   if (error) throw error;
 }
 
-async function uploadPreparedFiles(
+async function deletePreparedPostAttachment(
+  attachmentId: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("delete_post_attachment", {
+    p_attachment_id: attachmentId,
+  });
+  if (error) throw error;
+}
+
+async function runPostFileUpload(
   postId: string,
-  files: PreparedPostFile[],
+  item: PreparedPostFile,
   session: PostUploadSession,
-  onProgress?: (
-    progress: PostSaveProgress,
-    completed: number,
-    total: number,
-  ) => void,
-): Promise<string[]> {
-  const ids: string[] = [];
-  for (const [index, item] of files.entries()) {
-    onProgress?.("uploading", index, files.length);
-    let state = session.files.get(item.key);
-    if (!state) {
-      state = {
-        attachment: await preparePostAttachment(postId, item),
-        uploaded: false,
-        finalized: false,
-      };
-      session.files.set(item.key, state);
+): Promise<string> {
+  const state = session.files.get(item.key)!;
+  const controller = new AbortController();
+  session.controllers.set(item.key, controller);
+  try {
+    if (session.cancelled || state.removed)
+      throw new DOMException("Upload aborted", "AbortError");
+    if (!state.attachment) {
+      updatePostUpload(session, item.key, {
+        status: "uploading",
+        progress: 0,
+        error: undefined,
+      });
+      state.attachment = await preparePostAttachment(postId, item);
     }
     if (!state.uploaded) {
       try {
-        await uploadPostAttachment(state.attachment.object_path, item.file);
+        await uploadPostAttachment(
+          state.attachment.object_path,
+          item.file,
+          (progress) =>
+            updatePostUpload(session, item.key, {
+              status: "uploading",
+              progress,
+            }),
+          controller.signal,
+        );
+        // 축소본 생성은 원본 업로드와 겹친다. finalize 전에만 준비되면 되므로, 여기서 결과를
+        // 기다려 올린다. 실패해도 원본 첨부는 그대로 확정한다.
+        const thumbnail = item.thumbnailPromise
+          ? await item.thumbnailPromise
+          : item.thumbnail;
+        if (state.attachment.thumbnail_path && thumbnail) {
+          await uploadPostAttachment(
+            state.attachment.thumbnail_path,
+            thumbnail,
+            undefined,
+            controller.signal,
+          ).catch(() => undefined);
+        }
         state.uploaded = true;
       } catch (uploadError) {
+        // 업로드가 실패로 보여도 finalize가 통과하면 object는 올라간 것이다(소유자·크기·MIME을 storage.objects와 대조한다). 응답만 잃은 경우를 건진다.
+        // object가 없으면 finalize가 P0002로 던지므로 원래 업로드 오류를 올린다.
         try {
           await finalizePostAttachment(state.attachment.id);
           state.uploaded = true;
@@ -259,18 +443,264 @@ async function uploadPreparedFiles(
       await finalizePostAttachment(state.attachment.id);
       state.finalized = true;
     }
-    ids.push(state.attachment.id);
+    if (state.removed) {
+      await deletePreparedPostAttachment(state.attachment.id);
+      state.attachment = undefined;
+      throw new Error("removed");
+    }
+    updatePostUpload(session, item.key, { status: "ready", progress: 1 });
+    return state.attachment.id;
+  } catch (error) {
+    if (!state.removed) {
+      updatePostUpload(session, item.key, {
+        status: "error",
+        error:
+          error instanceof Error
+            ? error.message
+            : "파일을 업로드하지 못했습니다.",
+      });
+    }
+    throw error;
+  } finally {
+    session.controllers.delete(item.key);
   }
+}
+
+function ensurePostFileUpload(
+  postId: string,
+  item: PreparedPostFile,
+  session: PostUploadSession,
+): Promise<string> {
+  if (session.cancelled)
+    return Promise.reject(new DOMException("Upload aborted", "AbortError"));
+  let state = session.files.get(item.key);
+  if (!state) {
+    state = {
+      status: "queued",
+      progress: 0,
+      uploaded: false,
+      finalized: false,
+    };
+    session.files.set(item.key, state);
+    notifyPostUpload(session, item.key, { ...state });
+  }
+  if (state.status === "ready" && state.attachment) {
+    return Promise.resolve(state.attachment.id);
+  }
+  if (state.promise) return state.promise;
+  state.removed = false;
+  state.error = undefined;
+  state.promise = enqueuePostUpload(item.key, session, () =>
+    runPostFileUpload(postId, item, session),
+  ).finally(() => {
+    const current = session.files.get(item.key);
+    if (current) current.promise = undefined;
+  });
+  return state.promise;
+}
+
+async function ensureGroupUploadDraft(
+  groupId: string,
+  identity: PostIdentity,
+  session: PostUploadSession,
+): Promise<string> {
+  if (session.postId) return session.postId;
+  session.postPromise ??= (async () => {
+    const { data, error } = await getSupabase().rpc(
+      "create_group_post_upload_draft",
+      { p_group_id: groupId, p_author_identity: identity },
+    );
+    if (error) throw error;
+    session.postId = data;
+    session.authorIdentity = identity;
+    return data;
+  })().finally(() => {
+    session.postPromise = undefined;
+  });
+  return session.postPromise;
+}
+
+async function ensureProfileUploadDraft(
+  timelinePubId: string,
+  visibility: ProfilePostFormValues["visibility"],
+  session: PostUploadSession,
+): Promise<string> {
+  if (session.postId) return session.postId;
+  session.postPromise ??= createProfilePost(timelinePubId, visibility)
+    .then((postId) => {
+      session.postId = postId;
+      return postId;
+    })
+    .finally(() => {
+      session.postPromise = undefined;
+    });
+  return session.postPromise;
+}
+
+export async function preuploadGroupPostFiles(
+  groupId: string,
+  identity: PostIdentity,
+  files: PreparedPostFile[],
+  session: PostUploadSession,
+): Promise<void> {
+  registerPostFiles(files, session);
+  try {
+    const postId = await ensureGroupUploadDraft(groupId, identity, session);
+    await Promise.all(
+      files.map((item) => ensurePostFileUpload(postId, item, session)),
+    );
+  } catch (error) {
+    files.forEach((item) => {
+      const state = session.files.get(item.key);
+      if (state?.status === "queued")
+        updatePostUpload(session, item.key, {
+          status: "error",
+          error:
+            error instanceof Error
+              ? error.message
+              : "업로드를 시작하지 못했습니다.",
+        });
+    });
+    throw error;
+  }
+}
+
+export async function preuploadProfilePostFiles(
+  timelinePubId: string,
+  visibility: ProfilePostFormValues["visibility"],
+  files: PreparedPostFile[],
+  session: PostUploadSession,
+): Promise<void> {
+  registerPostFiles(files, session);
+  try {
+    const postId = await ensureProfileUploadDraft(
+      timelinePubId,
+      visibility,
+      session,
+    );
+    await Promise.all(
+      files.map((item) => ensurePostFileUpload(postId, item, session)),
+    );
+  } catch (error) {
+    files.forEach((item) => {
+      const state = session.files.get(item.key);
+      if (state?.status === "queued")
+        updatePostUpload(session, item.key, {
+          status: "error",
+          error:
+            error instanceof Error
+              ? error.message
+              : "업로드를 시작하지 못했습니다.",
+        });
+    });
+    throw error;
+  }
+}
+
+export async function preuploadPostFiles(
+  postId: string,
+  files: PreparedPostFile[],
+  session: PostUploadSession,
+): Promise<void> {
+  session.postId = postId;
+  registerPostFiles(files, session);
+  await Promise.all(
+    files.map((item) => ensurePostFileUpload(postId, item, session)),
+  );
+}
+
+export async function discardPostFileUpload(
+  key: string,
+  session: PostUploadSession,
+): Promise<void> {
+  const state = session.files.get(key);
+  if (!state) return;
+  state.removed = true;
+  session.controllers.get(key)?.abort();
+  const queuedIndex = session.queue.findIndex((task) => task.key === key);
+  if (queuedIndex >= 0) {
+    const [task] = session.queue.splice(queuedIndex, 1);
+    task.reject(new DOMException("Upload aborted", "AbortError"));
+  }
+  if (state.promise) {
+    try {
+      await state.promise;
+    } catch {
+      // Failed and removed uploads have no live attachment to keep in the editor.
+    }
+  }
+  if (state.attachment) {
+    await deletePreparedPostAttachment(state.attachment.id);
+  }
+  session.files.delete(key);
+  notifyPostUpload(session, key, undefined);
+}
+
+export async function discardPostUploadDraft(
+  kind: "group" | "profile",
+  session: PostUploadSession,
+): Promise<void> {
+  cancelPostUploads(session);
+  if (session.postPromise) {
+    try {
+      await session.postPromise;
+    } catch {
+      return;
+    }
+  }
+  if (!session.postId) return;
+  if (kind === "group") await deleteGroupPost(session.postId);
+  else await deleteProfilePost(session.postId);
+  session.postId = undefined;
+  session.files.clear();
+}
+
+export async function discardPostUploads(
+  session: PostUploadSession,
+): Promise<void> {
+  cancelPostUploads(session);
+  await Promise.allSettled(
+    [...session.files.values()].flatMap((state) =>
+      state.promise ? [state.promise] : [],
+    ),
+  );
+  await Promise.allSettled(
+    [...session.files.values()].flatMap((state) =>
+      state.attachment
+        ? [deletePreparedPostAttachment(state.attachment.id)]
+        : [],
+    ),
+  );
+}
+
+function cancelPostUploads(session: PostUploadSession) {
+  session.cancelled = true;
+  session.files.forEach((state) => {
+    state.removed = true;
+  });
+  session.controllers.forEach((controller) => controller.abort());
+  drainPostUploadQueue(session);
+}
+
+async function uploadPreparedFiles(
+  postId: string,
+  files: PreparedPostFile[],
+  session: PostUploadSession,
+  onProgress?: (
+    progress: PostSaveProgress,
+    completed: number,
+    total: number,
+  ) => void,
+): Promise<string[]> {
+  onProgress?.("uploading", 0, files.length);
+  const ids = await Promise.all(
+    files.map((item) => ensurePostFileUpload(postId, item, session)),
+  );
   onProgress?.("uploading", files.length, files.length);
   return ids;
 }
 
-/**
- * 화면이 들고 있던 표시 순서를 커밋이 받는 첨부 ID 배열로 옮긴다.
- *
- * 화면의 순서 배열은 기존 첨부의 ID와 아직 업로드되지 않은 새 파일의 로컬 key가 섞여 있다.
- * 업로드가 끝나야 새 파일의 ID가 정해지므로 이 변환은 업로드 뒤에만 할 수 있다.
- */
+/** 화면의 표시 순서(기존 ID + 새 파일 local key)를 커밋용 첨부 ID 배열로 옮긴다. 업로드 뒤에만 새 파일 ID가 정해진다. */
 function resolveAttachmentOrder(
   order: string[],
   existing: PostAttachment[],
@@ -301,14 +731,17 @@ export async function createGroupPostWithAttachments(
   ) => void,
 ): Promise<string> {
   onProgress?.("creating", 0, files.length);
-  if (
-    session.postId &&
-    session.authorIdentity &&
-    session.authorIdentity !== values.authorIdentity
-  ) {
-    await deleteGroupPost(session.postId);
-    session.postId = undefined;
-    session.files.clear();
+  if (session.postPromise) await session.postPromise;
+  if (session.postId && session.authorIdentity !== values.authorIdentity) {
+    const { error } = await getSupabase().rpc(
+      "update_group_post_draft_identity",
+      {
+        p_post_id: session.postId,
+        p_author_identity: values.authorIdentity,
+      },
+    );
+    if (error) throw error;
+    session.authorIdentity = values.authorIdentity;
   }
   const postId =
     session.postId ?? (await createGroupPost(groupId, values, false));
@@ -353,14 +786,8 @@ export async function updateGroupPostWithAttachments(
   return postId;
 }
 
-/**
- * 개인 게시물 작성 (기능 명세 §8.4).
- *
- * 그룹 게시물과 같은 초안→업로드→커밋 흐름을 쓴다. 첨부 업로드가 부모 게시물 UUID를 먼저
- * 요구하기 때문이다. 다른 점은 커밋에 제목·카테고리 대신 공개 범위가 들어간다는 것뿐이라
- * 업로드 단계는 `uploadPreparedFiles()`를 그대로 공유한다.
- */
-export async function createProfilePost(
+/** 개인 게시물 작성. 그룹과 같은 초안→업로드→커밋 흐름이며 커밋에 공개 범위가 들어갈 뿐이라 `uploadPreparedFiles()`를 공유한다. */
+async function createProfilePost(
   timelinePubId: string,
   visibility: ProfilePostFormValues["visibility"],
 ): Promise<string> {
@@ -400,6 +827,7 @@ export async function createProfilePostWithAttachments(
   ) => void,
 ): Promise<string> {
   onProgress?.("creating", 0, files.length);
+  if (session.postPromise) await session.postPromise;
   const postId =
     session.postId ??
     (await createProfilePost(timelinePubId, values.visibility));
@@ -450,17 +878,6 @@ export async function deleteProfilePost(postId: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function reorderPostAttachments(
-  postId: string,
-  attachmentIds: string[],
-): Promise<void> {
-  const { error } = await getSupabase().rpc("reorder_post_attachments", {
-    p_post_id: postId,
-    p_attachment_ids: attachmentIds,
-  });
-  if (error) throw error;
-}
-
 export async function deleteGroupPost(postId: string): Promise<void> {
   const { error } = await getSupabase().rpc("delete_group_post", {
     p_post_id: postId,
@@ -480,35 +897,39 @@ export async function setGroupPostPinned(
   return data;
 }
 
-/**
- * 댓글 작성.
- *
- * 세 뮤테이션 모두 RPC가 정본 행을 돌려준다. route를 재검증하는 대신 이 행을 목록에 병합하는
- * 이유는 재검증이 펼쳐 둔 답글 묶음과 불러온 이전 페이지까지 되돌리기 때문이다.
- */
+/** 댓글 작성. RPC가 정본 행을 돌려주므로 재검증 대신 병합한다 — 재검증은 펼친 답글 묶음과 이전 페이지까지 되돌린다. */
 export async function createPostComment(
   postId: string,
   body: string,
   authorIdentity: PostIdentity,
   parentCommentId?: string | null,
   image?: CommentImageInput,
+  mentionEntries: MentionDraftEntry[] = [],
   session = createCommentImageUploadSession(),
-): Promise<PostComment> {
+): Promise<CreatedPostComment> {
   const imageId =
     image && "file" in image
       ? await uploadCommentImage(postId, image, session)
       : undefined;
+  const mentions = normalizeMentions(body, mentionEntries);
   const { data, error } = await getSupabase().rpc("create_post_comment", {
     p_post_id: postId,
-    p_body: body,
+    p_body: mentions.body,
     p_author_identity: authorIdentity,
     p_parent_comment_id: parentCommentId ?? undefined,
     p_image_id: imageId,
+    p_mention_pub_ids: mentions.pubIds,
   });
   if (error) throw error;
-  const comment = data?.[0];
-  if (!comment) throw new Error("댓글을 저장하지 못했습니다.");
-  return hydrateCommittedComment(comment);
+  const row = data?.[0];
+  if (!row) throw new Error("댓글을 저장하지 못했습니다.");
+  // 정본 count는 댓글 행이 아니라 게시물의 것이다. 행에 섞인 채로 두면 목록 캐시가
+  // 댓글 필드로 오해한다. 여기서 떼어 내고 나머지만 댓글로 수화한다.
+  const { post_comment_count: commentCount, ...comment } = row;
+  return {
+    comment: await hydrateCommittedComment(withMentions(comment)),
+    commentCount,
+  };
 }
 
 export async function updatePostComment(
@@ -516,6 +937,7 @@ export async function updatePostComment(
   body: string,
   postId: string,
   image: CommentImageInput | undefined,
+  mentionEntries: MentionDraftEntry[] = [],
   session = createCommentImageUploadSession(),
 ): Promise<PostComment> {
   const imageId =
@@ -524,34 +946,33 @@ export async function updatePostComment(
       : image && "image_id" in image
         ? image.image_id
         : undefined;
+  const mentions = normalizeMentions(body, mentionEntries);
   const { data, error } = await getSupabase().rpc("update_post_comment", {
     p_comment_id: commentId,
-    p_body: body,
+    p_body: mentions.body,
     p_image_id: imageId,
     p_remove_image: image === null,
+    p_mention_pub_ids: mentions.pubIds,
   });
   if (error) throw error;
   const comment = data?.[0];
   if (!comment) throw new Error("댓글을 수정하지 못했습니다.");
-  return hydrateCommittedComment(comment);
+  return hydrateCommittedComment(withMentions(comment));
 }
 
-export async function deletePostComment(commentId: string): Promise<void> {
-  const { error } = await getSupabase().rpc("delete_post_comment", {
+/** 댓글 삭제. 삭제 트리거가 센 게시물 정본 댓글 수를 돌려준다 — 연쇄 삭제 규칙(기능 명세 §9.4)을 클라이언트가 옮겨 적지 않는다. */
+export async function deletePostComment(commentId: string): Promise<number> {
+  const { data, error } = await getSupabase().rpc("delete_post_comment", {
     p_comment_id: commentId,
   });
   if (error) throw error;
+  if (typeof data !== "number") {
+    throw new Error("댓글을 삭제하지 못했습니다.");
+  }
+  return data;
 }
 
-/**
- * 반응 쓰기 (기능 명세 §10.1, §10.2).
- *
- * 넷 다 갱신된 요약을 그대로 돌려준다. 화면은 누르는 즉시 로컬 계산으로 앞서 나가고, 응답이
- * 오면 이 정본으로 덮어쓴다 — 상위 반응 순위는 남들의 반응까지 봐야 알 수 있어서 클라이언트가
- * 혼자 맞힐 수 없다.
- *
- * 실명이냐 익명이냐는 그룹 정책이 정하므로 인자로 받지 않는다.
- */
+/** 반응 쓰기. 넷 다 갱신된 요약을 돌려주고 화면은 이 정본으로 덮는다(상위 반응 순위는 클라이언트가 못 맞힌다). 실명/익명은 그룹 정책이 정한다. */
 export async function setPostReaction(
   postId: string,
   reaction: PostReaction,

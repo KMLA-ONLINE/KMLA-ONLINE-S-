@@ -15,6 +15,7 @@ const baseGroup: GroupDetail = {
   join_policy: "open",
   identity_policy: "identified",
   posting_policy: "members",
+  hide_staff_roles: false,
   icon_path: null,
   cover_path: null,
   member_count: 12,
@@ -126,6 +127,66 @@ describe("GroupDetailScreen", () => {
     expect(
       screen.queryByRole("button", { name: "그룹 가입" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("offers the group link only where a non-member can use it", async () => {
+    const cases: [Partial<GroupDetail>, boolean][] = [
+      [{ join_policy: "open", member_role: "member" }, true],
+      [{ join_policy: "request", member_role: "member" }, false],
+      [{ join_policy: "request", member_role: "admin" }, true],
+      [{ join_policy: "invite_only", member_role: "owner" }, false],
+    ];
+
+    for (const [overrides, visible] of cases) {
+      const { user, unmount } = renderRoute(
+        () => <DetailHarness group={{ ...baseGroup, ...overrides }} />,
+        {
+          path: "/groups/:slug",
+          initialEntries: ["/groups/test-group"],
+        },
+      );
+
+      await user.click(screen.getByRole("button", { name: "그룹 옵션" }));
+      await screen.findByRole("menuitem", { name: "알림 설정" });
+      expect(
+        screen.queryByRole("menuitem", { name: "그룹 링크 복사" }) !== null,
+      ).toBe(visible);
+      unmount();
+    }
+  });
+
+  it("lets a student request a private request group from its link", () => {
+    const previewGroup: GroupDetail = {
+      ...baseGroup,
+      join_policy: "request",
+      membership_state: "none",
+      member_role: null,
+    };
+    const { unmount } = renderRoute(
+      () => <DetailHarness group={previewGroup} />,
+      {
+        path: "/groups/:slug",
+        initialEntries: ["/groups/test-group"],
+      },
+    );
+
+    expect(
+      screen.getByRole("button", { name: "가입 요청" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/비공개 그룹/)).toBeInTheDocument();
+    unmount();
+
+    renderRoute(() => <DetailHarness group={previewGroup} isTeacher />, {
+      path: "/groups/:slug",
+      initialEntries: ["/groups/test-group"],
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "가입 요청" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("교사는 초대 링크로만 가입할 수 있습니다."),
+    ).toBeInTheDocument();
   });
 
   it("opens official-group settings for an app administrator without membership", () => {

@@ -8,6 +8,7 @@ export {
   birthdayKeys,
 } from "~/features/profiles/data/cache";
 export {
+  readProfileEditFailure,
   readProfileEditForm,
   updateMyProfile,
   validateProfileEdit,
@@ -16,15 +17,13 @@ export {
   loadAcceptedProfile,
   loadMyEditableProfile,
   loadProfileDepartments,
+  listBirthdayCalendar,
   listBirthdays,
 } from "~/features/profiles/data/queries";
+export { formatCohort } from "~/features/profiles/model/format";
 export type {
-  AcceptedProfile,
   BirthdayProfile,
-  BirthdayScope,
+  BirthdayCalendarProfile,
   EditableProfile,
   ProfileEditActionData,
-  ProfileEditErrors,
-  ProfileEditValues,
-  ProfileMediaSlot,
 } from "~/features/profiles/model/types";

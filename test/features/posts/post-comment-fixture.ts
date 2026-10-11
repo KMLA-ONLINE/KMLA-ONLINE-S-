@@ -2,14 +2,19 @@ import type { PostComment } from "~/features/posts/model/types";
 
 export function postComment(overrides: Partial<PostComment> = {}): PostComment {
   return {
-    author_avatar_path: null as unknown as string,
+    author_avatar_path: null,
+    author_avatar_url: null,
     author_identity: "identified",
     author_label: "이한별",
     author_name: "이한별",
     author_pub_id: "hanbyeol-25",
     body: "댓글 본문",
+    mentions: [],
+    anonymous_author_restricted: false,
+    anonymous_author_restriction_expires_at: null,
     can_delete: false,
     can_edit: false,
+    can_moderate_anonymous: false,
     comment_id: "comment-id",
     created_at: "2026-08-13T02:00:00Z",
     depth: 0,

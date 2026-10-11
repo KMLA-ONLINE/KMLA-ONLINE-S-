@@ -50,7 +50,7 @@ import {
 import {
   QuickReactionBar,
   ReactionPickerSurface,
-} from "~/features/posts/components/quick-reaction-bar";
+} from "~/features/posts/components/reaction/quick-reaction-bar";
 import type { PostReaction } from "~/features/posts/model/types";
 import { Button } from "~/shared/ui/button";
 import {

@@ -22,4 +22,10 @@ describe("resolveIdentityOptions", () => {
       "staff",
     ]);
   });
+
+  it("removes anonymous while the caller has an active restriction", () => {
+    expect(
+      resolveIdentityOptions("optional_anonymous", "manager", true),
+    ).toEqual(["identified", "staff"]);
+  });
 });

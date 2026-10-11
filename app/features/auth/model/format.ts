@@ -1,9 +1,4 @@
-/**
- * Supabase auth 에러를 사용자에게 보여줄 문구로 바꾼다.
- *
- * 입력은 wire(에러 코드)지만 출력은 화면이라 `data/`가 아니라 여기에 둔다. Supabase client
- * 대역 없이 그대로 테스트할 수 있다는 점이 이 경계의 실익이다.
- */
+/** Supabase auth 에러를 문구로 바꾼다. 출력이 화면이라 `data/`가 아닌 여기에 두고 client 대역 없이 테스트한다. */
 export function getAuthErrorMessage(error: unknown): string {
   const code =
     typeof error === "object" && error && "code" in error

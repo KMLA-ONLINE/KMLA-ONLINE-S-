@@ -2,7 +2,8 @@ import type { GroupDetail } from "~/features/groups/model/types";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 
-export type SettingsSection = "basic" | "join" | "identity" | "posting";
+export type SettingsSection =
+  "basic" | "join" | "identity" | "posting" | "staffRoles";
 
 export function SettingsHidden({
   group,
@@ -15,6 +16,7 @@ export function SettingsHidden({
     <>
       <input type="hidden" name="intent" value="update-settings" />
       <input type="hidden" name="groupId" value={group.group_id} />
+      <input type="hidden" name="settingsSection" value={omit} />
       {omit !== "basic" ? (
         <>
           <input type="hidden" name="name" value={group.name} />
@@ -36,6 +38,13 @@ export function SettingsHidden({
           type="hidden"
           name="postingPolicy"
           value={group.posting_policy}
+        />
+      ) : null}
+      {omit !== "staffRoles" ? (
+        <input
+          type="hidden"
+          name="hideStaffRoles"
+          value={String(group.hide_staff_roles)}
         />
       ) : null}
     </>

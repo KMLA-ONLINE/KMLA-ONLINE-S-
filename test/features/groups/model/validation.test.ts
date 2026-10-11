@@ -15,6 +15,7 @@ const VALID_GROUP: CreateGroupValues = {
   joinPolicy: "open",
   identityPolicy: "optional_anonymous",
   postingPolicy: "members",
+  hideStaffRoles: false,
 };
 
 describe("group creation validation", () => {
@@ -30,6 +31,26 @@ describe("group creation validation", () => {
 
     expect(errors.slug).toMatch(/임의 주소/);
     expect(hasGroupFormErrors(errors)).toBe(true);
+  });
+
+  it("rejects custom addresses for private request groups", () => {
+    expect(
+      validateCreateGroup({ ...VALID_GROUP, joinPolicy: "request" }).slug,
+    ).toMatch(/임의 주소/);
+    expect(
+      validateCreateGroup({ ...VALID_GROUP, joinPolicy: "request", slug: "" }),
+    ).toEqual({});
+  });
+
+  it("keeps official groups public", () => {
+    expect(
+      validateCreateGroup({
+        ...VALID_GROUP,
+        kind: "official",
+        joinPolicy: "request",
+        slug: "",
+      }).joinPolicy,
+    ).toBeDefined();
   });
 
   it("rejects reserved, malformed, and overlong values", () => {
@@ -57,6 +78,7 @@ describe("group creation validation", () => {
     formData.set("joinPolicy", "open");
     formData.set("identityPolicy", "identified");
     formData.set("postingPolicy", "staff");
+    formData.set("hideStaffRoles", "true");
 
     expect(readCreateGroupForm(formData)).toEqual({
       kind: "unofficial",
@@ -66,6 +88,7 @@ describe("group creation validation", () => {
       joinPolicy: "open",
       identityPolicy: "identified",
       postingPolicy: "staff",
+      hideStaffRoles: true,
     });
   });
 });

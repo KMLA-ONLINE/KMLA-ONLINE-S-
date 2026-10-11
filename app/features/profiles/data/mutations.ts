@@ -5,7 +5,24 @@ import type {
   ProfileGender,
   ProfileType,
 } from "~/features/profiles/model/types";
+import { readDateField } from "~/shared/lib/date-field";
 import { getSupabase } from "~/shared/supabase/client";
+
+/** `profiles_pub_id_format`와 같은 형식이다. 앞뒤는 영숫자, 전체 5~15자 (§12.1). */
+const PUB_ID_PATTERN = /^[a-z0-9][a-z0-9-]{3,13}[a-z0-9]$/;
+
+/** `profiles_pub_id_not_reserved`와 같은 목록. 판정은 DB 제약이 하고 이건 저장 전 안내용이다. */
+const RESERVED_PUB_IDS = new Set([
+  "admin",
+  "administrator",
+  "teacher",
+  "staff",
+  "moderator",
+  "support",
+  "system",
+  "root",
+  "sibal",
+]);
 
 function readString(formData: FormData, key: string): string {
   const value = formData.get(key);
@@ -32,9 +49,10 @@ function readAcademicTrack(formData: FormData): ProfileAcademicTrack | null {
 
 export function readProfileEditForm(formData: FormData): ProfileEditValues {
   return {
+    pubId: readString(formData, "pubId").trim().toLowerCase(),
     name: readString(formData, "name"),
     description: readString(formData, "description"),
-    birthday: readString(formData, "birthday"),
+    birthday: readDateField(formData, "birthday"),
     phoneNumber: readString(formData, "phoneNumber"),
     contactEmail: readString(formData, "contactEmail"),
     gender: readGender(formData),
@@ -68,6 +86,12 @@ export function validateProfileEdit(
 ): ProfileEditErrors {
   const errors: ProfileEditErrors = {};
   const name = values.name.trim();
+
+  if (!PUB_ID_PATTERN.test(values.pubId)) {
+    errors.pubId = "slug는 영문 소문자, 숫자, 하이픈으로 된 5~15자여야 합니다.";
+  } else if (RESERVED_PUB_IDS.has(values.pubId)) {
+    errors.pubId = "이 slug는 쓸 수 없습니다.";
+  }
 
   if (name.length < 1 || name.length > 50) {
     errors.name = "이름은 1자 이상 50자 이하로 입력해 주세요.";
@@ -136,10 +160,31 @@ function optional(value: string): string | undefined {
   return trimmed || undefined;
 }
 
+/** 저장 실패를 폼 오류로 옮긴다. 공개 ID 중복은 서버만 알아, 상단 문구 대신 필드 오류로 돌려 고칠 곳을 남긴다. */
+export function readProfileEditFailure(error: unknown): ProfileEditErrors {
+  const candidate = (error ?? {}) as { code?: string; message?: string };
+
+  if (candidate.code === "23505") {
+    return { pubId: "이미 쓰고 있는 slug입니다." };
+  }
+
+  if (
+    candidate.code === "23514" &&
+    candidate.message?.includes("profiles_pub_id")
+  ) {
+    return { pubId: "쓸 수 없는 slug입니다. 다른 값을 입력해 주세요." };
+  }
+
+  return {
+    form: "프로필을 저장하지 못했습니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.",
+  };
+}
+
+/** 저장 뒤의 공개 ID를 돌려준다. 공개 ID를 바꾸면 프로필 주소도 함께 바뀐다. */
 export async function updateMyProfile(
   values: ProfileEditValues,
-): Promise<void> {
-  const { error } = await getSupabase().rpc("update_my_profile", {
+): Promise<string> {
+  const { data, error } = await getSupabase().rpc("update_my_profile", {
     p_name: values.name.trim(),
     p_description: optional(values.description),
     p_birthday: values.birthday || undefined,
@@ -153,7 +198,10 @@ export async function updateMyProfile(
     p_dorm_room: values.dormRoom ?? undefined,
     p_allow_timeline_posts: values.allowTimelinePosts,
     p_is_returning_student: values.isReturningStudent,
+    p_pub_id: values.pubId,
   });
 
   if (error) throw error;
+
+  return data.pub_id;
 }

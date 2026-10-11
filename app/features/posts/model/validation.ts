@@ -1,3 +1,4 @@
+import { POST_ATTACHMENT_LIMIT } from "~/features/posts/model/constants";
 import type {
   PostFormErrors,
   PostFormValues,
@@ -7,8 +8,12 @@ import type {
   ProfilePostFormValues,
 } from "~/features/posts/model/types";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
+import { validateMentionCount } from "~/features/posts/model/mentions";
+import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 
 const IDENTITIES: PostIdentity[] = ["identified", "anonymous", "staff"];
+const VIDEO_FILE_EXTENSION =
+  /\.(?:mp4|m4v|mov|webm|avi|mkv|mpeg|mpg|3gp|3g2|ogv|m2ts)$/i;
 
 export function readPostForm(formData: FormData): PostFormValues {
   const identity = formData.get("authorIdentity");
@@ -22,6 +27,8 @@ export function readPostForm(formData: FormData): PostFormValues {
     authorIdentity: IDENTITIES.includes(identity as PostIdentity)
       ? (identity as PostIdentity)
       : "identified",
+    // 멘션은 폼 필드가 아니라 편집기 상태다. 읽어 온 값에 부르는 쪽이 얹는다.
+    mentions: [],
   };
 }
 
@@ -39,6 +46,10 @@ export function validatePostForm(
     errors.body = "본문 또는 첨부 파일을 추가해 주세요.";
   else if (Array.from(values.body).length > 20_000)
     errors.body = "본문은 20,000자 이하로 입력해 주세요.";
+  else {
+    const tooManyMentions = validateMentionCount(values.body, values.mentions);
+    if (tooManyMentions) errors.body = tooManyMentions;
+  }
   if (allowedIdentities && !allowedIdentities.includes(values.authorIdentity))
     errors.authorIdentity = "선택할 수 없는 작성 신원입니다.";
   if (
@@ -63,13 +74,7 @@ export function readProfilePostForm(formData: FormData): ProfilePostFormValues {
   };
 }
 
-/**
- * 개인 게시물 폼 검사 (기능 명세 §8.3, §8.4).
- *
- * 제목이 없으므로 본문 또는 첨부가 유일한 필수 항목이다. 공개 범위 선택은 자기 타임라인에서만
- * 열리므로, 타인 타임라인이면 `private`이 들어온 것 자체가 잘못된 폼이다 — 서버도 같은 이유로
- * 전체 공개로 되돌린다.
- */
+/** 개인 게시물 폼 검사(기능 명세 §8.3, §8.4). 본문 또는 첨부가 필수이고, 타인 타임라인의 `private`은 잘못된 폼이다(서버도 전체 공개로 되돌린다). */
 export function validateProfilePostForm(
   values: ProfilePostFormValues,
   attachmentCount = 0,
@@ -96,16 +101,73 @@ export function validateSelectedFiles(
   files: File[],
   currentCount: number,
 ): string | null {
-  if (currentCount + files.length > 10)
-    return "첨부 파일은 최대 10개까지 추가할 수 있습니다.";
+  for (const file of files) {
+    if (isPostVideoFile(file))
+      return `동영상 파일은 첨부할 수 없습니다: ${file.name}`;
+  }
+  if (currentCount + files.length > POST_ATTACHMENT_LIMIT)
+    return `첨부 파일은 최대 ${POST_ATTACHMENT_LIMIT}개까지 추가할 수 있습니다.`;
   for (const file of files) {
     if (file.size === 0) return `빈 파일은 첨부할 수 없습니다: ${file.name}`;
-    if (file.size > 30 * 1024 * 1024)
-      return `파일은 30MiB 이하여야 합니다: ${file.name}`;
+    if (file.size > MAX_INPUT_FILE_BYTES)
+      return `파일은 30MB 이하여야 합니다: ${file.name}`;
   }
   return null;
 }
 
+export function isPostVideoFile(file: File): boolean {
+  return file.type.startsWith("video/") || VIDEO_FILE_EXTENSION.test(file.name);
+}
+
 export function hasPostFormErrors(errors: PostFormErrors): boolean {
   return Object.keys(errors).length > 0;
+}
+
+/** 익명·운영진 명의는 되돌릴 수 없으므로 한 번 더 확인받는다. */
+export function needsPostIdentityConfirmation(identity: PostIdentity): boolean {
+  return identity === "staff" || identity === "anonymous";
+}
+
+export function isPostDraftDirty({
+  mode: _mode,
+  initial,
+  title,
+  body,
+  categoryId,
+  authorIdentity,
+  attachmentsChanged,
+}: {
+  mode: "create" | "edit";
+  initial: PostFormValues;
+  title: string;
+  body: string;
+  categoryId: string;
+  authorIdentity: PostIdentity;
+  attachmentsChanged: boolean;
+}): boolean {
+  return (
+    title !== initial.title ||
+    body !== initial.body ||
+    categoryId !== initial.categoryId ||
+    authorIdentity !== initial.authorIdentity ||
+    attachmentsChanged
+  );
+}
+
+export function isProfilePostDraftDirty({
+  initial,
+  body,
+  visibility,
+  attachmentsChanged,
+}: {
+  initial: ProfilePostFormValues;
+  body: string;
+  visibility: PostVisibility;
+  attachmentsChanged: boolean;
+}): boolean {
+  return (
+    body !== initial.body ||
+    visibility !== initial.visibility ||
+    attachmentsChanged
+  );
 }

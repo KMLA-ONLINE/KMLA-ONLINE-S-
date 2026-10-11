@@ -15,6 +15,7 @@ import {
   getGroupIdentityPolicyLabel,
   getGroupJoinPolicyLabel,
   getGroupPostingPolicyLabel,
+  isPrivateJoinPolicy,
 } from "~/features/groups/model/format";
 import type {
   GroupDetail,
@@ -22,18 +23,23 @@ import type {
   GroupJoinRequest,
   GroupMemberPage,
 } from "~/features/groups/model/types";
-import { GroupPostReportsPanel } from "~/features/posts/components/group-post-reports-panel";
+import { GroupPostReportsPanel } from "~/features/posts/components/group/group-post-reports-panel";
 import type { GroupPostReportSummaryPage } from "~/features/posts/data/group-reports";
 import {
+  AnonymousActivityRestrictionNotice,
   GroupPostSearchDialog,
   GroupPostsPanel,
+  PostListSkeleton,
   PostWriteRow,
   type GroupCategory,
   type GroupPostPage,
+  type AnonymousActivityRestriction,
 } from "~/features/posts";
+import { Deferred } from "~/shared/components/deferred";
 import { cn } from "~/shared/lib/utils";
 import { useDelayedPending } from "~/shared/hooks/use-delayed-pending";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
+import { PendingRegion, Skeleton } from "~/shared/ui/skeleton";
 
 type GroupTab = "posts" | "members" | "settings" | "reports";
 
@@ -60,6 +66,7 @@ export function GroupDetailScreen({
   joinRequests = [],
   invite = null,
   reportPage,
+  anonymousActivityRestriction = null,
 }: {
   group: GroupDetail;
   profileId: number;
@@ -68,17 +75,24 @@ export function GroupDetailScreen({
   isTeacher: boolean;
   canDeleteOfficial?: boolean;
   categories?: GroupCategory[];
-  posts?: GroupPostPage;
+  /**
+   * 자식 route로 바로 들어왔을 때는 loader가 기다리지 않고 목록 칸의 카테고리와 함께 promise째
+   * 넘긴다. null은 불러오기 실패다.
+   */
+  posts?:
+    | GroupPostPage
+    | Promise<{ page: GroupPostPage; categories: GroupCategory[] } | null>;
   memberPage?: GroupMemberPage;
   joinRequests?: GroupJoinRequest[];
   invite?: GroupInvite | null;
   reportPage?: GroupPostReportSummaryPage;
+  anonymousActivityRestriction?: AnonymousActivityRestriction | null;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigation = useNavigation();
   const isMember = group.membership_state === "member";
-  const isPrivate = group.join_policy === "invite_only";
+  const isPrivate = isPrivateJoinPolicy(group.join_policy);
   const VisibilityIcon = isPrivate ? LockIcon : Globe2Icon;
   const canManage =
     group.member_role === "owner" || group.member_role === "admin";
@@ -160,21 +174,43 @@ export function GroupDetailScreen({
           ) : tab === "posts" ? (
             <div className="flex flex-col md:gap-3">
               {canCreatePost ? (
-                <PostWriteRow
-                  to={`/groups/${group.slug}/posts/new`}
-                  viewerName={viewerName}
-                  viewerAvatarUrl={viewerAvatarUrl}
-                />
+                <>
+                  <PostWriteRow
+                    to={`/groups/${group.slug}/posts/new`}
+                    viewerName={viewerName}
+                    viewerAvatarUrl={viewerAvatarUrl}
+                  />
+                  {anonymousActivityRestriction ? (
+                    <AnonymousActivityRestrictionNotice
+                      restriction={anonymousActivityRestriction}
+                      className="px-4 text-sm text-muted-foreground md:px-1"
+                    />
+                  ) : null}
+                </>
               ) : null}
-              <GroupPostsPanel
-                key={posts.posts
-                  .map((post) => `${post.post_id}:${post.is_pinned}`)
-                  .join("|")}
-                groupId={group.group_id}
-                slug={group.slug}
-                categories={categories}
-                initialPage={posts}
-              />
+              <Deferred
+                value={
+                  posts instanceof Promise ? posts : { page: posts, categories }
+                }
+                fallback={<PostListSkeleton />}
+              >
+                {(content) =>
+                  content === null ? (
+                    <EmptyTabCard
+                      icon={<MessageSquareTextIcon aria-hidden />}
+                      title="게시물"
+                      description="게시물 목록을 불러오지 못했습니다."
+                    />
+                  ) : (
+                    <KeyedGroupPostsPanel
+                      groupId={group.group_id}
+                      slug={group.slug}
+                      categories={content.categories}
+                      initialPage={content.page}
+                    />
+                  )
+                }
+              </Deferred>
             </div>
           ) : tab === "members" ? (
             memberPage ? (
@@ -239,8 +275,7 @@ export function GroupDetailScreen({
         </aside>
       </div>
 
-      {/* 검색 버튼은 모바일 헤더와 데스크톱 액션 두 곳에 있지만 검색창은 여기 하나뿐이다.
-          열림 상태가 URL에 있으므로 두 곳이 각자 그리면 같은 검색창이 두 장 열린다. */}
+      {/* 열림 상태가 URL에 있어 검색창은 두 트리거 대신 여기 하나만 그린다. */}
       {isMember ? (
         <GroupPostSearchDialog groupId={group.group_id} slug={group.slug} />
       ) : null}
@@ -248,26 +283,34 @@ export function GroupDetailScreen({
   );
 }
 
+type GroupPostsPanelProps = Parameters<typeof GroupPostsPanel>[0];
+
+/** loader가 새 첫 페이지를 주면 더 불러온 페이지를 버리고 다시 시작한다. 고정 변경도 순서를 바꾸므로 key에 넣는다. */
+function KeyedGroupPostsPanel(props: GroupPostsPanelProps) {
+  return (
+    <GroupPostsPanel
+      key={props.initialPage.posts
+        .map((post) => `${post.post_id}:${post.is_pinned}`)
+        .join("|")}
+      {...props}
+    />
+  );
+}
+
 function GroupTabSkeleton({ tab }: { tab: GroupTab }) {
   const rows = tab === "members" ? 6 : tab === "posts" ? 3 : 4;
+  const label = GROUP_TABS.find((item) => item.id === tab)?.label ?? "그룹";
 
   return (
-    <section
-      aria-busy="true"
-      aria-label={`${GROUP_TABS.find((item) => item.id === tab)?.label ?? "그룹"} 탭을 불러오는 중`}
-      className="space-y-3 px-4 md:px-0"
-    >
+    <PendingRegion label={`${label} 탭을`} className="space-y-3 px-4 md:px-0">
       {Array.from({ length: rows }, (_, index) => (
         <div key={index} className="space-y-3 rounded-xl border bg-card p-4">
-          <div className="h-4 w-2/5 animate-pulse rounded bg-muted motion-reduce:animate-none" />
-          <div className="h-3 w-full animate-pulse rounded bg-muted motion-reduce:animate-none" />
-          <div className="h-3 w-3/4 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+          <Skeleton className="h-4 w-2/5" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-3/4" />
         </div>
       ))}
-      <span className="sr-only" aria-live="polite">
-        그룹 탭 내용을 불러오는 중입니다.
-      </span>
-    </section>
+    </PendingRegion>
   );
 }
 

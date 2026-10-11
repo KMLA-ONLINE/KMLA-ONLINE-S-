@@ -21,18 +21,54 @@ import {
   createCommentImageUploadSession,
   createPostComment,
   createPostUploadSession,
+  discardPostFileUpload,
+  preuploadGroupPostFiles,
   updatePostComment,
+  restrictGroupAnonymousActivity,
+  cancelGroupAnonymousActivityRestriction,
 } from "~/features/posts/data/mutations";
+
+describe("anonymous activity restriction mutations", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("uses only the public source kind and source id", async () => {
+    rpc.mockResolvedValueOnce({
+      data: [{ restriction_id: "restriction-id", expires_at: "expires" }],
+      error: null,
+    });
+    await restrictGroupAnonymousActivity(
+      "comment",
+      "comment-id",
+      "제한 사유입니다",
+      30,
+    );
+    expect(rpc).toHaveBeenCalledWith("restrict_group_anonymous_activity", {
+      p_source_kind: "comment",
+      p_source_id: "comment-id",
+      p_reason: "제한 사유입니다",
+      p_duration_days: 30,
+    });
+
+    rpc.mockResolvedValueOnce({ data: null, error: null });
+    await cancelGroupAnonymousActivityRestriction("comment", "comment-id");
+    expect(rpc).toHaveBeenLastCalledWith(
+      "cancel_group_anonymous_activity_restriction",
+      { p_source_kind: "comment", p_source_id: "comment-id" },
+    );
+  });
+});
 
 const values = {
   title: "제목",
   body: "",
   categoryId: "",
   authorIdentity: "identified" as const,
+  mentions: [],
 };
 const prepared = {
   key: "file-key",
   file: new File(["image"], "photo.webp", { type: "image/webp" }),
+  thumbnail: null,
   kind: "image" as const,
   width: 100,
   height: 80,
@@ -79,7 +115,138 @@ describe("post attachment orchestration", () => {
     expect(uploadPostAttachment).toHaveBeenCalledWith(
       "post-id/attachment-id",
       prepared.file,
+      expect.any(Function),
+      expect.any(AbortSignal),
     );
+  });
+
+  it("limits immediate uploads to three concurrent files", async () => {
+    let active = 0;
+    let maximum = 0;
+    const releases: (() => void)[] = [];
+    rpc.mockImplementation((name: string) => {
+      if (name === "create_group_post_upload_draft")
+        return Promise.resolve({ data: "post-id", error: null });
+      if (name === "prepare_post_attachment") {
+        const id = `attachment-${rpc.mock.calls.length}`;
+        return Promise.resolve({
+          data: { id, object_path: `post-id/${id}` },
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: null, error: null });
+    });
+    uploadPostAttachment.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          active += 1;
+          maximum = Math.max(maximum, active);
+          releases.push(() => {
+            active -= 1;
+            resolve();
+          });
+        }),
+    );
+    const files = Array.from({ length: 4 }, (_, index) => ({
+      ...prepared,
+      key: `file-${index}`,
+      file: new File([`${index}`], `${index}.txt`, { type: "text/plain" }),
+      thumbnail: null,
+      kind: "file" as const,
+      width: null,
+      height: null,
+      previewUrl: null,
+    }));
+
+    const uploading = preuploadGroupPostFiles(
+      "group-id",
+      "identified",
+      files,
+      createPostUploadSession(),
+    );
+    await vi.waitFor(() => expect(releases).toHaveLength(3));
+    expect(maximum).toBe(3);
+    releases.splice(0).forEach((release) => release());
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    releases[0]();
+    await uploading;
+  });
+
+  it("cancels a removed file before its queued upload starts", async () => {
+    const releases: (() => void)[] = [];
+    rpc.mockImplementation((name: string) => {
+      if (name === "create_group_post_upload_draft")
+        return Promise.resolve({ data: "post-id", error: null });
+      if (name === "prepare_post_attachment") {
+        const id = `attachment-${rpc.mock.calls.length}`;
+        return Promise.resolve({
+          data: { id, object_path: `post-id/${id}` },
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: null, error: null });
+    });
+    uploadPostAttachment.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releases.push(resolve);
+        }),
+    );
+    const files = Array.from({ length: 4 }, (_, index) => ({
+      ...prepared,
+      key: `file-${index}`,
+      file: new File([`${index}`], `${index}.txt`, { type: "text/plain" }),
+      thumbnail: null,
+      kind: "file" as const,
+      width: null,
+      height: null,
+      previewUrl: null,
+    }));
+    const session = createPostUploadSession();
+
+    const uploading = preuploadGroupPostFiles(
+      "group-id",
+      "identified",
+      files,
+      session,
+    );
+    await vi.waitFor(() => expect(releases).toHaveLength(3));
+    await discardPostFileUpload(files[3].key, session);
+    releases.forEach((release) => release());
+
+    await expect(uploading).rejects.toThrow("Upload aborted");
+    expect(uploadPostAttachment).toHaveBeenCalledTimes(3);
+  });
+
+  it("reuses preuploaded files when the draft identity changes", async () => {
+    const session = createPostUploadSession();
+    rpc.mockImplementation((name: string) => {
+      if (name === "create_group_post_upload_draft")
+        return Promise.resolve({ data: "post-id", error: null });
+      if (name === "prepare_post_attachment")
+        return Promise.resolve({
+          data: { id: "attachment-id", object_path: "post-id/attachment-id" },
+          error: null,
+        });
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    await preuploadGroupPostFiles("group-id", "anonymous", [prepared], session);
+    await createGroupPostWithAttachments(
+      "group-id",
+      values,
+      [prepared],
+      session,
+    );
+
+    expect(uploadPostAttachment).toHaveBeenCalledOnce();
+    expect(rpc.mock.calls.map(([name]) => String(name))).toEqual([
+      "create_group_post_upload_draft",
+      "prepare_post_attachment",
+      "finalize_post_attachment",
+      "update_group_post_draft_identity",
+      "commit_group_post",
+    ]);
   });
 
   it("reuses draft and prepared metadata when retrying", async () => {
@@ -171,7 +338,13 @@ describe("comment image orchestration", () => {
         });
       if (name === "create_post_comment")
         return Promise.resolve({
-          data: [{ comment_id: "comment-id", post_id: "post-id" }],
+          data: [
+            {
+              comment_id: "comment-id",
+              post_id: "post-id",
+              post_comment_count: 7,
+            },
+          ],
           error: null,
         });
       return Promise.resolve({ data: null, error: null });
@@ -185,6 +358,7 @@ describe("comment image orchestration", () => {
       "identified",
       null,
       prepared,
+      [],
       createCommentImageUploadSession(),
     );
 
@@ -212,13 +386,30 @@ describe("comment image orchestration", () => {
       "identified",
       null,
       prepared,
+      [],
       createCommentImageUploadSession(),
     );
 
-    expect(created.images).toEqual([]);
+    expect(created.comment.images).toEqual([]);
     expect(
       rpc.mock.calls.filter(([name]) => name === "create_post_comment"),
     ).toHaveLength(1);
+  });
+
+  it("returns the canonical comment count apart from the comment row", async () => {
+    const created = await createPostComment(
+      "post-id",
+      "본문",
+      "identified",
+      null,
+      undefined,
+      [],
+      createCommentImageUploadSession(),
+    );
+
+    expect(created.commentCount).toBe(7);
+    // 정본 수는 게시물의 것이다. 댓글 행에 섞여 목록 캐시로 흘러가면 안 된다.
+    expect(created.comment).not.toHaveProperty("post_comment_count");
   });
 
   it("does not create a comment after upload failure and reuses preparation on retry", async () => {
@@ -245,6 +436,7 @@ describe("comment image orchestration", () => {
         "identified",
         null,
         prepared,
+        [],
         session,
       ),
     ).rejects.toThrow("offline");
@@ -258,6 +450,7 @@ describe("comment image orchestration", () => {
       "identified",
       null,
       prepared,
+      [],
       session,
     );
     expect(
@@ -282,6 +475,7 @@ describe("comment image orchestration", () => {
       p_body: "updated",
       p_image_id: undefined,
       p_remove_image: true,
+      p_mention_pub_ids: [],
     });
   });
 });

@@ -1,127 +1,74 @@
-import type {
-  AcceptedProfile,
-  ProfileMediaSlot,
-} from "~/features/profiles/model/types";
+import type { ProfileMediaSlot } from "~/features/profiles/model/types";
 import { getSupabase } from "~/shared/supabase/client";
+import { createSignedUrls } from "~/shared/supabase/signed-urls";
+import { STORAGE_UPLOAD_CACHE_CONTROL } from "~/shared/supabase/storage";
 
 const BUCKET = "profile-media";
-const SIGNED_URL_CACHE_MS = 55 * 60 * 1000;
 
-interface SignedUrlCacheEntry {
-  url: string;
-  expiresAt: number;
-}
-
-const signedUrlCache = new Map<string, SignedUrlCacheEntry>();
-
-function isExternalUrl(path: string): boolean {
-  return /^https?:\/\//i.test(path);
-}
-
-export async function createProfileMediaUrls(
-  paths: (string | null)[],
+/** `avatar_path`·`cover_path`는 항상 이 버킷의 object 경로이거나 `null`이다(쓰는 RPC가 둘뿐이라 외부 URL이 들어올 길이 없다). */
+export function createProfileMediaUrls(
+  paths: readonly (string | null | undefined)[],
 ): Promise<Map<string, string>> {
-  const uniquePaths = [
-    ...new Set(paths.filter((path): path is string => Boolean(path))),
-  ];
-  const urls = new Map<string, string>();
-
-  for (const path of uniquePaths) {
-    if (isExternalUrl(path)) urls.set(path, path);
-  }
-
-  const storagePaths = uniquePaths.filter((path) => !isExternalUrl(path));
-  if (storagePaths.length === 0) return urls;
-
-  const supabase = getSupabase();
-  const { data: sessionData } = await supabase.auth.getSession();
-  const userId = sessionData.session?.user.id;
-  const now = Date.now();
-  const missingPaths: string[] = [];
-
-  for (const path of storagePaths) {
-    const cached = userId ? signedUrlCache.get(`${userId}:${path}`) : undefined;
-    if (cached && cached.expiresAt > now) urls.set(path, cached.url);
-    else missingPaths.push(path);
-  }
-
-  if (missingPaths.length === 0) return urls;
-
-  const { data, error } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrls(missingPaths, 3600);
-
-  if (error) return urls;
-
-  for (const item of data ?? []) {
-    if (!item.path || !item.signedUrl) continue;
-    urls.set(item.path, item.signedUrl);
-
-    if (userId) {
-      signedUrlCache.set(`${userId}:${item.path}`, {
-        url: item.signedUrl,
-        expiresAt: now + SIGNED_URL_CACHE_MS,
-      });
-    }
-  }
-
-  return urls;
+  return createSignedUrls(BUCKET, paths);
 }
 
+/** 교체 뒤 이전 이미지는 클라이언트가 지우지 않는다 — 변경 활동 게시물이 계속 참조하므로 판단과 삭제는 정리 큐가 맡는다. */
 export async function replaceProfileMedia(
-  profile: AcceptedProfile,
   slot: ProfileMediaSlot,
   file: File,
+  dimensions: { width: number; height: number },
+  activity: { file: File; width: number; height: number } | null = null,
 ): Promise<void> {
   const supabase = getSupabase();
-  const { data: sessionData } = await supabase.auth.getSession();
-  const userId = sessionData.session?.user.id;
+  const { data, error } = await supabase.rpc("prepare_profile_media", {
+    p_slot: slot,
+    p_size_bytes: file.size,
+    p_width: dimensions.width,
+    p_height: dimensions.height,
+    p_activity_size_bytes: activity?.file.size,
+    p_activity_width: activity?.width,
+    p_activity_height: activity?.height,
+  });
+  if (error) throw error;
+  const prepared = data?.[0];
+  if (!prepared) throw new Error("Profile media upload was not prepared");
 
-  if (!userId) throw new Error("Authentication required.");
-
-  const objectPath = `${userId}/${slot}/${crypto.randomUUID()}`;
-  const previousPath =
-    slot === "avatar" ? profile.avatar_path : profile.cover_path;
-
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(objectPath, file, {
+  const uploads = [
+    supabase.storage.from(BUCKET).upload(prepared.object_path, file, {
       contentType: "image/webp",
+      cacheControl: STORAGE_UPLOAD_CACHE_CONTROL,
       upsert: false,
-    });
+    }),
+  ];
 
+  if (activity && prepared.activity_object_path) {
+    uploads.push(
+      supabase.storage
+        .from(BUCKET)
+        .upload(prepared.activity_object_path, activity.file, {
+          contentType: "image/webp",
+          cacheControl: STORAGE_UPLOAD_CACHE_CONTROL,
+          upsert: false,
+        }),
+    );
+  }
+
+  const results = await Promise.all(uploads);
+  const uploadError = results.find((result) => result.error)?.error;
   if (uploadError) throw uploadError;
 
-  const { error: connectError } = await supabase.rpc("set_my_profile_media", {
-    p_slot: slot,
-    p_object_path: objectPath,
-  });
-
-  if (connectError) {
-    await supabase.storage.from(BUCKET).remove([objectPath]);
-    throw connectError;
-  }
-
-  // Storage RLS가 현재 프로필과 살아 있는 활동 게시물의 스냅샷은 보존한다.
-  if (previousPath && !isExternalUrl(previousPath)) {
-    await supabase.storage.from(BUCKET).remove([previousPath]);
-  }
+  const { error: finalizeError } = await supabase.rpc(
+    "finalize_profile_media",
+    { p_media_id: prepared.media_id },
+  );
+  if (finalizeError) throw finalizeError;
 }
 
 export async function removeProfileMedia(
-  profile: AcceptedProfile,
   slot: ProfileMediaSlot,
 ): Promise<void> {
-  const supabase = getSupabase();
-  const previousPath =
-    slot === "avatar" ? profile.avatar_path : profile.cover_path;
-
-  const { error } = await supabase.rpc("remove_my_profile_media", {
+  const { error } = await getSupabase().rpc("remove_my_profile_media", {
     p_slot: slot,
   });
   if (error) throw error;
-
-  if (previousPath && !isExternalUrl(previousPath)) {
-    await supabase.storage.from(BUCKET).remove([previousPath]);
-  }
 }

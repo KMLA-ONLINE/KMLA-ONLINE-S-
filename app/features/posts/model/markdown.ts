@@ -1,10 +1,32 @@
 import type { Content, PhrasingContent, Root, RootContent, Text } from "mdast";
+import remarkCjkFriendly from "remark-cjk-friendly/bidi";
+import remarkCjkFriendlyStrikethrough from "remark-cjk-friendly-gfm-strikethrough/bidi";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkStringify from "remark-stringify";
-import { unified } from "unified";
+import { unified, type Pluggable } from "unified";
 
-const parser = unified().use(remarkParse).use(remarkGfm);
+import { isMentionHref } from "~/features/posts/model/mentions";
+import {
+  remarkPostUnderline,
+  UNDERLINE_DIRECTIVE,
+} from "~/features/posts/model/underline";
+
+/**
+ * 게시물 Markdown 문법. 정화·읽기 화면이 함께 쓰고, 편집기(Milkdown)도 같은 플러그인을 단다.
+ *
+ * CJK 플러그인은 CommonMark가 `**끝.**다음`처럼 문장부호와 한글이 붙은 자리에서 `**`·`*`·`~~`를
+ * 닫지 않는 규칙을 한중일 글자 옆에서만 푼다(`docs/CONTENT_FORMATTING.md`). 직렬화도 같은 규칙을 써서
+ * 그 자리를 문자 참조 없이 그대로 쓴다. 한 곳에서만 빼면 저장된 `**`가 글자로 보인다.
+ */
+export const postMarkdownPlugins: Pluggable[] = [
+  remarkGfm,
+  remarkCjkFriendly,
+  remarkCjkFriendlyStrikethrough,
+  remarkPostUnderline,
+];
+
+const parser = unified().use(remarkParse).use(postMarkdownPlugins);
 const serializer = unified()
   .use(remarkStringify, {
     bullet: "-",
@@ -13,7 +35,12 @@ const serializer = unified()
     listItemIndent: "one",
     strong: "*",
   })
-  .use(remarkGfm);
+  .use(postMarkdownPlugins);
+
+/** 밑줄 플러그인은 파싱 뒤 변환 단계에서 원문을 보고 밑줄 아닌 지시어를 되돌린다. `parse`만으로는 그 단계가 돌지 않는다. */
+function parse(markdown: string): Root {
+  return parser.runSync(parser.parse(markdown), markdown) as Root;
+}
 
 const EMPTY_LINE_MARKER = "<br />";
 
@@ -47,9 +74,19 @@ function inline(nodes: Content[]): PhrasingContent[] {
       case "emphasis":
       case "delete":
         return [{ ...node, children: inline(node.children) }];
+      case "textDirective": {
+        // 파서는 `:u[`만 지시어로 읽는다(`model/underline.ts`). 다른 이름이 오면 직렬화가 그
+        // 이름을 그대로 `:이름[…]`로 쓰지 않도록 글자만 남긴다.
+        const children = inline(node.children);
+        return node.name === UNDERLINE_DIRECTIVE
+          ? [{ ...node, attributes: {}, children }]
+          : children;
+      }
       case "link": {
         const children = inline(node.children);
-        return isSafeLink(node.url)
+        // 멘션은 CommonMark 링크 모양으로 저장한다(`model/mentions.ts`). 주소가 HTTP(S)가
+        // 아니라 여기서 함께 통과시키지 않으면 정화가 링크를 풀어 멘션이 평문이 된다.
+        return isSafeLink(node.url) || isMentionHref(node.url)
           ? [{ ...node, url: node.url, children }]
           : children;
       }
@@ -72,12 +109,37 @@ function blockText(node: Content): PhrasingContent[] {
   return [];
 }
 
+/**
+ * 줄 머리·끝 공백을 걷는다. Markdown 파서도 원래 버리는 공백인데, 편집기가 넘긴 그대로 직렬화하면
+ * 표준 규칙이 `&#x20;`로 바꿔 저장하고 공백뿐인 본문이 빈 글이 아니게 된다.
+ */
+function trimEdges(children: PhrasingContent[]): PhrasingContent[] {
+  // 편집기의 문단은 저장할 때 한 줄로 이어 붙어 한 문단 안의 줄바꿈이 되므로, 그 앞뒤 공백도 줄 끝이다.
+  const result = children.map((node) =>
+    node.type === "text"
+      ? { ...node, value: node.value.replace(/[ \t]*\n[ \t]*/g, "\n") }
+      : node,
+  );
+  const first = result[0];
+  if (first?.type === "text")
+    result[0] = { ...first, value: first.value.replace(/^[ \t]+/, "") };
+  const last = result.at(-1);
+  if (last?.type === "text")
+    result[result.length - 1] = {
+      ...last,
+      value: last.value.replace(/[ \t]+$/, ""),
+    };
+  return result.filter((node) => node.type !== "text" || node.value !== "");
+}
+
 function blocks(nodes: RootContent[]): RootContent[] {
   return nodes.flatMap((node): RootContent[] => {
     if (node.type === "paragraph")
-      return [{ type: "paragraph", children: inline(node.children) }];
+      return [
+        { type: "paragraph", children: trimEdges(inline(node.children)) },
+      ];
     if (node.type === "heading") {
-      const children = inline(node.children);
+      const children = trimEdges(inline(node.children));
       return node.depth === 2 || node.depth === 3
         ? [{ type: "heading", depth: node.depth, children }]
         : [{ type: "paragraph", children }];
@@ -105,7 +167,7 @@ function blocks(nodes: RootContent[]): RootContent[] {
 }
 
 export function parsePostMarkdown(markdown: string): Root {
-  const parsed = parser.parse(markdown);
+  const parsed = parse(markdown);
   return { type: "root", children: blocks(parsed.children) };
 }
 
@@ -113,7 +175,7 @@ export function sanitizePostMarkdown(markdown: string): string {
   const editorSource = toPostEditorMarkdown(
     normalizePostMarkdownSource(markdown),
   );
-  const parsed = parser.parse(editorSource);
+  const parsed = parse(editorSource);
   const safe = serializer.stringify({
     type: "root",
     children: blocks(parsed.children),
@@ -136,16 +198,7 @@ export function toPostEditorMarkdown(markdown: string): string {
   );
 }
 
-/**
- * Milkdown(ProseMirror)에 넣을 Markdown.
- *
- * 저장 형식은 줄바꿈 하나를 문단 안의 soft break로 둔다. 읽기 화면은 문단에 걸린
- * `whitespace-pre-wrap`이 그대로 줄바꿈으로 보여주지만, ProseMirror 문서에는 soft break에
- * 해당하는 노드가 없어서 편집기에 넣는 순간 사라진다. 그래서 편집기로 들어갈 때만 줄바꿈
- * 하나도 문단으로 갈라 준다.
- *
- * 되돌리는 쪽은 `fromPostEditorMarkdown`이 이미 문단 사이를 줄바꿈 하나로 줄이므로 왕복이 맞는다.
- */
+/** Milkdown(ProseMirror)에 넣을 Markdown. 편집기에는 soft break 노드가 없어 들어갈 때만 줄바꿈 하나도 문단으로 가른다. */
 export function toMilkdownMarkdown(markdown: string): string {
   return normalizePostMarkdownSource(markdown).replace(
     /\n+/g,

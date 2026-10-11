@@ -22,6 +22,7 @@ export function GroupMobileDiscoverCard({
           <img
             src={group.cover_path}
             alt=""
+            crossOrigin="anonymous"
             width={480}
             height={160}
             loading="lazy"

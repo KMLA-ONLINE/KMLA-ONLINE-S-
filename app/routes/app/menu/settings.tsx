@@ -1,7 +1,14 @@
-import { ChevronRightIcon, FlaskConicalIcon } from "lucide-react";
+import {
+  BellIcon,
+  ChevronRightIcon,
+  FlaskConicalIcon,
+  KeyRoundIcon,
+} from "lucide-react";
 import { Link } from "react-router";
 
 import { defineAppChrome, PageHeader } from "~/features/app-shell";
+import { AppVersionCard } from "~/features/support";
+import { ListLinkRow } from "~/shared/components/list-link-row";
 import { useExperimentalFeatures } from "~/shared/hooks/use-experimental-features";
 import {
   Field,
@@ -26,6 +33,27 @@ export default function SettingsPage() {
 
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
         <h1 className="hidden text-2xl font-semibold md:block">설정</h1>
+
+        {/* 메뉴 홈에 흩어져 있던 계정 설정을 모은다. */}
+        <section className="flex flex-col gap-1.5">
+          <h2 className="px-1 text-xs font-semibold tracking-wide text-muted-foreground">
+            계정
+          </h2>
+
+          <div className="divide-y overflow-hidden rounded-xl border bg-card">
+            <ListLinkRow
+              to="/menu/password"
+              label="비밀번호 변경"
+              icon={KeyRoundIcon}
+            />
+
+            <ListLinkRow
+              to="/noti/settings"
+              label="알림 설정"
+              icon={BellIcon}
+            />
+          </div>
+        </section>
 
         <section className="flex flex-col gap-2">
           <div className="px-1">
@@ -68,6 +96,8 @@ export default function SettingsPage() {
             ) : null}
           </div>
         </section>
+
+        <AppVersionCard />
       </div>
     </>
   );

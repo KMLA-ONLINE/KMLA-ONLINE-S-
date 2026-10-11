@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { PlusIcon } from "lucide-react";
 import { data, Link, type ShouldRevalidateFunctionArgs } from "react-router";
 
@@ -5,18 +6,18 @@ import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import {
   cancelGroupJoinRequest,
   getGroupErrorMessage,
+  groupHomeQuery,
   groupKeys,
-  GROUP_STALE_TIME,
   GroupHomeScreen,
+  type GroupHomeItem,
   joinGroup,
-  loadGroupHome,
   requestGroupJoin,
   setGroupPinned,
 } from "~/features/groups";
 import type { Route } from "./+types/index";
 import { Button } from "~/shared/ui/button";
 import { getQueryClient } from "~/shared/lib/query-client";
-import { feedKeys } from "~/features/feed";
+import { resetFeed } from "~/features/feed";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -40,14 +41,19 @@ export function shouldRevalidate({
   return current.toString() !== next.toString();
 }
 
+/**
+ * 캐시가 있으면 2분이 지났어도 기다리지 않고 그린다. 다시 읽기는 화면의 `useQuery`가 뒤에서 맡는다.
+ *
+ * 무효화된 캐시만은 기다린다. 무효화는 가입·고정처럼 내가 방금 바꾼 것이 있다는 표시라, 옛 목록을
+ * 먼저 그리면 방금 한 일이 되돌아간 것처럼 보였다가 바뀐다. 당겨서 새로고침도 이 경로다.
+ */
 export async function clientLoader() {
-  return {
-    groups: await getQueryClient().fetchQuery({
-      queryKey: groupKeys.home(),
-      queryFn: loadGroupHome,
-      staleTime: GROUP_STALE_TIME,
-    }),
-  };
+  const queryClient = getQueryClient();
+  const cached = queryClient.getQueryState<GroupHomeItem[]>(groupKeys.home());
+
+  if (cached?.data && !cached.isInvalidated) return { groups: cached.data };
+
+  return { groups: await queryClient.query(groupHomeQuery()) };
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
@@ -76,13 +82,31 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     } else {
       return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
     }
-    await Promise.all([
-      getQueryClient().invalidateQueries({ queryKey: groupKeys.all }),
-      getQueryClient().invalidateQueries({
-        queryKey: feedKeys.all,
+    const queryClient = getQueryClient();
+    const tasks = [
+      queryClient.invalidateQueries({
+        queryKey: groupKeys.home(),
         refetchType: "none",
       }),
-    ]);
+      queryClient.invalidateQueries({
+        queryKey: groupKeys.details(),
+        refetchType: "none",
+      }),
+    ];
+    if (intent !== "pin") {
+      tasks.push(
+        queryClient.invalidateQueries({
+          queryKey: groupKeys.discoveries(),
+          refetchType: "none",
+        }),
+        queryClient.invalidateQueries({
+          queryKey: groupKeys.memberLists(groupId),
+          refetchType: "none",
+        }),
+      );
+    }
+    if (intent === "join") tasks.push(resetFeed(queryClient));
+    await Promise.all(tasks);
     return data({ ok: true });
   } catch (error) {
     return data({ error: getGroupErrorMessage(error) }, { status: 400 });
@@ -91,6 +115,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
 
 export default function GroupListPage({ loaderData }: Route.ComponentProps) {
   const { profile } = useAppShell();
+  const { data: groups = loaderData.groups } = useQuery(groupHomeQuery());
 
   return (
     <>
@@ -109,7 +134,7 @@ export default function GroupListPage({ loaderData }: Route.ComponentProps) {
         }
       />
       <GroupHomeScreen
-        groups={loaderData.groups}
+        groups={groups}
         isTeacher={profile.type === "teacher"}
         profileId={profile.id}
       />

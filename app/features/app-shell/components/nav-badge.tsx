@@ -1,12 +1,6 @@
 import { cn } from "~/shared/lib/utils";
 
-/**
- * 아이콘 오른쪽 위에 얹는 안 읽음 수.
- *
- * 아이콘에 얹는 이유: 사이드바가 아이콘만 남게 접혀도 보여야 한다.
- * `aria-hidden`인 이유: 링크의 접근성 이름에 이미 "알림 (안 읽음 3개)"로 들어가므로,
- * 여기서 또 읽으면 중복이다.
- */
+/** 아이콘 오른쪽 위 안 읽음 수. 접힌 사이드바에서도 보이도록 아이콘에 얹고, 링크 이름에 이미 들어 있어 `aria-hidden`이다. */
 export function NavBadge({
   count,
   className,

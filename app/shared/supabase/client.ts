@@ -38,8 +38,3 @@ export function getSupabase(): TypedSupabaseClient {
 
   return client;
 }
-
-/** Test-only: drop the memoized client so each test gets a clean instance. */
-export function resetSupabaseForTests(): void {
-  client = undefined;
-}

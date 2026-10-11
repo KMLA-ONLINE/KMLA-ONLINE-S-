@@ -7,19 +7,25 @@ import {
   useRevalidator,
 } from "react-router";
 
-import { absenceKeys } from "~/features/absences/data/cache";
+import { storyKeys } from "~/features/stories/data/cache";
 import {
   AppHeader,
   AppSidebar,
   MobileTabBar,
+  NavigationProgress,
   NavigationSkeleton,
   PullToRefresh,
   resolveAppChrome,
   ScrollRegion,
 } from "~/features/app-shell";
-import { isPostOverlayNavigation } from "~/features/app-shell/model/navigation";
-import { feedKeys } from "~/features/feed";
+import {
+  isPostOverlayNavigation,
+  isSamePathUiOverlayNavigation,
+} from "~/features/app-shell/model/navigation";
+import { resetFeed } from "~/features/feed";
 import { groupKeys } from "~/features/groups";
+import { notificationKeys } from "~/features/notifications";
+import { clearPostEngagement, collapseAllPostBodies } from "~/features/posts";
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
 import { useDelayedPending } from "~/shared/hooks/use-delayed-pending";
 import { getQueryClient } from "~/shared/lib/query-client";
@@ -32,6 +38,9 @@ const CONTENT_WIDTH_CLASS = {
   "5xl": "max-w-5xl",
   full: "max-w-none",
 } as const;
+
+/** 이 시간이 지나도 이동이 안 끝나면 이전 화면 대신 스켈레톤을 그린다. */
+const NAVIGATION_SKELETON_DELAY_MS = 1000;
 
 export default function MainAppLayout() {
   const matches = useMatches();
@@ -56,26 +65,55 @@ export default function MainAppLayout() {
     navigation.state === "loading" &&
     Boolean(pendingPathname) &&
     isPostOverlayNavigation(location.pathname, pendingPathname ?? "");
+  const uiOverlaySearchNavigation =
+    navigation.state === "loading" &&
+    Boolean(pendingPathname) &&
+    isSamePathUiOverlayNavigation(
+      location.pathname,
+      location.search,
+      pendingPathname ?? "",
+      navigation.location.search,
+    );
   const navigationPending =
     navigation.state === "loading" &&
     Boolean(pendingPathname) &&
     !groupDetailSearchNavigation &&
-    !postOverlayNavigation;
-  const showNavigationSkeleton = useDelayedPending(navigationPending);
+    !postOverlayNavigation &&
+    !uiOverlaySearchNavigation;
+  // 짧은 이동은 이전 화면을 그대로 두고 진행 막대만 띄운다. 화면을 스켈레톤으로 바꾸면 금방 끝나는
+  // 이동마다 페이지 머리까지 깜빡인다. 오래 걸릴 때만 다음 화면 모양의 스켈레톤으로 바꿔 눌린 것을 보여 준다.
+  const showNavigationProgress = useDelayedPending(navigationPending, {
+    delay: 100,
+  });
+  const showNavigationSkeleton = useDelayedPending(navigationPending, {
+    delay: NAVIGATION_SKELETON_DELAY_MS,
+  });
   const skeletonPath = pendingPathname ?? location.pathname;
 
   const refresh = async () => {
     const queryClient = getQueryClient();
-    const staleKeys =
-      location.pathname === "/"
-        ? [feedKeys.all, absenceKeys.all]
-        : [groupKeys.all];
+    const stale = (queryKey: readonly unknown[]) =>
+      queryClient.invalidateQueries({ queryKey, refetchType: "none" });
 
-    await Promise.all(
-      staleKeys.map((queryKey) =>
-        queryClient.invalidateQueries({ queryKey, refetchType: "none" }),
-      ),
-    );
+    // 새 서버 snapshot이 기준이 되어야 하므로, 명시적 새로고침 전에 표시용 뮤테이션 값을 버린다.
+    clearPostEngagement(queryClient);
+    // 새로 읽은 목록은 접힌 채로 시작한다. 펼침 상태는 돌아왔을 때 위치를 맞추려고 기억해 둔 것이다.
+    collapseAllPostBodies();
+
+    // 피드는 stale 표시가 아니라 리셋이다. 무한 쿼리에서 무효화는 "쌓인 페이지를 전부 다시
+    // 읽어라"가 되는데, 당겨서 새로고침이 원하는 건 새 세션의 1페이지다. 스토리는 홈 로더가
+    // 캐시를 기다리지 않으므로 레일 observer가 지금 다시 읽게 하고 끝날 때까지 기다린다.
+    await Promise.all([
+      location.pathname === "/"
+        ? Promise.all([
+            resetFeed(queryClient),
+            queryClient
+              .invalidateQueries({ queryKey: storyKeys.all })
+              .catch(() => undefined),
+          ])
+        : stale(groupKeys.all),
+      stale(notificationKeys.badge()),
+    ]);
     await revalidator.revalidate();
   };
 
@@ -86,7 +124,9 @@ export default function MainAppLayout() {
           className={cn(
             "max-md:hidden",
             chrome.header === "hide-on-scroll" &&
-              "transition-[margin,transform] duration-200 ease-out motion-reduce:transition-none md:focus-within:mt-0 md:focus-within:translate-y-0",
+              // 키보드 포커스가 안에 들어와 있으면 숨기지 않는다. `focus-within`이 아니라
+              // `:focus-visible`을 보는 이유는 아래 탭바 주석에 있다.
+              "transition-[margin,transform] duration-200 ease-out motion-reduce:transition-none md:has-[:focus-visible]:mt-0 md:has-[:focus-visible]:translate-y-0",
             chrome.header === "hide-on-scroll" &&
               hidden &&
               "md:-mt-[var(--app-header-h)] md:-translate-y-full",
@@ -98,6 +138,9 @@ export default function MainAppLayout() {
         <AppSidebar className="max-md:hidden" />
 
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          {showNavigationProgress ? (
+            <NavigationProgress className="absolute inset-x-0 top-[var(--app-safe-t)] z-50" />
+          ) : null}
           <PullToRefresh
             containerRef={scrollRef}
             enabled={chrome.pullToRefresh}
@@ -105,6 +148,7 @@ export default function MainAppLayout() {
           />
           <ScrollRegion
             scrollRef={scrollRef}
+            rememberScroll={chrome.rememberScroll}
             className={cn(
               chrome.bottomNav === "hide-on-scroll" &&
                 "max-md:pb-[calc(var(--app-tabbar-h)+var(--app-safe-b))]",
@@ -130,16 +174,26 @@ export default function MainAppLayout() {
 
           {chrome.bottomNav === "none" ? null : (
             <MobileTabBar
+              scrollRef={scrollRef}
               className={cn(
                 "md:hidden",
+                // 키보드 포커스 중에는 숨기지 않는다. `focus-within`은 탭을 눌러도 포커스가 남아
+                // (탭바는 리마운트되지 않음) 자동 숨김을 영영 죽이므로 `:focus-visible`을 쓴다.
                 chrome.bottomNav === "hide-on-scroll" &&
-                  "absolute inset-x-0 bottom-0 transition-transform duration-200 ease-out focus-within:translate-y-0 motion-reduce:transition-none",
+                  "absolute inset-x-0 bottom-0 transition-transform duration-200 ease-out has-[:focus-visible]:translate-y-0 motion-reduce:transition-none",
                 chrome.bottomNav === "hide-on-scroll" &&
                   hidden &&
                   "max-md:translate-y-full",
               )}
             />
           )}
+          {/* 탭바가 숨어도 시스템 내비게이션 바 뒤 띠는 배경색으로 고정한다. */}
+          {chrome.bottomNav === "hide-on-scroll" ? (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[var(--app-safe-b)] bg-background md:hidden"
+            />
+          ) : null}
         </div>
       </div>
     </div>

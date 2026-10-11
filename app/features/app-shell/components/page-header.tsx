@@ -1,16 +1,16 @@
 import { ChevronLeftIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
+import { useScrollToTopOnTap } from "~/shared/hooks/use-scroll-to-top-on-tap";
 import { Button } from "~/shared/ui/button";
 import { cn } from "~/shared/lib/utils";
 
 interface PageHeaderProps {
   title: ReactNode;
-  /** 뒤로가기 버튼. 드릴인 화면(그룹 상세, 프로필)에서 쓴다. */
+  /** 문자열이면 그 경로로, `true`면 이전 화면으로(없으면 홈) 간다. */
   back?: boolean | string;
-  /** 오른쪽 액션 슬롯. 검색·더보기 등. */
   actions?: ReactNode;
   /** 아래로 읽으면 숨긴다. 기본은 고정이고, 긴 목록에서만 켠다. 효과는 모바일에서만 보인다. */
   hideOnScroll?: boolean;
@@ -18,13 +18,8 @@ interface PageHeaderProps {
 }
 
 /**
- * 페이지가 자기 스크롤 컨테이너 안에 직접 그리는 sticky 헤더.
- *
- * 모바일 헤더를 셸이 아니라 페이지가 소유한다. 그래서 화면마다 다른 제목·뒤로가기·액션이
- * 자연스럽게 들어가고, 셸에 `showMobileHeader` 같은 축이 생기지 않는다.
- *
- * `sticky`는 부모 스크롤 컨테이너(`ScrollRegion`)를 기준으로 붙는다 — `fixed`가 아니므로
- * z-index 싸움도 없고 콘텐츠 상단 패딩 보정도 없다.
+ * 페이지가 자기 스크롤 컨테이너 안에 그리는 sticky 헤더. 모바일 헤더를 셸이 아닌 페이지가 소유해 화면별 제목·액션이 자연스럽다.
+ * `fixed`가 아니므로 z-index 싸움도 상단 패딩 보정도 없다.
  */
 export function PageHeader({
   title,
@@ -34,12 +29,19 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const hidden = useHideOnScroll({ enabled: hideOnScroll });
+  const onTap = useScrollToTopOnTap();
 
   return (
+    // 맨 위로 가기는 터치 편의다. 키보드는 스크롤 영역에서 Home 키로 같은 일을 한다.
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
     <header
+      onClick={onTap}
       className={cn(
-        "sticky top-0 z-10 flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] items-center gap-2 bg-background/95 px-3 pt-[var(--app-safe-t)] backdrop-blur md:hidden",
+        // 배경은 불투명하다. `bg-background/95 + backdrop-blur`는 아래로 지나가는
+        // 사진·카드 색을 그대로 빨아들여, 스크롤하는 동안 헤더 색이 계속 바뀌었다.
+        "sticky top-0 z-10 flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] items-center gap-2 bg-background px-3 pt-[var(--app-safe-t)] md:hidden",
         hideOnScroll &&
           "transition-transform duration-200 ease-out motion-reduce:transition-none",
         // 숨김은 모바일에서만. 이 헤더 자체가 md:hidden이라 어차피 데스크톱에선 안 보이지만,
@@ -54,9 +56,15 @@ export function PageHeader({
           size="icon"
           aria-label="뒤로"
           className="-ml-1 shrink-0"
-          onClick={() =>
-            typeof back === "string" ? void navigate(back) : void navigate(-1)
-          }
+          onClick={() => {
+            if (typeof back === "string") {
+              void navigate(back);
+              return;
+            }
+            // 링크로 바로 들어와 앱 안의 이전 화면이 없으면 -1은 앱 밖으로 나간다. 홈으로 보낸다.
+            if (location.key === "default") void navigate("/");
+            else void navigate(-1);
+          }}
         >
           <ChevronLeftIcon />
         </Button>

@@ -31,6 +31,7 @@ create type public.notification_kind as enum (
   'group_deleted',
   'post_moderated',
   'comment_moderated',
+  'anonymous_activity_restricted',
   'application_submitted',
   'account_approved',
   'account_blocked',
@@ -39,7 +40,9 @@ create type public.notification_kind as enum (
   'app_admin_revoked',
   'gongang_manager_granted',
   'gongang_manager_revoked',
-  'gongang_preempted'
+  'gongang_preempted',
+  'post_mentioned',
+  'comment_mentioned'
 );
 alter type public.notification_kind owner to postgres;
 
@@ -66,11 +69,16 @@ create table public.notifications (
   actor_avatar_path text,
   actor_count integer not null default 1,
   group_id uuid references public.groups(id) on delete set null,
-  post_id uuid references public.posts(id) on delete set null,
-  comment_id uuid references public.post_comments(id) on delete set null,
+  -- 대상이 사라진 알림은 갈 곳이 없다. 게시물과 댓글이 하드 삭제로 바뀌었으므로 그 알림도 함께
+  -- 지운다(삭제 및 보존 정책 §5.5). 운영 조치 알림은 애초에 post_id를 싣지 않고 그룹 ID만 싣기
+  -- 때문에, "내 글이 삭제되었다"는 알림은 이 CASCADE에 걸리지 않는다.
+  post_id uuid references public.posts(id) on delete cascade,
+  comment_id uuid references public.post_comments(id) on delete cascade,
   target_profile_id bigint references public.profiles(id) on delete set null,
   reservation_id bigint references public.utility_reservations(id) on delete set null,
   title text not null,
+  detail text,
+  restriction_expires_at timestamptz,
   created_at timestamptz not null default now(),
   last_activity_at timestamptz not null default now(),
   read_at timestamptz,
@@ -81,6 +89,12 @@ create table public.notifications (
   ),
   constraint notifications_title_length check (
     char_length(btrim(title)) between 1 and 160
+  ),
+  constraint notifications_detail_length check (
+    detail is null or (detail = btrim(detail) and char_length(detail) >= 1 and char_length(detail) <= 300)
+  ),
+  constraint notifications_restriction_shape check (
+    restriction_expires_at is null or kind = 'anonymous_activity_restricted'
   ),
   constraint notifications_activity_order check (
     last_activity_at >= created_at and (read_at is null or read_at >= created_at)
@@ -123,6 +137,10 @@ create table private.web_push_subscriptions (
   expiration_time timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  -- Push service가 404/410으로 끝났다고 답한 시각. 행을 바로 지우면 outbox와 시도 기록이
+  -- cascade로 함께 사라져 진단할 근거가 없어지고, 같은 endpoint가 다시 등록돼도 죽은 줄
+  -- 모른다. 그래서 표시만 하고 보관 기간이 지나면 정리한다.
+  gone_at timestamptz,
   constraint web_push_subscriptions_endpoint_length check (
     char_length(endpoint) between 12 and 2048
   ),
@@ -266,6 +284,7 @@ as $$
         on subscription.id = p_delivery.subscription_id
       where notification.id = p_delivery.notification_id
         and subscription.profile_id = p_delivery.recipient_profile_id
+        and subscription.gone_at is null
         and private.notification_push_allowed(
           notification, subscription.created_at, subscription.expiration_time
         )
@@ -281,7 +300,6 @@ as $$
               select 1
               from public.posts as post
               where post.id = notification.post_id
-                and post.deleted_at is null
                 and (
                   (post.kind = 'group' and exists (
                     select 1 from public.group_memberships as membership
@@ -300,7 +318,6 @@ as $$
               join public.groups as group_record on group_record.id = membership.group_id
               where membership.group_id = notification.group_id
                 and membership.profile_id = p_delivery.recipient_profile_id
-                and group_record.deleted_at is null
             )
           )
           or (notification.post_id is null and notification.group_id is null)
@@ -333,6 +350,7 @@ begin
   select target.id, target.recipient_profile_id, subscription.id, 'web_push'
   from private.web_push_subscriptions as subscription
   where subscription.profile_id = target.recipient_profile_id
+    and subscription.gone_at is null
     and private.notification_push_allowed(
       target, subscription.created_at, subscription.expiration_time
     )
@@ -493,6 +511,10 @@ create or replace function public.list_my_notifications(
   target_profile_id bigint,
   reservation_id bigint,
   title text,
+  detail text,
+  comment_excerpt text,
+  reaction public.post_reaction,
+  restriction_expires_at timestamptz,
   created_at timestamptz,
   last_activity_at timestamptz,
   read_at timestamptz
@@ -518,9 +540,15 @@ begin
   -- 이미 recipient 본인의 알림만 돌려주고 그 행이 group_id를 들고 있으므로 이름을 함께
   -- 내보내도 새로 드러나는 정보는 없다.
   --
-  -- 그룹 삭제는 deleted_at을 세우는 soft delete라서 삭제된 그룹의 알림도 이름을 그대로
-  -- 들고 온다. 그래야 "그룹이 영구 삭제되었습니다"가 어느 그룹인지 말할 수 있다. 이름이
-  -- 비는 경우는 애초에 그룹과 무관한 알림뿐이다.
+  -- 그룹 삭제 알림만 그룹 이름을 제목에 싣는다. 그룹 행이 하드 삭제로 사라지면 여기에서
+  -- 이름을 붙일 수 없기 때문이다(삭제 및 보존 정책 §5.2). 이름이 비는 경우는 그 알림과
+  -- 애초에 그룹과 무관한 알림뿐이다.
+  --
+  -- 댓글·답글 알림은 그 댓글 본문을, 반응 알림은 표시된 사람(가장 최근 반응자)이 지금 남겨 둔
+  -- 반응 종류를 함께 돌려준다(기능 명세 §14.3). 알림 행에 복사해 두지 않고 읽을 때 붙이는
+  -- 이유는 댓글이 수정·삭제되거나 반응이 바뀐 뒤에도 옛 원문이 알림에 남지 않게 하려는 것이다.
+  -- 본문은 수신자가 지금 그 게시물을 읽을 수 있을 때만 싣는다 -- 그룹을 나간 뒤에도 그 그룹의
+  -- 댓글이 알림함으로 새어 나오면 안 된다. 제목은 여전히 `title`이며 Push에도 그것만 쓴다.
   return query
   select notification.id, notification.kind, notification.importance,
     notification.category, notification.actor_identity,
@@ -529,11 +557,33 @@ begin
     notification.post_id,
     notification.comment_id, notification.target_profile_id,
     notification.reservation_id,
-    notification.title, notification.created_at, notification.last_activity_at,
+    notification.title, notification.detail,
+    case when notification.kind in ('post_commented', 'comment_replied') then
+      case when notification_comment.deleted_at is null
+        and private.can_read_post(notification_comment.post_id)
+        then nullif(left(btrim(notification_comment.body), 200), '')
+      end
+    end,
+    case notification.kind
+      when 'post_reacted' then (
+        select reaction.reaction from public.post_reactions as reaction
+        where reaction.post_id = notification.post_id
+          and reaction.profile_id = notification.actor_profile_id
+      )
+      when 'comment_reacted' then (
+        select reaction.reaction from public.comment_reactions as reaction
+        where reaction.comment_id = notification.comment_id
+          and reaction.profile_id = notification.actor_profile_id
+      )
+    end,
+    notification.restriction_expires_at,
+    notification.created_at, notification.last_activity_at,
     notification.read_at
   from public.notifications as notification
   left join public.groups as notification_group
     on notification_group.id = notification.group_id
+  left join public.post_comments as notification_comment
+    on notification_comment.id = notification.comment_id
   where notification.recipient_profile_id = caller_profile_id
     and (
       p_before_last_activity_at is null
@@ -546,6 +596,8 @@ end;
 $$;
 alter function public.list_my_notifications(timestamptz, uuid, integer) owner to postgres;
 
+-- 지금 앱은 부르지 않는다. 알림을 열면 resolve_my_notification_destination이 읽음까지 처리한다.
+-- 업데이트를 수락하지 않은 PWA가 아직 이 함수를 부르므로, 그 번들이 사라진 뒤의 릴리스에서 지운다.
 create or replace function public.mark_my_notification_read(p_notification_id uuid)
 returns boolean
 language plpgsql security definer
@@ -708,12 +760,13 @@ create or replace function public.register_my_web_push_subscription(
   p_p256dh text,
   p_auth text,
   p_expiration_time double precision default null
-) returns void
+) returns boolean
 language plpgsql security definer
 set search_path = ''
 as $$
 declare
   caller_profile_id bigint := private.current_profile_id();
+  live boolean;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -725,6 +778,9 @@ begin
     or p_expiration_time > 253402300799999 then
     raise exception 'invalid web push subscription' using errcode = '22023';
   end if;
+  -- 같은 키로 다시 올라온 gone endpoint는 브라우저가 들고 있던 죽은 구독이라 살리지 않는다.
+  -- 그래야 클라이언트가 `gone`을 보고 새로 구독한다. 새 구독은 키가 반드시 바뀌므로, endpoint가
+  -- 우연히 같아도 키가 다르면 살린다.
   insert into private.web_push_subscriptions as subscription (
     profile_id, endpoint, p256dh, auth, expiration_time
   ) values (
@@ -738,7 +794,16 @@ begin
     p256dh = excluded.p256dh,
     auth = excluded.auth,
     expiration_time = excluded.expiration_time,
-    updated_at = now();
+    gone_at = case
+      when subscription.p256dh = excluded.p256dh
+        and subscription.auth = excluded.auth
+        then subscription.gone_at
+    end,
+    updated_at = now()
+  returning subscription.gone_at is null into live;
+  -- false면 클라이언트는 새로 구독해 다시 올린다. 상태를 따로 읽다 실패하거나, 다른 계정이 쓰던
+  -- gone endpoint를 넘겨받은 경우에도 이 답 하나로 걸러진다.
+  return live;
 end;
 $$;
 alter function public.register_my_web_push_subscription(text, text, text, double precision) owner to postgres;
@@ -760,7 +825,7 @@ $$;
 alter function public.unregister_my_web_push_subscription(text) owner to postgres;
 
 create or replace function public.get_my_web_push_status(p_endpoint text)
-returns table (subscribed boolean)
+returns table (subscribed boolean, gone boolean)
 language plpgsql stable security definer
 set search_path = ''
 as $$
@@ -768,11 +833,12 @@ begin
   if auth.uid() is null or private.current_profile_id() is null then
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
-  return query select exists (
-    select 1 from private.web_push_subscriptions as subscription
-    where subscription.endpoint = p_endpoint
-      and subscription.profile_id = private.current_profile_id()
-  );
+  return query
+  select coalesce(bool_or(subscription.gone_at is null), false),
+    coalesce(bool_or(subscription.gone_at is not null), false)
+  from private.web_push_subscriptions as subscription
+  where subscription.endpoint = p_endpoint
+    and subscription.profile_id = private.current_profile_id();
 end;
 $$;
 alter function public.get_my_web_push_status(text) owner to postgres;
@@ -804,7 +870,7 @@ begin
     if target.group_id is not null then
       select group_record.slug into group_slug
       from public.groups as group_record
-      where group_record.id = target.group_id and group_record.deleted_at is null;
+      where group_record.id = target.group_id;
       if group_slug is not null then
         destination := '/groups/' || group_slug || '/posts/' || target.post_id::text;
       end if;
@@ -820,7 +886,7 @@ begin
   elsif target.group_id is not null and private.is_group_member(target.group_id) then
     select group_record.slug into group_slug
     from public.groups as group_record
-    where group_record.id = target.group_id and group_record.deleted_at is null;
+    where group_record.id = target.group_id;
     if group_slug is not null then destination := '/groups/' || group_slug; end if;
   elsif target.target_profile_id is not null then
     select profile.pub_id into profile_pub_id
@@ -850,6 +916,9 @@ create or replace function public.claim_notification_deliveries(
   auth text,
   recipient_email text,
   notification_id uuid,
+  importance public.notification_importance,
+  category public.notification_category,
+  grouping_key uuid,
   title text,
   body text,
   tag text
@@ -908,6 +977,8 @@ begin
   select claimed.id, claimed.lease_id, claimed.channel,
     subscription.endpoint, subscription.p256dh, subscription.auth,
     claimed.recipient_email, notification.id,
+    notification.importance, notification.category,
+    subscription.id,
     notification.title,
     case notification.kind
       when 'post_commented' then '내 게시물에 새 댓글이 등록되었습니다.'
@@ -916,9 +987,16 @@ begin
       when 'account_approved' then '가입이 승인되었습니다.'
       when 'account_blocked' then '가입이 차단되었습니다.'
       when 'account_unblocked' then '차단이 해제되었습니다.'
+      when 'anonymous_activity_restricted' then '그룹 익명 활동이 제한되었습니다.'
+      when 'post_mentioned' then '게시물에서 회원님을 멘션했습니다.'
+      when 'comment_mentioned' then '댓글에서 회원님을 멘션했습니다.'
       else '새 알림이 있습니다.'
     end,
-    'notification:' || notification.id::text
+    case
+      when notification.importance = 'high'
+        then 'notification:' || notification.id::text
+      else 'notification-category:' || notification.category::text || ':' || subscription.id::text
+    end
   from claimed
   left join private.web_push_subscriptions as subscription
     on subscription.id = claimed.subscription_id
@@ -991,10 +1069,16 @@ begin
     delivery_id, outcome, status_code, error_code
   ) values (target.id, p_outcome, p_status_code, left(p_error_code, 80));
 
+  -- 이 delivery가 쌓인 뒤 구독이 새 키로 다시 등록됐다면 404/410은 옛 키에 대한 답이다.
+  -- 그대로 표시하면 방금 살아난 구독을 다시 죽인다.
   if p_outcome = 'gone' then
-    delete from private.web_push_subscriptions where id = target.subscription_id;
-    return true;
-  elsif p_outcome = 'retry' and target.attempt_count < 5 then
+    update private.web_push_subscriptions
+    set gone_at = coalesce(gone_at, now())
+    where id = target.subscription_id
+      and updated_at <= target.created_at;
+  end if;
+
+  if p_outcome = 'retry' and target.attempt_count < 5 then
     update private.notification_delivery_outbox
     set status = 'pending', lease_id = null, lease_expires_at = null,
       available_at = now() + make_interval(secs => least(3600, 15 * (2 ^ target.attempt_count)::integer)),
@@ -1029,6 +1113,8 @@ begin
   get diagnostics removed = row_count;
   delete from private.notification_event_keys
   where notification_id is null and created_at < now() - interval '30 days';
+  delete from private.web_push_subscriptions
+  where gone_at < now() - interval '30 days';
   return removed;
 end;
 $$;
@@ -1133,6 +1219,142 @@ end;
 $$;
 alter function private.notify_comment_created() owner to postgres;
 
+-- 알림 제목은 그대로 잠금 화면 Push 제목이 된다. 게시물 제목을 밝히되(운영 조치 알림이 쓰는
+-- 같은 문형) 40자에서 자른다 -- 길면 화면에서 잘려 문장이 통째로 사라진다.
+create or replace function private.mention_notification_title(
+  p_post_title text,
+  p_in_comment boolean
+) returns text
+language sql immutable
+set search_path = ''
+as $$
+  select '“'
+    || case
+      when char_length(btrim(coalesce(p_post_title, ''))) > 40
+        then left(btrim(p_post_title), 39) || '…'
+      else btrim(coalesce(p_post_title, ''))
+    end
+    || '” 게시물'
+    || case when p_in_comment then '의 댓글' else '' end
+    || '에서 회원님을 멘션했습니다.';
+$$;
+alter function private.mention_notification_title(text, boolean) owner to postgres;
+
+-- 게시된 게시물의 현재 멘션 전원에게 알림을 시도한다. event key가 이미 알린 사람을 막으므로
+-- 여러 번 불러도 처음 등장한 사람만 새 알림을 받는다.
+create or replace function private.emit_post_mention_notifications(p_post_id uuid)
+returns void
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  post_record public.posts;
+  actor_profile_id bigint := private.current_profile_id();
+  actor_profile public.profiles;
+  actor_identity public.notification_actor_identity;
+  mention record;
+begin
+  if actor_profile_id is null then return; end if;
+  select post.* into post_record from public.posts as post where post.id = p_post_id;
+  if post_record.id is null or post_record.published_at is null
+    or post_record.kind <> 'group' then
+    return;
+  end if;
+  actor_identity := post_record.author_identity::text::public.notification_actor_identity;
+  select profile.* into actor_profile
+  from public.profiles as profile where profile.id = actor_profile_id;
+
+  for mention in
+    select target.profile_id from public.post_mentions as target
+    where target.post_id = p_post_id
+  loop
+    perform private.emit_notification(
+      'post-mention:' || p_post_id::text || ':' || mention.profile_id::text,
+      mention.profile_id, 'post_mentioned', 'normal', 'content', actor_identity,
+      actor_profile_id,
+      case actor_identity
+        when 'identified' then coalesce(actor_profile.name, '탈퇴한 사용자')
+        else '운영진'
+      end,
+      case when actor_identity = 'identified' then actor_profile.avatar_path end,
+      private.mention_notification_title(post_record.title, false),
+      post_record.group_id, p_post_id
+    );
+  end loop;
+end;
+$$;
+alter function private.emit_post_mention_notifications(uuid) owner to postgres;
+
+create or replace function private.notify_post_mention()
+returns trigger
+language plpgsql security definer
+set search_path = ''
+as $$
+begin
+  perform private.emit_post_mention_notifications(new.post_id);
+  return new;
+end;
+$$;
+alter function private.notify_post_mention() owner to postgres;
+
+create or replace function private.notify_comment_mention()
+returns trigger
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  comment_record public.post_comments;
+  post_record public.posts;
+  actor_profile_id bigint := private.current_profile_id();
+  actor_profile public.profiles;
+  actor_identity public.notification_actor_identity;
+  direct_recipient_profile_id bigint;
+begin
+  if actor_profile_id is null then return new; end if;
+  select comment.* into comment_record
+  from public.post_comments as comment where comment.id = new.comment_id;
+  if comment_record.id is null or comment_record.deleted_at is not null then
+    return new;
+  end if;
+  select post.* into post_record
+  from public.posts as post where post.id = comment_record.post_id;
+  if post_record.id is null or post_record.published_at is null then return new; end if;
+
+  -- 댓글·답글 알림이 이미 간 사람에게는 멘션 알림을 만들지 않는다(기능 명세 §14.9). 한 댓글로
+  -- 알림 카드 두 장을 받는 일이 없어야 한다.
+  if comment_record.parent_comment_id is not null then
+    select author.profile_id into direct_recipient_profile_id
+    from private.comment_authors as author
+    where author.comment_id = comment_record.parent_comment_id;
+  else
+    select author.profile_id into direct_recipient_profile_id
+    from private.post_authors as author
+    where author.post_id = comment_record.post_id;
+  end if;
+  if new.profile_id is not distinct from direct_recipient_profile_id then
+    return new;
+  end if;
+
+  actor_identity := comment_record.author_identity::text::public.notification_actor_identity;
+  select profile.* into actor_profile
+  from public.profiles as profile where profile.id = actor_profile_id;
+  perform private.emit_notification(
+    'comment-mention:' || new.comment_id::text || ':' || new.profile_id::text,
+    new.profile_id, 'comment_mentioned', 'normal', 'content', actor_identity,
+    actor_profile_id,
+    case actor_identity
+      when 'identified' then coalesce(actor_profile.name, '탈퇴한 사용자')
+      else '운영진'
+    end,
+    case when actor_identity = 'identified' then actor_profile.avatar_path end,
+    private.mention_notification_title(post_record.title, true),
+    post_record.group_id, comment_record.post_id, new.comment_id
+  );
+  return new;
+end;
+$$;
+alter function private.notify_comment_mention() owner to postgres;
+
 create or replace function private.notify_reaction_created()
 returns trigger
 language plpgsql security definer
@@ -1166,7 +1388,7 @@ begin
   end if;
 
   select post.* into target_post from public.posts as post where post.id = target_post_id;
-  if target_post.id is null or target_post.deleted_at is not null
+  if target_post.id is null
     or (target_post.kind = 'profile' and target_post.visibility = 'private') then
     return new;
   end if;
@@ -1223,6 +1445,9 @@ begin
         new.title, new.group_id, new.id
       );
     end loop;
+    -- 초안에 멘션을 넣고 나중에 게시하면 멘션 행은 이미 있고 새 INSERT가 없어 트리거가
+    -- 돌지 않을 수 있다. 게시되는 이 순간이 그 알림의 유일한 자리다.
+    perform private.emit_post_mention_notifications(new.id);
   elsif new.timeline_profile_id <> actor_profile_id then
     perform private.emit_notification(
       'timeline-post:' || new.id::text,
@@ -1303,13 +1528,12 @@ declare
   event_title text;
 begin
   if actor_profile_id is null then return new; end if;
-  if old.deleted_at is null and new.deleted_at is not null then
-    event_kind := 'group_deleted';
-    event_importance := 'high';
-    event_title := '그룹이 영구 삭제되었습니다.';
-  elsif old.join_policy is distinct from new.join_policy
+  -- 그룹 삭제 알림은 여기서 보내지 않는다. 삭제가 UPDATE 가 아니라 DELETE 라 트리거가 볼 수
+  -- 없고, 알림이 그룹 이름을 제목에 실어야 하기 때문이다. public.delete_group 이 보낸다.
+  if old.join_policy is distinct from new.join_policy
     or old.identity_policy is distinct from new.identity_policy
-    or old.posting_policy is distinct from new.posting_policy then
+    or old.posting_policy is distinct from new.posting_policy
+    or old.hide_staff_roles is distinct from new.hide_staff_roles then
     event_kind := 'group_policy_changed';
     event_importance := 'normal';
     event_title := '그룹 운영 정책이 변경되었습니다.';
@@ -1410,12 +1634,40 @@ end;
 $$;
 alter function private.notify_profile_permission_changed() owner to postgres;
 
+create or replace function private.notify_group_anonymous_activity_restricted()
+returns trigger
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  notification_id uuid;
+begin
+  notification_id := private.emit_notification(
+    'anonymous-activity-restricted:' || new.id::text,
+    new.profile_id, 'anonymous_activity_restricted', 'high', 'moderation',
+    'staff', new.restricted_by_profile_id, '운영진', null,
+    '그룹 익명 활동이 제한되었습니다.', new.group_id
+  );
+  update public.notifications
+  set detail = new.reason, restriction_expires_at = new.expires_at
+  where id = notification_id;
+  return new;
+end;
+$$;
+alter function private.notify_group_anonymous_activity_restricted() owner to postgres;
+
 create trigger group_memberships_prepare_notification_preferences
 before insert on public.group_memberships
 for each row execute function private.prepare_group_notification_preferences();
 create trigger post_comments_notify_created
 after insert on public.post_comments
 for each row execute function private.notify_comment_created();
+create trigger post_mentions_notify_created
+after insert on public.post_mentions
+for each row execute function private.notify_post_mention();
+create trigger comment_mentions_notify_created
+after insert on public.comment_mentions
+for each row execute function private.notify_comment_mention();
 create trigger post_reactions_notify_created
 after insert on public.post_reactions
 for each row execute function private.notify_reaction_created();
@@ -1432,7 +1684,7 @@ create trigger group_memberships_notify_official_join
 after insert on public.group_memberships
 for each row execute function private.notify_official_group_joined();
 create trigger groups_notify_changed
-after update of join_policy, identity_policy, posting_policy, deleted_at on public.groups
+after update of join_policy, identity_policy, posting_policy, hide_staff_roles on public.groups
 for each row execute function private.notify_group_changed();
 create trigger profiles_notify_changed
 after update of status, role on public.profiles
@@ -1440,6 +1692,9 @@ for each row execute function private.notify_profile_changed();
 create trigger profile_permissions_notify_changed
 after insert or delete on public.profile_permissions
 for each row execute function private.notify_profile_permission_changed();
+create trigger group_anonymous_activity_restrictions_notify_created
+after insert on private.group_anonymous_activity_restrictions
+for each row execute function private.notify_group_anonymous_activity_restricted();
 
 alter table public.notifications enable row level security;
 create policy notifications_select_own on public.notifications
@@ -1476,6 +1731,10 @@ revoke all on function private.cleanup_expired_notifications() from public;
 revoke all on function private.invoke_notification_dispatcher() from public;
 revoke all on function private.prepare_group_notification_preferences() from public;
 revoke all on function private.notify_comment_created() from public;
+revoke all on function private.mention_notification_title(text, boolean) from public;
+revoke all on function private.emit_post_mention_notifications(uuid) from public;
+revoke all on function private.notify_post_mention() from public;
+revoke all on function private.notify_comment_mention() from public;
 revoke all on function private.notify_reaction_created() from public;
 revoke all on function private.notify_post_published() from public;
 revoke all on function private.notify_group_join_requested() from public;
@@ -1483,6 +1742,7 @@ revoke all on function private.notify_official_group_joined() from public;
 revoke all on function private.notify_group_changed() from public;
 revoke all on function private.notify_profile_changed() from public;
 revoke all on function private.notify_profile_permission_changed() from public;
+revoke all on function private.notify_group_anonymous_activity_restricted() from public;
 
 revoke all on function public.list_my_notifications(timestamptz, uuid, integer) from public;
 grant execute on function public.list_my_notifications(timestamptz, uuid, integer) to authenticated;

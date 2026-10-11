@@ -1,21 +1,15 @@
-import { ShieldCheckIcon, UserCheckIcon, UsersIcon } from "lucide-react";
-import { Link, redirect } from "react-router";
+import {
+  HardDriveIcon,
+  ShieldCheckIcon,
+  UserCheckIcon,
+  UsersIcon,
+} from "lucide-react";
+import { Link, Navigate } from "react-router";
 
-import { assertAppAdmin, isAdminAccessError } from "~/features/admin";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 
 export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
-
-export async function clientLoader() {
-  try {
-    await assertAppAdmin();
-    return null;
-  } catch (error) {
-    if (isAdminAccessError(error)) throw redirect("/");
-    throw error;
-  }
-}
 
 const links = [
   {
@@ -36,11 +30,21 @@ const links = [
     description: "앱 관리자 명단, 임명 및 강등",
     icon: UsersIcon,
   },
+  {
+    to: "/admin/storage-cleanup",
+    title: "파일 정리",
+    description: "고아 파일 정리 상태와 실패 확인",
+    icon: HardDriveIcon,
+  },
 ];
 
+/**
+ * 링크 모음일 뿐 읽는 데이터가 없어 loader를 두지 않는다. 권한은 셸 프로필의 `role`로 가른다.
+ * 실제 권한 확인은 각 하위 관리자 화면의 RPC가 한다.
+ */
 export default function AdminHubPage() {
   const { profile } = useAppShell();
-  if (profile.role !== "admin") return null;
+  if (profile.role !== "admin") return <Navigate to="/" replace />;
   return (
     <>
       <PageHeader title="관리자" back="/menu" />

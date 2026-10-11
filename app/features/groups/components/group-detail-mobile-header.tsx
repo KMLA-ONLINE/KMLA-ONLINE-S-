@@ -1,7 +1,8 @@
 import { ArrowLeftIcon, SearchIcon } from "lucide-react";
 import { useNavigate } from "react-router";
 
-import { useGroupPostSearch } from "~/features/posts";
+import { useScrollToTopOnTap } from "~/shared/hooks/use-scroll-to-top-on-tap";
+import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { Button } from "~/shared/ui/button";
 
 export function GroupDetailMobileHeader({
@@ -15,21 +16,28 @@ export function GroupDetailMobileHeader({
 }) {
   const navigate = useNavigate();
   // 검색창은 `GroupDetailScreen`이 하나만 그린다. 여기서는 URL만 연다.
-  const { openSearch } = useGroupPostSearch();
+  const { openSearch } = useSearchDialogParam();
+  const onTap = useScrollToTopOnTap();
 
   return (
+    // 그룹 이름을 누르면 맨 위로 간다. 키보드는 스크롤 영역에서 Home 키로 같은 일을 한다.
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
     <header
+      onClick={onTap}
       data-slot="group-detail-mobile-header"
-      className="sticky top-0 z-10 flex h-[calc(2.75rem+var(--app-safe-t))] items-center gap-2 border-b bg-background/95 px-1.5 pt-[var(--app-safe-t)] backdrop-blur md:hidden"
+      // 배경은 `PageHeader`처럼 불투명하다(반투명이면 지나가는 이미지 색에 물든다).
+      // 높이는 `--app-page-header-h`보다 한 단계 낮다 — 그룹 화면이 계속 붙들고 있어 같으면 목록이 좁아진다.
+      className="sticky top-0 z-10 flex h-[calc(3rem+var(--app-safe-t))] items-center gap-2 border-b bg-background px-2 pt-[var(--app-safe-t)] md:hidden"
     >
+      {/* 그룹을 빠져나가는 유일한 손잡이라 크게 둔다. */}
       <Button
         type="button"
         variant="ghost"
-        size="icon-sm"
+        size="icon"
         aria-label="그룹 목록으로 돌아가기"
         onClick={() => void navigate("/groups")}
       >
-        <ArrowLeftIcon />
+        <ArrowLeftIcon className="size-5.5" />
       </Button>
 
       <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -38,6 +46,7 @@ export function GroupDetailMobileHeader({
             <img
               src={iconPath}
               alt=""
+              crossOrigin="anonymous"
               width={28}
               height={28}
               className="size-full object-cover"

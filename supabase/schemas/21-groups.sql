@@ -65,8 +65,7 @@ begin
   select group_record.*
   into target_group
   from public.groups as group_record
-  where group_record.id = p_group_id
-    and group_record.deleted_at is null;
+  where group_record.id = p_group_id;
 
   if target_group.id is null then
     raise exception 'group not found' using errcode = 'P0002';
@@ -127,7 +126,7 @@ CREATE OR REPLACE FUNCTION "private"."can_read_group_media"("p_object_path" "tex
               group_record.kind = 'official'
               or (
                 group_record.kind = 'unofficial'
-                and group_record.join_policy <> 'invite_only'
+                and group_record.join_policy = 'open'
               )
             )
           )
@@ -140,6 +139,26 @@ CREATE OR REPLACE FUNCTION "private"."can_read_group_media"("p_object_path" "tex
 $$;
 
 ALTER FUNCTION "private"."can_read_group_media"("p_object_path" "text") OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "private"."can_request_group_join"("p_group_id" "uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  -- 승인 가입 그룹은 비공개라 요청자의 RLS로는 그룹 행이 보이지 않는다. 그래서 정책 대신 여기서 확인한다.
+  select exists (
+    select 1
+    from public.groups as group_record
+    join public.profiles as profile
+      on profile.id = private.current_profile_id()
+    where group_record.id = p_group_id
+      and group_record.kind = 'unofficial'
+      and group_record.join_policy = 'request'
+      and profile.type in ('student', 'alumni')
+  )
+  and not private.is_group_member(p_group_id);
+$$;
+
+ALTER FUNCTION "private"."can_request_group_join"("p_group_id" "uuid") OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "private"."can_upload_group_media"("p_object_path" "text") RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
@@ -156,61 +175,7 @@ $$;
 
 ALTER FUNCTION "private"."can_upload_group_media"("p_object_path" "text") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "private"."claim_group_media_cleanup"("p_limit" integer DEFAULT 100, "p_lease_seconds" integer DEFAULT 300) RETURNS TABLE("media_id" "uuid", "object_path" "text", "lease_id" "uuid")
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-begin
-  if p_limit not between 1 and 500 or p_lease_seconds not between 30 and 3600 then
-    raise exception 'invalid cleanup lease parameters' using errcode = '22023';
-  end if;
-  return query
-  with candidates as (
-    select media.id
-    from public.group_media_objects as media
-    where (
-        (media.status = 'pending' and media.created_at <= now() - interval '48 hours')
-        or media.status = 'deleted'
-      )
-      and (media.cleanup_lease_expires_at is null or media.cleanup_lease_expires_at <= now())
-    order by media.created_at, media.id
-    for update skip locked
-    limit p_limit
-  ), claimed as (
-    update public.group_media_objects as media
-    set cleanup_lease_id = gen_random_uuid(),
-      cleanup_lease_expires_at = now() + make_interval(secs => p_lease_seconds)
-    from candidates
-    where media.id = candidates.id
-    returning media.id, media.object_path, media.cleanup_lease_id
-  )
-  select claimed.id, claimed.object_path, claimed.cleanup_lease_id from claimed;
-end;
-$$;
 
-ALTER FUNCTION "private"."claim_group_media_cleanup"("p_limit" integer, "p_lease_seconds" integer) OWNER TO "postgres";
-
-CREATE OR REPLACE FUNCTION "private"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) RETURNS boolean
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-begin
-  if coalesce(p_object_deleted, false) then
-    delete from public.group_media_objects
-    where id = p_media_id
-      and cleanup_lease_id = p_lease_id
-      and cleanup_lease_expires_at > now()
-      and (status = 'deleted' or (status = 'pending' and created_at <= now() - interval '48 hours'));
-  else
-    update public.group_media_objects
-    set cleanup_lease_id = null, cleanup_lease_expires_at = null
-    where id = p_media_id and cleanup_lease_id = p_lease_id;
-  end if;
-  return found;
-end;
-$$;
-
-ALTER FUNCTION "private"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "private"."initialize_group_memberships"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -420,10 +385,6 @@ begin
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
 
-  -- 프로필 종류를 보지 않는다. `group_memberships_join_open` 정책은 교사를 막지만 그 정책이
-  -- 막는 것은 "스스로 가입"이고, 초대 수락은 definer라 그 옆을 지난다. 교사는 그룹을 찾을
-  -- 수도 가입 요청을 넣을 수도 없으므로 초대가 교사의 유일한 가입 경로다.
-
   select invite.*
   into invite_record
   from private.group_invites as invite
@@ -440,8 +401,7 @@ begin
   select group_record.*
   into invited_group
   from public.groups as group_record
-  where group_record.id = invite_record.group_id
-    and group_record.deleted_at is null;
+  where group_record.id = invite_record.group_id;
 
   if invited_group.id is null then
     raise exception 'invite not found' using errcode = 'P0002';
@@ -451,6 +411,15 @@ begin
   -- 수락이 뚫리지 않도록 여기서 한 번 더 본다.
   if invited_group.kind = 'official' then
     raise exception 'official groups cannot be invited to' using errcode = '55000';
+  end if;
+
+  if not exists (
+    select 1
+    from public.group_memberships as membership
+    where membership.group_id = invited_group.id
+      and membership.profile_id = caller_profile.id
+  ) and not caller_profile.type = any(invite_record.allowed_profile_types) then
+    raise exception 'profile type is not allowed by invite' using errcode = '42501';
   end if;
 
   -- 이미 멤버면 역할을 그대로 둔다. 관리자가 자기 링크를 눌러 멤버로 강등되면 안 된다.
@@ -528,30 +497,9 @@ $$;
 
 ALTER FUNCTION "public"."approve_group_join_request"("p_group_id" "uuid", "p_request_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."claim_group_media_cleanup"("p_limit" integer DEFAULT 100, "p_lease_seconds" integer DEFAULT 300) RETURNS TABLE("media_id" "uuid", "object_path" "text", "lease_id" "uuid")
-    LANGUAGE "sql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-  select *
-  from private.claim_group_media_cleanup(p_limit, p_lease_seconds);
-$$;
 
-ALTER FUNCTION "public"."claim_group_media_cleanup"("p_limit" integer, "p_lease_seconds" integer) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) RETURNS boolean
-    LANGUAGE "sql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-  select private.complete_group_media_cleanup(
-    p_media_id,
-    p_lease_id,
-    p_object_deleted
-  );
-$$;
-
-ALTER FUNCTION "public"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) OWNER TO "postgres";
-
-CREATE OR REPLACE FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text" DEFAULT ''::"text", "p_slug" "text" DEFAULT NULL::"text", "p_join_policy" "public"."group_join_policy" DEFAULT NULL::"public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy" DEFAULT 'optional_anonymous'::"public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy" DEFAULT 'members'::"public"."group_posting_policy") RETURNS TABLE("group_id" "uuid", "slug" "text")
+CREATE OR REPLACE FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text" DEFAULT ''::"text", "p_slug" "text" DEFAULT NULL::"text", "p_join_policy" "public"."group_join_policy" DEFAULT NULL::"public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy" DEFAULT 'optional_anonymous'::"public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy" DEFAULT 'members'::"public"."group_posting_policy", "p_hide_staff_roles" boolean DEFAULT false) RETURNS TABLE("group_id" "uuid", "slug" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -588,11 +536,16 @@ begin
     end
   );
 
-  if chosen_policy = 'invite_only' and nullif(btrim(p_slug), '') is not null then
-    raise exception 'invite-only groups cannot use a custom slug' using errcode = '22023';
+  -- 공개 그룹은 즉시 가입뿐이고, 승인 가입은 비공개 그룹에만 있다(§7.5).
+  if p_kind = 'official' and chosen_policy <> 'open' then
+    raise exception 'official groups must be open' using errcode = '22023';
   end if;
 
-  if chosen_policy = 'invite_only' or nullif(btrim(p_slug), '') is null then
+  if chosen_policy <> 'open' and nullif(btrim(p_slug), '') is not null then
+    raise exception 'private groups cannot use a custom slug' using errcode = '22023';
+  end if;
+
+  if chosen_policy <> 'open' or nullif(btrim(p_slug), '') is null then
     chosen_slug := encode(extensions.gen_random_bytes(7), 'hex');
   else
     chosen_slug := lower(btrim(p_slug));
@@ -600,17 +553,18 @@ begin
 
   insert into public.groups (
     id, slug, slug_is_custom, kind, name, description, join_policy,
-    identity_policy, posting_policy, created_by
+    identity_policy, posting_policy, hide_staff_roles, created_by
   ) values (
     created_group_id,
     chosen_slug,
-    chosen_policy <> 'invite_only' and nullif(btrim(p_slug), '') is not null,
+    chosen_policy = 'open' and nullif(btrim(p_slug), '') is not null,
     p_kind,
     btrim(p_name),
     btrim(coalesce(p_description, '')),
     chosen_policy,
     p_identity_policy,
     p_posting_policy,
+    p_hide_staff_roles,
     caller_profile.id
   );
 
@@ -618,7 +572,7 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") OWNER TO "postgres";
+ALTER FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) OWNER TO "postgres";
 
 SET default_tablespace = '';
 
@@ -631,6 +585,7 @@ CREATE OR REPLACE FUNCTION "public"."delete_group"("p_group_id" "uuid") RETURNS 
 declare
   caller_profile_id bigint := private.current_profile_id();
   target_group public.groups;
+  recipient record;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'group owner required' using errcode = '42501';
@@ -638,7 +593,7 @@ begin
 
   select group_record.* into target_group
   from public.groups as group_record
-  where group_record.id = p_group_id and group_record.deleted_at is null
+  where group_record.id = p_group_id
   for update;
   if target_group.id is null then
     raise exception 'group not found' using errcode = 'P0002';
@@ -658,31 +613,43 @@ begin
     raise exception 'group owner required' using errcode = '42501';
   end if;
 
-  update public.groups
-  set deleted_at = now(), icon_path = null, cover_path = null
-  where id = p_group_id;
+  -- 그룹의 게시물은 첨부·댓글·반응과 함께 즉시 사라진다(삭제 및 보존 정책 §5.2).
+  perform private.purge_posts(array(
+    select post.id from public.posts as post where post.group_id = p_group_id
+  ));
 
-  -- 저장소를 돌려받는다. 청소 워커가 집어 갈 수 있게 tombstone만 찍고 객체는 건드리지 않는다.
-  update public.group_media_objects
-  set status = 'deleted', deleted_at = now(),
-    cleanup_lease_id = null, cleanup_lease_expires_at = null
-  where group_id = p_group_id and status <> 'deleted';
+  -- 그룹을 가리키던 알림은 갈 곳이 없다. 삭제 알림을 새로 보내기 전에 걷어낸다.
+  delete from public.notifications where group_id = p_group_id;
 
-  update public.post_attachments as attachment
-  set status = 'deleted', deleted_at = now(),
-    cleanup_lease_id = null, cleanup_lease_expires_at = null
-  where attachment.status <> 'deleted'
-    and exists (
-      select 1 from public.posts as post
-      where post.id = attachment.post_id and post.group_id = p_group_id
+  -- 삭제 알림만 이름을 제목에 싣는다. 행이 사라진 뒤에는 그룹 이름을 조회할 수 없고, 알림함은
+  -- `notifications.group_id`로 이름을 붙이기 때문이다. 게시물 운영 조치 알림이 제목을 싣는 것과
+  -- 같은 이유다. 트리거가 아니라 여기서 보내는 것도 UPDATE 가 아니라 DELETE 이기 때문이다.
+  for recipient in
+    select membership.profile_id
+    from public.group_memberships as membership
+    where membership.group_id = p_group_id
+      and membership.profile_id <> caller_profile_id
+  loop
+    perform private.emit_notification(
+      'group-deleted:' || p_group_id::text || ':' || recipient.profile_id::text,
+      recipient.profile_id, 'group_deleted', 'high', 'group', 'staff',
+      caller_profile_id, '운영진', null,
+      '“' || target_group.name || '” 그룹이 영구 삭제되었습니다.'
     );
+  end loop;
 
-  update public.posts
-  set deleted_at = now(), pinned_at = null
-  where group_id = p_group_id and deleted_at is null;
+  -- 미디어 경로를 큐로 옮긴 뒤 그룹을 지운다. 멤버십·가입 요청·초대·카테고리·미디어 행은 모두
+  -- 외래 키 CASCADE로 함께 사라진다.
+  insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+  select 'group-media', media.object_path, 'group_media'
+  from public.group_media_objects as media
+  where media.group_id = p_group_id
+  on conflict (bucket, object_path) do update
+    set dry_run = queue.dry_run and excluded.dry_run;
 
-  delete from public.group_join_requests where group_id = p_group_id;
-  delete from public.group_memberships where group_id = p_group_id;
+  delete from public.groups where id = p_group_id;
+
+  perform private.invoke_storage_cleanup(p_quiet => true);
 end;
 $$;
 
@@ -752,7 +719,7 @@ begin
       on join_request.group_id = group_record.id
       and join_request.profile_id = caller_profile.id
     where group_record.kind = 'unofficial'
-      and group_record.join_policy <> 'invite_only'
+      and group_record.join_policy = 'open'
       and (p_include_joined or membership.profile_id is null)
       and (
         normalized_query = ''
@@ -843,7 +810,7 @@ $$;
 
 ALTER FUNCTION "public"."finalize_group_media"("p_media_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."get_group_invite"("p_group_id" "uuid") RETURNS TABLE("token" "text", "expires_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."get_group_invite"("p_group_id" "uuid") RETURNS TABLE("token" "text", "expires_at" timestamp with time zone, "allowed_profile_types" "public"."profile_type"[])
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -851,7 +818,7 @@ begin
   perform private.assert_group_invite_manager(p_group_id);
 
   return query
-  select invite.token, invite.expires_at
+  select invite.token, invite.expires_at, invite.allowed_profile_types
   from private.group_invites as invite
   where invite.group_id = p_group_id
     and invite.expires_at > now();
@@ -860,16 +827,22 @@ $$;
 
 ALTER FUNCTION "public"."get_group_invite"("p_group_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."get_group_invite_preview"("p_token" "text") RETURNS TABLE("group_id" "uuid", "slug" "text", "name" "text", "description" "text", "join_policy" "public"."group_join_policy", "identity_policy" "public"."group_identity_policy", "posting_policy" "public"."group_posting_policy", "member_count" bigint, "expires_at" timestamp with time zone, "already_member" boolean)
+CREATE OR REPLACE FUNCTION "public"."get_group_invite_preview"("p_token" "text") RETURNS TABLE("group_id" "uuid", "slug" "text", "name" "text", "description" "text", "join_policy" "public"."group_join_policy", "identity_policy" "public"."group_identity_policy", "posting_policy" "public"."group_posting_policy", "member_count" bigint, "expires_at" timestamp with time zone, "already_member" boolean, "allowed_profile_types" "public"."profile_type"[], "profile_type_allowed" boolean)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
   caller_profile_id bigint := private.current_profile_id();
+  caller_profile_type public.profile_type;
 begin
   if caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
+
+  select profile.type
+  into caller_profile_type
+  from public.profiles as profile
+  where profile.id = caller_profile_id;
 
   return query
   select
@@ -887,24 +860,63 @@ begin
       from public.group_memberships as membership
       where membership.group_id = group_record.id
         and membership.profile_id = caller_profile_id
-    )
+    ),
+    invite.allowed_profile_types,
+    caller_profile_type = any(invite.allowed_profile_types)
   from private.group_invites as invite
   join public.groups as group_record on group_record.id = invite.group_id
   where invite.token = p_token
     and invite.expires_at > now()
-    and group_record.kind = 'unofficial'
-    and group_record.deleted_at is null;
+    and group_record.kind = 'unofficial';
 end;
 $$;
 
 ALTER FUNCTION "public"."get_group_invite_preview"("p_token" "text") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer DEFAULT 24) RETURNS TABLE("token" "text", "expires_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."get_group_link_preview"("p_slug" "text") RETURNS TABLE("group_id" "uuid", "slug" "text", "name" "text", "description" "text", "join_policy" "public"."group_join_policy", "identity_policy" "public"."group_identity_policy", "posting_policy" "public"."group_posting_policy", "member_count" bigint, "requested_at" timestamp with time zone)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+
+  -- 비공개 승인 가입 그룹은 RLS로 보이지 않는다. 주소를 정확히 아는 비멤버에게만 초대 미리보기와
+  -- 같은 정보를 준다(§7.5). 이미지와 명부는 주지 않는다.
+  return query
+  select
+    group_record.id,
+    group_record.slug,
+    group_record.name,
+    group_record.description,
+    group_record.join_policy,
+    group_record.identity_policy,
+    group_record.posting_policy,
+    group_record.member_count,
+    join_request.requested_at
+  from public.groups as group_record
+  left join public.group_join_requests as join_request
+    on join_request.group_id = group_record.id
+    and join_request.profile_id = caller_profile_id
+  where group_record.slug = p_slug
+    and group_record.kind = 'unofficial'
+    and group_record.join_policy = 'request'
+    and not private.is_group_member(group_record.id);
+end;
+$$;
+
+ALTER FUNCTION "public"."get_group_link_preview"("p_slug" "text") OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer DEFAULT 24, "p_allowed_profile_types" "public"."profile_type"[] DEFAULT ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type", 'teacher'::"public"."profile_type"]) RETURNS TABLE("token" "text", "expires_at" timestamp with time zone, "allowed_profile_types" "public"."profile_type"[])
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
   new_token text := encode(extensions.gen_random_bytes(16), 'hex');
+  normalized_profile_types public.profile_type[];
 begin
   perform private.assert_group_invite_manager(p_group_id);
 
@@ -913,29 +925,45 @@ begin
       using errcode = '22023';
   end if;
 
+  if p_allowed_profile_types is null
+    or cardinality(p_allowed_profile_types) = 0
+    or array_position(p_allowed_profile_types, null) is not null then
+    raise exception 'invite must allow at least one profile type'
+      using errcode = '22023';
+  end if;
+
+  select array_agg(profile_type order by profile_type)
+  into normalized_profile_types
+  from (
+    select distinct profile_type
+    from unnest(p_allowed_profile_types) as allowed(profile_type)
+  ) as normalized;
+
   return query
   insert into private.group_invites as invite (
-    group_id, token, created_by, created_at, expires_at
+    group_id, token, created_by, created_at, expires_at, allowed_profile_types
   )
   values (
     p_group_id,
     new_token,
     private.current_profile_id(),
     now(),
-    now() + make_interval(hours => p_hours)
+    now() + make_interval(hours => p_hours),
+    normalized_profile_types
   )
   on conflict (group_id) do update
   set token = excluded.token,
     created_by = excluded.created_by,
     created_at = excluded.created_at,
-    expires_at = excluded.expires_at
-  returning invite.token, invite.expires_at;
+    expires_at = excluded.expires_at,
+    allowed_profile_types = excluded.allowed_profile_types
+  returning invite.token, invite.expires_at, invite.allowed_profile_types;
 end;
 $$;
 
-ALTER FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer) OWNER TO "postgres";
+ALTER FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer, "p_allowed_profile_types" "public"."profile_type"[]) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_group_join_requests"("p_group_id" "uuid") RETURNS TABLE("request_id" "uuid", "pub_id" "text", "name" "text", "cohort" smallint, "avatar_path" "text", "requested_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."list_group_join_requests"("p_group_id" "uuid") RETURNS TABLE("request_id" "uuid", "pub_id" "text", "name" "text", "cohort" smallint, "is_returning_student" boolean, "avatar_path" "text", "requested_at" timestamp with time zone)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -953,7 +981,7 @@ begin
 
   return query
   select join_request.id, profile.pub_id, profile.name, profile.cohort,
-    profile.avatar_path, join_request.requested_at
+    profile.is_returning_student, profile.avatar_path, join_request.requested_at
   from public.group_join_requests as join_request
   join public.profiles as profile on profile.id = join_request.profile_id
   where join_request.group_id = p_group_id
@@ -963,13 +991,15 @@ $$;
 
 ALTER FUNCTION "public"."list_group_join_requests"("p_group_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_group_members"("p_group_id" "uuid", "p_query" "text" DEFAULT ''::"text", "p_after_role" "public"."group_member_role" DEFAULT NULL::"public"."group_member_role", "p_after_joined_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_after_membership_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 30) RETURNS TABLE("membership_id" "uuid", "pub_id" "text", "name" "text", "cohort" smallint, "avatar_path" "text", "role" "public"."group_member_role", "joined_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."list_group_members"("p_group_id" "uuid", "p_query" "text" DEFAULT ''::"text", "p_after_role" "public"."group_member_role" DEFAULT NULL::"public"."group_member_role", "p_after_joined_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_after_membership_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 30) RETURNS TABLE("membership_id" "uuid", "pub_id" "text", "name" "text", "cohort" smallint, "is_returning_student" boolean, "avatar_path" "text", "role" "public"."group_member_role", "joined_at" timestamp with time zone)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
   caller_profile_id bigint := private.current_profile_id();
   query_text text := btrim(coalesce(p_query, ''));
+  caller_role public.group_member_role;
+  roles_visible boolean;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'group membership required' using errcode = '42501';
@@ -981,6 +1011,79 @@ begin
     or (p_after_role is null) <> (p_after_membership_id is null) then
     raise exception 'member cursor must be complete' using errcode = '22023';
   end if;
+  select caller_membership.role,
+    not group_record.hide_staff_roles
+      or caller_membership.role in ('owner', 'admin')
+  into caller_role, roles_visible
+  from public.groups as group_record
+  join public.group_memberships as caller_membership
+    on caller_membership.group_id = group_record.id
+   and caller_membership.profile_id = caller_profile_id
+  where group_record.id = p_group_id;
+
+  if caller_role is null then
+    raise exception 'group membership required' using errcode = '42501';
+  end if;
+
+  return query
+  select membership.id, profile.pub_id, profile.name, profile.cohort,
+    profile.is_returning_student, profile.avatar_path,
+    case when roles_visible then membership.role else 'member'::public.group_member_role end,
+    membership.joined_at
+  from public.group_memberships as membership
+  join public.profiles as profile on profile.id = membership.profile_id
+  where membership.group_id = p_group_id
+    and (
+      query_text = ''
+      -- 명부가 복학생을 n.5기로 보여 주므로 검색도 표시값을 기준으로 한다.
+      -- 표시값은 저장된 기수를 접두사로 포함하므로 '20'은 20기와 20.5기를 모두 찾는다.
+      or (
+        profile.cohort
+          + case when profile.is_returning_student then 0.5 else 0 end
+      )::text like '%' || query_text || '%'
+      or profile.name ilike '%' || query_text || '%'
+    )
+    and (
+      p_after_role is null
+      or (
+        roles_visible
+        and (membership.role, membership.joined_at, membership.id)
+          > (p_after_role, p_after_joined_at, p_after_membership_id)
+      )
+      or (
+        not roles_visible
+        and (membership.joined_at, membership.id)
+          > (p_after_joined_at, p_after_membership_id)
+      )
+    )
+  order by
+    case when roles_visible then membership.role else 'member'::public.group_member_role end,
+    membership.joined_at,
+    membership.id
+  limit p_limit;
+end;
+$$;
+
+ALTER FUNCTION "public"."list_group_members"("p_group_id" "uuid", "p_query" "text", "p_after_role" "public"."group_member_role", "p_after_joined_at" timestamp with time zone, "p_after_membership_id" "uuid", "p_limit" integer) OWNER TO "postgres";
+
+-- 멘션 후보 목록(기능 명세 §8.14). 명부(`list_group_members`)와 정렬이 다르다 -- 명부는 그룹
+-- 역할 순이지만 여기서는 선생님을 먼저, 그다음 최근 기수부터 보여준다. 부를 일이 잦은 순서다.
+-- 명부 RPC에 정렬 인자를 얹지 않고 따로 둔 것은 반환 모양도 다르기 때문이다: 화면이 기수를
+-- 함께 보여주므로 `type`이 필요하고, 커서 페이지네이션은 필요 없다.
+CREATE OR REPLACE FUNCTION "public"."search_group_mention_candidates"("p_group_id" "uuid", "p_query" "text" DEFAULT ''::"text", "p_limit" integer DEFAULT 30) RETURNS TABLE("pub_id" "text", "name" "text", "cohort" smallint, "is_returning_student" boolean, "profile_type" "public"."profile_type", "avatar_path" "text")
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  query_text text := btrim(coalesce(p_query, ''));
+begin
+  if auth.uid() is null or caller_profile_id is null then
+    raise exception 'group membership required' using errcode = '42501';
+  end if;
+  if p_limit not between 1 and 50 then
+    raise exception 'mention candidate limit must be between 1 and 50' using errcode = '22023';
+  end if;
   if not exists (
     select 1 from public.group_memberships as caller_membership
     where caller_membership.group_id = p_group_id
@@ -990,27 +1093,37 @@ begin
   end if;
 
   return query
-  select membership.id, profile.pub_id, profile.name, profile.cohort,
-    profile.avatar_path, membership.role, membership.joined_at
+  select profile.pub_id, profile.name, profile.cohort,
+    profile.is_returning_student, profile.type, profile.avatar_path
   from public.group_memberships as membership
   join public.profiles as profile on profile.id = membership.profile_id
   where membership.group_id = p_group_id
+    -- 자기 자신은 부를 일이 없어 후보에서 뺀다. 본문에 이미 있는 자기 멘션은 그대로 저장된다.
+    and profile.id <> caller_profile_id
+    and profile.status = 'accepted'
+    and profile.deleted_at is null
     and (
       query_text = ''
-      or profile.cohort::text like '%' || query_text || '%'
       or profile.name ilike '%' || query_text || '%'
+      -- 명부와 같은 규칙으로 표시값을 검색한다. 복학생은 n.5기로 보이므로 '20'이 20기와
+      -- 20.5기를 함께 찾는다.
+      or (
+        profile.cohort + case when profile.is_returning_student then 0.5 else 0 end
+      )::text like '%' || query_text || '%'
+      -- 선생님은 기수가 없어 화면에 '선생님'으로 나온다. 보이는 대로 검색되어야 한다.
+      or (profile.type = 'teacher' and '선생님' like '%' || query_text || '%')
     )
-    and (
-      p_after_role is null
-      or (membership.role, membership.joined_at, membership.id)
-        > (p_after_role, p_after_joined_at, p_after_membership_id)
-    )
-  order by membership.role, membership.joined_at, membership.id
+  order by
+    case when profile.type = 'teacher' then 0 else 1 end,
+    (profile.cohort + case when profile.is_returning_student then 0.5 else 0 end)
+      desc nulls last,
+    profile.name,
+    profile.id
   limit p_limit;
 end;
 $$;
 
-ALTER FUNCTION "public"."list_group_members"("p_group_id" "uuid", "p_query" "text", "p_after_role" "public"."group_member_role", "p_after_joined_at" timestamp with time zone, "p_after_membership_id" "uuid", "p_limit" integer) OWNER TO "postgres";
+ALTER FUNCTION "public"."search_group_mention_candidates"("p_group_id" "uuid", "p_query" "text", "p_limit" integer) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."prepare_group_media"("p_group_id" "uuid", "p_slot" "public"."group_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) RETURNS TABLE("media_id" "uuid", "object_path" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -1244,7 +1357,7 @@ $$;
 
 ALTER FUNCTION "public"."update_group_member_role"("p_group_id" "uuid", "p_membership_id" "uuid", "p_role" "public"."group_member_role") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") RETURNS TABLE("name" "text", "description" "text", "join_policy" "public"."group_join_policy", "identity_policy" "public"."group_identity_policy", "posting_policy" "public"."group_posting_policy", "updated_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) RETURNS TABLE("name" "text", "description" "text", "join_policy" "public"."group_join_policy", "identity_policy" "public"."group_identity_policy", "posting_policy" "public"."group_posting_policy", "hide_staff_roles" boolean, "updated_at" timestamp with time zone)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1267,7 +1380,7 @@ begin
   ) then
     raise exception 'group administrator required' using errcode = '42501';
   end if;
-  if current_group.join_policy <> 'invite_only' and p_join_policy = 'invite_only' then
+  if current_group.join_policy = 'open' and p_join_policy <> 'open' then
     raise exception 'public groups cannot become private' using errcode = '55000';
   end if;
   if current_group.join_policy = 'request' and p_join_policy <> 'request' and exists (
@@ -1281,14 +1394,15 @@ begin
   update public.groups as group_record
   set name = btrim(p_name), description = btrim(coalesce(p_description, '')),
     join_policy = p_join_policy, identity_policy = p_identity_policy,
-    posting_policy = p_posting_policy
+    posting_policy = p_posting_policy, hide_staff_roles = p_hide_staff_roles
   where group_record.id = p_group_id
   returning group_record.name, group_record.description, group_record.join_policy,
-    group_record.identity_policy, group_record.posting_policy, group_record.updated_at;
+    group_record.identity_policy, group_record.posting_policy,
+    group_record.hide_staff_roles, group_record.updated_at;
 end;
 $$;
 
-ALTER FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") OWNER TO "postgres";
+ALTER FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "private"."group_invites" (
     "group_id" "uuid" NOT NULL,
@@ -1296,6 +1410,8 @@ CREATE TABLE IF NOT EXISTS "private"."group_invites" (
     "created_by" bigint NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "expires_at" timestamp with time zone NOT NULL,
+    "allowed_profile_types" "public"."profile_type"[] DEFAULT ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type", 'teacher'::"public"."profile_type"] NOT NULL,
+    CONSTRAINT "group_invites_allowed_profile_types_not_empty" CHECK (("cardinality"("allowed_profile_types") > 0)),
     CONSTRAINT "group_invites_expires_after_creation" CHECK (("expires_at" > "created_at")),
     CONSTRAINT "group_invites_token_format" CHECK (("token" ~ '^[a-f0-9]{32}$'::"text"))
 );
@@ -1323,9 +1439,6 @@ CREATE TABLE IF NOT EXISTS "public"."group_media_objects" (
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "ready_at" timestamp with time zone,
     "deleted_at" timestamp with time zone,
-    "cleanup_lease_id" "uuid",
-    "cleanup_lease_expires_at" timestamp with time zone,
-    CONSTRAINT "group_media_cleanup_lease_check" CHECK ((("cleanup_lease_id" IS NULL) = ("cleanup_lease_expires_at" IS NULL))),
     CONSTRAINT "group_media_dimensions_check" CHECK (((("slot" = 'icon'::"public"."group_media_slot") AND ("width" = "height") AND (("width" >= 1) AND ("width" <= 512))) OR (("slot" = 'cover'::"public"."group_media_slot") AND ("width" = ("height" * 4)) AND (("width" >= 4) AND ("width" <= 2400))))),
     CONSTRAINT "group_media_path_check" CHECK (("object_path" = ((((("group_id")::"text" || '/'::"text") || ("slot")::"text") || '/'::"text") || ("id")::"text"))),
     CONSTRAINT "group_media_size_check" CHECK ((("size_bytes" >= 1) AND ("size_bytes" <=
@@ -1343,6 +1456,7 @@ CREATE TABLE IF NOT EXISTS "public"."group_memberships" (
     "profile_id" bigint NOT NULL,
     "role" "public"."group_member_role" DEFAULT 'member'::"public"."group_member_role" NOT NULL,
     "joined_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "posts_visited_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "pinned_at" timestamp with time zone,
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL
 );
@@ -1360,13 +1474,13 @@ CREATE TABLE IF NOT EXISTS "public"."groups" (
     "join_policy" "public"."group_join_policy" NOT NULL,
     "identity_policy" "public"."group_identity_policy" NOT NULL,
     "posting_policy" "public"."group_posting_policy" NOT NULL,
+    "hide_staff_roles" boolean DEFAULT false NOT NULL,
     "created_by" bigint NOT NULL,
     "icon_path" "text",
     "cover_path" "text",
     "member_count" bigint DEFAULT 0 NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "deleted_at" timestamp with time zone,
     CONSTRAINT "groups_description_length" CHECK (("char_length"("description") <= 2000)),
     CONSTRAINT "groups_member_count_nonnegative" CHECK (("member_count" >= 0)),
     CONSTRAINT "groups_name_length" CHECK ((("char_length"("btrim"("name")) >= 1) AND ("char_length"("btrim"("name")) <= 50))),
@@ -1424,7 +1538,7 @@ CREATE INDEX "groups_discovery_idx" ON "public"."groups" USING "btree" ("kind", 
 
 CREATE UNIQUE INDEX "groups_official_name_unique_idx" ON "public"."groups" USING "btree" ("lower"("btrim"("name"))) WHERE ("kind" = 'official'::"public"."group_kind");
 
-CREATE INDEX "groups_search_name_trgm_idx" ON "public"."groups" USING "gin" ("search_name" "extensions"."gin_trgm_ops") WHERE (("kind" = 'unofficial'::"public"."group_kind") AND ("join_policy" <> 'invite_only'::"public"."group_join_policy"));
+CREATE INDEX "groups_search_name_trgm_idx" ON "public"."groups" USING "gin" ("search_name" "extensions"."gin_trgm_ops") WHERE (("kind" = 'unofficial'::"public"."group_kind") AND ("join_policy" = 'open'::"public"."group_join_policy"));
 
 CREATE OR REPLACE TRIGGER "group_join_requests_lock_group" BEFORE INSERT ON "public"."group_join_requests" FOR EACH ROW EXECUTE FUNCTION "private"."lock_group_for_join_request"();
 
@@ -1468,10 +1582,7 @@ CREATE POLICY "group_invites_deny_client_access" ON "private"."group_invites" US
 
 ALTER TABLE "public"."group_join_requests" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "group_join_requests_create_own" ON "public"."group_join_requests" FOR INSERT TO "authenticated" WITH CHECK ((("profile_id" = "private"."current_profile_id"()) AND (EXISTS ( SELECT 1
-   FROM ("public"."profiles" "profile"
-     JOIN "public"."groups" "group_record" ON (("group_record"."id" = "group_join_requests"."group_id")))
-  WHERE (("profile"."id" = "group_join_requests"."profile_id") AND ("profile"."type" = ANY (ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type"])) AND ("group_record"."join_policy" = 'request'::"public"."group_join_policy")))) AND (NOT "private"."is_group_member"("group_id"))));
+CREATE POLICY "group_join_requests_create_own" ON "public"."group_join_requests" FOR INSERT TO "authenticated" WITH CHECK ((("profile_id" = "private"."current_profile_id"()) AND "private"."can_request_group_join"("group_id")));
 
 CREATE POLICY "group_join_requests_delete_own" ON "public"."group_join_requests" FOR DELETE TO "authenticated" USING (("profile_id" = "private"."current_profile_id"()));
 
@@ -1498,14 +1609,17 @@ CREATE POLICY "group_memberships_update_own" ON "public"."group_memberships" FOR
 
 ALTER TABLE "public"."groups" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "groups_select_visible" ON "public"."groups" FOR SELECT TO "authenticated" USING ((("deleted_at" IS NULL) AND (EXISTS ( SELECT 1
+CREATE POLICY "groups_select_visible" ON "public"."groups" FOR SELECT TO "authenticated" USING (((EXISTS ( SELECT 1
     FROM "public"."profiles" "profile"
-   WHERE (("profile"."id" = "private"."current_profile_id"()) AND ((("profile"."role" = 'admin'::"public"."app_role") AND ("groups"."kind" = 'official'::"public"."group_kind")) OR (("profile"."type" = ANY (ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type"])) AND (("groups"."kind" = 'official'::"public"."group_kind") OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND ("groups"."join_policy" <> 'invite_only'::"public"."group_join_policy")))) OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND "private"."is_group_member"("groups"."id"))))))));
+   WHERE (("profile"."id" = "private"."current_profile_id"()) AND ((("profile"."role" = 'admin'::"public"."app_role") AND ("groups"."kind" = 'official'::"public"."group_kind")) OR (("profile"."type" = ANY (ARRAY['student'::"public"."profile_type", 'alumni'::"public"."profile_type"])) AND (("groups"."kind" = 'official'::"public"."group_kind") OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND ("groups"."join_policy" = 'open'::"public"."group_join_policy")))) OR (("groups"."kind" = 'unofficial'::"public"."group_kind") AND "private"."is_group_member"("groups"."id"))))))));
 
 REVOKE ALL ON FUNCTION "private"."assert_group_invite_manager"("p_group_id" "uuid") FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."can_manage_group"("p_group_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."can_manage_group"("p_group_id" "uuid") TO "authenticated";
+
+REVOKE ALL ON FUNCTION "private"."can_request_group_join"("p_group_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."can_request_group_join"("p_group_id" "uuid") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "private"."can_read_group_media"("p_object_path" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."can_read_group_media"("p_object_path" "text") TO "authenticated";
@@ -1513,11 +1627,7 @@ GRANT ALL ON FUNCTION "private"."can_read_group_media"("p_object_path" "text") T
 REVOKE ALL ON FUNCTION "private"."can_upload_group_media"("p_object_path" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."can_upload_group_media"("p_object_path" "text") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "private"."claim_group_media_cleanup"("p_limit" integer, "p_lease_seconds" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."claim_group_media_cleanup"("p_limit" integer, "p_lease_seconds" integer) TO "service_role";
 
-REVOKE ALL ON FUNCTION "private"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) TO "service_role";
 
 REVOKE ALL ON FUNCTION "private"."initialize_group_memberships"() FROM PUBLIC;
 
@@ -1540,14 +1650,13 @@ GRANT ALL ON FUNCTION "public"."accept_group_invite"("p_token" "text") TO "authe
 REVOKE ALL ON FUNCTION "public"."approve_group_join_request"("p_group_id" "uuid", "p_request_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."approve_group_join_request"("p_group_id" "uuid", "p_request_id" "uuid") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."claim_group_media_cleanup"("p_limit" integer, "p_lease_seconds" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."claim_group_media_cleanup"("p_limit" integer, "p_lease_seconds" integer) TO "service_role";
 
-REVOKE ALL ON FUNCTION "public"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."complete_group_media_cleanup"("p_media_id" "uuid", "p_lease_id" "uuid", "p_object_deleted" boolean) TO "service_role";
 
-REVOKE ALL ON FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."get_group_link_preview"("p_slug" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_group_link_preview"("p_slug" "text") TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_group"("p_kind" "public"."group_kind", "p_name" "text", "p_description" "text", "p_slug" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."delete_group"("p_group_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."delete_group"("p_group_id" "uuid") TO "authenticated";
@@ -1564,14 +1673,17 @@ GRANT ALL ON FUNCTION "public"."get_group_invite"("p_group_id" "uuid") TO "authe
 REVOKE ALL ON FUNCTION "public"."get_group_invite_preview"("p_token" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_group_invite_preview"("p_token" "text") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer, "p_allowed_profile_types" "public"."profile_type"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."issue_group_invite"("p_group_id" "uuid", "p_hours" integer, "p_allowed_profile_types" "public"."profile_type"[]) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."list_group_join_requests"("p_group_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."list_group_join_requests"("p_group_id" "uuid") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."list_group_members"("p_group_id" "uuid", "p_query" "text", "p_after_role" "public"."group_member_role", "p_after_joined_at" timestamp with time zone, "p_after_membership_id" "uuid", "p_limit" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."list_group_members"("p_group_id" "uuid", "p_query" "text", "p_after_role" "public"."group_member_role", "p_after_joined_at" timestamp with time zone, "p_after_membership_id" "uuid", "p_limit" integer) TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."search_group_mention_candidates"("p_group_id" "uuid", "p_query" "text", "p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."search_group_mention_candidates"("p_group_id" "uuid", "p_query" "text", "p_limit" integer) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."prepare_group_media"("p_group_id" "uuid", "p_slot" "public"."group_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."prepare_group_media"("p_group_id" "uuid", "p_slot" "public"."group_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) TO "authenticated";
@@ -1591,8 +1703,8 @@ GRANT ALL ON FUNCTION "public"."transfer_group_ownership"("p_group_id" "uuid", "
 REVOKE ALL ON FUNCTION "public"."update_group_member_role"("p_group_id" "uuid", "p_membership_id" "uuid", "p_role" "public"."group_member_role") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."update_group_member_role"("p_group_id" "uuid", "p_membership_id" "uuid", "p_role" "public"."group_member_role") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."update_group_settings"("p_group_id" "uuid", "p_name" "text", "p_description" "text", "p_join_policy" "public"."group_join_policy", "p_identity_policy" "public"."group_identity_policy", "p_posting_policy" "public"."group_posting_policy", "p_hide_staff_roles" boolean) TO "authenticated";
 
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."group_join_requests" TO "service_role";
 GRANT SELECT,DELETE ON TABLE "public"."group_join_requests" TO "authenticated";

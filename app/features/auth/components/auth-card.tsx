@@ -10,12 +10,7 @@ import {
 } from "~/shared/ui/card";
 import { cn } from "~/shared/lib/utils";
 
-/**
- * 셸 **바깥** 화면의 껍데기.
- *
- * 로그인·가입·승인 대기는 인증 게이트를 통과하기 전이라 셸 데이터(`useAppShell()`)를 쓸 수 없다.
- * 헤더도 사이드바도 탭바도 없는 게 정상이므로 여기서 자체 배치를 갖는다.
- */
+/** 인증 게이트 바깥 화면의 껍데기. 셸 데이터(`useAppShell()`)를 쓸 수 없어 자체 배치를 갖는다. */
 export function AuthCard({
   title,
   description,
@@ -30,7 +25,7 @@ export function AuthCard({
   wide?: boolean;
 }) {
   return (
-    <main className="min-h-dvh bg-muted/40 p-4 sm:p-6">
+    <main className="min-h-dvh bg-muted/40 p-4">
       <div className="mx-auto grid min-h-[calc(100dvh-2rem)] max-w-5xl overflow-hidden rounded-3xl bg-background shadow-sm ring-1 ring-foreground/10 sm:min-h-[calc(100dvh-3rem)] md:grid-cols-[0.9fr_1.1fr]">
         <section className="relative hidden overflow-hidden bg-primary p-10 text-primary-foreground md:flex md:flex-col md:justify-between">
           <div className="absolute -top-28 -right-24 size-72 rounded-full bg-primary-foreground/10" />
@@ -61,7 +56,6 @@ export function AuthCard({
           >
             <CardHeader className="text-center sm:text-left">
               <div className="mb-3 flex items-center justify-center gap-2 md:hidden">
-                <img src="/logo.svg" alt="" className="size-8" />
                 <span className="font-semibold">KMLA Online</span>
               </div>
               <CardTitle>

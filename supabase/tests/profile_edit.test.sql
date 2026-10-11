@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(37);
 
 select is(
   (select public from storage.buckets where id = 'profile-media'),
@@ -25,7 +25,7 @@ select ok(
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean,boolean)',
+    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean,boolean,text)',
     'EXECUTE'
   ),
   'authenticated users can edit their profile through the RPC'
@@ -33,7 +33,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'anon',
-    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean,boolean)',
+    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean,boolean,text)',
     'EXECUTE'
   ),
   'anonymous users cannot edit profiles'
@@ -41,10 +41,25 @@ select ok(
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.set_my_profile_media(text,text)',
+    'public.prepare_profile_media(public.profile_media_slot,bigint,integer,integer,bigint,integer,integer)',
+    'EXECUTE'
+  ),
+  'authenticated users can reserve a profile media upload'
+);
+select ok(
+  has_function_privilege(
+    'authenticated',
+    'public.finalize_profile_media(uuid)',
     'EXECUTE'
   ),
   'authenticated users can connect uploaded profile media'
+);
+select ok(
+  not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects' and cmd = 'DELETE'
+  ),
+  'no bucket lets a client delete objects directly'
 );
 
 select set_config(
@@ -62,10 +77,15 @@ select set_config(
   true
 );
 select set_config(
-  'test.profile_media_path',
-  '10000000-0000-0000-0000-000000000001/avatar/30000000-0000-0000-0000-000000000001',
+  'test.original_pub_id',
+  (
+    select pub_id
+    from public.profiles
+    where auth_user_id = '10000000-0000-0000-0000-000000000001'
+  ),
   true
 );
+select set_config('test.unused', '', true);
 
 set local role authenticated;
 
@@ -98,6 +118,14 @@ select is(
 );
 select is(
   (
+    select pub_id
+    from public.get_my_profile()
+  ),
+  current_setting('test.original_pub_id'),
+  'omitting the public id leaves the profile address alone'
+);
+select is(
+  (
     select contact_email
     from public.get_my_profile()
   ),
@@ -121,6 +149,37 @@ select is(
   'timeline posting preference is updated'
 );
 
+-- prepare -> upload -> finalize. 업로드는 prepare가 만든 `pending` 행이 가리키는 경로에만
+-- 허용되므로 경로를 지어내는 업로드는 여기서 막힌다.
+create temporary table prepared_media as
+select * from public.prepare_profile_media('avatar', 4, 100, 100, 5, 200, 200);
+select set_config(
+  'test.profile_media_path',
+  (select object_path from prepared_media),
+  true
+);
+select set_config(
+  'test.profile_media_id',
+  (select media_id::text from prepared_media),
+  true
+);
+select set_config(
+  'test.profile_activity_media_path',
+  (select activity_object_path from prepared_media),
+  true
+);
+select throws_ok(
+  $$insert into storage.objects (bucket_id, name, owner_id, metadata)
+    values (
+      'profile-media',
+      '10000000-0000-0000-0000-000000000001/avatar/30000000-0000-0000-0000-000000000003',
+      '10000000-0000-0000-0000-000000000001',
+      '{"size":4,"mimetype":"image/webp"}'::jsonb
+    )$$,
+  '42501',
+  null,
+  'uploads without a prepared row are rejected'
+);
 select lives_ok(
   $$insert into storage.objects (bucket_id, name, owner_id, metadata)
     values (
@@ -129,36 +188,29 @@ select lives_ok(
       '10000000-0000-0000-0000-000000000001',
       '{"size":4,"mimetype":"image/webp"}'::jsonb
     )$$,
-  'owner can upload media at their strict user UUID and object UUID path'
+  'owner can upload at the prepared path'
 );
 select throws_ok(
-  $$insert into storage.objects (bucket_id, name, owner_id, metadata)
-    values (
-      'profile-media',
-      current_setting('test.profile_id') || '/avatar/30000000-0000-0000-0000-000000000003',
-      '10000000-0000-0000-0000-000000000001',
-      '{"size":4,"mimetype":"image/webp"}'::jsonb
+  $$select public.finalize_profile_media(
+      current_setting('test.profile_media_id')::uuid
     )$$,
-  '42501',
-  null,
-  'new uploads reject legacy numeric profile paths'
-);
-select throws_ok(
-  $$insert into storage.objects (bucket_id, name, owner_id, metadata)
-    values (
-      'profile-media',
-      '10000000-0000-0000-0000-000000000001/avatar/30000000-0000-0000-0000-000000000004.webp',
-      '10000000-0000-0000-0000-000000000001',
-      '{"size":4,"mimetype":"image/webp"}'::jsonb
-    )$$,
-  '42501',
-  null,
-  'new uploads require an extensionless object UUID'
+  'P0002',
+  'uploaded activity object not found',
+  'finalize refuses an avatar when its high-resolution activity object is missing'
 );
 select lives_ok(
-  $$select public.set_my_profile_media(
-      'avatar',
-      current_setting('test.profile_media_path')
+  $$insert into storage.objects (bucket_id, name, owner_id, metadata)
+    values (
+      'profile-media',
+      current_setting('test.profile_activity_media_path'),
+      '10000000-0000-0000-0000-000000000001',
+      '{"size":5,"mimetype":"image/webp"}'::jsonb
+    )$$,
+  'owner can upload the prepared high-resolution activity path'
+);
+select lives_ok(
+  $$select public.finalize_profile_media(
+      current_setting('test.profile_media_id')::uuid
     )$$,
   'owner can connect uploaded avatar'
 );
@@ -170,16 +222,27 @@ select is(
   current_setting('test.profile_media_path'),
   'avatar path is connected to profile'
 );
+select throws_ok(
+  $$select public.finalize_profile_media(
+      current_setting('test.profile_media_id')::uuid
+    )$$,
+  '55000',
+  null,
+  'a media object can only be finalized once'
+);
 select set_config('storage.operation', 'storage.object.sign', true);
 select is(
   (
     select count(*)
     from storage.objects
     where bucket_id = 'profile-media'
-      and name = current_setting('test.profile_media_path')
+      and name in (
+        current_setting('test.profile_media_path'),
+        current_setting('test.profile_activity_media_path')
+      )
   ),
-  1::bigint,
-  'accepted users can sign readable profile media'
+  2::bigint,
+  'accepted users can sign both avatar and high-resolution activity media'
 );
 select set_config('storage.operation', 'storage.object.list', true);
 select is(
@@ -194,7 +257,7 @@ select is(
     from public.list_profile_posts(
       (select pub_id from public.get_my_profile())
     )
-    where activity_media_path = current_setting('test.profile_media_path')
+    where activity_media_path = current_setting('test.profile_activity_media_path')
   ),
   'avatar_changed'::public.profile_media_activity_kind,
   'connecting an avatar creates an avatar activity post'
@@ -207,8 +270,8 @@ select is(
     )
     where activity_kind = 'avatar_changed'
   ),
-  current_setting('test.profile_media_path'),
-  'the activity keeps the changed image path'
+  current_setting('test.profile_activity_media_path'),
+  'the activity keeps the high-resolution changed image path'
 );
 select is(
   (
@@ -232,13 +295,6 @@ select is(
   true,
   'profile media activities can be deleted by their author'
 );
-select lives_ok(
-  $$select public.set_my_profile_media(
-      'avatar',
-      current_setting('test.profile_media_path')
-    )$$,
-  'retrying the same media connection succeeds'
-);
 select is(
   (
     select count(*)::integer
@@ -248,7 +304,7 @@ select is(
     where activity_kind = 'avatar_changed'
   ),
   1,
-  'retrying the same media connection does not duplicate the activity'
+  'connecting media creates exactly one activity'
 );
 select lives_ok(
   $$select public.remove_my_profile_media('avatar')$$,
@@ -261,6 +317,66 @@ select is(
   ),
   null::text,
   'avatar path is cleared'
+);
+
+-- 공개 ID 편집 (기능 명세 §12.2).
+select lives_ok(
+  $$select public.update_my_profile(
+      p_name => '홍길동 수정',
+      p_birthday => '2007-01-01'::date,
+      p_gender => 'male'::public.profile_gender,
+      p_cohort => 30::smallint,
+      p_academic_track => 'domestic'::public.profile_academic_track,
+      p_pub_id => '  HongGil-30  '
+    )$$,
+  'accepted user can change their own public id'
+);
+select is(
+  (
+    select pub_id
+    from public.get_my_profile()
+  ),
+  'honggil-30',
+  'the new public id is trimmed and folded to lower case'
+);
+select throws_ok(
+  $$select public.update_my_profile(
+      p_name => '홍길동 수정',
+      p_birthday => '2007-01-01'::date,
+      p_gender => 'male'::public.profile_gender,
+      p_cohort => 30::smallint,
+      p_academic_track => 'domestic'::public.profile_academic_track,
+      p_pub_id => 'KIM-admin'
+    )$$,
+  '23505',
+  null,
+  'a public id another profile already holds is rejected regardless of case'
+);
+select throws_ok(
+  $$select public.update_my_profile(
+      p_name => '홍길동 수정',
+      p_birthday => '2007-01-01'::date,
+      p_gender => 'male'::public.profile_gender,
+      p_cohort => 30::smallint,
+      p_academic_track => 'domestic'::public.profile_academic_track,
+      p_pub_id => 'admin'
+    )$$,
+  '23514',
+  null,
+  'reserved public ids stay unavailable to profile editing'
+);
+select throws_ok(
+  $$select public.update_my_profile(
+      p_name => '홍길동 수정',
+      p_birthday => '2007-01-01'::date,
+      p_gender => 'male'::public.profile_gender,
+      p_cohort => 30::smallint,
+      p_academic_track => 'domestic'::public.profile_academic_track,
+      p_pub_id => 'ab'
+    )$$,
+  '23514',
+  null,
+  'a public id shorter than five characters is rejected'
 );
 
 reset role;

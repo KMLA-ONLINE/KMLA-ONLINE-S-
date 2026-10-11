@@ -17,11 +17,15 @@ import type {
   GroupSummary,
 } from "~/features/groups/model/types";
 import { createGroupMediaUrls } from "~/features/groups/data/files";
+import { createProfileMediaUrls } from "~/features/profiles/data/media";
 
 type GroupRow = Database["public"]["Tables"]["groups"]["Row"];
 
 const GROUP_COLUMNS =
   "id, slug, name, description, kind, join_policy, identity_policy, posting_policy, icon_path, cover_path, member_count" as const;
+const GROUP_DETAIL_COLUMNS = `${GROUP_COLUMNS}, hide_staff_roles` as const;
+/** `create_group`이 비공개 그룹에 붙이는 임의 주소(7바이트 hex). 사용자 지정 주소는 15자까지라 겹칠 수 있다. */
+const GENERATED_SLUG_PATTERN = /^[0-9a-f]{14}$/;
 
 interface MembershipWithGroup {
   role: GroupMemberRole;
@@ -36,6 +40,7 @@ function asHomeItem(
     state: GroupMembershipState;
     role?: GroupMemberRole | null;
     pinnedAt?: string | null;
+    newPostCount?: number;
   },
 ): GroupHomeItem {
   return {
@@ -45,13 +50,14 @@ function asHomeItem(
     membership_state: values.state,
     member_role: values.role ?? null,
     pinned_at: values.pinnedAt ?? null,
+    new_post_count: values.newPostCount ?? 0,
   };
 }
 
 export async function loadGroupHome(): Promise<GroupHomeItem[]> {
   const supabase = getSupabase();
-  const [officialResult, membershipsResult, requestsResult] = await Promise.all(
-    [
+  const [officialResult, membershipsResult, requestsResult, countsResult] =
+    await Promise.all([
       supabase
         .from("groups")
         .select(GROUP_COLUMNS)
@@ -62,12 +68,13 @@ export async function loadGroupHome(): Promise<GroupHomeItem[]> {
         .select(`role, pinned_at, groups!inner(${GROUP_COLUMNS})`)
         .order("pinned_at", { ascending: false, nullsFirst: false }),
       supabase.from("group_join_requests").select("group_id, requested_at"),
-    ],
-  );
+      supabase.rpc("get_my_group_new_post_counts"),
+    ]);
 
   if (officialResult.error) throw officialResult.error;
   if (membershipsResult.error) throw membershipsResult.error;
   if (requestsResult.error) throw requestsResult.error;
+  if (countsResult.error) throw countsResult.error;
 
   const memberships = membershipsResult.data as MembershipWithGroup[];
   const membershipByGroup = new Map(
@@ -75,6 +82,12 @@ export async function loadGroupHome(): Promise<GroupHomeItem[]> {
   );
   const requestedGroups = new Set(
     requestsResult.data.map((request) => request.group_id),
+  );
+  const newPostCounts = new Map(
+    (countsResult.data ?? []).map((count) => [
+      count.group_id,
+      count.new_post_count,
+    ]),
   );
 
   const official = (officialResult.data as GroupRow[]).map((group) => {
@@ -88,6 +101,7 @@ export async function loadGroupHome(): Promise<GroupHomeItem[]> {
           : "none",
       role: membership?.role,
       pinnedAt: membership?.pinned_at,
+      newPostCount: newPostCounts.get(group.id),
     });
   });
 
@@ -99,17 +113,16 @@ export async function loadGroupHome(): Promise<GroupHomeItem[]> {
         state: "member",
         role: membership.role,
         pinnedAt: membership.pinned_at,
+        newPostCount: newPostCounts.get(membership.groups.id),
       }),
     );
 
   const items = [...official, ...mine];
-  const urls = await createGroupMediaUrls(
-    items.flatMap((item) => [item.icon_path, item.cover_path]),
-  );
+  const urls = await createGroupMediaUrls(items.map((item) => item.icon_path));
   return items.map((item) => ({
     ...item,
     icon_path: item.icon_path ? (urls.get(item.icon_path) ?? null) : null,
-    cover_path: item.cover_path ? (urls.get(item.cover_path) ?? null) : null,
+    cover_path: null,
   }));
 }
 
@@ -161,35 +174,59 @@ export async function discoverGroups({
   };
 }
 
+/**
+ * `onFound`는 그룹 행을 찾은 직후, 아이콘·커버 서명을 기다리기 전에 불린다. 그룹 ID만 있으면 되는
+ * 다음 요청(게시물 목록 등)을 서명 왕복과 겹쳐 띄우는 데 쓴다. 미리보기(비멤버 비공개 그룹)에는 부르지 않는다.
+ */
 export async function loadGroupDetail(
   slug: string,
+  options: {
+    onFound?: (
+      group: Pick<GroupDetail, "group_id" | "membership_state">,
+    ) => void;
+  } = {},
 ): Promise<GroupDetail | null> {
   const supabase = getSupabase();
-  const [groupResult, membershipResult, requestResult] = await Promise.all([
-    supabase
-      .from("groups")
-      .select(GROUP_COLUMNS)
-      .eq("slug", slug)
-      .maybeSingle(),
-    supabase
-      .from("group_memberships")
-      .select("role, pinned_at, groups!inner(slug)")
-      .eq("groups.slug", slug)
-      .maybeSingle(),
-    supabase
-      .from("group_join_requests")
-      .select("requested_at, groups!inner(slug)")
-      .eq("groups.slug", slug)
-      .maybeSingle(),
-  ]);
+  // 미리보기는 그룹 행이 RLS에 가려질 때만 쓰지만, 행 조회를 기다렸다가 부르면 순차 요청이 된다.
+  // 비공개 그룹은 언제나 임의 주소라, 그 모양의 주소에만 처음부터 함께 묻는다.
+  const [groupResult, membershipResult, requestResult, preview] =
+    await Promise.all([
+      supabase
+        .from("groups")
+        .select(GROUP_DETAIL_COLUMNS)
+        .eq("slug", slug)
+        .maybeSingle(),
+      supabase
+        .from("group_memberships")
+        .select("role, pinned_at, groups!inner(slug)")
+        .eq("groups.slug", slug)
+        .maybeSingle(),
+      supabase
+        .from("group_join_requests")
+        .select("requested_at, groups!inner(slug)")
+        .eq("groups.slug", slug)
+        .maybeSingle(),
+      GENERATED_SLUG_PATTERN.test(slug)
+        ? loadGroupLinkPreview(slug)
+        : Promise.resolve(null),
+    ]);
 
   if (groupResult.error) throw groupResult.error;
   if (membershipResult.error) throw membershipResult.error;
   if (requestResult.error) throw requestResult.error;
-  if (!groupResult.data) return null;
+  if (!groupResult.data) return preview;
 
   const membership = membershipResult.data;
   const request = requestResult.data;
+  const membershipState = membership
+    ? "member"
+    : request
+      ? "requested"
+      : "none";
+  options.onFound?.({
+    group_id: groupResult.data.id,
+    membership_state: membershipState,
+  });
   const urls = await createGroupMediaUrls([
     groupResult.data.icon_path,
     groupResult.data.cover_path,
@@ -203,10 +240,43 @@ export async function loadGroupDetail(
       ? (urls.get(groupResult.data.cover_path) ?? null)
       : null,
     group_id: groupResult.data.id,
-    membership_state: membership ? "member" : request ? "requested" : "none",
+    membership_state: membershipState,
     member_role: membership?.role ?? null,
     pinned_at: membership?.pinned_at ?? null,
     requested_at: request?.requested_at ?? null,
+  };
+}
+
+/**
+ * 비공개 승인 가입 그룹은 비멤버의 RLS에 보이지 않는다. 주소를 아는 사람에게는 초대 미리보기와
+ * 같은 정보만 상세 모양으로 채워 돌려준다(§7.5). 이미지와 명부는 없다.
+ */
+async function loadGroupLinkPreview(slug: string): Promise<GroupDetail | null> {
+  const { data, error } = await getSupabase()
+    .rpc("get_group_link_preview", { p_slug: slug })
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const requestedAt = data.requested_at as string | null;
+  return {
+    id: data.group_id,
+    group_id: data.group_id,
+    slug: data.slug,
+    name: data.name,
+    description: data.description,
+    kind: "unofficial",
+    join_policy: data.join_policy,
+    identity_policy: data.identity_policy,
+    posting_policy: data.posting_policy,
+    icon_path: null,
+    cover_path: null,
+    member_count: data.member_count,
+    hide_staff_roles: false,
+    membership_state: requestedAt ? "requested" : "none",
+    member_role: null,
+    pinned_at: null,
+    requested_at: requestedAt,
   };
 }
 
@@ -226,8 +296,8 @@ export async function listGroupMembers(
   });
   if (error) throw error;
 
-  const rows = (data ?? []) as GroupMember[];
-  const members = rows.slice(0, pageSize);
+  const rows = (data ?? []) as Omit<GroupMember, "avatar_url">[];
+  const members = await signAvatars(rows.slice(0, pageSize));
   const last = members.at(-1);
   return {
     members,
@@ -249,15 +319,21 @@ export async function listGroupJoinRequests(
     p_group_id: groupId,
   });
   if (error) throw error;
-  return data ?? [];
+  return signAvatars(data ?? []);
 }
 
-/**
- * 그룹에 살아 있는 초대 링크. 없거나 만료됐으면 null이다.
- *
- * 발급과 분리한 이유는 설정 화면을 다시 열 때마다 링크가 바뀌면 안 되기 때문이다.
- * 소유자와 관리자만 부를 수 있다.
- */
+/** 명부·가입 신청 아바타를 한 배치로 서명한다. `avatar_path`는 두고 `avatar_url`만 채우므로 멱등하다. */
+async function signAvatars<T extends { avatar_path: string | null }>(
+  rows: T[],
+): Promise<(T & { avatar_url: string | null })[]> {
+  const urls = await createProfileMediaUrls(rows.map((row) => row.avatar_path));
+  return rows.map((row) => ({
+    ...row,
+    avatar_url: row.avatar_path ? (urls.get(row.avatar_path) ?? null) : null,
+  }));
+}
+
+/** 그룹의 살아 있는 초대 링크(없거나 만료면 null). 발급과 분리해 설정 화면을 열 때마다 링크가 바뀌지 않게 한다. */
 export async function getGroupInvite(
   groupId: string,
 ): Promise<GroupInvite | null> {
@@ -268,12 +344,7 @@ export async function getGroupInvite(
   return data?.[0] ?? null;
 }
 
-/**
- * 초대 토큰이 가리키는 그룹의 미리보기. 토큰이 없거나 만료됐으면 null이다.
- *
- * 비공개 그룹의 행은 RLS가 비멤버에게 통째로 숨기므로, 이 definer RPC 없이는 링크를 받은
- * 사람이 그룹 이름조차 볼 수 없다.
- */
+/** 초대 토큰의 그룹 미리보기(없거나 만료면 null). RLS가 비멤버에게 비공개 그룹을 숨겨 이 definer RPC가 필요하다. */
 export async function getGroupInvitePreview(
   token: string,
 ): Promise<GroupInvitePreview | null> {

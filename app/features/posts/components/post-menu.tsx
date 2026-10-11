@@ -2,7 +2,8 @@ import { MoreHorizontalIcon } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 
-import { GroupPostReportDialog } from "~/features/posts/components/group-post-report-dialog";
+import { GroupPostReportDialog } from "~/features/posts/components/group/group-post-report-dialog";
+import { AnonymousActivityRestrictionDialog } from "~/features/posts/components/group/anonymous-activity-restriction-dialog";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -19,16 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "~/shared/ui/dropdown-menu";
 
-/**
- * 게시물 카드와 상세가 함께 쓰는 ⋯ 메뉴.
- *
- * 권한 플래그는 RPC가 내려준 `can_edit`/`can_pin`/`can_delete`를 그대로 받는다. 클라이언트가
- * 역할을 다시 계산하지 않는다 — 실제 판정은 RLS와 RPC 안에 있고, 여기서 한 번 더 계산하면
- * 두 규칙이 언젠가 갈라진다.
- *
- * 고정은 그룹 게시물에만 있다(기능 명세 §8.1). 개인 게시물은 고정 관련 props를 넘기지 않고,
- * 그러면 고정 항목 자체가 그려지지 않는다.
- */
+/** 카드와 상세가 함께 쓰는 ⋯ 메뉴. 권한은 RPC의 `can_*`를 그대로 받고 클라이언트가 다시 계산하지 않는다. 고정은 그룹 게시물에만 있다(기능 명세 §8.1). */
 export function PostMenu({
   editTo,
   isPinned = false,
@@ -39,6 +31,10 @@ export function PostMenu({
   reportPostId,
   onPin,
   onDelete,
+  canModerateAnonymous = false,
+  anonymousAuthorRestricted = false,
+  anonymousAuthorRestrictionExpiresAt = null,
+  anonymousSourceId,
 }: {
   editTo: string;
   isPinned?: boolean;
@@ -49,18 +45,29 @@ export function PostMenu({
   reportPostId?: string;
   onPin?: () => void;
   onDelete: () => void;
+  canModerateAnonymous?: boolean;
+  anonymousAuthorRestricted?: boolean;
+  anonymousAuthorRestrictionExpiresAt?: string | null;
+  anonymousSourceId?: string;
 }) {
   // 확인 dialog는 menu 바깥에 둔다. menu가 닫히면서 자식이 언마운트되면 dialog도 같이
   // 사라지므로, 열림 상태만 여기서 들고 dialog는 형제로 그린다.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reported, setReported] = useState(false);
+  const [restrictionOpen, setRestrictionOpen] = useState(false);
+  const [restricted, setRestricted] = useState(anonymousAuthorRestricted);
+  const [restrictionExpiresAt, setRestrictionExpiresAt] = useState(
+    anonymousAuthorRestrictionExpiresAt,
+  );
+  const canRestrict = canModerateAnonymous && Boolean(anonymousSourceId);
 
   if (
     !canEdit &&
     !canPin &&
     !canDelete &&
-    !(canReport && reportPostId && !reported)
+    !(canReport && reportPostId && !reported) &&
+    !canRestrict
   ) {
     return null;
   }
@@ -99,6 +106,11 @@ export function PostMenu({
               신고
             </DropdownMenuItem>
           ) : null}
+          {canRestrict ? (
+            <DropdownMenuItem onClick={() => setRestrictionOpen(true)}>
+              {restricted ? "익명 차단 해제" : "익명 활동 차단"}
+            </DropdownMenuItem>
+          ) : null}
 
           {canDelete ? (
             <DropdownMenuItem
@@ -117,6 +129,20 @@ export function PostMenu({
           open={reportOpen}
           onOpenChange={setReportOpen}
           onReported={() => setReported(true)}
+        />
+      ) : null}
+      {anonymousSourceId ? (
+        <AnonymousActivityRestrictionDialog
+          open={restrictionOpen}
+          sourceKind="post"
+          sourceId={anonymousSourceId}
+          restricted={restricted}
+          restrictionExpiresAt={restrictionExpiresAt}
+          onOpenChange={setRestrictionOpen}
+          onRestrictedChange={(nextRestricted, expiresAt) => {
+            setRestricted(nextRestricted);
+            setRestrictionExpiresAt(expiresAt);
+          }}
         />
       ) : null}
 

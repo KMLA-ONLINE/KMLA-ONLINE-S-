@@ -7,12 +7,8 @@ import {
 } from "~/features/posts/model/view-preference";
 
 /**
- * 카드/목록 선택은 기기 단위 취향이라 서버가 아니라 `localStorage`에 산다. 문제는 같은 값을
- * 두 곳(그룹 헤더 ⋯ 메뉴, 게시물 패널)이 동시에 읽는다는 것 — `useState`로 각자 들고 있으면
- * 한쪽에서 바꿔도 다른 쪽은 다음 mount까지 옛 값을 그린다.
- *
- * 그래서 store를 하나 두고 `useSyncExternalStore`로 구독한다. 같은 탭에서의 `setItem`은 native
- * `storage` 이벤트를 발생시키지 않으므로 직접 만든 이벤트로 알린다.
+ * 카드/목록 선택은 기기 취향이라 `localStorage`에 산다. 여러 곳이 동시에 읽으므로 store 하나를 `useSyncExternalStore`로 구독하고,
+ * 같은 탭의 `setItem`은 `storage` 이벤트가 없어 직접 알린다.
  */
 const CHANGE_EVENT = "kmla-online:posts-view-change";
 

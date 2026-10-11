@@ -2,6 +2,7 @@ import { BadgeCheckIcon, Globe2Icon, LockIcon } from "lucide-react";
 
 import { GroupAvatar } from "~/features/groups/components/group-avatar";
 import { GroupDetailActions } from "~/features/groups/components/group-detail-actions";
+import { isPrivateJoinPolicy } from "~/features/groups/model/format";
 import type { GroupDetail } from "~/features/groups/model/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";
 
@@ -25,16 +26,19 @@ export function GroupDetailHero({
   onSelectReports: () => void;
 }) {
   const isMember = group.membership_state === "member";
-  const isPrivate = group.join_policy === "invite_only";
+  const isPrivate = isPrivateJoinPolicy(group.join_policy);
   const VisibilityIcon = isPrivate ? LockIcon : Globe2Icon;
 
   return (
-    <section className="overflow-hidden border-0 bg-card sm:rounded-xl sm:border">
+    // 테두리 없는 모바일에서는 위의 헤더와 한 면이 되도록 페이지 배경을 쓴다. 다크 모드는
+    // 카드가 배경보다 밝아서, 카드색이면 헤더·히어로·카테고리 줄이 띠처럼 번갈아 보인다.
+    <section className="overflow-hidden border-0 bg-background sm:rounded-xl sm:border sm:bg-card">
       <div className="relative aspect-[4/1] w-full overflow-hidden bg-gradient-to-br from-primary/30 to-primary/5">
         {group.cover_path ? (
           <img
             src={group.cover_path}
             alt=""
+            crossOrigin="anonymous"
             width={1200}
             height={300}
             fetchPriority="high"

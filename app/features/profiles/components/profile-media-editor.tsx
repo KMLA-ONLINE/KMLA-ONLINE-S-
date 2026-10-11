@@ -1,5 +1,6 @@
-import { ImageIcon, RotateCcwIcon } from "lucide-react";
+import { EyeIcon, ImageIcon, RotateCcwIcon } from "lucide-react";
 import { useRef, useState } from "react";
+import { toast } from "sonner";
 
 import {
   removeProfileMedia,
@@ -11,33 +12,38 @@ import type {
 } from "~/features/profiles/model/types";
 import { ImageCropper } from "~/shared/components/image-cropper";
 import { useImageCrop } from "~/shared/hooks/use-image-crop";
-import { compressImage } from "~/shared/lib/image/compress";
+import {
+  compressImage,
+  getImageDimensions,
+  IMAGE_INPUT_ACCEPT,
+  isSupportedImageInput,
+  prepareImageInput,
+} from "~/shared/lib/image/compress";
+import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
+import { isNetworkError } from "~/shared/lib/network-error";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "~/shared/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "~/shared/ui/dialog";
 import { Spinner } from "~/shared/ui/spinner";
-
-const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export function ProfileMediaEditor({
   profile,
   slot,
+  onView,
+  onSaved,
   className,
 }: {
   profile: AcceptedProfile;
   slot: ProfileMediaSlot;
+  onView?: () => void;
+  /** 저장 뒤 할 일. 없으면 새로고침해 아바타를 들고 있는 모든 화면과 캐시를 한 번에 맞춘다. */
+  onSaved?: () => Promise<void>;
   className?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [pending, setPending] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const isAvatar = slot === "avatar";
 
@@ -53,36 +59,77 @@ export function ProfileMediaEditor({
     });
   };
 
+  const openViewer = () => {
+    setActionsOpen(false);
+
+    requestAnimationFrame(() => {
+      onView?.();
+    });
+  };
+
+  const finish = async () => {
+    if (!onSaved) {
+      window.location.reload();
+      return;
+    }
+
+    await onSaved();
+    setActionsOpen(false);
+    setPending(false);
+  };
+
   const upload = async (cropped: File) => {
     setPending(true);
-    setError(null);
 
     try {
+      const activityFile = isAvatar
+        ? await compressImage(cropped, "activity")
+        : null;
       const compressed = await compressImage(
         cropped,
         isAvatar ? "icon" : "banner",
       );
+      const [width, height] = await getImageDimensions(compressed);
+      const activityDimensions = activityFile
+        ? await getImageDimensions(activityFile)
+        : null;
 
-      await replaceProfileMedia(profile, slot, compressed);
+      await replaceProfileMedia(
+        slot,
+        compressed,
+        { width, height },
+        activityFile && activityDimensions
+          ? {
+              file: activityFile,
+              width: activityDimensions[0],
+              height: activityDimensions[1],
+            }
+          : null,
+      );
 
-      window.location.reload();
-    } catch {
+      await finish();
+    } catch (cause) {
+      console.error("Failed to save profile media", cause);
       setPending(false);
-      setError("이미지를 저장하지 못했습니다.");
+      toast.error(
+        isNetworkError(cause)
+          ? "인터넷 연결을 확인한 뒤 다시 시도해 주세요."
+          : "이미지를 저장하지 못했습니다.",
+      );
     }
   };
 
   const reset = async () => {
     setPending(true);
-    setError(null);
 
     try {
-      await removeProfileMedia(profile, slot);
-      window.location.reload();
-    } catch {
+      await removeProfileMedia(slot);
+      await finish();
+    } catch (cause) {
+      console.error("Failed to reset profile media", cause);
       setPending(false);
       setActionsOpen(false);
-      setError("기본 이미지로 변경하지 못했습니다.");
+      toast.error("기본 이미지로 변경하지 못했습니다.");
     }
   };
 
@@ -90,21 +137,28 @@ export function ProfileMediaEditor({
     void upload(file);
   });
 
-  const chooseFile = (file: File | undefined) => {
+  const chooseFile = async (file: File | undefined) => {
     if (!file) return;
 
-    if (!ACCEPTED_TYPES.has(file.type) || file.size > 30 * 1024 * 1024) {
-      setError("JPEG, PNG, WebP 이미지만 사용할 수 있습니다.");
+    if (!isSupportedImageInput(file) || file.size > MAX_INPUT_FILE_BYTES) {
+      toast.error(
+        "JPEG, PNG, WebP, HEIC, HEIF 이미지를 30MB 이하로 선택해 주세요.",
+      );
       return;
     }
 
-    setError(null);
-    crop.start(file);
+    try {
+      crop.start(await prepareImageInput(file));
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error
+          ? cause.message
+          : "이미지를 처리하지 못했습니다.",
+      );
+    }
   };
 
   const handleEditorClick = () => {
-    setError(null);
-
     if (hasCurrentMedia) {
       setActionsOpen(true);
       return;
@@ -119,13 +173,31 @@ export function ProfileMediaEditor({
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept={IMAGE_INPUT_ACCEPT}
           className="sr-only"
           onChange={(event) => {
-            chooseFile(event.currentTarget.files?.[0]);
+            void chooseFile(event.currentTarget.files?.[0]);
             event.currentTarget.value = "";
           }}
         />
+
+        {/* 데스크톱은 아바타 자체가 버튼(hover로 힌트), 모바일은 배지. 둘은 `sm:`으로 하나만 렌더된다. */}
+        {isAvatar ? (
+          <button
+            type="button"
+            disabled={pending}
+            aria-label="프로필 사진 변경"
+            onClick={handleEditorClick}
+            className={cn(
+              "pointer-events-auto absolute inset-0 hidden place-items-center rounded-full transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:grid",
+              pending
+                ? "bg-black/40"
+                : "cursor-pointer bg-black/0 hover:bg-black/25",
+            )}
+          >
+            {pending ? <Spinner className="size-6 text-white" /> : null}
+          </button>
+        ) : null}
 
         <Button
           type="button"
@@ -134,19 +206,14 @@ export function ProfileMediaEditor({
           disabled={pending}
           aria-label={isAvatar ? "프로필 사진 변경" : "커버 사진 변경"}
           onClick={handleEditorClick}
-          className="rounded-full bg-background shadow-sm ring-2 ring-background"
+          className={cn(
+            "pointer-events-auto rounded-full bg-background shadow-sm ring-2 ring-background",
+            // 아바타 배지는 이제 `inset-0`인 root 안에서 스스로 자리를 잡는다.
+            isAvatar && "absolute right-0 bottom-0 sm:hidden",
+          )}
         >
-          {pending ? <Spinner /> : <ImageIcon aria-hidden="true" />}
+          {pending ? <Spinner aria-hidden /> : <ImageIcon aria-hidden="true" />}
         </Button>
-
-        {error ? (
-          <p
-            role="alert"
-            className="absolute top-full right-0 z-30 mt-2 w-56 rounded-md border bg-background p-2 text-xs text-destructive shadow-md"
-          >
-            {error}
-          </p>
-        ) : null}
       </div>
 
       <Dialog
@@ -155,15 +222,34 @@ export function ProfileMediaEditor({
           if (!pending) setActionsOpen(open);
         }}
       >
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{isAvatar ? "프로필 사진" : "커버 사진"}</DialogTitle>
-          </DialogHeader>
+        {/* 창보다 선택지 목록으로 읽히게 제목과 여백을 걷어 낸다. 제목은 스크린리더용으로만 남긴다. */}
+        <DialogContent
+          className="gap-0 p-1.5 sm:max-w-xs"
+          showCloseButton={false}
+        >
+          <DialogTitle className="sr-only">
+            {isAvatar ? "프로필 사진" : "커버 사진"}
+          </DialogTitle>
 
-          <div className="grid gap-2">
+          {/* 액션 시트처럼 같은 무게의 목록으로 둔다. 하나만 채운 버튼은 "권장"처럼 읽힌다. 되돌리기만 색으로 구분한다. */}
+          <div className="flex flex-col">
+            {onView ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 w-full justify-start gap-3 px-3"
+                disabled={pending}
+                onClick={openViewer}
+              >
+                <EyeIcon />
+                이미지 보기
+              </Button>
+            ) : null}
+
             <Button
               type="button"
-              className="w-full justify-start"
+              variant="ghost"
+              className="h-11 w-full justify-start gap-3 px-3"
               disabled={pending}
               onClick={openPicker}
             >
@@ -173,8 +259,8 @@ export function ProfileMediaEditor({
 
             <Button
               type="button"
-              variant="outline"
-              className="w-full justify-start"
+              variant="ghost"
+              className="h-11 w-full justify-start gap-3 px-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
               disabled={pending}
               onClick={() => {
                 void reset();
@@ -195,7 +281,7 @@ export function ProfileMediaEditor({
         <ImageCropper
           {...crop.cropperProps}
           aspect={isAvatar ? 1 : 3}
-          maxOutputEdge={isAvatar ? 512 : 2400}
+          maxOutputEdge={isAvatar ? 2048 : 2400}
           round={isAvatar}
           title={isAvatar ? "프로필 사진" : "커버 사진"}
         />

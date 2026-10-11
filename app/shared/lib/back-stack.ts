@@ -11,7 +11,9 @@ const HOME = "/";
  *
  * 이 표는 **뒤로가기 내역이 없을 때 무엇으로 채울지**만 정의한다. 앱 안에서 이동해 들어온
  * 경우의 뒤로가기는 여기와 무관하게 "내가 온 곳"으로 남아야 하므로, 이 값으로 기존 내역을
- * 덮어쓰지 않는다.
+ * 덮어쓰지 않는다. 게시물처럼 부모 위에 얹히는 화면도 예외가 아니다 — 밑에 깔린 것이 그룹이
+ * 아니어도 뒤로가기는 사용자가 온 곳을 내놓아야 하고, 그룹으로 가는 길은 상세 머리의 링크가
+ * 맡는다.
  */
 const PARENT_ROUTE: Record<string, string | null> = {
   "/": null,
@@ -42,37 +44,46 @@ function currentIndex(): number {
   return typeof index === "number" ? index : 0;
 }
 
+interface RouteMatch {
+  pattern: string;
+  params: Record<string, string>;
+}
+
+/** 표에 선언된 route 중 목적지와 맞는 것. 쿼리와 해시는 매칭에 쓰지 않는다. */
+function matchRoute(destination: string): RouteMatch | null {
+  const pathname = destination.split(/[?#]/, 1)[0] ?? destination;
+
+  for (const pattern of Object.keys(PARENT_ROUTE)) {
+    const match = matchPath(pattern, pathname);
+    if (!match) continue;
+    return {
+      pattern,
+      params: Object.fromEntries(
+        Object.entries(match.params).filter(
+          (entry): entry is [string, string] => entry[1] !== undefined,
+        ),
+      ),
+    };
+  }
+  return null;
+}
+
 /**
  * 목적지 아래에 깔려야 할 경로들. 루트부터 직속 부모까지 순서대로 돌려준다.
  *
  * 표에 없는 경로는 홈 하나만 깐다. 목적지가 홈이면 깔 것이 없다.
  */
 export function resolveBackStack(destination: string): string[] {
-  const pathname = destination.split(/[?#]/, 1)[0] ?? destination;
-
-  let pattern: string | null = null;
-  let params: Record<string, string> = {};
-  for (const candidate of Object.keys(PARENT_ROUTE)) {
-    const match = matchPath(candidate, pathname);
-    if (!match) continue;
-    pattern = candidate;
-    params = Object.fromEntries(
-      Object.entries(match.params).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    );
-    break;
-  }
-
-  if (pattern === null) return [HOME];
+  const matched = matchRoute(destination);
+  if (matched === null) return [HOME];
 
   const stack: string[] = [];
   for (
-    let parent = PARENT_ROUTE[pattern];
+    let parent = PARENT_ROUTE[matched.pattern];
     parent;
     parent = PARENT_ROUTE[parent]
   ) {
-    stack.unshift(generatePath(parent, params));
+    stack.unshift(generatePath(parent, matched.params));
   }
   return stack;
 }

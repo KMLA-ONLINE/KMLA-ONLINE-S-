@@ -1,14 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+/* 한글 전체를 한 파일에 담은 Pretendard는 ~750 kB다. 가변 폰트를 unicode-range로 쪼갠 이
+   판은 화면에 나온 글자가 속한 조각만 받고, 굵기도 합성이 아니라 실제 글리프로 그린다. */
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 @import "@fontsource-variable/inter";
-@font-face {
-  font-family: "Pretendard Variable";
-  font-weight: 45 920;
-  font-style: normal;
-  font-display: swap;
-  src: url("/woff2/PretendardVariable.woff2") format("woff2");
-}
 
 @custom-variant dark (&:is(.dark *));
 
@@ -58,14 +54,32 @@
   .post-typography h2 {
     @apply mt-6 text-xl leading-8 font-bold;
   }
+  /* 첫 블록의 위 여백은 카드·편집기 위쪽을 띄울 뿐이고, 접힌 세 줄 높이를 제목 여백이 먹는다. */
+  .post-typography > :first-child,
+  .post-typography .ProseMirror > :first-child {
+    @apply mt-0;
+  }
   .post-typography h3 {
     @apply mt-5 text-lg leading-[22px] font-semibold;
   }
   .post-typography a {
     @apply text-primary underline underline-offset-2;
   }
+  /* 편집 영역의 높이는 바깥 상자가 정하고(`desktop-markdown-editor.tsx`), Milkdown이 만든 래퍼
+   * 전부가 그 상자를 끝까지 채워야 빈 아래쪽을 눌러도 캐럿이 잡힌다.
+   *
+   * 사슬이 세 겹인 게 함정이다. `<Milkdown />`이 그리는 것은 클래스 없는 `[data-milkdown-root]`
+   * 하나뿐이고, `.milkdown`과 `.editor.ProseMirror`는 편집기가 그 안에 직접 만들어 넣는다.
+   * 그래서 `.milkdown`만 늘려 봐야 부모인 root가 내용 높이 그대로라 한 줄에서 멈춘다. 퍼센트
+   * 높이도 같은 자리에서 죽는다 — root 높이가 auto면 백분율이 풀린다.
+   *
+   * 세 겹을 모두 flex로 늘린다. `shrink-0`이 있어야 본문이 상자보다 길어질 때 눌리지 않는다. */
+  .post-typography [data-milkdown-root],
+  .post-typography .milkdown {
+    @apply flex shrink-0 grow flex-col;
+  }
   .post-typography .milkdown .ProseMirror {
-    @apply min-h-72 px-3 py-2 outline-none;
+    @apply shrink-0 grow px-3 py-2 outline-none;
   }
   .post-typography
     .milkdown
@@ -81,6 +95,32 @@
     "Pretendard Variable", "Inter Variable", ui-sans-serif, system-ui,
     sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
     "Noto Color Emoji";
+
+  /* 첫 로딩 로고 화면의 스피너. 금방 끝나는 로딩에서는 아예 보이지 않도록 늦게 나타난다. */
+  --animate-splash-hint: splash-hint 400ms ease-out 1500ms both;
+  /* 로고 화면의 연결 안내. 스피너보다 한참 늦게, 정말 오래 걸릴 때만 보인다. */
+  --animate-splash-slow: splash-hint 400ms ease-out 8000ms both;
+
+  @keyframes splash-hint {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* 화면 이동 중 상단 진행 막대. 끝을 알 수 없으므로 같은 구간을 되풀이해 흐른다. */
+  --animate-navigation-progress: navigation-progress 1.1s ease-in-out infinite;
+
+  @keyframes navigation-progress {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(300%);
+    }
+  }
 }
 
 @theme inline {
@@ -253,6 +293,18 @@
     border: 2px solid transparent;
     border-radius: 9999px;
     background-clip: padding-box;
+  }
+
+  /* Mobile relies on direct-touch scrolling, so keep every scrollbar visually
+     unobtrusive without changing its scroll behavior. */
+  @media (max-width: 767px) {
+    * {
+      scrollbar-color: transparent transparent;
+    }
+
+    *::-webkit-scrollbar-thumb {
+      background: transparent;
+    }
   }
 
   /* Opt-outs for surfaces that should hide their scrollbar entirely. */

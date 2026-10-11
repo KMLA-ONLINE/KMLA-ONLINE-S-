@@ -15,17 +15,19 @@ import { useSearchParams } from "react-router";
 import {
   CommentComposer,
   type CommentViewer,
-} from "~/features/posts/components/comment-composer";
-import { CommentThread } from "~/features/posts/components/comment-thread";
-import { commentDomId } from "~/features/posts/components/comment-item";
+} from "~/features/posts/components/comment/comment-composer";
+import { CommentThread } from "~/features/posts/components/comment/comment-thread";
+import { commentDomId } from "~/features/posts/components/comment/comment-item";
 import { PostActionBar } from "~/features/posts/components/post-action-bar";
 import { useKeyboardViewport } from "~/features/posts/hooks/use-keyboard-viewport";
 import { usePostComments } from "~/features/posts/hooks/use-post-comments";
+import { AnonymousActivityRestrictionNotice } from "~/features/posts/components/anonymous-activity-restriction-notice";
 import type {
   PostComment,
   PostCommentPage,
   PostIdentity,
   ReactionSummary,
+  AnonymousActivityRestriction,
 } from "~/features/posts/model/types";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -36,24 +38,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/shared/ui/dialog";
+import { PendingRegion, Skeleton } from "~/shared/ui/skeleton";
 
-/**
- * 모바일은 전체화면, 데스크톱은 가운데 정렬된 모달.
- *
- * 높이를 `h-[90svh]`로 고정한 것이 핵심이다. 내용에 맞춰 늘어나게 두면 짧은 게시물과 긴
- * 게시물 사이를 오갈 때 모달 크기가 매번 달라져서, 목록에서 하나씩 열어볼 때 창이 계속
- * 출렁인다. `svh`는 모바일 주소창이 접히며 높이가 변하는 것까지 막는다.
- */
+/** 모바일은 전체화면, 데스크톱은 가운데 모달. 높이를 `90svh`로 고정해 게시물마다 크기가 출렁이지 않게 한다. */
 const DETAIL_DIALOG_CLASS =
   "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-2xl";
 
 const COMMENT_SHEET_CLASS =
-  "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-[1025px]:top-auto max-[1025px]:bottom-0 max-[1025px]:h-[98svh] max-[1025px]:max-h-[98svh] max-[1025px]:rounded-t-2xl max-[1025px]:rounded-b-none max-[1025px]:translate-y-[var(--sheet-drag-offset,0px)] max-[1025px]:data-open:zoom-in-100 max-[1025px]:data-open:slide-in-from-bottom-4 max-[1025px]:data-closed:zoom-out-100 max-[1025px]:data-closed:slide-out-to-bottom-4 max-md:left-0 max-md:max-w-full max-md:translate-x-0 md:max-[1025px]:left-1/2 md:max-[1025px]:max-w-2xl md:max-[1025px]:-translate-x-1/2 min-[1025px]:max-w-2xl";
+  "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-[1025px]:top-auto max-[1025px]:bottom-0 max-[1025px]:h-[98svh] max-[1025px]:max-h-[98svh] max-[1025px]:rounded-t-2xl max-[1025px]:rounded-b-none max-[1025px]:translate-y-[var(--sheet-drag-offset,0px)] max-[1025px]:data-open:zoom-in-100 max-[1025px]:data-open:slide-in-from-bottom-4 max-[1025px]:data-closed:zoom-out-100 max-[1025px]:data-closed:slide-out-to-bottom-4 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 sm:max-[1025px]:left-1/2 sm:max-[1025px]:max-w-2xl sm:max-[1025px]:-translate-x-1/2 min-[1025px]:max-w-2xl";
 
 const DISMISS_DRAG_DISTANCE = 96;
 /** 목록에서 시작한 손짓을 당기기로 볼 최소 거리. 그 전에는 브라우저의 스크롤로 둔다. */
 const PULL_START_SLOP = 6;
 const TABLET_SHEET_QUERY = "(max-width: 1024px) and (hover: none)";
+const TOUCH_PRIMARY_QUERY = "(hover: none) and (pointer: coarse)";
 
 function subscribeToTabletSheetQuery(onChange: () => void) {
   const query = window.matchMedia(TABLET_SHEET_QUERY);
@@ -69,13 +67,17 @@ function getServerTabletSheetViewport() {
   return false;
 }
 
-/**
- * 그룹 게시물과 개인 게시물 상세가 공유하는 껍데기.
- *
- * 두 상세가 다른 것은 본문 영역뿐이다 — 댓글 목록, 답글, 입력창, 스크롤 컨테이너와 모달
- * 프레이밍은 같다. 액션 바까지 여기서 그리는 이유는 그것이 방금 쓴 댓글을 더한 개수와 입력창
- * 포커스를 필요로 하는데, 둘 다 이 컴포넌트만 알고 있기 때문이다.
- */
+function subscribeToTouchPrimaryQuery(onChange: () => void) {
+  const query = window.matchMedia(TOUCH_PRIMARY_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function isTouchPrimaryViewport() {
+  return window.matchMedia(TOUCH_PRIMARY_QUERY).matches;
+}
+
+/** 그룹·개인 게시물 상세가 공유하는 껍데기. 다른 것은 본문 영역뿐이다. */
 export function PostDetailDialog({
   title,
   postId,
@@ -87,12 +89,14 @@ export function PostDetailDialog({
   onClose,
   actionBar,
   children,
+  anonymousActivityRestriction,
+  mentionGroupId,
 }: {
   /** 모달 머리에 적는 제목. 낭독기에는 이것이 게시물의 이름이 된다. */
   title: string;
   postId: string;
-  comments: PostCommentPage;
-  /** 입력창 왼쪽 아바타에 쓰는 내 프로필. */
+  /** null이면 댓글을 불러오는 중이다. 본문은 그대로 그리고 댓글 자리만 스켈레톤으로 둔다. */
+  comments: PostCommentPage | null;
   viewer: CommentViewer;
   /** 이 게시물에 댓글로 쓸 수 있는 작성 신원. 첫 항목이 기본값이다. */
   identities: PostIdentity[];
@@ -100,7 +104,7 @@ export function PostDetailDialog({
   postAuthorPubId?: string | null;
   error?: string | null;
   onClose: () => void;
-  /** 본문 아래 액션 바. 댓글 수는 서버가 준 값만 넘기면 된다 — 방금 쓴 댓글은 여기서 더한다. */
+  /** 본문 아래 액션 바. 댓글 수는 서버 값만 넘기면 `usePostComments`가 정본 수를 얹는다. */
   actionBar: {
     reaction: ReactionSummary;
     sharePath: string;
@@ -109,22 +113,19 @@ export function PostDetailDialog({
   };
   /** 게시물 본문 영역. 종류마다 다른 유일한 부분이다. */
   children: ReactNode;
+  anonymousActivityRestriction?: AnonymousActivityRestriction | null;
+  /** 댓글에서 멘션할 수 있는 그룹. 개인 게시물 상세는 넘기지 않아 버튼이 없다(기능 명세 §8.14). */
+  mentionGroupId?: string | null;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  /**
-   * 스크롤 영역은 ref로도 잡고 상태로도 잡는다.
-   *
-   * 모달 본문은 포털이 나중에 붙여서, 이 컴포넌트의 첫 effect가 도는 시점에는 ref가 아직
-   * 비어 있다. 손짓 리스너를 거기에 걸려면 노드가 생겼다는 사실이 effect를 다시 돌게 해야
-   * 한다 — ref만으로는 아무 일도 일어나지 않는다.
-   */
+  /** 스크롤 영역은 ref와 상태로 함께 잡는다. 포털이 늦게 붙어 첫 effect에는 ref가 비어 있다. */
   const [listElement, setListElement] = useState<HTMLDivElement | null>(null);
   const attachList = useCallback((node: HTMLDivElement | null) => {
     scrollRef.current = node;
     setListElement(node);
   }, []);
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const thread = usePostComments(postId, comments);
+  const thread = usePostComments(postId, comments, actionBar.commentCount);
   const [identity, setIdentity] = useState<PostIdentity>(identities[0]);
   const [replyingTo, setReplyingTo] = useState<PostComment | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
@@ -137,14 +138,16 @@ export function PostDetailDialog({
     isTabletSheetViewport,
     getServerTabletSheetViewport,
   );
-  /**
-   * 바텀 시트로 그릴 것인가.
-   *
-   * 뷰포트만으로 정하면 안 된다 — 게시물을 열었을 뿐인데 본문이 숨겨진 댓글 서랍이 뜬다.
-   * 댓글만 보러 들어왔다는 의도(`?view=comments`)가 함께 있어야 한다.
-   */
+  const touchPrimaryViewport = useSyncExternalStore(
+    subscribeToTouchPrimaryQuery,
+    isTouchPrimaryViewport,
+    getServerTabletSheetViewport,
+  );
+  /** 바텀 시트로 그릴 것인가. 뷰포트만이 아니라 댓글만 보려는 의도(`?view=comments`)도 있어야 한다. */
   const commentSheet = commentsOnly && sheetViewport;
-  const keyboardViewport = useKeyboardViewport(commentSheet);
+  const keyboardViewport = useKeyboardViewport(sheetViewport);
+  const mobileDetailKeyboardOpen =
+    !commentSheet && keyboardViewport.keyboardOpen;
 
   useEffect(() => {
     if (!replyingTo || keyboardViewport.height === null) return;
@@ -166,7 +169,12 @@ export function PostDetailDialog({
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [keyboardViewport.bottomInset, keyboardViewport.height, replyingTo]);
+  }, [
+    keyboardViewport.bottomInset,
+    keyboardViewport.height,
+    keyboardViewport.keyboardOpen,
+    replyingTo,
+  ]);
 
   // 본문 영역이 액션 바에서 부르는 핸들러다. JSX 안에서 즉석 클로저로 만들면 render 중에
   // ref를 읽는 것으로 잡힌다.
@@ -180,8 +188,9 @@ export function PostDetailDialog({
   const submitComment = async (
     body: string,
     image?: Parameters<typeof thread.create>[3],
+    mentions?: Parameters<typeof thread.create>[4],
   ) => {
-    const created = await thread.create(body, identity, null, image);
+    const created = await thread.create(body, identity, null, image, mentions);
     if (!created) return created;
     // 방금 쓴 댓글은 목록 맨 아래에 붙는다. 보이지 않는 곳에 등록되면 실패로 읽힌다.
     requestAnimationFrame(() => {
@@ -194,13 +203,15 @@ export function PostDetailDialog({
   const submit = async (
     body: string,
     image?: Parameters<typeof thread.create>[3],
+    mentions?: Parameters<typeof thread.create>[4],
   ) => {
-    if (!replyingTo) return submitComment(body, image);
+    if (!replyingTo) return submitComment(body, image, mentions);
     const created = await thread.create(
       body,
       identity,
       replyingTo.comment_id,
       image,
+      mentions,
     );
     if (created) setReplyingTo(null);
     return created;
@@ -249,17 +260,8 @@ export function PostDetailDialog({
   };
 
   /**
-   * 댓글 목록을 맨 위까지 올린 뒤 이어서 아래로 당겨도 시트를 닫는다.
-   *
-   * 머리글만 끌 수 있으면, 댓글을 다 읽고 목록을 끝까지 올린 사람이 닫으려고 손가락을
-   * 위로 다시 가져가야 한다. 이어서 당기는 쪽이 자연스럽다.
-   *
-   * 포인터 이벤트로는 안 된다. 스크롤 영역 위의 세로 손짓은 브라우저가 스크롤로 가져가면서
-   * `pointercancel`로 끊어 버려서, 머리글에서 쓰는 핸들러를 그대로 붙여도 아무 일도 일어나지
-   * 않는다. `touchmove`를 passive가 아닌 채로 듣고 직접 `preventDefault`를 불러야 손짓이
-   * 우리에게 남는다 — 목록 맨 위에서 아래로 당기기라는 같은 문제를 푸는 `PullToRefresh`가
-   * 같은 이유로 같은 방식을 쓴다. 덤으로 `preventDefault`는 뒤따르는 클릭까지 막아 주므로,
-   * 링크나 버튼 위에서 당기기 시작해도 닫히면서 그쪽으로 넘어가지 않는다.
+   * 목록 맨 위에서 이어 아래로 당겨도 시트를 닫는다. 포인터 이벤트는 브라우저가 스크롤로 가져가 `pointercancel`로 끊기므로
+   * passive 아닌 `touchmove`에서 `preventDefault`한다(`PullToRefresh`와 같다).
    */
   const closeSheet = useEffectEvent(onClose);
 
@@ -335,14 +337,18 @@ export function PostDetailDialog({
           commentSheet &&
             !dragging &&
             "max-[1025px]:transition-transform max-[1025px]:duration-200",
+          mobileDetailKeyboardOpen &&
+            "max-[1025px]:top-auto max-[1025px]:translate-y-0",
         )}
         style={
-          commentSheet
+          sheetViewport
             ? ({
-                bottom:
-                  keyboardViewport.bottomInset > 0
-                    ? `${keyboardViewport.bottomInset}px`
-                    : undefined,
+                // 보이는 영역의 아래에 붙인다. 화면이 끌어올려졌으면 가려진 아래쪽이 0이라
+                // 레이아웃 바닥에 붙고, 그 자리가 곧 보이는 영역의 바닥이다.
+                bottom: keyboardViewport.keyboardOpen
+                  ? `${keyboardViewport.bottomInset}px`
+                  : undefined,
+                top: mobileDetailKeyboardOpen ? "auto" : undefined,
                 maxHeight:
                   keyboardViewport.height === null
                     ? undefined
@@ -420,47 +426,82 @@ export function PostDetailDialog({
               reaction={actionBar.reaction}
               sharePath={actionBar.sharePath}
               shareTitle={actionBar.shareTitle}
-              commentCount={actionBar.commentCount + thread.countDelta}
+              commentCount={thread.commentCount}
               onComment={focusComposer}
             />
           </article>
 
           <section className="border-t p-4">
-            <CommentThread
-              comments={thread.comments}
-              replies={thread.replies}
-              expanded={thread.expanded}
-              hasMore={thread.hasMore}
-              loading={thread.loading}
-              pending={thread.pending}
-              viewer={viewer}
-              postAuthorPubId={postAuthorPubId}
-              replyingToId={replyingTo?.comment_id}
-              scrollRef={scrollRef}
-              onLoadMore={thread.loadMore}
-              onToggleReplies={thread.toggleReplies}
-              onReply={startReply}
-              onEdit={thread.edit}
-              onReact={thread.react}
-              onDelete={thread.remove}
-            />
+            {thread.initialLoading ? (
+              <CommentThreadSkeleton />
+            ) : (
+              <CommentThread
+                comments={thread.comments}
+                replies={thread.replies}
+                expanded={thread.expanded}
+                hasMore={thread.hasMore}
+                loading={thread.loading}
+                pending={thread.pending}
+                viewer={viewer}
+                postAuthorPubId={postAuthorPubId}
+                replyingToId={replyingTo?.comment_id}
+                scrollRef={scrollRef}
+                onLoadMore={thread.loadMore}
+                onToggleReplies={thread.toggleReplies}
+                onReply={startReply}
+                onEdit={thread.edit}
+                mentionGroupId={mentionGroupId}
+                onReact={thread.react}
+                onDelete={thread.remove}
+              />
+            )}
           </section>
         </div>
 
+        {anonymousActivityRestriction ? (
+          <AnonymousActivityRestrictionNotice
+            restriction={anonymousActivityRestriction}
+            className="border-t px-4 pt-2 text-xs text-muted-foreground"
+          />
+        ) : null}
         <CommentComposer
+          /** 키보드가 없을 때만 홈 인디케이터 여백을 준다. iOS Safari는 키보드가 떠도 `env(safe-area-inset-bottom)`이 0이 아니라 `keyboardOpen`으로 판단한다. */
+          className={cn(
+            "border-t p-3",
+            !keyboardViewport.keyboardOpen &&
+              "pb-[calc(0.75rem+var(--app-safe-b))]",
+          )}
           viewer={viewer}
           identities={identities}
           identity={identity}
           onIdentityChange={setIdentity}
           onSubmit={submit}
-          pending={thread.pending}
+          mentionGroupId={mentionGroupId}
+          // 첫 페이지가 오기 전에 쓴 댓글은 그 페이지가 도착하며 지워진다.
+          pending={thread.pending || thread.initialLoading}
           error={thread.error}
           inputRef={composerRef}
-          focusOnMount={commentsOnly && !sheetViewport}
+          focusOnMount={commentsOnly && !touchPrimaryViewport}
           replyTarget={replyTarget}
           onCancelReply={() => setReplyingTo(null)}
         />
       </DialogContent>
     </Dialog>
+  );
+}
+
+function CommentThreadSkeleton() {
+  return (
+    <PendingRegion label="댓글을" className="space-y-4">
+      {Array.from({ length: 3 }, (_, index) => (
+        <div key={index} className="flex gap-2">
+          <Skeleton className="size-8 shrink-0 rounded-full" />
+          <div className="flex-1 space-y-2 pt-1">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-full" />
+          </div>
+        </div>
+      ))}
+    </PendingRegion>
   );
 }

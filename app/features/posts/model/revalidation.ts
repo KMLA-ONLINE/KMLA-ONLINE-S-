@@ -4,13 +4,10 @@ import type {
 } from "react-router";
 
 /**
- * loader가 읽지 않는 UI 전용 URL 상태. 이미지 뷰어(`image`)와 댓글 시트(`view`)는 안드로이드
- * 뒤로가기로 닫히도록 history entry를 남기므로 URL에 산다.
- *
- * 목록 화면은 여기에 자기 오버레이 파라미터를 더해서 쓴다. 하나라도 빠지면 오버레이를 여닫는
- * 것만으로 loader가 다시 돌고, 그러면 무한 스크롤로 쌓은 페이지와 피드 세션이 통째로 버려진다.
+ * loader가 읽지 않는 UI 전용 URL 상태(이미지 뷰어 `image`, 댓글 시트 `view`, 반응 목록 `reactions`). 안드로이드 뒤로가기로 닫히도록 URL에 산다.
+ * 목록 화면의 오버레이 파라미터가 하나라도 빠지면 여닫기만으로 loader가 다시 돌아 쌓은 페이지가 버려진다.
  */
-const POST_UI_SEARCH_PARAMS = ["image", "view"] as const;
+const POST_UI_SEARCH_PARAMS = ["image", "view", "reactions"] as const;
 
 /** `ignoredKeys`를 뺀 나머지 검색 파라미터가 두 URL에서 같은가. 키 순서는 보지 않는다. */
 function isUiOnlySearchChange(
@@ -52,19 +49,30 @@ export function shouldRevalidatePostDetail({
 }
 
 /**
- * 게시물 목록 화면(`/`, `/groups/:slug`, `/profile/:pubId`)의 `shouldRevalidate`를 만든다.
- * `extraUiParams`는 그 화면에만 있는 오버레이 파라미터다.
- *
- * 이 화면들은 loader 데이터를 목록 컴포넌트의 첫 페이지로 넘기고, 컴포넌트는 그 객체가 바뀌면
- * 더 불러온 페이지를 버린다. 그래서 "다시 읽을 것이 없으면 읽지 않는다"가 성능이 아니라 정확성
- * 문제다.
+ * 게시물 목록 화면의 `shouldRevalidate`를 만든다. `extraUiParams`는 그 화면 고유의 오버레이 파라미터다.
+ * 컴포넌트는 loader 객체가 바뀌면 더 불러온 페이지를 버리므로 불필요한 재검증은 정확성 문제다.
  */
 export function createPostListRevalidation(
   extraUiParams: readonly string[] = [],
+  options: {
+    /**
+     * 게시물 상세를 자식 route로 그리는 목록 화면의 경로(`/^\/groups\/[^/]+/`). 그 화면과 바로 아래
+     * `posts/*` 사이를 오가는 것은 dialog를 여닫는 일이라 다시 읽지 않는다 — 다시 읽으면 열 때도
+     * 닫을 때도 목록 왕복을 기다리고, 쌓아 둔 페이지와 스크롤이 사라진다.
+     */
+    detailParent?: RegExp;
+  } = {},
 ): ShouldRevalidateFunction {
   const uiParams = [...POST_UI_SEARCH_PARAMS, ...extraUiParams];
 
   return ({ currentUrl, nextUrl, formMethod }) => {
+    if (
+      options.detailParent &&
+      formMethod === undefined &&
+      isPostDetailTransition(currentUrl, nextUrl, options.detailParent)
+    ) {
+      return false;
+    }
     if (formMethod && formMethod !== "GET") return true;
     // 명시적 revalidate(`useRevalidator`)는 URL이 그대로다 — 당겨서 새로고침이 이 경로다.
     if (currentUrl.href === nextUrl.href) return true;
@@ -72,4 +80,20 @@ export function createPostListRevalidation(
 
     return !isUiOnlySearchChange(currentUrl, nextUrl, uiParams);
   };
+}
+
+function isPostDetailTransition(
+  currentUrl: URL,
+  nextUrl: URL,
+  parent: RegExp,
+): boolean {
+  const parentPath = parent.exec(currentUrl.pathname)?.[0];
+  if (parentPath === undefined) return false;
+  const detailPrefix = `${parentPath}/posts/`;
+  return (
+    (currentUrl.pathname === parentPath &&
+      nextUrl.pathname.startsWith(detailPrefix)) ||
+    (nextUrl.pathname === parentPath &&
+      currentUrl.pathname.startsWith(detailPrefix))
+  );
 }

@@ -51,7 +51,10 @@ describe("FeedPostCard", () => {
     );
     expect(screen.getByText("고정된 게시물")).toBeInTheDocument();
     expect(screen.queryByText("필독")).not.toBeInTheDocument();
-    expect(screen.queryByText("운영진")).not.toBeInTheDocument();
+    // 피드에도 운영진 표시를 둔다(§8.6). 글자 배지가 아니라 파란 체크라 접근성 이름으로 찾는다.
+    expect(
+      screen.getByRole("img", { name: "운영진 명의" }),
+    ).toBeInTheDocument();
     expect(within(title).queryByText("필독")).not.toBeInTheDocument();
   });
 });

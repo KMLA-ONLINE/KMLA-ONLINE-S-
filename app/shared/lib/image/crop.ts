@@ -75,18 +75,36 @@ export function coverCropRect(params: {
   };
 }
 
-/** 종횡비를 유지한 채 긴 변을 `maxEdge`로 눌러 담는다. 원본보다 키우지는 않는다. */
+/**
+ * 종횡비를 유지한 채 긴 변을 `maxEdge`로 눌러 담는다. 원본보다 키우지는 않는다.
+ *
+ * `aspect`를 주면 결과를 그 비율에 정확히 맞춘다. 크롭 영역은 화면 프레임에서 온 소수라 두 변을
+ * 따로 반올림하면 1201×300처럼 비율이 1px 어긋나고, 그룹 커버처럼 `width = height * 4`를
+ * 요구하는 DB 검사에 걸린다.
+ */
 export function fitOutputSize(
   rect: Pick<CropRect, "width" | "height">,
   maxEdge: number,
+  aspect?: number,
 ): { width: number; height: number } {
   const longer = Math.max(rect.width, rect.height);
   const scale = longer > maxEdge ? maxEdge / longer : 1;
+  const width = Math.max(1, Math.round(rect.width * scale));
+  const height = Math.max(1, Math.round(rect.height * scale));
+  if (!aspect) return { width, height };
 
-  return {
-    width: Math.max(1, Math.round(rect.width * scale)),
-    height: Math.max(1, Math.round(rect.height * scale)),
-  };
+  if (aspect >= 1) {
+    const lockedHeight = Math.max(
+      1,
+      Math.min(Math.round(width / aspect), Math.floor(maxEdge / aspect)),
+    );
+    return { width: Math.round(lockedHeight * aspect), height: lockedHeight };
+  }
+  const lockedWidth = Math.max(
+    1,
+    Math.min(Math.round(height * aspect), Math.floor(maxEdge * aspect)),
+  );
+  return { width: lockedWidth, height: Math.round(lockedWidth / aspect) };
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {

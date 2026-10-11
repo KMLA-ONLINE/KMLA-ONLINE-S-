@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(29);
 
 select is(
   (
@@ -231,6 +231,84 @@ select ok(
   'dead-lettering clears the lease without exceeding the hard attempt limit'
 );
 
+-- 404/410은 구독을 지우지 않고 표시만 한다. 지우면 outbox와 시도 기록이 cascade로 함께
+-- 사라져 왜 안 왔는지 볼 근거가 없어진다.
+set local role service_role;
+select ok(
+  public.complete_notification_delivery(
+    '72000000-0000-0000-0000-000000000012',
+    (select lease_id from exhausted_claim where delivery_id = '72000000-0000-0000-0000-000000000012'),
+    'gone', 410, null
+  ),
+  'the lease owner can record a gone subscription'
+);
+reset role;
+select ok(
+  (select gone_at is not null from private.web_push_subscriptions where id = '71000000-0000-0000-0000-000000000001'),
+  'a gone result marks the subscription instead of deleting it'
+);
+select ok(
+  (
+    select status = 'dead' and last_status_code = 410
+    from private.notification_delivery_outbox
+    where id = '72000000-0000-0000-0000-000000000012'
+  ),
+  'the delivery ends dead with the push service status kept'
+);
+select is(
+  (
+    select outcome from private.notification_delivery_attempts
+    where delivery_id = '72000000-0000-0000-0000-000000000012'
+  ),
+  'gone',
+  'the gone attempt stays on record'
+);
+insert into public.notifications (
+  id, recipient_profile_id, kind, importance, category, actor_identity, title,
+  created_at, last_activity_at
+) values (
+  '70000000-0000-0000-0000-000000000013',
+  (select id from public.profiles where pub_id = 'hanbyeol-25'),
+  'account_approved', 'high', 'account', 'staff', '죽은 구독 이후 알림',
+  now(), now()
+);
+select is(
+  private.enqueue_notification_push('70000000-0000-0000-0000-000000000013'),
+  0,
+  'new notifications are not queued for a gone subscription'
+);
+
+-- delivery가 쌓인 뒤 구독이 새 키로 다시 등록됐다면 그 410은 옛 키에 대한 답이다. 방금 살아난
+-- 구독을 다시 죽이면 안 된다.
+update private.web_push_subscriptions
+set gone_at = null, updated_at = now() + interval '1 second'
+where id = '71000000-0000-0000-0000-000000000001';
+insert into private.notification_delivery_outbox (
+  id, notification_id, recipient_profile_id, subscription_id, channel,
+  status, attempt_count, lease_id, lease_expires_at
+) values (
+  '72000000-0000-0000-0000-000000000013',
+  '70000000-0000-0000-0000-000000000013',
+  (select id from public.profiles where pub_id = 'hanbyeol-25'),
+  '71000000-0000-0000-0000-000000000001', 'web_push',
+  'leased', 1, '73000000-0000-0000-0000-000000000013',
+  now() + interval '1 minute'
+);
+set local role service_role;
+select ok(
+  public.complete_notification_delivery(
+    '72000000-0000-0000-0000-000000000013',
+    '73000000-0000-0000-0000-000000000013',
+    'gone', 410, null
+  ),
+  'a gone result for an older key is still recorded'
+);
+reset role;
+select ok(
+  (select gone_at is null from private.web_push_subscriptions where id = '71000000-0000-0000-0000-000000000001'),
+  'a gone result for an older key does not kill a re-registered subscription'
+);
+
 insert into public.notifications (
   recipient_profile_id, kind, importance, category, actor_identity, title,
   created_at, last_activity_at
@@ -239,8 +317,15 @@ insert into public.notifications (
   'group_deleted', 'high', 'group', 'system', '만료 알림',
   now() - interval '31 days', now() - interval '31 days'
 );
+update private.web_push_subscriptions
+set gone_at = now() - interval '31 days'
+where id = '71000000-0000-0000-0000-000000000001';
 select is(private.cleanup_expired_notifications(), 1::bigint, 'retention removes notifications after 30 days');
 select is((select count(*) from public.notifications where title = '만료 알림'), 0::bigint, 'expired notification data is gone');
+select ok(
+  not exists (select 1 from private.web_push_subscriptions where id = '71000000-0000-0000-0000-000000000001'),
+  'retention removes subscriptions that have been gone for 30 days'
+);
 
 select * from finish();
 rollback;

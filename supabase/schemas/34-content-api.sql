@@ -13,8 +13,7 @@ begin
   select post.* into post_record
   from public.posts as post
   where post.id = p_post_id
-    and post.published_at is not null
-    and post.deleted_at is null;
+    and post.published_at is not null;
   if post_record.id is null then
     return;
   end if;
@@ -44,7 +43,7 @@ $$;
 
 ALTER FUNCTION "private"."comment_post_context"("p_post_id" "uuid", "p_caller_profile_id" bigint, OUT "is_visible" boolean, OUT "post_kind" "public"."post_kind", OUT "caller_role" "public"."group_member_role", OUT "identity_policy" "public"."group_identity_policy", OUT "post_author_identity" "public"."post_identity") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "private"."read_post_comments"("p_comment_ids" "uuid"[], "p_caller_profile_id" bigint, "p_caller_role" "public"."group_member_role") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
+CREATE OR REPLACE FUNCTION "private"."read_post_comments"("p_comment_ids" "uuid"[], "p_caller_profile_id" bigint, "p_caller_role" "public"."group_member_role") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb")
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -115,8 +114,20 @@ CREATE OR REPLACE FUNCTION "private"."read_post_comments"("p_comment_ids" "uuid"
       then private.comment_author_label(
         parent.author_identity, parent.anon_alias_number, parent_profile.name
       )
+    end,
+    comment.deleted_at is null
+      and comment.author_identity = 'anonymous'
+      and author.profile_id <> p_caller_profile_id
+      and coalesce(p_caller_role in ('owner', 'admin'), false),
+    active_restriction.expires_at is not null,
+    active_restriction.expires_at,
+    -- tombstone은 본문을 내보내지 않으므로 그 본문에 걸려 있던 멘션도 내보내지 않는다.
+    case
+      when comment.deleted_at is null then private.comment_mentions_json(comment.id)
+      else '[]'::jsonb
     end
   from public.post_comments as comment
+  join public.posts as comment_post on comment_post.id = comment.post_id
   join private.comment_authors as author on author.comment_id = comment.id
   left join private.feed_bump_events as feed_bump
     on feed_bump.comment_id = comment.id
@@ -129,6 +140,19 @@ CREATE OR REPLACE FUNCTION "private"."read_post_comments"("p_comment_ids" "uuid"
     and profile.deleted_at is null
   left join public.comment_reactions as mine
     on mine.comment_id = comment.id and mine.profile_id = p_caller_profile_id
+  left join lateral (
+    select restriction.expires_at
+    from private.group_anonymous_activity_restrictions as restriction
+    where restriction.group_id = comment_post.group_id
+      and restriction.profile_id = author.profile_id
+      and restriction.ended_at is null
+      and restriction.expires_at > now()
+    order by restriction.created_at desc, restriction.id desc
+    limit 1
+  ) as active_restriction on comment.deleted_at is null
+    and comment.author_identity = 'anonymous'
+    and author.profile_id <> p_caller_profile_id
+    and coalesce(p_caller_role in ('owner', 'admin'), false)
   left join lateral (
     select
       coalesce(sum(tally.n)::integer, 0) as total,
@@ -286,7 +310,7 @@ $$;
 
 ALTER FUNCTION "public"."clear_post_reaction"("p_post_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean DEFAULT false, "p_category_id" "uuid" DEFAULT NULL::"uuid") RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean DEFAULT false, "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_mention_pub_ids" "text"[] DEFAULT '{}'::"text"[]) RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -294,19 +318,26 @@ declare
   caller_profile_id bigint := private.current_profile_id();
   post_record public.posts;
   target_group_id uuid;
+  target_author_identity public.post_identity;
   locked_group_id uuid;
   group_identity_policy public.group_identity_policy;
   group_posting_policy public.group_posting_policy;
   member_role public.group_member_role;
+  content_changed boolean;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
-  select post.group_id into target_group_id
+  select post.group_id, post.author_identity into target_group_id, target_author_identity
   from public.posts as post
-  where post.id = p_post_id and post.kind = 'group' and post.deleted_at is null;
+  where post.id = p_post_id and post.kind = 'group';
   if target_group_id is null or not private.is_post_author(p_post_id) then
     raise exception 'only the author can commit this post' using errcode = '42501';
+  end if;
+  if coalesce(p_publish, false) and target_author_identity = 'anonymous' then
+    perform private.lock_group_anonymous_activity_target(
+      target_group_id, caller_profile_id
+    );
   end if;
 
   select group_data.id, group_data.identity_policy, group_data.posting_policy,
@@ -315,7 +346,7 @@ begin
   from public.groups as group_data
   join public.group_memberships as membership
     on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
-  where group_data.id = target_group_id and group_data.deleted_at is null
+  where group_data.id = target_group_id
   for share of group_data, membership;
   if locked_group_id is null then
     raise exception 'group membership required' using errcode = '42501';
@@ -323,7 +354,7 @@ begin
   select post.* into post_record
   from public.posts as post
   where post.id = p_post_id and post.kind = 'group'
-    and post.group_id = target_group_id and post.deleted_at is null
+    and post.group_id = target_group_id
   for update;
   if post_record.id is null or not private.is_post_author(p_post_id) then
     raise exception 'only the author can commit this post' using errcode = '42501';
@@ -340,6 +371,11 @@ begin
       and group_identity_policy = 'identified' then
       raise exception 'anonymous posting is not allowed' using errcode = '42501';
     end if;
+    if post_record.author_identity = 'anonymous' then
+      perform private.assert_group_anonymous_activity_allowed(
+        target_group_id, caller_profile_id
+      );
+    end if;
     if post_record.author_identity = 'staff'
       and member_role not in ('owner', 'admin', 'manager') then
       raise exception 'staff identity is not allowed' using errcode = '42501';
@@ -355,17 +391,41 @@ begin
     raise exception 'category must belong to the group' using errcode = '22023';
   end if;
 
+  -- 카테고리 이동은 수정이 아니다. 글의 내용은 그대로고 분류만 바뀐다 — 개인 게시물에서
+  -- 공개 범위를 세지 않는 것과 같은 취급이다(`commit_profile_post`). 첨부를 재배치하기 전에
+  -- 재어 두어야 원래 순서와 비교할 수 있다(`apply_post_commit`이 position과 status를 갈아엎는다).
+  --
+  -- `ready`만 세는 것이 핵심이다. 게시된 글에서 `finalize_post_attachment`는 새 첨부를
+  -- `pending`으로 남기므로 `ready`가 곧 "이번 편집 전부터 있던 것"이다. `status <> 'deleted'`로
+  -- 세면 방금 올린 첨부까지 들어가 양쪽 배열이 같아지고, 사진만 더한 수정이 수정이 아닌 것이
+  -- 된다.
+  content_changed := btrim(p_title) is distinct from post_record.title
+    or coalesce(p_body, '') is distinct from post_record.body
+    or coalesce(p_attachment_ids, '{}'::uuid[]) is distinct from (
+      select coalesce(array_agg(attachment.id order by attachment.position), '{}'::uuid[])
+      from public.post_attachments as attachment
+      where attachment.post_id = p_post_id and attachment.status = 'ready'
+    );
+
   perform private.apply_post_commit(p_post_id, p_body, p_attachment_ids);
   update public.posts
   set title = btrim(p_title), body = coalesce(p_body, ''), category_id = p_category_id,
     published_at = case when coalesce(p_publish, false) then now() else published_at end,
-    edited_at = case when published_at is not null then now() else null end
+    edited_at = case
+      -- 지금 게시하는 글은 수정된 적이 없다.
+      when published_at is null then null
+      when content_changed then now()
+      else edited_at
+    end
   where id = p_post_id;
+  -- 게시 시각을 세운 다음에 부른다. 새 멘션 행의 트리거가 이미 게시된 게시물을 보아야 알림이
+  -- 나가기 때문이다. 미게시 초안의 멘션은 `p_publish`가 참인 커밋에서 함께 알린다.
+  perform private.sync_post_mentions(p_post_id, coalesce(p_body, ''), p_mention_pub_ids);
   return p_post_id;
 end;
 $$;
 
-ALTER FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_category_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_category_id" "uuid", "p_mention_pub_ids" "text"[]) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."commit_profile_post"("p_post_id" "uuid", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean DEFAULT false, "p_visibility" "public"."post_visibility" DEFAULT NULL::"public"."post_visibility") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -382,7 +442,7 @@ begin
   end if;
   select post.* into post_record
   from public.posts as post
-  where post.id = p_post_id and post.kind = 'profile' and post.deleted_at is null
+  where post.id = p_post_id and post.kind = 'profile'
   for update;
   -- 타임라인 당사자는 타인이 쓴 글을 수정할 수 없다(기능 명세 §12.4). 작성자만 통과한다.
   if post_record.id is null or not private.is_post_author(p_post_id) then
@@ -489,7 +549,7 @@ $$;
 
 ALTER FUNCTION "public"."create_group_category"("p_group_id" "uuid", "p_name" "text", "p_position" integer) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_publish" boolean DEFAULT true) RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_publish" boolean DEFAULT true, "p_mention_pub_ids" "text"[] DEFAULT '{}'::"text"[]) RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -503,6 +563,11 @@ declare
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  if p_author_identity = 'anonymous' then
+    perform private.lock_group_anonymous_activity_target(
+      p_group_id, caller_profile_id
+    );
   end if;
   select group_data.id, group_data.identity_policy, group_data.posting_policy,
     membership.role
@@ -521,6 +586,11 @@ begin
   end if;
   if p_author_identity = 'anonymous' and group_identity_policy = 'identified' then
     raise exception 'anonymous posting is not allowed' using errcode = '42501';
+  end if;
+  if p_author_identity = 'anonymous' then
+    perform private.assert_group_anonymous_activity_allowed(
+      p_group_id, caller_profile_id
+    );
   end if;
   if p_author_identity = 'staff' and member_role not in ('owner', 'admin', 'manager') then
     raise exception 'staff identity is not allowed' using errcode = '42501';
@@ -551,13 +621,265 @@ begin
   ) returning id into created_post_id;
   insert into private.post_authors (post_id, profile_id)
   values (created_post_id, caller_profile_id);
+  -- 즉시 게시 경로도 본문을 직접 쓰므로 여기서 대상을 맞춰야 한다. 이 한 줄이 없으면 화면에는
+  -- 멘션이 보이는데 `post_mentions`가 비어 아무도 불리지 않는다.
+  perform private.sync_post_mentions(
+    created_post_id, coalesce(p_body, ''), p_mention_pub_ids
+  );
   return created_post_id;
 end;
 $$;
 
-ALTER FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean) OWNER TO "postgres";
+ALTER FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean, "p_mention_pub_ids" "text"[]) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid" DEFAULT NULL::"uuid", "p_image_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
+CREATE OR REPLACE FUNCTION "public"."create_group_post_upload_draft"("p_group_id" "uuid", "p_author_identity" "public"."post_identity") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  locked_group_id uuid;
+  group_identity_policy public.group_identity_policy;
+  group_posting_policy public.group_posting_policy;
+  member_role public.group_member_role;
+  created_post_id uuid;
+begin
+  if auth.uid() is null or caller_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  if p_author_identity is null then
+    raise exception 'author identity is required' using errcode = '22023';
+  end if;
+  if p_author_identity = 'anonymous' then
+    perform private.lock_group_anonymous_activity_target(p_group_id, caller_profile_id);
+  end if;
+
+  select group_data.id, group_data.identity_policy, group_data.posting_policy,
+    membership.role
+  into locked_group_id, group_identity_policy, group_posting_policy, member_role
+  from public.groups as group_data
+  join public.group_memberships as membership
+    on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
+  where group_data.id = p_group_id
+  for share of group_data, membership;
+  if locked_group_id is null then
+    raise exception 'group membership required' using errcode = '42501';
+  end if;
+  if group_posting_policy = 'staff'
+    and member_role not in ('owner', 'admin', 'manager') then
+    raise exception 'group posting is restricted to staff' using errcode = '42501';
+  end if;
+  if p_author_identity = 'anonymous' and group_identity_policy = 'identified' then
+    raise exception 'anonymous posting is not allowed' using errcode = '42501';
+  end if;
+  if p_author_identity = 'anonymous' then
+    perform private.assert_group_anonymous_activity_allowed(p_group_id, caller_profile_id);
+  end if;
+  if p_author_identity = 'staff' and member_role not in ('owner', 'admin', 'manager') then
+    raise exception 'staff identity is not allowed' using errcode = '42501';
+  end if;
+
+  insert into public.posts (
+    kind, body, group_id, title, author_identity, display_author_profile_id
+  ) values (
+    'group', '', p_group_id, '[private upload draft]', p_author_identity,
+    case when p_author_identity = 'identified' then caller_profile_id end
+  ) returning id into created_post_id;
+  insert into private.post_authors (post_id, profile_id)
+  values (created_post_id, caller_profile_id);
+  return created_post_id;
+end;
+$$;
+
+ALTER FUNCTION "public"."create_group_post_upload_draft"("p_group_id" "uuid", "p_author_identity" "public"."post_identity") OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."restrict_group_anonymous_activity"("p_source_kind" "text", "p_source_id" "uuid", "p_reason" "text", "p_duration_days" integer) RETURNS TABLE("restriction_id" "uuid", "expires_at" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  target_group_id uuid;
+  target_profile_id bigint;
+  caller_role public.group_member_role;
+  created_restriction_id uuid;
+  restriction_expires_at timestamptz;
+  trimmed_reason text := btrim(coalesce(p_reason, ''));
+begin
+  if auth.uid() is null or caller_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  if p_source_kind not in ('post', 'comment') or p_source_id is null then
+    raise exception 'invalid anonymous moderation source' using errcode = '22023';
+  end if;
+  if char_length(trimmed_reason) not between 5 and 300 then
+    raise exception 'reason must contain between 5 and 300 characters' using errcode = '22023';
+  end if;
+  if p_duration_days is null or p_duration_days not between 1 and 180 then
+    raise exception 'duration days must be an integer between 1 and 180' using errcode = '22023';
+  end if;
+
+  if p_source_kind = 'post' then
+    select post.group_id, author.profile_id into target_group_id, target_profile_id
+    from public.posts as post
+    join public.groups as group_record on group_record.id = post.group_id
+    join private.post_authors as author on author.post_id = post.id
+    where post.id = p_source_id and post.kind = 'group'
+      and post.author_identity = 'anonymous'
+      and post.published_at is not null;
+  else
+    select post.group_id, author.profile_id into target_group_id, target_profile_id
+    from public.post_comments as comment
+    join public.posts as post on post.id = comment.post_id and post.kind = 'group'
+      and post.published_at is not null
+    join public.groups as group_record on group_record.id = post.group_id
+    join private.comment_authors as author on author.comment_id = comment.id
+    where comment.id = p_source_id and comment.author_identity = 'anonymous'
+      and comment.deleted_at is null;
+  end if;
+  if target_profile_id is null then
+    raise exception 'anonymous moderation source not found' using errcode = 'P0002';
+  end if;
+
+  select membership.role into caller_role
+  from public.group_memberships as membership
+  where membership.group_id = target_group_id and membership.profile_id = caller_profile_id;
+  if caller_role not in ('owner', 'admin') then
+    raise exception 'group anonymous moderation is not allowed' using errcode = '42501';
+  end if;
+  if target_profile_id = caller_profile_id then
+    raise exception 'cannot moderate own anonymous activity' using errcode = '42501';
+  end if;
+
+  perform private.lock_group_anonymous_activity_target(target_group_id, target_profile_id);
+  perform 1 from public.group_memberships as membership
+  where membership.group_id = target_group_id and membership.profile_id = target_profile_id
+  for update;
+  update private.group_anonymous_activity_restrictions as restriction
+  set ended_at = restriction.expires_at
+  where restriction.group_id = target_group_id and restriction.profile_id = target_profile_id
+    and restriction.ended_at is null and restriction.expires_at <= now();
+  if exists (
+    select 1 from private.group_anonymous_activity_restrictions as restriction
+    where restriction.group_id = target_group_id and restriction.profile_id = target_profile_id
+      and restriction.ended_at is null and restriction.expires_at > now()
+  ) then
+    raise exception 'anonymous activity restriction already active' using errcode = '55000';
+  end if;
+
+  restriction_expires_at := now() + make_interval(days => p_duration_days);
+  insert into private.group_anonymous_activity_restrictions (
+    group_id, profile_id, reason, expires_at, restricted_by_profile_id,
+    source_kind, source_post_id, source_comment_id
+  ) values (
+    target_group_id, target_profile_id, trimmed_reason, restriction_expires_at,
+    caller_profile_id, p_source_kind,
+    case when p_source_kind = 'post' then p_source_id end,
+    case when p_source_kind = 'comment' then p_source_id end
+  ) returning id into created_restriction_id;
+  return query select created_restriction_id, restriction_expires_at;
+end;
+$$;
+
+ALTER FUNCTION "public"."restrict_group_anonymous_activity"("p_source_kind" "text", "p_source_id" "uuid", "p_reason" "text", "p_duration_days" integer) OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."cancel_group_anonymous_activity_restriction"("p_source_kind" "text", "p_source_id" "uuid") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  target_group_id uuid;
+  target_profile_id bigint;
+  caller_role public.group_member_role;
+  target_restriction private.group_anonymous_activity_restrictions;
+begin
+  if auth.uid() is null or caller_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  if p_source_kind not in ('post', 'comment') or p_source_id is null then
+    raise exception 'invalid anonymous moderation source' using errcode = '22023';
+  end if;
+  if p_source_kind = 'post' then
+    select post.group_id, author.profile_id into target_group_id, target_profile_id
+    from public.posts as post
+    join public.groups as group_record on group_record.id = post.group_id
+    join private.post_authors as author on author.post_id = post.id
+    where post.id = p_source_id and post.kind = 'group'
+      and post.author_identity = 'anonymous'
+      and post.published_at is not null;
+  else
+    select post.group_id, author.profile_id into target_group_id, target_profile_id
+    from public.post_comments as comment
+    join public.posts as post on post.id = comment.post_id and post.kind = 'group'
+      and post.published_at is not null
+    join public.groups as group_record on group_record.id = post.group_id
+    join private.comment_authors as author on author.comment_id = comment.id
+    where comment.id = p_source_id and comment.author_identity = 'anonymous'
+      and comment.deleted_at is null;
+  end if;
+  if target_profile_id is null then
+    raise exception 'anonymous moderation source not found' using errcode = 'P0002';
+  end if;
+
+  select membership.role into caller_role
+  from public.group_memberships as membership
+  where membership.group_id = target_group_id and membership.profile_id = caller_profile_id;
+  if caller_role not in ('owner', 'admin') then
+    raise exception 'group anonymous moderation is not allowed' using errcode = '42501';
+  end if;
+  if target_profile_id = caller_profile_id then
+    raise exception 'cannot moderate own anonymous activity' using errcode = '42501';
+  end if;
+
+  perform private.lock_group_anonymous_activity_target(target_group_id, target_profile_id);
+  perform 1 from public.group_memberships as membership
+  where membership.group_id = target_group_id and membership.profile_id = target_profile_id
+  for update;
+  select restriction.* into target_restriction
+  from private.group_anonymous_activity_restrictions as restriction
+  where restriction.group_id = target_group_id and restriction.profile_id = target_profile_id
+  order by restriction.created_at desc, restriction.id desc limit 1 for update;
+  if target_restriction.id is null then
+    raise exception 'anonymous activity restriction not found' using errcode = 'P0002';
+  end if;
+  if target_restriction.cancelled_at is not null then
+    raise exception 'anonymous activity restriction already cancelled' using errcode = '55000';
+  end if;
+  if target_restriction.ended_at is not null or target_restriction.expires_at <= now() then
+    raise exception 'anonymous activity restriction is expired' using errcode = '55000';
+  end if;
+  update private.group_anonymous_activity_restrictions
+  set ended_at = now(), cancelled_at = now(), cancelled_by_profile_id = caller_profile_id
+  where id = target_restriction.id;
+  return target_restriction.id;
+end;
+$$;
+
+ALTER FUNCTION "public"."cancel_group_anonymous_activity_restriction"("p_source_kind" "text", "p_source_id" "uuid") OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."get_my_group_anonymous_activity_restriction"("p_group_id" "uuid") RETURNS TABLE("reason" "text", "expires_at" timestamp with time zone)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+begin
+  if auth.uid() is null or caller_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  return query
+  select restriction.reason, restriction.expires_at
+  from private.group_anonymous_activity_restrictions as restriction
+  where restriction.group_id = p_group_id and restriction.profile_id = caller_profile_id
+    and restriction.ended_at is null and restriction.expires_at > now()
+  order by restriction.created_at desc, restriction.id desc limit 1;
+end;
+$$;
+
+ALTER FUNCTION "public"."get_my_group_anonymous_activity_restriction"("p_group_id" "uuid") OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid" DEFAULT NULL::"uuid", "p_image_id" "uuid" DEFAULT NULL::"uuid", "p_mention_pub_ids" "text"[] DEFAULT '{}'::"text"[]) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb", "post_comment_count" integer)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -571,10 +893,22 @@ declare
   new_depth smallint := 0;
   new_root_id uuid;
   new_alias smallint;
+  new_post_comment_count integer;
+  target_group_id uuid;
   trimmed_body text := btrim(coalesce(p_body, ''));
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  if p_author_identity = 'anonymous' then
+    select post.group_id into target_group_id
+    from public.posts as post
+    where post.id = p_post_id and post.kind = 'group';
+    if target_group_id is not null then
+      perform private.lock_group_anonymous_activity_target(
+        target_group_id, caller_profile_id
+      );
+    end if;
   end if;
   perform 1
   from public.posts as post
@@ -587,7 +921,6 @@ begin
   from public.posts as post
   where post.id = p_post_id
     and post.published_at is not null
-    and post.deleted_at is null
   for update;
   if not found then
     raise exception 'post not found' using errcode = 'P0002';
@@ -607,9 +940,31 @@ begin
     if p_author_identity = 'anonymous' and context.identity_policy = 'identified' then
       raise exception 'anonymous commenting is not allowed' using errcode = '42501';
     end if;
+    if p_author_identity = 'anonymous' then
+      perform private.assert_group_anonymous_activity_allowed(
+        target_group_id, caller_profile_id
+      );
+    end if;
     if p_author_identity = 'staff'
       and context.caller_role not in ('owner', 'admin', 'manager') then
       raise exception 'staff identity is not allowed' using errcode = '42501';
+    end if;
+  end if;
+  -- 자기 글 익명 댓글 판정. 공개 표시 필드가 아니라 private.post_authors만 쓴다.
+  --
+  -- 실명·운영진 게시물의 실제 작성자는 자기 글에 익명 댓글/답글을 쓸 수 없다(기능 명세 §9.1).
+  -- 이름을 걸고 쓴 글 아래에 같은 사람이 익명으로 서면, 그 익명이 게시물 작성자라는 것이 이미
+  -- 드러난 셈이라 익명을 고를 이유가 없다.
+  --
+  -- 익명 게시물은 다르다. 작성자도 익명으로 답할 수 있고, 아래 alias 분기가 `글쓴이`를 준다.
+  if p_author_identity = 'anonymous' then
+    select author.profile_id into post_author_profile_id
+    from private.post_authors as author
+    where author.post_id = p_post_id;
+    if post_author_profile_id = caller_profile_id
+      and context.post_author_identity <> 'anonymous' then
+      raise exception 'post author cannot comment anonymously on own post'
+        using errcode = '42501';
     end if;
   end if;
   if char_length(trimmed_body) > 5000 then
@@ -649,9 +1004,9 @@ begin
     end if;
   end if;
   if p_author_identity = 'anonymous' then
-    select author.profile_id into post_author_profile_id
-    from private.post_authors as author
-    where author.post_id = p_post_id;
+    -- 익명 게시물의 작성자는 alias 0을 받아 `글쓴이`로 표시된다. 읽는 사람이 답을 다는 쪽이
+    -- 글쓴이인지 다른 참여자인지 알아야 스레드가 읽히기 때문이다. 실명 자기 댓글의 `작성자`
+    -- 표시와 같은 역할이다(기능 명세 §9.3).
     if context.post_author_identity = 'anonymous'
       and post_author_profile_id = caller_profile_id then
       new_alias := 0;
@@ -692,15 +1047,22 @@ begin
     set comment_id = new_comment_id, status = 'ready', ready_at = now()
     where id = p_image_id;
   end if;
+  perform private.sync_comment_mentions(
+    new_comment_id, trimmed_body, p_author_identity, p_mention_pub_ids
+  );
+  -- insert 트리거가 갱신한 정본 count를 읽어 클라이언트가 낡은 값에 +1 하지 않게 한다.
+  select post.comment_count into new_post_comment_count
+  from public.posts as post
+  where post.id = p_post_id;
   return query
-  select entry.*
+  select entry.*, new_post_comment_count
   from private.read_post_comments(
     array[new_comment_id], caller_profile_id, context.caller_role
   ) as entry;
 end;
 $$;
 
-ALTER FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid", "p_image_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid", "p_image_id" "uuid", "p_mention_pub_ids" "text"[]) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."create_profile_post"("p_timeline_pub_id" "text", "p_visibility" "public"."post_visibility" DEFAULT 'public'::"public"."post_visibility") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -807,7 +1169,7 @@ begin
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
   select post.* into post_record from public.posts as post
-  where post.id = p_post_id and post.kind = 'group' and post.deleted_at is null
+  where post.id = p_post_id and post.kind = 'group'
   for update;
   select membership.role into caller_role
   from public.group_memberships as membership
@@ -821,11 +1183,7 @@ begin
   end if;
   select author.profile_id into author_profile_id
   from private.post_authors as author where author.post_id = p_post_id;
-  update public.posts set deleted_at = now(), pinned_at = null where id = p_post_id;
-  update public.post_attachments
-  set status = 'deleted', deleted_at = now(), cleanup_lease_id = null,
-    cleanup_lease_expires_at = null
-  where post_id = p_post_id and status <> 'deleted';
+  perform private.purge_posts(array[p_post_id]);
   if caller_profile_id <> author_profile_id then
     -- 어느 글이 사라졌는지 제목으로 말해준다. 삭제된 게시물은 열어볼 수 없으므로 알림이
     -- 대상을 밝히지 않으면 작성자는 무엇이 지워졌는지 영영 알 수 없다. 제목은 작성자
@@ -872,17 +1230,27 @@ begin
     raise exception 'post requires a body or ready attachment' using errcode = '22023';
   end if;
   if attachment.status <> 'deleted' then
+    insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+    select attachment.storage_bucket, path.object_path, 'post_attachment'
+    from (
+      values (attachment.object_path), (attachment.thumbnail_path)
+    ) as path(object_path)
+    where path.object_path is not null
+    on conflict (bucket, object_path) do update
+      set dry_run = queue.dry_run and excluded.dry_run;
+
     update public.post_attachments
-    set status = 'deleted', deleted_at = now(), cleanup_lease_id = null,
-      cleanup_lease_expires_at = null
+    set status = 'deleted', deleted_at = now()
     where id = p_attachment_id;
+
+    perform private.invoke_storage_cleanup(p_quiet => true);
   end if;
 end;
 $$;
 
 ALTER FUNCTION "public"."delete_post_attachment"("p_attachment_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."delete_post_comment"("p_comment_id" "uuid") RETURNS "void"
+CREATE OR REPLACE FUNCTION "public"."delete_post_comment"("p_comment_id" "uuid") RETURNS integer
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -894,6 +1262,7 @@ declare
   comment_post_title text;
   caller_role public.group_member_role;
   author_profile_id bigint;
+  remaining_comment_count integer;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -948,23 +1317,68 @@ begin
   select author.profile_id into author_profile_id
   from private.comment_authors as author where author.comment_id = p_comment_id;
 
+  -- 하드 삭제는 외래 키가 이 데이터를 정리하지만, 살아 있는 자식 때문에 답글이 tombstone으로
+  -- 남는 경우에도 삭제된 댓글을 가리키는 데이터는 즉시 사라져야 한다.
+  delete from public.notifications where comment_id = p_comment_id;
+  delete from public.comment_mentions where comment_id = p_comment_id;
+
   if comment_record.depth = 0 then
-    -- 최상위 댓글을 지우면 답글 묶음 전체가 사라진다(기능 명세 §9.4).
+    -- 최상위 댓글을 지우면 답글 묶음 전체가 사라진다(기능 명세 §9.4). 묶음이 통째로 숨는 이상
+    -- 자리 표시가 필요 없으므로 하드 삭제한다.
     perform 1
     from public.post_comments as comment
     where comment.root_comment_id = p_comment_id
-      and comment.deleted_at is null
     order by comment.id
     for update;
 
-    update public.post_comments as comment
-    set deleted_at = now()
-    where comment.root_comment_id = p_comment_id and comment.deleted_at is null;
+    insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+    select image.storage_bucket, image.object_path, 'comment_image'
+    from public.comment_images as image
+    join public.post_comments as comment on comment.id = image.comment_id
+    where comment.root_comment_id = p_comment_id
+    on conflict (bucket, object_path) do update
+      set dry_run = queue.dry_run and excluded.dry_run;
+
+    delete from public.post_comments as comment
+    where comment.root_comment_id = p_comment_id;
   else
+    -- 답글은 아래에 살아 있는 답글이 남아 있으면 대화 연결을 위해 자리 표시로 남아야 한다
+    -- (기능 명세 §9.4). 자리 표시에 필요한 것은 트리 골격뿐이므로 본문은 그 자리에서 비운다
+    -- (삭제 및 보존 정책 §7.2).
     update public.post_comments as comment
-    set deleted_at = now()
+    set deleted_at = now(), body = ''
     where comment.id = p_comment_id;
   end if;
+
+  -- 자식이 없는 자리 표시는 존재 이유가 없다. 잎에서부터 걷어내면 삭제만 남은 사슬이 조상까지
+  -- 함께 사라진다. 이미지 경로는 행이 사라지기 전에 큐로 옮긴다.
+  loop
+    with doomed as (
+      select comment.id
+      from public.post_comments as comment
+      where comment.post_id = target_post_id
+        and comment.deleted_at is not null
+        and not exists (
+          select 1
+          from public.post_comments as child
+          where child.parent_comment_id = comment.id
+        )
+    ), queued as (
+      insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+      select image.storage_bucket, image.object_path, 'comment_image'
+      from public.comment_images as image
+      join doomed on doomed.id = image.comment_id
+      on conflict (bucket, object_path) do update
+        set dry_run = queue.dry_run and excluded.dry_run
+      returning 1
+    )
+    delete from public.post_comments as comment
+    using doomed
+    where comment.id = doomed.id;
+    exit when not found;
+  end loop;
+
+  perform private.invoke_storage_cleanup(p_quiet => true);
   if caller_profile_id <> author_profile_id then
     -- 댓글 원문은 싣지 않는다(기능 명세 §14.8). 대신 댓글이 달려 있던 게시물의 제목으로
     -- 어느 댓글이었는지 짚어준다. 제목은 원문이 아니고 작성자가 이미 읽을 수 있던 값이다.
@@ -981,6 +1395,14 @@ begin
       comment_group_id, target_post_id
     );
   end if;
+
+  -- `create_post_comment`와 같은 이유로 삭제 트리거가 갱신한 정본 count를 돌려준다. 삭제는
+  -- 답글 묶음과 자식 없는 자리 표시까지 함께 걷어내므로, 클라이언트가 지워진 개수를 세어
+  -- 빼려면 그 규칙을 그대로 옮겨 적어야 한다. 두 벌이 되면 언젠가 갈라진다.
+  select post.comment_count into remaining_comment_count
+  from public.posts as post
+  where post.id = target_post_id;
+  return remaining_comment_count;
 end;
 $$;
 
@@ -1001,7 +1423,7 @@ begin
   end if;
   select post.* into post_record
   from public.posts as post
-  where post.id = p_post_id and post.kind = 'profile' and post.deleted_at is null
+  where post.id = p_post_id and post.kind = 'profile'
   for update;
   if post_record.id is null then
     raise exception 'post not found or not accessible' using errcode = '42501';
@@ -1016,11 +1438,7 @@ begin
   select profile.* into caller_profile
   from public.profiles as profile where profile.id = caller_profile_id;
 
-  update public.posts set deleted_at = now() where id = p_post_id;
-  update public.post_attachments
-  set status = 'deleted', deleted_at = now(), cleanup_lease_id = null,
-    cleanup_lease_expires_at = null
-  where post_id = p_post_id and status <> 'deleted';
+  perform private.purge_posts(array[p_post_id]);
   if caller_profile_id = post_record.timeline_profile_id
     and caller_profile_id <> author_profile_id then
     perform private.emit_notification(
@@ -1094,6 +1512,7 @@ CREATE OR REPLACE FUNCTION "public"."finalize_post_attachment"("p_attachment_id"
 declare
   attachment public.post_attachments;
   object_record storage.objects;
+  thumbnail_record storage.objects;
   is_published boolean;
 begin
   if auth.uid() is null or private.current_profile_id() is null then
@@ -1104,12 +1523,12 @@ begin
   if attachment.id is null or not private.is_post_author(attachment.post_id) then
     raise exception 'only the author can finalize attachments' using errcode = '42501';
   end if;
-  if attachment.status <> 'pending' then
+  if attachment.status = 'deleted' then
     raise exception 'attachment is not pending' using errcode = '55000';
   end if;
   select post.published_at is not null into is_published
   from public.posts as post
-  where post.id = attachment.post_id and post.deleted_at is null;
+  where post.id = attachment.post_id;
   if is_published is null then
     raise exception 'post is deleted' using errcode = '55000';
   end if;
@@ -1127,6 +1546,52 @@ begin
     or object_record.metadata ->> 'mimetype' is distinct from attachment.mime_type then
     raise exception 'uploaded object metadata does not match' using errcode = '22023';
   end if;
+  if lower(attachment.mime_type) like 'image/%'
+    and attachment.size_bytes > 8388608 then
+    raise exception 'image attachments must be 8 MiB or smaller' using errcode = '22023';
+  end if;
+
+  -- 썸네일이 없으면 실패시키지 않고 경로를 지운다. 축소본은 데이터 절약 수단이지 게시물의
+  -- 일부가 아니라서, 그것 하나 때문에 원본이 멀쩡한 글의 업로드를 되돌릴 이유가 없다.
+  -- 읽는 쪽은 `thumbnail_path`가 없으면 원본으로 떨어지므로 화면은 그대로 동작한다.
+  if attachment.thumbnail_path is not null then
+    select object.* into thumbnail_record
+    from storage.objects as object
+    where object.bucket_id = attachment.storage_bucket
+      and object.name = attachment.thumbnail_path;
+
+    if thumbnail_record.id is null
+      or thumbnail_record.owner_id is distinct from auth.uid()::text
+      -- Storage metadata comes from the upload request, so do not trust the
+      -- client-side compressor to enforce the thumbnail contract by itself.
+      or thumbnail_record.metadata ->> 'mimetype' is distinct from 'image/webp'
+      or (
+        case
+          when thumbnail_record.metadata ->> 'size' ~ '^[0-9]+$'
+          then (thumbnail_record.metadata ->> 'size')::bigint > 1048576
+          else true
+        end
+      ) then
+      -- A rejected thumbnail is not referenced after this point. Queue the
+      -- uploaded object before clearing its path so the sweeper does not have
+      -- to discover it 48 hours later.
+      if thumbnail_record.id is not null then
+        insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+        values (attachment.storage_bucket, attachment.thumbnail_path, 'post_attachment')
+        on conflict (bucket, object_path) do update
+          set dry_run = queue.dry_run and excluded.dry_run;
+      end if;
+
+      update public.post_attachments
+      set thumbnail_path = null
+      where id = p_attachment_id
+      returning * into attachment;
+    end if;
+  end if;
+
+  if attachment.status = 'ready' then
+    return attachment;
+  end if;
   if not is_published then
     update public.post_attachments
     set status = 'ready', ready_at = now()
@@ -1139,7 +1604,7 @@ $$;
 
 ALTER FUNCTION "public"."finalize_post_attachment"("p_attachment_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."get_group_post"("p_post_id" "uuid") RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean)
+CREATE OR REPLACE FUNCTION "public"."get_group_post"("p_post_id" "uuid") RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean, "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1154,7 +1619,7 @@ begin
   select post.group_id into post_group_id
   from public.posts as post
   where post.id = p_post_id and post.kind = 'group'
-    and post.published_at is not null and post.deleted_at is null;
+    and post.published_at is not null;
   if post_group_id is null then
     return;
   end if;
@@ -1186,7 +1651,12 @@ begin
     author.profile_id = caller_profile_id,
     author.profile_id = caller_profile_id,
     author.profile_id = caller_profile_id or caller_role in ('owner', 'admin'),
-    caller_role in ('owner', 'admin', 'manager')
+    caller_role in ('owner', 'admin', 'manager'),
+    post.author_identity = 'anonymous' and author.profile_id <> caller_profile_id
+      and caller_role in ('owner', 'admin'),
+    active_restriction.expires_at is not null,
+    active_restriction.expires_at,
+    private.post_mentions_json(post.id)
   from public.posts as post
   join private.post_authors as author on author.post_id = post.id
   left join public.group_categories as category on category.id = post.category_id
@@ -1199,6 +1669,18 @@ begin
     and profile.deleted_at is null
   left join public.post_reactions as mine
     on mine.post_id = post.id and mine.profile_id = caller_profile_id
+  left join lateral (
+    select restriction.expires_at
+    from private.group_anonymous_activity_restrictions as restriction
+    where restriction.group_id = post.group_id
+      and restriction.profile_id = author.profile_id
+      and restriction.ended_at is null
+      and restriction.expires_at > now()
+    order by restriction.created_at desc, restriction.id desc
+    limit 1
+  ) as active_restriction on post.author_identity = 'anonymous'
+    and author.profile_id <> caller_profile_id
+    and caller_role in ('owner', 'admin')
   left join lateral (
     select
       coalesce(sum(tally.n)::integer, 0) as total,
@@ -1218,7 +1700,7 @@ begin
     ) as tally
   ) as summary on true
   where post.id = p_post_id and post.kind = 'group'
-    and post.published_at is not null and post.deleted_at is null;
+    and post.published_at is not null;
 end;
 $$;
 
@@ -1237,7 +1719,7 @@ begin
   if not exists (
     select 1 from public.posts as post
     where post.id = p_post_id and post.kind = 'profile'
-      and post.published_at is not null and post.deleted_at is null
+      and post.published_at is not null
   ) or not private.can_read_post(p_post_id) then
     return;
   end if;
@@ -1309,7 +1791,7 @@ $$;
 
 ALTER FUNCTION "public"."list_comment_reactors"("p_comment_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_cursor_published_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_post_id" "uuid" DEFAULT NULL::"uuid", "p_cursor_is_pinned" boolean DEFAULT NULL::boolean, "p_limit" integer DEFAULT 20) RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean)
+CREATE OR REPLACE FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_cursor_published_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_post_id" "uuid" DEFAULT NULL::"uuid", "p_cursor_is_pinned" boolean DEFAULT NULL::boolean, "p_limit" integer DEFAULT 20) RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean, "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb", "attachments" "jsonb")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1352,7 +1834,13 @@ begin
     author.profile_id = caller_profile_id,
     author.profile_id = caller_profile_id,
     author.profile_id = caller_profile_id or caller_role in ('owner', 'admin'),
-    caller_role in ('owner', 'admin', 'manager')
+    caller_role in ('owner', 'admin', 'manager'),
+    post.author_identity = 'anonymous' and author.profile_id <> caller_profile_id
+      and caller_role in ('owner', 'admin'),
+    active_restriction.expires_at is not null,
+    active_restriction.expires_at,
+    private.post_mentions_json(post.id),
+    private.post_attachments_json(post.id)
   from public.posts as post
   join private.post_authors as author on author.post_id = post.id
   left join public.group_categories as category on category.id = post.category_id
@@ -1365,6 +1853,18 @@ begin
     and profile.deleted_at is null
   left join public.post_reactions as mine
     on mine.post_id = post.id and mine.profile_id = caller_profile_id
+  left join lateral (
+    select restriction.expires_at
+    from private.group_anonymous_activity_restrictions as restriction
+    where restriction.group_id = post.group_id
+      and restriction.profile_id = author.profile_id
+      and restriction.ended_at is null
+      and restriction.expires_at > now()
+    order by restriction.created_at desc, restriction.id desc
+    limit 1
+  ) as active_restriction on post.author_identity = 'anonymous'
+    and author.profile_id <> caller_profile_id
+    and caller_role in ('owner', 'admin')
   left join lateral (
     select
       coalesce(sum(tally.n)::integer, 0) as total,
@@ -1384,7 +1884,7 @@ begin
     ) as tally
   ) as summary on true
   where post.group_id = p_group_id and post.kind = 'group'
-    and post.published_at is not null and post.deleted_at is null
+    and post.published_at is not null
     and (p_category_id is null or post.category_id = p_category_id)
     and (
       p_cursor_post_id is null
@@ -1411,13 +1911,14 @@ $$;
 
 ALTER FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid", "p_cursor_published_at" timestamp with time zone, "p_cursor_post_id" "uuid", "p_cursor_is_pinned" boolean, "p_limit" integer) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") RETURNS TABLE("attachment_id" "uuid", "post_id" "uuid", "storage_bucket" "text", "object_path" "text", "original_filename" "text", "position" integer, "mime_type" "text", "size_bytes" bigint, "width" integer, "height" integer, "status" "public"."post_attachment_status", "created_at" timestamp with time zone, "ready_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") RETURNS TABLE("attachment_id" "uuid", "post_id" "uuid", "storage_bucket" "text", "object_path" "text", "thumbnail_path" "text", "original_filename" "text", "position" integer, "mime_type" "text", "size_bytes" bigint, "width" integer, "height" integer, "status" "public"."post_attachment_status", "created_at" timestamp with time zone, "ready_at" timestamp with time zone)
     LANGUAGE "sql" STABLE
     SET "search_path" TO ''
     AS $$
   select item.id, item.post_id, item.storage_bucket, item.object_path,
-    item.original_filename, item.position, item.mime_type, item.size_bytes,
-    item.width, item.height, item.status, item.created_at, item.ready_at
+    item.thumbnail_path, item.original_filename, item.position, item.mime_type,
+    item.size_bytes, item.width, item.height, item.status, item.created_at,
+    item.ready_at
   from public.post_attachments as item
   where item.post_id = p_post_id
     and item.status <> 'deleted'
@@ -1430,7 +1931,7 @@ $$;
 
 ALTER FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_post_comment_replies"("p_root_comment_id" "uuid") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
+CREATE OR REPLACE FUNCTION "public"."list_post_comment_replies"("p_root_comment_id" "uuid") RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb", "images" "jsonb")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1484,7 +1985,7 @@ begin
     );
 
   return query
-  select entry.*
+  select entry.*, private.comment_images_json(entry.comment_id)
   from private.read_post_comments(
     coalesce(visible_ids, '{}'::uuid[]), caller_profile_id, context.caller_role
   ) as entry;
@@ -1493,7 +1994,7 @@ $$;
 
 ALTER FUNCTION "public"."list_post_comment_replies"("p_root_comment_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_post_comments"("p_post_id" "uuid", "p_cursor_created_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_comment_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 20) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
+CREATE OR REPLACE FUNCTION "public"."list_post_comments"("p_post_id" "uuid", "p_cursor_created_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_comment_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 20) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb", "images" "jsonb")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1532,7 +2033,7 @@ begin
   ) as page;
 
   return query
-  select entry.*
+  select entry.*, private.comment_images_json(entry.comment_id)
   from private.read_post_comments(
     coalesce(page_ids, '{}'::uuid[]), caller_profile_id, context.caller_role
   ) as entry;
@@ -1565,7 +2066,7 @@ $$;
 
 ALTER FUNCTION "public"."list_post_reactors"("p_post_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_profile_posts"("p_timeline_pub_id" "text", "p_cursor_published_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_post_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 20) RETURNS TABLE("post_id" "uuid", "body" "text", "timeline_pub_id" "text", "timeline_name" "text", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "activity_kind" "public"."profile_media_activity_kind", "activity_media_path" "text", "visibility" "public"."post_visibility", "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean)
+CREATE OR REPLACE FUNCTION "public"."list_profile_posts"("p_timeline_pub_id" "text", "p_cursor_published_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_post_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 20) RETURNS TABLE("post_id" "uuid", "body" "text", "timeline_pub_id" "text", "timeline_name" "text", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "activity_kind" "public"."profile_media_activity_kind", "activity_media_path" "text", "visibility" "public"."post_visibility", "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "attachments" "jsonb")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1597,7 +2098,6 @@ begin
     where post.timeline_profile_id = target_profile_id
       and post.kind = 'profile'
       and post.published_at is not null
-      and post.deleted_at is null
       and (
         post.visibility = 'public'
         or exists (
@@ -1613,11 +2113,13 @@ begin
     limit least(greatest(coalesce(p_limit, 20), 1), 50)
   ) as page;
 
+  -- 첨부를 같이 담는다. 목록을 받은 뒤 첨부를 따로 물으면 타임라인을 열 때마다 왕복이 하나 더 붙는다.
   return query
-  select entry.*
+  select entry.*, private.post_attachments_json(entry.post_id)
   from private.read_profile_posts(
     coalesce(page_ids, '{}'::uuid[]), caller_profile_id
-  ) as entry;
+  ) as entry
+  order by entry.published_at desc, entry.post_id desc;
 end;
 $$;
 
@@ -1765,28 +2267,43 @@ begin
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
   select post.* into post_record from public.posts as post
-  where post.id = p_post_id and post.deleted_at is null
+  where post.id = p_post_id
   for update;
   if post_record.id is null or not private.is_post_author(p_post_id) then
     raise exception 'only the author can add attachments' using errcode = '42501';
   end if;
+  if lower(btrim(p_mime_type)) like 'video/%'
+     or lower(btrim(p_original_filename)) ~ '\.(mp4|m4v|mov|webm|avi|mkv|mpeg|mpg|3gp|3g2|ogv|m2ts)$' then
+    raise exception 'video attachments are not supported' using errcode = '22023';
+  end if;
+  if lower(btrim(p_mime_type)) like 'image/%'
+    and p_size_bytes > 8388608 then
+    raise exception 'image attachments must be 8 MiB or smaller' using errcode = '22023';
+  end if;
   if (select count(*) from public.post_attachments
-      where post_id = p_post_id and status <> 'deleted') >= 10 then
-    raise exception 'a post can have at most 10 attachments' using errcode = '23514';
+      where post_id = p_post_id and status <> 'deleted') >= 30 then
+    raise exception 'a post can have at most 30 attachments' using errcode = '23514';
   end if;
 
   select coalesce(min(candidate), 0) into next_position
-  from generate_series(0, 9) as candidate
+  from generate_series(0, 29) as candidate
   where not exists (
     select 1 from public.post_attachments
     where post_id = p_post_id and status <> 'deleted' and position = candidate
   );
 
+  -- 이미지에만 썸네일 경로를 예고한다. pdf·hwp에는 축소본이랄 것이 없고, CHECK 제약도
+  -- 이미지가 아닌 행에 `thumbnail_path`가 붙는 것을 막는다. 경로는 원본에서 파생되므로
+  -- 클라이언트가 정하지 않는다 — Storage 정책이 이 행이 예고한 두 경로만 통과시킨다.
   insert into public.post_attachments (
-    id, post_id, object_path, original_filename, position, mime_type,
-    size_bytes, width, height
+    id, post_id, object_path, thumbnail_path, original_filename, position,
+    mime_type, size_bytes, width, height
   ) values (
     attachment_id, p_post_id, p_post_id::text || '/' || attachment_id::text,
+    case
+      when lower(btrim(p_mime_type)) like 'image/%'
+      then p_post_id::text || '/' || attachment_id::text || '/thumb'
+    end,
     btrim(p_original_filename), next_position, btrim(p_mime_type),
     p_size_bytes, p_width, p_height
   ) returning * into attachment;
@@ -1795,131 +2312,6 @@ end;
 $$;
 
 ALTER FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) OWNER TO "postgres";
-
-CREATE OR REPLACE FUNCTION "public"."publish_group_post"("p_post_id" "uuid") RETURNS "uuid"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-declare
-  caller_profile_id bigint := private.current_profile_id();
-  post_record public.posts;
-  target_group_id uuid;
-  locked_group_id uuid;
-  group_identity_policy public.group_identity_policy;
-  group_posting_policy public.group_posting_policy;
-  member_role public.group_member_role;
-begin
-  if auth.uid() is null or caller_profile_id is null then
-    raise exception 'accepted profile required' using errcode = '42501';
-  end if;
-  select post.group_id into target_group_id
-  from public.posts as post
-  where post.id = p_post_id and post.kind = 'group' and post.deleted_at is null;
-  if target_group_id is null or not private.is_post_author(p_post_id) then
-    raise exception 'only the author can publish this post' using errcode = '42501';
-  end if;
-
-  select group_data.id, group_data.identity_policy, group_data.posting_policy,
-    membership.role
-  into locked_group_id, group_identity_policy, group_posting_policy, member_role
-  from public.groups as group_data
-  join public.group_memberships as membership
-    on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
-  where group_data.id = target_group_id and group_data.deleted_at is null
-  for share of group_data, membership;
-  if locked_group_id is null then
-    raise exception 'group membership required' using errcode = '42501';
-  end if;
-  select post.* into post_record
-  from public.posts as post
-  where post.id = p_post_id and post.kind = 'group'
-    and post.group_id = target_group_id and post.deleted_at is null
-  for update;
-  if post_record.id is null or not private.is_post_author(p_post_id) then
-    raise exception 'only the author can publish this post' using errcode = '42501';
-  end if;
-  if post_record.published_at is not null then
-    return p_post_id;
-  end if;
-  if group_posting_policy = 'staff'
-    and member_role not in ('owner', 'admin', 'manager') then
-    raise exception 'group posting is restricted to staff' using errcode = '42501';
-  end if;
-  if post_record.author_identity = 'anonymous'
-    and group_identity_policy = 'identified' then
-    raise exception 'anonymous posting is not allowed' using errcode = '42501';
-  end if;
-  if post_record.author_identity = 'staff'
-    and member_role not in ('owner', 'admin', 'manager') then
-    raise exception 'staff identity is not allowed' using errcode = '42501';
-  end if;
-  if exists (
-    select 1 from public.post_attachments
-    where post_id = p_post_id and status = 'pending'
-  ) then
-    raise exception 'pending attachments must be finalized or deleted' using errcode = '55000';
-  end if;
-  if nullif(btrim(post_record.body), '') is null and not exists (
-    select 1 from public.post_attachments
-    where post_id = p_post_id and status = 'ready'
-  ) then
-    raise exception 'published post requires a body or ready attachment' using errcode = '22023';
-  end if;
-
-  update public.posts set published_at = now() where id = p_post_id;
-  return p_post_id;
-end;
-$$;
-
-ALTER FUNCTION "public"."publish_group_post"("p_post_id" "uuid") OWNER TO "postgres";
-
-CREATE OR REPLACE FUNCTION "public"."reorder_post_attachments"("p_post_id" "uuid", "p_attachment_ids" "uuid"[]) RETURNS SETOF "public"."post_attachments"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-declare
-  active_count integer;
-begin
-  perform 1 from public.posts where id = p_post_id and deleted_at is null for update;
-  if not found or not private.is_post_author(p_post_id) then
-    raise exception 'only the author can reorder attachments' using errcode = '42501';
-  end if;
-  if p_attachment_ids is null
-    or cardinality(p_attachment_ids) > 10
-    or cardinality(p_attachment_ids) <> (
-      select count(distinct id) from unnest(p_attachment_ids) as id
-    ) then
-    raise exception 'attachment order must contain unique ids' using errcode = '22023';
-  end if;
-  select count(*) into active_count from public.post_attachments
-  where post_id = p_post_id and status <> 'deleted';
-  if cardinality(p_attachment_ids) <> active_count
-    or exists (
-      select 1 from unnest(p_attachment_ids) as requested(id)
-      where not exists (
-        select 1 from public.post_attachments as item
-        where item.id = requested.id and item.post_id = p_post_id and item.status <> 'deleted'
-      )
-    ) then
-    raise exception 'attachment order must contain every active attachment exactly once'
-      using errcode = '22023';
-  end if;
-
-  -- Move to a disjoint range first so the partial unique index stays valid.
-  update public.post_attachments set position = -position - 1
-  where post_id = p_post_id and status <> 'deleted';
-  update public.post_attachments as item
-  set position = requested.ordinality - 1
-  from unnest(p_attachment_ids) with ordinality as requested(id, ordinality)
-  where item.id = requested.id;
-
-  return query select item.* from public.post_attachments as item
-  where item.post_id = p_post_id and item.status <> 'deleted'
-  order by item.position, item.id;
-end;
-$$;
-
-ALTER FUNCTION "public"."reorder_post_attachments"("p_post_id" "uuid", "p_attachment_ids" "uuid"[]) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."search_group_posts"("p_group_id" "uuid", "p_query" "text", "p_limit" integer DEFAULT 50) RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
@@ -1971,9 +2363,12 @@ begin
     and profile.status = 'accepted'
     and profile.deleted_at is null
   where post.group_id = p_group_id and post.kind = 'group'
-    and post.published_at is not null and post.deleted_at is null
+    and post.published_at is not null
     and nullif(normalized_query, '') is not null
-    and post.search_text like '%' || normalized_query || '%'
+    and (
+      post.search_text like '%' || normalized_query || '%'
+      or profile.search_name like '%' || normalized_query || '%'
+    )
   order by post.published_at desc, post.id desc
   limit least(greatest(coalesce(p_limit, 50), 1), 50);
 end;
@@ -2038,7 +2433,6 @@ begin
   where post.id = p_post_id
     and post.kind = 'group'
     and post.published_at is not null
-    and post.deleted_at is null
   for update;
 
   if post_record.id is null or not exists (
@@ -2120,56 +2514,101 @@ $$;
 
 ALTER FUNCTION "public"."update_group_category"("p_category_id" "uuid", "p_name" "text", "p_position" integer) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."update_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_category_id" "uuid" DEFAULT NULL::"uuid") RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."update_group_post_draft_identity"("p_post_id" "uuid", "p_author_identity" "public"."post_identity") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
   caller_profile_id bigint := private.current_profile_id();
-  post_record public.posts;
+  target_group_id uuid;
+  locked_group_id uuid;
+  group_identity_policy public.group_identity_policy;
+  group_posting_policy public.group_posting_policy;
+  member_role public.group_member_role;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
-  select post.* into post_record from public.posts as post
-  where post.id = p_post_id and post.kind = 'group' and post.deleted_at is null
-  for update;
-  if post_record.id is null or not private.is_post_author(p_post_id) then
-    raise exception 'only the author can update this post' using errcode = '42501';
-  end if;
-  if not private.is_group_member(post_record.group_id) then
-    raise exception 'group membership required' using errcode = '42501';
-  end if;
-  if nullif(btrim(p_title), '') is null or char_length(btrim(p_title)) > 100 then
-    raise exception 'title must contain between 1 and 100 characters' using errcode = '22023';
-  end if;
-  if char_length(coalesce(p_body, '')) > 20000 then
-    raise exception 'body must contain between 0 and 20000 characters' using errcode = '22023';
-  end if;
-  if nullif(btrim(coalesce(p_body, '')), '') is null and not exists (
-    select 1 from public.post_attachments
-    where post_id = p_post_id and status = 'ready'
-  ) then
-    raise exception 'post requires a body or ready attachment' using errcode = '22023';
-  end if;
-  if p_category_id is not null and not exists (
-    select 1 from public.group_categories as category
-    where category.id = p_category_id and category.group_id = post_record.group_id
-  ) then
-    raise exception 'category must belong to the group' using errcode = '22023';
+  if p_author_identity is null then
+    raise exception 'author identity is required' using errcode = '22023';
   end if;
 
+  select post.group_id into target_group_id
+  from public.posts as post
+  where post.id = p_post_id
+    and post.kind = 'group'
+    and post.activity_kind is null
+    and post.published_at is null
+    and private.is_post_author(post.id);
+  if target_group_id is null then
+    raise exception 'only the author can change an unpublished group draft identity'
+      using errcode = '42501';
+  end if;
+  if p_author_identity = 'anonymous' then
+    perform private.lock_group_anonymous_activity_target(target_group_id, caller_profile_id);
+  end if;
+
+  select group_data.id, group_data.identity_policy, group_data.posting_policy,
+    membership.role
+  into locked_group_id, group_identity_policy, group_posting_policy, member_role
+  from public.groups as group_data
+  join public.group_memberships as membership
+    on membership.group_id = group_data.id and membership.profile_id = caller_profile_id
+  where group_data.id = target_group_id
+  for share of group_data, membership;
+  if locked_group_id is null then
+    raise exception 'group membership required' using errcode = '42501';
+  end if;
+
+  perform 1
+  from public.posts as post
+  where post.id = p_post_id
+    and post.kind = 'group'
+    and post.group_id = target_group_id
+    and post.activity_kind is null
+    and post.published_at is null
+    and private.is_post_author(post.id)
+  for update;
+  if not found then
+    raise exception 'only the author can change an unpublished group draft identity'
+      using errcode = '42501';
+  end if;
+  if group_posting_policy = 'staff'
+    and member_role not in ('owner', 'admin', 'manager') then
+    raise exception 'group posting is restricted to staff' using errcode = '42501';
+  end if;
+  if p_author_identity = 'anonymous' and group_identity_policy = 'identified' then
+    raise exception 'anonymous posting is not allowed' using errcode = '42501';
+  end if;
+  if p_author_identity = 'anonymous' then
+    perform private.assert_group_anonymous_activity_allowed(target_group_id, caller_profile_id);
+  end if;
+  if p_author_identity = 'staff' and member_role not in ('owner', 'admin', 'manager') then
+    raise exception 'staff identity is not allowed' using errcode = '42501';
+  end if;
+  -- 익명은 멘션할 수 없다(기능 명세 §8.14). 멘션을 넣어 둔 초안을 익명으로 바꾸는 길을 열어
+  -- 두면 그 금지가 통째로 우회된다. 본문에서 멘션을 지운 뒤 다시 바꾸게 한다.
+  if p_author_identity = 'anonymous' and exists (
+    select 1 from public.post_mentions as mention where mention.post_id = p_post_id
+  ) then
+    raise exception 'remove mentions before switching a draft to anonymous'
+      using errcode = '22023';
+  end if;
+
+  perform set_config('app.update_group_post_draft_identity', p_post_id::text, true);
   update public.posts
-  set title = btrim(p_title), body = coalesce(p_body, ''), category_id = p_category_id,
-    edited_at = case when published_at is not null then now() else null end
+  set author_identity = p_author_identity,
+    display_author_profile_id = case
+      when p_author_identity = 'identified' then caller_profile_id
+    end
   where id = p_post_id;
   return p_post_id;
 end;
 $$;
 
-ALTER FUNCTION "public"."update_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_category_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION "public"."update_group_post_draft_identity"("p_post_id" "uuid", "p_author_identity" "public"."post_identity") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid" DEFAULT NULL::"uuid", "p_remove_image" boolean DEFAULT false) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text")
+CREATE OR REPLACE FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid" DEFAULT NULL::"uuid", "p_remove_image" boolean DEFAULT false, "p_mention_pub_ids" "text"[] DEFAULT '{}'::"text"[]) RETURNS TABLE("comment_id" "uuid", "post_id" "uuid", "parent_comment_id" "uuid", "root_comment_id" "uuid", "depth" smallint, "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "created_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_deleted" boolean, "is_effective_feed_bump" boolean, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "reply_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "parent_author_label" "text", "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -2249,8 +2688,7 @@ begin
 
   if image_changed and current_image.id is not null then
     update public.comment_images
-    set status = 'deleted', deleted_at = now(), cleanup_lease_id = null,
-      cleanup_lease_expires_at = null
+    set status = 'deleted', deleted_at = now()
     where id = current_image.id;
   end if;
   if p_image_id is not null and image_changed then
@@ -2266,6 +2704,10 @@ begin
       else comment_record.edited_at
     end
   where comment.id = p_comment_id;
+  -- 작성 신원은 등록 뒤 바꿀 수 없으므로(기능 명세 §8.5) 저장된 값을 그대로 넘긴다.
+  perform private.sync_comment_mentions(
+    p_comment_id, trimmed_body, comment_record.author_identity, p_mention_pub_ids
+  );
 
   return query
   select entry.*
@@ -2275,7 +2717,7 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid", "p_remove_image" boolean) OWNER TO "postgres";
+ALTER FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid", "p_remove_image" boolean, "p_mention_pub_ids" "text"[]) OWNER TO "postgres";
 
 REVOKE ALL ON FUNCTION "private"."comment_post_context"("p_post_id" "uuid", "p_caller_profile_id" bigint, OUT "is_visible" boolean, OUT "post_kind" "public"."post_kind", OUT "caller_role" "public"."group_member_role", OUT "identity_policy" "public"."group_identity_policy", OUT "post_author_identity" "public"."post_identity") FROM PUBLIC;
 
@@ -2289,8 +2731,8 @@ GRANT ALL ON FUNCTION "public"."clear_comment_reaction"("p_comment_id" "uuid") T
 REVOKE ALL ON FUNCTION "public"."clear_post_reaction"("p_post_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."clear_post_reaction"("p_post_id" "uuid") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_category_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_category_id" "uuid") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_category_id" "uuid", "p_mention_pub_ids" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."commit_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_category_id" "uuid", "p_mention_pub_ids" "text"[]) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."commit_profile_post"("p_post_id" "uuid", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_visibility" "public"."post_visibility") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."commit_profile_post"("p_post_id" "uuid", "p_body" "text", "p_attachment_ids" "uuid"[], "p_publish" boolean, "p_visibility" "public"."post_visibility") TO "authenticated";
@@ -2298,11 +2740,23 @@ GRANT ALL ON FUNCTION "public"."commit_profile_post"("p_post_id" "uuid", "p_body
 REVOKE ALL ON FUNCTION "public"."create_group_category"("p_group_id" "uuid", "p_name" "text", "p_position" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."create_group_category"("p_group_id" "uuid", "p_name" "text", "p_position" integer) TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean, "p_mention_pub_ids" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_group_post"("p_group_id" "uuid", "p_title" "text", "p_body" "text", "p_author_identity" "public"."post_identity", "p_category_id" "uuid", "p_publish" boolean, "p_mention_pub_ids" "text"[]) TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid", "p_image_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid", "p_image_id" "uuid") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."create_group_post_upload_draft"("p_group_id" "uuid", "p_author_identity" "public"."post_identity") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_group_post_upload_draft"("p_group_id" "uuid", "p_author_identity" "public"."post_identity") TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."restrict_group_anonymous_activity"("p_source_kind" "text", "p_source_id" "uuid", "p_reason" "text", "p_duration_days" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."restrict_group_anonymous_activity"("p_source_kind" "text", "p_source_id" "uuid", "p_reason" "text", "p_duration_days" integer) TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."cancel_group_anonymous_activity_restriction"("p_source_kind" "text", "p_source_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."cancel_group_anonymous_activity_restriction"("p_source_kind" "text", "p_source_id" "uuid") TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."get_my_group_anonymous_activity_restriction"("p_group_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_my_group_anonymous_activity_restriction"("p_group_id" "uuid") TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid", "p_image_id" "uuid", "p_mention_pub_ids" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_post_comment"("p_post_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_parent_comment_id" "uuid", "p_image_id" "uuid", "p_mention_pub_ids" "text"[]) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."create_profile_post"("p_timeline_pub_id" "text", "p_visibility" "public"."post_visibility") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."create_profile_post"("p_timeline_pub_id" "text", "p_visibility" "public"."post_visibility") TO "authenticated";
@@ -2367,12 +2821,6 @@ GRANT ALL ON FUNCTION "public"."prepare_comment_image"("p_post_id" "uuid", "p_mi
 REVOKE ALL ON FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."publish_group_post"("p_post_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."publish_group_post"("p_post_id" "uuid") TO "authenticated";
-
-REVOKE ALL ON FUNCTION "public"."reorder_post_attachments"("p_post_id" "uuid", "p_attachment_ids" "uuid"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."reorder_post_attachments"("p_post_id" "uuid", "p_attachment_ids" "uuid"[]) TO "authenticated";
-
 REVOKE ALL ON FUNCTION "public"."search_group_posts"("p_group_id" "uuid", "p_query" "text", "p_limit" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."search_group_posts"("p_group_id" "uuid", "p_query" "text", "p_limit" integer) TO "authenticated";
 
@@ -2388,8 +2836,9 @@ GRANT ALL ON FUNCTION "public"."set_post_reaction"("p_post_id" "uuid", "p_reacti
 REVOKE ALL ON FUNCTION "public"."update_group_category"("p_category_id" "uuid", "p_name" "text", "p_position" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."update_group_category"("p_category_id" "uuid", "p_name" "text", "p_position" integer) TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."update_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_category_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_group_post"("p_post_id" "uuid", "p_title" "text", "p_body" "text", "p_category_id" "uuid") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid", "p_remove_image" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid", "p_remove_image" boolean) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."update_group_post_draft_identity"("p_post_id" "uuid", "p_author_identity" "public"."post_identity") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."update_group_post_draft_identity"("p_post_id" "uuid", "p_author_identity" "public"."post_identity") TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid", "p_remove_image" boolean, "p_mention_pub_ids" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."update_post_comment"("p_comment_id" "uuid", "p_body" "text", "p_image_id" "uuid", "p_remove_image" boolean, "p_mention_pub_ids" "text"[]) TO "authenticated";

@@ -1,5 +1,8 @@
+import type { MentionDraftEntry } from "~/features/posts/model/mentions";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { patchPostEngagement } from "~/features/posts/data/cache";
 import {
   clearCommentReaction,
   createCommentImageUploadSession,
@@ -43,21 +46,24 @@ function mergeComments(
 }
 
 /**
- * 게시물 상세의 댓글 상태.
- *
- * 뮤테이션 뒤에 route를 재검증하지 않는다. 재검증하면 사용자가 펼쳐 둔 답글 묶음과 위로 불러온
- * 이전 페이지가 통째로 초기화된다. 대신 RPC가 돌려준 정본 행을 목록에 병합한다.
- *
- * 답글은 만들거나 지운 뒤 그 묶음만 다시 불러온다. tombstone이 보이는지 여부는 "살아 있는
- * 자손이 있는가"라는 서버 규칙이라, 클라이언트에서 흉내 내면 두 규칙이 갈라진다.
+ * 게시물 상세의 댓글 상태. 뮤테이션 뒤 route를 재검증하지 않고(펼친 답글·이전 페이지가 초기화된다) RPC의 정본 행을 병합한다.
+ * 답글은 바뀐 뒤 그 묶음만 다시 읽는다. 댓글 수도 서버의 정본 값을 그대로 쓰고 `±1` 하지 않는다 — 삭제 연쇄 규칙을 클라이언트가 복제하게 된다.
  */
-export function usePostComments(postId: string, initialPage: PostCommentPage) {
+export function usePostComments(
+  postId: string,
+  /** null이면 첫 페이지가 아직 오는 중이다. 게시물은 먼저 그리고 댓글만 나중에 채운다. */
+  initialPage: PostCommentPage | null,
+  /** loader가 준 게시물의 댓글 수. 훅이 여기서 시작해 정본 값으로 갱신한다. */
+  serverCommentCount: number,
+) {
+  const queryClient = useQueryClient();
   const [imageSession] = useState(createCommentImageUploadSession);
-  const [comments, setComments] = useState(initialPage.comments);
-  const [nextCursor, setNextCursor] = useState(initialPage.nextCursor);
+  const [comments, setComments] = useState(initialPage?.comments ?? []);
+  const [nextCursor, setNextCursor] = useState(initialPage?.nextCursor ?? null);
   const [replies, setReplies] = useState<Record<string, PostComment[]>>({});
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const [countDelta, setCountDelta] = useState(0);
+  const [commentCount, setCommentCount] = useState(serverCommentCount);
+  const [loadedCount, setLoadedCount] = useState(serverCommentCount);
   const [loading, setLoading] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,12 +72,17 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
   // loader가 새 페이지를 내려주면(게시물 이동, 재검증) 로컬 상태를 버리고 다시 시작한다.
   if (loadedPage !== initialPage) {
     setLoadedPage(initialPage);
-    setComments(initialPage.comments);
-    setNextCursor(initialPage.nextCursor);
+    setComments(initialPage?.comments ?? []);
+    setNextCursor(initialPage?.nextCursor ?? null);
     setReplies({});
     setExpanded(new Set());
-    setCountDelta(0);
+    setLoadedCount(serverCommentCount);
+    setCommentCount(serverCommentCount);
     setError(null);
+  } else if (loadedCount !== serverCommentCount) {
+    // 페이지는 그대로인데 게시물의 수만 새로 내려온 경우. loader 쪽이 더 최신이다.
+    setLoadedCount(serverCommentCount);
+    setCommentCount(serverCommentCount);
   }
 
   const run = async <T>(action: () => Promise<T>): Promise<T | undefined> => {
@@ -85,6 +96,12 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
     } finally {
       setPending(false);
     }
+  };
+
+  /** 정본 댓글 수를 화면과 engagement overlay에 적용한다. 절대값이라 중복·지연 응답에도 안전하다. */
+  const applyCount = (next: number) => {
+    setCommentCount(next);
+    patchPostEngagement(queryClient, postId, { comment_count: next });
   };
 
   const refreshBundle = async (rootId: string) => {
@@ -133,6 +150,7 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
     identity: PostIdentity,
     parentCommentId: string | null,
     image?: CommentImageInput,
+    mentions: MentionDraftEntry[] = [],
   ) =>
     run(async () => {
       const created = await createPostComment(
@@ -141,22 +159,26 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
         identity,
         parentCommentId,
         image,
+        mentions,
         imageSession,
       );
-      setCountDelta((current) => current + 1);
-      if (created.depth === 0) {
-        setComments((current) => mergeComments(current, [created]));
-        return created;
+      applyCount(created.commentCount);
+      if (created.comment.depth === 0) {
+        setComments((current) => mergeComments(current, [created.comment]));
+        return created.comment;
       }
-      await refreshBundle(created.root_comment_id);
-      setExpanded((current) => new Set(current).add(created.root_comment_id));
-      return created;
+      await refreshBundle(created.comment.root_comment_id);
+      setExpanded((current) =>
+        new Set(current).add(created.comment.root_comment_id),
+      );
+      return created.comment;
     });
 
   const edit = (
     comment: PostComment,
     body: string,
     image?: CommentImageInput,
+    mentions: MentionDraftEntry[] = [],
   ) =>
     run(async () => {
       const updated = await updatePostComment(
@@ -164,6 +186,7 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
         body,
         comment.post_id,
         image,
+        mentions,
         imageSession,
       );
       const replace = (item: PostComment) =>
@@ -185,10 +208,9 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
 
   const remove = (comment: PostComment) =>
     run(async () => {
-      await deletePostComment(comment.comment_id);
+      applyCount(await deletePostComment(comment.comment_id));
       if (comment.depth === 0) {
         // 최상위를 지우면 답글 묶음까지 함께 사라진다(기능 명세 §9.4).
-        setCountDelta((current) => current - (1 + comment.reply_count));
         setComments((current) =>
           current.filter((item) => item.comment_id !== comment.comment_id),
         );
@@ -204,16 +226,12 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
         });
         return;
       }
-      const before = liveCount(replies[comment.root_comment_id] ?? []);
-      const bundle = await refreshBundle(comment.root_comment_id);
-      setCountDelta((current) => current - (before - liveCount(bundle)));
+      // 답글은 tombstone으로 남을 수도, 조상까지 데려가며 사라질 수도 있다. 어느 쪽인지는
+      // 묶음을 다시 읽어야 알 수 있다 — 수는 이미 위에서 정본으로 받았다.
+      await refreshBundle(comment.root_comment_id);
     });
 
-  /**
-   * 댓글 반응 (기능 명세 §10.2). 게시물 반응과 같은 이유로 화면이 먼저 움직이고 정본이 덮는다.
-   *
-   * `run`을 쓰지 않는다 — 반응은 실패해도 되돌리면 그만이라 입력창까지 잠글 일이 아니다.
-   */
+  /** 댓글 반응. 게시물 반응처럼 화면이 먼저 움직이고 정본이 덮는다. `run`은 입력창까지 잠그므로 쓰지 않는다. */
   const react = (comment: PostComment, next: PostReaction | null) => {
     const merge = (summary: ReactionSummary) => {
       const patch = (item: PostComment) =>
@@ -249,8 +267,9 @@ export function usePostComments(postId: string, initialPage: PostCommentPage) {
     comments,
     replies,
     expanded,
-    countDelta,
+    commentCount,
     hasMore: nextCursor !== null,
+    initialLoading: initialPage === null,
     loading,
     pending,
     error,

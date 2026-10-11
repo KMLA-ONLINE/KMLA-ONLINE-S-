@@ -1,10 +1,10 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { useNavigate } from "react-router";
 
 import {
   PostFileList,
   PostImageGrid,
-  splitPostAttachments,
 } from "~/features/posts/components/post-attachments";
 import type { PostAttachment } from "~/features/posts/model/types";
 import { renderRoute } from "../../../router";
@@ -23,6 +23,8 @@ function attachment(overrides: Partial<PostAttachment>): PostAttachment {
     size_bytes: 10,
     status: "ready",
     storage_bucket: "post-attachments",
+    thumbnail_path: null,
+    thumbnailUrl: null,
     width: null,
     signedUrl: "https://example.com/file",
     ...overrides,
@@ -36,36 +38,42 @@ const image = (id: string) =>
     original_filename: `${id}.webp`,
   });
 
-describe("splitPostAttachments", () => {
-  it("treats normalized WebP as images and everything else as files", () => {
-    const { images, files } = splitPostAttachments([
-      image("photo"),
-      attachment({ attachment_id: "doc" }),
-    ]);
-
-    expect(images.map((item) => item.attachment_id)).toEqual(["photo"]);
-    expect(files.map((item) => item.attachment_id)).toEqual(["doc"]);
-  });
-});
-
 const gridRatio = () =>
   Number.parseFloat(screen.getByTestId("post-image-grid").style.aspectRatio);
 
+function DuplicateImageGrids() {
+  const navigate = useNavigate();
+  const images = [image("shared")];
+
+  return (
+    <>
+      <p>현재 화면</p>
+      <button type="button" onClick={() => void navigate(-1)}>
+        이전 화면으로
+      </button>
+      <PostImageGrid images={images} />
+      <PostImageGrid images={images} />
+    </>
+  );
+}
+
+function ImageGridLeavingToStaleLink() {
+  const navigate = useNavigate();
+
+  return (
+    <>
+      <PostImageGrid images={[image("shared")]} />
+      <button
+        type="button"
+        onClick={() => void navigate("/previous?image=shared")}
+      >
+        다른 화면으로
+      </button>
+    </>
+  );
+}
+
 describe("PostImageGrid", () => {
-  it("rules a single image top and bottom only", () => {
-    const { unmount } = renderRoute(() => (
-      <PostImageGrid images={[image("single")]} />
-    ));
-
-    // 좌우는 카드 폭에 꽉 차서 카드 테두리와 겹쳐 두 줄로 보인다.
-    expect(screen.getByTestId("post-image-grid")).toHaveClass("border-y");
-
-    unmount();
-    renderRoute(() => <PostImageGrid images={[image("a"), image("b")]} />);
-
-    expect(screen.getByTestId("post-image-grid")).not.toHaveClass("border-y");
-  });
-
   it("shows a single image at its own aspect ratio", () => {
     renderRoute(() => (
       <PostImageGrid
@@ -115,6 +123,43 @@ describe("PostImageGrid", () => {
     expect(screen.queryByText(/^\+/)).not.toBeInTheDocument();
   });
 
+  it("uses thumbnails for tiles and the original only for a full-width single tile", () => {
+    const thumbnailed = (id: string) => ({
+      ...image(id),
+      thumbnailUrl: `https://example.com/thumbnail-${id}`,
+    });
+    const first = thumbnailed("a");
+    const { unmount } = renderRoute(() => <PostImageGrid images={[first]} />);
+
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "https://example.com/thumbnail-a",
+    );
+
+    unmount();
+    const { unmount: unmountSingle } = renderRoute(() => (
+      <PostImageGrid images={[first]} allowOriginalTile />
+    ));
+
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "https://example.com/file",
+    );
+
+    // 상세라도 두 장부터는 타일이 절반 이하로 줄어 축소본으로 충분하다.
+    unmountSingle();
+    renderRoute(() => (
+      <PostImageGrid images={[first, thumbnailed("b")]} allowOriginalTile />
+    ));
+
+    expect(
+      screen.getAllByRole("img").map((node) => node.getAttribute("src")),
+    ).toEqual([
+      "https://example.com/thumbnail-a",
+      "https://example.com/thumbnail-b",
+    ]);
+  });
+
   it("caps visible tiles at five and marks the rest as overflow", () => {
     renderRoute(() => (
       <PostImageGrid images={["a", "b", "c", "d", "e", "f", "g"].map(image)} />
@@ -122,6 +167,11 @@ describe("PostImageGrid", () => {
 
     expect(screen.getAllByRole("img")).toHaveLength(5);
     expect(screen.getByText("+2")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "e.webp 크게 보기, 사진 2장 더 있음",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("disables the tile when the attachment could not be signed", () => {
@@ -154,12 +204,68 @@ describe("PostImageGrid", () => {
 
     await user.click(screen.getByRole("button", { name: /원본 사진.webp/ }));
 
-    const download = screen.getByRole("link", { name: "다운로드" });
+    const download = await screen.findByRole("link", { name: "다운로드" });
     expect(download).toHaveAttribute(
       "href",
       "https://example.com/file?download=image-uuid.webp",
     );
     expect(download).toHaveAttribute("download", "image-uuid.webp");
+  });
+
+  it("closes one history entry when the same image is registered twice", async () => {
+    const { user } = renderRoute(DuplicateImageGrids, {
+      initialEntries: ["/previous", "/"],
+      initialIndex: 1,
+      routes: [{ path: "/previous", Component: () => <p>이전 화면</p> }],
+    });
+
+    await user.click(
+      screen.getAllByRole("button", { name: "shared.webp 크게 보기" })[0],
+    );
+    expect(await screen.findAllByRole("dialog")).toHaveLength(1);
+
+    await user.keyboard("{Escape}");
+    expect(await screen.findByText("현재 화면")).toBeVisible();
+    expect(screen.queryByText("이전 화면")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "이전 화면으로" }));
+    expect(await screen.findByText("이전 화면")).toBeVisible();
+  });
+
+  // provider는 화면보다 오래 산다. 화면을 떠난 그리드가 등록을 거두지 않으면, 그 사진을
+  // 가리키는 `?image=`가 아무 화면에서나 뷰어를 연다.
+  it("stops answering an image link once the grid leaves the screen", async () => {
+    const { user } = renderRoute(ImageGridLeavingToStaleLink, {
+      routes: [{ path: "/previous", Component: () => <p>이전 화면</p> }],
+    });
+
+    await user.click(screen.getByRole("button", { name: "다른 화면으로" }));
+
+    expect(await screen.findByText("이전 화면")).toBeVisible();
+    // 뷰어는 닫히는 애니메이션이 끝난 뒤에 빠진다.
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("opens a direct image link in one global viewer", async () => {
+    renderRoute(DuplicateImageGrids, { initialEntries: ["/?image=shared"] });
+
+    expect(await screen.findAllByRole("dialog")).toHaveLength(1);
+  });
+
+  it("opens a legacy image entry after a remount", async () => {
+    renderRoute(DuplicateImageGrids, {
+      initialEntries: [
+        {
+          pathname: "/",
+          search: "?image=shared",
+          state: { imageViewerOwner: ":legacy:" },
+        },
+      ],
+    });
+
+    expect(await screen.findAllByRole("dialog")).toHaveLength(1);
   });
 });
 
@@ -179,5 +285,26 @@ describe("PostFileList", () => {
     ));
 
     expect(screen.getByText("다운로드할 수 없음")).toBeInTheDocument();
+  });
+
+  it("shows three files before expanding the complete list", async () => {
+    const files = Array.from({ length: 5 }, (_, index) =>
+      attachment({
+        attachment_id: `file-${index}`,
+        original_filename: `document-${index}.pdf`,
+      }),
+    );
+    const { user } = renderRoute(() => <PostFileList files={files} />);
+
+    expect(screen.getAllByRole("link")).toHaveLength(3);
+    const expand = screen.getByRole("button", { name: "파일 5개 모두 보기" });
+    await user.click(expand);
+    expect(screen.getAllByRole("link")).toHaveLength(5);
+    expect(
+      within(screen.getByRole("region", { name: "첨부 파일" })).getByRole(
+        "button",
+        { name: "파일 목록 접기" },
+      ),
+    ).toHaveAttribute("aria-expanded", "true");
   });
 });

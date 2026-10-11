@@ -295,8 +295,7 @@ export function TimetableScreen() {
           }
         }}
       >
-        {/* 닫기 버튼은 vendored dialog가 기본 padding(p-6)을 전제로 top-4에 박아 둔다.
-            여기는 p-4라 32px짜리 버튼이 14px짜리 제목보다 9px 아래로 처진다. */}
+        {/* vendored dialog의 닫기 버튼은 p-6 기준 top-4라, p-4인 여기서는 제목보다 처진다. */}
         <DialogContent className="max-h-[88dvh] gap-4 overflow-y-auto rounded-2xl p-4 *:data-[slot=dialog-close]:top-2">
           <DialogHeader>
             <DialogTitle>{draft?.id ? "수업 수정" : "수업 추가"}</DialogTitle>

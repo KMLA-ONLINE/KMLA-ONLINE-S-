@@ -1,14 +1,23 @@
 import { BellIcon, CheckCheckIcon, SettingsIcon } from "lucide-react";
-import { useState } from "react";
-import { Link, useFetcher } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState, type MouseEvent } from "react";
+import { Link, useFetcher, useNavigate } from "react-router";
 
 import { PageHeader } from "~/features/app-shell";
 import { NotificationAvatar } from "~/features/notifications/components/notification-avatar";
-import { groupNotifications } from "~/features/notifications/model/notifications";
+import { NotificationPermissionCard } from "~/features/notifications/components/notification-permission-card";
+import { invalidateOpenedNotification } from "~/features/notifications/data/cache";
+import { resolveNotificationDestination } from "~/features/notifications/data/queries";
+import {
+  getNotificationMessage,
+  groupNotifications,
+} from "~/features/notifications/model/notifications";
 import type {
   NotificationItem,
   NotificationPage,
 } from "~/features/notifications/model/types";
+// 배럴(`~/features/posts`)은 편집기와 Markdown 파서까지 끌고 온다. 그림 하나만 필요하다.
+import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { Button } from "~/shared/ui/button";
 import {
@@ -19,6 +28,7 @@ import {
   EmptyTitle,
 } from "~/shared/ui/empty";
 import { Spinner } from "~/shared/ui/spinner";
+import { formatDateTime } from "~/shared/lib/time";
 import { cn } from "~/shared/lib/utils";
 
 function isRead(item: NotificationItem): boolean {
@@ -42,15 +52,8 @@ function MetaDot() {
 }
 
 /**
- * 한 행은 누가·어디서·언제 한 줄과 무슨 일이 최대 세 줄, 합쳐서 네 줄까지다.
- *
- * `title`은 DB가 만든 완결된 문장("내 게시물에 새 댓글이 등록되었습니다.")이라 이름 뒤에
- * 그대로 이어 붙이면 조사가 어긋난다. 그래서 이름과 문장은 위아래로 나누고, 시간은 이름 옆에
- * 붙여 첫 줄에서 함께 끝낸다.
- *
- * 그룹 이름이 첫 줄에 함께 서는 이유는 새 그룹 게시물 알림 때문이다. 그 알림의 `title`은
- * 게시물 제목 그대로여서, 그룹을 말해주지 않으면 어디에 올라온 글인지 알 수가 없다.
- * 그룹과 무관한 알림(계정·학교 부가 기능)은 `group_name`이 비어 있어 이 자리가 사라진다.
+ * 한 행은 이름·그룹·시간 한 줄과 본문 최대 세 줄이다. `title`은 DB가 만든 완결 문장이라 이름에 이어 붙이지 않고 위아래로 나눈다.
+ * 그룹 이름은 새 그룹 게시물 알림의 `title`이 게시물 제목뿐이라 넣는다(그룹과 무관한 알림은 `group_name`이 비어 생략).
  */
 function NotificationRow({
   item,
@@ -59,11 +62,48 @@ function NotificationRow({
   item: NotificationItem;
   forceRead: boolean;
 }) {
-  const readFetcher = useFetcher();
-  const unread =
-    !forceRead &&
-    !isRead(item) &&
-    readFetcher.formData?.get("notificationId") !== item.id;
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [opening, setOpening] = useState(false);
+  const unread = !forceRead && !isRead(item) && !opening;
+  const landingPath = `/noti/open/${encodeURIComponent(item.id)}`;
+
+  /**
+   * 목적지를 여기서 풀고 곧장 간다. `/noti/open`은 앱 셸 밖이라 거쳐 가면 셸이 내려가고, 목적지 loader가
+   * 게이트부터 다시 도는 동안 흰 화면이 남는다. 그 route는 Push처럼 앱 밖에서 들어오는 길에만 쓴다.
+   * 목적지 RPC가 읽음 처리까지 하므로 따로 읽음 요청을 보내지 않는다.
+   */
+  const open = async (event: MouseEvent<HTMLAnchorElement>) => {
+    // 새 탭·새 창으로 여는 손짓은 브라우저에 맡긴다.
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
+    event.preventDefault();
+    if (opening) return;
+    setOpening(true);
+
+    let destination: string | null = null;
+    try {
+      destination = await resolveNotificationDestination(item.id);
+    } catch {
+      // 풀지 못했으면 착지 route가 재시도와 로그인 이동을 맡는다.
+    }
+    if (destination === null) {
+      void navigate(landingPath);
+      return;
+    }
+    // 목적지 loader보다 먼저 stale로 둬야 그 loader가 옛 그룹 목록을 쓰지 않는다.
+    await invalidateOpenedNotification(queryClient);
+    // 글이 지워졌거나 볼 수 없게 되면 목적지가 알림함 자신이다. 화면이 그대로 남으므로 눌림 표시를
+    // 풀어야 다시 누를 수 있다. 같은 주소로의 이동은 알림함을 다시 읽어 읽음 표시도 맞춘다.
+    await navigate(destination, { replace: destination === "/noti" });
+    setOpening(false);
+  };
   const name = actorName(item);
   const others = item.actor_count > 1 ? ` 외 ${item.actor_count - 1}명` : "";
   // 생성 타입은 RPC의 모든 열을 non-null로 적지만, 그룹과 무관한 알림은 실제로 비어서 온다.
@@ -71,19 +111,13 @@ function NotificationRow({
 
   return (
     <Link
-      to={`/noti/open/${encodeURIComponent(item.id)}`}
-      state={{ fromNotificationInbox: true }}
-      onClick={() => {
-        if (unread) {
-          void readFetcher.submit(
-            { intent: "mark-one", notificationId: item.id },
-            { method: "post", action: "/noti" },
-          );
-        }
-      }}
+      to={landingPath}
+      aria-busy={opening || undefined}
+      onClick={(event) => void open(event)}
       className={cn(
         "flex gap-3 px-4 py-3 transition-colors outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
         unread && "bg-primary/5 hover:bg-primary/10",
+        opening && "bg-muted/50",
       )}
     >
       <NotificationAvatar item={item} name={name} />
@@ -101,8 +135,7 @@ function NotificationRow({
           {groupName ? (
             <>
               <MetaDot />
-              {/* 가운뎃점은 낭독에서 빠지므로, 이름과 그룹이 "박새벽 메이커스 랩"처럼 한
-                  덩어리로 읽히지 않게 여기서만 관계를 말해준다. */}
+              {/* 가운뎃점은 낭독에서 빠져, 이름과 그룹이 한 덩어리로 읽히지 않게 한다. */}
               <span className="sr-only">그룹 </span>
               <span className="min-w-0 truncate text-xs text-muted-foreground">
                 {groupName}
@@ -114,25 +147,45 @@ function NotificationRow({
             value={item.last_activity_at}
             className="shrink-0 text-xs text-muted-foreground"
           />
-          {unread ? (
+          {/* 목적지 RPC를 기다리는 동안 눌린 행에서 바로 보이게 한다. 배경색만으로는 눈에 띄지 않는다. */}
+          {opening ? (
+            <Spinner
+              aria-label="여는 중"
+              className="ml-auto size-3.5 shrink-0 text-muted-foreground"
+            />
+          ) : unread ? (
             <span className="ml-auto size-2 shrink-0 rounded-full bg-primary">
               <span className="sr-only">읽지 않음</span>
             </span>
           ) : null}
         </span>
 
-        {/* 세 줄까지 흐르게 두어 한 행이 최대 네 줄에서 끝난다. 그룹 새 게시물 알림의
-            제목은 사용자가 쓴 게시물 제목(최대 160자)이라 한 줄로 자르면 대부분 잘려나가고,
-            그렇다고 끝까지 풀어두면 긴 제목 하나가 목록을 통째로 밀어낸다.
-            잘린 뒷부분은 눌러서 들어간 상세 화면이 그대로 들고 있다. */}
+        {/* 세 줄까지 흘려 긴 제목(최대 160자)이 목록을 밀어내지 않게 한다. 나머지는 상세에 있다. */}
         <span
           className={cn(
             "mt-0.5 line-clamp-3 text-sm break-keep",
             unread ? "text-foreground" : "text-muted-foreground",
           )}
         >
-          {item.title}
+          {item.reaction &&
+          (item.kind === "post_reacted" || item.kind === "comment_reacted") ? (
+            <ReactionEmoji
+              reaction={item.reaction}
+              className="mr-1 inline-block align-[-0.2em]"
+            />
+          ) : null}
+          {getNotificationMessage(item)}
         </span>
+        {item.kind === "anonymous_activity_restricted" ? (
+          <span className="mt-1 line-clamp-2 text-xs break-words text-muted-foreground">
+            {item.detail
+              ? `사유: ${item.detail}`
+              : "사유가 기록되지 않았습니다."}
+            {item.restriction_expires_at
+              ? ` · 만료: ${formatDateTime(item.restriction_expires_at)}`
+              : ""}
+          </span>
+        ) : null}
       </span>
     </Link>
   );
@@ -166,8 +219,10 @@ function NotificationGroup({
 
 export function NotificationInbox({
   initialPage,
+  profileId,
 }: {
   initialPage: NotificationPage;
+  profileId: number;
 }) {
   const pageFetcher = useFetcher<NotificationPage>();
   const markAllFetcher = useFetcher();
@@ -218,15 +273,29 @@ export function NotificationInbox({
         hideOnScroll
         title="알림"
         actions={
-          <Button
-            variant="ghost"
-            size="icon"
-            nativeButton={false}
-            aria-label="알림 설정"
-            render={<Link to="/noti/settings" />}
-          >
-            <SettingsIcon />
-          </Button>
+          <>
+            <markAllFetcher.Form method="post" action="/noti">
+              <input type="hidden" name="intent" value="mark-all" />
+              <Button
+                type="submit"
+                variant="ghost"
+                size="icon"
+                aria-label="모두 읽음"
+                disabled={markAllPending || allLoadedRead}
+              >
+                <CheckCheckIcon />
+              </Button>
+            </markAllFetcher.Form>
+            <Button
+              variant="ghost"
+              size="icon"
+              nativeButton={false}
+              aria-label="알림 설정"
+              render={<Link to="/noti/settings" />}
+            >
+              <SettingsIcon />
+            </Button>
+          </>
         }
       />
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
@@ -248,8 +317,7 @@ export function NotificationInbox({
                 <CheckCheckIcon /> 모두 읽음
               </Button>
             </markAllFetcher.Form>
-            {/* 모바일은 PageHeader가 같은 링크를 이미 들고 있다. 데스크톱에서는 그 헤더가
-                숨겨지므로 여기에도 두지 않으면 설정으로 갈 길이 사라진다. */}
+            {/* 데스크톱에서는 PageHeader가 숨겨져 모두 읽음과 설정 링크를 여기에도 둔다. */}
             <Button
               variant="ghost"
               size="icon-sm"
@@ -262,6 +330,8 @@ export function NotificationInbox({
             </Button>
           </div>
         </div>
+
+        <NotificationPermissionCard profileId={profileId} />
 
         {items.length === 0 ? (
           <Empty className="border-0 py-20">
@@ -306,12 +376,12 @@ export function NotificationInbox({
                   beforeId: nextCursor.beforeId,
                   beforeLastActivityAt: nextCursor.beforeLastActivityAt,
                 });
-                void pageFetcher.load(`/noti?${search}`);
+                void pageFetcher.load(`/noti/page?${search}`);
               }}
             >
               {loadingMore ? (
                 <>
-                  <Spinner /> 불러오는 중
+                  <Spinner aria-hidden /> 불러오는 중
                 </>
               ) : (
                 "이전 알림 더 보기"

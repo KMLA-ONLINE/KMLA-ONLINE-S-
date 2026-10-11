@@ -2,16 +2,9 @@ import type {
   AcceptedUser,
   AdminApplication,
   AdminMember,
+  StorageCleanupStatus,
 } from "~/features/admin/model/types";
 import { getSupabase } from "~/shared/supabase/client";
-
-export async function assertAppAdmin(): Promise<void> {
-  const { error } = await getSupabase().rpc("admin_list_accepted_users", {
-    p_limit: 1,
-    p_offset: 0,
-  });
-  if (error) throw error;
-}
 
 export async function listApplications(
   status: "pending" | "blocked",
@@ -52,4 +45,12 @@ export async function listAdminMembers(
   });
   if (error) throw error;
   return data ?? [];
+}
+
+export async function getStorageCleanupStatus(): Promise<StorageCleanupStatus | null> {
+  const { data, error } = await getSupabase().rpc(
+    "admin_storage_cleanup_status",
+  );
+  if (error) throw error;
+  return data?.[0] ?? null;
 }

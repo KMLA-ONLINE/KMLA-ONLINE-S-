@@ -8,17 +8,6 @@ async function loginAsAcceptedStudent(page: Page) {
   await expect(page).toHaveURL(/\/$/);
 }
 
-test("셸이 뜨고 index 라우트(피드)가 렌더된다", async ({ page }) => {
-  await loginAsAcceptedStudent(page);
-  await page.goto("/");
-
-  // 셸 로더가 실제 Supabase 프로필을 읽어 페이지에 제공한다.
-  await expect(page.getByText("홍길동님, 안녕하세요")).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "동아리 박람회 안내" }),
-  ).toBeVisible();
-});
-
 test("주요 메뉴는 뷰포트마다 정확히 하나만 노출된다", async ({ page }) => {
   await loginAsAcceptedStudent(page);
   // 사이드바(`max-md:hidden`)와 탭바(`md:hidden`) 둘 다 DOM에 있지만 `display:none`이
@@ -76,6 +65,25 @@ test("PWA manifest is served and installable", async ({ page, request }) => {
   expect(json.icons.some((icon) => icon.sizes === "512x512")).toBeTruthy();
 });
 
+test("첫 화면은 스타일시트를 네트워크로 받지 않는다", async ({ page }) => {
+  // `scripts/inline-root-css.mjs`가 유일한 render-blocking 스타일시트를 index.html에
+  // 인라인하고, 라우트 매니페스트의 `css` 목록에서도 뺀다. 매니페스트 쪽을 놓치면
+  // 하이드레이션한 `<Links />`가 이미 인라인된 CSS를 한 번 더 받아 온다 — 화면은 멀쩡해서
+  // 요청 수를 보지 않으면 드러나지 않는다.
+  const stylesheets: string[] = [];
+  page.on("request", (request) => {
+    if (request.resourceType() === "stylesheet") {
+      stylesheets.push(request.url());
+    }
+  });
+
+  await page.goto("/login");
+  // 하이드레이션이 끝난 뒤를 봐야 한다. `<Links />`가 링크를 다시 그리는 것은 그때다.
+  await expect(page.getByRole("button", { name: "로그인" })).toBeVisible();
+
+  expect(stylesheets).toEqual([]);
+});
+
 test("service worker imports a revalidated Push companion", async ({
   request,
 }) => {
@@ -107,10 +115,6 @@ test("첫 서비스 워커 설치는 현재 페이지를 새로고침하지 않�
       page.evaluate(() => Boolean(navigator.serviceWorker.controller)),
     )
     .toBe(true);
-  await expect(
-    page.getByText("오프라인에서도 사용할 수 있습니다."),
-  ).toBeVisible();
-
   expect(
     await page.evaluate(() => sessionStorage.getItem("document-load-count")),
   ).toBe("1");

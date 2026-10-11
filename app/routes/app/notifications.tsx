@@ -1,11 +1,10 @@
 import { data } from "react-router";
 
-import { defineAppChrome } from "~/features/app-shell";
+import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import {
   getNotificationCursor,
   listNotifications,
   markAllNotificationsRead,
-  markNotificationRead,
 } from "~/features/notifications";
 import { NotificationInbox } from "~/features/notifications/components/notification-inbox";
 import type { NotificationCursor } from "~/features/notifications";
@@ -36,20 +35,17 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
+  // POST 뒤 게이트 loader가 notification badge query를 항상 새로 읽는다. 여기서 같은 키를
+  // 다시 invalidate하면 그 RPC를 한 번 더 끝낸 뒤 gate가 또 요청하게 된다.
   if (intent === "mark-all") {
-    return { marked: await markAllNotificationsRead() };
-  }
-  if (intent === "mark-one") {
-    const notificationId = formData.get("notificationId");
-    if (typeof notificationId !== "string" || !notificationId) {
-      return data({ error: "알림을 찾을 수 없습니다." }, { status: 400 });
-    }
-    return { marked: (await markNotificationRead(notificationId)) ? 1 : 0 };
+    const marked = await markAllNotificationsRead();
+    return { marked };
   }
 
   return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
 }
 
 export default function NotiPage({ loaderData }: Route.ComponentProps) {
-  return <NotificationInbox initialPage={loaderData} />;
+  const { profile } = useAppShell();
+  return <NotificationInbox initialPage={loaderData} profileId={profile.id} />;
 }

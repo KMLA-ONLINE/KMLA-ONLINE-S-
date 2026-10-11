@@ -1,7 +1,12 @@
 import { ChevronRightIcon } from "lucide-react";
 import { Link } from "react-router";
 
-import { getDefaultMeal, type MealDay } from "~/features/meal/data/neis";
+import { PendingRegion, Skeleton } from "~/shared/ui/skeleton";
+import {
+  getDefaultMeal,
+  getKoreaDate,
+  type MealDay,
+} from "~/features/meal/data/neis";
 
 export function HomeMealSummary({ day }: { day: MealDay }) {
   const meal = day.meals.find((item) => item.label === getDefaultMeal());
@@ -13,7 +18,9 @@ export function HomeMealSummary({ day }: { day: MealDay }) {
         className="mb-3 flex items-center justify-between rounded-xl border bg-card px-4 py-3 transition-colors hover:bg-muted/40"
       >
         <div>
-          <p className="text-sm font-semibold">오늘의 급식</p>
+          <p className="text-sm font-semibold">
+            {day.date === getKoreaDate() ? "오늘의 급식" : "내일의 급식"}
+          </p>
           <p className="mt-0.5 text-xs text-muted-foreground">{day.date}</p>
         </div>
         <ChevronRightIcon className="size-4 text-muted-foreground" />
@@ -38,5 +45,22 @@ export function HomeMealSummary({ day }: { day: MealDay }) {
         )}
       </div>
     </section>
+  );
+}
+
+/** 홈 옆 칸이 늦게 채워지는 동안 급식 카드 자리를 잡아 둔다. 비어 있다가 튀어나오지 않게 한다. */
+export function HomeMealSummarySkeleton() {
+  return (
+    <PendingRegion label="급식을" className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5 rounded-xl border bg-card px-4 py-3">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-3 w-16" />
+      </div>
+      <div className="flex flex-col gap-2 rounded-xl border bg-card p-4">
+        <Skeleton className="h-4 w-10" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-3/4" />
+      </div>
+    </PendingRegion>
   );
 }

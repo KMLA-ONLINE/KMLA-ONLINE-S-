@@ -17,7 +17,7 @@ import type {
   MessageParticipant,
 } from "~/features/messaging/model/types";
 import type { PostReaction } from "~/features/posts/model/types";
-import { QuickReactionBar } from "~/features/posts/components/quick-reaction-bar";
+import { QuickReactionBar } from "~/features/posts/components/reaction/quick-reaction-bar";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";

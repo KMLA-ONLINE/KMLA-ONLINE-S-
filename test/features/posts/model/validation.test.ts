@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { getPostErrorMessage } from "~/features/posts/model/format";
 import {
+  isPostDraftDirty,
+  needsPostIdentityConfirmation,
   readPostForm,
   readProfilePostForm,
   validatePostForm,
   validateProfilePostForm,
+  validateSelectedFiles,
 } from "~/features/posts/model/validation";
 
 describe("post form validation", () => {
@@ -16,6 +19,7 @@ describe("post form validation", () => {
         body: "",
         categoryId: "",
         authorIdentity: "identified",
+        mentions: [],
       }),
     ).toEqual({
       title: "제목을 입력해 주세요.",
@@ -28,6 +32,7 @@ describe("post form validation", () => {
           body: "",
           categoryId: "",
           authorIdentity: "identified",
+          mentions: [],
         },
         1,
       ),
@@ -42,6 +47,7 @@ describe("post form validation", () => {
           body: "본문",
           categoryId: "other",
           authorIdentity: "anonymous",
+          mentions: [],
         },
         0,
         ["identified"],
@@ -63,7 +69,51 @@ describe("post form validation", () => {
       title: "제목",
       body: "첫째 줄\n둘째 줄",
       authorIdentity: "identified",
+      mentions: [],
     });
+  });
+});
+
+describe("attachment selection validation", () => {
+  const file = new File(["x"], "x.txt", { type: "text/plain" });
+
+  it("accepts 30 attachments and rejects the 31st", () => {
+    expect(validateSelectedFiles([file], 29)).toBeNull();
+    expect(validateSelectedFiles([file], 30)).toBe(
+      "첨부 파일은 최대 30개까지 추가할 수 있습니다.",
+    );
+  });
+
+  it("rejects video attachments", () => {
+    const video = new File(["video"], "clip.mp4");
+
+    expect(validateSelectedFiles([video], 0)).toBe(
+      "동영상 파일은 첨부할 수 없습니다: clip.mp4",
+    );
+  });
+
+  it("reports an unsupported video before the attachment count limit", () => {
+    const video = new File(["video"], "clip.mov", {
+      type: "application/octet-stream",
+    });
+
+    expect(validateSelectedFiles([video], 30)).toBe(
+      "동영상 파일은 첨부할 수 없습니다: clip.mov",
+    );
+  });
+
+  it("accepts 30 MB and rejects one byte more", () => {
+    const atLimit = new File(["x"], "limit.bin");
+    const overLimit = new File(["x"], "large.bin");
+    Object.defineProperty(atLimit, "size", { value: 30 * 1024 * 1024 });
+    Object.defineProperty(overLimit, "size", {
+      value: 30 * 1024 * 1024 + 1,
+    });
+
+    expect(validateSelectedFiles([atLimit], 0)).toBeNull();
+    expect(validateSelectedFiles([overLimit], 0)).toBe(
+      "파일은 30MB 이하여야 합니다: large.bin",
+    );
   });
 });
 
@@ -131,5 +181,101 @@ describe("getPostErrorMessage", () => {
         message: "timeline owner does not accept posts",
       }),
     ).toBe("이 사용자는 타임라인에 다른 사람의 글을 받지 않습니다.");
+  });
+});
+
+describe("needsPostIdentityConfirmation", () => {
+  it("confirms anonymous and staff identities", () => {
+    expect(needsPostIdentityConfirmation("identified")).toBe(false);
+    expect(needsPostIdentityConfirmation("anonymous")).toBe(true);
+    expect(needsPostIdentityConfirmation("staff")).toBe(true);
+  });
+});
+
+describe("isPostDraftDirty", () => {
+  const initial = {
+    title: "제목",
+    body: "본문",
+    categoryId: "category",
+    authorIdentity: "identified" as const,
+    mentions: [],
+  };
+
+  it("considers every entered field and attachments for new posts", () => {
+    for (const change of [
+      { title: "새 제목" },
+      { categoryId: "other" },
+      { authorIdentity: "anonymous" as const },
+    ]) {
+      expect(
+        isPostDraftDirty({
+          mode: "create",
+          initial: { ...initial, title: "", body: "", categoryId: "" },
+          title: "",
+          body: "",
+          categoryId: "",
+          authorIdentity: "identified",
+          attachmentsChanged: false,
+          ...change,
+        }),
+      ).toBe(true);
+    }
+    expect(
+      isPostDraftDirty({
+        mode: "create",
+        initial: { ...initial, title: "", body: "", categoryId: "" },
+        title: "",
+        body: "작성 중",
+        categoryId: "",
+        authorIdentity: "identified",
+        attachmentsChanged: false,
+      }),
+    ).toBe(true);
+    expect(
+      isPostDraftDirty({
+        mode: "create",
+        initial: { ...initial, title: "", body: "", categoryId: "" },
+        title: "",
+        body: "",
+        categoryId: "",
+        authorIdentity: "identified",
+        attachmentsChanged: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("considers every editable field and attachments for edits", () => {
+    expect(
+      isPostDraftDirty({
+        mode: "edit",
+        initial,
+        title: initial.title,
+        body: initial.body,
+        categoryId: initial.categoryId,
+        authorIdentity: initial.authorIdentity,
+        attachmentsChanged: false,
+      }),
+    ).toBe(false);
+
+    for (const change of [
+      { title: "다른 제목" },
+      { body: "다른 본문" },
+      { categoryId: "other" },
+      { authorIdentity: "staff" as const },
+      { attachmentsChanged: true },
+    ]) {
+      expect(
+        isPostDraftDirty({
+          mode: "edit",
+          initial,
+          title: initial.title,
+          body: initial.body,
+          categoryId: initial.categoryId,
+          authorIdentity: initial.authorIdentity,
+          attachmentsChanged: false,
+          ...change,
+        }),
+      ).toBe(true);
+    }
   });
 });

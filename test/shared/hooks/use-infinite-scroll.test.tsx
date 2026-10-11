@@ -10,6 +10,7 @@ let observers: { callback: IntersectionObserverCallback; root: unknown }[];
 class MockIntersectionObserver implements IntersectionObserver {
   readonly root: Element | Document | null;
   readonly rootMargin: string;
+  readonly scrollMargin = "0px";
   readonly thresholds = [0];
 
   constructor(

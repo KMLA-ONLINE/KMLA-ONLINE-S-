@@ -1,5 +1,6 @@
 import type {
   GroupIdentityPolicy,
+  GroupInviteProfileType,
   GroupJoinPolicy,
   GroupKind,
   GroupMemberRole,
@@ -29,6 +30,17 @@ const MEMBER_ROLE_LABELS: Record<GroupMemberRole, string> = {
   member: "멤버",
 };
 
+const INVITE_PROFILE_TYPE_LABELS: Record<GroupInviteProfileType, string> = {
+  student: "재학생",
+  alumni: "졸업생",
+  teacher: "교사",
+};
+
+/** 공개 그룹은 즉시 가입뿐이다. 승인 가입과 초대 전용은 모두 비공개다(§7.5). */
+export function isPrivateJoinPolicy(policy: GroupJoinPolicy): boolean {
+  return policy !== "open";
+}
+
 export function getGroupJoinPolicyLabel(policy: GroupJoinPolicy): string {
   return JOIN_POLICY_LABELS[policy];
 }
@@ -51,6 +63,12 @@ export function getGroupKindLabel(kind: GroupKind): string {
   return kind === "official" ? "공식 그룹" : "비공식 그룹";
 }
 
+export function getGroupInviteProfileTypeLabel(
+  type: GroupInviteProfileType,
+): string {
+  return INVITE_PROFILE_TYPE_LABELS[type];
+}
+
 export function normalizeGroupSearchInput(value: string): string {
   return value.normalize("NFC").trim();
 }
@@ -69,6 +87,9 @@ export function getGroupErrorMessage(error: unknown): string {
   if (candidate.code === "23514" || candidate.code === "22023") {
     if (candidate.message?.includes("invite lifetime")) {
       return "초대 링크 기한은 1시간에서 2주 사이여야 합니다.";
+    }
+    if (candidate.message?.includes("invite must allow")) {
+      return "가입 가능한 사용자 유형을 하나 이상 선택해 주세요.";
     }
     return "입력한 그룹 정보를 다시 확인해 주세요.";
   }
@@ -92,6 +113,9 @@ export function getGroupErrorMessage(error: unknown): string {
     }
     if (candidate.message?.includes("invite expired")) {
       return "기한이 지난 초대 링크입니다.";
+    }
+    if (candidate.message?.includes("does not accept join requests")) {
+      return "이 그룹은 지금 가입 요청을 받지 않습니다.";
     }
     if (candidate.message?.includes("cannot be invited to")) {
       return "공식 그룹은 초대 링크를 쓰지 않습니다.";

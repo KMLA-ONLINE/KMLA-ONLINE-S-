@@ -58,10 +58,7 @@ export function useInfiniteScroll(
         triggeredRef.current = true;
         onLoadMoreRef.current();
       },
-      // 의존성 배열이 지켜보는 건 ref 객체이지 `.current`가 아니다. 그래도 되는 이유는
-      // React가 커밋 단계에서 ref를 먼저 붙이고 passive effect를 나중에 돌리기 때문이다 —
-      // 이 이펙트가 도는 시점에 `<main>`은 이미 ref에 들어와 있다. 스크롤 영역이 나중에
-      // 교체되는 구조가 생기면 이 가정이 깨지므로 그때는 `.current`를 state로 올려야 한다.
+      // deps가 ref 객체를 보지만 React가 ref를 먼저 붙이고 passive effect를 돌리므로 `<main>`은 이미 있다. 스크롤 영역이 교체되는 구조가 생기면 `.current`를 state로 올릴 것.
       { root: scrollRef?.current ?? null, rootMargin: ROOT_MARGIN },
     );
 

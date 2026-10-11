@@ -17,6 +17,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
+      // 모바일 토스트가 하단 탭바에 가리지 않도록 탭바 높이만큼 띄운다. 탭바가 숨어도 움직이지 않게 항상 보이는 위치 기준.
+      mobileOffset={{
+        bottom: "calc(var(--app-tabbar-h) + var(--app-safe-b) + 0.75rem)",
+        left: "1rem",
+        right: "1rem",
+      }}
       icons={{
         success: <CircleCheckIcon className="size-4" />,
         info: <InfoIcon className="size-4" />,

@@ -46,7 +46,10 @@ describe("listFeedPosts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.createPostAttachmentUrls.mockResolvedValue(
-      new Map([["posts/photo.webp", "signed-attachment"]]),
+      new Map([
+        ["posts/photo.webp", "signed-attachment"],
+        ["posts/photo.webp/thumb", "signed-thumbnail"],
+      ]),
     );
     mocks.createProfileMediaUrls.mockResolvedValue(
       new Map([
@@ -77,6 +80,7 @@ describe("listFeedPosts", () => {
               attachment_id: "40000000-0000-0000-0000-000000000001",
               storage_bucket: "post-attachments",
               object_path: "posts/photo.webp",
+              thumbnail_path: "posts/photo.webp/thumb",
               original_filename: "photo.webp",
               position: 0,
               mime_type: "image/webp",
@@ -115,8 +119,10 @@ describe("listFeedPosts", () => {
     expect(mocks.rpc).toHaveBeenCalledWith("list_feed_posts", {
       p_page_token: "50000000-0000-0000-0000-000000000001",
     });
+    // 원본과 축소본을 한 배치로 서명한다. 나눠 부르면 왕복이 두 번이 된다.
     expect(mocks.createPostAttachmentUrls).toHaveBeenCalledWith([
       "posts/photo.webp",
+      "posts/photo.webp/thumb",
     ]);
     expect(mocks.createProfileMediaUrls).toHaveBeenCalledTimes(1);
     expect(page.nextPageToken).toBe(common.next_page_token);
@@ -125,8 +131,13 @@ describe("listFeedPosts", () => {
       kind: "group",
       group_slug: "notice",
       is_pinned: false,
-      author_avatar_path: "signed-avatar",
-      attachments: [{ signedUrl: "signed-attachment" }],
+      // 서명 결과는 `*_url`에만 담고 원시 경로는 그대로 둔다. 그래야 이미 채워진 페이지를
+      // 화면이 한 번 더 통과시켜도 아바타가 살아남는다.
+      author_avatar_path: "avatars/test.webp",
+      author_avatar_url: "signed-avatar",
+      attachments: [
+        { signedUrl: "signed-attachment", thumbnailUrl: "signed-thumbnail" },
+      ],
     });
     expect(page.posts[1]).toMatchObject({
       kind: "profile",
@@ -147,6 +158,51 @@ describe("listFeedPosts", () => {
     });
     expect(mocks.createPostAttachmentUrls).toHaveBeenCalledWith([]);
     expect(mocks.createProfileMediaUrls).toHaveBeenCalledWith([]);
+  });
+
+  it("keeps object paths unsigned when media hydration is disabled", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...common,
+          kind: "group",
+          title: "목록 글",
+          group_id: "30000000-0000-0000-0000-000000000001",
+          group_slug: "notice",
+          group_name: "공지",
+          category_name: null,
+          timeline_pub_id: null,
+          timeline_name: null,
+          activity_kind: null,
+          activity_media_path: null,
+          visibility: null,
+          attachments: [
+            {
+              attachment_id: "40000000-0000-0000-0000-000000000001",
+              storage_bucket: "post-attachments",
+              object_path: "posts/photo.webp",
+              original_filename: "photo.webp",
+              position: 0,
+              mime_type: "image/webp",
+              size_bytes: 100,
+              width: 100,
+              height: 100,
+            },
+          ],
+        },
+      ],
+      error: null,
+    });
+
+    const page = await listFeedPosts(null, false);
+
+    expect(mocks.createPostAttachmentUrls).not.toHaveBeenCalled();
+    expect(mocks.createProfileMediaUrls).not.toHaveBeenCalled();
+    expect(page.posts[0]).toMatchObject({
+      author_avatar_path: "avatars/test.webp",
+      author_avatar_url: null,
+      attachments: [{ signedUrl: null }],
+    });
   });
 
   it("propagates RPC failures", async () => {

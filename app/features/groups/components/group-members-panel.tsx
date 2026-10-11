@@ -1,6 +1,12 @@
 import { SearchIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useFetcher, useSearchParams } from "react-router";
+import {
+  Link,
+  useFetcher,
+  useLocation,
+  useNavigation,
+  useSearchParams,
+} from "react-router";
 
 import { GroupJoinRequestsPanel } from "~/features/groups/components/group-join-requests-panel";
 import { MemberRoleMenu } from "~/features/groups/components/group-member-role-menu";
@@ -11,12 +17,15 @@ import type {
   GroupMemberPage,
   GroupMemberRole,
 } from "~/features/groups/model/types";
+import { formatCohort } from "~/features/profiles";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Input } from "~/shared/ui/input";
+import { ListRowSkeleton } from "~/shared/ui/skeleton";
 import { Spinner } from "~/shared/ui/spinner";
+import { cn } from "~/shared/lib/utils";
 import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
 
 const STAFF_ROLES = new Set<GroupMemberRole>(["owner", "admin", "manager"]);
@@ -36,6 +45,15 @@ export function GroupMembersPanel({
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const serverQuery = searchParams.get("memberQuery") ?? "";
+  // 검색은 그룹 loader를 다시 돌린다. 같은 화면이라 레이아웃이 skeleton을 그리지 않으므로, 기다리는 동안
+  // 아무 표시가 없으면 눌러도 반응이 없는 것처럼 보인다.
+  const location = useLocation();
+  const navigation = useNavigation();
+  const searching =
+    navigation.state === "loading" &&
+    navigation.location.pathname === location.pathname &&
+    (new URLSearchParams(navigation.location.search).get("memberQuery") ??
+      "") !== serverQuery;
   const [query, setQuery] = useState(serverQuery);
   const [searchError, setSearchError] = useState<string | null>(null);
   const pageFetcher = useFetcher<GroupMemberPage>();
@@ -131,8 +149,13 @@ export function GroupMembersPanel({
                 variant="ghost"
                 className="absolute inset-y-0 right-1 my-auto text-muted-foreground"
                 aria-label="멤버 검색"
+                aria-busy={searching || undefined}
               >
-                <SearchIcon aria-hidden />
+                {searching ? (
+                  <Spinner aria-hidden />
+                ) : (
+                  <SearchIcon aria-hidden />
+                )}
               </Button>
             </div>
             {searchError ? (
@@ -142,7 +165,12 @@ export function GroupMembersPanel({
             ) : null}
           </form>
         </CardHeader>
-        <CardContent className="flex flex-col gap-5">
+        <CardContent
+          className={cn(
+            "flex flex-col gap-5 transition-opacity",
+            searching && "opacity-50",
+          )}
+        >
           <MemberSection
             title="운영진"
             members={staff}
@@ -163,10 +191,16 @@ export function GroupMembersPanel({
           <div
             ref={sentinelRef}
             className="flex min-h-8 items-center justify-center"
-            aria-live="polite"
           >
             {pageFetcher.state !== "idle" ? (
-              <Spinner aria-label="멤버 불러오는 중" />
+              <ListRowSkeleton
+                label="멤버를"
+                avatar="lg"
+                secondLine
+                rows={2}
+                className="w-full"
+                rowClassName="min-h-16 py-2"
+              />
             ) : null}
           </div>
         </CardContent>
@@ -218,11 +252,12 @@ function MemberRow({
 }) {
   const content = (
     <>
-      <UserAvatar src={member.avatar_path} name={member.name} size="lg" />
+      <UserAvatar src={member.avatar_url} name={member.name} size="lg" />
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium">{member.name}</span>
         <span className="block text-xs text-muted-foreground">
-          {cohortLabel(member.cohort)}
+          {formatCohort(member.cohort, member.is_returning_student) ??
+            "기수 없음"}
         </span>
       </span>
       <Badge variant="secondary">{getGroupMemberRoleLabel(member.role)}</Badge>
@@ -244,8 +279,4 @@ function MemberRow({
       />
     </li>
   );
-}
-
-function cohortLabel(cohort: number | null): string {
-  return cohort === null ? "기수 없음" : `${cohort}기`;
 }

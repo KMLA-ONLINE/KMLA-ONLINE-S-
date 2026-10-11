@@ -11,21 +11,24 @@ import { PostActionBar } from "~/features/posts/components/post-action-bar";
 import {
   PostFileList,
   PostImageGrid,
-  splitPostAttachments,
 } from "~/features/posts/components/post-attachments";
+import { splitPostAttachments } from "~/features/posts/model/attachments";
 import { PostAuthorAvatar } from "~/features/posts/components/post-author-avatar";
 import { PostBodyClamp } from "~/features/posts/components/post-body-clamp";
 import { PostMarkdown } from "~/features/posts/components/post-markdown";
-import { ProfileMediaActivity } from "~/features/posts/components/profile-media-activity";
-import { ReactionEmoji } from "~/features/posts/components/reaction-emoji";
+import { ProfileMediaActivity } from "~/features/posts/components/profile/profile-media-activity";
+import { StaffMark } from "~/features/posts/components/staff-mark";
+import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
+import { usePostEngagement } from "~/features/posts/hooks/use-post-engagement";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
+import { groupPostPath } from "~/features/posts/model/navigation";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 
-export function feedPostPath(post: FeedPost): string {
+function feedPostPath(post: FeedPost): string {
   return post.kind === "group"
-    ? `/groups/${post.group_slug}/posts/${post.post_id}`
+    ? groupPostPath(post.group_slug, post.post_id)
     : `/profile/${post.timeline_pub_id}/posts/${post.post_id}`;
 }
 
@@ -45,7 +48,7 @@ function AuthorAvatar({ post }: { post: FeedPost }) {
     <PostAuthorAvatar
       identity={post.author_identity}
       name={post.author_name}
-      avatarPath={post.author_avatar_path}
+      avatarUrl={post.author_avatar_url}
       size="default"
       className="size-9"
     />
@@ -147,6 +150,9 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
           {post.kind === "group" ? (
             <>
               <AuthorName post={post} compact />
+              {post.author_identity === "staff" ? (
+                <StaffMark className="size-3.5" />
+              ) : null}
               {post.is_author && post.author_identity === "anonymous" ? (
                 <Badge variant="secondary" className="shrink-0">
                   나
@@ -193,8 +199,8 @@ export function FeedPostCard({ post }: { post: FeedPost }) {
                 </Link>
               </h2>
             ) : null}
-            <PostBodyClamp testId="feed-post-body">
-              <PostMarkdown>{post.body}</PostMarkdown>
+            <PostBodyClamp postId={post.post_id} testId="feed-post-body">
+              <PostMarkdown mentions={post.mentions}>{post.body}</PostMarkdown>
             </PostBodyClamp>
           </div>
           <PostImageGrid images={images} className="mt-3" />
@@ -235,6 +241,7 @@ export function FeedPostRow({
   isVisited: boolean;
   onVisit: () => void;
 }) {
+  const engagement = usePostEngagement(post.post_id, post);
   const path = feedPostOverlayPath(post);
   const author = post.author_name ?? post.author_label;
   const target = post.kind === "group" ? post.group_name : post.timeline_name;
@@ -274,20 +281,20 @@ export function FeedPostRow({
         <RelativeTime value={post.published_at} />
         <span className="ml-auto flex shrink-0 items-center gap-3">
           <span className="flex items-center gap-1">
-            {post.top_reactions.length ? (
-              post.top_reactions.map((reaction) => (
+            {engagement.top_reactions.length ? (
+              engagement.top_reactions.map((reaction) => (
                 <ReactionEmoji key={reaction} reaction={reaction} />
               ))
             ) : (
               <HeartIcon className="size-3.5" aria-hidden="true" />
             )}
             <span className="sr-only">반응</span>
-            {post.reaction_count}
+            {engagement.reaction_count}
           </span>
           <span className="flex items-center gap-1">
             <MessageSquareIcon className="size-3.5" aria-hidden="true" />
             <span className="sr-only">댓글</span>
-            {post.comment_count}
+            {engagement.comment_count}
           </span>
         </span>
       </div>

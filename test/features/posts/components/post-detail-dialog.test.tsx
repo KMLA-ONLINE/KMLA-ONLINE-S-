@@ -23,12 +23,21 @@ function stubVisualViewport(height: number, offsetTop = 0) {
   });
 }
 
-function stubTabletSheetViewport(matches: boolean) {
-  vi.spyOn(window, "matchMedia").mockReturnValue({
-    matches,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-  } as unknown as MediaQueryList);
+function stubPostDetailViewport({
+  sheet,
+  touchPrimary = sheet,
+}: {
+  sheet: boolean;
+  touchPrimary?: boolean;
+}) {
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query) =>
+      ({
+        matches: query.includes("max-width: 1024px") ? sheet : touchPrimary,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }) as unknown as MediaQueryList,
+  );
 }
 
 afterEach(() => {
@@ -109,7 +118,7 @@ function pullDown(element: HTMLElement, distance: number) {
 
 describe("PostDetailDialog", () => {
   it("does not focus the composer when opening a comment sheet", async () => {
-    stubTabletSheetViewport(true);
+    stubPostDetailViewport({ sheet: true });
     renderRoute(Detail, {
       path: "/posts/:postId",
       initialEntries: ["/posts/post-id?view=comments"],
@@ -121,26 +130,12 @@ describe("PostDetailDialog", () => {
     ).not.toHaveFocus();
   });
 
-  it("uses a centered bottom sheet through the tablet breakpoint", () => {
-    stubTabletSheetViewport(true);
-    renderRoute(Detail, {
-      path: "/posts/:postId",
-      initialEntries: ["/posts/post-id?view=comments"],
-    });
-
-    expect(screen.getByRole("dialog")).toHaveClass(
-      "max-[1025px]:bottom-0",
-      "md:max-[1025px]:left-1/2",
-      "md:max-[1025px]:-translate-x-1/2",
-    );
-  });
-
   /**
    * 회귀: 시트 여부를 뷰포트만으로 정하던 때에는, 글을 쓰고 상세로 이동하기만 해도 본문이
    * 숨겨진 댓글 서랍이 떴다. 댓글만 보러 왔다는 의도가 함께 있어야 시트다.
    */
   it("opens the post itself as a detail modal on a tablet viewport", () => {
-    stubTabletSheetViewport(true);
+    stubPostDetailViewport({ sheet: true });
     renderRoute(Detail, {
       path: "/posts/:postId",
       initialEntries: ["/posts/post-id"],
@@ -155,7 +150,7 @@ describe("PostDetailDialog", () => {
   });
 
   it("keeps a computer comment button as a focused detail modal", async () => {
-    stubTabletSheetViewport(false);
+    stubPostDetailViewport({ sheet: false });
     renderRoute(Detail, {
       path: "/posts/:postId",
       initialEntries: ["/posts/post-id?view=comments"],
@@ -164,6 +159,19 @@ describe("PostDetailDialog", () => {
     await waitFor(() =>
       expect(screen.getByRole("textbox", { name: "댓글 입력" })).toHaveFocus(),
     );
+  });
+
+  it("does not focus the composer in a wide touch-primary tablet modal", async () => {
+    stubPostDetailViewport({ sheet: false, touchPrimary: true });
+    renderRoute(Detail, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id?view=comments"],
+    });
+
+    await waitFor(() => expect(screen.getByRole("dialog")).toHaveFocus());
+    expect(
+      screen.getByRole("textbox", { name: "댓글 입력" }),
+    ).not.toHaveFocus();
   });
 
   it("does not focus the composer for a regular detail link", async () => {
@@ -179,7 +187,7 @@ describe("PostDetailDialog", () => {
   });
 
   it("keeps the mobile comment sheet inside the visual viewport", async () => {
-    stubTabletSheetViewport(true);
+    stubPostDetailViewport({ sheet: true });
     stubVisualViewport(500, 100);
     renderRoute(Detail, {
       path: "/posts/:postId",
@@ -194,8 +202,47 @@ describe("PostDetailDialog", () => {
     );
   });
 
+  it("keeps a mobile post detail composer inside the visual viewport", async () => {
+    stubPostDetailViewport({ sheet: true });
+    stubVisualViewport(500, 100);
+    renderRoute(Detail, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id"],
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole("dialog")).toHaveStyle({
+        bottom: "200px",
+        top: "auto",
+        maxHeight: "500px",
+      }),
+    );
+  });
+
+  /**
+   * 회귀: 안드로이드 Chrome은 키보드를 띄우며 화면을 키보드 높이만큼 끌어올린다. 그러면 가려진
+   * 아래쪽이 0이라 키보드가 없는 것으로 읽혀, 위에 붙은 상세 모달의 윗부분이 화면 밖으로 밀리고
+   * 답글 대상이 보이는 것으로 계산되어 스크롤도 하지 않았다.
+   */
+  it("keeps a mobile post detail inside a visual viewport the keyboard pushed up", async () => {
+    stubPostDetailViewport({ sheet: true });
+    stubVisualViewport(500, 300);
+    renderRoute(Detail, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id"],
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole("dialog")).toHaveStyle({
+        bottom: "0px",
+        top: "auto",
+        maxHeight: "500px",
+      }),
+    );
+  });
+
   it("scrolls only enough to reveal a reply target after resizing", async () => {
-    stubTabletSheetViewport(true);
+    stubPostDetailViewport({ sheet: true });
     stubVisualViewport(500);
     const { user } = renderRoute(() => <Detail withComment />, {
       path: "/posts/:postId",
@@ -231,7 +278,7 @@ describe("PostDetailDialog", () => {
    * 손가락을 머리글까지 다시 가져가야 했다. 이어서 아래로 당기는 손짓으로도 닫힌다.
    */
   it("closes the comment sheet when the list is dragged down from its top", () => {
-    stubTabletSheetViewport(true);
+    stubPostDetailViewport({ sheet: true });
     const onClose = vi.fn();
     renderRoute(() => <Detail withComment onClose={onClose} />, {
       path: "/posts/:postId",
@@ -245,7 +292,7 @@ describe("PostDetailDialog", () => {
   });
 
   it("keeps the sheet open when the same drag starts mid-list", () => {
-    stubTabletSheetViewport(true);
+    stubPostDetailViewport({ sheet: true });
     const onClose = vi.fn();
     renderRoute(() => <Detail withComment onClose={onClose} />, {
       path: "/posts/:postId",
@@ -265,7 +312,7 @@ describe("PostDetailDialog", () => {
   });
 
   it("leaves the drag alone on a computer detail modal", () => {
-    stubTabletSheetViewport(false);
+    stubPostDetailViewport({ sheet: false });
     const onClose = vi.fn();
     renderRoute(() => <Detail withComment onClose={onClose} />, {
       path: "/posts/:postId",

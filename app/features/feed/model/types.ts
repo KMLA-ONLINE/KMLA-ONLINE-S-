@@ -2,9 +2,13 @@ import type {
   GroupPostDetail,
   PostAttachment,
   PostCommentPage,
-  PostIdentity,
   ProfilePost,
 } from "~/features/posts/model/types";
+import type { PostMention } from "~/features/posts/model/mentions";
+import type {
+  GroupIdentityPolicy,
+  GroupMemberRole,
+} from "~/features/groups/model/types";
 import type { Database } from "~/shared/supabase/database.types";
 
 type FeedRow =
@@ -29,13 +33,22 @@ type NullableColumns =
   | "visibility";
 
 /** Postgres `returns table` nullability is not represented by generated types. */
-type FeedBase = Omit<FeedRow, NullableColumns | "attachments" | "kind"> & {
+type FeedBase = Omit<
+  FeedRow,
+  NullableColumns | "attachments" | "kind" | "mentions"
+> & {
   author_avatar_path: string | null;
+  /**
+   * 서명된 아바타 URL. 화면은 언제나 이쪽만 읽는다 —
+   * `~/features/posts/model/types`의 `GroupPost` 주석이 이유를 적어 두었다.
+   */
+  author_avatar_url: string | null;
   author_name: string | null;
   author_pub_id: string | null;
   edited_at: string | null;
   my_reaction: FeedRow["my_reaction"] | null;
   attachments: PostAttachment[];
+  mentions: PostMention[];
 };
 
 export type GroupFeedPost = FeedBase & {
@@ -76,27 +89,28 @@ export interface FeedPage {
   nextPageToken: string | null;
 }
 
-export interface FeedPageResult {
-  page: FeedPage | null;
-  pageToken: string | null;
-  error: string | null;
-  expired: boolean;
-}
-
+/**
+ * 피드 상세 창의 내용. `comments`가 null이면 피드가 든 글로 먼저 그린 미리보기다 — 댓글과
+ * 권한(`can_*`)은 상세 응답이 와야 채워진다.
+ */
 export type FeedPostDetail =
   | {
       kind: "group";
       post: GroupPostDetail;
-      comments: PostCommentPage;
+      comments: PostCommentPage | null;
       slug: string;
       groupName: string;
-      groupId: string;
-      identities: PostIdentity[];
+      /** 댓글 작성 신원을 정할 그룹 정책. 미리보기에는 없다. */
+      group: {
+        groupId: string;
+        identityPolicy: GroupIdentityPolicy;
+        memberRole: GroupMemberRole | null;
+      } | null;
     }
   | {
       kind: "profile";
       post: ProfilePost;
-      comments: PostCommentPage;
+      comments: PostCommentPage | null;
     };
 
 export interface FeedPostDetailResult {

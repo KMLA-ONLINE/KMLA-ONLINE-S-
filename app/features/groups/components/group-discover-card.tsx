@@ -34,6 +34,7 @@ export function GroupDiscoverCard({
           <img
             src={group.cover_path}
             alt=""
+            crossOrigin="anonymous"
             width={800}
             height={200}
             loading="lazy"

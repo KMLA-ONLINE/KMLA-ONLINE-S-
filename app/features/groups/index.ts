@@ -7,6 +7,7 @@ export { GroupInviteScreen } from "~/features/groups/components/group-invite-scr
 export {
   GROUP_CONTENT_STALE_TIME,
   GROUP_STALE_TIME,
+  groupHomeQuery,
   groupKeys,
   isGroupAccessQuery,
 } from "~/features/groups/data/cache";
@@ -19,9 +20,8 @@ export {
   issueGroupInvite,
   joinGroup,
   leaveGroup,
+  markGroupPostsVisited,
   rejectGroupJoinRequest,
-  removeGroupMedia,
-  replaceGroupMedia,
   requestGroupJoin,
   revokeGroupInvite,
   setGroupPinned,
@@ -40,11 +40,7 @@ export {
 } from "~/features/groups/data/queries";
 export {
   getGroupErrorMessage,
-  getGroupIdentityPolicyLabel,
-  getGroupJoinPolicyLabel,
-  getGroupKindLabel,
-  getGroupMemberRoleLabel,
-  getGroupPostingPolicyLabel,
+  getGroupInviteProfileTypeLabel,
   hasMinimumGroupSearchLength,
   normalizeGroupSearchInput,
 } from "~/features/groups/model/format";
@@ -59,20 +55,13 @@ export type {
   DiscoverGroupItem,
   GroupDetail,
   GroupDiscoveryCursor,
-  GroupDiscoveryPage,
   GroupHomeItem,
   GroupInvite,
+  GroupInviteProfileType,
   GroupInvitePreview,
-  GroupJoinRequest,
   GroupIdentityPolicy,
-  GroupJoinPolicy,
   GroupKind,
   GroupMemberRole,
   GroupMember,
   GroupMemberCursor,
-  GroupMemberPage,
-  GroupMediaSlot,
-  GroupMembershipState,
-  GroupPostingPolicy,
-  UpdateGroupSettingsValues,
 } from "~/features/groups/model/types";

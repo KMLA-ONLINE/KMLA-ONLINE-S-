@@ -1,26 +1,105 @@
 import type {
+  PostAttachment,
   PreparedCommentImage,
   PreparedPostFile,
 } from "~/features/posts/model/types";
+export { POST_ATTACHMENT_LIMIT } from "~/features/posts/model/constants";
 import { validateSelectedFiles } from "~/features/posts/model/validation";
-import { compressImage } from "~/shared/lib/image/compress";
+import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
+import {
+  compressImage,
+  getImageDimensions,
+  isSupportedImageInput,
+} from "~/shared/lib/image/compress";
+const DEFAULT_IMAGE_PREPARATION_CONCURRENCY = 3;
+/** 휴대폰·저사양 기기에서 한 번에 손보는 사진 수. 인코딩이 워커로 옮겨 겹침이 생겼지만 iOS는 메모리 압박에 탭을 죽이므로 데스크톱(3)만큼 주지 않는다. */
+const LOW_POWER_IMAGE_PREPARATION_CONCURRENCY = 2;
 
-const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+/** 업로드 파이프라인이 사진을 webp로 정규화하므로, 이미지인지 아닌지는 이 한 줄로 갈린다. */
+const IMAGE_MIME = "image/webp";
+
+interface PreparationTask {
+  run: () => Promise<void>;
+  resolve: () => void;
+  reject: (reason: unknown) => void;
+}
+
+const preparationQueue: PreparationTask[] = [];
+let activePreparations = 0;
+
+function imagePreparationConcurrency(): number {
+  if (typeof navigator === "undefined")
+    return DEFAULT_IMAGE_PREPARATION_CONCURRENCY;
+  const isIOS =
+    /^(?:iPad|iPhone|iPod)$/.test(navigator.platform) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isLowPowerTouchDevice =
+    navigator.maxTouchPoints > 0 &&
+    (!navigator.hardwareConcurrency || navigator.hardwareConcurrency <= 4);
+  return isIOS || isLowPowerTouchDevice
+    ? LOW_POWER_IMAGE_PREPARATION_CONCURRENCY
+    : DEFAULT_IMAGE_PREPARATION_CONCURRENCY;
+}
+
+function drainPreparationQueue(): void {
+  while (
+    activePreparations < imagePreparationConcurrency() &&
+    preparationQueue.length > 0
+  ) {
+    const task = preparationQueue.shift()!;
+    activePreparations += 1;
+    void task
+      .run()
+      .then(task.resolve, task.reject)
+      .finally(() => {
+        activePreparations -= 1;
+        drainPreparationQueue();
+      });
+  }
+}
+
+function enqueueImagePreparation<T>(
+  run: () => Promise<T>,
+  prioritize = false,
+): Promise<T> {
+  const promise = new Promise<T>((resolve, reject) => {
+    let result!: T;
+    const task: PreparationTask = {
+      run: async () => {
+        result = await run();
+      },
+      resolve: () => resolve(result),
+      reject,
+    };
+    if (prioritize) preparationQueue.unshift(task);
+    else preparationQueue.push(task);
+  });
+  drainPreparationQueue();
+  return promise;
+}
+
+export function splitPostAttachments(attachments: PostAttachment[]) {
+  return {
+    images: attachments.filter((item) => item.mime_type === IMAGE_MIME),
+    files: attachments.filter((item) => item.mime_type !== IMAGE_MIME),
+  };
+}
 
 export async function prepareCommentImage(
   source: File,
 ): Promise<PreparedCommentImage> {
-  if (!IMAGE_TYPES.has(source.type))
-    throw new Error("JPEG, PNG, WebP 사진만 선택할 수 있습니다.");
+  if (!isSupportedImageInput(source))
+    throw new Error("JPEG, PNG, WebP, HEIC, HEIF 사진만 선택할 수 있습니다.");
+  if (source.size > MAX_INPUT_FILE_BYTES)
+    throw new Error(`이미지는 30MB 이하여야 합니다: ${source.name}`);
 
   const file = await compressImage(source, "photo");
-  const bitmap = await createImageBitmap(file);
-  const width = bitmap.width;
-  const height = bitmap.height;
-  bitmap.close();
+  const [width, height] = await getImageDimensions(file);
   return {
     key: crypto.randomUUID(),
     file,
+    // 댓글 이미지는 목록에 깔리지 않고 게시물을 열어야 보이므로 축소본을 만들지 않는다.
+    thumbnail: null,
     kind: "image",
     width,
     height,
@@ -28,53 +107,107 @@ export async function prepareCommentImage(
   };
 }
 
+/** 정규화한 `photo`에서 축소본을 만든다(픽셀이 적고 EXIF·방향이 이미 처리됐다). 실패해도 던지지 않는다 — 축소본은 게시물의 일부가 아니다. */
+async function createThumbnail(
+  file: File,
+  signal?: AbortSignal,
+): Promise<File | null> {
+  return compressImage(file, "thumbnail", signal).catch(() => null);
+}
+
+interface PostFilePreparationOptions {
+  /** 고른 파일의 key를 고른 순서대로 준비 시작 전에 알린다. 압축 완료 순서(`onPrepared`)는 고른 순서가 아니다. */
+  onQueued?: (keys: string[]) => void;
+  onPrepared?: (file: PreparedPostFile) => void;
+  onError?: (error: Error, key: string) => void;
+  signal?: AbortSignal;
+}
+
 export async function preparePostFiles(
   selected: File[],
   currentCount: number,
   selection: "image" | "file" | "mixed",
+  options: PostFilePreparationOptions = {},
 ): Promise<PreparedPostFile[]> {
   const error = validateSelectedFiles(selected, currentCount);
   if (error) throw new Error(error);
 
-  return Promise.all(
-    selected.map(async (source) => {
-      const isImage = IMAGE_TYPES.has(source.type);
-      if (selection === "image" && !isImage)
-        throw new Error(
-          `JPEG, PNG, WebP 사진만 선택할 수 있습니다: ${source.name}`,
-        );
-      if (source.type.startsWith("image/") && !isImage)
-        throw new Error(`지원하지 않는 이미지 형식입니다: ${source.name}`);
+  // 첫 `await` 전에 동기적으로 알린다. 앞선 선택이 아직 준비 중이어도 이번 선택의 자리는
+  // 그 뒤에 통째로 잡힌다.
+  const keys = selected.map(() => crypto.randomUUID());
+  options.onQueued?.(keys);
 
-      const file = isImage ? await compressImage(source, "photo") : source;
-      let width: number | null = null;
-      let height: number | null = null;
-      if (isImage) {
-        const bitmap = await createImageBitmap(file);
-        width = bitmap.width;
-        height = bitmap.height;
-        bitmap.close();
-      }
-      return {
-        key: crypto.randomUUID(),
-        file,
-        kind: isImage ? "image" : "file",
-        width,
-        height,
-        previewUrl: isImage ? URL.createObjectURL(file) : null,
+  const prepared = new Array<PreparedPostFile>(selected.length);
+  const errors: Error[] = [];
+
+  await Promise.all(
+    selected.map((source, index) => {
+      const controller = new AbortController();
+      const abort = () => controller.abort();
+      options.signal?.addEventListener("abort", abort, { once: true });
+      const prepare = async () => {
+        try {
+          const isImage = isSupportedImageInput(source);
+          if (selection === "image" && !isImage)
+            throw new Error(
+              `JPEG, PNG, WebP, HEIC, HEIF 사진만 선택할 수 있습니다: ${source.name}`,
+            );
+          if (source.type.startsWith("image/") && !isImage)
+            throw new Error(`지원하지 않는 이미지 형식입니다: ${source.name}`);
+
+          const file = isImage
+            ? await compressImage(source, "photo", controller.signal)
+            : source;
+          const [width, height] = isImage
+            ? await getImageDimensions(file, controller.signal)
+            : [null, null];
+          const item: PreparedPostFile = {
+            key: keys[index],
+            file,
+            thumbnail: null,
+            kind: isImage ? "image" : "file",
+            width,
+            height,
+            previewUrl: isImage ? URL.createObjectURL(file) : null,
+            abortPreparation: () => controller.abort(),
+          };
+          if (isImage) {
+            item.thumbnailPromise = enqueueImagePreparation(async () => {
+              const thumbnail = await createThumbnail(file, controller.signal);
+              item.thumbnail = thumbnail;
+              return thumbnail;
+            }, true);
+          }
+          prepared[index] = item;
+          options.onPrepared?.(item);
+          return item;
+        } catch (cause) {
+          const itemError =
+            cause instanceof Error
+              ? cause
+              : new Error("파일을 준비하지 못했습니다.");
+          errors.push(itemError);
+          options.onError?.(itemError, keys[index]);
+          return undefined;
+        }
       };
+      const preparation = isSupportedImageInput(source)
+        ? enqueueImagePreparation(prepare).then((item) =>
+            item?.thumbnailPromise?.then(() => undefined),
+          )
+        : prepare();
+      return preparation.finally(() =>
+        options.signal?.removeEventListener("abort", abort),
+      );
     }),
   );
+
+  if (errors[0]) throw errors[0];
+
+  return prepared.filter((item): item is PreparedPostFile => Boolean(item));
 }
 
-/**
- * Supabase Storage의 signed URL에 `download` 쿼리를 붙인다.
- *
- * `<a download>`는 같은 출처에서만 동작한다. 첨부는 Storage 도메인에서 오므로 브라우저가
- * 속성을 무시하고 그냥 탭에서 열어버린다(PDF는 뷰어로, 나머지는 빈 화면으로). Storage가
- * 이 쿼리를 보면 `Content-Disposition: attachment`를 붙여 내려주므로, 저장 여부와 파일명
- * 모두 서버 응답이 결정하게 된다.
- */
+/** signed URL에 `download` 쿼리를 붙인다. Storage는 다른 출처라 `<a download>`가 무시되므로, 서버가 `Content-Disposition: attachment`를 내리게 한다. */
 export function toAttachmentDownloadUrl(
   signedUrl: string,
   filename: string,
@@ -90,5 +223,6 @@ export function imageDownloadName(imageId: string): string {
 }
 
 export function releasePostFile(file: PreparedPostFile): void {
+  file.abortPreparation?.();
   if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
 }

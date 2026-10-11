@@ -36,9 +36,8 @@ const SHELL = {
     role: "member",
     type: "student",
     status: "accepted",
-    avatar_url: null,
+    avatar_path: null,
   },
-  badges: {},
 } satisfies ShellData;
 
 function postRequest(entries: Record<string, string>): Request {

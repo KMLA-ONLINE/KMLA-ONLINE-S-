@@ -87,7 +87,7 @@ begin
   select post.* into post_record
   from public.posts as post
   where post.id = p_post_id
-    and post.published_at is not null and post.deleted_at is null;
+    and post.published_at is not null;
   if post_record.id is null then
     raise exception 'post not found' using errcode = 'P0002';
   end if;
@@ -124,7 +124,6 @@ begin
   from public.posts as post
   where post.id = p_post_id
     and post.published_at is not null
-    and post.deleted_at is null
   for update;
 
   if not found then

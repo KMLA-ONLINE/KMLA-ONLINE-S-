@@ -14,6 +14,7 @@ const group: GroupDetail = {
   join_policy: "invite_only",
   identity_policy: "identified",
   posting_policy: "members",
+  hide_staff_roles: false,
   icon_path: null,
   cover_path: null,
   member_count: 4,
@@ -26,14 +27,15 @@ const group: GroupDetail = {
 const invite: GroupInvite = {
   token: "0123456789abcdef0123456789abcdef",
   expires_at: "2026-09-01T09:00:00Z",
+  allowed_profile_types: ["student", "alumni"],
 };
 
 describe("InviteSettings", () => {
-  it("opens with a one-day link and nothing to revoke yet", () => {
+  it("opens with a one-hour link and nothing to revoke yet", () => {
     renderRoute(() => <InviteSettings group={group} invite={null} />);
 
     expect(screen.getByRole("combobox", { name: "유효 기간" })).toHaveValue(
-      "24",
+      "1",
     );
     expect(
       screen.getByRole("button", { name: "초대 링크 만들기" }),
@@ -44,6 +46,9 @@ describe("InviteSettings", () => {
     expect(
       screen.queryByRole("textbox", { name: "초대 링크" }),
     ).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "재학생" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "졸업생" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "교사" })).not.toBeChecked();
   });
 
   it("shows the address to hand out and when it dies", () => {
@@ -53,6 +58,23 @@ describe("InviteSettings", () => {
       `${window.location.origin}/invite/${invite.token}`,
     );
     expect(screen.getByText(/만료됩니다/)).toBeVisible();
+    expect(screen.getByText(/재학생·졸업생 가입 가능/)).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "재학생" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "졸업생" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "교사" })).not.toBeChecked();
+  });
+
+  it("requires at least one allowed profile type", async () => {
+    const { user } = renderRoute(() => (
+      <InviteSettings group={group} invite={null} />
+    ));
+
+    await user.click(screen.getByRole("checkbox", { name: "재학생" }));
+
+    expect(screen.getByText("한 유형 이상 선택해 주세요.")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "초대 링크 만들기" }),
+    ).toBeDisabled();
   });
 
   it("warns that a new link cuts off everyone holding the old one", async () => {

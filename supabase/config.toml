@@ -16,12 +16,8 @@ extra_search_path = ["public", "extensions"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
 # for accidental or malicious requests.
 max_rows = 1000
-# Controls whether new tables, views, sequences and functions created in the `public` schema by
-# `postgres` are reachable through the Data API roles (`anon`, `authenticated`, `service_role`)
-# without explicit GRANTs. When unset, new entities are NOT auto-exposed, matching the new cloud
-# default. Set to `true` to keep the legacy behaviour of auto-exposing new entities; this is
-# deprecated and the field is removed on 2026-10-30 once the always-revoked behaviour is permanent.
-# auto_expose_new_tables = true
+# Keep direct grants off by default; migrations grant each browser-facing RPC and table explicitly.
+auto_expose_new_tables = false
 
 [api.tls]
 # Enable HTTPS endpoints locally using a self-signed certificate.
@@ -134,6 +130,11 @@ file_size_limit = "4MiB"
 allowed_mime_types = ["image/webp"]
 
 [storage.buckets.profile-media]
+public = false
+file_size_limit = "4MiB"
+allowed_mime_types = ["image/webp"]
+
+[storage.buckets.story-media]
 public = false
 file_size_limit = "4MiB"
 allowed_mime_types = ["image/webp"]
@@ -416,7 +417,7 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-[functions.cleanup-post-attachments]
+[functions.cleanup-storage-objects]
 verify_jwt = false
 
 [functions.dispatch-notifications]

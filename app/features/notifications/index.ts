@@ -1,7 +1,11 @@
 export {
+  notificationBadgeQuery,
+  invalidateOpenedNotification,
+  notificationKeys,
+} from "~/features/notifications/data/cache";
+export {
   getMyGroupNotificationPreference,
   getNotificationPreferences,
-  getRecentUnreadNotificationCount,
   listMyGroupNotificationPreferences,
   listNotifications,
   loadNotificationPage,
@@ -9,7 +13,6 @@ export {
 } from "~/features/notifications/data/queries";
 export {
   markAllNotificationsRead,
-  markNotificationRead,
   updateGroupNotificationPreferences,
   updateNotificationPreferences,
 } from "~/features/notifications/data/mutations";
@@ -25,16 +28,11 @@ export {
   getNotificationCursor,
   groupNotifications,
   isDefaultGroupNotificationPreference,
-  NOTIFICATION_PAGE_SIZE,
   sanitizeNotificationDestination,
 } from "~/features/notifications/model/notifications";
 export type {
   NotificationCursor,
-  GroupNotificationGroupKind,
-  GroupNotificationLevel,
   GroupNotificationPreference,
   NotificationItem,
-  NotificationPage,
   NotificationPreferences,
-  PushSupport,
 } from "~/features/notifications/model/types";

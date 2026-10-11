@@ -1,10 +1,16 @@
+import {
+  withMentions,
+  type MentionCandidate,
+} from "~/features/posts/model/mentions";
 import type {
   CommentCursor,
   CommentImage,
   GroupCategory,
+  GroupPost,
   GroupPostDetail,
   GroupPostPage,
   GroupPostSearchResult,
+  AnonymousActivityRestriction,
   PostComment,
   PostCommentPage,
   PostCursor,
@@ -15,105 +21,130 @@ import type {
 } from "~/features/posts/model/types";
 import type { PostAttachment } from "~/features/posts/model/types";
 import { createPostAttachmentUrls } from "~/features/posts/data/files";
+import {
+  applyAttachmentUrls,
+  attachmentPaths,
+  readAttachmentsJson,
+  readCommentImagesJson,
+} from "~/features/posts/model/attachment-json";
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import { getSupabase } from "~/shared/supabase/client";
+import type { Json } from "~/shared/supabase/database.types";
 
-export const GROUP_POST_PAGE_SIZE = 12;
-export const PROFILE_POST_PAGE_SIZE = 12;
-export const POST_COMMENT_PAGE_SIZE = 20;
+const GROUP_POST_PAGE_SIZE = 12;
+const PROFILE_POST_PAGE_SIZE = 12;
+const POST_COMMENT_PAGE_SIZE = 20;
 
-export async function hydratePostComments(
-  comments: Omit<PostComment, "images">[],
-): Promise<PostComment[]> {
-  if (comments.length === 0) return [];
+export async function getMyGroupAnonymousActivityRestriction(
+  groupId: string,
+): Promise<AnonymousActivityRestriction | null> {
+  const { data, error } = await getSupabase().rpc(
+    "get_my_group_anonymous_activity_restriction",
+    { p_group_id: groupId },
+  );
+  if (error) throw error;
+  return data?.[0] ?? null;
+}
+
+type UnhydratedComment = Omit<PostComment, "images" | "author_avatar_url"> & {
+  /** 목록 RPC가 함께 내려준 이미지. 없으면(작성·수정 응답) `list_comment_images`로 따로 읽는다. */
+  images?: Json;
+};
+
+async function readCommentImages(
+  comments: UnhydratedComment[],
+): Promise<CommentImage[]> {
+  if (comments.every((comment) => comment.images !== undefined)) {
+    return comments.flatMap((comment) =>
+      readCommentImagesJson(comment.images, comment),
+    );
+  }
   const { data, error } = await getSupabase().rpc("list_comment_images", {
     p_comment_ids: comments.map((comment) => comment.comment_id),
   });
   if (error) throw error;
-  const rows = data ?? [];
-  const urls = await createPostAttachmentUrls(
-    rows.map((image) => image.object_path),
-  );
+  return (data ?? []).map((image) => ({ ...image, signedUrl: null }));
+}
+
+/** 댓글 한 묶음에 이미지와 작성자 아바타를 채운다. 두 버킷은 병렬로 서명하고 아바타는 `author_avatar_url`에만 채운다. */
+export async function hydratePostComments(
+  comments: UnhydratedComment[],
+): Promise<PostComment[]> {
+  if (comments.length === 0) return [];
+  const images = await readCommentImages(comments);
+  const [urls, avatarUrls] = await Promise.all([
+    createPostAttachmentUrls(images.map((image) => image.object_path)),
+    createProfileMediaUrls(
+      comments.map((comment) => comment.author_avatar_path),
+    ),
+  ]);
   return comments.map((comment) => ({
     ...comment,
-    images: rows
+    author_avatar_url: comment.author_avatar_path
+      ? (avatarUrls.get(comment.author_avatar_path) ?? null)
+      : null,
+    images: images
       .filter((image) => image.comment_id === comment.comment_id)
-      .map((image): CommentImage => ({
+      .map((image) => ({
         ...image,
         signedUrl: urls.get(image.object_path) ?? null,
       })),
   }));
 }
 
-async function attachFiles<T extends { post_id: string }>(
-  posts: T[],
-): Promise<(T & { attachments: PostAttachment[] })[]> {
-  if (posts.length === 0) return [];
-  const { data, error } = await getSupabase()
-    .from("post_attachments")
-    .select(
-      "id,post_id,storage_bucket,object_path,original_filename,position,mime_type,size_bytes,width,height,status,created_at,ready_at",
-    )
-    .in(
-      "post_id",
-      posts.map((post) => post.post_id),
-    )
-    .eq("status", "ready")
-    .order("position");
-  if (error) throw error;
-  const urls = await createPostAttachmentUrls(
-    (data ?? []).map((item) => item.object_path),
-  );
-  return posts.map((post) => ({
-    ...post,
-    attachments: (data ?? [])
-      .filter((item) => item.post_id === post.post_id)
-      .map((item) => ({
-        ...item,
-        attachment_id: item.id,
-        signedUrl: urls.get(item.object_path) ?? null,
-      })),
-  }));
+interface ProfileMediaPaths {
+  activity_media_path: string | null;
+  author_avatar_path: string | null;
 }
 
-async function attachProfileMedia<
-  T extends {
-    activity_media_path: string | null;
-    author_avatar_path: string | null;
-  },
->(posts: T[]): Promise<(T & { activity_media_url: string | null })[]> {
-  const urls = await createProfileMediaUrls(
-    posts.flatMap((post) => [
-      post.author_avatar_path,
-      post.activity_media_path,
-    ]),
-  );
+function profileMediaPaths(posts: readonly ProfileMediaPaths[]) {
+  return posts.flatMap((post) => [
+    post.author_avatar_path,
+    post.activity_media_path,
+  ]);
+}
 
-  return posts.map((post) => ({
+/** 결과는 `*_url`에만 담는다. 경로를 덮어쓰지 않으므로 다시 통과시켜도 같다(멱등). */
+function applyProfileMediaUrls<T extends ProfileMediaPaths>(
+  post: T,
+  urls: Map<string, string>,
+): T & { activity_media_url: string | null; author_avatar_url: string | null } {
+  return {
     ...post,
-    author_avatar_path: post.author_avatar_path
+    author_avatar_url: post.author_avatar_path
       ? (urls.get(post.author_avatar_path) ?? null)
       : null,
     activity_media_url: post.activity_media_path
       ? (urls.get(post.activity_media_path) ?? null)
       : null,
-  }));
+  };
 }
 
-export async function listPostAttachments(
-  postId: string,
-): Promise<PostAttachment[]> {
+async function listPostAttachments(postId: string): Promise<PostAttachment[]> {
   const { data, error } = await getSupabase().rpc("list_post_attachments", {
     p_post_id: postId,
   });
   if (error) throw error;
   const rows = data ?? [];
   const urls = await createPostAttachmentUrls(
-    rows.map((item) => item.object_path),
+    rows.flatMap((item) => [item.object_path, item.thumbnail_path]),
   );
   return rows.map((item) => ({
-    ...item,
+    attachment_id: item.attachment_id,
+    post_id: item.post_id,
+    storage_bucket: item.storage_bucket,
+    object_path: item.object_path,
+    original_filename: item.original_filename,
+    position: item.position,
+    mime_type: item.mime_type,
+    size_bytes: item.size_bytes,
+    width: item.width ?? null,
+    height: item.height ?? null,
     signedUrl: urls.get(item.object_path) ?? null,
+    thumbnail_path: item.thumbnail_path,
+    thumbnailUrl: item.thumbnail_path
+      ? (urls.get(item.thumbnail_path) ?? null)
+      : null,
   }));
 }
 
@@ -132,7 +163,11 @@ export async function listGroupCategories(
 
 export async function listGroupPosts(
   groupId: string,
-  options: { categoryId?: string | null; cursor?: PostCursor | null } = {},
+  options: {
+    categoryId?: string | null;
+    cursor?: PostCursor | null;
+    hydrateMedia?: boolean;
+  } = {},
 ): Promise<GroupPostPage> {
   const { data, error } = await getSupabase().rpc("list_group_posts", {
     p_group_id: groupId,
@@ -143,8 +178,18 @@ export async function listGroupPosts(
     p_limit: GROUP_POST_PAGE_SIZE + 1,
   });
   if (error) throw error;
-  const rows = data ?? [];
-  const posts = await attachFiles(rows.slice(0, GROUP_POST_PAGE_SIZE));
+  const rows = (data ?? []).map(withMentions);
+  // 첨부는 목록 RPC가 같이 내려준다. 서명은 아래에서 아바타와 함께 한 번에 한다.
+  const postsWithFiles = rows.slice(0, GROUP_POST_PAGE_SIZE).map((row) => ({
+    ...row,
+    attachments: readAttachmentsJson(row.attachments, row.post_id),
+  }));
+  const posts =
+    options.hydrateMedia === false
+      ? // 목록 보기는 아바타도 첨부도 그리지 않는다. 서명은 카드 보기로 바꿀 때
+        // `hydrateGroupPostMedia()`가 마저 채운다.
+        postsWithFiles.map((post) => ({ ...post, author_avatar_url: null }))
+      : await hydrateGroupPostMedia(postsWithFiles);
   const last = posts.at(-1);
   return {
     posts,
@@ -157,6 +202,28 @@ export async function listGroupPosts(
           }
         : null,
   };
+}
+
+/** 그룹 게시물 묶음에 첨부와 아바타의 signed URL을 채운다. 멱등하다 — 경로를 덮어쓰면 로더가 채운 첫 페이지를 다시 통과시킬 때 서명이 실패해 아바타가 사라진다. */
+export async function hydrateGroupPostMedia(
+  posts: Omit<GroupPost, "author_avatar_url">[],
+): Promise<GroupPostPage["posts"]> {
+  const [attachmentUrls, profileUrls] = await Promise.all([
+    createPostAttachmentUrls(
+      attachmentPaths(posts.flatMap((post) => post.attachments)),
+    ),
+    createProfileMediaUrls(posts.map((post) => post.author_avatar_path)),
+  ]);
+
+  return posts.map((post) => ({
+    ...post,
+    // 서명에 실패하면 null이다. 화면이 원시 object path를 그리면 <img src>가 상대 경로로
+    // 나가 깨진 이미지가 되고, null이어야 기본 실루엣으로 떨어진다.
+    author_avatar_url: post.author_avatar_path
+      ? (profileUrls.get(post.author_avatar_path) ?? null)
+      : null,
+    attachments: applyAttachmentUrls(post.attachments, attachmentUrls),
+  }));
 }
 
 export async function searchGroupPosts(
@@ -174,27 +241,33 @@ export async function searchGroupPosts(
   return data ?? [];
 }
 
+/**
+ * 첨부 목록은 게시물 RPC의 결과가 필요 없으므로 같이 띄운다. 기다렸다 부르면 상세를 열 때마다 왕복 하나가 더 붙는다.
+ * 게시물이 없으면 첨부 쪽 실패는 의미가 없으니 버린다 — 읽을 수 없는 글의 첨부 RPC는 거절될 수 있다.
+ */
+function startPostAttachments(postId: string): Promise<PostAttachment[]> {
+  const attachments = listPostAttachments(postId);
+  attachments.catch(() => undefined);
+  return attachments;
+}
+
 export async function getGroupPost(
   postId: string,
 ): Promise<GroupPostDetail | null> {
+  const attachments = startPostAttachments(postId);
   const { data, error } = await getSupabase().rpc("get_group_post", {
     p_post_id: postId,
   });
   if (error) throw error;
   const post = data?.[0];
   if (!post) return null;
-  return { ...post, attachments: await listPostAttachments(postId) };
+  const [hydrated] = await hydrateGroupPostMedia([
+    { ...withMentions(post), attachments: await attachments },
+  ]);
+  return hydrated;
 }
 
-/**
- * 프로필 타임라인 한 페이지 (기능 명세 §12.4).
- *
- * 그룹 목록과 같은 방식으로 한 건을 더 받아 다음 커서를 정한다. 고정 게시물이 없으므로
- * 커서는 `(published_at, post_id)` 두 값이면 충분하다.
- *
- * 타임라인을 화면과 같은 공개 ID로 가리키므로 loader가 프로필 조회를 기다리지 않는다 —
- * 프로필과 타임라인이 나란히 나간다.
- */
+/** 프로필 타임라인 한 페이지. 한 건을 더 받아 다음 커서를 정하며, 고정이 없어 커서는 `(published_at, post_id)`면 충분하다. */
 export async function listProfilePosts(
   timelinePubId: string,
   cursor?: ProfilePostCursor | null,
@@ -207,8 +280,26 @@ export async function listProfilePosts(
   });
   if (error) throw error;
   const rows = data ?? [];
-  const posts = await attachProfileMedia(
-    await attachFiles(rows.slice(0, PROFILE_POST_PAGE_SIZE)),
+  // 첨부는 목록 RPC가 같이 내려준다. 첨부와 아바타·프로필 미디어는 버킷이 달라 따로 서명하므로
+  // 나란히 띄운다. 하나씩 기다리면 타임라인을 열 때마다 서명 왕복이 하나 더 쌓인다.
+  const pagePosts = rows.slice(0, PROFILE_POST_PAGE_SIZE).map((row) => ({
+    ...row,
+    attachments: readAttachmentsJson(row.attachments, row.post_id),
+  }));
+  const [attachmentUrls, mediaUrls] = await Promise.all([
+    createPostAttachmentUrls(
+      attachmentPaths(pagePosts.flatMap((post) => post.attachments)),
+    ),
+    createProfileMediaUrls(profileMediaPaths(pagePosts)),
+  ]);
+  const posts = pagePosts.map((post) =>
+    applyProfileMediaUrls(
+      {
+        ...post,
+        attachments: applyAttachmentUrls(post.attachments, attachmentUrls),
+      },
+      mediaUrls,
+    ),
   );
   const last = posts.at(-1);
   return {
@@ -223,24 +314,21 @@ export async function listProfilePosts(
 export async function getProfilePost(
   postId: string,
 ): Promise<ProfilePost | null> {
+  const attachments = startPostAttachments(postId);
   const { data, error } = await getSupabase().rpc("get_profile_post", {
     p_post_id: postId,
   });
   if (error) throw error;
   const post = data?.[0];
   if (!post) return null;
-  const [hydrated] = await attachProfileMedia([
-    { ...post, attachments: await listPostAttachments(postId) },
-  ]);
-  return hydrated;
+  const mediaUrls = await createProfileMediaUrls(profileMediaPaths([post]));
+  return applyProfileMediaUrls(
+    { ...post, attachments: await attachments },
+    mediaUrls,
+  );
 }
 
-/**
- * 최상위 댓글 한 페이지.
- *
- * RPC는 오래된 댓글부터 화면 순서대로 돌려준다. 한 건을 더 받아 다음 페이지가 있는지만 확인하고,
- * 현재 페이지의 마지막 댓글을 다음 커서로 쓴다.
- */
+/** 최상위 댓글 한 페이지. 한 건을 더 받아 다음 페이지 유무를 확인하고 마지막 댓글을 커서로 쓴다. */
 export async function listPostComments(
   postId: string,
   cursor?: CommentCursor | null,
@@ -252,7 +340,7 @@ export async function listPostComments(
     p_limit: POST_COMMENT_PAGE_SIZE + 1,
   });
   if (error) throw error;
-  const rows = data ?? [];
+  const rows = (data ?? []).map(withMentions);
   const hasMore = rows.length > POST_COMMENT_PAGE_SIZE;
   const comments = await hydratePostComments(
     hasMore ? rows.slice(0, POST_COMMENT_PAGE_SIZE) : rows,
@@ -275,19 +363,16 @@ export async function listPostCommentReplies(
     p_root_comment_id: rootCommentId,
   });
   if (error) throw error;
-  return hydratePostComments(data ?? []);
+  return hydratePostComments((data ?? []).map(withMentions));
 }
 
-/**
- * 반응 참여자 목록 (기능 명세 §10.3). 요약을 누를 때만 부른다 — 목록 화면에서 게시물마다
- * 미리 받으면 반응 하나 보자고 페이지 전체가 무거워진다.
- */
+/** 반응 참여자 목록. 요약을 누를 때만 부른다. */
 export async function listPostReactors(postId: string): Promise<PostReactor[]> {
   const { data, error } = await getSupabase().rpc("list_post_reactors", {
     p_post_id: postId,
   });
   if (error) throw error;
-  return data ?? [];
+  return signReactorAvatars(data ?? []);
 }
 
 /** 댓글 반응 참여자 목록. 게시물과 같은 모양이라 같은 dialog가 받는다. */
@@ -298,5 +383,39 @@ export async function listCommentReactors(
     p_comment_id: commentId,
   });
   if (error) throw error;
-  return data ?? [];
+  return signReactorAvatars(data ?? []);
+}
+
+/** 두 반응자 목록이 같은 모양이라 서명도 한 곳에서 한다. */
+async function signReactorAvatars(
+  rows: Omit<PostReactor, "reactor_avatar_url">[],
+): Promise<PostReactor[]> {
+  const urls = await createProfileMediaUrls(
+    rows.map((row) => row.reactor_avatar_path),
+  );
+  return rows.map((row) => ({
+    ...row,
+    reactor_avatar_url: row.reactor_avatar_path
+      ? (urls.get(row.reactor_avatar_path) ?? null)
+      : null,
+  }));
+}
+
+/** 멘션 후보 한 페이지(기능 명세 §8.14). 정렬은 RPC가 정하고(선생님 먼저, 최근 기수순), 찾는 화면이라 커서 대신 검색어로 좁힌다. */
+export async function searchGroupMentionCandidates(
+  groupId: string,
+  query = "",
+): Promise<MentionCandidate[]> {
+  const { data, error } = await getSupabase().rpc(
+    "search_group_mention_candidates",
+    { p_group_id: groupId, p_query: query, p_limit: 30 },
+  );
+  if (error) throw error;
+  const rows = data ?? [];
+  const urls = await createProfileMediaUrls(rows.map((row) => row.avatar_path));
+  return rows.map((row) => ({
+    ...row,
+    cohort: row.cohort ?? null,
+    avatar_url: row.avatar_path ? (urls.get(row.avatar_path) ?? null) : null,
+  }));
 }

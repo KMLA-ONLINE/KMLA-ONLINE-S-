@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(65);
+select plan(79);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -67,6 +67,12 @@ from public.profiles as profile
 where membership.profile_id = profile.id
   and membership.group_id = '20000000-0000-0000-0000-000000000003';
 
+-- 복학생 표기와 검색을 확인하려면 명부와 가입 요청에 복학생이 있어야 한다.
+update public.profiles
+set is_returning_student = true
+where pub_id = 'saebyeok-24'
+  or auth_user_id = '10000000-0000-0000-0000-000000000001';
+
 insert into public.group_join_requests (group_id, profile_id, requested_at)
 values (
   '20000000-0000-0000-0000-000000000006',
@@ -87,7 +93,7 @@ select ok(
   'anonymous users cannot execute roster RPCs'
 );
 select ok(
-  has_function_privilege('authenticated', 'public.update_group_settings(uuid,text,text,public.group_join_policy,public.group_identity_policy,public.group_posting_policy)', 'EXECUTE'),
+  has_function_privilege('authenticated', 'public.update_group_settings(uuid,text,text,public.group_join_policy,public.group_identity_policy,public.group_posting_policy,boolean)', 'EXECUTE'),
   'settings RPC is explicitly granted to authenticated users'
 );
 
@@ -169,12 +175,121 @@ select is(
   'optional-anonymous roster searches cohorts'
 );
 select ok(
+  (
+    select is_returning_student
+    from public.list_group_members('20000000-0000-0000-0000-000000000004')
+    where pub_id = 'saebyeok-24'
+  ),
+  'roster reports returning students so the client can render n.5'
+);
+select is(
+  (
+    select count(*)
+    from public.list_group_members('20000000-0000-0000-0000-000000000004', '24.5')
+  ),
+  1::bigint,
+  'roster searches the displayed half cohort'
+);
+select is(
+  (
+    select count(*)
+    from public.list_group_members('20000000-0000-0000-0000-000000000003', '20.5')
+  ),
+  0::bigint,
+  'roster does not treat a whole cohort as a half cohort'
+);
+select ok(
   exists (
     select 1
     from public.list_group_members('20000000-0000-0000-0000-000000000004')
     where pub_id = 'saebyeok-24' and name = '박새벽' and avatar_path is not null
   ),
   'optional-anonymous roster exposes normal profile presentation fields'
+);
+select is(
+  (select hide_staff_roles from public.groups where id = '20000000-0000-0000-0000-000000000003'),
+  false,
+  'staff roles are visible by default'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
+set local role authenticated;
+
+select lives_ok(
+  $$select * from public.update_group_settings(
+    '20000000-0000-0000-0000-000000000003',
+    '메이커스 랩', '개발, 로보틱스, 제작 프로젝트를 함께 진행합니다.',
+    'open', 'optional_anonymous', 'members', true
+  )$$,
+  'owner can hide staff roles from the roster'
+);
+select is(
+  (select hide_staff_roles from public.groups where id = '20000000-0000-0000-0000-000000000003'),
+  true,
+  'staff-role visibility setting is stored'
+);
+select is(
+  (
+    select array_agg(role order by role, joined_at, membership_id)
+    from public.list_group_members('20000000-0000-0000-0000-000000000003')
+  ),
+  array['owner', 'admin', 'manager', 'member']::public.group_member_role[],
+  'owner still sees every actual roster role'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+set local role authenticated;
+
+select is(
+  (
+    select array_agg(role order by role, joined_at, membership_id)
+    from public.list_group_members('20000000-0000-0000-0000-000000000003')
+  ),
+  array['owner', 'admin', 'manager', 'member']::public.group_member_role[],
+  'administrator still sees every actual roster role'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000004', true);
+set local role authenticated;
+
+select is(
+  (
+    select array_agg(role order by joined_at, membership_id)
+    from public.list_group_members('20000000-0000-0000-0000-000000000003')
+  ),
+  array['member', 'member', 'member', 'member']::public.group_member_role[],
+  'manager receives every roster member with the neutral role and join ordering'
+);
+select ok(
+  (
+    select pub_id = 'hanbyeol-25'
+      and name = '이한별'
+      and avatar_path is not null
+      and role = 'member'
+    from public.list_group_members('20000000-0000-0000-0000-000000000003', '이한별')
+  ),
+  'manager can search a hidden administrator while receiving only the neutral role'
+);
+select is(
+  (
+    with first_page as (
+      select * from public.list_group_members(
+        '20000000-0000-0000-0000-000000000003', '', null, null, null, 2
+      )
+    ), cursor_row as (
+      select * from first_page order by joined_at desc, membership_id desc limit 1
+    )
+    select count(*) from cursor_row,
+    lateral public.list_group_members(
+      '20000000-0000-0000-0000-000000000003', '', cursor_row.role,
+      cursor_row.joined_at, cursor_row.membership_id, 30
+    )
+  ),
+  2::bigint,
+  'neutral-role roster cursor continues in joined order without duplicates'
 );
 select throws_ok(
   $$select * from public.list_group_join_requests('20000000-0000-0000-0000-000000000004')$$,
@@ -194,6 +309,13 @@ select is(
   ),
   '홍길동',
   'identified join requests expose the safe profile presentation'
+);
+select ok(
+  (
+    select is_returning_student
+    from public.list_group_join_requests('20000000-0000-0000-0000-000000000006')
+  ),
+  'join requests report returning students so the client can render n.5'
 );
 select lives_ok(
   $$select public.approve_group_join_request(
@@ -234,7 +356,7 @@ select ok(
 select throws_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000004',
-    '기숙사 이야기', '', 'open', 'optional_anonymous', 'members'
+    '기숙사 이야기', '', 'open', 'optional_anonymous', 'members', false
   )$$,
   '55000',
   'pending join requests must be resolved first',
@@ -280,13 +402,13 @@ set local role authenticated;
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000004',
-    '새 기숙사 이야기', '새 설명', 'open', 'optional_anonymous', 'staff'
+    '새 기숙사 이야기', '새 설명', 'open', 'optional_anonymous', 'staff', false
   )$$,
   'settings can change after requests are resolved'
 );
 select is(
   (select slug from public.groups where id = '20000000-0000-0000-0000-000000000004'),
-  'dorm-stories',
+  '3c7e1a9b5d2f40',
   'settings keep the slug immutable'
 );
 select is(
@@ -380,14 +502,14 @@ select is(
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000003',
-    '메이커스 랩', '실명 전용 전환', 'open', 'identified', 'members'
+    '메이커스 랩', '실명 전용 전환', 'open', 'identified', 'members', true
   )$$,
   'admin can change group settings'
 );
 select throws_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000003',
-    '메이커스 랩', '비공개 복귀', 'invite_only', 'identified', 'members'
+    '메이커스 랩', '비공개 복귀', 'invite_only', 'identified', 'members', true
   )$$,
   '55000',
   'public groups cannot become private',
@@ -396,22 +518,23 @@ select throws_ok(
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000001',
-    '학교 공지', '기본 정보 변경', 'open', 'identified', 'staff'
+    '학교 공지', '기본 정보 변경', 'open', 'identified', 'staff', false
   )$$,
   'an official group admin can save its settings'
 );
--- 공식 그룹이라는 이유만으로 정책을 잠그지는 않는다. 남는 제약은 그룹의 현재 상태에서 나온다.
-select lives_ok(
+-- 공식 그룹은 공개 그룹이고, 공개 그룹은 비공개 정책으로 갈 수 없다(§7.5).
+select throws_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000001',
-    '학교 공지', '정책 변경', 'request', 'identified', 'staff'
+    '학교 공지', '정책 변경', 'request', 'identified', 'staff', false
   )$$,
-  'official group policies can change too'
+  '55000', 'public groups cannot become private',
+  'an official group cannot become a private request group'
 );
 select is(
   (select join_policy from public.groups where id = '20000000-0000-0000-0000-000000000001'),
-  'request'::public.group_join_policy,
-  'the official group keeps its new join policy'
+  'open'::public.group_join_policy,
+  'the official group stays open'
 );
 
 -- 정책은 바꿀 수 있어도 그룹 자체를 없앨 수는 없다. 승인된 재학생이 자동으로 가입하는 공간이
@@ -431,7 +554,7 @@ set local role authenticated;
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000001',
-    '학교 공지', '선택 익명 전환', 'request', 'optional_anonymous', 'staff'
+    '학교 공지', '선택 익명 전환', 'open', 'optional_anonymous', 'staff', false
   )$$,
   'an official group can enable optional anonymity'
 );
@@ -444,7 +567,7 @@ select is(
 select lives_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000003',
-    '메이커스 랩', '선택 익명 복귀', 'open', 'optional_anonymous', 'members'
+    '메이커스 랩', '선택 익명 복귀', 'open', 'optional_anonymous', 'members', true
   )$$,
   'identity policy can change back to optional-anonymous'
 );
@@ -465,7 +588,7 @@ set local role authenticated;
 select throws_ok(
   $$select * from public.update_group_settings(
     '20000000-0000-0000-0000-000000000003',
-    '권한 없음', '', 'open', 'identified', 'members'
+    '권한 없음', '', 'open', 'identified', 'members', true
   )$$,
   '42501',
   'group administrator required',
@@ -605,12 +728,31 @@ select is(
   0::bigint,
   'deleting a group drops every membership'
 );
+-- 삭제 알림만 그룹 이름을 제목에 싣는다. 행이 사라진 뒤에는 알림함이 이름을 붙일 수 없기
+-- 때문이다(삭제 및 보존 정책 §5.2).
 select ok(
-  (
-    select deleted_at is not null from public.groups
+  exists (
+    select 1 from public.notifications
+    where kind = 'group_deleted'
+      and group_id is null
+      and title like '%그룹이 영구 삭제되었습니다.'
+      and title like '%주말 산책단%'
+  ),
+  'group deletion names the group in the title because the row is gone'
+);
+select ok(
+  not exists (
+    select 1 from public.notifications
+    where group_id = '20000000-0000-0000-0000-000000000005'
+  ),
+  'notifications that pointed at the group are cleared with it'
+);
+select ok(
+  not exists (
+    select 1 from public.groups
     where id = '20000000-0000-0000-0000-000000000005'
   ),
-  'the group row survives as a tombstone so storage cleanup still has its targets'
+  'the group row leaves outright once its media paths are queued'
 );
 
 reset role;
@@ -665,11 +807,11 @@ select is(
   'admin deletion removes every official-group membership'
 );
 select ok(
-  (
-    select deleted_at is not null from public.groups
+  not exists (
+    select 1 from public.groups
     where id = '50000000-0000-0000-0000-000000000006'
   ),
-  'admin deletion leaves the official group as a storage-cleanup tombstone'
+  'admin deletion removes the official group row too'
 );
 
 select * from finish();

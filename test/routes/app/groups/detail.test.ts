@@ -7,6 +7,10 @@ const mutations = vi.hoisted(() => ({
   setGroupMemberRole: vi.fn(),
   transferGroupOwnership: vi.fn(),
   updateGroupSettings: vi.fn(),
+  loadGroupDetail: vi.fn(),
+  listGroupCategories: vi.fn(),
+  listGroupPosts: vi.fn(),
+  markGroupPostsVisited: vi.fn(),
 }));
 
 vi.mock("~/features/groups", async (importOriginal) => ({
@@ -14,7 +18,51 @@ vi.mock("~/features/groups", async (importOriginal) => ({
   ...mutations,
 }));
 
-import { clientAction, shouldRevalidate } from "~/routes/app/groups/detail";
+vi.mock("~/features/posts", async (importOriginal) => ({
+  ...(await importOriginal()),
+  listGroupCategories: mutations.listGroupCategories,
+  listGroupPosts: mutations.listGroupPosts,
+}));
+
+import { groupKeys } from "~/features/groups";
+import {
+  clientAction,
+  clientLoader,
+  shouldRevalidate,
+} from "~/routes/app/groups/detail";
+import { getQueryClient } from "~/shared/lib/query-client";
+
+const group = {
+  id: "group-id",
+  group_id: "group-id",
+  slug: "test",
+  name: "테스트 그룹",
+  description: "",
+  kind: "official",
+  join_policy: "open",
+  identity_policy: "identified",
+  posting_policy: "members",
+  hide_staff_roles: false,
+  icon_path: null,
+  cover_path: null,
+  member_count: 1,
+  membership_state: "member",
+  member_role: "member",
+  requested_at: null,
+  pinned_at: null,
+} as const;
+
+function load(pathname: string) {
+  const url = new URL(`https://example.com${pathname}`);
+  return clientLoader({
+    request: new Request(url),
+    params: { slug: "test" },
+    context: new RouterContextProvider(),
+    url,
+    pattern: "/groups/:slug",
+    serverLoader: () => Promise.resolve(undefined),
+  });
+}
 
 function action(body: URLSearchParams) {
   return clientAction({
@@ -31,7 +79,10 @@ function action(body: URLSearchParams) {
 }
 
 describe("group detail management action", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getQueryClient().clear();
+  });
 
   it("dispatches member moderation and ownership intents", async () => {
     await action(
@@ -76,12 +127,14 @@ describe("group detail management action", () => {
     const result = await action(
       new URLSearchParams({
         intent: "update-settings",
+        settingsSection: "posting",
         groupId: "group",
         name: "새 이름",
         description: "설명",
         joinPolicy: "request",
         identityPolicy: "optional_anonymous",
         postingPolicy: "staff",
+        hideStaffRoles: "true",
       }),
     );
     expect(result).toMatchObject({ data: { ok: true } });
@@ -91,6 +144,7 @@ describe("group detail management action", () => {
       joinPolicy: "request",
       identityPolicy: "optional_anonymous",
       postingPolicy: "staff",
+      hideStaffRoles: true,
     });
   });
 
@@ -115,17 +169,227 @@ describe("group detail management action", () => {
     const result = await action(
       new URLSearchParams({
         intent: "update-settings",
+        settingsSection: "posting",
         groupId: "group",
         name,
         description,
         joinPolicy: "request",
         identityPolicy: "identified",
         postingPolicy: "members",
+        hideStaffRoles: "false",
       }),
     );
 
     expect(result).toMatchObject({ init: { status: 400 } });
     expect(mutations.updateGroupSettings).not.toHaveBeenCalled();
+  });
+});
+
+describe("group detail loader", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getQueryClient().clear();
+    mutations.loadGroupDetail.mockResolvedValue(group);
+    mutations.listGroupCategories.mockResolvedValue([]);
+    mutations.markGroupPostsVisited.mockResolvedValue(undefined);
+  });
+
+  // 목록은 그룹 ID만 있으면 된다. 아이콘·커버 서명 왕복이 끝나기를 기다리면 그만큼 늦게 출발한다.
+  it("starts the post list before the group media is signed", async () => {
+    let finishDetail: (value: typeof group) => void = () => undefined;
+    mutations.loadGroupDetail.mockImplementation(
+      (
+        _slug: string,
+        options: {
+          onFound?: (row: {
+            group_id: string;
+            membership_state: string;
+          }) => void;
+        },
+      ) => {
+        options.onFound?.({ group_id: "group-id", membership_state: "member" });
+        return new Promise((resolve) => {
+          finishDetail = resolve;
+        });
+      },
+    );
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+
+    const loading = load("/groups/test");
+    await vi.waitFor(() => {
+      expect(mutations.listGroupPosts).toHaveBeenCalledOnce();
+    });
+    expect(mutations.listGroupCategories).toHaveBeenCalledOnce();
+
+    finishDetail(group);
+    await loading;
+    // 진행 중이던 요청을 이어받는다. 같은 목록을 두 번 부르지 않는다.
+    expect(mutations.listGroupPosts).toHaveBeenCalledOnce();
+    expect(mutations.listGroupCategories).toHaveBeenCalledOnce();
+  });
+
+  it("loads the background post list for a direct post detail", async () => {
+    const page = { posts: [{ post_id: "post-id" }], nextCursor: null };
+    mutations.listGroupPosts.mockResolvedValue(page);
+
+    const result = await load("/groups/test/posts/post-id");
+
+    expect(mutations.listGroupPosts).toHaveBeenCalledWith("group-id", {
+      hydrateMedia: expect.any(Boolean),
+    });
+    expect(result.posts).toBeInstanceOf(Promise);
+    await expect(result.posts).resolves.toEqual({ page, categories: [] });
+  });
+
+  // 상세는 카테고리를 쓰지 않는다. 글쓰기·수정은 부모의 카테고리를 그대로 쓰므로 기다린다.
+  it("waits for categories only on the editor child routes", async () => {
+    const category = { id: "category-id", name: "공지" };
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    mutations.listGroupCategories.mockReturnValue(new Promise(() => undefined));
+
+    const detail = await load("/groups/test/posts/post-id");
+    expect(detail.categories).toEqual([]);
+
+    getQueryClient().clear();
+    mutations.listGroupCategories.mockResolvedValue([category]);
+    const editor = await load("/groups/test/posts/post-id/edit");
+    expect(editor.categories).toEqual([category]);
+  });
+
+  // 목록은 dialog 뒤에 깔릴 뿐이라, 상세가 목록 RPC를 기다리면 열리는 시간이 그만큼 늘어난다.
+  it("does not hold a direct post detail on the post list", async () => {
+    mutations.listGroupPosts.mockReturnValue(new Promise(() => undefined));
+
+    const result = await load("/groups/test/posts/post-id");
+
+    expect(result.group).toBe(group);
+    expect(result.posts).toBeInstanceOf(Promise);
+  });
+
+  it("keeps a direct post detail when the background post list fails", async () => {
+    mutations.listGroupPosts.mockRejectedValue(new Error("offline"));
+
+    const result = await load("/groups/test/posts/post-id");
+
+    await expect(result.posts).resolves.toBeNull();
+  });
+
+  it("marks posts visited only when the group post list itself loads", async () => {
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+
+    await load("/groups/test/posts/post-id");
+    expect(mutations.markGroupPostsVisited).not.toHaveBeenCalled();
+
+    await load("/groups/test");
+    expect(mutations.markGroupPostsVisited).toHaveBeenCalledWith("group-id");
+  });
+
+  it("clears this group's home badge without waiting for the visit RPC", async () => {
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    // 끝나지 않는 RPC — 배지는 응답을 기다리지 않고 내려가야 한다.
+    mutations.markGroupPostsVisited.mockReturnValue(
+      new Promise<void>(() => undefined),
+    );
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(groupKeys.home(), [
+      { group_id: "group-id", new_post_count: 3 },
+      { group_id: "other-id", new_post_count: 5 },
+    ]);
+
+    await load("/groups/test");
+
+    expect(queryClient.getQueryData(groupKeys.home())).toEqual([
+      { group_id: "group-id", new_post_count: 0 },
+      { group_id: "other-id", new_post_count: 5 },
+    ]);
+  });
+
+  // 성공하면 캐시가 이미 서버와 같다. 무효화하면 그룹에서 목록으로 돌아올 때마다 네 요청을 다시 기다린다.
+  it("keeps the home cache fresh when the visit RPC succeeds", async () => {
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(groupKeys.home(), [
+      { group_id: "group-id", new_post_count: 3 },
+    ]);
+
+    await load("/groups/test");
+    await vi.waitFor(() =>
+      expect(mutations.markGroupPostsVisited).toHaveBeenCalled(),
+    );
+    // 방문 저장의 후속 처리가 끝날 틈을 준다.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(queryClient.getQueryState(groupKeys.home())?.isInvalidated).toBe(
+      false,
+    );
+  });
+
+  it("re-reads the home counts when the visit RPC fails", async () => {
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    mutations.markGroupPostsVisited.mockRejectedValue(new Error("offline"));
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(groupKeys.home(), [
+      { group_id: "group-id", new_post_count: 3 },
+    ]);
+
+    await load("/groups/test");
+    await vi.waitFor(() =>
+      expect(queryClient.getQueryState(groupKeys.home())?.isInvalidated).toBe(
+        true,
+      ),
+    );
+  });
+
+  it("does not block optional-anonymous group content on a restriction lookup", async () => {
+    mutations.loadGroupDetail.mockResolvedValue({
+      ...group,
+      identity_policy: "optional_anonymous",
+    });
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+
+    const result = await load("/groups/test");
+
+    expect(result.posts).toEqual({ posts: [], nextCursor: null });
+    expect(result).not.toHaveProperty("anonymousActivityRestriction");
+  });
+
+  it("checks current membership again after a focused group route invalidates access cache", async () => {
+    await load("/groups/test");
+    await getQueryClient().invalidateQueries({
+      queryKey: groupKeys.all,
+      refetchType: "none",
+    });
+
+    await load("/groups/test");
+
+    expect(mutations.loadGroupDetail).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns a refreshed post list while a detail modal is open", async () => {
+    const initialPage = {
+      posts: [{ post_id: "old-post" }],
+      nextCursor: null,
+    };
+    const refreshedPage = {
+      posts: [{ post_id: "new-post" }, { post_id: "old-post" }],
+      nextCursor: null,
+    };
+    mutations.listGroupPosts
+      .mockResolvedValueOnce(initialPage)
+      .mockResolvedValueOnce(refreshedPage);
+
+    await load("/groups/test");
+    await getQueryClient().invalidateQueries({
+      queryKey: groupKeys.postPages("group-id"),
+      refetchType: "none",
+    });
+    const result = await load("/groups/test/posts/new-post");
+
+    expect(mutations.listGroupPosts).toHaveBeenCalledTimes(2);
+    await expect(result.posts).resolves.toEqual({
+      page: refreshedPage,
+      categories: [],
+    });
   });
 });
 
@@ -150,5 +414,27 @@ describe("group detail revalidation", () => {
         nextUrl: new URL("https://example.com/groups/test?tab=members"),
       } as never),
     ).toBe(true);
+  });
+
+  it("preserves the parent snapshot when opening and closing a post", () => {
+    expect(
+      shouldRevalidate({
+        currentUrl: new URL("https://example.com/groups/test"),
+        nextUrl: new URL("https://example.com/groups/test/posts/post-id"),
+      } as never),
+    ).toBe(false);
+    expect(
+      shouldRevalidate({
+        currentUrl: new URL("https://example.com/groups/test/posts/post-id"),
+        nextUrl: new URL("https://example.com/groups/test"),
+      } as never),
+    ).toBe(false);
+  });
+
+  it("allows an explicit refresh while a post is open", () => {
+    const url = new URL("https://example.com/groups/test/posts/post-id");
+    expect(shouldRevalidate({ currentUrl: url, nextUrl: url } as never)).toBe(
+      true,
+    );
   });
 });

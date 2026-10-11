@@ -8,6 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   resolveNotificationDestination: vi.fn(),
+  prefetchShellData: vi.fn(),
+  discardPrefetchedShellData: vi.fn(),
+}));
+
+vi.mock("~/features/app-shell/data/queries", () => ({
+  prefetchShellData: mocks.prefetchShellData,
+  discardPrefetchedShellData: mocks.discardPrefetchedShellData,
 }));
 
 vi.mock("~/features/notifications", async (importOriginal) => ({
@@ -15,6 +22,7 @@ vi.mock("~/features/notifications", async (importOriginal) => ({
   resolveNotificationDestination: mocks.resolveNotificationDestination,
 }));
 
+import { getQueryClient } from "~/shared/lib/query-client";
 import NotificationOpenRoute, {
   clientLoader,
 } from "~/routes/notification-open";
@@ -85,6 +93,64 @@ describe("notification open route", () => {
     Reflect.deleteProperty(window.history, "length");
   });
 
+  /**
+   * 회귀: 그룹을 본 지 2분이 안 됐으면 상세 밑에 깔리는 그룹 loader가 캐시된 옛 목록을 썼다. 상세를
+   * 닫으면 그 목록이 남아, 알림으로 연 새 글이 그룹에서 안 보였다.
+   */
+  it("marks cached group post lists stale before opening the destination", async () => {
+    mocks.resolveNotificationDestination.mockResolvedValue(
+      "/groups/test/posts/post-id",
+    );
+    const key = [
+      "groups",
+      "posts",
+      "group-id",
+      { categoryId: null, cursor: null },
+    ];
+    getQueryClient().setQueryData(key, { posts: [], nextCursor: null });
+
+    await load();
+
+    expect(getQueryClient().getQueryState(key)?.isInvalidated).toBe(true);
+  });
+
+  // 목적지는 게이트 아래에 있다. 셸 데이터를 목적지 RPC 뒤에 읽으면 왕복이 줄로 선다.
+  it("starts the shell data before resolving the destination", async () => {
+    let resolveDestination: (value: string) => void = () => undefined;
+    mocks.resolveNotificationDestination.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveDestination = resolve;
+      }),
+    );
+
+    const loading = load();
+    expect(mocks.prefetchShellData).toHaveBeenCalledOnce();
+
+    resolveDestination("/noti");
+    await loading;
+    // 게이트로 가는 길에서는 게이트가 넘겨받아야 한다.
+    expect(mocks.discardPrefetchedShellData).not.toHaveBeenCalled();
+  });
+
+  // 게이트로 가지 않는 길에서 남긴 값은, 뒤에 다른 이유로 돈 게이트가 넘겨받아 낡은 프로필을 보인다.
+  it("discards the prefetched shell data when it will not reach the gate", async () => {
+    mocks.resolveNotificationDestination.mockResolvedValue(null);
+    await redirection();
+    expect(mocks.discardPrefetchedShellData).toHaveBeenCalledOnce();
+
+    mocks.resolveNotificationDestination.mockRejectedValue(new Error("down"));
+    await expect(load()).rejects.toThrow("down");
+    expect(mocks.discardPrefetchedShellData).toHaveBeenCalledTimes(2);
+
+    // 목적지는 풀었지만 그 뒤 단계가 실패해도 게이트로 가지 않는다.
+    mocks.resolveNotificationDestination.mockResolvedValue("/noti");
+    vi.spyOn(getQueryClient(), "invalidateQueries")
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("cache"));
+    await expect(load()).rejects.toThrow("cache");
+    expect(mocks.discardPrefetchedShellData).toHaveBeenCalledTimes(3);
+  });
+
   it("redirects an authenticated user only to a safe resolved path", async () => {
     mocks.resolveNotificationDestination.mockResolvedValue("//evil.example");
 
@@ -104,10 +170,18 @@ describe("notification open route", () => {
     expect(replaces(await redirection())).toBe(true);
   });
 
-  it("returns to the inbox after closing a post opened from the inbox", async () => {
+  /**
+   * 게시물은 그룹 위에 오버레이로 열리고 닫기는 바로 밑 entry를 드러낸다. 알림함에서 열었다면
+   * 그 자리가 알림함이라, 부모를 끼워 넣지 않으면 글이 놓여 있던 그룹으로 갈 방법이 없다.
+   */
+  /**
+   * 알림을 한 번 눌렀으면 entry도 하나여야 한다. 게시물이 그룹 위에 얹히는 오버레이라는 이유로
+   * 그룹을 끼워 넣으면, 가본 적 없는 화면이 뒤로가기에서 나오고 알림함은 두 번 눌러야 나온다.
+   */
+  it("returns to the inbox from a post opened there", async () => {
     function Post() {
       const navigate = useNavigate();
-      return <button onClick={() => void navigate(-1)}>게시물 닫기</button>;
+      return <button onClick={() => void navigate(-1)}>뒤로</button>;
     }
     const Stub = createRoutesStub([
       { path: "/noti", Component: () => <p>알림함</p> },
@@ -121,19 +195,46 @@ describe("notification open route", () => {
 
     render(
       <Stub
-        initialEntries={[
-          "/noti",
-          {
-            pathname: "/noti/open/notification-id",
-            state: { fromNotificationInbox: true },
-          },
-        ]}
+        initialEntries={["/noti", "/noti/open/notification-id"]}
         initialIndex={1}
       />,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "게시물 닫기" }));
+    fireEvent.click(await screen.findByRole("button", { name: "뒤로" }));
     expect(await screen.findByText("알림함")).toBeVisible();
+    expect(seeded.replaced).toEqual([]);
+    expect(seeded.pushed).toEqual([]);
+  });
+
+  /**
+   * 앱이 떠 있는 채로 push를 누르면 서비스 워커가 그 창을 이 route로 보낸다. 사용자가 보던
+   * 화면이 밑에 그대로 있으므로 뒤로가기는 그리로 돌아가야 한다 — 목적지가 오버레이인지는
+   * 상관이 없다.
+   */
+  it("leaves the screen the user was on under a push-opened post", async () => {
+    function Post() {
+      const navigate = useNavigate();
+      return <button onClick={() => void navigate(-1)}>뒤로</button>;
+    }
+    const Stub = createRoutesStub([
+      { path: "/messenger", Component: () => <p>메신저</p> },
+      {
+        path: "/noti/open/:notificationId",
+        Component: NotificationOpenRoute,
+        loader: () => ({ target: "/groups/study/posts/post-id" }),
+      },
+      { path: "/groups/study/posts/post-id", Component: Post },
+    ]);
+
+    render(
+      <Stub
+        initialEntries={["/messenger", "/noti/open/notification-id"]}
+        initialIndex={1}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "뒤로" }));
+    expect(await screen.findByText("메신저")).toBeVisible();
     expect(seeded.replaced).toEqual([]);
     expect(seeded.pushed).toEqual([]);
   });

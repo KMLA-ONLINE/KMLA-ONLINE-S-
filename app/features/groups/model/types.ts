@@ -11,6 +11,8 @@ export type GroupIdentityPolicy =
 export type GroupPostingPolicy =
   Database["public"]["Enums"]["group_posting_policy"];
 export type GroupMemberRole = Database["public"]["Enums"]["group_member_role"];
+export type GroupInviteProfileType =
+  Database["public"]["Enums"]["profile_type"];
 
 export type GroupMembershipState = "member" | "requested" | "none";
 export type GroupHomeSection = "official" | "mine";
@@ -36,6 +38,7 @@ export type GroupHomeItem = GroupSummary & {
   membership_state: GroupMembershipState;
   member_role: GroupMemberRole | null;
   pinned_at: string | null;
+  new_post_count: number;
 };
 
 export type DiscoverGroupItem = Omit<
@@ -77,6 +80,7 @@ export interface GroupMemberPage {
 
 export type GroupDetail = GroupSummary & {
   group_id: GroupRow["id"];
+  hide_staff_roles: boolean;
   membership_state: GroupMembershipState;
   member_role: GroupMemberRole | null;
   requested_at: string | null;
@@ -91,6 +95,7 @@ export interface CreateGroupValues {
   joinPolicy: GroupJoinPolicy;
   identityPolicy: GroupIdentityPolicy;
   postingPolicy: GroupPostingPolicy;
+  hideStaffRoles: boolean;
 }
 
 /** Presentation-safe member row returned by `list_group_members`. */
@@ -99,9 +104,12 @@ export interface GroupMember {
   role: GroupMemberRole;
   joined_at: string;
   cohort: number | null;
+  is_returning_student: boolean;
   pub_id: string;
   name: string;
   avatar_path: string | null;
+  /** 서명된 아바타 URL. 화면은 이쪽만 읽는다. */
+  avatar_url: string | null;
 }
 
 /** Presentation-safe pending request returned by `list_group_join_requests`. */
@@ -109,21 +117,19 @@ export interface GroupJoinRequest {
   request_id: string;
   requested_at: string;
   cohort: number | null;
+  is_returning_student: boolean;
   pub_id: string;
   name: string;
   avatar_path: string | null;
+  /** 서명된 아바타 URL. 화면은 이쪽만 읽는다. */
+  avatar_url: string | null;
 }
 
 /** 그룹당 하나만 살아 있는 초대 링크. 재발급하면 이전 토큰은 사라진다. */
 export type GroupInvite =
   Database["public"]["Functions"]["get_group_invite"]["Returns"][number];
 
-/**
- * 링크를 받은 사람에게 보여 줄 만큼의 그룹 정보.
- *
- * 아이콘과 커버가 없는 것은 빠뜨린 게 아니다. 저장소 정책이 비멤버에게 비공개 그룹의 이미지를
- * 내주지 않고, 미리보기 한 장 때문에 그 정책을 넓히지 않기로 했다.
- */
+/** 링크를 받은 사람에게 보일 그룹 정보. 아이콘·커버가 없는 건 저장소 정책이 비멤버에게 이미지를 주지 않기 때문이다. */
 export type GroupInvitePreview =
   Database["public"]["Functions"]["get_group_invite_preview"]["Returns"][number];
 
@@ -133,6 +139,7 @@ export interface UpdateGroupSettingsValues {
   joinPolicy: GroupJoinPolicy;
   identityPolicy: GroupIdentityPolicy;
   postingPolicy: GroupPostingPolicy;
+  hideStaffRoles: boolean;
 }
 
 export type GroupMediaSlot = Database["public"]["Enums"]["group_media_slot"];

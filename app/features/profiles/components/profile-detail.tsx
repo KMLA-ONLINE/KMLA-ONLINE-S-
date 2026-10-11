@@ -7,15 +7,24 @@ import {
   MailIcon,
   PencilIcon,
   PhoneIcon,
+  ShieldCheckIcon,
   UserRoundIcon,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 
-import { ProfilePostsPanel, type ProfilePostPage } from "~/features/posts";
+import {
+  PostListSkeleton,
+  ProfilePostsPanel,
+  type ProfilePostPage,
+} from "~/features/posts";
+import { Deferred } from "~/shared/components/deferred";
 import { ProfileMediaEditor } from "~/features/profiles/components/profile-media-editor";
+import { formatCohort } from "~/features/profiles/model/format";
 import type { AcceptedProfile } from "~/features/profiles/model/types";
+import type { ViewerImage } from "~/shared/components/image-viewer";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 import { Button, buttonVariants } from "~/shared/ui/button";
@@ -39,6 +48,62 @@ interface ProfileFact {
   value: string | null;
   icon: ReactNode;
   href?: string;
+  /** 있으면 처음에는 이 값을 대신 보여주고, 눌러야 `value`가 드러난다. */
+  masked?: string;
+}
+
+interface ProfileFactGroup {
+  /** 화면에 그리지 않고 접근성 트리에서만 묶음을 구분한다. */
+  label: string;
+  facts: ProfileFact[];
+}
+
+/**
+ * 연락처를 가린다(기능 명세 §12.1). 전화번호는 뒷 네 자리, 이메일은 도메인을 남겨 본인 확인 단서를 둔다.
+ * 화면 표시 규칙일 뿐 `get_accepted_profile`은 원본을 내려준다.
+ */
+function maskPhoneNumber(value: string) {
+  const digitCount = value.replace(/\D/g, "").length;
+  let seen = 0;
+
+  return value.replace(/\d/g, (digit) => {
+    seen += 1;
+    return seen > digitCount - 4 ? digit : "•";
+  });
+}
+
+function maskEmail(value: string) {
+  const at = value.lastIndexOf("@");
+  if (at <= 0) return "•••";
+
+  return `${value.slice(0, Math.min(2, at))}•••${value.slice(at)}`;
+}
+
+function ProfileFactValue({ fact }: { fact: ProfileFact }) {
+  const [revealed, setRevealed] = useState(false);
+
+  if (fact.masked !== undefined && !revealed) {
+    return (
+      <button
+        type="button"
+        aria-label={`${fact.label} 보기`}
+        onClick={() => setRevealed(true)}
+        className="cursor-pointer rounded-sm tracking-wide text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        {fact.masked}
+      </button>
+    );
+  }
+
+  if (fact.href) {
+    return (
+      <a href={fact.href} className="hover:underline">
+        {fact.value}
+      </a>
+    );
+  }
+
+  return fact.value;
 }
 
 function formatBirthday(value: string) {
@@ -46,13 +111,24 @@ function formatBirthday(value: string) {
   return `${Number(year)}년 ${Number(month)}월 ${Number(day)}일`;
 }
 
-function formatCohort(profile: AcceptedProfile) {
-  if (profile.cohort === null) return null;
+function profileMediaViewerImage(
+  slot: "avatar" | "cover",
+  path: string | null,
+  src: string | null,
+): ViewerImage | null {
+  if (!path || !src) return null;
 
-  const displayedCohort =
-    profile.cohort + (profile.is_returning_student ? 0.5 : 0);
+  const objectId = path.split("/").at(-1) ?? `${slot}-image`;
+  const name = `${objectId}.webp`;
+  const downloadUrl = new URL(src);
+  downloadUrl.searchParams.set("download", name);
 
-  return `${displayedCohort}기`;
+  return {
+    id: `profile-${slot}-${path}`,
+    src,
+    downloadSrc: downloadUrl.toString(),
+    name,
+  };
 }
 
 function ProfileDescription({ description }: { description: string }) {
@@ -79,12 +155,12 @@ function ProfileDescription({ description }: { description: string }) {
   }, [description, expanded]);
 
   return (
-    <div className="mt-3 max-w-3xl sm:mt-5">
+    <div className="mt-3 max-w-3xl min-w-0 basis-full sm:col-span-2 sm:col-start-2 sm:row-start-2 sm:mt-5">
       <p
         ref={descriptionRef}
         className={cn(
-          "text-sm leading-5.5 whitespace-pre-wrap sm:text-base sm:leading-6",
-          !expanded && "line-clamp-3",
+          "text-sm leading-5.5 break-words whitespace-pre-wrap sm:text-base sm:leading-6",
+          !expanded && "line-clamp-2",
         )}
       >
         {description}
@@ -117,10 +193,38 @@ export function ProfileDetail({
   /** 지금 보고 있는 사람. 타임라인 당사자와 다를 수 있어 `profile`로 대신하지 못한다. */
   viewerName: string | null;
   viewerAvatarUrl: string | null;
-  posts: ProfilePostPage;
+  /** 게시물 상세로 바로 들어왔을 때는 loader가 기다리지 않고 promise째 넘긴다. null은 불러오기 실패다. */
+  posts: ProfilePostPage | Promise<ProfilePostPage | null>;
 }) {
+  // 좁은 화면에서는 정보 카드가 타임라인 위에 통째로 쌓여서 첫 게시물까지 한참 걸린다.
+  // 그래서 모바일에서만 첫 묶음을 남기고 접는다 — `sm:`부터는 항상 전부 펼쳐 둔다.
+  const [factsExpanded, setFactsExpanded] = useState(false);
+
+  const avatarViewerImage = useMemo(
+    () =>
+      profileMediaViewerImage(
+        "avatar",
+        profile.avatar_path,
+        profile.avatar_url,
+      ),
+    [profile.avatar_path, profile.avatar_url],
+  );
+  const coverViewerImage = useMemo(
+    () =>
+      profileMediaViewerImage("cover", profile.cover_path, profile.cover_url),
+    [profile.cover_path, profile.cover_url],
+  );
+  const viewerImages = useMemo(
+    () =>
+      [avatarViewerImage, coverViewerImage].filter(
+        (image): image is ViewerImage => image !== null,
+      ),
+    [avatarViewerImage, coverViewerImage],
+  );
+  const viewer = useImageViewerParam(viewerImages);
+
   const schoolSummary = [
-    formatCohort(profile),
+    formatCohort(profile.cohort, profile.is_returning_student),
     profile.academic_track === null
       ? null
       : TRACK_LABELS[profile.academic_track],
@@ -129,116 +233,194 @@ export function ProfileDetail({
 
   const hasCoverImage = Boolean(profile.cover_url?.trim());
 
-  const facts: ProfileFact[] = [
+  // 성격이 다른 항목을 한 덩어리로 쌓으면 눈이 멈출 지점이 없다. 선이나 소제목 대신
+  // 묶음 사이 여백으로만 나누고, 부가 정보는 한 톤 낮춰 위계를 만든다.
+  const factGroups: ProfileFactGroup[] = [
     {
-      label: "학번",
-      value: profile.student_number,
-      icon: <GraduationCapIcon aria-hidden />,
+      label: "학적 정보",
+      facts: [
+        {
+          label: "학번",
+          value: profile.student_number,
+          icon: <GraduationCapIcon aria-hidden />,
+        },
+        {
+          label: "반",
+          value: profile.class_no === null ? null : `${profile.class_no}반`,
+          icon: <UsersRoundIcon aria-hidden />,
+        },
+        {
+          label: "부서",
+          value: profile.department,
+          icon: <Building2Icon aria-hidden />,
+        },
+        {
+          label: "기숙사",
+          value: profile.dorm_room === null ? null : `${profile.dorm_room}호`,
+          icon: <HouseIcon aria-hidden />,
+        },
+      ],
     },
     {
-      label: "반",
-      value: profile.class_no === null ? null : `${profile.class_no}반`,
-      icon: <UsersRoundIcon aria-hidden />,
+      label: "연락처",
+      facts: [
+        {
+          label: "전화번호",
+          value: profile.phone_number,
+          icon: <PhoneIcon aria-hidden />,
+          href: profile.phone_number
+            ? `tel:${profile.phone_number.replace(/[ -]/g, "")}`
+            : undefined,
+          masked: profile.phone_number
+            ? maskPhoneNumber(profile.phone_number)
+            : undefined,
+        },
+        {
+          label: "이메일",
+          value: profile.contact_email,
+          icon: <MailIcon aria-hidden />,
+          href: profile.contact_email
+            ? `mailto:${profile.contact_email}`
+            : undefined,
+          masked: profile.contact_email
+            ? maskEmail(profile.contact_email)
+            : undefined,
+        },
+      ],
     },
     {
-      label: "부서",
-      value: profile.department,
-      icon: <Building2Icon aria-hidden />,
-    },
-    {
-      label: "기숙사",
-      value: profile.dorm_room === null ? null : `${profile.dorm_room}호`,
-      icon: <HouseIcon aria-hidden />,
-    },
-    {
-      label: "성별",
-      value: profile.gender === null ? null : GENDER_LABELS[profile.gender],
-      icon: <UserRoundIcon aria-hidden />,
-    },
-    {
-      label: "생일",
-      value:
-        profile.birthday === null ? null : formatBirthday(profile.birthday),
-      icon: <CakeIcon aria-hidden />,
-    },
-    {
-      label: "전화번호",
-      value: profile.phone_number,
-      icon: <PhoneIcon aria-hidden />,
-      href: profile.phone_number
-        ? `tel:${profile.phone_number.replace(/[ -]/g, "")}`
-        : undefined,
-    },
-    {
-      label: "이메일",
-      value: profile.contact_email,
-      icon: <MailIcon aria-hidden />,
-      href: profile.contact_email
-        ? `mailto:${profile.contact_email}`
-        : undefined,
+      label: "기타 정보",
+      facts: [
+        {
+          label: "성별",
+          value: profile.gender === null ? null : GENDER_LABELS[profile.gender],
+          icon: <UserRoundIcon aria-hidden />,
+        },
+        {
+          label: "생일",
+          value:
+            profile.birthday === null ? null : formatBirthday(profile.birthday),
+          icon: <CakeIcon aria-hidden />,
+        },
+      ],
     },
   ];
 
-  const visibleFacts = facts.filter(
-    (fact) => fact.value !== null && fact.value.trim() !== "",
-  );
+  const visibleFactGroups = factGroups
+    .map((group) => ({
+      ...group,
+      facts: group.facts.filter(
+        (fact) => fact.value !== null && fact.value.trim() !== "",
+      ),
+    }))
+    .filter((group) => group.facts.length > 0);
 
   return (
     <main className="px-3 pb-4 md:px-0 md:pb-10">
       <div className="w-full space-y-2 md:space-y-6">
-        <section className="-mx-3 overflow-hidden bg-background sm:mx-0 sm:rounded-2xl sm:border">
-          {/* cover */}
+        {/* `isolate`: 아바타·편집 버튼의 z-index가 모바일 sticky 머리말(z-10) 위로 새지 않게 가둔다. */}
+        <section className="isolate -mx-3 overflow-hidden bg-background sm:mx-0 sm:rounded-2xl sm:border">
           <div
             data-testid="profile-cover"
             className="relative aspect-[3/1] w-full overflow-hidden bg-[#F3F4F7]"
           >
             {hasCoverImage ? (
-              <img
-                src={profile.cover_url ?? undefined}
-                alt=""
-                aria-hidden="true"
-                className="absolute inset-0 size-full object-cover"
-              />
+              isOwnProfile || !coverViewerImage ? (
+                <img
+                  src={profile.cover_url ?? undefined}
+                  alt=""
+                  crossOrigin="anonymous"
+                  aria-hidden="true"
+                  className="absolute inset-0 size-full object-cover"
+                />
+              ) : (
+                <button
+                  type="button"
+                  aria-label="커버 사진 크게 보기"
+                  onClick={() => viewer.open(coverViewerImage.id)}
+                  className="absolute inset-0 size-full cursor-zoom-in outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
+                >
+                  <img
+                    src={profile.cover_url ?? undefined}
+                    alt=""
+                    crossOrigin="anonymous"
+                    aria-hidden="true"
+                    className="size-full object-cover"
+                  />
+                </button>
+              )
             ) : null}
 
             {isOwnProfile ? (
               <ProfileMediaEditor
                 profile={profile}
                 slot="cover"
+                onView={
+                  coverViewerImage
+                    ? () => viewer.open(coverViewerImage.id)
+                    : undefined
+                }
                 className="absolute top-3 right-3 z-20"
               />
             ) : null}
           </div>
 
-          {/* profile identity */}
-          <div className="bg-background px-3 pb-2.5 sm:px-8 sm:pb-7">
-            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-0.5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-5 sm:gap-y-3">
-              {/* avatar */}
-              <div className="relative z-10 row-span-2 -mt-9 w-fit shrink-0 rounded-full border-[3px] border-background bg-background shadow-sm sm:row-span-1 sm:-mt-14 sm:border-4">
+          <div className="bg-background px-3 pb-2 sm:px-8 sm:pt-7 sm:pb-7">
+            {/* 모바일은 flex(버튼 위 여백을 버튼이 정함), sm부터는 grid(소개글을 이름 아래에 두려고). 모든 항목에 열/행을 명시해 span이 아무것도 밀지 않는다. */}
+            <div className="flex flex-wrap items-start gap-x-3 sm:grid sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-rows-[auto_1fr] sm:gap-x-7">
+              <div className="relative z-10 -mt-5 w-fit shrink-0 rounded-full border-[3px] border-background bg-background sm:col-start-1 sm:row-span-2 sm:row-start-1 sm:mt-0 sm:border-0">
                 <div className="relative">
-                  <UserAvatar
-                    src={profile.avatar_url}
-                    name={profile.name}
-                    className="size-[5.5rem] sm:size-32"
-                  />
+                  {!isOwnProfile && avatarViewerImage ? (
+                    <button
+                      type="button"
+                      aria-label="프로필 사진 크게 보기"
+                      onClick={() => viewer.open(avatarViewerImage.id)}
+                      className="block cursor-zoom-in rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                      <UserAvatar
+                        src={profile.avatar_url}
+                        name={profile.name}
+                        className="size-[5.5rem] after:hidden sm:size-36 sm:after:block"
+                      />
+                    </button>
+                  ) : (
+                    <UserAvatar
+                      src={profile.avatar_url}
+                      name={profile.name}
+                      className="size-[5.5rem] after:hidden sm:size-36 sm:after:block"
+                    />
+                  )}
 
                   {isOwnProfile ? (
                     <ProfileMediaEditor
                       profile={profile}
                       slot="avatar"
-                      className="absolute right-0 bottom-0 z-20"
+                      onView={
+                        avatarViewerImage
+                          ? () => viewer.open(avatarViewerImage.id)
+                          : undefined
+                      }
+                      className="pointer-events-none absolute inset-0 z-20"
                     />
                   ) : null}
                 </div>
               </div>
 
-              {/* name / summary */}
-              <div className="min-w-0 pt-2.5 sm:pt-4">
+              <div className="min-w-0 flex-1 pt-2.5 sm:col-start-2 sm:row-start-1 sm:pt-1">
                 <div className="flex min-w-0 items-center gap-2">
                   <h1 className="min-w-0 truncate text-[1.35rem] leading-tight font-semibold tracking-tight sm:text-3xl">
                     {profile.name}
                   </h1>
-                  {profile.role === "admin" ? <Badge>관리자</Badge> : null}
+                  {/* 이름이 주인공이라 옅은 틴트 배지로 둔다. */}
+                  {profile.role === "admin" ? (
+                    <Badge
+                      variant="outline"
+                      className="h-[1.375rem] gap-1 border-primary/25 bg-primary/10 px-2 text-blue-700 sm:h-6 sm:px-2.5 sm:text-[13px] dark:border-primary/35 dark:bg-primary/15 dark:text-blue-300 sm:[&>svg]:size-3.5!"
+                    >
+                      <ShieldCheckIcon aria-hidden="true" />
+                      관리자
+                    </Badge>
+                  ) : null}
                 </div>
 
                 {schoolSummary.length > 0 ? (
@@ -248,10 +430,6 @@ export function ProfileDetail({
                 ) : null}
               </div>
 
-              {/* edit button
-                  mobile: 이름 오른쪽 영역 아래
-                  desktop: 동일 row 우측
-                  absolute/translate 사용하지 않음 */}
               {isOwnProfile ? (
                 <Link
                   to={`/profile/${profile.pub_id}/edit`}
@@ -259,22 +437,21 @@ export function ProfileDetail({
                     variant: "default",
                     size: "sm",
                     className:
-                      "col-span-2 mt-1 h-10 w-full justify-center sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:mt-4 sm:h-auto sm:w-auto sm:self-start sm:py-2",
+                      "order-1 mt-5 h-10 w-full basis-full justify-center sm:order-none sm:col-start-3 sm:row-start-1 sm:mt-1 sm:h-auto sm:w-auto sm:py-2",
                   })}
                 >
                   <PencilIcon />
                   프로필 편집
                 </Link>
               ) : null}
-            </div>
 
-            {profile.description ? (
-              <ProfileDescription description={profile.description} />
-            ) : null}
+              {profile.description ? (
+                <ProfileDescription description={profile.description} />
+              ) : null}
+            </div>
           </div>
         </section>
 
-        {/* content */}
         <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start">
           <section className="min-w-0 space-y-1.5 sm:space-y-2">
             <h2 className="px-0.5 text-[17px] font-semibold tracking-tight sm:px-1 sm:text-xl">
@@ -283,51 +460,75 @@ export function ProfileDetail({
 
             <Card className="-mx-3 h-fit gap-0 rounded-none border-x-0 py-0 shadow-none sm:mx-0 sm:rounded-xl sm:border sm:shadow-sm">
               <CardContent className="px-3 py-2.5 sm:px-6 sm:py-5">
-                <div className="divide-y divide-border/70">
-                  {visibleFacts.map((fact) => (
+                <div className="flex flex-col gap-5 sm:gap-6">
+                  {visibleFactGroups.map((group, index) => (
                     <div
-                      key={fact.label}
-                      className="flex min-w-0 items-center gap-2.5 py-2.5 first:pt-0 last:pb-0 sm:gap-3 sm:py-3"
+                      key={group.label}
+                      role="group"
+                      aria-label={group.label}
+                      className={cn(
+                        index > 0 && !factsExpanded && "hidden sm:block",
+                      )}
                     >
-                      <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground sm:size-8 [&_svg]:size-3.5 sm:[&_svg]:size-4">
-                        {fact.icon}
-                      </span>
+                      {group.facts.map((fact) => (
+                        <div
+                          key={fact.label}
+                          className="flex min-w-0 items-center gap-2.5 py-1 first:pt-0 last:pb-0 sm:gap-3 sm:py-1.5"
+                        >
+                          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground sm:size-8 [&_svg]:size-3.5 sm:[&_svg]:size-4">
+                            {fact.icon}
+                          </span>
 
-                      <div className="min-w-0 text-sm font-medium break-words">
-                        <span className="sr-only">{fact.label}: </span>
-
-                        {fact.href ? (
-                          <a href={fact.href} className="hover:underline">
-                            {fact.value}
-                          </a>
-                        ) : (
-                          fact.value
-                        )}
-                      </div>
+                          <div className="min-w-0 text-sm font-medium break-words">
+                            <span className="sr-only">{fact.label}: </span>
+                            <ProfileFactValue fact={fact} />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ))}
                 </div>
+
+                {visibleFactGroups.length > 1 ? (
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="mt-3 h-auto px-0 py-0 sm:hidden"
+                    aria-expanded={factsExpanded}
+                    onClick={() => setFactsExpanded((current) => !current)}
+                  >
+                    {factsExpanded ? "접기" : "정보 더 보기"}
+                  </Button>
+                ) : null}
               </CardContent>
             </Card>
           </section>
 
-          {/* 타임라인은 게시물 카드가 스스로 프레이밍을 들고 있어서(모바일 풀블리드,
-              `md:`부터 테두리) 정보 카드처럼 Card로 감싸지 않는다. 감싸면 테두리가 두 겹이
-              된다. 좌우 여백을 지우는 구간도 카드가 모서리를 얻는 `md:`에 맞춘다 — `sm:`에서
-              풀면 모서리 없는 카드가 안쪽으로 들어와 어중간해진다. */}
+          {/* 게시물 카드가 스스로 프레이밍을 들고 있어 Card로 감싸지 않는다(테두리 중복). */}
           <section className="-mx-3 min-w-0 space-y-1.5 sm:space-y-2 md:mx-0">
             <h2 className="px-3.5 text-[17px] font-semibold tracking-tight sm:text-xl md:px-1">
               게시물
             </h2>
 
-            <ProfilePostsPanel
-              timelinePubId={profile.pub_id}
-              canWrite={isOwnProfile || profile.allow_timeline_posts}
-              isOwnTimeline={isOwnProfile}
-              viewerName={viewerName}
-              viewerAvatarUrl={viewerAvatarUrl}
-              initialPage={posts}
-            />
+            <Deferred value={posts} fallback={<PostListSkeleton />}>
+              {(page) =>
+                page ? (
+                  <ProfilePostsPanel
+                    timelinePubId={profile.pub_id}
+                    canWrite={isOwnProfile || profile.allow_timeline_posts}
+                    isOwnTimeline={isOwnProfile}
+                    viewerName={viewerName}
+                    viewerAvatarUrl={viewerAvatarUrl}
+                    initialPage={page}
+                  />
+                ) : (
+                  <p className="px-4 py-12 text-center text-sm text-muted-foreground">
+                    게시물을 불러오지 못했습니다.
+                  </p>
+                )
+              }
+            </Deferred>
           </section>
         </div>
       </div>

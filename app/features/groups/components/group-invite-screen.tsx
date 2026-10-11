@@ -3,6 +3,7 @@ import { Link, useFetcher } from "react-router";
 
 import {
   getGroupIdentityPolicyLabel,
+  getGroupInviteProfileTypeLabel,
   getGroupJoinPolicyLabel,
   getGroupPostingPolicyLabel,
 } from "~/features/groups/model/format";
@@ -12,13 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Spinner } from "~/shared/ui/spinner";
 
 /**
- * 초대 링크를 열었을 때 보이는 화면.
- *
- * 그룹 상세(`/groups/:slug`)로 바로 보낼 수 없어서 화면이 따로 있다. 그 로더는 토큰을 읽기도
- * 전에 RLS에 막혀 404를 던진다 — 비공개 그룹의 행은 비멤버에게 존재하지 않기 때문이다.
- *
- * 아이콘과 커버는 보여 주지 않는다. 저장소 정책이 비멤버에게 비공개 그룹의 이미지를 내주지
- * 않고, 미리보기 한 장을 위해 그 정책을 넓히지 않았다.
+ * 초대 링크 화면. 상세 loader는 토큰을 읽기 전에 RLS로 404를 던지므로(비멤버에겐 비공개 그룹 행이 없다) 따로 둔다.
+ * 저장소 정책상 비멤버에게 비공개 그룹 이미지를 주지 않아 아이콘·커버는 보이지 않는다.
  */
 export function GroupInviteScreen({
   preview,
@@ -40,6 +36,33 @@ export function GroupInviteScreen({
             <p className="text-sm leading-6 text-muted-foreground">
               기한이 지났거나 그룹 운영진이 링크를 끊었습니다. 초대한 사람에게
               새 링크를 받아 주세요.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link to="/groups" />}
+          >
+            그룹 목록으로
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!preview.profile_type_allowed && !preview.already_member) {
+    return (
+      <Card className="rounded-none border-x-0 md:rounded-xl md:border">
+        <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
+          <div className="grid size-11 place-items-center rounded-full bg-muted text-muted-foreground">
+            <LockIcon aria-hidden="true" className="size-5" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <p className="font-medium">가입할 수 없는 초대 링크입니다</p>
+            <p className="text-sm leading-6 text-muted-foreground">
+              이 링크는{" "}
+              {formatAllowedProfileTypes(preview.allowed_profile_types)}만
+              가입할 수 있습니다.
             </p>
           </div>
           <Button
@@ -109,6 +132,12 @@ export function GroupInviteScreen({
       </CardContent>
     </Card>
   );
+}
+
+function formatAllowedProfileTypes(
+  types: GroupInvitePreview["allowed_profile_types"],
+): string {
+  return types.map(getGroupInviteProfileTypeLabel).join("·");
 }
 
 function InfoRow({

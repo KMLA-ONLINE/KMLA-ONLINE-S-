@@ -35,6 +35,18 @@ export default function LicensesPage() {
             </a>{" "}
             라이선스를 따릅니다.
           </p>
+          <p className="mt-3">
+            HEIC/HEIF 이미지 변환에는{" "}
+            <a
+              href="https://github.com/hoppergee/heic-to"
+              target="_blank"
+              rel="noreferrer"
+              className="text-foreground underline underline-offset-2"
+            >
+              heic-to
+            </a>{" "}
+            및 libheif를 사용하며 LGPL-3.0 라이선스를 따릅니다.
+          </p>
         </div>
       </div>
     </>

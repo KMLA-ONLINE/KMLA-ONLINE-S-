@@ -7,8 +7,8 @@ import {
   timetableFromStored,
   type TimetableStorage,
 } from "~/features/timetable/model/timetable";
-
-const STORAGE_KEY = "kmla-online:timetable:v1";
+// 계정이 바뀌면 버려야 하는 값이라 키 자체는 `user-scoped-storage`가 소유한다.
+import { TIMETABLE_STORAGE_KEY } from "~/shared/lib/user-scoped-storage";
 
 export function loadTimetable(): TimetableStorage {
   const empty = emptyTimetable();
@@ -18,7 +18,7 @@ export function loadTimetable(): TimetableStorage {
   }
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(TIMETABLE_STORAGE_KEY);
 
     if (raw) {
       const parsed: unknown = JSON.parse(raw);
@@ -38,7 +38,10 @@ export function loadTimetable(): TimetableStorage {
 
 export function saveTimetable(timetable: TimetableStorage) {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(timetable));
+    window.localStorage.setItem(
+      TIMETABLE_STORAGE_KEY,
+      JSON.stringify(timetable),
+    );
   } catch {
     return;
   }

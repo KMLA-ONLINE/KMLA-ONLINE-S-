@@ -1,4 +1,4 @@
-import { ChevronLeftIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { Form, Link } from "react-router";
 
@@ -6,6 +6,7 @@ import { GroupConfirmDialog } from "~/features/groups/components/group-confirm-d
 import {
   getGroupJoinPolicyLabel,
   getGroupKindLabel,
+  isPrivateJoinPolicy,
 } from "~/features/groups/model/format";
 import type {
   CreateGroupErrors,
@@ -13,10 +14,13 @@ import type {
   GroupJoinPolicy,
   GroupKind,
 } from "~/features/groups/model/types";
+import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent } from "~/shared/ui/card";
+import { Checkbox } from "~/shared/ui/checkbox";
 import {
   Field,
+  FieldContent,
   FieldDescription,
   FieldError,
   FieldGroup,
@@ -38,6 +42,7 @@ const DEFAULT_VALUES: CreateGroupValues = {
   joinPolicy: "invite_only",
   identityPolicy: "optional_anonymous",
   postingPolicy: "members",
+  hideStaffRoles: false,
 };
 
 export function GroupCreateForm({
@@ -55,7 +60,13 @@ export function GroupCreateForm({
   const [joinPolicy, setJoinPolicy] = useState<GroupJoinPolicy>(
     values.joinPolicy,
   );
-  const customSlugAllowed = joinPolicy !== "invite_only";
+  // 공개 그룹만 주소를 직접 정한다. 비공개 그룹의 임의 주소는 승인 가입 링크의 열쇠이기도 하다.
+  const customSlugAllowed = !isPrivateJoinPolicy(joinPolicy);
+  // 주소는 거의 모든 그룹이 임의 주소로 두는 선택 항목이다. 접어 두면 폼을 위에서
+  // 아래로 읽는 사람이 굳이 판단하지 않고 지나간다. 값이나 오류가 있으면 펴 둔다.
+  const [slugOpen, setSlugOpen] = useState(
+    Boolean(values.slug) || Boolean(errors.slug),
+  );
   const formRef = useRef<HTMLFormElement>(null);
   const confirmedRef = useRef(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -95,9 +106,8 @@ export function GroupCreateForm({
 
   function changeKind(nextKind: GroupKind) {
     setKind(nextKind);
-    if (nextKind === "official" && joinPolicy === "invite_only") {
-      setJoinPolicy("open");
-    }
+    // 공식 그룹은 공개 그룹이라 즉시 가입만 있다(§7.5).
+    if (nextKind === "official") setJoinPolicy("open");
   }
 
   return (
@@ -119,12 +129,6 @@ export function GroupCreateForm({
         className="flex flex-col gap-4"
         onSubmit={handleSubmit}
       >
-        {errors.form ? (
-          <div className="px-4 md:px-0">
-            <FieldError>{errors.form}</FieldError>
-          </div>
-        ) : null}
-
         {canCreateOfficial ? (
           <SectionCard>
             <FieldSet>
@@ -214,45 +218,75 @@ export function GroupCreateForm({
                   disabled={pending}
                   aria-invalid={Boolean(errors.joinPolicy)}
                 >
-                  <NativeSelectOption value="invite_only">
-                    비공개 · 초대 전용
-                  </NativeSelectOption>
-                  <NativeSelectOption value="request">
-                    공개 · 승인 가입
-                  </NativeSelectOption>
+                  {kind === "official" ? null : (
+                    <>
+                      <NativeSelectOption value="invite_only">
+                        비공개 · 초대 전용
+                      </NativeSelectOption>
+                      <NativeSelectOption value="request">
+                        비공개 · 승인 가입
+                      </NativeSelectOption>
+                    </>
+                  )}
                   <NativeSelectOption value="open">공개</NativeSelectOption>
                 </NativeSelect>
                 <FieldError>{errors.joinPolicy}</FieldError>
               </Field>
 
               {customSlugAllowed ? (
-                <Field data-invalid={Boolean(errors.slug)}>
-                  <FieldLabel htmlFor="group-slug">그룹 주소 (선택)</FieldLabel>
-                  <div className="flex items-center gap-1">
-                    <span className="shrink-0 text-sm text-muted-foreground">
-                      /groups/
-                    </span>
-                    <Input
-                      id="group-slug"
-                      name="slug"
-                      type="text"
-                      defaultValue={values.slug}
-                      minLength={4}
-                      maxLength={15}
-                      pattern="[a-z0-9][a-z0-9-]{2,13}[a-z0-9]"
-                      placeholder="makers-lab"
-                      disabled={pending}
-                      aria-invalid={Boolean(errors.slug)}
-                      autoComplete="off"
-                      spellCheck={false}
+                <div className="flex flex-col gap-4">
+                  <button
+                    type="button"
+                    id="group-slug-toggle"
+                    className="flex w-fit items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    aria-expanded={slugOpen}
+                    aria-controls="group-slug-panel"
+                    onClick={() => setSlugOpen((open) => !open)}
+                  >
+                    <ChevronRightIcon
+                      aria-hidden
+                      className={cn(
+                        "size-4 transition-transform duration-150 motion-reduce:transition-none",
+                        slugOpen && "rotate-90",
+                      )}
                     />
-                  </div>
-                  <FieldDescription>
-                    비워 두면 임의 주소를 만듭니다. 영문 소문자, 숫자,
-                    하이픈으로 4~15자입니다.
-                  </FieldDescription>
-                  <FieldError>{errors.slug}</FieldError>
-                </Field>
+                    그룹 주소 직접 정하기 (선택)
+                  </button>
+
+                  {slugOpen ? (
+                    <Field
+                      id="group-slug-panel"
+                      aria-labelledby="group-slug-toggle"
+                      data-invalid={Boolean(errors.slug)}
+                    >
+                      <FieldLabel htmlFor="group-slug">그룹 주소</FieldLabel>
+                      <div className="flex items-center gap-1">
+                        <span className="shrink-0 text-sm text-muted-foreground">
+                          /groups/
+                        </span>
+                        <Input
+                          id="group-slug"
+                          name="slug"
+                          type="text"
+                          defaultValue={values.slug}
+                          minLength={4}
+                          maxLength={15}
+                          pattern="[a-z0-9][a-z0-9-]{2,13}[a-z0-9]"
+                          placeholder="makers-lab"
+                          disabled={pending}
+                          aria-invalid={Boolean(errors.slug)}
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                      </div>
+                      <FieldDescription>
+                        비워 두면 임의 주소를 만듭니다. 영문 소문자, 숫자,
+                        하이픈으로 4~15자입니다.
+                      </FieldDescription>
+                      <FieldError>{errors.slug}</FieldError>
+                    </Field>
+                  ) : null}
+                </div>
               ) : (
                 <p className="rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
                   비공개 그룹은 임의 주소를 사용합니다.
@@ -284,40 +318,72 @@ export function GroupCreateForm({
                 </NativeSelect>
                 <FieldError>{errors.identityPolicy}</FieldError>
               </Field>
-              <Field data-invalid={Boolean(errors.postingPolicy)}>
-                <FieldLabel htmlFor="posting-policy">글쓰기</FieldLabel>
-                <NativeSelect
-                  id="posting-policy"
+              <Field
+                orientation="horizontal"
+                data-invalid={Boolean(errors.postingPolicy)}
+              >
+                <Checkbox
+                  id="staff-only-posting"
                   name="postingPolicy"
-                  defaultValue={values.postingPolicy}
+                  value="staff"
+                  defaultChecked={values.postingPolicy === "staff"}
                   disabled={pending}
                   aria-invalid={Boolean(errors.postingPolicy)}
-                >
-                  <NativeSelectOption value="members">
-                    모든 멤버
-                  </NativeSelectOption>
-                  <NativeSelectOption value="staff">
-                    운영진만
-                  </NativeSelectOption>
-                </NativeSelect>
+                />
+                <FieldContent>
+                  <FieldLabel htmlFor="staff-only-posting">
+                    운영진만 게시 가능
+                  </FieldLabel>
+                  <FieldDescription>
+                    매니저, 관리자와 소유자만 게시물을 작성합니다.
+                  </FieldDescription>
+                </FieldContent>
                 <FieldError>{errors.postingPolicy}</FieldError>
+              </Field>
+              <Field
+                orientation="horizontal"
+                className="sm:col-span-2"
+                data-invalid={Boolean(errors.hideStaffRoles)}
+              >
+                <Checkbox
+                  id="hide-staff-roles"
+                  name="hideStaffRoles"
+                  value="true"
+                  defaultChecked={values.hideStaffRoles}
+                  disabled={pending}
+                  aria-invalid={Boolean(errors.hideStaffRoles)}
+                />
+                <FieldContent>
+                  <FieldLabel htmlFor="hide-staff-roles">
+                    일반 멤버에게 운영진 역할 숨기기
+                  </FieldLabel>
+                  <FieldDescription>
+                    소유자와 관리자를 제외한 멤버 명부에서는 운영진도 일반
+                    멤버처럼 표시합니다.
+                  </FieldDescription>
+                </FieldContent>
+                <FieldError>{errors.hideStaffRoles}</FieldError>
               </Field>
             </FieldGroup>
           </FieldSet>
         </SectionCard>
 
-        <div className="flex justify-end gap-2 px-4 md:px-0">
-          <Button
-            variant="ghost"
-            nativeButton={false}
-            render={<Link to="/groups" />}
-          >
-            취소
-          </Button>
-          <Button type="submit" disabled={pending}>
-            {pending ? <Spinner data-icon="inline-start" /> : null}
-            그룹 만들기
-          </Button>
+        {/* 모바일에서 위쪽 메시지는 안 보이므로 버튼 옆에 둔다. */}
+        <div className="flex flex-col gap-3 px-4 md:px-0">
+          {errors.form ? <FieldError>{errors.form}</FieldError> : null}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              nativeButton={false}
+              render={<Link to="/groups" />}
+            >
+              취소
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? <Spinner data-icon="inline-start" /> : null}
+              그룹 만들기
+            </Button>
+          </div>
         </div>
       </Form>
 
@@ -332,8 +398,11 @@ export function GroupCreateForm({
         }
         details={
           <dl className="flex flex-col gap-1 text-sm">
-            <SummaryRow label="종류">{getGroupKindLabel(kind)}</SummaryRow>
+            {canCreateOfficial ? (
+              <SummaryRow label="종류">{getGroupKindLabel(kind)}</SummaryRow>
+            ) : null}
             <SummaryRow label="가입 정책">
+              {isPrivateJoinPolicy(joinPolicy) ? "비공개" : "공개"} ·{" "}
               {getGroupJoinPolicyLabel(joinPolicy)}
             </SummaryRow>
           </dl>

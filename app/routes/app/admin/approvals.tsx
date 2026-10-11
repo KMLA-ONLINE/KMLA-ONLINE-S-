@@ -21,6 +21,7 @@ export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "none",
   contentWidth: "5xl",
+  pullToRefresh: true,
 });
 
 function pageFrom(value: string | null): number {

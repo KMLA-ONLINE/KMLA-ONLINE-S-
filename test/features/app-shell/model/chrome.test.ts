@@ -40,6 +40,7 @@ describe("app chrome", () => {
       bottomNav: "sticky",
       contentWidth: "4xl",
       pullToRefresh: false,
+      rememberScroll: false,
     });
   });
 

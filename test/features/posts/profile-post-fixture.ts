@@ -7,6 +7,7 @@ export function profilePost(overrides: Partial<ProfilePost> = {}): ProfilePost {
     activity_media_url: null,
     attachments: [],
     author_avatar_path: null,
+    author_avatar_url: null,
     author_name: "김서민",
     author_pub_id: "seomin-30",
     body: "본문",

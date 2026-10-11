@@ -3,8 +3,17 @@ import type { Database } from "~/shared/supabase/database.types";
 type NotificationRow =
   Database["public"]["Functions"]["list_my_notifications"]["Returns"][number];
 
-export type NotificationItem = Omit<NotificationRow, "actor_avatar_path"> & {
+/**
+ * 생성 타입은 RPC의 모든 열을 non-null로 적는다. 댓글 본문과 반응 종류는 해당 kind가 아니거나
+ * 대상이 사라지면 실제로 null이 오므로 여기서 바로잡는다.
+ */
+export type NotificationItem = Omit<
+  NotificationRow,
+  "actor_avatar_path" | "comment_excerpt" | "reaction"
+> & {
   actor_avatar_url: string | null;
+  comment_excerpt: string | null;
+  reaction: Database["public"]["Enums"]["post_reaction"] | null;
 };
 export type NotificationPreferences =
   Database["public"]["Functions"]["get_my_notification_preferences"]["Returns"][number];
@@ -40,6 +49,14 @@ export interface GroupNotificationPreference {
   contentPushEnabled: boolean;
   newPostPushEnabled: boolean;
 }
+
+/** 차단한 알림 권한을 되돌리는 설정이 있는 곳. 기기와 설치 여부마다 다르다. */
+export type PermissionHelpPlatform =
+  | "ios-app"
+  | "android-app"
+  | "android-browser"
+  | "desktop-app"
+  | "desktop-browser";
 
 export type PushSupport =
   | { state: "unsupported" }

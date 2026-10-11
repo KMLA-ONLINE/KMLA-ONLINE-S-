@@ -1,29 +1,34 @@
-import { MessagesSquareIcon, SearchIcon, UtensilsIcon } from "lucide-react";
+import { SearchIcon, UtensilsIcon } from "lucide-react";
+import { Suspense, use } from "react";
 import { Link } from "react-router";
 
-import { AbsenceRail } from "~/features/absences/components/absence-rail";
+import { StoryRail } from "~/features/stories/components/story-rail";
+import { STORY_STALE_TIME, storyKeys } from "~/features/stories/data/cache";
 import {
-  ABSENCE_STALE_TIME,
-  absenceKeys,
-} from "~/features/absences/data/cache";
-import { listTodayAbsences } from "~/features/absences/data/queries";
+  listActiveStories,
+  type StoryItem,
+} from "~/features/stories/data/queries";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import { hasActiveSession } from "~/features/auth";
+import { FeedScreen, feedQuery } from "~/features/feed";
 import {
-  FEED_STALE_TIME,
-  FeedScreen,
-  feedKeys,
-  listFeedPosts,
-} from "~/features/feed";
-import { getKoreaDate, getMealDay, HomeMealSummary } from "~/features/meal";
+  getMealDay,
+  getMealReferenceDate,
+  HomeMealSummary,
+  HomeMealSummarySkeleton,
+  type MealDay,
+} from "~/features/meal";
 import {
   BIRTHDAY_GC_TIME,
   BIRTHDAY_STALE_TIME,
   birthdayKeys,
+  type BirthdayProfile,
   HomeBirthdaySummary,
   listBirthdays,
 } from "~/features/profiles";
 import { createPostListRevalidation } from "~/features/posts";
+import { GlobalSearchDialog } from "~/features/search";
+import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { getKoreaDateIso } from "~/shared/lib/korea-date";
 import { Button } from "~/shared/ui/button";
@@ -44,10 +49,13 @@ export const handle = defineAppChrome({
   bottomNav: "hide-on-scroll",
   contentWidth: "5xl",
   pullToRefresh: true,
+  // 피드는 하단 탭으로 오가는 화면이라 뒤로 가기만으로는 위치가 안 남는다.
+  rememberScroll: true,
 });
 
 /**
- * `post`·`kind`·`source`는 게시물 상세 오버레이의 URL 상태이고, loader가 읽지 않는다. 이미지
+ * `post`·`kind`·`source`는 게시물 상세 오버레이의, `story`는 스토리 뷰어·작성 창의 URL
+ * 상태이고, loader가 읽지 않는다. 이미지
  * 뷰어와 댓글 시트는 공용 규칙이 이미 무시한다.
  *
  * 피드에서는 이게 특히 비싸다. 첫 페이지를 다시 읽으면 `list_feed_posts`가 새 세션을 열어
@@ -57,133 +65,82 @@ export const shouldRevalidate = createPostListRevalidation([
   "post",
   "kind",
   "source",
+  "story",
 ]);
 
-// 첫 페이지는 로더가 await 한다. 이후 페이지는 useFetcher로 같은 clientLoader에 커서를 보낸다
-// (AGENTS.md의 "Loaders await their data" — 스트리밍 스켈레톤이 필요한 화면에서만 예외).
-export async function clientLoader({ request }: Route.ClientLoaderArgs) {
-  const pageToken = new URL(request.url).searchParams.get("pageToken");
-
+// 로더는 화면이 읽을 캐시를 데우는 일만 한다. 피드 자체는 `FeedScreen`이 무한 쿼리로
+// 구독하므로 여기서 loaderData로 넘기지 않는다 — 넘기면 같은 데이터의 진실 소스가 둘이 된다.
+export async function clientLoader() {
   // 게이트와 이 로더는 병렬로 돈다. 세션이 없으면 게이트가 /login으로 보내므로 아래 값은
   // 렌더되지 않지만, 그 전에 요청을 띄우면 인증 전용 RPC 세 개가 익명으로 나가 401이 된다.
   // 인증은 게이트가 판정하고, 여기서는 요청을 보내지 않는 것까지만 한다.
   if (!(await hasActiveSession())) {
     return {
-      page: null,
-      pageToken,
-      error: null,
-      expired: false,
-      mealDay: null,
-      birthdays: null,
-      absences: [],
+      mealDay: Promise.resolve(null),
+      birthdays: Promise.resolve(null),
+      stories: [],
     };
   }
 
   const queryClient = getQueryClient();
   const referenceDate = getKoreaDateIso();
-  const mealDayPromise = pageToken
-    ? Promise.resolve(null)
-    : getMealDay(getKoreaDate());
-  const birthdaysPromise = pageToken
-    ? Promise.resolve(null)
-    : queryClient
-        .fetchQuery({
-          queryKey: birthdayKeys.today(referenceDate),
-          queryFn: () => listBirthdays(referenceDate, "today"),
-          staleTime: BIRTHDAY_STALE_TIME,
-          gcTime: BIRTHDAY_GC_TIME,
+
+  // 급식과 생일은 넓은 화면의 옆 칸에만 보인다. 기다리면 피드 전체가 가장 느린 요청 —
+  // 특히 외부 NEIS API — 에 묶이므로 promise째 넘기고 옆 칸만 따로 채운다.
+  // 끼니는 시간대로 고르므로(19시 이후는 조식) 날짜도 같은 기준으로 넘긴다. 오늘 날짜로 받으면
+  // 저녁에 이미 지난 오늘 아침 조식이 뜬다. 급식 화면과 같은 기준이다.
+  const mealDay = getMealDay(getMealReferenceDate()).catch(() => null);
+  const birthdays = queryClient
+    .query({
+      queryKey: birthdayKeys.today(referenceDate),
+      queryFn: () => listBirthdays(referenceDate, "today"),
+      staleTime: BIRTHDAY_STALE_TIME,
+      gcTime: BIRTHDAY_GC_TIME,
+    })
+    .catch(() => null);
+
+  // 스토리 캐시가 있으면 오래됐어도 그대로 그린다. 기다리면 2분이 지날 때마다 홈 진입이 목록 RPC와
+  // 서명 왕복에 묶인다. 다시 읽는 일은 마운트되는 레일의 `useQuery`가 뒤에서 맡는다.
+  const cachedStories = queryClient.getQueryData<StoryItem[]>(
+    storyKeys.active(),
+  );
+  const [stories] = await Promise.all([
+    cachedStories ??
+      queryClient
+        .query({
+          queryKey: storyKeys.active(),
+          queryFn: listActiveStories,
+          staleTime: STORY_STALE_TIME,
         })
-        .catch(() => null);
+        .catch(() => []),
+    // 캐시에 이미 세션이 있으면 그대로 쓴다. 뒤로 가기로 돌아왔을 때 쌓아 둔 페이지를
+    // 유지하려는 것이고, 갱신은 당겨서 새로고침처럼 명시적인 경로가 맡는다.
+    queryClient.ensureInfiniteQueryData(feedQuery()).catch(() => null),
+  ]);
 
-  const absencePromise = pageToken
-    ? Promise.resolve([])
-    : queryClient
-        .fetchQuery({
-          queryKey: absenceKeys.today(referenceDate),
-          queryFn: listTodayAbsences,
-          staleTime: ABSENCE_STALE_TIME,
-        })
-        .catch(() => []);
-
-  try {
-    const [page, mealDay, birthdays, absences] = await Promise.all([
-      queryClient.fetchQuery({
-        queryKey: feedKeys.page(pageToken),
-        queryFn: () => listFeedPosts(pageToken),
-        staleTime: FEED_STALE_TIME,
-      }),
-      mealDayPromise,
-      birthdaysPromise,
-      absencePromise,
-    ]);
-
-    if (pageToken) {
-      return {
-        page,
-        pageToken,
-        error: null,
-        expired: false,
-        mealDay,
-        birthdays,
-        absences,
-      };
-    }
-
-    return {
-      page,
-      pageToken: null,
-      error: null,
-      expired: false,
-      mealDay,
-      birthdays,
-      absences,
-    };
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "피드를 불러오지 못했습니다.";
-    const expired = pageToken !== null && /expired|not found/i.test(message);
-    const [mealDay, birthdays, absences] = await Promise.all([
-      mealDayPromise,
-      birthdaysPromise,
-      absencePromise,
-    ]);
-
-    if (pageToken) {
-      return {
-        page: null,
-        pageToken,
-        error: expired ? "피드가 만료되었습니다. 새로고침해 주세요." : message,
-        expired,
-        mealDay,
-        birthdays,
-        absences,
-      };
-    }
-
-    return {
-      page: null,
-      pageToken: null,
-      error: message,
-      expired: false,
-      mealDay,
-      birthdays,
-      absences,
-    };
-  }
+  return { mealDay, birthdays, stories };
 }
 
 export default function FeedPage({ loaderData }: Route.ComponentProps) {
-  const { page, error, mealDay, birthdays, absences } = loaderData;
+  const { mealDay, birthdays, stories } = loaderData;
   const { profile } = useAppShell();
+  const { openSearch: openDirectorySearch } = useSearchDialogParam();
 
   return (
     <>
-      {/* 긴 목록에서는 페이지 헤더만 별도로 자동 숨김한다. */}
       <PageHeader
         title="KMLA Online"
         hideOnScroll
         actions={
           <>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="검색"
+              onClick={openDirectorySearch}
+            >
+              <SearchIcon />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -193,44 +150,48 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
             >
               <UtensilsIcon />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              nativeButton={false}
-              aria-label="검색"
-              render={<Link to="/groups/discover" />}
-            >
-              <SearchIcon />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              nativeButton={false}
-              aria-label="메시지"
-              render={<Link to="/messenger" />}
-            >
-              <MessagesSquareIcon />
-            </Button>
           </>
         }
       />
+      <GlobalSearchDialog />
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-4">
         <div className="min-w-0">
-          {profile.type === "student" && absences.length > 0 ? (
-            <AbsenceRail initialItems={absences} viewerPubId={profile.pub_id} />
-          ) : null}
+          <StoryRail
+            initialItems={stories}
+            viewer={{
+              pubId: profile.pub_id,
+              name: profile.name,
+              avatarUrl: profile.avatar_url,
+            }}
+            canWrite={profile.type !== "alumni"}
+          />
 
-          <FeedScreen initialPage={page} initialError={error} />
+          <FeedScreen />
         </div>
 
-        {mealDay || birthdays ? (
-          <aside className="hidden space-y-3 self-start lg:block">
-            {birthdays ? <HomeBirthdaySummary birthdays={birthdays} /> : null}
-            {mealDay ? <HomeMealSummary day={mealDay} /> : null}
-          </aside>
-        ) : null}
+        <aside className="hidden space-y-3 self-start lg:block">
+          {/* 한 경계로 묶어 생일과 급식이 함께 들어선다. 따로 두면 생일 카드가 늦게 끼어들며 급식을 밀어낸다. */}
+          <Suspense fallback={<HomeMealSummarySkeleton />}>
+            <DeferredBirthdays birthdays={birthdays} />
+            <DeferredMeal mealDay={mealDay} />
+          </Suspense>
+        </aside>
       </div>
     </>
   );
+}
+
+function DeferredBirthdays({
+  birthdays,
+}: {
+  birthdays: Promise<BirthdayProfile[] | null>;
+}) {
+  const value = use(birthdays);
+  return value ? <HomeBirthdaySummary birthdays={value} /> : null;
+}
+
+function DeferredMeal({ mealDay }: { mealDay: Promise<MealDay | null> }) {
+  const value = use(mealDay);
+  return value ? <HomeMealSummary day={value} /> : null;
 }

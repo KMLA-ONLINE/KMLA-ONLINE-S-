@@ -2,6 +2,7 @@ import type {
   FieldErrors,
   ProfileFormValues,
 } from "~/features/auth/model/types";
+import { readDateField } from "~/shared/lib/date-field";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+?[0-9 -]{8,20}$/;
@@ -44,7 +45,7 @@ export function readProfileForm(formData: FormData): ProfileFormValues {
     gender: readFormText(formData, "gender"),
     academicTrack: readFormText(formData, "academicTrack"),
     phoneNumber: readFormText(formData, "phoneNumber"),
-    birthday: readFormText(formData, "birthday"),
+    birthday: readDateField(formData, "birthday"),
     dormRoom: readFormText(formData, "dormRoom"),
   };
 }

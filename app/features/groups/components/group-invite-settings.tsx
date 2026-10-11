@@ -2,13 +2,20 @@ import { CheckIcon, CopyIcon } from "lucide-react";
 import { useState } from "react";
 import { useFetcher } from "react-router";
 
-import type { GroupDetail, GroupInvite } from "~/features/groups/model/types";
+import { getGroupInviteProfileTypeLabel } from "~/features/groups/model/format";
+import type {
+  GroupDetail,
+  GroupInvite,
+  GroupInviteProfileType,
+} from "~/features/groups/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
+import { Checkbox } from "~/shared/ui/checkbox";
+import { Label } from "~/shared/ui/label";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
-import { TextField } from "~/shared/ui/text-field";
 import { Spinner } from "~/shared/ui/spinner";
+import { TextField } from "~/shared/ui/text-field";
 
 /** 시간 단위. 기본이 하루인 것은 의도다 — 더 오래 열어 두려면 한 번 골라야 한다. */
 const LIFETIME_OPTIONS: [number, string][] = [
@@ -19,13 +26,14 @@ const LIFETIME_OPTIONS: [number, string][] = [
   [336, "14일"],
 ];
 
-/**
- * 그룹 초대 링크.
- *
- * 링크는 그룹당 하나만 살아 있다. 여러 개를 두면 목록 화면과 개별 취소가 따라붙는데, 그만한
- * 이득이 없다 — 채널을 나눠 추적할 일이 없는 규모다. 대신 재발급이 곧 이전 링크의 무효화가
- * 되므로 "끊고 싶다"와 "다시 만들고 싶다"가 갈린다. 그래서 취소 버튼을 따로 둔다.
- */
+const PROFILE_TYPE_OPTIONS: GroupInviteProfileType[] = [
+  "student",
+  "alumni",
+  "teacher",
+];
+const DEFAULT_ALLOWED_PROFILE_TYPES: GroupInviteProfileType[] = ["student"];
+
+/** 그룹 초대 링크. 그룹당 하나만 살아 있고, 재발급이 곧 이전 링크의 무효화라 취소 버튼을 따로 둔다. */
 export function InviteSettings({
   group,
   invite,
@@ -34,12 +42,16 @@ export function InviteSettings({
   invite: GroupInvite | null;
 }) {
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
-  const [hours, setHours] = useState(24);
+  const [hours, setHours] = useState(1);
+  const [allowedProfileTypes, setAllowedProfileTypes] = useState<
+    GroupInviteProfileType[]
+  >(() => invite?.allowed_profile_types ?? DEFAULT_ALLOWED_PROFILE_TYPES);
   const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState<"reissue" | "revoke" | null>(
     null,
   );
   const pending = fetcher.state !== "idle";
+  const hasAllowedProfileType = allowedProfileTypes.length > 0;
 
   // 공식 그룹에는 초대할 사람이 없다. 승인된 재학생은 트리거로 자동 가입한다.
   if (group.kind === "official") return null;
@@ -55,6 +67,7 @@ export function InviteSettings({
         intent: "issue-invite",
         groupId: group.group_id,
         hours: String(hours),
+        allowedProfileTypes: allowedProfileTypes.join(","),
       },
       { method: "post" },
     );
@@ -66,6 +79,20 @@ export function InviteSettings({
     void fetcher.submit(
       { intent: "revoke-invite", groupId: group.group_id },
       { method: "post" },
+    );
+  };
+
+  const toggleProfileType = (
+    profileType: GroupInviteProfileType,
+    checked: boolean,
+  ) => {
+    setAllowedProfileTypes((current) =>
+      checked
+        ? PROFILE_TYPE_OPTIONS.filter(
+            (candidate) =>
+              candidate === profileType || current.includes(candidate),
+          )
+        : current.filter((candidate) => candidate !== profileType),
     );
   };
 
@@ -110,10 +137,39 @@ export function InviteSettings({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
+              {formatProfileTypes(invite.allowed_profile_types)} 가입 가능 ·{" "}
               {formatExpiry(invite.expires_at)}에 만료됩니다.
             </p>
           </div>
         ) : null}
+
+        <fieldset disabled={pending} className="flex flex-col">
+          <legend className="mb-2 text-sm font-medium">가입 가능 대상</legend>
+          <div className="flex flex-wrap gap-x-5 gap-y-3 rounded-lg border px-3 py-3">
+            {PROFILE_TYPE_OPTIONS.map((profileType) => {
+              const id = `invite-profile-type-${profileType}`;
+              return (
+                <div key={profileType} className="flex items-center gap-2">
+                  <Checkbox
+                    id={id}
+                    checked={allowedProfileTypes.includes(profileType)}
+                    onCheckedChange={(checked) =>
+                      toggleProfileType(profileType, checked === true)
+                    }
+                  />
+                  <Label htmlFor={id} className="font-normal">
+                    {getGroupInviteProfileTypeLabel(profileType)}
+                  </Label>
+                </div>
+              );
+            })}
+          </div>
+          {!hasAllowedProfileType ? (
+            <p className="text-xs text-destructive">
+              한 유형 이상 선택해 주세요.
+            </p>
+          ) : null}
+        </fieldset>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <label className="grid flex-1 gap-1.5 text-sm font-medium">
@@ -136,7 +192,7 @@ export function InviteSettings({
             type="button"
             variant={invite ? "outline" : "default"}
             className="shrink-0"
-            disabled={pending}
+            disabled={pending || !hasAllowedProfileType}
             onClick={() => (invite ? setConfirming("reissue") : issue())}
           >
             {pending ? <Spinner data-icon="inline-start" /> : null}
@@ -199,4 +255,8 @@ function formatExpiry(value: string): string {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatProfileTypes(types: GroupInviteProfileType[]): string {
+  return types.map(getGroupInviteProfileTypeLabel).join("·");
 }

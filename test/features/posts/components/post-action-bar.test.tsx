@@ -1,3 +1,4 @@
+import { act } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { setPostReaction, clearPostReaction, listPostReactors } = vi.hoisted(
@@ -15,6 +16,7 @@ vi.mock("~/features/posts/data/mutations", () => ({
 vi.mock("~/features/posts/data/queries", () => ({ listPostReactors }));
 
 import { PostActionBar } from "~/features/posts/components/post-action-bar";
+import { patchPostEngagement } from "~/features/posts/data/cache";
 import { renderRoute, screen } from "../../../router";
 
 beforeEach(() => {
@@ -95,6 +97,85 @@ describe("PostActionBar", () => {
     expect(
       await screen.findByRole("button", { name: "좋아요 취소" }),
     ).toBeInTheDocument();
+  });
+
+  it("shares comment and reaction changes with another action bar for the post", async () => {
+    const { queryClient, user } = renderRoute(() => (
+      <>
+        <PostActionBar
+          postId="post-id"
+          reaction={noReactions}
+          sharePath="/groups/group/posts/post-id"
+          shareTitle="제목"
+          commentCount={0}
+        />
+        <PostActionBar
+          postId="post-id"
+          reaction={noReactions}
+          sharePath="/groups/group/posts/post-id"
+          shareTitle="제목"
+          commentCount={0}
+        />
+      </>
+    ));
+
+    act(() =>
+      patchPostEngagement(queryClient, "post-id", { comment_count: 3 }),
+    );
+    expect(
+      await screen.findAllByRole("button", { name: "댓글 3개" }),
+    ).toHaveLength(2);
+
+    await user.click(screen.getAllByRole("button", { name: "반응 남기기" })[0]);
+
+    expect(
+      await screen.findAllByRole("button", { name: "좋아요 취소" }),
+    ).toHaveLength(2);
+  });
+
+  describe("share", () => {
+    const share = vi.fn();
+
+    beforeEach(() => {
+      share.mockReset().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "share", {
+        configurable: true,
+        value: share,
+      });
+      return () => {
+        Reflect.deleteProperty(navigator, "share");
+      };
+    });
+
+    function stubTouchPrimary(touch: boolean) {
+      vi.spyOn(window, "matchMedia").mockReturnValue({
+        matches: touch,
+      } as MediaQueryList);
+    }
+
+    it("copies the link on desktop even when the browser can share", async () => {
+      stubTouchPrimary(false);
+      const { user } = renderBar();
+
+      await user.click(screen.getByRole("button", { name: "공유" }));
+
+      expect(share).not.toHaveBeenCalled();
+      expect(await navigator.clipboard.readText()).toBe(
+        `${window.location.origin}/groups/group/posts/post-id`,
+      );
+    });
+
+    it("opens the system share sheet on touch devices", async () => {
+      stubTouchPrimary(true);
+      const { user } = renderBar();
+
+      await user.click(screen.getByRole("button", { name: "공유" }));
+
+      expect(share).toHaveBeenCalledWith({
+        title: "제목",
+        url: `${window.location.origin}/groups/group/posts/post-id`,
+      });
+    });
   });
 
   it("hides the reaction summary until someone reacts", () => {

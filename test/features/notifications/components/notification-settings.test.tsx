@@ -7,7 +7,11 @@ import { renderRoute } from "../../../router";
 const mocks = vi.hoisted(() => ({
   disableWebPush: vi.fn(),
   enableWebPush: vi.fn(),
+  getPermissionHelpPlatform: vi.fn(() => "android-app"),
   getPushSupport: vi.fn(),
+  watchNotificationPermission: vi.fn(
+    (_onChange: () => void) => () => undefined,
+  ),
 }));
 
 vi.mock("~/features/notifications/data/push", () => mocks);
@@ -21,6 +25,54 @@ const preferences = {
 };
 
 describe("NotificationSettings", () => {
+  it("guides a blocked device and restores the switch once allowed", async () => {
+    let notifyChange: (() => void) | null = null;
+    mocks.watchNotificationPermission.mockImplementation(
+      (onChange: () => void) => {
+        notifyChange = onChange;
+        return () => undefined;
+      },
+    );
+    mocks.getPushSupport.mockResolvedValue({
+      state: "available",
+      permission: "default",
+      subscribed: false,
+    });
+
+    renderRoute(() => (
+      <NotificationSettings
+        initialPreferences={preferences}
+        pushSupport={{
+          state: "available",
+          permission: "denied",
+          subscribed: false,
+        }}
+        groupPreferences={[]}
+      />
+    ));
+
+    expect(
+      screen.getByText(
+        "홈 화면의 앱 아이콘을 길게 눌러 앱 정보 → 알림에서 허용해 주세요.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("switch", { name: "이 기기의 Web Push" }),
+    ).not.toBeInTheDocument();
+
+    await act(async () => {
+      notifyChange?.();
+      await Promise.resolve();
+    });
+
+    expect(
+      await screen.findByRole("switch", { name: "이 기기의 Web Push" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/앱 정보 → 알림에서 허용해 주세요/),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows progress while enabling Web Push", async () => {
     let finishEnable:
       | ((value: {
@@ -38,7 +90,7 @@ describe("NotificationSettings", () => {
     const { user } = renderRoute(() => (
       <NotificationSettings
         initialPreferences={preferences}
-        initialPushSupport={{
+        pushSupport={{
           state: "available",
           permission: "granted",
           subscribed: false,
@@ -83,7 +135,7 @@ describe("NotificationSettings", () => {
     renderRoute(() => (
       <NotificationSettings
         initialPreferences={preferences}
-        initialPushSupport={{ state: "unsupported" }}
+        pushSupport={{ state: "unsupported" }}
         groupPreferences={[
           {
             groupId: "11111111-1111-4111-8111-111111111111",
@@ -122,7 +174,7 @@ describe("NotificationSettings", () => {
     renderRoute(() => (
       <NotificationSettings
         initialPreferences={preferences}
-        initialPushSupport={{ state: "unsupported" }}
+        pushSupport={{ state: "unsupported" }}
         groupPreferences={[
           {
             groupId: "11111111-1111-4111-8111-111111111111",
@@ -151,7 +203,7 @@ describe("NotificationSettings", () => {
     renderRoute(() => (
       <NotificationSettings
         initialPreferences={{ ...preferences, timeline_push_enabled: false }}
-        initialPushSupport={{
+        pushSupport={{
           state: "available",
           permission: "granted",
           subscribed: true,
@@ -174,16 +226,13 @@ describe("NotificationSettings", () => {
     renderRoute(() => (
       <NotificationSettings
         initialPreferences={preferences}
-        initialPushSupport={{ state: "unsupported" }}
+        pushSupport={{ state: "unsupported" }}
         groupPreferences={[]}
       />
     ));
 
     expect(
       screen.getByText("이 기기로 오는 Push가 없습니다."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("받도록 설정한 알림은 앱 알림함에서 확인합니다."),
     ).toBeInTheDocument();
   });
 
@@ -197,7 +246,7 @@ describe("NotificationSettings", () => {
           school_push_enabled: false,
           timeline_push_enabled: false,
         }}
-        initialPushSupport={{
+        pushSupport={{
           state: "available",
           permission: "granted",
           subscribed: true,
@@ -210,9 +259,7 @@ describe("NotificationSettings", () => {
       screen.getByText("이 기기로 운영 조치 Push만 받습니다."),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "운영 조치는 유형별 설정과 관계없이 전달됩니다. 가입 승인·차단 Push는 ‘계정 · 권한’ 설정을 따르며, 이메일과 앱 알림함은 계속 전달됩니다.",
-      ),
+      screen.getByText("그 밖의 알림은 앱 알림함에서 확인합니다."),
     ).toBeInTheDocument();
   });
 });

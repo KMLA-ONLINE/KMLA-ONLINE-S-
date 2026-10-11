@@ -93,7 +93,7 @@ $$;
 
 ALTER FUNCTION "public"."admin_list_accepted_users"("p_query" "text", "p_limit" integer, "p_offset" integer, "p_managers_only" boolean) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."admin_list_applications"("p_status" "public"."profile_status", "p_limit" integer DEFAULT 50, "p_offset" integer DEFAULT 0) RETURNS TABLE("profile_id" bigint, "pub_id" "text", "name" "text", "profile_type" "public"."profile_type", "is_returning_student" boolean, "submitted_at" timestamp with time zone, "status_updated_at" timestamp with time zone, "cohort" smallint, "class_no" smallint, "academic_track" "public"."profile_academic_track", "department" "text", "student_number" "text", "gender" "public"."profile_gender", "birthday" "date", "phone_number" "text", "dorm_room" smallint, "description" "text", "total_count" bigint)
+CREATE OR REPLACE FUNCTION "public"."admin_list_applications"("p_status" "public"."profile_status", "p_limit" integer DEFAULT 50, "p_offset" integer DEFAULT 0) RETURNS TABLE("profile_id" bigint, "name" "text", "profile_type" "public"."profile_type", "is_returning_student" boolean, "submitted_at" timestamp with time zone, "cohort" smallint, "student_number" "text", "gender" "public"."profile_gender", "birthday" "date", "total_count" bigint)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -109,12 +109,9 @@ begin
 
   return query
   select
-    profile.id, profile.pub_id, profile.name, profile.type,
-    profile.is_returning_student, profile.submitted_at,
-    profile.status_updated_at, profile.cohort, profile.class_no,
-    profile.academic_track, profile.department, profile.student_number,
-    profile.gender, profile.birthday, profile.phone_number,
-    profile.dorm_room, profile.description, count(*) over ()
+    profile.id, profile.name, profile.type, profile.is_returning_student,
+    profile.submitted_at, profile.cohort, profile.student_number,
+    profile.gender, profile.birthday, count(*) over ()
   from public.profiles as profile
   where profile.status = p_status
     and profile.deleted_at is null

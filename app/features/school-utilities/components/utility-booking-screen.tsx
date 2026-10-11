@@ -20,6 +20,10 @@ import {
   startOfKoreaWeek,
   useKoreaToday,
 } from "~/features/school-utilities/model/korea-date";
+import {
+  reservationCancelErrorMessage,
+  reservationCreateErrorMessage,
+} from "~/features/school-utilities/model/reservation-error";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -284,7 +288,6 @@ interface SlotTabsProps {
   onSelect: (slot: string) => void;
 }
 
-/** 평일은 3개, 주말은 14개다. 모바일은 가로 스크롤, 데스크톱은 줄바꿈으로 전부 보여준다. */
 function SlotTabs({ slots, activeSlot, onSelect }: SlotTabsProps) {
   return (
     <div
@@ -480,8 +483,7 @@ function BookingRow({
           {label}
         </span>
 
-        {/* `sm`(24px)은 두 줄짜리 줄에서 작아 보이고 `default`(32px)는 과하다.
-            `default` 기준 클래스만 tailwind-merge로 덮어써서 28px로 쓴다. */}
+        {/* `default` 기준 클래스만 tailwind-merge로 덮어 28px로 쓴다. */}
         <Link
           to={`/profile/${reservation.applicantPubId}`}
           aria-label={`${reservation.applicantName} 프로필`}
@@ -774,7 +776,12 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
       setOpenKey(null);
     } catch (error) {
       console.error("Failed to create utility reservation", error);
-      setError("다른 사용자가 먼저 신청했거나 신청할 수 없는 일정입니다.");
+      setError(
+        reservationCreateErrorMessage(
+          error,
+          mode === "gongang" && draft.recurring,
+        ),
+      );
       setRefreshVersion((current) => current + 1);
     } finally {
       setMutationKey(null);
@@ -834,7 +841,7 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
       setOpenKey(null);
     } catch (error) {
       console.error("Failed to delete utility reservation", error);
-      setError("예약을 취소할 수 없습니다. 새로고침 후 다시 시도해주세요.");
+      setError(reservationCancelErrorMessage(error));
       setRefreshVersion((current) => current + 1);
     } finally {
       setMutationKey(null);
@@ -851,6 +858,7 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
     );
 
     setOpenKey(null);
+    setError(null);
   };
 
   const rows =
@@ -944,6 +952,7 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
             onSelect={(slot) => {
               setSelectedSlot(slot);
               setOpenKey(null);
+              setError(null);
             }}
           />
         </div>
@@ -972,7 +981,10 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
                 reservation={row.reservation}
                 draft={drafts[row.key] ?? emptyDraft()}
                 open={openKey === row.key}
-                onOpen={() => setOpenKey(row.key)}
+                onOpen={() => {
+                  setOpenKey(row.key);
+                  setError(null);
+                }}
                 onDraftChange={(draft) => updateDraft(row.key, draft)}
                 onClose={() => setOpenKey(null)}
                 onSave={() => {

@@ -1,0 +1,1 @@
+export const POST_ATTACHMENT_LIMIT = 30;

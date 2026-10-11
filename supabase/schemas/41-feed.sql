@@ -19,7 +19,6 @@ CREATE OR REPLACE FUNCTION "private"."can_access_feed_post"("p_post_id" "uuid", 
       and viewer.deleted_at is null
     where post.id = p_post_id
       and post.published_at is not null
-      and post.deleted_at is null
       and (
         (
           post.kind = 'group'
@@ -29,7 +28,6 @@ CREATE OR REPLACE FUNCTION "private"."can_access_feed_post"("p_post_id" "uuid", 
             join public.groups as group_record on group_record.id = membership.group_id
             where membership.group_id = post.group_id
               and membership.profile_id = p_profile_id
-              and group_record.deleted_at is null
           )
         )
         or (
@@ -79,7 +77,6 @@ begin
     where post.id = new.post_id
       and post.kind = 'group'
       and post.published_at is not null
-      and post.deleted_at is null
   ) then
     return new;
   end if;
@@ -104,6 +101,10 @@ $$;
 
 ALTER FUNCTION "private"."capture_effective_feed_bump"() OWNER TO "postgres";
 
+-- 게시물이 사라지는 중이면 반응 취소 이력을 남기지 않는다. 게시물을 지우면 반응이 CASCADE로
+-- 함께 지워지고 이 트리거가 행마다 도는데, 그때 -1 이벤트를 넣으면 이미 없어진 게시물을 가리켜
+-- 외래 키 위반이 난다. 남긴다 해도 같은 CASCADE에 곧 지워질 행이다. 정리 경로가 세우는
+-- `app.feed_event_purge`로 그 상황을 구분한다(삭제 및 보존 정책 §7.4).
 CREATE OR REPLACE FUNCTION "private"."capture_post_reaction_count_event"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -112,7 +113,10 @@ begin
   if tg_op = 'INSERT' then
     insert into private.post_reaction_count_events (post_id, delta, occurred_at)
     values (new.post_id, 1, new.created_at);
-  elsif tg_op = 'DELETE' then
+  elsif tg_op = 'DELETE'
+    and coalesce(
+      pg_catalog.current_setting('app.feed_event_purge', true), ''
+    ) <> 'on' then
     insert into private.post_reaction_count_events (post_id, delta)
     values (old.post_id, -1);
   end if;
@@ -143,13 +147,34 @@ CREATE OR REPLACE FUNCTION "private"."create_feed_session"("p_profile_id" bigint
 declare
   session_id uuid;
   epoch timestamptz := statement_timestamp();
-  candidate record;
-  next_position integer := 1;
-  page_counts jsonb := '{}'::jsonb;
-  last_source_type text;
-  last_source_id text;
+  viewer_cohorts smallint[] := private.feed_profile_cohorts(p_profile_id);
+  -- 후보는 순위 순서의 배열이다. 배열 번호가 곧 순위(priority)이고, 출처는 1부터 매긴 번호로 둔다.
+  candidate_post_ids uuid[];
+  candidate_rank_times timestamptz[];
+  candidate_sources integer[];
+  candidate_total integer;
+  -- 출처별 후보: `source_items`에 출처 번호 순, 같은 출처 안에서는 순위 순으로 이어 붙인 순위 목록.
+  -- `source_next`는 그 출처에서 아직 배치하지 않은 첫 칸, `source_last`는 마지막 칸이다.
+  -- 출처별 페이지 제한과 연속 제한. 개인은 4개·2개, 그룹은 10개·3개다.
+  source_page_limits integer[];
+  source_run_limits integer[];
+  source_items integer[];
+  source_next integer[];
+  source_last integer[];
+  source_total integer;
+  -- frontier는 아직 한 번도 살펴보지 않은 첫 순위다. 그보다 앞인데 남아 있는 후보는 제한에 걸려
+  -- 밀린 것이고, 그런 후보가 있는 출처를 `deferred`에 둔다.
+  frontier integer := 1;
+  deferred integer[] := '{}'::integer[];
+  page_counts integer[];
+  placed integer[];
+  placed_count integer := 0;
+  last_source integer;
   consecutive_count integer := 0;
-  source_count integer;
+  chosen integer;
+  chosen_source integer;
+  item_source integer;
+  head integer;
 begin
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended('feed-session:' || p_profile_id::text, 0)
@@ -187,46 +212,59 @@ begin
   insert into private.feed_sessions (id, profile_id, feed_epoch, expires_at)
   values (session_id, p_profile_id, epoch, epoch + interval '24 hours');
 
-  create temporary table if not exists feed_ranked_candidates (
-    priority bigint primary key,
-    post_id uuid not null unique,
-    rank_time timestamptz not null,
-    source_type text not null,
-    source_id text not null
-  ) on commit drop;
-  truncate table feed_ranked_candidates;
-
-  insert into feed_ranked_candidates (
-    priority, post_id, rank_time, source_type, source_id
-  )
-  select
-    row_number() over (
-      order by ranked.rank_time desc, ranked.published_at desc, ranked.post_id desc
-    ),
-    ranked.post_id,
-    ranked.rank_time,
-    ranked.source_type,
-    ranked.source_id
-  from (
+  -- 접근 조건은 `can_access_feed_post()`를 집합 조건으로 옮긴 것이다. 후보마다 그 함수를 부르면
+  -- security definer 호출 비용이 후보 수만큼 쌓인다. 두 조건이 같은 게시물을 고르는지는
+  -- `integrated_feed.test.sql`이 확인한다.
+  --
+  -- 생탐 판정에 쓰는 타임라인 주인의 관련 기수도 게시물마다 구하지 않고 주인마다 한 번만 구한다.
+  -- 보는 사람에게 관련 기수가 없으면 생탐은 어차피 들어오지 않으므로 아무도 구하지 않는다.
+  with timeline_cohorts as materialized (
+    select timeline.profile_id, private.feed_profile_cohorts(timeline.profile_id) as cohorts
+    from (
+      select distinct post.timeline_profile_id as profile_id
+      from public.posts as post
+      where post.kind = 'profile'
+        and post.timeline_profile_id is not null
+        and post.published_at is not null
+        and coalesce(cardinality(viewer_cohorts), 0) > 0
+    ) as timeline
+  ),
+  candidates as (
     select
       post.id as post_id,
       post.published_at,
-      private.feed_rank_time(
-        post.published_at,
-        bump.effective_at,
-        epoch,
-        coalesce(reaction.total, 0),
-        coalesce(comment.total, 0),
-        post.kind = 'profile' and author.profile_id <> post.timeline_profile_id,
-        post.activity_kind is not null
-      ) as rank_time,
-      case post.kind when 'group' then 'group' else 'profile' end as source_type,
+      -- 6시간이 지났고 `#업`도 없는 게시물은 `feed_rank_time()`이 게시 시각을 그대로 돌려준다.
+      -- 후보 대부분이 그런 지난 글이라 호출을 건너뛴다(search_path를 고정한 함수라 인라인되지 않는다).
+      case
+        when post.published_at <= epoch - interval '6 hours' and bump.effective_at is null
+          then post.published_at
+        else private.feed_rank_time(
+          post.published_at,
+          bump.effective_at,
+          epoch,
+          coalesce(reaction.total, 0),
+          coalesce(comment.total, 0),
+          post.kind = 'profile' and author.profile_id <> post.timeline_profile_id,
+          post.activity_kind is not null
+        )
+      end as rank_time,
+      post.kind <> 'group' as is_profile,
       case post.kind
         when 'group' then post.group_id::text
         else author.profile_id::text
       end as source_id
     from public.posts as post
     join private.post_authors as author on author.post_id = post.id
+    left join public.profiles as timeline
+      on timeline.id = post.timeline_profile_id
+      and timeline.status = 'accepted'
+      and timeline.deleted_at is null
+    left join public.profiles as viewer
+      on viewer.id = p_profile_id
+      and viewer.status = 'accepted'
+      and viewer.deleted_at is null
+    left join timeline_cohorts
+      on timeline_cohorts.profile_id = post.timeline_profile_id
     left join lateral (
       select event.effective_at
       from private.feed_bump_events as event
@@ -252,60 +290,177 @@ begin
     ) as comment on post.published_at > epoch - interval '6 hours'
     where post.published_at is not null
       and post.published_at <= epoch
-      and post.deleted_at is null
-      and private.can_access_feed_post(post.id, p_profile_id)
-  ) as ranked;
-
-  while exists (select 1 from feed_ranked_candidates) loop
-    if (next_position - 1) % 20 = 0 then
-      page_counts := '{}'::jsonb;
-    end if;
-
-    select item.* into candidate
-    from feed_ranked_candidates as item
-    where coalesce((page_counts ->> (item.source_type || ':' || item.source_id))::integer, 0)
-        < case item.source_type when 'profile' then 4 else 10 end
-      and not (
-        item.source_type = last_source_type
-        and item.source_id = last_source_id
-        and consecutive_count >= case item.source_type when 'profile' then 2 else 3 end
+      and (
+        (
+          post.kind = 'group'
+          and post.group_id in (
+            select membership.group_id
+            from public.group_memberships as membership
+            join public.groups as group_record on group_record.id = membership.group_id
+            where membership.profile_id = p_profile_id
+          )
+        )
+        or (
+          post.kind = 'profile'
+          and post.visibility = 'public'
+          and timeline.id is not null
+          and (
+            author.profile_id = post.timeline_profile_id
+            or (
+              (viewer_cohorts && timeline_cohorts.cohorts)
+              and viewer.gender = timeline.gender
+            )
+          )
+          and (
+            post.activity_kind is null
+            or post.timeline_profile_id = p_profile_id
+            or timeline.type = 'teacher'
+            or (
+              viewer.cohort = timeline.cohort
+              and viewer.gender = timeline.gender
+            )
+          )
+        )
       )
-    order by item.priority
-    limit 1;
+  ),
+  numbered as (
+    select
+      candidate.*,
+      row_number() over (
+        order by candidate.rank_time desc, candidate.published_at desc, candidate.post_id desc
+      )::integer as priority,
+      dense_rank() over (
+        order by candidate.is_profile, candidate.source_id
+      )::integer as source_number
+    from candidates as candidate
+  ),
+  slotted as (
+    select
+      numbered.*,
+      row_number() over (
+        order by numbered.source_number, numbered.priority
+      )::integer as slot
+    from numbered
+  ),
+  sources as (
+    select
+      slotted.source_number,
+      bool_or(slotted.is_profile) as is_profile,
+      min(slotted.slot)::integer as first_slot,
+      max(slotted.slot)::integer as last_slot
+    from slotted
+    group by slotted.source_number
+  )
+  select
+    (select array_agg(slotted.post_id order by slotted.priority) from slotted),
+    (select array_agg(slotted.rank_time order by slotted.priority) from slotted),
+    (select array_agg(slotted.source_number order by slotted.priority) from slotted),
+    (select array_agg(slotted.priority order by slotted.slot) from slotted),
+    (select array_agg(case when sources.is_profile then 4 else 10 end order by sources.source_number) from sources),
+    (select array_agg(case when sources.is_profile then 2 else 3 end order by sources.source_number) from sources),
+    (select array_agg(sources.first_slot order by sources.source_number) from sources),
+    (select array_agg(sources.last_slot order by sources.source_number) from sources)
+  into
+    candidate_post_ids,
+    candidate_rank_times,
+    candidate_sources,
+    source_items,
+    source_page_limits,
+    source_run_limits,
+    source_next,
+    source_last;
 
-    if not found then
-      select item.* into candidate
-      from feed_ranked_candidates as item
-      order by item.priority
-      limit 1;
+  candidate_total := coalesce(cardinality(candidate_post_ids), 0);
+  if candidate_total = 0 then
+    return session_id;
+  end if;
+
+  source_total := cardinality(source_next);
+  placed := pg_catalog.array_fill(0, array[candidate_total]);
+
+  -- 출처 제한(FEED_ALGORITHM.md §5): 자리마다 남은 후보 중 두 제한을 모두 만족하는 가장 높은
+  -- 순위를 고르고, 없으면 남은 것 중 가장 높은 순위를 고른다. 남은 후보를 매번 처음부터 훑지
+  -- 않는다. 같은 출처의 후보는 제한 결과가 같으므로 밀린 출처마다 맨 앞 하나만 보면 되고,
+  -- 그런 출처는 몇 개뿐이다. 거기서 고를 수 없을 때만 frontier를 민다. 고르는 순서는 같고 일은
+  -- 후보 수에 비례한다.
+  while placed_count < candidate_total loop
+    if placed_count % 20 = 0 then
+      page_counts := pg_catalog.array_fill(0, array[source_total]);
     end if;
 
-    insert into private.feed_session_posts (session_id, position, post_id, rank_time)
-    values (session_id, next_position, candidate.post_id, candidate.rank_time);
-    delete from feed_ranked_candidates where post_id = candidate.post_id;
+    chosen := null;
 
-    source_count := coalesce(
-      (page_counts ->> (candidate.source_type || ':' || candidate.source_id))::integer,
-      0
-    ) + 1;
-    page_counts := jsonb_set(
-      page_counts,
-      array[candidate.source_type || ':' || candidate.source_id],
-      to_jsonb(source_count),
-      true
-    );
+    foreach item_source in array deferred loop
+      if page_counts[item_source] < source_page_limits[item_source]
+        and not (
+          item_source = last_source
+          and consecutive_count >= source_run_limits[item_source]
+        ) then
+        head := source_items[source_next[item_source]];
+        if chosen is null or head < chosen then
+          chosen := head;
+          chosen_source := item_source;
+        end if;
+      end if;
+    end loop;
 
-    if candidate.source_type = last_source_type
-      and candidate.source_id = last_source_id then
+    -- 밀린 출처가 하나도 통과하지 못했다. frontier의 후보는 그들보다 순위가 낮으므로 이제 본다.
+    -- 밀린 출처의 후보는 그 출처가 지금 제한에 걸려 있다는 뜻이라 그대로 지나친다.
+    while chosen is null and frontier <= candidate_total loop
+      item_source := candidate_sources[frontier];
+      if item_source <> all(deferred) then
+        if page_counts[item_source] < source_page_limits[item_source]
+          and not (
+            item_source = last_source
+            and consecutive_count >= source_run_limits[item_source]
+          ) then
+          chosen := frontier;
+          chosen_source := item_source;
+        else
+          deferred := deferred || item_source;
+        end if;
+      end if;
+      frontier := frontier + 1;
+    end loop;
+
+    if chosen is null then
+      -- 제한을 만족하는 후보가 없다. 남은 것 중 가장 높은 순위로 채운다.
+      foreach item_source in array deferred loop
+        head := source_items[source_next[item_source]];
+        if chosen is null or head < chosen then
+          chosen := head;
+          chosen_source := item_source;
+        end if;
+      end loop;
+    end if;
+
+    placed_count := placed_count + 1;
+    placed[placed_count] := chosen;
+    source_next[chosen_source] := source_next[chosen_source] + 1;
+    if chosen_source = any(deferred)
+      and (
+        source_next[chosen_source] > source_last[chosen_source]
+        or source_items[source_next[chosen_source]] >= frontier
+      ) then
+      deferred := pg_catalog.array_remove(deferred, chosen_source);
+    end if;
+
+    page_counts[chosen_source] := page_counts[chosen_source] + 1;
+    if chosen_source = last_source then
       consecutive_count := consecutive_count + 1;
     else
-      last_source_type := candidate.source_type;
-      last_source_id := candidate.source_id;
+      last_source := chosen_source;
       consecutive_count := 1;
     end if;
-
-    next_position := next_position + 1;
   end loop;
+
+  insert into private.feed_session_posts (session_id, position, post_id, rank_time)
+  select
+    session_id,
+    slot.position::integer,
+    candidate_post_ids[slot.priority],
+    candidate_rank_times[slot.priority]
+  from unnest(placed) with ordinality as slot(priority, position);
 
   return session_id;
 end;
@@ -380,18 +535,29 @@ $$;
 
 ALTER FUNCTION "private"."feed_rank_time"("p_published_at" timestamp with time zone, "p_bumped_at" timestamp with time zone, "p_feed_epoch" timestamp with time zone, "p_reaction_count" integer, "p_ranking_comment_count" integer, "p_is_cross_timeline" boolean, "p_is_profile_media_activity" boolean) OWNER TO "postgres";
 
+-- 랭킹 이벤트는 순위가 오른 사실의 기록이다. 지우고 다시 만들어 순위를 반복해서 올리는 길을
+-- 막아야 하므로 UPDATE는 어떤 경우에도 통과시키지 않는다.
+--
+-- DELETE에만 예외를 둔다. 게시물이 사라지면 그 이벤트도 함께 사라져야 하는데 외래 키 CASCADE도
+-- 이 트리거를 거치기 때문이다. 정리 경로가 `app.feed_event_purge`를 세워 스스로를 밝히며, 그
+-- 설정은 트랜잭션 지역이라 밖으로 새지 않는다. 두 테이블은 private 스키마에 있고 authenticated
+-- 권한이 없어, 클라이언트가 이 설정을 세워도 행에 도달할 수 없다(삭제 및 보존 정책 §7.4).
 CREATE OR REPLACE FUNCTION "private"."reject_feed_event_mutation"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO ''
     AS $$
 begin
+  if "tg_op" = 'DELETE'
+    and "pg_catalog"."current_setting"('app.feed_event_purge', true) = 'on' then
+    return old;
+  end if;
   raise exception 'feed ranking events are append-only' using errcode = '55000';
 end;
 $$;
 
 ALTER FUNCTION "private"."reject_feed_event_mutation"() OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_feed_posts"("p_page_token" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("feed_epoch" timestamp with time zone, "next_page_token" "uuid", "feed_position" integer, "rank_time" timestamp with time zone, "post_id" "uuid", "kind" "public"."post_kind", "body" "text", "title" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "group_id" "uuid", "group_slug" "text", "group_name" "text", "category_name" "text", "is_pinned" boolean, "timeline_pub_id" "text", "timeline_name" "text", "activity_kind" "public"."profile_media_activity_kind", "activity_media_path" "text", "visibility" "public"."post_visibility", "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "attachments" "jsonb", "is_author" boolean)
+CREATE OR REPLACE FUNCTION "public"."list_feed_posts"("p_page_token" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("feed_epoch" timestamp with time zone, "next_page_token" "uuid", "feed_position" integer, "rank_time" timestamp with time zone, "post_id" "uuid", "kind" "public"."post_kind", "body" "text", "title" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "group_id" "uuid", "group_slug" "text", "group_name" "text", "category_name" "text", "is_pinned" boolean, "timeline_pub_id" "text", "timeline_name" "text", "activity_kind" "public"."profile_media_activity_kind", "activity_media_path" "text", "visibility" "public"."post_visibility", "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "attachments" "jsonb", "is_author" boolean, "mentions" "jsonb")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -402,9 +568,11 @@ declare
   page_after_position integer := 0;
   page_last_position integer;
   following_page_token uuid;
-  selected_positions integer[];
-  selected_post_ids uuid[];
-  selected_rank_times timestamptz[];
+  selected_positions integer[] := '{}'::integer[];
+  selected_post_ids uuid[] := '{}'::uuid[];
+  selected_rank_times timestamptz[] := '{}'::timestamptz[];
+  has_more boolean := false;
+  session_entry record;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -429,32 +597,31 @@ begin
     end if;
   end if;
 
-  select
-    array_agg(page.position order by page.position),
-    array_agg(page.post_id order by page.position),
-    array_agg(page.rank_time order by page.position)
-  into selected_positions, selected_post_ids, selected_rank_times
-  from (
+  -- 위치 순으로 읽다가 접근 가능한 20개와, 다음 페이지가 있는지 알려 줄 하나를 더 찾으면 멈춘다.
+  -- 같은 일을 `order by ... limit 20` 한 문장으로 쓰면 planner가 세션 전체에 접근 검사를 돌린 뒤
+  -- 정렬하는 계획을 고를 수 있다. 세션은 접근 가능한 게시물 전부를 담으므로 그 비용이 페이지마다 든다.
+  for session_entry in
     select entry.position, entry.post_id, entry.rank_time
     from private.feed_session_posts as entry
     where entry.session_id = target_session_id
       and entry.position > page_after_position
-      and private.can_access_feed_post(entry.post_id, caller_profile_id)
     order by entry.position
-    limit 20
-  ) as page;
+  loop
+    continue when not private.can_access_feed_post(session_entry.post_id, caller_profile_id);
 
-  if cardinality(selected_positions) > 0 then
+    if cardinality(selected_positions) = 20 then
+      has_more := true;
+      exit;
+    end if;
+
+    selected_positions := selected_positions || session_entry.position;
+    selected_post_ids := selected_post_ids || session_entry.post_id;
+    selected_rank_times := selected_rank_times || session_entry.rank_time;
+  end loop;
+
+  if has_more then
     page_last_position := selected_positions[cardinality(selected_positions)];
-  end if;
 
-  if page_last_position is not null and exists (
-    select 1
-    from private.feed_session_posts as entry
-    where entry.session_id = target_session_id
-      and entry.position > page_last_position
-      and private.can_access_feed_post(entry.post_id, caller_profile_id)
-  ) then
     insert into private.feed_pages (session_id, after_position)
     values (target_session_id, page_last_position)
     on conflict (session_id, after_position) do nothing;
@@ -500,8 +667,9 @@ begin
     reaction_summary.total,
     reaction_summary.top,
     mine.reaction,
-    attachment_summary.items,
-    author.profile_id = caller_profile_id
+    private.post_attachments_json(post.id),
+    author.profile_id = caller_profile_id,
+    private.post_mentions_json(post.id)
   from unnest(selected_positions, selected_post_ids, selected_rank_times)
     as selected(position, post_id, rank_time)
   join public.posts as post on post.id = selected.post_id
@@ -537,29 +705,6 @@ begin
       group by entry.reaction
     ) as tally
   ) as reaction_summary on true
-  left join lateral (
-    select coalesce(
-      jsonb_agg(
-        jsonb_build_object(
-          'attachment_id', attachment.id,
-          'storage_bucket', attachment.storage_bucket,
-          'object_path', attachment.object_path,
-          'original_filename', attachment.original_filename,
-          'position', attachment.position,
-          'mime_type', attachment.mime_type,
-          'size_bytes', attachment.size_bytes,
-          'width', attachment.width,
-          'height', attachment.height,
-          'status', attachment.status,
-          'created_at', attachment.created_at,
-          'ready_at', attachment.ready_at
-        ) order by attachment.position, attachment.id
-      ),
-      '[]'::jsonb
-    ) as items
-    from public.post_attachments as attachment
-    where attachment.post_id = post.id and attachment.status = 'ready'
-  ) as attachment_summary on true
   order by selected.position;
 end;
 $$;
@@ -679,10 +824,10 @@ CREATE OR REPLACE TRIGGER "post_comments_capture_effective_feed_bump" AFTER INSE
 CREATE OR REPLACE TRIGGER "post_reactions_capture_count_event" AFTER INSERT OR DELETE ON "public"."post_reactions" FOR EACH ROW EXECUTE FUNCTION "private"."capture_post_reaction_count_event"();
 
 ALTER TABLE ONLY "private"."feed_bump_events"
-    ADD CONSTRAINT "feed_bump_events_comment_id_fkey" FOREIGN KEY ("comment_id") REFERENCES "public"."post_comments"("id");
+    ADD CONSTRAINT "feed_bump_events_comment_id_fkey" FOREIGN KEY ("comment_id") REFERENCES "public"."post_comments"("id") ON DELETE CASCADE;
 
 ALTER TABLE ONLY "private"."feed_bump_events"
-    ADD CONSTRAINT "feed_bump_events_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id");
+    ADD CONSTRAINT "feed_bump_events_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id") ON DELETE CASCADE;
 
 ALTER TABLE ONLY "private"."feed_pages"
     ADD CONSTRAINT "feed_pages_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "private"."feed_sessions"("id") ON DELETE CASCADE;
@@ -697,7 +842,7 @@ ALTER TABLE ONLY "private"."feed_sessions"
     ADD CONSTRAINT "feed_sessions_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
 
 ALTER TABLE ONLY "private"."post_reaction_count_events"
-    ADD CONSTRAINT "post_reaction_count_events_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id");
+    ADD CONSTRAINT "post_reaction_count_events_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id") ON DELETE CASCADE;
 
 ALTER TABLE "private"."feed_bump_events" ENABLE ROW LEVEL SECURITY;
 

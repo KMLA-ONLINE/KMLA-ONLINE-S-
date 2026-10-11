@@ -28,23 +28,11 @@ function DialogOverlay({
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
-      // Base UI는 중첩된 dialog의 backdrop을 렌더하지 않는다(`enabled: forceRender || !nested`).
-      // 스크림이 겹겹이 쌓여 과하게 어두워지는 걸 막으려는 기본값인데, 이 앱은 게시물 상세가
-      // 화면을 거의 덮는 불투명 시트라 그 위에 뜬 dialog만 아무 배경도 없이 떠 있는 것처럼
-      // 보인다. 10%가 두 겹 겹쳐 봐야 과하지 않다.
+      // Base UI는 중첩 dialog의 backdrop을 기본으로 안 그리는데, 게시물 상세가 불투명 시트라 그 위 dialog가 배경 없이 떠 보인다.
       forceRender
-      // blur는 쓰지 않는다. 스크림이 별도 합성 레이어가 되면서, 모달이 opacity로 페이드하는
-      // 동안 Chrome이 레이어 경계에 1px짜리 가로선을 그렸다 지운다 — 화면을 거의 채우는
-      // 모달에서 특히 눈에 띈다. 게다가 `backdrop-blur-xs`는 2px이라 그 대가를 치를 만큼
-      // 보이지도 않았다.
-      // 스크림 농도는 모드마다 다르다. light의 `--background`와 `--popover`는 둘 다 순백이라
-      // 모달을 배경에서 떼어 내는 건 오직 이 스크림이고, 흰 바탕에서는 10%만 깔려도 눈에 띈다.
-      // dark의 `--background`는 이미 oklch(0.22)라 같은 10%를 덮어도 sRGB로 2/255밖에 안
-      // 움직여 사실상 보이지 않는다 — 검은 스크림을 어두운 바탕에 얹으니 내려갈 자리가 없다.
-      // 대신 dark는 `--popover`(0.3)가 배경보다 밝아 분리 자체는 이미 되어 있으므로, 여기서
-      // 필요한 일은 뒤에 남은 밝은 본문과 글자를 눌러 주는 쪽이다. 40%면 흰 글자가 L* 98에서
-      // 60 근처까지 내려간다. 더 올리지 않는 건 위의 `forceRender` 때문이다 — 두 겹 겹치면
-      // 40%는 64%가 되고, 50%는 75%까지 올라 모달 두 장 뒤가 새까매진다.
+      // blur는 쓰지 않는다: 스크림이 합성 레이어가 되어 모달 페이드 중 Chrome이 1px 가로선을 그린다.
+      // 농도는 모드별: light는 background/popover가 모두 순백이라 10%로도 분리되고, dark는 popover가 이미 더 밝아 40%로 뒤 본문만 눌러 준다.
+      // 더 올리지 않는 이유는 `forceRender`로 두 겹 겹치기 때문(40% -> 64%).
       className={cn(
         "fixed inset-0 isolate z-50 bg-black/10 duration-100 dark:bg-black/40 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className,
@@ -58,23 +46,21 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  overlayClassName,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean;
+  /** 이미지 뷰어(z-60)처럼 z-50보다 높은 층 위에 띄울 때 배경도 함께 올린다. */
+  overlayClassName?: string;
 }) {
   const popupRef = React.useRef<HTMLDivElement>(null);
 
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
-        // Base UI는 기본적으로 팝업 안의 첫 tabbable 요소로 포커스를 옮긴다. 열자마자
-        // 닫기나 취소 버튼에 포커스 링이 붙어 거절을 권하는 모양이 되므로, 팝업
-        // 컨테이너(tabindex=-1)로 보낸다 — 터치로 열렸을 때 Base UI가 하는 동작과 같고,
-        // `aria-labelledby` 덕에 버튼 대신 다이얼로그 제목이 읽힌다. 포커스를 아예 끄면
-        // (`initialFocus={false}`) 배경이 inert인 트랩 안에 갈 곳이 없어진다.
-        // `{...props}`가 뒤에 있으므로 호출부에서 계속 덮어쓸 수 있다.
+        // 첫 tabbable(닫기 버튼)에 포커스 링이 붙지 않게 팝업 자신으로 보낸다. `false`로 끄면 inert 트랩 안에 갈 곳이 없다.
         ref={popupRef}
         initialFocus={popupRef}
         className={cn(

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(15);
+select plan(17);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -78,6 +78,15 @@ select is(
   (select count(*) from moderation_claim where title = '운영 조치'),
   1::bigint,
   'moderation ignores type and group opt-outs at claim time'
+);
+select is(
+  (select row(importance, category, grouping_key, tag)::text
+   from moderation_claim where title = '운영 조치'),
+  '(high,moderation,' ||
+    (select grouping_key::text from moderation_claim where title = '운영 조치') ||
+    ',notification:' ||
+    (select notification_id::text from moderation_claim where title = '운영 조치') || ')',
+  'high importance delivery carries its grouping key and keeps a unique tag'
 );
 select ok(
   public.complete_notification_delivery(
@@ -180,6 +189,14 @@ select is(
   (select count(*) from active_preference_claim where title = 'lease 중 설정 변경'),
   1::bigint,
   'an allowed delivery can be leased before the preference changes'
+);
+select is(
+  (select row(importance, category, tag)::text
+   from active_preference_claim where title = 'lease 중 설정 변경'),
+  '(normal,content,notification-category:content:' ||
+    (select grouping_key::text
+     from active_preference_claim where title = 'lease 중 설정 변경') || ')',
+  'normal delivery uses a category tag scoped to the browser subscription'
 );
 reset role;
 set local role authenticated;

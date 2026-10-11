@@ -1,3 +1,5 @@
+// 배럴(`~/features/profiles`)은 화면 컴포넌트를 전부 끌고 온다. 서명 헬퍼만 필요하다.
+import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import { getSupabase } from "~/shared/supabase/client";
 
 export type UtilityMode = "gongang" | "karaoke";
@@ -58,32 +60,13 @@ function toMode(value: string): UtilityMode {
   throw new Error("Unknown utility reservation mode.");
 }
 
-async function createAvatarUrls(rows: ReservationRow[]) {
-  const urls = new Map<string, string>();
-  const paths = [
-    ...new Set(
-      rows.flatMap((row) => {
-        const path = row.avatar_path;
-        if (!path) return [];
-        if (/^https?:\/\//i.test(path)) {
-          urls.set(path, path);
-          return [];
-        }
-        return [path];
-      }),
-    ),
-  ];
-  if (paths.length === 0) return urls;
-
-  const { data, error } = await getSupabase()
-    .storage.from("profile-media")
-    .createSignedUrls(paths, 3600);
-  if (error) return urls;
-
-  for (const item of data ?? []) {
-    if (item.path && item.signedUrl) urls.set(item.path, item.signedUrl);
-  }
-  return urls;
+/**
+ * 여기서 `createSignedUrls`를 직접 부르면 공용 서명 캐시를 비켜 가, 예약 목록을 다시 읽을
+ * 때마다 같은 아바타에 새 토큰이 붙는다. URL이 바뀌면 `<img>`가 브라우저·Service Worker
+ * 캐시를 모두 놓쳐 같은 이미지를 매번 새로 내려받는다.
+ */
+function createAvatarUrls(rows: ReservationRow[]) {
+  return createProfileMediaUrls(rows.map((row) => row.avatar_path));
 }
 
 function mapReservation(

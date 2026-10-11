@@ -4,7 +4,7 @@ import { defineAppChrome, useAppShell } from "~/features/app-shell";
 
 export const handle = defineAppChrome({
   header: "sticky",
-  bottomNav: "sticky",
+  bottomNav: "none",
 });
 
 export default function MyProfilePage() {

@@ -6,7 +6,7 @@ import {
   parseMessageText,
 } from "~/features/messaging/model/message-text";
 import type { ConversationMessage } from "~/features/messaging/model/types";
-import { ReactionEmoji } from "~/features/posts/components/reaction-emoji";
+import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import type { PostReaction } from "~/features/posts/model/types";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";

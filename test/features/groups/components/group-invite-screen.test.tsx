@@ -15,6 +15,8 @@ const preview: GroupInvitePreview = {
   member_count: 12,
   expires_at: "2026-09-01T09:00:00Z",
   already_member: false,
+  allowed_profile_types: ["student", "alumni"],
+  profile_type_allowed: true,
 };
 
 describe("GroupInviteScreen", () => {
@@ -40,9 +42,33 @@ describe("GroupInviteScreen", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("hides group information from a profile type the link does not allow", () => {
+    renderRoute(() => (
+      <GroupInviteScreen
+        preview={{ ...preview, profile_type_allowed: false }}
+      />
+    ));
+
+    expect(screen.getByText("가입할 수 없는 초대 링크입니다")).toBeVisible();
+    expect(
+      screen.getByText("이 링크는 재학생·졸업생만 가입할 수 있습니다."),
+    ).toBeVisible();
+    expect(screen.queryByText(preview.name)).not.toBeInTheDocument();
+    expect(screen.queryByText(preview.description)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "가입하기" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("sends an existing member to the group rather than joining again", () => {
     renderRoute(() => (
-      <GroupInviteScreen preview={{ ...preview, already_member: true }} />
+      <GroupInviteScreen
+        preview={{
+          ...preview,
+          already_member: true,
+          profile_type_allowed: false,
+        }}
+      />
     ));
 
     expect(screen.getByRole("button", { name: "그룹 열기" })).toHaveAttribute(
