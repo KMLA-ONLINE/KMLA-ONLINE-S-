@@ -95,8 +95,8 @@ describe("feed post detail loader", () => {
     });
   });
 
-  // 그룹 화면을 거쳐 왔다면 그룹 행이 이미 캐시에 있다. 상세 창 하나 때문에 다시 묻지 않는다.
-  it("reuses the cached group row", async () => {
+  // 캐시된 그룹 행은 최대 2분 묵었다. 그 사이 바뀐 작성 신원 정책이나 역할을 상세 창이 놓치면 안 된다.
+  it("reads the group row fresh even when it is cached", async () => {
     mocks.getGroupPost.mockResolvedValue({
       post_id: "post-id",
       group_id: "group-id",
@@ -113,6 +113,6 @@ describe("feed post detail loader", () => {
     await load("?kind=group&source=notice");
     await load("?kind=group&source=notice");
 
-    expect(mocks.loadGroupDetail).toHaveBeenCalledTimes(1);
+    expect(mocks.loadGroupDetail).toHaveBeenCalledTimes(2);
   });
 });

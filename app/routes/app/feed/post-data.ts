@@ -1,8 +1,4 @@
-import {
-  GROUP_STALE_TIME,
-  groupKeys,
-  loadGroupDetail,
-} from "~/features/groups";
+import { groupKeys, loadGroupDetail } from "~/features/groups";
 import type { FeedPostDetailResult } from "~/features/feed";
 import {
   getGroupPost,
@@ -25,11 +21,13 @@ export async function clientLoader({
       const [post, comments, group] = await Promise.all([
         getGroupPost(params.postId),
         listPostComments(params.postId),
-        // 그룹 화면과 같은 캐시를 쓴다. 상세 창은 이름과 작성 신원 정책만 읽는다.
+        // 멤버십·작성 신원 정책·역할은 댓글 신원 선택지를 정하므로 캐시가 아니라 지금 값을 읽는다. 2분 묵은
+        // 값이면 그 사이 바뀐 정책이나 강등이 반영되지 않아 고를 수 없는 신원이 보이고 등록이 실패한다.
+        // 게시물·댓글과 나란히 나가므로 왕복은 늘지 않는다. 받은 값은 그룹 화면의 캐시도 갱신한다.
         getQueryClient().fetchQuery({
           queryKey: groupKeys.detail(source),
           queryFn: () => loadGroupDetail(source),
-          staleTime: GROUP_STALE_TIME,
+          staleTime: 0,
         }),
       ]);
       if (
