@@ -18,10 +18,17 @@ export const handle = defineAppChrome({
   contentWidth: "2xl",
 });
 
+/**
+ * 기기의 Push 상태는 서비스 워커와 서버 구독 확인을 거쳐 가장 늦고, 화면에서는 Push 카드 하나만 쓴다.
+ * 그래서 기다리지 않고 promise째 넘긴다. 실패하면 카드만 "확인 실패"로 그린다.
+ */
 export async function clientLoader() {
-  const [preferences, pushSupport, groupPreferences] = await Promise.all([
+  const pushSupport = getPushSupport().catch((error: unknown) => {
+    console.error("Failed to read Web Push support", error);
+    return null;
+  });
+  const [preferences, groupPreferences] = await Promise.all([
     getNotificationPreferences(),
-    getPushSupport(),
     listMyGroupNotificationPreferences(),
   ]);
   return { preferences, pushSupport, groupPreferences };
@@ -86,7 +93,7 @@ export default function NotificationSettingsRoute({
   return (
     <NotificationSettings
       initialPreferences={loaderData.preferences}
-      initialPushSupport={loaderData.pushSupport}
+      pushSupport={loaderData.pushSupport}
       groupPreferences={loaderData.groupPreferences}
     />
   );

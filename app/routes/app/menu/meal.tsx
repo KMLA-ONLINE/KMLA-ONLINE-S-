@@ -14,14 +14,18 @@ export const handle = defineAppChrome({
   contentWidth: "5xl",
 });
 
-export async function clientLoader() {
+/**
+ * 급식은 외부 NEIS API라 느리고, 화면에서는 식단 칸 하나만 쓴다. 기다리지 않고 promise째 넘겨
+ * 날짜 줄과 끼니 탭을 먼저 그린다. `getMealDay`는 실패를 "불러오지 못했습니다" 값으로 돌려주므로 거부되지 않는다.
+ */
+export function clientLoader() {
   const initialDate = getMealReferenceDate();
   const dates = getKoreaWeekDates(initialDate);
 
   return {
     initialDate,
     dates,
-    initialDay: await getMealDay(initialDate),
+    initialDay: getMealDay(initialDate),
   };
 }
 

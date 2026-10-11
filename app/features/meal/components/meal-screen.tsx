@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { cn } from "~/shared/lib/utils";
 import { Spinner } from "~/shared/ui/spinner";
@@ -56,7 +56,8 @@ function MealNotice({ children }: { children: string }) {
 interface MealScreenProps {
   dates: string[];
   initialDate: string;
-  initialDay: MealDay;
+  /** loader가 기다리지 않고 넘긴 첫 날짜의 식단. 오는 동안 식단 칸만 로딩으로 둔다. */
+  initialDay: MealDay | Promise<MealDay>;
 }
 
 export function MealScreen({
@@ -68,9 +69,23 @@ export function MealScreen({
 
   const [selectedMeal, setSelectedMeal] = useState(getDefaultMeal);
 
-  const [days, setDays] = useState<Record<string, MealDay>>({
-    [initialDay.date]: initialDay,
-  });
+  const [days, setDays] = useState<Record<string, MealDay>>(() =>
+    initialDay instanceof Promise ? {} : { [initialDay.date]: initialDay },
+  );
+
+  useEffect(() => {
+    if (!(initialDay instanceof Promise)) return;
+    let active = true;
+    void initialDay.then((day) => {
+      if (!active) return;
+      setDays((current) =>
+        current[day.date] ? current : { ...current, [day.date]: day },
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, [initialDay]);
 
   const [loadingDate, setLoadingDate] = useState<string | null>(null);
 
