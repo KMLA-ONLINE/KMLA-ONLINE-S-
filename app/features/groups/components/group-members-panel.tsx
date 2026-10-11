@@ -191,7 +191,6 @@ export function GroupMembersPanel({
           <div
             ref={sentinelRef}
             className="flex min-h-8 items-center justify-center"
-            aria-live="polite"
           >
             {pageFetcher.state !== "idle" ? (
               <ListRowSkeleton
