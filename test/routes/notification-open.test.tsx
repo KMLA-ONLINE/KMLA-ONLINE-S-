@@ -9,10 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   resolveNotificationDestination: vi.fn(),
   prefetchShellData: vi.fn(),
+  discardPrefetchedShellData: vi.fn(),
 }));
 
 vi.mock("~/features/app-shell/data/queries", () => ({
   prefetchShellData: mocks.prefetchShellData,
+  discardPrefetchedShellData: mocks.discardPrefetchedShellData,
 }));
 
 vi.mock("~/features/notifications", async (importOriginal) => ({
@@ -126,6 +128,17 @@ describe("notification open route", () => {
 
     resolveDestination("/noti");
     await loading;
+  });
+
+  // 게이트로 가지 않는 길에서 남긴 값은, 뒤에 다른 이유로 돈 게이트가 넘겨받아 낡은 프로필을 보인다.
+  it("discards the prefetched shell data when it will not reach the gate", async () => {
+    mocks.resolveNotificationDestination.mockResolvedValue(null);
+    await redirection();
+    expect(mocks.discardPrefetchedShellData).toHaveBeenCalledOnce();
+
+    mocks.resolveNotificationDestination.mockRejectedValue(new Error("down"));
+    await expect(load()).rejects.toThrow("down");
+    expect(mocks.discardPrefetchedShellData).toHaveBeenCalledTimes(2);
   });
 
   it("redirects an authenticated user only to a safe resolved path", async () => {

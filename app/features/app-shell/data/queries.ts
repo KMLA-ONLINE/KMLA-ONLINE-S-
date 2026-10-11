@@ -76,7 +76,10 @@ let prefetched: {
 
 /**
  * 게이트보다 앞선 화면(알림 착지점)이 셸 데이터를 미리 띄운다. 다음 `loadShellData()` 한 번이 이
- * 결과를 넘겨받는다. 실패는 그때 다시 드러나므로 여기서는 삼킨다.
+ * 결과를 넘겨받는다. 실패하면 그때 새로 읽어 복구하므로 여기서는 삼킨다.
+ *
+ * 띄운 화면이 게이트로 가지 않게 되면(로그인 이동, 목적지 확인 실패) `discardPrefetchedShellData()`로
+ * 버린다. 남겨 두면 그 뒤 다른 이유로 돈 게이트, 예를 들어 프로필 수정 직후의 재검증이 수정 전 값을 받는다.
  */
 export function prefetchShellData(): void {
   const promise = fetchShellData();
@@ -84,15 +87,20 @@ export function prefetchShellData(): void {
   prefetched = { promise, startedAt: Date.now() };
 }
 
+export function discardPrefetchedShellData(): void {
+  prefetched = null;
+}
+
 /**
  * 게이트가 쓰는 셸 데이터를 읽는다. `null`은 "인증되지 않음"이며 게이트가 `/login`으로 보낸다.
- * 미리 띄운 값은 한 번만 쓴다. 그 값이 "인증되지 않음"이었다면 그 사이 로그인했을 수 있으므로 다시 읽는다.
+ * 미리 띄운 값은 한 번만 쓴다. 그 요청이 실패했거나 "인증되지 않음"이었다면 일시적 오류였거나 그 사이
+ * 로그인했을 수 있으므로 새로 읽는다. 미리 읽기 때문에 원래 열렸을 화면이 에러가 되면 안 된다.
  */
 export async function loadShellData(): Promise<ShellLoadData | null> {
   const pending = prefetched;
   prefetched = null;
   if (pending && Date.now() - pending.startedAt < PREFETCH_TTL_MS) {
-    const shell = await pending.promise;
+    const shell = await pending.promise.catch(() => null);
     if (shell) return shell;
   }
   return fetchShellData();

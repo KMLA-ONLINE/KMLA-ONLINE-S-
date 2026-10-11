@@ -10,6 +10,7 @@ const { getSession, getSupabase, rpc, signOut } = vi.hoisted(() => ({
 vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 
 import {
+  discardPrefetchedShellData,
   loadShellData,
   prefetchShellData,
 } from "~/features/app-shell/data/queries";
@@ -79,5 +80,24 @@ describe("shell data", () => {
     prefetchShellData();
     await expect(loadShellData()).resolves.toMatchObject({ profile: null });
     expect(rpc).toHaveBeenCalledOnce();
+  });
+
+  // 미리 읽기가 일시적 오류로 실패했다고 원래 열렸을 화면이 에러가 되면 안 된다.
+  it("reads again when the prefetch failed", async () => {
+    getSession.mockRejectedValueOnce(new Error("offline"));
+    rpc.mockResolvedValue({ data: [], error: null });
+
+    prefetchShellData();
+    await expect(loadShellData()).resolves.toMatchObject({ profile: null });
+    expect(rpc).toHaveBeenCalledOnce();
+  });
+
+  it("does not hand over a discarded prefetch", async () => {
+    rpc.mockResolvedValue({ data: [], error: null });
+
+    prefetchShellData();
+    discardPrefetchedShellData();
+    await loadShellData();
+    expect(rpc).toHaveBeenCalledTimes(2);
   });
 });

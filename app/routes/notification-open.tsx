@@ -2,7 +2,10 @@ import { useEffect, useRef } from "react";
 import { replace, useNavigate } from "react-router";
 
 // 배럴(`~/features/app-shell`)은 셸 컴포넌트를 전부 끌고 온다. 미리 읽기 하나만 필요하다.
-import { prefetchShellData } from "~/features/app-shell/data/queries";
+import {
+  discardPrefetchedShellData,
+  prefetchShellData,
+} from "~/features/app-shell/data/queries";
 import {
   invalidateOpenedNotification,
   resolveNotificationDestination,
@@ -42,8 +45,16 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   if (!notificationId) throw replace("/noti");
 
   prefetchShellData();
-  const destination = await resolveNotificationDestination(notificationId);
+  let destination: string | null;
+  try {
+    destination = await resolveNotificationDestination(notificationId);
+  } catch (error) {
+    // 게이트로 가지 않으므로 미리 읽은 값을 버린다. 남기면 다음 게이트 재검증이 낡은 값을 받는다.
+    discardPrefetchedShellData();
+    throw error;
+  }
   if (destination === null) {
+    discardPrefetchedShellData();
     const next = `/noti/open/${encodeURIComponent(notificationId)}`;
     throw replace(`/login?${new URLSearchParams({ next })}`);
   }
