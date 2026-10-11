@@ -34,6 +34,7 @@ describe("isSamePathUiOverlayNavigation", () => {
       "?view=comments&image=attachment-id",
     ],
     ["/profile/jieun-29/posts/post-id", "?view=comments", ""],
+    ["/groups/study/posts/post-id", "", "?reactions=comment%3Ac1"],
   ])(
     "preserves the outlet for UI-only search navigation",
     (path, current, next) => {

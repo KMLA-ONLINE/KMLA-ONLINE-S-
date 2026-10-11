@@ -142,9 +142,9 @@ describe("birthday components", () => {
     expect(
       screen.getAllByRole("link").map((link) => link.getAttribute("href")),
     ).toEqual([
-      "/profile/year-end-25",
       "/profile/new-year-26",
       "/profile/teacher-spring",
+      "/profile/year-end-25",
     ]);
   });
 
@@ -194,30 +194,7 @@ describe("birthday components", () => {
     expect(screen.queryByText("200일 뒤")).not.toBeInTheDocument();
   });
 
-  it("does not repeat a cycle that already fits on one screen", async () => {
-    renderRoute(() => (
-      <ScrollHost clientHeight={800}>
-        <BirthdayListScreen
-          birthdays={birthdayCalendar}
-          referenceDate="2026-12-30"
-        />
-      </ScrollHost>
-    ));
-
-    // 세 명이면 한 바퀴가 384px이라 800px 화면 안에 다 들어간다. 두 바퀴째를 깔면 같은
-    // 사람이 한 화면에 두 번 보인다.
-    const hrefs = (await screen.findAllByRole("link")).map((link) =>
-      link.getAttribute("href"),
-    );
-
-    expect(hrefs).toEqual([
-      "/profile/year-end-25",
-      "/profile/new-year-26",
-      "/profile/teacher-spring",
-    ]);
-  });
-
-  it("lays down the next cycle when one cycle is taller than the screen", async () => {
+  it("lists the year once from January even when it is taller than the screen", async () => {
     renderRoute(() => (
       <ScrollHost clientHeight={100}>
         <BirthdayListScreen
@@ -232,12 +209,9 @@ describe("birthday components", () => {
     );
 
     expect(hrefs).toEqual([
-      "/profile/year-end-25",
       "/profile/new-year-26",
       "/profile/teacher-spring",
       "/profile/year-end-25",
-      "/profile/new-year-26",
-      "/profile/teacher-spring",
     ]);
   });
 

@@ -2,10 +2,13 @@ import type {
   GroupPostDetail,
   PostAttachment,
   PostCommentPage,
-  PostIdentity,
   ProfilePost,
 } from "~/features/posts/model/types";
 import type { PostMention } from "~/features/posts/model/mentions";
+import type {
+  GroupIdentityPolicy,
+  GroupMemberRole,
+} from "~/features/groups/model/types";
 import type { Database } from "~/shared/supabase/database.types";
 
 type FeedRow =
@@ -86,19 +89,28 @@ export interface FeedPage {
   nextPageToken: string | null;
 }
 
+/**
+ * 피드 상세 창의 내용. `comments`가 null이면 피드가 든 글로 먼저 그린 미리보기다 — 댓글과
+ * 권한(`can_*`)은 상세 응답이 와야 채워진다.
+ */
 export type FeedPostDetail =
   | {
       kind: "group";
       post: GroupPostDetail;
-      comments: PostCommentPage;
+      comments: PostCommentPage | null;
       slug: string;
       groupName: string;
-      identities: PostIdentity[];
+      /** 댓글 작성 신원을 정할 그룹 정책. 미리보기에는 없다. */
+      group: {
+        groupId: string;
+        identityPolicy: GroupIdentityPolicy;
+        memberRole: GroupMemberRole | null;
+      } | null;
     }
   | {
       kind: "profile";
       post: ProfilePost;
-      comments: PostCommentPage;
+      comments: PostCommentPage | null;
     };
 
 export interface FeedPostDetailResult {

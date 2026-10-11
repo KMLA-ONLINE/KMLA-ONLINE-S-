@@ -194,6 +194,40 @@ describe("group detail loader", () => {
     mutations.markGroupPostsVisited.mockResolvedValue(undefined);
   });
 
+  // 목록은 그룹 ID만 있으면 된다. 아이콘·커버 서명 왕복이 끝나기를 기다리면 그만큼 늦게 출발한다.
+  it("starts the post list before the group media is signed", async () => {
+    let finishDetail: (value: typeof group) => void = () => undefined;
+    mutations.loadGroupDetail.mockImplementation(
+      (
+        _slug: string,
+        options: {
+          onFound?: (row: {
+            group_id: string;
+            membership_state: string;
+          }) => void;
+        },
+      ) => {
+        options.onFound?.({ group_id: "group-id", membership_state: "member" });
+        return new Promise((resolve) => {
+          finishDetail = resolve;
+        });
+      },
+    );
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+
+    const loading = load("/groups/test");
+    await vi.waitFor(() => {
+      expect(mutations.listGroupPosts).toHaveBeenCalledOnce();
+    });
+    expect(mutations.listGroupCategories).toHaveBeenCalledOnce();
+
+    finishDetail(group);
+    await loading;
+    // 진행 중이던 요청을 이어받는다. 같은 목록을 두 번 부르지 않는다.
+    expect(mutations.listGroupPosts).toHaveBeenCalledOnce();
+    expect(mutations.listGroupCategories).toHaveBeenCalledOnce();
+  });
+
   it("loads the background post list for a direct post detail", async () => {
     const page = { posts: [{ post_id: "post-id" }], nextCursor: null };
     mutations.listGroupPosts.mockResolvedValue(page);
@@ -203,7 +237,41 @@ describe("group detail loader", () => {
     expect(mutations.listGroupPosts).toHaveBeenCalledWith("group-id", {
       hydrateMedia: expect.any(Boolean),
     });
-    expect(result.posts).toBe(page);
+    expect(result.posts).toBeInstanceOf(Promise);
+    await expect(result.posts).resolves.toEqual({ page, categories: [] });
+  });
+
+  // 상세는 카테고리를 쓰지 않는다. 글쓰기·수정은 부모의 카테고리를 그대로 쓰므로 기다린다.
+  it("waits for categories only on the editor child routes", async () => {
+    const category = { id: "category-id", name: "공지" };
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    mutations.listGroupCategories.mockReturnValue(new Promise(() => undefined));
+
+    const detail = await load("/groups/test/posts/post-id");
+    expect(detail.categories).toEqual([]);
+
+    getQueryClient().clear();
+    mutations.listGroupCategories.mockResolvedValue([category]);
+    const editor = await load("/groups/test/posts/post-id/edit");
+    expect(editor.categories).toEqual([category]);
+  });
+
+  // 목록은 dialog 뒤에 깔릴 뿐이라, 상세가 목록 RPC를 기다리면 열리는 시간이 그만큼 늘어난다.
+  it("does not hold a direct post detail on the post list", async () => {
+    mutations.listGroupPosts.mockReturnValue(new Promise(() => undefined));
+
+    const result = await load("/groups/test/posts/post-id");
+
+    expect(result.group).toBe(group);
+    expect(result.posts).toBeInstanceOf(Promise);
+  });
+
+  it("keeps a direct post detail when the background post list fails", async () => {
+    mutations.listGroupPosts.mockRejectedValue(new Error("offline"));
+
+    const result = await load("/groups/test/posts/post-id");
+
+    await expect(result.posts).resolves.toBeNull();
   });
 
   it("marks posts visited only when the group post list itself loads", async () => {
@@ -318,7 +386,10 @@ describe("group detail loader", () => {
     const result = await load("/groups/test/posts/new-post");
 
     expect(mutations.listGroupPosts).toHaveBeenCalledTimes(2);
-    expect(result.posts).toBe(refreshedPage);
+    await expect(result.posts).resolves.toEqual({
+      page: refreshedPage,
+      categories: [],
+    });
   });
 });
 

@@ -103,6 +103,7 @@ Deno.test(
       sent: 0,
       suppressed: 1,
       retry: 0,
+      gone: 0,
       dead: 0,
     });
     assertEquals(pushCalls, 0);
@@ -112,7 +113,7 @@ Deno.test(
 );
 
 Deno.test(
-  "dispatcher removes gone subscriptions and retries transient push failures",
+  "dispatcher reports gone subscriptions and retries transient push failures",
   async () => {
     const { deps, completions } = dependencies([
       delivery(),
@@ -123,7 +124,7 @@ Deno.test(
     ]);
     let call = 0;
     deps.sendPush = () => Promise.resolve({ status: call++ === 0 ? 410 : 503 });
-    await createDispatchHandler(deps)(
+    const response = await createDispatchHandler(deps)(
       new Request("http://localhost", {
         method: "POST",
         headers: { "x-dispatch-secret": "dispatch-secret" },
@@ -133,6 +134,14 @@ Deno.test(
       completions.map((item) => item.outcome),
       ["gone", "retry"],
     );
+    assertEquals(await response.json(), {
+      claimed: 2,
+      sent: 0,
+      suppressed: 0,
+      retry: 1,
+      gone: 1,
+      dead: 0,
+    });
   },
 );
 
@@ -181,7 +190,75 @@ Deno.test(
       sent: 0,
       suppressed: 0,
       retry: 1,
+      gone: 0,
       dead: 0,
     });
+  },
+);
+
+function post() {
+  return new Request("http://localhost", {
+    method: "POST",
+    headers: { "x-dispatch-secret": "dispatch-secret" },
+  });
+}
+
+Deno.test(
+  "a push rejected for its VAPID key is dead, not gone, since config errors look the same",
+  async () => {
+    const { deps, completions } = dependencies([delivery()]);
+    deps.sendPush = () => Promise.resolve({ status: 403 });
+    await createDispatchHandler(deps)(post());
+    assertEquals(completions[0]?.outcome, "dead");
+  },
+);
+
+function key(index: number) {
+  return `44444444-4444-4444-8444-${String(index).padStart(12, "0")}`;
+}
+
+Deno.test(
+  "a batch is sent with bounded overlap and every item is counted",
+  async () => {
+    const items = Array.from({ length: 25 }, (_, index) =>
+      delivery({ delivery_id: key(index), grouping_key: key(index) }),
+    );
+    const { deps } = dependencies(items);
+    let inFlight = 0;
+    let peak = 0;
+    deps.sendPush = async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      inFlight -= 1;
+      return { status: 201 };
+    };
+    const response = await createDispatchHandler(deps)(post());
+    assertEquals((await response.json()).sent, 25);
+    assertEquals(peak, 10);
+  },
+);
+
+Deno.test(
+  "pushes to one subscription go out one at a time in claim order",
+  async () => {
+    const items = Array.from({ length: 3 }, (_, index) =>
+      delivery({ delivery_id: key(index) }),
+    );
+    const { deps } = dependencies(items);
+    const order: string[] = [];
+    let inFlight = 0;
+    let peak = 0;
+    deps.sendPush = async (item) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      order.push(item.delivery_id);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      inFlight -= 1;
+      return { status: 201 };
+    };
+    await createDispatchHandler(deps)(post());
+    assertEquals(peak, 1);
+    assertEquals(order, [key(0), key(1), key(2)]);
   },
 );

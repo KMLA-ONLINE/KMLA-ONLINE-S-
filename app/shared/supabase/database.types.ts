@@ -1966,6 +1966,7 @@ export type Database = {
       get_my_web_push_status: {
         Args: { p_endpoint: string }
         Returns: {
+          gone: boolean
           subscribed: boolean
         }[]
       }
@@ -2186,6 +2187,7 @@ export type Database = {
         Returns: {
           anonymous_author_restricted: boolean
           anonymous_author_restriction_expires_at: string
+          attachments: Json
           author_avatar_path: string
           author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
@@ -2281,6 +2283,7 @@ export type Database = {
           depth: number
           edited_at: string
           is_author: boolean
+          images: Json
           is_deleted: boolean
           is_effective_feed_bump: boolean
           mentions: Json
@@ -2318,6 +2321,7 @@ export type Database = {
           depth: number
           edited_at: string
           is_author: boolean
+          images: Json
           is_deleted: boolean
           is_effective_feed_bump: boolean
           mentions: Json
@@ -2351,6 +2355,7 @@ export type Database = {
         Returns: {
           activity_kind: Database["public"]["Enums"]["profile_media_activity_kind"]
           activity_media_path: string
+          attachments: Json
           author_avatar_path: string
           author_name: string
           author_pub_id: string
@@ -2516,7 +2521,7 @@ export type Database = {
           p_expiration_time?: number
           p_p256dh: string
         }
-        Returns: undefined
+        Returns: boolean
       }
       reject_group_join_request: {
         Args: { p_group_id: string; p_request_id: string }

@@ -5,8 +5,9 @@ Generated lookup tables. Rules live in `AGENTS.md`, product behavior in
 `grep -n list_feed_posts docs/AGENT_MAP.md` — rather than reading it through.
 
 Every table below is derived from the code and checked by `scripts/check-agent-map.mjs` during
-`npm run check` and `npm run check:static`; `node scripts/check-agent-map.mjs --print` regenerates
-them. A failure names the exact row to fix. Two exceptions are hand-written and **not** checked:
+`npm run check` and `npm run check:static`; neither edits this file.
+`node scripts/check-agent-map.mjs --print` prints route URL/module, RPC, and direct-table rows for updates.
+A failure names the exact row to fix. The following columns are hand-written and **not** checked:
 the **Spec** and **Features** columns of the route table, and the **Owns** column of the feature
 table. Spec chapter numbers are stable identifiers by design, so they age slowly.
 
@@ -49,8 +50,9 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `/noti/settings`                     | `app/routes/app/notification-settings.tsx`  | sticky/none/2xl               | L A   | notifications                                   | §15.2, §7.16     | `test/routes/app/notification-settings.test.ts`                                    |
 | `/menu`                              | `app/routes/app/menu/index.tsx`             | sticky/sticky/4xl             | —     | app-shell, auth                                 | §15.1            | `test/routes/app/menu.test.tsx`                                                    |
 | `/menu/licenses`                     | `app/routes/app/menu/licenses.tsx`          | sticky/sticky/4xl             | —     | app-shell                                       | §15.7            | —                                                                                  |
+| `/menu/links`                        | `app/routes/app/menu/links.tsx`             | sticky/sticky/4xl             | —     | app-shell                                       | §15.13           | `test/routes/app/menu/links.test.tsx`                                              |
 | `/menu/birthdays`                    | `app/routes/app/menu/birthdays.tsx`         | sticky/none/5xl               | L     | profiles                                        | §17.5, §17.8     | `test/routes/app/menu/birthdays.test.ts`                                           |
-| `/menu/meal`                         | `app/routes/app/menu/meal.tsx`              | sticky/sticky/5xl             | L     | meal                                            | §17.4            | —                                                                                  |
+| `/menu/meal`                         | `app/routes/app/menu/meal.tsx`              | sticky/sticky/5xl             | L     | meal                                            | §17.4            | `test/routes/app/menu/meal.test.ts`                                                |
 | `/menu/password`                     | `app/routes/app/menu/password.tsx`          | sticky/sticky/4xl             | A     | auth                                            | §4.5             | `test/routes/password.test.tsx`                                                    |
 | `/menu/settings`                     | `app/routes/app/menu/settings.tsx`          | sticky/sticky/4xl             | —     | app-shell                                       | §15.3            | `test/routes/app/menu/settings.test.tsx`                                           |
 | `/menu/settings/lab`                 | `app/routes/app/menu/settings-lab.tsx`      | sticky/sticky/4xl             | —     | posts                                           | §15.4, §15.5     | `test/routes/app/menu/settings-lab.test.tsx`                                       |
@@ -75,7 +77,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `/groups/:slug/posts/new`            | `app/routes/app/groups/post-new.tsx`        | sticky/none/4xl               | —     | posts, groups                                   | §8.3, §8.5       | `test/routes/app/groups/post-routes.test.tsx`                                      |
 | `/groups/:slug/posts/:postId`        | `app/routes/app/groups/post.tsx`            | sticky/none/5xl               | L A S | posts, groups                                   | §8.8, §9, §10    | `test/routes/app/groups/post-routes.test.tsx`                                      |
 | `/groups/:slug/posts/:postId/edit`   | `app/routes/app/groups/post-edit.tsx`       | sticky/none/4xl               | L     | posts                                           | §8.10            | `test/routes/app/groups/post-routes.test.tsx`                                      |
-| `/admin`                             | `app/routes/app/admin/index.tsx`            | sticky/none/4xl               | L     | admin                                           | §16              | —                                                                                  |
+| `/admin`                             | `app/routes/app/admin/index.tsx`            | sticky/none/4xl               | —     | admin                                           | §16              | —                                                                                  |
 | `/admin/approvals`                   | `app/routes/app/admin/approvals.tsx`        | sticky/none/5xl/PTR           | L A   | admin, profiles                                 | §16.1, §16.2     | `test/routes/app/admin/actions.test.ts`, `test/routes/app/admin/approvals.test.ts` |
 | `/admin/gongang-managers`            | `app/routes/app/admin/gongang-managers.tsx` | sticky/none/5xl               | L A   | admin                                           | §16.6            | —                                                                                  |
 | `/admin/app-admins`                  | `app/routes/app/admin/app-admins.tsx`       | sticky/none/5xl               | L A   | admin                                           | §16.3–16.5       | `test/routes/app/admin/actions.test.ts`                                            |
@@ -110,7 +112,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `search`           | Global search dialog, directory search, recent searches                                                                                     | §3.3, §3.6                                          |
 | `stories`          | 24-hour photo/text story rail, viewer and composer                                                                                          | §17.6, §6.6                                         |
 | `support`          | FAQ and release notes — static content in `content/`, no Supabase                                                                           | §15.11, §15.12                                      |
-| `timetable`        | Personal timetable, backed by local storage                                                                                                 | §17.7                                               |
+| `timetable`        | Personal timetable, stored per account in the database with a device-local cache                                                            | §17.7                                               |
 
 <!-- features:end -->
 
@@ -190,7 +192,6 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `list_profile_posts`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `mark_all_my_notifications_read`              | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
 | `mark_group_posts_visited`                    | `groups/data/mutations.ts`                                                      | `31-posts.sql`                |
-| `mark_my_notification_read`                   | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
 | `move_group_category`                         | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `prepare_comment_image`                       | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `prepare_group_media`                         | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |
@@ -240,7 +241,6 @@ browser reads or writes directly.
 | `group_join_requests`  | `groups/data/mutations.ts`, `groups/data/queries.ts`                                  |
 | `group_memberships`    | `groups/data/mutations.ts`, `groups/data/queries.ts`, `notifications/data/queries.ts` |
 | `groups`               | `groups/data/queries.ts`                                                              |
-| `post_attachments`     | `posts/data/queries.ts`                                                               |
 | `profile_departments`  | `profiles/data/queries.ts`                                                            |
 | `profile_permissions`  | `school-utilities/data/gongang-schedule.ts`                                           |
 | `user_timetables`      | `timetable/data/timetable.ts`                                                         |

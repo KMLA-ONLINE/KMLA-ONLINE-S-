@@ -32,14 +32,27 @@ describe("notification settings route", () => {
   });
 
   it("loads account preferences and device state in parallel", async () => {
-    await expect(clientLoader()).resolves.toEqual({
-      preferences,
-      pushSupport: { state: "unsupported" },
-      groupPreferences: [],
-    });
+    const loaded = await clientLoader();
+    expect(loaded).toMatchObject({ preferences, groupPreferences: [] });
+    await expect(loaded.pushSupport).resolves.toEqual({ state: "unsupported" });
     expect(mocks.getNotificationPreferences).toHaveBeenCalledOnce();
     expect(mocks.getPushSupport).toHaveBeenCalledOnce();
     expect(mocks.listMyGroupNotificationPreferences).toHaveBeenCalledOnce();
+  });
+
+  // 기기 상태 확인은 서버 RPC까지 거친다. 그동안 설정 목록 전체를 막지 않는다.
+  it("does not wait for the device push state", async () => {
+    mocks.getPushSupport.mockReturnValue(new Promise(() => undefined));
+
+    await expect(clientLoader()).resolves.toMatchObject({ preferences });
+  });
+
+  it("shows a failed device check only in the push card", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.getPushSupport.mockRejectedValue(new Error("offline"));
+
+    const loaded = await clientLoader();
+    await expect(loaded.pushSupport).resolves.toBeNull();
   });
 
   it("writes a complete preference snapshot", async () => {

@@ -169,7 +169,7 @@ export function AnonymousActivityRestrictionDialog({
                 disabled={pending}
                 onClick={prepareCancellation}
               >
-                {pending ? <Spinner /> : null} 차단 해제
+                {pending ? <Spinner aria-hidden /> : null} 차단 해제
               </Button>
             </DialogFooter>
           ) : (

@@ -9,7 +9,11 @@ const { getSession, getSupabase, rpc, signOut } = vi.hoisted(() => ({
 
 vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 
-import { loadShellData } from "~/features/app-shell/data/queries";
+import {
+  discardPrefetchedShellData,
+  loadShellData,
+  prefetchShellData,
+} from "~/features/app-shell/data/queries";
 
 describe("shell data", () => {
   beforeEach(() => {
@@ -40,5 +44,60 @@ describe("shell data", () => {
 
     await expect(loadShellData()).rejects.toBe(error);
     expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it("hands a prefetched profile to the next load only once", async () => {
+    rpc.mockResolvedValue({
+      data: [
+        {
+          id: 1,
+          pub_id: "student",
+          name: "홍길동",
+          role: "member",
+          type: "student",
+          status: "accepted",
+          avatar_path: null,
+        },
+      ],
+      error: null,
+    });
+
+    prefetchShellData();
+    await expect(loadShellData()).resolves.toMatchObject({
+      profile: { pub_id: "student" },
+    });
+    expect(rpc).toHaveBeenCalledOnce();
+
+    await loadShellData();
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  // 착지점에서 로그인으로 보낸 뒤 돌아오면, 미리 읽은 "로그인 안 됨"을 쓰면 안 된다.
+  it("reads again when the prefetch found no session", async () => {
+    getSession.mockResolvedValueOnce({ data: { session: null }, error: null });
+    rpc.mockResolvedValue({ data: [], error: null });
+
+    prefetchShellData();
+    await expect(loadShellData()).resolves.toMatchObject({ profile: null });
+    expect(rpc).toHaveBeenCalledOnce();
+  });
+
+  // 미리 읽기가 일시적 오류로 실패했다고 원래 열렸을 화면이 에러가 되면 안 된다.
+  it("reads again when the prefetch failed", async () => {
+    getSession.mockRejectedValueOnce(new Error("offline"));
+    rpc.mockResolvedValue({ data: [], error: null });
+
+    prefetchShellData();
+    await expect(loadShellData()).resolves.toMatchObject({ profile: null });
+    expect(rpc).toHaveBeenCalledOnce();
+  });
+
+  it("does not hand over a discarded prefetch", async () => {
+    rpc.mockResolvedValue({ data: [], error: null });
+
+    prefetchShellData();
+    discardPrefetchedShellData();
+    await loadShellData();
+    expect(rpc).toHaveBeenCalledTimes(2);
   });
 });

@@ -12,7 +12,6 @@ const releases: Release[] = [
   },
   {
     date: "2026-08-31",
-    version: "1.2.0",
     title: "나중에 쓴 항목",
     changes: [
       { kind: "added", text: "기능을 추가했습니다." },
@@ -39,13 +38,12 @@ describe("ReleaseNotesScreen", () => {
     expect(screen.getByText("2026년 1월 2일")).toBeInTheDocument();
   });
 
-  it("labels each change by kind and shows a version only when one is given", () => {
+  it("labels each change by kind", () => {
     render(<ReleaseNotesScreen releases={releases} />);
 
     // `listitem`으로 잡으면 변경 줄까지 딸려 온다. 릴리스 한 건은 `article`이다.
     const [newest, oldest] = screen.getAllByRole("article");
 
-    expect(within(newest).getByText("1.2.0")).toBeInTheDocument();
     expect(within(newest).getByText("추가")).toBeInTheDocument();
     expect(within(newest).getByText("제거")).toBeInTheDocument();
     expect(within(oldest).getByText("수정")).toBeInTheDocument();
@@ -53,6 +51,9 @@ describe("ReleaseNotesScreen", () => {
 
   it("shows an empty state before the first release is logged", () => {
     render(<ReleaseNotesScreen releases={[]} />);
+
+    // 기록이 없어도 지금 버전과 확인은 그대로 쓸 수 있다.
+    expect(screen.getByRole("region", { name: "앱 버전" })).toBeInTheDocument();
 
     expect(
       screen.getByText("아직 기록된 업데이트가 없어요"),

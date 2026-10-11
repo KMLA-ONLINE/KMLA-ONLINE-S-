@@ -157,7 +157,7 @@ export function GroupSummaryRow({
               className={`${group.pinned_at ? "text-primary" : "text-muted-foreground"} sr-only min-h-9 min-w-9 focus:not-sr-only md:not-sr-only`}
             >
               {pending ? (
-                <Spinner />
+                <Spinner aria-hidden />
               ) : (
                 <PinIcon className="size-4.5 -rotate-45" />
               )}

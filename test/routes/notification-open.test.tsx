@@ -8,6 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   resolveNotificationDestination: vi.fn(),
+  prefetchShellData: vi.fn(),
+  discardPrefetchedShellData: vi.fn(),
+}));
+
+vi.mock("~/features/app-shell/data/queries", () => ({
+  prefetchShellData: mocks.prefetchShellData,
+  discardPrefetchedShellData: mocks.discardPrefetchedShellData,
 }));
 
 vi.mock("~/features/notifications", async (importOriginal) => ({
@@ -15,6 +22,7 @@ vi.mock("~/features/notifications", async (importOriginal) => ({
   resolveNotificationDestination: mocks.resolveNotificationDestination,
 }));
 
+import { getQueryClient } from "~/shared/lib/query-client";
 import NotificationOpenRoute, {
   clientLoader,
 } from "~/routes/notification-open";
@@ -83,6 +91,64 @@ describe("notification open route", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     Reflect.deleteProperty(window.history, "length");
+  });
+
+  /**
+   * 회귀: 그룹을 본 지 2분이 안 됐으면 상세 밑에 깔리는 그룹 loader가 캐시된 옛 목록을 썼다. 상세를
+   * 닫으면 그 목록이 남아, 알림으로 연 새 글이 그룹에서 안 보였다.
+   */
+  it("marks cached group post lists stale before opening the destination", async () => {
+    mocks.resolveNotificationDestination.mockResolvedValue(
+      "/groups/test/posts/post-id",
+    );
+    const key = [
+      "groups",
+      "posts",
+      "group-id",
+      { categoryId: null, cursor: null },
+    ];
+    getQueryClient().setQueryData(key, { posts: [], nextCursor: null });
+
+    await load();
+
+    expect(getQueryClient().getQueryState(key)?.isInvalidated).toBe(true);
+  });
+
+  // 목적지는 게이트 아래에 있다. 셸 데이터를 목적지 RPC 뒤에 읽으면 왕복이 줄로 선다.
+  it("starts the shell data before resolving the destination", async () => {
+    let resolveDestination: (value: string) => void = () => undefined;
+    mocks.resolveNotificationDestination.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveDestination = resolve;
+      }),
+    );
+
+    const loading = load();
+    expect(mocks.prefetchShellData).toHaveBeenCalledOnce();
+
+    resolveDestination("/noti");
+    await loading;
+    // 게이트로 가는 길에서는 게이트가 넘겨받아야 한다.
+    expect(mocks.discardPrefetchedShellData).not.toHaveBeenCalled();
+  });
+
+  // 게이트로 가지 않는 길에서 남긴 값은, 뒤에 다른 이유로 돈 게이트가 넘겨받아 낡은 프로필을 보인다.
+  it("discards the prefetched shell data when it will not reach the gate", async () => {
+    mocks.resolveNotificationDestination.mockResolvedValue(null);
+    await redirection();
+    expect(mocks.discardPrefetchedShellData).toHaveBeenCalledOnce();
+
+    mocks.resolveNotificationDestination.mockRejectedValue(new Error("down"));
+    await expect(load()).rejects.toThrow("down");
+    expect(mocks.discardPrefetchedShellData).toHaveBeenCalledTimes(2);
+
+    // 목적지는 풀었지만 그 뒤 단계가 실패해도 게이트로 가지 않는다.
+    mocks.resolveNotificationDestination.mockResolvedValue("/noti");
+    vi.spyOn(getQueryClient(), "invalidateQueries")
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("cache"));
+    await expect(load()).rejects.toThrow("cache");
+    expect(mocks.discardPrefetchedShellData).toHaveBeenCalledTimes(3);
   });
 
   it("redirects an authenticated user only to a safe resolved path", async () => {

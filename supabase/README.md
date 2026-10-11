@@ -11,8 +11,13 @@
 | `21-*`           | Groups and membership                                          |
 | `31-*` to `35-*` | Posts, comments, reactions, cross-content APIs, and moderation |
 | `41-*`           | Integrated feed                                                |
+| `42-*`           | Stories                                                        |
 | `51-*` to `52-*` | Reservations and timetables                                    |
+| `53-*`           | Directory search                                               |
+| `61-*`           | Notifications, delivery preferences, and outbox                |
 | `81-*`           | Policies on Supabase-managed Storage objects                   |
+| `82-*`           | Storage cleanup queue, worker APIs, and observability          |
+| `83-*`           | Record retention and cleanup                                   |
 | `91-*`           | Scheduled `pg_cron` jobs                                       |
 
 Files run in lexicographic order. Add new files with a number that follows their dependencies. Keep one final definition for each object; declarative files must not reproduce the sequence of historical `alter` and `drop` statements.
@@ -28,6 +33,10 @@ Files run in lexicographic order. Add new files with a number that follows their
 7. Run `npm run db:drift`. It fails and prints the difference when the schema files and migrations disagree, and deletes the draft it generated. A clean result does not replace migration review.
 
 Never edit a deployed migration.
+
+## Bulk fake data
+
+`npm run db:fake` loads `dev/fake-data.sql` into the local database only, for checking loading states, pagination, and long lists. It adds 60 people, 12 groups, about 500 posts, a post with 190 comments and 60 reactions, and 220 notifications, all addressed to the seed account `student@kmla.hs.kr` / `password123`. Rerunning it adds nothing new. `npm run db:reset` removes it. It is kept out of `seed.sql` because pgTAP asserts exact row sets from the seed: run `npm run db:reset` before `npm run test:db`.
 
 ## Remote projects
 
@@ -45,7 +54,7 @@ Never `--include-seed` a remote push (`seed.sql` inserts into `auth.users`), and
 
 Migrations do not carry these. Set them per project before scheduled work functions.
 
-**Vault.** `seed.sql` covers the local stack only. Elsewhere the cron helpers read `vault.decrypted_secrets` and return `null` when a name is missing.
+**Vault.** `seed.sql` covers the local stack only. Elsewhere the cron helpers read `vault.decrypted_secrets`; missing-secret behavior differs by helper as described below.
 
 | Name                           | Read by                                   |
 | ------------------------------ | ----------------------------------------- |

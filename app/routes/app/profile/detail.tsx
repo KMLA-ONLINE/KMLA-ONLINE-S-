@@ -22,20 +22,33 @@ export const handle = defineAppChrome({
  * 이미지 뷰어가 `?image=`를 붙이기 때문이다 — 다시 읽으면 새 첫 페이지가 내려오고
  * `ProfilePostsPanel`이 "더 보기"로 쌓은 페이지를 전부 버린다.
  */
-export const shouldRevalidate = createPostListRevalidation();
+export const shouldRevalidate = createPostListRevalidation([], {
+  detailParent: /^\/profile\/[^/]+/,
+});
 
 /**
  * `profile/:pubId`. 게시물 상세(`posts/:postId`)를 자식으로 가지므로 `<Outlet />`을 그린다 —
  * 게시물을 열어도 프로필이 언마운트되지 않아 스크롤 위치와 로더 데이터가 유지된다.
  */
-export async function clientLoader({ params }: Route.ClientLoaderArgs) {
+export async function clientLoader({
+  params,
+  request,
+}: Route.ClientLoaderArgs) {
   const requestedPubId = params.pubId.toLowerCase();
+  const isProfilePage =
+    new URL(request.url).pathname === `/profile/${params.pubId}`;
   // 타임라인 RPC도 공개 ID를 받으므로 둘이 나란히 나간다. 프로필을 먼저 기다렸다가 그 숫자
   // ID로 게시물을 부르면 화면 하나에 왕복이 두 번 쌓인다.
-  const [profile, posts] = await Promise.all([
+  const postsRequest = listProfilePosts(requestedPubId);
+  // 게시물 상세로 바로 들어오면 타임라인은 그 뒤에 깔릴 뿐이라 기다리지 않는다. 실패는 상세를
+  // 덮지 않도록 null로 받는다. catch는 await보다 먼저 붙여 처리되지 않은 rejection을 막는다.
+  // 글쓰기·수정 화면으로 바로 들어와도 받는다. 편집기를 취소로 닫으면 부모를 다시 읽지 않아서다.
+  const deferredPosts = postsRequest.catch(() => null);
+  const [profile, loadedPosts] = await Promise.all([
     loadAcceptedProfile(requestedPubId),
-    listProfilePosts(requestedPubId),
+    isProfilePage ? postsRequest : null,
   ]);
+  const posts = loadedPosts ?? deferredPosts;
 
   if (!profile) {
     throw new Response("프로필을 찾을 수 없습니다.", { status: 404 });

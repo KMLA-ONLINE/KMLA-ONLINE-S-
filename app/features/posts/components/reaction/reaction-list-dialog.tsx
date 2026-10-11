@@ -13,7 +13,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from "~/shared/ui/dialog";
-import { Spinner } from "~/shared/ui/spinner";
+import { ListRowSkeleton } from "~/shared/ui/skeleton";
 
 function ReactionTab({
   active,
@@ -31,7 +31,7 @@ function ReactionTab({
       aria-selected={active}
       onClick={onClick}
       className={cn(
-        "-mb-px flex flex-none items-center gap-1.5 border-b-2 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors",
+        "-mb-px flex flex-none items-center gap-1.5 border-b-2 px-2.5 py-3 text-sm font-medium whitespace-nowrap transition-colors",
         active
           ? "border-primary text-foreground"
           : "border-transparent text-muted-foreground hover:text-foreground",
@@ -91,7 +91,7 @@ export function ReactionListDialog({
     >
       <DialogContent
         showCloseButton={false}
-        className="flex h-[70svh] flex-col gap-0 overflow-hidden p-0 max-sm:top-0 max-sm:left-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 sm:max-w-md"
+        className="flex h-[70svh] flex-col gap-0 overflow-hidden p-0 max-sm:top-0 max-sm:left-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 sm:max-w-xl"
       >
         {/* 화면의 헤더는 아래 탭 줄이라 제목·설명은 스크린리더용이다. */}
         <DialogTitle className="sr-only">{title}</DialogTitle>
@@ -139,9 +139,11 @@ export function ReactionListDialog({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {loading ? (
-            <div className="flex justify-center py-10">
-              <Spinner />
-            </div>
+            <ListRowSkeleton
+              label="반응한 사람을"
+              avatar="lg"
+              rowClassName="px-2 py-1.5"
+            />
           ) : shown.length > 0 ? (
             <ul className="flex flex-col">
               {shown.map((row, index) => (
@@ -150,8 +152,11 @@ export function ReactionListDialog({
                   className="flex items-center gap-3 rounded-lg px-2 py-1.5"
                 >
                   {row.reactor_pub_id && row.reactor_name ? (
+                    // 목록이 push한 entry를 프로필로 바꾼다. 돌아왔을 때 화면이 다시 그려지면
+                    // 목록을 연 버튼을 찾지 못해, 목록 없는 entry에서 뒤로가기를 한 번 헛누르게 된다.
                     <Link
                       to={`/profile/${row.reactor_pub_id}`}
+                      replace
                       className="flex min-w-0 flex-1 items-center gap-3 rounded-lg hover:underline"
                     >
                       <ReactorAvatar reaction={row.reaction}>

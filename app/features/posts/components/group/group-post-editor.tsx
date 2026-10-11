@@ -119,6 +119,7 @@ export function GroupPostEditor({
     disposedRef,
     isDragging,
     dropHandlers,
+    pasteHandlers,
     addFiles,
     removeExisting,
     removeAddition,
@@ -265,6 +266,7 @@ export function GroupPostEditor({
             }
           },
           ...dropHandlers,
+          ...pasteHandlers,
         }}
       >
         {mode === "create" && anonymousActivityRestriction ? (
@@ -357,10 +359,17 @@ export function GroupPostEditor({
                     draftBody,
                     mentionDraft.entries,
                   )}
-                  onSelect={(candidate) => {
-                    const ordinal = mentionDraft.register(candidate, draftBody);
-                    if (ordinal === null) return;
-                    bodyHandle.current?.insertMention(candidate.name, ordinal);
+                  onSelect={(candidates) => {
+                    const assigned = mentionDraft.register(
+                      candidates,
+                      draftBody,
+                    );
+                    bodyHandle.current?.insertMentions(
+                      assigned.map(({ name, ordinal }) => ({
+                        label: name,
+                        ordinal,
+                      })),
+                    );
                   }}
                 />
                 <span className="text-xs text-muted-foreground">멘션</span>

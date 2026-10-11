@@ -1,4 +1,11 @@
-import { act, renderHook } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { preparePostFiles } from "~/features/posts/model/attachments";
@@ -99,5 +106,87 @@ describe("usePostAttachmentDraft", () => {
     expect(prepare).not.toHaveBeenCalled();
     expect(result.current.preparingCount).toBe(0);
     expect(result.current.preparationError).toContain("clip.mov");
+  });
+
+  describe("paste", () => {
+    const innerPaste = vi.fn();
+    function Screen({ disabled = false }: { disabled?: boolean }) {
+      const { pasteHandlers } = usePostAttachmentDraft({
+        initialAttachments: [],
+        disabled,
+        preupload: vi.fn().mockResolvedValue(undefined),
+      });
+      return (
+        <div {...pasteHandlers}>
+          <input aria-label="제목" onPaste={innerPaste} />
+        </div>
+      );
+    }
+    const png = new File(["x"], "shot.png", { type: "image/png" });
+    const jpeg = new File(["x"], "photo.jpg", { type: "image/jpeg" });
+    const gif = new File(["x"], "anim.gif", { type: "image/gif" });
+    const clipboardData = (
+      files: File[],
+      text: Record<string, string> = {},
+    ) => ({
+      getData: (type: string) => text[type] ?? "",
+      items: files.map((file) => ({
+        kind: "file",
+        type: file.type,
+        getAsFile: () => file,
+      })),
+    });
+
+    beforeEach(() => innerPaste.mockClear());
+
+    it("adds every pasted image before the focused field sees the paste", async () => {
+      render(<Screen />);
+
+      fireEvent.paste(screen.getByLabelText("제목"), {
+        clipboardData: clipboardData([png, jpeg]),
+      });
+
+      await waitFor(() =>
+        expect(prepare).toHaveBeenCalledWith(
+          [png, jpeg],
+          0,
+          "image",
+          expect.any(Object),
+        ),
+      );
+      expect(innerPaste).not.toHaveBeenCalled();
+    });
+
+    it("takes a paste when nothing is focused, but not one in a field outside the form", async () => {
+      render(<Screen />);
+      const outside = document.createElement("input");
+      document.body.append(outside);
+
+      fireEvent.paste(outside, { clipboardData: clipboardData([png]) });
+      expect(prepare).not.toHaveBeenCalled();
+
+      fireEvent.paste(document.body, { clipboardData: clipboardData([png]) });
+      await waitFor(() => expect(prepare).toHaveBeenCalledOnce());
+      outside.remove();
+    });
+
+    it("leaves the paste alone when it cannot attach anything", () => {
+      const { rerender } = render(<Screen />);
+      const title = screen.getByLabelText("제목");
+
+      // 스프레드시트 셀 복사: 표 HTML과 함께 PNG가 실린다.
+      fireEvent.paste(title, {
+        clipboardData: clipboardData([png], {
+          "text/plain": "a	b",
+          "text/html": "<table><tr><td>a</td><td>b</td></tr></table>",
+        }),
+      });
+      fireEvent.paste(title, { clipboardData: clipboardData([gif]) });
+      rerender(<Screen disabled />);
+      fireEvent.paste(title, { clipboardData: clipboardData([png]) });
+
+      expect(innerPaste).toHaveBeenCalledTimes(3);
+      expect(prepare).not.toHaveBeenCalled();
+    });
   });
 });

@@ -13,7 +13,12 @@ import {
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 
-import { ProfilePostsPanel, type ProfilePostPage } from "~/features/posts";
+import {
+  PostListSkeleton,
+  ProfilePostsPanel,
+  type ProfilePostPage,
+} from "~/features/posts";
+import { Deferred } from "~/shared/components/deferred";
 import { ProfileMediaEditor } from "~/features/profiles/components/profile-media-editor";
 import { formatCohort } from "~/features/profiles/model/format";
 import type { AcceptedProfile } from "~/features/profiles/model/types";
@@ -188,7 +193,8 @@ export function ProfileDetail({
   /** 지금 보고 있는 사람. 타임라인 당사자와 다를 수 있어 `profile`로 대신하지 못한다. */
   viewerName: string | null;
   viewerAvatarUrl: string | null;
-  posts: ProfilePostPage;
+  /** 게시물 상세로 바로 들어왔을 때는 loader가 기다리지 않고 promise째 넘긴다. null은 불러오기 실패다. */
+  posts: ProfilePostPage | Promise<ProfilePostPage | null>;
 }) {
   // 좁은 화면에서는 정보 카드가 타임라인 위에 통째로 쌓여서 첫 게시물까지 한참 걸린다.
   // 그래서 모바일에서만 첫 묶음을 남기고 접는다 — `sm:`부터는 항상 전부 펼쳐 둔다.
@@ -505,14 +511,24 @@ export function ProfileDetail({
               게시물
             </h2>
 
-            <ProfilePostsPanel
-              timelinePubId={profile.pub_id}
-              canWrite={isOwnProfile || profile.allow_timeline_posts}
-              isOwnTimeline={isOwnProfile}
-              viewerName={viewerName}
-              viewerAvatarUrl={viewerAvatarUrl}
-              initialPage={posts}
-            />
+            <Deferred value={posts} fallback={<PostListSkeleton />}>
+              {(page) =>
+                page ? (
+                  <ProfilePostsPanel
+                    timelinePubId={profile.pub_id}
+                    canWrite={isOwnProfile || profile.allow_timeline_posts}
+                    isOwnTimeline={isOwnProfile}
+                    viewerName={viewerName}
+                    viewerAvatarUrl={viewerAvatarUrl}
+                    initialPage={page}
+                  />
+                ) : (
+                  <p className="px-4 py-12 text-center text-sm text-muted-foreground">
+                    게시물을 불러오지 못했습니다.
+                  </p>
+                )
+              }
+            </Deferred>
           </section>
         </div>
       </div>

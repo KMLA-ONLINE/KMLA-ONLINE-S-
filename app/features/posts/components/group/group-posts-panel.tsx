@@ -22,6 +22,7 @@ import type {
 } from "~/features/posts/model/types";
 import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
 import { Button } from "~/shared/ui/button";
+import { PostListSkeleton } from "~/features/posts/components/post-card-skeleton";
 import { Spinner } from "~/shared/ui/spinner";
 import { getQueryClient } from "~/shared/lib/query-client";
 
@@ -183,9 +184,7 @@ export function GroupPostsPanel({
       ) : null}
 
       {loading && posts.length === 0 ? (
-        <div className="flex justify-center py-12">
-          <Spinner />
-        </div>
+        <PostListSkeleton />
       ) : posts.length === 0 ? (
         <GroupPostFeedEmpty searched={false} />
       ) : (
@@ -211,7 +210,7 @@ export function GroupPostsPanel({
           role="status"
           className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground"
         >
-          <Spinner /> 이전 게시물을 불러오는 중입니다.
+          <Spinner aria-hidden /> 이전 게시물을 불러오는 중입니다.
         </div>
       ) : null}
       <div ref={sentinelRef} className="h-px" aria-hidden="true" />

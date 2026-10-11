@@ -2,6 +2,7 @@ import {
   defaultValueCtx,
   Editor as MilkdownEditor,
   editorViewCtx,
+  remarkStringifyOptionsCtx,
   rootCtx,
 } from "@milkdown/core";
 import { history, redoCommand, undoCommand } from "@milkdown/plugin-history";
@@ -42,7 +43,13 @@ import { Milkdown, MilkdownProvider, useEditor } from "@milkdown/react";
 import { toggleMark } from "@milkdown/prose/commands";
 import { redo, undo } from "@milkdown/prose/history";
 import { Plugin } from "@milkdown/prose/state";
-import { $prose, callCommand } from "@milkdown/utils";
+import {
+  $command,
+  $markSchema,
+  $prose,
+  $remark,
+  callCommand,
+} from "@milkdown/utils";
 import {
   BoldIcon,
   Heading2Icon,
@@ -51,6 +58,7 @@ import {
   LinkIcon,
   Redo2Icon,
   StrikethroughIcon,
+  UnderlineIcon,
   Undo2Icon,
 } from "lucide-react";
 import { useEffect, useImperativeHandle, useRef, type RefObject } from "react";
@@ -63,8 +71,57 @@ import {
 } from "~/features/posts/model/markdown";
 import type { PostBodyInputHandle } from "~/features/posts/components/editor/post-body-input";
 import { sanitizeMentionLabel } from "~/features/posts/model/mentions";
+import {
+  remarkPostUnderline,
+  UNDERLINE_DIRECTIVE,
+} from "~/features/posts/model/underline";
+import remarkCjkFriendly from "remark-cjk-friendly/bidi";
+import remarkCjkFriendlyStrikethrough from "remark-cjk-friendly-gfm-strikethrough/bidi";
+
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
+
+// 밑줄은 preset에 없다. 저장 문법 `:u[…]`는 `model/underline.ts`의 remark 플러그인이 읽고 쓴다.
+const underlineRemark = $remark(
+  "remarkPostUnderline",
+  () => remarkPostUnderline,
+);
+
+// 정화·읽기 화면과 같은 CJK 강조 규칙(`postMarkdownPlugins`). 빠지면 `**끝.**다음`을 편집기만 글자로 읽는다.
+const cjkFriendlyRemark = [
+  $remark("remarkCjkFriendly", () => remarkCjkFriendly),
+  $remark(
+    "remarkCjkFriendlyStrikethrough",
+    () => remarkCjkFriendlyStrikethrough,
+  ),
+];
+
+const underlineSchema = $markSchema("underline", () => ({
+  parseDOM: [{ tag: "u" }],
+  toDOM: () => ["u", 0],
+  parseMarkdown: {
+    match: (node) =>
+      node.type === "textDirective" && node.name === UNDERLINE_DIRECTIVE,
+    runner: (state, node, markType) => {
+      state.openMark(markType);
+      state.next(node.children);
+      state.closeMark(markType);
+    },
+  },
+  toMarkdown: {
+    match: (mark) => mark.type.name === "underline",
+    runner: (state, mark) => {
+      state.withMark(mark, "textDirective", undefined, {
+        name: UNDERLINE_DIRECTIVE,
+      });
+    },
+  },
+}));
+
+const toggleUnderlineCommand = $command(
+  "ToggleUnderline",
+  (ctx) => () => toggleMark(underlineSchema.type(ctx)),
+);
 
 const markdownSchema = [
   docSchema,
@@ -90,8 +147,12 @@ const markdownSchema = [
   strikethroughAttr,
   strikethroughSchema,
   toggleStrikethroughCommand,
+  underlineRemark,
+  underlineSchema,
+  toggleUnderlineCommand,
   textSchema,
   remarkGFMPlugin,
+  ...cjkFriendlyRemark,
   remarkLineBreak,
   remarkHtmlTransformer,
   remarkPreserveEmptyLinePlugin,
@@ -124,6 +185,12 @@ const imeSafeShortcuts = $prose(
               view.dispatch,
               view,
             );
+          if (key === "u" && !event.shiftKey)
+            return toggleMark(underlineSchema.type(ctx))(
+              view.state,
+              view.dispatch,
+              view,
+            );
           if (key === "x" && event.shiftKey)
             return toggleMark(strikethroughSchema.type(ctx))(
               view.state,
@@ -136,6 +203,13 @@ const imeSafeShortcuts = $prose(
             return redo(view.state, view.dispatch, view);
           return false;
         },
+        // 편집기는 원문의 줄 하나를 문단 하나로 든다(`toMilkdownMarkdown()`). 기본 복사는 문단
+        // 사이를 빈 줄로 이어서 다른 곳에 붙이면 줄마다 엔터가 두 번 들어간다. 빈 줄은 빈 문단이라
+        // 줄바꿈 하나로 이어도 그대로 남는다.
+        clipboardTextSerializer: (slice) =>
+          slice.content.textBetween(0, slice.content.size, "\n", (leaf) =>
+            leaf.type.name === "hardbreak" ? "\n" : "",
+          ),
       },
     }),
 );
@@ -188,6 +262,13 @@ function EditorSurface({
         .config((ctx) => {
           ctx.set(rootCtx, root);
           ctx.set(defaultValueCtx, lastValue.current);
+          // Milkdown 기본 처리기는 `text`·`strong`·`emphasis`를 덮어써서 문단 머리 `- `를 escape하지
+          // 않고(정화가 목록으로 읽어 `-`를 지운다) 강조 표식 경계도 맞추지 않는다. 덮어쓴 것을 걷어
+          // 표준 처리기와 CJK 플러그인의 직렬화 규칙을 쓴다.
+          ctx.update(remarkStringifyOptionsCtx, (options) => ({
+            ...options,
+            handlers: {},
+          }));
           ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
             const safe = sanitizePostMarkdown(fromPostEditorMarkdown(markdown));
             if (input.current) input.current.value = safe;
@@ -211,18 +292,20 @@ function EditorSurface({
   useImperativeHandle(
     handleRef,
     () => ({
-      insertMention(label: string, ordinal: number) {
+      insertMentions(mentions: { label: string; ordinal: number }[]) {
+        if (mentions.length === 0) return;
         get()?.action((ctx) => {
           const view = ctx.get(editorViewCtx);
           const { state, dispatch } = view;
-          const mark = linkSchema.type(ctx).create({ href: `m:${ordinal}` });
-          const mention = state.schema.text(`@${sanitizeMentionLabel(label)}`, [
-            mark,
+          // 뒤에 이어 쓸 때 링크 안으로 빨려 들어가지 않도록 멘션마다 mark 없는 공백을 함께 넣는다.
+          const nodes = mentions.flatMap(({ label, ordinal }) => [
+            state.schema.text(`@${sanitizeMentionLabel(label)}`, [
+              linkSchema.type(ctx).create({ href: `m:${ordinal}` }),
+            ]),
+            state.schema.text(" "),
           ]);
-          // 뒤에 이어 쓸 때 링크 안으로 빨려 들어가지 않도록 mark 없는 공백을 함께 넣는다.
-          const trailing = state.schema.text(" ");
           const { from, to } = state.selection;
-          dispatch(state.tr.replaceWith(from, to, [mention, trailing]));
+          dispatch(state.tr.replaceWith(from, to, nodes));
           view.focus();
         });
       },
@@ -256,6 +339,12 @@ function EditorSurface({
       keys: "Control+I Meta+I",
       icon: <ItalicIcon />,
       run: () => run(callCommand(toggleEmphasisCommand.key)),
+    },
+    {
+      label: "밑줄",
+      keys: "Control+U Meta+U",
+      icon: <UnderlineIcon />,
+      run: () => run(callCommand(toggleUnderlineCommand.key)),
     },
     {
       label: "취소선",

@@ -43,8 +43,6 @@ export interface Release {
    * `YYYY-MM-DD`. 순간이 아니라 달력 날짜라서 문자열로 둔다. 사전순 정렬이 곧 시간순이다.
    */
   date: string;
-  /** 배포에 번호를 붙이기 시작하면 채운다. 비어 있으면 화면은 날짜만 보여준다. */
-  version?: string;
   title: string;
   changes: ReleaseChange[];
 }

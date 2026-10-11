@@ -3,7 +3,10 @@ import { useRouteLoaderData } from "react-router";
 import { defineAppChrome } from "~/features/app-shell";
 import { getGroupPost, GroupPostEditor } from "~/features/posts";
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
-import { invalidateSavedGroupPost } from "~/routes/app/groups/post-cache";
+import {
+  invalidateSavedGroupPost,
+  useGroupEditorCategories,
+} from "~/routes/app/groups/post-cache";
 import type { Route } from "./+types/post-edit";
 
 export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
@@ -26,6 +29,10 @@ export default function EditGroupPostPage({
   const parent = useRouteLoaderData<typeof groupLoader>(
     "routes/app/groups/detail",
   );
+  const categories = useGroupEditorCategories(
+    parent?.group.group_id ?? "",
+    parent?.categories ?? [],
+  );
   if (
     parent?.group.membership_state !== "member" ||
     loaderData.post.group_id !== parent.group.group_id
@@ -37,7 +44,7 @@ export default function EditGroupPostPage({
       slug={parent.group.slug}
       groupName={parent.group.name}
       groupId={parent.group.group_id}
-      categories={parent.categories}
+      categories={categories}
       post={loaderData.post}
       onSaved={() => invalidateSavedGroupPost(parent.group.group_id)}
     />

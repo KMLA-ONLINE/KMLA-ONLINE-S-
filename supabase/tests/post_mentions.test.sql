@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(76);
+select plan(77);
 
 -- 멘션 대상의 정본은 `public.post_mentions` / `public.comment_mentions`이고 본문에는 ordinal
 -- 토큰만 남는다(기능 명세 §8.14). 이 파일은 그 둘이 어긋날 수 있는 자리를 전부 밟는다.
@@ -644,8 +644,14 @@ select is(
      select name, row_number() over () as ordinality
      from public.search_group_mention_candidates('20000000-0000-0000-0000-000000000002')
    ) as candidate),
-  array['정선생', '홍길동', '이한별', '박새벽', '최푸름'],
+  array['정선생', '이한별', '박새벽', '최푸름'],
   'teachers come first and students follow from the most recent cohort'
+);
+select is(
+  (select count(*)::integer from public.search_group_mention_candidates(
+     '20000000-0000-0000-0000-000000000002', '홍길동')),
+  0,
+  'the caller is never offered as their own mention candidate'
 );
 select is(
   (select array_agg(name) from public.search_group_mention_candidates(

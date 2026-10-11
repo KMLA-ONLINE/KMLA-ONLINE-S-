@@ -12,6 +12,7 @@ vi.mock("~/features/profiles/data/media", () => ({ createProfileMediaUrls }));
 vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 
 import {
+  getGroupPost,
   getProfilePost,
   getMyGroupAnonymousActivityRestriction,
   hydrateGroupPostMedia,
@@ -44,6 +45,40 @@ describe("post queries", () => {
     );
   });
 
+  it("asks for a post and its attachments at the same time", async () => {
+    let resolvePost: (value: unknown) => void = () => undefined;
+    const rpc = vi.fn((name: string) =>
+      name === "get_group_post"
+        ? new Promise((resolve) => {
+            resolvePost = resolve;
+          })
+        : Promise.resolve({ data: [], error: null }),
+    );
+    getSupabase.mockReturnValue({ rpc });
+
+    const loading = getGroupPost("post-id");
+    // 게시물 응답을 기다리지 않고 첨부 목록 요청이 이미 나가 있어야 한다.
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual([
+      "list_post_attachments",
+      "get_group_post",
+    ]);
+    resolvePost({ data: [{ post_id: "post-id", mentions: [] }], error: null });
+    await expect(loading).resolves.toMatchObject({ post_id: "post-id" });
+  });
+
+  it("still reports a missing post when its attachments are refused", async () => {
+    const rpc = vi.fn((name: string) =>
+      Promise.resolve(
+        name === "get_group_post"
+          ? { data: [], error: null }
+          : { data: null, error: { code: "42501" } },
+      ),
+    );
+    getSupabase.mockReturnValue({ rpc });
+
+    await expect(getGroupPost("post-id")).resolves.toBeNull();
+  });
+
   it("does not load or sign attachments for search results", async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: [{ post_id: "post-id", title: "결과" }],
@@ -59,34 +94,35 @@ describe("post queries", () => {
     expect(createPostAttachmentUrls).not.toHaveBeenCalled();
   });
 
-  it("hydrates a comment page with one batched image lookup and signing call", async () => {
-    const rpc = vi
-      .fn()
-      .mockResolvedValueOnce({
-        data: [
-          {
-            comment_id: "comment-1",
-            post_id: "post-id",
-            created_at: "2026-08-24T00:00:00Z",
-          },
-          {
-            comment_id: "comment-2",
-            post_id: "post-id",
-            created_at: "2026-08-24T00:01:00Z",
-          },
-        ],
-        error: null,
-      })
-      .mockResolvedValueOnce({
-        data: [
-          {
-            image_id: "image-2",
-            comment_id: "comment-2",
-            object_path: "comments/post-id/image-2",
-          },
-        ],
-        error: null,
-      });
+  it("reads comment images from the list RPC and signs them in one call", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          comment_id: "comment-1",
+          post_id: "post-id",
+          created_at: "2026-08-24T00:00:00Z",
+          images: [],
+        },
+        {
+          comment_id: "comment-2",
+          post_id: "post-id",
+          created_at: "2026-08-24T00:01:00Z",
+          images: [
+            {
+              image_id: "image-2",
+              storage_bucket: "post-attachments",
+              object_path: "comments/post-id/image-2",
+              mime_type: "image/webp",
+              size_bytes: 100,
+              width: 100,
+              height: 100,
+              ready_at: "2026-08-24T00:01:00Z",
+            },
+          ],
+        },
+      ],
+      error: null,
+    });
     createPostAttachmentUrls.mockResolvedValue(
       new Map([["comments/post-id/image-2", "https://signed/image-2"]]),
     );
@@ -94,44 +130,83 @@ describe("post queries", () => {
 
     const page = await listPostComments("post-id");
 
-    expect(rpc).toHaveBeenNthCalledWith(2, "list_comment_images", {
-      p_comment_ids: ["comment-1", "comment-2"],
-    });
+    // 이미지를 따로 묻지 않는다 — 그 왕복이 상세를 열 때마다 붙던 것이다.
+    expect(rpc).toHaveBeenCalledOnce();
     expect(createPostAttachmentUrls).toHaveBeenCalledOnce();
     expect(page.comments[0].images).toEqual([]);
     expect(page.comments[1].images[0]).toMatchObject({
       image_id: "image-2",
+      comment_id: "comment-2",
+      post_id: "post-id",
       signedUrl: "https://signed/image-2",
     });
   });
 
-  it("propagates attachment metadata query failures", async () => {
+  it("reads timeline attachments from the list RPC without a second query", async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: [
         {
           post_id: "post-id",
           published_at: "2026-08-13T00:00:00Z",
+          attachments: [
+            {
+              attachment_id: "attachment-1",
+              storage_bucket: "post-attachments",
+              object_path: "post-id/attachment-1",
+              original_filename: "photo.webp",
+              position: 0,
+              mime_type: "image/webp",
+              size_bytes: 100,
+              width: 100,
+              height: 100,
+            },
+          ],
         },
       ],
       error: null,
     });
-    const attachmentError = new Error("attachment metadata failed");
-    const query = {
-      select: vi.fn(),
-      in: vi.fn(),
-      eq: vi.fn(),
-      order: vi.fn().mockResolvedValue({ data: null, error: attachmentError }),
-    };
-    query.select.mockReturnValue(query);
-    query.in.mockReturnValue(query);
-    query.eq.mockReturnValue(query);
-    getSupabase.mockReturnValue({
-      rpc,
-      from: vi.fn().mockReturnValue(query),
-    });
+    const from = vi.fn();
+    getSupabase.mockReturnValue({ rpc, from });
+    createPostAttachmentUrls.mockResolvedValue(
+      new Map([["post-id/attachment-1", "https://signed/attachment-1"]]),
+    );
 
-    await expect(listGroupPosts("group-id")).rejects.toBe(attachmentError);
-    expect(createPostAttachmentUrls).not.toHaveBeenCalled();
+    const page = await listProfilePosts("jieun-29");
+
+    expect(from).not.toHaveBeenCalled();
+    expect(page.posts[0].attachments[0]).toMatchObject({
+      attachment_id: "attachment-1",
+      signedUrl: "https://signed/attachment-1",
+    });
+  });
+
+  it("signs timeline attachments and avatars at the same time", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          post_id: "post-id",
+          published_at: "2026-08-13T00:00:00Z",
+          author_avatar_path: "profiles/avatar.webp",
+          attachments: [],
+        },
+      ],
+      error: null,
+    });
+    getSupabase.mockReturnValue({ rpc, from: vi.fn() });
+    let resolveAttachments: (value: Map<string, string>) => void = () =>
+      undefined;
+    createPostAttachmentUrls.mockReturnValue(
+      new Promise((resolve) => {
+        resolveAttachments = resolve;
+      }),
+    );
+
+    const loading = listProfilePosts("jieun-29");
+    await vi.waitFor(() => expect(createPostAttachmentUrls).toHaveBeenCalled());
+    // 첨부 서명이 끝나기 전에 아바타 서명도 이미 나가 있어야 한다.
+    expect(createProfileMediaUrls).toHaveBeenCalled();
+    resolveAttachments(new Map());
+    await expect(loading).resolves.toMatchObject({ nextCursor: null });
   });
 
   it("asks for the timeline by public id so the loader need not resolve it first", async () => {
@@ -198,8 +273,10 @@ describe("post queries", () => {
     getSupabase.mockReturnValue({ rpc, from: vi.fn() });
 
     await expect(getProfilePost("post-id")).resolves.toBeNull();
-    // 첨부를 이어 부르지 않는다 — 읽을 수 없는 게시물의 첨부를 물어볼 이유가 없다.
-    expect(rpc).toHaveBeenCalledTimes(1);
+    // 첨부는 게시물과 함께 물어본다. 읽을 수 없는 글이면 RLS가 빈 목록을 주고, 결과는 버린다.
+    expect(createPostAttachmentUrls).not.toHaveBeenCalledWith(
+      expect.arrayContaining([expect.any(String)]),
+    );
   });
 
   it("uses pinned state as part of the next-page cursor", async () => {
@@ -228,6 +305,49 @@ describe("post queries", () => {
     });
   });
 
+  it("reads group post attachments from the list RPC without a second query", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          post_id: "post-1",
+          published_at: "2026-08-13T00:00:00Z",
+          is_pinned: false,
+          author_avatar_path: "avatars/author",
+          attachments: [
+            {
+              attachment_id: "attachment-1",
+              storage_bucket: "post-attachments",
+              object_path: "post-1/attachment-1",
+              thumbnail_path: "post-1/attachment-1-thumb",
+              original_filename: "photo.webp",
+              position: 0,
+              mime_type: "image/webp",
+              size_bytes: 100,
+              width: 100,
+              height: 100,
+            },
+          ],
+        },
+      ],
+      error: null,
+    });
+    const from = vi.fn();
+    getSupabase.mockReturnValue({ rpc, from });
+    createPostAttachmentUrls.mockResolvedValue(
+      new Map([["post-1/attachment-1", "https://signed/attachment-1"]]),
+    );
+
+    const page = await listGroupPosts("group-id");
+
+    expect(from).not.toHaveBeenCalled();
+    expect(createPostAttachmentUrls).toHaveBeenCalledOnce();
+    expect(page.posts[0].attachments[0]).toMatchObject({
+      attachment_id: "attachment-1",
+      post_id: "post-1",
+      signedUrl: "https://signed/attachment-1",
+    });
+  });
+
   it("does not sign group post media for list-mode reads", async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: [
@@ -236,36 +356,24 @@ describe("post queries", () => {
           published_at: "2026-08-13T00:00:00Z",
           is_pinned: false,
           author_avatar_path: "avatars/author",
+          attachments: [
+            {
+              attachment_id: "attachment-1",
+              storage_bucket: "post-attachments",
+              object_path: "post-1/attachment-1",
+              original_filename: "photo.webp",
+              position: 0,
+              mime_type: "image/webp",
+              size_bytes: 100,
+              width: 100,
+              height: 100,
+            },
+          ],
         },
       ],
       error: null,
     });
-    const query = {
-      select: vi.fn(),
-      in: vi.fn(),
-      eq: vi.fn(),
-      order: vi.fn().mockResolvedValue({
-        data: [
-          {
-            id: "attachment-1",
-            post_id: "post-1",
-            storage_bucket: "post-attachments",
-            object_path: "post-1/attachment-1",
-            original_filename: "photo.webp",
-            position: 0,
-            mime_type: "image/webp",
-            size_bytes: 100,
-            width: 100,
-            height: 100,
-          },
-        ],
-        error: null,
-      }),
-    };
-    query.select.mockReturnValue(query);
-    query.in.mockReturnValue(query);
-    query.eq.mockReturnValue(query);
-    getSupabase.mockReturnValue({ rpc, from: vi.fn().mockReturnValue(query) });
+    getSupabase.mockReturnValue({ rpc, from: vi.fn() });
 
     const page = await listGroupPosts("group-id", { hydrateMedia: false });
 

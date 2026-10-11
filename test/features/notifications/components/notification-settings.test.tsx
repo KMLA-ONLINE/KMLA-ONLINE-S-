@@ -42,7 +42,7 @@ describe("NotificationSettings", () => {
     renderRoute(() => (
       <NotificationSettings
         initialPreferences={preferences}
-        initialPushSupport={{
+        pushSupport={{
           state: "available",
           permission: "denied",
           subscribed: false,
@@ -90,7 +90,7 @@ describe("NotificationSettings", () => {
     const { user } = renderRoute(() => (
       <NotificationSettings
         initialPreferences={preferences}
-        initialPushSupport={{
+        pushSupport={{
           state: "available",
           permission: "granted",
           subscribed: false,
@@ -135,7 +135,7 @@ describe("NotificationSettings", () => {
     renderRoute(() => (
       <NotificationSettings
         initialPreferences={preferences}
-        initialPushSupport={{ state: "unsupported" }}
+        pushSupport={{ state: "unsupported" }}
         groupPreferences={[
           {
             groupId: "11111111-1111-4111-8111-111111111111",
@@ -174,7 +174,7 @@ describe("NotificationSettings", () => {
     renderRoute(() => (
       <NotificationSettings
         initialPreferences={preferences}
-        initialPushSupport={{ state: "unsupported" }}
+        pushSupport={{ state: "unsupported" }}
         groupPreferences={[
           {
             groupId: "11111111-1111-4111-8111-111111111111",
@@ -203,7 +203,7 @@ describe("NotificationSettings", () => {
     renderRoute(() => (
       <NotificationSettings
         initialPreferences={{ ...preferences, timeline_push_enabled: false }}
-        initialPushSupport={{
+        pushSupport={{
           state: "available",
           permission: "granted",
           subscribed: true,
@@ -226,7 +226,7 @@ describe("NotificationSettings", () => {
     renderRoute(() => (
       <NotificationSettings
         initialPreferences={preferences}
-        initialPushSupport={{ state: "unsupported" }}
+        pushSupport={{ state: "unsupported" }}
         groupPreferences={[]}
       />
     ));
@@ -246,7 +246,7 @@ describe("NotificationSettings", () => {
           school_push_enabled: false,
           timeline_push_enabled: false,
         }}
-        initialPushSupport={{
+        pushSupport={{
           state: "available",
           permission: "granted",
           subscribed: true,

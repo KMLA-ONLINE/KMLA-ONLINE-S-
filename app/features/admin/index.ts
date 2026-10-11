@@ -6,7 +6,6 @@ export { ApprovalsScreen } from "~/features/admin/components/approvals-screen";
 export { GongangManagersScreen } from "~/features/admin/components/gongang-managers-screen";
 export { StorageCleanupScreen } from "~/features/admin/components/storage-cleanup-screen";
 export {
-  assertAppAdmin,
   getStorageCleanupStatus,
   listAcceptedUsers,
   listAdminMembers,

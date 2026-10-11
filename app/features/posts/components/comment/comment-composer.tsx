@@ -60,6 +60,7 @@ import {
   DialogTitle,
 } from "~/shared/ui/dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { clipboardImageFiles } from "~/shared/lib/clipboard";
 import { cn } from "~/shared/lib/utils";
 import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
 import { Button } from "~/shared/ui/button";
@@ -485,13 +486,10 @@ export function CommentComposer({
                 if (localError) setLocalError(null);
               }}
               onPaste={(event) => {
-                const pasted = Array.from(event.clipboardData.items).find(
-                  (item) =>
-                    item.kind === "file" && item.type.startsWith("image/"),
-                );
+                const [pasted] = clipboardImageFiles(event.clipboardData);
                 if (!pasted) return;
                 event.preventDefault();
-                void selectImage(pasted.getAsFile() ?? undefined);
+                void selectImage(pasted);
               }}
               onCompositionStart={() => (composing.current = true)}
               onCompositionEnd={(event) => {
@@ -536,7 +534,7 @@ export function CommentComposer({
               className="m-0.5 shrink-0 text-muted-foreground"
               onClick={() => fileInput.current?.click()}
             >
-              {processingImage ? <Spinner /> : <ImagePlusIcon />}
+              {processingImage ? <Spinner aria-hidden /> : <ImagePlusIcon />}
             </Button>
             {/* 익명 댓글은 멘션 불가(기능 명세 §8.14). 멘션 토큰이 있으면 익명으로 못 바꾼다. */}
             {mentionGroupId && identity !== "anonymous" ? (
@@ -549,15 +547,20 @@ export function CommentComposer({
                   mentionDraft.entries,
                 )}
                 className="m-0.5 shrink-0 text-muted-foreground"
-                onSelect={(candidate) => {
+                onSelect={(candidates) => {
                   // 번호는 원문의 토큰을 보고 고른다. 표시형에는 토큰이 없어 언제나 1이
                   // 나오고, 두 번째로 고른 사람이 첫 번째를 덮는다.
-                  const ordinal = mentionDraft.register(candidate, body);
-                  if (ordinal === null) return;
+                  const assigned = mentionDraft.register(candidates, body);
+                  if (assigned.length === 0) return;
                   const element = input.current;
                   // 이름이 같은 사람이 여럿이면 표시가 누구인지를 들고 다닌다. 어느
                   // 표시인지는 ordinal이 정하므로 초안의 다른 항목을 보지 않는다.
-                  const label = `${mentionDisplayText(candidate.name, ordinal)} `;
+                  const label = assigned
+                    .map(
+                      ({ name, ordinal }) =>
+                        `${mentionDisplayText(name, ordinal)} `,
+                    )
+                    .join("");
                   const start = element?.selectionStart ?? draft.length;
                   const end = element?.selectionEnd ?? start;
                   replaceDraft(
@@ -592,7 +595,7 @@ export function CommentComposer({
           disabled={!canSend}
           onClick={send}
         >
-          {pending ? <Spinner /> : <SendIcon className="size-5" />}
+          {pending ? <Spinner aria-hidden /> : <SendIcon className="size-5" />}
         </Button>
       </div>
 

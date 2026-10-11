@@ -68,7 +68,7 @@ export function MemberRoleMenu({
             />
           }
         >
-          {pending ? <Spinner /> : <MoreHorizontalIcon />}
+          {pending ? <Spinner aria-hidden /> : <MoreHorizontalIcon />}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40">
           <DropdownMenuGroup>

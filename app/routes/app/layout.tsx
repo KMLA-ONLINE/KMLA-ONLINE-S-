@@ -12,6 +12,7 @@ import {
   AppHeader,
   AppSidebar,
   MobileTabBar,
+  NavigationProgress,
   NavigationSkeleton,
   PullToRefresh,
   resolveAppChrome,
@@ -37,6 +38,9 @@ const CONTENT_WIDTH_CLASS = {
   "5xl": "max-w-5xl",
   full: "max-w-none",
 } as const;
+
+/** 이 시간이 지나도 이동이 안 끝나면 이전 화면 대신 스켈레톤을 그린다. */
+const NAVIGATION_SKELETON_DELAY_MS = 1000;
 
 export default function MainAppLayout() {
   const matches = useMatches();
@@ -76,7 +80,14 @@ export default function MainAppLayout() {
     !groupDetailSearchNavigation &&
     !postOverlayNavigation &&
     !uiOverlaySearchNavigation;
-  const showNavigationSkeleton = useDelayedPending(navigationPending);
+  // 짧은 이동은 이전 화면을 그대로 두고 진행 막대만 띄운다. 화면을 스켈레톤으로 바꾸면 금방 끝나는
+  // 이동마다 페이지 머리까지 깜빡인다. 오래 걸릴 때만 다음 화면 모양의 스켈레톤으로 바꿔 눌린 것을 보여 준다.
+  const showNavigationProgress = useDelayedPending(navigationPending, {
+    delay: 100,
+  });
+  const showNavigationSkeleton = useDelayedPending(navigationPending, {
+    delay: NAVIGATION_SKELETON_DELAY_MS,
+  });
   const skeletonPath = pendingPathname ?? location.pathname;
 
   const refresh = async () => {
@@ -127,6 +138,9 @@ export default function MainAppLayout() {
         <AppSidebar className="max-md:hidden" />
 
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          {showNavigationProgress ? (
+            <NavigationProgress className="absolute inset-x-0 top-[var(--app-safe-t)] z-50" />
+          ) : null}
           <PullToRefresh
             containerRef={scrollRef}
             enabled={chrome.pullToRefresh}
@@ -160,6 +174,7 @@ export default function MainAppLayout() {
 
           {chrome.bottomNav === "none" ? null : (
             <MobileTabBar
+              scrollRef={scrollRef}
               className={cn(
                 "md:hidden",
                 // 키보드 포커스 중에는 숨기지 않는다. `focus-within`은 탭을 눌러도 포커스가 남아

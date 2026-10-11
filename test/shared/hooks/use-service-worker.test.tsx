@@ -1,7 +1,11 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useServiceWorker } from "~/shared/hooks/use-service-worker";
+import {
+  resetAppUpdateForTests,
+  useAppUpdate,
+  useServiceWorker,
+} from "~/shared/hooks/use-service-worker";
 
 interface WorkboxEvent {
   isUpdate?: boolean;
@@ -75,6 +79,7 @@ async function setupHook() {
 
 describe("useServiceWorker", () => {
   beforeEach(() => {
+    resetAppUpdateForTests();
     workboxMock.instances.length = 0;
     vi.stubEnv("PROD", true);
     Object.defineProperty(navigator, "serviceWorker", {
@@ -96,6 +101,40 @@ describe("useServiceWorker", () => {
     } else {
       Reflect.deleteProperty(navigator, "serviceWorker");
     }
+  });
+
+  it("사람이 누른 확인은 쓰로틀 없이 서버에 묻고 결과를 알려 준다", async () => {
+    const { workbox } = await setupHook();
+    const getRegistration = vi.fn().mockResolvedValue({ waiting: null });
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: { getRegistration },
+    });
+    const { result: shared } = renderHook(() => useAppUpdate());
+    const check = shared.current.checkForUpdate;
+    if (!check) throw new Error("checkForUpdate was not published");
+
+    // 방금 등록했으니 자동 확인이라면 쓰로틀에 걸린다.
+    await expect(check()).resolves.toBe("latest");
+    expect(workbox.update).toHaveBeenCalledOnce();
+
+    getRegistration.mockResolvedValue({ installing: {} });
+    await expect(check()).resolves.toBe("found");
+
+    vi.mocked(workbox.update).mockRejectedValueOnce(new Error("offline"));
+    await expect(check()).resolves.toBe("failed");
+  });
+
+  it("다른 화면이 같은 업데이트 상태와 적용 동작을 본다", async () => {
+    const { emit, workbox } = await setupHook();
+    const { result: shared } = renderHook(() => useAppUpdate());
+
+    emit("waiting", { isUpdate: true });
+    expect(shared.current.updateReady).toBe(true);
+
+    act(() => shared.current.applyUpdate());
+    expect(workbox.messageSkipWaiting).toHaveBeenCalledOnce();
+    expect(shared.current.applyingUpdate).toBe(true);
   });
 
   it("첫 설치에서 현재 페이지를 새로고침하지 않는다", async () => {

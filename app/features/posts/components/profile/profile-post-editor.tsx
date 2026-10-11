@@ -83,6 +83,7 @@ export function ProfilePostEditor({
     disposedRef,
     isDragging,
     dropHandlers,
+    pasteHandlers,
     addFiles,
     removeExisting,
     removeAddition,
@@ -201,6 +202,7 @@ export function ProfilePostEditor({
             }
           },
           ...dropHandlers,
+          ...pasteHandlers,
         }}
       >
         {canChooseVisibility ? (

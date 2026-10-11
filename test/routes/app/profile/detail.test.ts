@@ -27,12 +27,12 @@ import {
 
 const emptyPage = { posts: [], nextCursor: null };
 
-function loader(pubId: string) {
+function loader(pubId: string, path = `/profile/${pubId}`) {
   return clientLoader({
     params: { pubId },
     context: new RouterContextProvider(),
-    request: new Request(`https://example.com/profile/${pubId}`),
-    url: new URL(`https://example.com/profile/${pubId}`),
+    request: new Request(`https://example.com${path}`),
+    url: new URL(`https://example.com${path}`),
     pattern: "/profile/:pubId",
     serverLoader: () => Promise.resolve(undefined),
   });
@@ -95,6 +95,24 @@ describe("profile detail loader", () => {
     expect(listProfilePosts).toHaveBeenCalledWith("jieun-29");
   });
 
+  // 상세 dialog 뒤에 깔릴 타임라인을 기다리면 상세가 그만큼 늦게 열린다.
+  it("does not hold a direct post detail on the timeline", async () => {
+    listProfilePosts.mockReturnValue(new Promise(() => undefined));
+
+    const result = await loader("jieun-29", "/profile/jieun-29/posts/post-id");
+
+    expect(result.profile).toMatchObject({ pub_id: "jieun-29" });
+    expect(result.posts).toBeInstanceOf(Promise);
+  });
+
+  it("keeps a direct post detail when the background timeline fails", async () => {
+    listProfilePosts.mockRejectedValue(new Error("offline"));
+
+    const result = await loader("jieun-29", "/profile/jieun-29/posts/post-id");
+
+    await expect(result.posts).resolves.toBeNull();
+  });
+
   it("404s an unknown profile", async () => {
     loadAcceptedProfile.mockResolvedValue(null);
 
@@ -153,5 +171,32 @@ describe("profile detail revalidation", () => {
         ),
       } as never),
     ).toBe(false);
+  });
+
+  // 회귀: 게시물을 열고 닫을 때마다 프로필과 타임라인을 다시 읽고 쌓은 페이지를 버렸다.
+  it("keeps the timeline while a post opens and closes", () => {
+    expect(
+      shouldRevalidate({
+        currentUrl: new URL("https://example.com/profile/jieun-29"),
+        nextUrl: new URL("https://example.com/profile/jieun-29/posts/post-id"),
+      } as never),
+    ).toBe(false);
+    expect(
+      shouldRevalidate({
+        currentUrl: new URL(
+          "https://example.com/profile/jieun-29/posts/post-id",
+        ),
+        nextUrl: new URL("https://example.com/profile/jieun-29"),
+      } as never),
+    ).toBe(false);
+  });
+
+  it("refreshes the timeline after a post is saved", () => {
+    expect(
+      shouldRevalidate({
+        currentUrl: new URL("https://example.com/profile/jieun-29/posts/new"),
+        nextUrl: new URL("https://example.com/profile/jieun-29/posts/post-id"),
+      } as never),
+    ).toBe(true);
   });
 });

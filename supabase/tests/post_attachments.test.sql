@@ -10,7 +10,7 @@ create temporary table cleanup_claims (
 grant select, insert on cleanup_claims to service_role;
 create temporary table attachment_test_ids (name text primary key, id uuid not null);
 grant select, insert on attachment_test_ids to authenticated;
-select plan(77);
+select plan(78);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -412,6 +412,13 @@ select lives_ok(
   'ready attachment permits blank-body publication'
 );
 select is((select count(*) from public.list_post_attachments((select id from public.posts where title = '첨부 초안'))), 1::bigint, 'member can list ready metadata');
+select is(
+  (select jsonb_array_length(attachments)
+   from public.list_group_posts('20000000-0000-0000-0000-000000000002')
+   where post_id = (select id from public.posts where title = '첨부 초안')),
+  1,
+  'the group post list carries the ready attachment'
+);
 select throws_ok(
   $$select public.update_group_post_draft_identity(
       (select id from attachment_test_ids where name = 'upload_draft'), 'identified'

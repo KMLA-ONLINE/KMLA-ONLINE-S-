@@ -120,6 +120,7 @@ export function GroupCategoryManager({
               }
             }}
           >
+            <input type="hidden" name="groupId" value={groupId} />
             <input type="hidden" name="categoryId" value={category.id} />
             <input type="hidden" name="position" value={category.position} />
             <TextField

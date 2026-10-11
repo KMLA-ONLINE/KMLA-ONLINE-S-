@@ -9,7 +9,10 @@ import {
   resolveIdentityOptions,
 } from "~/features/posts";
 import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
-import { invalidateSavedGroupPost } from "~/routes/app/groups/post-cache";
+import {
+  invalidateSavedGroupPost,
+  useGroupEditorCategories,
+} from "~/routes/app/groups/post-cache";
 
 export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
 
@@ -35,6 +38,10 @@ export default function NewGroupPostPage() {
     "routes/app/groups/detail",
   );
   const groupId = parent?.group.group_id ?? "";
+  const categories = useGroupEditorCategories(
+    groupId,
+    parent?.categories ?? [],
+  );
   const restrictionQuery = useQuery({
     ...anonymousActivityRestrictionQuery(groupId),
     enabled: parent?.group.identity_policy === "optional_anonymous",
@@ -43,7 +50,7 @@ export default function NewGroupPostPage() {
     throw new Response("그룹을 찾을 수 없습니다.", { status: 404 });
   }
 
-  const { group, categories } = parent;
+  const { group } = parent;
   if (!canCreate(group))
     throw new Response("게시물을 작성할 권한이 없습니다.", { status: 403 });
 

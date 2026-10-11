@@ -12,6 +12,12 @@ import { cn } from "~/shared/lib/utils";
 const TRIGGER_DISTANCE = 72;
 const MAX_DISTANCE = 96;
 const MINIMUM_REFRESH_INDICATOR_MS = 300;
+/**
+ * 당기기를 끝낸 직후 이 시간 안에 오는 click만 삼킨다. 손가락을 끌고 떼면 대부분의 브라우저는
+ * click을 보내지 않는다. 기한 없이 "다음 click 하나"를 삼키면 그 click은 사용자가 나중에 누른
+ * 버튼의 것이 되어, 새로고침 뒤 첫 탭이 먹히지 않는다.
+ */
+const SUPPRESS_CLICK_MS = 400;
 
 interface GestureState {
   active: boolean;
@@ -42,7 +48,7 @@ export function PullToRefresh({
   const [refreshing, setRefreshing] = useState(false);
   const gestureRef = useRef<GestureState>({ ...IDLE_GESTURE });
   const distanceRef = useRef(0);
-  const suppressClickRef = useRef(false);
+  const suppressClickUntilRef = useRef(0);
   const refreshEvent = useEffectEvent(onRefresh);
 
   useEffect(() => {
@@ -108,7 +114,8 @@ export function PullToRefresh({
       gestureRef.current = { ...IDLE_GESTURE };
       setPullDistance(0);
 
-      if (didDrag) suppressClickRef.current = true;
+      if (didDrag)
+        suppressClickUntilRef.current = Date.now() + SUPPRESS_CLICK_MS;
       if (!shouldRefresh) return;
 
       setRefreshing(true);
@@ -134,8 +141,8 @@ export function PullToRefresh({
       if (touch) move(touch.clientX, touch.clientY, event);
     };
     const onClick = (event: MouseEvent) => {
-      if (!suppressClickRef.current) return;
-      suppressClickRef.current = false;
+      if (Date.now() > suppressClickUntilRef.current) return;
+      suppressClickUntilRef.current = 0;
       event.preventDefault();
       event.stopImmediatePropagation();
     };

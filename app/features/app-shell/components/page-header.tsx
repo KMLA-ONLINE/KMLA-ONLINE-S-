@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router";
 
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
+import { useScrollToTopOnTap } from "~/shared/hooks/use-scroll-to-top-on-tap";
 import { Button } from "~/shared/ui/button";
 import { cn } from "~/shared/lib/utils";
 
@@ -30,9 +31,13 @@ export function PageHeader({
   const navigate = useNavigate();
   const location = useLocation();
   const hidden = useHideOnScroll({ enabled: hideOnScroll });
+  const onTap = useScrollToTopOnTap();
 
   return (
+    // 맨 위로 가기는 터치 편의다. 키보드는 스크롤 영역에서 Home 키로 같은 일을 한다.
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
     <header
+      onClick={onTap}
       className={cn(
         // 배경은 불투명하다. `bg-background/95 + backdrop-blur`는 아래로 지나가는
         // 사진·카드 색을 그대로 빨아들여, 스크롤하는 동안 헤더 색이 계속 바뀌었다.

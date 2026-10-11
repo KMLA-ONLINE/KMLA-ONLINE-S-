@@ -6,10 +6,10 @@ const mocks = vi.hoisted(() => ({
   getProfilePost: vi.fn(),
   listPostComments: vi.fn(),
   loadGroupDetail: vi.fn(),
-  resolveIdentityOptions: vi.fn(),
 }));
 
-vi.mock("~/features/groups", () => ({
+vi.mock("~/features/groups", async (importOriginal) => ({
+  ...(await importOriginal()),
   loadGroupDetail: mocks.loadGroupDetail,
 }));
 
@@ -17,10 +17,10 @@ vi.mock("~/features/posts", () => ({
   getGroupPost: mocks.getGroupPost,
   getProfilePost: mocks.getProfilePost,
   listPostComments: mocks.listPostComments,
-  resolveIdentityOptions: mocks.resolveIdentityOptions,
 }));
 
 import { clientLoader } from "~/routes/app/feed/post-data";
+import { getQueryClient } from "~/shared/lib/query-client";
 
 function load(query: string) {
   const url = `https://example.com/feed/posts/post-id${query}`;
@@ -37,11 +37,11 @@ function load(query: string) {
 describe("feed post detail loader", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getQueryClient().clear();
     mocks.listPostComments.mockResolvedValue({
       comments: [],
       nextCursor: null,
     });
-    mocks.resolveIdentityOptions.mockReturnValue(["identified"]);
   });
 
   it("loads a group post without navigating to the group screen", async () => {
@@ -54,7 +54,7 @@ describe("feed post detail loader", () => {
       slug: "notice",
       name: "공지사항",
       membership_state: "member",
-      identity_policy: "identified_only",
+      identity_policy: "optional_anonymous",
       member_role: "member",
     });
 
@@ -66,7 +66,11 @@ describe("feed post detail loader", () => {
         kind: "group",
         slug: "notice",
         groupName: "공지사항",
-        identities: ["identified"],
+        group: {
+          groupId: "group-id",
+          identityPolicy: "optional_anonymous",
+          memberRole: "member",
+        },
       },
       error: null,
     });
@@ -89,5 +93,26 @@ describe("feed post detail loader", () => {
       detail: null,
       error: "게시물을 볼 수 없습니다.",
     });
+  });
+
+  // 캐시된 그룹 행은 최대 2분 묵었다. 그 사이 바뀐 작성 신원 정책이나 역할을 상세 창이 놓치면 안 된다.
+  it("reads the group row fresh even when it is cached", async () => {
+    mocks.getGroupPost.mockResolvedValue({
+      post_id: "post-id",
+      group_id: "group-id",
+    });
+    mocks.loadGroupDetail.mockResolvedValue({
+      group_id: "group-id",
+      slug: "notice",
+      name: "공지사항",
+      membership_state: "member",
+      identity_policy: "identified",
+      member_role: "member",
+    });
+
+    await load("?kind=group&source=notice");
+    await load("?kind=group&source=notice");
+
+    expect(mocks.loadGroupDetail).toHaveBeenCalledTimes(2);
   });
 });

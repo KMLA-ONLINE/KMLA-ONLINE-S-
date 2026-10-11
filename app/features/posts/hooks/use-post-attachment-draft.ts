@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type ClipboardEvent,
+} from "react";
 
 import {
   createPostUploadSession,
@@ -17,6 +23,7 @@ import type {
 } from "~/features/posts/model/types";
 import { isPostVideoFile } from "~/features/posts/model/validation";
 import { useFileDrop } from "~/shared/hooks/use-file-drop";
+import { clipboardImageFiles } from "~/shared/lib/clipboard";
 
 type FileSelection = "image" | "file" | "mixed";
 
@@ -93,7 +100,10 @@ export function usePostAttachmentDraft({
     [],
   );
 
-  const addFiles = async (files: FileList | null, selection: FileSelection) => {
+  const addFiles = async (
+    files: FileList | readonly File[] | null,
+    selection: FileSelection,
+  ) => {
     if (!files?.length || disabled) return;
     const selected = [...files];
     const videos = selected.filter(isPostVideoFile);
@@ -195,6 +205,36 @@ export function usePostAttachmentDraft({
     (files) => void addFiles(files, "mixed"),
   );
 
+  // 첨부할 수 있을 때만 붙여넣기를 가로챈다. 저장 중이거나 첨부할 이미지가 없으면 원래 붙여넣기로 둔다.
+  const takePastedImages = (event: {
+    clipboardData: DataTransfer | null;
+    preventDefault: () => void;
+    stopPropagation: () => void;
+  }) => {
+    if (disabled) return;
+    const files = clipboardImageFiles(event.clipboardData);
+    if (!files.length) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void addFiles(files, "image");
+  };
+
+  // 캡처 단계에서 받는다. 본문 편집기(ProseMirror)가 버블 단계에서 붙여넣기를 먼저 처리해 버리고,
+  // 폼 안 어느 칸에 포커스가 있든(제목, 본문) 같은 첨부로 들어가야 한다.
+  const pasteHandlers = {
+    onPasteCapture: (event: ClipboardEvent) => takePastedImages(event),
+  };
+
+  // 첨부 목록이나 여백처럼 포커스를 받지 않는 곳을 누르면 포커스가 `body`로 가서 붙여넣기가 폼에
+  // 닿지 않는다. 그 경우만 문서에서 받는다. 폼 밖 입력칸(헤더 검색 등)의 붙여넣기는 건드리지 않는다.
+  const onDocumentPaste = useEffectEvent((event: globalThis.ClipboardEvent) => {
+    if (event.target === document.body) takePastedImages(event);
+  });
+  useEffect(() => {
+    document.addEventListener("paste", onDocumentPaste);
+    return () => document.removeEventListener("paste", onDocumentPaste);
+  }, []);
+
   return {
     existing,
     removedIds,
@@ -212,6 +252,7 @@ export function usePostAttachmentDraft({
     disposedRef,
     isDragging,
     dropHandlers,
+    pasteHandlers,
     addFiles,
     removeExisting,
     removeAddition,

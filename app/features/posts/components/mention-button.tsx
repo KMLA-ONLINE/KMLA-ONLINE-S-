@@ -20,7 +20,8 @@ export function MentionButton({
   remaining: number;
   activeTargetPubIds: string[];
   disabled?: boolean;
-  onSelect: (candidate: MentionCandidate) => void;
+  /** 고른 사람들을 고른 순서대로 넘긴다. */
+  onSelect: (candidates: MentionCandidate[]) => void;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -52,9 +53,9 @@ export function MentionButton({
           onOpenChange={setOpen}
           remaining={remaining}
           activeTargetPubIds={activeTargetPubIds}
-          onSelect={(candidate) => {
+          onSelect={(candidates) => {
             setOpen(false);
-            onSelect(candidate);
+            onSelect(candidates);
           }}
         />
       ) : null}

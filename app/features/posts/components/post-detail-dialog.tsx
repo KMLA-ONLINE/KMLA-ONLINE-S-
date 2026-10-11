@@ -38,6 +38,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/shared/ui/dialog";
+import { PendingRegion, Skeleton } from "~/shared/ui/skeleton";
 
 /** 모바일은 전체화면, 데스크톱은 가운데 모달. 높이를 `90svh`로 고정해 게시물마다 크기가 출렁이지 않게 한다. */
 const DETAIL_DIALOG_CLASS =
@@ -94,7 +95,8 @@ export function PostDetailDialog({
   /** 모달 머리에 적는 제목. 낭독기에는 이것이 게시물의 이름이 된다. */
   title: string;
   postId: string;
-  comments: PostCommentPage;
+  /** null이면 댓글을 불러오는 중이다. 본문은 그대로 그리고 댓글 자리만 스켈레톤으로 둔다. */
+  comments: PostCommentPage | null;
   viewer: CommentViewer;
   /** 이 게시물에 댓글로 쓸 수 있는 작성 신원. 첫 항목이 기본값이다. */
   identities: PostIdentity[];
@@ -145,7 +147,7 @@ export function PostDetailDialog({
   const commentSheet = commentsOnly && sheetViewport;
   const keyboardViewport = useKeyboardViewport(sheetViewport);
   const mobileDetailKeyboardOpen =
-    !commentSheet && keyboardViewport.bottomInset > 0;
+    !commentSheet && keyboardViewport.keyboardOpen;
 
   useEffect(() => {
     if (!replyingTo || keyboardViewport.height === null) return;
@@ -167,7 +169,12 @@ export function PostDetailDialog({
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [keyboardViewport.bottomInset, keyboardViewport.height, replyingTo]);
+  }, [
+    keyboardViewport.bottomInset,
+    keyboardViewport.height,
+    keyboardViewport.keyboardOpen,
+    replyingTo,
+  ]);
 
   // 본문 영역이 액션 바에서 부르는 핸들러다. JSX 안에서 즉석 클로저로 만들면 render 중에
   // ref를 읽는 것으로 잡힌다.
@@ -336,10 +343,11 @@ export function PostDetailDialog({
         style={
           sheetViewport
             ? ({
-                bottom:
-                  keyboardViewport.bottomInset > 0
-                    ? `${keyboardViewport.bottomInset}px`
-                    : undefined,
+                // 보이는 영역의 아래에 붙인다. 화면이 끌어올려졌으면 가려진 아래쪽이 0이라
+                // 레이아웃 바닥에 붙고, 그 자리가 곧 보이는 영역의 바닥이다.
+                bottom: keyboardViewport.keyboardOpen
+                  ? `${keyboardViewport.bottomInset}px`
+                  : undefined,
                 top: mobileDetailKeyboardOpen ? "auto" : undefined,
                 maxHeight:
                   keyboardViewport.height === null
@@ -424,25 +432,29 @@ export function PostDetailDialog({
           </article>
 
           <section className="border-t p-4">
-            <CommentThread
-              comments={thread.comments}
-              replies={thread.replies}
-              expanded={thread.expanded}
-              hasMore={thread.hasMore}
-              loading={thread.loading}
-              pending={thread.pending}
-              viewer={viewer}
-              postAuthorPubId={postAuthorPubId}
-              replyingToId={replyingTo?.comment_id}
-              scrollRef={scrollRef}
-              onLoadMore={thread.loadMore}
-              onToggleReplies={thread.toggleReplies}
-              onReply={startReply}
-              onEdit={thread.edit}
-              mentionGroupId={mentionGroupId}
-              onReact={thread.react}
-              onDelete={thread.remove}
-            />
+            {thread.initialLoading ? (
+              <CommentThreadSkeleton />
+            ) : (
+              <CommentThread
+                comments={thread.comments}
+                replies={thread.replies}
+                expanded={thread.expanded}
+                hasMore={thread.hasMore}
+                loading={thread.loading}
+                pending={thread.pending}
+                viewer={viewer}
+                postAuthorPubId={postAuthorPubId}
+                replyingToId={replyingTo?.comment_id}
+                scrollRef={scrollRef}
+                onLoadMore={thread.loadMore}
+                onToggleReplies={thread.toggleReplies}
+                onReply={startReply}
+                onEdit={thread.edit}
+                mentionGroupId={mentionGroupId}
+                onReact={thread.react}
+                onDelete={thread.remove}
+              />
+            )}
           </section>
         </div>
 
@@ -453,10 +465,10 @@ export function PostDetailDialog({
           />
         ) : null}
         <CommentComposer
-          /** 키보드가 없을 때만 홈 인디케이터 여백을 준다. iOS Safari는 키보드가 떠도 `env(safe-area-inset-bottom)`이 0이 아니라 `bottomInset`으로 판단한다. */
+          /** 키보드가 없을 때만 홈 인디케이터 여백을 준다. iOS Safari는 키보드가 떠도 `env(safe-area-inset-bottom)`이 0이 아니라 `keyboardOpen`으로 판단한다. */
           className={cn(
             "border-t p-3",
-            keyboardViewport.bottomInset === 0 &&
+            !keyboardViewport.keyboardOpen &&
               "pb-[calc(0.75rem+var(--app-safe-b))]",
           )}
           viewer={viewer}
@@ -465,7 +477,8 @@ export function PostDetailDialog({
           onIdentityChange={setIdentity}
           onSubmit={submit}
           mentionGroupId={mentionGroupId}
-          pending={thread.pending}
+          // 첫 페이지가 오기 전에 쓴 댓글은 그 페이지가 도착하며 지워진다.
+          pending={thread.pending || thread.initialLoading}
           error={thread.error}
           inputRef={composerRef}
           focusOnMount={commentsOnly && !touchPrimaryViewport}
@@ -474,5 +487,21 @@ export function PostDetailDialog({
         />
       </DialogContent>
     </Dialog>
+  );
+}
+
+function CommentThreadSkeleton() {
+  return (
+    <PendingRegion label="댓글을" className="space-y-4">
+      {Array.from({ length: 3 }, (_, index) => (
+        <div key={index} className="flex gap-2">
+          <Skeleton className="size-8 shrink-0 rounded-full" />
+          <div className="flex-1 space-y-2 pt-1">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-full" />
+          </div>
+        </div>
+      ))}
+    </PendingRegion>
   );
 }

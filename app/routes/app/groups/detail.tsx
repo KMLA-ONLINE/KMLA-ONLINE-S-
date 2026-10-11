@@ -1,9 +1,4 @@
-import {
-  data,
-  Outlet,
-  redirect,
-  type ShouldRevalidateFunctionArgs,
-} from "react-router";
+import { data, Outlet, redirect } from "react-router";
 
 import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import {
@@ -46,7 +41,6 @@ import {
   deleteGroupCategory,
   deleteGroupPost,
   getPostErrorMessage,
-  listGroupCategories,
   listGroupPosts,
   moveGroupCategory,
   setGroupPostPinned,
@@ -57,6 +51,7 @@ import { readPostViewMode } from "~/features/posts/model/view-preference";
 import type { Route } from "./+types/detail";
 import { feedKeys, removeFeedPost, resetFeed } from "~/features/feed";
 import { getQueryClient } from "~/shared/lib/query-client";
+import { groupCategoriesQuery } from "~/routes/app/groups/post-cache";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -66,20 +61,9 @@ export const handle = defineAppChrome({
 });
 
 /** 게시물 검색 오버레이의 URL 상태. loader가 읽지 않으므로 이것만 바뀌면 다시 읽을 것이 없다. */
-const shouldRevalidateList = createPostListRevalidation(["search", "q"]);
-const GROUP_PATH_PATTERN = /^\/groups\/[^/]+/;
-
-export function shouldRevalidate(args: ShouldRevalidateFunctionArgs) {
-  const groupPath = GROUP_PATH_PATTERN.exec(args.currentUrl.pathname)?.[0];
-  const isDetailTransition =
-    groupPath !== undefined &&
-    args.formMethod === undefined &&
-    ((args.currentUrl.pathname === groupPath &&
-      args.nextUrl.pathname.startsWith(`${groupPath}/posts/`)) ||
-      (args.nextUrl.pathname === groupPath &&
-        args.currentUrl.pathname.startsWith(`${groupPath}/posts/`)));
-  return isDetailTransition ? false : shouldRevalidateList(args);
-}
+export const shouldRevalidate = createPostListRevalidation(["search", "q"], {
+  detailParent: /^\/groups\/[^/]+/,
+});
 
 /**
  * `groups/:slug`. 게시물 상세(`posts/:postId`)를 자식으로 가지므로 `<Outlet />`을 그린다 —
@@ -90,9 +74,34 @@ export async function clientLoader({
   request,
 }: Route.ClientLoaderArgs) {
   const queryClient = getQueryClient();
+  const url = new URL(request.url);
+  const searchParams = url.searchParams;
+  const memberTab = searchParams.get("tab") === "members";
+  const settingsTab = searchParams.get("tab") === "settings";
+  const reportsTab = searchParams.get("tab") === "reports";
+  const postsTab = !memberTab && !settingsTab && !reportsTab;
+  const categoriesQuery = groupCategoriesQuery;
+  const postsQuery = (groupId: string) => ({
+    queryKey: groupKeys.posts(groupId, null, null),
+    queryFn: () =>
+      listGroupPosts(groupId, {
+        hydrateMedia: readPostViewMode() === "card",
+      }),
+    staleTime: GROUP_CONTENT_STALE_TIME,
+  });
   const group = await queryClient.fetchQuery({
     queryKey: groupKeys.detail(params.slug),
-    queryFn: () => loadGroupDetail(params.slug),
+    // 목록과 카테고리는 그룹 ID만 있으면 된다. 아이콘·커버 서명을 기다리지 않고 함께 띄운다.
+    // 아래의 `fetchQuery`가 같은 키로 진행 중인 요청을 이어받는다. 실패는 그쪽에서 다시 드러난다.
+    queryFn: () =>
+      loadGroupDetail(params.slug, {
+        onFound: ({ group_id, membership_state }) => {
+          if (membership_state !== "member") return;
+          if (postsTab) void queryClient.prefetchQuery(postsQuery(group_id));
+          if (postsTab || settingsTab)
+            void queryClient.prefetchQuery(categoriesQuery(group_id));
+        },
+      }),
     staleTime: GROUP_STALE_TIME,
   });
   if (!group) throw new Response("그룹을 찾을 수 없습니다.", { status: 404 });
@@ -103,73 +112,79 @@ export async function clientLoader({
       posts: { posts: [], nextCursor: null },
     };
   }
-  const url = new URL(request.url);
-  const searchParams = url.searchParams;
-  const memberTab = searchParams.get("tab") === "members";
-  const settingsTab = searchParams.get("tab") === "settings";
-  const reportsTab = searchParams.get("tab") === "reports";
-  const postsTab = !memberTab && !settingsTab && !reportsTab;
   const canModerate =
     group.member_role === "owner" || group.member_role === "admin";
   const canCurate = canModerate || group.member_role === "manager";
   const reportSort =
     searchParams.get("reportSort") === "recent" ? "recent" : "count";
-  const [categories, posts, memberPage, joinRequests, invite, reportPage] =
-    await Promise.all([
-      postsTab || settingsTab
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.categories(group.group_id),
-            queryFn: () => listGroupCategories(group.group_id),
-            staleTime: GROUP_CONTENT_STALE_TIME,
-          })
-        : Promise.resolve([]),
-      postsTab
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.posts(group.group_id, null, null),
-            queryFn: () =>
-              listGroupPosts(group.group_id, {
-                hydrateMedia: readPostViewMode() === "card",
-              }),
-            staleTime: GROUP_CONTENT_STALE_TIME,
-          })
-        : Promise.resolve({ posts: [], nextCursor: null }),
-      memberTab
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.members(
+  const isGroupPage = url.pathname === `/groups/${group.slug}`;
+  // 글쓰기·수정 화면은 부모의 카테고리를 쓴다. 게시물 상세는 쓰지 않아 기다리지 않는다. 상세를 닫고
+  // 글쓰기를 열면 부모가 다시 돌지 않으므로, 편집기는 `useGroupEditorCategories`로 캐시를 함께 본다.
+  const isEditorRoute = /\/posts\/(?:new|[^/]+\/edit)$/.test(url.pathname);
+  const categoriesRequest =
+    postsTab || settingsTab
+      ? queryClient.fetchQuery(categoriesQuery(group.group_id))
+      : Promise.resolve([]);
+  const postsRequest = postsTab
+    ? queryClient.fetchQuery(postsQuery(group.group_id))
+    : Promise.resolve({ posts: [], nextCursor: null });
+  // 게시물 상세처럼 자식 route로 바로 들어오면 목록은 그 뒤에 깔릴 뿐이다. 기다리면 상세가
+  // 목록 RPC와 20건 서명 왕복에 묶이므로 목록 칸이 쓰는 카테고리와 함께 promise째 넘긴다.
+  // 실패해도 상세까지 에러 화면으로 덮지 않도록 null로 받아 목록 자리에만 알린다. catch는 아래
+  // await보다 먼저 붙여야 그사이 거절이 처리되지 않은 rejection으로 새지 않는다.
+  // 글쓰기·수정 화면으로 바로 들어와도 목록을 받는다. 편집기는 목록 위에 뜨고, 취소로 닫을 때는
+  // `shouldRevalidate`가 부모를 다시 읽지 않으므로 여기서 받아 두지 않으면 닫은 뒤 목록이 비어 있다.
+  const deferredPosts = Promise.all([postsRequest, categoriesRequest])
+    .then(([page, categories]) => ({ page, categories }))
+    .catch(() => null);
+  const [
+    categories,
+    loadedPosts,
+    memberPage,
+    joinRequests,
+    invite,
+    reportPage,
+  ] = await Promise.all([
+    isGroupPage || isEditorRoute || settingsTab ? categoriesRequest : [],
+    isGroupPage ? postsRequest : null,
+    memberTab
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.members(
+            group.group_id,
+            searchParams.get("memberQuery") ?? "",
+          ),
+          queryFn: () =>
+            listGroupMembers(
               group.group_id,
               searchParams.get("memberQuery") ?? "",
             ),
-            queryFn: () =>
-              listGroupMembers(
-                group.group_id,
-                searchParams.get("memberQuery") ?? "",
-              ),
-          })
-        : Promise.resolve(undefined),
-      memberTab && canModerate
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.joinRequests(group.group_id),
-            queryFn: () => listGroupJoinRequests(group.group_id),
-          })
-        : Promise.resolve([]),
-      // 초대 링크는 설정 탭의 운영진에게만 보이고, 다른 사람이 부르면 서버가 42501로 막는다.
-      settingsTab && canModerate && group.kind !== "official"
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.invite(group.group_id),
-            queryFn: () => getGroupInvite(group.group_id),
-          })
-        : Promise.resolve(null),
-      reportsTab && canCurate
-        ? queryClient.fetchQuery({
-            queryKey: groupKeys.reports(group.group_id, reportSort),
-            queryFn: () =>
-              listGroupPostReportSummaries(group.group_id, reportSort),
-          })
-        : Promise.resolve(undefined),
-    ]);
+        })
+      : Promise.resolve(undefined),
+    memberTab && canModerate
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.joinRequests(group.group_id),
+          queryFn: () => listGroupJoinRequests(group.group_id),
+        })
+      : Promise.resolve([]),
+    // 초대 링크는 설정 탭의 운영진에게만 보이고, 다른 사람이 부르면 서버가 42501로 막는다.
+    settingsTab && canModerate && group.kind !== "official"
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.invite(group.group_id),
+          queryFn: () => getGroupInvite(group.group_id),
+        })
+      : Promise.resolve(null),
+    reportsTab && canCurate
+      ? queryClient.fetchQuery({
+          queryKey: groupKeys.reports(group.group_id, reportSort),
+          queryFn: () =>
+            listGroupPostReportSummaries(group.group_id, reportSort),
+        })
+      : Promise.resolve(undefined),
+  ]);
+  const posts = loadedPosts ?? deferredPosts;
 
   // A post detail is a child route, so only the group's exact posts tab advances §7.19.
-  if (postsTab && url.pathname === `/groups/${group.slug}`) {
+  if (postsTab && isGroupPage) {
     // 그룹 홈에는 활성 observer가 없어 무효화가 화면을 다시 그리지 않는다. 배지를 먼저 0으로
     // 낮춰야 RPC보다 먼저 목록으로 돌아와도 옛 숫자가 남지 않는다(§7.19).
     queryClient.setQueryData(

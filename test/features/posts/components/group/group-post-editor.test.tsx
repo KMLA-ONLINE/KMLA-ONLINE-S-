@@ -21,12 +21,17 @@ vi.mock("~/features/posts/components/editor/post-body-input", async () => {
       value: string;
       onValueChange?: (value: string) => void;
       handleRef?: React.RefObject<{
-        insertMention(label: string, ordinal: number): void;
+        insertMentions(mentions: { label: string; ordinal: number }[]): void;
       } | null>;
     }) => {
       useImperativeHandle(handleRef, () => ({
-        insertMention(label: string, ordinal: number) {
-          onValueChange?.(`${value}[@${label}](m:${ordinal}) `);
+        insertMentions(mentions: { label: string; ordinal: number }[]) {
+          onValueChange?.(
+            value +
+              mentions
+                .map(({ label, ordinal }) => `[@${label}](m:${ordinal}) `)
+                .join(""),
+          );
         },
       }));
       return (
@@ -41,18 +46,24 @@ vi.mock("~/features/posts/components/editor/post-body-input", async () => {
 });
 
 vi.mock("~/features/posts/components/mention-button", () => ({
-  MentionButton: ({ onSelect }: { onSelect: (candidate: object) => void }) => (
+  MentionButton: ({
+    onSelect,
+  }: {
+    onSelect: (candidates: object[]) => void;
+  }) => (
     <button
       type="button"
       onClick={() =>
-        onSelect({
-          pub_id: "member-1",
-          name: "테스트 멤버",
-          cohort: 30,
-          is_returning_student: false,
-          profile_type: "student",
-          avatar_path: null,
-        })
+        onSelect([
+          {
+            pub_id: "member-1",
+            name: "테스트 멤버",
+            cohort: 30,
+            is_returning_student: false,
+            profile_type: "student",
+            avatar_path: null,
+          },
+        ])
       }
     >
       멘션 추가

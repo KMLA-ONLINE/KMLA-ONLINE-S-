@@ -21,7 +21,7 @@ function renderMenu(
       role,
       type,
       status: "accepted",
-      avatar_url: null,
+      avatar_path: null,
     },
   } satisfies ShellData;
 
@@ -81,6 +81,10 @@ describe("menu route", () => {
     expect(screen.getByRole("link", { name: "업데이트 기록" })).toHaveAttribute(
       "href",
       "/update",
+    );
+    expect(screen.getByRole("link", { name: "바로가기" })).toHaveAttribute(
+      "href",
+      "/menu/links",
     );
   });
 });

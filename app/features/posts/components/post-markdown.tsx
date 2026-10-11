@@ -1,9 +1,11 @@
 import { Children, type ComponentPropsWithoutRef, type ReactNode } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
-import remarkGfm from "remark-gfm";
 
 import { MentionChip } from "~/features/posts/components/mention-chip";
-import { toPostRenderMarkdown } from "~/features/posts/model/markdown";
+import {
+  postMarkdownPlugins,
+  toPostRenderMarkdown,
+} from "~/features/posts/model/markdown";
 import {
   isMentionHref,
   mentionOrdinalFromHref,
@@ -12,7 +14,17 @@ import {
 } from "~/features/posts/model/mentions";
 import { cn } from "~/shared/lib/utils";
 
-const allowedElements = ["p", "br", "strong", "em", "del", "h2", "h3", "a"];
+const allowedElements = [
+  "p",
+  "br",
+  "strong",
+  "em",
+  "del",
+  "u",
+  "h2",
+  "h3",
+  "a",
+];
 
 /** 멘션은 `m:1` 모양 링크로 저장하므로(`model/mentions.ts`) 그 주소만 통과시킨다. 나머지는 기본 동작에 맡겨 `javascript:`가 새지 않게 한다. */
 function transformUrl(url: string): string {
@@ -72,7 +84,7 @@ export function PostMarkdown({
   return (
     <div className={cn("post-typography", className)}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={postMarkdownPlugins}
         allowedElements={allowedElements}
         urlTransform={transformUrl}
         components={{

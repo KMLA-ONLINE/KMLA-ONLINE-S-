@@ -50,8 +50,10 @@ export function ScrollRegion({
         ref={ref}
         // overscroll-contain: 끝에서 더 당길 때 브라우저 제스처로 전파되지 않게 한다(특히 iOS).
         // overflow-x-hidden 명시 필수: 세로만 지정하면 가로 `visible`이 `auto`로 계산돼 1px만 삐져나가도 페이지가 옆으로 끌린다.
+        // relative: 위치 기준이 없는 absolute 자손(Base UI 체크박스의 숨은 input 등)이 이 영역 밖을 기준으로 잡히면 스크롤을
+        // 따라오지 않고, 포커스를 받을 때 브라우저가 그걸 보이려고 셸의 overflow-hidden 컨테이너를 밀어 올린다.
         className={cn(
-          "min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain md:[scrollbar-gutter:stable_both-edges]",
+          "relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain md:[scrollbar-gutter:stable_both-edges]",
           className,
         )}
       >

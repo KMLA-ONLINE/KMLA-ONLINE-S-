@@ -8,12 +8,14 @@ const pureLayers = [
   "test/routes/**/*.{test,spec}.ts",
   "test/eslint/**/*.{test,spec}.ts",
   "test/shared/service-worker/**/*.{test,spec}.ts",
+  "test/scripts/**/*.{test,spec}.ts",
 ];
 
 const domDependent = [
   "test/features/posts/model/view-preference.test.ts",
   "test/features/search/model/recent-searches.test.ts",
   "test/routes/notification-open.test.ts",
+  "test/shared/lib/clipboard.test.ts",
   "test/shared/lib/user-scoped-storage.test.ts",
 ];
 

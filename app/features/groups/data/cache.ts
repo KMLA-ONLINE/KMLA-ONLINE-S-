@@ -24,12 +24,18 @@ export const groupKeys = {
   detail: (slug: string) => [...groupKeys.details(), slug] as const,
   categories: (groupId: string) =>
     [...groupKeys.all, "categories", groupId] as const,
-  postPages: (groupId: string) => [...groupKeys.all, "posts", groupId] as const,
+  /** 모든 그룹의 게시물 목록. 어느 그룹이 바뀌었는지 모를 때 한꺼번에 stale로 둔다. */
+  postPageLists: () => [...groupKeys.all, "posts"] as const,
+  postPages: (groupId: string) =>
+    [...groupKeys.postPageLists(), groupId] as const,
   posts: (
     groupId: string,
     categoryId: string | null,
     cursor: PostCursor | null,
   ) => [...groupKeys.postPages(groupId), { categoryId, cursor }] as const,
+  /** 게시물 검색 결과. 돌아왔을 때 첫 화면을 그리는 데만 쓰고 매번 다시 읽는다. */
+  postSearch: (groupId: string, query: string) =>
+    [...groupKeys.postPages(groupId), "search", query] as const,
   memberLists: (groupId: string) =>
     [...groupKeys.all, "members", groupId] as const,
   members: (groupId: string, query: string) =>
