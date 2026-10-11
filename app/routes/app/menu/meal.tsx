@@ -2,6 +2,7 @@ import { defineAppChrome, PageHeader } from "~/features/app-shell";
 import {
   getKoreaWeekDates,
   getMealDay,
+  getMealDayIfLoaded,
   getMealReferenceDate,
   MealScreen,
 } from "~/features/meal";
@@ -25,7 +26,8 @@ export function clientLoader() {
   return {
     initialDate,
     dates,
-    initialDay: getMealDay(initialDate),
+    // 받아 둔 날이면 값으로 넘긴다. promise로 넘기면 다시 열 때마다 식단 칸이 한 번 로딩으로 깜빡인다.
+    initialDay: getMealDayIfLoaded(initialDate) ?? getMealDay(initialDate),
   };
 }
 

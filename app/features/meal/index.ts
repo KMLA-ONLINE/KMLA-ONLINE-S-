@@ -9,6 +9,7 @@ export {
   getKoreaDate,
   getKoreaWeekDates,
   getMealDay,
+  getMealDayIfLoaded,
   getMealReferenceDate,
 } from "./data/neis";
 export type { MealDay } from "./data/neis";
