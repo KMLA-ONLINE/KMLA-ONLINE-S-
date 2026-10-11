@@ -4,23 +4,12 @@ import {
   UserCheckIcon,
   UsersIcon,
 } from "lucide-react";
-import { Link, redirect } from "react-router";
+import { Link, Navigate } from "react-router";
 
-import { assertAppAdmin, isAdminAccessError } from "~/features/admin";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 
 export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
-
-export async function clientLoader() {
-  try {
-    await assertAppAdmin();
-    return null;
-  } catch (error) {
-    if (isAdminAccessError(error)) throw redirect("/");
-    throw error;
-  }
-}
 
 const links = [
   {
@@ -49,9 +38,13 @@ const links = [
   },
 ];
 
+/**
+ * 링크 모음일 뿐 읽는 데이터가 없어 loader를 두지 않는다. 권한은 셸 프로필의 `role`로 가른다.
+ * 실제 권한 확인은 각 하위 관리자 화면의 RPC가 한다.
+ */
 export default function AdminHubPage() {
   const { profile } = useAppShell();
-  if (profile.role !== "admin") return null;
+  if (profile.role !== "admin") return <Navigate to="/" replace />;
   return (
     <>
       <PageHeader title="관리자" back="/menu" />

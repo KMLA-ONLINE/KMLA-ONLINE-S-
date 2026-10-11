@@ -1,6 +1,11 @@
 import { useEffect, useRef } from "react";
 import { replace, useNavigate } from "react-router";
 
+// 배럴(`~/features/app-shell`)은 셸 컴포넌트를 전부 끌고 온다. 미리 읽기 하나만 필요하다.
+import {
+  discardPrefetchedShellData,
+  prefetchShellData,
+} from "~/features/app-shell/data/queries";
 import {
   invalidateOpenedNotification,
   resolveNotificationDestination,
@@ -30,20 +35,31 @@ import {
  * 나오고 entry가 쌓이므로 끼우지 않는다. 그룹으로 가는 길은 상세 머리의 그룹 링크가 맡는다.
  *
  * 깔았다면 목적지는 그 위에 push한다. 깔 것이 없을 때만 자기 entry를 목적지로 갈아치운다.
+ *
+ * 목적지는 인증 게이트 아래에 있다. 게이트의 셸 데이터(세션·프로필)는 목적지와 무관하므로 목적지 RPC와
+ * 함께 미리 띄워, 게이트가 그 결과를 넘겨받게 한다. 뱃지는 목적지 RPC가 `read_at`을 찍은 뒤에 읽어야
+ * 하므로 미리 띄우지 않는다.
  */
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const notificationId = params.notificationId;
   if (!notificationId) throw replace("/noti");
 
-  const destination = await resolveNotificationDestination(notificationId);
-  if (destination === null) {
-    const next = `/noti/open/${encodeURIComponent(notificationId)}`;
-    throw replace(`/login?${new URLSearchParams({ next })}`);
-  }
+  prefetchShellData();
+  try {
+    const destination = await resolveNotificationDestination(notificationId);
+    if (destination === null) {
+      const next = `/noti/open/${encodeURIComponent(notificationId)}`;
+      throw replace(`/login?${new URLSearchParams({ next })}`);
+    }
 
-  const target = sanitizeNotificationDestination(destination);
-  await invalidateOpenedNotification(getQueryClient());
-  return { target };
+    const target = sanitizeNotificationDestination(destination);
+    await invalidateOpenedNotification(getQueryClient());
+    return { target };
+  } catch (thrown) {
+    // 로그인 이동이든 실패든 게이트로 가지 않는다. 미리 읽은 값을 남기면 다음 게이트 재검증이 낡은 값을 받는다.
+    discardPrefetchedShellData();
+    throw thrown;
+  }
 }
 
 /** 목적지 밑에 깔 화면들. 이 창이 알림으로 처음 열렸을 때만 있다. */

@@ -212,7 +212,7 @@ export function ProfileMediaEditor({
             isAvatar && "absolute right-0 bottom-0 sm:hidden",
           )}
         >
-          {pending ? <Spinner /> : <ImageIcon aria-hidden="true" />}
+          {pending ? <Spinner aria-hidden /> : <ImageIcon aria-hidden="true" />}
         </Button>
       </div>
 

@@ -157,4 +157,45 @@ describe("createPostListRevalidation", () => {
       ),
     ).toBe(true);
   });
+
+  it("skips the parent list only while a post dialog opens and closes", () => {
+    const group = createPostListRevalidation([], {
+      detailParent: /^\/groups\/[^/]+/,
+    });
+
+    expect(
+      group(
+        args(
+          "https://kmla.online/groups/test",
+          "https://kmla.online/groups/test/posts/post-id",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      group(
+        args(
+          "https://kmla.online/groups/test/posts/post-id",
+          "https://kmla.online/groups/test",
+        ),
+      ),
+    ).toBe(false);
+    // 작성 화면에서 상세로 넘어가는 것은 저장 뒤라 목록이 바뀌었다.
+    expect(
+      group(
+        args(
+          "https://kmla.online/groups/test/posts/new",
+          "https://kmla.online/groups/test/posts/post-id",
+        ),
+      ),
+    ).toBe(true);
+    // 다른 그룹으로 가는 것은 여닫기가 아니다.
+    expect(
+      group(
+        args(
+          "https://kmla.online/groups/test",
+          "https://kmla.online/groups/other/posts/post-id",
+        ),
+      ),
+    ).toBe(true);
+  });
 });

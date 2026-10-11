@@ -56,7 +56,7 @@ export function PostEditorLayout({
               </p>
             </div>
             <Button type="submit" disabled={saving || preparingCount > 0}>
-              {saving ? <Spinner /> : null}{" "}
+              {saving ? <Spinner aria-hidden /> : null}{" "}
               {preparingCount > 0
                 ? "파일 준비 중"
                 : saving

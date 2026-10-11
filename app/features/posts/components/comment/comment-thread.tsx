@@ -194,7 +194,8 @@ export function CommentThread({
             className="flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50"
             onClick={() => void onLoadMore()}
           >
-            {loading ? <Spinner className="size-3" /> : null} 댓글 더 보기
+            {loading ? <Spinner aria-hidden className="size-3" /> : null} 댓글
+            더 보기
           </button>
         </li>
       ) : null}

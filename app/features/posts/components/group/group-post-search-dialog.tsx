@@ -248,7 +248,9 @@ function SearchPanel({
                       <p className="line-clamp-1 min-w-0 flex-1 text-sm font-medium">
                         {post.title}
                       </p>
-                      {opening ? <Spinner className="shrink-0" /> : null}
+                      {opening ? (
+                        <Spinner aria-label="여는 중" className="shrink-0" />
+                      ) : null}
                     </div>
                     <p className="line-clamp-2 text-xs text-muted-foreground">
                       {extractPostPlainText(post.body)}

@@ -51,14 +51,15 @@ function mergeComments(
  */
 export function usePostComments(
   postId: string,
-  initialPage: PostCommentPage,
+  /** null이면 첫 페이지가 아직 오는 중이다. 게시물은 먼저 그리고 댓글만 나중에 채운다. */
+  initialPage: PostCommentPage | null,
   /** loader가 준 게시물의 댓글 수. 훅이 여기서 시작해 정본 값으로 갱신한다. */
   serverCommentCount: number,
 ) {
   const queryClient = useQueryClient();
   const [imageSession] = useState(createCommentImageUploadSession);
-  const [comments, setComments] = useState(initialPage.comments);
-  const [nextCursor, setNextCursor] = useState(initialPage.nextCursor);
+  const [comments, setComments] = useState(initialPage?.comments ?? []);
+  const [nextCursor, setNextCursor] = useState(initialPage?.nextCursor ?? null);
   const [replies, setReplies] = useState<Record<string, PostComment[]>>({});
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [commentCount, setCommentCount] = useState(serverCommentCount);
@@ -71,8 +72,8 @@ export function usePostComments(
   // loader가 새 페이지를 내려주면(게시물 이동, 재검증) 로컬 상태를 버리고 다시 시작한다.
   if (loadedPage !== initialPage) {
     setLoadedPage(initialPage);
-    setComments(initialPage.comments);
-    setNextCursor(initialPage.nextCursor);
+    setComments(initialPage?.comments ?? []);
+    setNextCursor(initialPage?.nextCursor ?? null);
     setReplies({});
     setExpanded(new Set());
     setLoadedCount(serverCommentCount);
@@ -268,6 +269,7 @@ export function usePostComments(
     expanded,
     commentCount,
     hasMore: nextCursor !== null,
+    initialLoading: initialPage === null,
     loading,
     pending,
     error,

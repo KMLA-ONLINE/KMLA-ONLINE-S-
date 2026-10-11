@@ -1,6 +1,7 @@
 import { ChevronRightIcon } from "lucide-react";
 import { Link } from "react-router";
 
+import { PendingRegion, Skeleton } from "~/shared/ui/skeleton";
 import {
   getDefaultMeal,
   getKoreaDate,
@@ -44,5 +45,22 @@ export function HomeMealSummary({ day }: { day: MealDay }) {
         )}
       </div>
     </section>
+  );
+}
+
+/** 홈 옆 칸이 늦게 채워지는 동안 급식 카드 자리를 잡아 둔다. 비어 있다가 튀어나오지 않게 한다. */
+export function HomeMealSummarySkeleton() {
+  return (
+    <PendingRegion label="급식을" className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5 rounded-xl border bg-card px-4 py-3">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-3 w-16" />
+      </div>
+      <div className="flex flex-col gap-2 rounded-xl border bg-card p-4">
+        <Skeleton className="h-4 w-10" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-3/4" />
+      </div>
+    </PendingRegion>
   );
 }

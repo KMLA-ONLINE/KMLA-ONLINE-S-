@@ -112,7 +112,7 @@ export function GroupDetailActions({
                   />
                 }
               >
-                {pending ? <Spinner /> : <MoreHorizontalIcon />}
+                {pending ? <Spinner aria-hidden /> : <MoreHorizontalIcon />}
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"

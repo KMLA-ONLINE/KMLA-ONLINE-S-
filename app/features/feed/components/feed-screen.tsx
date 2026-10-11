@@ -1,4 +1,8 @@
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useFetcher, useSearchParams } from "react-router";
 
@@ -9,14 +13,18 @@ import {
 } from "~/features/feed/components/feed-post";
 import { feedQuery, resetFeed } from "~/features/feed/data/cache";
 import { hydrateFeedPostMedia } from "~/features/feed/data/queries";
+import { previewFeedPostDetail } from "~/features/feed/model/detail-preview";
 import type {
   FeedPost,
   FeedPostDetailResult,
 } from "~/features/feed/model/types";
 import {
+  anonymousActivityRestrictionQuery,
   GroupPostDetail,
   groupPostPath,
+  type PostIdentity,
   ProfilePostDetail,
+  resolveIdentityOptions,
   usePostViewMode,
   useVisitedPosts,
 } from "~/features/posts";
@@ -151,7 +159,31 @@ export function FeedScreen() {
     activePostId && detailFetcher.data?.requestedPostId === activePostId
       ? detailFetcher.data
       : null;
-  const detail = activeDetailResult?.detail ?? null;
+  // 눌린 글은 피드가 이미 들고 있다. 상세 응답을 기다리지 않고 그것으로 창을 열고, 댓글과
+  // 권한만 응답이 오면 채운다. 피드에 없는 글(주소로 직접 연 경우)만 아래 로딩 창을 거친다.
+  const feedPost = activePostId
+    ? posts.find((post) => post.post_id === activePostId)
+    : undefined;
+  const detail =
+    activeDetailResult?.detail ??
+    (feedPost && !activeDetailResult?.error
+      ? previewFeedPostDetail(feedPost)
+      : null);
+  const detailGroup = detail?.kind === "group" ? detail.group : null;
+  const restrictionQuery = useQuery({
+    ...anonymousActivityRestrictionQuery(detailGroup?.groupId ?? ""),
+    enabled: detailGroup?.identityPolicy === "optional_anonymous",
+  });
+  // 그룹 정책을 모르는 미리보기 동안은 언제나 허용되는 실명만 둔다. 입력창은 댓글이 올 때까지 잠겨 있다.
+  const identities: PostIdentity[] = detailGroup
+    ? resolveIdentityOptions(
+        detailGroup.identityPolicy,
+        detailGroup.memberRole,
+        restrictionQuery.isPending ||
+          restrictionQuery.isError ||
+          Boolean(restrictionQuery.data),
+      )
+    : ["identified"];
 
   function loadMore() {
     if (!hasNextPage || pending) return;
@@ -234,7 +266,8 @@ export function FeedScreen() {
           slug={detail.slug}
           groupName={detail.groupName}
           post={detail.post}
-          identities={detail.identities}
+          identities={identities}
+          anonymousActivityRestriction={restrictionQuery.data}
           comments={detail.comments}
           viewer={{ name: profile.name, avatarUrl: profile.avatar_url }}
           onClose={closeDetail}
@@ -261,7 +294,7 @@ export function FeedScreen() {
               </p>
             ) : (
               <>
-                <Spinner />
+                <Spinner aria-hidden />
                 <p className="text-sm text-muted-foreground">
                   게시물을 불러오는 중입니다.
                 </p>

@@ -15,7 +15,22 @@ vi.mock("~/features/app-shell", () => ({
   useAppShell: () => ({ profile: { name: "나", avatar_url: null } }),
 }));
 vi.mock("~/features/posts", () => ({
-  GroupPostDetail: () => null,
+  anonymousActivityRestrictionQuery: (groupId: string) => ({
+    queryKey: ["anonymous-activity-restriction", groupId],
+    queryFn: () => null,
+  }),
+  resolveIdentityOptions: () => ["identified"],
+  groupPostPath: (slug: string, postId: string) =>
+    `/groups/${slug}/posts/${postId}`,
+  GroupPostDetail: ({
+    post,
+    comments,
+  }: {
+    post: { post_id: string; can_edit: boolean };
+    comments: unknown;
+  }) => (
+    <p>{`detail:${post.post_id}:${comments ? "comments" : "loading"}:${post.can_edit ? "editable" : "locked"}`}</p>
+  ),
   ProfilePostDetail: () => null,
   usePostViewMode: () => ["card"],
   useVisitedPosts: () => ({ visited: new Set<string>(), markVisited: vi.fn() }),
@@ -260,6 +275,100 @@ describe("FeedScreen detail re-entry", () => {
     await waitFor(() => expect(detailLoads).toEqual(["post-a", "post-a"]));
   });
 
+  // 눌린 글은 피드가 이미 들고 있다. 상세 응답을 기다리며 로딩 창을 띄우지 않는다.
+  it("opens a feed post at once and fills comments when the detail arrives", async () => {
+    let resolveDetail: (value: unknown) => void = () => undefined;
+
+    function Harness() {
+      const [, setSearchParams] = useSearchParams();
+      return (
+        <QueryClientProvider client={getQueryClient()}>
+          <button
+            type="button"
+            onClick={() =>
+              setSearchParams({
+                post: "post-a",
+                kind: "group",
+                source: "notice",
+              })
+            }
+          >
+            상세 열기
+          </button>
+          <FeedScreen />
+        </QueryClientProvider>
+      );
+    }
+
+    getQueryClient().setQueryData(feedKeys.list(), {
+      pages: [
+        {
+          posts: [
+            {
+              post_id: "post-a",
+              kind: "group",
+              group_id: "group-id",
+              group_slug: "notice",
+              group_name: "공지사항",
+              author_avatar_path: null,
+              attachments: [],
+              comment_count: 0,
+              reaction_count: 0,
+              top_reactions: [],
+              my_reaction: null,
+            },
+          ],
+          feedEpoch: "epoch-1",
+          nextPageToken: null,
+        },
+      ],
+      pageParams: [null],
+    });
+    const { user } = renderRoute(Harness, {
+      routes: [
+        {
+          path: "/feed/posts/:postId",
+          loader: () =>
+            new Promise((resolve) => {
+              resolveDetail = resolve;
+            }),
+        },
+      ],
+    });
+
+    await user.click(screen.getByRole("button", { name: "상세 열기" }));
+
+    expect(
+      await screen.findByText("detail:post-a:loading:locked"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("게시물을 불러오는 중입니다."),
+    ).not.toBeInTheDocument();
+
+    act(() =>
+      resolveDetail({
+        requestedPostId: "post-a",
+        detail: {
+          kind: "group",
+          post: { post_id: "post-a", can_edit: true },
+          comments: { comments: [], nextCursor: null },
+          slug: "notice",
+          groupName: "공지사항",
+          group: {
+            groupId: "group-id",
+            identityPolicy: "identified",
+            memberRole: "member",
+          },
+        },
+        error: null,
+      }),
+    );
+
+    expect(
+      await screen.findByText("detail:post-a:comments:editable"),
+    ).toBeInTheDocument();
+  });
+
   /**
    * 요청을 건 순간 "읽었다"고 기록하므로, 그 요청이 이 글의 응답 없이 끝나면(중간에 끊긴
    * 경우) 다시 걸 길이 없어 상세가 열려 있는 내내 spinner만 돌아간다. 한 번은 더 건다.
@@ -288,7 +397,8 @@ describe("FeedScreen detail re-entry", () => {
       );
     }
 
-    seedSession("epoch-1", ["post-a"]);
+    // 피드에 있는 글은 미리보기로 바로 열리므로, 주소로 직접 연 글처럼 피드에 없는 글로 확인한다.
+    seedSession("epoch-1", ["post-b"]);
     const { user } = renderRoute(Harness, {
       routes: [
         {

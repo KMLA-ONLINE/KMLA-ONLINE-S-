@@ -15,6 +15,7 @@ import {
   getMealDay,
   getMealReferenceDate,
   HomeMealSummary,
+  HomeMealSummarySkeleton,
   type MealDay,
 } from "~/features/meal";
 import {
@@ -170,10 +171,9 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
         </div>
 
         <aside className="hidden space-y-3 self-start lg:block">
-          <Suspense fallback={null}>
+          {/* 한 경계로 묶어 생일과 급식이 함께 들어선다. 따로 두면 생일 카드가 늦게 끼어들며 급식을 밀어낸다. */}
+          <Suspense fallback={<HomeMealSummarySkeleton />}>
             <DeferredBirthdays birthdays={birthdays} />
-          </Suspense>
-          <Suspense fallback={null}>
             <DeferredMeal mealDay={mealDay} />
           </Suspense>
         </aside>

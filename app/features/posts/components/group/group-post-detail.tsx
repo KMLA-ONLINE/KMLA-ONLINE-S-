@@ -40,7 +40,8 @@ export function GroupPostDetail({
   viewer: CommentViewer;
   /** 이 그룹에서 댓글에 쓸 수 있는 작성 신원. 첫 항목이 기본값이다. */
   identities: PostIdentity[];
-  comments: PostCommentPage;
+  /** null이면 댓글을 불러오는 중이다. */
+  comments: PostCommentPage | null;
   onClose?: () => void;
   action?: string;
   anonymousActivityRestriction?: AnonymousActivityRestriction | null;

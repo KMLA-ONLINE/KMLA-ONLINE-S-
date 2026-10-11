@@ -534,7 +534,7 @@ export function CommentComposer({
               className="m-0.5 shrink-0 text-muted-foreground"
               onClick={() => fileInput.current?.click()}
             >
-              {processingImage ? <Spinner /> : <ImagePlusIcon />}
+              {processingImage ? <Spinner aria-hidden /> : <ImagePlusIcon />}
             </Button>
             {/* 익명 댓글은 멘션 불가(기능 명세 §8.14). 멘션 토큰이 있으면 익명으로 못 바꾼다. */}
             {mentionGroupId && identity !== "anonymous" ? (
@@ -595,7 +595,7 @@ export function CommentComposer({
           disabled={!canSend}
           onClick={send}
         >
-          {pending ? <Spinner /> : <SendIcon className="size-5" />}
+          {pending ? <Spinner aria-hidden /> : <SendIcon className="size-5" />}
         </Button>
       </div>
 

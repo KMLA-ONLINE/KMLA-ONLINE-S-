@@ -23,6 +23,7 @@ import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Input } from "~/shared/ui/input";
+import { ListRowSkeleton } from "~/shared/ui/skeleton";
 import { Spinner } from "~/shared/ui/spinner";
 import { cn } from "~/shared/lib/utils";
 import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
@@ -150,7 +151,11 @@ export function GroupMembersPanel({
                 aria-label="멤버 검색"
                 aria-busy={searching || undefined}
               >
-                {searching ? <Spinner /> : <SearchIcon aria-hidden />}
+                {searching ? (
+                  <Spinner aria-hidden />
+                ) : (
+                  <SearchIcon aria-hidden />
+                )}
               </Button>
             </div>
             {searchError ? (
@@ -186,10 +191,16 @@ export function GroupMembersPanel({
           <div
             ref={sentinelRef}
             className="flex min-h-8 items-center justify-center"
-            aria-live="polite"
           >
             {pageFetcher.state !== "idle" ? (
-              <Spinner aria-label="멤버 불러오는 중" />
+              <ListRowSkeleton
+                label="멤버를"
+                avatar="lg"
+                secondLine
+                rows={2}
+                className="w-full"
+                rowClassName="min-h-16 py-2"
+              />
             ) : null}
           </div>
         </CardContent>

@@ -6,14 +6,6 @@ import type {
 } from "~/features/admin/model/types";
 import { getSupabase } from "~/shared/supabase/client";
 
-export async function assertAppAdmin(): Promise<void> {
-  const { error } = await getSupabase().rpc("admin_list_accepted_users", {
-    p_limit: 1,
-    p_offset: 0,
-  });
-  if (error) throw error;
-}
-
 export async function listApplications(
   status: "pending" | "blocked",
   offset = 0,

@@ -1,4 +1,7 @@
-import type { PostAttachment } from "~/features/posts/model/types";
+import type {
+  CommentImage,
+  PostAttachment,
+} from "~/features/posts/model/types";
 import type { Json } from "~/shared/supabase/database.types";
 
 /**
@@ -78,4 +81,53 @@ export function applyAttachmentUrls(
       ? (urls.get(attachment.thumbnail_path) ?? null)
       : null,
   }));
+}
+
+/**
+ * 댓글 목록 RPC가 함께 내려주는 이미지 배열을 읽는다. 모양은 `private.comment_images_json()`이
+ * 정한다. 첨부와 같은 이유로 어긋난 항목만 버리고 경고를 남긴다.
+ */
+export function readCommentImagesJson(
+  value: Json | undefined,
+  comment: { comment_id: string; post_id: string },
+): CommentImage[] {
+  if (!Array.isArray(value)) {
+    console.warn("Comment images are not an array", { comment, value });
+    return [];
+  }
+
+  return value.flatMap((item) => {
+    if (
+      !item ||
+      Array.isArray(item) ||
+      typeof item !== "object" ||
+      typeof item.image_id !== "string" ||
+      typeof item.storage_bucket !== "string" ||
+      typeof item.object_path !== "string" ||
+      typeof item.mime_type !== "string" ||
+      typeof item.size_bytes !== "number" ||
+      typeof item.width !== "number" ||
+      typeof item.height !== "number" ||
+      typeof item.ready_at !== "string"
+    ) {
+      console.warn("Dropped a malformed comment image", { comment, item });
+      return [];
+    }
+
+    return [
+      {
+        image_id: item.image_id,
+        comment_id: comment.comment_id,
+        post_id: comment.post_id,
+        storage_bucket: item.storage_bucket,
+        object_path: item.object_path,
+        mime_type: item.mime_type,
+        size_bytes: item.size_bytes,
+        width: item.width,
+        height: item.height,
+        ready_at: item.ready_at,
+        signedUrl: null,
+      },
+    ];
+  });
 }

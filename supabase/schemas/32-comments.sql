@@ -167,6 +167,35 @@ $$;
 
 ALTER FUNCTION "private"."comment_mentions_json"("p_comment_id" "uuid") OWNER TO "postgres";
 
+-- 댓글 목록 RPC가 이미지를 함께 담는 데 쓴다. 목록을 받은 뒤 `list_comment_images`를 따로 부르면
+-- 게시물 상세를 열 때마다 왕복이 하나 더 붙는다. 지운 댓글의 이미지는 tombstone 트리거가 내리므로
+-- `ready`만 고르면 된다. 모양은 클라이언트의 `readCommentImagesJson()`과 맞춘다.
+CREATE OR REPLACE FUNCTION "private"."comment_images_json"("p_comment_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO ''
+    AS $$
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'image_id', image.id,
+        'storage_bucket', image.storage_bucket,
+        'object_path', image.object_path,
+        'mime_type', image.mime_type,
+        'size_bytes', image.size_bytes,
+        'width', image.width,
+        'height', image.height,
+        'ready_at', image.ready_at
+      )
+      order by image.id
+    ),
+    '[]'::jsonb
+  )
+  from public.comment_images as image
+  where image.comment_id = p_comment_id and image.status = 'ready';
+$$;
+
+ALTER FUNCTION "private"."comment_images_json"("p_comment_id" "uuid") OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "private"."prevent_comment_immutable_changes"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO ''
@@ -538,6 +567,8 @@ REVOKE ALL ON FUNCTION "private"."is_comment_image_uploader"("p_image_id" "uuid"
 REVOKE ALL ON FUNCTION "private"."sync_comment_mentions"("p_comment_id" "uuid", "p_body" "text", "p_author_identity" "public"."post_identity", "p_mention_pub_ids" "text"[]) FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."comment_mentions_json"("p_comment_id" "uuid") FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "private"."comment_images_json"("p_comment_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."is_comment_image_uploader"("p_image_id" "uuid") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "private"."prevent_comment_immutable_changes"() FROM PUBLIC;

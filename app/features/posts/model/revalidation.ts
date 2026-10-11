@@ -54,10 +54,25 @@ export function shouldRevalidatePostDetail({
  */
 export function createPostListRevalidation(
   extraUiParams: readonly string[] = [],
+  options: {
+    /**
+     * 게시물 상세를 자식 route로 그리는 목록 화면의 경로(`/^\/groups\/[^/]+/`). 그 화면과 바로 아래
+     * `posts/*` 사이를 오가는 것은 dialog를 여닫는 일이라 다시 읽지 않는다 — 다시 읽으면 열 때도
+     * 닫을 때도 목록 왕복을 기다리고, 쌓아 둔 페이지와 스크롤이 사라진다.
+     */
+    detailParent?: RegExp;
+  } = {},
 ): ShouldRevalidateFunction {
   const uiParams = [...POST_UI_SEARCH_PARAMS, ...extraUiParams];
 
   return ({ currentUrl, nextUrl, formMethod }) => {
+    if (
+      options.detailParent &&
+      formMethod === undefined &&
+      isPostDetailTransition(currentUrl, nextUrl, options.detailParent)
+    ) {
+      return false;
+    }
     if (formMethod && formMethod !== "GET") return true;
     // 명시적 revalidate(`useRevalidator`)는 URL이 그대로다 — 당겨서 새로고침이 이 경로다.
     if (currentUrl.href === nextUrl.href) return true;
@@ -65,4 +80,20 @@ export function createPostListRevalidation(
 
     return !isUiOnlySearchChange(currentUrl, nextUrl, uiParams);
   };
+}
+
+function isPostDetailTransition(
+  currentUrl: URL,
+  nextUrl: URL,
+  parent: RegExp,
+): boolean {
+  const parentPath = parent.exec(currentUrl.pathname)?.[0];
+  if (parentPath === undefined) return false;
+  const detailPrefix = `${parentPath}/posts/`;
+  return (
+    (currentUrl.pathname === parentPath &&
+      nextUrl.pathname.startsWith(detailPrefix)) ||
+    (nextUrl.pathname === parentPath &&
+      currentUrl.pathname.startsWith(detailPrefix))
+  );
 }

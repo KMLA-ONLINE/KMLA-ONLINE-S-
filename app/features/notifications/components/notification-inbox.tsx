@@ -147,7 +147,13 @@ function NotificationRow({
             value={item.last_activity_at}
             className="shrink-0 text-xs text-muted-foreground"
           />
-          {unread ? (
+          {/* 목적지 RPC를 기다리는 동안 눌린 행에서 바로 보이게 한다. 배경색만으로는 눈에 띄지 않는다. */}
+          {opening ? (
+            <Spinner
+              aria-label="여는 중"
+              className="ml-auto size-3.5 shrink-0 text-muted-foreground"
+            />
+          ) : unread ? (
             <span className="ml-auto size-2 shrink-0 rounded-full bg-primary">
               <span className="sr-only">읽지 않음</span>
             </span>
@@ -375,7 +381,7 @@ export function NotificationInbox({
             >
               {loadingMore ? (
                 <>
-                  <Spinner /> 불러오는 중
+                  <Spinner aria-hidden /> 불러오는 중
                 </>
               ) : (
                 "이전 알림 더 보기"

@@ -30,7 +30,9 @@ import type {
   PermissionHelpPlatform,
   PushSupport,
 } from "~/features/notifications/model/types";
+import { Deferred } from "~/shared/components/deferred";
 import { Badge } from "~/shared/ui/badge";
+import { PendingRegion, Skeleton } from "~/shared/ui/skeleton";
 import { Spinner } from "~/shared/ui/spinner";
 import { Switch } from "~/shared/ui/switch";
 import { cn } from "~/shared/lib/utils";
@@ -91,11 +93,19 @@ interface SettingsActionResult {
   error?: string;
 }
 
-/** Web Push 상태 여섯 갈래를 배지 문구·설명·색으로 한 곳에서 푼다. JSX 삼항으로 엮으면 읽히지 않는다. */
+/** Web Push 상태 일곱 갈래(확인 실패 포함)를 배지 문구·설명·색으로 한 곳에서 푼다. JSX 삼항으로 엮으면 읽히지 않는다. */
 function describePush(
-  support: PushSupport,
+  support: PushSupport | null,
   pending: boolean,
 ): { label: string; tone: PushTone; message: string } {
+  if (support === null) {
+    return {
+      label: "확인 실패",
+      tone: "off",
+      message:
+        "이 기기의 Web Push 상태를 확인하지 못했습니다. 잠시 후 다시 열어 주세요.",
+    };
+  }
   if (pending) {
     return {
       label: "변경 중",
@@ -276,33 +286,46 @@ function GroupPreferenceRow({
   );
 }
 
-export function NotificationSettings({
-  initialPreferences,
+/** 서버 RPC까지 거치는 기기 상태 확인을 기다리는 동안 Push 카드 자리를 잡아 둔다. */
+function PushCardSkeleton() {
+  return (
+    <PendingRegion
+      label="이 기기의 Web Push 상태를"
+      className="overflow-hidden rounded-xl border bg-card"
+    >
+      <div className="flex items-start gap-3 p-4">
+        <Skeleton className="size-10 shrink-0 rounded-xl" />
+        <div className="flex min-w-0 flex-1 flex-col gap-2 pt-0.5">
+          <Skeleton className="h-4 w-36" />
+          <Skeleton className="h-3.5 w-full max-w-64" />
+        </div>
+      </div>
+      <div className="flex flex-col gap-1.5 border-t bg-muted/30 px-4 py-3">
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-3 w-full max-w-72" />
+      </div>
+    </PendingRegion>
+  );
+}
+
+/** 이 기기의 Web Push 카드. `null`은 기기 상태를 확인하지 못한 경우다. */
+function PushCard({
   initialPushSupport,
-  groupPreferences,
+  preferences,
+  pushPending,
+  setPushPending,
+  disabled,
 }: {
-  initialPreferences: NotificationPreferences;
-  initialPushSupport: PushSupport;
-  groupPreferences: GroupNotificationPreference[];
+  initialPushSupport: PushSupport | null;
+  preferences: NotificationPreferences;
+  pushPending: boolean;
+  setPushPending: (pending: boolean) => void;
+  disabled: boolean;
 }) {
   const [pushState, setPushState] = useState({
     source: initialPushSupport,
     value: initialPushSupport,
   });
-  const [pushPending, setPushPending] = useState(false);
-  const fetcher = useFetcher<SettingsActionResult>();
-  const activeFetchers = useFetchers();
-
-  // 화면에 들어온 순간 "기본값이 아니던" 그룹을 기억한다. 여기서 다시 기본값으로 돌려도
-  // 행이 발밑에서 사라지지 않아야 방금 무엇을 바꿨는지 확인할 수 있다.
-  const [pinnedGroupIds] = useState(
-    () =>
-      new Set(
-        groupPreferences
-          .filter((item) => !isDefaultGroupNotificationPreference(item))
-          .map((item) => item.groupId),
-      ),
-  );
 
   let currentPushState = pushState;
   if (currentPushState.source !== initialPushSupport) {
@@ -313,37 +336,11 @@ export function NotificationSettings({
     setPushState(currentPushState);
   }
   const pushSupport = currentPushState.value;
-  const preferences = fetcher.formData
-    ? {
-        account_push_enabled:
-          fetcher.formData.get("account_push_enabled") === "true",
-        content_push_enabled:
-          fetcher.formData.get("content_push_enabled") === "true",
-        group_push_enabled:
-          fetcher.formData.get("group_push_enabled") === "true",
-        school_push_enabled:
-          fetcher.formData.get("school_push_enabled") === "true",
-        timeline_push_enabled:
-          fetcher.formData.get("timeline_push_enabled") === "true",
-      }
-    : initialPreferences;
-
-  const savePreferences = (next: NotificationPreferences) => {
-    void fetcher.submit(
-      {
-        intent: "preferences",
-        ...Object.fromEntries(
-          Object.entries(next).map(([key, value]) => [key, String(value)]),
-        ),
-      },
-      { method: "post" },
-    );
-  };
 
   const togglePush = async () => {
     setPushPending(true);
     try {
-      if (pushSupport.state === "available" && pushSupport.subscribed) {
+      if (pushSupport?.state === "available" && pushSupport.subscribed) {
         await disableWebPush();
         setPushState({
           source: initialPushSupport,
@@ -372,9 +369,9 @@ export function NotificationSettings({
   };
 
   const pushEnabled =
-    pushSupport.state === "available" && pushSupport.subscribed;
+    pushSupport?.state === "available" && pushSupport.subscribed;
   const pushBlocked =
-    pushSupport.state === "available" && pushSupport.permission === "denied";
+    pushSupport?.state === "available" && pushSupport.permission === "denied";
 
   const recheckPush = useEffectEvent(async () => {
     const value = await getPushSupport();
@@ -386,6 +383,139 @@ export function NotificationSettings({
     if (!pushBlocked) return;
     return watchNotificationPermission(() => void recheckPush());
   }, [pushBlocked]);
+
+  const push = describePush(pushSupport, pushPending);
+  const summary = summarizeDelivery(pushEnabled, preferences);
+
+  return (
+    <section className="overflow-hidden rounded-xl border bg-card">
+      <div className="flex items-start gap-3 p-4">
+        <span
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-xl",
+            pushEnabled
+              ? "bg-primary/10 text-primary"
+              : push.tone === "blocked"
+                ? "bg-destructive/10 text-destructive"
+                : "bg-muted text-muted-foreground",
+          )}
+        >
+          {pushEnabled ? <BellRingIcon /> : <BellOffIcon />}
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="font-semibold">이 기기의 Web Push</h2>
+            <Badge
+              variant={
+                push.tone === "on"
+                  ? "default"
+                  : push.tone === "blocked"
+                    ? "destructive"
+                    : "secondary"
+              }
+            >
+              {push.label}
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground" aria-live="polite">
+            {push.message}
+          </p>
+        </div>
+
+        {pushSupport?.state === "available" &&
+        pushSupport.permission !== "denied" ? (
+          <div className="flex min-w-8 items-center justify-end gap-2">
+            {pushPending ? (
+              <Spinner aria-label="Web Push 설정 변경 중" />
+            ) : null}
+            <Switch
+              aria-label="이 기기의 Web Push"
+              checked={pushEnabled}
+              disabled={disabled}
+              onCheckedChange={() => void togglePush()}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <div className="border-t bg-muted/30 px-4 py-3">
+        <p className="text-sm font-medium">{summary.headline}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{summary.detail}</p>
+      </div>
+
+      {pushBlocked ? (
+        <div className="border-t bg-muted/30 px-4 py-3 text-sm">
+          <p>{PERMISSION_HELP[getPermissionHelpPlatform()]}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            허용한 뒤 이 화면으로 돌아오면 자동으로 다시 확인합니다.
+          </p>
+        </div>
+      ) : null}
+
+      {pushSupport?.state === "ios-browser" ? (
+        <div className="flex gap-2 border-t bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          <SmartphoneIcon className="mt-0.5 size-4 shrink-0" />
+          Safari 공유 메뉴에서 ‘홈 화면에 추가’를 선택한 뒤 설치된 앱을 열어
+          주세요.
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+export function NotificationSettings({
+  initialPreferences,
+  pushSupport,
+  groupPreferences,
+}: {
+  initialPreferences: NotificationPreferences;
+  /** 기기 상태 확인은 Push 카드에서만 기다린다. `null`은 확인 실패. */
+  pushSupport: PushSupport | null | Promise<PushSupport | null>;
+  groupPreferences: GroupNotificationPreference[];
+}) {
+  const [pushPending, setPushPending] = useState(false);
+  const fetcher = useFetcher<SettingsActionResult>();
+  const activeFetchers = useFetchers();
+
+  // 화면에 들어온 순간 "기본값이 아니던" 그룹을 기억한다. 여기서 다시 기본값으로 돌려도
+  // 행이 발밑에서 사라지지 않아야 방금 무엇을 바꿨는지 확인할 수 있다.
+  const [pinnedGroupIds] = useState(
+    () =>
+      new Set(
+        groupPreferences
+          .filter((item) => !isDefaultGroupNotificationPreference(item))
+          .map((item) => item.groupId),
+      ),
+  );
+
+  const preferences = fetcher.formData
+    ? {
+        account_push_enabled:
+          fetcher.formData.get("account_push_enabled") === "true",
+        content_push_enabled:
+          fetcher.formData.get("content_push_enabled") === "true",
+        group_push_enabled:
+          fetcher.formData.get("group_push_enabled") === "true",
+        school_push_enabled:
+          fetcher.formData.get("school_push_enabled") === "true",
+        timeline_push_enabled:
+          fetcher.formData.get("timeline_push_enabled") === "true",
+      }
+    : initialPreferences;
+
+  const savePreferences = (next: NotificationPreferences) => {
+    void fetcher.submit(
+      {
+        intent: "preferences",
+        ...Object.fromEntries(
+          Object.entries(next).map(([key, value]) => [key, String(value)]),
+        ),
+      },
+      { method: "post" },
+    );
+  };
+
   const preferencePending = activeFetchers.some(
     (item) =>
       item.state !== "idle" &&
@@ -393,8 +523,6 @@ export function NotificationSettings({
         item.formData?.get("intent") === "group-preferences"),
   );
   const settingsPending = pushPending || preferencePending;
-  const push = describePush(pushSupport, pushPending);
-  const summary = summarizeDelivery(pushEnabled, preferences);
   const adjustedGroups = groupPreferences.filter(
     (item) =>
       pinnedGroupIds.has(item.groupId) ||
@@ -407,84 +535,17 @@ export function NotificationSettings({
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
         <h1 className="hidden text-2xl font-semibold md:block">알림 설정</h1>
 
-        <section className="overflow-hidden rounded-xl border bg-card">
-          <div className="flex items-start gap-3 p-4">
-            <span
-              className={cn(
-                "flex size-10 shrink-0 items-center justify-center rounded-xl",
-                pushEnabled
-                  ? "bg-primary/10 text-primary"
-                  : push.tone === "blocked"
-                    ? "bg-destructive/10 text-destructive"
-                    : "bg-muted text-muted-foreground",
-              )}
-            >
-              {pushEnabled ? <BellRingIcon /> : <BellOffIcon />}
-            </span>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-semibold">이 기기의 Web Push</h2>
-                <Badge
-                  variant={
-                    push.tone === "on"
-                      ? "default"
-                      : push.tone === "blocked"
-                        ? "destructive"
-                        : "secondary"
-                  }
-                >
-                  {push.label}
-                </Badge>
-              </div>
-              <p
-                className="mt-1 text-sm text-muted-foreground"
-                aria-live="polite"
-              >
-                {push.message}
-              </p>
-            </div>
-
-            {pushSupport.state === "available" &&
-            pushSupport.permission !== "denied" ? (
-              <div className="flex min-w-8 items-center justify-end gap-2">
-                {pushPending ? (
-                  <Spinner aria-label="Web Push 설정 변경 중" />
-                ) : null}
-                <Switch
-                  aria-label="이 기기의 Web Push"
-                  checked={pushEnabled}
-                  disabled={settingsPending}
-                  onCheckedChange={() => void togglePush()}
-                />
-              </div>
-            ) : null}
-          </div>
-
-          <div className="border-t bg-muted/30 px-4 py-3">
-            <p className="text-sm font-medium">{summary.headline}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {summary.detail}
-            </p>
-          </div>
-
-          {pushBlocked ? (
-            <div className="border-t bg-muted/30 px-4 py-3 text-sm">
-              <p>{PERMISSION_HELP[getPermissionHelpPlatform()]}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                허용한 뒤 이 화면으로 돌아오면 자동으로 다시 확인합니다.
-              </p>
-            </div>
-          ) : null}
-
-          {pushSupport.state === "ios-browser" ? (
-            <div className="flex gap-2 border-t bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-              <SmartphoneIcon className="mt-0.5 size-4 shrink-0" />
-              Safari 공유 메뉴에서 ‘홈 화면에 추가’를 선택한 뒤 설치된 앱을 열어
-              주세요.
-            </div>
-          ) : null}
-        </section>
+        <Deferred value={pushSupport} fallback={<PushCardSkeleton />}>
+          {(support) => (
+            <PushCard
+              initialPushSupport={support}
+              preferences={preferences}
+              pushPending={pushPending}
+              setPushPending={setPushPending}
+              disabled={settingsPending}
+            />
+          )}
+        </Deferred>
 
         <SettingsSection title="유형별 Push">
           {PREFERENCE_ROWS.map(([key, Icon, title, description]) => (

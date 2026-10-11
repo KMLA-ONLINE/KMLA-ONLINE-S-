@@ -44,6 +44,8 @@ const MEAL_LABELS: Record<string, string> = {
 };
 
 const cache = new Map<string, Promise<MealDay>>();
+/** 받아 둔 식단. 다시 열 때 promise를 거치지 않고 첫 렌더부터 그리려고 따로 둔다. */
+const settled = new Map<string, MealDay>();
 
 function splitLines(value: unknown) {
   if (typeof value !== "string") return [];
@@ -178,6 +180,11 @@ export function getKoreaWeekDates(referenceDate = getMealReferenceDate()) {
   });
 }
 
+/** 이미 받아 둔 식단이면 바로 돌려준다. 없으면 `getMealDay`로 받는다. */
+export function getMealDayIfLoaded(date: string): MealDay | undefined {
+  return settled.get(date);
+}
+
 export async function getMealDay(date: string): Promise<MealDay> {
   const existing = cache.get(date);
 
@@ -235,11 +242,13 @@ async function fetchMealDay(date: string): Promise<MealDay> {
       })
       .sort((a, b) => Number(a.code) - Number(b.code));
 
-    return {
+    const day: MealDay = {
       date,
       meals,
       unavailable: false,
     };
+    settled.set(date, day);
+    return day;
   } catch {
     cache.delete(date);
 
