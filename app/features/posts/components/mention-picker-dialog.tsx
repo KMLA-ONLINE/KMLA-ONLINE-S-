@@ -18,7 +18,7 @@ import {
   DialogTitle,
 } from "~/shared/ui/dialog";
 import { Input } from "~/shared/ui/input";
-import { Spinner } from "~/shared/ui/spinner";
+import { ListRowSkeleton } from "~/shared/ui/skeleton";
 import { cn } from "~/shared/lib/utils";
 
 /** 검색 dialog(`group/group-post-search-dialog.tsx`)와 같은 껍데기 규칙을 쓴다. */
@@ -156,9 +156,7 @@ export function MentionPickerDialog({
 
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="flex justify-center p-6">
-              <Spinner />
-            </div>
+            <ListRowSkeleton label="멤버를" rowClassName="px-4 py-3" />
           ) : null}
           {!loading && result?.error ? (
             <p className="p-4 text-sm text-destructive">{result.error}</p>

@@ -13,7 +13,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from "~/shared/ui/dialog";
-import { Spinner } from "~/shared/ui/spinner";
+import { ListRowSkeleton } from "~/shared/ui/skeleton";
 
 function ReactionTab({
   active,
@@ -139,9 +139,11 @@ export function ReactionListDialog({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {loading ? (
-            <div className="flex justify-center py-10">
-              <Spinner />
-            </div>
+            <ListRowSkeleton
+              label="반응한 사람을"
+              avatar="lg"
+              rowClassName="px-2 py-1.5"
+            />
           ) : shown.length > 0 ? (
             <ul className="flex flex-col">
               {shown.map((row, index) => (

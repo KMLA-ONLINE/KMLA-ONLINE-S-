@@ -381,7 +381,7 @@ export function NotificationInbox({
             >
               {loadingMore ? (
                 <>
-                  <Spinner /> 불러오는 중
+                  <Spinner aria-hidden /> 불러오는 중
                 </>
               ) : (
                 "이전 알림 더 보기"

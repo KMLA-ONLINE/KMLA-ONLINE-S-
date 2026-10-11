@@ -42,7 +42,7 @@ describe("DirectorySearchPanel", () => {
     );
   });
 
-  it("shows a spinner while loading", () => {
+  it("shows placeholder rows while loading", () => {
     vi.mocked(useRecentSearchEntries).mockReturnValue([]);
     renderRoute(() => (
       <DirectorySearchPanel
@@ -54,7 +54,9 @@ describe("DirectorySearchPanel", () => {
       />
     ));
 
-    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "검색 결과를 불러오는 중" }),
+    ).toHaveAttribute("aria-busy", "true");
   });
 
   it("shows an empty state when nothing matches", () => {

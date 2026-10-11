@@ -211,7 +211,7 @@ export function GroupPostsPanel({
           role="status"
           className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground"
         >
-          <Spinner /> 이전 게시물을 불러오는 중입니다.
+          <Spinner aria-hidden /> 이전 게시물을 불러오는 중입니다.
         </div>
       ) : null}
       <div ref={sentinelRef} className="h-px" aria-hidden="true" />

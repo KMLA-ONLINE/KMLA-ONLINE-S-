@@ -8,7 +8,7 @@ import type {
   DirectorySearchResult,
 } from "~/features/search/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
-import { Spinner } from "~/shared/ui/spinner";
+import { ListRowSkeleton } from "~/shared/ui/skeleton";
 
 export function DirectorySearchPanel({
   query,
@@ -80,9 +80,13 @@ export function DirectorySearchPanel({
 
   if (loading) {
     return (
-      <div className="flex justify-center p-6">
-        <Spinner />
-      </div>
+      <ListRowSkeleton
+        label="검색 결과를"
+        avatar="sm"
+        rows={3}
+        className="p-2"
+        rowClassName="px-2 py-2"
+      />
     );
   }
 
