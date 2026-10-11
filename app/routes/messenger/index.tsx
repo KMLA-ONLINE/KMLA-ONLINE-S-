@@ -1,8 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Outlet, useParams } from "react-router";
 
 import { defineAppChrome } from "~/features/app-shell";
-import { listConversations, MessagingScreen } from "~/features/messaging";
+import { conversationListQuery, MessagingScreen } from "~/features/messaging";
+import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/index";
 
 // 셸 안에서 목록과 대화창이 각자 스크롤하도록 셸의 공통 스크롤 영역을 쓰지 않는다.
@@ -12,8 +14,13 @@ export const handle = defineAppChrome({
   scroll: "route",
 });
 
+// cache가 있으면 오래됐어도 기다리지 않고 넘긴다. 낡았으면 화면의 `useQuery`가 뒤에서 다시 읽는다.
 export async function clientLoader() {
-  return { conversations: await listConversations() };
+  return {
+    conversations: await getQueryClient().ensureQueryData(
+      conversationListQuery(),
+    ),
+  };
 }
 
 /**
@@ -26,10 +33,13 @@ export async function clientLoader() {
 export default function MessengerPage({ loaderData }: Route.ComponentProps) {
   const { roomId } = useParams();
   const [desktopDetailsOpen, setDesktopDetailsOpen] = useState(true);
+  const { data: conversations = loaderData.conversations } = useQuery(
+    conversationListQuery(),
+  );
 
   return (
     <MessagingScreen
-      conversations={loaderData.conversations}
+      conversations={conversations}
       selectedRoomId={roomId}
       hasRoom={Boolean(roomId)}
     >

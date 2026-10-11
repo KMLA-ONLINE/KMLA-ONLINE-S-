@@ -9,6 +9,9 @@ import { loadConversation } from "~/features/messaging/data/queries";
 import type { Conversation } from "~/features/messaging/model/types";
 import { renderRoute, screen, within } from "../../../router";
 
+vi.mock("~/features/messaging/data/queries", () => import("../fake-api"));
+vi.mock("~/features/messaging/data/mutations", () => import("../fake-api"));
+
 type ContextMenuPositionerProps = ComponentProps<
   typeof ContextMenuModule.ContextMenu.Positioner
 >;

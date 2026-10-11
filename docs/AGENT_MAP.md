@@ -104,7 +104,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `feed`             | Home integrated feed, infinite feed session, feed cache surgery                                                                             | §6 and `docs/FEED_ALGORITHM.md`                     |
 | `groups`           | Group home, discover, detail, membership, roles, invites, group settings, group media                                                       | §7                                                  |
 | `meal`             | NEIS meal fetch and meal screens                                                                                                            | §17.4                                               |
-| `messaging`        | Messenger screens — **shell only, unimplemented**                                                                                           | §13                                                 |
+| `messaging`        | Conversations, room thread, send and read position                                                                                          | §13                                                 |
 | `notifications`    | Inbox, badges, delivery preferences, Web Push subscribe and unsubscribe, realtime sync                                                      | §14, §15.2, `docs/NOTIFICATION_TECHNICAL_DESIGN.md` |
 | `posts`            | Posts, comments, reactions, mentions, attachments, markdown, categories, reports, anonymity — **read `app/features/posts/AGENTS.md` first** | §8–§11, `docs/CONTENT_FORMATTING.md`                |
 | `profiles`         | Profile view and edit, profile media, birthdays                                                                                             | §12, §17.5                                          |
@@ -178,12 +178,14 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `list_birthdays`                              | `profiles/data/queries.ts`                                                      | `11-identity.sql`             |
 | `list_comment_images`                         | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_comment_reactors`                       | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
+| `list_conversations`                          | `messaging/data/queries.ts`                                                     | `71-messaging.sql`            |
 | `list_feed_posts`                             | `feed/data/queries.ts`                                                          | `41-feed.sql`                 |
 | `list_group_join_requests`                    | `groups/data/queries.ts`                                                        | `21-groups.sql`               |
 | `list_group_members`                          | `groups/data/queries.ts`                                                        | `21-groups.sql`               |
 | `list_group_post_report_descriptions`         | `posts/data/group-reports.ts`                                                   | `35-moderation.sql`           |
 | `list_group_post_report_summaries`            | `posts/data/group-reports.ts`                                                   | `35-moderation.sql`           |
 | `list_group_posts`                            | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
+| `list_messages`                               | `messaging/data/queries.ts`                                                     | `71-messaging.sql`            |
 | `list_my_notifications`                       | `notifications/data/queries.ts`                                                 | `61-notifications.sql`        |
 | `list_post_attachments`                       | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_post_comment_replies`                   | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
@@ -191,6 +193,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `list_post_reactors`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_profile_posts`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `mark_all_my_notifications_read`              | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
+| `mark_conversation_read`                      | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `mark_group_posts_visited`                    | `groups/data/mutations.ts`                                                      | `31-posts.sql`                |
 | `move_group_category`                         | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `prepare_comment_image`                       | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
@@ -210,6 +213,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `search_directory`                            | `search/data/queries.ts`                                                        | `53-search.sql`               |
 | `search_group_mention_candidates`             | `posts/data/queries.ts`                                                         | `21-groups.sql`               |
 | `search_group_posts`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
+| `send_message`                                | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `set_comment_reaction`                        | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `set_group_post_pinned`                       | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `set_my_group_notification_preferences`       | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |

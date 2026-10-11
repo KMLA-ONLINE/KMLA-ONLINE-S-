@@ -25,9 +25,9 @@ KMLA Online을 개발·검증·운영하는 사람과 에이전트를 위한 문
 - [Storage 버킷](STORAGE_BUCKETS.md): 파일 정책·접근 권한·업로드·object 정리
 - [삭제 및 보존](DELETION_POLICY.md): DB 행 수명·보존 기간·정리 작업
 - [알림 및 Web Push](NOTIFICATION_TECHNICAL_DESIGN.md): 데이터·outbox·worker·클라이언트 동기화
-- [메시지](MESSAGING_TECHNICAL_DESIGN.md): 데이터·서버 측 암호화·Realtime·검색 (미구현)
+- [메시지](MESSAGING_TECHNICAL_DESIGN.md): 데이터·서버 측 암호화·Realtime·검색 (일부 구현)
 
-메시지는 화면 골격만 제공한다. 메시지 명세와 관련 기술 설계의 미구현 표시는 현재 제공 기능과
+메시지는 일부만 제공한다. 메시지 명세와 관련 기술 설계의 미구현 표시는 현재 제공 기능과
 도입 시 규칙을 구분한다. 상세한 미래 설계가 존재한다고 구현된 기능인 것은 아니다.
 
 ## 문서 책임과 추가 위치

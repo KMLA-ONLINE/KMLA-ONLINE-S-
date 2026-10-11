@@ -47,7 +47,7 @@
     "db:drift": "node scripts/check-db-drift.mjs",
     "db:lint": "supabase db lint --local --schema public --level warning --fail-on error",
     "db:advisors": "supabase db advisors --local --type security --level info --fail-on error",
-    "db:types": "supabase gen types typescript --local > app/shared/supabase/database.types.ts",
+    "db:types": "supabase gen types typescript --local > app/shared/supabase/database.types.ts && prettier --no-semi --ignore-path \"\" --log-level warn --write app/shared/supabase/database.types.ts",
     "link:dev": "supabase link --project-ref trftjcieogrewqptgidd",
     "db:diff:dev": "npm run link:dev && supabase db diff --linked",
     "db:push:dev": "npm run link:dev && supabase db push --linked",

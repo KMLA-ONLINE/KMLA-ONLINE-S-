@@ -1,10 +1,7 @@
 import { applyMessageReaction } from "~/features/messaging/model/message-reactions";
 import type { ConversationMessage } from "~/features/messaging/model/types";
 import type { PostReaction } from "~/features/posts/model/types";
-
-// 메시지 RPC가 생기기 전의 자리다(docs/MESSAGING_TECHNICAL_DESIGN.md §3). 서버가 확정해 돌려줄
-// 정본 모양만 흉내 내고 아무것도 저장하지 않으므로, 새로고침하면 보낸 내용이 사라진다.
-// RPC가 생기면 시그니처는 두고 본문만 바꾼다.
+import { getSupabase } from "~/shared/supabase/client";
 
 export interface SendMessageInput {
   conversationId: string;
@@ -14,12 +11,38 @@ export interface SendMessageInput {
   replyToMessageId?: string;
 }
 
-export function sendMessage(
+/** 서버가 정한 전송 시각으로 초안을 확정한다. 본문 끝의 줄바꿈은 보내기 전에 화면이 이미 지운다. */
+export async function sendMessage(
   input: SendMessageInput,
   draft: ConversationMessage,
 ): Promise<ConversationMessage> {
-  return Promise.resolve({ ...draft, id: input.id, body: input.body });
+  const { data, error } = await getSupabase().rpc("send_message", {
+    p_conversation_id: input.conversationId,
+    p_message_id: input.id,
+    p_body: input.body,
+    p_reply_to_id: input.replyToMessageId,
+  });
+  if (error) throw error;
+  const saved = data?.[0];
+  if (!saved) throw new Error("Message was not saved");
+
+  return { ...draft, id: saved.id, body: input.body, sentAt: saved.sent_at };
 }
+
+/** 읽음 위치를 이 메시지로 옮긴다. 서버는 앞으로만 옮기므로 순서가 뒤바뀐 요청도 안전하다. */
+export async function markConversationRead(
+  conversationId: string,
+  messageId: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("mark_conversation_read", {
+    p_conversation_id: conversationId,
+    p_message_id: messageId,
+  });
+  if (error) throw error;
+}
+
+// 반응과 고정은 아직 저장하지 않는다(기술 설계 §3의 다음 단계). 서버가 확정해 돌려줄 정본 모양만
+// 흉내 내므로 새로고침하면 사라진다. RPC가 생기면 시그니처는 두고 본문만 바꾼다.
 
 export function setMessageReaction(
   message: ConversationMessage,

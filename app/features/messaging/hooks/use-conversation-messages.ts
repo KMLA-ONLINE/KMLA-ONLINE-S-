@@ -3,7 +3,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 
 import {
@@ -11,18 +11,20 @@ import {
   findCachedMessage,
   flattenMessagePages,
   initialMessagePages,
+  invalidateConversationList,
   messagingKeys,
   patchMessage,
   removeMessage,
 } from "~/features/messaging/data/cache";
 import {
+  markConversationRead,
   sendMessage,
   setMessagePinned,
   setMessageReaction,
 } from "~/features/messaging/data/mutations";
 import {
   listMessages,
-  loadConversation,
+  listPinnedMessages,
 } from "~/features/messaging/data/queries";
 import { applyMessageReaction } from "~/features/messaging/model/message-reactions";
 import type {
@@ -71,8 +73,7 @@ export function useConversationMessages(conversation: Conversation) {
   });
   const pinnedQuery = useQuery({
     queryKey: messagingKeys.pinned(conversationId),
-    queryFn: async () =>
-      (await loadConversation(conversationId))?.pinnedMessages ?? [],
+    queryFn: () => listPinnedMessages(conversationId),
     initialData: conversation.pinnedMessages,
     staleTime: Infinity,
   });
@@ -81,6 +82,32 @@ export function useConversationMessages(conversation: Conversation) {
     [pagesQuery.data],
   );
   const latestRequest = useRef(new Map<string, number>());
+
+  // 화면에 나온 가장 최근 상대 메시지까지 읽은 것으로 기록한다. 내 메시지는 보낼 때 서버가 읽음
+  // 위치를 옮긴다. 이 위치가 메시지 Push 억제의 근거이므로 탭이 실제로 보일 때만 기록하고, 가려진
+  // 탭이면 다시 보일 때 기록한다. 실패하면 사용자에게 알리지 않고 다음에 보일 때 다시 시도한다.
+  const latestMessage = messages.at(-1);
+  const unreadLatestId =
+    latestMessage && latestMessage.senderId !== conversation.viewerId
+      ? latestMessage.id
+      : undefined;
+  useEffect(() => {
+    if (!unreadLatestId) return;
+    let pending = true;
+    const mark = () => {
+      if (!pending || document.visibilityState !== "visible") return;
+      pending = false;
+      markConversationRead(conversationId, unreadLatestId).then(
+        () => void invalidateConversationList(queryClient),
+        () => {
+          pending = true;
+        },
+      );
+    };
+    mark();
+    document.addEventListener("visibilitychange", mark);
+    return () => document.removeEventListener("visibilitychange", mark);
+  }, [conversationId, unreadLatestId, queryClient]);
 
   /** 이 메시지에 대한 새 요청 번호. 응답이 왔을 때 아직 마지막 요청인지 비교한다. */
   function beginRequest(messageId: string) {
@@ -116,6 +143,7 @@ export function useConversationMessages(conversation: Conversation) {
         draft,
       );
       patchMessage(queryClient, conversationId, draft.id, sent);
+      void invalidateConversationList(queryClient);
       return true;
     } catch {
       removeMessage(queryClient, conversationId, draft.id);

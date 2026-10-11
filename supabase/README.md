@@ -15,6 +15,7 @@
 | `51-*` to `52-*` | Reservations and timetables                                    |
 | `53-*`           | Directory search                                               |
 | `61-*`           | Notifications, delivery preferences, and outbox                |
+| `71-*`           | Messaging: conversations, membership periods, and messages     |
 | `81-*`           | Policies on Supabase-managed Storage objects                   |
 | `82-*`           | Storage cleanup queue, worker APIs, and observability          |
 | `83-*`           | Record retention and cleanup                                   |
@@ -61,10 +62,19 @@ Migrations do not carry these. Set them per project before scheduled work functi
 | `project_url`                  | both helpers, as the `net.http_post` base |
 | `notification_dispatch_secret` | `private.invoke_notification_dispatcher`  |
 | `storage_cleanup_secret`       | `private.invoke_storage_cleanup`          |
+| `message_key_v<N>`             | `private.message_keys`                    |
 
 ```sql
 select vault.create_secret('https://<ref>.supabase.co', 'project_url', '');
 ```
+
+Message keys encrypt message bodies (`docs/MESSAGING_TECHNICAL_DESIGN.md` §4). Create `message_key_v1` once per project with a random value and never change it in place. Every message RPC raises until it exists:
+
+```sql
+select vault.create_secret(encode(extensions.gen_random_bytes(32), 'base64'), 'message_key_v1', '');
+```
+
+To rotate, add `message_key_v2`. New messages use the highest version; keep older versions until no row uses them.
 
 Rotate with `vault.update_secret` — `create_secret` fails on an existing name. There is no dual-secret window, so dispatch 401s until both sides match; cron retries.
 

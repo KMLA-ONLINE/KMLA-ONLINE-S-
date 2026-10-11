@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { MessagingScreen } from "~/features/messaging/components/messaging-screen";
 import { listConversations } from "~/features/messaging/data/queries";
 import { renderRoute, screen, within } from "../../../router";
+
+vi.mock("~/features/messaging/data/queries", () => import("../fake-api"));
+vi.mock("~/features/messaging/data/mutations", () => import("../fake-api"));
 
 describe("MessagingScreen", () => {
   it("대화 목록을 검색하고 현재 대화를 표시한다", async () => {

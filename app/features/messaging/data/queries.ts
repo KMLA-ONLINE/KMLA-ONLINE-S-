@@ -1,119 +1,172 @@
-import {
-  mockConversations,
-  type MockMessage,
-} from "~/features/messaging/model/mock";
 import type {
   Conversation,
   ConversationMessage,
   ConversationSummary,
   MessageCursor,
   MessagePage,
+  MessageParticipant,
 } from "~/features/messaging/model/types";
+import { createProfileMediaUrls } from "~/features/profiles/data/media";
+import type { Database } from "~/shared/supabase/database.types";
+import { getSupabase } from "~/shared/supabase/client";
 
 export const MESSAGE_PAGE_SIZE = 50;
+/** `list_messages`가 한 번에 돌려주는 최대 행 수(101)에서 남았는지 확인할 한 개를 뺀 값. */
+const MAX_MESSAGE_PAGE_SIZE = 100;
 
-export function listConversations(): Promise<ConversationSummary[]> {
-  return Promise.resolve(
-    mockConversations.map(
-      ({
-        messages: _messages,
-        sharedMediaCount: _media,
-        sharedFileCount: _files,
-        sharedLinkCount: _links,
-        ...conversation
-      }) => structuredClone(conversation),
-    ),
-  );
+type Functions = Database["public"]["Functions"];
+type ConversationRow = Functions["list_conversations"]["Returns"][number];
+type MessageRow = Functions["list_messages"]["Returns"][number];
+
+interface ParticipantRow {
+  id: number;
+  name: string;
+  avatar_path: string | null;
 }
 
-/** 대화 정보, 최신 메시지 한 페이지와 고정 메시지 전체. 대화방 첫 화면의 유일한 요청이다. */
-export function loadConversation(
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function listConversations(): Promise<ConversationSummary[]> {
+  const { data, error } = await getSupabase().rpc("list_conversations");
+  if (error) throw error;
+  return toSummaries(data ?? []);
+}
+
+/**
+ * 대화 정보, 최신 메시지 한 페이지와 고정 메시지 전체. 대화방 첫 화면은 이 요청들을 함께
+ * 기다린다. 내 대화가 아니면 `null`이다.
+ */
+export async function loadConversation(
   conversationId: string,
   limit = MESSAGE_PAGE_SIZE,
 ): Promise<Conversation | null> {
-  const conversation = findConversation(conversationId);
-  if (!conversation) return Promise.resolve(null);
+  // 주소창에 아무 문자열이나 들어올 수 있다. uuid가 아니면 RPC가 형 변환 오류를 내므로 미리 거른다.
+  if (!UUID_PATTERN.test(conversationId)) return null;
 
-  const { messages, ...rest } = conversation;
-  return Promise.resolve(
-    structuredClone({
-      ...rest,
-      ...pageBefore(messages, null, limit),
-      pinnedMessages: messages
-        .filter((message) => message.pinned && !message.system)
-        .map((message) => withReplyPreview(message, messages)),
-    }),
-  );
+  const [summary, page, pinnedMessages] = await Promise.all([
+    getSupabase()
+      .rpc("list_conversations", { p_conversation_id: conversationId })
+      .then(async ({ data, error }) => {
+        if (error) throw error;
+        return (await toSummaries(data ?? []))[0] ?? null;
+      }),
+    listMessages(conversationId, null, limit),
+    listPinnedMessages(conversationId),
+  ]);
+  if (!summary) return null;
+
+  return {
+    ...summary,
+    ...page,
+    pinnedMessages,
+    // 첨부는 아직 저장하지 않는다(기술 설계 §3의 다음 단계).
+    sharedMediaCount: 0,
+    sharedFileCount: 0,
+    sharedLinkCount: 0,
+  };
 }
 
-/** `before`보다 앞선 메시지 한 페이지. `before`가 없으면 최신 페이지다. */
-export function listMessages(
+/**
+ * `before`보다 앞선 메시지 한 페이지. `before`가 없으면 최신 페이지다. 한 개를 더 읽어 그보다
+ * 앞선 메시지가 남았는지 안다.
+ */
+export async function listMessages(
   conversationId: string,
   before: MessageCursor | null,
   limit = MESSAGE_PAGE_SIZE,
 ): Promise<MessagePage> {
-  return Promise.resolve(
-    structuredClone(
-      pageBefore(
-        findConversation(conversationId)?.messages ?? [],
-        before,
-        limit,
-      ),
-    ),
-  );
-}
+  const size = Math.min(limit, MAX_MESSAGE_PAGE_SIZE);
+  const { data, error } = await getSupabase().rpc("list_messages", {
+    p_conversation_id: conversationId,
+    p_before_sent_at: before?.sentAt,
+    p_before_id: before?.id,
+    p_limit: size + 1,
+  });
+  if (error) throw error;
 
-function findConversation(conversationId: string) {
-  return mockConversations.find(({ id }) => id === conversationId);
-}
-
-/** `(sentAt, id)` 순서. 실제 RPC의 정렬·커서 비교와 같은 규칙이다. */
-function compareCursor(a: MessageCursor, b: MessageCursor): number {
-  const time = Date.parse(a.sentAt) - Date.parse(b.sentAt);
-  if (time !== 0) return time;
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-}
-
-/**
- * 커서 행을 찾지 않고 비교로 자른다. 커서가 가리키던 메시지가 그새 사라져도 그보다 앞선 메시지만
- * 정확히 돌려준다.
- */
-function pageBefore(
-  messages: MockMessage[],
-  before: MessageCursor | null,
-  limit: number,
-): MessagePage {
-  const older = before
-    ? messages.filter((message) => compareCursor(message, before) < 0)
-    : messages;
-  const start = Math.max(0, older.length - limit);
-  const first = older[start];
+  const rows = data ?? [];
+  const page = rows.length > size ? rows.slice(rows.length - size) : rows;
+  const oldest = page[0];
 
   return {
-    messages: older
-      .slice(start)
-      .map((message) => withReplyPreview(message, messages)),
+    messages: page.map(toMessage),
     olderCursor:
-      start > 0 && first ? { sentAt: first.sentAt, id: first.id } : null,
+      rows.length > size && oldest
+        ? { sentAt: oldest.sent_at, id: oldest.id }
+        : null,
   };
 }
 
-function withReplyPreview(
-  { replyToMessageId, ...message }: MockMessage,
-  messages: MockMessage[],
-): ConversationMessage {
-  const original = replyToMessageId
-    ? messages.find(({ id }) => id === replyToMessageId)
-    : undefined;
-  if (!original) return message;
+/** 대화 순서대로의 고정 메시지 전체. 고정은 아직 저장하지 않으므로(기술 설계 §3의 다음 단계) 비어 있다. */
+export function listPinnedMessages(
+  _conversationId: string,
+): Promise<ConversationMessage[]> {
+  return Promise.resolve([]);
+}
 
+async function toSummaries(
+  rows: ConversationRow[],
+): Promise<ConversationSummary[]> {
+  const participantRows = rows.map((row) =>
+    parseParticipants(row.participants),
+  );
+  const avatarUrls = await createProfileMediaUrls(
+    participantRows.flat().map((participant) => participant.avatar_path),
+  );
+
+  return rows.map((row, index) => ({
+    id: row.conversation_id,
+    type: row.type,
+    name: row.name,
+    viewerId: String(row.viewer_id),
+    participants: (participantRows[index] ?? []).map(
+      (participant): MessageParticipant => ({
+        id: String(participant.id),
+        name: participant.name,
+        avatarUrl: participant.avatar_path
+          ? (avatarUrls.get(participant.avatar_path) ?? null)
+          : null,
+      }),
+    ),
+    lastMessage: row.last_message_id
+      ? {
+          senderId: toProfileId(row.last_message_sender_id),
+          body: row.last_message_deleted
+            ? "삭제된 메시지입니다"
+            : (row.last_message_body ?? ""),
+          sentAt: row.last_message_sent_at,
+        }
+      : null,
+    unreadCount: row.unread_count,
+    muted: row.muted,
+  }));
+}
+
+function parseParticipants(value: unknown): ParticipantRow[] {
+  return Array.isArray(value) ? (value as ParticipantRow[]) : [];
+}
+
+function toMessage(row: MessageRow): ConversationMessage {
   return {
-    ...message,
-    replyTo: {
-      id: original.id,
-      senderId: original.senderId,
-      body: original.deleted ? "" : original.body,
-      deleted: original.deleted,
-    },
+    id: row.id,
+    senderId: toProfileId(row.sender_id),
+    body: row.body,
+    sentAt: row.sent_at,
+    deleted: row.deleted,
+    replyTo: row.reply_to_id
+      ? {
+          id: row.reply_to_id,
+          senderId: toProfileId(row.reply_sender_id),
+          body: row.reply_body ?? "",
+          deleted: row.reply_deleted,
+        }
+      : undefined,
+    unreadMemberCount: row.unread_member_count ?? undefined,
   };
+}
+
+/** 프로필 ID는 화면에서 문자열로 다룬다. 탈퇴로 지워진 발신자는 `null`이다. */
+function toProfileId(value: number | null): string | null {
+  return value === null ? null : String(value);
 }

@@ -7,6 +7,9 @@ import * as mutations from "~/features/messaging/data/mutations";
 import { loadConversation } from "~/features/messaging/data/queries";
 import { useConversationMessages } from "~/features/messaging/hooks/use-conversation-messages";
 
+vi.mock("~/features/messaging/data/queries", () => import("../fake-api"));
+vi.mock("~/features/messaging/data/mutations", () => import("../fake-api"));
+
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 async function renderMessages() {
@@ -25,6 +28,26 @@ afterEach(() => {
 });
 
 describe("useConversationMessages", () => {
+  it("가려진 탭에서는 읽음을 기록하지 않고 다시 보일 때 가장 최근 상대 메시지까지 기록한다", async () => {
+    const visibility = vi
+      .spyOn(document, "visibilityState", "get")
+      .mockReturnValue("hidden");
+    const markRead = vi.spyOn(mutations, "markConversationRead");
+    await renderMessages();
+
+    expect(markRead).not.toHaveBeenCalled();
+
+    visibility.mockReturnValue("visible");
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    await waitFor(() =>
+      expect(markRead).toHaveBeenCalledWith("student-council", "m9"),
+    );
+    expect(markRead).toHaveBeenCalledTimes(1);
+  });
+
   it("보낸 메시지를 먼저 붙이고 정본으로 확정한다", async () => {
     const { result } = await renderMessages();
 

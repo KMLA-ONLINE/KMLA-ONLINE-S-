@@ -35,7 +35,7 @@ export async function saveTimetableRecord(
       {
         profile_id: profileId,
         active_semester: activeSemester,
-        semesters: semesters as Json,
+        semesters: semesters as NonNullable<Json>,
         updated_at: new Date().toISOString(),
       },
       {

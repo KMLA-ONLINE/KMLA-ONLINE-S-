@@ -1,4 +1,10 @@
-import type { InfiniteData, QueryClient } from "@tanstack/react-query";
+import {
+  queryOptions,
+  type InfiniteData,
+  type QueryClient,
+} from "@tanstack/react-query";
+
+import { listConversations } from "~/features/messaging/data/queries";
 
 import type {
   Conversation,
@@ -9,11 +15,32 @@ import type {
 
 export const messagingKeys = {
   all: ["messaging"] as const,
+  conversations: () => [...messagingKeys.all, "conversations"] as const,
   messages: (conversationId: string) =>
     [...messagingKeys.all, "messages", conversationId] as const,
   pinned: (conversationId: string) =>
     [...messagingKeys.all, "pinned", conversationId] as const,
 };
+
+/**
+ * 대화 목록. 데스크톱에서는 대화방 옆에 계속 떠 있으므로 loader 데이터가 아니라 이 cache를
+ * 구독한다. 내 읽음과 전송은 무효화로 덮는다. 다른 사람의 새 메시지는 Realtime이 맡을 것이다
+ * (기술 설계 §5).
+ */
+export function conversationListQuery() {
+  return queryOptions({
+    queryKey: messagingKeys.conversations(),
+    queryFn: listConversations,
+    staleTime: 2 * 60_000,
+  });
+}
+
+/** 내 읽음 위치나 마지막 메시지가 바뀌었다. 목록의 읽지 않은 수와 미리보기를 다시 읽는다. */
+export function invalidateConversationList(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({
+    queryKey: messagingKeys.conversations(),
+  });
+}
 
 /** 첫 페이지가 최신, 뒤로 갈수록 오래된 페이지다. 페이지 안은 오래된 것부터다. */
 export type MessagePages = InfiniteData<MessagePage, MessageCursor | null>;
