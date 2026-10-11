@@ -42,6 +42,7 @@ export async function clientLoader({
   const postsRequest = listProfilePosts(requestedPubId);
   // 게시물 상세로 바로 들어오면 타임라인은 그 뒤에 깔릴 뿐이라 기다리지 않는다. 실패는 상세를
   // 덮지 않도록 null로 받는다. catch는 await보다 먼저 붙여 처리되지 않은 rejection을 막는다.
+  // 글쓰기·수정 화면으로 바로 들어와도 받는다. 편집기를 취소로 닫으면 부모를 다시 읽지 않아서다.
   const deferredPosts = postsRequest.catch(() => null);
   const [profile, loadedPosts] = await Promise.all([
     loadAcceptedProfile(requestedPubId),

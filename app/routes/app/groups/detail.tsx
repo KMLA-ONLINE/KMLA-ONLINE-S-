@@ -135,6 +135,8 @@ export async function clientLoader({
   // 목록 RPC와 20건 서명 왕복에 묶이므로 목록 칸이 쓰는 카테고리와 함께 promise째 넘긴다.
   // 실패해도 상세까지 에러 화면으로 덮지 않도록 null로 받아 목록 자리에만 알린다. catch는 아래
   // await보다 먼저 붙여야 그사이 거절이 처리되지 않은 rejection으로 새지 않는다.
+  // 글쓰기·수정 화면으로 바로 들어와도 목록을 받는다. 편집기는 목록 위에 뜨고, 취소로 닫을 때는
+  // `shouldRevalidate`가 부모를 다시 읽지 않으므로 여기서 받아 두지 않으면 닫은 뒤 목록이 비어 있다.
   const deferredPosts = Promise.all([postsRequest, categoriesRequest])
     .then(([page, categories]) => ({ page, categories }))
     .catch(() => null);
