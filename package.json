@@ -42,6 +42,7 @@
     "db:stop": "supabase stop",
     "db:status": "supabase status",
     "db:reset": "supabase db reset",
+    "db:fake": "node scripts/load-fake-data.mjs",
     "db:diff": "supabase db schema declarative sync --no-apply --name",
     "db:drift": "node scripts/check-db-drift.mjs",
     "db:lint": "supabase db lint --local --schema public --level warning --fail-on error",
