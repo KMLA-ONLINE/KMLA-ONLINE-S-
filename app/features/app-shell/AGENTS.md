@@ -11,7 +11,7 @@
 - 일반 앱의 데스크톱 콘텐츠 폭도 `handle.chrome.contentWidth`가 소유한다. 기본은 `model/chrome.ts`의 `DEFAULT_APP_CHROME.contentWidth`(`4xl`)이고, 목록이나 폼처럼 다른 폭이 필요한 route만 명시적으로 override한다.
 - 메신저 layout은 데스크톱 전역 헤더를 유지하지만 사이드바와 하단 nav를 렌더하지 않는다.
 - 인증/승인 게이트는 `app/routes/app/gate.tsx` 한 곳에만 둔다.
-- 셸 loader는 첫 진입과 mutation 이후에만 다시 실행한다. 자식 route의 명시적 revalidation은 셸 프로필을 다시 읽지 않는다.
+- 셸 loader는 첫 진입과 셸 데이터를 바꾸는 mutation(`gate.tsx`의 `SHELL_MUTATION_ACTIONS`) 이후에만 다시 실행한다. 프로필·역할·뱃지를 바꾸는 action을 새로 만들면 그 목록에 더한다. 자식 route의 명시적 revalidation은 셸 프로필을 다시 읽지 않는다.
 - 게이트 loader는 아바타를 서명하지 않는다. `avatar_url`은 `AppShellProvider`가 `shellAvatarQuery`로 나중에 채우므로 첫 페인트에는 `null`일 수 있다.
 - 모바일 전역 헤더는 없다. 각 page route가 `PageHeader`를 조립하며 이는 `handle.chrome` 설정과 무관하다.
 - `PageHeader`는 기본적으로 고정이다. 아래로 스크롤할 때 숨겨야 하는 긴 목록 화면만 `hideOnScroll`을 명시한다.
