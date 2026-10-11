@@ -1,4 +1,5 @@
-import { PostCardSkeleton } from "~/features/posts";
+// 배럴(`~/features/posts`)은 편집기와 댓글까지 끌고 와 셸 청크를 키운다. 카드 뼈대 하나만 필요하다.
+import { PostCardSkeleton } from "~/features/posts/components/post-card-skeleton";
 import { cn } from "~/shared/lib/utils";
 import { PendingRegion, Skeleton } from "~/shared/ui/skeleton";
 
