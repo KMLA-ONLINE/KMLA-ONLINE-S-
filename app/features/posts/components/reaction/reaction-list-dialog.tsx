@@ -31,7 +31,7 @@ function ReactionTab({
       aria-selected={active}
       onClick={onClick}
       className={cn(
-        "-mb-px flex flex-none items-center gap-1.5 border-b-2 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors",
+        "-mb-px flex flex-none items-center gap-1.5 border-b-2 px-2.5 py-3 text-sm font-medium whitespace-nowrap transition-colors",
         active
           ? "border-primary text-foreground"
           : "border-transparent text-muted-foreground hover:text-foreground",
@@ -91,7 +91,7 @@ export function ReactionListDialog({
     >
       <DialogContent
         showCloseButton={false}
-        className="flex h-[70svh] flex-col gap-0 overflow-hidden p-0 max-sm:top-0 max-sm:left-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 sm:max-w-md"
+        className="flex h-[70svh] flex-col gap-0 overflow-hidden p-0 max-sm:top-0 max-sm:left-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 sm:max-w-xl"
       >
         {/* 화면의 헤더는 아래 탭 줄이라 제목·설명은 스크린리더용이다. */}
         <DialogTitle className="sr-only">{title}</DialogTitle>
