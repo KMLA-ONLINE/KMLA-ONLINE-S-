@@ -48,12 +48,14 @@ export default function MainAppLayout() {
   const navigation = useNavigation();
   const revalidator = useRevalidator();
   const chrome = resolveAppChrome(matches);
+  const routeOwnsScroll = chrome.scroll === "route";
   const scrollRef = useRef<HTMLElement>(null);
   const hidden = useHideOnScroll({
     containerRef: scrollRef,
     enabled:
-      chrome.header === "hide-on-scroll" ||
-      chrome.bottomNav === "hide-on-scroll",
+      !routeOwnsScroll &&
+      (chrome.header === "hide-on-scroll" ||
+        chrome.bottomNav === "hide-on-scroll"),
   });
   const pendingPathname = navigation.location?.pathname;
   const groupDetailSearchNavigation =
@@ -85,9 +87,12 @@ export default function MainAppLayout() {
   const showNavigationProgress = useDelayedPending(navigationPending, {
     delay: 100,
   });
-  const showNavigationSkeleton = useDelayedPending(navigationPending, {
-    delay: NAVIGATION_SKELETON_DELAY_MS,
-  });
+  // 스크롤을 직접 소유하는 화면(메신저)은 목록과 대화방이 한 route 트리라, 방을 옮기는 동안
+  // 스켈레톤으로 바꾸면 그대로 둬야 할 대화 목록까지 사라진다. 진행 막대만 띄운다.
+  const showNavigationSkeleton = useDelayedPending(
+    navigationPending && !routeOwnsScroll,
+    { delay: NAVIGATION_SKELETON_DELAY_MS },
+  );
   const skeletonPath = pendingPathname ?? location.pathname;
 
   const refresh = async () => {
@@ -141,36 +146,44 @@ export default function MainAppLayout() {
           {showNavigationProgress ? (
             <NavigationProgress className="absolute inset-x-0 top-[var(--app-safe-t)] z-50" />
           ) : null}
-          <PullToRefresh
-            containerRef={scrollRef}
-            enabled={chrome.pullToRefresh}
-            onRefresh={refresh}
-          />
-          <ScrollRegion
-            scrollRef={scrollRef}
-            rememberScroll={chrome.rememberScroll}
-            className={cn(
-              chrome.bottomNav === "hide-on-scroll" &&
-                "max-md:pb-[calc(var(--app-tabbar-h)+var(--app-safe-b))]",
-            )}
-          >
-            <div className="md:px-8">
-              <div
-                data-slot="app-content"
-                data-content-width={chrome.contentWidth}
+          {routeOwnsScroll ? (
+            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+              <Outlet />
+            </div>
+          ) : (
+            <>
+              <PullToRefresh
+                containerRef={scrollRef}
+                enabled={chrome.pullToRefresh}
+                onRefresh={refresh}
+              />
+              <ScrollRegion
+                scrollRef={scrollRef}
+                rememberScroll={chrome.rememberScroll}
                 className={cn(
-                  "mx-auto w-full md:py-6",
-                  CONTENT_WIDTH_CLASS[chrome.contentWidth],
+                  chrome.bottomNav === "hide-on-scroll" &&
+                    "max-md:pb-[calc(var(--app-tabbar-h)+var(--app-safe-b))]",
                 )}
               >
-                {showNavigationSkeleton ? (
-                  <NavigationSkeleton pathname={skeletonPath} />
-                ) : (
-                  <Outlet />
-                )}
-              </div>
-            </div>
-          </ScrollRegion>
+                <div className="md:px-8">
+                  <div
+                    data-slot="app-content"
+                    data-content-width={chrome.contentWidth}
+                    className={cn(
+                      "mx-auto w-full md:py-6",
+                      CONTENT_WIDTH_CLASS[chrome.contentWidth],
+                    )}
+                  >
+                    {showNavigationSkeleton ? (
+                      <NavigationSkeleton pathname={skeletonPath} />
+                    ) : (
+                      <Outlet />
+                    )}
+                  </div>
+                </div>
+              </ScrollRegion>
+            </>
+          )}
 
           {chrome.bottomNav === "none" ? null : (
             <MobileTabBar
