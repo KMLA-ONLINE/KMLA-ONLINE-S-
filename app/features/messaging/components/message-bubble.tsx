@@ -52,87 +52,97 @@ export function MessageBubble({
   );
 
   return (
+    // 반응 표시는 버블 밑에 흐름대로 놓는다. absolute로 버블 모서리에 붙이면 짧은 메시지에서 반응이
+    // 버블보다 넓을 때 대화 바깥쪽으로 삐져나가 가로 스크롤이 생긴다. 흐름 안에 두면 이 묶음이
+    // 넓어지는데, 묶음은 화면 가장자리 쪽에 붙어 있으므로 대화 중앙 쪽으로만 넓어진다.
     <div
-      ref={anchorRef}
-      data-slot="message-bubble"
       className={cn(
-        "relative w-fit max-w-full min-w-0",
-        hasReactions && "mb-4",
-        highlighted &&
-          (isEmojiOnly
-            ? "rounded-full"
-            : cn(
-                "rounded-2xl",
-                !startsGroup && isOwn && "rounded-tr-md",
-                !startsGroup && !isOwn && "rounded-tl-md",
-                !endsGroup && isOwn && "rounded-br-md",
-                !endsGroup && !isOwn && "rounded-bl-md",
-              )),
-        highlighted &&
-          "ring-1 ring-primary ring-offset-1 ring-offset-background",
+        "flex max-w-full min-w-0 flex-col",
+        isOwn ? "items-end" : "items-start",
       )}
     >
       <div
+        ref={anchorRef}
+        data-slot="message-bubble"
         className={cn(
-          "w-full",
-          isEmojiOnly
-            ? "px-1 py-0.5 text-5xl leading-none"
-            : "rounded-2xl px-3.5 py-2 text-[15px] [overflow-wrap:anywhere] break-keep whitespace-pre-wrap",
-          !isEmojiOnly &&
-            (isOwn
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-foreground"),
-          !isEmojiOnly && !startsGroup && isOwn && "rounded-tr-md",
-          !isEmojiOnly && !startsGroup && !isOwn && "rounded-tl-md",
-          !isEmojiOnly && !endsGroup && isOwn && "rounded-br-md",
-          !isEmojiOnly && !endsGroup && !isOwn && "rounded-bl-md",
+          "relative w-fit max-w-full min-w-0",
+          highlighted &&
+            (isEmojiOnly
+              ? "rounded-full"
+              : cn(
+                  "rounded-2xl",
+                  !startsGroup && isOwn && "rounded-tr-md",
+                  !startsGroup && !isOwn && "rounded-tl-md",
+                  !endsGroup && isOwn && "rounded-br-md",
+                  !endsGroup && !isOwn && "rounded-bl-md",
+                )),
+          highlighted &&
+            "ring-1 ring-primary ring-offset-1 ring-offset-background",
         )}
       >
-        {replyTarget && onViewReply ? (
-          <button
-            type="button"
-            aria-label={`${replyTargetAuthor ?? "알 수 없는 사용자"}의 원문 메시지 보기`}
-            className={cn(
-              "mb-1.5 block w-full max-w-full min-w-0 border-l-2 pl-2 text-left text-xs leading-4",
-              isOwn && !isEmojiOnly
-                ? "border-primary-foreground/50 text-primary-foreground/85 hover:bg-primary-foreground/10"
-                : "border-primary text-muted-foreground hover:bg-background/60",
-            )}
-            onClick={onViewReply}
-          >
-            <span className="block truncate font-semibold">
-              {replyTargetAuthor ?? "알 수 없는 사용자"}
-            </span>
-            <span className="block truncate">
-              {replyTarget.deleted ? "삭제된 메시지입니다" : replyTarget.body}
-            </span>
-          </button>
-        ) : null}
-        {isEmojiOnly ? (
-          <EmojiOnlyMessageBody graphemes={emojiGraphemes} />
-        ) : (
-          <MessageBody body={messageBody} isOwn={isOwn} />
-        )}
-        {showTimestamp ? (
-          <time
-            dateTime={message.sentAt}
-            className={cn(
-              "mt-1 block text-right text-[10px] leading-none",
-              !isEmojiOnly && isOwn
-                ? "text-primary-foreground/75"
-                : "text-muted-foreground",
-            )}
-          >
-            {formatMessageTime(message.sentAt)}
-          </time>
-        ) : null}
+        <div
+          className={cn(
+            "w-full",
+            isEmojiOnly
+              ? "px-1 py-0.5 text-5xl leading-none"
+              : "rounded-2xl px-3.5 py-2 text-[15px] [overflow-wrap:anywhere] break-keep whitespace-pre-wrap",
+            !isEmojiOnly &&
+              (isOwn
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-foreground"),
+            !isEmojiOnly && !startsGroup && isOwn && "rounded-tr-md",
+            !isEmojiOnly && !startsGroup && !isOwn && "rounded-tl-md",
+            !isEmojiOnly && !endsGroup && isOwn && "rounded-br-md",
+            !isEmojiOnly && !endsGroup && !isOwn && "rounded-bl-md",
+          )}
+        >
+          {replyTarget && onViewReply ? (
+            <button
+              type="button"
+              aria-label={`${replyTargetAuthor ?? "알 수 없는 사용자"}의 원문 메시지 보기`}
+              className={cn(
+                "mb-1.5 block w-full max-w-full min-w-0 border-l-2 pl-2 text-left text-xs leading-4",
+                isOwn && !isEmojiOnly
+                  ? "border-primary-foreground/50 text-primary-foreground/85 hover:bg-primary-foreground/10"
+                  : "border-primary text-muted-foreground hover:bg-background/60",
+              )}
+              onClick={onViewReply}
+            >
+              <span className="block truncate font-semibold">
+                {replyTargetAuthor ?? "알 수 없는 사용자"}
+              </span>
+              <span className="block truncate">
+                {replyTarget.deleted ? "삭제된 메시지입니다" : replyTarget.body}
+              </span>
+            </button>
+          ) : null}
+          {isEmojiOnly ? (
+            <EmojiOnlyMessageBody graphemes={emojiGraphemes} />
+          ) : (
+            <MessageBody body={messageBody} isOwn={isOwn} />
+          )}
+          {showTimestamp ? (
+            <time
+              dateTime={message.sentAt}
+              className={cn(
+                "mt-1 block text-right text-[10px] leading-none",
+                !isEmojiOnly && isOwn
+                  ? "text-primary-foreground/75"
+                  : "text-muted-foreground",
+              )}
+            >
+              {formatMessageTime(message.sentAt)}
+            </time>
+          ) : null}
+        </div>
       </div>
       {hasReactions ? (
         <Badge
           variant="secondary"
           className={cn(
-            "absolute top-full h-6 -translate-y-2 gap-1 rounded-full border-2 border-background px-1.5 text-[13px] shadow-none",
-            isOwn ? "left-1" : "right-1",
+            // `relative`가 없으면 positioned인 버블이 나중에 칠해져 반응 표시를 덮는다.
+            "relative -mt-2 h-6 gap-1 rounded-full border-2 border-background px-1.5 text-[13px] shadow-none",
+            isOwn ? "ml-1 self-start" : "mr-1 self-end",
           )}
         >
           {[...reactions].map(([reaction]) => (
@@ -145,12 +155,9 @@ export function MessageBubble({
             </span>
           ))}
           {reactionCount > 1 ? (
-            <span
-              className={cn(
-                "font-normal",
-                isOwn ? "text-primary-foreground/75" : "text-muted-foreground",
-              )}
-            >
+            // 반응 표시는 버블 밖의 secondary 배경이다. 버블 글자색(primary-foreground)을 쓰면 내 메시지에서
+            // 배경과 같은 밝기가 되어 숫자가 보이지 않는다.
+            <span className="font-normal text-muted-foreground">
               {reactionCount}
             </span>
           ) : null}

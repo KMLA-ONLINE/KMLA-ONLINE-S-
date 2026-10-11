@@ -144,14 +144,13 @@ describe("RoomScreen", () => {
     });
     expect(reactionGraphic).toHaveAttribute("src", "/twemoji/15.1.0/1f44d.svg");
     expect(reactionGraphic).toHaveClass("size-[13px]");
+    // 상대 메시지의 반응은 버블 오른쪽(대화 중앙 쪽) 밑에 흐름대로 붙는다.
     expect(reactionGraphic.parentElement?.parentElement).toHaveClass(
-      "top-full",
-      "text-[13px]",
-      "-translate-y-2",
-      "right-1",
-      "border-2",
-      "border-background",
-      "shadow-none",
+      "-mt-2",
+      "self-end",
+    );
+    expect(reactionGraphic.parentElement?.parentElement).not.toHaveClass(
+      "absolute",
     );
     const reactionSummary = reactionGraphic.parentElement!.parentElement!;
     expect(reactionSummary).toHaveClass("gap-1");
@@ -236,7 +235,7 @@ describe("RoomScreen", () => {
     expect(
       within(message).getByRole("img", { name: "하트" }).parentElement
         ?.parentElement,
-    ).toHaveClass("left-1", "bg-secondary", "text-secondary-foreground");
+    ).toHaveClass("self-start", "bg-secondary", "text-secondary-foreground");
     expect(
       within(message).getByRole("img", { name: "하트" }).parentElement,
     ).not.toHaveTextContent("1");
@@ -723,13 +722,7 @@ describe("RoomScreen", () => {
     expect(originalPinnedMessage).not.toHaveClass("ring-2", "ring-primary");
     expect(
       originalPinnedMessage.querySelector('[data-slot="message-bubble"]'),
-    ).toHaveClass(
-      "mb-4",
-      "rounded-2xl",
-      "ring-1",
-      "ring-primary",
-      "ring-offset-1",
-    );
+    ).toHaveClass("rounded-2xl", "ring-1", "ring-primary", "ring-offset-1");
 
     await user.click(screen.getByRole("button", { name: /고정된 메시지\s*2/ }));
     dialog = screen.getByRole("dialog");
