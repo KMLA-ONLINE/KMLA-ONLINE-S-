@@ -41,7 +41,6 @@ import {
   deleteGroupCategory,
   deleteGroupPost,
   getPostErrorMessage,
-  listGroupCategories,
   listGroupPosts,
   moveGroupCategory,
   setGroupPostPinned,
@@ -52,6 +51,7 @@ import { readPostViewMode } from "~/features/posts/model/view-preference";
 import type { Route } from "./+types/detail";
 import { feedKeys, removeFeedPost, resetFeed } from "~/features/feed";
 import { getQueryClient } from "~/shared/lib/query-client";
+import { groupCategoriesQuery } from "~/routes/app/groups/post-cache";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -80,11 +80,7 @@ export async function clientLoader({
   const settingsTab = searchParams.get("tab") === "settings";
   const reportsTab = searchParams.get("tab") === "reports";
   const postsTab = !memberTab && !settingsTab && !reportsTab;
-  const categoriesQuery = (groupId: string) => ({
-    queryKey: groupKeys.categories(groupId),
-    queryFn: () => listGroupCategories(groupId),
-    staleTime: GROUP_CONTENT_STALE_TIME,
-  });
+  const categoriesQuery = groupCategoriesQuery;
   const postsQuery = (groupId: string) => ({
     queryKey: groupKeys.posts(groupId, null, null),
     queryFn: () =>
@@ -122,7 +118,8 @@ export async function clientLoader({
   const reportSort =
     searchParams.get("reportSort") === "recent" ? "recent" : "count";
   const isGroupPage = url.pathname === `/groups/${group.slug}`;
-  // 글쓰기·수정 화면은 부모의 카테고리를 그대로 쓴다. 게시물 상세는 쓰지 않는다.
+  // 글쓰기·수정 화면은 부모의 카테고리를 쓴다. 게시물 상세는 쓰지 않아 기다리지 않는다. 상세를 닫고
+  // 글쓰기를 열면 부모가 다시 돌지 않으므로, 편집기는 `useGroupEditorCategories`로 캐시를 함께 본다.
   const isEditorRoute = /\/posts\/(?:new|[^/]+\/edit)$/.test(url.pathname);
   const categoriesRequest =
     postsTab || settingsTab

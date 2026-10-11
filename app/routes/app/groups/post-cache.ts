@@ -1,6 +1,34 @@
+import { useQuery } from "@tanstack/react-query";
+
 import { removeFeedPost, resetFeed } from "~/features/feed";
-import { groupKeys } from "~/features/groups";
+import { groupKeys, GROUP_CONTENT_STALE_TIME } from "~/features/groups";
+import { listGroupCategories, type GroupCategory } from "~/features/posts";
 import { getQueryClient } from "~/shared/lib/query-client";
+
+/** 그룹 loader와 글쓰기·수정 화면이 같은 키로 읽는 카테고리. */
+export function groupCategoriesQuery(groupId: string) {
+  return {
+    queryKey: groupKeys.categories(groupId),
+    queryFn: () => listGroupCategories(groupId),
+    staleTime: GROUP_CONTENT_STALE_TIME,
+  };
+}
+
+/**
+ * 글쓰기·수정 화면의 카테고리. 부모 loader 값을 먼저 쓰되 캐시를 우선한다. 게시물 상세로 바로 들어오면
+ * 부모는 상세를 막지 않으려고 카테고리를 기다리지 않고 `[]`로 넘기며, 상세를 닫고 글쓰기를 열어도 부모를
+ * 다시 읽지 않는다. 그때 카테고리는 목록 칸을 위해 이미 받아 둔 캐시에 있다.
+ */
+export function useGroupEditorCategories(
+  groupId: string,
+  fallback: GroupCategory[],
+): GroupCategory[] {
+  const { data } = useQuery({
+    ...groupCategoriesQuery(groupId),
+    enabled: groupId !== "",
+  });
+  return data ?? fallback;
+}
 
 /**
  * 게시물 변경이 피드에 미치는 영향은 종류마다 다르고, 그 차이가 비싸다. 새 세션 하나는
