@@ -45,23 +45,21 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   if (!notificationId) throw replace("/noti");
 
   prefetchShellData();
-  let destination: string | null;
   try {
-    destination = await resolveNotificationDestination(notificationId);
-  } catch (error) {
-    // 게이트로 가지 않으므로 미리 읽은 값을 버린다. 남기면 다음 게이트 재검증이 낡은 값을 받는다.
-    discardPrefetchedShellData();
-    throw error;
-  }
-  if (destination === null) {
-    discardPrefetchedShellData();
-    const next = `/noti/open/${encodeURIComponent(notificationId)}`;
-    throw replace(`/login?${new URLSearchParams({ next })}`);
-  }
+    const destination = await resolveNotificationDestination(notificationId);
+    if (destination === null) {
+      const next = `/noti/open/${encodeURIComponent(notificationId)}`;
+      throw replace(`/login?${new URLSearchParams({ next })}`);
+    }
 
-  const target = sanitizeNotificationDestination(destination);
-  await invalidateOpenedNotification(getQueryClient());
-  return { target };
+    const target = sanitizeNotificationDestination(destination);
+    await invalidateOpenedNotification(getQueryClient());
+    return { target };
+  } catch (thrown) {
+    // 로그인 이동이든 실패든 게이트로 가지 않는다. 미리 읽은 값을 남기면 다음 게이트 재검증이 낡은 값을 받는다.
+    discardPrefetchedShellData();
+    throw thrown;
+  }
 }
 
 /** 목적지 밑에 깔 화면들. 이 창이 알림으로 처음 열렸을 때만 있다. */

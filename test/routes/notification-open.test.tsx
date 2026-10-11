@@ -128,6 +128,8 @@ describe("notification open route", () => {
 
     resolveDestination("/noti");
     await loading;
+    // 게이트로 가는 길에서는 게이트가 넘겨받아야 한다.
+    expect(mocks.discardPrefetchedShellData).not.toHaveBeenCalled();
   });
 
   // 게이트로 가지 않는 길에서 남긴 값은, 뒤에 다른 이유로 돈 게이트가 넘겨받아 낡은 프로필을 보인다.
@@ -139,6 +141,14 @@ describe("notification open route", () => {
     mocks.resolveNotificationDestination.mockRejectedValue(new Error("down"));
     await expect(load()).rejects.toThrow("down");
     expect(mocks.discardPrefetchedShellData).toHaveBeenCalledTimes(2);
+
+    // 목적지는 풀었지만 그 뒤 단계가 실패해도 게이트로 가지 않는다.
+    mocks.resolveNotificationDestination.mockResolvedValue("/noti");
+    vi.spyOn(getQueryClient(), "invalidateQueries")
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("cache"));
+    await expect(load()).rejects.toThrow("cache");
+    expect(mocks.discardPrefetchedShellData).toHaveBeenCalledTimes(3);
   });
 
   it("redirects an authenticated user only to a safe resolved path", async () => {
