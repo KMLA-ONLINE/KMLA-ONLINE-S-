@@ -100,7 +100,7 @@ export function ConversationDetails({
                       size="lg"
                     />
                     <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                      {participant.id === "viewer"
+                      {participant.id === conversation.viewerId
                         ? `${participant.name} (나)`
                         : participant.name}
                     </span>

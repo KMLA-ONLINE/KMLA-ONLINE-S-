@@ -847,7 +847,7 @@ describe("RoomScreen", () => {
     const conversation = await loadConversation("student-council");
     expect(conversation).not.toBeNull();
     const ownMessage = conversation!.messages.find(
-      (message) => message.senderId === "viewer",
+      (message) => message.senderId === conversation!.viewerId,
     )!;
     ownMessage.pinned = true;
     ownMessage.body = "내 메시지 ".repeat(80);

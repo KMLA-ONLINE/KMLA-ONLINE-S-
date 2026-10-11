@@ -10,12 +10,17 @@ export function ConversationAvatar({
   className,
   size = "default",
 }: {
-  conversation: Pick<ConversationSummary, "type" | "name" | "participants">;
+  conversation: Pick<
+    ConversationSummary,
+    "type" | "name" | "participants" | "viewerId"
+  >;
   className?: string;
   size?: "default" | "lg";
 }) {
   if (conversation.type === "direct") {
-    const other = conversation.participants.find(({ id }) => id !== "viewer");
+    const other = conversation.participants.find(
+      ({ id }) => id !== conversation.viewerId,
+    );
     return (
       <UserAvatar
         src={other?.avatarUrl}
@@ -26,7 +31,7 @@ export function ConversationAvatar({
   }
 
   const others = conversation.participants
-    .filter(({ id }) => id !== "viewer")
+    .filter(({ id }) => id !== conversation.viewerId)
     .slice(0, 2);
 
   return (

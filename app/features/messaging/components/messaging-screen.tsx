@@ -8,7 +8,9 @@ import { useDeferredValue, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
+import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
 import type { ConversationSummary } from "~/features/messaging/model/types";
+import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
@@ -109,9 +111,12 @@ export function MessagingScreen({
                             />
                           ) : null}
                         </span>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {conversation.lastActivityLabel}
-                        </span>
+                        {conversation.lastMessage ? (
+                          <RelativeTime
+                            value={conversation.lastMessage.sentAt}
+                            className="shrink-0 text-xs text-muted-foreground"
+                          />
+                        ) : null}
                       </span>
                       <span className="flex min-w-0 items-center gap-1.5">
                         <span
@@ -121,7 +126,7 @@ export function MessagingScreen({
                               "font-medium text-foreground",
                           )}
                         >
-                          {conversation.lastMessage}
+                          {formatLastMessagePreview(conversation)}
                         </span>
                         {conversation.unreadCount > 0 ? (
                           <Badge

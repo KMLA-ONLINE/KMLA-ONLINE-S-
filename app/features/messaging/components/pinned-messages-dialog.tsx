@@ -5,6 +5,10 @@ import {
   MessageActionRail,
   MessageRow,
 } from "~/features/messaging/components/message-row";
+import {
+  formatMessageDay,
+  startsMessageDay,
+} from "~/features/messaging/model/message-time";
 import type {
   ConversationMessage,
   MessageParticipant,
@@ -17,27 +21,11 @@ import {
   DialogTitle,
 } from "~/shared/ui/dialog";
 
-function getPinnedMessages(messages: ConversationMessage[]) {
-  const pinnedMessages: {
-    message: ConversationMessage;
-    dayLabel: string | undefined;
-  }[] = [];
-  let dayLabel: string | undefined;
-
-  for (const message of messages) {
-    dayLabel = message.dayLabel ?? dayLabel;
-    if (message.pinned && !message.system) {
-      pinnedMessages.push({ message, dayLabel });
-    }
-  }
-
-  return pinnedMessages;
-}
-
 export function PinnedMessagesDialog({
   open,
   messages,
   participants,
+  viewerId,
   isGroup,
   onOpenChange,
   onViewMessage,
@@ -46,6 +34,7 @@ export function PinnedMessagesDialog({
   open: boolean;
   messages: ConversationMessage[];
   participants: MessageParticipant[];
+  viewerId: string;
   isGroup: boolean;
   onOpenChange: (open: boolean) => void;
   onViewMessage: (messageId: string) => void;
@@ -56,7 +45,9 @@ export function PinnedMessagesDialog({
   const participantById = new Map(
     participants.map((participant) => [participant.id, participant]),
   );
-  const pinnedMessages = getPinnedMessages(messages);
+  const pinnedMessages = messages.filter(
+    (message) => message.pinned && !message.system,
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -88,12 +79,11 @@ export function PinnedMessagesDialog({
         >
           {pinnedMessages.length ? (
             <div className="mx-auto flex max-w-3xl flex-col gap-0.5">
-              {pinnedMessages.map(({ message, dayLabel }, index) => {
+              {pinnedMessages.map((message, index) => {
                 const sender = message.senderId
                   ? participantById.get(message.senderId)
                   : undefined;
-                const isOwn = message.senderId === "viewer";
-                const previousDayLabel = pinnedMessages[index - 1]?.dayLabel;
+                const isOwn = message.senderId === viewerId;
                 const viewAction = (
                   <Button
                     variant="ghost"
@@ -119,10 +109,10 @@ export function PinnedMessagesDialog({
 
                 return (
                   <div key={message.id}>
-                    {dayLabel && dayLabel !== previousDayLabel ? (
+                    {startsMessageDay(pinnedMessages[index - 1], message) ? (
                       <div className="my-4 flex items-center justify-center">
                         <span className="text-xs text-muted-foreground">
-                          {dayLabel}
+                          {formatMessageDay(message.sentAt)}
                         </span>
                       </div>
                     ) : null}

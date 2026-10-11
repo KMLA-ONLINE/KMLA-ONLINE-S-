@@ -2,9 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   canConnectMessages,
-  dayLabelFor,
   hasVisibleMessageReaction,
-  nextMessageDayLabel,
 } from "~/features/messaging/model/message-grouping";
 import type { ConversationMessage } from "~/features/messaging/model/types";
 
@@ -15,7 +13,7 @@ function message(
     id: "message",
     senderId: "sender",
     body: "본문",
-    sentAt: "오후 3:12",
+    sentAt: "2026-08-28T15:12:05+09:00",
     ...overrides,
   };
 }
@@ -26,12 +24,18 @@ describe("message grouping", () => {
 
     expect(canConnectMessages(previous, message({ id: "next" }))).toBe(true);
     expect(
+      canConnectMessages(
+        previous,
+        message({ id: "next", sentAt: "2026-08-28T15:12:59+09:00" }),
+      ),
+    ).toBe(true);
+    expect(
       canConnectMessages(previous, message({ id: "next", senderId: "other" })),
     ).toBe(false);
     expect(
       canConnectMessages(
         previous,
-        message({ id: "next", sentAt: "오후 3:13" }),
+        message({ id: "next", sentAt: "2026-08-28T15:13:00+09:00" }),
       ),
     ).toBe(false);
   });
@@ -42,7 +46,8 @@ describe("message grouping", () => {
     expect(
       canConnectMessages(
         previous,
-        message({ id: "next", dayLabel: "2026년 8월 29일 토요일" }),
+        // 같은 "오후 3:12"라도 날짜가 다르면 묶지 않는다.
+        message({ id: "next", sentAt: "2026-08-29T15:12:05+09:00" }),
       ),
     ).toBe(false);
     expect(
@@ -63,14 +68,5 @@ describe("message grouping", () => {
     expect(hasVisibleMessageReaction(previous)).toBe(true);
     expect(canConnectMessages(previous, next, true)).toBe(false);
     expect(hasVisibleMessageReaction(next, "love")).toBe(true);
-  });
-
-  it("마지막 메시지와 날짜가 바뀌면 새 날짜 구분선을 만든다", () => {
-    const yesterday = new Date(2026, 7, 28, 23, 59);
-    const today = new Date(2026, 7, 29, 0, 1);
-    const messages = [message({ dayLabel: dayLabelFor(yesterday) })];
-
-    expect(nextMessageDayLabel(messages, yesterday)).toBeUndefined();
-    expect(nextMessageDayLabel(messages, today)).toBe(dayLabelFor(today));
   });
 });

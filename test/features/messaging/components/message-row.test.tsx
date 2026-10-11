@@ -13,7 +13,7 @@ describe("MessageRow", () => {
             id: "message-1",
             senderId: "sender-1",
             body: "반응이 있는 메시지",
-            sentAt: "오후 3:12",
+            sentAt: "2026-08-28T15:12:00+09:00",
             reactions: [{ reaction: "like", count: 1 }],
           }}
           sender={{
@@ -44,7 +44,7 @@ describe("MessageRow", () => {
             id: "message-1",
             senderId: "viewer",
             body: "연결된 내 메시지",
-            sentAt: "오후 3:12",
+            sentAt: "2026-08-28T15:12:00+09:00",
           }}
           isOwn
           isGroup={false}
@@ -72,7 +72,7 @@ describe("MessageRow", () => {
             id: "message-1",
             senderId: "viewer",
             body: "👍",
-            sentAt: "오후 3:12",
+            sentAt: "2026-08-28T15:12:00+09:00",
           }}
           isOwn
           isGroup={false}
@@ -97,7 +97,7 @@ describe("MessageRow", () => {
               id: "message-1",
               senderId: "viewer",
               body: "시간 카드를 확인할 메시지",
-              sentAt: "오후 3:12",
+              sentAt: "2026-08-28T15:12:00+09:00",
             }}
             isOwn
             isGroup={false}

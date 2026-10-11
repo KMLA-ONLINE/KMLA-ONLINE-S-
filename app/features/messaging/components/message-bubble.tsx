@@ -5,6 +5,7 @@ import {
   getEmojiOnlyMessageGraphemes,
   parseMessageText,
 } from "~/features/messaging/model/message-text";
+import { formatMessageTime } from "~/features/messaging/model/message-time";
 import type { ConversationMessage } from "~/features/messaging/model/types";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import type { PostReaction } from "~/features/posts/model/types";
@@ -117,6 +118,7 @@ export function MessageBubble({
         )}
         {showTimestamp ? (
           <time
+            dateTime={message.sentAt}
             className={cn(
               "mt-1 block text-right text-[10px] leading-none",
               !isEmojiOnly && isOwn
@@ -124,7 +126,7 @@ export function MessageBubble({
                 : "text-muted-foreground",
             )}
           >
-            {message.sentAt}
+            {formatMessageTime(message.sentAt)}
           </time>
         ) : null}
       </div>

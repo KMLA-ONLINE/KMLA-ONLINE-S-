@@ -35,9 +35,12 @@ import {
 import { PinnedMessagesDialog } from "~/features/messaging/components/pinned-messages-dialog";
 import {
   canConnectMessages,
-  nextMessageDayLabel,
   hasVisibleMessageReaction,
 } from "~/features/messaging/model/message-grouping";
+import {
+  formatMessageDay,
+  startsMessageDay,
+} from "~/features/messaging/model/message-time";
 import type {
   Conversation,
   ConversationMessage,
@@ -150,21 +153,16 @@ export function RoomScreen({
   }
 
   function sendMessage(body: string) {
-    const sentAt = new Date();
     scrollToBottomAfterSend.current = true;
     setMessages((current) => [
       ...current,
       {
         id: crypto.randomUUID(),
-        senderId: "viewer",
+        senderId: conversation.viewerId,
         body,
-        sentAt: new Intl.DateTimeFormat("ko-KR", {
-          hour: "numeric",
-          minute: "2-digit",
-        }).format(sentAt),
-        dayLabel: nextMessageDayLabel(current, sentAt),
+        sentAt: new Date().toISOString(),
         replyToMessageId: replyTargetId ?? undefined,
-        readBy: [],
+        unreadMemberCount: conversation.participants.length - 1,
       },
     ]);
     setReplyTargetId(null);
@@ -288,6 +286,7 @@ export function RoomScreen({
         open={pinnedDialogOpen}
         messages={messages}
         participants={conversation.participants}
+        viewerId={conversation.viewerId}
         isGroup={conversation.type === "group"}
         onOpenChange={setPinnedDialogOpen}
         onViewMessage={viewMessage}
@@ -412,10 +411,10 @@ function MessageThread({
 
             return (
               <div key={message.id}>
-                {message.dayLabel ? (
+                {startsMessageDay(previous, message) ? (
                   <div className="my-4 flex items-center justify-center">
                     <span className="text-xs text-muted-foreground">
-                      {message.dayLabel}
+                      {formatMessageDay(message.sentAt)}
                     </span>
                   </div>
                 ) : null}
@@ -427,14 +426,9 @@ function MessageThread({
                   <MessageRow
                     message={message}
                     sender={sender}
-                    isOwn={message.senderId === "viewer"}
+                    isOwn={message.senderId === conversation.viewerId}
                     isGroup={conversation.type === "group"}
-                    unreadParticipantCount={Math.max(
-                      0,
-                      conversation.participants.length -
-                        1 -
-                        (message.readBy?.length ?? 0),
-                    )}
+                    unreadParticipantCount={message.unreadMemberCount ?? 0}
                     startsGroup={startsGroup}
                     endsGroup={endsGroup}
                     selectedReaction={selectedReactions[message.id]}
@@ -484,7 +478,7 @@ function MessageThread({
                     ]}
                     actionRail={
                       <MessageActions
-                        isOwn={message.senderId === "viewer"}
+                        isOwn={message.senderId === conversation.viewerId}
                         message={message}
                         selectedReaction={selectedReactions[message.id]}
                         isPinned={message.pinned ?? false}

@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { MessageBubble } from "~/features/messaging/components/message-bubble";
+import { formatMessageTime } from "~/features/messaging/model/message-time";
 import type {
   ConversationMessage,
   MessageParticipant,
@@ -563,7 +564,7 @@ function MessageTimeCard({
         {children}
       </TooltipTrigger>
       <TooltipContent className="[@media(hover:none)]:hidden">
-        {message.sentAt}
+        {formatMessageTime(message.sentAt)}
       </TooltipContent>
     </Tooltip>
   );
