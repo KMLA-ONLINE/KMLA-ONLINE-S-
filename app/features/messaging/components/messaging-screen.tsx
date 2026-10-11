@@ -80,7 +80,7 @@ export function MessagingScreen({
           />
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-[calc(var(--app-tabbar-h)+var(--app-safe-b)+0.5rem)] md:pb-2">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
           {filteredConversations.length > 0 ? (
             <nav aria-label="대화 목록" className="flex flex-col gap-0.5">
               {filteredConversations.map((conversation) => {

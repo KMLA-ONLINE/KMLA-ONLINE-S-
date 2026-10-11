@@ -124,6 +124,9 @@ export function MessageRow({
       onReply?.();
   }
 
+  // 부모가 렌더마다 새 콜백을 넘기므로 effect는 함수 대신 반응 막대 유무에만 의존한다.
+  const hasReactionBar = Boolean(onSelectReaction);
+
   function changeContextMenuOpen(open: boolean) {
     if (contextMenuOpenRef.current === open) return;
     contextMenuOpenRef.current = open;
@@ -246,7 +249,7 @@ export function MessageRow({
           width: window.innerWidth,
           height: window.innerHeight,
         });
-      const reactionSpace = onSelectReaction
+      const reactionSpace = hasReactionBar
         ? REACTION_BAR_HEIGHT + CONTEXT_MENU_SURFACE_GAP
         : 0;
       const actionSpace = contextActions?.length
@@ -352,7 +355,7 @@ export function MessageRow({
     contextMenuOpen,
     contextOpenedByTouch,
     contextViewportRef,
-    onSelectReaction,
+    hasReactionBar,
     showTimestamp,
   ]);
 

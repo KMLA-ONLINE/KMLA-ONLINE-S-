@@ -35,6 +35,14 @@ describe("message text", () => {
     ]);
   });
 
+  it("닫는 괄호 뒤에 문장 부호가 붙어도 괄호를 링크에서 제외한다", () => {
+    expect(parseMessageText("(자료: https://example.com/a).")).toEqual([
+      { type: "text", value: "(자료: " },
+      { type: "link", value: "https://example.com/a" },
+      { type: "text", value: ")." },
+    ]);
+  });
+
   it("URL 내부에서 짝이 맞는 괄호는 유지한다", () => {
     expect(parseMessageText("https://example.com/docs_(v1).")).toEqual([
       { type: "link", value: "https://example.com/docs_(v1)" },

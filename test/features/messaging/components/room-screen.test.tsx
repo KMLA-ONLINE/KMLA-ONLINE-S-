@@ -1089,7 +1089,11 @@ describe("RoomScreen", () => {
     fireEvent.keyDown(input, { key: "Enter", isComposing: true });
     expect(screen.getAllByRole("article")).toHaveLength(3);
 
+    // Safari는 compositionend 뒤에 isComposing 없이 keyCode 229인 Enter를 보낸다.
     fireEvent.compositionEnd(input);
+    fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+    expect(screen.getAllByRole("article")).toHaveLength(3);
+
     fireEvent.keyDown(input, { key: "Enter" });
     expect(
       screen.getAllByRole("article", { name: "내 메시지" }).at(-1),

@@ -58,11 +58,16 @@ export function parseMessageText(value: string): MessageTextSegment[] {
   URL_PATTERN.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = URL_PATTERN.exec(value)) !== null) {
+    // `).`처럼 닫는 괄호와 문장부호가 섞여 끝날 수 있어 둘이 더 안 깎일 때까지 번갈아 깎는다.
     let link = match[0];
-    while (link.endsWith(")") && countChar(link, "(") < countChar(link, ")")) {
-      link = link.slice(0, -1);
-    }
-    link = link.replace(TRAILING_PUNCTUATION, "");
+    let previous: string;
+    do {
+      previous = link;
+      link = link.replace(TRAILING_PUNCTUATION, "");
+      if (link.endsWith(")") && countChar(link, "(") < countChar(link, ")")) {
+        link = link.slice(0, -1);
+      }
+    } while (link !== previous);
 
     if (match.index > cursor) {
       segments.push({ type: "text", value: value.slice(cursor, match.index) });

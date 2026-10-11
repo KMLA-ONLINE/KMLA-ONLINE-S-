@@ -241,7 +241,9 @@ export function RoomScreen({
                 {pinnedMessageAuthor ?? "알 수 없는 사용자"}
               </p>
               <p className="truncate text-sm text-muted-foreground">
-                {pinnedMessage.body}
+                {pinnedMessage.deleted
+                  ? "삭제된 메시지입니다"
+                  : pinnedMessage.body}
               </p>
             </div>
           </button>
@@ -328,6 +330,7 @@ function MessageThread({
       participant,
     ]),
   );
+  const messageById = new Map(messages.map((message) => [message.id, message]));
 
   function updateScrollToBottomVisibility() {
     const messageThread = messageThreadRef.current;
@@ -401,7 +404,7 @@ function MessageThread({
               ? participantById.get(message.senderId)
               : undefined;
             const replyTarget = message.replyToMessageId
-              ? messages.find(({ id }) => id === message.replyToMessageId)
+              ? messageById.get(message.replyToMessageId)
               : undefined;
             const replyTargetAuthor = replyTarget?.senderId
               ? participantById.get(replyTarget.senderId)?.name
@@ -463,11 +466,16 @@ function MessageThread({
                               onSelect: () => onReply(message),
                             },
                           ]),
-                      {
-                        label: "복사",
-                        icon: <CopyIcon aria-hidden />,
-                        onSelect: () => void copyMessageText(message.body),
-                      },
+                      ...(message.deleted
+                        ? []
+                        : [
+                            {
+                              label: "복사",
+                              icon: <CopyIcon aria-hidden />,
+                              onSelect: () =>
+                                void copyMessageText(message.body),
+                            },
+                          ]),
                       {
                         label: message.pinned ? "고정 해제" : "고정",
                         icon: <PinIcon aria-hidden />,
@@ -592,13 +600,15 @@ function MessageActions({
         className="shadow-sm duration-0 data-open:animate-none data-closed:animate-none"
       >
         <DropdownMenuGroup>
-          <DropdownMenuItem
-            className="cursor-pointer"
-            onClick={() => void copyMessageText(message.body)}
-          >
-            <CopyIcon aria-hidden />
-            복사
-          </DropdownMenuItem>
+          {!message.deleted ? (
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => void copyMessageText(message.body)}
+            >
+              <CopyIcon aria-hidden />
+              복사
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem className="cursor-pointer" onClick={onTogglePinned}>
             <PinIcon aria-hidden />
             {isPinned ? "고정 해제" : "고정"}
@@ -750,7 +760,14 @@ function ComposerShell({
             onCompositionEnd={() => (composing.current = false)}
             onKeyDown={(event) => {
               if (event.key !== "Enter" || event.shiftKey) return;
-              if (composing.current || event.nativeEvent.isComposing) return;
+              // Safari는 compositionend를 Enter keydown보다 먼저 보내 isComposing도 false다.
+              // 그 keydown은 keyCode 229로 온다.
+              if (
+                composing.current ||
+                event.nativeEvent.isComposing ||
+                event.keyCode === 229
+              )
+                return;
               event.preventDefault();
               sendDraft();
             }}
@@ -773,8 +790,13 @@ function ComposerShell({
           aria-label={hasDraft ? "메시지 보내기" : "좋아요 보내기"}
           disabled={overLimit}
           onClick={() => {
-            if (hasDraft) sendDraft();
-            else onSend("👍");
+            if (hasDraft) {
+              sendDraft();
+              return;
+            }
+            onSend("👍");
+            // 공백만 있던 입력은 좋아요와 함께 비운다.
+            setDraft("");
           }}
         >
           {hasDraft ? (
