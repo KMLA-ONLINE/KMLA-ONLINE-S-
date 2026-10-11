@@ -74,9 +74,38 @@ export async function clientLoader({
   request,
 }: Route.ClientLoaderArgs) {
   const queryClient = getQueryClient();
+  const url = new URL(request.url);
+  const searchParams = url.searchParams;
+  const memberTab = searchParams.get("tab") === "members";
+  const settingsTab = searchParams.get("tab") === "settings";
+  const reportsTab = searchParams.get("tab") === "reports";
+  const postsTab = !memberTab && !settingsTab && !reportsTab;
+  const categoriesQuery = (groupId: string) => ({
+    queryKey: groupKeys.categories(groupId),
+    queryFn: () => listGroupCategories(groupId),
+    staleTime: GROUP_CONTENT_STALE_TIME,
+  });
+  const postsQuery = (groupId: string) => ({
+    queryKey: groupKeys.posts(groupId, null, null),
+    queryFn: () =>
+      listGroupPosts(groupId, {
+        hydrateMedia: readPostViewMode() === "card",
+      }),
+    staleTime: GROUP_CONTENT_STALE_TIME,
+  });
   const group = await queryClient.fetchQuery({
     queryKey: groupKeys.detail(params.slug),
-    queryFn: () => loadGroupDetail(params.slug),
+    // 목록과 카테고리는 그룹 ID만 있으면 된다. 아이콘·커버 서명을 기다리지 않고 함께 띄운다.
+    // 아래의 `fetchQuery`가 같은 키로 진행 중인 요청을 이어받는다. 실패는 그쪽에서 다시 드러난다.
+    queryFn: () =>
+      loadGroupDetail(params.slug, {
+        onFound: ({ group_id, membership_state }) => {
+          if (membership_state !== "member") return;
+          if (postsTab) void queryClient.prefetchQuery(postsQuery(group_id));
+          if (postsTab || settingsTab)
+            void queryClient.prefetchQuery(categoriesQuery(group_id));
+        },
+      }),
     staleTime: GROUP_STALE_TIME,
   });
   if (!group) throw new Response("그룹을 찾을 수 없습니다.", { status: 404 });
@@ -87,12 +116,6 @@ export async function clientLoader({
       posts: { posts: [], nextCursor: null },
     };
   }
-  const url = new URL(request.url);
-  const searchParams = url.searchParams;
-  const memberTab = searchParams.get("tab") === "members";
-  const settingsTab = searchParams.get("tab") === "settings";
-  const reportsTab = searchParams.get("tab") === "reports";
-  const postsTab = !memberTab && !settingsTab && !reportsTab;
   const canModerate =
     group.member_role === "owner" || group.member_role === "admin";
   const canCurate = canModerate || group.member_role === "manager";
@@ -103,21 +126,10 @@ export async function clientLoader({
   const isEditorRoute = /\/posts\/(?:new|[^/]+\/edit)$/.test(url.pathname);
   const categoriesRequest =
     postsTab || settingsTab
-      ? queryClient.fetchQuery({
-          queryKey: groupKeys.categories(group.group_id),
-          queryFn: () => listGroupCategories(group.group_id),
-          staleTime: GROUP_CONTENT_STALE_TIME,
-        })
+      ? queryClient.fetchQuery(categoriesQuery(group.group_id))
       : Promise.resolve([]);
   const postsRequest = postsTab
-    ? queryClient.fetchQuery({
-        queryKey: groupKeys.posts(group.group_id, null, null),
-        queryFn: () =>
-          listGroupPosts(group.group_id, {
-            hydrateMedia: readPostViewMode() === "card",
-          }),
-        staleTime: GROUP_CONTENT_STALE_TIME,
-      })
+    ? queryClient.fetchQuery(postsQuery(group.group_id))
     : Promise.resolve({ posts: [], nextCursor: null });
   // 게시물 상세처럼 자식 route로 바로 들어오면 목록은 그 뒤에 깔릴 뿐이다. 기다리면 상세가
   // 목록 RPC와 20건 서명 왕복에 묶이므로 목록 칸이 쓰는 카테고리와 함께 promise째 넘긴다.

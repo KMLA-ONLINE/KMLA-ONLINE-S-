@@ -174,8 +174,17 @@ export async function discoverGroups({
   };
 }
 
+/**
+ * `onFound`는 그룹 행을 찾은 직후, 아이콘·커버 서명을 기다리기 전에 불린다. 그룹 ID만 있으면 되는
+ * 다음 요청(게시물 목록 등)을 서명 왕복과 겹쳐 띄우는 데 쓴다. 미리보기(비멤버 비공개 그룹)에는 부르지 않는다.
+ */
 export async function loadGroupDetail(
   slug: string,
+  options: {
+    onFound?: (
+      group: Pick<GroupDetail, "group_id" | "membership_state">,
+    ) => void;
+  } = {},
 ): Promise<GroupDetail | null> {
   const supabase = getSupabase();
   // 미리보기는 그룹 행이 RLS에 가려질 때만 쓰지만, 행 조회를 기다렸다가 부르면 순차 요청이 된다.
@@ -209,6 +218,15 @@ export async function loadGroupDetail(
 
   const membership = membershipResult.data;
   const request = requestResult.data;
+  const membershipState = membership
+    ? "member"
+    : request
+      ? "requested"
+      : "none";
+  options.onFound?.({
+    group_id: groupResult.data.id,
+    membership_state: membershipState,
+  });
   const urls = await createGroupMediaUrls([
     groupResult.data.icon_path,
     groupResult.data.cover_path,
@@ -222,7 +240,7 @@ export async function loadGroupDetail(
       ? (urls.get(groupResult.data.cover_path) ?? null)
       : null,
     group_id: groupResult.data.id,
-    membership_state: membership ? "member" : request ? "requested" : "none",
+    membership_state: membershipState,
     member_role: membership?.role ?? null,
     pinned_at: membership?.pinned_at ?? null,
     requested_at: request?.requested_at ?? null,

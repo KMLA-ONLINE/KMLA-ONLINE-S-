@@ -194,6 +194,40 @@ describe("group detail loader", () => {
     mutations.markGroupPostsVisited.mockResolvedValue(undefined);
   });
 
+  // 목록은 그룹 ID만 있으면 된다. 아이콘·커버 서명 왕복이 끝나기를 기다리면 그만큼 늦게 출발한다.
+  it("starts the post list before the group media is signed", async () => {
+    let finishDetail: (value: typeof group) => void = () => undefined;
+    mutations.loadGroupDetail.mockImplementation(
+      (
+        _slug: string,
+        options: {
+          onFound?: (row: {
+            group_id: string;
+            membership_state: string;
+          }) => void;
+        },
+      ) => {
+        options.onFound?.({ group_id: "group-id", membership_state: "member" });
+        return new Promise((resolve) => {
+          finishDetail = resolve;
+        });
+      },
+    );
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+
+    const loading = load("/groups/test");
+    await vi.waitFor(() => {
+      expect(mutations.listGroupPosts).toHaveBeenCalledOnce();
+    });
+    expect(mutations.listGroupCategories).toHaveBeenCalledOnce();
+
+    finishDetail(group);
+    await loading;
+    // 진행 중이던 요청을 이어받는다. 같은 목록을 두 번 부르지 않는다.
+    expect(mutations.listGroupPosts).toHaveBeenCalledOnce();
+    expect(mutations.listGroupCategories).toHaveBeenCalledOnce();
+  });
+
   it("loads the background post list for a direct post detail", async () => {
     const page = { posts: [{ post_id: "post-id" }], nextCursor: null };
     mutations.listGroupPosts.mockResolvedValue(page);
