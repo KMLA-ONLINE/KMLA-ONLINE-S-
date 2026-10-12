@@ -14,6 +14,17 @@ import {
 
 /** 한 번의 변경이 신호 여러 개(행 갱신마다 하나)로 오므로 짧게 모아 한 번만 따라잡는다. */
 const SIGNAL_COALESCE_MS = 150;
+/**
+ * 읽음 신호는 더 길게 모은다. 그룹에서는 멤버마다 읽을 때 신호가 오고, 방을 연 사람마다 최근 메시지의
+ * 읽음 수를 다시 받으므로 요청이 멤버 수의 제곱으로 는다. 숫자가 1초 늦게 바뀌는 건 티가 나지 않는다.
+ */
+const READ_COALESCE_MS = 1_000;
+/**
+ * 화면으로 돌아올 때 이 시간 안에 이미 맞췄으면 다시 읽지 않는다. 모바일은 앱을 자주 오가고, 목록을
+ * 다시 읽으면 서버가 모든 대화의 마지막 메시지를 복호화한다. 연결이 끊겼다 붙으면 `onSubscribed`가
+ * 따로 맞춘다.
+ */
+const RESUME_RESYNC_MIN_INTERVAL_MS = 30_000;
 
 /** 따라잡기가 실패하면 이 간격으로 다시 시도한다. 다 실패하면 다음 신호나 복귀에 맡긴다. */
 const RETRY_DELAYS_MS = [1_000, 3_000, 10_000];
@@ -32,7 +43,9 @@ export function MessagingSync({ profileId }: { profileId: number }) {
     const isOpen = (conversationId: string) =>
       openConversationIds(queryClient).includes(conversationId);
     // 끊긴 동안 잃은 신호에는 다른 멤버의 읽음도 있다. 바뀐 시각에 잡히지 않으므로 함께 다시 받는다.
+    let lastResyncAt = 0;
     const resync = () => {
+      lastResyncAt = Date.now();
       void invalidateConversationList(queryClient);
       for (const id of openConversationIds(queryClient)) {
         scheduler.schedule(id, "changes");
@@ -40,7 +53,12 @@ export function MessagingSync({ profileId }: { profileId: number }) {
       }
     };
     const onResume = () => {
-      if (document.visibilityState === "visible") resync();
+      if (
+        document.visibilityState === "visible" &&
+        Date.now() - lastResyncAt >= RESUME_RESYNC_MIN_INTERVAL_MS
+      ) {
+        resync();
+      }
     };
 
     const unsubscribe = subscribeToMessagingSignals(profileId, {
@@ -75,7 +93,10 @@ export function MessagingSync({ profileId }: { profileId: number }) {
  * 늘리며 몇 번 다시 시도한다.
  */
 function createSyncScheduler(queryClient: QueryClient) {
-  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  const timers = new Map<
+    string,
+    { timer: ReturnType<typeof setTimeout>; at: number }
+  >();
   const pending = new Map<string, Set<SyncKind>>();
   const running = new Set<string>();
   const failures = new Map<string, number>();
@@ -89,16 +110,22 @@ function createSyncScheduler(queryClient: QueryClient) {
     pending.set(conversationId, queued);
   }
 
+  /** 더 이른 시각으로만 당긴다. 읽음을 기다리는 중에 온 새 메시지는 읽음 간격만큼 늦추지 않는다. */
   function arm(conversationId: string, delay: number) {
-    if (disposed || running.has(conversationId) || timers.has(conversationId))
-      return;
-    timers.set(
-      conversationId,
-      setTimeout(() => {
+    if (disposed || running.has(conversationId)) return;
+    const at = Date.now() + delay;
+    const armed = timers.get(conversationId);
+    if (armed) {
+      if (armed.at <= at) return;
+      clearTimeout(armed.timer);
+    }
+    timers.set(conversationId, {
+      at,
+      timer: setTimeout(() => {
         timers.delete(conversationId);
         void run(conversationId);
       }, delay),
-    );
+    });
   }
 
   async function run(conversationId: string) {
@@ -135,7 +162,10 @@ function createSyncScheduler(queryClient: QueryClient) {
   return {
     schedule(conversationId: string, kind: SyncKind) {
       queue(conversationId, [kind]);
-      arm(conversationId, SIGNAL_COALESCE_MS);
+      arm(
+        conversationId,
+        kind === "reads" ? READ_COALESCE_MS : SIGNAL_COALESCE_MS,
+      );
     },
     scheduleList(conversationId: string) {
       listConversations.add(conversationId);
@@ -154,7 +184,7 @@ function createSyncScheduler(queryClient: QueryClient) {
     },
     dispose() {
       disposed = true;
-      for (const timer of timers.values()) clearTimeout(timer);
+      for (const { timer } of timers.values()) clearTimeout(timer);
       if (listTimer) clearTimeout(listTimer);
     },
   };

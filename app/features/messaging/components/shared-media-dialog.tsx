@@ -190,6 +190,8 @@ function MediaTile({
           src={url}
           alt=""
           crossOrigin="anonymous"
+          loading="lazy"
+          decoding="async"
           className="size-full object-cover"
         />
       ) : null}

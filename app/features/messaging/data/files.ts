@@ -37,10 +37,13 @@ export async function prepareAttachment(
     if (source.size > MAX_INPUT_FILE_BYTES) {
       throw new Error(`사진은 30MB 이하여야 합니다: ${source.name}`);
     }
-    const file = await compressImage(source, "photo");
+    // 채팅 사진은 휴대폰 화면 한 장 크기(2048px)면 충분하다. 글 첨부의 `photo`(3072px)보다 작아
+    // 원본도 대개 1MiB 아래로 내려와 Service Worker 미디어 캐시에 들어간다.
+    const file = await compressImage(source, "screen");
     const [width, height] = await getImageDimensions(file);
-    // 축소본은 목록 데이터를 줄이는 수단이다. 만들지 못해도 원본을 그리면 되므로 실패를 삼킨다.
-    const thumbnail = await compressImage(file, "thumbnail").catch(() => null);
+    // 축소본은 대화방에 까는 이미지다. 말풍선 사진은 최대 288 CSS px라 640px이면 DPR 2에서도
+    // 충분하다. 만들지 못해도 원본을 그리면 되므로 실패를 삼킨다.
+    const thumbnail = await compressImage(file, "card").catch(() => null);
     return { kind, file, thumbnail, fileName: file.name, width, height };
   }
   if (source.size > MESSAGE_FILE_MAX_BYTES) {
@@ -114,12 +117,13 @@ export async function uploadAttachments(
         },
       );
       if (attachment.thumbnail && target.thumbnail_path) {
-        // 축소본이 올라가지 않아도 전송은 막지 않는다. 서버가 축소본 경로를 비운다.
-        await uploadStorageObject(
-          BUCKET,
-          target.thumbnail_path,
-          attachment.thumbnail,
-        ).catch(() => undefined);
+        // 축소본이 없으면 대화방이 원본을 그리므로 한 번 더 시도한다. 그래도 올라가지 않으면
+        // 전송은 막지 않는다. 서버가 축소본 경로를 비운다.
+        const thumbnail = attachment.thumbnail;
+        const thumbnailPath = target.thumbnail_path;
+        await uploadStorageObject(BUCKET, thumbnailPath, thumbnail)
+          .catch(() => uploadStorageObject(BUCKET, thumbnailPath, thumbnail))
+          .catch(() => undefined);
       }
     }),
   );

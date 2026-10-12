@@ -94,19 +94,67 @@ describe("MessagingSync", () => {
     expect(invalidate).not.toHaveBeenCalled();
   });
 
-  it("다른 멤버가 읽으면 열린 방의 읽음 상태를 다시 받는다", async () => {
+  it("다른 멤버들이 읽으면 1초 동안 모아 열린 방의 읽음 상태를 한 번 다시 받는다", async () => {
     renderSync();
 
-    act(() => handlers.onReadChanged("open"));
+    act(() => {
+      handlers.onReadChanged("open");
+      handlers.onReadChanged("open");
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(200);
     });
+    expect(sync.refreshReadState).not.toHaveBeenCalled();
 
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(sync.refreshReadState).toHaveBeenCalledTimes(1);
     expect(sync.refreshReadState).toHaveBeenCalledWith(
       expect.anything(),
       "open",
     );
     expect(sync.catchUpConversation).not.toHaveBeenCalled();
+  });
+
+  it("읽음을 기다리는 중에 온 새 메시지는 읽음 간격만큼 늦추지 않는다", async () => {
+    renderSync();
+
+    act(() => handlers.onReadChanged("open"));
+    act(() => handlers.onMessageChanged("open", "content"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+
+    expect(sync.catchUpConversation).toHaveBeenCalledTimes(1);
+    expect(sync.refreshReadState).toHaveBeenCalledTimes(1);
+  });
+
+  it("화면으로 돌아와도 30초 안에 이미 맞췄으면 다시 읽지 않는다", async () => {
+    const { invalidate } = renderSync();
+    const visibility = vi
+      .spyOn(document, "visibilityState", "get")
+      .mockReturnValue("visible");
+    const resume = () => document.dispatchEvent(new Event("visibilitychange"));
+
+    act(() => {
+      resume();
+    });
+    const once = invalidate.mock.calls.length;
+    expect(once).toBeGreaterThan(0);
+    act(() => {
+      resume();
+    });
+    expect(invalidate).toHaveBeenCalledTimes(once);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    act(() => {
+      resume();
+    });
+    expect(invalidate).toHaveBeenCalledTimes(once * 2);
+    visibility.mockRestore();
   });
 
   it("반응·고정 신호는 열린 방만 따라잡고 대화 목록은 다시 읽지 않는다", async () => {

@@ -166,10 +166,14 @@ function MediaGrid({
               }
             >
               {attachment.kind === "image" && thumb ? (
+                // 방을 열면 한 페이지(50개) 안의 사진을 다 그린다. 화면 밖 사진은 스크롤해 다가갈
+                // 때 받는다. 칸의 비율이 미리 정해져 있어 늦게 떠도 자리가 밀리지 않는다.
                 <img
                   src={thumb}
                   alt=""
                   crossOrigin="anonymous"
+                  loading="lazy"
+                  decoding="async"
                   className="size-full object-cover"
                 />
               ) : attachment.kind === "video" && attachment.previewUrl ? (
