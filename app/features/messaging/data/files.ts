@@ -107,7 +107,9 @@ export async function uploadAttachments(
   await Promise.all(
     targets.map(async (target, index) => {
       const attachment = attachments[index];
-      await uploadStorageObject(
+      // 서버는 예고한 첨부가 모두 올라와야 메시지를 확정한다. 한 장이 잠깐 끊겨 묶음 전체가 실패하지
+      // 않도록 그 첨부만 다시 올린다.
+      await uploadWithRetry(
         BUCKET,
         target.object_path,
         attachment.file,
@@ -142,6 +144,48 @@ export async function uploadAttachments(
       thumbnailPath: attachment.thumbnail ? target.thumbnail_path : null,
     };
   });
+}
+
+/** 첫 시도를 포함해 올려 보는 횟수. */
+const UPLOAD_ATTEMPTS = 3;
+const UPLOAD_RETRY_DELAY_MS = 800;
+
+/**
+ * 올리기가 실패하면 잠시 쉬었다가 같은 경로로 다시 올린다. 앞선 시도가 사실은 저장까지 마치고 응답만
+ * 잃었으면 덮어쓰지 않는 업로드가 "이미 있음"으로 거절하는데, 그건 올라간 것이므로 성공으로 본다.
+ */
+async function uploadWithRetry(
+  bucket: string,
+  path: string,
+  file: File,
+  onProgress: (progress: number) => void,
+): Promise<void> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await uploadStorageObject(bucket, path, file, onProgress);
+      return;
+    } catch (error) {
+      if (attempt > 1 && isAlreadyUploaded(error)) return;
+      if (attempt >= UPLOAD_ATTEMPTS) throw error;
+      await new Promise((resolve) =>
+        setTimeout(resolve, UPLOAD_RETRY_DELAY_MS * attempt),
+      );
+    }
+  }
+}
+
+function isAlreadyUploaded(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const { status, statusCode, message } = error as {
+    status?: unknown;
+    statusCode?: unknown;
+    message?: unknown;
+  };
+  return (
+    status === 409 ||
+    statusCode === "409" ||
+    (typeof message === "string" && /already exists|duplicate/i.test(message))
+  );
 }
 
 /** 첨부 object의 signed URL. 같은 경로는 만료 전까지 다시 서명하지 않는다. */

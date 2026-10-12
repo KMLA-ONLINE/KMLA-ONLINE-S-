@@ -241,12 +241,12 @@ export function useConversationMessages(conversation: Conversation) {
    */
   const deliverAttachments = async (draft: ConversationMessage) => {
     const release = holdMessageWrite(draft.id);
+    let shown = draft.attachments ?? [];
     try {
-      const prepared =
-        preparedAttachments.current.get(draft.id) ??
-        (await Promise.all(
-          (attachmentFiles.current.get(draft.id) ?? []).map(prepareAttachment),
-        ));
+      let prepared = preparedAttachments.current.get(draft.id);
+      if (!prepared) {
+        ({ prepared, shown } = await prepareKeepingSuccesses(draft.id, shown));
+      }
       preparedAttachments.current.set(draft.id, prepared);
       // 앞선 시도가 사실은 전송까지 마쳤고 응답만 잃었으면 서버가 "이미 보낸 메시지"로 예고를 거절한다.
       // 그때는 다시 올리지 않고 같은 ID의 전송으로 서버 행을 받는다. 첨부는 따라잡기가 정본으로 덮는다.
@@ -269,12 +269,10 @@ export function useConversationMessages(conversation: Conversation) {
       patchMessage(queryClient, conversationId, draft.id, {
         ...sent,
         // 올라간 사진이 signed URL로 다시 그려지는 동안 깜박이지 않게 기기 미리보기를 잠시 이어 쓴다.
-        attachments: (attachments ?? draft.attachments ?? []).map(
-          (attachment, index) => ({
-            ...attachment,
-            previewUrl: draft.attachments?.[index]?.previewUrl,
-          }),
-        ),
+        attachments: (attachments ?? shown).map((attachment, index) => ({
+          ...attachment,
+          previewUrl: shown[index]?.previewUrl,
+        })),
         pending: false,
         failed: false,
       });
@@ -298,6 +296,48 @@ export function useConversationMessages(conversation: Conversation) {
     } finally {
       release();
     }
+  };
+
+  /**
+   * 고른 파일을 업로드할 수 있게 만든다. 사진 묶음에서 일부만 변환에 실패하면(브라우저가 열지 못하는
+   * 형식 등) 그 사진만 빼고 알린 뒤 나머지를 보낸다. 다시 보내도 같은 이유로 실패하므로 묶음 전체를
+   * 실패로 남기지 않는다. 모두 실패하면 첫 오류를 던져 메시지를 "보내지 못함"으로 남긴다.
+   */
+  const prepareKeepingSuccesses = async (
+    messageId: string,
+    shown: MessageAttachment[],
+  ) => {
+    const files = attachmentFiles.current.get(messageId) ?? [];
+    const settled = await Promise.allSettled(files.map(prepareAttachment));
+    const failed = settled.flatMap((result, index) =>
+      result.status === "rejected" ? [index] : [],
+    );
+    const firstFailure = settled.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    if (firstFailure && failed.length === settled.length) {
+      throw firstFailure.reason;
+    }
+    const prepared = settled.flatMap((result) =>
+      result.status === "fulfilled" ? [result.value] : [],
+    );
+    if (failed.length === 0) return { prepared, shown };
+
+    const keep = (_: unknown, index: number) => !failed.includes(index);
+    const kept = shown.filter(keep);
+    for (const index of failed) {
+      const previewUrl = shown[index]?.previewUrl;
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    }
+    attachmentFiles.current.set(messageId, files.filter(keep));
+    patchMessage(queryClient, conversationId, messageId, { attachments: kept });
+    const [onlyFailed] = failed;
+    toast.error(
+      failed.length === 1 && onlyFailed !== undefined
+        ? `사진 한 장은 보내지 못했습니다: ${files[onlyFailed]?.name ?? ""}`
+        : `사진 ${failed.length}장은 보내지 못했습니다.`,
+    );
+    return { prepared, shown: kept };
   };
 
   /**

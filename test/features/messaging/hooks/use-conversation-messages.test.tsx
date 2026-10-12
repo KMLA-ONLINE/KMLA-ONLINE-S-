@@ -414,6 +414,63 @@ describe("useConversationMessages", () => {
     );
   });
 
+  it("사진 묶음에서 일부만 변환에 실패하면 그 사진만 빼고 알린 뒤 나머지를 보낸다", async () => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:preview");
+    vi.spyOn(URL, "revokeObjectURL").mockReturnValue(undefined);
+    const attachments = await import("~/features/messaging/data/files");
+    const photo = (file: File) =>
+      Promise.resolve({
+        kind: "image" as const,
+        file,
+        thumbnail: null,
+        fileName: file.name,
+        width: 10,
+        height: 10,
+      });
+    vi.mocked(attachments.prepareAttachment)
+      .mockImplementationOnce(photo)
+      .mockRejectedValueOnce(new Error("decode failed"))
+      .mockImplementationOnce(photo);
+    const { result } = await renderMessages();
+
+    let sent: boolean | undefined;
+    await act(async () => {
+      sent = await result.current.sendFiles([
+        new File(["a"], "a.jpg", { type: "image/jpeg" }),
+        new File(["b"], "broken.jpg", { type: "image/jpeg" }),
+        new File(["c"], "c.jpg", { type: "image/jpeg" }),
+      ]);
+    });
+
+    expect(sent).toBe(true);
+    expect(toast.error).toHaveBeenCalledWith(
+      "사진 한 장은 보내지 못했습니다: broken.jpg",
+    );
+    expect(vi.mocked(attachments.uploadAttachments)).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.any(String),
+      [
+        expect.objectContaining({ fileName: "a.jpg" }),
+        expect.objectContaining({ fileName: "c.jpg" }),
+      ],
+    );
+    // cache 알림은 다음 tick에 묶여 나간다.
+    await waitFor(() =>
+      expect(
+        result.current.messages.find(
+          (message) => message.attachments?.[0]?.fileName === "a.jpg",
+        ),
+      ).toMatchObject({ pending: false, failed: false }),
+    );
+    const photoMessage = result.current.messages.find(
+      (message) => message.attachments?.[0]?.fileName === "a.jpg",
+    )!;
+    expect(photoMessage.attachments?.map(({ fileName }) => fileName)).toEqual([
+      "a.jpg",
+      "c.jpg",
+    ]);
+  });
+
   it("앞선 전송이 응답만 잃었으면 다시 보낼 때 다시 올리지 않고 보낸 것으로 확정한다", async () => {
     const files = await import("~/features/messaging/data/files");
     vi.mocked(files.uploadAttachments).mockRejectedValueOnce(
