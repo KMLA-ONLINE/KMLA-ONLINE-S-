@@ -26,8 +26,10 @@ supabase/tests/          ← pgTAP DB 통합 테스트
 - 다른 feature는 상대 feature의 좁은 `index.ts`를 우선 사용한다. 다만 큰 barrel import, 순환 의존 또는 불필요한 공개 API 확장을 피할 수 있고 대상 모듈이 안정적인 경계라면 직접 module import를 허용한다.
 - 애플리케이션 코드는 `~/*` alias를 사용하고 테스트는 `test/` 아래에 둔다.
 
-Supabase 호출은 `features/<feature>/data/**`에서만 한다. ESLint가 모든 내부 경계를 막지는 않으므로
-component와 model에서 `getSupabase()`를 부르지 않는다.
+제품별 Supabase I/O는 `features/<feature>/data/**`에 둔다. 기존 공용 클라이언트 인프라,
+signed URL 배치, `QueryProvider`의 Auth 동기화는 공유 인프라 예외다.
+이 예외를 근거로 일반 route, component, hook, model에 직접 Supabase 접근을 추가하지 않는다.
+ESLint가 모든 내부 경계를 강제하지는 않으므로 이 경계는 코드 검토에서도 확인한다.
 
 ## Feature
 
