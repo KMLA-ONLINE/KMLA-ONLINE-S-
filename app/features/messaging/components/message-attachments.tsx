@@ -1,6 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { DownloadIcon, FileIcon, MusicIcon, PlayIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  DownloadIcon,
+  FileIcon,
+  MusicIcon,
+  PauseIcon,
+  PlayIcon,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   createAttachmentUrls,
@@ -117,6 +123,8 @@ function MediaGrid({
   // 말풍선에는 여섯 칸까지만 깐다. 나머지는 마지막 칸의 `+N`으로 알리고, 뷰어에서 넘겨 본다.
   const visible = media.slice(0, MEDIA_GRID_LIMIT);
   const hiddenCount = media.length - visible.length;
+  // 다섯 장은 3열에 놓으면 오른쪽 아래가 비므로 위 2장, 아래 3장으로 6열을 나눠 깐다.
+  const five = visible.length === 5;
 
   return (
     <>
@@ -127,7 +135,9 @@ function MediaGrid({
             ? "grid-cols-1"
             : visible.length === 2 || visible.length === 4
               ? "grid-cols-2"
-              : "grid-cols-3",
+              : five
+                ? "grid-cols-6"
+                : "grid-cols-3",
         )}
       >
         {visible.map((attachment, index) => {
@@ -155,7 +165,10 @@ function MediaGrid({
                   ? `사진 ${more}장 더 보기`
                   : `사진 크게 보기: ${attachment.fileName}`
               }
-              className="relative block max-h-[32rem] min-w-0 overflow-hidden bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+              className={cn(
+                "relative block max-h-[32rem] min-w-0 overflow-hidden bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+                five && (index < 2 ? "col-span-3" : "col-span-2"),
+              )}
               style={{ aspectRatio: ratio }}
               onClick={() => viewer.open(attachment.id)}
             >
@@ -251,22 +264,11 @@ function AudioAttachment({
   const state = usePlayableUrl(attachment, attempt, !pending);
 
   if (state.status === "ready") {
-    return (
-      <audio
-        src={state.url}
-        controls
-        autoPlay
-        aria-label={attachment.fileName}
-        className="w-64 max-w-full"
-      >
-        {/* 사용자가 보낸 오디오라 자막 파일이 없다. */}
-        <track kind="captions" />
-      </audio>
-    );
+    return <AudioPlayer src={state.url} fileName={attachment.fileName} />;
   }
 
   return (
-    <div className="flex w-64 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2.5">
+    <div className={AUDIO_CARD_CLASS_NAME}>
       <MusicIcon
         aria-hidden
         className="size-5 shrink-0 text-muted-foreground"
@@ -297,6 +299,97 @@ function AudioAttachment({
       )}
     </div>
   );
+}
+
+const AUDIO_CARD_CLASS_NAME =
+  "flex w-64 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2.5";
+
+/**
+ * 불러온 오디오를 재생 전 카드와 같은 모양으로 재생한다. 브라우저 기본 재생기로 바꿔 끼우면 누르는 순간
+ * 카드 모양이 달라진다. 재생 버튼은 재생 전과 같은 오른쪽 자리에 둔다.
+ */
+function AudioPlayer({ src, fileName }: { src: string; fileName: string }) {
+  const audio = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  // WebM 녹음은 끝까지 읽기 전에는 길이가 Infinity로 온다.
+  const knownDuration = Number.isFinite(duration) && duration > 0;
+
+  return (
+    <div className={AUDIO_CARD_CLASS_NAME}>
+      <MusicIcon
+        aria-hidden
+        className="size-5 shrink-0 text-muted-foreground"
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm">{fileName}</span>
+        <span className="flex items-center gap-2">
+          <input
+            type="range"
+            min={0}
+            max={knownDuration ? duration : 0}
+            step="any"
+            value={currentTime}
+            disabled={!knownDuration}
+            aria-label={`재생 위치: ${fileName}`}
+            className="h-4 min-w-0 flex-1 cursor-pointer accent-primary disabled:cursor-default"
+            onChange={(event) => {
+              const next = Number(event.currentTarget.value);
+              if (audio.current) audio.current.currentTime = next;
+              setCurrentTime(next);
+            }}
+          />
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            {formatPlaybackTime(currentTime)}
+            {knownDuration ? ` / ${formatPlaybackTime(duration)}` : null}
+          </span>
+        </span>
+      </span>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="rounded-full"
+        aria-label={playing ? `일시 정지: ${fileName}` : `재생: ${fileName}`}
+        onClick={() => {
+          const element = audio.current;
+          if (!element) return;
+          if (element.paused)
+            void element.play().catch(() => setPlaying(false));
+          else element.pause();
+        }}
+      >
+        {playing ? <PauseIcon aria-hidden /> : <PlayIcon aria-hidden />}
+      </Button>
+      <audio
+        ref={audio}
+        src={src}
+        autoPlay
+        hidden
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
+        onTimeUpdate={(event) =>
+          setCurrentTime(event.currentTarget.currentTime)
+        }
+        onDurationChange={(event) => setDuration(event.currentTarget.duration)}
+      >
+        {/* 사용자가 보낸 오디오라 자막 파일이 없다. */}
+        <track kind="captions" />
+      </audio>
+    </div>
+  );
+}
+
+/** 재생 시각 "1:05". 한 시간을 넘으면 "1:02:05". */
+function formatPlaybackTime(seconds: number): string {
+  const total = Math.floor(Number.isFinite(seconds) ? seconds : 0);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const rest = String(total % 60).padStart(2, "0");
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}`
+    : `${minutes}:${rest}`;
 }
 
 function FileAttachment({

@@ -877,7 +877,7 @@ describe("RoomScreen", () => {
 
     // 키보드를 내리고 메시지를 보이는 자리로 끌어올린 뒤 메뉴를 연다.
     expect(blurComposer).toHaveBeenCalledOnce();
-    expect(message).toHaveStyle({ transform: "translate3d(0, -232px, 0)" });
+    expect(message).toHaveStyle({ transform: "translate3d(0, -232.5px, 0)" });
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     fireEvent.transitionEnd(message, { propertyName: "transform" });
     act(() => void vi.advanceTimersByTime(16));
@@ -1026,7 +1026,7 @@ describe("RoomScreen", () => {
       .getByRole("link", { name: "https://www.kmlaonline.net" })
       .closest("article")!;
     await user.click(
-      within(linkedMessage).getByRole("button", { name: "채팅에서 보기" }),
+      within(linkedMessage).getByRole("button", { name: "대화에서 보기" }),
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 

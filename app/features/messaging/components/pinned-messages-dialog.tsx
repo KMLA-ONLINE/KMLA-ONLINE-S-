@@ -89,7 +89,7 @@ export function PinnedMessagesDialog({
                     variant="ghost"
                     size="icon-sm"
                     className="rounded-full text-muted-foreground"
-                    aria-label="채팅에서 보기"
+                    aria-label="대화에서 보기"
                     onClick={() => onViewMessage(message.id)}
                   >
                     <LocateFixedIcon aria-hidden />
@@ -109,7 +109,7 @@ export function PinnedMessagesDialog({
 
                 return (
                   // 메시지를 누르면 원래 메시지로 간다. 모바일에서 길게 누르지 않아도 된다. 작업 버튼,
-                  // 본문 링크와 오디오는 각자 자기 일을 한다. 키보드는 `채팅에서 보기` 버튼을 쓴다.
+                  // 본문 링크와 오디오는 각자 자기 일을 한다. 키보드는 `대화에서 보기` 버튼을 쓴다.
                   // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
                   <div
                     key={message.id}
@@ -145,7 +145,7 @@ export function PinnedMessagesDialog({
                       contextPortalRef={contextPortalRef}
                       contextActions={[
                         {
-                          label: "채팅에서 보기",
+                          label: "대화에서 보기",
                           icon: <LocateFixedIcon aria-hidden />,
                           onSelect: () => onViewMessage(message.id),
                         },

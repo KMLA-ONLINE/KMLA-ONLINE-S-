@@ -106,7 +106,7 @@ export function MessageSearchPanel({
     <div className="absolute inset-0 z-20 flex flex-col bg-background">
       <form
         role="search"
-        className="flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 px-2 pt-[var(--app-safe-t)] shadow-sm md:h-16 md:px-4 md:pt-0"
+        className="flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 border-b px-2 pt-[var(--app-safe-t)] md:h-16 md:px-4 md:pt-0"
         onSubmit={(event) => {
           event.preventDefault();
           if (term) void run(term, null);

@@ -59,8 +59,8 @@ export function MessagingScreen({
           hasRoom && "max-md:hidden",
         )}
       >
-        <header className="flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 px-4 pt-[var(--app-safe-t)] md:h-16 md:pt-0">
-          <h1 className="min-w-0 flex-1 text-2xl font-bold">채팅</h1>
+        <header className="flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 px-4 pt-[var(--app-safe-t)] md:h-16 md:border-b md:pt-0">
+          <h1 className="min-w-0 flex-1 text-2xl font-bold">메시지</h1>
           <Button
             variant="secondary"
             size="icon"
@@ -81,7 +81,7 @@ export function MessagingScreen({
           />
         </header>
 
-        <div className="relative mx-3 mb-2 shrink-0">
+        <div className="relative mx-3 mb-2 shrink-0 md:mt-3">
           <SearchIcon
             aria-hidden
             className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
@@ -91,7 +91,7 @@ export function MessagingScreen({
             type="search"
             value={search}
             onChange={(event) => setSearch(event.currentTarget.value)}
-            placeholder="채팅 검색"
+            placeholder="대화 검색"
             aria-label="대화 검색"
             className="rounded-full border-0 bg-muted pr-4 pl-9"
           />
@@ -163,7 +163,11 @@ export function MessagingScreen({
             <Empty className="h-full border-0 px-4">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
-                  <SearchIcon aria-hidden />
+                  {deferredSearch ? (
+                    <SearchIcon aria-hidden />
+                  ) : (
+                    <MessageSquareMoreIcon aria-hidden />
+                  )}
                 </EmptyMedia>
                 <EmptyTitle>
                   {deferredSearch
@@ -176,6 +180,17 @@ export function MessagingScreen({
                     : "새 대화 버튼으로 대화를 시작해 보세요."}
                 </EmptyDescription>
               </EmptyHeader>
+              {/* 넓은 화면에서는 오른쪽 빈 화면에 같은 버튼이 있다. */}
+              {deferredSearch ? null : (
+                <Button
+                  variant="secondary"
+                  className="rounded-full md:hidden"
+                  onClick={() => setNewConversationOpen(true)}
+                >
+                  <PenLineIcon aria-hidden data-icon="inline-start" />새 대화
+                  시작하기
+                </Button>
+              )}
             </Empty>
           )}
         </div>

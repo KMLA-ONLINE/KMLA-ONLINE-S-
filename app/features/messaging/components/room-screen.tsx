@@ -432,7 +432,7 @@ export function RoomScreen({
           compactDetailsOpen ? "hidden xl:flex" : "flex",
         )}
       >
-        <header className="z-10 flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 bg-background/95 px-2 pt-[var(--app-safe-t)] shadow-sm backdrop-blur md:h-16 md:px-4 md:pt-0">
+        <header className="z-10 flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 border-b bg-background px-2 pt-[var(--app-safe-t)] md:h-16 md:px-4 md:pt-0">
           <Button
             variant="ghost"
             size="icon"
@@ -504,7 +504,7 @@ export function RoomScreen({
           <button
             type="button"
             aria-label="고정 메시지"
-            className="flex min-h-14 shrink-0 items-center gap-3 border-t border-b bg-muted/40 px-4 py-2.5 text-left hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+            className="flex min-h-14 shrink-0 items-center gap-3 border-b bg-muted/40 px-4 py-2.5 text-left hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
             onClick={() => roomOverlay.open({ kind: "pinned" })}
           >
             <PinIcon aria-hidden className="size-4 shrink-0 text-primary" />
@@ -1064,7 +1064,7 @@ function MessageThread({
                   </div>
                 ) : null}
                 {message.system ? (
-                  <p className="my-3 text-center text-xs text-muted-foreground">
+                  <p className="mx-auto my-3 w-fit max-w-[85%] rounded-xl bg-muted/60 px-3 py-1 text-center text-xs text-muted-foreground">
                     {formatSystemMessage(message.system, participantById)}
                   </p>
                 ) : (
@@ -1324,11 +1324,13 @@ const ThreadMessage = memo(function ThreadMessage({
         }
       />
       {message.failed ? (
-        <div className="mt-0.5 flex items-center justify-end gap-1 text-xs">
+        <div className="mt-0.5 mb-1 flex items-center justify-end gap-1 text-xs">
           <span className="text-destructive">보내지 못했습니다</span>
           <Button
             variant="ghost"
             size="xs"
+            // 누를 자리를 위아래로 넓힌다. 옆 버튼과 겹치지 않게 좌우는 그대로 둔다.
+            className="relative after:absolute after:inset-x-0 after:-inset-y-2"
             onClick={() => actions.retry(message)}
           >
             다시 보내기
@@ -1336,7 +1338,7 @@ const ThreadMessage = memo(function ThreadMessage({
           <Button
             variant="ghost"
             size="xs"
-            className="text-muted-foreground"
+            className="relative text-muted-foreground after:absolute after:inset-x-0 after:-inset-y-2"
             onClick={() => actions.discard(message)}
           >
             지우기
@@ -1697,7 +1699,8 @@ function ComposerShell({
           <Button
             variant="ghost"
             size="icon-xs"
-            className="rounded-full"
+            // 보이는 크기는 작게 두고 누를 자리만 44px로 넓힌다.
+            className="relative rounded-full after:absolute after:-inset-2.5"
             aria-label="수정 취소"
             onClick={onCancelEdit}
           >
@@ -1723,7 +1726,7 @@ function ComposerShell({
           <Button
             variant="ghost"
             size="icon-xs"
-            className="rounded-full"
+            className="relative rounded-full after:absolute after:-inset-2.5"
             aria-label="답장 취소"
             onClick={onCancelReply}
           >
@@ -1769,7 +1772,7 @@ function ComposerShell({
                 size="icon-xs"
                 variant="secondary"
                 aria-label={`첨부 빼기: ${item.file.name}`}
-                className="absolute -top-1.5 -right-1.5 rounded-full shadow-sm"
+                className="absolute -top-1.5 -right-1.5 rounded-full shadow-sm after:absolute after:-inset-2.5"
                 onClick={() => onUnstage(item.id)}
               >
                 <XIcon aria-hidden />
@@ -1851,7 +1854,7 @@ function ComposerShell({
             value={draft}
             aria-label="메시지 입력"
             placeholder="메시지 입력"
-            className="field-sizing-content max-h-32 min-h-6 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground md:text-sm"
+            className="field-sizing-content max-h-32 min-h-6 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground md:text-[15px]"
             onChange={(event) => changeDraft(event.currentTarget.value)}
             onPaste={(event) => {
               if (!canStage) return;

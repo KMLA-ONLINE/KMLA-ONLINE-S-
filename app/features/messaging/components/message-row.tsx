@@ -42,7 +42,7 @@ const CONTEXT_MENU_EDGE_GAP = 16;
 const CONTEXT_MENU_SURFACE_GAP = 8;
 const REACTION_BAR_HEIGHT = 48;
 const CONTEXT_ACTION_HEIGHT = 42;
-const INLINE_TIMESTAMP_HEIGHT = 14;
+const INLINE_TIMESTAMP_HEIGHT = 15;
 const CONTEXT_MENU_MOVE_DURATION = 200;
 
 export function MessageRow({
@@ -417,7 +417,7 @@ export function MessageRow({
             className={cn(
               hasVisibleReactions ? "mb-[1.125rem]" : "mb-0.5",
               "size-7",
-              contextOpenedByTouch && "translate-y-[14px]",
+              contextOpenedByTouch && "translate-y-[15px]",
             )}
           />
         ) : (

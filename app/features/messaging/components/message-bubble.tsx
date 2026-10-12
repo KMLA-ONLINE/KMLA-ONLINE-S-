@@ -163,7 +163,7 @@ export function MessageBubble({
               <time
                 dateTime={message.sentAt}
                 className={cn(
-                  "mt-1 block text-right text-[10px] leading-none",
+                  "mt-1 block text-right text-[11px] leading-none",
                   !isEmojiOnly && isOwn && !message.deleted
                     ? "text-primary-foreground/75"
                     : "text-muted-foreground",
@@ -189,7 +189,10 @@ export function MessageBubble({
           variant="secondary"
           className={cn(
             // `relative`가 없으면 positioned인 버블이 나중에 칠해져 반응 표시를 덮는다.
-            "relative -mt-2 h-6 gap-1 rounded-full border-2 border-background px-1.5 text-[13px] shadow-none",
+            "relative -mt-2 h-6 gap-1 rounded-full border-2 border-background px-1.5 text-xs shadow-none",
+            // 누를 자리를 아래와 옆으로 넓힌다. 위로 넓히면 버블(사진)을 누를 자리를 가린다.
+            onShowReactions &&
+              "overflow-visible after:absolute after:-inset-x-1.5 after:top-0 after:-bottom-3",
             isOwn ? "ml-1 self-start" : "mr-1 self-end",
           )}
         >

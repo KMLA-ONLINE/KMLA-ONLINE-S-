@@ -136,21 +136,20 @@ export function ConversationDetails({
         </section>
 
         <div className="flex flex-col gap-1">
-          <DetailSection title="대화 정보" defaultOpen>
+          {/* 패널 제목이 이미 `대화 정보`라 이 묶음에는 제목을 달지 않는다. */}
+          <DetailRow
+            icon={PinIcon}
+            label="고정된 메시지"
+            value={String(pinnedCount)}
+            onClick={onOpenPinnedMessages}
+          />
+          {manageable ? (
             <DetailRow
-              icon={PinIcon}
-              label="고정된 메시지"
-              value={String(pinnedCount)}
-              onClick={onOpenPinnedMessages}
+              icon={PencilIcon}
+              label="그룹 이름 변경"
+              onClick={onRename}
             />
-            {manageable ? (
-              <DetailRow
-                icon={PencilIcon}
-                label="그룹 이름 변경"
-                onClick={onRename}
-              />
-            ) : null}
-          </DetailSection>
+          ) : null}
 
           {conversation.type === "group" ? (
             <DetailSection title={`대화 멤버 ${members.length}명`}>
@@ -193,21 +192,24 @@ export function ConversationDetails({
             />
           </DetailSection>
 
+          {/* 되돌릴 수 없는 작업은 선으로 떼어 따로 묶는다. */}
           {manageable ? (
-            <DetailRow
-              icon={LogOutIcon}
-              label="그룹 나가기"
-              destructive
-              onClick={onLeave}
-            />
-          ) : null}
-          {manageable && conversation.canDelete ? (
-            <DetailRow
-              icon={Trash2Icon}
-              label="대화방 삭제"
-              destructive
-              onClick={onDeleteGroup}
-            />
+            <div className="mt-2 flex flex-col gap-1 border-t pt-3">
+              <DetailRow
+                icon={LogOutIcon}
+                label="그룹 나가기"
+                destructive
+                onClick={onLeave}
+              />
+              {conversation.canDelete ? (
+                <DetailRow
+                  icon={Trash2Icon}
+                  label="대화방 삭제"
+                  destructive
+                  onClick={onDeleteGroup}
+                />
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>

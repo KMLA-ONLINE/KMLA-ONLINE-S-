@@ -48,13 +48,15 @@ export function ConversationAvatar({
           key={participant.id}
           src={participant.avatarUrl}
           name={participant.name}
+          // 다른 멤버가 한 명이면 1:1 대화 아바타와 같은 크기로 꽉 채운다.
           className={cn(
-            "absolute size-2/3 ring-2 ring-background",
+            "absolute",
             others.length === 1
-              ? "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-              : index === 0
-                ? "top-0 right-0"
-                : "bottom-0 left-0 z-10",
+              ? "inset-0 size-full"
+              : cn(
+                  "size-2/3 ring-2 ring-background",
+                  index === 0 ? "top-0 right-0" : "bottom-0 left-0 z-10",
+                ),
           )}
         />
       ))}
