@@ -1,6 +1,6 @@
 import { LogOutIcon } from "lucide-react";
 import { useState, type RefObject } from "react";
-import { useFetcher } from "react-router";
+import { useNavigation, useSubmit } from "react-router";
 
 import { Button } from "~/shared/ui/button";
 import {
@@ -64,8 +64,10 @@ export function LogoutDialog({
   onOpenChange: (open: boolean) => void;
   finalFocus?: RefObject<HTMLElement | null>;
 }) {
-  const fetcher = useFetcher();
-  const pending = fetcher.state !== "idle";
+  const submit = useSubmit();
+  const navigation = useNavigation();
+  const pending =
+    navigation.state !== "idle" && navigation.formAction === "/logout";
 
   return (
     <Dialog
@@ -100,7 +102,8 @@ export function LogoutDialog({
             type="button"
             disabled={pending}
             onClick={() => {
-              void fetcher.submit(null, {
+              // 세션 정리가 다이얼로그를 unmount해도 redirect가 유지되도록 navigation으로 제출한다.
+              void submit(null, {
                 method: "post",
                 action: "/logout",
               });

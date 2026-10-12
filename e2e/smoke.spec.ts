@@ -8,6 +8,42 @@ async function loginAsAcceptedStudent(page: Page) {
   await expect(page).toHaveURL(/\/$/);
 }
 
+async function confirmLogout(page: Page) {
+  await page
+    .getByRole("dialog", { name: "로그아웃하시겠습니까?" })
+    .getByRole("button", { name: "로그아웃", exact: true })
+    .click();
+
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(
+    page.getByRole("heading", { name: "다시 만나서 반가워요" }),
+  ).toBeVisible();
+  await page.goto("/");
+}
+
+test("데스크톱 계정 메뉴에서 로그아웃하면 로그인 화면으로 이동한다", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await loginAsAcceptedStudent(page);
+  await page.getByRole("button", { name: "계정 메뉴" }).click();
+  await page.getByRole("menuitem", { name: "로그아웃" }).click();
+  await confirmLogout(page);
+  await expect(page).toHaveURL(/\/login$/);
+});
+
+test("모바일 설정에서 로그아웃하면 로그인 화면으로 이동한다", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  await loginAsAcceptedStudent(page);
+  await page.getByRole("link", { name: "학교생활", exact: true }).click();
+  await page.getByRole("link", { name: "설정", exact: true }).click();
+  await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+  await confirmLogout(page);
+  await expect(page).toHaveURL(/\/login$/);
+});
+
 test("주요 메뉴는 뷰포트마다 정확히 하나만 노출된다", async ({ page }) => {
   await loginAsAcceptedStudent(page);
   // 사이드바(`max-md:hidden`)와 탭바(`md:hidden`) 둘 다 DOM에 있지만 `display:none`이
