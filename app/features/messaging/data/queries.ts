@@ -110,6 +110,44 @@ export async function listPinnedMessages(
   return (data ?? []).map(toMessage);
 }
 
+/** 따라잡기 한 번에 받는 최대 행 수. 다 차면 더 남았을 수 있다. */
+export const MESSAGE_CHANGES_LIMIT = 100;
+
+/**
+ * `since` 이후에 바뀐 메시지(새 메시지 포함). 서버가 10초를 겹쳐 읽으므로 이미 가진 행이 섞인다.
+ * `complete`가 false면 한도까지 찼으므로 최신 페이지부터 다시 읽어야 한다.
+ */
+export async function listMessageChanges(
+  conversationId: string,
+  since: string,
+): Promise<{ messages: ConversationMessage[]; complete: boolean }> {
+  const { data, error } = await getSupabase().rpc("list_message_changes", {
+    p_conversation_id: conversationId,
+    p_since: since,
+    p_limit: MESSAGE_CHANGES_LIMIT,
+  });
+  if (error) throw error;
+  const rows = data ?? [];
+  return {
+    messages: rows.map(toMessage),
+    complete: rows.length < MESSAGE_CHANGES_LIMIT,
+  };
+}
+
+/** 내 메시지들의 "읽지 않은 수"만. 본문을 다시 복호화하지 않는다. */
+export async function listMessageReadCounts(
+  conversationId: string,
+  messageIds: string[],
+): Promise<Map<string, number>> {
+  if (messageIds.length === 0) return new Map();
+  const { data, error } = await getSupabase().rpc("list_message_read_counts", {
+    p_conversation_id: conversationId,
+    p_message_ids: messageIds,
+  });
+  if (error) throw error;
+  return new Map((data ?? []).map((row) => [row.id, row.unread_member_count]));
+}
+
 /** 서버의 반응 집계(`[{reaction, count}]`, 많은 순서). */
 export function toReactions(value: unknown): MessageReaction[] {
   return Array.isArray(value) ? (value as MessageReaction[]) : [];
@@ -177,6 +215,7 @@ function toMessage(row: MessageRow): ConversationMessage {
     reactions: toReactions(row.reactions),
     myReaction: row.my_reaction,
     pinned: row.pinned,
+    changedAt: row.changed_at,
   };
 }
 

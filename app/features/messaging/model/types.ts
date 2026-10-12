@@ -32,6 +32,8 @@ export interface ConversationMessage {
   unreadMemberCount?: number;
   pinned?: boolean;
   system?: boolean;
+  /** 서버에서 이 메시지의 무엇이든 마지막으로 바뀐 시각. 따라잡기의 기준으로만 쓴다. */
+  changedAt?: string;
   /** 보냈지만 서버가 아직 확정하지 않은 내 메시지. 확정 전에는 서버에 없어 다른 작업을 받지 않는다. */
   pending?: boolean;
 }

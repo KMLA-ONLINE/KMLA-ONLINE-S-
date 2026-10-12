@@ -104,7 +104,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `feed`             | Home integrated feed, infinite feed session, feed cache surgery                                                                             | §6 and `docs/FEED_ALGORITHM.md`                     |
 | `groups`           | Group home, discover, detail, membership, roles, invites, group settings, group media                                                       | §7                                                  |
 | `meal`             | NEIS meal fetch and meal screens                                                                                                            | §17.4                                               |
-| `messaging`        | Conversations, room thread, send, reactions, pins, edit and delete                                                                          | §13                                                 |
+| `messaging`        | Conversations, room thread, send, reactions, pins, edit, delete, realtime sync                                                              | §13                                                 |
 | `notifications`    | Inbox, badges, delivery preferences, Web Push subscribe and unsubscribe, realtime sync                                                      | §14, §15.2, `docs/NOTIFICATION_TECHNICAL_DESIGN.md` |
 | `posts`            | Posts, comments, reactions, mentions, attachments, markdown, categories, reports, anonymity — **read `app/features/posts/AGENTS.md` first** | §8–§11, `docs/CONTENT_FORMATTING.md`                |
 | `profiles`         | Profile view and edit, profile media, birthdays                                                                                             | §12, §17.5                                          |
@@ -187,6 +187,8 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `list_group_post_report_descriptions`         | `posts/data/group-reports.ts`                                                   | `35-moderation.sql`           |
 | `list_group_post_report_summaries`            | `posts/data/group-reports.ts`                                                   | `35-moderation.sql`           |
 | `list_group_posts`                            | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
+| `list_message_changes`                        | `messaging/data/queries.ts`                                                     | `71-messaging.sql`            |
+| `list_message_read_counts`                    | `messaging/data/queries.ts`                                                     | `71-messaging.sql`            |
 | `list_messages`                               | `messaging/data/queries.ts`                                                     | `71-messaging.sql`            |
 | `list_my_notifications`                       | `notifications/data/queries.ts`                                                 | `61-notifications.sql`        |
 | `list_pinned_messages`                        | `messaging/data/queries.ts`                                                     | `71-messaging.sql`            |

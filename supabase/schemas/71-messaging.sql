@@ -75,6 +75,9 @@ create table private.messages (
   key_version smallint,
   edited_at timestamptz,
   deleted_at timestamptz,
+  -- 화면에 보이는 무엇이든 마지막으로 바뀐 시각. 수정, 삭제, 반응, 고정이 trigger로 갱신한다.
+  -- 따라잡기 RPC가 이 시각으로 바뀐 메시지를 고른다(기술 설계 §5).
+  changed_at timestamptz not null default clock_timestamp(),
   constraint messages_conversation_id_key unique (conversation_id, id),
   -- 답장 대상은 같은 대화의 메시지다. 원본은 삭제해도 행을 남기므로 지워지지 않는다.
   constraint messages_reply_to_fkey
@@ -89,6 +92,9 @@ create table private.messages (
 
 create index messages_conversation_sent_idx
   on private.messages (conversation_id, sent_at desc, id desc);
+
+create index messages_conversation_changed_idx
+  on private.messages (conversation_id, changed_at);
 
 -- 반응은 메시지와 프로필마다 하나다. 평문이지만 메시지를 볼 수 있는 사람만 보도록 같은 RPC 경계에 둔다.
 create table private.message_reactions (
@@ -382,7 +388,8 @@ returns table (
   -- `{reaction, count}`를 많은 순서로. 내 반응을 포함한다.
   reactions jsonb,
   my_reaction public.post_reaction,
-  pinned boolean
+  pinned boolean,
+  changed_at timestamptz
 )
 language sql
 stable
@@ -429,7 +436,8 @@ as $$
     end,
     coalesce(tally.list, '[]'::jsonb),
     mine.reaction,
-    pin.message_id is not null
+    pin.message_id is not null,
+    message.changed_at
   from private.messages as message
   left join private.messages as original
     on original.id = message.reply_to_id
@@ -486,7 +494,8 @@ returns table (
   unread_member_count integer,
   reactions jsonb,
   my_reaction public.post_reaction,
-  pinned boolean
+  pinned boolean,
+  changed_at timestamptz
 )
 language plpgsql
 stable
@@ -563,7 +572,8 @@ returns table (
   unread_member_count integer,
   reactions jsonb,
   my_reaction public.post_reaction,
-  pinned boolean
+  pinned boolean,
+  changed_at timestamptz
 )
 language plpgsql
 stable
@@ -1044,4 +1054,290 @@ revoke all on function public.delete_messages(uuid[])
   from public, anon;
 
 grant execute on function public.delete_messages(uuid[])
+  to authenticated;
+
+-- `p_since` 이후에 바뀐 메시지. Realtime 신호를 받았을 때와 연결이 끊겼다 돌아왔을 때 클라이언트가
+-- 부른다. 늦게 커밋된 트랜잭션은 그보다 앞선 시각으로 기록될 수 있으므로 10초를 겹쳐 읽는다. 겹친
+-- 행은 클라이언트가 같은 ID로 덮는다. 바뀐 시각 순서로 `p_limit`개까지만 주며, 그만큼 다 차면 더
+-- 남았을 수 있으므로 클라이언트가 최신 페이지부터 다시 읽는다.
+create function public.list_message_changes(
+  p_conversation_id uuid,
+  p_since timestamptz,
+  p_limit integer default 100
+)
+returns table (
+  id uuid,
+  sender_id bigint,
+  body text,
+  sent_at timestamptz,
+  edited_at timestamptz,
+  deleted boolean,
+  reply_to_id uuid,
+  reply_sender_id bigint,
+  reply_body text,
+  reply_deleted boolean,
+  unread_member_count integer,
+  reactions jsonb,
+  my_reaction public.post_reaction,
+  pinned boolean,
+  changed_at timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  changed_ids uuid[];
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  if p_since is null then
+    raise exception 'since required'
+      using errcode = '22023';
+  end if;
+
+  select array_agg(changed.id)
+  into changed_ids
+  from (
+    select message.id
+    from private.messages as message
+    where message.conversation_id = p_conversation_id
+      and message.changed_at > p_since - interval '10 seconds'
+      and exists (
+        select 1
+        from public.conversation_members as period
+        where period.conversation_id = p_conversation_id
+          and period.profile_id = caller_profile_id
+          and message.sent_at >= period.joined_at
+          and (period.left_at is null or message.sent_at < period.left_at)
+      )
+    order by message.changed_at, message.id
+    limit least(greatest(coalesce(p_limit, 100), 1), 200)
+  ) as changed;
+
+  if changed_ids is null then
+    return;
+  end if;
+
+  return query
+  select *
+  from private.message_rows(
+    caller_profile_id, p_conversation_id, changed_ids, private.message_keys()
+  );
+end;
+$$;
+
+revoke all on function public.list_message_changes(uuid, timestamptz, integer)
+  from public, anon;
+
+grant execute on function public.list_message_changes(uuid, timestamptz, integer)
+  to authenticated;
+
+-- 메시지 행이 바뀌면 바뀐 시각을 새로 적는다.
+--
+-- 운영 작업(키 교체 후 재암호화, 백필)은 `set local messaging.suppress_signals = 'on'`으로 바뀐 시각
+-- 갱신과 Realtime 신호를 끈다. 끄지 않으면 행마다 현재 멤버 수만큼 신호가 나간다.
+create function private.touch_message()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  -- 바뀐 시각을 직접 적는 갱신(테스트)과 신호를 끈 운영 작업은 그 값을 둔다.
+  if new.changed_at is not distinct from old.changed_at
+    and not coalesce(current_setting('messaging.suppress_signals', true) = 'on', false) then
+    new.changed_at := clock_timestamp();
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function private.touch_message()
+  from public;
+
+create trigger messages_touch
+before update on private.messages
+for each row
+execute function private.touch_message();
+
+-- 반응과 고정은 메시지 행 밖에 있지만 화면의 메시지를 바꾼다. 메시지의 바뀐 시각을 갱신해 따라잡기와
+-- Realtime 신호가 한 경로로 지나가게 한다.
+create function private.touch_message_from_child()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if coalesce(current_setting('messaging.suppress_signals', true) = 'on', false) then
+    return null;
+  end if;
+  update private.messages
+  set changed_at = clock_timestamp()
+  where id = coalesce(new.message_id, old.message_id);
+  return null;
+end;
+$$;
+
+revoke all on function private.touch_message_from_child()
+  from public;
+
+create trigger message_reactions_touch
+after insert or update or delete on private.message_reactions
+for each row
+execute function private.touch_message_from_child();
+
+create trigger message_pins_touch
+after insert or delete on private.message_pins
+for each row
+execute function private.touch_message_from_child();
+
+-- 현재 멤버마다 자기 topic(`messaging:<profile_id>`)으로 "이 메시지가 바뀌었다"만 보낸다. 본문은
+-- 넣지 않는다(기술 설계 §4). 사용자별 topic이라 클라이언트는 채널 하나만 구독하고, 구독 권한은 topic이
+-- 내 것인지만 본다. 대가로 메시지 하나에 현재 멤버 수만큼 신호가 나간다.
+create function private.broadcast_message_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if coalesce(current_setting('messaging.suppress_signals', true) = 'on', false) then
+    return null;
+  end if;
+  -- `content`는 대화 목록의 미리보기와 읽지 않은 수가 바뀔 수 있는 변경이다. 반응·고정은 `meta`라
+  -- 클라이언트가 목록을 다시 읽지 않는다.
+  perform realtime.send(
+    jsonb_build_object(
+      'conversation_id', new.conversation_id,
+      'message_id', new.id,
+      'kind', case
+        when tg_op = 'INSERT'
+          or old.body_ciphertext is distinct from new.body_ciphertext
+          or old.deleted_at is distinct from new.deleted_at
+          then 'content'
+        else 'meta'
+      end
+    ),
+    'message_changed',
+    'messaging:' || member.profile_id::text,
+    true
+  )
+  from public.conversation_members as member
+  where member.conversation_id = new.conversation_id
+    and member.left_at is null;
+  return null;
+end;
+$$;
+
+revoke all on function private.broadcast_message_change()
+  from public;
+
+create trigger messages_broadcast
+after insert or update on private.messages
+for each row
+execute function private.broadcast_message_change();
+
+-- 읽음 위치가 바뀌면 다른 현재 멤버의 "내 메시지를 읽지 않은 수"와 대화 목록이 바뀐다.
+create function private.broadcast_read_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if coalesce(current_setting('messaging.suppress_signals', true) = 'on', false) then
+    return null;
+  end if;
+  perform realtime.send(
+    jsonb_build_object('conversation_id', new.conversation_id),
+    'read_changed',
+    'messaging:' || member.profile_id::text,
+    true
+  )
+  from public.conversation_members as member
+  where member.conversation_id = new.conversation_id
+    and member.left_at is null
+    and member.profile_id <> new.profile_id;
+  return null;
+end;
+$$;
+
+revoke all on function private.broadcast_read_change()
+  from public;
+
+create trigger conversation_members_broadcast_read
+after update of last_read_sent_at, last_read_message_id on public.conversation_members
+for each row
+when (old.last_read_message_id is distinct from new.last_read_message_id)
+execute function private.broadcast_read_change();
+
+-- 메시지 신호는 자기 topic만 받는다.
+create policy "messaging_signals_receive_own"
+on realtime.messages
+for select
+to authenticated
+using (
+  realtime.messages.extension = 'broadcast'
+  and (select realtime.topic()) = 'messaging:' || (select private.current_profile_id())::text
+);
+
+-- 내 메시지들의 "읽지 않은 수"만. 다른 멤버가 읽었다는 신호를 받았을 때 본문을 다시 복호화하지 않고
+-- 읽음 표시만 고친다. 내 메시지가 아니거나 내 참여 기간 밖이면 빠진다.
+create function public.list_message_read_counts(
+  p_conversation_id uuid,
+  p_message_ids uuid[]
+)
+returns table (id uuid, unread_member_count integer)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  if coalesce(cardinality(p_message_ids), 0) > 100 then
+    raise exception 'at most 100 messages'
+      using errcode = '22023';
+  end if;
+
+  return query
+  select
+    message.id,
+    (
+      select count(*)::integer
+      from public.conversation_members as other
+      where other.conversation_id = p_conversation_id
+        and other.profile_id <> caller_profile_id
+        and other.left_at is null
+        and other.joined_at <= message.sent_at
+        and (other.last_read_sent_at, other.last_read_message_id) < (message.sent_at, message.id)
+    )
+  from private.messages as message
+  where message.conversation_id = p_conversation_id
+    and message.id = any(p_message_ids)
+    and message.sender_id = caller_profile_id
+    and exists (
+      select 1
+      from public.conversation_members as period
+      where period.conversation_id = p_conversation_id
+        and period.profile_id = caller_profile_id
+        and message.sent_at >= period.joined_at
+        and (period.left_at is null or message.sent_at < period.left_at)
+    );
+end;
+$$;
+
+revoke all on function public.list_message_read_counts(uuid, uuid[])
+  from public, anon;
+
+grant execute on function public.list_message_read_counts(uuid, uuid[])
   to authenticated;

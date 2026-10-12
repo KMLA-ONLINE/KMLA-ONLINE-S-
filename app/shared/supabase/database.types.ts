@@ -2331,6 +2331,33 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      list_message_changes: {
+        Args: { p_conversation_id: string; p_limit?: number; p_since: string }
+        Returns: {
+          body: string
+          changed_at: string
+          deleted: boolean
+          edited_at: string
+          id: string
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          pinned: boolean
+          reactions: Json
+          reply_body: string
+          reply_deleted: boolean
+          reply_sender_id: number
+          reply_to_id: string
+          sender_id: number
+          sent_at: string
+          unread_member_count: number
+        }[]
+      }
+      list_message_read_counts: {
+        Args: { p_conversation_id: string; p_message_ids: string[] }
+        Returns: {
+          id: string
+          unread_member_count: number
+        }[]
+      }
       list_messages: {
         Args: {
           p_before_id?: string
@@ -2340,6 +2367,7 @@ export type Database = {
         }
         Returns: {
           body: string
+          changed_at: string
           deleted: boolean
           edited_at: string
           id: string
@@ -2390,6 +2418,7 @@ export type Database = {
         Args: { p_conversation_id: string }
         Returns: {
           body: string
+          changed_at: string
           deleted: boolean
           edited_at: string
           id: string

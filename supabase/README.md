@@ -76,6 +76,8 @@ select vault.create_secret(encode(extensions.gen_random_bytes(32), 'base64'), 'm
 
 To rotate, add `message_key_v2`. New messages use the highest version; keep older versions until no row uses them.
 
+Any bulk write to `private.messages`, `private.message_reactions`, or `private.message_pins` (re-encryption after rotation, backfills) must run `set local messaging.suppress_signals = 'on';` in the same transaction. Otherwise every row sends one Realtime signal per current member and moves the row's `changed_at`, which makes every open client catch up.
+
 Rotate with `vault.update_secret` — `create_secret` fails on an existing name. There is no dual-secret window, so dispatch 401s until both sides match; cron retries.
 
 `invoke_storage_cleanup` raises when either name is missing rather than returning `null`, so a misconfigured project shows up as a failed `cron.job_run_details` row and as a warning on `/admin/storage-cleanup`. The notification dispatcher still returns `null` on a missing secret.

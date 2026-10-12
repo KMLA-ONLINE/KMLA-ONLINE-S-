@@ -11,6 +11,7 @@ import {
   type ShellData,
 } from "~/features/app-shell";
 import type { Route } from "./+types/gate";
+import { MessagingSync } from "~/features/messaging";
 import { notificationBadgeQuery } from "~/features/notifications";
 import { NotificationSync } from "~/features/notifications/components/notification-sync";
 import { getQueryClient } from "~/shared/lib/query-client";
@@ -108,6 +109,7 @@ export default function Shell({ loaderData }: Route.ComponentProps) {
     <AppShellProvider value={loaderData}>
       <Outlet />
       <NotificationSync profileId={loaderData.profile.id} />
+      <MessagingSync profileId={loaderData.profile.id} />
     </AppShellProvider>
   );
 }

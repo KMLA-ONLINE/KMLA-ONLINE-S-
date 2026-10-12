@@ -25,8 +25,8 @@ export const messagingKeys = {
 
 /**
  * 대화 목록. 데스크톱에서는 대화방 옆에 계속 떠 있으므로 loader 데이터가 아니라 이 cache를
- * 구독한다. 내 읽음과 전송은 무효화로 덮는다. 다른 사람의 새 메시지는 Realtime이 맡을 것이다
- * (기술 설계 §5).
+ * 구독한다. 내 읽음과 전송은 무효화로 덮고, 다른 사람의 새 메시지는 `MessagingSync`가 Realtime
+ * 신호로 무효화한다(기술 설계 §5).
  */
 export function conversationListQuery() {
   return queryOptions({
@@ -160,11 +160,7 @@ export function patchMessage(
       const next = { ...current, ...patch };
       const rest = pinned.filter(({ id }) => id !== messageId);
       if (!next.pinned) return rest;
-      return [...rest, next].sort(
-        (a, b) =>
-          Date.parse(a.sentAt) - Date.parse(b.sentAt) ||
-          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-      );
+      return [...rest, next].sort(compareMessageOrder);
     },
   );
 }
@@ -185,6 +181,206 @@ export function patchReplyPreviews(
     messagingKeys.pinned(conversationId),
     (pinned) => pinned?.map(update),
   );
+}
+
+/** 대화 순서. 서버 정렬과 같은 `(sentAt, id)`다. */
+export function compareMessageOrder(
+  a: Pick<ConversationMessage, "sentAt" | "id">,
+  b: Pick<ConversationMessage, "sentAt" | "id">,
+): number {
+  return (
+    Date.parse(a.sentAt) - Date.parse(b.sentAt) ||
+    (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+  );
+}
+
+/**
+ * 내 변경 요청이 진행 중인 메시지. 그동안 도착한 따라잡기 응답은 요청 전의 서버 상태일 수 있어 이
+ * 메시지를 덮지 않는다. 요청이 끝나면 hook이 정본을 넣고, 그 변경의 신호가 다음 따라잡기를 부른다.
+ */
+const messageWrites = new Map<string, number>();
+
+/** 이 메시지에 대한 요청을 시작한다. 돌려준 함수를 요청이 끝날 때 부른다. */
+export function holdMessageWrite(messageId: string): () => void {
+  messageWrites.set(messageId, (messageWrites.get(messageId) ?? 0) + 1);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const count = (messageWrites.get(messageId) ?? 1) - 1;
+    if (count > 0) messageWrites.set(messageId, count);
+    else messageWrites.delete(messageId);
+  };
+}
+
+/** 서버 행이 cache의 같은 메시지보다 낡지 않았고, 내 요청이 진행 중이지 않아 덮어도 되는지. */
+function acceptsServerRow(
+  current: ConversationMessage | undefined,
+  row: ConversationMessage,
+): boolean {
+  if (messageWrites.has(row.id)) return false;
+  if (!current?.changedAt || !row.changedAt) return true;
+  return Date.parse(row.changedAt) >= Date.parse(current.changedAt);
+}
+
+/** 답장 인용에 담는 원문 길이. 서버 `private.message_rows`의 `reply_body`와 같다. */
+export const REPLY_PREVIEW_LENGTH = 200;
+
+/**
+ * 서버가 준 정본 행을 cache에 합친다. 불러온 메시지는 같은 ID로 덮고, 처음 보는 메시지는 불러온
+ * 구간 안에 들면 그 페이지에 순서대로 넣는다. 불러온 가장 오래된 메시지보다 앞서면 아직 읽지 않은
+ * 페이지에 속하므로 그 페이지를 읽을 때 받는다. 이 메시지를 인용한 답장의 인용과 고정 목록도 함께
+ * 고친다.
+ */
+export function mergeServerMessages(
+  queryClient: QueryClient,
+  conversationId: string,
+  rows: ConversationMessage[],
+) {
+  if (rows.length === 0) return;
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const accepted = new Map<string, ConversationMessage>();
+  const quote = (message: ConversationMessage) => {
+    const original = message.replyTo && accepted.get(message.replyTo.id);
+    if (!original || !message.replyTo) return message;
+    return {
+      ...message,
+      replyTo: {
+        ...message.replyTo,
+        body: original.deleted
+          ? ""
+          : original.body.slice(0, REPLY_PREVIEW_LENGTH),
+        deleted: original.deleted,
+      },
+    };
+  };
+
+  queryClient.setQueryData<MessagePages>(
+    messagingKeys.messages(conversationId),
+    (data) => {
+      if (!data) return data;
+      const seen = new Set<string>();
+      for (const page of data.pages) {
+        for (const message of page.messages) {
+          const row = byId.get(message.id);
+          if (!row) continue;
+          seen.add(message.id);
+          if (acceptsServerRow(message, row)) accepted.set(row.id, row);
+        }
+      }
+      const pages = data.pages.map((page) => ({
+        ...page,
+        messages: page.messages.map(
+          (message) => accepted.get(message.id) ?? message,
+        ),
+      }));
+
+      for (const row of rows) {
+        if (seen.has(row.id) || messageWrites.has(row.id)) continue;
+        // 첫 메시지가 이 행보다 앞서는 가장 최근 페이지가 이 행의 자리다. 맨 뒤 페이지 앞이
+        // 대화의 처음이면 그 페이지에 넣는다.
+        const index = pages.findIndex((page) => {
+          const first = page.messages[0];
+          return !first || compareMessageOrder(row, first) >= 0;
+        });
+        const lastIndex = pages.length - 1;
+        const target =
+          index !== -1
+            ? index
+            : pages[lastIndex]?.olderCursor === null
+              ? lastIndex
+              : -1;
+        const page = pages[target];
+        if (!page) continue;
+        pages[target] = {
+          ...page,
+          messages: [...page.messages, row].sort(compareMessageOrder),
+        };
+        accepted.set(row.id, row);
+      }
+
+      return {
+        ...data,
+        pages: pages.map((page) => ({
+          ...page,
+          messages: page.messages.map(quote),
+        })),
+      };
+    },
+  );
+  queryClient.setQueryData<ConversationMessage[]>(
+    messagingKeys.pinned(conversationId),
+    (pinned) => {
+      if (!pinned) return pinned;
+      const current = new Map(pinned.map((message) => [message.id, message]));
+      const updates = rows.filter((row) =>
+        acceptsServerRow(current.get(row.id), row),
+      );
+      const updated = new Set(updates.map(({ id }) => id));
+      return [
+        ...pinned.filter(({ id }) => !updated.has(id)),
+        ...updates.filter((row) => row.pinned),
+      ]
+        .map(quote)
+        .sort(compareMessageOrder);
+    },
+  );
+}
+
+/** 불러온 페이지의 내 메시지마다 "읽지 않은 수"를 서버 값으로 바꾼다. */
+export function patchUnreadCounts(
+  queryClient: QueryClient,
+  conversationId: string,
+  counts: Map<string, number>,
+) {
+  if (counts.size === 0) return;
+  updatePages(queryClient, conversationId, (messages) =>
+    messages.map((message) => {
+      const count = counts.get(message.id);
+      return count === undefined || count === message.unreadMemberCount
+        ? message
+        : { ...message, unreadMemberCount: count };
+    }),
+  );
+}
+
+/** 불러온 메시지 중 가장 늦게 바뀐 시각. 따라잡기의 기준이다. 아무것도 없으면 `null`이다. */
+export function latestMessageChange(
+  queryClient: QueryClient,
+  conversationId: string,
+): string | null {
+  const data = queryClient.getQueryData<MessagePages>(
+    messagingKeys.messages(conversationId),
+  );
+  const pinned =
+    queryClient.getQueryData<ConversationMessage[]>(
+      messagingKeys.pinned(conversationId),
+    ) ?? [];
+  let latest: string | null = null;
+  for (const message of [
+    ...(data ? flattenMessagePages(data) : []),
+    ...pinned,
+  ]) {
+    if (
+      message.changedAt &&
+      (!latest || Date.parse(message.changedAt) > Date.parse(latest))
+    ) {
+      latest = message.changedAt;
+    }
+  }
+  return latest;
+}
+
+/** 화면이 지금 구독하고 있는 대화방. 닫힌 방의 cache는 다시 열 때 loader가 새로 채운다. */
+export function openConversationIds(queryClient: QueryClient): string[] {
+  return queryClient
+    .getQueryCache()
+    .findAll({ queryKey: messagingKeys.all })
+    .filter(
+      (query) =>
+        query.queryKey[1] === "messages" && query.getObserversCount() > 0,
+    )
+    .map((query) => String(query.queryKey[2]));
 }
 
 export function removeMessage(

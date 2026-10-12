@@ -1,4 +1,5 @@
 export { MessagingScreen } from "~/features/messaging/components/messaging-screen";
+export { MessagingSync } from "~/features/messaging/components/messaging-sync";
 export {
   RoomScreen,
   type DesktopDetailsContext,

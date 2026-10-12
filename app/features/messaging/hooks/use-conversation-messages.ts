@@ -10,11 +10,13 @@ import {
   appendMessage,
   findCachedMessage,
   flattenMessagePages,
+  holdMessageWrite,
   initialMessagePages,
   invalidateConversationList,
   messagingKeys,
   patchMessage,
   patchReplyPreviews,
+  REPLY_PREVIEW_LENGTH,
   removeMessage,
 } from "~/features/messaging/data/cache";
 import {
@@ -43,9 +45,6 @@ export type OlderMessagesResult = "loaded" | "empty" | "failed";
 
 type RequestField = "reaction" | "pin" | "content";
 
-/** 답장 인용에 담는 원문 길이. 서버 `private.message_rows`의 `reply_body`와 같다. */
-const REPLY_PREVIEW_LENGTH = 200;
-
 export interface SendDraft {
   /** 호출하는 쪽이 정해 두면, 이 메시지가 화면에 나타나는 순간을 그 ID로 기다릴 수 있다. */
   id?: string;
@@ -55,8 +54,8 @@ export interface SendDraft {
 
 /**
  * 대화방 메시지와 고정 메시지 cache. 둘 다 대화방 loader가 `seedConversationCache`로 채우고,
- * 위로 스크롤하면 앞선 페이지를 붙인다. 신선도는 시간이 아니라 Realtime과 따라잡기가 맡을
- * 것이므로(기술 설계 §5) 시간 경과로 다시 읽지 않는다.
+ * 위로 스크롤하면 앞선 페이지를 붙인다. 신선도는 시간이 아니라 Realtime 신호와 따라잡기가 맡으므로(기술 설계 §5,
+ * `MessagingSync`) 시간 경과로 다시 읽지 않는다.
  *
  * 내 변경은 먼저 그리고 정본으로 덮으며, 실패하면 되돌린다. 같은 메시지에 요청이 겹치면 마지막
  * 요청만 결과를 반영한다. 먼저 보낸 요청의 응답이나 되돌림이 나중 선택을 덮지 않게 하기 위해서다.
@@ -146,6 +145,7 @@ export function useConversationMessages(conversation: Conversation) {
       pending: true,
     };
     appendMessage(queryClient, conversationId, draft);
+    const release = holdMessageWrite(draft.id);
     try {
       const sent = await sendMessage(
         {
@@ -166,6 +166,8 @@ export function useConversationMessages(conversation: Conversation) {
       removeMessage(queryClient, conversationId, draft.id);
       toast.error("메시지를 보내지 못했습니다.");
       return false;
+    } finally {
+      release();
     }
   };
 
@@ -178,6 +180,7 @@ export function useConversationMessages(conversation: Conversation) {
       myReaction: message.myReaction,
     };
     const isLatest = beginRequest(message.id, "reaction");
+    const release = holdMessageWrite(message.id);
     patchMessage(
       queryClient,
       conversationId,
@@ -192,6 +195,8 @@ export function useConversationMessages(conversation: Conversation) {
       if (!isLatest()) return;
       patchMessage(queryClient, conversationId, message.id, previous);
       toast.error("반응을 남기지 못했습니다.");
+    } finally {
+      release();
     }
   };
 
@@ -199,6 +204,7 @@ export function useConversationMessages(conversation: Conversation) {
     const message = current(target);
     const pinned = !message.pinned;
     const isLatest = beginRequest(message.id, "pin");
+    const release = holdMessageWrite(message.id);
     patchMessage(queryClient, conversationId, message.id, { pinned });
     try {
       const saved = await setMessagePinned(message.id, pinned);
@@ -212,6 +218,8 @@ export function useConversationMessages(conversation: Conversation) {
       toast.error(
         pinned ? "고정하지 못했습니다." : "고정을 해제하지 못했습니다.",
       );
+    } finally {
+      release();
     }
   };
 
@@ -227,6 +235,7 @@ export function useConversationMessages(conversation: Conversation) {
       });
     };
     apply({ body, editedAt: new Date().toISOString() });
+    const release = holdMessageWrite(message.id);
     try {
       const saved = await editMessage(message.id, body);
       if (isLatest()) apply(saved);
@@ -236,6 +245,8 @@ export function useConversationMessages(conversation: Conversation) {
       if (isLatest()) apply(previous);
       toast.error("메시지를 고치지 못했습니다.");
       return false;
+    } finally {
+      release();
     }
   };
 
@@ -264,6 +275,7 @@ export function useConversationMessages(conversation: Conversation) {
       body: "",
       deleted: true,
     });
+    const release = holdMessageWrite(message.id);
     try {
       await deleteMessages([message.id]);
       void invalidateConversationList(queryClient);
@@ -275,6 +287,8 @@ export function useConversationMessages(conversation: Conversation) {
         deleted: message.deleted,
       });
       toast.error("메시지를 삭제하지 못했습니다.");
+    } finally {
+      release();
     }
   };
 
