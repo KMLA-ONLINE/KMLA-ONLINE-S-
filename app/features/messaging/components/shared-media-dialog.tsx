@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { DownloadIcon, FileIcon, PlayIcon } from "lucide-react";
+import { DownloadIcon, FileIcon, PlayIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -69,12 +69,25 @@ export function SharedMediaDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="flex max-h-[min(40rem,90dvh)] flex-col sm:max-w-lg">
-        <DialogHeader>
+      {/* 휴대폰에서는 화면 전체를 덮고, 뒤로가기로 닫는다(URL의 `?panel=`). */}
+      <DialogContent
+        showCloseButton={false}
+        className="flex max-h-[min(40rem,90dvh)] flex-col max-sm:top-0 max-sm:left-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:gap-4 max-sm:rounded-none max-sm:px-4 max-sm:pt-[calc(1rem+var(--app-safe-t))] max-sm:pb-[calc(1rem+var(--app-safe-b))] max-sm:ring-0 sm:max-w-lg"
+      >
+        <DialogHeader className="flex-row items-center justify-between gap-2">
           <DialogTitle>공유된 미디어</DialogTitle>
           <DialogDescription className="sr-only">
-            이 대화에서 주고받은 사진, 동영상과 파일
+            이 대화에서 주고받은 사진과 파일
           </DialogDescription>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="닫기"
+            className="-my-1 shrink-0 rounded-full text-muted-foreground"
+            onClick={onClose}
+          >
+            <XIcon aria-hidden />
+          </Button>
         </DialogHeader>
         <div role="tablist" aria-label="첨부 종류" className="flex gap-1">
           {(

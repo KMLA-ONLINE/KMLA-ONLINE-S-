@@ -28,7 +28,7 @@ export function MessagingSync({ profileId }: { profileId: number }) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const scheduler = createSyncScheduler(queryClient, String(profileId));
+    const scheduler = createSyncScheduler(queryClient);
     const isOpen = (conversationId: string) =>
       openConversationIds(queryClient).includes(conversationId);
     // 끊긴 동안 잃은 신호에는 다른 멤버의 읽음도 있다. 바뀐 시각에 잡히지 않으므로 함께 다시 받는다.
@@ -74,7 +74,7 @@ export function MessagingSync({ profileId }: { profileId: number }) {
  * 대화마다 따라잡기를 하나씩만 돌린다. 도는 중에 신호가 오면 끝난 뒤 한 번 더 돈다. 실패하면 간격을
  * 늘리며 몇 번 다시 시도한다.
  */
-function createSyncScheduler(queryClient: QueryClient, viewerId: string) {
+function createSyncScheduler(queryClient: QueryClient) {
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   const pending = new Map<string, Set<SyncKind>>();
   const running = new Set<string>();
@@ -111,7 +111,7 @@ function createSyncScheduler(queryClient: QueryClient, viewerId: string) {
         await catchUpConversation(queryClient, conversationId);
       }
       if (kinds.has("reads")) {
-        await refreshReadState(queryClient, conversationId, viewerId);
+        await refreshReadState(queryClient, conversationId);
       }
       failures.delete(conversationId);
     } catch {

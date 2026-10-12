@@ -7,7 +7,6 @@ import {
   ChevronRightIcon,
   ImageIcon,
   InfoIcon,
-  ListChecksIcon,
   PaperclipIcon,
   PencilIcon,
   PinIcon,
@@ -30,7 +29,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Link } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
 import { ConversationDetails } from "~/features/messaging/components/conversation-details";
@@ -49,6 +48,8 @@ import {
   useListedConversation,
 } from "~/features/messaging/hooks/use-conversation-membership";
 import { useConversationMute } from "~/features/messaging/hooks/use-conversation-mute";
+import { useRoomOverlayParam } from "~/features/messaging/hooks/use-room-overlay-param";
+import type { RoomEntryState } from "~/features/messaging/hooks/use-room-entry";
 import { MessageSearchPanel } from "~/features/messaging/components/message-search-panel";
 import { ReactionMembersDialog } from "~/features/messaging/components/reaction-members-dialog";
 import { AttachmentRemovalDialog } from "~/features/messaging/components/attachment-removal-dialog";
@@ -65,6 +66,7 @@ import {
   isViewerActive,
 } from "~/features/messaging/model/system-message";
 import { canEditMessage } from "~/features/messaging/model/message-edit";
+import { formatReplyPreview } from "~/features/messaging/model/conversation-preview";
 import {
   canConnectMessages,
   hasVisibleMessageReaction,
@@ -89,6 +91,7 @@ import {
 } from "~/features/posts/components/reaction/quick-reaction-bar";
 import type { PostReaction } from "~/features/posts/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import { UserAvatar } from "~/shared/components/user-avatar";
 import { toast } from "sonner";
 import { Button } from "~/shared/ui/button";
 import {
@@ -110,6 +113,8 @@ const BOTTOM_SCROLL_BUTTON_THRESHOLD = 200;
 const FOLLOW_NEW_MESSAGES_THRESHOLD = 80;
 /** 맨 위에서 이만큼 남았을 때 앞선 메시지를 미리 읽는다. */
 const OLDER_MESSAGES_THRESHOLD = 400;
+/** 메시지·좋아요를 보내거나 반응을 바꾼 뒤 다음 전송까지 쉬는 시간. 도배를 막는 UI 제한이다. */
+const SEND_COOLDOWN_MS = 500;
 
 export function RoomScreen({
   conversation: loadedConversation,
@@ -137,9 +142,14 @@ export function RoomScreen({
     | { kind: "remove"; participant: MessageParticipant }
     | null
   >(null);
-  const [compactDetailsOpen, setCompactDetailsOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [pinnedDialogOpen, setPinnedDialogOpen] = useState(false);
+  // 대화 정보, 검색, 고정 메시지, 반응한 사람, 공유된 미디어는 뒤로가기로 닫히도록 URL에 둔다.
+  const roomOverlay = useRoomOverlayParam();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const overlay = roomOverlay.overlay;
+  const compactDetailsOpen = overlay?.kind === "details";
+  const searchOpen = overlay?.kind === "search";
+  const pinnedDialogOpen = overlay?.kind === "pinned";
   const [highlightedMessageId, setHighlightedMessageId] = useState<
     string | null
   >(null);
@@ -158,15 +168,10 @@ export function RoomScreen({
     react,
     togglePinned,
     edit,
-    remove,
     removeMany,
   } = useConversationMessages(conversation);
   // 삭제 모드에서 고른 내 메시지. `null`이면 삭제 모드가 아니다(기능 명세 §13.11).
   const [selection, setSelection] = useState<ReadonlySet<string> | null>(null);
-  const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false);
-  const [sharedMediaTab, setSharedMediaTab] = useState<
-    "media" | "files" | null
-  >(null);
   // 대화 정보가 보일 때 공유된 첨부 수를 센다. 첨부가 바뀌면 메시지 신호가 다시 읽게 한다.
   const { data: sharedCounts } = useQuery({
     queryKey: messagingKeys.sharedAttachmentCounts(conversation.id),
@@ -175,19 +180,24 @@ export function RoomScreen({
   });
   const [attachmentTarget, setAttachmentTarget] =
     useState<ConversationMessage | null>(null);
-  const [reactionsTarget, setReactionsTarget] =
-    useState<ConversationMessage | null>(null);
+  const reactionsTarget =
+    overlay?.kind === "reactions"
+      ? messages.find(({ id }) => id === overlay.messageId)
+      : undefined;
   const { muted, toggleMuted } = useConversationMute(conversation);
   const [replyTarget, setReplyTarget] = useState<ConversationMessage | null>(
     null,
   );
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<ConversationMessage | null>(
-    null,
-  );
   const messageThreadRef = useRef<HTMLDivElement>(null);
+  /** 메시지마다 마지막으로 반응을 바꾼 시각. 짧은 간격의 연타는 버린다. */
+  const reactedAt = useRef(new Map<string, number>());
   /** 방금 보낸 메시지. 그 메시지가 화면에 나타날 때 맨 아래로 내린다. */
   const sentMessageId = useRef<string | null>(null);
+  // 맨 아래를 보고 있었는지. 새 메시지가 붙기 직전의 스크롤 위치로 판단해야 하므로 스크롤할 때 적어
+  // 둔다. 붙은 뒤에 재면 새 메시지 높이만큼 이미 맨 아래에서 멀어져 있다. 내가 보내면 어디를 보던
+  // 맨 아래를 따라간다. 긴 메시지는 그린 뒤에도 줄바꿈과 작성창이 줄며 높이가 다시 바뀐다.
+  const followingNewMessagesRef = useRef(true);
   const pinnedMessage = pinnedMessages.at(-1);
   const pinnedMessageAuthor = pinnedMessage?.senderId
     ? (conversation.participants.find(({ id }) => id === pinnedMessage.senderId)
@@ -222,11 +232,32 @@ export function RoomScreen({
     sentMessageId.current = null;
   }, [messages]);
 
+  /**
+   * 대화 목록으로 돌아간다. 목록에서 들어왔으면 대화방과 그 위의 오버레이 entry를 함께 되돌려
+   * 뒤로가기가 대화방으로 다시 들어오지 않게 한다. 프로필처럼 다른 곳에서 들어왔으면 오버레이를
+   * 닫고 대화방 entry를 목록으로 바꾼다. 그 아래는 들어오기 전 화면이다.
+   */
+  async function backToList() {
+    const entry = location.state as RoomEntryState | null;
+    if (entry?.roomAboveList) {
+      await navigate(-(roomOverlay.depth + 1));
+      return;
+    }
+    await roomOverlay.closeAll();
+    await navigate("/messenger", { replace: true });
+  }
+
+  function openDetails() {
+    if (window.matchMedia("(min-width: 80rem)").matches) {
+      onDesktopDetailsOpenChange?.(true);
+      return;
+    }
+    if (!compactDetailsOpen) roomOverlay.open({ kind: "details" });
+  }
+
   // 원래 메시지로 이동해 강조한다. 아직 불러오지 않은 구간이면 그 메시지까지 앞선 페이지를 이어 읽는다.
   async function viewMessage(messageId: string) {
-    setPinnedDialogOpen(false);
-    setCompactDetailsOpen(false);
-    setSearchOpen(false);
+    await roomOverlay.closeAll();
     if (!(await loadUntil(messageId))) {
       toast.error("메시지를 찾을 수 없습니다.");
       return;
@@ -245,6 +276,7 @@ export function RoomScreen({
     const target = replyTarget;
     const id = crypto.randomUUID();
     sentMessageId.current = id;
+    followingNewMessagesRef.current = true;
     setReplyTarget(null);
     const sent = await send({
       id,
@@ -255,6 +287,7 @@ export function RoomScreen({
             senderId: target.senderId,
             body: target.body,
             deleted: target.deleted,
+            attachmentKind: target.attachments?.[0]?.kind ?? null,
           }
         : undefined,
     });
@@ -289,23 +322,31 @@ export function RoomScreen({
             size="icon"
             className="rounded-full md:hidden"
             aria-label="대화 목록으로 돌아가기"
-            nativeButton={false}
-            render={<Link to="/messenger" />}
+            onClick={() => void backToList()}
           >
             <ChevronLeftIcon aria-hidden />
           </Button>
-          <ConversationAvatar conversation={conversation} className="size-10" />
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-sm font-semibold md:text-base">
+          {/* 이름을 누르면 대화 정보를 연다. 넓은 화면에서 접어 둔 정보 패널도 다시 편다. */}
+          <button
+            type="button"
+            aria-label={`${conversation.name} 대화 정보 보기`}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+            onClick={openDetails}
+          >
+            <ConversationAvatar
+              conversation={conversation}
+              className="size-10"
+            />
+            <h1 className="min-w-0 flex-1 truncate text-sm font-semibold md:text-base">
               {conversation.name}
             </h1>
-          </div>
+          </button>
           <Button
             variant="ghost"
             size="icon"
             className="rounded-full"
             aria-label="대화 검색"
-            onClick={() => setSearchOpen(true)}
+            onClick={() => roomOverlay.open({ kind: "search" })}
           >
             <SearchIcon aria-hidden />
           </Button>
@@ -314,7 +355,7 @@ export function RoomScreen({
             size="icon"
             className="rounded-full xl:hidden"
             aria-label="대화 정보 열기"
-            onClick={() => setCompactDetailsOpen(true)}
+            onClick={() => roomOverlay.open({ kind: "details" })}
           >
             <InfoIcon aria-hidden />
           </Button>
@@ -336,7 +377,7 @@ export function RoomScreen({
           <MessageSearchPanel
             conversationId={conversation.id}
             participants={participantById}
-            onClose={() => setSearchOpen(false)}
+            onClose={roomOverlay.close}
             onSelect={(result) => void viewMessage(result.id)}
           />
         ) : null}
@@ -346,7 +387,7 @@ export function RoomScreen({
             type="button"
             aria-label="고정 메시지"
             className="flex min-h-14 shrink-0 items-center gap-3 border-t border-b bg-muted/40 px-4 py-2.5 text-left hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
-            onClick={() => setPinnedDialogOpen(true)}
+            onClick={() => roomOverlay.open({ kind: "pinned" })}
           >
             <PinIcon aria-hidden className="size-4 shrink-0 text-primary" />
             <div className="min-w-0 flex-1">
@@ -354,9 +395,7 @@ export function RoomScreen({
                 {pinnedMessageAuthor ?? "알 수 없는 사용자"}
               </p>
               <p className="truncate text-sm text-muted-foreground">
-                {pinnedMessage.deleted
-                  ? "삭제된 메시지입니다"
-                  : pinnedMessage.body}
+                {formatReplyPreview(toReplyPreview(pinnedMessage))}
               </p>
             </div>
           </button>
@@ -367,11 +406,18 @@ export function RoomScreen({
           messages={messages}
           highlightedMessageId={highlightedMessageId}
           messageThreadRef={messageThreadRef}
+          followingNewMessagesRef={followingNewMessagesRef}
           desktopDetailsOpen={desktopDetailsOpen}
           hasOlderMessages={hasOlderMessages}
           loadingOlderMessages={loadingOlderMessages}
           onLoadOlderMessages={loadOlderMessages}
-          onSelectReaction={react}
+          onSelectReaction={(message, reaction) => {
+            const now = Date.now();
+            const last = reactedAt.current.get(message.id) ?? 0;
+            if (now - last < SEND_COOLDOWN_MS) return;
+            reactedAt.current.set(message.id, now);
+            void react(message, reaction);
+          }}
           onReply={(message) => {
             if (message.deleted) return;
             setEditTarget(null);
@@ -382,14 +428,15 @@ export function RoomScreen({
             setReplyTarget(null);
             setEditTarget({ message, draft: message.body });
           }}
-          onDelete={setDeleteTarget}
-          onViewMessage={(messageId) => void viewMessage(messageId)}
-          selection={selection}
-          onStartSelection={(message) => {
+          // 삭제는 삭제 모드로 들어가 그 메시지를 고른 채로 시작한다. 더 고른 뒤 아래 삭제 버튼으로
+          // 한 번에 지운다(기능 명세 §13.11).
+          onDelete={(message) => {
             setReplyTarget(null);
             setEditTarget(null);
             setSelection(new Set([message.id]));
           }}
+          onViewMessage={(messageId) => void viewMessage(messageId)}
+          selection={selection}
           onToggleSelection={(message) =>
             setSelection((current) => {
               if (!current) return current;
@@ -401,12 +448,15 @@ export function RoomScreen({
           }
           onRetry={retry}
           onDiscard={discard}
-          onShowReactions={setReactionsTarget}
+          onShowReactions={(message) =>
+            roomOverlay.open({ kind: "reactions", messageId: message.id })
+          }
           onRemoveAttachments={setAttachmentTarget}
           onDropFiles={
             viewerActive && !selection
               ? (files) => {
                   setReplyTarget(null);
+                  followingNewMessagesRef.current = true;
                   void sendFiles(files);
                 }
               : undefined
@@ -426,7 +476,10 @@ export function RoomScreen({
             <Button
               variant="destructive"
               disabled={selection.size === 0}
-              onClick={() => setConfirmingBulkDelete(true)}
+              onClick={() => {
+                removeMany(messages.filter(({ id }) => selection.has(id)));
+                setSelection(null);
+              }}
             >
               삭제
             </Button>
@@ -442,6 +495,7 @@ export function RoomScreen({
             onSend={sendMessage}
             onSendFiles={(files) => {
               setReplyTarget(null);
+              followingNewMessagesRef.current = true;
               void sendFiles(files);
             }}
             desktopDetailsOpen={desktopDetailsOpen}
@@ -455,14 +509,13 @@ export function RoomScreen({
 
       <ConversationDetails
         conversation={conversation}
-        onMobileBack={() => setCompactDetailsOpen(false)}
+        onMobileBack={roomOverlay.close}
         pinnedCount={pinnedMessages.length}
-        onOpenPinnedMessages={() => setPinnedDialogOpen(true)}
+        onOpenPinnedMessages={() => roomOverlay.open({ kind: "pinned" })}
         muted={muted}
         onToggleMuted={toggleMuted}
         onSearch={() => {
-          setCompactDetailsOpen(false);
-          setSearchOpen(true);
+          roomOverlay.open({ kind: "search" }, { replace: true });
         }}
         onInvite={() => setMemberDialog({ kind: "invite" })}
         onRename={() => setMemberDialog({ kind: "rename" })}
@@ -471,7 +524,7 @@ export function RoomScreen({
           setMemberDialog({ kind: "remove", participant })
         }
         sharedCounts={sharedCounts}
-        onOpenSharedMedia={setSharedMediaTab}
+        onOpenSharedMedia={(tab) => roomOverlay.open({ kind: "shared", tab })}
         className={cn(
           compactDetailsOpen ? "flex xl:hidden" : "hidden",
           compactDetailsOpen &&
@@ -485,7 +538,9 @@ export function RoomScreen({
         participants={conversation.participants}
         viewerId={conversation.viewerId}
         isGroup={conversation.type === "group"}
-        onOpenChange={setPinnedDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) roomOverlay.close();
+        }}
         onViewMessage={(messageId) => void viewMessage(messageId)}
         onUnpin={togglePinned}
       />
@@ -514,7 +569,7 @@ export function RoomScreen({
       {memberDialog?.kind === "leave" ? (
         <ConfirmDialog
           title="그룹에서 나갈까요?"
-          description="나간 뒤에도 참여한 동안의 메시지는 볼 수 있지만, 이후 메시지는 볼 수 없습니다."
+          description="나가면 대화 목록에서 사라지고, 이후 메시지는 볼 수 없습니다."
           confirmLabel="나가기"
           destructive
           onCancel={() => setMemberDialog(null)}
@@ -538,30 +593,13 @@ export function RoomScreen({
           }}
         />
       ) : null}
-      {confirmingBulkDelete && selection ? (
-        <ConfirmDialog
-          title={`메시지 ${selection.size}개를 삭제할까요?`}
-          description="모든 참여자에게 '삭제된 메시지입니다'로 표시되고 반응과 고정도 사라집니다."
-          confirmLabel="삭제"
-          destructive
-          onCancel={() => setConfirmingBulkDelete(false)}
-          onConfirm={() => {
-            removeMany(messages.filter(({ id }) => selection.has(id)));
-            setConfirmingBulkDelete(false);
-            setSelection(null);
-          }}
-        />
-      ) : null}
-      {sharedMediaTab ? (
+      {overlay?.kind === "shared" ? (
         <SharedMediaDialog
           conversationId={conversation.id}
-          initialTab={sharedMediaTab}
+          initialTab={overlay.tab}
           counts={sharedCounts}
-          onClose={() => setSharedMediaTab(null)}
-          onViewMessage={(messageId) => {
-            setSharedMediaTab(null);
-            void viewMessage(messageId);
-          }}
+          onClose={roomOverlay.close}
+          onViewMessage={(messageId) => void viewMessage(messageId)}
         />
       ) : null}
       {attachmentTarget ? (
@@ -579,21 +617,7 @@ export function RoomScreen({
       {reactionsTarget ? (
         <ReactionMembersDialog
           message={reactionsTarget}
-          onClose={() => setReactionsTarget(null)}
-        />
-      ) : null}
-      {deleteTarget ? (
-        <ConfirmDialog
-          title="메시지를 삭제할까요?"
-          description="모든 참여자에게 '삭제된 메시지입니다'로 표시되고 반응과 고정도 사라집니다."
-          confirmLabel="삭제"
-          destructive
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={() => {
-            remove(deleteTarget);
-            if (editTarget?.message.id === deleteTarget.id) setEditTarget(null);
-            setDeleteTarget(null);
-          }}
+          onClose={roomOverlay.close}
         />
       ) : null}
     </div>
@@ -605,6 +629,7 @@ function MessageThread({
   messages,
   highlightedMessageId,
   messageThreadRef,
+  followingNewMessagesRef,
   desktopDetailsOpen,
   hasOlderMessages,
   loadingOlderMessages,
@@ -616,7 +641,6 @@ function MessageThread({
   onDelete,
   onViewMessage,
   selection,
-  onStartSelection,
   onToggleSelection,
   onRetry,
   onDiscard,
@@ -628,6 +652,8 @@ function MessageThread({
   messages: ConversationMessage[];
   highlightedMessageId: string | null;
   messageThreadRef: RefObject<HTMLDivElement | null>;
+  /** 맨 아래를 따라가는 중인지. 보내는 쪽(`RoomScreen`)도 켠다. */
+  followingNewMessagesRef: RefObject<boolean>;
   desktopDetailsOpen: boolean;
   hasOlderMessages: boolean;
   loadingOlderMessages: boolean;
@@ -642,7 +668,6 @@ function MessageThread({
   onDelete: (message: ConversationMessage) => void;
   onViewMessage: (messageId: string) => void;
   selection: ReadonlySet<string> | null;
-  onStartSelection: (message: ConversationMessage) => void;
   onToggleSelection: (message: ConversationMessage) => void;
   onRetry: (message: ConversationMessage) => void;
   onDiscard: (message: ConversationMessage) => void;
@@ -653,6 +678,7 @@ function MessageThread({
 }) {
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [draggingFiles, setDraggingFiles] = useState(false);
+  const threadContentRef = useRef<HTMLDivElement>(null);
   const scrollingToBottom = useRef(false);
   const previousScrollTop = useRef(0);
   const contextPortalRef = useRef<HTMLDivElement>(null);
@@ -673,10 +699,30 @@ function MessageThread({
   // 벗어났다가 다시 올라오면 한 번 더 시도한다.
   const olderLoadFailed = useRef(false);
   const oldestMessageId = messages[0]?.id;
-  const newestMessageId = messages.at(-1)?.id;
-  // 맨 아래를 보고 있었는지. 새 메시지가 붙기 직전의 스크롤 위치로 판단해야 하므로 스크롤할 때 적어
-  // 둔다. 붙은 뒤에 재면 새 메시지 높이만큼 이미 맨 아래에서 멀어져 있다.
-  const followingNewMessages = useRef(true);
+  const newestMessage = messages.at(-1);
+  const newestMessageId = newestMessage?.id;
+  // 맨 아래에서 마지막으로 본 가장 최근 메시지. 지난 대화를 보던 중에 상대 메시지가 새로 오면 이와
+  // 달라지고, 맨 아래 이동 버튼 자리에 그 메시지를 미리 보여 준다.
+  // 다른 대화방으로 바뀌면 그 방의 최근 메시지를 본 것으로 다시 시작한다.
+  const [seen, setSeen] = useState({
+    conversationId: conversation.id,
+    messageId: newestMessageId,
+  });
+  if (seen.conversationId !== conversation.id) {
+    setSeen({ conversationId: conversation.id, messageId: newestMessageId });
+  }
+  const seenNewestId = seen.messageId;
+  const incomingMessage =
+    showScrollToBottom &&
+    newestMessage &&
+    newestMessage.id !== seenNewestId &&
+    !newestMessage.system &&
+    newestMessage.senderId !== conversation.viewerId
+      ? newestMessage
+      : undefined;
+  const incomingSender = incomingMessage?.senderId
+    ? participantById.get(incomingMessage.senderId)
+    : undefined;
   // 부모가 렌더마다 새로 만드는 콜백을 그대로 넘기면 `ThreadMessage`의 memo가 매번 깨진다.
   // 행에는 한 번 만든 객체를 넘기고, 호출 시점에 최신 콜백을 읽는다.
   const latestHandlers = useRef({
@@ -686,7 +732,6 @@ function MessageThread({
     onEdit,
     onDelete,
     onViewMessage,
-    onStartSelection,
     onToggleSelection,
     onRetry,
     onDiscard,
@@ -701,7 +746,6 @@ function MessageThread({
       onEdit,
       onDelete,
       onViewMessage,
-      onStartSelection,
       onToggleSelection,
       onRetry,
       onDiscard,
@@ -719,8 +763,6 @@ function MessageThread({
       delete: (message) => latestHandlers.current.onDelete(message),
       viewMessage: (messageId) =>
         latestHandlers.current.onViewMessage(messageId),
-      startSelection: (message) =>
-        latestHandlers.current.onStartSelection(message),
       toggleSelection: (message) =>
         latestHandlers.current.onToggleSelection(message),
       retry: (message) => latestHandlers.current.onRetry(message),
@@ -748,9 +790,25 @@ function MessageThread({
   // 바뀌지 않으므로 여기에 걸리지 않는다.
   useLayoutEffect(() => {
     const messageThread = messageThreadRef.current;
-    if (!messageThread || !followingNewMessages.current) return;
+    if (!messageThread || !followingNewMessagesRef.current) return;
     messageThread.scrollTop = messageThread.scrollHeight;
-  }, [newestMessageId, messageThreadRef]);
+  }, [newestMessageId, messageThreadRef, followingNewMessagesRef]);
+
+  // 맨 아래를 보고 있는 동안에는 메시지가 늘지 않아도 맨 아래에 붙어 있는다. 반응이 붙거나 사진이
+  // 늦게 그려지거나 키보드·답장 표시로 대화 영역이 줄면 높이만 바뀌어 아래가 가려진다.
+  useEffect(() => {
+    const messageThread = messageThreadRef.current;
+    const content = threadContentRef.current;
+    if (!messageThread || !content) return;
+    const observer = new ResizeObserver(() => {
+      if (followingNewMessagesRef.current) {
+        messageThread.scrollTop = messageThread.scrollHeight;
+      }
+    });
+    observer.observe(messageThread);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [messageThreadRef, followingNewMessagesRef]);
 
   function maybeLoadOlderMessages() {
     const messageThread = messageThreadRef.current;
@@ -783,8 +841,11 @@ function MessageThread({
       messageThread.scrollHeight -
       messageThread.clientHeight -
       messageThread.scrollTop;
-    followingNewMessages.current =
+    followingNewMessagesRef.current =
       distanceFromBottom <= FOLLOW_NEW_MESSAGES_THRESHOLD;
+    if (followingNewMessagesRef.current) {
+      setSeen({ conversationId: conversation.id, messageId: newestMessageId });
+    }
 
     if (scrollingToBottom.current) {
       if (
@@ -849,6 +910,7 @@ function MessageThread({
         }}
       >
         <div
+          ref={threadContentRef}
           className={cn(
             "mx-auto flex min-h-full max-w-3xl flex-col justify-start gap-0.5",
             !desktopDetailsOpen && "xl:max-w-none",
@@ -918,7 +980,32 @@ function MessageThread({
           })}
         </div>
       </div>
-      {showScrollToBottom ? (
+      {incomingMessage ? (
+        <button
+          type="button"
+          aria-label={`새 메시지: ${incomingSender?.name ?? "알 수 없는 사용자"}, 맨 아래로 이동`}
+          className="absolute bottom-3 left-1/2 z-10 flex w-max max-w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 py-1.5 pr-3 pl-1.5 text-left text-sm shadow-md backdrop-blur focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          onClick={scrollToBottom}
+        >
+          <UserAvatar
+            src={incomingSender?.avatarUrl}
+            name={incomingSender?.name}
+            className="size-6"
+          />
+          <span className="min-w-0 truncate">
+            <span className="font-semibold">
+              {incomingSender?.name ?? "알 수 없는 사용자"}
+            </span>{" "}
+            <span className="text-muted-foreground">
+              {formatReplyPreview(toReplyPreview(incomingMessage))}
+            </span>
+          </span>
+          <ChevronDownIcon
+            aria-hidden
+            className="size-4 shrink-0 text-muted-foreground"
+          />
+        </button>
+      ) : showScrollToBottom ? (
         <Button
           variant="secondary"
           size="icon"
@@ -938,6 +1025,23 @@ function MessageThread({
   );
 }
 
+/** 불러온 메시지를 답장 인용과 같은 모양으로 줄인다. 첨부만 있는 메시지를 첨부 종류로 부르게 한다. */
+function toReplyPreview(message: ConversationMessage) {
+  return {
+    body: message.body,
+    deleted: message.deleted,
+    attachmentKind: message.attachments?.[0]?.kind ?? null,
+  };
+}
+
+/** 쉬는 시간이 지났으면 지금을 기록하고 true를 돌려준다. 이벤트 처리기에서만 부른다. */
+function claimCooldown(lastAt: { current: number }): boolean {
+  const now = Date.now();
+  if (now - lastAt.current < SEND_COOLDOWN_MS) return false;
+  lastAt.current = now;
+  return true;
+}
+
 /** 고치는 중인 내 메시지와 작성창에 올릴 입력. 실패한 수정을 되살릴 때는 입력이 원문과 다르다. */
 interface EditTarget {
   message: ConversationMessage;
@@ -954,7 +1058,6 @@ interface ThreadMessageActions {
   edit: (message: ConversationMessage) => void;
   delete: (message: ConversationMessage) => void;
   viewMessage: (messageId: string) => void;
-  startSelection: (message: ConversationMessage) => void;
   toggleSelection: (message: ConversationMessage) => void;
   retry: (message: ConversationMessage) => void;
   discard: (message: ConversationMessage) => void;
@@ -1049,11 +1152,6 @@ const ThreadMessage = memo(function ThreadMessage({
             icon: <Trash2Icon aria-hidden />,
             onSelect: () => actions.delete(message),
           },
-          {
-            label: "여러 개 선택",
-            icon: <ListChecksIcon aria-hidden />,
-            onSelect: () => actions.startSelection(message),
-          },
           ...((message.attachments?.length ?? 0) > 0
             ? [
                 {
@@ -1108,11 +1206,6 @@ const ThreadMessage = memo(function ThreadMessage({
             onEdit={canEdit ? () => actions.edit(message) : undefined}
             onDelete={
               isOwn && actionable ? () => actions.delete(message) : undefined
-            }
-            onStartSelection={
-              isOwn && actionable
-                ? () => actions.startSelection(message)
-                : undefined
             }
           />
         }
@@ -1172,7 +1265,6 @@ function MessageActions({
   onTogglePinned,
   onEdit,
   onDelete,
-  onStartSelection,
 }: {
   isOwn: boolean;
   message: ConversationMessage;
@@ -1182,7 +1274,6 @@ function MessageActions({
   onTogglePinned: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
-  onStartSelection?: () => void;
 }) {
   const [reactionOpen, setReactionOpen] = useState(false);
 
@@ -1272,15 +1363,6 @@ function MessageActions({
               삭제
             </DropdownMenuItem>
           ) : null}
-          {onStartSelection ? (
-            <DropdownMenuItem
-              className="cursor-pointer"
-              onClick={onStartSelection}
-            >
-              <ListChecksIcon aria-hidden />
-              여러 개 선택
-            </DropdownMenuItem>
-          ) : null}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -1333,6 +1415,10 @@ function ComposerShell({
   desktopDetailsOpen: boolean;
 }) {
   const [draft, setDraft] = useState("");
+  // 보낸 직후 잠시 전송을 받지 않는다. 버튼을 껐다 켜면 깜박이므로 누름만 버리고, 입력은 그대로
+  // 두어 이어서 보낼 수 있다.
+  const lastSentAt = useRef(0);
+  const claimSend = () => claimCooldown(lastSentAt);
   const mediaInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const attachDisabled = Boolean(replyTarget ?? editTarget);
@@ -1359,6 +1445,11 @@ function ComposerShell({
   useEffect(() => {
     if (editingId) textareaRef.current?.focus();
   }, [editingId]);
+  // 답장을 시작하면 바로 쓸 수 있게 입력창으로 간다.
+  const replyingId = replyTarget?.id;
+  useEffect(() => {
+    if (replyingId) textareaRef.current?.focus();
+  }, [replyingId]);
   const [attachmentActionsExpanded, setAttachmentActionsExpanded] =
     useState(false);
   const composing = useRef(false);
@@ -1375,6 +1466,7 @@ function ComposerShell({
       void onEdit(body);
       return true;
     }
+    if (!claimSend()) return false;
     void onSend(body);
     setDraft("");
     setAttachmentActionsExpanded(false);
@@ -1426,7 +1518,7 @@ function ComposerShell({
               {replyAuthor ?? "알 수 없는 사용자"}에게 답장
             </p>
             <p className="truncate text-xs text-muted-foreground">
-              {replyTarget.body}
+              {formatReplyPreview(toReplyPreview(replyTarget))}
             </p>
           </div>
           <Button
@@ -1458,7 +1550,7 @@ function ComposerShell({
           <input
             ref={mediaInput}
             type="file"
-            accept={`${IMAGE_INPUT_ACCEPT},video/*`}
+            accept={IMAGE_INPUT_ACCEPT}
             multiple
             hidden
             aria-hidden
@@ -1478,7 +1570,7 @@ function ComposerShell({
             variant="ghost"
             size="icon"
             className="mb-0.5 rounded-full"
-            aria-label="사진·동영상 보내기"
+            aria-label="사진 보내기"
             disabled={attachDisabled}
             onClick={() => mediaInput.current?.click()}
           >
@@ -1564,6 +1656,7 @@ function ComposerShell({
               sendDraft();
               return;
             }
+            if (!claimSend()) return;
             void onSend("👍");
             // 공백만 있던 입력은 좋아요와 함께 비운다.
             setDraft("");

@@ -141,7 +141,13 @@ describe("mergeServerMessages", () => {
     expect(
       queryClient.getQueryData<MessagePages>(messagingKeys.messages(ID))!
         .pages[0].messages[1].replyTo,
-    ).toEqual({ id: "a", senderId: "1", body: "", deleted: true });
+    ).toEqual({
+      id: "a",
+      senderId: "1",
+      body: "",
+      deleted: true,
+      attachmentKind: null,
+    });
   });
 
   it("고정 목록은 행의 고정 상태대로 넣고 빼며 대화 순서를 지킨다", () => {
@@ -220,21 +226,25 @@ describe("catchUpConversation", () => {
 });
 
 describe("refreshReadState", () => {
-  it("최근 내 메시지의 읽지 않은 수만 받아 고친다", async () => {
+  it("보낸 메시지의 읽지 않은 수를 받아 고친다", async () => {
     seed(queryClient, [
       [
         message("mine", 1, { unreadMemberCount: 2 }),
         message("other", 2, { senderId: "2" }),
         message("sending", 3, { pending: true }),
+        message("gone", 4, { deleted: true }),
       ],
     ]);
     vi.mocked(queries.listMessageReadCounts).mockResolvedValue(
       new Map([["mine", 0]]),
     );
 
-    await refreshReadState(queryClient, ID, "1");
+    await refreshReadState(queryClient, ID);
 
-    expect(queries.listMessageReadCounts).toHaveBeenCalledWith(ID, ["mine"]);
+    expect(queries.listMessageReadCounts).toHaveBeenCalledWith(ID, [
+      "mine",
+      "other",
+    ]);
     expect(
       queryClient.getQueryData<MessagePages>(messagingKeys.messages(ID))!
         .pages[0].messages[0].unreadMemberCount,

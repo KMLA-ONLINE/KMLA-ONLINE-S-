@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { CheckIcon, SearchIcon, XIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { messagingKeys } from "~/features/messaging/data/cache";
 import { searchMessageRecipients } from "~/features/messaging/data/queries";
@@ -20,8 +20,6 @@ import { Input } from "~/shared/ui/input";
 import { Spinner } from "~/shared/ui/spinner";
 import { TextField } from "~/shared/ui/text-field";
 
-/** 입력이 멈춘 뒤 이만큼 지나서 찾는다. 글자마다 요청하지 않는다. */
-const SEARCH_DELAY_MS = 250;
 /** 그룹 이름 상한(기능 명세 §13.15). 서버 `create_group_conversation`이 같은 상한을 강제한다. */
 const GROUP_NAME_MAX_LENGTH = 50;
 
@@ -54,14 +52,6 @@ export function RecipientPickerDialog({
   const [selected, setSelected] = useState<MessageRecipient[]>([]);
   const [groupName, setGroupName] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(
-      () => setSearchTerm(query.trim()),
-      SEARCH_DELAY_MS,
-    );
-    return () => clearTimeout(timer);
-  }, [query]);
 
   const results = useQuery({
     queryKey: messagingKeys.recipients(searchTerm),
@@ -159,7 +149,15 @@ export function RecipientPickerDialog({
           />
         ) : null}
 
-        <div className="relative">
+        {/* 입력 중에는 찾지 않고 Enter(모바일 키보드의 검색)를 누를 때 찾는다. */}
+        <form
+          role="search"
+          className="relative"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setSearchTerm(query.trim());
+          }}
+        >
           <SearchIcon
             aria-hidden
             className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
@@ -167,17 +165,18 @@ export function RecipientPickerDialog({
           <Input
             type="search"
             value={query}
+            enterKeyHint="search"
             onChange={(event) => setQuery(event.currentTarget.value)}
             placeholder="이름으로 찾기"
             aria-label="이름으로 찾기"
-            className="rounded-full border-0 bg-muted pl-9"
+            className="rounded-full pl-9"
           />
-        </div>
+        </form>
 
         <div className="min-h-32 flex-1 overflow-y-auto overscroll-contain">
           {searchTerm === "" ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              이름을 입력하세요.
+              이름을 입력하고 Enter를 누르세요.
             </p>
           ) : results.isPending ? (
             <div className="flex justify-center py-8">

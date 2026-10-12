@@ -78,6 +78,17 @@ export function replaceConversationSummary(
   return replaced;
 }
 
+/** 목록에서 이 대화를 뺀다. 스스로 나간 그룹은 서버도 목록에서 감춘다(기능 명세 §13.16). */
+export function removeConversationFromList(
+  queryClient: QueryClient,
+  conversationId: string,
+) {
+  queryClient.setQueryData<ConversationSummary[]>(
+    messagingKeys.conversations(),
+    (list) => list?.filter(({ id }) => id !== conversationId),
+  );
+}
+
 /** 목록의 이 대화를 읽음으로 그린다. 서버가 확정하면 `replaceConversationSummary`가 덮는다. */
 export function markConversationListRead(
   queryClient: QueryClient,
@@ -380,6 +391,9 @@ export function mergeServerMessages(
           ? ""
           : original.body.slice(0, REPLY_PREVIEW_LENGTH),
         deleted: original.deleted,
+        attachmentKind: original.deleted
+          ? null
+          : (original.attachments?.[0]?.kind ?? null),
       },
     };
   };

@@ -4,6 +4,7 @@ import {
   attachmentKindLabel,
   classifyAttachment,
   groupAttachmentsIntoMessages,
+  isBlockedAttachment,
   sniffPlayableFormat,
 } from "~/features/messaging/model/attachments";
 import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
@@ -11,26 +12,33 @@ import { formatLastMessagePreview } from "~/features/messaging/model/conversatio
 const file = (name: string, type: string) => new File(["x"], name, { type });
 
 describe("message attachments", () => {
-  it("사진·동영상은 열 개씩 한 묶음, 파일과 오디오는 파일마다 메시지 하나로 나눈다", () => {
+  it("사진은 열 개씩 한 묶음, 파일과 오디오는 파일마다 메시지 하나로 나눈다", () => {
     const photos = Array.from({ length: 11 }, (_, index) =>
       file(`p${index}.jpg`, "image/jpeg"),
     );
     const groups = groupAttachmentsIntoMessages([
       file("a.pdf", "application/pdf"),
       ...photos,
-      file("v.mp4", "video/mp4"),
       file("s.mp3", "audio/mpeg"),
     ]);
 
     expect(groups.map((group) => group.map(({ name }) => name))).toEqual([
       photos.slice(0, 10).map(({ name }) => name),
-      ["p10.jpg", "v.mp4"],
+      ["p10.jpg"],
       ["a.pdf"],
       ["s.mp3"],
     ]);
     expect(classifyAttachment(file("x.heic", ""))).toBe("image");
-    // GIF는 사진으로 다루지 않는다. 내려받기만 하는 일반 파일이다.
-    expect(classifyAttachment(file("x.gif", "image/gif"))).toBe("file");
+  });
+
+  it("동영상과 GIF는 MIME type이나 확장자로 보내지 않는다", () => {
+    expect(isBlockedAttachment(file("v.mp4", "video/mp4"))).toBe(true);
+    expect(isBlockedAttachment(file("x.gif", "image/gif"))).toBe(true);
+    expect(isBlockedAttachment(file("clip.MOV", ""))).toBe(true);
+    expect(isBlockedAttachment(file("p.jpg", "image/jpeg"))).toBe(false);
+    expect(isBlockedAttachment(file("a.pdf", "application/pdf"))).toBe(false);
+    expect(isBlockedAttachment(file("s.mp3", "audio/mpeg"))).toBe(false);
+    expect(isBlockedAttachment(file("voice.webm", "audio/webm"))).toBe(false);
   });
 
   it("내려받은 앞부분으로 재생할 수 있는 형식만 알아본다", () => {

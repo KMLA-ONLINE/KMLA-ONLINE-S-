@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(17);
 
 -- seed: 홍길동(…0001)과 김민준(…0100)의 1:1 대화 c…01. d…01은 김민준, d…02는 홍길동의 메시지다.
 create temp table profile_ids as
@@ -218,9 +218,20 @@ select results_eq(
     )
     order by id$$,
   $$values
+    ('d0000000-0000-0000-0000-000000000001'::uuid, 0),
     ('d0000000-0000-0000-0000-000000000002'::uuid, 1),
     ('e0000000-0000-0000-0000-000000000300'::uuid, 1)$$,
-  'read counts cover only my own messages'
+  'read counts leave out the sender and the caller'
+);
+
+select results_eq(
+  $$select id, unread_member_count
+    from public.list_message_read_counts(
+      'c0000000-0000-0000-0000-000000000002',
+      array['d0000000-0000-0000-0000-000000000013']::uuid[]
+    )$$,
+  $$values ('d0000000-0000-0000-0000-000000000013'::uuid, 2)$$,
+  'in a group the count also covers messages from other members'
 );
 
 reset role;

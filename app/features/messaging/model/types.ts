@@ -2,6 +2,8 @@ import type { PostReaction } from "~/features/posts/model/types";
 
 export interface MessageParticipant {
   id: string;
+  /** 프로필 주소(`/profile/:pubId`). 모르면 프로필로 잇지 않는다. */
+  pubId?: string;
   name: string;
   avatarUrl: string | null;
   /** 지금 멤버인지. 나간 사람도 지난 메시지와 시스템 메시지의 이름을 그리려고 목록에 남는다. */
@@ -57,7 +59,7 @@ export interface ConversationMessage {
   /** 내 반응을 포함한 반응 종류별 총수. */
   reactions?: MessageReaction[];
   myReaction?: PostReaction | null;
-  /** 내 메시지에서만 의미가 있다. 이 메시지를 아직 읽지 않은 다른 멤버 수. */
+  /** 이 메시지를 아직 읽지 않은 다른 멤버 수. 보낸 사람과 나는 세지 않는다. */
   unreadMemberCount?: number;
   pinned?: boolean;
   /** 첨부. 본문 없이 첨부만 있는 메시지도 있다. */
@@ -78,6 +80,8 @@ export interface MessageReplyPreview {
   /** 원문이 삭제됐으면 서버가 비워 준다. */
   body: string;
   deleted?: boolean;
+  /** 원문의 첫 첨부 종류. 본문 없이 첨부만 있는 원문을 "사진"처럼 부를 때 쓴다. */
+  attachmentKind?: MessageAttachmentKind | null;
 }
 
 /** 메시지 목록의 페이지 경계. `(sentAt, id)` 순서로 이보다 앞선 메시지를 읽는다. */

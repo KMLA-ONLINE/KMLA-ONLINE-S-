@@ -2,10 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 
 import { messagingKeys } from "~/features/messaging/data/cache";
 import { listMessageReactors } from "~/features/messaging/data/queries";
-import {
-  formatMessageDay,
-  formatMessageTime,
-} from "~/features/messaging/model/message-time";
 import type { ConversationMessage } from "~/features/messaging/model/types";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { UserAvatar } from "~/shared/components/user-avatar";
@@ -18,7 +14,7 @@ import {
 } from "~/shared/ui/dialog";
 import { Spinner } from "~/shared/ui/spinner";
 
-/** 메시지에 반응한 사람과 반응 시각(기능 명세 §13.8). 열 때마다 서버에서 새로 읽는다. */
+/** 메시지에 반응한 사람(기능 명세 §13.8). 열 때마다 서버에서 새로 읽는다. */
 export function ReactionMembersDialog({
   message,
   onClose,
@@ -69,17 +65,8 @@ export function ReactionMembersDialog({
                     name={reactor.name}
                     size="lg"
                   />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">
-                      {reactor.name}
-                    </span>
-                    <time
-                      dateTime={reactor.reactedAt}
-                      className="block text-xs text-muted-foreground"
-                    >
-                      {formatMessageDay(reactor.reactedAt)}{" "}
-                      {formatMessageTime(reactor.reactedAt)}
-                    </time>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {reactor.name}
                   </span>
                   <ReactionEmoji
                     reaction={reactor.reaction}

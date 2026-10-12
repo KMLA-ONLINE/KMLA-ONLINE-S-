@@ -45,13 +45,12 @@ export async function catchUpConversation(
 }
 
 /**
- * 다른 멤버가 읽었다. 내 메시지의 "읽지 않은 수"는 바뀐 시각에 잡히지 않으므로 최근 내 메시지의 수만
- * 다시 받는다.
+ * 다른 멤버가 읽었다. 메시지의 "읽지 않은 수"는 바뀐 시각에 잡히지 않으므로 최근 메시지의 수만 다시
+ * 받는다. 그룹에서는 상대 메시지도 다른 멤버가 읽었는지 보여 준다.
  */
 export async function refreshReadState(
   queryClient: QueryClient,
   conversationId: string,
-  viewerId: string,
 ): Promise<void> {
   const data = queryClient.getQueryData<MessagePages>(
     messagingKeys.messages(conversationId),
@@ -59,7 +58,10 @@ export async function refreshReadState(
   const ids = (data ? flattenMessagePages(data) : [])
     .filter(
       (message) =>
-        message.senderId === viewerId && !message.pending && !message.deleted,
+        !message.system &&
+        !message.pending &&
+        !message.failed &&
+        !message.deleted,
     )
     .slice(-READ_COUNT_LIMIT)
     .map(({ id }) => id);

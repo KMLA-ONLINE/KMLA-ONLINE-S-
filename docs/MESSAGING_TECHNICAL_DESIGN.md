@@ -22,8 +22,9 @@
 
 - `public.conversations`: 유형(`direct`·`group`), 그룹 이름, 생성자, 마지막 메시지 시각. 1:1 대화는 두
   프로필 쌍에 unique 제약을 두어 같은 두 사람 사이에 하나만 존재하게 한다.
-- `public.conversation_members`: 대화, 프로필, 참여 시각(`joined_at`), 나간 시각(`left_at`), 읽음 위치,
-  알림 끄기 만료 시각. 다시 참여하면 새 참여 기간 행을 만들어 이전 기간과 사이 기간을 구분한다. 그룹
+- `public.conversation_members`: 대화, 프로필, 참여 시각(`joined_at`), 나간 시각(`left_at`), 스스로 나갔는지
+  (`left_by_self`), 읽음 위치, 알림 끄기 만료 시각. 대화 목록과 탭 배지는 가장 최근 기간을 스스로 나간 대화를
+  빼고, 대화 ID를 지정한 한 건 조회는 그대로 돌려준다. 다시 참여하면 새 참여 기간 행을 만들어 이전 기간과 사이 기간을 구분한다. 그룹
   최대 100명은 멤버 추가 RPC가 대화 행을 잠근 뒤 강제한다.
 - `private.messages`: 대화, 발신자, `sent_at`, 답장 대상, 본문 암호문, 키 버전, 편집 시각, 삭제 시각,
   시스템 메시지 종류. 클라이언트가 만든 UUID를 기본 키로 받아 재전송을 멱등으로 만든다.
@@ -89,8 +90,9 @@ trigger가 `realtime.send`로 현재 멤버마다 자기 private Broadcast topic
 - `message_changed`: 메시지가 새로 오거나 바뀌었다. 수정, 삭제, 반응, 고정은 메시지의 `changed_at`을
   갱신하므로 모두 이 신호 하나로 온다. `kind`가 `content`(새 메시지, 수정, 삭제)일 때만 대화 목록을 다시
   읽고, 반응·고정(`meta`)은 열린 대화방만 따라잡는다.
-- `read_changed`: 다른 멤버가 읽음 위치를 옮겼다. 내 메시지의 읽지 않은 수는 `changed_at`에 잡히지 않으므로
-  열린 대화방의 최근 내 메시지만 `list_message_read_counts`로 다시 받는다. 본문은 다시 복호화하지 않는다.
+- `read_changed`: 다른 멤버가 읽음 위치를 옮겼다. 메시지의 읽지 않은 수는 `changed_at`에 잡히지 않으므로
+  열린 대화방의 최근 메시지만 `list_message_read_counts`로 다시 받는다. 읽지 않은 수는 보낸 사람과 호출자를
+  빼고 세므로 그룹의 상대 메시지에도 의미가 있다. 본문은 다시 복호화하지 않는다.
 - 운영 작업의 대량 갱신은 `messaging.suppress_signals`로 신호와 `changed_at` 갱신을 끈다
   (`supabase/README.md`).
 

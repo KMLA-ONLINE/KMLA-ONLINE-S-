@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   conversationListQuery,
   invalidateConversationList,
+  removeConversationFromList,
 } from "~/features/messaging/data/cache";
 import {
   addConversationMembers,
@@ -18,6 +19,7 @@ import {
 import { refreshConversationInList } from "~/features/messaging/data/sync";
 import type { RecipientSelection } from "~/features/messaging/components/recipient-picker-dialog";
 import type { Conversation } from "~/features/messaging/model/types";
+import type { RoomEntryState } from "~/features/messaging/hooks/use-room-entry";
 
 /**
  * 대화방이 loader로 받은 대화 정보에 대화 목록의 최신 값을 덮는다. 이름, 멤버, 알림 상태는 다른
@@ -49,6 +51,7 @@ export function useListedConversation(
  */
 export function useConversationMembership(conversationId: string) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   async function run(action: () => Promise<void>, failure: string) {
     try {
@@ -69,11 +72,20 @@ export function useConversationMembership(conversationId: string) {
         () => addConversationMembers(conversationId, profileIds),
         "멤버를 초대하지 못했습니다.",
       ),
-    leave: () =>
-      run(
-        () => leaveConversation(conversationId),
-        "대화에서 나가지 못했습니다.",
-      ),
+    // 스스로 나간 그룹은 목록에서 사라지므로 대화 목록으로 돌아간다. 뒤로가기가 나간 대화방으로
+    // 돌아오지 않게 지금 entry를 바꾼다.
+    leave: async () => {
+      try {
+        await leaveConversation(conversationId);
+      } catch {
+        toast.error("대화에서 나가지 못했습니다.");
+        return false;
+      }
+      removeConversationFromList(queryClient, conversationId);
+      void invalidateConversationList(queryClient);
+      await navigate("/messenger", { replace: true });
+      return true;
+    },
     remove: (profileId: string) =>
       run(
         () => removeConversationMember(conversationId, profileId),
@@ -87,8 +99,14 @@ export function useConversationMembership(conversationId: string) {
   };
 }
 
-/** 새 대화를 열고 그 대화방으로 간다. 한 명이면 1:1 대화, 여러 명이면 그룹이다. */
-export function useStartConversation() {
+/**
+ * 새 대화를 열고 그 대화방으로 간다. 한 명이면 1:1 대화, 여러 명이면 그룹이다. `entry`는 대화방
+ * entry를 쌓을지 바꿀지다(`useRoomEntry`).
+ */
+export function useStartConversation(entry: {
+  replace: boolean;
+  state: RoomEntryState;
+}) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -103,7 +121,7 @@ export function useStartConversation() {
               recipients.map(({ id }) => id),
             );
       await invalidateConversationList(queryClient);
-      await navigate(`/messenger/${conversationId}`);
+      await navigate(`/messenger/${conversationId}`, entry);
     } catch (error) {
       toast.error("대화를 시작하지 못했습니다.");
       throw error;

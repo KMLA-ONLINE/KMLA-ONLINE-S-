@@ -105,7 +105,6 @@ describe("MessagingSync", () => {
     expect(sync.refreshReadState).toHaveBeenCalledWith(
       expect.anything(),
       "open",
-      "1",
     );
     expect(sync.catchUpConversation).not.toHaveBeenCalled();
   });
@@ -156,7 +155,6 @@ describe("MessagingSync", () => {
     expect(sync.refreshReadState).toHaveBeenCalledWith(
       expect.anything(),
       "open",
-      "1",
     );
   });
 });

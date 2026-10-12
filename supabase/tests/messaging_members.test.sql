@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(29);
 
 -- seed: 홍길동(…0001), 김민준(…0100), 김관리(kim-admin, 앱 관리자), 박새벽, 이한별.
 insert into auth.users (
@@ -256,6 +256,14 @@ select ok(
   'a removed member cannot see later messages'
 );
 
+select ok(
+  exists (
+    select 1 from public.list_conversations()
+    where conversation_id = (select id from made where name = 'group')
+  ),
+  'a removed member still lists the conversation'
+);
+
 select throws_ok(
   $$select public.send_message(
       (select id from made where name = 'group'),
@@ -291,7 +299,15 @@ select public.leave_conversation((select id from made where name = 'group'));
 
 select ok(
   exists (select 1 from public.list_conversations((select id from made where name = 'group'))),
-  'a member who left still finds the conversation in their list'
+  'a member who left can still open the conversation by id'
+);
+
+select ok(
+  not exists (
+    select 1 from public.list_conversations()
+    where conversation_id = (select id from made where name = 'group')
+  ),
+  'a member who left on their own no longer lists the conversation'
 );
 
 select throws_ok(

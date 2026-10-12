@@ -42,6 +42,7 @@ import {
 import {
   classifyAttachment,
   groupAttachmentsIntoMessages,
+  isBlockedAttachment,
 } from "~/features/messaging/model/attachments";
 import { applyMessageReaction } from "~/features/messaging/model/message-reactions";
 import { activeParticipants } from "~/features/messaging/model/system-message";
@@ -318,11 +319,13 @@ export function useConversationMessages(conversation: Conversation) {
   };
 
   /**
-   * 고른 파일을 보낸다. 사진·동영상은 열 개씩 한 묶음, 일반 파일과 오디오는 파일마다 메시지 하나다
-   * (기능 명세 §13.5). 각 메시지는 기기 안의 미리보기로 먼저 그린다.
+   * 고른 파일을 보낸다. 사진은 열 개씩 한 묶음, 일반 파일과 오디오는 파일마다 메시지 하나다
+   * (기능 명세 §13.5). 동영상과 GIF는 빼고 알린다. 각 메시지는 기기 안의 미리보기로 먼저 그린다.
    */
-  const sendFiles = async (files: File[]) => {
-    let allSent = true;
+  const sendFiles = async (selected: File[]) => {
+    const files = selected.filter((file) => !isBlockedAttachment(file));
+    let allSent = files.length === selected.length;
+    if (!allSent) toast.error("동영상과 GIF는 보낼 수 없습니다.");
     for (const group of groupAttachmentsIntoMessages(files)) {
       const id = crypto.randomUUID();
       const draft: ConversationMessage = {

@@ -19,6 +19,7 @@ import {
   type ProfilePostPage,
 } from "~/features/posts";
 import { Deferred } from "~/shared/components/deferred";
+import { SendMessageButton } from "~/features/messaging/components/send-message-button";
 import { ProfileMediaEditor } from "~/features/profiles/components/profile-media-editor";
 import { formatCohort } from "~/features/profiles/model/format";
 import type { AcceptedProfile } from "~/features/profiles/model/types";
@@ -443,7 +444,12 @@ export function ProfileDetail({
                   <PencilIcon />
                   프로필 편집
                 </Link>
-              ) : null}
+              ) : (
+                <SendMessageButton
+                  profileId={profile.id}
+                  className="order-1 mt-5 h-10 w-full basis-full justify-center sm:order-none sm:col-start-3 sm:row-start-1 sm:mt-1 sm:h-auto sm:w-auto sm:py-2"
+                />
+              )}
 
               {profile.description ? (
                 <ProfileDescription description={profile.description} />

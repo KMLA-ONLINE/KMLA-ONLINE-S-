@@ -1,7 +1,8 @@
-import { ThumbsUpIcon } from "lucide-react";
+import { BanIcon, ThumbsUpIcon } from "lucide-react";
 import type { Ref } from "react";
 
 import { MessageAttachments } from "~/features/messaging/components/message-attachments";
+import { formatReplyPreview } from "~/features/messaging/model/conversation-preview";
 import {
   getEmojiOnlyMessageGraphemes,
   parseMessageText,
@@ -102,10 +103,14 @@ export function MessageBubble({
               isEmojiOnly
                 ? "px-1 py-0.5 text-5xl leading-none"
                 : "rounded-2xl px-3.5 py-2 text-[15px] [overflow-wrap:anywhere] break-keep whitespace-pre-wrap",
+              // 삭제된 메시지는 같은 문구를 보낸 메시지와 헷갈리지 않게 배경 없이 연한 점선 테두리와
+              // 흐린 글씨로 그린다. 내 메시지와 상대 메시지가 같은 모양이다.
               !isEmojiOnly &&
-                (isOwn
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-foreground"),
+                (message.deleted
+                  ? "border border-dashed border-muted-foreground/40 bg-transparent text-muted-foreground"
+                  : isOwn
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-foreground"),
               !isEmojiOnly && !startsGroup && isOwn && "rounded-tr-md",
               !isEmojiOnly && !startsGroup && !isOwn && "rounded-tl-md",
               !isEmojiOnly && !endsGroup && isOwn && "rounded-br-md",
@@ -118,7 +123,7 @@ export function MessageBubble({
                 aria-label={`${replyTargetAuthor ?? "알 수 없는 사용자"}의 원문 메시지 보기`}
                 className={cn(
                   "mb-1.5 block w-full max-w-full min-w-0 border-l-2 pl-2 text-left text-xs leading-4",
-                  isOwn && !isEmojiOnly
+                  isOwn && !isEmojiOnly && !message.deleted
                     ? "border-primary-foreground/50 text-primary-foreground/85 hover:bg-primary-foreground/10"
                     : "border-primary text-muted-foreground hover:bg-background/60",
                 )}
@@ -128,13 +133,16 @@ export function MessageBubble({
                   {replyTargetAuthor ?? "알 수 없는 사용자"}
                 </span>
                 <span className="block truncate">
-                  {replyTarget.deleted
-                    ? "삭제된 메시지입니다"
-                    : replyTarget.body}
+                  {formatReplyPreview(replyTarget)}
                 </span>
               </button>
             ) : null}
-            {isEmojiOnly ? (
+            {message.deleted ? (
+              <span className="inline-flex items-center gap-1.5">
+                <BanIcon aria-hidden className="size-3.5 shrink-0" />
+                {messageBody}
+              </span>
+            ) : isEmojiOnly ? (
               <EmojiOnlyMessageBody graphemes={emojiGraphemes} />
             ) : (
               <MessageBody body={messageBody} isOwn={isOwn} />
@@ -156,7 +164,7 @@ export function MessageBubble({
                 dateTime={message.sentAt}
                 className={cn(
                   "mt-1 block text-right text-[10px] leading-none",
-                  !isEmojiOnly && isOwn
+                  !isEmojiOnly && isOwn && !message.deleted
                     ? "text-primary-foreground/75"
                     : "text-muted-foreground",
                 )}

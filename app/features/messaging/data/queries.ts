@@ -25,6 +25,7 @@ type MessageRow = Functions["list_messages"]["Returns"][number];
 
 interface ParticipantRow {
   id: number;
+  pub_id: string;
   name: string;
   avatar_path: string | null;
   active: boolean;
@@ -276,6 +277,7 @@ async function toSummaries(
     participants: (participantRows[index] ?? []).map(
       (participant): MessageParticipant => ({
         id: String(participant.id),
+        pubId: participant.pub_id,
         name: participant.name,
         avatarUrl: participant.avatar_path
           ? (avatarUrls.get(participant.avatar_path) ?? null)
@@ -319,6 +321,8 @@ function toMessage(row: MessageRow): ConversationMessage {
           senderId: toProfileId(row.reply_sender_id),
           body: row.reply_body ?? "",
           deleted: row.reply_deleted,
+          attachmentKind:
+            (row.reply_attachment_kind as MessageAttachmentKind | null) ?? null,
         }
       : undefined,
     unreadMemberCount: row.unread_member_count ?? undefined,

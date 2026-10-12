@@ -55,8 +55,12 @@ create table public.conversation_members (
   last_read_sent_at timestamptz not null default clock_timestamp(),
   last_read_message_id uuid not null default '00000000-0000-0000-0000-000000000000',
   muted_until timestamptz,
+  -- 스스로 나간 기간인지. 내보내진 기간과 달리 대화 목록에서 감춘다(기능 명세 §13.16).
+  left_by_self boolean not null default false,
   constraint conversation_members_period_check
-    check (left_at is null or left_at >= joined_at)
+    check (left_at is null or left_at >= joined_at),
+  constraint conversation_members_left_by_self_check
+    check (not left_by_self or left_at is not null)
 );
 
 create unique index conversation_members_active_key
@@ -321,14 +325,15 @@ revoke all on function private.decrypt_message_text(bytea, smallint, jsonb)
   from public;
 
 -- 내 대화 목록. `p_conversation_id`를 주면 그 대화 한 건만 돌려주며, 대화방이 대화 정보를 읽을 때
--- 쓴다. 나간 대화도 참여 기간의 메시지를 계속 볼 수 있으므로 목록에 남는다(기능 명세 §13.16).
+-- 쓴다. 내보내진 대화는 참여 기간의 메시지를 계속 볼 수 있으므로 목록에 남고, 스스로 나간 대화는
+-- 목록에서 감춘다. 한 건을 지정하면 나간 대화도 돌려준다(기능 명세 §13.16).
 create function public.list_conversations(p_conversation_id uuid default null)
 returns table (
   conversation_id uuid,
   type public.conversation_type,
   name text,
   viewer_id bigint,
-  -- 현재 멤버의 `{id, name, avatar_path}`. 참여 순서다.
+  -- 지금과 예전 멤버의 `{id, pub_id, name, avatar_path, active}`. 지금 멤버가 앞이고 참여 순서다.
   participants jsonb,
   last_message_id uuid,
   last_message_sender_id bigint,
@@ -400,6 +405,7 @@ begin
   join public.profiles as caller on caller.id = caller_profile_id
   join public.conversations as conversation
     on conversation.id = latest_period.conversation_id
+    and (p_conversation_id is not null or not latest_period.left_by_self)
   left join public.profiles as counterpart
     on conversation.type = 'direct'
     and counterpart.id = case
@@ -413,6 +419,7 @@ begin
     select jsonb_agg(
       jsonb_build_object(
         'id', profile.id,
+        'pub_id', profile.pub_id,
         'name', profile.name,
         'avatar_path', profile.avatar_path,
         'active', person.active
@@ -496,7 +503,9 @@ returns table (
   -- 답장 원문의 앞부분. 원문이 삭제됐으면 비운다.
   reply_body text,
   reply_deleted boolean,
-  -- 내 메시지에서만 채운다. 이 메시지를 아직 읽지 않은 현재 멤버 수.
+  -- 답장 원문의 첫 첨부 종류. 본문 없이 첨부만 있는 원문의 인용에 쓴다.
+  reply_attachment_kind text,
+  -- 이 메시지를 아직 읽지 않은 현재 멤버 수. 보낸 사람과 호출자는 세지 않는다.
   unread_member_count integer,
   -- `{reaction, count}`를 많은 순서로. 내 반응을 포함한다.
   reactions jsonb,
@@ -542,11 +551,22 @@ as $$
     end,
     original.deleted_at is not null,
     case
-      when message.sender_id = p_caller_profile_id then (
+      when original.id is not null and original.deleted_at is null then (
+        select attachment.kind
+        from private.message_attachments as attachment
+        where attachment.message_id = original.id
+          and attachment.status = 'ready'
+        order by attachment.position
+        limit 1
+      )
+    end,
+    case
+      when message.system_kind is null then (
         select count(*)::integer
         from public.conversation_members as other
         where other.conversation_id = p_conversation_id
           and other.profile_id <> p_caller_profile_id
+          and other.profile_id is distinct from message.sender_id
           and other.left_at is null
           and other.joined_at <= message.sent_at
           and (other.last_read_sent_at, other.last_read_message_id) < (message.sent_at, message.id)
@@ -635,6 +655,7 @@ returns table (
   reply_sender_id bigint,
   reply_body text,
   reply_deleted boolean,
+  reply_attachment_kind text,
   unread_member_count integer,
   reactions jsonb,
   my_reaction public.post_reaction,
@@ -717,6 +738,7 @@ returns table (
   reply_sender_id bigint,
   reply_body text,
   reply_deleted boolean,
+  reply_attachment_kind text,
   unread_member_count integer,
   reactions jsonb,
   my_reaction public.post_reaction,
@@ -1269,6 +1291,7 @@ returns table (
   reply_sender_id bigint,
   reply_body text,
   reply_deleted boolean,
+  reply_attachment_kind text,
   unread_member_count integer,
   reactions jsonb,
   my_reaction public.post_reaction,
@@ -1438,7 +1461,7 @@ after insert or update on private.messages
 for each row
 execute function private.broadcast_message_change();
 
--- 읽음 위치가 바뀌면 다른 현재 멤버의 "내 메시지를 읽지 않은 수"와 대화 목록이 바뀐다.
+-- 읽음 위치가 바뀌면 다른 현재 멤버가 보는 "읽지 않은 수"와 대화 목록이 바뀐다.
 create function private.broadcast_read_change()
 returns trigger
 language plpgsql
@@ -1482,8 +1505,8 @@ using (
   and (select realtime.topic()) = 'messaging:' || (select private.current_profile_id())::text
 );
 
--- 내 메시지들의 "읽지 않은 수"만. 다른 멤버가 읽었다는 신호를 받았을 때 본문을 다시 복호화하지 않고
--- 읽음 표시만 고친다. 내 메시지가 아니거나 내 참여 기간 밖이면 빠진다.
+-- 메시지들의 "읽지 않은 수"만. 다른 멤버가 읽었다는 신호를 받았을 때 본문을 다시 복호화하지 않고
+-- 읽음 표시만 고친다. 보낸 사람과 호출자는 세지 않는다. 시스템 메시지나 내 참여 기간 밖이면 빠진다.
 create function public.list_message_read_counts(
   p_conversation_id uuid,
   p_message_ids uuid[]
@@ -1514,6 +1537,7 @@ begin
       from public.conversation_members as other
       where other.conversation_id = p_conversation_id
         and other.profile_id <> caller_profile_id
+        and other.profile_id is distinct from message.sender_id
         and other.left_at is null
         and other.joined_at <= message.sent_at
         and (other.last_read_sent_at, other.last_read_message_id) < (message.sent_at, message.id)
@@ -1521,7 +1545,7 @@ begin
   from private.messages as message
   where message.conversation_id = p_conversation_id
     and message.id = any(p_message_ids)
-    and message.sender_id = caller_profile_id
+    and message.system_kind is null
     and exists (
       select 1
       from public.conversation_members as period
@@ -2099,7 +2123,8 @@ begin
   perform private.lock_group_for_member(caller_profile_id, p_conversation_id);
 
   update public.conversation_members as member
-  set left_at = clock_timestamp()
+  set left_at = clock_timestamp(),
+    left_by_self = true
   where member.conversation_id = p_conversation_id
     and member.profile_id = caller_profile_id
     and member.left_at is null;
@@ -2243,6 +2268,7 @@ begin
   select count(*)::integer
   into total
   from latest_period
+  -- 스스로 나간 대화는 목록에 없으므로 배지에도 세지 않는다.
   join private.messages as message
     on message.conversation_id = latest_period.conversation_id
     and message.sender_id is distinct from caller_profile_id
@@ -2250,14 +2276,15 @@ begin
     and message.system_kind is null
     and (message.sent_at, message.id)
       > (latest_period.last_read_sent_at, latest_period.last_read_message_id)
-  where exists (
-    select 1
-    from public.conversation_members as period
-    where period.conversation_id = latest_period.conversation_id
-      and period.profile_id = caller_profile_id
-      and message.sent_at >= period.joined_at
-      and (period.left_at is null or message.sent_at < period.left_at)
-  );
+  where not latest_period.left_by_self
+    and exists (
+      select 1
+      from public.conversation_members as period
+      where period.conversation_id = latest_period.conversation_id
+        and period.profile_id = caller_profile_id
+        and message.sent_at >= period.joined_at
+        and (period.left_at is null or message.sent_at < period.left_at)
+    );
 
   return total;
 end;
@@ -2462,9 +2489,25 @@ begin
   if file_count > 1 and exists (
     select 1
     from jsonb_array_elements(p_files) as item
-    where item ->> 'kind' not in ('image', 'video')
+    where item ->> 'kind' is distinct from 'image'
   ) then
-    raise exception 'several attachments must all be photos or videos'
+    raise exception 'several attachments must all be photos'
+      using errcode = '22023';
+  end if;
+  -- 동영상과 GIF는 보낼 수 없다(기능 명세 §13.5). 업로더가 밝힌 종류, MIME type과 확장자로 막는다.
+  if exists (
+    select 1
+    from jsonb_array_elements(p_files) as item
+    where item ->> 'kind' = 'video'
+      or lower(btrim(coalesce(item ->> 'mime_type', ''))) like 'video/%'
+      or lower(btrim(coalesce(item ->> 'mime_type', ''))) = 'image/gif'
+      or (
+        lower(btrim(coalesce(item ->> 'mime_type', ''))) not like 'audio/%'
+        and lower(btrim(coalesce(item ->> 'file_name', '')))
+          ~ '\.(gif|mp4|m4v|mov|webm|mkv|avi|wmv|flv|3gp|3g2|mpe?g|ogv)$'
+      )
+  ) then
+    raise exception 'videos and GIFs are not allowed'
       using errcode = '22023';
   end if;
   if not exists (

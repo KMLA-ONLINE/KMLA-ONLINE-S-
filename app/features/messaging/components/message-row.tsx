@@ -1,4 +1,5 @@
 import { ContextMenu } from "@base-ui/react/context-menu";
+import { Link } from "react-router";
 import {
   useEffect,
   useRef,
@@ -367,6 +368,20 @@ export function MessageRow({
       }
     : null;
 
+  // 읽지 않은 멤버 수는 버블 바깥쪽 아래에 둔다. 내 메시지는 왼쪽, 상대 메시지는 오른쪽이다.
+  const unreadCount =
+    showUnreadCount && unreadParticipantCount > 0 ? (
+      <span
+        aria-label={`${unreadParticipantCount}명 안 읽음`}
+        className={cn(
+          "shrink-0 self-end text-[11px] leading-4 font-medium text-primary",
+          hasVisibleReactions ? "mb-[1.125rem]" : "mb-0.5",
+        )}
+      >
+        {unreadParticipantCount}
+      </span>
+    ) : null;
+
   const row = (
     <article
       ref={rowRef}
@@ -397,10 +412,8 @@ export function MessageRow({
     >
       {!isOwn ? (
         endsGroup ? (
-          <UserAvatar
-            src={sender?.avatarUrl}
-            name={sender?.name}
-            size="default"
+          <SenderAvatar
+            sender={sender}
             className={cn(
               hasVisibleReactions ? "mb-[1.125rem]" : "mb-0.5",
               "size-7",
@@ -438,14 +451,7 @@ export function MessageRow({
         ) : null}
         <div className={cn("flex w-full min-w-0 items-center gap-1.5")}>
           {isOwn ? actionRail : null}
-          {isOwn && showUnreadCount && unreadParticipantCount > 0 ? (
-            <span
-              aria-label={`${unreadParticipantCount}명 안 읽음`}
-              className="mb-0.5 shrink-0 self-end text-[11px] leading-4 font-medium text-primary"
-            >
-              {unreadParticipantCount}
-            </span>
-          ) : null}
+          {isOwn ? unreadCount : null}
           <MessageTimeCard message={message} showTimeCard={!showTimestamp}>
             <MessageBubble
               anchorRef={bubbleRef}
@@ -462,6 +468,7 @@ export function MessageRow({
               onShowReactions={onShowReactions}
             />
           </MessageTimeCard>
+          {!isOwn ? unreadCount : null}
           {!isOwn ? actionRail : null}
         </div>
       </div>
@@ -545,6 +552,37 @@ export function MessageRow({
         ) : null}
       </ContextMenu.Portal>
     </ContextMenu.Root>
+  );
+}
+
+/** 상대 메시지 옆 프로필 사진. 프로필 주소를 알면 누를 때 그 사람의 프로필로 간다. */
+function SenderAvatar({
+  sender,
+  className,
+}: {
+  sender?: MessageParticipant;
+  className: string;
+}) {
+  const avatar = (
+    <UserAvatar
+      src={sender?.avatarUrl}
+      name={sender?.name}
+      size="default"
+      className={sender?.pubId ? "size-7" : className}
+    />
+  );
+  if (!sender?.pubId) return avatar;
+  return (
+    <Link
+      to={`/profile/${sender.pubId}`}
+      aria-label={`${sender.name} 프로필`}
+      className={cn(
+        "shrink-0 rounded-full focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+        className,
+      )}
+    >
+      {avatar}
+    </Link>
   );
 }
 

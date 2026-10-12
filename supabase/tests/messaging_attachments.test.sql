@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(19);
+select plan(21);
 
 -- seed: 홍길동(…0001)과 김민준(…0100)의 1:1 대화 c…01, 그룹 c…02에는 이한별이 2026-08-21에 참여했다.
 insert into auth.users (
@@ -31,17 +31,37 @@ select throws_ok(
     )$$,
   '22023',
   null,
-  'several attachments must all be photos or videos'
+  'several attachments must all be photos'
 );
 
 select throws_ok(
   $$select * from public.prepare_message_attachments(
       'c0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000701',
-      '[{"kind":"file","mime_type":"video/mp4","size_bytes":40000000,"file_name":"big.mp4"}]'::jsonb
+      '[{"kind":"file","mime_type":"application/zip","size_bytes":40000000,"file_name":"big.zip"}]'::jsonb
     )$$,
   '23514',
   null,
   'a file over 30MiB is rejected'
+);
+
+select throws_ok(
+  $$select * from public.prepare_message_attachments(
+      'c0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000701',
+      '[{"kind":"file","mime_type":"","size_bytes":4,"file_name":"clip.MOV"}]'::jsonb
+    )$$,
+  '22023',
+  null,
+  'a video is rejected even as a plain file'
+);
+
+select throws_ok(
+  $$select * from public.prepare_message_attachments(
+      'c0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000701',
+      '[{"kind":"file","mime_type":"image/gif","size_bytes":4,"file_name":"funny.gif"}]'::jsonb
+    )$$,
+  '22023',
+  null,
+  'a GIF is rejected'
 );
 
 -- 실패한 업로드를 같은 메시지 ID로 다시 예고할 수 있다.
@@ -58,14 +78,14 @@ select row_number() over (), *
 from public.prepare_message_attachments(
   'c0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000701',
   '[{"kind":"image","mime_type":"image/webp","size_bytes":4,"width":30,"height":20,"file_name":"축제 사진.webp"},
-    {"kind":"video","mime_type":"video/mp4","size_bytes":4,"file_name":"영상.mp4"}]'::jsonb
+    {"kind":"image","mime_type":"image/webp","size_bytes":4,"width":20,"height":20,"file_name":"둘째 사진.webp"}]'::jsonb
 );
 
 select ok(
   (select count(*) = 2 from prepared)
     and (select thumbnail_path is not null from prepared where position = 1)
-    and (select thumbnail_path is null from prepared where position = 2),
-  'preparing returns exact paths, with a thumbnail path for photos only'
+    and (select thumbnail_path is not null from prepared where position = 2),
+  'preparing returns exact paths, with a thumbnail path for each photo'
 );
 
 select throws_ok(
@@ -83,7 +103,7 @@ select throws_ok(
 
 insert into storage.objects (bucket_id, name, owner_id, metadata)
 select 'message-attachments', object_path, '10000000-0000-0000-0000-000000000001',
-  case when position = 1 then '{"size":4,"mimetype":"image/webp"}' else '{"size":4,"mimetype":"video/mp4"}' end::jsonb
+  '{"size":4,"mimetype":"image/webp"}'::jsonb
 from prepared;
 
 select throws_ok(
@@ -108,7 +128,7 @@ select results_eq(
       attachments -> 0 ->> 'thumbnail_path'
     from public.list_messages('c0000000-0000-0000-0000-000000000001')
     where id = 'e0000000-0000-0000-0000-000000000701'$$,
-  $$values (''::text, '["축제 사진.webp", "영상.mp4"]'::jsonb, null::text)$$,
+  $$values (''::text, '["축제 사진.webp", "둘째 사진.webp"]'::jsonb, null::text)$$,
   'pages carry the attachments in order with decrypted names, and drop a missing thumbnail'
 );
 
@@ -123,7 +143,7 @@ select results_eq(
   $$select media_count, file_count
     from public.get_conversation_attachment_counts('c0000000-0000-0000-0000-000000000001')$$,
   $$values (2, 0)$$,
-  'shared media counts photos and videos'
+  'shared media counts photos'
 );
 
 select is(

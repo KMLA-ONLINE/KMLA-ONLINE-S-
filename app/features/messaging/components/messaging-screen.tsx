@@ -10,6 +10,7 @@ import { Link } from "react-router";
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
 import { useStartConversation } from "~/features/messaging/hooks/use-conversation-membership";
+import { useRoomEntry } from "~/features/messaging/hooks/use-room-entry";
 import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
 import type { ConversationSummary } from "~/features/messaging/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
@@ -38,7 +39,8 @@ export function MessagingScreen({
 }) {
   const [search, setSearch] = useState("");
   const [newConversationOpen, setNewConversationOpen] = useState(false);
-  const startConversation = useStartConversation();
+  const roomEntry = useRoomEntry(hasRoom);
+  const startConversation = useStartConversation(roomEntry);
   const deferredSearch = useDeferredValue(
     search.trim().toLocaleLowerCase("ko"),
   );
@@ -104,6 +106,8 @@ export function MessagingScreen({
                   <Link
                     key={conversation.id}
                     to={`/messenger/${conversation.id}`}
+                    replace={roomEntry.replace}
+                    state={roomEntry.state}
                     aria-current={selected ? "page" : undefined}
                     className={cn(
                       "flex min-w-0 items-center gap-3 rounded-xl px-2 py-2.5 transition-colors outline-none hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/50",

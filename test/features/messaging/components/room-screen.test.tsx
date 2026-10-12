@@ -240,6 +240,8 @@ describe("RoomScreen", () => {
   });
 
   it("메시지 반응을 로컬에서 선택하고 제거한다", async () => {
+    // 반응은 0.5초 안에 다시 바꾸지 않으므로 시계를 고정해 두고 필요한 만큼만 넘긴다.
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
     const conversation = await loadConversation("student-council");
     expect(conversation).not.toBeNull();
 
@@ -285,11 +287,18 @@ describe("RoomScreen", () => {
       within(message).getByRole("img", { name: "하트" }).parentElement,
     ).not.toHaveTextContent("1");
 
+    // 같은 메시지의 반응은 0.5초 안에 다시 바꾸지 않는다.
+    await user.click(reactionButton);
+    await user.click(screen.getByRole("button", { name: "하트 반응 남기기" }));
+    expect(within(message).getByRole("img", { name: "하트" })).toBeVisible();
+
+    now.mockReturnValue(1_001_000);
     await user.click(reactionButton);
     await user.click(screen.getByRole("button", { name: "하트 반응 남기기" }));
     expect(
       within(message).queryByRole("img", { name: "하트" }),
     ).not.toBeInTheDocument();
+    now.mockRestore();
   });
 
   it("답장 대상을 표시하고 기타 메뉴에서 메시지를 고정한다", async () => {
@@ -371,9 +380,12 @@ describe("RoomScreen", () => {
     );
     await user.click(await screen.findByRole("menuitem", { name: "삭제" }));
     await user.click(await screen.findByRole("button", { name: "삭제" }));
-    expect(
-      await within(ownMessage()).findByText("삭제된 메시지입니다"),
-    ).toBeInTheDocument();
+    const deletedSurface = (
+      await within(ownMessage()).findByText("삭제된 메시지입니다")
+    ).closest("div")!;
+    // 같은 문구를 보낸 메시지와 헷갈리지 않게 배경 없이 점선 테두리로 그린다.
+    expect(deletedSurface).toHaveClass("border-dashed", "bg-transparent");
+    expect(deletedSurface).not.toHaveClass("bg-primary");
     expect(
       within(ownMessage()).queryByRole("button", { name: "메시지 기타 작업" }),
     ).not.toBeInTheDocument();
@@ -457,7 +469,7 @@ describe("RoomScreen", () => {
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
   });
 
-  it("삭제 모드에서 내 메시지만 골라 한 번에 지운다", async () => {
+  it("삭제를 누르면 그 메시지를 고른 삭제 모드가 되고, 더 고른 뒤 한 번에 지운다", async () => {
     const removeMany = vi.spyOn(mutations, "deleteMessages");
     const conversation = await loadConversation("student-council");
     const { user } = renderRoute(
@@ -469,9 +481,10 @@ describe("RoomScreen", () => {
     await user.click(
       within(ownMessage).getByRole("button", { name: "메시지 기타 작업" }),
     );
-    await user.click(
-      await screen.findByRole("menuitem", { name: "여러 개 선택" }),
-    );
+    expect(
+      screen.queryByRole("menuitem", { name: "여러 개 선택" }),
+    ).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("menuitem", { name: "삭제" }));
     expect(screen.getByText("1개 선택됨")).toBeInTheDocument();
     expect(
       screen.queryByRole("textbox", { name: "메시지 입력" }),
@@ -496,11 +509,6 @@ describe("RoomScreen", () => {
     );
     expect(screen.getByText("2개 선택됨")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "삭제" }));
-    await user.click(
-      within(await screen.findByRole("dialog")).getByRole("button", {
-        name: "삭제",
-      }),
-    );
 
     await waitFor(() =>
       expect(removeMany).toHaveBeenCalledWith(
@@ -607,7 +615,7 @@ describe("RoomScreen", () => {
 
     await user.click(screen.getByRole("button", { name: "멤버 초대" }));
     const dialog = await screen.findByRole("dialog", { name: "멤버 초대" });
-    await user.type(within(dialog).getByRole("searchbox"), "새봄");
+    await user.type(within(dialog).getByRole("searchbox"), "새봄{Enter}");
     await user.click(
       await within(dialog).findByRole("button", { name: /최새봄/ }),
     );
@@ -632,11 +640,14 @@ describe("RoomScreen", () => {
     remove.mockRestore();
   });
 
-  it("그룹 이름을 바꾸고, 나가면 작성창 대신 안내를 보인다", async () => {
+  it("그룹 이름을 바꾸고, 나가면 목록에서 빼고 대화 목록으로 돌아간다", async () => {
     const conversation = await loadConversation("science-project");
     const { user } = renderRoute(
       () => <RoomScreen conversation={conversation!} />,
-      { path: "/messenger/science-project" },
+      {
+        path: "/messenger/science-project",
+        routes: [{ path: "/messenger", Component: () => <p>대화 목록</p> }],
+      },
     );
 
     await user.click(screen.getByRole("button", { name: "그룹 이름 변경" }));
@@ -649,17 +660,7 @@ describe("RoomScreen", () => {
 
     await user.click(screen.getByRole("button", { name: "그룹 나가기" }));
     await user.click(await screen.findByRole("button", { name: "나가기" }));
-    expect(
-      await screen.findByText(
-        "이 대화에서 나왔습니다. 참여한 동안의 메시지만 볼 수 있습니다.",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("textbox", { name: "메시지 입력" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "그룹 나가기" }),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByText("대화 목록")).toBeInTheDocument();
   });
 
   it("대화 정보에서 대화 알림을 끄고 다시 켠다", async () => {
@@ -685,6 +686,11 @@ describe("RoomScreen", () => {
   });
 
   it("답장을 전송하고 인용 원문으로 이동하며 삭제된 원문을 표시한다", async () => {
+    // 보낸 뒤 0.5초 안의 전송은 받지 않으므로 시계를 매번 넘긴다.
+    let clock = Date.now();
+    const now = vi
+      .spyOn(Date, "now")
+      .mockImplementation(() => (clock += 1_000));
     const conversation = await loadConversation("student-council");
     expect(conversation).not.toBeNull();
     const originalBody = "축제 부스 배치 초안 확인했어요?".repeat(20);
@@ -728,14 +734,16 @@ describe("RoomScreen", () => {
     expect(replyQuote.lastElementChild).toHaveClass("truncate");
     await user.click(replyQuote);
     expect(originalMessage).not.toHaveClass("ring-2", "ring-primary");
-    expect(
-      originalMessage.querySelector('[data-slot="message-bubble"]'),
-    ).toHaveClass(
-      "rounded-2xl",
-      "rounded-bl-md",
-      "ring-1",
-      "ring-primary",
-      "ring-offset-1",
+    await waitFor(() =>
+      expect(
+        originalMessage.querySelector('[data-slot="message-bubble"]'),
+      ).toHaveClass(
+        "rounded-2xl",
+        "rounded-bl-md",
+        "ring-1",
+        "ring-primary",
+        "ring-offset-1",
+      ),
     );
 
     await user.click(
@@ -770,9 +778,13 @@ describe("RoomScreen", () => {
       }),
     );
     expect(deletedOriginal).not.toHaveClass("ring-2", "ring-primary");
-    expect(
-      deletedOriginal.querySelector('[data-slot="message-bubble"]'),
-    ).toHaveClass("rounded-2xl", "ring-1", "ring-primary", "ring-offset-1");
+    // 이동은 열린 오버레이를 닫은 뒤에 일어나므로 강조를 기다린다.
+    await waitFor(() =>
+      expect(
+        deletedOriginal.querySelector('[data-slot="message-bubble"]'),
+      ).toHaveClass("rounded-2xl", "ring-1", "ring-primary", "ring-offset-1"),
+    );
+    now.mockRestore();
   });
 
   it("모바일 가로 스와이프로 답장을 시작한다", async () => {
@@ -1138,6 +1150,11 @@ describe("RoomScreen", () => {
   });
 
   it("메시지를 입력해 전송하고 빈 입력에서는 좋아요를 보낸다", async () => {
+    // 보낸 뒤 0.5초는 다음 전송을 받지 않는다. 시계를 매번 1초씩 넘겨 그 제한 밖에서 보낸다.
+    let clock = Date.now();
+    const now = vi
+      .spyOn(Date, "now")
+      .mockImplementation(() => (clock += 1_000));
     const conversation = await loadConversation("hyunwoo");
     expect(conversation).not.toBeNull();
 
@@ -1188,6 +1205,28 @@ describe("RoomScreen", () => {
       "rounded-2xl",
       "bg-primary",
     );
+    now.mockRestore();
+  });
+
+  it("보낸 직후 0.5초 안의 전송은 받지 않는다", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    const sendSpy = vi.spyOn(mutations, "sendMessage");
+    const conversation = await loadConversation("hyunwoo");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/hyunwoo" },
+    );
+    const like = screen.getByRole("button", { name: "좋아요 보내기" });
+
+    await user.click(like);
+    await user.click(like);
+    await waitFor(() => expect(sendSpy).toHaveBeenCalledTimes(1));
+
+    now.mockReturnValue(1_000_600);
+    await user.click(like);
+    await waitFor(() => expect(sendSpy).toHaveBeenCalledTimes(2));
+    sendSpy.mockRestore();
+    now.mockRestore();
   });
 
   it("맨 아래를 보고 있을 때 새 메시지가 오면 따라 내려가고, 위로 올려 보던 중이면 그대로 둔다", async () => {
@@ -1240,8 +1279,14 @@ describe("RoomScreen", () => {
     act(() => {
       mergeServerMessages(queryClient, "hyunwoo", [incoming("new-2", 11)]);
     });
-    expect(await screen.findByText("new-2")).toBeInTheDocument();
+    expect(
+      await within(messageThread as HTMLElement).findByText("new-2"),
+    ).toBeInTheDocument();
     expect(messageThread.scrollTop).toBe(100);
+    // 지난 대화를 보던 중에 온 상대 메시지는 맨 아래 이동 버튼 자리에 미리 보여 준다.
+    expect(
+      screen.getByRole("button", { name: /^새 메시지: .+, 맨 아래로 이동$/ }),
+    ).toHaveTextContent("new-2");
   });
 
   it("대화방을 열면 맨 아래로 이동하고 위로 스크롤하면 하단 이동 버튼을 표시한다", async () => {

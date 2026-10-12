@@ -5,7 +5,6 @@ import {
   ChevronLeftIcon,
   FileIcon,
   ImagesIcon,
-  LockKeyholeIcon,
   LogOutIcon,
   PencilIcon,
   PinIcon,
@@ -16,6 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
 import {
@@ -66,6 +66,10 @@ export function ConversationDetails({
   // 나갔거나 내보내진 그룹에서는 지난 메시지만 보이고 멤버 관리는 할 수 없다.
   const manageable =
     conversation.type === "group" && isViewerActive(conversation);
+  const counterpart =
+    conversation.type === "direct"
+      ? conversation.participants.find(({ id }) => id !== conversation.viewerId)
+      : undefined;
   return (
     <aside
       aria-label="대화 상세"
@@ -94,8 +98,25 @@ export function ConversationDetails({
             {conversation.name}
           </h2>
           <div className="mt-3 flex items-start justify-center gap-5">
+            {conversation.type === "group" ? (
+              <DetailQuickAction
+                icon={UserPlusIcon}
+                label="초대"
+                actionLabel="멤버 초대"
+                onClick={manageable ? onInvite : undefined}
+              />
+            ) : null}
             {conversation.type === "direct" ? (
-              <DetailQuickAction icon={UserRoundIcon} label="프로필" />
+              <DetailQuickAction
+                icon={UserRoundIcon}
+                label="프로필"
+                actionLabel={`${conversation.name} 프로필`}
+                href={
+                  counterpart?.pubId
+                    ? `/profile/${counterpart.pubId}`
+                    : undefined
+                }
+              />
             ) : null}
             <DetailQuickAction
               icon={muted ? BellOffIcon : BellIcon}
@@ -110,14 +131,6 @@ export function ConversationDetails({
               actionLabel="대화에서 찾기"
               onClick={onSearch}
             />
-            {conversation.type === "group" ? (
-              <DetailQuickAction
-                icon={UserPlusIcon}
-                label="초대"
-                actionLabel="멤버 초대"
-                onClick={manageable ? onInvite : undefined}
-              />
-            ) : null}
           </div>
         </section>
 
@@ -136,7 +149,6 @@ export function ConversationDetails({
                 onClick={onRename}
               />
             ) : null}
-            <DetailRow icon={LockKeyholeIcon} label="메시지 암호화 안내" />
           </DetailSection>
 
           {conversation.type === "group" ? (
@@ -145,18 +157,20 @@ export function ConversationDetails({
                 {members.map((participant) => (
                   <div
                     key={participant.id}
-                    className="flex items-center gap-3 rounded-lg px-2 py-2"
+                    className="flex items-center gap-1 rounded-lg"
                   >
-                    <UserAvatar
-                      src={participant.avatarUrl}
-                      name={participant.name}
-                      size="lg"
-                    />
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                      {participant.id === conversation.viewerId
-                        ? `${participant.name} (나)`
-                        : participant.name}
-                    </span>
+                    <MemberProfileLink participant={participant}>
+                      <UserAvatar
+                        src={participant.avatarUrl}
+                        name={participant.name}
+                        size="lg"
+                      />
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                        {participant.id === conversation.viewerId
+                          ? `${participant.name} (나)`
+                          : participant.name}
+                      </span>
+                    </MemberProfileLink>
                     {conversation.canManageMembers &&
                     participant.id !== conversation.viewerId ? (
                       <Button
@@ -190,47 +204,73 @@ export function ConversationDetails({
             />
           </DetailSection>
 
-          <DetailSection title="개인정보 보호 및 지원">
-            <DetailRow icon={LockKeyholeIcon} label="개인정보 및 안전" />
-            {manageable ? (
-              <DetailRow
-                icon={LogOutIcon}
-                label="그룹 나가기"
-                destructive
-                onClick={onLeave}
-              />
-            ) : null}
-          </DetailSection>
+          {manageable ? (
+            <DetailRow
+              icon={LogOutIcon}
+              label="그룹 나가기"
+              destructive
+              onClick={onLeave}
+            />
+          ) : null}
         </div>
       </div>
     </aside>
   );
 }
 
-/** `onClick`이 없으면 아직 준비 중인 기능으로 비활성화한다. */
+/** 그룹 멤버 한 줄. 프로필 주소를 알면 그 사람의 프로필로 간다. */
+function MemberProfileLink({
+  participant,
+  children,
+}: {
+  participant: MessageParticipant;
+  children: ReactNode;
+}) {
+  const className =
+    "flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2";
+  if (!participant.pubId) return <div className={className}>{children}</div>;
+  return (
+    <Link
+      to={`/profile/${participant.pubId}`}
+      aria-label={`${participant.name} 프로필`}
+      className={cn(
+        className,
+        "hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+      )}
+    >
+      {children}
+    </Link>
+  );
+}
+
+/** `onClick`과 `href`가 모두 없으면 아직 준비 중인 기능으로 비활성화한다. */
 function DetailQuickAction({
   icon: Icon,
   label,
   actionLabel,
   pressed,
   onClick,
+  href,
 }: {
   icon: LucideIcon;
   label: string;
   actionLabel?: string;
   pressed?: boolean;
   onClick?: () => void;
+  href?: string;
 }) {
+  const enabled = Boolean(onClick ?? href);
   return (
     <div className="flex min-w-12 flex-col items-center gap-1.5">
       <Button
         variant="secondary"
         size="icon"
         className="rounded-full"
-        disabled={!onClick}
-        aria-label={onClick ? (actionLabel ?? label) : `${label} 기능 준비 중`}
+        disabled={!enabled}
+        aria-label={enabled ? (actionLabel ?? label) : `${label} 기능 준비 중`}
         aria-pressed={pressed}
         onClick={onClick}
+        {...(href ? { nativeButton: false, render: <Link to={href} /> } : {})}
       >
         <Icon aria-hidden />
       </Button>

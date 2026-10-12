@@ -177,6 +177,7 @@ export type Database = {
           last_read_message_id: string
           last_read_sent_at: string
           left_at: string | null
+          left_by_self: boolean
           muted_until: string | null
           profile_id: number
         }
@@ -187,6 +188,7 @@ export type Database = {
           last_read_message_id?: string
           last_read_sent_at?: string
           left_at?: string | null
+          left_by_self?: boolean
           muted_until?: string | null
           profile_id: number
         }
@@ -197,6 +199,7 @@ export type Database = {
           last_read_message_id?: string
           last_read_sent_at?: string
           left_at?: string | null
+          left_by_self?: boolean
           muted_until?: string | null
           profile_id?: number
         }
@@ -2397,6 +2400,7 @@ export type Database = {
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           pinned: boolean
           reactions: Json
+          reply_attachment_kind: string
           reply_body: string
           reply_deleted: boolean
           reply_sender_id: number
@@ -2443,6 +2447,7 @@ export type Database = {
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           pinned: boolean
           reactions: Json
+          reply_attachment_kind: string
           reply_body: string
           reply_deleted: boolean
           reply_sender_id: number
@@ -2498,6 +2503,7 @@ export type Database = {
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           pinned: boolean
           reactions: Json
+          reply_attachment_kind: string
           reply_body: string
           reply_deleted: boolean
           reply_sender_id: number

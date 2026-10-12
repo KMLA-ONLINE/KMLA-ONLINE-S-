@@ -30,7 +30,7 @@ describe("MessagingScreen", () => {
 
     await user.click(screen.getByRole("button", { name: "새 대화" }));
     const dialog = await screen.findByRole("dialog", { name: "새 대화" });
-    await user.type(within(dialog).getByRole("searchbox"), "새봄");
+    await user.type(within(dialog).getByRole("searchbox"), "새봄{Enter}");
     await user.click(
       await within(dialog).findByRole("button", { name: /최새봄/ }),
     );
@@ -39,7 +39,7 @@ describe("MessagingScreen", () => {
     ).not.toBeInTheDocument();
 
     await user.clear(within(dialog).getByRole("searchbox"));
-    await user.type(within(dialog).getByRole("searchbox"), "여름");
+    await user.type(within(dialog).getByRole("searchbox"), "여름{Enter}");
     await user.click(
       await within(dialog).findByRole("button", { name: /정여름/ }),
     );
