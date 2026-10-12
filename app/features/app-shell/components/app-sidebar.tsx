@@ -4,7 +4,7 @@ import { NavBadge } from "~/features/app-shell/components/nav-badge";
 import { useNavBadges } from "~/features/app-shell/context/app-shell-context";
 import {
   isNavItemActive,
-  navItems,
+  desktopNavItems,
 } from "~/features/app-shell/model/nav-items";
 import { cn } from "~/shared/lib/utils";
 
@@ -32,7 +32,7 @@ export function AppSidebar({ className }: { className?: string }) {
         )}
       >
         <ul className="flex flex-col gap-5 p-2 pt-6">
-          {navItems.map((item) => {
+          {desktopNavItems.map((item) => {
             const isActive = isNavItemActive(location.pathname, item);
             const unread = badges[item.to] ?? 0;
 

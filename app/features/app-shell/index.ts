@@ -7,6 +7,7 @@ export { PageHeader } from "~/features/app-shell/components/page-header";
 export { PullToRefresh } from "~/features/app-shell/components/pull-to-refresh";
 export { ScrollRegion } from "~/features/app-shell/components/scroll-region";
 export { loadShellData } from "~/features/app-shell/data/queries";
+export { useDesktopShell } from "~/features/app-shell/model/use-desktop-shell";
 export {
   DEFAULT_APP_CHROME,
   defineAppChrome,

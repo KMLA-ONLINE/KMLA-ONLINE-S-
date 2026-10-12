@@ -1,9 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import LinksPage from "~/routes/app/menu/links";
 import { renderRoute, screen } from "../../../router";
 
 describe("school links route", () => {
+  it("redirects desktop visits to home", async () => {
+    const original = window.matchMedia.bind(window);
+    vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+      ...original(query),
+      matches: query === "(min-width: 768px)",
+    }));
+    renderRoute(LinksPage, {
+      path: "/menu/links",
+      routes: [{ path: "/", Component: () => <h1>홈 화면</h1> }],
+    });
+    expect(
+      await screen.findByRole("heading", { name: "홈 화면" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "인트라넷" }),
+    ).not.toBeInTheDocument();
+  });
   it("opens each school site in a new tab", () => {
     renderRoute(LinksPage, { path: "/menu/links" });
 

@@ -1,22 +1,25 @@
 import {
+  CalendarClockIcon,
   LogOutIcon,
   MessagesSquareIcon,
   SettingsIcon,
   UserRoundIcon,
 } from "lucide-react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { useRef, useState } from "react";
 
 import { useAppShell } from "~/features/app-shell/context/app-shell-context";
+import { schoolLinks } from "~/features/app-shell/model/school-links";
 import { LogoutDialog } from "~/features/auth/components/logout-button";
 import { GlobalSearchDropdown } from "~/features/search";
 import { UserAvatar } from "~/shared/components/user-avatar";
-import { Button } from "~/shared/ui/button";
+import { Button, buttonVariants } from "~/shared/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/shared/ui/dropdown-menu";
@@ -28,6 +31,7 @@ import { cn } from "~/shared/lib/utils";
  */
 export function AppHeader({ className }: { className?: string }) {
   const { profile } = useAppShell();
+  const { pathname } = useLocation();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const avatarRef = useRef<HTMLButtonElement>(null);
 
@@ -51,6 +55,15 @@ export function AppHeader({ className }: { className?: string }) {
       <GlobalSearchDropdown />
 
       <div className="flex flex-1 basis-0 items-center justify-end gap-2">
+        {pathname === "/" ? (
+          <Link
+            to="/util/gongang"
+            className={buttonVariants({ variant: "ghost", size: "sm" })}
+          >
+            <CalendarClockIcon data-icon="inline-start" aria-hidden />
+            공강·노래방
+          </Link>
+        ) : null}
         <Button
           variant="ghost"
           size="icon"
@@ -77,6 +90,26 @@ export function AppHeader({ className }: { className?: string }) {
                 <SettingsIcon aria-hidden />
                 설정
               </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>바로가기</DropdownMenuLabel>
+              {schoolLinks.map(({ href, label, icon: Icon }) => (
+                <DropdownMenuItem
+                  key={href}
+                  render={
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={label}
+                    />
+                  }
+                >
+                  <Icon aria-hidden />
+                  {label}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>

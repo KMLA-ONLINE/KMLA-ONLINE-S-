@@ -1,43 +1,20 @@
-import {
-  ExternalLinkIcon,
-  GraduationCapIcon,
-  LogInIcon,
-  SchoolIcon,
-} from "lucide-react";
-import type { ComponentType } from "react";
+import { ExternalLinkIcon } from "lucide-react";
+import { Navigate } from "react-router";
 
 import { defineAppChrome, PageHeader } from "~/features/app-shell";
+import { schoolLinks } from "~/features/app-shell/model/school-links";
+import { useDesktopShell } from "~/features/app-shell/model/use-desktop-shell";
 
 export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "sticky",
 });
 
-interface SchoolLink {
-  href: string;
-  label: string;
-  icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
-}
-
-const links: SchoolLink[] = [
-  {
-    href: "https://www.minjok.hs.kr/",
-    label: "민사고 홈페이지",
-    icon: SchoolIcon,
-  },
-  {
-    href: "https://old.minjok.hs.kr/members/login.php",
-    label: "인트라넷",
-    icon: LogInIcon,
-  },
-  {
-    href: "https://minjok.riroschool.kr/",
-    label: "리로스쿨",
-    icon: GraduationCapIcon,
-  },
-];
-
 export default function LinksPage() {
+  const isDesktop = useDesktopShell();
+
+  if (isDesktop) return <Navigate to="/" replace />;
+
   return (
     <>
       <PageHeader title="바로가기" back="/menu" />
@@ -46,7 +23,7 @@ export default function LinksPage() {
         <h1 className="hidden text-2xl font-semibold md:block">바로가기</h1>
 
         <div className="divide-y overflow-hidden rounded-xl border bg-card">
-          {links.map(({ href, label, icon: Icon }) => (
+          {schoolLinks.map(({ href, label, icon: Icon }) => (
             <a
               key={href}
               href={href}

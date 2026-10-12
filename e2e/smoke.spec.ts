@@ -23,6 +23,12 @@ test("모바일 학교생활은 도구와 설정·프로필 진입을 분리한�
 }) => {
   await page.setViewportSize({ width: 390, height: 780 });
   await loginAsAcceptedStudent(page);
+  await expect(
+    page.getByRole("button", { name: "급식", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("complementary", { name: "학교생활 요약" }),
+  ).toHaveCount(0);
   await page.getByRole("link", { name: "학교생활", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "학교생활", exact: true }),
@@ -30,6 +36,15 @@ test("모바일 학교생활은 도구와 설정·프로필 진입을 분리한�
   const tools = page.getByRole("navigation", { name: "학교생활 기능" });
   await expect(tools.getByRole("link")).toHaveCount(5);
   await expect(page.getByRole("link", { name: "도움말" })).toHaveCount(0);
+
+  await tools.getByRole("link", { name: "바로가기", exact: true }).click();
+  await expect(page).toHaveURL(/\/menu\/links$/);
+  await expect(
+    page.getByRole("link", { name: /민사고 홈페이지/ }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: /인트라넷/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /리로스쿨/ })).toBeVisible();
+  await page.getByRole("button", { name: "뒤로" }).click();
 
   await page.getByRole("link", { name: "설정", exact: true }).click();
   await expect(page).toHaveURL(/\/menu\/settings$/);
@@ -45,6 +60,100 @@ test("모바일 학교생활은 도구와 설정·프로필 진입을 분리한�
   await expect(page).toHaveURL(/\/profile\/[^/]+$/);
 });
 
+test("태블릿 홈 바로가기에서 급식·생일·시간표로 이동한다", async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1180 });
+  await loginAsAcceptedStudent(page);
+  const shortcuts = page.getByRole("navigation", { name: "학교생활 바로가기" });
+  await expect(shortcuts).toBeVisible();
+  await expect(shortcuts.getByRole("link")).toHaveCount(3);
+  for (const [name, path] of [
+    ["급식", "/menu/meal"],
+    ["생일", "/menu/birthdays"],
+    ["시간표", "/menu/timetable"],
+  ]) {
+    await shortcuts.getByRole("link", { name, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${path}$`));
+    await page.goto("/");
+  }
+  await page.setViewportSize({ width: 768, height: 1180 });
+  await expect(shortcuts).toBeVisible();
+  await page.setViewportSize({ width: 1023, height: 1180 });
+  await expect(shortcuts).toBeVisible();
+  await page.setViewportSize({ width: 1024, height: 1180 });
+  await expect(shortcuts).toBeHidden();
+  await expect(
+    page.getByRole("complementary", { name: "학교생활 요약" }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 780 });
+  await expect(shortcuts).toBeHidden();
+  await expect(
+    page.getByRole("link", { name: "학교생활", exact: true }),
+  ).toBeVisible();
+});
+
+test("데스크톱 홈 사이드바는 생일·급식·오늘 시간표를 제공한다", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await loginAsAcceptedStudent(page);
+  const sidebar = page.getByRole("complementary", { name: "학교생활 요약" });
+  await expect(sidebar).toBeVisible();
+  await expect(
+    sidebar.getByRole("heading", { name: /오늘의|내일의/ }),
+  ).toHaveCount(0);
+  await expect(sidebar.getByText("전체 보기", { exact: true })).toHaveCount(0);
+  await expect(
+    sidebar.getByRole("link", { name: "생일 보기" }),
+  ).toHaveAttribute("href", "/menu/birthdays");
+  await expect(
+    sidebar.getByRole("link", { name: "급식 보기" }),
+  ).toHaveAttribute("href", "/menu/meal");
+  await expect(
+    sidebar.getByRole("link", { name: "시간표 보기" }),
+  ).toHaveAttribute("href", "/menu/timetable");
+  const timetable = sidebar.getByRole("link", { name: "시간표 보기" });
+  await expect(sidebar).toHaveCSS("row-gap", "12px");
+  await expect(timetable).not.toHaveCSS("border-radius", "0px");
+  const radius = await timetable.evaluate(
+    (element) => getComputedStyle(element).borderRadius,
+  );
+  for (const name of ["생일 보기", "급식 보기", "시간표 보기"]) {
+    const content = sidebar.getByRole("link", { name, exact: true });
+    await expect(content).toHaveCSS("border-radius", radius);
+    await expect(content).toHaveCSS("padding-top", "8px");
+    await expect(content).toHaveCSS("padding-bottom", "8px");
+    await expect(content).toHaveCSS("padding-left", "8px");
+    await expect(content).toHaveCSS("padding-right", "8px");
+  }
+  await expect(
+    sidebar.getByRole("heading", { name: "생일", exact: true }),
+  ).toBeVisible();
+  const background = await timetable.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  await timetable.hover();
+  await expect(timetable).not.toHaveCSS("background-color", background);
+  for (const [name, path] of [
+    ["생일 보기", "/menu/birthdays"],
+    ["급식 보기", "/menu/meal"],
+    ["시간표 보기", "/menu/timetable"],
+  ]) {
+    await sidebar.getByRole("link", { name, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${path}$`));
+    await page.goto("/");
+  }
+  await expect(
+    page.getByRole("link", { name: "학교생활", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "공강·노래방", exact: true }),
+  ).toHaveAttribute("href", "/util/gongang");
+  await page.goto("/menu");
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/menu/links");
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test("데스크톱 아바타 메뉴에서 설정과 확인 후 로그아웃을 연다", async ({
   page,
 }) => {
@@ -56,7 +165,16 @@ test("데스크톱 아바타 메뉴에서 설정과 확인 후 로그아웃을 �
   await expect(
     page.getByRole("menuitem", { name: "내 프로필" }),
   ).toHaveAttribute("href", "/profile");
-  await expect(page.getByRole("menuitem")).toHaveCount(3);
+  await expect(page.getByRole("menuitem")).toHaveCount(6);
+  await expect(
+    page.getByRole("menuitem", { name: /민사고 홈페이지/ }),
+  ).toHaveAttribute("href", "https://www.minjok.hs.kr/");
+  await expect(
+    page.getByRole("menuitem", { name: /인트라넷/ }),
+  ).toHaveAttribute("target", "_blank");
+  await expect(
+    page.getByRole("menuitem", { name: /리로스쿨/ }),
+  ).toHaveAttribute("rel", "noreferrer");
   await page.getByRole("menuitem", { name: "설정", exact: true }).click();
   await expect(page).toHaveURL(/\/menu\/settings$/);
 

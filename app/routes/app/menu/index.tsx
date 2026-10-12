@@ -7,9 +7,10 @@ import {
   UtensilsIcon,
 } from "lucide-react";
 import type { ComponentType } from "react";
-import { Link } from "react-router";
+import { Link, Navigate } from "react-router";
 
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { useDesktopShell } from "~/features/app-shell/model/use-desktop-shell";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { buttonVariants } from "~/shared/ui/button";
@@ -36,6 +37,9 @@ const shortcuts: Shortcut[] = [
 
 export default function MenuPage() {
   const { profile } = useAppShell();
+  const isDesktop = useDesktopShell();
+
+  if (isDesktop) return <Navigate to="/" replace />;
 
   return (
     <>

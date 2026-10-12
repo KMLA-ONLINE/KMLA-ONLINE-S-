@@ -1,4 +1,9 @@
-import { SearchIcon, UtensilsIcon } from "lucide-react";
+import {
+  CakeIcon,
+  CalendarDaysIcon,
+  SearchIcon,
+  UtensilsIcon,
+} from "lucide-react";
 import { Suspense, use } from "react";
 import { Link } from "react-router";
 
@@ -8,7 +13,12 @@ import {
   listActiveStories,
   type StoryItem,
 } from "~/features/stories/data/queries";
-import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import {
+  defineAppChrome,
+  PageHeader,
+  useAppShell,
+  useDesktopShell,
+} from "~/features/app-shell";
 import { hasActiveSession } from "~/features/auth";
 import { FeedScreen, feedQuery } from "~/features/feed";
 import {
@@ -28,11 +38,19 @@ import {
 } from "~/features/profiles";
 import { createPostListRevalidation } from "~/features/posts";
 import { GlobalSearchDialog } from "~/features/search";
+import { HomeTimetableSummary } from "~/features/timetable";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { getKoreaDateIso } from "~/shared/lib/korea-date";
 import { Button } from "~/shared/ui/button";
+import { Separator } from "~/shared/ui/separator";
 import type { Route } from "./+types/home";
+
+const schoolShortcuts = [
+  { to: "/menu/meal", label: "급식", icon: UtensilsIcon },
+  { to: "/menu/birthdays", label: "생일", icon: CakeIcon },
+  { to: "/menu/timetable", label: "시간표", icon: CalendarDaysIcon },
+];
 
 /**
  * 앱의 index 라우트. 전역 chrome은 아래 handle에서 명시한다.
@@ -124,6 +142,7 @@ export async function clientLoader() {
 export default function FeedPage({ loaderData }: Route.ComponentProps) {
   const { mealDay, birthdays, stories } = loaderData;
   const { profile } = useAppShell();
+  const desktop = useDesktopShell();
   const { openSearch: openDirectorySearch } = useSearchDialogParam();
 
   return (
@@ -155,7 +174,23 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
       />
       <GlobalSearchDialog />
 
-      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-4">
+      <nav
+        aria-label="학교생활 바로가기"
+        className="mb-4 hidden grid-cols-3 gap-2 md:grid lg:hidden"
+      >
+        {schoolShortcuts.map(({ to, label, icon: Icon }) => (
+          <Link
+            key={to}
+            to={to}
+            className="flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <Icon className="size-4" aria-hidden />
+            {label}
+          </Link>
+        ))}
+      </nav>
+
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-6 lg:py-4">
         <div className="min-w-0">
           <StoryRail
             initialItems={stories}
@@ -170,12 +205,18 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
           <FeedScreen />
         </div>
 
-        <aside className="hidden space-y-3 self-start lg:block">
+        <aside
+          aria-label="학교생활 요약"
+          className="hidden min-w-0 flex-col gap-3 self-start lg:flex"
+        >
           {/* 한 경계로 묶어 생일과 급식이 함께 들어선다. 따로 두면 생일 카드가 늦게 끼어들며 급식을 밀어낸다. */}
           <Suspense fallback={<HomeMealSummarySkeleton />}>
             <DeferredBirthdays birthdays={birthdays} />
+            <Separator />
             <DeferredMeal mealDay={mealDay} />
           </Suspense>
+          <Separator />
+          {desktop ? <HomeTimetableSummary profileId={profile.id} /> : null}
         </aside>
       </div>
     </>

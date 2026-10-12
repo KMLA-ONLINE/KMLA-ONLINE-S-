@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   AppShellProvider,
@@ -31,11 +31,28 @@ function renderMenu(
         <MenuPage />
       </AppShellProvider>
     ),
-    { path: "/menu" },
+    {
+      path: "/menu",
+      routes: [{ path: "/", Component: () => <h1>홈 화면</h1> }],
+    },
   );
 }
 
 describe("menu route", () => {
+  it("redirects the desktop school-life entry to home", async () => {
+    const original = window.matchMedia.bind(window);
+    vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+      ...original(query),
+      matches: query === "(min-width: 768px)",
+    }));
+    renderMenu("member");
+    expect(
+      await screen.findByRole("heading", { name: "홈 화면" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("navigation", { name: "학교생활 기능" }),
+    ).not.toBeInTheDocument();
+  });
   it("keeps school tools in the body and account entry points in the header", () => {
     renderMenu("admin");
 
