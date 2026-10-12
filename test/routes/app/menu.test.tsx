@@ -6,7 +6,7 @@ import {
   type ShellData,
 } from "~/features/app-shell";
 import MenuPage from "~/routes/app/menu";
-import { renderRoute, screen } from "../../router";
+import { renderRoute, screen, within } from "../../router";
 
 function renderMenu(
   role: ProfileRole,
@@ -36,55 +36,45 @@ function renderMenu(
 }
 
 describe("menu route", () => {
-  it("shows one admin shortcut for an admin", () => {
+  it("keeps school tools in the body and account entry points in the header", () => {
     renderMenu("admin");
 
-    const links = screen.getAllByRole("link", { name: "관리자 페이지" });
-    expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAttribute("href", "/admin");
-  });
-
-  it("keeps the admin shortcut away from a member", () => {
-    renderMenu("member");
-
-    expect(screen.getByRole("link", { name: "생일" })).toHaveAttribute(
-      "href",
-      "/menu/birthdays",
+    expect(screen.getAllByRole("heading", { name: "학교생활" })).toHaveLength(
+      2,
     );
-    expect(
-      screen.queryByRole("link", { name: "관리자 페이지" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("opens every setting through one row instead of listing them", () => {
-    renderMenu("member");
-
+    const tools = within(
+      screen.getByRole("navigation", { name: "학교생활 기능" }),
+    );
+    expect(tools.getAllByRole("link")).toHaveLength(5);
+    for (const [name, href] of [
+      ["급식", "/menu/meal"],
+      ["시간표", "/menu/timetable"],
+      ["공강 · 노래방", "/util/gongang"],
+      ["생일", "/menu/birthdays"],
+      ["바로가기", "/menu/links"],
+    ]) {
+      expect(tools.getByRole("link", { name })).toHaveAttribute("href", href);
+    }
     expect(screen.getByRole("link", { name: "설정" })).toHaveAttribute(
       "href",
       "/menu/settings",
     );
+    expect(screen.getByRole("link", { name: "내 프로필" })).toHaveAttribute(
+      "href",
+      "/profile",
+    );
+    for (const name of [
+      "관리자 페이지",
+      "도움말",
+      "업데이트 기록",
+      "오픈소스 라이선스",
+      "비밀번호 변경",
+      "알림 설정",
+    ]) {
+      expect(screen.queryByRole("link", { name })).not.toBeInTheDocument();
+    }
     expect(
-      screen.queryByRole("link", { name: "비밀번호 변경" }),
+      screen.queryByRole("button", { name: "로그아웃" }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: "알림 설정" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("reaches the help and update pages from the menu", () => {
-    renderMenu("member");
-
-    expect(screen.getByRole("link", { name: "도움말" })).toHaveAttribute(
-      "href",
-      "/support",
-    );
-    expect(screen.getByRole("link", { name: "업데이트 기록" })).toHaveAttribute(
-      "href",
-      "/update",
-    );
-    expect(screen.getByRole("link", { name: "바로가기" })).toHaveAttribute(
-      "href",
-      "/menu/links",
-    );
   });
 });

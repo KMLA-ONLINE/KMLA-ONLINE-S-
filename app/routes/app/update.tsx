@@ -10,7 +10,7 @@ export const handle = defineAppChrome({
 export default function UpdatePage() {
   return (
     <>
-      <PageHeader title="업데이트 기록" back="/menu" />
+      <PageHeader title="업데이트 기록" back="/menu/settings" />
 
       <ReleaseNotesScreen releases={releases} />
     </>

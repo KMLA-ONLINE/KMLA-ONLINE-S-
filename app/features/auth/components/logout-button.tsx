@@ -1,5 +1,5 @@
 import { LogOutIcon } from "lucide-react";
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import { useFetcher } from "react-router";
 
 import { Button } from "~/shared/ui/button";
@@ -22,9 +22,6 @@ export function LogoutButton({
   appearance?: "block" | "row";
 }) {
   const [open, setOpen] = useState(false);
-  const fetcher = useFetcher();
-
-  const pending = fetcher.state !== "idle";
   const asRow = appearance === "row";
 
   return (
@@ -52,46 +49,68 @@ export function LogoutButton({
         )}
       </Button>
 
-      <Dialog
-        open={open}
-        onOpenChange={(next) => {
-          // 로그아웃이 이미 날아간 뒤에는 닫아 봐야 redirect가 화면을 갈아 끼운다.
-          if (!pending) {
-            setOpen(next);
-          }
-        }}
-      >
-        <DialogContent className="max-w-xs" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>로그아웃하시겠습니까?</DialogTitle>
-          </DialogHeader>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pending}
-              onClick={() => setOpen(false)}
-            >
-              취소
-            </Button>
-
-            <Button
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                void fetcher.submit(null, {
-                  method: "post",
-                  action: "/logout",
-                });
-              }}
-            >
-              {pending ? <Spinner data-icon="inline-start" /> : null}
-              로그아웃
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <LogoutDialog open={open} onOpenChange={setOpen} />
     </>
+  );
+}
+
+/** 드롭다운이 닫혀도 확인창은 유지되도록 트리거와 분리한다. */
+export function LogoutDialog({
+  open,
+  onOpenChange,
+  finalFocus,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  finalFocus?: RefObject<HTMLElement | null>;
+}) {
+  const fetcher = useFetcher();
+  const pending = fetcher.state !== "idle";
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // 로그아웃이 이미 날아간 뒤에는 닫아 봐야 redirect가 화면을 갈아 끼운다.
+        if (!pending) {
+          onOpenChange(next);
+        }
+      }}
+    >
+      <DialogContent
+        className="max-w-xs"
+        showCloseButton={false}
+        finalFocus={finalFocus}
+      >
+        <DialogHeader>
+          <DialogTitle>로그아웃하시겠습니까?</DialogTitle>
+        </DialogHeader>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={pending}
+            onClick={() => onOpenChange(false)}
+          >
+            취소
+          </Button>
+
+          <Button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              void fetcher.submit(null, {
+                method: "post",
+                action: "/logout",
+              });
+            }}
+          >
+            {pending ? <Spinner data-icon="inline-start" /> : null}
+            로그아웃
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -18,6 +18,63 @@ test("주요 메뉴는 뷰포트마다 정확히 하나만 노출된다", async 
   );
 });
 
+test("모바일 학교생활은 도구와 설정·프로필 진입을 분리한다", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  await loginAsAcceptedStudent(page);
+  await page.getByRole("link", { name: "학교생활", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "학교생활", exact: true }),
+  ).toBeVisible();
+  const tools = page.getByRole("navigation", { name: "학교생활 기능" });
+  await expect(tools.getByRole("link")).toHaveCount(5);
+  await expect(page.getByRole("link", { name: "도움말" })).toHaveCount(0);
+
+  await page.getByRole("link", { name: "설정", exact: true }).click();
+  await expect(page).toHaveURL(/\/menu\/settings$/);
+  await expect(page.getByRole("link", { name: "관리자 페이지" })).toHaveCount(
+    0,
+  );
+  await page.getByRole("link", { name: "도움말" }).click();
+  await page.getByRole("button", { name: "뒤로" }).click();
+  await expect(page).toHaveURL(/\/menu\/settings$/);
+  await page.getByRole("button", { name: "뒤로" }).click();
+  await expect(page).toHaveURL(/\/menu$/);
+  await page.getByRole("link", { name: "내 프로필", exact: true }).click();
+  await expect(page).toHaveURL(/\/profile\/[^/]+$/);
+});
+
+test("데스크톱 아바타 메뉴에서 설정과 확인 후 로그아웃을 연다", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await loginAsAcceptedStudent(page);
+  const avatar = page.getByRole("button", { name: "계정 메뉴" });
+  await avatar.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("menuitem", { name: "내 프로필" }),
+  ).toHaveAttribute("href", "/profile");
+  await expect(page.getByRole("menuitem")).toHaveCount(3);
+  await page.getByRole("menuitem", { name: "설정", exact: true }).click();
+  await expect(page).toHaveURL(/\/menu\/settings$/);
+
+  await avatar.click();
+  await page.getByRole("menuitem", { name: "로그아웃" }).click();
+  const dialog = page.getByRole("dialog", { name: "로그아웃하시겠습니까?" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "취소" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(avatar).toBeFocused();
+  await expect(page).toHaveURL(/\/menu\/settings$/);
+
+  await avatar.click();
+  await page.getByRole("menuitem", { name: "로그아웃" }).click();
+  await dialog.getByRole("button", { name: "로그아웃", exact: true }).click();
+  await expect(page).toHaveURL(/\/login$/);
+});
+
 test("focused 레이아웃에는 탭바가 없다", async ({ page }) => {
   await loginAsAcceptedStudent(page);
   // 레이아웃은 라우트 모듈의 플래그가 아니라 `routes.ts`상의 위치가 정한다.

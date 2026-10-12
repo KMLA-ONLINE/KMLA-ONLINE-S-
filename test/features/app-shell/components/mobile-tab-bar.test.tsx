@@ -28,6 +28,15 @@ function renderTabBar(path: string) {
 }
 
 describe("MobileTabBar", () => {
+  it("opens school life through the existing menu URL", async () => {
+    const { user } = renderTabBar("/");
+    await user.click(screen.getByRole("link", { name: "학교생활" }));
+    expect(screen.getByTestId("location")).toHaveTextContent(/^\/menu$/);
+    expect(
+      screen.queryByRole("link", { name: "메뉴" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("scrolls home back to the top instead of reloading it", async () => {
     const { user, scrollTo } = renderTabBar("/");
 

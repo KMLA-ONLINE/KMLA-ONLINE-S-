@@ -8,7 +8,7 @@ export const handle = defineAppChrome({
 export default function LicensesPage() {
   return (
     <>
-      <PageHeader title="오픈소스 라이선스" back="/menu" />
+      <PageHeader title="오픈소스 라이선스" back="/menu/settings" />
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4 md:p-0">
         <h1 className="hidden text-2xl font-semibold md:block">
           오픈소스 라이선스
