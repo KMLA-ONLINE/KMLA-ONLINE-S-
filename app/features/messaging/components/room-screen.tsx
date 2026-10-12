@@ -81,7 +81,10 @@ import {
   formatSystemMessage,
   isViewerActive,
 } from "~/features/messaging/model/system-message";
-import { canEditMessage } from "~/features/messaging/model/message-edit";
+import {
+  canEditMessage,
+  EDIT_EXPIRED_MESSAGE,
+} from "~/features/messaging/model/message-edit";
 import { formatReplyPreview } from "~/features/messaging/model/conversation-preview";
 import {
   canConnectMessages,
@@ -132,6 +135,11 @@ const FOLLOW_NEW_MESSAGES_THRESHOLD = 80;
 const OLDER_MESSAGES_THRESHOLD = 400;
 /** 메시지·좋아요를 보내거나 반응을 바꾼 뒤 다음 전송까지 쉬는 시간. 도배를 막는 UI 제한이다. */
 const SEND_COOLDOWN_MS = 500;
+/**
+ * 글이나 첨부를 보낸 뒤 이만큼은 빈 입력의 버튼을 좋아요로 바꾸지 않는다. 바로 바뀌면 전송 버튼을 한 번
+ * 더 누른 손가락이 의도하지 않은 좋아요를 보낸다.
+ */
+const LIKE_AFTER_SEND_MS = 1_000;
 
 export function RoomScreen({
   conversation: loadedConversation,
@@ -383,13 +391,18 @@ export function RoomScreen({
 
   // 고친 내용은 먼저 그린다. 실패하면 hook이 메시지를 되돌리고, 여기서는 고치던 입력과 함께
   // 수정 모드를 되살린다. 그새 다른 수정을 시작했으면 두지 않는다.
+  // 고치는 사이 15분이 지났으면 보내지 않고 이유를 알린다. 되살려도 계속 실패하므로 수정 모드를 끝낸다.
   async function submitEdit(body: string) {
     const target = editTarget?.message;
     if (!target) return;
     setEditTarget(null);
     if (body === target.body) return;
+    if (!canEditMessage(target, conversation.viewerId)) {
+      toast.error(EDIT_EXPIRED_MESSAGE);
+      return;
+    }
     const edited = await edit(target, body);
-    if (!edited) {
+    if (!edited && canEditMessage(target, conversation.viewerId)) {
       setEditTarget((current) => current ?? { message: target, draft: body });
     }
   }
@@ -1564,6 +1577,16 @@ function ComposerShell({
   // 보낸 직후 잠시 전송을 받지 않는다. 버튼을 껐다 켜면 깜박이므로 누름만 버리고, 입력은 그대로
   // 두어 이어서 보낼 수 있다.
   const lastSentAt = useRef(0);
+  // 방금 글이나 첨부를 보냈는지. 그동안은 빈 입력이어도 버튼을 좋아요로 바꾸지 않는다.
+  const [justSent, setJustSent] = useState(false);
+  useEffect(() => {
+    if (!justSent) return;
+    const timeout = window.setTimeout(
+      () => setJustSent(false),
+      LIKE_AFTER_SEND_MS,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [justSent]);
   const claimSend = () => claimCooldown(lastSentAt);
   const mediaInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -1632,11 +1655,13 @@ function ComposerShell({
     }
     if (hasStaged) onSendStaged();
     setAttachmentActionsExpanded(false);
+    setJustSent(true);
     return true;
   }
 
   function changeDraft(value: string) {
     setDraft(value);
+    setJustSent(false);
     if (normalizeMessageBody(value).trim() === "") {
       setAttachmentActionsExpanded(false);
     }
@@ -1869,7 +1894,7 @@ function ComposerShell({
           aria-label={
             editTarget
               ? "수정한 메시지 저장"
-              : hasDraft || hasStaged
+              : hasDraft || hasStaged || justSent
                 ? "메시지 보내기"
                 : "좋아요 보내기"
           }
@@ -1887,13 +1912,14 @@ function ComposerShell({
               sendDraft();
               return;
             }
+            if (justSent) return;
             if (!claimSend()) return;
             void onSend("👍");
             // 공백만 있던 입력은 좋아요와 함께 비운다.
             setDraft("");
           }}
         >
-          {hasDraft || hasStaged || editTarget ? (
+          {hasDraft || hasStaged || editTarget || justSent ? (
             <SendIcon aria-hidden className="size-5" />
           ) : (
             <ThumbsUpIcon aria-hidden className="size-5" />

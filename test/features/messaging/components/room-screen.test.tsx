@@ -4,6 +4,7 @@ import { act, fireEvent, waitFor } from "@testing-library/react";
 import { type ComponentProps, useEffect, useState } from "react";
 import type * as ContextMenuModule from "@base-ui/react/context-menu";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 
 import { RoomScreen } from "~/features/messaging/components/room-screen";
 import { mergeServerMessages } from "~/features/messaging/data/cache";
@@ -291,6 +292,39 @@ describe("RoomScreen", () => {
     expect(await within(ownMessage()).findByText("수정됨")).toBeInTheDocument();
     expect(screen.queryByText("메시지 수정")).not.toBeInTheDocument();
     expect(input).toHaveValue("");
+    now.mockRestore();
+  });
+
+  it("고치는 사이 15분이 지나면 보내지 않고 이유를 알리며 수정 모드를 끝낸다", async () => {
+    // 이 파일은 spy를 일괄 복원하지 않으므로 테스트 끝에서 직접 되돌린다.
+    const now = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(Date.parse("2026-08-28T15:32:00+09:00"));
+    const editSpy = vi.spyOn(mutations, "editMessage");
+    const toastError = vi.spyOn(toast, "error");
+    const conversation = await loadConversation("student-council");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+    const ownMessage = document.getElementById("message-m6")!;
+
+    await user.click(
+      within(ownMessage).getByRole("button", { name: "메시지 기타 작업" }),
+    );
+    await user.click(await screen.findByRole("menuitem", { name: "수정" }));
+    const input = screen.getByRole("textbox", { name: "메시지 입력" });
+    await user.clear(input);
+    now.mockReturnValue(Date.parse("2026-08-28T16:00:00+09:00"));
+    await user.type(input, "늦은 수정{Enter}");
+
+    expect(toastError).toHaveBeenCalledWith(
+      "보낸 지 15분이 지나 고칠 수 없습니다.",
+    );
+    expect(editSpy).not.toHaveBeenCalled();
+    expect(screen.queryByText("메시지 수정")).not.toBeInTheDocument();
+    editSpy.mockRestore();
+    toastError.mockRestore();
     now.mockRestore();
   });
 
@@ -1080,7 +1114,17 @@ describe("RoomScreen", () => {
       ).toHaveTextContent(/첫 줄\s*둘째 줄/),
     );
     expect(messageThread.scrollTop).toBe(500);
-    expect(screen.getByRole("button", { name: "좋아요 보내기" })).toBeEnabled();
+    // 보낸 직후에는 버튼이 좋아요로 바뀌지 않는다. 한 번 더 누른 손가락이 좋아요를 보내지 않게 한다.
+    expect(likeButton).toHaveAccessibleName("메시지 보내기");
+    await user.click(likeButton);
+    expect(screen.queryByLabelText("좋아요")).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole(
+        "button",
+        { name: "좋아요 보내기" },
+        { timeout: 2_000 },
+      ),
+    ).toBeEnabled();
     await user.click(likeButton);
     expect(await screen.findByLabelText("좋아요")).toBeInTheDocument();
 

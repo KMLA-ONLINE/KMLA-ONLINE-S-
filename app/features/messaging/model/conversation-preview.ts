@@ -4,7 +4,10 @@ import type {
   MessageAttachmentKind,
 } from "~/features/messaging/model/types";
 
-/** 대화 목록의 마지막 메시지 한 줄. 그룹 대화에서 남이 보낸 메시지에는 발신자 이름을 붙인다. */
+/**
+ * 대화 목록의 마지막 메시지 한 줄. 내가 보낸 메시지에는 `나:`를, 그룹 대화에서 남이 보낸 메시지에는
+ * 발신자 이름을 붙인다. 1:1 대화의 상대 메시지는 대화 이름이 곧 발신자라 붙이지 않는다.
+ */
 export function formatLastMessagePreview(
   conversation: Pick<
     ConversationSummary,
@@ -19,13 +22,10 @@ export function formatLastMessagePreview(
     (lastMessage.attachmentKind
       ? attachmentKindLabel(lastMessage.attachmentKind)
       : "");
-  if (
-    conversation.type !== "group" ||
-    !lastMessage.senderId ||
-    lastMessage.senderId === conversation.viewerId
-  ) {
-    return body;
+  if (lastMessage.senderId && lastMessage.senderId === conversation.viewerId) {
+    return `나: ${body}`;
   }
+  if (conversation.type !== "group" || !lastMessage.senderId) return body;
 
   const sender = conversation.participants.find(
     ({ id }) => id === lastMessage.senderId,

@@ -15,6 +15,15 @@ describe("message time", () => {
     );
   });
 
+  it("한국 날짜로 오늘과 어제는 줄여 부른다", () => {
+    const now = Date.parse("2026-08-29T00:30:00+09:00");
+    expect(formatMessageDay("2026-08-29T00:10:00+09:00", now)).toBe("오늘");
+    expect(formatMessageDay("2026-08-28T23:50:00+09:00", now)).toBe("어제");
+    expect(formatMessageDay("2026-08-27T23:50:00+09:00", now)).toBe(
+      "2026년 8월 27일 목요일",
+    );
+  });
+
   it("같은 날 같은 분일 때만 같은 표시 시각으로 본다", () => {
     expect(
       isSameMessageMinute(

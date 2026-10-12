@@ -28,15 +28,15 @@ function conversation(
 }
 
 describe("formatLastMessagePreview", () => {
-  it("그룹 대화에서 남이 보낸 메시지에만 발신자 이름을 붙인다", () => {
+  it("내 메시지에는 `나:`를, 그룹에서 남이 보낸 메시지에는 발신자 이름을 붙인다", () => {
     expect(formatLastMessagePreview(conversation())).toBe("박서현: 안녕");
+    const mine = {
+      lastMessage: { senderId: "me", body: "응", sentAt: "2026-08-28" },
+    };
+    expect(formatLastMessagePreview(conversation(mine))).toBe("나: 응");
     expect(
-      formatLastMessagePreview(
-        conversation({
-          lastMessage: { senderId: "me", body: "응", sentAt: "2026-08-28" },
-        }),
-      ),
-    ).toBe("응");
+      formatLastMessagePreview(conversation({ ...mine, type: "direct" })),
+    ).toBe("나: 응");
     expect(formatLastMessagePreview(conversation({ type: "direct" }))).toBe(
       "안녕",
     );

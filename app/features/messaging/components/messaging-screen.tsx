@@ -91,7 +91,7 @@ export function MessagingScreen({
             type="search"
             value={search}
             onChange={(event) => setSearch(event.currentTarget.value)}
-            placeholder="Messenger 검색"
+            placeholder="채팅 검색"
             aria-label="대화 검색"
             className="rounded-full border-0 bg-muted pr-4 pl-9"
           />
@@ -195,7 +195,19 @@ export function MessagingScreen({
               <EmptyMedia variant="icon" className="size-20 rounded-full">
                 <MessageSquareMoreIcon aria-hidden className="size-10" />
               </EmptyMedia>
+              <EmptyTitle>대화를 골라 주세요</EmptyTitle>
+              <EmptyDescription>
+                왼쪽 목록에서 대화를 고르거나 새 대화를 시작하세요.
+              </EmptyDescription>
             </EmptyHeader>
+            <Button
+              variant="secondary"
+              className="rounded-full"
+              onClick={() => setNewConversationOpen(true)}
+            >
+              <PenLineIcon aria-hidden data-icon="inline-start" />새 대화
+              시작하기
+            </Button>
           </Empty>
         )}
       </div>

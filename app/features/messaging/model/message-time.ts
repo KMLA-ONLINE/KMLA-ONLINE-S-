@@ -27,10 +27,16 @@ export function formatMessageTime(sentAt: string): string {
   return timeFormatter.format(new Date(sentAt));
 }
 
-/** 날짜 구분선의 "2026년 8월 28일 금요일". */
-export function formatMessageDay(sentAt: string): string {
+/** 날짜 구분선의 "2026년 8월 28일 금요일". 한국 날짜로 오늘과 어제는 `오늘`, `어제`로 줄인다. */
+export function formatMessageDay(sentAt: string, now = Date.now()): string {
+  const day = dayKeyFormatter.format(new Date(sentAt));
+  if (day === dayKeyFormatter.format(now)) return "오늘";
+  if (day === dayKeyFormatter.format(now - DAY_MS)) return "어제";
   return dayFormatter.format(new Date(sentAt));
 }
+
+// 한국은 일광 절약 시간이 없어 하루가 늘 24시간이다.
+const DAY_MS = 24 * 60 * 60_000;
 
 export function isSameMessageDay(a: string, b: string): boolean {
   return (
