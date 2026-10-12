@@ -1,10 +1,4 @@
-import {
-  FileIcon,
-  ImageIcon,
-  MusicIcon,
-  Trash2Icon,
-  VideoIcon,
-} from "lucide-react";
+import { FileIcon, ImageIcon, MusicIcon, Trash2Icon } from "lucide-react";
 
 import { formatFileSize } from "~/features/messaging/model/attachments";
 import type {
@@ -22,7 +16,6 @@ import {
 
 const KIND_ICONS: Record<MessageAttachment["kind"], typeof FileIcon> = {
   image: ImageIcon,
-  video: VideoIcon,
   audio: MusicIcon,
   file: FileIcon,
 };

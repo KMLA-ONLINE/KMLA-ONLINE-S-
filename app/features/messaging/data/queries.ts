@@ -415,7 +415,7 @@ export interface SharedAttachment extends MessageAttachment {
   sentAt: string;
 }
 
-/** 대화에서 공유된 미디어(사진·동영상) 또는 파일. 최근 것부터 한 쪽씩 준다. */
+/** 대화에서 공유된 사진 또는 파일. 최근 것부터 한 쪽씩 준다. */
 export async function listSharedAttachments(
   conversationId: string,
   media: boolean,

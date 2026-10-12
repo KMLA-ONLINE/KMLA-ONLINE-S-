@@ -1,7 +1,7 @@
 import {
   classifyAttachment,
   MESSAGE_FILE_MAX_BYTES,
-  sniffPlayableFormat,
+  sniffAudioFormat,
 } from "~/features/messaging/model/attachments";
 import type {
   MessageAttachment,
@@ -159,7 +159,7 @@ export function toDownloadUrl(signedUrl: string, fileName: string): string {
 }
 
 /**
- * 오디오·동영상을 내려받아 앞부분으로 실제 형식을 확인하고, 통제된 MIME type의 Blob URL로
+ * 오디오를 내려받아 앞부분으로 실제 형식을 확인하고, 통제된 MIME type의 Blob URL로
  * 돌려준다. 재생할 수 있는 형식이 아니면 `null`이다(Storage 설계 §6.4). 다 쓴 URL은 호출한 쪽이
  * `URL.revokeObjectURL`로 거둔다.
  */
@@ -173,10 +173,7 @@ export async function loadPlayableAttachment(
   if (!response.ok)
     throw new Error(`Attachment download failed: ${response.status}`);
   const buffer = await response.arrayBuffer();
-  const format = sniffPlayableFormat(
-    new Uint8Array(buffer.slice(0, 16)),
-    attachment.kind,
-  );
+  const format = sniffAudioFormat(new Uint8Array(buffer.slice(0, 16)));
   if (!format) return null;
   return URL.createObjectURL(new Blob([buffer], { type: format }));
 }

@@ -8,22 +8,16 @@ import {
   toDownloadUrl,
 } from "~/features/messaging/data/files";
 import { messagingKeys } from "~/features/messaging/data/cache";
-import {
-  formatFileSize,
-  isMediaKind,
-} from "~/features/messaging/model/attachments";
+import { formatFileSize } from "~/features/messaging/model/attachments";
 import type { MessageAttachment } from "~/features/messaging/model/types";
 import type { ViewerImage } from "~/shared/components/image-viewer";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "~/shared/ui/dialog";
 import { Spinner } from "~/shared/ui/spinner";
+
+/** 말풍선 격자에 까는 최대 칸 수. */
+const MEDIA_GRID_LIMIT = 6;
 
 /** 첨부 object의 signed URL. 서버에 올라가지 않은(보내는 중인) 첨부는 건너뛴다. */
 function useAttachmentUrls(attachments: MessageAttachment[]) {
@@ -40,7 +34,7 @@ function useAttachmentUrls(attachments: MessageAttachment[]) {
 }
 
 /**
- * 메시지 첨부(기능 명세 §13.6). 사진과 동영상은 격자로, 오디오는 그 자리에서 재생하고, 그 밖의
+ * 메시지 첨부(기능 명세 §13.6). 사진은 격자로, 오디오는 그 자리에서 재생하고, 그 밖의
  * 파일은 이름과 크기를 보이고 내려받기로만 연다. 재생은 내려받은 뒤 실제 형식을 확인한 경우에만 한다.
  */
 export function MessageAttachments({
@@ -53,8 +47,8 @@ export function MessageAttachments({
   pending?: boolean;
 }) {
   const urls = useAttachmentUrls(attachments);
-  const media = attachments.filter(({ kind }) => isMediaKind(kind));
-  const others = attachments.filter(({ kind }) => !isMediaKind(kind));
+  const media = attachments.filter(({ kind }) => kind === "image");
+  const others = attachments.filter(({ kind }) => kind !== "image");
 
   return (
     <div
@@ -96,11 +90,9 @@ function MediaGrid({
   urls: Map<string, string> | undefined;
   pending: boolean;
 }) {
-  const [playing, setPlaying] = useState<MessageAttachment | null>(null);
   const images = useMemo<ViewerImage[]>(
     () =>
       media
-        .filter(({ kind }) => kind === "image")
         .map((attachment) => {
           const src =
             urls?.get(attachment.objectPath) ?? attachment.previewUrl ?? "";
@@ -121,6 +113,9 @@ function MediaGrid({
   );
   const viewer = useImageViewerParam(images, { downloadAll: true });
   const single = media.length === 1;
+  // 말풍선에는 여섯 칸까지만 깐다. 나머지는 마지막 칸의 `+N`으로 알리고, 뷰어에서 넘겨 본다.
+  const visible = media.slice(0, MEDIA_GRID_LIMIT);
+  const hiddenCount = media.length - visible.length;
 
   return (
     <>
@@ -129,20 +124,20 @@ function MediaGrid({
           "grid max-w-72 gap-0.5 overflow-hidden rounded-2xl",
           single
             ? "grid-cols-1"
-            : media.length === 2 || media.length === 4
+            : visible.length === 2 || visible.length === 4
               ? "grid-cols-2"
               : "grid-cols-3",
         )}
       >
-        {media.map((attachment) => {
+        {visible.map((attachment, index) => {
+          const more =
+            hiddenCount > 0 && index === visible.length - 1 ? hiddenCount : 0;
           const thumb =
             attachment.previewUrl ??
             (attachment.thumbnailPath
               ? urls?.get(attachment.thumbnailPath)
               : undefined) ??
-            (attachment.kind === "image"
-              ? urls?.get(attachment.objectPath)
-              : undefined);
+            urls?.get(attachment.objectPath);
           const ratio =
             single && attachment.width && attachment.height
               ? `${attachment.width} / ${attachment.height}`
@@ -153,19 +148,15 @@ function MediaGrid({
               type="button"
               disabled={pending}
               aria-label={
-                attachment.kind === "image"
-                  ? `사진 크게 보기: ${attachment.fileName}`
-                  : `동영상 재생: ${attachment.fileName}`
+                more > 0
+                  ? `사진 ${more}장 더 보기`
+                  : `사진 크게 보기: ${attachment.fileName}`
               }
               className="relative block min-w-0 overflow-hidden bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
               style={{ aspectRatio: ratio }}
-              onClick={() =>
-                attachment.kind === "image"
-                  ? viewer.open(attachment.id)
-                  : setPlaying(attachment)
-              }
+              onClick={() => viewer.open(attachment.id)}
             >
-              {attachment.kind === "image" && thumb ? (
+              {thumb ? (
                 // 방을 열면 한 페이지(50개) 안의 사진을 다 그린다. 화면 밖 사진은 스크롤해 다가갈
                 // 때 받는다. 칸의 비율이 미리 정해져 있어 늦게 떠도 자리가 밀리지 않는다.
                 <img
@@ -176,17 +167,13 @@ function MediaGrid({
                   decoding="async"
                   className="size-full object-cover"
                 />
-              ) : attachment.kind === "video" && attachment.previewUrl ? (
-                <video
-                  src={attachment.previewUrl}
-                  muted
-                  playsInline
-                  className="size-full object-cover"
-                />
               ) : null}
-              {attachment.kind === "video" ? (
-                <span className="absolute inset-0 flex items-center justify-center bg-black/25 text-white">
-                  <PlayIcon aria-hidden className="size-8 fill-current" />
+              {more > 0 ? (
+                <span
+                  aria-hidden
+                  className="absolute inset-0 flex items-center justify-center bg-black/45 text-xl font-semibold text-white"
+                >
+                  +{more}
                 </span>
               ) : null}
               {pending ? (
@@ -198,12 +185,6 @@ function MediaGrid({
           );
         })}
       </div>
-      {playing ? (
-        <VideoPlayerDialog
-          attachment={playing}
-          onClose={() => setPlaying(null)}
-        />
-      ) : null}
     </>
   );
 }
@@ -244,47 +225,6 @@ function usePlayableUrl(attachment: MessageAttachment, enabled: boolean) {
     : state;
 }
 
-function VideoPlayerDialog({
-  attachment,
-  onClose,
-}: {
-  attachment: MessageAttachment;
-  onClose: () => void;
-}) {
-  const state = usePlayableUrl(attachment, true);
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl bg-black p-2 text-white">
-        <DialogTitle className="sr-only">{attachment.fileName}</DialogTitle>
-        <DialogDescription className="sr-only">동영상 재생</DialogDescription>
-        {state.status === "ready" ? (
-          <video
-            src={state.url}
-            controls
-            autoPlay
-            playsInline
-            className="max-h-[80dvh] w-full"
-          >
-            {/* 사용자가 보낸 동영상이라 자막 파일이 없다. */}
-            <track kind="captions" />
-          </video>
-        ) : state.status === "loading" || state.status === "idle" ? (
-          <div className="flex h-48 items-center justify-center">
-            <Spinner />
-          </div>
-        ) : (
-          <p className="p-6 text-center text-sm">
-            {state.status === "unsupported"
-              ? "이 동영상은 앱에서 재생할 수 없습니다. 내려받아 열어 주세요."
-              : "동영상을 불러오지 못했습니다."}
-          </p>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function AudioAttachment({
   attachment,
   pending,
@@ -311,7 +251,7 @@ function AudioAttachment({
   }
 
   return (
-    <div className="flex w-64 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2">
+    <div className="flex w-64 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2.5">
       <MusicIcon
         aria-hidden
         className="size-5 shrink-0 text-muted-foreground"
@@ -367,7 +307,7 @@ function FileAttachment({
     </>
   );
   const className =
-    "flex w-64 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2 text-left";
+    "flex w-64 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2.5 text-left";
 
   return url ? (
     <a

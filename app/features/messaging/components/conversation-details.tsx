@@ -58,7 +58,7 @@ export function ConversationDetails({
   onRename: () => void;
   onLeave: () => void;
   onRemoveMember: (participant: MessageParticipant) => void;
-  /** 공유된 사진·동영상과 파일 수. 아직 모르면 비어 있다. */
+  /** 공유된 사진과 파일 수. 아직 모르면 비어 있다. */
   sharedCounts: { media: number; files: number } | undefined;
   onOpenSharedMedia: (tab: "media" | "files") => void;
 }) {
@@ -192,7 +192,7 @@ export function ConversationDetails({
           <DetailSection title="공유된 미디어" defaultOpen>
             <DetailRow
               icon={ImagesIcon}
-              label="사진·동영상"
+              label="사진"
               value={sharedCounts ? String(sharedCounts.media) : undefined}
               onClick={() => onOpenSharedMedia("media")}
             />

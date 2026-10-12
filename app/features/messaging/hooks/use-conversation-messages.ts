@@ -41,7 +41,9 @@ import {
 } from "~/features/messaging/data/files";
 import {
   classifyAttachment,
+  ATTACHMENT_LIMIT_MESSAGE,
   groupAttachmentsIntoMessages,
+  limitAttachments,
   isBlockedAttachment,
 } from "~/features/messaging/model/attachments";
 import { applyMessageReaction } from "~/features/messaging/model/message-reactions";
@@ -299,7 +301,7 @@ export function useConversationMessages(conversation: Conversation) {
   };
 
   /**
-   * 보낸 첨부의 기기 미리보기를 거둔다. 사진·동영상 Blob을 붙잡고 있으면 보낸 만큼 메모리가 쌓인다.
+   * 보낸 첨부의 기기 미리보기를 거둔다. 사진 Blob을 붙잡고 있으면 보낸 만큼 메모리가 쌓인다.
    * signed URL로 바꿔 그릴 시간을 주고 잠시 뒤에 미리보기를 떼고 해제한다.
    */
   const releasePreviews = (messageId: string) => {
@@ -319,13 +321,18 @@ export function useConversationMessages(conversation: Conversation) {
   };
 
   /**
-   * 고른 파일을 보낸다. 사진은 열 개씩 한 묶음, 일반 파일과 오디오는 파일마다 메시지 하나다
-   * (기능 명세 §13.5). 동영상과 GIF는 빼고 알린다. 각 메시지는 기기 안의 미리보기로 먼저 그린다.
+   * 고른 파일을 보낸다. 사진은 30장까지 한 묶음, 일반 파일과 오디오는 10개까지 파일마다 메시지
+   * 하나다(기능 명세 §13.5). 동영상과 GIF와 넘친 것은 빼고 알린다. 각 메시지는 기기 안의 미리보기로
+   * 먼저 그린다.
    */
   const sendFiles = async (selected: File[]) => {
-    const files = selected.filter((file) => !isBlockedAttachment(file));
+    const allowed = selected.filter((file) => !isBlockedAttachment(file));
+    if (allowed.length < selected.length) {
+      toast.error("동영상과 GIF는 보낼 수 없습니다.");
+    }
+    const { files, overflow } = limitAttachments(allowed);
+    if (overflow) toast.error(ATTACHMENT_LIMIT_MESSAGE);
     let allSent = files.length === selected.length;
-    if (!allSent) toast.error("동영상과 GIF는 보낼 수 없습니다.");
     for (const group of groupAttachmentsIntoMessages(files)) {
       const id = crypto.randomUUID();
       const draft: ConversationMessage = {
@@ -348,9 +355,7 @@ export function useConversationMessages(conversation: Conversation) {
             objectPath: "",
             thumbnailPath: null,
             previewUrl:
-              kind === "image" || kind === "video"
-                ? URL.createObjectURL(file)
-                : undefined,
+              kind === "image" ? URL.createObjectURL(file) : undefined,
           };
         }),
       };

@@ -3,6 +3,7 @@ import {
   ChevronDownIcon,
   CopyIcon,
   EllipsisIcon,
+  FileIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ImageIcon,
@@ -59,6 +60,14 @@ import { getSharedAttachmentCounts } from "~/features/messaging/data/queries";
 import { messagingKeys } from "~/features/messaging/data/cache";
 import { useQuery } from "@tanstack/react-query";
 import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
+import { clipboardImageFiles } from "~/shared/lib/clipboard";
+import {
+  ATTACHMENT_LIMIT_MESSAGE,
+  classifyAttachment,
+  formatFileSize,
+  isBlockedAttachment,
+  limitAttachments,
+} from "~/features/messaging/model/attachments";
 import { useKeyboardViewport } from "~/shared/hooks/use-keyboard-viewport";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
 import { RenameConversationDialog } from "~/features/messaging/components/rename-conversation-dialog";
@@ -188,6 +197,21 @@ export function RoomScreen({
       ? messages.find(({ id }) => id === overlay.messageId)
       : undefined;
   const { muted, toggleMuted } = useConversationMute(conversation);
+  // 끌어 놓거나 붙여 넣은 첨부. 바로 보내지 않고 작성창 위에 두었다가 전송할 때 함께 보낸다.
+  const [staged, setStaged] = useState<StagedAttachment[]>([]);
+  const stagedRef = useRef(staged);
+  useEffect(() => {
+    stagedRef.current = staged;
+  }, [staged]);
+  // 대화방을 떠나면(방마다 다시 마운트된다) 쌓아 둔 미리보기를 해제한다.
+  useEffect(
+    () => () => {
+      for (const item of stagedRef.current) {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      }
+    },
+    [],
+  );
   const [replyTarget, setReplyTarget] = useState<ConversationMessage | null>(
     null,
   );
@@ -271,6 +295,49 @@ export function RoomScreen({
         .getElementById(`message-${messageId}`)
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
+  }
+
+  /** 동영상과 GIF는 빼고, 이미 쌓아 둔 것까지 합쳐 사진 30장·파일 10개까지만 쌓는다. */
+  function stageFiles(selected: File[]) {
+    const allowed = selected.filter((file) => !isBlockedAttachment(file));
+    if (allowed.length < selected.length) {
+      toast.error("동영상과 GIF는 보낼 수 없습니다.");
+    }
+    const { files, overflow } = limitAttachments(
+      allowed,
+      staged.map(({ file }) => file),
+    );
+    if (overflow) toast.error(ATTACHMENT_LIMIT_MESSAGE);
+    if (files.length === 0) return;
+    setStaged((current) => [
+      ...current,
+      ...files.map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl:
+          classifyAttachment(file) === "image"
+            ? URL.createObjectURL(file)
+            : null,
+      })),
+    ]);
+  }
+
+  function unstage(id: string) {
+    const item = staged.find((entry) => entry.id === id);
+    if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    setStaged((current) => current.filter((entry) => entry.id !== id));
+  }
+
+  /** 쌓아 둔 첨부를 보낸다. 보내는 메시지는 각자 미리보기를 새로 만들므로 여기의 것은 바로 해제한다. */
+  function sendStaged() {
+    for (const item of staged) {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    }
+    const files = staged.map(({ file }) => file);
+    setStaged([]);
+    setReplyTarget(null);
+    followingNewMessagesRef.current = true;
+    void sendFiles(files);
   }
 
   // 보내지 못하면 메시지가 목록에 "보내지 못함"으로 남아 다시 보낼 수 있으므로 입력과 답장 대상은
@@ -472,13 +539,7 @@ export function RoomScreen({
           }
           onRemoveAttachments={setAttachmentTarget}
           onDropFiles={
-            viewerActive && !selection
-              ? (files) => {
-                  setReplyTarget(null);
-                  followingNewMessagesRef.current = true;
-                  void sendFiles(files);
-                }
-              : undefined
+            viewerActive && !selection && !editTarget ? stageFiles : undefined
           }
         />
         {selection ? (
@@ -512,6 +573,10 @@ export function RoomScreen({
             onCancelEdit={() => setEditTarget(null)}
             onEdit={submitEdit}
             onSend={sendMessage}
+            staged={staged}
+            onStageFiles={stageFiles}
+            onUnstage={unstage}
+            onSendStaged={sendStaged}
             onSendFiles={(files) => {
               setReplyTarget(null);
               followingNewMessagesRef.current = true;
@@ -618,7 +683,6 @@ export function RoomScreen({
           initialTab={overlay.tab}
           counts={sharedCounts}
           onClose={roomOverlay.close}
-          onViewMessage={(messageId) => void viewMessage(messageId)}
         />
       ) : null}
       {attachmentTarget ? (
@@ -917,7 +981,7 @@ function MessageThread({
     >
       {draggingFiles ? (
         <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary bg-background/80 text-sm font-medium text-primary">
-          여기에 놓으면 보냅니다
+          여기에 놓으면 첨부합니다
         </div>
       ) : null}
       <div
@@ -1409,6 +1473,13 @@ function MessageActions({
   );
 }
 
+/** 작성창 위에 쌓아 둔 첨부 하나. 사진은 기기 안의 미리보기를 함께 든다. */
+interface StagedAttachment {
+  id: string;
+  file: File;
+  previewUrl: string | null;
+}
+
 function ComposerShell({
   replyTarget,
   replyAuthor,
@@ -1417,6 +1488,10 @@ function ComposerShell({
   onCancelEdit,
   onEdit,
   onSend,
+  staged,
+  onStageFiles,
+  onUnstage,
+  onSendStaged,
   onSendFiles,
   desktopDetailsOpen,
 }: {
@@ -1429,6 +1504,11 @@ function ComposerShell({
   onEdit: (body: string) => Promise<void>;
   /** 보내지 못한 메시지는 목록에 남아 다시 보낼 수 있으므로 작성창은 입력을 되살리지 않는다. */
   onSend: (body: string) => Promise<boolean>;
+  /** 끌어 놓거나 붙여 넣어 쌓아 둔 첨부. 전송하면 글 다음에 함께 보낸다. */
+  staged: StagedAttachment[];
+  onStageFiles: (files: File[]) => void;
+  onUnstage: (id: string) => void;
+  onSendStaged: () => void;
   /** 고른 파일을 보낸다. 답장이나 수정 중에는 첨부할 수 없다(기능 명세 §13.5). */
   onSendFiles: (files: File[]) => void;
   desktopDetailsOpen: boolean;
@@ -1475,20 +1555,29 @@ function ComposerShell({
   const composing = useRef(false);
   const normalizedDraft = normalizeMessageBody(draft);
   const hasDraft = normalizedDraft.trim() !== "";
+  // 수정 중에는 첨부를 쌓지 않는다. 고칠 수 있는 메시지는 본문뿐이다.
+  const hasStaged = !editTarget && staged.length > 0;
+  const canStage = !editTarget;
   const draftLength = countMessageGraphemes(normalizedDraft);
   const overLimit = draftLength > MESSAGE_MAX_LENGTH;
   const attachmentActionsCollapsed = hasDraft && !attachmentActionsExpanded;
 
   function sendDraft(): boolean {
-    if (!hasDraft || overLimit) return false;
+    if (overLimit) return false;
     const body = normalizedDraft;
     if (editTarget) {
+      if (!hasDraft) return false;
       void onEdit(body);
       return true;
     }
+    if (!hasDraft && !hasStaged) return false;
     if (!claimSend()) return false;
-    void onSend(body);
-    setDraft("");
+    // 글을 먼저 보낸다. 첨부는 올리기가 끝나야 서버 시각이 정해지므로 어차피 글 뒤에 온다.
+    if (hasDraft) {
+      void onSend(body);
+      setDraft("");
+    }
+    if (hasStaged) onSendStaged();
     setAttachmentActionsExpanded(false);
     return true;
   }
@@ -1501,7 +1590,19 @@ function ComposerShell({
   }
 
   return (
-    <footer className="shrink-0 bg-background px-2 pt-2 pb-[calc(0.5rem+var(--app-safe-b))] md:px-3 md:pb-3">
+    <footer
+      className="shrink-0 bg-background px-2 pt-2 pb-[calc(0.5rem+var(--app-safe-b))] md:px-3 md:pb-3"
+      onDragOver={(event) => {
+        if (canStage && event.dataTransfer.types.includes("Files")) {
+          event.preventDefault();
+        }
+      }}
+      onDrop={(event) => {
+        if (!canStage || event.dataTransfer.files.length === 0) return;
+        event.preventDefault();
+        onStageFiles([...event.dataTransfer.files]);
+      }}
+    >
       {editTarget ? (
         <div
           className={cn(
@@ -1552,6 +1653,52 @@ function ComposerShell({
           </Button>
         </div>
       ) : null}
+      {hasStaged ? (
+        <ul
+          aria-label="보낼 첨부"
+          className={cn(
+            "mx-auto mb-2 flex max-w-3xl gap-2 overflow-x-auto px-1 pt-2 pb-1",
+            !desktopDetailsOpen && "xl:max-w-none",
+          )}
+        >
+          {staged.map((item) => (
+            <li key={item.id} className="relative shrink-0">
+              {item.previewUrl ? (
+                <img
+                  src={item.previewUrl}
+                  alt={item.file.name}
+                  className="size-16 rounded-xl bg-muted object-cover"
+                />
+              ) : (
+                <div className="flex h-16 w-44 items-center gap-2 rounded-xl bg-muted px-3">
+                  <FileIcon
+                    aria-hidden
+                    className="size-5 shrink-0 text-muted-foreground"
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs">
+                      {item.file.name}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {formatFileSize(item.file.size)}
+                    </span>
+                  </span>
+                </div>
+              )}
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="secondary"
+                aria-label={`첨부 빼기: ${item.file.name}`}
+                className="absolute -top-1.5 -right-1.5 rounded-full shadow-sm"
+                onClick={() => onUnstage(item.id)}
+              >
+                <XIcon aria-hidden />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div
         className={cn(
           "mx-auto flex max-w-3xl items-end gap-1.5",
@@ -1590,21 +1737,21 @@ function ComposerShell({
             variant="ghost"
             size="icon"
             className="mb-0.5 rounded-full"
-            aria-label="사진 보내기"
-            disabled={attachDisabled}
-            onClick={() => mediaInput.current?.click()}
-          >
-            <ImageIcon aria-hidden className="size-5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="mb-0.5 rounded-full"
             aria-label="파일 보내기"
             disabled={attachDisabled}
             onClick={() => fileInput.current?.click()}
           >
             <PaperclipIcon aria-hidden className="size-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="mb-0.5 rounded-full"
+            aria-label="사진 보내기"
+            disabled={attachDisabled}
+            onClick={() => mediaInput.current?.click()}
+          >
+            <ImageIcon aria-hidden className="size-5" />
           </Button>
         </div>
         {attachmentActionsCollapsed ? (
@@ -1627,6 +1774,13 @@ function ComposerShell({
             placeholder="메시지 입력"
             className="field-sizing-content max-h-32 min-h-6 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground md:text-sm"
             onChange={(event) => changeDraft(event.currentTarget.value)}
+            onPaste={(event) => {
+              if (!canStage) return;
+              const images = clipboardImageFiles(event.clipboardData);
+              if (images.length === 0) return;
+              event.preventDefault();
+              onStageFiles(images);
+            }}
             onCompositionStart={() => (composing.current = true)}
             onCompositionEnd={() => (composing.current = false)}
             onKeyDown={(event) => {
@@ -1666,7 +1820,7 @@ function ComposerShell({
           aria-label={
             editTarget
               ? "수정한 메시지 저장"
-              : hasDraft
+              : hasDraft || hasStaged
                 ? "메시지 보내기"
                 : "좋아요 보내기"
           }
@@ -1680,7 +1834,7 @@ function ComposerShell({
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
             if (refocusAfterSend.current) textareaRef.current?.focus();
-            if (hasDraft || editTarget) {
+            if (hasDraft || hasStaged || editTarget) {
               sendDraft();
               return;
             }
@@ -1690,7 +1844,7 @@ function ComposerShell({
             setDraft("");
           }}
         >
-          {hasDraft || editTarget ? (
+          {hasDraft || hasStaged || editTarget ? (
             <SendIcon aria-hidden className="size-5" />
           ) : (
             <ThumbsUpIcon aria-hidden className="size-5" />

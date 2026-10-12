@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(23);
 
 -- seed: 홍길동(…0001)과 김민준(…0100)의 1:1 대화 c…01, 그룹 c…02에는 이한별이 2026-08-21에 참여했다.
 insert into auth.users (
@@ -62,6 +62,30 @@ select throws_ok(
   '22023',
   null,
   'a GIF is rejected'
+);
+
+select lives_ok(
+  $$select * from public.prepare_message_attachments(
+      'c0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000709',
+      (select jsonb_agg(jsonb_build_object(
+        'kind', 'image', 'mime_type', 'image/webp', 'size_bytes', 4,
+        'width', 10, 'height', 10, 'file_name', n || '.webp'))
+       from generate_series(1, 30) as n)
+    )$$,
+  'one message holds up to 30 photos'
+);
+
+select throws_ok(
+  $$select * from public.prepare_message_attachments(
+      'c0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000710',
+      (select jsonb_agg(jsonb_build_object(
+        'kind', 'image', 'mime_type', 'image/webp', 'size_bytes', 4,
+        'width', 10, 'height', 10, 'file_name', n || '.webp'))
+       from generate_series(1, 31) as n)
+    )$$,
+  '22023',
+  null,
+  'a 31st photo is rejected'
 );
 
 -- 실패한 업로드를 같은 메시지 ID로 다시 예고할 수 있다.

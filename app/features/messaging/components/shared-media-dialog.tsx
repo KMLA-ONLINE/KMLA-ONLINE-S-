@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { DownloadIcon, FileIcon, PlayIcon, XIcon } from "lucide-react";
-import { useState } from "react";
+import { DownloadIcon, FileIcon, XIcon } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import {
   createAttachmentUrls,
@@ -14,6 +14,8 @@ import { messagingKeys } from "~/features/messaging/data/cache";
 import { formatFileSize } from "~/features/messaging/model/attachments";
 import { formatMessageDay } from "~/features/messaging/model/message-time";
 import type { MessageCursor } from "~/features/messaging/model/types";
+import type { ViewerImage } from "~/shared/components/image-viewer";
+import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
@@ -26,21 +28,20 @@ import {
 import { Spinner } from "~/shared/ui/spinner";
 
 /**
- * 공유된 미디어와 파일(기능 명세 §13.18). 사진·동영상은 격자, 파일은 유형·이름·크기로 보이고 더
- * 불러올 수 있다. 신규 멤버에게는 서버가 참여 이후의 첨부만 준다. 항목을 고르면 원래 메시지로 간다.
+ * 공유된 미디어와 파일(기능 명세 §13.18). 사진은 격자, 파일은 유형·이름·크기로 보이고 더
+ * 불러올 수 있다. 신규 멤버에게는 서버가 참여 이후의 첨부만 준다. 사진을 고르면 그 자리에서 뷰어로
+ * 열고 불러온 사진끼리 넘겨 본다.
  */
 export function SharedMediaDialog({
   conversationId,
   initialTab,
   counts,
   onClose,
-  onViewMessage,
 }: {
   conversationId: string;
   initialTab: "media" | "files";
   counts: { media: number; files: number } | undefined;
   onClose: () => void;
-  onViewMessage: (messageId: string) => void;
 }) {
   const [tab, setTab] = useState(initialTab);
   const media = tab === "media";
@@ -52,20 +53,42 @@ export function SharedMediaDialog({
     getNextPageParam: (page) => page.nextCursor,
     staleTime: 0,
   });
-  const items = pages.data?.pages.flatMap((page) => page.items) ?? [];
+  const items = useMemo(
+    () => pages.data?.pages.flatMap((page) => page.items) ?? [],
+    [pages.data],
+  );
+  // 사진은 뷰어가 원본을 열 수 있게 원본 경로도 서명한다. 서명만 하고 받는 것은 뷰어를 열 때다.
   const paths = items
     .map((item) => item.thumbnailPath ?? item.objectPath)
-    .concat(
-      items
-        .filter(({ kind }) => kind !== "image")
-        .map((item) => item.objectPath),
-    );
+    .concat(items.map((item) => item.objectPath));
   const urls = useQuery({
     queryKey: messagingKeys.attachmentUrls(paths),
     queryFn: () => createAttachmentUrls(paths),
     enabled: paths.length > 0,
     staleTime: 55 * 60_000,
   }).data;
+  const images = useMemo<ViewerImage[]>(
+    () =>
+      (media ? items : []).flatMap((item) => {
+        const src = urls?.get(item.objectPath);
+        if (!src) return [];
+        return [
+          {
+            id: item.id,
+            src,
+            thumbSrc: item.thumbnailPath
+              ? urls?.get(item.thumbnailPath)
+              : undefined,
+            downloadSrc: toDownloadUrl(src, item.fileName),
+            name: item.fileName,
+            width: item.width ?? undefined,
+            height: item.height ?? undefined,
+          },
+        ];
+      }),
+    [items, media, urls],
+  );
+  const viewer = useImageViewerParam(images);
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -92,7 +115,7 @@ export function SharedMediaDialog({
         <div role="tablist" aria-label="첨부 종류" className="flex gap-1">
           {(
             [
-              ["media", "사진·동영상", counts?.media],
+              ["media", "사진", counts?.media],
               ["files", "파일", counts?.files],
             ] as const
           ).map(([value, label, count]) => (
@@ -124,17 +147,17 @@ export function SharedMediaDialog({
           ) : items.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               {media
-                ? "주고받은 사진과 동영상이 없습니다."
+                ? "주고받은 사진이 없습니다."
                 : "주고받은 파일이 없습니다."}
             </p>
           ) : media ? (
-            <ul aria-label="사진·동영상" className="grid grid-cols-3 gap-0.5">
+            <ul aria-label="사진" className="grid grid-cols-3 gap-0.5">
               {items.map((item) => (
                 <li key={item.id}>
                   <MediaTile
                     item={item}
                     url={urls?.get(item.thumbnailPath ?? item.objectPath)}
-                    onSelect={() => onViewMessage(item.messageId)}
+                    onSelect={() => viewer.open(item.id)}
                   />
                 </li>
               ))}
@@ -181,11 +204,11 @@ function MediaTile({
   return (
     <button
       type="button"
-      aria-label={`${formatMessageDay(item.sentAt)} ${item.kind === "image" ? "사진" : "동영상"}, 원래 메시지로 이동`}
+      aria-label={`${formatMessageDay(item.sentAt)} 사진 크게 보기`}
       className="relative block aspect-square w-full overflow-hidden bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
       onClick={onSelect}
     >
-      {item.kind === "image" && url ? (
+      {url ? (
         <img
           src={url}
           alt=""
@@ -194,11 +217,6 @@ function MediaTile({
           decoding="async"
           className="size-full object-cover"
         />
-      ) : null}
-      {item.kind === "video" ? (
-        <span className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-          <PlayIcon aria-hidden className="size-7" />
-        </span>
       ) : null}
     </button>
   );

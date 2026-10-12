@@ -167,7 +167,8 @@ create table private.message_attachments (
   constraint message_attachments_status_check
     check (status in ('pending', 'ready', 'deleted')),
   constraint message_attachments_kind_check
-    check (kind in ('image', 'video', 'audio', 'file')),
+    -- 동영상은 지원하지 않는다(기능 명세 §13.5). 예전에 올린 동영상은 일반 파일로 남긴다.
+    check (kind in ('image', 'audio', 'file')),
   constraint message_attachments_mime_check
     check (char_length(mime_type) between 1 and 255),
   -- 정규화한 사진은 WebP 8MiB, 그 밖의 파일은 30MiB까지다(Storage 설계 §6).
@@ -1702,7 +1703,6 @@ as $$
           (
             select case attachment.kind
               when 'image' then '사진'
-              when 'video' then '동영상'
               else '파일'
             end
             from private.message_attachments as attachment
@@ -2449,7 +2449,7 @@ grant execute on function public.list_message_reactors(uuid)
   to authenticated;
 
 -- 첨부 업로드를 예고한다. `p_files`는 `{kind, mime_type, size_bytes, width, height, file_name}`의
--- 배열이다. 한 메시지에 최대 10개이고, 두 개 이상이면 모두 사진이나 동영상이어야 한다(기능 명세 §13.5).
+-- 배열이다. 사진은 한 메시지에 최대 30장이고, 두 개 이상이면 모두 사진이어야 한다(기능 명세 §13.5).
 -- 같은 메시지 ID로 다시 부르면 이전 예고를 버린다. 돌려준 경로에만 업로드할 수 있다.
 create function public.prepare_message_attachments(
   p_conversation_id uuid,
@@ -2482,8 +2482,9 @@ begin
     raise exception 'message id and files required'
       using errcode = '22023';
   end if;
-  if file_count not between 1 and 10 then
-    raise exception 'between 1 and 10 attachments required'
+  -- 사진은 한 메시지에 30장까지 묶는다. 그 밖의 파일은 메시지마다 하나다(기능 명세 §13.5).
+  if file_count not between 1 and 30 then
+    raise exception 'between 1 and 30 attachments required'
       using errcode = '22023';
   end if;
   if file_count > 1 and exists (
@@ -2780,7 +2781,7 @@ begin
   where attachment.conversation_id = p_conversation_id
     and attachment.status = 'ready'
     and message.deleted_at is null
-    and (attachment.kind in ('image', 'video')) = coalesce(p_media, true)
+    and (attachment.kind = 'image') = coalesce(p_media, true)
     and (
       p_before_sent_at is null
       or (message.sent_at, attachment.id) < (p_before_sent_at, p_before_id)
@@ -2822,8 +2823,8 @@ begin
 
   return query
   select
-    (count(*) filter (where attachment.kind in ('image', 'video')))::integer,
-    (count(*) filter (where attachment.kind not in ('image', 'video')))::integer
+    (count(*) filter (where attachment.kind = 'image'))::integer,
+    (count(*) filter (where attachment.kind <> 'image'))::integer
   from private.message_attachments as attachment
   join private.messages as message on message.id = attachment.message_id
   where attachment.conversation_id = p_conversation_id

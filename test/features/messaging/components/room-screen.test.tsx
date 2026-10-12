@@ -434,6 +434,67 @@ describe("RoomScreen", () => {
     expect(download).toHaveTextContent("5B");
   });
 
+  it("끌어 놓거나 붙여 넣은 첨부는 작성창 위에 두었다가 전송할 때 보낸다", async () => {
+    // jsdom에는 Blob URL이 없다. 쌓아 둔 사진의 미리보기용으로만 채운다.
+    const created = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
+    const revoked = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
+    Object.assign(URL, {
+      createObjectURL: () => "blob:preview",
+      revokeObjectURL: () => undefined,
+    });
+    const sendSpy = vi.spyOn(mutations, "sendMessage");
+    const conversation = await loadConversation("hyunwoo");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/hyunwoo" },
+    );
+    const input = screen.getByRole("textbox", { name: "메시지 입력" });
+
+    fireEvent.drop(input.closest("footer")!, {
+      dataTransfer: {
+        types: ["Files"],
+        files: [new File(["hello"], "회의록.pdf", { type: "application/pdf" })],
+      },
+    });
+    fireEvent.paste(input, {
+      clipboardData: {
+        getData: () => "",
+        items: [
+          {
+            kind: "file",
+            getAsFile: () =>
+              new File(["png"], "캡처.png", { type: "image/png" }),
+          },
+        ],
+      },
+    });
+
+    const tray = screen.getByRole("list", { name: "보낼 첨부" });
+    expect(within(tray).getAllByRole("listitem")).toHaveLength(2);
+    expect(sendSpy).not.toHaveBeenCalled();
+
+    await user.click(
+      within(tray).getByRole("button", { name: "첨부 빼기: 캡처.png" }),
+    );
+    await user.click(screen.getByRole("button", { name: "메시지 보내기" }));
+
+    expect(
+      await screen.findByRole("link", { name: "내려받기: 회의록.pdf" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("list", { name: "보낼 첨부" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByAltText("캡처.png")).not.toBeInTheDocument();
+    sendSpy.mockRestore();
+    for (const [name, descriptor] of [
+      ["createObjectURL", created],
+      ["revokeObjectURL", revoked],
+    ] as const) {
+      if (descriptor) Object.defineProperty(URL, name, descriptor);
+      else Reflect.deleteProperty(URL, name);
+    }
+  });
+
   it("대화 정보에서 멤버를 초대하고, 확인을 거쳐 내보낸다", async () => {
     const invite = vi.spyOn(mutations, "addConversationMembers");
     const remove = vi.spyOn(mutations, "removeConversationMember");

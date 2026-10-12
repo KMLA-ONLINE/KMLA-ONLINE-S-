@@ -10,7 +10,8 @@ export interface MessageParticipant {
   active: boolean;
 }
 
-export type MessageAttachmentKind = "image" | "video" | "audio" | "file";
+/** 메시지 첨부 종류. 동영상은 지원하지 않는다(기능 명세 §13.5). */
+export type MessageAttachmentKind = "image" | "audio" | "file";
 
 /** 메시지 첨부 한 개. object는 비공개 버킷에 있고 화면은 signed URL로 연다. */
 export interface MessageAttachment {
