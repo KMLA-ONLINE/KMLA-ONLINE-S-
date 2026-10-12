@@ -286,8 +286,8 @@ iOS/iPadOS의 일반 Safari 탭에는 설치 안내를 제공하고 설치형 PW
 
 ## 11. 메시지 Push
 
-> **상태**: 미구현. 메시지 기능 도입 시 적용할 설계다. 데이터 모델과 암호화는
-> [메시지 기술 설계](MESSAGING_TECHNICAL_DESIGN.md)를 따른다.
+> **상태**: 구현. 그룹의 멘션 중심 알림과 첨부 종류 본문은 메시지 멘션과 첨부가 생길 때 함께 넣는다.
+> 데이터 모델과 암호화는 [메시지 기술 설계](MESSAGING_TECHNICAL_DESIGN.md)를 따른다.
 
 메시지 Push는 `public.notifications`를 만들지 않는다(§2). 같은 outbox, worker와 서비스 워커를 쓰되 원본
 참조가 알림이 아니라 메시지다.
@@ -303,13 +303,15 @@ iOS/iPadOS의 일반 Safari 탭에는 설치 안내를 제공하고 설치형 PW
 
 ### 11.2 즉시 깨우기
 
-30초 Cron만으로는 메시지가 늦다. 전송 RPC가 `pg_net`으로 dispatcher를 한 번 호출한다. pg_net 요청은
+30초 Cron만으로는 메시지가 늦다. 전송 RPC가 `pg_net`으로 dispatcher를 한 번 호출한다
+(`private.wake_notification_dispatcher`). pg_net 요청은
 transaction이 commit된 뒤에 나가므로 아직 보이지 않는 행을 찾는 일은 없다. 빠르게 오가는 대화에서 호출이
-메시지마다 나가지 않도록, 짧은 간격 안에 이미 깨운 기록이 있으면 다시 호출하지 않는다. Cron은 놓친 호출과
+메시지마다 나가지 않도록, 1초 안에 이미 깨운 기록이 있으면 다시 호출하지 않는다. Cron은 놓친 호출과
 재시도를 맡는 fallback으로 남는다.
 
-dispatcher는 깨워졌을 때 몇 초 안에 `available_at`이 되는 메시지 delivery가 있으면 그 시각까지 기다린 뒤
-claim한다. 깨운 직후에는 2초 대기 중인 행만 있기 때문이다.
+dispatcher는 한 배치를 보낸 뒤 5초 안에 `available_at`이 되는 메시지 delivery가 있으면
+(`next_message_delivery_at`) 그 시각까지 기다렸다 다시 claim한다. 깨운 직후에는 2초 대기 중인 행만 있고,
+깨우기를 건너뛴 1초 사이의 메시지도 이 대기가 받는다. 한 호출이 기다리며 머무는 시간은 20초까지다.
 
 ### 11.3 발송 직전 확인
 
@@ -333,9 +335,11 @@ Push service로 나간 payload는 브라우저 Push 암호화(RFC 8291)로 보�
 
 ### 11.4 서비스 워커
 
-- 메시지 payload는 대화 ID를 담는 별도 형식으로 검증한다. 클릭 시 payload URL을 열지 않고
+- 메시지 payload는 `type: "message"`와 대화·메시지·delivery ID, 제목, 본문만 담는 별도 형식으로 검증한다. 클릭 시 payload URL을 열지 않고
   `/messenger/:conversationId`를 직접 구성한다. 대화방 loader가 접근 권한을 다시 확인한다.
-- tag는 subscription 범위의 대화별 값이다. 같은 대화의 새 메시지는 카드를 교체하고 `renotify`한다.
+- tag는 서비스 워커가 정하는 대화별 값(`message:<대화 ID>`)이다. 카드는 구독한 기기마다 따로 뜨므로
+  subscription 범위가 된다. 같은 대화의 새 메시지는 카드를 교체하고 `renotify`한다. 메시지 카드는 앱 아이콘
+  뱃지에 세지 않는다.
 - 서비스 워커는 화면에 그 대화가 열려 있는지로 카드를 생략하지 않는다. `userVisibleOnly` 구독에서 카드를
   생략하면 iOS가 구독을 끊을 수 있으므로, 억제는 §11.3의 서버 확인만 맡는다.
 - 메시지 unread는 일반 알림함 badge와 따로 센다(§2).

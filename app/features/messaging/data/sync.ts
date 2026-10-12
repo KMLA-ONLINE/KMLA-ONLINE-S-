@@ -2,13 +2,17 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import {
   flattenMessagePages,
+  invalidateConversationList,
+  isMessageWriteHeld,
   latestMessageChange,
   mergeServerMessages,
   messagingKeys,
   patchUnreadCounts,
+  replaceConversationSummary,
   type MessagePages,
 } from "~/features/messaging/data/cache";
 import {
+  getConversationSummary,
   listMessageChanges,
   listMessageReadCounts,
   listMessages,
@@ -62,6 +66,20 @@ export async function refreshReadState(
   patchUnreadCounts(queryClient, conversationId, counts);
 }
 
+/**
+ * 대화 목록에서 이 대화 한 줄만 다시 받는다. 목록 전체를 다시 읽으면 모든 대화의 마지막 메시지를
+ * 복호화한다. 목록에 없던 대화(새로 초대된 대화)면 전체를 다시 읽는다.
+ */
+export async function refreshConversationInList(
+  queryClient: QueryClient,
+  conversationId: string,
+): Promise<void> {
+  const summary = await getConversationSummary(conversationId);
+  if (!summary || !replaceConversationSummary(queryClient, summary)) {
+    await invalidateConversationList(queryClient);
+  }
+}
+
 async function reloadLatestPage(
   queryClient: QueryClient,
   conversationId: string,
@@ -76,12 +94,21 @@ async function reloadLatestPage(
     messagingKeys.messages(conversationId),
     (data) => {
       if (!data) return data;
+      const cached = new Map(
+        flattenMessagePages(data).map((message) => [message.id, message]),
+      );
       const received = new Set(page.messages.map(({ id }) => id));
-      const pending = flattenMessagePages(data).filter(
+      const pending = [...cached.values()].filter(
         (message) => message.pending && !received.has(message.id),
       );
+      // 내 요청이 진행 중인 메시지는 이 스냅숏보다 cache가 새롭다.
+      const messages = page.messages.map((message) =>
+        isMessageWriteHeld(message.id)
+          ? (cached.get(message.id) ?? message)
+          : message,
+      );
       return {
-        pages: [{ ...page, messages: [...page.messages, ...pending] }],
+        pages: [{ ...page, messages: [...messages, ...pending] }],
         pageParams: [null],
       };
     },

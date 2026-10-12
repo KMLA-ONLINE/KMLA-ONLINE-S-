@@ -13,6 +13,7 @@ import {
   holdMessageWrite,
   initialMessagePages,
   invalidateConversationList,
+  markConversationListRead,
   messagingKeys,
   patchMessage,
   patchReplyPreviews,
@@ -31,6 +32,7 @@ import {
   listMessages,
   listPinnedMessages,
 } from "~/features/messaging/data/queries";
+import { refreshConversationInList } from "~/features/messaging/data/sync";
 import { applyMessageReaction } from "~/features/messaging/model/message-reactions";
 import type {
   Conversation,
@@ -89,23 +91,39 @@ export function useConversationMessages(conversation: Conversation) {
     [pagesQuery.data],
   );
   const latestRequest = useRef(new Map<string, number>());
+  /** 실패한 전송의 ID. 같은 내용을 다시 보내면 같은 ID를 써서 서버가 한 번만 저장하게 한다. */
+  const failedSends = useRef(new Map<string, string>());
 
-  // 화면에 나온 가장 최근 상대 메시지까지 읽은 것으로 기록한다. 내 메시지는 보낼 때 서버가 읽음
-  // 위치를 옮긴다. 이 위치가 메시지 Push 억제의 근거이므로 탭이 실제로 보일 때만 기록하고, 가려진
-  // 탭이면 다시 보일 때 기록한다. 실패하면 사용자에게 알리지 않고 다음에 보일 때 다시 시도한다.
-  const latestMessage = messages.at(-1);
-  const unreadLatestId =
-    latestMessage && latestMessage.senderId !== conversation.viewerId
-      ? latestMessage.id
-      : undefined;
+  // 대화 목록에서 이 대화 한 줄만 다시 받는다. 실패하면 목록 전체를 다시 읽는다.
+  const refreshList = () => {
+    refreshConversationInList(queryClient, conversationId).catch(
+      () => void invalidateConversationList(queryClient),
+    );
+  };
+
+  // 화면에 나온 가장 최근 상대 메시지까지 읽은 것으로 기록한다. 마지막 메시지가 아니라 마지막 "상대"
+  // 메시지를 본다. 내 메시지가 뒤에 있어도 그 앞의 상대 메시지는 읽은 것이고, 서버는 읽음 위치를
+  // 앞으로만 옮기므로 이미 지난 메시지면 아무 일도 없다. 이 위치가 메시지 Push 억제의 근거이므로
+  // 탭이 실제로 보일 때만 기록하고, 가려진 탭이면 다시 보일 때 기록한다. 실패하면 사용자에게 알리지
+  // 않고 다음에 보일 때 다시 시도한다.
+  const unreadLatestId = latestIncomingMessageId(
+    messages,
+    conversation.viewerId,
+  );
   useEffect(() => {
     if (!unreadLatestId) return;
     let pending = true;
     const mark = () => {
       if (!pending || document.visibilityState !== "visible") return;
       pending = false;
+      // 가장 최근 상대 메시지까지 읽었으니 이 대화의 읽지 않은 수는 0이다. 목록을 먼저 그린다.
+      markConversationListRead(queryClient, conversationId);
       markConversationRead(conversationId, unreadLatestId).then(
-        () => void invalidateConversationList(queryClient),
+        () => {
+          refreshConversationInList(queryClient, conversationId).catch(
+            () => void invalidateConversationList(queryClient),
+          );
+        },
         () => {
           pending = true;
         },
@@ -134,9 +152,20 @@ export function useConversationMessages(conversation: Conversation) {
     );
   }
 
+  const sendKey = (body: string, replyToId: string | undefined) =>
+    `${replyToId ?? ""}\n${body}`;
+
+  /**
+   * 보낼 메시지의 ID. 응답을 잃어 실패로 보인 전송을 같은 내용으로 다시 보내면 그때의 ID를 돌려준다.
+   * 서버가 이미 저장했으면 같은 ID라 다시 저장하지 않는다.
+   */
+  const draftIdFor = (body: string, replyToId?: string) =>
+    failedSends.current.get(sendKey(body, replyToId)) ?? crypto.randomUUID();
+
   const send = async ({ id, body, replyTo }: SendDraft) => {
+    const key = sendKey(body, replyTo?.id);
     const draft: ConversationMessage = {
-      id: id ?? crypto.randomUUID(),
+      id: id ?? failedSends.current.get(key) ?? crypto.randomUUID(),
       senderId: conversation.viewerId,
       body,
       sentAt: new Date().toISOString(),
@@ -156,14 +185,19 @@ export function useConversationMessages(conversation: Conversation) {
         },
         draft,
       );
+      failedSends.current.delete(key);
       patchMessage(queryClient, conversationId, draft.id, {
         ...sent,
         pending: false,
       });
-      void invalidateConversationList(queryClient);
+      refreshList();
       return true;
     } catch {
-      removeMessage(queryClient, conversationId, draft.id);
+      failedSends.current.set(key, draft.id);
+      // 그새 따라잡기가 서버 행을 넣었으면(응답만 잃은 경우) 거두지 않는다.
+      if (findCachedMessage(queryClient, conversationId, draft.id)?.pending) {
+        removeMessage(queryClient, conversationId, draft.id);
+      }
       toast.error("메시지를 보내지 못했습니다.");
       return false;
     } finally {
@@ -239,7 +273,7 @@ export function useConversationMessages(conversation: Conversation) {
     try {
       const saved = await editMessage(message.id, body);
       if (isLatest()) apply(saved);
-      void invalidateConversationList(queryClient);
+      refreshList();
       return true;
     } catch {
       if (isLatest()) apply(previous);
@@ -278,7 +312,7 @@ export function useConversationMessages(conversation: Conversation) {
     const release = holdMessageWrite(message.id);
     try {
       await deleteMessages([message.id]);
-      void invalidateConversationList(queryClient);
+      refreshList();
     } catch {
       if (!isLatest()) return;
       patchMessage(queryClient, conversationId, message.id, previous);
@@ -303,10 +337,30 @@ export function useConversationMessages(conversation: Conversation) {
       return result.data?.pages.at(-1)?.messages.length ? "loaded" : "empty";
     },
     send,
+    draftIdFor,
     react: (message: ConversationMessage, reaction: PostReaction) =>
       void react(message, reaction),
     togglePinned: (message: ConversationMessage) => void togglePinned(message),
     edit,
     remove: (message: ConversationMessage) => void remove(message),
   };
+}
+
+/** 가장 최근의 상대 메시지. 아직 서버가 확정하지 않은 메시지와 시스템 메시지는 건너뛴다. */
+function latestIncomingMessageId(
+  messages: ConversationMessage[],
+  viewerId: string,
+): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (
+      message &&
+      message.senderId !== viewerId &&
+      !message.pending &&
+      !message.system
+    ) {
+      return message.id;
+    }
+  }
+  return undefined;
 }

@@ -16,6 +16,14 @@ const validPayload = {
   body: "확인할 새 알림이 있습니다.",
   tag: "notification-category:content:018f3f16-40c7-7d25-b2c3-abcdef012345",
 };
+const messagePayload = {
+  type: "message",
+  conversationId: "018f3f17-40c7-7d25-b2c3-abcdef012345",
+  messageId: "018f3f18-40c7-7d25-b2c3-abcdef012345",
+  deliveryId: "018f3f19-40c7-7d25-b2c3-abcdef012345",
+  title: "홍길동",
+  body: "도서관 앞이야",
+};
 const validClickData = {
   notificationId: validPayload.notificationId,
   deliveryIds: [validPayload.deliveryId],
@@ -107,6 +115,89 @@ function loadPushWorker(
 describe("public push service worker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("shows a message push on one card per conversation and re-alerts on the next message", async () => {
+    const worker = loadPushWorker();
+
+    await worker.dispatch("push", { data: { json: () => messagePayload } });
+    await worker.dispatch("push", {
+      data: {
+        json: () => ({
+          ...messagePayload,
+          messageId: "018f3f1a-40c7-7d25-b2c3-abcdef012345",
+          deliveryId: "018f3f1b-40c7-7d25-b2c3-abcdef012345",
+          body: "어디야?",
+        }),
+      },
+    });
+
+    expect(worker.showNotification).toHaveBeenLastCalledWith("홍길동", {
+      body: "어디야?",
+      icon: "/pwa-192x192.png",
+      badge: "/badge-96x96.png",
+      lang: "ko",
+      tag: `message:${messagePayload.conversationId}`,
+      renotify: true,
+      data: {
+        conversationId: messagePayload.conversationId,
+        deliveryId: "018f3f1b-40c7-7d25-b2c3-abcdef012345",
+      },
+    });
+    expect(worker.notifications).toHaveLength(1);
+    // 메시지 카드는 알림함 뱃지에 세지 않는다.
+    expect(worker.setAppBadge).not.toHaveBeenCalled();
+  });
+
+  it("ignores a repeated message delivery and rejects a message push with extra fields", async () => {
+    const worker = loadPushWorker();
+
+    await worker.dispatch("push", { data: { json: () => messagePayload } });
+    await worker.dispatch("push", { data: { json: () => messagePayload } });
+    expect(worker.showNotification).toHaveBeenCalledTimes(1);
+
+    await worker.dispatch("push", {
+      data: {
+        json: () => ({ ...messagePayload, url: "https://evil.example" }),
+      },
+    });
+    expect(worker.showNotification).toHaveBeenLastCalledWith(
+      "새 알림",
+      expect.objectContaining({ tag: "notification-inbox" }),
+    );
+  });
+
+  it("measures message bodies in code points like the server does", async () => {
+    const worker = loadPushWorker();
+    // 이모지 240개는 code point로 240자, UTF-16으로는 480자다.
+    const body = "😀".repeat(240);
+
+    await worker.dispatch("push", {
+      data: { json: () => ({ ...messagePayload, body }) },
+    });
+
+    expect(worker.showNotification).toHaveBeenCalledWith(
+      "홍길동",
+      expect.objectContaining({ body }),
+    );
+  });
+
+  it("opens the conversation from a message card", async () => {
+    const worker = loadPushWorker();
+
+    await worker.dispatch("notificationclick", {
+      notification: {
+        close: vi.fn(),
+        data: {
+          conversationId: messagePayload.conversationId,
+          deliveryId: messagePayload.deliveryId,
+        },
+      },
+    });
+
+    expect(worker.openWindow).toHaveBeenCalledWith(
+      `/messenger/${messagePayload.conversationId}`,
+    );
   });
 
   it("shows a validated push with fixed local assets and stable identifiers", async () => {

@@ -59,6 +59,14 @@ async function prepare(delivery: Delivery): Promise<boolean> {
   return Boolean(data);
 }
 
+async function nextMessageDeliveryAt(): Promise<string | null> {
+  const { data, error } = await supabase.rpc("next_message_delivery_at", {
+    p_within_seconds: 5,
+  });
+  if (error) throw error;
+  return (data as string | null) ?? null;
+}
+
 async function sendPush(delivery: Delivery, payload: string) {
   if (!vapidSubject || !vapidPublicKey || !vapidPrivateKey) {
     throw new Error("missing_vapid_configuration");
@@ -134,5 +142,9 @@ Deno.serve(
     complete,
     sendPush,
     sendEmail,
+    nextMessageDeliveryAt,
+    sleep: (milliseconds) =>
+      new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    now: () => Date.now(),
   }),
 );

@@ -85,6 +85,18 @@ export async function editMessage(
   return { body, editedAt: data };
 }
 
+/** 대화 알림을 끄거나 켠다. 끄면 직접 다시 켤 때까지 이 대화의 Push를 보내지 않는다. */
+export async function setConversationMuted(
+  conversationId: string,
+  muted: boolean,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("set_conversation_muted", {
+    p_conversation_id: conversationId,
+    p_muted: muted,
+  });
+  if (error) throw error;
+}
+
 /** 내 메시지를 지운다. 하나라도 내 메시지가 아니면 아무것도 지우지 않는다. */
 export async function deleteMessages(messageIds: string[]): Promise<void> {
   const { error } = await getSupabase().rpc("delete_messages", {

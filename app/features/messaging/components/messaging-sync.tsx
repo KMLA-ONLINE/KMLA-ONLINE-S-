@@ -8,6 +8,7 @@ import {
 import { subscribeToMessagingSignals } from "~/features/messaging/data/subscriptions";
 import {
   catchUpConversation,
+  refreshConversationInList,
   refreshReadState,
 } from "~/features/messaging/data/sync";
 
@@ -30,10 +31,12 @@ export function MessagingSync({ profileId }: { profileId: number }) {
     const scheduler = createSyncScheduler(queryClient, String(profileId));
     const isOpen = (conversationId: string) =>
       openConversationIds(queryClient).includes(conversationId);
+    // 끊긴 동안 잃은 신호에는 다른 멤버의 읽음도 있다. 바뀐 시각에 잡히지 않으므로 함께 다시 받는다.
     const resync = () => {
       void invalidateConversationList(queryClient);
       for (const id of openConversationIds(queryClient)) {
         scheduler.schedule(id, "changes");
+        scheduler.schedule(id, "reads");
       }
     };
     const onResume = () => {
@@ -43,7 +46,7 @@ export function MessagingSync({ profileId }: { profileId: number }) {
     const unsubscribe = subscribeToMessagingSignals(profileId, {
       onMessageChanged: (conversationId, kind) => {
         // 반응·고정은 목록의 미리보기와 읽지 않은 수를 바꾸지 않는다.
-        if (kind === "content") scheduler.scheduleList();
+        if (kind === "content") scheduler.scheduleList(conversationId);
         if (isOpen(conversationId))
           scheduler.schedule(conversationId, "changes");
       },
@@ -77,6 +80,7 @@ function createSyncScheduler(queryClient: QueryClient, viewerId: string) {
   const running = new Set<string>();
   const failures = new Map<string, number>();
   let listTimer: ReturnType<typeof setTimeout> | null = null;
+  const listConversations = new Set<string>();
   let disposed = false;
 
   function queue(conversationId: string, kinds: Iterable<SyncKind>) {
@@ -133,11 +137,19 @@ function createSyncScheduler(queryClient: QueryClient, viewerId: string) {
       queue(conversationId, [kind]);
       arm(conversationId, SIGNAL_COALESCE_MS);
     },
-    scheduleList() {
+    scheduleList(conversationId: string) {
+      listConversations.add(conversationId);
       if (listTimer) return;
       listTimer = setTimeout(() => {
         listTimer = null;
-        void invalidateConversationList(queryClient);
+        const ids = [...listConversations];
+        listConversations.clear();
+        for (const id of ids) {
+          // 실패하면 목록 전체를 다시 읽는다. 다음 신호를 기다리면 미리보기가 낡은 채 남는다.
+          refreshConversationInList(queryClient, id).catch(
+            () => void invalidateConversationList(queryClient),
+          );
+        }
       }, SIGNAL_COALESCE_MS);
     },
     dispose() {

@@ -5,6 +5,7 @@ import {
   getNotificationPreferences,
   getPushSupport,
   listMyGroupNotificationPreferences,
+  setMessagePreviewHidden,
   updateGroupNotificationPreferences,
   updateNotificationPreferences,
 } from "~/features/notifications";
@@ -60,6 +61,19 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
       console.error("Failed to update group notification preferences", error);
       return data(
         { error: "그룹 알림 설정을 저장하지 못했습니다." },
+        { status: 503 },
+      );
+    }
+  }
+
+  if (formData.get("intent") === "message-preview") {
+    try {
+      await setMessagePreviewHidden(formData.get("hidden") === "true");
+      return { saved: true };
+    } catch (error) {
+      console.error("Failed to update message preview setting", error);
+      return data(
+        { error: "메시지 알림 설정을 저장하지 못했습니다." },
         { status: 503 },
       );
     }

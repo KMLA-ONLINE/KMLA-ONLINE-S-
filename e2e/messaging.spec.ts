@@ -1,5 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
+// seed 대화(supabase/seed.sql): 홍길동과 김민준의 1:1 대화, 홍길동이 만든 그룹 대화.
+const DIRECT = "c0000000-0000-0000-0000-000000000001";
+const GROUP = "c0000000-0000-0000-0000-000000000002";
+
 async function loginAsAcceptedStudent(page: Page) {
   await page.goto("/login");
   await page.getByLabel("이메일").fill("student@kmla.hs.kr");
@@ -13,10 +17,10 @@ test("좁은 화면에서 연 상세 패널은 화면을 넓히면 대화 옆에
 }) => {
   await page.setViewportSize({ width: 1024, height: 900 });
   await loginAsAcceptedStudent(page);
-  await page.goto("/messenger/hyunwoo");
+  await page.goto(`/messenger/${DIRECT}`);
 
   await page.getByRole("button", { name: "대화 정보 열기" }).click();
-  const conversation = page.getByRole("region", { name: "이현우 대화" });
+  const conversation = page.getByRole("region", { name: "김민준 대화" });
   const details = page.getByRole("complementary", { name: "대화 상세" });
   await expect(details).toBeVisible();
 
@@ -38,7 +42,7 @@ test("접은 대화 상세 패널은 다른 대화로 이동해도 닫힌 상태
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await loginAsAcceptedStudent(page);
-  await page.goto("/messenger/hyunwoo");
+  await page.goto(`/messenger/${DIRECT}`);
 
   await page.getByRole("button", { name: "대화 정보 닫기" }).click();
   await expect(
@@ -46,7 +50,7 @@ test("접은 대화 상세 패널은 다른 대화로 이동해도 닫힌 상태
   ).toBeVisible();
 
   await page.getByRole("link", { name: /학생회 기획부/ }).click();
-  await expect(page).toHaveURL(/\/messenger\/student-council$/);
+  await expect(page).toHaveURL(new RegExp(`/messenger/${GROUP}$`));
   await expect(
     page.getByRole("button", { name: "대화 정보 열기" }),
   ).toBeVisible();

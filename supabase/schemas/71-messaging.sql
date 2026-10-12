@@ -681,13 +681,15 @@ begin
   if saved.id is null then
     normalized_body := private.normalize_message_body(p_body);
 
-    -- 나가기와 겹치지 않도록 내 현재 참여 기간을 잠근다.
+    -- 나가기와 겹치지 않도록 내 현재 참여 기간을 잠근다. 아래에서 같은 행의 읽음 위치를 고치므로
+    -- 처음부터 `no key update`로 잡는다. `share`로 잡으면 같은 사람이 동시에 보낸 두 전송이 서로의
+    -- 잠금 승격을 기다리며 교착한다.
     perform 1
     from public.conversation_members as member
     where member.conversation_id = p_conversation_id
       and member.profile_id = caller_profile_id
       and member.left_at is null
-    for share;
+    for no key update;
 
     if not found then
       raise exception 'conversation member required'
@@ -730,6 +732,8 @@ begin
     returning * into saved;
 
     if saved.id is not null then
+      perform private.enqueue_message_push(saved);
+
       update public.conversation_members as member
       set last_read_sent_at = saved.sent_at,
         last_read_message_id = saved.id
@@ -1340,4 +1344,189 @@ revoke all on function public.list_message_read_counts(uuid, uuid[])
   from public, anon;
 
 grant execute on function public.list_message_read_counts(uuid, uuid[])
+  to authenticated;
+
+-- 메시지 Push(알림 기술 설계 §11). 알림 행을 만들지 않고 같은 outbox, dispatcher, 서비스 워커를 쓴다.
+-- outbox 행은 알림 대신 메시지를 가리킨다. 본문은 outbox에 복사하지 않고 발송 직전에 복호화한다.
+alter table private.notification_delivery_outbox
+  add column message_id uuid references private.messages(id) on delete cascade,
+  add constraint notification_delivery_outbox_source
+    check (num_nonnulls(notification_id, message_id) = 1),
+  add constraint notification_delivery_outbox_message_channel
+    check (message_id is null or channel = 'web_push');
+
+create unique index notification_delivery_message_push_unique_idx
+  on private.notification_delivery_outbox (message_id, subscription_id)
+  where message_id is not null;
+
+-- 같은 구독, 같은 대화의 더 새로운 대기 Push를 찾을 때 쓴다.
+create index notification_delivery_message_pending_idx
+  on private.notification_delivery_outbox (subscription_id, message_id)
+  where message_id is not null and status in ('pending', 'leased');
+
+-- 새 메시지의 Push를 수신 멤버의 구독마다 예약한다. 보낸 사람과 대화 알림을 끈 멤버는 뺀다. 2초 뒤에
+-- 보내 그 사이 대화방을 보고 있던 수신자의 읽음 위치가 갱신될 시간을 준다.
+create function private.enqueue_message_push(p_message private.messages)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into private.notification_delivery_outbox (
+    message_id, recipient_profile_id, subscription_id, channel, available_at
+  )
+  select
+    p_message.id,
+    member.profile_id,
+    subscription.id,
+    'web_push',
+    p_message.sent_at + interval '2 seconds'
+  from public.conversation_members as member
+  join private.web_push_subscriptions as subscription
+    on subscription.profile_id = member.profile_id
+    and subscription.gone_at is null
+    and (subscription.expiration_time is null or subscription.expiration_time > now())
+  where member.conversation_id = p_message.conversation_id
+    and member.left_at is null
+    and member.profile_id is distinct from p_message.sender_id
+    and (member.muted_until is null or member.muted_until <= now())
+  on conflict do nothing;
+
+  if found then
+    perform private.wake_notification_dispatcher();
+  end if;
+end;
+$$;
+
+revoke all on function private.enqueue_message_push(private.messages)
+  from public;
+
+-- 발송 직전 확인(알림 기술 설계 §11.3). 수신자가 아직 볼 수 있는 멤버이고, 메시지가 남아 있고, 대화
+-- 알림을 끄지 않았고, 아직 그 메시지를 읽지 않았고, 같은 대화에 더 새로운 대기 Push가 없어야 한다.
+-- 읽음 위치는 계정 기준이므로 대화방을 보고 있던 기기가 하나라도 있으면 다른 기기로도 보내지 않는다.
+create function private.message_delivery_allowed(
+  p_delivery private.notification_delivery_outbox
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from private.messages as message
+    join private.web_push_subscriptions as subscription
+      on subscription.id = p_delivery.subscription_id
+      and subscription.profile_id = p_delivery.recipient_profile_id
+      and subscription.gone_at is null
+      and (subscription.expiration_time is null or subscription.expiration_time > now())
+    join public.conversation_members as member
+      on member.conversation_id = message.conversation_id
+      and member.profile_id = p_delivery.recipient_profile_id
+      and member.left_at is null
+      and message.sent_at >= member.joined_at
+    where message.id = p_delivery.message_id
+      and message.deleted_at is null
+      and (member.muted_until is null or member.muted_until <= now())
+      and (member.last_read_sent_at, member.last_read_message_id) < (message.sent_at, message.id)
+      and not exists (
+        select 1
+        from private.notification_delivery_outbox as newer
+        join private.messages as newer_message on newer_message.id = newer.message_id
+        where newer.subscription_id = p_delivery.subscription_id
+          and newer.id <> p_delivery.id
+          and newer.status in ('pending', 'leased')
+          and newer_message.conversation_id = message.conversation_id
+          and (newer_message.sent_at, newer_message.id) > (message.sent_at, message.id)
+      )
+  );
+$$;
+
+revoke all on function private.message_delivery_allowed(private.notification_delivery_outbox)
+  from public;
+
+-- 메시지 Push 카드의 제목과 본문. 1:1은 보낸 사람 이름, 그룹은 대화 이름이 제목이고 그룹 본문 앞에
+-- 보낸 사람 이름을 붙인다. 수신자가 `알림에 메시지 내용 가리기`를 켰으면 본문 대신 안내 문구를 쓴다.
+-- 본문 한도는 알림 Push와 같은 240자다(알림 기술 설계 §7).
+create function private.message_push_content(
+  p_message_id uuid,
+  p_recipient_profile_id bigint,
+  p_keys jsonb
+)
+returns table (conversation_id uuid, title text, body text)
+language sql
+stable
+strict
+security definer
+set search_path = ''
+as $$
+  select
+    message.conversation_id,
+    case conversation.type
+      when 'group' then conversation.name
+      else coalesce(sender.name, '알 수 없는 사용자')
+    end,
+    left(
+      case
+        when conversation.type = 'group'
+          then coalesce(sender.name, '알 수 없는 사용자') || ': '
+        else ''
+      end
+      || case
+        when coalesce(preference.message_preview_hidden, false) then '새 메시지가 있습니다.'
+        else private.decrypt_message_text(message.body_ciphertext, message.key_version, p_keys)
+      end,
+      240
+    )
+  from private.messages as message
+  join public.conversations as conversation on conversation.id = message.conversation_id
+  left join public.profiles as sender on sender.id = message.sender_id
+  left join public.notification_preferences as preference
+    on preference.profile_id = p_recipient_profile_id
+  where message.id = p_message_id
+    and message.deleted_at is null;
+$$;
+
+revoke all on function private.message_push_content(uuid, bigint, jsonb)
+  from public;
+
+-- 대화 알림을 끄거나 켠다(기능 명세 §13.17). 지금은 직접 다시 켤 때까지만 끈다. 기간을 정하는 끄기는
+-- 같은 `muted_until`에 시각을 넣으면 된다. 읽지 않은 수는 그대로 센다.
+create function public.set_conversation_muted(p_conversation_id uuid, p_muted boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  if p_muted is null then
+    raise exception 'muted state required'
+      using errcode = '22023';
+  end if;
+
+  update public.conversation_members as member
+  set muted_until = case when p_muted then 'infinity'::timestamptz end
+  where member.conversation_id = p_conversation_id
+    and member.profile_id = caller_profile_id
+    and member.left_at is null;
+
+  if not found then
+    raise exception 'conversation member required'
+      using errcode = '42501';
+  end if;
+end;
+$$;
+
+revoke all on function public.set_conversation_muted(uuid, boolean)
+  from public, anon;
+
+grant execute on function public.set_conversation_muted(uuid, boolean)
   to authenticated;

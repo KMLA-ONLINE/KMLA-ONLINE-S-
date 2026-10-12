@@ -1,5 +1,6 @@
 import {
   BellIcon,
+  BellOffIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   FileIcon,
@@ -27,12 +28,16 @@ export function ConversationDetails({
   onMobileBack,
   pinnedCount,
   onOpenPinnedMessages,
+  muted,
+  onToggleMuted,
 }: {
   conversation: Conversation;
   className?: string;
   onMobileBack: () => void;
   pinnedCount: number;
   onOpenPinnedMessages: () => void;
+  muted: boolean;
+  onToggleMuted: () => void;
 }) {
   return (
     <aside
@@ -65,7 +70,13 @@ export function ConversationDetails({
             {conversation.type === "direct" ? (
               <DetailQuickAction icon={UserRoundIcon} label="프로필" />
             ) : null}
-            <DetailQuickAction icon={BellIcon} label="알림" />
+            <DetailQuickAction
+              icon={muted ? BellOffIcon : BellIcon}
+              label={muted ? "알림 꺼짐" : "알림"}
+              actionLabel={muted ? "대화 알림 켜기" : "대화 알림 끄기"}
+              pressed={muted}
+              onClick={onToggleMuted}
+            />
             <DetailQuickAction icon={SearchIcon} label="검색" />
             {conversation.type === "group" ? (
               <DetailQuickAction icon={UserPlusIcon} label="초대" />
@@ -140,12 +151,19 @@ export function ConversationDetails({
   );
 }
 
+/** `onClick`이 없으면 아직 준비 중인 기능으로 비활성화한다. */
 function DetailQuickAction({
   icon: Icon,
   label,
+  actionLabel,
+  pressed,
+  onClick,
 }: {
   icon: LucideIcon;
   label: string;
+  actionLabel?: string;
+  pressed?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <div className="flex min-w-12 flex-col items-center gap-1.5">
@@ -153,8 +171,10 @@ function DetailQuickAction({
         variant="secondary"
         size="icon"
         className="rounded-full"
-        disabled
-        aria-label={`${label} 기능 준비 중`}
+        disabled={!onClick}
+        aria-label={onClick ? (actionLabel ?? label) : `${label} 기능 준비 중`}
+        aria-pressed={pressed}
+        onClick={onClick}
       >
         <Icon aria-hidden />
       </Button>

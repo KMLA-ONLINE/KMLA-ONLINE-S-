@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as mutations from "~/features/messaging/data/mutations";
 import { loadConversation } from "~/features/messaging/data/queries";
+import { messagingKeys } from "~/features/messaging/data/cache";
 import { useConversationMessages } from "~/features/messaging/hooks/use-conversation-messages";
 
 vi.mock("~/features/messaging/data/queries", () => import("../fake-api"));
@@ -272,5 +273,71 @@ describe("useConversationMessages", () => {
     await waitFor(() =>
       expect(message("m8").replyTo?.body).toBe("가".repeat(200)),
     );
+  });
+
+  it("내 메시지가 마지막이어도 그 앞의 가장 최근 상대 메시지까지 읽음으로 기록하고 목록을 먼저 0으로 그린다", async () => {
+    const markRead = vi.spyOn(mutations, "markConversationRead");
+    const loaded = (await loadConversation("student-council"))!;
+    // 상대 메시지(m9) 뒤에 내 메시지가 있다. 마지막 메시지만 보면 읽음을 기록하지 않는다.
+    const conversation = {
+      ...loaded,
+      messages: [
+        ...loaded.messages,
+        {
+          id: "mine",
+          senderId: loaded.viewerId,
+          body: "내가 마지막",
+          sentAt: "2026-08-28T15:40:00+09:00",
+        },
+      ],
+    };
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(messagingKeys.conversations(), [
+      { id: "student-council", unreadCount: 3 },
+    ]);
+    renderHook(() => useConversationMessages(conversation), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      ),
+    });
+
+    await waitFor(() =>
+      expect(markRead).toHaveBeenCalledWith("student-council", "m9"),
+    );
+    expect(
+      queryClient.getQueryData<{ unreadCount: number }[]>(
+        messagingKeys.conversations(),
+      )?.[0]?.unreadCount,
+    ).toBe(0);
+  });
+
+  it("응답을 잃어 실패한 전송을 같은 내용으로 다시 보내면 같은 ID를 쓴다", async () => {
+    vi.spyOn(mutations, "sendMessage").mockRejectedValueOnce(
+      new Error("timeout"),
+    );
+    const { result } = await renderMessages();
+    const id = result.current.draftIdFor("다시 보낼 글");
+
+    await act(async () => {
+      await result.current.send({ id, body: "다시 보낼 글" });
+    });
+
+    expect(result.current.draftIdFor("다시 보낼 글")).toBe(id);
+    expect(result.current.draftIdFor("다른 글")).not.toBe(id);
+
+    await act(async () => {
+      await result.current.send({
+        id: result.current.draftIdFor("다시 보낼 글"),
+        body: "다시 보낼 글",
+      });
+    });
+    await waitFor(() =>
+      expect(
+        result.current.messages.filter(({ id: messageId }) => messageId === id),
+      ).toHaveLength(1),
+    );
+    expect(result.current.draftIdFor("다시 보낼 글")).not.toBe(id);
   });
 });

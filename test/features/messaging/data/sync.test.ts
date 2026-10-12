@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   holdMessageWrite,
   mergeServerMessages,
+  patchMessage,
   messagingKeys,
   type MessagePages,
 } from "~/features/messaging/data/cache";
@@ -237,5 +238,57 @@ describe("refreshReadState", () => {
       queryClient.getQueryData<MessagePages>(messagingKeys.messages(ID))!
         .pages[0].messages[0].unreadMemberCount,
     ).toBe(0);
+  });
+});
+
+describe("message order", () => {
+  it("같은 밀리초 안의 메시지도 서버처럼 마이크로초로 줄 세운다", () => {
+    seed(queryClient, [
+      [message("z", 1, { sentAt: "2026-08-28T06:00:00.123900+00:00" })],
+    ]);
+
+    mergeServerMessages(queryClient, ID, [
+      message("y", 1, { sentAt: "2026-08-28T06:00:00.123100+00:00" }),
+    ]);
+
+    expect(pageIds(queryClient)).toEqual([["y", "z"]]);
+  });
+
+  it("서버가 전송 시각을 확정하면 앞서 도착한 상대 메시지 뒤로 자리를 다시 잡는다", () => {
+    // 기기 시계가 빨라 초안이 상대 메시지(06:05)보다 뒤에 붙어 있었다.
+    seed(queryClient, [
+      [message("other", 5), message("draft", 9, { pending: true })],
+    ]);
+
+    patchMessage(queryClient, ID, "draft", {
+      sentAt: "2026-08-28T06:04:00.000Z",
+      pending: false,
+    });
+
+    expect(pageIds(queryClient)).toEqual([["draft", "other"]]);
+  });
+});
+
+describe("reloadLatestPage", () => {
+  it("다시 읽어도 내 요청이 진행 중인 메시지는 cache의 상태를 지킨다", async () => {
+    seed(queryClient, [[message("a", 1, { deleted: true, body: "" })]]);
+    vi.mocked(queries.listMessageChanges).mockResolvedValue({
+      messages: [],
+      complete: false,
+    });
+    vi.mocked(queries.listMessages).mockResolvedValue({
+      messages: [message("a", 1)],
+      olderCursor: null,
+    });
+    vi.mocked(queries.listPinnedMessages).mockResolvedValue([]);
+    const release = holdMessageWrite("a");
+
+    await catchUpConversation(queryClient, ID);
+    release();
+
+    expect(
+      queryClient.getQueryData<MessagePages>(messagingKeys.messages(ID))!
+        .pages[0].messages[0].deleted,
+    ).toBe(true);
   });
 });

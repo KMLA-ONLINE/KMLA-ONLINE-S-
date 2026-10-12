@@ -151,10 +151,13 @@ export function sendMessage(
   return Promise.resolve({ ...draft, id: input.id, body: input.body });
 }
 
+/** 다시 읽은 목록이 읽은 상태를 보이도록 목 데이터를 고친다. */
 export function markConversationRead(
-  _conversationId: string,
+  conversationId: string,
   _messageId: string,
 ): Promise<void> {
+  const conversation = findConversation(conversationId);
+  if (conversation) conversation.unreadCount = 0;
   return Promise.resolve();
 }
 
@@ -181,4 +184,22 @@ export function editMessage(
 
 export function deleteMessages(_messageIds: string[]): Promise<void> {
   return Promise.resolve();
+}
+
+/** 목록이 정본이므로 다시 읽었을 때 바뀐 값이 보이도록 목 데이터를 고친다. */
+export function setConversationMuted(
+  conversationId: string,
+  muted: boolean,
+): Promise<void> {
+  const conversation = findConversation(conversationId);
+  if (conversation) conversation.muted = muted;
+  return Promise.resolve();
+}
+
+export async function getConversationSummary(
+  conversationId: string,
+): Promise<ConversationSummary | null> {
+  return (
+    (await listConversations()).find(({ id }) => id === conversationId) ?? null
+  );
 }

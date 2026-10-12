@@ -46,12 +46,7 @@ export async function loadConversation(
   if (!UUID_PATTERN.test(conversationId)) return null;
 
   const [summary, page, pinnedMessages] = await Promise.all([
-    getSupabase()
-      .rpc("list_conversations", { p_conversation_id: conversationId })
-      .then(async ({ data, error }) => {
-        if (error) throw error;
-        return (await toSummaries(data ?? []))[0] ?? null;
-      }),
+    getConversationSummary(conversationId),
     listMessages(conversationId, null, limit),
     listPinnedMessages(conversationId),
   ]);
@@ -66,6 +61,17 @@ export async function loadConversation(
     sharedFileCount: 0,
     sharedLinkCount: 0,
   };
+}
+
+/** 대화 목록의 한 줄. 내 대화가 아니면 `null`이다. */
+export async function getConversationSummary(
+  conversationId: string,
+): Promise<ConversationSummary | null> {
+  const { data, error } = await getSupabase().rpc("list_conversations", {
+    p_conversation_id: conversationId,
+  });
+  if (error) throw error;
+  return (await toSummaries(data ?? []))[0] ?? null;
 }
 
 /**

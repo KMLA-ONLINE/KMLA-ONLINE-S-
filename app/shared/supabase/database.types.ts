@@ -558,6 +558,7 @@ export type Database = {
           account_push_enabled: boolean
           content_push_enabled: boolean
           group_push_enabled: boolean
+          message_preview_hidden: boolean
           profile_id: number
           school_push_enabled: boolean
           timeline_push_enabled: boolean
@@ -567,6 +568,7 @@ export type Database = {
           account_push_enabled?: boolean
           content_push_enabled?: boolean
           group_push_enabled?: boolean
+          message_preview_hidden?: boolean
           profile_id: number
           school_push_enabled?: boolean
           timeline_push_enabled?: boolean
@@ -576,6 +578,7 @@ export type Database = {
           account_push_enabled?: boolean
           content_push_enabled?: boolean
           group_push_enabled?: boolean
+          message_preview_hidden?: boolean
           profile_id?: number
           school_push_enabled?: boolean
           timeline_push_enabled?: boolean
@@ -1574,11 +1577,13 @@ export type Database = {
           body: string
           category: Database["public"]["Enums"]["notification_category"]
           channel: "web_push" | "email"
+          conversation_id: string
           delivery_id: string
           endpoint: string
           grouping_key: string
           importance: Database["public"]["Enums"]["notification_importance"]
           lease_id: string
+          message_id: string
           notification_id: string
           p256dh: string
           recipient_email: string
@@ -2012,6 +2017,7 @@ export type Database = {
           account_push_enabled: boolean
           content_push_enabled: boolean
           group_push_enabled: boolean
+          message_preview_hidden: boolean
           school_push_enabled: boolean
           timeline_push_enabled: boolean
         }[]
@@ -2597,6 +2603,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      next_message_delivery_at: {
+        Args: { p_within_seconds?: number }
+        Returns: string
+      }
       prepare_comment_image: {
         Args: {
           p_height: number
@@ -2865,6 +2875,10 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      set_conversation_muted: {
+        Args: { p_conversation_id: string; p_muted: boolean }
+        Returns: undefined
+      }
       set_group_post_pinned: {
         Args: { p_pinned: boolean; p_post_id: string }
         Returns: string
@@ -2890,6 +2904,10 @@ export type Database = {
           p_new_post_push_enabled: boolean
           p_notification_level: Database["public"]["Enums"]["group_notification_level"]
         }
+        Returns: undefined
+      }
+      set_my_message_preview_hidden: {
+        Args: { p_hidden: boolean }
         Returns: undefined
       }
       set_post_reaction: {

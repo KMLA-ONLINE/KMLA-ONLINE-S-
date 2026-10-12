@@ -1,10 +1,12 @@
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 /* eslint-disable testing-library/no-node-access */
 import { act, fireEvent, waitFor } from "@testing-library/react";
-import { type ComponentProps, useState } from "react";
+import { type ComponentProps, useEffect, useState } from "react";
 import type * as ContextMenuModule from "@base-ui/react/context-menu";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RoomScreen } from "~/features/messaging/components/room-screen";
+import { mergeServerMessages } from "~/features/messaging/data/cache";
 import * as mutations from "~/features/messaging/data/mutations";
 import { loadConversation } from "~/features/messaging/data/queries";
 import type { Conversation } from "~/features/messaging/model/types";
@@ -373,6 +375,42 @@ describe("RoomScreen", () => {
     fireEvent.keyDown(input, { key: "Escape" });
     expect(screen.queryByText("메시지 수정")).not.toBeInTheDocument();
     now.mockRestore();
+  });
+
+  it("다른 기기에서 끈 대화 알림은 목록 값을 따라 꺼진 것으로 보인다", async () => {
+    const conversation = await loadConversation("hyunwoo");
+    // 다른 기기에서 끈 상태. 대화방 loader가 읽은 값은 그 전이다.
+    await mutations.setConversationMuted("hyunwoo", true);
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/hyunwoo",
+    });
+
+    expect(
+      await screen.findByRole("button", { name: "대화 알림 켜기" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await mutations.setConversationMuted("hyunwoo", false);
+  });
+
+  it("대화 정보에서 대화 알림을 끄고 다시 켠다", async () => {
+    const setMuted = vi.spyOn(mutations, "setConversationMuted");
+    const conversation = await loadConversation("student-council");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+
+    await user.click(screen.getByRole("button", { name: "대화 알림 끄기" }));
+    expect(
+      screen.getByRole("button", { name: "대화 알림 켜기" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(setMuted).toHaveBeenLastCalledWith("student-council", true);
+
+    await user.click(screen.getByRole("button", { name: "대화 알림 켜기" }));
+    expect(
+      screen.getByRole("button", { name: "대화 알림 끄기" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(setMuted).toHaveBeenLastCalledWith("student-council", false);
+    setMuted.mockRestore();
   });
 
   it("답장을 전송하고 인용 원문으로 이동하며 삭제된 원문을 표시한다", async () => {
@@ -879,6 +917,60 @@ describe("RoomScreen", () => {
       "rounded-2xl",
       "bg-primary",
     );
+  });
+
+  it("맨 아래를 보고 있을 때 새 메시지가 오면 따라 내려가고, 위로 올려 보던 중이면 그대로 둔다", async () => {
+    const conversation = await loadConversation("hyunwoo");
+    let queryClient!: QueryClient;
+    const keepClient = (client: QueryClient) => {
+      queryClient = client;
+    };
+    function GrabClient() {
+      const client = useQueryClient();
+      useEffect(() => keepClient(client), [client]);
+      return null;
+    }
+    renderRoute(
+      () => (
+        <>
+          <GrabClient />
+          <RoomScreen conversation={conversation!} />
+        </>
+      ),
+      { path: "/messenger/hyunwoo" },
+    );
+    const messageThread = screen
+      .getByRole("region", { name: "이현우 대화" })
+      .querySelector(".overflow-y-auto")!;
+    let scrollHeight = 500;
+    Object.defineProperties(messageThread, {
+      clientHeight: { configurable: true, value: 100 },
+      scrollHeight: { configurable: true, get: () => scrollHeight },
+      scrollTop: { configurable: true, writable: true, value: 400 },
+    });
+    fireEvent.scroll(messageThread);
+
+    const incoming = (id: string, minute: number) => ({
+      id,
+      senderId: "hyunwoo-user",
+      body: id,
+      sentAt: `2026-09-30T12:${minute}:00+09:00`,
+    });
+    scrollHeight = 600;
+    act(() => {
+      mergeServerMessages(queryClient, "hyunwoo", [incoming("new-1", 10)]);
+    });
+    expect(await screen.findByText("new-1")).toBeInTheDocument();
+    expect(messageThread.scrollTop).toBe(600);
+
+    messageThread.scrollTop = 100;
+    fireEvent.scroll(messageThread);
+    scrollHeight = 700;
+    act(() => {
+      mergeServerMessages(queryClient, "hyunwoo", [incoming("new-2", 11)]);
+    });
+    expect(await screen.findByText("new-2")).toBeInTheDocument();
+    expect(messageThread.scrollTop).toBe(100);
   });
 
   it("대화방을 열면 맨 아래로 이동하고 위로 스크롤하면 하단 이동 버튼을 표시한다", async () => {

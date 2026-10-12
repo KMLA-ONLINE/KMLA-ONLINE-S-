@@ -42,6 +42,7 @@ import {
   useConversationMessages,
   type OlderMessagesResult,
 } from "~/features/messaging/hooks/use-conversation-messages";
+import { useConversationMute } from "~/features/messaging/hooks/use-conversation-mute";
 import { canEditMessage } from "~/features/messaging/model/message-edit";
 import {
   canConnectMessages,
@@ -83,6 +84,8 @@ export interface DesktopDetailsContext {
 }
 
 const BOTTOM_SCROLL_BUTTON_THRESHOLD = 200;
+/** 맨 아래에서 이만큼 안이면 맨 아래를 보고 있는 것으로 보고, 새 메시지가 오면 따라 내려간다. */
+const FOLLOW_NEW_MESSAGES_THRESHOLD = 80;
 /** 맨 위에서 이만큼 남았을 때 앞선 메시지를 미리 읽는다. */
 const OLDER_MESSAGES_THRESHOLD = 400;
 
@@ -107,11 +110,13 @@ export function RoomScreen({
     loadingOlderMessages,
     loadOlderMessages,
     send,
+    draftIdFor,
     react,
     togglePinned,
     edit,
     remove,
   } = useConversationMessages(conversation);
+  const { muted, toggleMuted } = useConversationMute(conversation);
   const [replyTarget, setReplyTarget] = useState<ConversationMessage | null>(
     null,
   );
@@ -168,8 +173,8 @@ export function RoomScreen({
   }
 
   async function sendMessage(body: string) {
-    const id = crypto.randomUUID();
     const target = replyTarget;
+    const id = draftIdFor(body, target?.id);
     sentMessageId.current = id;
     setReplyTarget(null);
     const sent = await send({
@@ -321,6 +326,8 @@ export function RoomScreen({
         onMobileBack={() => setCompactDetailsOpen(false)}
         pinnedCount={pinnedMessages.length}
         onOpenPinnedMessages={() => setPinnedDialogOpen(true)}
+        muted={muted}
+        onToggleMuted={toggleMuted}
         className={cn(
           compactDetailsOpen ? "flex xl:hidden" : "hidden",
           compactDetailsOpen &&
@@ -411,6 +418,10 @@ function MessageThread({
   // 벗어났다가 다시 올라오면 한 번 더 시도한다.
   const olderLoadFailed = useRef(false);
   const oldestMessageId = messages[0]?.id;
+  const newestMessageId = messages.at(-1)?.id;
+  // 맨 아래를 보고 있었는지. 새 메시지가 붙기 직전의 스크롤 위치로 판단해야 하므로 스크롤할 때 적어
+  // 둔다. 붙은 뒤에 재면 새 메시지 높이만큼 이미 맨 아래에서 멀어져 있다.
+  const followingNewMessages = useRef(true);
   // 부모가 렌더마다 새로 만드는 콜백을 그대로 넘기면 `ThreadMessage`의 memo가 매번 깨진다.
   // 행에는 한 번 만든 객체를 넘기고, 호출 시점에 최신 콜백을 읽는다.
   const latestHandlers = useRef({
@@ -455,6 +466,15 @@ function MessageThread({
     olderAnchor.current = null;
   }, [oldestMessageId, messageThreadRef]);
 
+  // 맨 아래를 보고 있을 때 새 메시지가 붙으면 따라 내려간다. 위로 올려 지난 대화를 보던 중이면
+  // 그대로 두고 맨 아래 이동 버튼으로 알린다. 앞선 페이지가 위에 붙을 때는 가장 최근 메시지가
+  // 바뀌지 않으므로 여기에 걸리지 않는다.
+  useLayoutEffect(() => {
+    const messageThread = messageThreadRef.current;
+    if (!messageThread || !followingNewMessages.current) return;
+    messageThread.scrollTop = messageThread.scrollHeight;
+  }, [newestMessageId, messageThreadRef]);
+
   function maybeLoadOlderMessages() {
     const messageThread = messageThreadRef.current;
     if (!messageThread) return;
@@ -486,6 +506,8 @@ function MessageThread({
       messageThread.scrollHeight -
       messageThread.clientHeight -
       messageThread.scrollTop;
+    followingNewMessages.current =
+      distanceFromBottom <= FOLLOW_NEW_MESSAGES_THRESHOLD;
 
     if (scrollingToBottom.current) {
       if (

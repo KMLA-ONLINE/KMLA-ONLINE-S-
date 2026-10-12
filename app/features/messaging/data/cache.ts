@@ -9,6 +9,7 @@ import { listConversations } from "~/features/messaging/data/queries";
 import type {
   Conversation,
   ConversationMessage,
+  ConversationSummary,
   MessageCursor,
   MessagePage,
   MessageReplyPreview,
@@ -34,6 +35,57 @@ export function conversationListQuery() {
     queryFn: listConversations,
     staleTime: 2 * 60_000,
   });
+}
+
+/**
+ * 대화 목록의 한 줄을 바꾸고 마지막 메시지 순서를 다시 잡는다. 목록이 아직 없거나 처음 보는 대화면
+ * `false`를 돌려주며, 호출하는 쪽이 목록 전체를 다시 읽는다.
+ */
+export function replaceConversationSummary(
+  queryClient: QueryClient,
+  summary: ConversationSummary,
+): boolean {
+  let replaced = false;
+  queryClient.setQueryData<ConversationSummary[]>(
+    messagingKeys.conversations(),
+    (list) => {
+      if (!list?.some(({ id }) => id === summary.id)) return list;
+      replaced = true;
+      return list
+        .map((item) => (item.id === summary.id ? summary : item))
+        .sort(compareConversationOrder);
+    },
+  );
+  return replaced;
+}
+
+/** 목록의 이 대화를 읽음으로 그린다. 서버가 확정하면 `replaceConversationSummary`가 덮는다. */
+export function markConversationListRead(
+  queryClient: QueryClient,
+  conversationId: string,
+) {
+  queryClient.setQueryData<ConversationSummary[]>(
+    messagingKeys.conversations(),
+    (list) =>
+      list?.map((item) =>
+        item.id === conversationId && item.unreadCount > 0
+          ? { ...item, unreadCount: 0 }
+          : item,
+      ),
+  );
+}
+
+/** 서버 `list_conversations`의 순서. 최근 메시지가 위, 메시지가 없는 대화는 아래다. */
+function compareConversationOrder(
+  a: ConversationSummary,
+  b: ConversationSummary,
+): number {
+  if (!a.lastMessage || !b.lastMessage) {
+    return a.lastMessage ? -1 : b.lastMessage ? 1 : 0;
+  }
+  return (
+    toMicroseconds(b.lastMessage.sentAt) - toMicroseconds(a.lastMessage.sentAt)
+  );
 }
 
 /** 내 읽음 위치나 마지막 메시지가 바뀌었다. 목록의 읽지 않은 수와 미리보기를 다시 읽는다. */
@@ -123,11 +175,16 @@ function updatePages(
 }
 
 /** 최신 페이지 끝에 붙인다. */
+/**
+ * 최신 페이지 끝에 붙인다. 같은 ID가 이미 있으면 붙이지 않는다. 응답을 잃은 전송을 같은 ID로 다시
+ * 보낼 때, 그사이 따라잡기가 서버 행을 먼저 넣었을 수 있다.
+ */
 export function appendMessage(
   queryClient: QueryClient,
   conversationId: string,
   message: ConversationMessage,
 ) {
+  if (findCachedMessage(queryClient, conversationId, message.id)) return;
   updatePages(queryClient, conversationId, (messages, index) =>
     index === 0 ? [...messages, message] : messages,
   );
@@ -143,11 +200,15 @@ export function patchMessage(
   messageId: string,
   patch: Partial<ConversationMessage>,
 ) {
-  updatePages(queryClient, conversationId, (messages) =>
-    messages.map((message) =>
+  updatePages(queryClient, conversationId, (messages) => {
+    if (!messages.some(({ id }) => id === messageId)) return messages;
+    const patched = messages.map((message) =>
       message.id === messageId ? { ...message, ...patch } : message,
-    ),
-  );
+    );
+    // 전송 시각이 서버 값으로 확정되면 자리를 다시 잡는다. 초안은 기기 시계로 붙였으므로, 그새
+    // 도착한 상대 메시지보다 뒤에 남아 있을 수 있다.
+    return patch.sentAt ? patched.sort(compareMessageOrder) : patched;
+  });
   queryClient.setQueryData<ConversationMessage[]>(
     messagingKeys.pinned(conversationId),
     (pinned) => {
@@ -189,9 +250,21 @@ export function compareMessageOrder(
   b: Pick<ConversationMessage, "sentAt" | "id">,
 ): number {
   return (
-    Date.parse(a.sentAt) - Date.parse(b.sentAt) ||
+    toMicroseconds(a.sentAt) - toMicroseconds(b.sentAt) ||
     (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
   );
+}
+
+/**
+ * ISO 시각을 마이크로초로. Postgres는 마이크로초까지 주는데 `Date.parse`는 밀리초에서 버려, 같은
+ * 밀리초에 보낸 두 메시지의 순서가 서버와 달라진다.
+ */
+export function toMicroseconds(value: string): number {
+  const match = /^(.*?)(?:\.(\d+))?(Z|[+-]\d{2}:?\d{2})?$/.exec(value);
+  if (!match) return Date.parse(value) * 1000;
+  const [, base = "", fraction = "", zone = ""] = match;
+  const micros = Number(fraction.slice(0, 6).padEnd(6, "0"));
+  return Date.parse(base + zone) * 1000 + micros;
 }
 
 /**
@@ -199,6 +272,11 @@ export function compareMessageOrder(
  * 메시지를 덮지 않는다. 요청이 끝나면 hook이 정본을 넣고, 그 변경의 신호가 다음 따라잡기를 부른다.
  */
 const messageWrites = new Map<string, number>();
+
+/** 이 메시지에 내 요청이 진행 중인지. 그동안의 서버 스냅숏은 이 메시지를 덮지 않는다. */
+export function isMessageWriteHeld(messageId: string): boolean {
+  return messageWrites.has(messageId);
+}
 
 /** 이 메시지에 대한 요청을 시작한다. 돌려준 함수를 요청이 끝날 때 부른다. */
 export function holdMessageWrite(messageId: string): () => void {

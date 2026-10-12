@@ -25,6 +25,7 @@ vi.mock("~/features/messaging/data/subscriptions", () => ({
 vi.mock("~/features/messaging/data/sync", () => ({
   catchUpConversation: vi.fn(() => Promise.resolve()),
   refreshReadState: vi.fn(() => Promise.resolve()),
+  refreshConversationInList: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("~/features/messaging/data/queries", () => ({
   listConversations: vi.fn(() => Promise.resolve([])),
@@ -48,6 +49,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.mocked(sync.catchUpConversation).mockClear();
   vi.mocked(sync.refreshReadState).mockClear();
+  vi.mocked(sync.refreshConversationInList).mockClear();
 });
 
 function renderSync() {
@@ -63,7 +65,7 @@ function renderSync() {
 }
 
 describe("MessagingSync", () => {
-  it("한 변경의 여러 신호를 모아 열린 방만 한 번 따라잡고 목록을 다시 읽는다", async () => {
+  it("한 변경의 여러 신호를 모아 열린 방만 한 번 따라잡고 목록에서는 바뀐 대화만 다시 받는다", async () => {
     const { invalidate } = renderSync();
 
     act(() => {
@@ -80,9 +82,16 @@ describe("MessagingSync", () => {
       expect.anything(),
       "open",
     );
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: messagingKeys.conversations(),
-    });
+    expect(sync.refreshConversationInList).toHaveBeenCalledTimes(2);
+    expect(sync.refreshConversationInList).toHaveBeenCalledWith(
+      expect.anything(),
+      "open",
+    );
+    expect(sync.refreshConversationInList).toHaveBeenCalledWith(
+      expect.anything(),
+      "closed",
+    );
+    expect(invalidate).not.toHaveBeenCalled();
   });
 
   it("다른 멤버가 읽으면 열린 방의 읽음 상태를 다시 받는다", async () => {
@@ -110,6 +119,7 @@ describe("MessagingSync", () => {
     });
 
     expect(sync.catchUpConversation).toHaveBeenCalledTimes(1);
+    expect(sync.refreshConversationInList).not.toHaveBeenCalled();
     expect(invalidate).not.toHaveBeenCalled();
   });
 
@@ -131,7 +141,7 @@ describe("MessagingSync", () => {
     expect(sync.catchUpConversation).toHaveBeenCalledTimes(2);
   });
 
-  it("채널이 붙으면 처음이라도 신호를 기다리지 않고 열린 방을 따라잡는다", async () => {
+  it("채널이 붙으면 처음이라도 신호를 기다리지 않고 열린 방의 변경과 읽음을 함께 맞춘다", async () => {
     renderSync();
 
     act(() => handlers.onSubscribed());
@@ -142,6 +152,11 @@ describe("MessagingSync", () => {
     expect(sync.catchUpConversation).toHaveBeenCalledWith(
       expect.anything(),
       "open",
+    );
+    expect(sync.refreshReadState).toHaveBeenCalledWith(
+      expect.anything(),
+      "open",
+      "1",
     );
   });
 });
