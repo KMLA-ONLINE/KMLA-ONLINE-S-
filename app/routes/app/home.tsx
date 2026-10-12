@@ -1,9 +1,4 @@
-import {
-  CalendarClockIcon,
-  GiftIcon,
-  SearchIcon,
-  UtensilsIcon,
-} from "lucide-react";
+import { SearchIcon, UtensilsIcon } from "lucide-react";
 import { Suspense, use } from "react";
 import { Link } from "react-router";
 
@@ -42,7 +37,7 @@ import { HomeTimetableSummary } from "~/features/timetable";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { getKoreaDateIso } from "~/shared/lib/korea-date";
-import { Button, buttonVariants } from "~/shared/ui/button";
+import { Button } from "~/shared/ui/button";
 import { Separator } from "~/shared/ui/separator";
 import type { Route } from "./+types/home";
 
@@ -187,25 +182,6 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
           aria-label="학교생활 요약"
           className="hidden min-w-0 flex-col gap-3 self-start lg:flex"
         >
-          <nav
-            aria-label="예약·기부 바로가기"
-            className="grid grid-cols-[1fr_auto_1fr] gap-2"
-          >
-            <Link
-              to="/menu/gongang"
-              className={buttonVariants({ variant: "outline" })}
-            >
-              <CalendarClockIcon data-icon="inline-start" aria-hidden />
-              공강·노래방
-            </Link>
-            <Separator orientation="vertical" className="my-2" />
-            {/* eslint-disable-next-line jsx-a11y/anchor-is-valid -- 기부물품은 빈 해시로 연결하는 임시 링크로 제공한다. */}
-            <a href="#" className={buttonVariants({ variant: "outline" })}>
-              <GiftIcon data-icon="inline-start" aria-hidden />
-              기부물품
-            </a>
-          </nav>
-          <Separator />
           {/* 한 경계로 묶어 생일과 급식이 함께 들어선다. 따로 두면 생일 카드가 늦게 끼어들며 급식을 밀어낸다. */}
           <Suspense fallback={<HomeMealSummarySkeleton />}>
             <DeferredBirthdays birthdays={birthdays} />

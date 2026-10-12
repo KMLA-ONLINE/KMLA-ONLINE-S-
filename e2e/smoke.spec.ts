@@ -268,48 +268,16 @@ test("데스크톱 홈 사이드바는 생일·급식·오늘 시간표를 제�
   const shortcuts = sidebar.getByRole("navigation", {
     name: "예약·기부 바로가기",
   });
-  await expect(shortcuts.getByRole("separator")).toHaveCount(1);
-  await expect(shortcuts.getByRole("separator")).toHaveAttribute(
-    "aria-orientation",
-    "vertical",
-  );
-  await expect(shortcuts.getByRole("separator")).toBeVisible();
-  await expect(
-    shortcuts.getByRole("link", { name: "공강·노래방" }),
-  ).toHaveAttribute("href", "/menu/gongang");
-  await expect(
-    shortcuts.getByRole("link", { name: "기부물품" }),
-  ).toHaveAttribute("href", "#");
-  await shortcuts.getByRole("link", { name: "기부물품" }).click();
-  await expect(page).toHaveURL(/\/#$/);
-  await expect(shortcuts.locator("a, button")).toHaveText([
-    "공강·노래방",
-    "기부물품",
-  ]);
   await expect(
     page.getByRole("banner").getByRole("link", { name: "공강·노래방" }),
   ).toHaveCount(0);
   for (const width of [1024, 1280]) {
     await page.setViewportSize({ width, height: 800 });
-    const reservationBox = await shortcuts
-      .getByRole("link", { name: "공강·노래방" })
-      .boundingBox();
-    const donationBox = await shortcuts
-      .getByRole("link", { name: "기부물품" })
-      .boundingBox();
-    const birthdayBox = await sidebar
-      .getByRole("link", { name: "생일 보기" })
-      .boundingBox();
-    expect(reservationBox).not.toBeNull();
-    expect(donationBox).not.toBeNull();
-    expect(birthdayBox).not.toBeNull();
-    expect(reservationBox!.y).toBe(donationBox!.y);
-    expect(reservationBox!.x + reservationBox!.width).toBeLessThan(
-      donationBox!.x,
-    );
-    expect(reservationBox!.y + reservationBox!.height).toBeLessThan(
-      birthdayBox!.y,
-    );
+    await expect(sidebar).toBeVisible();
+    await expect(shortcuts).toHaveCount(0);
+    for (const name of ["공강·노래방", "기부물품"]) {
+      await expect(sidebar.getByRole("link", { name })).toHaveCount(0);
+    }
   }
   await expect(
     sidebar.getByRole("heading", { name: /오늘의|내일의/ }),
@@ -360,7 +328,7 @@ test("데스크톱 홈 사이드바는 생일·급식·오늘 시간표를 제�
   ).toBeVisible();
   await expect(
     page.getByRole("link", { name: "공강·노래방", exact: true }),
-  ).toHaveAttribute("href", "/menu/gongang");
+  ).toHaveCount(0);
   await page.goto("/menu");
   await expect(page).toHaveURL(/\/menu$/);
   await expect(
