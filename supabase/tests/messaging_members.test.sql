@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(29);
+select plan(28);
 
 -- seed: 홍길동(…0001), 김민준(…0100), 김관리(kim-admin, 앱 관리자), 박새벽, 이한별.
 insert into auth.users (
@@ -114,15 +114,15 @@ select throws_ok(
 );
 
 select is(
-  (select can_manage_members from public.list_conversations((select id from made where name = 'group'))),
+  (select can_delete from public.list_conversations((select id from made where name = 'group'))),
   true,
-  'the creator can manage group members'
+  'the creator owns the group and can delete it'
 );
 
 select is(
-  (select can_manage_members from public.list_conversations('c0000000-0000-0000-0000-000000000001')),
+  (select can_delete from public.list_conversations('c0000000-0000-0000-0000-000000000001')),
   false,
-  'direct conversations have no members to manage'
+  'a direct conversation cannot be deleted'
 );
 
 -- 초대
@@ -204,89 +204,94 @@ select throws_ok(
   'a direct conversation has no name to change'
 );
 
--- 내보내기
+-- 그룹 지우기. 다른 멤버를 내보내는 기능은 없고, 소유주와 앱 관리자가 그룹을 지운다.
 
 reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000302', true);
 set local role authenticated;
 
 select throws_ok(
-  $$select public.remove_conversation_member(
-      (select id from made where name = 'group'), (select minjun from ids)
-    )$$,
+  $$select public.delete_group_conversation((select id from made where name = 'group'))$$,
   '42501',
   null,
-  'an ordinary member cannot remove others'
+  'an ordinary member cannot delete the group'
 );
 
+-- 소유주가 나가면 가장 먼저 들어온 남은 멤버가 소유주가 된다.
 reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
-
-select public.remove_conversation_member(
-  (select id from made where name = 'group'), (select saebyeok from ids)
+insert into made
+select 'handover', public.create_group_conversation(
+  '넘김', array[(select minjun from ids), (select saebyeok from ids)]
 );
-
-select ok(
-  (
-    select participants @> jsonb_build_array(
-      jsonb_build_object('id', (select saebyeok from ids), 'active', false)
-    )
-    from public.list_conversations((select id from made where name = 'group'))
-  ),
-  'a removed member stays in participants as inactive so their name still shows'
-);
-
--- 내보낸 사람에게 내보낸 뒤의 메시지는 보이지 않는다.
-select public.send_message(
-  (select id from made where name = 'group'),
-  'e0000000-0000-0000-0000-000000000501',
-  '내보낸 뒤의 메시지'
-);
-
+select public.leave_conversation((select id from made where name = 'handover'));
 reset role;
-select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000302', true);
+
+select is(
+  (select created_by from public.conversations where id = (select id from made where name = 'handover')),
+  (
+    select member.profile_id
+    from public.conversation_members as member
+    where member.conversation_id = (select id from made where name = 'handover')
+      and member.left_at is null
+    order by member.joined_at, member.id
+    limit 1
+  ),
+  'when the owner leaves, the earliest remaining member becomes the owner'
+);
+
+-- 넘겨받은 소유주가 그룹을 지우면 대화가 모두에게서 사라지고 첨부 object는 정리 큐로 간다.
+insert into private.message_attachments (
+  conversation_id, message_id, uploader_id, status, position, kind, mime_type, size_bytes,
+  object_path, filename_ciphertext, key_version
+)
+select id, gen_random_uuid(), (select minjun from ids), 'pending', 0, 'file', 'application/pdf', 4,
+  id::text || '/handover-file', '\x00', 1
+from made where name = 'handover';
+
+select set_config(
+  'request.jwt.claim.sub',
+  (
+    select profile.auth_user_id::text
+    from public.profiles as profile
+    join public.conversations as conversation on conversation.created_by = profile.id
+    where conversation.id = (select id from made where name = 'handover')
+  ),
+  true
+);
 set local role authenticated;
 
-select ok(
-  not exists (
-    select 1 from public.list_messages((select id from made where name = 'group'))
-    where id = 'e0000000-0000-0000-0000-000000000501'
-  ),
-  'a removed member cannot see later messages'
+select lives_ok(
+  $$select public.delete_group_conversation((select id from made where name = 'handover'))$$,
+  'the new owner can delete the group'
 );
-
-select ok(
-  exists (
-    select 1 from public.list_conversations()
-    where conversation_id = (select id from made where name = 'group')
-  ),
-  'a removed member still lists the conversation'
-);
-
-select throws_ok(
-  $$select public.send_message(
-      (select id from made where name = 'group'),
-      'e0000000-0000-0000-0000-000000000502',
-      '나는 아직 멤버야'
-    )$$,
-  '42501',
-  null,
-  'a removed member cannot send'
-);
-
--- 앱 관리자는 만든 사람이 아니어도 내보낼 수 있다.
 reset role;
-insert into public.conversation_members (conversation_id, profile_id)
-select id, (select admin from ids) from made where name = 'group';
+
+select ok(
+  not exists (select 1 from public.conversations where id = (select id from made where name = 'handover'))
+    and exists (
+      select 1 from private.storage_cleanup_queue
+      where bucket = 'message-attachments'
+        and object_path = (select id from made where name = 'handover')::text || '/handover-file'
+    ),
+  'a deleted group is gone and its attachment objects are queued for cleanup'
+);
+
+-- 앱 관리자는 소유주가 아니어도 지울 수 있다.
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+insert into made
+select 'admin', public.create_group_conversation(
+  '관리', array[(select admin from ids), (select minjun from ids)]
+);
+reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000301', true);
 set local role authenticated;
 
 select lives_ok(
-  $$select public.remove_conversation_member(
-      (select id from made where name = 'group'), (select hanbyeol from ids)
-    )$$,
-  'an app administrator can remove a member'
+  $$select public.delete_group_conversation((select id from made where name = 'admin'))$$,
+  'an app administrator can delete a group they do not own'
 );
 
 -- 나가기

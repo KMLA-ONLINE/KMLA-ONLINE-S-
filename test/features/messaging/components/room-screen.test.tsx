@@ -334,6 +334,14 @@ describe("RoomScreen", () => {
     );
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;
+    const messageThread = screen
+      .getByRole("region", { name: "학생회 기획부 대화" })
+      .querySelector(".overflow-y-auto")!;
+    const scrollTo = vi.fn();
+    Object.defineProperty(messageThread, "scrollTo", {
+      configurable: true,
+      value: scrollTo,
+    });
 
     await user.click(screen.getByRole("button", { name: "대화 검색" }));
     const searchBox = screen.getByRole("searchbox", { name: "대화에서 찾기" });
@@ -350,7 +358,13 @@ describe("RoomScreen", () => {
     expect(
       screen.queryByRole("searchbox", { name: "대화에서 찾기" }),
     ).not.toBeInTheDocument();
-    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    // 대화 영역만 움직인다. `scrollIntoView`는 바깥 틀까지 밀어 화면 전체가 밀린다.
+    await waitFor(() =>
+      expect(scrollTo).toHaveBeenCalledWith(
+        expect.objectContaining({ behavior: "smooth" }),
+      ),
+    );
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
   it("삭제를 누르면 그 메시지를 고른 삭제 모드가 되고, 더 고른 뒤 한 번에 지운다", async () => {
@@ -495,9 +509,8 @@ describe("RoomScreen", () => {
     }
   });
 
-  it("대화 정보에서 멤버를 초대하고, 확인을 거쳐 내보낸다", async () => {
+  it("대화 정보에서 멤버를 초대하고, 다른 멤버를 내보낼 수는 없다", async () => {
     const invite = vi.spyOn(mutations, "addConversationMembers");
-    const remove = vi.spyOn(mutations, "removeConversationMember");
     const conversation = await loadConversation("student-council");
     const { user } = renderRoute(
       () => <RoomScreen conversation={conversation!} />,
@@ -515,20 +528,40 @@ describe("RoomScreen", () => {
       expect(invite).toHaveBeenCalledWith("student-council", ["new-1"]),
     );
 
-    await user.click(screen.getByRole("button", { name: "최민준 내보내기" }));
-    await user.click(await screen.findByRole("button", { name: "내보내기" }));
-    await waitFor(() =>
-      expect(remove).toHaveBeenCalledWith("student-council", "min"),
-    );
-    // 목록이 다시 읽히면 내보낸 사람은 멤버 목록에서 빠진다.
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("button", { name: "최민준 내보내기" }),
-      ).not.toBeInTheDocument(),
-    );
-    await mutations.addConversationMembers("student-council", ["min"]);
+    expect(
+      screen.queryByRole("button", { name: /내보내기/ }),
+    ).not.toBeInTheDocument();
     invite.mockRestore();
+  });
+
+  it("소유주는 확인을 거쳐 대화방을 지우고 대화 목록으로 돌아간다", async () => {
+    const remove = vi.spyOn(mutations, "deleteGroupConversation");
+    const conversation = await loadConversation("student-council");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      {
+        path: "/messenger/student-council",
+        routes: [{ path: "/messenger", Component: () => <p>대화 목록</p> }],
+      },
+    );
+
+    await user.click(screen.getByRole("button", { name: "대화방 삭제" }));
+    await user.click(await screen.findByRole("button", { name: "삭제" }));
+
+    expect(await screen.findByText("대화 목록")).toBeInTheDocument();
+    expect(remove).toHaveBeenCalledWith("student-council");
     remove.mockRestore();
+  });
+
+  it("소유주가 아니면 대화방 삭제가 보이지 않는다", async () => {
+    const conversation = await loadConversation("science-project");
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/science-project",
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "대화방 삭제" }),
+    ).not.toBeInTheDocument();
   });
 
   it("그룹 이름을 바꾸고, 나가면 목록에서 빼고 대화 목록으로 돌아간다", async () => {

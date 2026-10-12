@@ -116,7 +116,8 @@ export interface ConversationSummary {
   unreadCount: number;
   muted: boolean;
   /** 그룹에서 다른 멤버를 내보낼 수 있는지. 만든 사람과 앱 관리자다. */
-  canManageMembers: boolean;
+  /** 그룹을 지울 수 있는지. 소유주와 앱 관리자다. */
+  canDelete: boolean;
 }
 
 /** 대화 상대 찾기 결과 한 사람. */

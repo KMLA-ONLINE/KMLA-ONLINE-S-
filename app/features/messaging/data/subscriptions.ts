@@ -10,6 +10,8 @@ export interface MessagingSignalHandlers {
   onMessageChanged: (conversationId: string, kind: MessageChangeKind) => void;
   /** 이 대화의 다른 멤버가 읽음 위치를 옮겼다. */
   onReadChanged: (conversationId: string) => void;
+  /** 소유주나 앱 관리자가 이 그룹 대화를 지웠다. */
+  onConversationDeleted: (conversationId: string) => void;
   /**
    * 채널이 붙었다. 처음 붙을 때도 부른다. 대화방 loader가 읽은 뒤 채널이 붙기 전까지, 또는 끊긴
    * 동안의 신호는 잃었을 수 있다.
@@ -49,6 +51,12 @@ export function subscribeToMessagingSignals(
     .on("broadcast", { event: "read_changed" }, ({ payload }) => {
       const conversationId = conversationOf(payload);
       if (active && conversationId) handlers.onReadChanged(conversationId);
+    })
+    .on("broadcast", { event: "conversation_deleted" }, ({ payload }) => {
+      const conversationId = conversationOf(payload);
+      if (active && conversationId) {
+        handlers.onConversationDeleted(conversationId);
+      }
     })
     .subscribe((status) => {
       if (active && status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {

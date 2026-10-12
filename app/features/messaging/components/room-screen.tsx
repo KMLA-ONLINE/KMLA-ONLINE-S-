@@ -149,7 +149,7 @@ export function RoomScreen({
     | { kind: "invite" }
     | { kind: "rename" }
     | { kind: "leave" }
-    | { kind: "remove"; participant: MessageParticipant }
+    | { kind: "delete" }
     | null
   >(null);
   // 대화 정보, 검색, 고정 메시지, 반응한 사람, 공유된 미디어는 뒤로가기로 닫히도록 URL에 둔다.
@@ -286,10 +286,12 @@ export function RoomScreen({
       return;
     }
     setHighlightedMessageId(messageId);
+    // 지난 메시지로 가는 중이다. 맨 아래를 따라가면 붙은 페이지나 그림이 자리를 바꿀 때 다시 끌려 내려간다.
+    followingNewMessagesRef.current = false;
     requestAnimationFrame(() => {
-      document
-        .getElementById(`message-${messageId}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      const messageThread = messageThreadRef.current;
+      const target = document.getElementById(`message-${messageId}`);
+      if (messageThread && target) centerInThread(messageThread, target);
     });
   }
 
@@ -599,9 +601,7 @@ export function RoomScreen({
         onInvite={() => setMemberDialog({ kind: "invite" })}
         onRename={() => setMemberDialog({ kind: "rename" })}
         onLeave={() => setMemberDialog({ kind: "leave" })}
-        onRemoveMember={(participant) =>
-          setMemberDialog({ kind: "remove", participant })
-        }
+        onDeleteGroup={() => setMemberDialog({ kind: "delete" })}
         sharedCounts={sharedCounts}
         onOpenSharedMedia={(tab) => roomOverlay.open({ kind: "shared", tab })}
         className={cn(
@@ -658,17 +658,16 @@ export function RoomScreen({
           }}
         />
       ) : null}
-      {memberDialog?.kind === "remove" ? (
+      {memberDialog?.kind === "delete" ? (
         <ConfirmDialog
-          title={`${memberDialog.participant.name}님을 내보낼까요?`}
-          description="내보낸 사람의 지난 메시지는 대화에 남고, 이후 메시지는 볼 수 없습니다."
-          confirmLabel="내보내기"
+          title="대화방을 삭제할까요?"
+          description="모든 멤버의 목록에서 대화방이 사라지고, 메시지와 사진·파일도 함께 지워집니다. 되돌릴 수 없습니다."
+          confirmLabel="삭제"
           destructive
           onCancel={() => setMemberDialog(null)}
           onConfirm={() => {
-            const { participant } = memberDialog;
             setMemberDialog(null);
-            void membership.remove(participant.id);
+            void membership.deleteGroup();
           }}
         />
       ) : null}
@@ -1440,6 +1439,21 @@ function MessageActions({
   );
 }
 
+/**
+ * 메시지를 대화 영역 가운데로 옮긴다. `scrollIntoView`는 스크롤 조상을 전부 밀어, 원문이 맨 위나 맨 아래
+ * 근처라 대화 영역만으로 가운데에 못 오면 `overflow-hidden`인 대화방과 앱 셸까지 밀어 버린다. 그러면
+ * 화면 전체가 밀리고 아래에 빈 영역이 생기므로 대화 영역 안에서만 움직인다.
+ */
+function centerInThread(messageThread: HTMLElement, target: HTMLElement) {
+  const threadRect = messageThread.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const top =
+    messageThread.scrollTop +
+    (targetRect.top - threadRect.top) -
+    (messageThread.clientHeight - targetRect.height) / 2;
+  messageThread.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+}
+
 /** 작성창 위에 쌓아 둔 첨부 하나. 사진은 기기 안의 미리보기를 함께 든다. */
 interface StagedAttachment {
   id: string;
@@ -1624,7 +1638,8 @@ function ComposerShell({
         <ul
           aria-label="보낼 첨부"
           className={cn(
-            "mx-auto mb-2 flex max-w-3xl gap-2 overflow-x-auto px-1 pt-2 pb-1",
+            // 작성창과 구분되도록 옅은 판 위에 늘어놓는다. 위쪽 여백은 빼기 버튼이 잘리지 않을 자리다.
+            "mx-auto mb-2 flex max-w-3xl gap-2 overflow-x-auto rounded-2xl bg-muted/70 px-2.5 pt-3 pb-2.5",
             !desktopDetailsOpen && "xl:max-w-none",
           )}
         >
@@ -1634,10 +1649,10 @@ function ComposerShell({
                 <img
                   src={item.previewUrl}
                   alt={item.file.name}
-                  className="size-16 rounded-xl bg-muted object-cover"
+                  className="size-16 rounded-xl bg-background object-cover ring-1 ring-border"
                 />
               ) : (
-                <div className="flex h-16 w-44 items-center gap-2 rounded-xl bg-muted px-3">
+                <div className="flex h-16 w-44 items-center gap-2 rounded-xl bg-background px-3 ring-1 ring-border">
                   <FileIcon
                     aria-hidden
                     className="size-5 shrink-0 text-muted-foreground"
@@ -1769,16 +1784,6 @@ function ComposerShell({
               sendDraft();
             }}
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="-m-1 hidden shrink-0 rounded-full text-primary md:inline-flex"
-            aria-label="이모지 선택 기능 준비 중"
-            disabled
-          >
-            <SmileIcon aria-hidden className="size-5" />
-          </Button>
         </div>
         <Button
           variant="ghost"

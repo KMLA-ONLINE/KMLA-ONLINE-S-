@@ -1,9 +1,13 @@
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useNavigate } from "react-router";
+import { toast } from "sonner";
 
 import {
   invalidateConversationList,
+  invalidateUnreadMessageCount,
   openConversationIds,
+  removeConversationFromList,
 } from "~/features/messaging/data/cache";
 import { subscribeToMessagingSignals } from "~/features/messaging/data/subscriptions";
 import {
@@ -37,6 +41,12 @@ type SyncKind = "changes" | "reads";
  */
 export function MessagingSync({ profileId }: { profileId: number }) {
   const queryClient = useQueryClient();
+  // 신호 구독을 다시 맺지 않도록 이동 함수는 ref로 들고 있는다.
+  const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
 
   useEffect(() => {
     const scheduler = createSyncScheduler(queryClient);
@@ -70,6 +80,15 @@ export function MessagingSync({ profileId }: { profileId: number }) {
       },
       onReadChanged: (conversationId) => {
         if (isOpen(conversationId)) scheduler.schedule(conversationId, "reads");
+      },
+      // 지운 그룹은 목록에서 바로 뺀다. 그 방을 보고 있었으면 알리고 대화 목록으로 돌아간다.
+      onConversationDeleted: (conversationId) => {
+        removeConversationFromList(queryClient, conversationId);
+        void invalidateUnreadMessageCount(queryClient);
+        if (window.location.pathname === `/messenger/${conversationId}`) {
+          toast("대화방이 삭제되었습니다.");
+          void navigateRef.current("/messenger", { replace: true });
+        }
       },
       // 처음 붙을 때도 맞춘다. loader가 읽은 뒤 채널이 붙기 전의 신호는 받을 수 없었다.
       onSubscribed: resync,

@@ -323,6 +323,16 @@
     overflow: hidden;
   }
 
+  /* The signed-in shell is fixed to the viewport and each region scrolls itself,
+     so the document never needs to. Popovers and tooltips are portaled to body
+     with absolute positioning; when content shifts under one (prepending older
+     messages), its anchor can briefly sit below the viewport and stretch the
+     document, flashing a page scrollbar. */
+  html:has([data-slot="app-shell"]),
+  html:has([data-slot="app-shell"]) body {
+    overflow: hidden;
+  }
+
   html.image-viewer-open {
     scrollbar-width: none;
   }

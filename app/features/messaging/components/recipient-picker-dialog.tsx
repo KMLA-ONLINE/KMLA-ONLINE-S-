@@ -113,9 +113,14 @@ export function RecipientPickerDialog({
             {mode === "invite" ? "멤버 초대" : "새 대화"}
           </DialogTitle>
           <DialogDescription>
+            {/* 고른 만큼 무엇이 만들어질지 바로 알린다. 한 명이면 1:1, 여럿이면 그룹이다. */}
             {mode === "invite"
               ? "그룹에 초대할 사람을 고르세요."
-              : "한 명을 고르면 1:1 대화, 여러 명을 고르면 그룹 대화가 됩니다."}
+              : selected.length === 0
+                ? "대화할 사람을 찾아 고르세요."
+                : selected.length === 1
+                  ? `${selected[0].name}님과 1:1 대화를 시작합니다.`
+                  : `${selected.length}명과 그룹 대화를 만듭니다.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -176,7 +181,7 @@ export function RecipientPickerDialog({
         <div className="min-h-32 flex-1 overflow-y-auto overscroll-contain">
           {searchTerm === "" ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              이름을 입력하고 Enter를 누르세요.
+              이름을 입력하고 Enter를 눌러 찾아보세요.
             </p>
           ) : results.isPending ? (
             <div className="flex justify-center py-8">
@@ -191,7 +196,7 @@ export function RecipientPickerDialog({
             </p>
           ) : results.data.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              찾는 사람이 없습니다.
+              일치하는 사람이 없습니다.
             </p>
           ) : (
             <ul aria-label="찾은 사람" className="flex flex-col gap-0.5">

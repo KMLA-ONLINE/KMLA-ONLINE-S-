@@ -22,7 +22,7 @@ function conversation(
     },
     unreadCount: 0,
     muted: false,
-    canManageMembers: false,
+    canDelete: false,
     ...overrides,
   };
 }

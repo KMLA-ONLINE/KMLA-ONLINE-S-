@@ -14,6 +14,8 @@ create table public.conversations (
   type public.conversation_type not null,
   -- 그룹 대화의 이름. 1:1 대화는 상대 이름을 표시하므로 비워 둔다.
   name text,
+  -- 그룹의 소유주. 처음에는 만든 사람이고, 소유주가 나가면 가장 먼저 들어온 남은 멤버에게 넘어간다.
+  -- 소유주와 앱 관리자만 그룹을 지울 수 있다(기능 명세 §13.16).
   created_by bigint references public.profiles(id) on delete set null,
   -- 1:1 대화의 두 프로필. 작은 ID를 앞에 두어 같은 두 사람 사이에 대화가 하나만 생기게 한다.
   direct_profile_low bigint references public.profiles(id) on delete cascade,
@@ -343,8 +345,8 @@ returns table (
   last_message_deleted boolean,
   unread_count integer,
   muted boolean,
-  -- 그룹에서 다른 멤버를 내보낼 수 있는지. 만든 사람과 앱 관리자다.
-  can_manage_members boolean,
+  -- 그룹을 지울 수 있는지. 소유주와 앱 관리자다.
+  can_delete boolean,
   -- 마지막 메시지의 첫 첨부 종류. 본문 없이 첨부만 있는 메시지의 미리보기에 쓴다.
   last_message_attachment_kind text
 )
@@ -2146,13 +2148,14 @@ set search_path = ''
 as $$
 declare
   caller_profile_id bigint := private.current_profile_id();
+  target public.conversations;
 begin
   if caller_profile_id is null then
     raise exception 'accepted profile required'
       using errcode = '42501';
   end if;
 
-  perform private.lock_group_for_member(caller_profile_id, p_conversation_id);
+  target := private.lock_group_for_member(caller_profile_id, p_conversation_id);
 
   update public.conversation_members as member
   set left_at = clock_timestamp(),
@@ -2160,6 +2163,20 @@ begin
   where member.conversation_id = p_conversation_id
     and member.profile_id = caller_profile_id
     and member.left_at is null;
+
+  -- 소유주가 나가면 가장 먼저 들어온 남은 멤버가 소유주가 된다. 아무도 없으면 비운다.
+  if target.created_by = caller_profile_id then
+    update public.conversations as conversation
+    set created_by = (
+      select member.profile_id
+      from public.conversation_members as member
+      where member.conversation_id = p_conversation_id
+        and member.left_at is null
+      order by member.joined_at, member.id
+      limit 1
+    )
+    where conversation.id = p_conversation_id;
+  end if;
 
   perform private.insert_system_message(
     p_conversation_id, 'member_left', array[caller_profile_id]
@@ -2173,11 +2190,10 @@ revoke all on function public.leave_conversation(uuid)
 grant execute on function public.leave_conversation(uuid)
   to authenticated;
 
--- 그룹 대화에서 다른 멤버를 내보낸다. 대화를 만든 사람과 앱 관리자만 할 수 있다(기능 명세 §13.16).
-create function public.remove_conversation_member(
-  p_conversation_id uuid,
-  p_profile_id bigint
-)
+-- 그룹 대화를 지운다(기능 명세 §13.16). 소유주와 앱 관리자만 할 수 있다. 다른 멤버를 내보내는 기능은
+-- 두지 않는다. 멤버, 메시지, 반응, 고정과 첨부 행은 외래 키 CASCADE로 함께 사라지고, 첨부 object 경로는
+-- 그 전에 정리 큐로 옮긴다. 지우기 전에 현재 멤버에게 신호를 보내 열린 화면이 대화 목록으로 돌아가게 한다.
+create function public.delete_group_conversation(p_conversation_id uuid)
 returns void
 language plpgsql
 security definer
@@ -2191,10 +2207,6 @@ begin
     raise exception 'accepted profile required'
       using errcode = '42501';
   end if;
-  if p_profile_id is null or p_profile_id = caller_profile_id then
-    raise exception 'another member required'
-      using errcode = '22023';
-  end if;
 
   target := private.lock_group_for_member(caller_profile_id, p_conversation_id);
 
@@ -2204,31 +2216,41 @@ begin
     where profile.id = caller_profile_id
       and profile.role = 'admin'
   ) then
-    raise exception 'group creator or app administrator required'
+    raise exception 'group owner or app administrator required'
       using errcode = '42501';
   end if;
 
-  update public.conversation_members as member
-  set left_at = clock_timestamp()
+  perform realtime.send(
+    jsonb_build_object('conversation_id', p_conversation_id),
+    'conversation_deleted',
+    'messaging:' || member.profile_id::text,
+    true
+  )
+  from public.conversation_members as member
   where member.conversation_id = p_conversation_id
-    and member.profile_id = p_profile_id
     and member.left_at is null;
 
-  if not found then
-    raise exception 'conversation member not found'
-      using errcode = 'P0002';
-  end if;
+  insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+  select 'message-attachments', path.object_path, 'message_attachment'
+  from private.message_attachments as attachment
+  cross join lateral (
+    values (attachment.object_path), (attachment.thumbnail_path)
+  ) as path(object_path)
+  where attachment.conversation_id = p_conversation_id
+    and path.object_path is not null
+  on conflict (bucket, object_path) do update
+    set dry_run = queue.dry_run and excluded.dry_run;
 
-  perform private.insert_system_message(
-    p_conversation_id, 'member_removed', array[caller_profile_id, p_profile_id]
-  );
+  delete from public.conversations where id = p_conversation_id;
+
+  perform private.invoke_storage_cleanup(p_quiet => true);
 end;
 $$;
 
-revoke all on function public.remove_conversation_member(uuid, bigint)
+revoke all on function public.delete_group_conversation(uuid)
   from public, anon;
 
-grant execute on function public.remove_conversation_member(uuid, bigint)
+grant execute on function public.delete_group_conversation(uuid)
   to authenticated;
 
 -- 현재 멤버가 그룹 이름을 바꾼다(기능 명세 §13.15).

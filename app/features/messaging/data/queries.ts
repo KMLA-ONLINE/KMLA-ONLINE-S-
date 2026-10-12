@@ -299,7 +299,7 @@ async function toSummaries(
       : null,
     unreadCount: row.unread_count,
     muted: row.muted,
-    canManageMembers: row.can_manage_members,
+    canDelete: row.can_delete,
   }));
 }
 

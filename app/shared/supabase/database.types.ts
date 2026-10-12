@@ -1776,6 +1776,10 @@ export type Database = {
         Args: { p_category_id: string }
         Returns: undefined
       }
+      delete_group_conversation: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
+      }
       delete_group_post: { Args: { p_post_id: string }; Returns: undefined }
       delete_messages: { Args: { p_message_ids: string[] }; Returns: undefined }
       delete_my_story: { Args: { p_story_id: number }; Returns: undefined }
@@ -2219,7 +2223,7 @@ export type Database = {
       list_conversations: {
         Args: { p_conversation_id?: string }
         Returns: {
-          can_manage_members: boolean
+          can_delete: boolean
           conversation_id: string
           last_message_attachment_kind: string
           last_message_body: string
@@ -2819,10 +2823,6 @@ export type Database = {
       }
       reject_group_join_request: {
         Args: { p_group_id: string; p_request_id: string }
-        Returns: undefined
-      }
-      remove_conversation_member: {
-        Args: { p_conversation_id: string; p_profile_id: number }
         Returns: undefined
       }
       remove_group_media: {

@@ -243,11 +243,10 @@ export function leaveConversation(conversationId: string): Promise<void> {
   return Promise.resolve();
 }
 
-export function removeConversationMember(
-  conversationId: string,
-  profileId: string,
-): Promise<void> {
-  setActive(conversationId, [profileId], false);
+/** 다시 읽은 목록에서 지운 대화가 빠지도록 목 데이터에서 뺀다. */
+export function deleteGroupConversation(conversationId: string): Promise<void> {
+  const index = mockConversations.findIndex(({ id }) => id === conversationId);
+  if (index >= 0) mockConversations.splice(index, 1);
   return Promise.resolve();
 }
 

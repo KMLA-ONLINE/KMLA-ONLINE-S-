@@ -4,6 +4,7 @@ import {
   useQuery,
 } from "@tanstack/react-query";
 import { act, render } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MessagingSync } from "~/features/messaging/components/messaging-sync";
@@ -56,12 +57,14 @@ function renderSync() {
   const queryClient = new QueryClient();
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
   render(
-    <QueryClientProvider client={queryClient}>
-      <OpenRoom id="open" />
-      <MessagingSync profileId={1} />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <OpenRoom id="open" />
+        <MessagingSync profileId={1} />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
-  return { invalidate };
+  return { invalidate, queryClient };
 }
 
 describe("MessagingSync", () => {
@@ -168,6 +171,20 @@ describe("MessagingSync", () => {
     expect(sync.catchUpConversation).toHaveBeenCalledTimes(1);
     expect(sync.refreshConversationInList).not.toHaveBeenCalled();
     expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it("지운 그룹은 대화 목록에서 바로 뺀다", () => {
+    const { queryClient } = renderSync();
+    queryClient.setQueryData(messagingKeys.conversations(), [
+      { id: "gone" },
+      { id: "kept" },
+    ]);
+
+    act(() => handlers.onConversationDeleted("gone"));
+
+    expect(queryClient.getQueryData(messagingKeys.conversations())).toEqual([
+      { id: "kept" },
+    ]);
   });
 
   it("따라잡기가 실패하면 간격을 두고 다시 시도한다", async () => {

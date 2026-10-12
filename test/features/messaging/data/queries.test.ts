@@ -57,7 +57,7 @@ function conversationRow(overrides: Record<string, unknown> = {}) {
     last_message_deleted: false,
     unread_count: 3,
     muted: false,
-    can_manage_members: true,
+    can_delete: true,
     last_message_attachment_kind: null,
     ...overrides,
   };
@@ -130,7 +130,7 @@ describe("messaging queries", () => {
         },
         unreadCount: 3,
         muted: false,
-        canManageMembers: true,
+        canDelete: true,
       },
     ]);
   });

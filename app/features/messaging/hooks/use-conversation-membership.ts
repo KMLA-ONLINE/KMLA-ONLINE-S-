@@ -11,9 +11,9 @@ import {
 import {
   addConversationMembers,
   createGroupConversation,
+  deleteGroupConversation,
   leaveConversation,
   openDirectConversation,
-  removeConversationMember,
   renameConversation,
 } from "~/features/messaging/data/mutations";
 import { refreshConversationInList } from "~/features/messaging/data/sync";
@@ -38,7 +38,7 @@ export function useListedConversation(
             name: listed.name,
             participants: listed.participants,
             muted: listed.muted,
-            canManageMembers: listed.canManageMembers,
+            canDelete: listed.canDelete,
           }
         : conversation,
     [conversation, listed],
@@ -86,11 +86,20 @@ export function useConversationMembership(conversationId: string) {
       await navigate("/messenger", { replace: true });
       return true;
     },
-    remove: (profileId: string) =>
-      run(
-        () => removeConversationMember(conversationId, profileId),
-        "멤버를 내보내지 못했습니다.",
-      ),
+    // 지운 그룹은 모두의 목록에서 사라진다. 나가기와 같이 대화 목록으로 돌아간다.
+    deleteGroup: async () => {
+      try {
+        await deleteGroupConversation(conversationId);
+      } catch {
+        toast.error("대화방을 삭제하지 못했습니다.");
+        return false;
+      }
+      removeConversationFromList(queryClient, conversationId);
+      void invalidateConversationList(queryClient);
+      await navigate("/messenger", { replace: true });
+      toast.success("대화방을 삭제했습니다.");
+      return true;
+    },
     rename: (name: string) =>
       run(
         () => renameConversation(conversationId, name),

@@ -218,7 +218,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `publish_image_story`                         | `stories/data/files.ts`                                                         | `42-stories.sql`              |
 | `register_my_web_push_subscription`           | `notifications/data/push.ts`                                                    | `61-notifications.sql`        |
 | `reject_group_join_request`                   | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |
-| `remove_conversation_member`                  | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
+| `delete_group_conversation`                   | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `remove_group_media`                          | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |
 | `remove_my_profile_media`                     | `profiles/data/media.ts`                                                        | `11-identity.sql`             |
 | `rename_conversation`                         | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |

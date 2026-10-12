@@ -34,6 +34,9 @@ describe("MessagingScreen", () => {
     await user.click(
       await within(dialog).findByRole("button", { name: /최새봄/ }),
     );
+    expect(dialog).toHaveAccessibleDescription(
+      "최새봄님과 1:1 대화를 시작합니다.",
+    );
     expect(
       within(dialog).queryByRole("textbox", { name: "그룹 이름" }),
     ).not.toBeInTheDocument();
@@ -43,6 +46,7 @@ describe("MessagingScreen", () => {
     await user.click(
       await within(dialog).findByRole("button", { name: /정여름/ }),
     );
+    expect(dialog).toHaveAccessibleDescription("2명과 그룹 대화를 만듭니다.");
     const create = within(dialog).getByRole("button", { name: "그룹 만들기" });
     expect(create).toBeDisabled();
     await user.type(

@@ -6,11 +6,11 @@ import {
   FileIcon,
   ImagesIcon,
   LogOutIcon,
+  Trash2Icon,
   PencilIcon,
   PinIcon,
   SearchIcon,
   UserRoundIcon,
-  UserMinusIcon,
   UserPlusIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -42,7 +42,7 @@ export function ConversationDetails({
   onInvite,
   onRename,
   onLeave,
-  onRemoveMember,
+  onDeleteGroup,
   sharedCounts,
   onOpenSharedMedia,
 }: {
@@ -57,7 +57,8 @@ export function ConversationDetails({
   onInvite: () => void;
   onRename: () => void;
   onLeave: () => void;
-  onRemoveMember: (participant: MessageParticipant) => void;
+  /** 소유주와 앱 관리자에게만 보인다. */
+  onDeleteGroup: () => void;
   /** 공유된 사진과 파일 수. 아직 모르면 비어 있다. */
   sharedCounts: { media: number; files: number } | undefined;
   onOpenSharedMedia: (tab: "media" | "files") => void;
@@ -171,18 +172,6 @@ export function ConversationDetails({
                           : participant.name}
                       </span>
                     </MemberProfileLink>
-                    {conversation.canManageMembers &&
-                    participant.id !== conversation.viewerId ? (
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="rounded-full text-muted-foreground"
-                        aria-label={`${participant.name} 내보내기`}
-                        onClick={() => onRemoveMember(participant)}
-                      >
-                        <UserMinusIcon aria-hidden />
-                      </Button>
-                    ) : null}
                   </div>
                 ))}
               </div>
@@ -210,6 +199,14 @@ export function ConversationDetails({
               label="그룹 나가기"
               destructive
               onClick={onLeave}
+            />
+          ) : null}
+          {manageable && conversation.canDelete ? (
+            <DetailRow
+              icon={Trash2Icon}
+              label="대화방 삭제"
+              destructive
+              onClick={onDeleteGroup}
             />
           ) : null}
         </div>
