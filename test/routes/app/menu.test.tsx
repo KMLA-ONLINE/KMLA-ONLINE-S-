@@ -56,18 +56,17 @@ describe("menu route", () => {
   it("keeps school tools in the body and account entry points in the header", () => {
     renderMenu("admin");
 
-    expect(screen.getAllByRole("heading", { name: "학교생활" })).toHaveLength(
-      2,
-    );
+    expect(screen.getAllByRole("heading", { name: "메뉴" })).toHaveLength(2);
     const tools = within(
       screen.getByRole("navigation", { name: "학교생활 기능" }),
     );
-    expect(tools.getAllByRole("link")).toHaveLength(4);
+    expect(tools.getAllByRole("link")).toHaveLength(5);
     for (const [name, href] of [
       ["급식", "/menu/meal"],
       ["시간표", "/menu/timetable"],
       ["공강 · 노래방", "/menu/gongang"],
       ["생일", "/menu/birthdays"],
+      ["기부물품", "#"],
     ]) {
       expect(tools.getByRole("link", { name })).toHaveAttribute("href", href);
     }

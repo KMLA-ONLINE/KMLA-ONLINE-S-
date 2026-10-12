@@ -1,12 +1,10 @@
 import {
-  CakeIcon,
   CalendarClockIcon,
-  CalendarDaysIcon,
   GiftIcon,
   SearchIcon,
   UtensilsIcon,
 } from "lucide-react";
-import { Fragment, Suspense, use } from "react";
+import { Suspense, use } from "react";
 import { Link } from "react-router";
 
 import { StoryRail } from "~/features/stories/components/story-rail";
@@ -47,13 +45,6 @@ import { getKoreaDateIso } from "~/shared/lib/korea-date";
 import { Button, buttonVariants } from "~/shared/ui/button";
 import { Separator } from "~/shared/ui/separator";
 import type { Route } from "./+types/home";
-
-const schoolShortcuts = [
-  { to: "/menu/birthdays", label: "생일", icon: CakeIcon },
-  { to: "/menu/meal", label: "급식", icon: UtensilsIcon },
-  { to: "/menu/timetable", label: "시간표", icon: CalendarDaysIcon },
-  { to: "/menu/gongang", label: "공강·노래방", icon: CalendarClockIcon },
-];
 
 /**
  * 앱의 index 라우트. 전역 chrome은 아래 handle에서 명시한다.
@@ -176,26 +167,6 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
         }
       />
       <GlobalSearchDialog />
-
-      <nav
-        aria-label="학교생활 바로가기"
-        className="mb-4 hidden grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr_auto_1fr] gap-1 md:grid lg:hidden"
-      >
-        {schoolShortcuts.map(({ to, label, icon: Icon }) => (
-          <Fragment key={to}>
-            <Link to={to} className={buttonVariants({ variant: "outline" })}>
-              <Icon data-icon="inline-start" aria-hidden />
-              {label}
-            </Link>
-            <Separator orientation="vertical" className="my-2" />
-          </Fragment>
-        ))}
-        {/* eslint-disable-next-line jsx-a11y/anchor-is-valid -- 기부물품은 빈 해시로 연결하는 임시 링크로 제공한다. */}
-        <a href="#" className={buttonVariants({ variant: "outline" })}>
-          <GiftIcon data-icon="inline-start" aria-hidden />
-          기부물품
-        </a>
-      </nav>
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-6">
         <div className="min-w-0">

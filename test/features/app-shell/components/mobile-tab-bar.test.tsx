@@ -28,12 +28,12 @@ function renderTabBar(path: string) {
 }
 
 describe("MobileTabBar", () => {
-  it("opens school life through the existing menu URL", async () => {
+  it("opens the menu through the existing menu URL", async () => {
     const { user } = renderTabBar("/");
-    await user.click(screen.getByRole("link", { name: "학교생활" }));
+    await user.click(screen.getByRole("link", { name: "메뉴" }));
     expect(screen.getByTestId("location")).toHaveTextContent(/^\/menu$/);
     expect(
-      screen.queryByRole("link", { name: "메뉴" }),
+      screen.queryByRole("link", { name: "학교생활" }),
     ).not.toBeInTheDocument();
   });
 

@@ -3,6 +3,7 @@ import {
   CalendarClockIcon,
   CalendarDaysIcon,
   ExternalLinkIcon,
+  GiftIcon,
   SettingsIcon,
   UtensilsIcon,
 } from "lucide-react";
@@ -44,7 +45,7 @@ export default function MenuPage() {
   return (
     <>
       <PageHeader
-        title="학교생활"
+        title="메뉴"
         actions={
           <div className="flex items-center gap-1">
             <Link
@@ -70,7 +71,7 @@ export default function MenuPage() {
       />
 
       <div className="flex w-full flex-col gap-6 p-4 md:gap-8 md:p-0">
-        <h1 className="hidden text-2xl font-semibold md:block">학교생활</h1>
+        <h1 className="hidden text-2xl font-semibold md:block">메뉴</h1>
 
         <section
           className="flex flex-col gap-3"
@@ -103,6 +104,19 @@ export default function MenuPage() {
                 </span>
               </Link>
             ))}
+            {/* eslint-disable-next-line jsx-a11y/anchor-is-valid -- 기부물품은 빈 해시로 연결하는 임시 링크로 제공한다. */}
+            <a
+              href="#"
+              className={cn(
+                tileClassName,
+                "flex min-h-22 min-w-0 flex-col items-center justify-center gap-3 px-3 py-4",
+              )}
+            >
+              <GiftIcon className="size-6 text-muted-foreground" aria-hidden />
+              <span className="text-center text-sm leading-tight font-medium break-keep">
+                기부물품
+              </span>
+            </a>
           </nav>
         </section>
 

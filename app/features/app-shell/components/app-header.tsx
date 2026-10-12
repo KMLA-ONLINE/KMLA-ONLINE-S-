@@ -8,7 +8,6 @@ import { Link } from "react-router";
 import { useRef, useState } from "react";
 
 import { useAppShell } from "~/features/app-shell/context/app-shell-context";
-import { schoolLinks } from "~/features/app-shell/model/school-links";
 import { LogoutDialog } from "~/features/auth/components/logout-button";
 import { GlobalSearchDropdown } from "~/features/search";
 import { UserAvatar } from "~/shared/components/user-avatar";
@@ -18,7 +17,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/shared/ui/dropdown-menu";
@@ -66,7 +64,7 @@ export function AppHeader({ className }: { className?: string }) {
           <DropdownMenuTrigger
             ref={avatarRef}
             aria-label="계정 메뉴"
-            render={<Button variant="ghost" size="icon" />}
+            render={<Button variant={null} size="icon" />}
           >
             <UserAvatar src={profile.avatar_url} name={profile.name} />
           </DropdownMenuTrigger>
@@ -79,26 +77,6 @@ export function AppHeader({ className }: { className?: string }) {
                 <SettingsIcon aria-hidden />
                 설정
               </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>바로가기</DropdownMenuLabel>
-              {schoolLinks.map(({ href, label, icon: Icon }) => (
-                <DropdownMenuItem
-                  key={href}
-                  render={
-                    <a
-                      href={href}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label={label}
-                    />
-                  }
-                >
-                  <Icon aria-hidden />
-                  {label}
-                </DropdownMenuItem>
-              ))}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>

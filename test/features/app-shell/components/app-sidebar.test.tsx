@@ -19,7 +19,7 @@ const shell = {
 
 describe("desktop navigation", () => {
   it.each(["/menu", "/menu/meal"])(
-    "offers an active school-life entry at %s",
+    "offers an active menu entry at %s",
     (path) => {
       renderRoute(
         () => (
@@ -34,11 +34,11 @@ describe("desktop navigation", () => {
       for (const name of ["홈", "그룹", "알림"]) {
         expect(nav.getByRole("link", { name })).toBeInTheDocument();
       }
-      expect(nav.getByRole("link", { name: "학교생활" })).toHaveAttribute(
+      expect(nav.getByRole("link", { name: "메뉴" })).toHaveAttribute(
         "href",
         "/menu",
       );
-      expect(nav.getByRole("link", { name: "학교생활" })).toHaveAttribute(
+      expect(nav.getByRole("link", { name: "메뉴" })).toHaveAttribute(
         "aria-current",
         "page",
       );
