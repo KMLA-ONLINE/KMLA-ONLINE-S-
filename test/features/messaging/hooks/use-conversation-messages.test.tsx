@@ -426,10 +426,14 @@ describe("useConversationMessages", () => {
     await waitFor(() =>
       expect(result.current.messages).toHaveLength(before + 2),
     );
-    const [failed, delivered] = result.current.messages.slice(-2);
+    // 두 메시지가 같은 밀리초에 만들어지면 순서가 ID로 갈리므로 파일 이름으로 찾는다.
+    const sentFile = (name: string) =>
+      result.current.messages.find(
+        (message) => message.attachments?.[0]?.fileName === name,
+      )!;
+    const failed = sentFile("a.pdf");
     expect(failed).toMatchObject({ failed: true, body: "" });
-    expect(delivered).toMatchObject({ pending: false, failed: false });
-    expect(delivered?.attachments?.[0]).toMatchObject({ fileName: "b.pdf" });
+    expect(sentFile("b.pdf")).toMatchObject({ pending: false, failed: false });
 
     act(() => result.current.retry(failed));
     await waitFor(() =>
