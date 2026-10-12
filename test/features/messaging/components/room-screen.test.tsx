@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { RoomScreen } from "~/features/messaging/components/room-screen";
 import { mergeServerMessages } from "~/features/messaging/data/cache";
 import * as mutations from "~/features/messaging/data/mutations";
+import { clearRoomDrafts } from "~/features/messaging/hooks/room-drafts";
 import { loadConversation } from "~/features/messaging/data/queries";
 import type { Conversation } from "~/features/messaging/model/types";
 import { renderRoute, screen, within } from "../../../router";
@@ -15,8 +16,11 @@ import { resetFakeMessaging } from "../fake-api";
 
 vi.mock("~/features/messaging/data/queries", () => import("../fake-api"));
 
-// 테스트가 고친 목 데이터(읽음, 알림 끄기, 멤버)가 다음 테스트로 새지 않게 한다.
-afterEach(() => resetFakeMessaging());
+// 테스트가 고친 목 데이터(읽음, 알림 끄기, 멤버)와 쓰다 둔 초안이 다음 테스트로 새지 않게 한다.
+afterEach(() => {
+  resetFakeMessaging();
+  clearRoomDrafts();
+});
 vi.mock("~/features/messaging/data/mutations", () => import("../fake-api"));
 vi.mock("~/features/messaging/data/files", () => ({
   prepareAttachment: (file: File) =>
@@ -365,6 +369,80 @@ describe("RoomScreen", () => {
       ),
     );
     expect(scrollIntoView).not.toHaveBeenCalled();
+
+    // 다시 열면 입력과 결과가 남아 있어 다음 결과를 이어 고른다. 찾은 말은 따로 표시한다.
+    await user.click(screen.getByRole("button", { name: "대화 검색" }));
+    expect(
+      screen.getByRole("searchbox", { name: "대화에서 찾기" }),
+    ).toHaveValue("부스 배치");
+    const reopened = screen.getByRole("list", { name: "검색 결과" });
+    expect(within(reopened).getAllByText("부스 배치")[0]?.tagName).toBe("MARK");
+  });
+
+  it("쓰던 글과 쌓아 둔 첨부는 대화방을 떠났다 돌아와도 남는다", async () => {
+    const conversation = await loadConversation("hyunwoo");
+    const view = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/hyunwoo" },
+    );
+    await view.user.type(
+      screen.getByRole("textbox", { name: "메시지 입력" }),
+      "쓰다 만 글",
+    );
+    fireEvent.drop(
+      screen.getByRole("textbox", { name: "메시지 입력" }).closest("footer")!,
+      {
+        dataTransfer: {
+          types: ["Files"],
+          files: [
+            new File(["hello"], "회의록.pdf", { type: "application/pdf" }),
+          ],
+        },
+      },
+    );
+    view.unmount();
+
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/hyunwoo",
+    });
+    expect(screen.getByRole("textbox", { name: "메시지 입력" })).toHaveValue(
+      "쓰다 만 글",
+    );
+    expect(
+      within(screen.getByRole("list", { name: "보낼 첨부" })).getByText(
+        "회의록.pdf",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("답장 중에는 끌어 놓은 파일을 쌓지 않는다", async () => {
+    const conversation = await loadConversation("student-council");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+    const message = screen
+      .getByText("축제 부스 배치 초안 확인했어요?")
+      .closest("article")!;
+    await user.click(
+      within(message).getByRole("button", { name: "메시지에 답장" }),
+    );
+
+    fireEvent.drop(
+      screen.getByRole("textbox", { name: "메시지 입력" }).closest("footer")!,
+      {
+        dataTransfer: {
+          types: ["Files"],
+          files: [
+            new File(["hello"], "회의록.pdf", { type: "application/pdf" }),
+          ],
+        },
+      },
+    );
+
+    expect(
+      screen.queryByRole("list", { name: "보낼 첨부" }),
+    ).not.toBeInTheDocument();
   });
 
   it("삭제를 누르면 그 메시지를 고른 삭제 모드가 되고, 더 고른 뒤 한 번에 지운다", async () => {

@@ -41,10 +41,8 @@ import {
 } from "~/features/messaging/data/files";
 import {
   classifyAttachment,
-  ATTACHMENT_LIMIT_MESSAGE,
   groupAttachmentsIntoMessages,
-  limitAttachments,
-  isBlockedAttachment,
+  screenAttachments,
 } from "~/features/messaging/model/attachments";
 import { applyMessageReaction } from "~/features/messaging/model/message-reactions";
 import { activeParticipants } from "~/features/messaging/model/system-message";
@@ -324,16 +322,12 @@ export function useConversationMessages(conversation: Conversation) {
 
   /**
    * 고른 파일을 보낸다. 사진은 30장까지 한 묶음, 일반 파일과 오디오는 10개까지 파일마다 메시지
-   * 하나다(기능 명세 §13.5). 동영상과 GIF와 넘친 것은 빼고 알린다. 각 메시지는 기기 안의 미리보기로
-   * 먼저 그린다.
+   * 하나다(기능 명세 §13.5). 동영상과 GIF, 크기 상한을 넘는 것과 넘친 것은 빼고 알린다. 각 메시지는
+   * 기기 안의 미리보기로 먼저 그린다.
    */
   const sendFiles = async (selected: File[]) => {
-    const allowed = selected.filter((file) => !isBlockedAttachment(file));
-    if (allowed.length < selected.length) {
-      toast.error("동영상과 GIF는 보낼 수 없습니다.");
-    }
-    const { files, overflow } = limitAttachments(allowed);
-    if (overflow) toast.error(ATTACHMENT_LIMIT_MESSAGE);
+    const { files, notices } = screenAttachments(selected);
+    for (const notice of notices) toast.error(notice);
     let allSent = files.length === selected.length;
     for (const group of groupAttachmentsIntoMessages(files)) {
       const id = crypto.randomUUID();

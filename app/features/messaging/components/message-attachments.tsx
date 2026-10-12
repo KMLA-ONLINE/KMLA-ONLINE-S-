@@ -74,6 +74,7 @@ export function MessageAttachments({
             key={attachment.id}
             attachment={attachment}
             url={urls?.get(attachment.objectPath)}
+            pending={pending}
           />
         ),
       )}
@@ -287,9 +288,11 @@ function AudioAttachment({
 function FileAttachment({
   attachment,
   url,
+  pending,
 }: {
   attachment: MessageAttachment;
   url: string | undefined;
+  pending: boolean;
 }) {
   const content = (
     <>
@@ -300,10 +303,15 @@ function FileAttachment({
           {formatFileSize(attachment.sizeBytes)}
         </span>
       </span>
-      <DownloadIcon
-        aria-hidden
-        className="size-4 shrink-0 text-muted-foreground"
-      />
+      {/* 올리는 동안은 사진처럼 돌아가는 표시를 둔다. 흐리게만 그리면 멈춘 것처럼 보인다. */}
+      {pending ? (
+        <Spinner />
+      ) : (
+        <DownloadIcon
+          aria-hidden
+          className="size-4 shrink-0 text-muted-foreground"
+        />
+      )}
     </>
   );
   const className =

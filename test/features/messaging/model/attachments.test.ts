@@ -6,6 +6,7 @@ import {
   groupAttachmentsIntoMessages,
   isBlockedAttachment,
   limitAttachments,
+  screenAttachments,
   sniffAudioFormat,
 } from "~/features/messaging/model/attachments";
 import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
@@ -55,6 +56,34 @@ describe("message attachments", () => {
       "f1.pdf",
     ]);
     expect(limited.overflow).toBe(true);
+  });
+
+  it("보내기 전에 30MB를 넘거나 빈 파일을 빼고 이유를 모은다", () => {
+    const sized = (name: string, type: string, size: number) => {
+      const made = file(name, type);
+      Object.defineProperty(made, "size", { value: size });
+      return made;
+    };
+    const big = 30 * 1024 * 1024 + 1;
+
+    const screened = screenAttachments([
+      sized("ok.pdf", "application/pdf", 10),
+      sized("big.pdf", "application/pdf", big),
+      sized("big.jpg", "image/jpeg", big),
+      sized("empty.txt", "text/plain", 0),
+      file("clip.mp4", "video/mp4"),
+    ]);
+
+    expect(screened.files.map(({ name }) => name)).toEqual(["ok.pdf"]);
+    expect(screened.notices).toEqual([
+      "동영상과 GIF는 보낼 수 없습니다.",
+      "30MB를 넘는 파일은 보낼 수 없습니다 (2개).",
+      "빈 파일은 보낼 수 없습니다: empty.txt",
+    ]);
+    // 뺀 파일은 개수 상한에 들지 않는다.
+    expect(
+      screenAttachments([sized("big.pdf", "application/pdf", big)], []).notices,
+    ).toEqual(["30MB를 넘는 파일은 보낼 수 없습니다: big.pdf"]);
   });
 
   it("동영상과 GIF는 MIME type이나 확장자로 보내지 않는다", () => {

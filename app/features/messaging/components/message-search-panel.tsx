@@ -1,10 +1,17 @@
 import { ChevronLeftIcon, SearchIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+  type Dispatch,
+  type SetStateAction,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   searchMessages,
   type MessageSearchResult,
 } from "~/features/messaging/data/queries";
+import { searchExcerpt } from "~/features/messaging/model/message-search";
 import {
   formatMessageDay,
   formatMessageTime,
@@ -23,29 +30,47 @@ interface SearchState {
   nextCursor: MessageCursor | null;
 }
 
+/** 입력과 마지막 결과. 대화방이 들고 있어 결과로 이동했다가 검색을 다시 열면 그대로 이어 본다. */
+export interface MessageSearchSession {
+  query: string;
+  state: SearchState | null;
+}
+
+export const EMPTY_MESSAGE_SEARCH: MessageSearchSession = {
+  query: "",
+  state: null,
+};
+
 /**
  * 대화 내 검색(기능 명세 §13.13). 서버가 메시지를 복호화하며 거르므로 글자마다가 아니라 Enter로
- * 찾는다. 결과는 이 화면의 상태에만 두고, 닫으면 버린다. 결과를 고르면 원래 메시지로 이동해 강조한다.
+ * 찾는다. 결과를 고르면 원래 메시지로 이동해 강조한다. 입력과 결과는 대화방이 들고 있어, 다시 열면
+ * 다음 결과를 이어 고를 수 있다. 대화방을 떠나면 버린다.
  */
 export function MessageSearchPanel({
   conversationId,
   participants,
+  session,
+  onSessionChange,
   onClose,
   onSelect,
 }: {
   conversationId: string;
   participants: Map<string, MessageParticipant>;
+  session: MessageSearchSession;
+  onSessionChange: Dispatch<SetStateAction<MessageSearchSession>>;
   onClose: () => void;
   onSelect: (result: MessageSearchResult) => void;
 }) {
-  const [query, setQuery] = useState("");
-  const [state, setState] = useState<SearchState | null>(null);
+  const { query, state } = session;
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const reopenedWithResults = useRef(state !== null);
 
-  // 검색을 열면 바로 입력할 수 있게 한다.
-  useEffect(() => input.current?.focus(), []);
+  // 처음 열면 바로 입력할 수 있게 한다. 결과를 보다 돌아왔으면 모바일 키보드가 결과를 가리지 않게 둔다.
+  useEffect(() => {
+    if (!reopenedWithResults.current) input.current?.focus();
+  }, []);
 
   // 검색은 복호화하며 훑어 느리다. 연달아 찾으면 마지막 요청의 결과만 반영한다.
   const latestRequest = useRef(0);
@@ -57,13 +82,16 @@ export function MessageSearchPanel({
     try {
       const page = await searchMessages(conversationId, term, cursor);
       if (request !== latestRequest.current) return;
-      setState((current) => ({
-        query: term,
-        results:
-          cursor && current?.query === term
-            ? [...current.results, ...page.results]
-            : page.results,
-        nextCursor: page.nextCursor,
+      onSessionChange((current) => ({
+        ...current,
+        state: {
+          query: term,
+          results:
+            cursor && current.state?.query === term
+              ? [...current.state.results, ...page.results]
+              : page.results,
+          nextCursor: page.nextCursor,
+        },
       }));
     } catch {
       if (request === latestRequest.current) setFailed(true);
@@ -103,7 +131,10 @@ export function MessageSearchPanel({
             ref={input}
             type="search"
             value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              onSessionChange((current) => ({ ...current, query: value }));
+            }}
             placeholder="대화에서 찾기"
             aria-label="대화에서 찾기"
             className="rounded-full border-0 bg-muted pl-9"
@@ -144,9 +175,7 @@ export function MessageSearchPanel({
                       {formatMessageTime(result.sentAt)}
                     </time>
                   </span>
-                  <span className="line-clamp-2 text-sm [overflow-wrap:anywhere] break-keep">
-                    {result.body}
-                  </span>
+                  <ResultExcerpt body={result.body} term={state.query} />
                 </button>
               </li>
             ))}
@@ -174,5 +203,21 @@ export function MessageSearchPanel({
         ) : null}
       </div>
     </div>
+  );
+}
+
+/** 결과 본문 두 줄. 찾은 말을 굵게 표시하고, 뒤쪽에서 찾았으면 앞을 줄여 두 줄 안에 보이게 한다. */
+function ResultExcerpt({ body, term }: { body: string; term: string }) {
+  const { before, match, after } = searchExcerpt(body, term);
+  return (
+    <span className="line-clamp-2 text-sm [overflow-wrap:anywhere] break-keep">
+      {before}
+      {match ? (
+        <mark className="rounded-sm bg-primary/15 font-semibold text-foreground">
+          {match}
+        </mark>
+      ) : null}
+      {after}
+    </span>
   );
 }

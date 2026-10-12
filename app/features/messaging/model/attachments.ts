@@ -1,4 +1,5 @@
 import type { MessageAttachmentKind } from "~/features/messaging/model/types";
+import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 import { isSupportedImageInput } from "~/shared/lib/image/compress";
 
 /** 한 번에 보낼 수 있는 사진 수. 모두 메시지 하나에 묶이고, 서버도 같은 상한을 강제한다(기능 명세 §13.5). */
@@ -53,6 +54,46 @@ export function limitAttachments(
 }
 
 export const ATTACHMENT_LIMIT_MESSAGE = `사진은 한 번에 ${MESSAGE_PHOTO_LIMIT}장, 파일은 ${MESSAGE_FILE_LIMIT}개까지 보낼 수 있습니다.`;
+
+/**
+ * 고른 파일 중 보낼 수 있는 것만 남기고, 뺀 이유를 알릴 문구를 모은다. 동영상과 GIF, 크기 상한을 넘거나
+ * 빈 파일을 먼저 빼고, 남은 것으로 개수 상한(`limitAttachments`)을 센다. 크기는 올릴 때
+ * `prepareAttachment`도 다시 보지만, 여기서 거르지 않으면 보내는 중 말풍선이 생겼다가 실패하고
+ * `다시 보내기`도 같은 이유로 계속 실패한다.
+ */
+export function screenAttachments(
+  selected: readonly File[],
+  kept: readonly File[] = [],
+): { files: File[]; notices: string[] } {
+  const notices: string[] = [];
+  const allowed = selected.filter((file) => !isBlockedAttachment(file));
+  if (allowed.length < selected.length) {
+    notices.push("동영상과 GIF는 보낼 수 없습니다.");
+  }
+  const tooLarge = allowed.filter(
+    (file) =>
+      file.size >
+      (isPhoto(file) ? MAX_INPUT_FILE_BYTES : MESSAGE_FILE_MAX_BYTES),
+  );
+  if (tooLarge.length > 0) {
+    notices.push(describeRejected(tooLarge, "30MB를 넘는 파일은"));
+  }
+  const empty = allowed.filter((file) => file.size === 0 && !isPhoto(file));
+  if (empty.length > 0) notices.push(describeRejected(empty, "빈 파일은"));
+  const { files, overflow } = limitAttachments(
+    allowed.filter((file) => !tooLarge.includes(file) && !empty.includes(file)),
+    kept,
+  );
+  if (overflow) notices.push(ATTACHMENT_LIMIT_MESSAGE);
+  return { files, notices };
+}
+
+function describeRejected(files: File[], subject: string): string {
+  const [only] = files;
+  return files.length === 1 && only
+    ? `${subject} 보낼 수 없습니다: ${only.name}`
+    : `${subject} 보낼 수 없습니다 (${files.length}개).`;
+}
 
 function isPhoto(file: File): boolean {
   return classifyAttachment(file) === "image";

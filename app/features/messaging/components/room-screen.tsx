@@ -52,7 +52,15 @@ import {
 import { useConversationMute } from "~/features/messaging/hooks/use-conversation-mute";
 import { useRoomOverlayParam } from "~/features/messaging/hooks/use-room-overlay-param";
 import type { RoomEntryState } from "~/features/messaging/hooks/use-room-entry";
-import { MessageSearchPanel } from "~/features/messaging/components/message-search-panel";
+import {
+  readRoomDraft,
+  roomDraftKey,
+  updateRoomDraft,
+} from "~/features/messaging/hooks/room-drafts";
+import {
+  EMPTY_MESSAGE_SEARCH,
+  MessageSearchPanel,
+} from "~/features/messaging/components/message-search-panel";
 import { ReactionMembersDialog } from "~/features/messaging/components/reaction-members-dialog";
 import { SharedMediaDialog } from "~/features/messaging/components/shared-media-dialog";
 import { getSharedAttachmentCounts } from "~/features/messaging/data/queries";
@@ -61,11 +69,9 @@ import { useQuery } from "@tanstack/react-query";
 import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
 import { clipboardImageFiles } from "~/shared/lib/clipboard";
 import {
-  ATTACHMENT_LIMIT_MESSAGE,
   classifyAttachment,
   formatFileSize,
-  isBlockedAttachment,
-  limitAttachments,
+  screenAttachments,
 } from "~/features/messaging/model/attachments";
 import { useKeyboardViewport } from "~/shared/hooks/use-keyboard-viewport";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
@@ -161,6 +167,8 @@ export function RoomScreen({
   const compactDetailsOpen = overlay?.kind === "details";
   const searchOpen = overlay?.kind === "search";
   const pinnedDialogOpen = overlay?.kind === "pinned";
+  // 검색 입력과 결과. 결과로 이동해 검색이 닫혀도 남겨 두어, 다시 열면 다음 결과를 이어 고른다.
+  const [searchSession, setSearchSession] = useState(EMPTY_MESSAGE_SEARCH);
   const [highlightedMessageId, setHighlightedMessageId] = useState<
     string | null
   >(null);
@@ -193,12 +201,17 @@ export function RoomScreen({
       ? messages.find(({ id }) => id === overlay.messageId)
       : undefined;
   const { muted, toggleMuted } = useConversationMute(conversation);
+  const draftKey = roomDraftKey(conversation.viewerId, conversation.id);
   // 끌어 놓거나 붙여 넣은 첨부. 바로 보내지 않고 작성창 위에 두었다가 전송할 때 함께 보낸다.
-  const [staged, setStaged] = useState<StagedAttachment[]>([]);
+  // 다른 방에 다녀와도 남도록 파일은 초안에 맡기고, 미리보기는 돌아올 때 다시 만든다.
+  const [staged, setStaged] = useState<StagedAttachment[]>(() =>
+    (readRoomDraft(draftKey)?.files ?? []).map(toStagedAttachment),
+  );
   const stagedRef = useRef(staged);
   useEffect(() => {
     stagedRef.current = staged;
-  }, [staged]);
+    updateRoomDraft(draftKey, { files: staged.map(({ file }) => file) });
+  }, [draftKey, staged]);
   // 대화방을 떠나면(방마다 다시 마운트된다) 쌓아 둔 미리보기를 해제한다.
   useEffect(
     () => () => {
@@ -295,29 +308,15 @@ export function RoomScreen({
     });
   }
 
-  /** 동영상과 GIF는 빼고, 이미 쌓아 둔 것까지 합쳐 사진 30장·파일 10개까지만 쌓는다. */
+  /** 보낼 수 없는 파일은 빼고, 이미 쌓아 둔 것까지 합쳐 사진 30장·파일 10개까지만 쌓는다. */
   function stageFiles(selected: File[]) {
-    const allowed = selected.filter((file) => !isBlockedAttachment(file));
-    if (allowed.length < selected.length) {
-      toast.error("동영상과 GIF는 보낼 수 없습니다.");
-    }
-    const { files, overflow } = limitAttachments(
-      allowed,
+    const { files, notices } = screenAttachments(
+      selected,
       staged.map(({ file }) => file),
     );
-    if (overflow) toast.error(ATTACHMENT_LIMIT_MESSAGE);
+    for (const notice of notices) toast.error(notice);
     if (files.length === 0) return;
-    setStaged((current) => [
-      ...current,
-      ...files.map((file) => ({
-        id: crypto.randomUUID(),
-        file,
-        previewUrl:
-          classifyAttachment(file) === "image"
-            ? URL.createObjectURL(file)
-            : null,
-      })),
-    ]);
+    setStaged((current) => [...current, ...files.map(toStagedAttachment)]);
   }
 
   function unstage(id: string) {
@@ -461,6 +460,8 @@ export function RoomScreen({
           <MessageSearchPanel
             conversationId={conversation.id}
             participants={participantById}
+            session={searchSession}
+            onSessionChange={setSearchSession}
             onClose={roomOverlay.close}
             onSelect={(result) => void viewMessage(result.id)}
           />
@@ -536,7 +537,9 @@ export function RoomScreen({
             roomOverlay.open({ kind: "reactions", messageId: message.id })
           }
           onDropFiles={
-            viewerActive && !selection && !editTarget ? stageFiles : undefined
+            viewerActive && !selection && !editTarget && !replyTarget
+              ? stageFiles
+              : undefined
           }
         />
         {selection ? (
@@ -580,6 +583,7 @@ export function RoomScreen({
               void sendFiles(files);
             }}
             desktopDetailsOpen={desktopDetailsOpen}
+            draftKey={draftKey}
           />
         ) : (
           <p className="shrink-0 px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))] text-center text-sm text-muted-foreground">
@@ -1385,13 +1389,16 @@ function MessageActions({
         className="shadow-sm duration-0 data-open:animate-none data-closed:animate-none"
       >
         <DropdownMenuGroup>
-          <DropdownMenuItem
-            className="cursor-pointer"
-            onClick={() => void copyMessageText(message.body)}
-          >
-            <CopyIcon aria-hidden />
-            복사
-          </DropdownMenuItem>
+          {/* 첨부만 있는 메시지는 복사할 글이 없다. 길게 누르기 메뉴와 같다. */}
+          {message.body !== "" ? (
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => void copyMessageText(message.body)}
+            >
+              <CopyIcon aria-hidden />
+              복사
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem className="cursor-pointer" onClick={onTogglePinned}>
             <PinIcon aria-hidden />
             {isPinned ? "고정 해제" : "고정"}
@@ -1461,6 +1468,15 @@ interface StagedAttachment {
   previewUrl: string | null;
 }
 
+function toStagedAttachment(file: File): StagedAttachment {
+  return {
+    id: crypto.randomUUID(),
+    file,
+    previewUrl:
+      classifyAttachment(file) === "image" ? URL.createObjectURL(file) : null,
+  };
+}
+
 function ComposerShell({
   replyTarget,
   replyAuthor,
@@ -1475,6 +1491,7 @@ function ComposerShell({
   onSendStaged,
   onSendFiles,
   desktopDetailsOpen,
+  draftKey,
 }: {
   replyTarget?: ConversationMessage;
   replyAuthor: string | null;
@@ -1493,8 +1510,10 @@ function ComposerShell({
   /** 고른 파일을 보낸다. 답장이나 수정 중에는 첨부할 수 없다(기능 명세 §13.5). */
   onSendFiles: (files: File[]) => void;
   desktopDetailsOpen: boolean;
+  /** 쓰던 글을 맡겨 둘 자리. 다른 방에 다녀오거나 삭제 모드를 마치고 돌아오면 되살린다. */
+  draftKey: string;
 }) {
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(() => readRoomDraft(draftKey)?.text ?? "");
   // 보낸 직후 잠시 전송을 받지 않는다. 버튼을 껐다 켜면 깜박이므로 누름만 버리고, 입력은 그대로
   // 두어 이어서 보낼 수 있다.
   const lastSentAt = useRef(0);
@@ -1526,6 +1545,11 @@ function ComposerShell({
   useEffect(() => {
     if (editingId) textareaRef.current?.focus();
   }, [editingId]);
+  // 고치는 중이면 맡겨 둔 원래 입력을 남긴다. 고치던 본문은 초안이 아니다.
+  const savedDraft = editTarget ? heldDraft : draft;
+  useEffect(() => {
+    updateRoomDraft(draftKey, { text: savedDraft });
+  }, [draftKey, savedDraft]);
   // 답장을 시작하면 바로 쓸 수 있게 입력창으로 간다.
   const replyingId = replyTarget?.id;
   useEffect(() => {
@@ -1536,9 +1560,10 @@ function ComposerShell({
   const composing = useRef(false);
   const normalizedDraft = normalizeMessageBody(draft);
   const hasDraft = normalizedDraft.trim() !== "";
-  // 수정 중에는 첨부를 쌓지 않는다. 고칠 수 있는 메시지는 본문뿐이다.
-  const hasStaged = !editTarget && staged.length > 0;
-  const canStage = !editTarget;
+  // 수정 중에는 첨부를 쌓지 않는다. 고칠 수 있는 메시지는 본문뿐이다. 답장에도 첨부하지 않는다
+  // (기능 명세 §13.5). 쌓아 둔 첨부는 그동안 숨겨 두었다가 끝나면 다시 보인다.
+  const canStage = !editTarget && !replyTarget;
+  const hasStaged = canStage && staged.length > 0;
   const draftLength = countMessageGraphemes(normalizedDraft);
   const overLimit = draftLength > MESSAGE_MAX_LENGTH;
   const attachmentActionsCollapsed = hasDraft && !attachmentActionsExpanded;
