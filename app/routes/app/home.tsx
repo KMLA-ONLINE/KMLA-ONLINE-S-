@@ -197,7 +197,7 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
         </a>
       </nav>
 
-      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-6 lg:py-4">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-6">
         <div className="min-w-0">
           <StoryRail
             initialItems={stories}
