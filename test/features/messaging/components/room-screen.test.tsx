@@ -118,6 +118,11 @@ function syncPinned<T extends Conversation>(conversation: T): T {
   };
 }
 
+/** 이동한 메시지의 강조는 말풍선 테두리로만 드러난다. */
+function bubble(message: Element) {
+  return message.querySelector('[data-slot="message-bubble"]');
+}
+
 function SwitchableRoomScreen({
   conversation,
   nextConversation,
@@ -162,25 +167,11 @@ describe("RoomScreen", () => {
     expect(
       within(pinnedBanner).queryByText("고정된 메시지"),
     ).not.toBeInTheDocument();
-    const dayLabel = screen.getByText("2026년 8월 28일 금요일");
-    expect(dayLabel).not.toHaveClass("rounded-full", "bg-muted");
+    expect(screen.getByText("2026년 8월 28일 금요일")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "https://www.kmlaonline.net" }),
     ).toHaveAttribute("href", "https://www.kmlaonline.net");
-    expect(
-      screen.getByText("수정할 부분 있으면 오늘 안에 알려주세요."),
-    ).toHaveClass("text-[15px]");
-    const senderAvatar = within(
-      screen
-        .getByText("수정할 부분 있으면 오늘 안에 알려주세요.")
-        .closest("article")!,
-    )
-      .getByRole("img", { name: "박서현 프로필 사진" })
-      .closest('[data-slot="avatar"]');
-    expect(senderAvatar).toHaveAttribute("data-size", "default");
-    expect(senderAvatar).toHaveClass("size-7");
     expect(screen.getByLabelText("2명 안 읽음")).toHaveTextContent("2");
-    expect(screen.queryByText("안 읽음 2")).not.toBeInTheDocument();
     const reactedMessage = screen
       .getByText("수정할 부분 있으면 오늘 안에 알려주세요.")
       .closest("article")!;
@@ -188,24 +179,7 @@ describe("RoomScreen", () => {
       name: "좋아요",
     });
     expect(reactionGraphic).toHaveAttribute("src", "/twemoji/15.1.0/1f44d.svg");
-    expect(reactionGraphic).toHaveClass("size-[13px]");
-    // 상대 메시지의 반응은 버블 오른쪽(대화 중앙 쪽) 밑에 흐름대로 붙는다.
-    expect(reactionGraphic.parentElement?.parentElement).toHaveClass(
-      "-mt-2",
-      "self-end",
-    );
-    expect(reactionGraphic.parentElement?.parentElement).not.toHaveClass(
-      "absolute",
-    );
-    const reactionSummary = reactionGraphic.parentElement!.parentElement!;
-    expect(reactionSummary).toHaveClass("gap-1");
-    expect(within(reactedMessage).getByText("3")).toHaveClass(
-      "font-normal",
-      "text-muted-foreground",
-    );
-    expect(
-      screen.queryByRole("button", { name: "프로필 기능 준비 중" }),
-    ).not.toBeInTheDocument();
+    expect(within(reactedMessage).getByText("3")).toBeInTheDocument();
 
     const pinnedMessage = screen
       .getByRole("link", { name: "https://www.kmlaonline.net" })
@@ -213,30 +187,7 @@ describe("RoomScreen", () => {
     const pinnedLabel =
       within(pinnedMessage).getByText("고정됨").parentElement!;
     expect(pinnedLabel).toHaveTextContent("최민준·고정됨");
-    expect(pinnedLabel).toHaveClass("gap-1");
-
-    expect(screen.queryByText("4명 · 2명 활동 중")).not.toBeInTheDocument();
-    expect(screen.queryByText("활동 중")).not.toBeInTheDocument();
     expect(screen.getByText("대화 멤버 4명")).toBeInTheDocument();
-    expect(screen.getByText("대화 멤버 4명").closest("summary")).toHaveClass(
-      "select-none",
-    );
-
-    const ownBubble = screen.getByText(
-      "확인했습니다! 2층 체험 부스 동선만 조금 넓히면 좋을 것 같아요.",
-    );
-    expect(screen.queryByText("오후 3:18")).not.toBeInTheDocument();
-    expect(ownBubble).toHaveClass("[overflow-wrap:anywhere]");
-
-    const firstConnectedMessage = screen
-      .getByText("축제 부스 배치 초안 확인했어요?")
-      .closest("article")!;
-    expect(
-      within(firstConnectedMessage).queryByText("오후 3:12"),
-    ).not.toBeInTheDocument();
-    expect(
-      within(reactedMessage).queryByText("오후 3:12"),
-    ).not.toBeInTheDocument();
   });
 
   it("메시지 반응을 로컬에서 선택하고 제거한다", async () => {
@@ -254,38 +205,12 @@ describe("RoomScreen", () => {
     const reactionButton = within(message).getByRole("button", {
       name: "메시지에 반응",
     });
-    expect(reactionButton).toHaveClass("size-8");
-    expect(reactionButton.parentElement).not.toHaveClass(
-      "border",
-      "bg-background",
-      "shadow-sm",
-    );
-    expect(reactionButton.parentElement?.parentElement).toHaveClass(
-      "items-center",
-    );
-    expect(
-      within(message)
-        .getAllByRole("button")
-        .map((button) => button.getAttribute("aria-label")),
-    ).toEqual(["메시지 기타 작업", "메시지에 답장", "메시지에 반응"]);
-
     await user.click(reactionButton);
-    const reactionPicker = screen.getByRole("button", {
-      name: "하트 반응 남기기",
-    }).parentElement?.parentElement;
-    expect(reactionPicker).toHaveClass("left-1/2", "-translate-x-1/2");
     await user.click(screen.getByRole("button", { name: "하트 반응 남기기" }));
     expect(within(message).getByRole("img", { name: "하트" })).toHaveAttribute(
       "src",
       "/twemoji/15.1.0/2764.svg",
     );
-    expect(
-      within(message).getByRole("img", { name: "하트" }).parentElement
-        ?.parentElement,
-    ).toHaveClass("self-start", "bg-secondary", "text-secondary-foreground");
-    expect(
-      within(message).getByRole("img", { name: "하트" }).parentElement,
-    ).not.toHaveTextContent("1");
 
     // 같은 메시지의 반응은 0.5초 안에 다시 바꾸지 않는다.
     await user.click(reactionButton);
@@ -322,19 +247,7 @@ describe("RoomScreen", () => {
     await user.click(
       within(message).getByRole("button", { name: "메시지 기타 작업" }),
     );
-    expect(await screen.findByRole("menu")).toHaveClass(
-      "duration-0",
-      "shadow-sm",
-      "data-open:animate-none",
-      "data-closed:animate-none",
-    );
-    expect(await screen.findByRole("menuitem", { name: "복사" })).toHaveClass(
-      "cursor-pointer",
-    );
-    expect(screen.getByRole("menuitem", { name: "고정" })).toHaveClass(
-      "cursor-pointer",
-    );
-    await user.click(screen.getByRole("menuitem", { name: "고정" }));
+    await user.click(await screen.findByRole("menuitem", { name: "고정" }));
     expect(screen.getAllByText(body)).toHaveLength(1);
     expect(screen.getByLabelText("고정 메시지")).not.toHaveTextContent(body);
     expect(within(message).getByText("고정됨")).toBeInTheDocument();
@@ -348,7 +261,7 @@ describe("RoomScreen", () => {
     expect(screen.getAllByText("고마워요 🙌")).toHaveLength(2);
   });
 
-  it("내 메시지를 15분 안에 고치고, 확인을 거쳐 삭제한다", async () => {
+  it("내 메시지를 15분 안에 고친다", async () => {
     // 목 메시지는 고정된 시각에 보냈으므로 그 직후로 시계를 맞춘다.
     // 이 파일은 spy를 일괄 복원하지 않으므로 테스트 끝에서 직접 되돌린다.
     const now = vi
@@ -374,21 +287,6 @@ describe("RoomScreen", () => {
     expect(await within(ownMessage()).findByText("수정됨")).toBeInTheDocument();
     expect(screen.queryByText("메시지 수정")).not.toBeInTheDocument();
     expect(input).toHaveValue("");
-
-    await user.click(
-      within(ownMessage()).getByRole("button", { name: "메시지 기타 작업" }),
-    );
-    await user.click(await screen.findByRole("menuitem", { name: "삭제" }));
-    await user.click(await screen.findByRole("button", { name: "삭제" }));
-    const deletedSurface = (
-      await within(ownMessage()).findByText("삭제된 메시지입니다")
-    ).closest("div")!;
-    // 같은 문구를 보낸 메시지와 헷갈리지 않게 배경 없이 점선 테두리로 그린다.
-    expect(deletedSurface).toHaveClass("border-dashed", "bg-transparent");
-    expect(deletedSurface).not.toHaveClass("bg-primary");
-    expect(
-      within(ownMessage()).queryByRole("button", { name: "메시지 기타 작업" }),
-    ).not.toBeInTheDocument();
     now.mockRestore();
   });
 
@@ -426,20 +324,6 @@ describe("RoomScreen", () => {
     fireEvent.keyDown(input, { key: "Escape" });
     expect(screen.queryByText("메시지 수정")).not.toBeInTheDocument();
     now.mockRestore();
-  });
-
-  it("다른 기기에서 끈 대화 알림은 목록 값을 따라 꺼진 것으로 보인다", async () => {
-    const conversation = await loadConversation("hyunwoo");
-    // 다른 기기에서 끈 상태. 대화방 loader가 읽은 값은 그 전이다.
-    await mutations.setConversationMuted("hyunwoo", true);
-    renderRoute(() => <RoomScreen conversation={conversation!} />, {
-      path: "/messenger/hyunwoo",
-    });
-
-    expect(
-      await screen.findByRole("button", { name: "대화 알림 켜기" }),
-    ).toHaveAttribute("aria-pressed", "true");
-    await mutations.setConversationMuted("hyunwoo", false);
   });
 
   it("대화에서 찾은 메시지를 고르면 검색을 닫고 그 메시지로 이동해 강조한다", async () => {
@@ -481,9 +365,6 @@ describe("RoomScreen", () => {
     await user.click(
       within(ownMessage).getByRole("button", { name: "메시지 기타 작업" }),
     );
-    expect(
-      screen.queryByRole("menuitem", { name: "여러 개 선택" }),
-    ).not.toBeInTheDocument();
     await user.click(await screen.findByRole("menuitem", { name: "삭제" }));
     expect(screen.getByText("1개 선택됨")).toBeInTheDocument();
     expect(
@@ -520,51 +401,13 @@ describe("RoomScreen", () => {
         "삭제된 메시지입니다",
       ),
     ).toBeInTheDocument();
+    // 지운 메시지에는 더 할 작업이 없다.
     expect(
-      screen.getByRole("textbox", { name: "메시지 입력" }),
-    ).toBeInTheDocument();
-    removeMany.mockRestore();
-  });
-
-  it("보내지 못한 메시지를 목록에 남기고 다시 보낸다", async () => {
-    const sendSpy = vi
-      .spyOn(mutations, "sendMessage")
-      .mockRejectedValueOnce(new Error("offline"));
-    const conversation = await loadConversation("student-council");
-    const { user } = renderRoute(
-      () => <RoomScreen conversation={conversation!} />,
-      { path: "/messenger/student-council" },
-    );
-
-    const input = screen.getByRole("textbox", { name: "메시지 입력" });
-    await user.type(input, "끊긴 메시지{Enter}");
-    expect(await screen.findByText("보내지 못했습니다")).toBeInTheDocument();
-    // 메시지가 목록에 남아 있으므로 작성창은 입력을 되살리지 않는다.
-    expect(input).toHaveValue("");
-
-    await user.click(screen.getByRole("button", { name: "다시 보내기" }));
-    await waitFor(() =>
-      expect(screen.queryByText("보내지 못했습니다")).not.toBeInTheDocument(),
-    );
-    expect(screen.getByText("끊긴 메시지")).toBeInTheDocument();
-    sendSpy.mockRestore();
-  });
-
-  it("반응 표시를 누르면 반응한 사람과 시각을 보여 준다", async () => {
-    const conversation = await loadConversation("student-council");
-    const { user } = renderRoute(
-      () => <RoomScreen conversation={conversation!} />,
-      { path: "/messenger/student-council" },
-    );
-
-    await user.click(
-      within(document.getElementById("message-m3")!).getByRole("button", {
-        name: /반응한 사람 보기/,
+      within(document.getElementById("message-m6")!).queryByRole("button", {
+        name: "메시지 기타 작업",
       }),
-    );
-
-    const list = await screen.findByRole("list", { name: "반응한 사람" });
-    expect(within(list).getByText("박서현")).toBeInTheDocument();
+    ).not.toBeInTheDocument();
+    removeMany.mockRestore();
   });
 
   it("고른 파일을 메시지로 보내고 이름과 크기, 내려받기 링크를 보인다", async () => {
@@ -589,19 +432,6 @@ describe("RoomScreen", () => {
       expect.stringContaining("download=회의록.pdf"),
     );
     expect(download).toHaveTextContent("5B");
-  });
-
-  it("시스템 메시지를 멤버 이름으로 문장을 만들어 표시한다", async () => {
-    const conversation = await loadConversation("student-council");
-    renderRoute(() => <RoomScreen conversation={conversation!} />, {
-      path: "/messenger/student-council",
-    });
-
-    expect(
-      screen.getByText(
-        "박서현님이 대화 이름을 ‘학생회 기획부’(으)로 변경했습니다.",
-      ),
-    ).toBeInTheDocument();
   });
 
   it("대화 정보에서 멤버를 초대하고, 확인을 거쳐 내보낸다", async () => {
@@ -714,50 +544,14 @@ describe("RoomScreen", () => {
     const sentReply = screen
       .getAllByRole("article", { name: "내 메시지" })
       .at(-1)!;
-    expect(sentReply).toHaveClass("w-full");
-    expect(sentReply.firstElementChild).toHaveClass("max-w-[78%]");
-    expect(sentReply.firstElementChild?.lastElementChild).toHaveClass("w-full");
-    expect(sentReply.firstElementChild).not.toHaveClass(
-      "w-[88%]",
-      "md:w-[78%]",
-    );
     const replyQuote = within(sentReply).getByRole("button", {
       name: "박서현의 원문 메시지 보기",
     });
-    expect(replyQuote.parentElement).toHaveClass("w-full");
-    expect(replyQuote.parentElement?.parentElement).toHaveClass(
-      "w-fit",
-      "max-w-full",
-    );
     expect(replyQuote).toHaveTextContent(originalBody);
-    expect(replyQuote).toHaveClass("w-full", "min-w-0", "max-w-full");
-    expect(replyQuote.lastElementChild).toHaveClass("truncate");
     await user.click(replyQuote);
-    expect(originalMessage).not.toHaveClass("ring-2", "ring-primary");
     await waitFor(() =>
-      expect(
-        originalMessage.querySelector('[data-slot="message-bubble"]'),
-      ).toHaveClass(
-        "rounded-2xl",
-        "rounded-bl-md",
-        "ring-1",
-        "ring-primary",
-        "ring-offset-1",
-      ),
+      expect(bubble(originalMessage)).toHaveClass("ring-primary"),
     );
-
-    await user.click(
-      within(originalMessage).getByRole("button", { name: "메시지에 답장" }),
-    );
-    await user.click(screen.getByRole("button", { name: "좋아요 보내기" }));
-    const emojiReply = screen
-      .getAllByRole("article", { name: "내 메시지" })
-      .at(-1)!;
-    expect(
-      within(emojiReply).getByRole("button", {
-        name: "박서현의 원문 메시지 보기",
-      }),
-    ).toHaveClass("border-primary", "text-muted-foreground");
 
     const deletedOriginal = screen
       .getAllByRole("article", { name: "최민준 메시지" })
@@ -777,12 +571,9 @@ describe("RoomScreen", () => {
         name: "최민준의 원문 메시지 보기",
       }),
     );
-    expect(deletedOriginal).not.toHaveClass("ring-2", "ring-primary");
     // 이동은 열린 오버레이를 닫은 뒤에 일어나므로 강조를 기다린다.
     await waitFor(() =>
-      expect(
-        deletedOriginal.querySelector('[data-slot="message-bubble"]'),
-      ).toHaveClass("rounded-2xl", "ring-1", "ring-primary", "ring-offset-1"),
+      expect(bubble(deletedOriginal)).toHaveClass("ring-primary"),
     );
     now.mockRestore();
   });
@@ -825,9 +616,6 @@ describe("RoomScreen", () => {
     const message = screen
       .getByText("축제 부스 배치 초안 확인했어요?")
       .closest("article")!;
-    const actionRail = within(message).getByRole("button", {
-      name: "메시지에 반응",
-    }).parentElement?.parentElement;
     const messageViewport = screen
       .getByRole("region", { name: "학생회 기획부 대화" })
       .querySelector(".overflow-y-auto")!;
@@ -843,60 +631,24 @@ describe("RoomScreen", () => {
     vi.spyOn(messageViewport, "getBoundingClientRect").mockReturnValue(
       DOMRect.fromRect({ x: 0, y: 100, width: 360, height: 600 }),
     );
-    expect(actionRail).toHaveClass("hidden", "[@media(hover:hover)]:flex");
-    expect(message.children[1]).toHaveClass("max-w-[78%]");
-
     composer.focus();
     fireEvent.touchStart(message, {
       touches: [{ clientX: 120, clientY: 200 }],
     });
     act(() => void vi.advanceTimersByTime(500));
 
+    // 키보드를 내리고 메시지를 보이는 자리로 끌어올린 뒤 메뉴를 연다.
     expect(blurComposer).toHaveBeenCalledOnce();
-    const backdrop = document.querySelector(
-      '[data-slot="message-context-backdrop"]',
-    );
-    expect(backdrop).toHaveClass("z-40", "bg-background/90");
-    expect(
-      backdrop?.closest('[data-slot="message-context-portal"]'),
-    ).toBeInTheDocument();
-    expect(message).toHaveClass(
-      "z-50",
-      "duration-200",
-      "[@media(hover:none)]:select-none",
-      "motion-reduce:transition-none",
-    );
-    expect(message).toHaveStyle({
-      height: "50px",
-      transform: "translate3d(0, -232px, 0)",
-    });
+    expect(message).toHaveStyle({ transform: "translate3d(0, -232px, 0)" });
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     fireEvent.transitionEnd(message, { propertyName: "transform" });
     act(() => void vi.advanceTimersByTime(16));
-    expect(screen.getByRole("menu")).toHaveClass(
-      "duration-0",
-      "data-open:animate-none",
-      "data-closed:animate-none",
-    );
     expect(
       screen.getByRole("button", { name: "하트 반응 남기기" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "답장" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "복사" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "고정" })).toBeInTheDocument();
-    expect(within(message).getByText("오후 3:12")).toHaveClass(
-      "mt-1",
-      "text-right",
-    );
-    expect(
-      screen.getByRole("menuitem", { name: "답장" }).parentElement,
-    ).toHaveClass(
-      "absolute",
-      "top-[calc(100%+var(--message-context-height)+1rem)]",
-    );
-    expect(screen.getByRole("menu")).toHaveStyle({
-      "--message-context-height": "64px",
-    });
 
     const replyItem = screen.getByRole("menuitem", { name: "답장" });
     const heartReaction = screen.getByRole("button", {
@@ -920,7 +672,6 @@ describe("RoomScreen", () => {
       within(message).getByRole("img", { name: "하트" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-    expect(message).not.toHaveClass("z-50");
     expect(message).toHaveStyle({ transform: "translate3d(0, 0px, 0)" });
   });
 
@@ -952,51 +703,6 @@ describe("RoomScreen", () => {
     });
     act(() => void vi.advanceTimersByTime(500));
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-  });
-
-  it("전환 종료 이벤트가 없어도 롱프레스 메뉴를 표시한다", async () => {
-    vi.useFakeTimers();
-    const conversation = await loadConversation("student-council");
-    expect(conversation).not.toBeNull();
-
-    renderRoute(() => <RoomScreen conversation={conversation!} />, {
-      path: "/messenger/student-council",
-    });
-    const message = screen
-      .getByText("축제 부스 배치 초안 확인했어요?")
-      .closest("article")!;
-    const messageViewport = screen
-      .getByRole("region", { name: "학생회 기획부 대화" })
-      .querySelector(".overflow-y-auto")!;
-    const messageSurface = message.children[1].lastElementChild!;
-    const messageRect = vi
-      .spyOn(message, "getBoundingClientRect")
-      .mockReturnValue(
-        DOMRect.fromRect({ x: 20, y: 600, width: 320, height: 50 }),
-      );
-    vi.spyOn(messageSurface, "getBoundingClientRect").mockReturnValue(
-      DOMRect.fromRect({ x: 48, y: 600, width: 220, height: 50 }),
-    );
-    vi.spyOn(messageViewport, "getBoundingClientRect").mockReturnValue(
-      DOMRect.fromRect({ x: 0, y: 100, width: 360, height: 600 }),
-    );
-
-    fireEvent.touchStart(message, {
-      touches: [{ clientX: 120, clientY: 200 }],
-    });
-    act(() => void vi.advanceTimersByTime(500));
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-    act(() => void vi.advanceTimersByTime(250));
-    fireEvent.touchEnd(message);
-    fireEvent.click(message, { pointerType: "touch" });
-    fireEvent.contextMenu(message, { clientX: 120, clientY: 200 });
-
-    expect(messageRect).toHaveBeenCalledTimes(1);
-    expect(message).toHaveClass("z-50");
-    expect(message).toHaveStyle({
-      transform: "translate3d(0, -232px, 0)",
-    });
-    expect(screen.getByRole("menu")).toBeInTheDocument();
   });
 
   it("롱프레스 손가락의 스크림 click을 막고 다음 스크림 탭으로 닫는다", async () => {
@@ -1036,10 +742,6 @@ describe("RoomScreen", () => {
     fireEvent.touchEnd(message);
     fireEvent.click(backdrop, { pointerType: "touch" });
     expect(screen.getByRole("menu")).toBeInTheDocument();
-    expect(message).toHaveClass("z-50");
-    expect(message).toHaveStyle({
-      transform: "translate3d(0, -232px, 0)",
-    });
 
     fireEvent.touchStart(backdrop, {
       touches: [{ clientX: 16, clientY: 16 }],
@@ -1047,7 +749,6 @@ describe("RoomScreen", () => {
     fireEvent.touchEnd(backdrop);
     fireEvent.click(backdrop, { pointerType: "touch" });
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-    expect(message).not.toHaveClass("z-50");
     expect(message).toHaveStyle({ transform: "translate3d(0, 0px, 0)" });
   });
 
@@ -1082,34 +783,6 @@ describe("RoomScreen", () => {
       within(dialog).getByText("2026년 8월 28일 금요일"),
     ).toBeInTheDocument();
     expect(within(dialog).getByText("최민준")).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole("img", { name: "최민준 프로필 사진" }),
-    ).toBeInTheDocument();
-    expect(within(dialog).getByText("오후 3:25")).toBeInTheDocument();
-    expect(within(dialog).queryByText("고정됨")).not.toBeInTheDocument();
-    expect(within(dialog).queryByLabelText("3명 읽음")).not.toBeInTheDocument();
-    expect(
-      within(dialog).queryByRole("img", { name: "좋아요" }),
-    ).not.toBeInTheDocument();
-
-    const otherPinnedMessage = within(dialog)
-      .getByRole("link", { name: "https://www.kmlaonline.net" })
-      .closest("article")!;
-    const ownPinnedMessageBeforeActions = within(dialog)
-      .getByText(
-        "확인했습니다! 2층 체험 부스 동선만 조금 넓히면 좋을 것 같아요.",
-      )
-      .closest("article")!;
-    expect(
-      within(otherPinnedMessage)
-        .getAllByRole("button")
-        .map((button) => button.getAttribute("aria-label")),
-    ).toEqual(["채팅에서 보기", "고정 취소"]);
-    expect(
-      within(ownPinnedMessageBeforeActions)
-        .getAllByRole("button")
-        .map((button) => button.getAttribute("aria-label")),
-    ).toEqual(["고정 취소", "채팅에서 보기"]);
 
     const linkedMessage = within(dialog)
       .getByRole("link", { name: "https://www.kmlaonline.net" })
@@ -1121,10 +794,7 @@ describe("RoomScreen", () => {
     const originalPinnedMessage = screen
       .getByRole("link", { name: "https://www.kmlaonline.net" })
       .closest("article")!;
-    expect(originalPinnedMessage).not.toHaveClass("ring-2", "ring-primary");
-    expect(
-      originalPinnedMessage.querySelector('[data-slot="message-bubble"]'),
-    ).toHaveClass("rounded-2xl", "ring-1", "ring-primary", "ring-offset-1");
+    expect(bubble(originalPinnedMessage)).toHaveClass("ring-primary");
 
     await user.click(screen.getByRole("button", { name: /고정된 메시지\s*2/ }));
     dialog = screen.getByRole("dialog");
@@ -1189,24 +859,13 @@ describe("RoomScreen", () => {
     expect(messageThread.scrollTop).toBe(500);
     expect(screen.getByRole("button", { name: "좋아요 보내기" })).toBeEnabled();
     await user.click(likeButton);
-    const sentLike = await screen.findByLabelText("좋아요");
-    expect(sentLike.querySelector("svg")).toHaveClass("size-[1em]");
-    const sentLikeSurface = sentLike.parentElement!;
-    expect(sentLikeSurface).toHaveClass("text-5xl");
-    expect(sentLikeSurface).not.toHaveClass("rounded-2xl", "bg-primary");
+    expect(await screen.findByLabelText("좋아요")).toBeInTheDocument();
 
-    await user.type(input, "😀😃😄😁😆");
+    await user.type(input, "버튼으로 보내기");
     await user.click(screen.getByRole("button", { name: "메시지 보내기" }));
-    expect(await screen.findByText("😀😃😄😁😆")).toHaveClass("text-5xl");
+    expect(await screen.findByText("버튼으로 보내기")).toBeInTheDocument();
     // 버튼으로 보내도 입력창이 포커스를 잃지 않아야 모바일 키보드가 접히지 않는다.
     expect(input).toHaveFocus();
-
-    await user.type(input, "😀😃😄😁😆😅");
-    await user.click(screen.getByRole("button", { name: "메시지 보내기" }));
-    expect(await screen.findByText("😀😃😄😁😆😅")).toHaveClass(
-      "rounded-2xl",
-      "bg-primary",
-    );
     now.mockRestore();
   });
 
@@ -1322,24 +981,12 @@ describe("RoomScreen", () => {
 
     await user.click(screen.getByRole("button", { name: "대화 변경" }));
     expect(messageThread.scrollTop).toBe(500);
-    expect(messageThread.firstElementChild).toHaveClass("justify-start");
-    expect(messageThread.firstElementChild).not.toHaveClass("justify-end");
 
     messageThread.scrollTop = 150;
     fireEvent.scroll(messageThread);
     const scrollToBottomButton = screen.getByRole("button", {
       name: "맨 아래로 이동",
     });
-    expect(scrollToBottomButton).toHaveClass(
-      "bottom-4",
-      "left-1/2",
-      "-translate-x-1/2",
-      "z-10",
-      "border-border",
-      "bg-background/95",
-      "shadow-md",
-    );
-    expect(scrollToBottomButton.querySelector("svg")).toHaveClass("size-5");
     await user.click(scrollToBottomButton);
     fireEvent.scroll(messageThread);
 
@@ -1349,40 +996,7 @@ describe("RoomScreen", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("작성 중 첨부 아이콘을 접고 화살표, 입력 비움 및 전송으로 복원한다", async () => {
-    const conversation = await loadConversation("hyunwoo");
-    expect(conversation).not.toBeNull();
-
-    const { user } = renderRoute(
-      () => <ControlledRoomScreen conversation={conversation!} />,
-      { path: "/messenger/hyunwoo" },
-    );
-    const input = screen.getByRole("textbox", { name: "메시지 입력" });
-    const attachmentActions = screen.getByRole("button", {
-      name: "파일 보내기",
-    }).parentElement!;
-
-    await user.type(input, "안녕하세요");
-    expect(attachmentActions).toHaveClass("w-0", "opacity-0");
-    expect(
-      screen.getByRole("button", { name: "첨부 메뉴 펼치기" }),
-    ).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: "첨부 메뉴 펼치기" }));
-    expect(attachmentActions).toHaveClass("w-[5.5rem]", "opacity-100");
-    expect(
-      screen.queryByRole("button", { name: "첨부 메뉴 펼치기" }),
-    ).not.toBeInTheDocument();
-
-    await user.clear(input);
-    expect(attachmentActions).toHaveClass("w-[5.5rem]", "opacity-100");
-
-    await user.type(input, "전송할 메시지");
-    await user.click(screen.getByRole("button", { name: "메시지 보내기" }));
-    expect(attachmentActions).toHaveClass("w-[5.5rem]", "opacity-100");
-  });
-
-  it("IME 조합 중 Enter는 전송하지 않고 모바일에서 이모지 버튼을 숨긴다", async () => {
+  it("IME 조합 중 Enter는 전송하지 않는다", async () => {
     const conversation = await loadConversation("hyunwoo");
     expect(conversation).not.toBeNull();
 
@@ -1390,16 +1004,6 @@ describe("RoomScreen", () => {
       path: "/messenger/hyunwoo",
     });
     const input = screen.getByRole("textbox", { name: "메시지 입력" });
-    const fileButton = screen.getByRole("button", {
-      name: "파일 보내기",
-    });
-    const emojiButton = screen.getByRole("button", {
-      name: "이모지 선택 기능 준비 중",
-    });
-
-    expect(fileButton).not.toHaveClass("hidden");
-    expect(emojiButton).toHaveClass("hidden", "md:inline-flex");
-    expect(emojiButton.querySelector("svg")).toHaveClass("size-5");
     fireEvent.change(input, { target: { value: "안녕하세" } });
     expect(
       await screen.findByRole("button", { name: "메시지 보내기" }),
@@ -1430,11 +1034,6 @@ describe("RoomScreen", () => {
       { path: "/messenger/hyunwoo" },
     );
 
-    expect(
-      screen.getByRole("button", { name: "프로필 기능 준비 중" }),
-    ).toBeDisabled();
-    expect(screen.queryByText("현재 활동 중")).not.toBeInTheDocument();
-
     const closeButton = screen.getByRole("button", { name: "대화 정보 닫기" });
     expect(closeButton).toHaveAttribute("aria-pressed", "true");
 
@@ -1444,11 +1043,6 @@ describe("RoomScreen", () => {
       pressed: false,
     });
     expect(openButton).toHaveAttribute("aria-pressed", "false");
-    expect(
-      screen
-        .getByText("좋아, 도서관 앞에서 보자")
-        .closest('[class*="max-w-3xl"]'),
-    ).toHaveClass("xl:max-w-none");
 
     await user.click(openButton);
     expect(

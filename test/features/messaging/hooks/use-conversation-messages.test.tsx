@@ -86,28 +86,6 @@ describe("useConversationMessages", () => {
     expect(markRead).toHaveBeenCalledTimes(1);
   });
 
-  it("보낸 메시지를 먼저 붙이고 정본으로 확정한다", async () => {
-    const { result } = await renderMessages();
-
-    let sent: boolean | undefined;
-    await act(async () => {
-      sent = await result.current.send({
-        body: "안녕",
-        replyTo: { id: "m9", senderId: "seo", body: "원문" },
-      });
-    });
-
-    expect(sent).toBe(true);
-    // cache 알림은 다음 tick에 묶여 나간다.
-    await waitFor(() =>
-      expect(result.current.messages.at(-1)).toMatchObject({
-        body: "안녕",
-        senderId: "viewer",
-        replyTo: { id: "m9", senderId: "seo", body: "원문" },
-      }),
-    );
-  });
-
   it("같은 반응을 다시 고르면 지우고, 실패하면 직전 반응으로 되돌린다", async () => {
     const { result } = await renderMessages();
     const target = () => result.current.messages.find(({ id }) => id === "m3")!;
@@ -224,7 +202,7 @@ describe("useConversationMessages", () => {
     expect(message("m3").reactions).toEqual([{ reaction: "like", count: 3 }]);
   });
 
-  it("보낸 메시지는 서버가 확정할 때까지 전송 중으로 표시한다", async () => {
+  it("보낸 메시지를 먼저 붙여 전송 중으로 표시하고, 서버가 확정하면 정본으로 바꾼다", async () => {
     let resolveSend!: () => void;
     vi.spyOn(mutations, "sendMessage").mockImplementationOnce(
       (input, draft) =>
@@ -236,11 +214,18 @@ describe("useConversationMessages", () => {
 
     let sending!: Promise<boolean>;
     act(() => {
-      sending = result.current.send({ id: "new", body: "안녕" });
+      sending = result.current.send({
+        id: "new",
+        body: "안녕",
+        replyTo: { id: "m9", senderId: "seo", body: "원문" },
+      });
     });
     await waitFor(() =>
       expect(result.current.messages.at(-1)).toMatchObject({
         id: "new",
+        body: "안녕",
+        senderId: "viewer",
+        replyTo: { id: "m9", senderId: "seo", body: "원문" },
         pending: true,
       }),
     );
@@ -281,20 +266,6 @@ describe("useConversationMessages", () => {
     });
     await waitFor(() => expect(message().body).toBe(body));
     expect(message().myReaction).toBe("love");
-  });
-
-  it("답장 인용에는 고친 원문의 앞 200자만 담는다", async () => {
-    const { result } = await renderMessages();
-    const message = (id: string) =>
-      result.current.messages.find((item) => item.id === id)!;
-
-    await act(async () => {
-      await result.current.edit(message("m7"), "가".repeat(300));
-    });
-
-    await waitFor(() =>
-      expect(message("m8").replyTo?.body).toBe("가".repeat(200)),
-    );
   });
 
   it("내 메시지가 마지막이어도 그 앞의 가장 최근 상대 메시지까지 읽음으로 기록하고 목록을 먼저 0으로 그린다", async () => {

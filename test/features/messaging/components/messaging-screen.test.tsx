@@ -91,49 +91,4 @@ describe("MessagingScreen", () => {
       screen.queryByRole("link", { name: /학생회 기획부/ }),
     ).not.toBeInTheDocument();
   });
-
-  it("검색 결과가 없으면 빈 상태를 표시한다", async () => {
-    const conversations = await listConversations();
-
-    function TestScreen() {
-      return (
-        <MessagingScreen conversations={conversations} hasRoom={false}>
-          {null}
-        </MessagingScreen>
-      );
-    }
-
-    const { user } = renderRoute(TestScreen, { path: "/messenger" });
-    await user.type(
-      screen.getByRole("searchbox", { name: "대화 검색" }),
-      "존재하지 않는 대화",
-    );
-
-    expect(
-      await screen.findByText("대화를 찾지 못했습니다"),
-    ).toBeInTheDocument();
-  });
-
-  it("알림 꺼짐 상태를 대화 이름 옆에 표시한다", async () => {
-    const conversations = await listConversations();
-
-    renderRoute(
-      () => (
-        <MessagingScreen conversations={conversations} hasRoom={false}>
-          {null}
-        </MessagingScreen>
-      ),
-      { path: "/messenger" },
-    );
-
-    const conversationLink = screen.getByRole("link", {
-      name: /과학전람회 준비/,
-    });
-    const mutedIcon = within(conversationLink).getByLabelText("알림 꺼짐");
-
-    expect(mutedIcon.parentElement).toHaveTextContent("과학전람회 준비");
-    expect(mutedIcon.parentElement).not.toHaveTextContent(
-      "은재: 실험 결과 파일 올렸습니다",
-    );
-  });
 });

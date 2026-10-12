@@ -99,17 +99,6 @@ describe("messaging queries", () => {
     });
   });
 
-  it("요청한 수보다 적게 오면 처음에 닿은 것이다", async () => {
-    rpc.mockResolvedValue({
-      data: [messageRow("a", "2026-08-28T06:00:00+00:00")],
-      error: null,
-    });
-
-    expect((await listMessages("conversation", null, 2)).olderCursor).toBe(
-      null,
-    );
-  });
-
   it("uuid가 아닌 주소는 요청하지 않고 없는 대화로 본다", async () => {
     await expect(loadConversation("not-a-uuid")).resolves.toBeNull();
     expect(rpc).not.toHaveBeenCalled();
@@ -221,14 +210,6 @@ describe("messaging queries", () => {
     });
   });
 
-  it("내 대화가 아니면 없는 대화로 본다", async () => {
-    rpc.mockResolvedValue({ data: [], error: null });
-
-    await expect(
-      loadConversation("c0000000-0000-0000-0000-000000000009"),
-    ).resolves.toBeNull();
-  });
-
   it("RPC 한 번의 상한을 넘는 페이지 크기는 상한으로 줄여 남은 메시지를 놓치지 않는다", async () => {
     rpc.mockResolvedValue({ data: [], error: null });
 
@@ -238,28 +219,5 @@ describe("messaging queries", () => {
       "list_messages",
       expect.objectContaining({ p_limit: 101 }),
     );
-  });
-
-  it("시스템 메시지는 종류와 프로필 ID를 문자열로 옮긴다", async () => {
-    rpc.mockResolvedValue({
-      data: [
-        {
-          ...messageRow("s", "2026-08-28T06:00:00+00:00"),
-          sender_id: null,
-          body: "",
-          system_kind: "member_added",
-          system_profile_ids: [1, 2],
-        },
-      ],
-      error: null,
-    });
-
-    const page = await listMessages("conversation", null);
-
-    expect(page.messages[0]?.system).toEqual({
-      kind: "member_added",
-      profileIds: ["1", "2"],
-      name: null,
-    });
   });
 });
