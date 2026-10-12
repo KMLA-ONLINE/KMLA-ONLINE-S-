@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(20);
 
 -- seed: 홍길동(…0001)과 김민준(…0100)의 1:1 대화 c…01, 그룹 c…02에는 이한별이 2026-08-21에 참여했다.
 insert into auth.users (
@@ -202,46 +202,17 @@ select is(
   'people outside the conversation cannot read the object'
 );
 
--- 첨부 지우기
+-- 메시지를 지우면 첨부도 함께 지운다.
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
-
-select public.remove_message_attachment((select attachment_id from prepared where position = 2));
-
-select is(
-  (select jsonb_array_length(attachments) from public.list_messages('c0000000-0000-0000-0000-000000000001')
-    where id = 'e0000000-0000-0000-0000-000000000701'),
-  1,
-  'the sender can remove one attachment'
-);
-
-select public.remove_message_attachment((select attachment_id from prepared where position = 1));
-
-select is(
-  (select deleted from public.list_messages('c0000000-0000-0000-0000-000000000001')
-    where id = 'e0000000-0000-0000-0000-000000000701'),
-  true,
-  'removing the last attachment of a message without a body deletes the message'
-);
-
-reset role;
-select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000100', true);
-set local role authenticated;
-
-select throws_ok(
-  $$select public.remove_message_attachment(gen_random_uuid())$$,
-  'P0002',
-  null,
-  'nobody removes an attachment they do not own'
-);
-
+select public.delete_messages(array['e0000000-0000-0000-0000-000000000701']::uuid[]);
 reset role;
 
 select is(
   private.can_read_message_object((select object_path from prepared where position = 1)),
   false,
-  'a removed attachment can no longer be read'
+  'the attachment of a deleted message can no longer be read'
 );
 
 -- 정리 작업이 지운 첨부의 object를 큐로 옮긴다.
@@ -253,7 +224,7 @@ select is(
       and object_path in (select object_path from prepared)
       and reason = 'message_attachment'),
   2::bigint,
-  'storage cleanup queues the objects of removed attachments'
+  'storage cleanup queues the objects of deleted attachments'
 );
 
 select * from finish();

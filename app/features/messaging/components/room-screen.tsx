@@ -54,7 +54,6 @@ import { useRoomOverlayParam } from "~/features/messaging/hooks/use-room-overlay
 import type { RoomEntryState } from "~/features/messaging/hooks/use-room-entry";
 import { MessageSearchPanel } from "~/features/messaging/components/message-search-panel";
 import { ReactionMembersDialog } from "~/features/messaging/components/reaction-members-dialog";
-import { AttachmentRemovalDialog } from "~/features/messaging/components/attachment-removal-dialog";
 import { SharedMediaDialog } from "~/features/messaging/components/shared-media-dialog";
 import { getSharedAttachmentCounts } from "~/features/messaging/data/queries";
 import { messagingKeys } from "~/features/messaging/data/cache";
@@ -173,7 +172,6 @@ export function RoomScreen({
     loadOlderMessages,
     send,
     sendFiles,
-    removeAttachment,
     retry,
     discard,
     loadUntil,
@@ -190,8 +188,6 @@ export function RoomScreen({
     queryFn: () => getSharedAttachmentCounts(conversation.id),
     staleTime: 60_000,
   });
-  const [attachmentTarget, setAttachmentTarget] =
-    useState<ConversationMessage | null>(null);
   const reactionsTarget =
     overlay?.kind === "reactions"
       ? messages.find(({ id }) => id === overlay.messageId)
@@ -537,7 +533,6 @@ export function RoomScreen({
           onShowReactions={(message) =>
             roomOverlay.open({ kind: "reactions", messageId: message.id })
           }
-          onRemoveAttachments={setAttachmentTarget}
           onDropFiles={
             viewerActive && !selection && !editTarget ? stageFiles : undefined
           }
@@ -685,18 +680,6 @@ export function RoomScreen({
           onClose={roomOverlay.close}
         />
       ) : null}
-      {attachmentTarget ? (
-        <AttachmentRemovalDialog
-          message={
-            messages.find(({ id }) => id === attachmentTarget.id) ??
-            attachmentTarget
-          }
-          onRemove={(attachmentId) =>
-            removeAttachment(attachmentTarget, attachmentId)
-          }
-          onClose={() => setAttachmentTarget(null)}
-        />
-      ) : null}
       {reactionsTarget ? (
         <ReactionMembersDialog
           message={reactionsTarget}
@@ -728,7 +711,6 @@ function MessageThread({
   onRetry,
   onDiscard,
   onShowReactions,
-  onRemoveAttachments,
   onDropFiles,
 }: {
   conversation: Conversation;
@@ -755,7 +737,6 @@ function MessageThread({
   onRetry: (message: ConversationMessage) => void;
   onDiscard: (message: ConversationMessage) => void;
   onShowReactions: (message: ConversationMessage) => void;
-  onRemoveAttachments: (message: ConversationMessage) => void;
   /** 데스크톱에서 대화 영역에 끌어 놓은 파일을 보낸다. 보낼 수 없는 상태면 없다. */
   onDropFiles?: (files: File[]) => void;
 }) {
@@ -819,7 +800,6 @@ function MessageThread({
     onRetry,
     onDiscard,
     onShowReactions,
-    onRemoveAttachments,
   });
   useLayoutEffect(() => {
     latestHandlers.current = {
@@ -833,7 +813,6 @@ function MessageThread({
       onRetry,
       onDiscard,
       onShowReactions,
-      onRemoveAttachments,
     };
   });
   const actions = useMemo<ThreadMessageActions>(
@@ -852,8 +831,6 @@ function MessageThread({
       discard: (message) => latestHandlers.current.onDiscard(message),
       showReactions: (message) =>
         latestHandlers.current.onShowReactions(message),
-      removeAttachments: (message) =>
-        latestHandlers.current.onRemoveAttachments(message),
     }),
     [],
   );
@@ -1145,7 +1122,6 @@ interface ThreadMessageActions {
   retry: (message: ConversationMessage) => void;
   discard: (message: ConversationMessage) => void;
   showReactions: (message: ConversationMessage) => void;
-  removeAttachments: (message: ConversationMessage) => void;
 }
 
 /**
@@ -1235,15 +1211,6 @@ const ThreadMessage = memo(function ThreadMessage({
             icon: <Trash2Icon aria-hidden />,
             onSelect: () => actions.delete(message),
           },
-          ...((message.attachments?.length ?? 0) > 0
-            ? [
-                {
-                  label: "첨부 지우기",
-                  icon: <PaperclipIcon aria-hidden />,
-                  onSelect: () => actions.removeAttachments(message),
-                },
-              ]
-            : []),
         ]
       : []),
   ];

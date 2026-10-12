@@ -168,13 +168,3 @@ export async function deleteMessages(messageIds: string[]): Promise<void> {
   });
   if (error) throw error;
 }
-
-/** 보낸 사람이 첨부 하나를 지운다. 본문 없이 첨부만 있던 메시지의 마지막 첨부면 메시지도 지워진다. */
-export async function removeMessageAttachment(
-  attachmentId: string,
-): Promise<void> {
-  const { error } = await getSupabase().rpc("remove_message_attachment", {
-    p_attachment_id: attachmentId,
-  });
-  if (error) throw error;
-}

@@ -2832,10 +2832,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      remove_message_attachment: {
-        Args: { p_attachment_id: string }
-        Returns: undefined
-      }
       remove_my_profile_media: {
         Args: { p_slot: string }
         Returns: {

@@ -22,7 +22,6 @@ import {
 } from "~/features/messaging/data/cache";
 import {
   deleteMessages,
-  removeMessageAttachment,
   editMessage,
   markConversationRead,
   sendMessage,
@@ -385,38 +384,6 @@ export function useConversationMessages(conversation: Conversation) {
       : deliver(draft));
   };
 
-  /** 보낸 사람이 첨부 하나를 지운다. 마지막 첨부를 지워 메시지가 비면 서버가 메시지도 지운다. */
-  const removeAttachment = async (
-    target: ConversationMessage,
-    attachmentId: string,
-  ) => {
-    const message = current(target);
-    const previous = message.attachments;
-    const remaining = (previous ?? []).filter(({ id }) => id !== attachmentId);
-    const release = holdMessageWrite(message.id);
-    patchMessage(queryClient, conversationId, message.id, {
-      attachments: remaining,
-      ...(remaining.length === 0 && !message.body
-        ? { deleted: true, reactions: [], myReaction: null, pinned: false }
-        : {}),
-    });
-    try {
-      await removeMessageAttachment(attachmentId);
-      refreshList();
-    } catch {
-      patchMessage(queryClient, conversationId, message.id, {
-        attachments: previous,
-        deleted: message.deleted,
-        reactions: message.reactions,
-        myReaction: message.myReaction,
-        pinned: message.pinned,
-      });
-      toast.error("첨부를 지우지 못했습니다.");
-    } finally {
-      release();
-    }
-  };
-
   /** 보내지 못한 메시지를 목록에서 거둔다. 서버에는 없다. */
   const discard = (target: ConversationMessage) => {
     const message = current(target);
@@ -600,8 +567,6 @@ export function useConversationMessages(conversation: Conversation) {
     sendFiles,
     retry,
     discard,
-    removeAttachment: (message: ConversationMessage, attachmentId: string) =>
-      void removeAttachment(message, attachmentId),
     loadUntil,
     react: (message: ConversationMessage, reaction: PostReaction) =>
       void react(message, reaction),

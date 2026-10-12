@@ -326,7 +326,3 @@ export function getSharedAttachmentCounts(_conversationId: string) {
 export function listSharedAttachments() {
   return Promise.resolve({ items: [], nextCursor: null });
 }
-
-export function removeMessageAttachment(_attachmentId: string): Promise<void> {
-  return Promise.resolve();
-}
