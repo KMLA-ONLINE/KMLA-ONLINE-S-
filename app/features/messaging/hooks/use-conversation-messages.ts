@@ -33,6 +33,7 @@ import {
   listMessages,
   listPinnedMessages,
 } from "~/features/messaging/data/queries";
+import { closeMessageNotifications } from "~/features/messaging/data/push-cards";
 import { refreshConversationInList } from "~/features/messaging/data/sync";
 import {
   prepareAttachment,
@@ -150,6 +151,8 @@ export function useConversationMessages(conversation: Conversation) {
       pending = false;
       // 가장 최근 상대 메시지까지 읽었으니 이 대화의 읽지 않은 수는 0이다. 목록을 먼저 그린다.
       markConversationListRead(queryClient, conversationId);
+      // 읽은 대화의 알림 카드는 알림센터에서도 거둔다.
+      void closeMessageNotifications(conversationId);
       markConversationRead(conversationId, unreadLatestId).then(
         () => {
           refreshConversationInList(queryClient, conversationId).catch(

@@ -1582,6 +1582,11 @@ create index notification_delivery_message_pending_idx
   on private.notification_delivery_outbox (subscription_id, message_id)
   where message_id is not null and status in ('pending', 'leased');
 
+-- 마지막으로 보낸 Push와 건너뛴 Push를 구독마다 찾을 때 쓴다(`message_delivery_allowed`).
+create index notification_delivery_message_finished_idx
+  on private.notification_delivery_outbox (subscription_id, status)
+  where message_id is not null and status in ('sent', 'suppressed');
+
 -- 새 메시지의 Push를 수신 멤버의 구독마다 예약한다. 보낸 사람과 대화 알림을 끈 멤버는 뺀다. 2초 뒤에
 -- 보내 그 사이 대화방을 보고 있던 수신자의 읽음 위치가 갱신될 시간을 준다.
 create function private.enqueue_message_push(p_message private.messages)
@@ -1623,6 +1628,8 @@ revoke all on function private.enqueue_message_push(private.messages)
 -- 발송 직전 확인(알림 기술 설계 §11.3). 수신자가 아직 볼 수 있는 멤버이고, 메시지가 남아 있고, 대화
 -- 알림을 끄지 않았고, 아직 그 메시지를 읽지 않았고, 같은 대화에 더 새로운 대기 Push가 없어야 한다.
 -- 읽음 위치는 계정 기준이므로 대화방을 보고 있던 기기가 하나라도 있으면 다른 기기로도 보내지 않는다.
+-- 상대가 2초보다 짧은 간격으로 계속 보내면 더 새로운 Push가 늘 대기 중이라 아무것도 나가지 않는다.
+-- 그래서 마지막으로 보낸 뒤 건너뛴 안 읽은 메시지가 10초 넘게 기다렸으면 더 새로운 것이 있어도 보낸다.
 create function private.message_delivery_allowed(
   p_delivery private.notification_delivery_outbox
 )
@@ -1649,15 +1656,40 @@ as $$
       and message.deleted_at is null
       and (member.muted_until is null or member.muted_until <= now())
       and (member.last_read_sent_at, member.last_read_message_id) < (message.sent_at, message.id)
-      and not exists (
-        select 1
-        from private.notification_delivery_outbox as newer
-        join private.messages as newer_message on newer_message.id = newer.message_id
-        where newer.subscription_id = p_delivery.subscription_id
-          and newer.id <> p_delivery.id
-          and newer.status in ('pending', 'leased')
-          and newer_message.conversation_id = message.conversation_id
-          and (newer_message.sent_at, newer_message.id) > (message.sent_at, message.id)
+      and (
+        not exists (
+          select 1
+          from private.notification_delivery_outbox as newer
+          join private.messages as newer_message on newer_message.id = newer.message_id
+          where newer.subscription_id = p_delivery.subscription_id
+            and newer.id <> p_delivery.id
+            and newer.status in ('pending', 'leased')
+            and newer_message.conversation_id = message.conversation_id
+            and (newer_message.sent_at, newer_message.id) > (message.sent_at, message.id)
+        )
+        or exists (
+          select 1
+          from private.notification_delivery_outbox as skipped
+          join private.messages as skipped_message on skipped_message.id = skipped.message_id
+          where skipped.subscription_id = p_delivery.subscription_id
+            and skipped.status = 'suppressed'
+            and skipped_message.conversation_id = message.conversation_id
+            and skipped_message.deleted_at is null
+            and skipped_message.sent_at <= now() - interval '10 seconds'
+            and (member.last_read_sent_at, member.last_read_message_id)
+              < (skipped_message.sent_at, skipped_message.id)
+            and skipped_message.sent_at > coalesce(
+              (
+                select max(sent_message.sent_at)
+                from private.notification_delivery_outbox as sent
+                join private.messages as sent_message on sent_message.id = sent.message_id
+                where sent.subscription_id = p_delivery.subscription_id
+                  and sent.status = 'sent'
+                  and sent_message.conversation_id = message.conversation_id
+              ),
+              '-infinity'
+            )
+        )
       )
   );
 $$;

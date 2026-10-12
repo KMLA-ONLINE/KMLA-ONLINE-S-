@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(24);
 
 -- seed: 홍길동(…0001)과 김민준(…0100)의 1:1 대화 c…01, 둘과 박새벽·이한별의 그룹 대화 c…02.
 create temp table profile_ids as
@@ -297,6 +297,51 @@ select ok(
       where message_id = 'e0000000-0000-0000-0000-000000000403'
     ),
   'finished message pushes older than 30 days are pruned, newer ones stay'
+);
+
+-- 연달아 보내는 동안에도 너무 오래 밀리지는 않는다.
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select public.send_message(
+  'c0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000405', '하나'
+);
+select public.send_message(
+  'c0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000406', '둘'
+);
+select public.send_message(
+  'c0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000407', '셋'
+);
+reset role;
+
+update private.notification_delivery_outbox
+set status = 'suppressed', completed_at = now()
+where message_id = 'e0000000-0000-0000-0000-000000000405';
+
+select ok(
+  not private.message_delivery_allowed(
+    (select delivery from private.notification_delivery_outbox as delivery
+      where message_id = 'e0000000-0000-0000-0000-000000000406')
+  ),
+  'in a short burst only the newest push goes out'
+);
+
+-- 테스트 트랜잭션 안에서는 `now()`가 멈춰 있으므로 기다리는 대신 시각을 당긴다. 읽음 위치도 함께
+-- 당겨 건너뛴 메시지가 여전히 안 읽은 메시지로 남게 한다.
+update private.messages
+set sent_at = sent_at - interval '1 minute'
+where id = 'e0000000-0000-0000-0000-000000000405';
+update public.conversation_members
+set last_read_sent_at = last_read_sent_at - interval '2 minutes'
+where conversation_id = 'c0000000-0000-0000-0000-000000000001'
+  and profile_id = (select minjun from profile_ids);
+
+select ok(
+  private.message_delivery_allowed(
+    (select delivery from private.notification_delivery_outbox as delivery
+      where message_id = 'e0000000-0000-0000-0000-000000000406')
+  ),
+  'once a skipped message has waited 10 seconds, a push goes out despite newer ones'
 );
 
 -- 최근에 깨웠으면 잠그지도 부르지도 않는다.

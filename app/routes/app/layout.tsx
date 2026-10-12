@@ -27,6 +27,7 @@ import { groupKeys } from "~/features/groups";
 import { notificationKeys } from "~/features/notifications";
 import { clearPostEngagement, collapseAllPostBodies } from "~/features/posts";
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
+import { useServiceWorkerNavigation } from "~/shared/hooks/use-service-worker-navigation";
 import { useDelayedPending } from "~/shared/hooks/use-delayed-pending";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { cn } from "~/shared/lib/utils";
@@ -48,6 +49,8 @@ export default function MainAppLayout() {
   const navigation = useNavigation();
   const revalidator = useRevalidator();
   const chrome = resolveAppChrome(matches);
+  // 알림을 누르면 떠 있는 창을 다시 불러오지 않고 앱 안에서 옮겨 간다.
+  useServiceWorkerNavigation();
   const routeOwnsScroll = chrome.scroll === "route";
   const scrollRef = useRef<HTMLElement>(null);
   const hidden = useHideOnScroll({

@@ -73,6 +73,9 @@ function loadPushWorker(
 
   runInNewContext(source, {
     URL,
+    MessageChannel,
+    setTimeout,
+    clearTimeout,
     self: {
       location: { origin: "https://kmla.example" },
       // 데스크톱 Firefox처럼 Badging API가 없는 환경도 정상 경로다.
@@ -149,12 +152,17 @@ describe("public push service worker", () => {
     expect(worker.setAppBadge).not.toHaveBeenCalled();
   });
 
-  it("ignores a repeated message delivery and rejects a message push with extra fields", async () => {
+  it("shows a repeated message delivery again quietly and rejects a message push with extra fields", async () => {
     const worker = loadPushWorker();
 
     await worker.dispatch("push", { data: { json: () => messagePayload } });
     await worker.dispatch("push", { data: { json: () => messagePayload } });
-    expect(worker.showNotification).toHaveBeenCalledTimes(1);
+    // 카드를 띄우지 않으면 브라우저가 기본 카드를 대신 띄운다. 다시 울리지는 않는다.
+    expect(worker.showNotification).toHaveBeenCalledTimes(2);
+    expect(worker.showNotification).toHaveBeenLastCalledWith(
+      "홍길동",
+      expect.objectContaining({ renotify: false }),
+    );
 
     await worker.dispatch("push", {
       data: {
@@ -484,6 +492,35 @@ describe("public push service worker", () => {
       `navigate:https://kmla.example/noti/open/${validPayload.notificationId}`,
     ]);
     expect(worker.openWindow).not.toHaveBeenCalled();
+  });
+
+  it("lets an app window move by itself instead of reloading it", async () => {
+    const appClient = {
+      url: "https://kmla.example/groups/1",
+      focus: vi.fn(() => Promise.resolve()),
+      navigate: vi.fn(() => Promise.resolve()),
+      postMessage: vi.fn(
+        (
+          _message: unknown,
+          [port]: { postMessage: (value: string) => void }[],
+        ) => port.postMessage("navigated"),
+      ),
+    };
+    const worker = loadPushWorker([appClient]);
+
+    await worker.dispatch("notificationclick", {
+      notification: { close: vi.fn(), data: validClickData },
+    });
+
+    expect(appClient.postMessage).toHaveBeenCalledWith(
+      {
+        type: "navigate",
+        path: `/noti/open/${validPayload.notificationId}`,
+      },
+      // 포트 배열은 워커 쪽 realm에서 만들어져 `expect.any(Array)`에 걸리지 않는다.
+      expect.anything(),
+    );
+    expect(appClient.navigate).not.toHaveBeenCalled();
   });
 
   it("opens the local resolver when no app window exists", async () => {

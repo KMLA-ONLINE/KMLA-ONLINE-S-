@@ -124,12 +124,11 @@ function isMessageClickData(value) {
 async function showMessagePush(payload) {
   const tag = `message:${payload.conversationId}`;
   const existing = (await self.registration.getNotifications({ tag }))[0];
-  if (
+  // 같은 delivery가 다시 와도 카드는 띄운다. 아무것도 띄우지 않으면 브라우저가 기본 카드("백그라운드에서
+  // 업데이트됨")를 대신 띄울 수 있다. 같은 카드를 조용히 다시 띄운다.
+  const repeated =
     isMessageClickData(existing?.data) &&
-    existing.data.deliveryId === payload.deliveryId
-  ) {
-    return;
-  }
+    existing.data.deliveryId === payload.deliveryId;
 
   await self.registration.showNotification(payload.title, {
     body: payload.body,
@@ -137,7 +136,7 @@ async function showMessagePush(payload) {
     badge: "/badge-96x96.png",
     lang: "ko",
     tag,
-    renotify: true,
+    renotify: !repeated,
     data: {
       conversationId: payload.conversationId,
       deliveryId: payload.deliveryId,
@@ -288,6 +287,25 @@ function enqueuePush(data) {
   return task;
 }
 
+/** 창 안의 앱(`use-service-worker-navigation`)에 이동을 부탁한다. 1초 안에 답하면 맡긴다. */
+function askWindowToNavigate(client, path) {
+  return new Promise((resolve) => {
+    let timer;
+    try {
+      const channel = new MessageChannel();
+      timer = setTimeout(() => resolve(false), 1000);
+      channel.port1.onmessage = () => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+      client.postMessage({ type: "navigate", path }, [channel.port2]);
+    } catch {
+      clearTimeout(timer);
+      resolve(false);
+    }
+  });
+}
+
 async function openNotification(data) {
   let path;
   if (isInboxCardData(data)) path = "/noti";
@@ -314,10 +332,16 @@ async function openNotification(data) {
     appWindows[0];
 
   if (appWindow) {
+    try {
+      await appWindow.focus();
+    } catch {
+      // 포커스를 못 줘도 이동은 시도한다.
+    }
+    // 앱이 router로 옮겨 가면 창을 다시 불러오지 않는다. 답이 없으면 창을 그 주소로 연다.
+    if (await askWindowToNavigate(appWindow, path)) return;
     // 이 워커가 제어하지 않는 창(업데이트 대기 중 등)에서는 navigate가 거부된다. 그때 카드는
     // 이미 닫혔으므로 새 창으로라도 열어야 탭이 허공에 사라지지 않는다.
     try {
-      await appWindow.focus();
       await appWindow.navigate(destination);
       return;
     } catch {
