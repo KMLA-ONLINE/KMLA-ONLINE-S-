@@ -143,6 +143,8 @@ function MediaGrid({
             single && attachment.width && attachment.height
               ? `${attachment.width} / ${attachment.height}`
               : "1 / 1";
+          // 세로로 아주 긴 사진 한 장이 대화를 덮지 않게 9:16(폭 288px에서 512px)까지만 세우고 나머지는
+          // 잘라 그린다. 전체는 뷰어에서 본다.
           return (
             <button
               key={attachment.id}
@@ -153,7 +155,7 @@ function MediaGrid({
                   ? `사진 ${more}장 더 보기`
                   : `사진 크게 보기: ${attachment.fileName}`
               }
-              className="relative block min-w-0 overflow-hidden bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+              className="relative block max-h-[32rem] min-w-0 overflow-hidden bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
               style={{ aspectRatio: ratio }}
               onClick={() => viewer.open(attachment.id)}
             >
@@ -190,15 +192,24 @@ function MediaGrid({
   );
 }
 
-/** 내려받아 형식을 확인한 Blob URL. 다 쓰면 거둔다. */
-function usePlayableUrl(attachment: MessageAttachment, enabled: boolean) {
+/**
+ * 내려받아 형식을 확인한 Blob URL. 다 쓰면 거둔다. `attempt`가 0이면 아직 받지 않고, 늘리면 다시
+ * 받는다. 불러오지 못한 뒤 재생을 다시 누르면 새로 시도한다.
+ */
+function usePlayableUrl(
+  attachment: MessageAttachment,
+  attempt: number,
+  enabled: boolean,
+) {
   const [state, setState] = useState<
-    | { status: "idle" | "loading" | "unsupported" | "failed" }
-    | { status: "ready"; url: string }
-  >({ status: "idle" });
+    | { attempt: number; status: "unsupported" | "failed" }
+    | { attempt: number; status: "ready"; url: string }
+    | null
+  >(null);
+  const active = enabled && attempt > 0;
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!active) return;
     let cancelled = false;
     let created: string | null = null;
     loadPlayableAttachment(attachment).then(
@@ -208,22 +219,25 @@ function usePlayableUrl(attachment: MessageAttachment, enabled: boolean) {
           if (url) URL.revokeObjectURL(url);
           return;
         }
-        setState(url ? { status: "ready", url } : { status: "unsupported" });
+        setState(
+          url
+            ? { attempt, status: "ready", url }
+            : { attempt, status: "unsupported" },
+        );
       },
       () => {
-        if (!cancelled) setState({ status: "failed" });
+        if (!cancelled) setState({ attempt, status: "failed" });
       },
     );
     return () => {
       cancelled = true;
       if (created) URL.revokeObjectURL(created);
     };
-  }, [attachment, enabled]);
+  }, [attachment, attempt, active]);
 
-  // 불러오기를 켠 뒤 결과가 오기 전까지는 불러오는 중이다.
-  return enabled && state.status === "idle"
-    ? ({ status: "loading" } as const)
-    : state;
+  if (!active) return { status: "idle" } as const;
+  // 이번 시도의 결과가 오기 전까지는 불러오는 중이다.
+  return state?.attempt === attempt ? state : ({ status: "loading" } as const);
 }
 
 function AudioAttachment({
@@ -233,8 +247,8 @@ function AudioAttachment({
   attachment: MessageAttachment;
   pending: boolean;
 }) {
-  const [requested, setRequested] = useState(false);
-  const state = usePlayableUrl(attachment, requested && !pending);
+  const [attempt, setAttempt] = useState(0);
+  const state = usePlayableUrl(attachment, attempt, !pending);
 
   if (state.status === "ready") {
     return (
@@ -276,7 +290,7 @@ function AudioAttachment({
           className="rounded-full"
           aria-label={`재생: ${attachment.fileName}`}
           disabled={pending || state.status === "unsupported"}
-          onClick={() => setRequested(true)}
+          onClick={() => setAttempt((current) => current + 1)}
         >
           <PlayIcon aria-hidden />
         </Button>

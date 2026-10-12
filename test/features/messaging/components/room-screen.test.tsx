@@ -379,6 +379,35 @@ describe("RoomScreen", () => {
     expect(within(reopened).getAllByText("부스 배치")[0]?.tagName).toBe("MARK");
   });
 
+  it("삭제 모드와 답장은 Esc로 끝낸다", async () => {
+    const conversation = await loadConversation("student-council");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+    const ownMessage = document.getElementById("message-m6")!;
+    await user.click(
+      within(ownMessage).getByRole("button", { name: "메시지 기타 작업" }),
+    );
+    await user.click(await screen.findByRole("menuitem", { name: "삭제" }));
+    expect(screen.getByText("1개 선택됨")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByText("1개 선택됨")).not.toBeInTheDocument();
+
+    const message = document.getElementById("message-m3")!;
+    await user.click(
+      within(message).getByRole("button", { name: "메시지에 답장" }),
+    );
+    expect(screen.getByRole("textbox", { name: "메시지 입력" })).toHaveFocus();
+    expect(
+      screen.getByRole("button", { name: "답장 취소" }),
+    ).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(
+      screen.queryByRole("button", { name: "답장 취소" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("쓰던 글과 쌓아 둔 첨부는 대화방을 떠났다 돌아와도 남는다", async () => {
     const conversation = await loadConversation("hyunwoo");
     const view = renderRoute(
@@ -462,7 +491,7 @@ describe("RoomScreen", () => {
     expect(
       screen.queryByRole("textbox", { name: "메시지 입력" }),
     ).not.toBeInTheDocument();
-    // 남의 메시지는 고를 수 없다.
+    // 남의 메시지는 고를 수 없고, 반응이나 답장도 받지 않는다.
     expect(
       within(document.getElementById("message-m3")!.parentElement!).queryByRole(
         "button",
@@ -471,6 +500,9 @@ describe("RoomScreen", () => {
         },
       ),
     ).not.toBeInTheDocument();
+    expect(
+      document.getElementById("message-m3")!.parentElement,
+    ).toHaveAttribute("inert");
 
     await user.click(
       within(document.getElementById("message-m4")!.parentElement!).getByRole(
@@ -963,10 +995,29 @@ describe("RoomScreen", () => {
       within(linkedMessage).getByRole("button", { name: "채팅에서 보기" }),
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
     const originalPinnedMessage = screen
       .getByRole("link", { name: "https://www.kmlaonline.net" })
       .closest("article")!;
     expect(bubble(originalPinnedMessage)).toHaveClass("ring-primary");
+
+    // 버튼이 아니라 메시지 자체를 눌러도 원래 메시지로 간다.
+    await user.click(screen.getByRole("button", { name: "고정 메시지" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByText(
+        "확인했습니다! 2층 체험 부스 동선만 조금 넓히면 좋을 것 같아요.",
+      ),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      bubble(
+        screen
+          .getByText(
+            "확인했습니다! 2층 체험 부스 동선만 조금 넓히면 좋을 것 같아요.",
+          )
+          .closest("article")!,
+      ),
+    ).toHaveClass("ring-primary");
 
     await user.click(screen.getByRole("button", { name: /고정된 메시지\s*2/ }));
     dialog = screen.getByRole("dialog");

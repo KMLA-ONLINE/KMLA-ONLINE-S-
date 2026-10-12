@@ -110,6 +110,7 @@ import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { toast } from "sonner";
 import { Button } from "~/shared/ui/button";
+import { Spinner } from "~/shared/ui/spinner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -167,6 +168,7 @@ export function RoomScreen({
   const compactDetailsOpen = overlay?.kind === "details";
   const searchOpen = overlay?.kind === "search";
   const pinnedDialogOpen = overlay?.kind === "pinned";
+  const [findingMessage, setFindingMessage] = useState(false);
   // 검색 입력과 결과. 결과로 이동해 검색이 닫혀도 남겨 두어, 다시 열면 다음 결과를 이어 고른다.
   const [searchSession, setSearchSession] = useState(EMPTY_MESSAGE_SEARCH);
   const [highlightedMessageId, setHighlightedMessageId] = useState<
@@ -190,6 +192,18 @@ export function RoomScreen({
   } = useConversationMessages(conversation);
   // 삭제 모드에서 고른 내 메시지. `null`이면 삭제 모드가 아니다(기능 명세 §13.11).
   const [selection, setSelection] = useState<ReadonlySet<string> | null>(null);
+  // 삭제 모드는 Esc로도 끝낸다. 열린 대화상자가 있으면 그쪽이 Esc를 먼저 쓴다.
+  const selecting = selection !== null;
+  useEffect(() => {
+    if (!selecting) return;
+    function cancelOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        setSelection(null);
+      }
+    }
+    document.addEventListener("keydown", cancelOnEscape);
+    return () => document.removeEventListener("keydown", cancelOnEscape);
+  }, [selecting]);
   // 대화 정보가 보일 때 공유된 첨부 수를 센다. 첨부가 바뀌면 메시지 신호가 다시 읽게 한다.
   const { data: sharedCounts } = useQuery({
     queryKey: messagingKeys.sharedAttachmentCounts(conversation.id),
@@ -294,7 +308,13 @@ export function RoomScreen({
   // 원래 메시지로 이동해 강조한다. 아직 불러오지 않은 구간이면 그 메시지까지 앞선 페이지를 이어 읽는다.
   async function viewMessage(messageId: string) {
     await roomOverlay.closeAll();
-    if (!(await loadUntil(messageId))) {
+    // 아직 불러오지 않은 구간이면 앞선 페이지를 여러 번 이어 읽는다. 그동안 멈춘 것처럼 보이지 않게
+    // 대화 위쪽에 찾는 중임을 보인다.
+    setFindingMessage(true);
+    const found = await loadUntil(messageId).finally(() =>
+      setFindingMessage(false),
+    );
+    if (!found) {
       toast.error("메시지를 찾을 수 없습니다.");
       return;
     }
@@ -483,6 +503,15 @@ export function RoomScreen({
                 {formatReplyPreview(toReplyPreview(pinnedMessage))}
               </p>
             </div>
+            {/* 가장 최근 것만 보이므로 여럿이면 몇 개인지 알린다. 누르면 목록이 열린다. */}
+            {pinnedMessages.length > 1 ? (
+              <span
+                aria-hidden
+                className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+              >
+                {pinnedMessages.length}
+              </span>
+            ) : null}
           </button>
         ) : null}
 
@@ -494,6 +523,7 @@ export function RoomScreen({
           followingNewMessagesRef={followingNewMessagesRef}
           desktopDetailsOpen={desktopDetailsOpen}
           hasOlderMessages={hasOlderMessages}
+          findingMessage={findingMessage}
           loadingOlderMessages={loadingOlderMessages}
           onLoadOlderMessages={loadOlderMessages}
           onSelectReaction={(message, reaction) => {
@@ -702,6 +732,7 @@ function MessageThread({
   desktopDetailsOpen,
   hasOlderMessages,
   loadingOlderMessages,
+  findingMessage,
   onLoadOlderMessages,
   onSelectReaction,
   onReply,
@@ -725,6 +756,8 @@ function MessageThread({
   desktopDetailsOpen: boolean;
   hasOlderMessages: boolean;
   loadingOlderMessages: boolean;
+  /** 답장 인용, 고정 메시지, 검색 결과의 원래 메시지를 찾아 앞선 페이지를 읽는 중인지. */
+  findingMessage: boolean;
   onLoadOlderMessages: () => Promise<OlderMessagesResult>;
   onSelectReaction: (
     message: ConversationMessage,
@@ -959,6 +992,15 @@ function MessageThread({
         onDropFiles([...event.dataTransfer.files]);
       }}
     >
+      {findingMessage || loadingOlderMessages ? (
+        <div
+          role="status"
+          className="pointer-events-none absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur"
+        >
+          <Spinner />
+          {findingMessage ? "메시지를 찾는 중" : "이전 메시지를 불러오는 중"}
+        </div>
+      ) : null}
       {draggingFiles ? (
         <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary bg-background/80 text-sm font-medium text-primary">
           여기에 놓으면 첨부합니다
@@ -1219,7 +1261,12 @@ const ThreadMessage = memo(function ThreadMessage({
   ];
 
   return (
-    <div className="relative">
+    // 삭제 모드에서 고를 수 없는 메시지(남의 메시지, 삭제된 메시지, 보내는 중이거나 보내지 못한 메시지)는
+    // 흐리게 두고 반응·답장·길게 누르기를 받지 않는다. 작성창이 숨어 있어 답장 대상이 보이지 않게 생긴다.
+    <div
+      className={cn("relative", selection === null && "opacity-50")}
+      inert={selection === null}
+    >
       <MessageRow
         message={message}
         sender={sender}
@@ -1795,10 +1842,15 @@ function ComposerShell({
                 composing.current ||
                 event.nativeEvent.isComposing ||
                 event.keyCode === 229;
-              // 조합 중 Esc는 IME가 조합을 취소하는 키다. 수정을 취소하지 않는다.
-              if (event.key === "Escape" && editTarget && !composingText) {
+              // 조합 중 Esc는 IME가 조합을 취소하는 키다. 수정이나 답장을 취소하지 않는다.
+              if (
+                event.key === "Escape" &&
+                (editTarget ?? replyTarget) &&
+                !composingText
+              ) {
                 event.preventDefault();
-                onCancelEdit();
+                if (editTarget) onCancelEdit();
+                else onCancelReply();
                 return;
               }
               if (event.key !== "Enter" || event.shiftKey) return;

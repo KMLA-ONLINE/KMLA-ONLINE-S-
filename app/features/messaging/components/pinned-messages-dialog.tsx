@@ -108,7 +108,22 @@ export function PinnedMessagesDialog({
                 );
 
                 return (
-                  <div key={message.id}>
+                  // 메시지를 누르면 원래 메시지로 간다. 모바일에서 길게 누르지 않아도 된다. 작업 버튼,
+                  // 본문 링크와 오디오는 각자 자기 일을 한다. 키보드는 `채팅에서 보기` 버튼을 쓴다.
+                  // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+                  <div
+                    key={message.id}
+                    className="cursor-pointer"
+                    onClick={(event) => {
+                      if (
+                        event.target instanceof Element &&
+                        event.target.closest("button, a, audio")
+                      ) {
+                        return;
+                      }
+                      onViewMessage(message.id);
+                    }}
+                  >
                     {startsMessageDay(pinnedMessages[index - 1], message) ? (
                       <div className="my-4 flex items-center justify-center">
                         <span className="text-xs text-muted-foreground">
