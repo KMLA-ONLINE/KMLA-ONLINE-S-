@@ -1,4 +1,7 @@
-import { useOutletContext } from "react-router";
+import {
+  useOutletContext,
+  type ShouldRevalidateFunctionArgs,
+} from "react-router";
 
 import { defineAppChrome } from "~/features/app-shell";
 import {
@@ -16,6 +19,21 @@ export const handle = defineAppChrome({
   bottomNav: "none",
   scroll: "route",
 });
+
+/**
+ * 같은 대화방 안에서는 loader를 다시 돌리지 않는다. 사진 뷰어의 `?image=`처럼 주소의 쿼리만 바뀌어도
+ * 다시 돌면 `seedConversationCache`가 불러온 앞선 페이지와 보내는 중·보내지 못한 메시지를 지운다.
+ * 새 메시지는 Realtime 신호와 따라잡기가 맡는다.
+ */
+export function shouldRevalidate({
+  currentParams,
+  nextParams,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  return currentParams.roomId === nextParams.roomId
+    ? false
+    : defaultShouldRevalidate;
+}
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const conversation = await loadConversation(params.roomId);

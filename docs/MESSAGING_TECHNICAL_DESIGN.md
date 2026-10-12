@@ -1,14 +1,12 @@
 # 메시지 기술 설계
 
-> **상태**: 일부 구현. 대화·멤버·메시지·반응·고정 테이블, 본문 암호화, 대화 목록·메시지 페이지·고정
-> 목록·전송·읽음 위치·반응·고정·편집·삭제·따라잡기·대화 알림 끄기 RPC, Realtime 신호와 메시지 Push가
-> 있다(`supabase/schemas/71-messaging.sql`). 대화 생성과 멤버 관리, 첨부, 검색은 아직 없으며 아래는 그 도입
-> 시 설계다.
+> **상태**: 구현(`supabase/schemas/71-messaging.sql`). 기간을 정한 대화 알림 끄기와 그룹의 멘션 중심 알림은
+> 아직 없다.
 
 이 문서는 [메시지 기능 명세](functional-spec/messaging.md)를 구현하기 위한 데이터, 암호화, 동기화와 전달
 경계를 정의한다. 제품 동작은 기능 명세가 정본이다. 메시지 Push 전달은
 [알림 및 Web Push 기술 설계](NOTIFICATION_TECHNICAL_DESIGN.md) §11, 첨부 버킷은
-[Storage 버킷 설계](STORAGE_BUCKETS.md) §4.4·§4.5를 따른다.
+[Storage 버킷 설계](STORAGE_BUCKETS.md) §4.4를 따른다.
 
 ## 1. 원칙
 

@@ -11,9 +11,48 @@ import * as mutations from "~/features/messaging/data/mutations";
 import { loadConversation } from "~/features/messaging/data/queries";
 import type { Conversation } from "~/features/messaging/model/types";
 import { renderRoute, screen, within } from "../../../router";
+import { resetFakeMessaging } from "../fake-api";
 
 vi.mock("~/features/messaging/data/queries", () => import("../fake-api"));
+
+// 테스트가 고친 목 데이터(읽음, 알림 끄기, 멤버)가 다음 테스트로 새지 않게 한다.
+afterEach(() => resetFakeMessaging());
 vi.mock("~/features/messaging/data/mutations", () => import("../fake-api"));
+vi.mock("~/features/messaging/data/files", () => ({
+  prepareAttachment: (file: File) =>
+    Promise.resolve({
+      kind: "file",
+      file,
+      thumbnail: null,
+      fileName: file.name,
+      width: null,
+      height: null,
+    }),
+  uploadAttachments: (
+    _conversationId: string,
+    messageId: string,
+    prepared: { fileName: string; file: File }[],
+  ) =>
+    Promise.resolve(
+      prepared.map((item, index) => ({
+        id: `${messageId}-a${index}`,
+        kind: "file",
+        mimeType: item.file.type,
+        sizeBytes: item.file.size,
+        width: null,
+        height: null,
+        fileName: item.fileName,
+        objectPath: `c/${messageId}-${index}`,
+        thumbnailPath: null,
+      })),
+    ),
+  createAttachmentUrls: (paths: string[]) =>
+    Promise.resolve(
+      new Map(paths.map((path) => [path, `https://signed/${path}`])),
+    ),
+  toDownloadUrl: (url: string, name: string) => `${url}?download=${name}`,
+  loadPlayableAttachment: () => Promise.resolve(null),
+}));
 
 type ContextMenuPositionerProps = ComponentProps<
   typeof ContextMenuModule.ContextMenu.Positioner
@@ -389,6 +428,238 @@ describe("RoomScreen", () => {
       await screen.findByRole("button", { name: "대화 알림 켜기" }),
     ).toHaveAttribute("aria-pressed", "true");
     await mutations.setConversationMuted("hyunwoo", false);
+  });
+
+  it("대화에서 찾은 메시지를 고르면 검색을 닫고 그 메시지로 이동해 강조한다", async () => {
+    const conversation = await loadConversation("student-council");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    await user.click(screen.getByRole("button", { name: "대화 검색" }));
+    const searchBox = screen.getByRole("searchbox", { name: "대화에서 찾기" });
+    expect(searchBox).toHaveFocus();
+    await user.type(searchBox, "부스 배치{Enter}");
+
+    const results = await screen.findByRole("list", { name: "검색 결과" });
+    const result = within(results).getByRole("button", {
+      name: /축제 부스 배치 초안/,
+    });
+    expect(result).toHaveTextContent("박서현");
+    await user.click(result);
+
+    expect(
+      screen.queryByRole("searchbox", { name: "대화에서 찾기" }),
+    ).not.toBeInTheDocument();
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+  });
+
+  it("삭제 모드에서 내 메시지만 골라 한 번에 지운다", async () => {
+    const removeMany = vi.spyOn(mutations, "deleteMessages");
+    const conversation = await loadConversation("student-council");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+    const ownMessage = document.getElementById("message-m6")!;
+
+    await user.click(
+      within(ownMessage).getByRole("button", { name: "메시지 기타 작업" }),
+    );
+    await user.click(
+      await screen.findByRole("menuitem", { name: "여러 개 선택" }),
+    );
+    expect(screen.getByText("1개 선택됨")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "메시지 입력" }),
+    ).not.toBeInTheDocument();
+    // 남의 메시지는 고를 수 없다.
+    expect(
+      within(document.getElementById("message-m3")!.parentElement!).queryByRole(
+        "button",
+        {
+          name: "메시지 선택",
+        },
+      ),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      within(document.getElementById("message-m4")!.parentElement!).getByRole(
+        "button",
+        {
+          name: "메시지 선택",
+        },
+      ),
+    );
+    expect(screen.getByText("2개 선택됨")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "삭제" }));
+    await user.click(
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "삭제",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(removeMany).toHaveBeenCalledWith(
+        expect.arrayContaining(["m4", "m6"]),
+      ),
+    );
+    expect(
+      await within(document.getElementById("message-m6")!).findByText(
+        "삭제된 메시지입니다",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "메시지 입력" }),
+    ).toBeInTheDocument();
+    removeMany.mockRestore();
+  });
+
+  it("보내지 못한 메시지를 목록에 남기고 다시 보낸다", async () => {
+    const sendSpy = vi
+      .spyOn(mutations, "sendMessage")
+      .mockRejectedValueOnce(new Error("offline"));
+    const conversation = await loadConversation("student-council");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+
+    const input = screen.getByRole("textbox", { name: "메시지 입력" });
+    await user.type(input, "끊긴 메시지{Enter}");
+    expect(await screen.findByText("보내지 못했습니다")).toBeInTheDocument();
+    // 메시지가 목록에 남아 있으므로 작성창은 입력을 되살리지 않는다.
+    expect(input).toHaveValue("");
+
+    await user.click(screen.getByRole("button", { name: "다시 보내기" }));
+    await waitFor(() =>
+      expect(screen.queryByText("보내지 못했습니다")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("끊긴 메시지")).toBeInTheDocument();
+    sendSpy.mockRestore();
+  });
+
+  it("반응 표시를 누르면 반응한 사람과 시각을 보여 준다", async () => {
+    const conversation = await loadConversation("student-council");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+
+    await user.click(
+      within(document.getElementById("message-m3")!).getByRole("button", {
+        name: /반응한 사람 보기/,
+      }),
+    );
+
+    const list = await screen.findByRole("list", { name: "반응한 사람" });
+    expect(within(list).getByText("박서현")).toBeInTheDocument();
+  });
+
+  it("고른 파일을 메시지로 보내고 이름과 크기, 내려받기 링크를 보인다", async () => {
+    const conversation = await loadConversation("student-council");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+    const fileInput =
+      document.querySelectorAll<HTMLInputElement>('input[type="file"]')[1];
+
+    await user.upload(
+      fileInput,
+      new File(["hello"], "회의록.pdf", { type: "application/pdf" }),
+    );
+
+    const download = await screen.findByRole("link", {
+      name: "내려받기: 회의록.pdf",
+    });
+    expect(download).toHaveAttribute(
+      "href",
+      expect.stringContaining("download=회의록.pdf"),
+    );
+    expect(download).toHaveTextContent("5B");
+  });
+
+  it("시스템 메시지를 멤버 이름으로 문장을 만들어 표시한다", async () => {
+    const conversation = await loadConversation("student-council");
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/student-council",
+    });
+
+    expect(
+      screen.getByText(
+        "박서현님이 대화 이름을 ‘학생회 기획부’(으)로 변경했습니다.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("대화 정보에서 멤버를 초대하고, 확인을 거쳐 내보낸다", async () => {
+    const invite = vi.spyOn(mutations, "addConversationMembers");
+    const remove = vi.spyOn(mutations, "removeConversationMember");
+    const conversation = await loadConversation("student-council");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+
+    await user.click(screen.getByRole("button", { name: "멤버 초대" }));
+    const dialog = await screen.findByRole("dialog", { name: "멤버 초대" });
+    await user.type(within(dialog).getByRole("searchbox"), "새봄");
+    await user.click(
+      await within(dialog).findByRole("button", { name: /최새봄/ }),
+    );
+    await user.click(within(dialog).getByRole("button", { name: "초대" }));
+    await waitFor(() =>
+      expect(invite).toHaveBeenCalledWith("student-council", ["new-1"]),
+    );
+
+    await user.click(screen.getByRole("button", { name: "최민준 내보내기" }));
+    await user.click(await screen.findByRole("button", { name: "내보내기" }));
+    await waitFor(() =>
+      expect(remove).toHaveBeenCalledWith("student-council", "min"),
+    );
+    // 목록이 다시 읽히면 내보낸 사람은 멤버 목록에서 빠진다.
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "최민준 내보내기" }),
+      ).not.toBeInTheDocument(),
+    );
+    await mutations.addConversationMembers("student-council", ["min"]);
+    invite.mockRestore();
+    remove.mockRestore();
+  });
+
+  it("그룹 이름을 바꾸고, 나가면 작성창 대신 안내를 보인다", async () => {
+    const conversation = await loadConversation("science-project");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/science-project" },
+    );
+
+    await user.click(screen.getByRole("button", { name: "그룹 이름 변경" }));
+    const nameInput = await screen.findByRole("textbox", { name: "그룹 이름" });
+    await user.clear(nameInput);
+    await user.type(nameInput, "과학전람회 본선{Enter}");
+    expect(
+      await screen.findByRole("heading", { name: "과학전람회 본선", level: 1 }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "그룹 나가기" }));
+    await user.click(await screen.findByRole("button", { name: "나가기" }));
+    expect(
+      await screen.findByText(
+        "이 대화에서 나왔습니다. 참여한 동안의 메시지만 볼 수 있습니다.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "메시지 입력" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "그룹 나가기" }),
+    ).not.toBeInTheDocument();
   });
 
   it("대화 정보에서 대화 알림을 끄고 다시 켠다", async () => {
@@ -1041,7 +1312,7 @@ describe("RoomScreen", () => {
     );
     const input = screen.getByRole("textbox", { name: "메시지 입력" });
     const attachmentActions = screen.getByRole("button", {
-      name: "파일 첨부 기능 준비 중",
+      name: "파일 보내기",
     }).parentElement!;
 
     await user.type(input, "안녕하세요");
@@ -1073,7 +1344,7 @@ describe("RoomScreen", () => {
     });
     const input = screen.getByRole("textbox", { name: "메시지 입력" });
     const fileButton = screen.getByRole("button", {
-      name: "파일 첨부 기능 준비 중",
+      name: "파일 보내기",
     });
     const emojiButton = screen.getByRole("button", {
       name: "이모지 선택 기능 준비 중",
@@ -1127,8 +1398,9 @@ describe("RoomScreen", () => {
     });
     expect(openButton).toHaveAttribute("aria-pressed", "false");
     expect(
-      screen.getByText("좋아, 도서관 앞에서 보자").closest("article")
-        ?.parentElement?.parentElement,
+      screen
+        .getByText("좋아, 도서관 앞에서 보자")
+        .closest('[class*="max-w-3xl"]'),
     ).toHaveClass("xl:max-w-none");
 
     await user.click(openButton);

@@ -6,6 +6,10 @@ import type {
   MessagePage,
   MessageParticipant,
   MessageReaction,
+  MessageAttachment,
+  MessageAttachmentKind,
+  MessageRecipient,
+  MessageSystemEvent,
 } from "~/features/messaging/model/types";
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import type { Database } from "~/shared/supabase/database.types";
@@ -23,7 +27,15 @@ interface ParticipantRow {
   id: number;
   name: string;
   avatar_path: string | null;
+  active: boolean;
 }
+
+const SYSTEM_KINDS = new Set<MessageSystemEvent["kind"]>([
+  "member_added",
+  "member_left",
+  "member_removed",
+  "renamed",
+]);
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -56,11 +68,98 @@ export async function loadConversation(
     ...summary,
     ...page,
     pinnedMessages,
-    // 첨부는 아직 저장하지 않는다(기술 설계 §3의 다음 단계).
-    sharedMediaCount: 0,
-    sharedFileCount: 0,
-    sharedLinkCount: 0,
   };
+}
+
+export interface MessageSearchResult {
+  id: string;
+  senderId: string | null;
+  /** 본문 앞부분. */
+  body: string;
+  sentAt: string;
+}
+
+interface SearchResponse {
+  results: {
+    id: string;
+    sender_id: number | null;
+    body: string;
+    sent_at: string;
+  }[];
+  next_cursor: { sent_at: string; id: string } | null;
+}
+
+/**
+ * 대화 내 검색. 서버가 최신부터 한 번에 정해진 수만 훑으므로, `nextCursor`가 있으면 더 앞선 메시지에서
+ * 이어 찾을 수 있다.
+ */
+export async function searchMessages(
+  conversationId: string,
+  query: string,
+  before: MessageCursor | null,
+): Promise<{
+  results: MessageSearchResult[];
+  nextCursor: MessageCursor | null;
+}> {
+  const { data, error } = await getSupabase().rpc("search_messages", {
+    p_conversation_id: conversationId,
+    p_query: query,
+    p_before_sent_at: before?.sentAt,
+    p_before_id: before?.id,
+  });
+  if (error) throw error;
+  const response = data as unknown as SearchResponse;
+  return {
+    results: response.results.map((row) => ({
+      id: row.id,
+      senderId: toProfileId(row.sender_id),
+      body: row.body,
+      sentAt: row.sent_at,
+    })),
+    nextCursor: response.next_cursor
+      ? { sentAt: response.next_cursor.sent_at, id: response.next_cursor.id }
+      : null,
+  };
+}
+
+export interface MessageReactor {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  reaction: MessageReaction["reaction"];
+  reactedAt: string;
+}
+
+/** 반응한 사람과 반응 시각(기능 명세 §13.8). 반응 종류, 먼저 남긴 순서다. */
+export async function listMessageReactors(
+  messageId: string,
+): Promise<MessageReactor[]> {
+  const { data, error } = await getSupabase().rpc("list_message_reactors", {
+    p_message_id: messageId,
+  });
+  if (error) throw error;
+  const rows = data ?? [];
+  const avatarUrls = await createProfileMediaUrls(
+    rows.map((row) => row.avatar_path),
+  );
+  return rows.map((row) => ({
+    id: String(row.profile_id),
+    name: row.name,
+    avatarUrl: row.avatar_path
+      ? (avatarUrls.get(row.avatar_path) ?? null)
+      : null,
+    reaction: row.reaction,
+    reactedAt: row.reacted_at,
+  }));
+}
+
+/** 메신저 탭 배지의 숫자. 내 대화들의 읽지 않은 메시지 수 합이다. */
+export async function getUnreadMessageCount(): Promise<number> {
+  const { data, error } = await getSupabase().rpc(
+    "get_my_unread_message_count",
+  );
+  if (error) throw error;
+  return data;
 }
 
 /** 대화 목록의 한 줄. 내 대화가 아니면 `null`이다. */
@@ -181,6 +280,7 @@ async function toSummaries(
         avatarUrl: participant.avatar_path
           ? (avatarUrls.get(participant.avatar_path) ?? null)
           : null,
+        active: participant.active,
       }),
     ),
     lastMessage: row.last_message_id
@@ -190,10 +290,14 @@ async function toSummaries(
             ? "삭제된 메시지입니다"
             : (row.last_message_body ?? ""),
           sentAt: row.last_message_sent_at,
+          attachmentKind:
+            (row.last_message_attachment_kind as MessageAttachmentKind | null) ??
+            null,
         }
       : null,
     unreadCount: row.unread_count,
     muted: row.muted,
+    canManageMembers: row.can_manage_members,
   }));
 }
 
@@ -222,10 +326,138 @@ function toMessage(row: MessageRow): ConversationMessage {
     myReaction: row.my_reaction,
     pinned: row.pinned,
     changedAt: row.changed_at,
+    system: toSystemEvent(row),
+    attachments: toAttachments(row.attachments),
   };
+}
+
+interface AttachmentRow {
+  id: string;
+  kind: MessageAttachmentKind;
+  mime_type: string;
+  size_bytes: number;
+  width: number | null;
+  height: number | null;
+  object_path: string;
+  thumbnail_path: string | null;
+  file_name: string;
+}
+
+export function toAttachments(value: unknown): MessageAttachment[] {
+  if (!Array.isArray(value)) return [];
+  return (value as AttachmentRow[]).map((row) => ({
+    id: row.id,
+    kind: row.kind,
+    mimeType: row.mime_type,
+    sizeBytes: row.size_bytes,
+    width: row.width,
+    height: row.height,
+    fileName: row.file_name,
+    objectPath: row.object_path,
+    thumbnailPath: row.thumbnail_path,
+  }));
+}
+
+function toSystemEvent(row: MessageRow): MessageSystemEvent | undefined {
+  const kind = row.system_kind as MessageSystemEvent["kind"] | null;
+  if (!kind || !SYSTEM_KINDS.has(kind)) return undefined;
+  return {
+    kind,
+    profileIds: (row.system_profile_ids ?? []).map(String),
+    name: row.system_name,
+  };
+}
+
+const PROFILE_TYPE_LABELS = {
+  student: "학생",
+  alumni: "졸업생",
+  teacher: "선생님",
+} as const;
+
+/** 대화 상대 찾기. 공백과 대소문자를 무시하고, 나는 빠진다. */
+export async function searchMessageRecipients(
+  query: string,
+): Promise<MessageRecipient[]> {
+  if (!query.trim()) return [];
+  const { data, error } = await getSupabase().rpc("search_message_recipients", {
+    p_query: query,
+  });
+  if (error) throw error;
+  const rows = data ?? [];
+  const avatarUrls = await createProfileMediaUrls(
+    rows.map((row) => row.avatar_path),
+  );
+  return rows.map((row) => ({
+    id: String(row.profile_id),
+    name: row.name,
+    avatarUrl: row.avatar_path
+      ? (avatarUrls.get(row.avatar_path) ?? null)
+      : null,
+    description:
+      row.profile_type === "teacher"
+        ? PROFILE_TYPE_LABELS.teacher
+        : `${row.cohort}기 ${PROFILE_TYPE_LABELS[row.profile_type]}`,
+  }));
 }
 
 /** 프로필 ID는 화면에서 문자열로 다룬다. 탈퇴로 지워진 발신자는 `null`이다. */
 function toProfileId(value: number | null): string | null {
   return value === null ? null : String(value);
+}
+
+export interface SharedAttachment extends MessageAttachment {
+  messageId: string;
+  senderId: string | null;
+  sentAt: string;
+}
+
+/** 대화에서 공유된 미디어(사진·동영상) 또는 파일. 최근 것부터 한 쪽씩 준다. */
+export async function listSharedAttachments(
+  conversationId: string,
+  media: boolean,
+  before: MessageCursor | null,
+  limit = 30,
+): Promise<{ items: SharedAttachment[]; nextCursor: MessageCursor | null }> {
+  const { data, error } = await getSupabase().rpc(
+    "list_conversation_attachments",
+    {
+      p_conversation_id: conversationId,
+      p_media: media,
+      p_before_sent_at: before?.sentAt,
+      p_before_id: before?.id,
+      p_limit: limit + 1,
+    },
+  );
+  if (error) throw error;
+  const rows = data ?? [];
+  const page = rows.slice(0, limit);
+  const items = toAttachments(page).map((attachment, index) => {
+    const row = page[index];
+    return {
+      ...attachment,
+      messageId: row.message_id,
+      senderId: row.sender_id === null ? null : String(row.sender_id),
+      sentAt: row.sent_at,
+    };
+  });
+  const last = page.at(-1);
+  return {
+    items,
+    nextCursor:
+      rows.length > limit && last
+        ? { sentAt: last.sent_at, id: last.id }
+        : null,
+  };
+}
+
+export async function getSharedAttachmentCounts(
+  conversationId: string,
+): Promise<{ media: number; files: number }> {
+  const { data, error } = await getSupabase().rpc(
+    "get_conversation_attachment_counts",
+    { p_conversation_id: conversationId },
+  );
+  if (error) throw error;
+  const row = data?.[0];
+  return { media: row?.media_count ?? 0, files: row?.file_count ?? 0 };
 }

@@ -5,19 +5,27 @@ import {
   ChevronLeftIcon,
   FileIcon,
   ImagesIcon,
-  LinkIcon,
   LockKeyholeIcon,
   LogOutIcon,
+  PencilIcon,
   PinIcon,
   SearchIcon,
   UserRoundIcon,
+  UserMinusIcon,
   UserPlusIcon,
   type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
-import type { Conversation } from "~/features/messaging/model/types";
+import {
+  activeParticipants,
+  isViewerActive,
+} from "~/features/messaging/model/system-message";
+import type {
+  Conversation,
+  MessageParticipant,
+} from "~/features/messaging/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { Button } from "~/shared/ui/button";
 import { cn } from "~/shared/lib/utils";
@@ -30,6 +38,13 @@ export function ConversationDetails({
   onOpenPinnedMessages,
   muted,
   onToggleMuted,
+  onSearch,
+  onInvite,
+  onRename,
+  onLeave,
+  onRemoveMember,
+  sharedCounts,
+  onOpenSharedMedia,
 }: {
   conversation: Conversation;
   className?: string;
@@ -38,7 +53,19 @@ export function ConversationDetails({
   onOpenPinnedMessages: () => void;
   muted: boolean;
   onToggleMuted: () => void;
+  onSearch: () => void;
+  onInvite: () => void;
+  onRename: () => void;
+  onLeave: () => void;
+  onRemoveMember: (participant: MessageParticipant) => void;
+  /** 공유된 사진·동영상과 파일 수. 아직 모르면 비어 있다. */
+  sharedCounts: { media: number; files: number } | undefined;
+  onOpenSharedMedia: (tab: "media" | "files") => void;
 }) {
+  const members = activeParticipants(conversation);
+  // 나갔거나 내보내진 그룹에서는 지난 메시지만 보이고 멤버 관리는 할 수 없다.
+  const manageable =
+    conversation.type === "group" && isViewerActive(conversation);
   return (
     <aside
       aria-label="대화 상세"
@@ -77,9 +104,19 @@ export function ConversationDetails({
               pressed={muted}
               onClick={onToggleMuted}
             />
-            <DetailQuickAction icon={SearchIcon} label="검색" />
+            <DetailQuickAction
+              icon={SearchIcon}
+              label="검색"
+              actionLabel="대화에서 찾기"
+              onClick={onSearch}
+            />
             {conversation.type === "group" ? (
-              <DetailQuickAction icon={UserPlusIcon} label="초대" />
+              <DetailQuickAction
+                icon={UserPlusIcon}
+                label="초대"
+                actionLabel="멤버 초대"
+                onClick={manageable ? onInvite : undefined}
+              />
             ) : null}
           </div>
         </section>
@@ -92,15 +129,20 @@ export function ConversationDetails({
               value={String(pinnedCount)}
               onClick={onOpenPinnedMessages}
             />
+            {manageable ? (
+              <DetailRow
+                icon={PencilIcon}
+                label="그룹 이름 변경"
+                onClick={onRename}
+              />
+            ) : null}
             <DetailRow icon={LockKeyholeIcon} label="메시지 암호화 안내" />
           </DetailSection>
 
           {conversation.type === "group" ? (
-            <DetailSection
-              title={`대화 멤버 ${conversation.participants.length}명`}
-            >
+            <DetailSection title={`대화 멤버 ${members.length}명`}>
               <div className="flex flex-col gap-1 px-2 pb-2">
-                {conversation.participants.map((participant) => (
+                {members.map((participant) => (
                   <div
                     key={participant.id}
                     className="flex items-center gap-3 rounded-lg px-2 py-2"
@@ -115,34 +157,48 @@ export function ConversationDetails({
                         ? `${participant.name} (나)`
                         : participant.name}
                     </span>
+                    {conversation.canManageMembers &&
+                    participant.id !== conversation.viewerId ? (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="rounded-full text-muted-foreground"
+                        aria-label={`${participant.name} 내보내기`}
+                        onClick={() => onRemoveMember(participant)}
+                      >
+                        <UserMinusIcon aria-hidden />
+                      </Button>
+                    ) : null}
                   </div>
                 ))}
               </div>
             </DetailSection>
           ) : null}
 
-          <DetailSection title="미디어, 파일 및 링크" defaultOpen>
+          <DetailSection title="공유된 미디어" defaultOpen>
             <DetailRow
               icon={ImagesIcon}
-              label="미디어"
-              value={String(conversation.sharedMediaCount)}
+              label="사진·동영상"
+              value={sharedCounts ? String(sharedCounts.media) : undefined}
+              onClick={() => onOpenSharedMedia("media")}
             />
             <DetailRow
               icon={FileIcon}
               label="파일"
-              value={String(conversation.sharedFileCount)}
-            />
-            <DetailRow
-              icon={LinkIcon}
-              label="링크"
-              value={String(conversation.sharedLinkCount)}
+              value={sharedCounts ? String(sharedCounts.files) : undefined}
+              onClick={() => onOpenSharedMedia("files")}
             />
           </DetailSection>
 
           <DetailSection title="개인정보 보호 및 지원">
             <DetailRow icon={LockKeyholeIcon} label="개인정보 및 안전" />
-            {conversation.type === "group" ? (
-              <DetailRow icon={LogOutIcon} label="그룹 나가기" destructive />
+            {manageable ? (
+              <DetailRow
+                icon={LogOutIcon}
+                label="그룹 나가기"
+                destructive
+                onClick={onLeave}
+              />
             ) : null}
           </DetailSection>
         </div>

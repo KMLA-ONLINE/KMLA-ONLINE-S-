@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(15);
+select plan(16);
 
 -- seed: 홍길동(…0001)과 김민준(…0100)의 1:1 대화 c…01. d…01은 김민준, d…02는 홍길동의 메시지다.
 create temp table profile_ids as
@@ -106,6 +106,26 @@ select ok(
   (select changed_at from private.messages where id = 'd0000000-0000-0000-0000-000000000001')
     > (select at from marks where name = 'before_pin'),
   'a pin moves the message changed time'
+);
+
+-- 반응과 고정이 있는 메시지를 지워도 멤버마다 신호는 한 번이다.
+create temp table before_delete as select id from realtime.messages;
+set local role authenticated;
+select public.set_message_reaction('e0000000-0000-0000-0000-000000000300', 'like');
+reset role;
+truncate before_delete;
+insert into before_delete select id from realtime.messages;
+set local role authenticated;
+select public.delete_messages(array['e0000000-0000-0000-0000-000000000300']::uuid[]);
+reset role;
+
+select is(
+  (select count(*) from realtime.messages
+    where id not in (select id from before_delete)
+      and event = 'message_changed'
+      and payload ->> 'message_id' = 'e0000000-0000-0000-0000-000000000300'),
+  2::bigint,
+  'deleting a message with reactions signals each of the two members once'
 );
 
 -- 운영 작업은 신호와 바뀐 시각 갱신을 끌 수 있다.

@@ -18,14 +18,13 @@
 
 ## 3. 버킷 목록
 
-| 버킷                         | 저장 대상                | 주요 접근 경계                                                       |
-| ---------------------------- | ------------------------ | -------------------------------------------------------------------- |
-| `profile-media`              | 프로필 사진, 프로필 커버 | 프로필 소유자가 관리하고 해당 프로필을 볼 수 있는 사용자가 열람      |
-| `group-media`                | 그룹 아이콘, 그룹 커버   | 그룹 소유자와 관리자가 관리하고 해당 그룹을 볼 수 있는 사용자가 열람 |
-| `post-attachments`           | 게시물 첨부, 댓글 이미지 | 그룹 또는 개인 게시물의 실제 열람 권한을 가진 사용자가 열람          |
-| `direct-message-attachments` | 1:1 메시지 첨부          | 두 대화 참여자가 열람                                                |
-| `group-message-attachments`  | 그룹 메시지 첨부         | 첨부가 전송된 시점에 참여 중이던 그룹 대화 멤버가 열람               |
-| `story-media`                | 사진 스토리              | 스토리 노출 규칙(기능 명세 §6.6)에 따라 만료 전까지 열람             |
+| 버킷                  | 저장 대상                | 주요 접근 경계                                                       |
+| --------------------- | ------------------------ | -------------------------------------------------------------------- |
+| `profile-media`       | 프로필 사진, 프로필 커버 | 프로필 소유자가 관리하고 해당 프로필을 볼 수 있는 사용자가 열람      |
+| `group-media`         | 그룹 아이콘, 그룹 커버   | 그룹 소유자와 관리자가 관리하고 해당 그룹을 볼 수 있는 사용자가 열람 |
+| `post-attachments`    | 게시물 첨부, 댓글 이미지 | 그룹 또는 개인 게시물의 실제 열람 권한을 가진 사용자가 열람          |
+| `message-attachments` | 1:1·그룹 메시지 첨부     | 첨부가 전송된 시점에 참여 중이던 대화 멤버가 열람                    |
+| `story-media`         | 사진 스토리              | 스토리 노출 규칙(기능 명세 §6.6)에 따라 만료 전까지 열람             |
 
 ## 4. 버킷별 규칙
 
@@ -66,23 +65,19 @@
 - `finalize_post_attachment`는 축소본 object가 없으면 실패시키지 않고 `thumbnail_path`를 비운다. 축소본은 데이터 사용량을 줄이는 수단이지 게시물의 일부가 아니다.
 - 게시물 또는 개별 첨부가 삭제되면 연결된 object도 정리한다.
 
-### 4.4 `direct-message-attachments`
+### 4.4 `message-attachments`
 
-> **상태**: 미구현. 메시지 기능 도입 시 사용할 버킷 설계다.
-
-- 1:1 대화의 첨부만 저장한다.
-- object 내용은 원본 그대로 저장하고, 원본 파일 이름은 object path나 metadata가 아니라 데이터베이스의 암호문 열에만 둔다(§10).
-- 업로드 대상이 1:1 대화인지 데이터베이스에서 확인하고 그룹 대화의 첨부 업로드를 거부한다.
-- 두 대화 참여자만 object에 접근할 수 있다.
-
-### 4.5 `group-message-attachments`
-
-> **상태**: 미구현. 메시지 기능 도입 시 사용할 버킷 설계다.
-
-- 그룹 대화의 첨부만 저장한다.
-- object 내용은 원본 그대로 저장하고, 원본 파일 이름은 데이터베이스의 암호문 열에만 둔다(§10).
-- 업로드 대상이 그룹 대화인지 데이터베이스에서 확인하고 1:1 대화의 첨부 업로드를 거부한다.
-- Storage RLS는 첨부가 전송된 시점이 읽는 사람의 참여 기간 안에 있을 때만 읽기를 허용한다. 신규 멤버는 참여 이전 object를, 나간 멤버는 이후 object를 내려받을 수 없다.
+- 1:1 대화와 그룹 대화의 첨부를 함께 저장한다. 두 대화 유형의 접근 규칙이 "첨부가 전송된 시점이 읽는 사람의
+  참여 기간 안"으로 같아서 버킷을 나누지 않는다.
+- object 내용은 원본 그대로 저장하고, 원본 파일 이름은 object path나 metadata가 아니라 데이터베이스의
+  암호문 열(`private.message_attachments.filename_ciphertext`)에만 둔다(§10).
+- `prepare_message_attachments`가 `pending` 행으로 예고한 정확한 경로에만, 그 행을 만든 사용자만 업로드할 수
+  있다. `send_message`가 object의 소유자와 크기, 사진의 MIME type을 확인한 뒤 `ready`로 올린다. 사진 축소본은
+  없거나 1MiB를 넘으면 경로만 비운다.
+- 읽기는 `ready` 첨부이고, 메시지가 삭제되지 않았고, 메시지 전송 시각이 읽는 사람의 참여 기간 안일 때만
+  허용한다. 신규 멤버는 참여 이전 object를, 나간 멤버는 이후 object를 내려받을 수 없다.
+- 메시지를 지우거나 보낸 사람이 첨부를 지우면 행을 `deleted`로 두고, 정리 작업이 행을 지우며 object를
+  큐로 옮긴다. 전송되지 않은 채 48시간이 지난 예고도 같은 방식으로 회수한다(§8.2).
 
 ### 4.6 `story-media`
 
@@ -93,21 +88,20 @@
 
 ## 5. Object Path
 
-| 버킷                           | Path 형식                                   |
-| ------------------------------ | ------------------------------------------- |
-| `profile-media`                | `{user_uuid}/{avatar\|cover}/{object_uuid}` |
-| `group-media`                  | `{group_uuid}/{icon\|cover}/{object_uuid}`  |
-| `post-attachments`             | `{post_uuid}/{object_uuid}`                 |
-| `post-attachments` 사진 축소본 | `{post_uuid}/{object_uuid}/thumb`           |
-| `post-attachments` 댓글 이미지 | `comments/{post_uuid}/{image_uuid}`         |
-| `direct-message-attachments`   | `{conversation_uuid}/{object_uuid}`         |
-| `group-message-attachments`    | `{conversation_uuid}/{object_uuid}`         |
+| 버킷                              | Path 형식                                   |
+| --------------------------------- | ------------------------------------------- |
+| `profile-media`                   | `{user_uuid}/{avatar\|cover}/{object_uuid}` |
+| `group-media`                     | `{group_uuid}/{icon\|cover}/{object_uuid}`  |
+| `post-attachments`                | `{post_uuid}/{object_uuid}`                 |
+| `post-attachments` 사진 축소본    | `{post_uuid}/{object_uuid}/thumb`           |
+| `post-attachments` 댓글 이미지    | `comments/{post_uuid}/{image_uuid}`         |
+| `message-attachments`             | `{conversation_uuid}/{object_uuid}`         |
+| `message-attachments` 사진 축소본 | `{conversation_uuid}/{object_uuid}/thumb`   |
 
 - 모든 식별자는 UUID를 사용한다.
 - object path는 확장자 없는 무작위 `object_uuid`로 끝난다.
 - 사용자가 입력한 원본 파일 이름은 path에 사용하지 않는다.
 - 게시물 첨부 path에는 그룹이나 작성자 사용자 ID를 넣지 않는다. 공통 `post_uuid`만 사용해 그룹 익명 작성자와 실명 작성자를 연결할 수 없게 한다. 업로더는 `storage.objects.owner_id`로 검증한다.
-- 메시지 첨부의 버킷은 데이터베이스에 기록된 대화 유형과 일치해야 한다.
 - 기존 object를 덮어쓰지 않는다. 이미지나 첨부를 교체할 때 새 path를 연결한 뒤 이전 object를 정리한다.
 
 ## 6. 파일 정책
@@ -116,14 +110,13 @@
 
 `MiB`는 1,048,576바이트를 뜻한다. 배포 환경은 Supabase Pro 프로젝트를 기준으로 한다.
 
-| 버킷                         | Object 최대 크기 | Storage MIME 정책   |
-| ---------------------------- | ---------------- | ------------------- |
-| `profile-media`              | 4MiB             | `image/webp`만 허용 |
-| `group-media`                | 4MiB             | `image/webp`만 허용 |
-| `post-attachments`           | 30MiB            | 모든 MIME type 허용 |
-| `direct-message-attachments` | 30MiB            | 모든 MIME type 허용 |
-| `group-message-attachments`  | 30MiB            | 모든 MIME type 허용 |
-| `story-media`                | 4MiB             | `image/webp`만 허용 |
+| 버킷                  | Object 최대 크기 | Storage MIME 정책   |
+| --------------------- | ---------------- | ------------------- |
+| `profile-media`       | 4MiB             | `image/webp`만 허용 |
+| `group-media`         | 4MiB             | `image/webp`만 허용 |
+| `post-attachments`    | 30MiB            | 모든 MIME type 허용 |
+| `message-attachments` | 30MiB            | 모든 MIME type 허용 |
+| `story-media`         | 4MiB             | `image/webp`만 허용 |
 
 Bucket 제한은 object 하나에 적용되는 최종 방어선이다. 이미지 종류별 제한은 클라이언트가 검사하고, 메시지 파일 제한은 클라이언트가 제출한 metadata와 object 크기의 일관성을 finalize RPC가 검사한다.
 
@@ -312,8 +305,6 @@ SQL RPC는 object의 실제 바이트가 WebP인지, 이미지의 실제 치수�
 
 ## 10. 메시지 암호화
 
-> **상태**: 미구현. 메시지 기능 도입 시 적용할 설계다.
-
 메시지 본문과 첨부 원본 파일 이름은 데이터베이스 안에서 서비스 키 하나로 암호화한다. 첨부 object 내용은
-암호화하지 않고 §4.4·§4.5의 private 버킷 접근 경계로 보호한다. 키 보관, 암호문 형식과 보장 범위는
+암호화하지 않고 §4.4의 private 버킷 접근 경계로 보호한다. 키 보관, 암호문 형식과 보장 범위는
 [메시지 기술 설계](MESSAGING_TECHNICAL_DESIGN.md) §4를 따른다.

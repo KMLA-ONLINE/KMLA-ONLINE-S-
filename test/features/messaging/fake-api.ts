@@ -203,3 +203,130 @@ export async function getConversationSummary(
     (await listConversations()).find(({ id }) => id === conversationId) ?? null
   );
 }
+
+const recipients = [
+  { id: "seo", name: "박서현", avatarUrl: null, description: "29기 학생" },
+  { id: "new-1", name: "최새봄", avatarUrl: null, description: "30기 학생" },
+  { id: "new-2", name: "정여름", avatarUrl: null, description: "선생님" },
+];
+
+export function searchMessageRecipients(query: string) {
+  const term = query.replace(/\s+/g, "");
+  return Promise.resolve(
+    term ? recipients.filter(({ name }) => name.includes(term)) : [],
+  );
+}
+
+export function openDirectConversation(_profileId: string): Promise<string> {
+  return Promise.resolve("hyunwoo");
+}
+
+export function createGroupConversation(
+  _name: string,
+  _profileIds: string[],
+): Promise<string> {
+  return Promise.resolve("student-council");
+}
+
+export function addConversationMembers(
+  conversationId: string,
+  profileIds: string[],
+): Promise<void> {
+  setActive(conversationId, profileIds, true);
+  return Promise.resolve();
+}
+
+/** 다시 읽은 목록이 나간 상태를 보이도록 목 데이터를 고친다. */
+export function leaveConversation(conversationId: string): Promise<void> {
+  const viewerId = findConversation(conversationId)?.viewerId;
+  if (viewerId) setActive(conversationId, [viewerId], false);
+  return Promise.resolve();
+}
+
+export function removeConversationMember(
+  conversationId: string,
+  profileId: string,
+): Promise<void> {
+  setActive(conversationId, [profileId], false);
+  return Promise.resolve();
+}
+
+// 참여자 객체는 대화끼리 같은 것을 쓸 수 있다(viewer). 고치지 않고 새로 만든다.
+function setActive(conversationId: string, ids: string[], active: boolean) {
+  const conversation = findConversation(conversationId);
+  if (!conversation) return;
+  conversation.participants = conversation.participants.map((participant) =>
+    ids.includes(participant.id) ? { ...participant, active } : participant,
+  );
+}
+
+const initialConversations = structuredClone(mockConversations);
+
+/** 테스트가 고친 목 데이터를 처음 상태로 되돌린다. */
+export function resetFakeMessaging() {
+  mockConversations.splice(
+    0,
+    mockConversations.length,
+    ...structuredClone(initialConversations),
+  );
+}
+
+export function renameConversation(
+  conversationId: string,
+  name: string,
+): Promise<void> {
+  const conversation = findConversation(conversationId);
+  if (conversation) conversation.name = name;
+  return Promise.resolve();
+}
+
+/** 본문 부분 일치. 실제 서버처럼 공백과 대소문자를 무시하고 최신부터 준다. */
+export function searchMessages(
+  conversationId: string,
+  query: string,
+  _before: MessageCursor | null,
+) {
+  const term = query.replace(/\s+/g, "").toLowerCase();
+  const messages = findConversation(conversationId)?.messages ?? [];
+  return Promise.resolve({
+    results: messages
+      .filter(
+        (message) =>
+          !message.system &&
+          !message.deleted &&
+          message.body.replace(/\s+/g, "").toLowerCase().includes(term),
+      )
+      .reverse()
+      .map(({ id, senderId, body, sentAt }) => ({
+        id,
+        senderId,
+        body,
+        sentAt,
+      })),
+    nextCursor: null,
+  });
+}
+
+export function listMessageReactors(_messageId: string) {
+  return Promise.resolve([
+    {
+      id: "seo",
+      name: "박서현",
+      avatarUrl: null,
+      reaction: "like" as const,
+      reactedAt: "2026-08-28T15:13:00+09:00",
+    },
+  ]);
+}
+
+export function getSharedAttachmentCounts(_conversationId: string) {
+  return Promise.resolve({ media: 0, files: 0 });
+}
+
+export function listSharedAttachments() {
+  return Promise.resolve({ items: [], nextCursor: null });
+}
+
+export function removeMessageAttachment(_attachmentId: string): Promise<void> {
+  return Promise.resolve();
+}

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   holdMessageWrite,
+  markConversationListRead,
   mergeServerMessages,
   patchMessage,
   messagingKeys,
@@ -290,5 +291,24 @@ describe("reloadLatestPage", () => {
       queryClient.getQueryData<MessagePages>(messagingKeys.messages(ID))!
         .pages[0].messages[0].deleted,
     ).toBe(true);
+  });
+});
+
+describe("markConversationListRead", () => {
+  it("목록의 그 대화를 읽음으로 그리고 탭 배지에서 그만큼 뺀다", () => {
+    queryClient.setQueryData(messagingKeys.conversations(), [
+      { id: ID, unreadCount: 3 },
+      { id: "other", unreadCount: 2 },
+    ]);
+    queryClient.setQueryData(messagingKeys.unreadCount(), 5);
+
+    markConversationListRead(queryClient, ID);
+
+    expect(queryClient.getQueryData(messagingKeys.unreadCount())).toBe(2);
+    expect(
+      queryClient.getQueryData<{ unreadCount: number }[]>(
+        messagingKeys.conversations(),
+      )?.[0]?.unreadCount,
+    ).toBe(0);
   });
 });

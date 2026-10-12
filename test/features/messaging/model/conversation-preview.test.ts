@@ -12,8 +12,8 @@ function conversation(
     name: "방",
     viewerId: "me",
     participants: [
-      { id: "me", name: "나", avatarUrl: null },
-      { id: "seo", name: "박서현", avatarUrl: null },
+      { id: "me", name: "나", avatarUrl: null, active: true },
+      { id: "seo", name: "박서현", avatarUrl: null, active: true },
     ],
     lastMessage: {
       senderId: "seo",
@@ -22,6 +22,7 @@ function conversation(
     },
     unreadCount: 0,
     muted: false,
+    canManageMembers: false,
     ...overrides,
   };
 }

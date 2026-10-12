@@ -31,4 +31,29 @@ describe("canEditMessage", () => {
       false,
     );
   });
+
+  it("사진이나 파일이 붙은 메시지는 고칠 수 없다", () => {
+    expect(
+      canEditMessage(
+        {
+          ...message,
+          attachments: [
+            {
+              id: "a",
+              kind: "file",
+              mimeType: "application/pdf",
+              sizeBytes: 1,
+              width: null,
+              height: null,
+              fileName: "a.pdf",
+              objectPath: "c/a",
+              thumbnailPath: null,
+            },
+          ],
+        },
+        "me",
+        sent,
+      ),
+    ).toBe(false);
+  });
 });

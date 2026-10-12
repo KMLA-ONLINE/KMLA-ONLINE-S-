@@ -1451,6 +1451,10 @@ export type Database = {
     }
     Functions: {
       accept_group_invite: { Args: { p_token: string }; Returns: string }
+      add_conversation_members: {
+        Args: { p_conversation_id: string; p_profile_ids: number[] }
+        Returns: undefined
+      }
       admin_list_accepted_users: {
         Args: {
           p_limit?: number
@@ -1690,6 +1694,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_group_conversation: {
+        Args: { p_name: string; p_profile_ids: number[] }
+        Returns: string
+      }
       create_group_post: {
         Args: {
           p_author_identity: Database["public"]["Enums"]["post_identity"]
@@ -1927,6 +1935,13 @@ export type Database = {
           type: Database["public"]["Enums"]["profile_type"]
         }[]
       }
+      get_conversation_attachment_counts: {
+        Args: { p_conversation_id: string }
+        Returns: {
+          file_count: number
+          media_count: number
+        }[]
+      }
       get_group_invite: {
         Args: { p_group_id: string }
         Returns: {
@@ -2069,6 +2084,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      get_my_unread_message_count: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       get_my_web_push_status: {
         Args: { p_endpoint: string }
         Returns: {
@@ -2111,6 +2130,10 @@ export type Database = {
           expires_at: string
           token: string
         }[]
+      }
+      leave_conversation: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
       }
       list_active_stories: {
         Args: Record<PropertyKey, never>
@@ -2167,10 +2190,35 @@ export type Database = {
           reactor_pub_id: string
         }[]
       }
+      list_conversation_attachments: {
+        Args: {
+          p_before_id?: string
+          p_before_sent_at?: string
+          p_conversation_id: string
+          p_limit?: number
+          p_media: boolean
+        }
+        Returns: {
+          file_name: string
+          height: number
+          id: string
+          kind: string
+          message_id: string
+          mime_type: string
+          object_path: string
+          sender_id: number
+          sent_at: string
+          size_bytes: number
+          thumbnail_path: string
+          width: number
+        }[]
+      }
       list_conversations: {
         Args: { p_conversation_id?: string }
         Returns: {
+          can_manage_members: boolean
           conversation_id: string
+          last_message_attachment_kind: string
           last_message_body: string
           last_message_deleted: boolean
           last_message_id: string
@@ -2340,6 +2388,7 @@ export type Database = {
       list_message_changes: {
         Args: { p_conversation_id: string; p_limit?: number; p_since: string }
         Returns: {
+          attachments: Json
           body: string
           changed_at: string
           deleted: boolean
@@ -2354,7 +2403,20 @@ export type Database = {
           reply_to_id: string
           sender_id: number
           sent_at: string
+          system_kind: string
+          system_name: string
+          system_profile_ids: number[]
           unread_member_count: number
+        }[]
+      }
+      list_message_reactors: {
+        Args: { p_message_id: string }
+        Returns: {
+          avatar_path: string
+          name: string
+          profile_id: number
+          reacted_at: string
+          reaction: Database["public"]["Enums"]["post_reaction"]
         }[]
       }
       list_message_read_counts: {
@@ -2372,6 +2434,7 @@ export type Database = {
           p_limit?: number
         }
         Returns: {
+          attachments: Json
           body: string
           changed_at: string
           deleted: boolean
@@ -2386,6 +2449,9 @@ export type Database = {
           reply_to_id: string
           sender_id: number
           sent_at: string
+          system_kind: string
+          system_name: string
+          system_profile_ids: number[]
           unread_member_count: number
         }[]
       }
@@ -2423,6 +2489,7 @@ export type Database = {
       list_pinned_messages: {
         Args: { p_conversation_id: string }
         Returns: {
+          attachments: Json
           body: string
           changed_at: string
           deleted: boolean
@@ -2437,6 +2504,9 @@ export type Database = {
           reply_to_id: string
           sender_id: number
           sent_at: string
+          system_kind: string
+          system_name: string
+          system_profile_ids: number[]
           unread_member_count: number
         }[]
       }
@@ -2607,6 +2677,10 @@ export type Database = {
         Args: { p_within_seconds?: number }
         Returns: string
       }
+      open_direct_conversation: {
+        Args: { p_profile_id: number }
+        Returns: string
+      }
       prepare_comment_image: {
         Args: {
           p_height: number
@@ -2662,6 +2736,14 @@ export type Database = {
         Returns: {
           object_path: string
           story_id: number
+          thumbnail_path: string
+        }[]
+      }
+      prepare_message_attachments: {
+        Args: { p_conversation_id: string; p_files: Json; p_message_id: string }
+        Returns: {
+          attachment_id: string
+          object_path: string
           thumbnail_path: string
         }[]
       }
@@ -2733,11 +2815,19 @@ export type Database = {
         Args: { p_group_id: string; p_request_id: string }
         Returns: undefined
       }
+      remove_conversation_member: {
+        Args: { p_conversation_id: string; p_profile_id: number }
+        Returns: undefined
+      }
       remove_group_media: {
         Args: {
           p_group_id: string
           p_slot: Database["public"]["Enums"]["group_media_slot"]
         }
+        Returns: undefined
+      }
+      remove_message_attachment: {
+        Args: { p_attachment_id: string }
         Returns: undefined
       }
       remove_my_profile_media: {
@@ -2782,6 +2872,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      rename_conversation: {
+        Args: { p_conversation_id: string; p_name: string }
+        Returns: undefined
       }
       report_group_post: {
         Args: {
@@ -2851,6 +2945,27 @@ export type Database = {
           published_at: string
           title: string
         }[]
+      }
+      search_message_recipients: {
+        Args: { p_query: string }
+        Returns: {
+          avatar_path: string
+          cohort: number
+          name: string
+          profile_id: number
+          profile_type: Database["public"]["Enums"]["profile_type"]
+          pub_id: string
+        }[]
+      }
+      search_messages: {
+        Args: {
+          p_before_id?: string
+          p_before_sent_at?: string
+          p_conversation_id: string
+          p_limit?: number
+          p_query: string
+        }
+        Returns: Json
       }
       send_message: {
         Args: {

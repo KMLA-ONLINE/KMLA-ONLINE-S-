@@ -32,6 +32,11 @@ function messageRow(id: string, sentAt: string) {
     reactions: [],
     my_reaction: null,
     pinned: false,
+    changed_at: sentAt,
+    system_kind: null,
+    system_profile_ids: null,
+    system_name: null,
+    attachments: [],
   };
 }
 
@@ -42,8 +47,8 @@ function conversationRow(overrides: Record<string, unknown> = {}) {
     name: "김민준",
     viewer_id: 1,
     participants: [
-      { id: 1, name: "홍길동", avatar_path: null },
-      { id: 2, name: "김민준", avatar_path: "avatars/2" },
+      { id: 1, name: "홍길동", avatar_path: null, active: true },
+      { id: 2, name: "김민준", avatar_path: "avatars/2", active: false },
     ],
     last_message_id: "m",
     last_message_sender_id: 2,
@@ -52,6 +57,8 @@ function conversationRow(overrides: Record<string, unknown> = {}) {
     last_message_deleted: false,
     unread_count: 3,
     muted: false,
+    can_manage_members: true,
+    last_message_attachment_kind: null,
     ...overrides,
   };
 }
@@ -118,16 +125,23 @@ describe("messaging queries", () => {
         name: "김민준",
         viewerId: "1",
         participants: [
-          { id: "1", name: "홍길동", avatarUrl: null },
-          { id: "2", name: "김민준", avatarUrl: "https://signed/avatars/2" },
+          { id: "1", name: "홍길동", avatarUrl: null, active: true },
+          {
+            id: "2",
+            name: "김민준",
+            avatarUrl: "https://signed/avatars/2",
+            active: false,
+          },
         ],
         lastMessage: {
           senderId: "2",
           body: "원문",
           sentAt: "2026-08-28T06:00:00+00:00",
+          attachmentKind: null,
         },
         unreadCount: 3,
         muted: false,
+        canManageMembers: true,
       },
     ]);
   });
@@ -224,5 +238,28 @@ describe("messaging queries", () => {
       "list_messages",
       expect.objectContaining({ p_limit: 101 }),
     );
+  });
+
+  it("시스템 메시지는 종류와 프로필 ID를 문자열로 옮긴다", async () => {
+    rpc.mockResolvedValue({
+      data: [
+        {
+          ...messageRow("s", "2026-08-28T06:00:00+00:00"),
+          sender_id: null,
+          body: "",
+          system_kind: "member_added",
+          system_profile_ids: [1, 2],
+        },
+      ],
+      error: null,
+    });
+
+    const page = await listMessages("conversation", null);
+
+    expect(page.messages[0]?.system).toEqual({
+      kind: "member_added",
+      profileIds: ["1", "2"],
+      name: null,
+    });
   });
 });

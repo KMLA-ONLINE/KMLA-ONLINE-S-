@@ -65,6 +65,7 @@ export function MessageRow({
   onViewReply,
   onReply,
   onSelectReaction,
+  onShowReactions,
   contextActions,
   contextViewportRef,
   contextPortalRef,
@@ -89,6 +90,8 @@ export function MessageRow({
   onViewReply?: () => void;
   onReply?: () => void;
   onSelectReaction?: (reaction: PostReaction) => void;
+  /** 반응 표시를 누르면 반응한 사람을 보여 준다. */
+  onShowReactions?: () => void;
   contextActions?: MessageContextAction[];
   contextViewportRef?: RefObject<HTMLElement | null>;
   contextPortalRef?: RefObject<HTMLElement | null>;
@@ -456,6 +459,7 @@ export function MessageRow({
               replyTarget={replyTarget}
               replyTargetAuthor={replyTargetAuthor}
               onViewReply={onViewReply}
+              onShowReactions={onShowReactions}
             />
           </MessageTimeCard>
           {!isOwn ? actionRail : null}

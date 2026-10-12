@@ -1,4 +1,5 @@
 import {
+  CheckIcon,
   ChevronDownIcon,
   CopyIcon,
   EllipsisIcon,
@@ -6,6 +7,7 @@ import {
   ChevronRightIcon,
   ImageIcon,
   InfoIcon,
+  ListChecksIcon,
   PaperclipIcon,
   PencilIcon,
   PinIcon,
@@ -42,7 +44,26 @@ import {
   useConversationMessages,
   type OlderMessagesResult,
 } from "~/features/messaging/hooks/use-conversation-messages";
+import {
+  useConversationMembership,
+  useListedConversation,
+} from "~/features/messaging/hooks/use-conversation-membership";
 import { useConversationMute } from "~/features/messaging/hooks/use-conversation-mute";
+import { MessageSearchPanel } from "~/features/messaging/components/message-search-panel";
+import { ReactionMembersDialog } from "~/features/messaging/components/reaction-members-dialog";
+import { AttachmentRemovalDialog } from "~/features/messaging/components/attachment-removal-dialog";
+import { SharedMediaDialog } from "~/features/messaging/components/shared-media-dialog";
+import { getSharedAttachmentCounts } from "~/features/messaging/data/queries";
+import { messagingKeys } from "~/features/messaging/data/cache";
+import { useQuery } from "@tanstack/react-query";
+import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
+import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
+import { RenameConversationDialog } from "~/features/messaging/components/rename-conversation-dialog";
+import {
+  activeParticipants,
+  formatSystemMessage,
+  isViewerActive,
+} from "~/features/messaging/model/system-message";
 import { canEditMessage } from "~/features/messaging/model/message-edit";
 import {
   canConnectMessages,
@@ -68,6 +89,7 @@ import {
 } from "~/features/posts/components/reaction/quick-reaction-bar";
 import type { PostReaction } from "~/features/posts/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import { toast } from "sonner";
 import { Button } from "~/shared/ui/button";
 import {
   DropdownMenu,
@@ -90,7 +112,7 @@ const FOLLOW_NEW_MESSAGES_THRESHOLD = 80;
 const OLDER_MESSAGES_THRESHOLD = 400;
 
 export function RoomScreen({
-  conversation,
+  conversation: loadedConversation,
   desktopDetailsOpen = true,
   onDesktopDetailsOpenChange,
 }: {
@@ -98,7 +120,25 @@ export function RoomScreen({
   desktopDetailsOpen?: boolean;
   onDesktopDetailsOpenChange?: (open: boolean) => void;
 }) {
+  // 이름과 멤버는 다른 멤버가 바꿀 수 있어 대화 목록의 최신 값을 쓴다.
+  const conversation = useListedConversation(loadedConversation);
+  const viewerActive = isViewerActive(conversation);
+  const participantById = new Map(
+    conversation.participants.map((participant) => [
+      participant.id,
+      participant,
+    ]),
+  );
+  const membership = useConversationMembership(conversation.id);
+  const [memberDialog, setMemberDialog] = useState<
+    | { kind: "invite" }
+    | { kind: "rename" }
+    | { kind: "leave" }
+    | { kind: "remove"; participant: MessageParticipant }
+    | null
+  >(null);
   const [compactDetailsOpen, setCompactDetailsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [pinnedDialogOpen, setPinnedDialogOpen] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<
     string | null
@@ -110,12 +150,33 @@ export function RoomScreen({
     loadingOlderMessages,
     loadOlderMessages,
     send,
-    draftIdFor,
+    sendFiles,
+    removeAttachment,
+    retry,
+    discard,
+    loadUntil,
     react,
     togglePinned,
     edit,
     remove,
+    removeMany,
   } = useConversationMessages(conversation);
+  // 삭제 모드에서 고른 내 메시지. `null`이면 삭제 모드가 아니다(기능 명세 §13.11).
+  const [selection, setSelection] = useState<ReadonlySet<string> | null>(null);
+  const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false);
+  const [sharedMediaTab, setSharedMediaTab] = useState<
+    "media" | "files" | null
+  >(null);
+  // 대화 정보가 보일 때 공유된 첨부 수를 센다. 첨부가 바뀌면 메시지 신호가 다시 읽게 한다.
+  const { data: sharedCounts } = useQuery({
+    queryKey: messagingKeys.sharedAttachmentCounts(conversation.id),
+    queryFn: () => getSharedAttachmentCounts(conversation.id),
+    staleTime: 60_000,
+  });
+  const [attachmentTarget, setAttachmentTarget] =
+    useState<ConversationMessage | null>(null);
+  const [reactionsTarget, setReactionsTarget] =
+    useState<ConversationMessage | null>(null);
   const { muted, toggleMuted } = useConversationMute(conversation);
   const [replyTarget, setReplyTarget] = useState<ConversationMessage | null>(
     null,
@@ -161,9 +222,15 @@ export function RoomScreen({
     sentMessageId.current = null;
   }, [messages]);
 
-  function viewMessage(messageId: string) {
+  // 원래 메시지로 이동해 강조한다. 아직 불러오지 않은 구간이면 그 메시지까지 앞선 페이지를 이어 읽는다.
+  async function viewMessage(messageId: string) {
     setPinnedDialogOpen(false);
     setCompactDetailsOpen(false);
+    setSearchOpen(false);
+    if (!(await loadUntil(messageId))) {
+      toast.error("메시지를 찾을 수 없습니다.");
+      return;
+    }
     setHighlightedMessageId(messageId);
     requestAnimationFrame(() => {
       document
@@ -172,9 +239,11 @@ export function RoomScreen({
     });
   }
 
+  // 보내지 못하면 메시지가 목록에 "보내지 못함"으로 남아 다시 보낼 수 있으므로 입력과 답장 대상은
+  // 되살리지 않는다.
   async function sendMessage(body: string) {
     const target = replyTarget;
-    const id = draftIdFor(body, target?.id);
+    const id = crypto.randomUUID();
     sentMessageId.current = id;
     setReplyTarget(null);
     const sent = await send({
@@ -189,8 +258,6 @@ export function RoomScreen({
           }
         : undefined,
     });
-    // 작성창이 입력을 되살리므로 답장 대상도 함께 되살린다. 그새 다른 답장을 골랐으면 두지 않는다.
-    if (!sent && target) setReplyTarget((current) => current ?? target);
     return sent;
   }
 
@@ -237,8 +304,8 @@ export function RoomScreen({
             variant="ghost"
             size="icon"
             className="rounded-full"
-            aria-label="대화 검색 기능 준비 중"
-            disabled
+            aria-label="대화 검색"
+            onClick={() => setSearchOpen(true)}
           >
             <SearchIcon aria-hidden />
           </Button>
@@ -264,6 +331,15 @@ export function RoomScreen({
             <InfoIcon aria-hidden />
           </Button>
         </header>
+
+        {searchOpen ? (
+          <MessageSearchPanel
+            conversationId={conversation.id}
+            participants={participantById}
+            onClose={() => setSearchOpen(false)}
+            onSelect={(result) => void viewMessage(result.id)}
+          />
+        ) : null}
 
         {pinnedMessage ? (
           <button
@@ -307,18 +383,74 @@ export function RoomScreen({
             setEditTarget({ message, draft: message.body });
           }}
           onDelete={setDeleteTarget}
-          onViewMessage={viewMessage}
+          onViewMessage={(messageId) => void viewMessage(messageId)}
+          selection={selection}
+          onStartSelection={(message) => {
+            setReplyTarget(null);
+            setEditTarget(null);
+            setSelection(new Set([message.id]));
+          }}
+          onToggleSelection={(message) =>
+            setSelection((current) => {
+              if (!current) return current;
+              const next = new Set(current);
+              if (next.has(message.id)) next.delete(message.id);
+              else next.add(message.id);
+              return next;
+            })
+          }
+          onRetry={retry}
+          onDiscard={discard}
+          onShowReactions={setReactionsTarget}
+          onRemoveAttachments={setAttachmentTarget}
+          onDropFiles={
+            viewerActive && !selection
+              ? (files) => {
+                  setReplyTarget(null);
+                  void sendFiles(files);
+                }
+              : undefined
+          }
         />
-        <ComposerShell
-          replyTarget={replyTarget ?? undefined}
-          replyAuthor={replyAuthor}
-          onCancelReply={() => setReplyTarget(null)}
-          editTarget={editTarget ?? undefined}
-          onCancelEdit={() => setEditTarget(null)}
-          onEdit={submitEdit}
-          onSend={sendMessage}
-          desktopDetailsOpen={desktopDetailsOpen}
-        />
+        {selection ? (
+          <div className="flex shrink-0 items-center gap-2 border-t bg-background px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))]">
+            <p
+              className="min-w-0 flex-1 text-sm font-medium"
+              aria-live="polite"
+            >
+              {selection.size}개 선택됨
+            </p>
+            <Button variant="outline" onClick={() => setSelection(null)}>
+              취소
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={selection.size === 0}
+              onClick={() => setConfirmingBulkDelete(true)}
+            >
+              삭제
+            </Button>
+          </div>
+        ) : viewerActive ? (
+          <ComposerShell
+            replyTarget={replyTarget ?? undefined}
+            replyAuthor={replyAuthor}
+            onCancelReply={() => setReplyTarget(null)}
+            editTarget={editTarget ?? undefined}
+            onCancelEdit={() => setEditTarget(null)}
+            onEdit={submitEdit}
+            onSend={sendMessage}
+            onSendFiles={(files) => {
+              setReplyTarget(null);
+              void sendFiles(files);
+            }}
+            desktopDetailsOpen={desktopDetailsOpen}
+          />
+        ) : (
+          <p className="shrink-0 px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))] text-center text-sm text-muted-foreground">
+            이 대화에서 나왔습니다. 참여한 동안의 메시지만 볼 수 있습니다.
+          </p>
+        )}
       </section>
 
       <ConversationDetails
@@ -328,6 +460,18 @@ export function RoomScreen({
         onOpenPinnedMessages={() => setPinnedDialogOpen(true)}
         muted={muted}
         onToggleMuted={toggleMuted}
+        onSearch={() => {
+          setCompactDetailsOpen(false);
+          setSearchOpen(true);
+        }}
+        onInvite={() => setMemberDialog({ kind: "invite" })}
+        onRename={() => setMemberDialog({ kind: "rename" })}
+        onLeave={() => setMemberDialog({ kind: "leave" })}
+        onRemoveMember={(participant) =>
+          setMemberDialog({ kind: "remove", participant })
+        }
+        sharedCounts={sharedCounts}
+        onOpenSharedMedia={setSharedMediaTab}
         className={cn(
           compactDetailsOpen ? "flex xl:hidden" : "hidden",
           compactDetailsOpen &&
@@ -342,9 +486,102 @@ export function RoomScreen({
         viewerId={conversation.viewerId}
         isGroup={conversation.type === "group"}
         onOpenChange={setPinnedDialogOpen}
-        onViewMessage={viewMessage}
+        onViewMessage={(messageId) => void viewMessage(messageId)}
         onUnpin={togglePinned}
       />
+      <RecipientPickerDialog
+        open={memberDialog?.kind === "invite"}
+        mode="invite"
+        excludeIds={activeParticipants(conversation).map(({ id }) => id)}
+        onOpenChange={(open) => {
+          if (!open) setMemberDialog(null);
+        }}
+        onSubmit={async ({ recipients }) => {
+          const invited = await membership.invite(
+            recipients.map(({ id }) => id),
+          );
+          if (!invited) throw new Error("invite failed");
+          setMemberDialog(null);
+        }}
+      />
+      {memberDialog?.kind === "rename" ? (
+        <RenameConversationDialog
+          currentName={conversation.name}
+          onCancel={() => setMemberDialog(null)}
+          onSubmit={membership.rename}
+        />
+      ) : null}
+      {memberDialog?.kind === "leave" ? (
+        <ConfirmDialog
+          title="그룹에서 나갈까요?"
+          description="나간 뒤에도 참여한 동안의 메시지는 볼 수 있지만, 이후 메시지는 볼 수 없습니다."
+          confirmLabel="나가기"
+          destructive
+          onCancel={() => setMemberDialog(null)}
+          onConfirm={() => {
+            setMemberDialog(null);
+            void membership.leave();
+          }}
+        />
+      ) : null}
+      {memberDialog?.kind === "remove" ? (
+        <ConfirmDialog
+          title={`${memberDialog.participant.name}님을 내보낼까요?`}
+          description="내보낸 사람의 지난 메시지는 대화에 남고, 이후 메시지는 볼 수 없습니다."
+          confirmLabel="내보내기"
+          destructive
+          onCancel={() => setMemberDialog(null)}
+          onConfirm={() => {
+            const { participant } = memberDialog;
+            setMemberDialog(null);
+            void membership.remove(participant.id);
+          }}
+        />
+      ) : null}
+      {confirmingBulkDelete && selection ? (
+        <ConfirmDialog
+          title={`메시지 ${selection.size}개를 삭제할까요?`}
+          description="모든 참여자에게 '삭제된 메시지입니다'로 표시되고 반응과 고정도 사라집니다."
+          confirmLabel="삭제"
+          destructive
+          onCancel={() => setConfirmingBulkDelete(false)}
+          onConfirm={() => {
+            removeMany(messages.filter(({ id }) => selection.has(id)));
+            setConfirmingBulkDelete(false);
+            setSelection(null);
+          }}
+        />
+      ) : null}
+      {sharedMediaTab ? (
+        <SharedMediaDialog
+          conversationId={conversation.id}
+          initialTab={sharedMediaTab}
+          counts={sharedCounts}
+          onClose={() => setSharedMediaTab(null)}
+          onViewMessage={(messageId) => {
+            setSharedMediaTab(null);
+            void viewMessage(messageId);
+          }}
+        />
+      ) : null}
+      {attachmentTarget ? (
+        <AttachmentRemovalDialog
+          message={
+            messages.find(({ id }) => id === attachmentTarget.id) ??
+            attachmentTarget
+          }
+          onRemove={(attachmentId) =>
+            removeAttachment(attachmentTarget, attachmentId)
+          }
+          onClose={() => setAttachmentTarget(null)}
+        />
+      ) : null}
+      {reactionsTarget ? (
+        <ReactionMembersDialog
+          message={reactionsTarget}
+          onClose={() => setReactionsTarget(null)}
+        />
+      ) : null}
       {deleteTarget ? (
         <ConfirmDialog
           title="메시지를 삭제할까요?"
@@ -378,6 +615,14 @@ function MessageThread({
   onEdit,
   onDelete,
   onViewMessage,
+  selection,
+  onStartSelection,
+  onToggleSelection,
+  onRetry,
+  onDiscard,
+  onShowReactions,
+  onRemoveAttachments,
+  onDropFiles,
 }: {
   conversation: Conversation;
   messages: ConversationMessage[];
@@ -396,8 +641,18 @@ function MessageThread({
   onEdit: (message: ConversationMessage) => void;
   onDelete: (message: ConversationMessage) => void;
   onViewMessage: (messageId: string) => void;
+  selection: ReadonlySet<string> | null;
+  onStartSelection: (message: ConversationMessage) => void;
+  onToggleSelection: (message: ConversationMessage) => void;
+  onRetry: (message: ConversationMessage) => void;
+  onDiscard: (message: ConversationMessage) => void;
+  onShowReactions: (message: ConversationMessage) => void;
+  onRemoveAttachments: (message: ConversationMessage) => void;
+  /** 데스크톱에서 대화 영역에 끌어 놓은 파일을 보낸다. 보낼 수 없는 상태면 없다. */
+  onDropFiles?: (files: File[]) => void;
 }) {
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [draggingFiles, setDraggingFiles] = useState(false);
   const scrollingToBottom = useRef(false);
   const previousScrollTop = useRef(0);
   const contextPortalRef = useRef<HTMLDivElement>(null);
@@ -431,6 +686,12 @@ function MessageThread({
     onEdit,
     onDelete,
     onViewMessage,
+    onStartSelection,
+    onToggleSelection,
+    onRetry,
+    onDiscard,
+    onShowReactions,
+    onRemoveAttachments,
   });
   useLayoutEffect(() => {
     latestHandlers.current = {
@@ -440,6 +701,12 @@ function MessageThread({
       onEdit,
       onDelete,
       onViewMessage,
+      onStartSelection,
+      onToggleSelection,
+      onRetry,
+      onDiscard,
+      onShowReactions,
+      onRemoveAttachments,
     };
   });
   const actions = useMemo<ThreadMessageActions>(
@@ -452,6 +719,16 @@ function MessageThread({
       delete: (message) => latestHandlers.current.onDelete(message),
       viewMessage: (messageId) =>
         latestHandlers.current.onViewMessage(messageId),
+      startSelection: (message) =>
+        latestHandlers.current.onStartSelection(message),
+      toggleSelection: (message) =>
+        latestHandlers.current.onToggleSelection(message),
+      retry: (message) => latestHandlers.current.onRetry(message),
+      discard: (message) => latestHandlers.current.onDiscard(message),
+      showReactions: (message) =>
+        latestHandlers.current.onShowReactions(message),
+      removeAttachments: (message) =>
+        latestHandlers.current.onRemoveAttachments(message),
     }),
     [],
   );
@@ -539,7 +816,30 @@ function MessageThread({
   }
 
   return (
-    <div className="relative isolate flex min-h-0 flex-1 flex-col">
+    <div
+      className="relative isolate flex min-h-0 flex-1 flex-col"
+      onDragOver={(event) => {
+        if (!onDropFiles || !event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        setDraggingFiles(true);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setDraggingFiles(false);
+        }
+      }}
+      onDrop={(event) => {
+        setDraggingFiles(false);
+        if (!onDropFiles || event.dataTransfer.files.length === 0) return;
+        event.preventDefault();
+        onDropFiles([...event.dataTransfer.files]);
+      }}
+    >
+      {draggingFiles ? (
+        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary bg-background/80 text-sm font-medium text-primary">
+          여기에 놓으면 보냅니다
+        </div>
+      ) : null}
       <div
         ref={messageThreadRef}
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 md:px-5"
@@ -585,7 +885,7 @@ function MessageThread({
                 ) : null}
                 {message.system ? (
                   <p className="my-3 text-center text-xs text-muted-foreground">
-                    {message.body}
+                    {formatSystemMessage(message.system, participantById)}
                   </p>
                 ) : (
                   <ThreadMessage
@@ -594,6 +894,16 @@ function MessageThread({
                     replyTargetAuthor={replyTargetAuthor}
                     isOwn={message.senderId === conversation.viewerId}
                     canEdit={canEditMessage(message, conversation.viewerId)}
+                    selection={
+                      selection === null
+                        ? undefined
+                        : message.senderId === conversation.viewerId &&
+                            !message.deleted &&
+                            !message.pending &&
+                            !message.failed
+                          ? selection.has(message.id)
+                          : null
+                    }
                     isGroup={conversation.type === "group"}
                     startsGroup={startsGroup}
                     endsGroup={endsGroup}
@@ -644,6 +954,12 @@ interface ThreadMessageActions {
   edit: (message: ConversationMessage) => void;
   delete: (message: ConversationMessage) => void;
   viewMessage: (messageId: string) => void;
+  startSelection: (message: ConversationMessage) => void;
+  toggleSelection: (message: ConversationMessage) => void;
+  retry: (message: ConversationMessage) => void;
+  discard: (message: ConversationMessage) => void;
+  showReactions: (message: ConversationMessage) => void;
+  removeAttachments: (message: ConversationMessage) => void;
 }
 
 /**
@@ -657,6 +973,7 @@ const ThreadMessage = memo(function ThreadMessage({
   replyTargetAuthor,
   isOwn,
   canEdit,
+  selection,
   isGroup,
   startsGroup,
   endsGroup,
@@ -671,6 +988,11 @@ const ThreadMessage = memo(function ThreadMessage({
   isOwn: boolean;
   /** 15분 기한은 렌더 시점에 판정한다. 기한이 지나면 다음 렌더에서 메뉴가 빠지고, 서버가 최종 판정한다. */
   canEdit: boolean;
+  /**
+   * 삭제 모드에서 이 메시지를 골랐는지. 삭제 모드가 아니면 `undefined`, 삭제 모드인데 고를 수 없는
+   * 메시지(남의 메시지, 삭제된 메시지, 보내는 중이거나 보내지 못한 메시지)면 `null`이다.
+   */
+  selection?: boolean | null;
   isGroup: boolean;
   startsGroup: boolean;
   endsGroup: boolean;
@@ -682,7 +1004,7 @@ const ThreadMessage = memo(function ThreadMessage({
   const replyTarget = message.replyTo;
   // 삭제된 메시지는 반응, 고정, 수정, 삭제를 받지 않는다. 전송 중인 메시지는 아직 서버에 없어
   // 복사만 된다. 남는 작업이 없으면 메뉴를 열지 않는다.
-  const actionable = !message.deleted && !message.pending;
+  const actionable = !message.deleted && !message.pending && !message.failed;
   const contextActions = [
     ...(actionable
       ? [
@@ -693,7 +1015,7 @@ const ThreadMessage = memo(function ThreadMessage({
           },
         ]
       : []),
-    ...(message.deleted
+    ...(message.deleted || message.body === ""
       ? []
       : [
           {
@@ -727,53 +1049,117 @@ const ThreadMessage = memo(function ThreadMessage({
             icon: <Trash2Icon aria-hidden />,
             onSelect: () => actions.delete(message),
           },
+          {
+            label: "여러 개 선택",
+            icon: <ListChecksIcon aria-hidden />,
+            onSelect: () => actions.startSelection(message),
+          },
+          ...((message.attachments?.length ?? 0) > 0
+            ? [
+                {
+                  label: "첨부 지우기",
+                  icon: <PaperclipIcon aria-hidden />,
+                  onSelect: () => actions.removeAttachments(message),
+                },
+              ]
+            : []),
         ]
       : []),
   ];
 
   return (
-    <MessageRow
-      message={message}
-      sender={sender}
-      isOwn={isOwn}
-      isGroup={isGroup}
-      unreadParticipantCount={message.unreadMemberCount ?? 0}
-      startsGroup={startsGroup}
-      endsGroup={endsGroup}
-      isPinned={message.pinned ?? false}
-      highlighted={highlighted}
-      elementId={`message-${message.id}`}
-      contextViewportRef={contextViewportRef}
-      contextPortalRef={contextPortalRef}
-      replyTarget={replyTarget}
-      replyTargetAuthor={replyTargetAuthor}
-      onViewReply={
-        replyTarget ? () => actions.viewMessage(replyTarget.id) : undefined
-      }
-      onReply={actionable ? () => actions.reply(message) : undefined}
-      onSelectReaction={
-        actionable
-          ? (reaction) => actions.selectReaction(message, reaction)
-          : undefined
-      }
-      contextActions={contextActions.length ? contextActions : undefined}
-      actionRail={
-        <MessageActions
-          isOwn={isOwn}
-          message={message}
-          isPinned={message.pinned ?? false}
-          onSelectReaction={(reaction) =>
-            actions.selectReaction(message, reaction)
-          }
-          onReply={() => actions.reply(message)}
-          onTogglePinned={() => actions.togglePinned(message)}
-          onEdit={canEdit ? () => actions.edit(message) : undefined}
-          onDelete={
-            isOwn && actionable ? () => actions.delete(message) : undefined
-          }
-        />
-      }
-    />
+    <div className="relative">
+      <MessageRow
+        message={message}
+        sender={sender}
+        isOwn={isOwn}
+        isGroup={isGroup}
+        unreadParticipantCount={message.unreadMemberCount ?? 0}
+        startsGroup={startsGroup}
+        endsGroup={endsGroup}
+        isPinned={message.pinned ?? false}
+        highlighted={highlighted}
+        elementId={`message-${message.id}`}
+        contextViewportRef={contextViewportRef}
+        contextPortalRef={contextPortalRef}
+        replyTarget={replyTarget}
+        replyTargetAuthor={replyTargetAuthor}
+        onShowReactions={() => actions.showReactions(message)}
+        onViewReply={
+          replyTarget ? () => actions.viewMessage(replyTarget.id) : undefined
+        }
+        onReply={actionable ? () => actions.reply(message) : undefined}
+        onSelectReaction={
+          actionable
+            ? (reaction) => actions.selectReaction(message, reaction)
+            : undefined
+        }
+        contextActions={contextActions.length ? contextActions : undefined}
+        actionRail={
+          <MessageActions
+            isOwn={isOwn}
+            message={message}
+            isPinned={message.pinned ?? false}
+            onSelectReaction={(reaction) =>
+              actions.selectReaction(message, reaction)
+            }
+            onReply={() => actions.reply(message)}
+            onTogglePinned={() => actions.togglePinned(message)}
+            onEdit={canEdit ? () => actions.edit(message) : undefined}
+            onDelete={
+              isOwn && actionable ? () => actions.delete(message) : undefined
+            }
+            onStartSelection={
+              isOwn && actionable
+                ? () => actions.startSelection(message)
+                : undefined
+            }
+          />
+        }
+      />
+      {message.failed ? (
+        <div className="mt-0.5 flex items-center justify-end gap-1 text-xs">
+          <span className="text-destructive">보내지 못했습니다</span>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => actions.retry(message)}
+          >
+            다시 보내기
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="text-muted-foreground"
+            onClick={() => actions.discard(message)}
+          >
+            지우기
+          </Button>
+        </div>
+      ) : null}
+      {selection === undefined || selection === null ? null : (
+        // 삭제 모드에서는 행 전체가 고르기 버튼이다. 메뉴와 길게 누르기는 막는다.
+        <button
+          type="button"
+          aria-label={selection ? "메시지 선택 해제" : "메시지 선택"}
+          aria-pressed={selection}
+          className="absolute inset-0 z-10 flex items-center rounded-lg pl-1 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          onClick={() => actions.toggleSelection(message)}
+        >
+          <span
+            aria-hidden
+            className={cn(
+              "flex size-5 items-center justify-center rounded-full border-2",
+              selection
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-muted-foreground bg-background",
+            )}
+          >
+            {selection ? <CheckIcon className="size-3" /> : null}
+          </span>
+        </button>
+      )}
+    </div>
   );
 });
 
@@ -786,6 +1172,7 @@ function MessageActions({
   onTogglePinned,
   onEdit,
   onDelete,
+  onStartSelection,
 }: {
   isOwn: boolean;
   message: ConversationMessage;
@@ -795,6 +1182,7 @@ function MessageActions({
   onTogglePinned: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onStartSelection?: () => void;
 }) {
   const [reactionOpen, setReactionOpen] = useState(false);
 
@@ -884,13 +1272,22 @@ function MessageActions({
               삭제
             </DropdownMenuItem>
           ) : null}
+          {onStartSelection ? (
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={onStartSelection}
+            >
+              <ListChecksIcon aria-hidden />
+              여러 개 선택
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 
   // 삭제된 메시지에는 할 수 있는 작업이 없고, 전송 중인 메시지는 아직 서버에 없다.
-  if (message.deleted || message.pending) return null;
+  if (message.deleted || message.pending || message.failed) return null;
 
   return (
     <MessageActionRail>
@@ -919,6 +1316,7 @@ function ComposerShell({
   onCancelEdit,
   onEdit,
   onSend,
+  onSendFiles,
   desktopDetailsOpen,
 }: {
   replyTarget?: ConversationMessage;
@@ -928,11 +1326,22 @@ function ComposerShell({
   editTarget?: EditTarget;
   onCancelEdit: () => void;
   onEdit: (body: string) => Promise<void>;
-  /** 실패하면 false로 끝난다. 작성창은 비워 둔 입력을 되살린다. */
+  /** 보내지 못한 메시지는 목록에 남아 다시 보낼 수 있으므로 작성창은 입력을 되살리지 않는다. */
   onSend: (body: string) => Promise<boolean>;
+  /** 고른 파일을 보낸다. 답장이나 수정 중에는 첨부할 수 없다(기능 명세 §13.5). */
+  onSendFiles: (files: File[]) => void;
   desktopDetailsOpen: boolean;
 }) {
   const [draft, setDraft] = useState("");
+  const mediaInput = useRef<HTMLInputElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const attachDisabled = Boolean(replyTarget ?? editTarget);
+  const pickFiles = (input: HTMLInputElement) => {
+    const files = [...(input.files ?? [])];
+    // 같은 파일을 다시 고를 수 있게 비운다.
+    input.value = "";
+    if (files.length > 0) onSendFiles(files);
+  };
   // 고치기를 시작하면 쓰던 입력을 맡겨 두고 메시지 본문을 올린다. 끝나면 맡긴 입력을 되돌린다.
   const [editingId, setEditingId] = useState<string | undefined>();
   const [heldDraft, setHeldDraft] = useState("");
@@ -966,10 +1375,7 @@ function ComposerShell({
       void onEdit(body);
       return true;
     }
-    void onSend(body).then((sent) => {
-      // 그새 새로 쓰기 시작했으면 덮어쓰지 않는다.
-      if (!sent) setDraft((current) => (current === "" ? body : current));
-    });
+    void onSend(body);
     setDraft("");
     setAttachmentActionsExpanded(false);
     return true;
@@ -1049,12 +1455,32 @@ function ComposerShell({
               : "w-[5.5rem] opacity-100",
           )}
         >
+          <input
+            ref={mediaInput}
+            type="file"
+            accept={`${IMAGE_INPUT_ACCEPT},video/*`}
+            multiple
+            hidden
+            aria-hidden
+            tabIndex={-1}
+            onChange={(event) => pickFiles(event.currentTarget)}
+          />
+          <input
+            ref={fileInput}
+            type="file"
+            multiple
+            hidden
+            aria-hidden
+            tabIndex={-1}
+            onChange={(event) => pickFiles(event.currentTarget)}
+          />
           <Button
             variant="ghost"
             size="icon"
             className="mb-0.5 rounded-full"
-            aria-label="사진 첨부 기능 준비 중"
-            disabled
+            aria-label="사진·동영상 보내기"
+            disabled={attachDisabled}
+            onClick={() => mediaInput.current?.click()}
           >
             <ImageIcon aria-hidden className="size-5" />
           </Button>
@@ -1062,8 +1488,9 @@ function ComposerShell({
             variant="ghost"
             size="icon"
             className="mb-0.5 rounded-full"
-            aria-label="파일 첨부 기능 준비 중"
-            disabled
+            aria-label="파일 보내기"
+            disabled={attachDisabled}
+            onClick={() => fileInput.current?.click()}
           >
             <PaperclipIcon aria-hidden className="size-5" />
           </Button>

@@ -22,6 +22,7 @@ import {
 } from "~/features/messaging/data/cache";
 import {
   deleteMessages,
+  removeMessageAttachment,
   editMessage,
   markConversationRead,
   sendMessage,
@@ -33,11 +34,23 @@ import {
   listPinnedMessages,
 } from "~/features/messaging/data/queries";
 import { refreshConversationInList } from "~/features/messaging/data/sync";
+import {
+  prepareAttachment,
+  uploadAttachments,
+  type PreparedAttachment,
+} from "~/features/messaging/data/files";
+import {
+  classifyAttachment,
+  groupAttachmentsIntoMessages,
+} from "~/features/messaging/model/attachments";
 import { applyMessageReaction } from "~/features/messaging/model/message-reactions";
+import { activeParticipants } from "~/features/messaging/model/system-message";
 import type {
   Conversation,
   ConversationMessage,
   MessageCursor,
+  MessageAttachment,
+  MessagePage,
   MessageReplyPreview,
 } from "~/features/messaging/model/types";
 import type { PostReaction } from "~/features/posts/model/types";
@@ -46,6 +59,21 @@ import type { PostReaction } from "~/features/posts/model/types";
 export type OlderMessagesResult = "loaded" | "empty" | "failed";
 
 type RequestField = "reaction" | "pin" | "content";
+
+/** 보낸 첨부의 기기 미리보기를 거두기까지의 시간. 그동안 signed URL 이미지가 준비된다. */
+const PREVIEW_RELEASE_DELAY_MS = 30_000;
+
+/** 같은 메시지 ID가 이미 저장돼 첨부 예고가 거절됐는지. 앞선 전송이 응답만 잃은 경우다. */
+function isAlreadySent(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === "23505"
+  );
+}
+
+/** 메시지로 이동할 때 이어 읽는 페이지 수 상한. 50개씩 100쪽, 메시지 5,000개 전까지 간다. */
+const MAX_JUMP_PAGES = 100;
 
 export interface SendDraft {
   /** 호출하는 쪽이 정해 두면, 이 메시지가 화면에 나타나는 순간을 그 ID로 기다릴 수 있다. */
@@ -91,8 +119,9 @@ export function useConversationMessages(conversation: Conversation) {
     [pagesQuery.data],
   );
   const latestRequest = useRef(new Map<string, number>());
-  /** 실패한 전송의 ID. 같은 내용을 다시 보내면 같은 ID를 써서 서버가 한 번만 저장하게 한다. */
-  const failedSends = useRef(new Map<string, string>());
+  /** 첨부 메시지의 원본 파일과 정규화한 결과. 다시 보낼 때 다시 고르지 않게 한다. */
+  const attachmentFiles = useRef(new Map<string, File[]>());
+  const preparedAttachments = useRef(new Map<string, PreparedAttachment[]>());
 
   // 대화 목록에서 이 대화 한 줄만 다시 받는다. 실패하면 목록 전체를 다시 읽는다.
   const refreshList = () => {
@@ -152,57 +181,241 @@ export function useConversationMessages(conversation: Conversation) {
     );
   }
 
-  const sendKey = (body: string, replyToId: string | undefined) =>
-    `${replyToId ?? ""}\n${body}`;
-
   /**
-   * 보낼 메시지의 ID. 응답을 잃어 실패로 보인 전송을 같은 내용으로 다시 보내면 그때의 ID를 돌려준다.
-   * 서버가 이미 저장했으면 같은 ID라 다시 저장하지 않는다.
+   * 초안을 서버에 보낸다. 실패하면 목록에 "보내지 못함"으로 남긴다. 같은 ID로 다시 보내므로 응답만
+   * 잃은 전송이었어도 서버는 한 번만 저장한다. 그새 따라잡기가 서버 행을 넣었으면 실패로 바꾸지 않는다.
    */
-  const draftIdFor = (body: string, replyToId?: string) =>
-    failedSends.current.get(sendKey(body, replyToId)) ?? crypto.randomUUID();
-
-  const send = async ({ id, body, replyTo }: SendDraft) => {
-    const key = sendKey(body, replyTo?.id);
-    const draft: ConversationMessage = {
-      id: id ?? failedSends.current.get(key) ?? crypto.randomUUID(),
-      senderId: conversation.viewerId,
-      body,
-      sentAt: new Date().toISOString(),
-      replyTo,
-      unreadMemberCount: conversation.participants.length - 1,
-      pending: true,
-    };
-    appendMessage(queryClient, conversationId, draft);
+  const deliver = async (draft: ConversationMessage) => {
     const release = holdMessageWrite(draft.id);
     try {
       const sent = await sendMessage(
         {
           conversationId,
           id: draft.id,
-          body,
-          replyToMessageId: replyTo?.id,
+          body: draft.body,
+          replyToMessageId: draft.replyTo?.id,
         },
         draft,
       );
-      failedSends.current.delete(key);
       patchMessage(queryClient, conversationId, draft.id, {
         ...sent,
         pending: false,
+        failed: false,
       });
       refreshList();
       return true;
     } catch {
-      failedSends.current.set(key, draft.id);
-      // 그새 따라잡기가 서버 행을 넣었으면(응답만 잃은 경우) 거두지 않는다.
       if (findCachedMessage(queryClient, conversationId, draft.id)?.pending) {
-        removeMessage(queryClient, conversationId, draft.id);
+        patchMessage(queryClient, conversationId, draft.id, {
+          pending: false,
+          failed: true,
+        });
       }
       toast.error("메시지를 보내지 못했습니다.");
       return false;
     } finally {
       release();
     }
+  };
+
+  const send = async ({ id, body, replyTo }: SendDraft) => {
+    const draft: ConversationMessage = {
+      id: id ?? crypto.randomUUID(),
+      senderId: conversation.viewerId,
+      body,
+      sentAt: new Date().toISOString(),
+      replyTo,
+      unreadMemberCount: activeParticipants(conversation).length - 1,
+      pending: true,
+    };
+    appendMessage(queryClient, conversationId, draft);
+    return deliver(draft);
+  };
+
+  /**
+   * 첨부를 정규화하고 올린 뒤 같은 ID로 메시지를 보낸다. 정규화한 결과는 다시 보내기에 쓰도록
+   * 기억한다. 실패하면 목록에 "보내지 못함"으로 남긴다.
+   */
+  const deliverAttachments = async (draft: ConversationMessage) => {
+    const release = holdMessageWrite(draft.id);
+    try {
+      const prepared =
+        preparedAttachments.current.get(draft.id) ??
+        (await Promise.all(
+          (attachmentFiles.current.get(draft.id) ?? []).map(prepareAttachment),
+        ));
+      preparedAttachments.current.set(draft.id, prepared);
+      // 앞선 시도가 사실은 전송까지 마쳤고 응답만 잃었으면 서버가 "이미 보낸 메시지"로 예고를 거절한다.
+      // 그때는 다시 올리지 않고 같은 ID의 전송으로 서버 행을 받는다. 첨부는 따라잡기가 정본으로 덮는다.
+      let attachments: MessageAttachment[] | null = null;
+      try {
+        attachments = await uploadAttachments(
+          conversationId,
+          draft.id,
+          prepared,
+        );
+      } catch (error) {
+        if (!isAlreadySent(error)) throw error;
+      }
+      const sent = await sendMessage(
+        { conversationId, id: draft.id, body: draft.body },
+        draft,
+      );
+      preparedAttachments.current.delete(draft.id);
+      attachmentFiles.current.delete(draft.id);
+      patchMessage(queryClient, conversationId, draft.id, {
+        ...sent,
+        // 올라간 사진이 signed URL로 다시 그려지는 동안 깜박이지 않게 기기 미리보기를 잠시 이어 쓴다.
+        attachments: (attachments ?? draft.attachments ?? []).map(
+          (attachment, index) => ({
+            ...attachment,
+            previewUrl: draft.attachments?.[index]?.previewUrl,
+          }),
+        ),
+        pending: false,
+        failed: false,
+      });
+      releasePreviews(draft.id);
+      refreshList();
+      return true;
+    } catch (error) {
+      if (findCachedMessage(queryClient, conversationId, draft.id)?.pending) {
+        patchMessage(queryClient, conversationId, draft.id, {
+          pending: false,
+          failed: true,
+        });
+      }
+      // 크기 제한처럼 사용자가 고칠 수 있는 사유는 그대로 보여 준다.
+      toast.error(
+        error instanceof Error && error.message.includes("MB")
+          ? error.message
+          : "파일을 보내지 못했습니다.",
+      );
+      return false;
+    } finally {
+      release();
+    }
+  };
+
+  /**
+   * 보낸 첨부의 기기 미리보기를 거둔다. 사진·동영상 Blob을 붙잡고 있으면 보낸 만큼 메모리가 쌓인다.
+   * signed URL로 바꿔 그릴 시간을 주고 잠시 뒤에 미리보기를 떼고 해제한다.
+   */
+  const releasePreviews = (messageId: string) => {
+    setTimeout(() => {
+      const message = findCachedMessage(queryClient, conversationId, messageId);
+      const previews = (message?.attachments ?? [])
+        .map(({ previewUrl }) => previewUrl)
+        .filter((url): url is string => Boolean(url));
+      if (previews.length === 0) return;
+      patchMessage(queryClient, conversationId, messageId, {
+        attachments: message?.attachments?.map(
+          ({ previewUrl: _preview, ...attachment }) => attachment,
+        ),
+      });
+      for (const url of previews) URL.revokeObjectURL(url);
+    }, PREVIEW_RELEASE_DELAY_MS);
+  };
+
+  /**
+   * 고른 파일을 보낸다. 사진·동영상은 열 개씩 한 묶음, 일반 파일과 오디오는 파일마다 메시지 하나다
+   * (기능 명세 §13.5). 각 메시지는 기기 안의 미리보기로 먼저 그린다.
+   */
+  const sendFiles = async (files: File[]) => {
+    let allSent = true;
+    for (const group of groupAttachmentsIntoMessages(files)) {
+      const id = crypto.randomUUID();
+      const draft: ConversationMessage = {
+        id,
+        senderId: conversation.viewerId,
+        body: "",
+        sentAt: new Date().toISOString(),
+        unreadMemberCount: activeParticipants(conversation).length - 1,
+        pending: true,
+        attachments: group.map((file, index) => {
+          const kind = classifyAttachment(file);
+          return {
+            id: `${id}:${index}`,
+            kind,
+            mimeType: file.type,
+            sizeBytes: file.size,
+            width: null,
+            height: null,
+            fileName: file.name,
+            objectPath: "",
+            thumbnailPath: null,
+            previewUrl:
+              kind === "image" || kind === "video"
+                ? URL.createObjectURL(file)
+                : undefined,
+          };
+        }),
+      };
+      attachmentFiles.current.set(id, group);
+      appendMessage(queryClient, conversationId, draft);
+      if (!(await deliverAttachments(draft))) allSent = false;
+    }
+    return allSent;
+  };
+
+  /** 보내지 못한 메시지를 같은 ID로 다시 보낸다. 맨 아래로 다시 붙인다. */
+  const retry = (target: ConversationMessage) => {
+    const message = current(target);
+    if (!message.failed) return;
+    const draft = {
+      ...message,
+      sentAt: new Date().toISOString(),
+      pending: true,
+      failed: false,
+    };
+    patchMessage(queryClient, conversationId, message.id, draft);
+    void (message.attachments?.length
+      ? deliverAttachments(draft)
+      : deliver(draft));
+  };
+
+  /** 보낸 사람이 첨부 하나를 지운다. 마지막 첨부를 지워 메시지가 비면 서버가 메시지도 지운다. */
+  const removeAttachment = async (
+    target: ConversationMessage,
+    attachmentId: string,
+  ) => {
+    const message = current(target);
+    const previous = message.attachments;
+    const remaining = (previous ?? []).filter(({ id }) => id !== attachmentId);
+    const release = holdMessageWrite(message.id);
+    patchMessage(queryClient, conversationId, message.id, {
+      attachments: remaining,
+      ...(remaining.length === 0 && !message.body
+        ? { deleted: true, reactions: [], myReaction: null, pinned: false }
+        : {}),
+    });
+    try {
+      await removeMessageAttachment(attachmentId);
+      refreshList();
+    } catch {
+      patchMessage(queryClient, conversationId, message.id, {
+        attachments: previous,
+        deleted: message.deleted,
+        reactions: message.reactions,
+        myReaction: message.myReaction,
+        pinned: message.pinned,
+      });
+      toast.error("첨부를 지우지 못했습니다.");
+    } finally {
+      release();
+    }
+  };
+
+  /** 보내지 못한 메시지를 목록에서 거둔다. 서버에는 없다. */
+  const discard = (target: ConversationMessage) => {
+    const message = current(target);
+    if (!message.failed) return;
+    for (const attachment of message.attachments ?? []) {
+      if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+    }
+    attachmentFiles.current.delete(message.id);
+    preparedAttachments.current.delete(message.id);
+    removeMessage(queryClient, conversationId, target.id);
   };
 
   /** 같은 반응을 다시 고르면 지운다. */
@@ -257,6 +470,29 @@ export function useConversationMessages(conversation: Conversation) {
     }
   };
 
+  /**
+   * 이 메시지가 불러온 페이지에 들 때까지 앞선 페이지를 이어 읽는다. 검색 결과나 답장 인용, 고정 메시지가
+   * 아직 불러오지 않은 구간에 있을 때 쓴다. 찾으면 true, 대화의 처음에 닿거나 읽기가 실패하면 false다.
+   */
+  const loadUntil = async (messageId: string) => {
+    const found = (data: { pages: MessagePage[] } | undefined) =>
+      Boolean(
+        data && flattenMessagePages(data).some(({ id }) => id === messageId),
+      );
+    if (
+      found(queryClient.getQueryData(messagingKeys.messages(conversationId)))
+    ) {
+      return true;
+    }
+    for (let page = 0; page < MAX_JUMP_PAGES; page += 1) {
+      const result = await pagesQuery.fetchNextPage();
+      if (result.isFetchNextPageError) return false;
+      if (found(result.data)) return true;
+      if (!result.hasNextPage) return false;
+    }
+    return false;
+  };
+
   /** 내 메시지를 고친다. 실패하면 되돌리고 false로 끝난다. 고치던 입력은 화면이 되살린다. */
   const edit = async (target: ConversationMessage, body: string) => {
     const message = current(target);
@@ -284,45 +520,58 @@ export function useConversationMessages(conversation: Conversation) {
     }
   };
 
-  /** 내 메시지를 지운다. 자리는 남기고 본문, 반응, 고정을 거두며 이 메시지를 인용한 답장도 고친다. */
-  const remove = async (target: ConversationMessage) => {
-    const message = current(target);
-    const previous = {
-      body: message.body,
-      deleted: message.deleted,
-      reactions: message.reactions,
-      myReaction: message.myReaction,
-      pinned: message.pinned,
-    };
-    const isLatest = beginRequest(message.id, "content");
-    // 진행 중인 반응·고정의 응답이나 되돌림이 지운 메시지에 다시 붙지 않게 한다.
-    beginRequest(message.id, "reaction");
-    beginRequest(message.id, "pin");
-    patchMessage(queryClient, conversationId, message.id, {
-      body: "",
-      deleted: true,
-      reactions: [],
-      myReaction: null,
-      pinned: false,
+  /**
+   * 내 메시지들을 지운다(삭제 모드는 여러 개를 한 번에). 자리는 남기고 본문, 반응, 고정을 거두며 이
+   * 메시지들을 인용한 답장도 고친다. 서버는 하나라도 내 메시지가 아니면 아무것도 지우지 않으므로
+   * 실패하면 모두 되돌린다.
+   */
+  const removeMany = async (targets: ConversationMessage[]) => {
+    const messages = targets.map(current).filter((message) => !message.deleted);
+    if (messages.length === 0) return;
+    const undo = messages.map((message) => {
+      const previous = {
+        body: message.body,
+        deleted: message.deleted,
+        reactions: message.reactions,
+        myReaction: message.myReaction,
+        pinned: message.pinned,
+      };
+      const isLatest = beginRequest(message.id, "content");
+      // 진행 중인 반응·고정의 응답이나 되돌림이 지운 메시지에 다시 붙지 않게 한다.
+      beginRequest(message.id, "reaction");
+      beginRequest(message.id, "pin");
+      patchMessage(queryClient, conversationId, message.id, {
+        body: "",
+        deleted: true,
+        reactions: [],
+        myReaction: null,
+        pinned: false,
+      });
+      patchReplyPreviews(queryClient, conversationId, message.id, {
+        body: "",
+        deleted: true,
+      });
+      const release = holdMessageWrite(message.id);
+      return {
+        release,
+        rollback: () => {
+          if (!isLatest()) return;
+          patchMessage(queryClient, conversationId, message.id, previous);
+          patchReplyPreviews(queryClient, conversationId, message.id, {
+            body: message.body.slice(0, REPLY_PREVIEW_LENGTH),
+            deleted: message.deleted,
+          });
+        },
+      };
     });
-    patchReplyPreviews(queryClient, conversationId, message.id, {
-      body: "",
-      deleted: true,
-    });
-    const release = holdMessageWrite(message.id);
     try {
-      await deleteMessages([message.id]);
+      await deleteMessages(messages.map(({ id }) => id));
       refreshList();
     } catch {
-      if (!isLatest()) return;
-      patchMessage(queryClient, conversationId, message.id, previous);
-      patchReplyPreviews(queryClient, conversationId, message.id, {
-        body: message.body.slice(0, REPLY_PREVIEW_LENGTH),
-        deleted: message.deleted,
-      });
+      for (const { rollback } of undo) rollback();
       toast.error("메시지를 삭제하지 못했습니다.");
     } finally {
-      release();
+      for (const { release } of undo) release();
     }
   };
 
@@ -337,12 +586,18 @@ export function useConversationMessages(conversation: Conversation) {
       return result.data?.pages.at(-1)?.messages.length ? "loaded" : "empty";
     },
     send,
-    draftIdFor,
+    sendFiles,
+    retry,
+    discard,
+    removeAttachment: (message: ConversationMessage, attachmentId: string) =>
+      void removeAttachment(message, attachmentId),
+    loadUntil,
     react: (message: ConversationMessage, reaction: PostReaction) =>
       void react(message, reaction),
     togglePinned: (message: ConversationMessage) => void togglePinned(message),
     edit,
-    remove: (message: ConversationMessage) => void remove(message),
+    remove: (message: ConversationMessage) => void removeMany([message]),
+    removeMany: (messages: ConversationMessage[]) => void removeMany(messages),
   };
 }
 

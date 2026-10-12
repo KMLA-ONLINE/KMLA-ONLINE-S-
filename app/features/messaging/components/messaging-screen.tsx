@@ -8,6 +8,8 @@ import { useDeferredValue, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
+import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
+import { useStartConversation } from "~/features/messaging/hooks/use-conversation-membership";
 import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
 import type { ConversationSummary } from "~/features/messaging/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
@@ -35,6 +37,8 @@ export function MessagingScreen({
   selectedRoomId?: string;
 }) {
   const [search, setSearch] = useState("");
+  const [newConversationOpen, setNewConversationOpen] = useState(false);
+  const startConversation = useStartConversation();
   const deferredSearch = useDeferredValue(
     search.trim().toLocaleLowerCase("ko"),
   );
@@ -59,11 +63,20 @@ export function MessagingScreen({
             variant="secondary"
             size="icon"
             className="rounded-full"
-            aria-label="새 대화 찾기"
-            onClick={() => searchInput.current?.focus()}
+            aria-label="새 대화"
+            onClick={() => setNewConversationOpen(true)}
           >
             <PenLineIcon aria-hidden />
           </Button>
+          <RecipientPickerDialog
+            open={newConversationOpen}
+            mode="create"
+            onOpenChange={setNewConversationOpen}
+            onSubmit={async (selection) => {
+              await startConversation(selection);
+              setNewConversationOpen(false);
+            }}
+          />
         </header>
 
         <div className="relative mx-3 mb-2 shrink-0">
@@ -148,9 +161,15 @@ export function MessagingScreen({
                 <EmptyMedia variant="icon">
                   <SearchIcon aria-hidden />
                 </EmptyMedia>
-                <EmptyTitle>대화를 찾지 못했습니다</EmptyTitle>
+                <EmptyTitle>
+                  {deferredSearch
+                    ? "대화를 찾지 못했습니다"
+                    : "아직 대화가 없습니다"}
+                </EmptyTitle>
                 <EmptyDescription>
-                  다른 이름으로 다시 검색해 보세요.
+                  {deferredSearch
+                    ? "다른 이름으로 다시 검색해 보세요."
+                    : "새 대화 버튼으로 대화를 시작해 보세요."}
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>

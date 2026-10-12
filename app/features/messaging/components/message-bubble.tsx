@@ -1,6 +1,7 @@
 import { ThumbsUpIcon } from "lucide-react";
 import type { Ref } from "react";
 
+import { MessageAttachments } from "~/features/messaging/components/message-attachments";
 import {
   getEmojiOnlyMessageGraphemes,
   parseMessageText,
@@ -25,6 +26,7 @@ export function MessageBubble({
   replyTarget,
   replyTargetAuthor,
   onViewReply,
+  onShowReactions,
   anchorRef,
 }: {
   message: ConversationMessage;
@@ -37,6 +39,8 @@ export function MessageBubble({
   replyTarget?: MessageReplyPreview;
   replyTargetAuthor?: string;
   onViewReply?: () => void;
+  /** 있으면 반응 표시가 반응한 사람을 여는 버튼이 된다. */
+  onShowReactions?: () => void;
   anchorRef?: Ref<HTMLDivElement>;
 }) {
   const reactions = new Map(
@@ -46,6 +50,10 @@ export function MessageBubble({
   const emojiGraphemes = getEmojiOnlyMessageGraphemes(messageBody);
   const isEmojiOnly = emojiGraphemes !== null;
   const hasReactions = showReactions && reactions.size > 0;
+  const attachments = message.deleted ? [] : (message.attachments ?? []);
+  // 첨부만 있는 메시지는 글자 버블 없이 첨부만 그린다.
+  const hasText =
+    Boolean(message.deleted) || message.body !== "" || attachments.length === 0;
   const reactionCount = [...reactions.values()].reduce(
     (total, count) => total + count,
     0,
@@ -80,76 +88,96 @@ export function MessageBubble({
             "ring-1 ring-primary ring-offset-1 ring-offset-background",
         )}
       >
-        <div
-          className={cn(
-            "w-full",
-            isEmojiOnly
-              ? "px-1 py-0.5 text-5xl leading-none"
-              : "rounded-2xl px-3.5 py-2 text-[15px] [overflow-wrap:anywhere] break-keep whitespace-pre-wrap",
-            !isEmojiOnly &&
-              (isOwn
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-foreground"),
-            !isEmojiOnly && !startsGroup && isOwn && "rounded-tr-md",
-            !isEmojiOnly && !startsGroup && !isOwn && "rounded-tl-md",
-            !isEmojiOnly && !endsGroup && isOwn && "rounded-br-md",
-            !isEmojiOnly && !endsGroup && !isOwn && "rounded-bl-md",
-          )}
-        >
-          {replyTarget && onViewReply ? (
-            <button
-              type="button"
-              aria-label={`${replyTargetAuthor ?? "알 수 없는 사용자"}의 원문 메시지 보기`}
-              className={cn(
-                "mb-1.5 block w-full max-w-full min-w-0 border-l-2 pl-2 text-left text-xs leading-4",
-                isOwn && !isEmojiOnly
-                  ? "border-primary-foreground/50 text-primary-foreground/85 hover:bg-primary-foreground/10"
-                  : "border-primary text-muted-foreground hover:bg-background/60",
-              )}
-              onClick={onViewReply}
-            >
-              <span className="block truncate font-semibold">
-                {replyTargetAuthor ?? "알 수 없는 사용자"}
+        {attachments.length > 0 ? (
+          <MessageAttachments
+            attachments={attachments}
+            isOwn={isOwn}
+            pending={message.pending}
+          />
+        ) : null}
+        {hasText ? (
+          <div
+            className={cn(
+              "w-full",
+              isEmojiOnly
+                ? "px-1 py-0.5 text-5xl leading-none"
+                : "rounded-2xl px-3.5 py-2 text-[15px] [overflow-wrap:anywhere] break-keep whitespace-pre-wrap",
+              !isEmojiOnly &&
+                (isOwn
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-foreground"),
+              !isEmojiOnly && !startsGroup && isOwn && "rounded-tr-md",
+              !isEmojiOnly && !startsGroup && !isOwn && "rounded-tl-md",
+              !isEmojiOnly && !endsGroup && isOwn && "rounded-br-md",
+              !isEmojiOnly && !endsGroup && !isOwn && "rounded-bl-md",
+            )}
+          >
+            {replyTarget && onViewReply ? (
+              <button
+                type="button"
+                aria-label={`${replyTargetAuthor ?? "알 수 없는 사용자"}의 원문 메시지 보기`}
+                className={cn(
+                  "mb-1.5 block w-full max-w-full min-w-0 border-l-2 pl-2 text-left text-xs leading-4",
+                  isOwn && !isEmojiOnly
+                    ? "border-primary-foreground/50 text-primary-foreground/85 hover:bg-primary-foreground/10"
+                    : "border-primary text-muted-foreground hover:bg-background/60",
+                )}
+                onClick={onViewReply}
+              >
+                <span className="block truncate font-semibold">
+                  {replyTargetAuthor ?? "알 수 없는 사용자"}
+                </span>
+                <span className="block truncate">
+                  {replyTarget.deleted
+                    ? "삭제된 메시지입니다"
+                    : replyTarget.body}
+                </span>
+              </button>
+            ) : null}
+            {isEmojiOnly ? (
+              <EmojiOnlyMessageBody graphemes={emojiGraphemes} />
+            ) : (
+              <MessageBody body={messageBody} isOwn={isOwn} />
+            )}
+            {message.editedAt && !message.deleted ? (
+              <span
+                className={cn(
+                  "ml-1.5 align-baseline text-[11px] leading-none whitespace-nowrap",
+                  !isEmojiOnly && isOwn
+                    ? "text-primary-foreground/75"
+                    : "text-muted-foreground",
+                )}
+              >
+                수정됨
               </span>
-              <span className="block truncate">
-                {replyTarget.deleted ? "삭제된 메시지입니다" : replyTarget.body}
-              </span>
-            </button>
-          ) : null}
-          {isEmojiOnly ? (
-            <EmojiOnlyMessageBody graphemes={emojiGraphemes} />
-          ) : (
-            <MessageBody body={messageBody} isOwn={isOwn} />
-          )}
-          {message.editedAt && !message.deleted ? (
-            <span
-              className={cn(
-                "ml-1.5 align-baseline text-[11px] leading-none whitespace-nowrap",
-                !isEmojiOnly && isOwn
-                  ? "text-primary-foreground/75"
-                  : "text-muted-foreground",
-              )}
-            >
-              수정됨
-            </span>
-          ) : null}
-          {showTimestamp ? (
-            <time
-              dateTime={message.sentAt}
-              className={cn(
-                "mt-1 block text-right text-[10px] leading-none",
-                !isEmojiOnly && isOwn
-                  ? "text-primary-foreground/75"
-                  : "text-muted-foreground",
-              )}
-            >
-              {formatMessageTime(message.sentAt)}
-            </time>
-          ) : null}
-        </div>
+            ) : null}
+            {showTimestamp ? (
+              <time
+                dateTime={message.sentAt}
+                className={cn(
+                  "mt-1 block text-right text-[10px] leading-none",
+                  !isEmojiOnly && isOwn
+                    ? "text-primary-foreground/75"
+                    : "text-muted-foreground",
+                )}
+              >
+                {formatMessageTime(message.sentAt)}
+              </time>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       {hasReactions ? (
         <Badge
+          render={
+            onShowReactions ? (
+              <button
+                type="button"
+                aria-label={`반응 ${reactionCount}개, 반응한 사람 보기`}
+                onClick={onShowReactions}
+              />
+            ) : undefined
+          }
           variant="secondary"
           className={cn(
             // `relative`가 없으면 positioned인 버블이 나중에 칠해져 반응 표시를 덮는다.

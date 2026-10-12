@@ -85,6 +85,70 @@ export async function editMessage(
   return { body, editedAt: data };
 }
 
+/** 1:1 대화를 연다. 같은 사람과 이미 대화가 있으면 그 대화의 ID를 돌려준다. */
+export async function openDirectConversation(
+  profileId: string,
+): Promise<string> {
+  const { data, error } = await getSupabase().rpc("open_direct_conversation", {
+    p_profile_id: Number(profileId),
+  });
+  if (error) throw error;
+  return data;
+}
+
+/** 그룹 대화를 만든다. 만든 사람은 자동으로 멤버가 된다. */
+export async function createGroupConversation(
+  name: string,
+  profileIds: string[],
+): Promise<string> {
+  const { data, error } = await getSupabase().rpc("create_group_conversation", {
+    p_name: name,
+    p_profile_ids: profileIds.map(Number),
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function addConversationMembers(
+  conversationId: string,
+  profileIds: string[],
+): Promise<void> {
+  const { error } = await getSupabase().rpc("add_conversation_members", {
+    p_conversation_id: conversationId,
+    p_profile_ids: profileIds.map(Number),
+  });
+  if (error) throw error;
+}
+
+export async function leaveConversation(conversationId: string): Promise<void> {
+  const { error } = await getSupabase().rpc("leave_conversation", {
+    p_conversation_id: conversationId,
+  });
+  if (error) throw error;
+}
+
+export async function removeConversationMember(
+  conversationId: string,
+  profileId: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("remove_conversation_member", {
+    p_conversation_id: conversationId,
+    p_profile_id: Number(profileId),
+  });
+  if (error) throw error;
+}
+
+export async function renameConversation(
+  conversationId: string,
+  name: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("rename_conversation", {
+    p_conversation_id: conversationId,
+    p_name: name,
+  });
+  if (error) throw error;
+}
+
 /** 대화 알림을 끄거나 켠다. 끄면 직접 다시 켤 때까지 이 대화의 Push를 보내지 않는다. */
 export async function setConversationMuted(
   conversationId: string,
@@ -101,6 +165,16 @@ export async function setConversationMuted(
 export async function deleteMessages(messageIds: string[]): Promise<void> {
   const { error } = await getSupabase().rpc("delete_messages", {
     p_message_ids: messageIds,
+  });
+  if (error) throw error;
+}
+
+/** 보낸 사람이 첨부 하나를 지운다. 본문 없이 첨부만 있던 메시지의 마지막 첨부면 메시지도 지워진다. */
+export async function removeMessageAttachment(
+  attachmentId: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("remove_message_attachment", {
+    p_attachment_id: attachmentId,
   });
   if (error) throw error;
 }

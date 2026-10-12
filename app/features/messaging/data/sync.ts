@@ -3,6 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
   flattenMessagePages,
   invalidateConversationList,
+  invalidateUnreadMessageCount,
   isMessageWriteHeld,
   latestMessageChange,
   mergeServerMessages,
@@ -77,7 +78,14 @@ export async function refreshConversationInList(
   const summary = await getConversationSummary(conversationId);
   if (!summary || !replaceConversationSummary(queryClient, summary)) {
     await invalidateConversationList(queryClient);
+    return;
   }
+  // 이 대화의 읽지 않은 수가 바뀌었으면 탭 배지도 바뀐다.
+  void invalidateUnreadMessageCount(queryClient);
+  // 새 메시지나 지운 메시지가 첨부를 더하거나 뺐을 수 있다.
+  void queryClient.invalidateQueries({
+    queryKey: messagingKeys.sharedAttachmentCounts(conversationId),
+  });
 }
 
 async function reloadLatestPage(
@@ -98,8 +106,11 @@ async function reloadLatestPage(
         flattenMessagePages(data).map((message) => [message.id, message]),
       );
       const received = new Set(page.messages.map(({ id }) => id));
+      // 보내는 중이거나 보내지 못한 내 메시지는 서버에 없으므로 그대로 둔다.
       const pending = [...cached.values()].filter(
-        (message) => message.pending && !received.has(message.id),
+        (message) =>
+          (message.pending === true || message.failed === true) &&
+          !received.has(message.id),
       );
       // 내 요청이 진행 중인 메시지는 이 스냅숏보다 cache가 새롭다.
       const messages = page.messages.map((message) =>

@@ -30,8 +30,9 @@ export function ConversationAvatar({
     );
   }
 
+  // 나간 멤버도 이름을 그리려고 목록에 남지만 그룹 아바타는 지금 멤버로만 만든다.
   const others = conversation.participants
-    .filter(({ id }) => id !== conversation.viewerId)
+    .filter(({ id, active }) => active && id !== conversation.viewerId)
     .slice(0, 2);
 
   return (

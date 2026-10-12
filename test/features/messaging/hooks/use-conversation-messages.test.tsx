@@ -8,11 +8,47 @@ import * as mutations from "~/features/messaging/data/mutations";
 import { loadConversation } from "~/features/messaging/data/queries";
 import { messagingKeys } from "~/features/messaging/data/cache";
 import { useConversationMessages } from "~/features/messaging/hooks/use-conversation-messages";
+import { resetFakeMessaging } from "../fake-api";
 
 vi.mock("~/features/messaging/data/queries", () => import("../fake-api"));
+
+// 테스트가 고친 목 데이터(읽음, 알림 끄기, 멤버)가 다음 테스트로 새지 않게 한다.
+afterEach(() => resetFakeMessaging());
 vi.mock("~/features/messaging/data/mutations", () => import("../fake-api"));
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
+vi.mock("~/features/messaging/data/files", () => ({
+  prepareAttachment: vi.fn((file: File) =>
+    Promise.resolve({
+      kind: "file",
+      file,
+      thumbnail: null,
+      fileName: file.name,
+      width: null,
+      height: null,
+    }),
+  ),
+  uploadAttachments: vi.fn(
+    (
+      _conversationId: string,
+      messageId: string,
+      prepared: { fileName: string }[],
+    ) =>
+      Promise.resolve(
+        prepared.map((item, index) => ({
+          id: `${messageId}-a${index}`,
+          kind: "file",
+          mimeType: "application/pdf",
+          sizeBytes: 1,
+          width: null,
+          height: null,
+          fileName: item.fileName,
+          objectPath: `c/${messageId}-${index}`,
+          thumbnailPath: null,
+        })),
+      ),
+  ),
+}));
 
 async function renderMessages() {
   const conversation = (await loadConversation("student-council"))!;
@@ -70,20 +106,6 @@ describe("useConversationMessages", () => {
         replyTo: { id: "m9", senderId: "seo", body: "원문" },
       }),
     );
-  });
-
-  it("전송이 실패하면 먼저 붙인 메시지를 거두고 false로 끝난다", async () => {
-    vi.spyOn(mutations, "sendMessage").mockRejectedValue(new Error("offline"));
-    const { result } = await renderMessages();
-    const before = result.current.messages.length;
-
-    let sent: boolean | undefined;
-    await act(async () => {
-      sent = await result.current.send({ body: "안녕" });
-    });
-
-    expect(sent).toBe(false);
-    expect(result.current.messages).toHaveLength(before);
   });
 
   it("같은 반응을 다시 고르면 지우고, 실패하면 직전 반응으로 되돌린다", async () => {
@@ -313,31 +335,130 @@ describe("useConversationMessages", () => {
     ).toBe(0);
   });
 
-  it("응답을 잃어 실패한 전송을 같은 내용으로 다시 보내면 같은 ID를 쓴다", async () => {
-    vi.spyOn(mutations, "sendMessage").mockRejectedValueOnce(
-      new Error("timeout"),
+  it("보내지 못한 메시지는 목록에 남고, 다시 보내면 같은 ID로 확정되며, 지우면 사라진다", async () => {
+    const sendSpy = vi
+      .spyOn(mutations, "sendMessage")
+      .mockRejectedValueOnce(new Error("timeout"));
+    const { result } = await renderMessages();
+
+    let sent: boolean | undefined;
+    await act(async () => {
+      sent = await result.current.send({ id: "lost", body: "다시 보낼 글" });
+    });
+    expect(sent).toBe(false);
+    await waitFor(() =>
+      expect(result.current.messages.at(-1)).toMatchObject({
+        id: "lost",
+        failed: true,
+        pending: false,
+      }),
+    );
+
+    act(() => result.current.retry(result.current.messages.at(-1)!));
+    await waitFor(() =>
+      expect(result.current.messages.at(-1)).toMatchObject({
+        id: "lost",
+        failed: false,
+        pending: false,
+      }),
+    );
+    expect(sendSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: "lost", body: "다시 보낼 글" }),
+      expect.anything(),
+    );
+
+    sendSpy.mockRejectedValueOnce(new Error("timeout"));
+    await act(async () => {
+      await result.current.send({ id: "drop", body: "지울 글" });
+    });
+    act(() => result.current.discard(result.current.messages.at(-1)!));
+    await waitFor(() =>
+      expect(result.current.messages.some(({ id }) => id === "drop")).toBe(
+        false,
+      ),
+    );
+  });
+
+  it("아직 불러오지 않은 메시지로 가면 그 메시지가 들 때까지 앞선 페이지를 이어 읽는다", async () => {
+    const conversation = (await loadConversation("student-council", 3))!;
+    const { result } = renderHook(() => useConversationMessages(conversation), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={new QueryClient()}>
+          {children}
+        </QueryClientProvider>
+      ),
+    });
+    expect(result.current.messages.some(({ id }) => id === "m2")).toBe(false);
+
+    let found: boolean | undefined;
+    await act(async () => {
+      found = await result.current.loadUntil("m2");
+    });
+
+    expect(found).toBe(true);
+    await waitFor(() =>
+      expect(result.current.messages.some(({ id }) => id === "m2")).toBe(true),
+    );
+
+    await act(async () => {
+      found = await result.current.loadUntil("no-such-message");
+    });
+    expect(found).toBe(false);
+  });
+
+  it("파일은 파일마다 메시지 하나로 보내고, 업로드에 실패하면 다시 보낼 수 있게 남긴다", async () => {
+    const attachments = await import("~/features/messaging/data/files");
+    vi.mocked(attachments.uploadAttachments).mockRejectedValueOnce(
+      new Error("offline"),
     );
     const { result } = await renderMessages();
-    const id = result.current.draftIdFor("다시 보낼 글");
+    const before = result.current.messages.length;
 
+    let sent: boolean | undefined;
     await act(async () => {
-      await result.current.send({ id, body: "다시 보낼 글" });
+      sent = await result.current.sendFiles([
+        new File(["a"], "a.pdf", { type: "application/pdf" }),
+        new File(["b"], "b.pdf", { type: "application/pdf" }),
+      ]);
     });
 
-    expect(result.current.draftIdFor("다시 보낼 글")).toBe(id);
-    expect(result.current.draftIdFor("다른 글")).not.toBe(id);
+    expect(sent).toBe(false);
+    await waitFor(() =>
+      expect(result.current.messages).toHaveLength(before + 2),
+    );
+    const [failed, delivered] = result.current.messages.slice(-2);
+    expect(failed).toMatchObject({ failed: true, body: "" });
+    expect(delivered).toMatchObject({ pending: false, failed: false });
+    expect(delivered?.attachments?.[0]).toMatchObject({ fileName: "b.pdf" });
 
-    await act(async () => {
-      await result.current.send({
-        id: result.current.draftIdFor("다시 보낼 글"),
-        body: "다시 보낼 글",
-      });
-    });
+    act(() => result.current.retry(failed));
     await waitFor(() =>
       expect(
-        result.current.messages.filter(({ id: messageId }) => messageId === id),
-      ).toHaveLength(1),
+        result.current.messages.find(({ id }) => id === failed.id),
+      ).toMatchObject({ failed: false, pending: false }),
     );
-    expect(result.current.draftIdFor("다시 보낼 글")).not.toBe(id);
+  });
+
+  it("앞선 전송이 응답만 잃었으면 다시 보낼 때 다시 올리지 않고 보낸 것으로 확정한다", async () => {
+    const files = await import("~/features/messaging/data/files");
+    vi.mocked(files.uploadAttachments).mockRejectedValueOnce(
+      Object.assign(new Error("message already sent"), { code: "23505" }),
+    );
+    const { result } = await renderMessages();
+
+    let sent: boolean | undefined;
+    await act(async () => {
+      sent = await result.current.sendFiles([
+        new File(["a"], "a.pdf", { type: "application/pdf" }),
+      ]);
+    });
+
+    expect(sent).toBe(true);
+    await waitFor(() =>
+      expect(result.current.messages.at(-1)).toMatchObject({
+        pending: false,
+        failed: false,
+      }),
+    );
   });
 });

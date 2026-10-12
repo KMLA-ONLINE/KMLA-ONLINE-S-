@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(24);
 
 -- seed: 홍길동(…0001)과 김민준(…0100)의 1:1 대화 c…01. d…01·d…03은 김민준, d…02는 홍길동의 메시지다.
 -- 그룹 대화 c…02에서 이한별은 2026-08-21에 참여해 d…11을 볼 수 없다.
@@ -73,9 +73,21 @@ select results_eq(
   'a null reaction removes mine'
 );
 
+select results_eq(
+  $$select name, reaction from public.list_message_reactors('d0000000-0000-0000-0000-000000000001')$$,
+  $$values ('홍길동'::text, 'love'::public.post_reaction)$$,
+  'members see who reacted and with what'
+);
+
 reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000201', true);
 set local role authenticated;
+
+select is(
+  (select count(*) from public.list_message_reactors('d0000000-0000-0000-0000-000000000001')),
+  0::bigint,
+  'people outside the conversation see no reactors'
+);
 
 select throws_ok(
   $$select public.set_message_reaction('d0000000-0000-0000-0000-000000000011', 'like')$$,

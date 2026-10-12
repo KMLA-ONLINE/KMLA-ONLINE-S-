@@ -51,7 +51,13 @@ describe("message grouping", () => {
       ),
     ).toBe(false);
     expect(
-      canConnectMessages(previous, message({ id: "next", system: true })),
+      canConnectMessages(
+        previous,
+        message({
+          id: "next",
+          system: { kind: "member_left", profileIds: ["a"], name: null },
+        }),
+      ),
     ).toBe(false);
     expect(
       canConnectMessages(previous, message({ id: "next", pinned: true })),

@@ -4,7 +4,10 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 
-import { listConversations } from "~/features/messaging/data/queries";
+import {
+  getUnreadMessageCount,
+  listConversations,
+} from "~/features/messaging/data/queries";
 
 import type {
   Conversation,
@@ -22,6 +25,22 @@ export const messagingKeys = {
     [...messagingKeys.all, "messages", conversationId] as const,
   pinned: (conversationId: string) =>
     [...messagingKeys.all, "pinned", conversationId] as const,
+  unreadCount: () => [...messagingKeys.all, "unread-count"] as const,
+  reactors: (messageId: string) =>
+    [...messagingKeys.all, "reactors", messageId] as const,
+  attachmentUrls: (paths: string[]) =>
+    [...messagingKeys.all, "attachment-urls", ...paths] as const,
+  sharedAttachments: (conversationId: string, media: boolean) =>
+    [
+      ...messagingKeys.all,
+      "shared-attachments",
+      conversationId,
+      media ? "media" : "files",
+    ] as const,
+  sharedAttachmentCounts: (conversationId: string) =>
+    [...messagingKeys.all, "shared-attachment-counts", conversationId] as const,
+  recipients: (query: string) =>
+    [...messagingKeys.all, "recipients", query] as const,
 };
 
 /**
@@ -64,6 +83,10 @@ export function markConversationListRead(
   queryClient: QueryClient,
   conversationId: string,
 ) {
+  const cleared =
+    queryClient
+      .getQueryData<ConversationSummary[]>(messagingKeys.conversations())
+      ?.find(({ id }) => id === conversationId)?.unreadCount ?? 0;
   queryClient.setQueryData<ConversationSummary[]>(
     messagingKeys.conversations(),
     (list) =>
@@ -73,6 +96,12 @@ export function markConversationListRead(
           : item,
       ),
   );
+  // 탭 배지에서도 그만큼 뺀다. 서버 값은 이어지는 목록 갱신이 다시 읽는다.
+  if (cleared > 0) {
+    queryClient.setQueryData<number>(messagingKeys.unreadCount(), (count) =>
+      count === undefined ? count : Math.max(0, count - cleared),
+    );
+  }
 }
 
 /** 서버 `list_conversations`의 순서. 최근 메시지가 위, 메시지가 없는 대화는 아래다. */
@@ -88,8 +117,30 @@ function compareConversationOrder(
   );
 }
 
-/** 내 읽음 위치나 마지막 메시지가 바뀌었다. 목록의 읽지 않은 수와 미리보기를 다시 읽는다. */
+/**
+ * 메신저 탭 배지. 셸이 모든 화면에서 그리므로 대화 목록 전체가 아니라 이 수만 읽는다. 내 읽음과
+ * 새 메시지 신호가 무효화한다.
+ */
+export function unreadMessageCountQuery() {
+  return queryOptions({
+    queryKey: messagingKeys.unreadCount(),
+    queryFn: getUnreadMessageCount,
+    staleTime: 60_000,
+    // 배지를 못 읽는다고 화면이 멈출 이유는 없다. 다음 무효화에서 다시 시도한다.
+    retry: false,
+  });
+}
+
+/** 메신저 탭 배지를 다시 읽는다. */
+export function invalidateUnreadMessageCount(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({
+    queryKey: messagingKeys.unreadCount(),
+  });
+}
+
+/** 내 읽음 위치나 마지막 메시지가 바뀌었다. 목록의 읽지 않은 수와 미리보기, 탭 배지를 다시 읽는다. */
 export function invalidateConversationList(queryClient: QueryClient) {
+  void invalidateUnreadMessageCount(queryClient);
   return queryClient.invalidateQueries({
     queryKey: messagingKeys.conversations(),
   });

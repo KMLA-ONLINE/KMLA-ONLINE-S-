@@ -13,7 +13,10 @@ export function canEditMessage(
     message.senderId === viewerId &&
     !message.deleted &&
     !message.pending &&
+    !message.failed &&
     !message.system &&
+    // 사진·파일이 붙은 메시지는 고치지 않는다.
+    (message.attachments?.length ?? 0) === 0 &&
     now - Date.parse(message.sentAt) < MESSAGE_EDIT_WINDOW_MS
   );
 }
