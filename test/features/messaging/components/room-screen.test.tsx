@@ -1198,6 +1198,8 @@ describe("RoomScreen", () => {
     await user.type(input, "😀😃😄😁😆");
     await user.click(screen.getByRole("button", { name: "메시지 보내기" }));
     expect(await screen.findByText("😀😃😄😁😆")).toHaveClass("text-5xl");
+    // 버튼으로 보내도 입력창이 포커스를 잃지 않아야 모바일 키보드가 접히지 않는다.
+    expect(input).toHaveFocus();
 
     await user.type(input, "😀😃😄😁😆😅");
     await user.click(screen.getByRole("button", { name: "메시지 보내기" }));

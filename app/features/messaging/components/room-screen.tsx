@@ -19,6 +19,7 @@ import {
   XIcon,
 } from "lucide-react";
 import {
+  type CSSProperties,
   type Dispatch,
   memo,
   type RefObject,
@@ -58,6 +59,7 @@ import { getSharedAttachmentCounts } from "~/features/messaging/data/queries";
 import { messagingKeys } from "~/features/messaging/data/cache";
 import { useQuery } from "@tanstack/react-query";
 import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
+import { useKeyboardViewport } from "~/shared/hooks/use-keyboard-viewport";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
 import { RenameConversationDialog } from "~/features/messaging/components/rename-conversation-dialog";
 import {
@@ -144,6 +146,7 @@ export function RoomScreen({
   >(null);
   // 대화 정보, 검색, 고정 메시지, 반응한 사람, 공유된 미디어는 뒤로가기로 닫히도록 URL에 둔다.
   const roomOverlay = useRoomOverlayParam();
+  const keyboardViewport = useKeyboardViewport(true);
   const location = useLocation();
   const navigate = useNavigate();
   const overlay = roomOverlay.overlay;
@@ -308,7 +311,23 @@ export function RoomScreen({
   }
 
   return (
-    <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+    <div
+      className={cn(
+        "relative flex min-h-0 min-w-0 flex-1 overflow-hidden",
+        // 모바일 키보드가 뜨면 브라우저가 화면을 끌어올려 머리가 밀려난다. 보이는 영역에 가둬 머리를
+        // 늘 위에 둔다. 게시물 댓글 시트와 같은 방식이다.
+        keyboardViewport.keyboardOpen &&
+          "max-md:fixed max-md:inset-x-0 max-md:bottom-(--room-keyboard-bottom) max-md:z-40 max-md:h-(--room-keyboard-height)",
+      )}
+      style={
+        keyboardViewport.keyboardOpen
+          ? ({
+              "--room-keyboard-bottom": `${keyboardViewport.bottomInset}px`,
+              "--room-keyboard-height": `${keyboardViewport.height}px`,
+            } as CSSProperties)
+          : undefined
+      }
+    >
       <section
         aria-label={`${conversation.name} 대화`}
         className={cn(
@@ -1432,6 +1451,7 @@ function ComposerShell({
   const [editingId, setEditingId] = useState<string | undefined>();
   const [heldDraft, setHeldDraft] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const refocusAfterSend = useRef(false);
   if (editTarget?.message.id !== editingId) {
     setEditingId(editTarget?.message.id);
     if (editTarget) {
@@ -1651,7 +1671,15 @@ function ComposerShell({
                 : "좋아요 보내기"
           }
           disabled={overLimit || (editTarget !== undefined && !hasDraft)}
+          // 보내도 키보드가 접히지 않게 한다. 누르는 순간 입력창이 포커스를 잃지 않도록 기본 동작을
+          // 막고, 그래도 잃는 브라우저(iOS Safari)를 위해 입력 중이었으면 누른 뒤 다시 돌려준다.
+          onPointerDown={() => {
+            refocusAfterSend.current =
+              document.activeElement === textareaRef.current;
+          }}
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
+            if (refocusAfterSend.current) textareaRef.current?.focus();
             if (hasDraft || editTarget) {
               sendDraft();
               return;

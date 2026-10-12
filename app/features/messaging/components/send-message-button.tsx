@@ -39,7 +39,7 @@ export function SendMessageButton({
   return (
     <Button
       type="button"
-      variant="secondary"
+      variant="default"
       size="sm"
       className={className}
       disabled={opening}
