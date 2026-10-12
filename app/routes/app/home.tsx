@@ -1,10 +1,12 @@
 import {
   CakeIcon,
+  CalendarClockIcon,
   CalendarDaysIcon,
+  GiftIcon,
   SearchIcon,
   UtensilsIcon,
 } from "lucide-react";
-import { Suspense, use } from "react";
+import { Fragment, Suspense, use } from "react";
 import { Link } from "react-router";
 
 import { StoryRail } from "~/features/stories/components/story-rail";
@@ -42,14 +44,15 @@ import { HomeTimetableSummary } from "~/features/timetable";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { getKoreaDateIso } from "~/shared/lib/korea-date";
-import { Button } from "~/shared/ui/button";
+import { Button, buttonVariants } from "~/shared/ui/button";
 import { Separator } from "~/shared/ui/separator";
 import type { Route } from "./+types/home";
 
 const schoolShortcuts = [
-  { to: "/menu/meal", label: "급식", icon: UtensilsIcon },
   { to: "/menu/birthdays", label: "생일", icon: CakeIcon },
+  { to: "/menu/meal", label: "급식", icon: UtensilsIcon },
   { to: "/menu/timetable", label: "시간표", icon: CalendarDaysIcon },
+  { to: "/util/gongang", label: "공강·노래방", icon: CalendarClockIcon },
 ];
 
 /**
@@ -176,18 +179,22 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
 
       <nav
         aria-label="학교생활 바로가기"
-        className="mb-4 hidden grid-cols-3 gap-2 md:grid lg:hidden"
+        className="mb-4 hidden grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr_auto_1fr] gap-1 md:grid lg:hidden"
       >
         {schoolShortcuts.map(({ to, label, icon: Icon }) => (
-          <Link
-            key={to}
-            to={to}
-            className="flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            <Icon className="size-4" aria-hidden />
-            {label}
-          </Link>
+          <Fragment key={to}>
+            <Link to={to} className={buttonVariants({ variant: "outline" })}>
+              <Icon data-icon="inline-start" aria-hidden />
+              {label}
+            </Link>
+            <Separator orientation="vertical" className="my-2" />
+          </Fragment>
         ))}
+        {/* eslint-disable-next-line jsx-a11y/anchor-is-valid -- 기부물품은 빈 해시로 연결하는 임시 링크로 제공한다. */}
+        <a href="#" className={buttonVariants({ variant: "outline" })}>
+          <GiftIcon data-icon="inline-start" aria-hidden />
+          기부물품
+        </a>
       </nav>
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-6 lg:py-4">
@@ -209,6 +216,25 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
           aria-label="학교생활 요약"
           className="hidden min-w-0 flex-col gap-3 self-start lg:flex"
         >
+          <nav
+            aria-label="예약·기부 바로가기"
+            className="grid grid-cols-[1fr_auto_1fr] gap-2"
+          >
+            <Link
+              to="/util/gongang"
+              className={buttonVariants({ variant: "outline" })}
+            >
+              <CalendarClockIcon data-icon="inline-start" aria-hidden />
+              공강·노래방
+            </Link>
+            <Separator orientation="vertical" className="my-2" />
+            {/* eslint-disable-next-line jsx-a11y/anchor-is-valid -- 기부물품은 빈 해시로 연결하는 임시 링크로 제공한다. */}
+            <a href="#" className={buttonVariants({ variant: "outline" })}>
+              <GiftIcon data-icon="inline-start" aria-hidden />
+              기부물품
+            </a>
+          </nav>
+          <Separator />
           {/* 한 경계로 묶어 생일과 급식이 함께 들어선다. 따로 두면 생일 카드가 늦게 끼어들며 급식을 밀어낸다. */}
           <Suspense fallback={<HomeMealSummarySkeleton />}>
             <DeferredBirthdays birthdays={birthdays} />

@@ -42,15 +42,11 @@ function renderHeader(path = "/") {
 }
 
 describe("AppHeader account menu", () => {
-  it("offers one combined reservation link on home instead of a meal link", () => {
+  it("leaves home school shortcuts to the page instead of the global header", () => {
     renderHeader();
-    expect(screen.getByRole("link", { name: "공강·노래방" })).toHaveAttribute(
-      "href",
-      "/util/gongang",
-    );
-    expect(screen.getAllByRole("link", { name: "공강·노래방" })).toHaveLength(
-      1,
-    );
+    expect(
+      screen.queryByRole("link", { name: "공강·노래방" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "급식" }),
     ).not.toBeInTheDocument();

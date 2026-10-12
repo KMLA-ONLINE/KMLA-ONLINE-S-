@@ -1,11 +1,10 @@
 import {
-  CalendarClockIcon,
   LogOutIcon,
   MessagesSquareIcon,
   SettingsIcon,
   UserRoundIcon,
 } from "lucide-react";
-import { Link, useLocation } from "react-router";
+import { Link } from "react-router";
 import { useRef, useState } from "react";
 
 import { useAppShell } from "~/features/app-shell/context/app-shell-context";
@@ -13,7 +12,7 @@ import { schoolLinks } from "~/features/app-shell/model/school-links";
 import { LogoutDialog } from "~/features/auth/components/logout-button";
 import { GlobalSearchDropdown } from "~/features/search";
 import { UserAvatar } from "~/shared/components/user-avatar";
-import { Button, buttonVariants } from "~/shared/ui/button";
+import { Button } from "~/shared/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +30,6 @@ import { cn } from "~/shared/lib/utils";
  */
 export function AppHeader({ className }: { className?: string }) {
   const { profile } = useAppShell();
-  const { pathname } = useLocation();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const avatarRef = useRef<HTMLButtonElement>(null);
 
@@ -55,15 +53,6 @@ export function AppHeader({ className }: { className?: string }) {
       <GlobalSearchDropdown />
 
       <div className="flex flex-1 basis-0 items-center justify-end gap-2">
-        {pathname === "/" ? (
-          <Link
-            to="/util/gongang"
-            className={buttonVariants({ variant: "ghost", size: "sm" })}
-          >
-            <CalendarClockIcon data-icon="inline-start" aria-hidden />
-            공강·노래방
-          </Link>
-        ) : null}
         <Button
           variant="ghost"
           size="icon"
