@@ -9,15 +9,13 @@ export interface NavItem {
   end?: boolean;
 }
 
-/** 내비게이션의 단일 소스. 모바일은 네 항목, 데스크톱은 학교생활을 제외한다. */
+/** 모바일 탭바와 데스크톱 사이드바가 공유하는 주요 내비게이션. */
 export const navItems: NavItem[] = [
   { to: "/", label: "홈", icon: HomeIcon, end: true },
   { to: "/groups", label: "그룹", icon: UsersRoundIcon },
   { to: "/noti", label: "알림", icon: BellIcon },
   { to: "/menu", label: "학교생활", icon: SchoolIcon },
 ];
-
-export const desktopNavItems = navItems.filter((item) => item.to !== "/menu");
 
 /**
  * `startsWith`가 아니라 경계까지 본다. 그냥 `startsWith`면 `/groups`가 `/groupsomething`에서도

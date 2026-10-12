@@ -70,7 +70,7 @@ test("모바일 학교생활은 도구와 설정·프로필 진입을 분리한�
     page.getByRole("heading", { name: "학교생활", exact: true }),
   ).toBeVisible();
   const tools = page.getByRole("navigation", { name: "학교생활 기능" });
-  await expect(tools.getByRole("link")).toHaveCount(5);
+  await expect(tools.getByRole("link")).toHaveCount(4);
   await expect(page.getByRole("link", { name: "도움말" })).toHaveCount(0);
 
   await tools.getByRole("link", { name: "공강 · 노래방", exact: true }).click();
@@ -87,14 +87,16 @@ test("모바일 학교생활은 도구와 설정·프로필 진입을 분리한�
   await page.getByRole("button", { name: "뒤로" }).click();
   await expect(page).toHaveURL(/\/menu$/);
 
-  await tools.getByRole("link", { name: "바로가기", exact: true }).click();
-  await expect(page).toHaveURL(/\/menu\/links$/);
-  await expect(
-    page.getByRole("link", { name: /민사고 홈페이지/ }),
-  ).toBeVisible();
-  await expect(page.getByRole("link", { name: /인트라넷/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: /리로스쿨/ })).toBeVisible();
-  await page.getByRole("button", { name: "뒤로" }).click();
+  const sites = page.getByRole("navigation", { name: "학교 사이트" });
+  await expect(sites.getByRole("link")).toHaveCount(3);
+  for (const name of ["민사고 홈페이지", "인트라넷", "리로스쿨"]) {
+    const link = sites.getByRole("link", {
+      name: `${name} (새 탭)`,
+      exact: true,
+    });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute("target", "_blank");
+  }
 
   await page.getByRole("link", { name: "설정", exact: true }).click();
   await expect(page).toHaveURL(/\/menu\/settings$/);
@@ -108,6 +110,87 @@ test("모바일 학교생활은 도구와 설정·프로필 진입을 분리한�
   await expect(page).toHaveURL(/\/menu$/);
   await page.getByRole("link", { name: "내 프로필", exact: true }).click();
   await expect(page).toHaveURL(/\/profile\/[^/]+$/);
+});
+
+test("학교생활 메뉴는 모바일과 데스크톱에서 구역별로 정돈되고 가로로 넘치지 않는다", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  await loginAsAcceptedStudent(page);
+  await page
+    .getByRole("navigation", { name: "주요 메뉴" })
+    .getByRole("link", { name: "학교생활", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/menu$/);
+
+  const tools = page.getByRole("navigation", { name: "학교생활 기능" });
+  const sites = page.getByRole("navigation", { name: "학교 사이트" });
+  for (const [width, toolRows, siteRows] of [
+    [320, 2, 3],
+    [390, 2, 3],
+    [767, 2, 3],
+    [768, 1, 1],
+    [820, 1, 1],
+    [1280, 1, 1],
+    [1920, 1, 1],
+  ] as const) {
+    await page.setViewportSize({ width, height: 800 });
+    await expect(tools.getByRole("link")).toHaveCount(4);
+    await expect(sites.getByRole("link")).toHaveCount(3);
+    await expect(
+      page
+        .getByRole("navigation", { name: "주요 메뉴" })
+        .getByRole("link", { name: "학교생활", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+
+    for (const [nav, rows] of [
+      [tools, toolRows],
+      [sites, siteRows],
+    ] as const) {
+      const boxes = await nav.getByRole("link").evaluateAll((elements) =>
+        elements.map((element) => {
+          const { top, left, right } = element.getBoundingClientRect();
+          return {
+            top,
+            left,
+            right,
+            fits: element.scrollWidth <= element.clientWidth,
+          };
+        }),
+      );
+      expect(new Set(boxes.map(({ top }) => top)).size).toBe(rows);
+      expect(
+        boxes.every(
+          ({ left, right, fits }) => left >= 0 && right <= width && fits,
+        ),
+      ).toBe(true);
+    }
+    expect(
+      await page
+        .getByRole("main")
+        .evaluate((element) => element.scrollWidth <= element.clientWidth),
+    ).toBe(true);
+    const menuBox = await tools.boundingBox();
+    expect(menuBox).not.toBeNull();
+    expect(menuBox!.width).toBeLessThanOrEqual(768);
+  }
+
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await testInfo.attach(`school-life-${width}`, {
+      body: await page.screenshot(),
+      contentType: "image/png",
+    });
+  }
+
+  await tools.getByRole("link", { name: "급식", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/menu\/meal$/);
+  await expect(
+    page
+      .getByRole("navigation", { name: "주요 메뉴" })
+      .getByRole("link", { name: "학교생활", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
 });
 
 test("공강 관리의 새 주소도 일반 사용자의 접근 제한과 돌아가기 링크를 유지한다", async ({
@@ -125,13 +208,14 @@ test("공강 관리의 새 주소도 일반 사용자의 접근 제한과 돌아
   ).toBeVisible();
 });
 
-test("이전 예약 주소는 리다이렉트 없이 없는 페이지로 표시한다", async ({
+test("이전 예약·바로가기 주소는 리다이렉트 없이 없는 페이지로 표시한다", async ({
   page,
 }) => {
   for (const path of [
     "/util/gongang",
     "/util/gongang/manage",
     "/util/karaoke",
+    "/menu/links",
   ]) {
     await page.goto(path);
     await expect(
@@ -314,14 +398,15 @@ test("데스크톱 홈 사이드바는 생일·급식·오늘 시간표를 제�
   }
   await expect(
     page.getByRole("link", { name: "학교생활", exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await expect(
     page.getByRole("link", { name: "공강·노래방", exact: true }),
   ).toHaveAttribute("href", "/menu/gongang");
   await page.goto("/menu");
-  await expect(page).toHaveURL(/\/$/);
-  await page.goto("/menu/links");
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/menu$/);
+  await expect(
+    page.getByRole("navigation", { name: "학교생활 기능" }),
+  ).toBeVisible();
 });
 
 test("데스크톱 아바타 메뉴에서 설정과 확인 후 로그아웃을 연다", async ({

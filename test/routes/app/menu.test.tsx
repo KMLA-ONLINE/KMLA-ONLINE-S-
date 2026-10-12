@@ -39,7 +39,7 @@ function renderMenu(
 }
 
 describe("menu route", () => {
-  it("redirects the desktop school-life entry to home", async () => {
+  it("keeps the desktop school-life entry on the menu screen", () => {
     const original = window.matchMedia.bind(window);
     vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
       ...original(query),
@@ -47,11 +47,11 @@ describe("menu route", () => {
     }));
     renderMenu("member");
     expect(
-      await screen.findByRole("heading", { name: "홈 화면" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("navigation", { name: "학교생활 기능" }),
+      screen.queryByRole("heading", { name: "홈 화면" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "학교생활 기능" }),
+    ).toBeInTheDocument();
   });
   it("keeps school tools in the body and account entry points in the header", () => {
     renderMenu("admin");
@@ -62,13 +62,12 @@ describe("menu route", () => {
     const tools = within(
       screen.getByRole("navigation", { name: "학교생활 기능" }),
     );
-    expect(tools.getAllByRole("link")).toHaveLength(5);
+    expect(tools.getAllByRole("link")).toHaveLength(4);
     for (const [name, href] of [
       ["급식", "/menu/meal"],
       ["시간표", "/menu/timetable"],
       ["공강 · 노래방", "/menu/gongang"],
       ["생일", "/menu/birthdays"],
-      ["바로가기", "/menu/links"],
     ]) {
       expect(tools.getByRole("link", { name })).toHaveAttribute("href", href);
     }
@@ -92,6 +91,33 @@ describe("menu route", () => {
     }
     expect(
       screen.queryByRole("button", { name: "로그아웃" }),
+    ).not.toBeInTheDocument();
+  });
+  it("opens school sites directly from a separate menu section in new tabs", () => {
+    renderMenu("member");
+
+    expect(
+      screen.getByRole("heading", { name: "학교 기능" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "학교 사이트" }),
+    ).toBeInTheDocument();
+    const sites = within(
+      screen.getByRole("navigation", { name: "학교 사이트" }),
+    );
+    expect(sites.getAllByRole("link")).toHaveLength(3);
+    for (const [name, href] of [
+      ["민사고 홈페이지", "https://www.minjok.hs.kr/"],
+      ["인트라넷", "https://old.minjok.hs.kr/members/login.php"],
+      ["리로스쿨", "https://minjok.riroschool.kr/"],
+    ]) {
+      const link = sites.getByRole("link", { name: `${name} (새 탭)` });
+      expect(link).toHaveAttribute("href", href);
+      expect(link).toHaveAttribute("target", "_blank");
+      expect(link).toHaveAttribute("rel", "noreferrer");
+    }
+    expect(
+      screen.queryByRole("link", { name: "바로가기" }),
     ).not.toBeInTheDocument();
   });
 });

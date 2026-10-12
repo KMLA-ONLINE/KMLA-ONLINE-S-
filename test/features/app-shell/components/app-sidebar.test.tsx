@@ -18,19 +18,30 @@ const shell = {
 } satisfies ShellData;
 
 describe("desktop navigation", () => {
-  it("offers home, groups and notifications without school life", () => {
-    renderRoute(() => (
-      <AppShellProvider value={shell}>
-        <AppSidebar />
-      </AppShellProvider>
-    ));
-    const nav = within(screen.getByRole("navigation", { name: "주요 메뉴" }));
-    expect(nav.getAllByRole("link")).toHaveLength(3);
-    for (const name of ["홈", "그룹", "알림"]) {
-      expect(nav.getByRole("link", { name })).toBeInTheDocument();
-    }
-    expect(
-      nav.queryByRole("link", { name: "학교생활" }),
-    ).not.toBeInTheDocument();
-  });
+  it.each(["/menu", "/menu/meal"])(
+    "offers an active school-life entry at %s",
+    (path) => {
+      renderRoute(
+        () => (
+          <AppShellProvider value={shell}>
+            <AppSidebar />
+          </AppShellProvider>
+        ),
+        { path },
+      );
+      const nav = within(screen.getByRole("navigation", { name: "주요 메뉴" }));
+      expect(nav.getAllByRole("link")).toHaveLength(4);
+      for (const name of ["홈", "그룹", "알림"]) {
+        expect(nav.getByRole("link", { name })).toBeInTheDocument();
+      }
+      expect(nav.getByRole("link", { name: "학교생활" })).toHaveAttribute(
+        "href",
+        "/menu",
+      );
+      expect(nav.getByRole("link", { name: "학교생활" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+    },
+  );
 });

@@ -25,7 +25,6 @@ export default [
       route("noti/settings", "routes/app/notification-settings.tsx"),
       route("menu", "routes/app/menu/index.tsx"),
       route("menu/licenses", "routes/app/menu/licenses.tsx"),
-      route("menu/links", "routes/app/menu/links.tsx"),
       route("menu/birthdays", "routes/app/menu/birthdays.tsx"),
       route("menu/gongang", "routes/app/menu/gongang.tsx"),
       route("menu/gongang/manage", "routes/app/menu/gongang-manage.tsx"),

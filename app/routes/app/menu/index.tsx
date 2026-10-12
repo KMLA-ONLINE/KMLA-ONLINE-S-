@@ -2,15 +2,15 @@ import {
   CakeIcon,
   CalendarClockIcon,
   CalendarDaysIcon,
-  LinkIcon,
+  ExternalLinkIcon,
   SettingsIcon,
   UtensilsIcon,
 } from "lucide-react";
 import type { ComponentType } from "react";
-import { Link, Navigate } from "react-router";
+import { Link } from "react-router";
 
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
-import { useDesktopShell } from "~/features/app-shell/model/use-desktop-shell";
+import { schoolLinks } from "~/features/app-shell/model/school-links";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { buttonVariants } from "~/shared/ui/button";
@@ -18,6 +18,7 @@ import { buttonVariants } from "~/shared/ui/button";
 export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "sticky",
+  contentWidth: "3xl",
 });
 
 interface Shortcut {
@@ -32,14 +33,13 @@ const shortcuts: Shortcut[] = [
   { to: "/menu/timetable", label: "시간표", icon: CalendarDaysIcon },
   { to: "/menu/gongang", label: "공강 · 노래방", icon: CalendarClockIcon },
   { to: "/menu/birthdays", label: "생일", icon: CakeIcon },
-  { to: "/menu/links", label: "바로가기", icon: LinkIcon },
 ];
+
+const tileClassName =
+  "rounded-xl border bg-card transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 export default function MenuPage() {
   const { profile } = useAppShell();
-  const isDesktop = useDesktopShell();
-
-  if (isDesktop) return <Navigate to="/" replace />;
 
   return (
     <>
@@ -69,35 +69,84 @@ export default function MenuPage() {
         }
       />
 
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4 md:p-0">
+      <div className="flex w-full flex-col gap-6 p-4 md:gap-8 md:p-0">
         <h1 className="hidden text-2xl font-semibold md:block">학교생활</h1>
 
-        <nav
-          aria-label="학교생활 기능"
-          className="grid grid-cols-2 gap-2 sm:grid-cols-5"
+        <section
+          className="flex flex-col gap-3"
+          aria-labelledby="school-tools-title"
         >
-          {shortcuts.map(({ to, label, icon: Icon }, index) => (
-            <Link
-              key={to}
-              to={to}
-              className={cn(
-                "flex min-h-18 flex-col items-center justify-center gap-2 rounded-xl border bg-card px-2 py-3 transition-colors hover:bg-muted/60",
-                // 홀수일 때 두 칸 그리드의 마지막
-                // 하나가 옆자리를 비운 채 남으므로, 그 하나만 한 줄을 다 쓰게 해 빈칸을 없앤다.
-                index === shortcuts.length - 1 &&
-                  shortcuts.length % 2 === 1 &&
-                  "col-span-2 sm:col-span-1",
-              )}
-            >
-              <Icon className="size-6 text-muted-foreground" aria-hidden />
+          <h2
+            id="school-tools-title"
+            className="text-sm font-semibold text-muted-foreground"
+          >
+            학교 기능
+          </h2>
+          <nav
+            aria-label="학교생활 기능"
+            className="grid grid-cols-2 gap-3 md:grid-cols-4"
+          >
+            {shortcuts.map(({ to, label, icon: Icon }) => (
+              <Link
+                key={to}
+                to={to}
+                className={cn(
+                  tileClassName,
+                  "flex min-h-22 min-w-0 flex-col items-center justify-center gap-3 px-3 py-4",
+                )}
+              >
+                <Icon className="size-6 text-muted-foreground" aria-hidden />
 
-              {/* `break-keep`이 없으면 두 줄 라벨이 어절 가운데서 잘린다. */}
-              <span className="text-center text-xs leading-tight font-medium break-keep">
-                {label}
-              </span>
-            </Link>
-          ))}
-        </nav>
+                {/* `break-keep`이 없으면 두 줄 라벨이 어절 가운데서 잘린다. */}
+                <span className="text-center text-sm leading-tight font-medium break-keep">
+                  {label}
+                </span>
+              </Link>
+            ))}
+          </nav>
+        </section>
+
+        <section
+          className="flex flex-col gap-3"
+          aria-labelledby="school-sites-title"
+        >
+          <h2
+            id="school-sites-title"
+            className="text-sm font-semibold text-muted-foreground"
+          >
+            학교 사이트
+          </h2>
+          <nav
+            aria-label="학교 사이트"
+            className="grid grid-cols-1 gap-3 md:grid-cols-3"
+          >
+            {schoolLinks.map(({ href, label, icon: Icon }) => (
+              <a
+                key={href}
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`${label} (새 탭)`}
+                className={cn(
+                  tileClassName,
+                  "flex min-h-14 min-w-0 items-center gap-3 px-3 py-3",
+                )}
+              >
+                <Icon
+                  className="size-5 shrink-0 text-muted-foreground"
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 text-sm font-medium break-keep">
+                  {label}
+                </span>
+                <ExternalLinkIcon
+                  className="size-4 shrink-0 text-muted-foreground"
+                  aria-hidden
+                />
+              </a>
+            ))}
+          </nav>
+        </section>
       </div>
     </>
   );
