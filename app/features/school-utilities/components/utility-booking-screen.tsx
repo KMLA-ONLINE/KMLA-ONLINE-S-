@@ -66,8 +66,8 @@ interface ManagerReservation {
 }
 
 const MODES = [
-  { id: "gongang", label: "공강", to: "/util/gongang" },
-  { id: "karaoke", label: "노래방", to: "/util/karaoke" },
+  { id: "gongang", label: "공강", to: "/menu/gongang" },
+  { id: "karaoke", label: "노래방", to: "/menu/karaoke" },
 ] as const;
 
 const FLOORS = [
@@ -922,7 +922,7 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
       {mode === "gongang" && canManage ? (
         <div className="mt-3 flex justify-end px-1">
           <Link
-            to="/util/gongang/manage"
+            to="/menu/gongang/manage"
             className="inline-flex min-h-9 items-center rounded-lg border px-3 text-sm font-medium transition-colors hover:bg-muted"
           >
             다음 주 공강 선예약

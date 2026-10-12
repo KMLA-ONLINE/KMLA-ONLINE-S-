@@ -30,7 +30,7 @@ interface Shortcut {
 const shortcuts: Shortcut[] = [
   { to: "/menu/meal", label: "급식", icon: UtensilsIcon },
   { to: "/menu/timetable", label: "시간표", icon: CalendarDaysIcon },
-  { to: "/util/gongang", label: "공강 · 노래방", icon: CalendarClockIcon },
+  { to: "/menu/gongang", label: "공강 · 노래방", icon: CalendarClockIcon },
   { to: "/menu/birthdays", label: "생일", icon: CakeIcon },
   { to: "/menu/links", label: "바로가기", icon: LinkIcon },
 ];

@@ -27,7 +27,7 @@ describe("back stack", () => {
   it("puts only home under a top-level screen", () => {
     expect(resolveBackStack("/groups/study")).toEqual(["/", "/groups"]);
     expect(resolveBackStack("/noti")).toEqual(["/"]);
-    expect(resolveBackStack("/util/gongang")).toEqual(["/"]);
+    expect(resolveBackStack("/menu/gongang")).toEqual(["/"]);
   });
 
   it("falls back to home for a screen the table does not declare", () => {

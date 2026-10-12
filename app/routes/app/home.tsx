@@ -52,7 +52,7 @@ const schoolShortcuts = [
   { to: "/menu/birthdays", label: "생일", icon: CakeIcon },
   { to: "/menu/meal", label: "급식", icon: UtensilsIcon },
   { to: "/menu/timetable", label: "시간표", icon: CalendarDaysIcon },
-  { to: "/util/gongang", label: "공강·노래방", icon: CalendarClockIcon },
+  { to: "/menu/gongang", label: "공강·노래방", icon: CalendarClockIcon },
 ];
 
 /**
@@ -221,7 +221,7 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
             className="grid grid-cols-[1fr_auto_1fr] gap-2"
           >
             <Link
-              to="/util/gongang"
+              to="/menu/gongang"
               className={buttonVariants({ variant: "outline" })}
             >
               <CalendarClockIcon data-icon="inline-start" aria-hidden />

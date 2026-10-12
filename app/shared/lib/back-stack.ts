@@ -23,7 +23,7 @@ const PARENT_ROUTE: Record<string, string | null> = {
   "/profile/:pubId": HOME,
   "/profile/:pubId/posts/:postId": "/profile/:pubId",
   "/noti": HOME,
-  "/util/gongang": HOME,
+  "/menu/gongang": HOME,
 };
 
 /** react-router의 `createKey`와 같은 모양. entry끼리 구분만 되면 된다. */

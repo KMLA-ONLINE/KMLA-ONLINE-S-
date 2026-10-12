@@ -66,7 +66,7 @@ describe("menu route", () => {
     for (const [name, href] of [
       ["급식", "/menu/meal"],
       ["시간표", "/menu/timetable"],
-      ["공강 · 노래방", "/util/gongang"],
+      ["공강 · 노래방", "/menu/gongang"],
       ["생일", "/menu/birthdays"],
       ["바로가기", "/menu/links"],
     ]) {

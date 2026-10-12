@@ -37,6 +37,20 @@ test("모바일 학교생활은 도구와 설정·프로필 진입을 분리한�
   await expect(tools.getByRole("link")).toHaveCount(5);
   await expect(page.getByRole("link", { name: "도움말" })).toHaveCount(0);
 
+  await tools.getByRole("link", { name: "공강 · 노래방", exact: true }).click();
+  await expect(page).toHaveURL(/\/menu\/gongang$/);
+  const modes = page.getByRole("navigation", { name: "공강 및 노래방" });
+  await expect(
+    modes.getByRole("link", { name: "공강", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await modes.getByRole("link", { name: "노래방", exact: true }).click();
+  await expect(page).toHaveURL(/\/menu\/karaoke$/);
+  await expect(
+    modes.getByRole("link", { name: "노래방", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await page.getByRole("button", { name: "뒤로" }).click();
+  await expect(page).toHaveURL(/\/menu$/);
+
   await tools.getByRole("link", { name: "바로가기", exact: true }).click();
   await expect(page).toHaveURL(/\/menu\/links$/);
   await expect(
@@ -58,6 +72,37 @@ test("모바일 학교생활은 도구와 설정·프로필 진입을 분리한�
   await expect(page).toHaveURL(/\/menu$/);
   await page.getByRole("link", { name: "내 프로필", exact: true }).click();
   await expect(page).toHaveURL(/\/profile\/[^/]+$/);
+});
+
+test("공강 관리의 새 주소도 일반 사용자의 접근 제한과 돌아가기 링크를 유지한다", async ({
+  page,
+}) => {
+  await loginAsAcceptedStudent(page);
+  await page.goto("/menu/gongang/manage");
+  await expect(
+    page.getByRole("heading", { name: "접근 권한이 없습니다" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "공강으로 돌아가기" }).click();
+  await expect(page).toHaveURL(/\/menu\/gongang$/);
+  await expect(
+    page.getByRole("navigation", { name: "공강 및 노래방" }),
+  ).toBeVisible();
+});
+
+test("이전 예약 주소는 리다이렉트 없이 없는 페이지로 표시한다", async ({
+  page,
+}) => {
+  for (const path of [
+    "/util/gongang",
+    "/util/gongang/manage",
+    "/util/karaoke",
+  ]) {
+    await page.goto(path);
+    await expect(
+      page.getByText("주소가 바뀌었거나, 페이지가 사라졌을 수 있어요."),
+    ).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`${path}$`));
+  }
 });
 
 test("태블릿 홈 바로가기는 생일·급식·시간표·공강·노래방·기부물품을 한 줄에 제공한다", async ({
@@ -92,7 +137,7 @@ test("태블릿 홈 바로가기는 생일·급식·시간표·공강·노래방
     ["급식", "/menu/meal"],
     ["생일", "/menu/birthdays"],
     ["시간표", "/menu/timetable"],
-    ["공강·노래방", "/util/gongang"],
+    ["공강·노래방", "/menu/gongang"],
   ]) {
     await shortcuts.getByRole("link", { name, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`${path}$`));
@@ -152,7 +197,7 @@ test("데스크톱 홈 사이드바는 생일·급식·오늘 시간표를 제�
   await expect(shortcuts.getByRole("separator")).toBeVisible();
   await expect(
     shortcuts.getByRole("link", { name: "공강·노래방" }),
-  ).toHaveAttribute("href", "/util/gongang");
+  ).toHaveAttribute("href", "/menu/gongang");
   await expect(
     shortcuts.getByRole("link", { name: "기부물품" }),
   ).toHaveAttribute("href", "#");
@@ -236,7 +281,7 @@ test("데스크톱 홈 사이드바는 생일·급식·오늘 시간표를 제�
   ).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "공강·노래방", exact: true }),
-  ).toHaveAttribute("href", "/util/gongang");
+  ).toHaveAttribute("href", "/menu/gongang");
   await page.goto("/menu");
   await expect(page).toHaveURL(/\/$/);
   await page.goto("/menu/links");
