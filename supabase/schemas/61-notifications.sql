@@ -926,7 +926,7 @@ begin
       and profile.status = 'accepted' and profile.deleted_at is null;
     if profile_pub_id is not null then destination := '/profile/' || profile_pub_id; end if;
   elsif target.kind = 'gongang_preempted' then
-    destination := '/util/gongang';
+    destination := '/menu/gongang';
   end if;
 
   update public.notifications set read_at = coalesce(read_at, now()) where id = target.id;

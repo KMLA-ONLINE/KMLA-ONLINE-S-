@@ -1,5 +1,5 @@
 import { SearchIcon, UtensilsIcon } from "lucide-react";
-import { Suspense, use } from "react";
+import { Suspense, use, useSyncExternalStore } from "react";
 import { Link } from "react-router";
 
 import { StoryRail } from "~/features/stories/components/story-rail";
@@ -28,10 +28,12 @@ import {
 } from "~/features/profiles";
 import { createPostListRevalidation } from "~/features/posts";
 import { GlobalSearchDialog } from "~/features/search";
+import { HomeTimetableSummary } from "~/features/timetable";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { getKoreaDateIso } from "~/shared/lib/korea-date";
 import { Button } from "~/shared/ui/button";
+import { Separator } from "~/shared/ui/separator";
 import type { Route } from "./+types/home";
 
 /**
@@ -121,9 +123,27 @@ export async function clientLoader() {
   return { mealDay, birthdays, stories };
 }
 
+// 위 aside의 `lg:flex`와 같은 경계다.
+const WIDE_HOME_QUERY = "(min-width: 1024px)";
+
+function subscribeWideHome(onChange: () => void) {
+  const query = window.matchMedia(WIDE_HOME_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function useWideHome() {
+  return useSyncExternalStore(
+    subscribeWideHome,
+    () => window.matchMedia(WIDE_HOME_QUERY).matches,
+    () => false,
+  );
+}
+
 export default function FeedPage({ loaderData }: Route.ComponentProps) {
   const { mealDay, birthdays, stories } = loaderData;
   const { profile } = useAppShell();
+  const wide = useWideHome();
   const { openSearch: openDirectorySearch } = useSearchDialogParam();
 
   return (
@@ -155,7 +175,7 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
       />
       <GlobalSearchDialog />
 
-      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-4">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-6">
         <div className="min-w-0">
           <StoryRail
             initialItems={stories}
@@ -170,12 +190,19 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
           <FeedScreen />
         </div>
 
-        <aside className="hidden space-y-3 self-start lg:block">
+        <aside
+          aria-label="학교생활 요약"
+          className="hidden min-w-0 flex-col gap-3 self-start lg:flex"
+        >
           {/* 한 경계로 묶어 생일과 급식이 함께 들어선다. 따로 두면 생일 카드가 늦게 끼어들며 급식을 밀어낸다. */}
           <Suspense fallback={<HomeMealSummarySkeleton />}>
             <DeferredBirthdays birthdays={birthdays} />
+            <Separator />
             <DeferredMeal mealDay={mealDay} />
           </Suspense>
+          <Separator />
+          {/* aside가 보이지 않는 폭에서는 시간표를 불러오지 않는다. */}
+          {wide ? <HomeTimetableSummary profileId={profile.id} /> : null}
         </aside>
       </div>
     </>

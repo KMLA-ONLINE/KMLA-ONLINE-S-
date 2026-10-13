@@ -11,10 +11,13 @@ import {
 import { TIMETABLE_STORAGE_KEY } from "~/shared/lib/user-scoped-storage";
 
 export function loadTimetable(): TimetableStorage {
-  const empty = emptyTimetable();
+  return loadCachedTimetable() ?? emptyTimetable();
+}
 
+/** Unlike the editing screen's empty default, a summary must distinguish a cache miss. */
+export function loadCachedTimetable(): TimetableStorage | null {
   if (typeof window === "undefined") {
-    return empty;
+    return null;
   }
 
   try {
@@ -30,10 +33,10 @@ export function loadTimetable(): TimetableStorage {
       }
     }
   } catch {
-    return empty;
+    return null;
   }
 
-  return empty;
+  return null;
 }
 
 export function saveTimetable(timetable: TimetableStorage) {

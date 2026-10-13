@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { useRef, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -97,26 +97,39 @@ const birthdayCalendar = [
 ] satisfies BirthdayCalendarProfile[];
 
 describe("birthday components", () => {
-  it("sends the home summary to the profile and to the full list", () => {
+  it("makes the birthday title and content a link to the full list without a separate button", () => {
     renderRoute(() => <HomeBirthdaySummary birthdays={birthdays} />);
 
-    expect(screen.getByRole("heading", { name: "오늘의 생일" })).toBeVisible();
-    expect(screen.getByRole("link", { name: /이한별/ })).toHaveAttribute(
-      "href",
-      "/profile/hanbyeol-25",
-    );
-    expect(screen.getByRole("link", { name: /오늘의 생일/ })).toHaveAttribute(
+    expect(
+      screen.queryByRole("heading", { name: "오늘의 생일" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole("link", { name: "생일 보기" })).getByText(
+        "이한별",
+      ),
+    ).toBeVisible();
+    expect(
+      within(screen.getByRole("link", { name: "생일 보기" })).getByRole(
+        "heading",
+        { name: "생일" },
+      ),
+    ).toBeVisible();
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.queryByText("전체 보기")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "생일 보기" })).toHaveAttribute(
       "href",
       "/menu/birthdays",
     );
   });
 
-  it("does not render a home summary when nobody has a birthday today", () => {
-    const { container } = renderRoute(() => (
-      <HomeBirthdaySummary birthdays={[]} />
-    ));
+  it("keeps the full list available when nobody has a birthday today", () => {
+    renderRoute(() => <HomeBirthdaySummary birthdays={[]} />);
 
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByText("오늘 생일인 학생이 없습니다")).toBeVisible();
+    expect(screen.getByRole("link", { name: "생일 보기" })).toHaveAttribute(
+      "href",
+      "/menu/birthdays",
+    );
   });
 
   it("groups birthdays by month and shows their cohort", () => {

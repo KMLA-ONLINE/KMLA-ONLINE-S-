@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(18);
+select plan(19);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -177,6 +177,16 @@ select ok(
   ),
   'manager preemption notifies the recurring reservation owner'
 );
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
+set local role authenticated;
+select is(
+  public.resolve_my_notification_destination(
+    (select id from public.notifications where kind = 'gongang_preempted')
+  ),
+  '/menu/gongang',
+  'the reservation owner opens a preemption notification under school-life routes'
+);
+reset role;
 select is(
   (
     select recurring_until

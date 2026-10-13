@@ -49,7 +49,7 @@ function FeedSkeleton() {
   return (
     <PendingScreen>
       <MobileHeaderSkeleton titleClassName="w-36" actions={2} />
-      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-4">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="flex min-w-0 flex-col md:gap-3">
           <PostCardSkeleton withImage />
           <PostCardSkeleton withImage={false} />

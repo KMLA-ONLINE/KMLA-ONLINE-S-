@@ -17,8 +17,10 @@ export const faqSections: FaqSection[] = [
         question: "비밀번호를 바꾸고 싶어요.",
         answer: (
           <>
-            메뉴 → 설정 → <Link to="/menu/password">비밀번호 변경</Link>에서
-            바꿉니다. 가입할 때 쓴 메일로 인증 코드를 보내 본인을 확인합니다.
+            설정 → <Link to="/menu/password">비밀번호 변경</Link>에서 바꿉니다.
+            설정은 모바일에서는 학교생활 화면의 톱니바퀴, 데스크톱에서는 상단
+            프로필 아바타 메뉴에서 엽니다. 가입할 때 쓴 메일로 인증 코드를 보내
+            본인을 확인합니다.
           </>
         ),
       },

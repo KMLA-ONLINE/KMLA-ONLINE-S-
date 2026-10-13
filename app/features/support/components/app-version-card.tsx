@@ -1,3 +1,4 @@
+import { InfoIcon } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -5,6 +6,7 @@ import {
   type UpdateCheckResult,
 } from "~/shared/hooks/use-service-worker";
 import { appBuild, formatAppBuild } from "~/shared/lib/app-build";
+import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 
@@ -17,8 +19,13 @@ const CHECK_MESSAGE: Record<UpdateCheckResult, string> = {
 /**
  * 지금 쓰는 빌드와 새 버전 확인(기능 명세 §15.12). 새 버전이 오면 화면 위 안내와 같은 적용을 부른다.
  * 업데이트는 사용자가 받아들일 때만 적용되므로, 안내를 닫아 둔 사람이 여기서 다시 적용할 수 있다.
+ * `row`는 설정의 목록 카드 안 한 줄로 들어갈 때 쓴다. 테두리는 감싸는 카드의 `divide-y`가 그린다.
  */
-export function AppVersionCard() {
+export function AppVersionCard({
+  appearance = "card",
+}: {
+  appearance?: "card" | "row";
+}) {
   const {
     updateReady,
     applyingUpdate,
@@ -53,8 +60,17 @@ export function AppVersionCard() {
   return (
     <section
       aria-label="앱 버전"
-      className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3"
+      className={cn(
+        "flex items-center gap-3 px-4 py-3",
+        appearance === "card" && "rounded-xl border bg-card",
+      )}
     >
+      {appearance === "row" ? (
+        <InfoIcon
+          className="size-4.5 shrink-0 text-muted-foreground"
+          aria-hidden
+        />
+      ) : null}
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">
           앱 버전{" "}

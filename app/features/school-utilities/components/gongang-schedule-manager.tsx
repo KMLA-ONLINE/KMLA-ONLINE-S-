@@ -217,7 +217,7 @@ export function GongangScheduleManager() {
         <h1 className="text-xl font-semibold">접근 권한이 없습니다</h1>
 
         <Link
-          to="/util/gongang"
+          to="/menu/gongang"
           className="mt-4 inline-block text-sm font-medium text-primary"
         >
           공강으로 돌아가기
@@ -317,7 +317,7 @@ export function GongangScheduleManager() {
           </p>
         </div>
 
-        <Link to="/util/gongang" className="text-sm font-medium text-primary">
+        <Link to="/menu/gongang" className="text-sm font-medium text-primary">
           돌아가기
         </Link>
       </div>

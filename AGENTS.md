@@ -98,6 +98,8 @@ Before DB changes, follow [Database workflow](supabase/README.md), including its
 
 Project skills live in `.agents/skills/`; do not hand-edit them. Load the relevant skill and follow its workflow and references with the project constraints above.
 
+Apply only skill recommendations compatible with this React Router SPA. Do not apply Next.js-specific APIs or components, or optimization patterns that require a runtime app server.
+
 ### Required skill usage
 
 The table defines minimum required usage, not an inventory of installed skills. Load other relevant skills according to their descriptions.

@@ -28,7 +28,7 @@
 | §12   | [프로필](functional-spec/profiles.md)                              | 프로필 열람과 편집, 프로필 타임라인                   |
 | §13   | [메시지](functional-spec/messaging.md)                             | 1:1 및 그룹 메시지 ·**구현**, 기간 알림 끄기 없음     |
 | §14   | [알림](functional-spec/notifications.md)                           | 알림함, 중요도와 전달 채널, 알림 종류별 정책          |
-| §15   | [메뉴 및 개인 설정](functional-spec/settings.md)                   | 메뉴 홈, 알림 설정, 실험실, 라이선스, 도움말, 앱 버전 |
+| §15   | [메뉴 및 개인 설정](functional-spec/settings.md)                   | 메뉴 홈, 개인 설정, 실험실, 라이선스, 도움말, 앱 버전 |
 | §16   | [앱 관리자](functional-spec/admin.md)                              | 가입 심사, 앱 관리자 임명, 권한 기반 기능 관리자      |
 | §17   | [학교 부가 기능](functional-spec/school-features.md)               | 공강·노래방 예약, 급식, 생일, 스토리, 시간표          |
 | §18   | [콘텐츠 및 미디어 공통 규칙](functional-spec/content-and-media.md) | 이미지 처리, 파일 접근, 콘텐츠 보존, 이미지 뷰어      |
