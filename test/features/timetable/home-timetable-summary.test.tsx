@@ -145,11 +145,13 @@ describe("HomeTimetableSummary", () => {
     );
     const { user } = renderSummary();
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "시간표를 불러오는 중",
-    );
+    const pending = await screen.findByRole("region", {
+      name: "시간표를 불러오는 중",
+    });
+    expect(pending).toHaveAttribute("aria-busy", "true");
+    expect(pending).toHaveTextContent("시간표를 불러오는 중");
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("status"));
+    await user.click(pending);
     expect(
       await screen.findByRole("heading", { name: "시간표 화면" }),
     ).toBeVisible();

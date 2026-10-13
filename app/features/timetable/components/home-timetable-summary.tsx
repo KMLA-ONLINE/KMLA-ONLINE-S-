@@ -11,7 +11,7 @@ import {
 } from "~/features/timetable/model/timetable";
 import { loadCachedTimetable } from "~/features/timetable/storage/timetable-storage";
 import { cn } from "~/shared/lib/utils";
-import { Skeleton } from "~/shared/ui/skeleton";
+import { PendingRegion, Skeleton } from "~/shared/ui/skeleton";
 
 export interface HomeTimetableSummaryProps {
   profileId: number;
@@ -75,10 +75,25 @@ function AccountTimetableSummary({ profileId }: HomeTimetableSummaryProps) {
             주말에는 시간표가 없습니다
           </p>
         ) : !timetable && loading ? (
-          <div role="status" className="flex flex-col gap-2">
-            <span className="sr-only">시간표를 불러오는 중</span>
-            <Skeleton className="h-96 w-full" />
-          </div>
+          <PendingRegion label="시간표를">
+            <div aria-hidden="true">
+              {PERIODS.map(({ period }) => (
+                <div
+                  key={period}
+                  className="flex h-12 border-b last:border-b-0"
+                >
+                  <div className="flex w-14 shrink-0 flex-col items-center justify-center gap-1 border-r pr-2">
+                    <Skeleton className="h-3 w-8" />
+                    <Skeleton className="h-2.5 w-7" />
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-2 py-1">
+                    <Skeleton className="h-3 w-3/4" />
+                    <Skeleton className="h-2.5 w-1/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </PendingRegion>
         ) : timetable ? (
           <table
             aria-label="오늘의 시간표"

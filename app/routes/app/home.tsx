@@ -24,6 +24,7 @@ import {
   birthdayKeys,
   type BirthdayProfile,
   HomeBirthdaySummary,
+  HomeBirthdaySummarySkeleton,
   listBirthdays,
 } from "~/features/profiles";
 import { createPostListRevalidation } from "~/features/posts";
@@ -194,12 +195,18 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
           aria-label="학교생활 요약"
           className="hidden min-w-0 flex-col gap-3 self-start lg:flex"
         >
-          {/* 한 경계로 묶어 생일과 급식이 함께 들어선다. 따로 두면 생일 카드가 늦게 끼어들며 급식을 밀어낸다. */}
-          <Suspense fallback={<HomeMealSummarySkeleton />}>
-            <DeferredBirthdays birthdays={birthdays} />
-            <Separator />
-            <DeferredMeal mealDay={mealDay} />
-          </Suspense>
+          {/* 경계 밖에서 공간을 확보해 준비된 요약부터 독립적으로 표시한다. */}
+          <div className="grid min-h-20 min-w-0">
+            <Suspense fallback={<HomeBirthdaySummarySkeleton />}>
+              <DeferredBirthdays birthdays={birthdays} />
+            </Suspense>
+          </div>
+          <Separator />
+          <div className="grid min-h-48 min-w-0">
+            <Suspense fallback={<HomeMealSummarySkeleton />}>
+              <DeferredMeal mealDay={mealDay} />
+            </Suspense>
+          </div>
           <Separator />
           {/* aside가 보이지 않는 폭에서는 시간표를 불러오지 않는다. */}
           {wide ? <HomeTimetableSummary profileId={profile.id} /> : null}
@@ -215,10 +222,10 @@ function DeferredBirthdays({
   birthdays: Promise<BirthdayProfile[] | null>;
 }) {
   const value = use(birthdays);
-  return value ? <HomeBirthdaySummary birthdays={value} /> : null;
+  return <HomeBirthdaySummary birthdays={value} />;
 }
 
 function DeferredMeal({ mealDay }: { mealDay: Promise<MealDay | null> }) {
   const value = use(mealDay);
-  return value ? <HomeMealSummary day={value} /> : null;
+  return <HomeMealSummary day={value} />;
 }
