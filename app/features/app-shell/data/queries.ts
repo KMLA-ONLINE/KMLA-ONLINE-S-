@@ -12,6 +12,7 @@ import {
 } from "~/features/auth/data/queries";
 // 배럴(`~/features/profiles`)은 화면 컴포넌트를 전부 끌고 온다. 서명 헬퍼만 필요하다.
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
+import { getQueryClient } from "~/shared/lib/query-client";
 import { getSupabase } from "~/shared/supabase/client";
 
 /**
@@ -29,6 +30,29 @@ export function shellAvatarQuery(path: string | null) {
     enabled: Boolean(path),
     // 서명 캐시(55분)보다 짧게 둬서, 다시 읽을 때는 아직 유효한 URL을 캐시에서 받는다.
     staleTime: 30 * 60 * 1000,
+  });
+}
+
+export const appShellKeys = {
+  profile: () => ["app-shell", "profile"] as const,
+};
+
+/**
+ * 셸 프로필. 게이트 loader가 첫 값을 넣고, 그 뒤로는 `refreshShellProfile()`이 부를 때만 다시 읽는다.
+ * 게이트를 mutation마다 재검증하지 않으므로, 셸 프로필이 바뀌는 곳이 직접 이 쿼리를 갱신한다.
+ */
+export function shellProfileQuery() {
+  return queryOptions({
+    queryKey: appShellKeys.profile(),
+    queryFn: fetchShellData,
+    staleTime: Infinity,
+  });
+}
+
+/** 이름·아바타·역할처럼 셸 프로필 필드를 바꾼 action이 부른다. 다시 읽을 때까지 기다린다. */
+export function refreshShellProfile(): Promise<void> {
+  return getQueryClient().invalidateQueries({
+    queryKey: appShellKeys.profile(),
   });
 }
 
