@@ -65,17 +65,6 @@ function allergenName(code: string) {
   return ALLERGEN_NAMES[code] ?? code;
 }
 
-function AllergenChip({ code }: { code: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-[11px] font-medium text-muted-foreground tabular-nums"
-    >
-      {code}
-    </span>
-  );
-}
-
 /** 이 끼니에 나온 번호만 오름차순으로 풀이한다. */
 function AllergenLegend({ items }: { items: MealMenu["items"] }) {
   const codes = [...new Set(items.flatMap((item) => item.allergens))].sort(
@@ -87,12 +76,11 @@ function AllergenLegend({ items }: { items: MealMenu["items"] }) {
   return (
     <ul
       aria-label="알레르기 유발 식품"
-      className="mt-4 flex flex-wrap gap-x-3 gap-y-2 border-t px-1 pt-4 text-xs text-muted-foreground md:rounded-2xl md:border md:bg-card md:px-5 md:py-3"
+      className="mt-4 flex flex-wrap gap-x-3 gap-y-1 px-1 text-xs text-muted-foreground md:px-0"
     >
       {codes.map((code) => (
-        <li key={code} className="inline-flex items-center gap-1">
-          <AllergenChip code={code} />
-          {allergenName(code)}
+        <li key={code}>
+          <span className="tabular-nums">{code}</span> {allergenName(code)}
         </li>
       ))}
     </ul>
@@ -244,15 +232,16 @@ export function MealScreen({
               {activeMeal.items.map((item) => (
                 <li
                   key={`${item.name}-${item.allergens.join(".")}`}
-                  className="flex items-center justify-between gap-3 px-1 py-2.5 text-[15px] leading-6 md:px-5"
+                  className="px-1 py-2.5 text-[15px] leading-6 md:px-5"
                 >
                   {item.name}
                   {showAllergens && item.allergens.length > 0 && (
                     <>
-                      <span className="flex shrink-0 gap-1">
-                        {item.allergens.map((code) => (
-                          <AllergenChip key={code} code={code} />
-                        ))}
+                      <span
+                        aria-hidden="true"
+                        className="ml-1.5 align-super text-[11px] text-muted-foreground tabular-nums"
+                      >
+                        {item.allergens.join("·")}
                       </span>
                       <span className="sr-only">
                         , 알레르기:{" "}

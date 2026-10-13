@@ -65,12 +65,10 @@ describe("MealScreen allergens", () => {
     await userEvent.click(screen.getByRole("switch", TOGGLE));
 
     const stew = dish("돈육김치찌개");
-    for (const code of ["5", "9", "10"]) {
-      expect(within(stew).getByText(code)).toHaveAttribute(
-        "aria-hidden",
-        "true",
-      );
-    }
+    expect(within(stew).getByText("5·9·10")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
     // 번호는 화면용이고 보조기기에는 이름을 읽힌다.
     expect(stew).toHaveTextContent("알레르기: 대두, 새우, 돼지고기");
     expect(dish("쌀밥")).toHaveTextContent(/^쌀밥$/);
@@ -80,7 +78,7 @@ describe("MealScreen allergens", () => {
       within(legend)
         .getAllByRole("listitem")
         .map((item) => item.textContent),
-    ).toEqual(["2우유", "5대두", "9새우", "10돼지고기"]);
+    ).toEqual(["2 우유", "5 대두", "9 새우", "10 돼지고기"]);
   });
 
   it("remembers the toggle on this device", async () => {
