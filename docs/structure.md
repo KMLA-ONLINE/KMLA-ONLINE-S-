@@ -5,6 +5,7 @@
 
 ```text
 app/
+  entry.client.tsx        ← 브라우저 진입점. hydration 전에 QueryClient 이벤트 구독 활성화
   root.tsx               ← document shell. 빌드 타임 렌더에서 브라우저 전역 금지
   routes.ts              ← 명시적 route tree
   routes/                ← 얇은 route module
@@ -14,6 +15,10 @@ test/                    ← Vitest. app/ 구조를 반영
 e2e/                     ← Playwright
 supabase/tests/          ← pgTAP DB 통합 테스트
 ```
+
+`entry.client.tsx`는 초기 loader가 기다리는 쿼리도 탭·네트워크 복귀 시 재개되도록
+QueryClient를 hydration 전에 마운트한다. HMR dispose에서는 React root와 해당 구독을
+정리한다. `QueryProvider`의 인증·보호 저장소 동기화와 화면 gate는 그대로 유지한다.
 
 ## 레이어
 

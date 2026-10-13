@@ -1,8 +1,15 @@
-import type { GroupDiscoveryCursor } from "~/features/groups/model/types";
+import type {
+  GroupDetail,
+  GroupDiscoveryCursor,
+} from "~/features/groups/model/types";
 import type { PostCursor } from "~/features/posts/model/types";
-import { queryOptions, type QueryKey } from "@tanstack/react-query";
+import {
+  queryOptions,
+  type QueryClient,
+  type QueryKey,
+} from "@tanstack/react-query";
 
-import { loadGroupHome } from "~/features/groups/data/queries";
+import { loadGroupDetail, loadGroupHome } from "~/features/groups/data/queries";
 
 /**
  * 두 값 모두 2분이다. 짧은 값은 모바일의 앱 왕복 복귀마다 재요청해 데이터 사용량이 컸다.
@@ -56,6 +63,7 @@ export function groupHomeQuery() {
   });
 }
 
+/** 그룹의 보호된 캐시인지. slug는 상세 키 자리에서만 맞춘다 — `posts`·`home` 같은 slug가 다른 키의 고정 구간과 겹친다. */
 export function isGroupAccessQuery(
   queryKey: QueryKey,
   groupId: string,
@@ -63,6 +71,70 @@ export function isGroupAccessQuery(
 ) {
   return (
     queryKey[0] === groupKeys.all[0] &&
-    (queryKey.includes(groupId) || queryKey.includes(slug))
+    (queryKey.includes(groupId) ||
+      (queryKey[1] === groupKeys.details()[1] && queryKey[2] === slug))
   );
+}
+
+/** 그룹 상세를 뺀 보호된 캐시를 stale로 둔다. 구독 중인 화면이 떨어져 나가지 않도록 지우지 않고, 다음 loader가 다시 읽는다. */
+export function invalidateGroupContent(
+  queryClient: QueryClient,
+  groupId: string,
+  slug: string,
+) {
+  return queryClient.invalidateQueries({
+    predicate: (query) =>
+      query.queryKey[1] !== groupKeys.details()[1] &&
+      isGroupAccessQuery(query.queryKey, groupId, slug),
+    refetchType: "none",
+  });
+}
+
+/**
+ * 복귀는 접근 상태만 확인한다. 변화가 없으면 오래된 게시물 캐시도 건드리지 않는다.
+ * 조회 실패(오프라인·타임아웃·5xx)는 변경으로 보지 않고 그대로 던진다 — 캐시를 비우면 권한이 같은데도
+ * 피드가 첫 페이지로 돌아간다. 데이터 보호는 RLS가 하고, 다음 복귀가 다시 확인한다.
+ */
+export async function refreshGroupAccess(
+  queryClient: QueryClient,
+  slug: string,
+  previous: GroupDetail | undefined,
+): Promise<boolean> {
+  // 비교 기준은 표시 중인 loader snapshot이다. inactive 상세 cache는 화면을 보는 중에도 GC된다.
+  const current = await queryClient.fetchQuery({
+    queryKey: groupKeys.detail(slug),
+    queryFn: () => loadGroupDetail(slug),
+    staleTime: 0,
+    retry: false,
+  });
+  // 이름·아이콘·인원 같은 표시 필드는 비교하지 않는다. 그것 때문에 재검증하면 누적 페이지를 잃는다 —
+  // 당겨서 새로고침이 덮는다.
+  const fields = [
+    "group_id",
+    "membership_state",
+    "member_role",
+    "kind",
+    "join_policy",
+    "identity_policy",
+    "posting_policy",
+    "hide_staff_roles",
+  ] as const satisfies readonly (keyof GroupDetail)[];
+  const changed =
+    !previous ||
+    !current ||
+    fields.some((field) => previous[field] !== current[field]);
+  if (changed) {
+    await Promise.all([
+      previous && invalidateGroupContent(queryClient, previous.group_id, slug),
+      queryClient.invalidateQueries({
+        queryKey: groupKeys.home(),
+        refetchType: "none",
+      }),
+      queryClient.invalidateQueries({
+        queryKey: groupKeys.discoveries(),
+        refetchType: "none",
+      }),
+    ]);
+  }
+  return changed;
 }
