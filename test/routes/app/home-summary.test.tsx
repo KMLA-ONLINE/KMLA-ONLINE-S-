@@ -150,6 +150,29 @@ describe("home school-life summaries", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("asks the loader for skipped summaries only once when it keeps skipping them", async () => {
+    // 다른 탭에서 설정을 껐거나 폭 경계에서 판정이 엇갈리면 loader는 계속 null을 준다.
+    const loader = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return { birthdays: null, mealDay: null, stories: [] };
+    });
+    renderRoute(
+      (props: ComponentProps<typeof FeedPage>) => (
+        <AppShellProvider value={shell}>
+          <FeedPage {...props} />
+        </AppShellProvider>
+      ),
+      { loader },
+    );
+    expect(
+      await screen.findByRole("button", { name: "스토리 만들기" }),
+    ).toBeVisible();
+
+    await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
+
+    expect(loader).toHaveBeenCalledTimes(2);
+  });
+
   it.each([
     ["birthdays", "생일 보기"],
     ["meal", "급식 보기"],

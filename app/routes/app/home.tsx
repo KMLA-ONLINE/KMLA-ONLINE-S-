@@ -148,15 +148,17 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
     wide &&
     preferences.enabled &&
     (preferences.birthdays || preferences.meal || preferences.timetable);
-  const { revalidate, state } = useRevalidator();
+  const { revalidate } = useRevalidator();
   const needsSidebarData =
     showSidebar &&
     ((preferences.birthdays && birthdays === null) ||
       (preferences.meal && mealDay === null));
   // 모바일 진입 때 생략한 요약은 넓어진 뒤 로더로 채운다. 피드 세션은 캐시에서 재사용한다.
+  // 필요해진 순간 한 번만 부른다. 다른 탭에서 바꾼 설정이나 폭 경계로 loader가 또 생략해도
+  // 반복하지 않는다 — 재검증 상태를 의존성에 넣으면 끝날 때마다 다시 불러 NEIS를 계속 두드린다.
   useEffect(() => {
-    if (needsSidebarData && state === "idle") void revalidate();
-  }, [needsSidebarData, revalidate, state]);
+    if (needsSidebarData) void revalidate();
+  }, [needsSidebarData, revalidate]);
   const { openSearch: openDirectorySearch } = useSearchDialogParam();
 
   return (
