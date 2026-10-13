@@ -107,7 +107,8 @@ export function MessageBubble({
               // 흐린 글씨로 그린다. 내 메시지와 상대 메시지가 같은 모양이다.
               !isEmojiOnly &&
                 (message.deleted
-                  ? "border border-dashed border-muted-foreground/40 bg-transparent text-muted-foreground"
+                  ? // 테두리 1px만큼 위아래 여백을 줄여 다른 버블과 높이를 맞춘다.
+                    "border border-dashed border-muted-foreground/40 bg-transparent py-[7px] text-muted-foreground"
                   : isOwn
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-foreground"),
@@ -138,7 +139,8 @@ export function MessageBubble({
               </button>
             ) : null}
             {message.deleted ? (
-              <span className="inline-flex items-center gap-1.5">
+              // inline-flex는 바깥 줄의 글자 기준선에 얹혀 아래에 빈 줄 높이가 남아 글이 위로 뜬다.
+              <span className="flex items-center gap-1.5">
                 <BanIcon aria-hidden className="size-3.5 shrink-0" />
                 {messageBody}
               </span>

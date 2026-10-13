@@ -595,11 +595,18 @@ function MessageTimeCard({
   showTimeCard: boolean;
   children: ReactElement;
 }) {
+  const [open, setOpen] = useState(false);
   if (!showTimeCard) return children;
 
+  // 툴팁은 기본으로 누르면 닫힌다. 터치패드로 탭해 시각을 보려는 사람에게는 반대가 되므로, 눌러도
+  // 닫지 않고 닫혀 있었으면 연다. 포인터가 떠나면 평소처럼 닫힌다.
   return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="block w-fit max-w-full" />}>
+    <Tooltip open={open} onOpenChange={setOpen}>
+      <TooltipTrigger
+        closeOnClick={false}
+        render={<span className="block w-fit max-w-full" />}
+        onClick={() => setOpen(true)}
+      >
         {children}
       </TooltipTrigger>
       <TooltipContent className="[@media(hover:none)]:hidden">
