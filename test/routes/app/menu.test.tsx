@@ -66,7 +66,7 @@ describe("menu route", () => {
       ["시간표", "/menu/timetable"],
       ["공강 · 노래방", "/menu/gongang"],
       ["생일", "/menu/birthdays"],
-      ["기부물품", "#"],
+      ["기부물품", "/menu/donations"],
     ]) {
       expect(tools.getByRole("link", { name })).toHaveAttribute("href", href);
     }

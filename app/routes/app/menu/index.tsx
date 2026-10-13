@@ -34,6 +34,7 @@ const shortcuts: Shortcut[] = [
   { to: "/menu/timetable", label: "시간표", icon: CalendarDaysIcon },
   { to: "/menu/gongang", label: "공강 · 노래방", icon: CalendarClockIcon },
   { to: "/menu/birthdays", label: "생일", icon: CakeIcon },
+  { to: "/menu/donations", label: "기부물품", icon: GiftIcon },
 ];
 
 const tileClassName =
@@ -104,19 +105,6 @@ export default function MenuPage() {
                 </span>
               </Link>
             ))}
-            {/* eslint-disable-next-line jsx-a11y/anchor-is-valid -- 기부물품은 빈 해시로 연결하는 임시 링크로 제공한다. */}
-            <a
-              href="#"
-              className={cn(
-                tileClassName,
-                "flex min-h-22 min-w-0 flex-col items-center justify-center gap-3 px-3 py-4",
-              )}
-            >
-              <GiftIcon className="size-6 text-muted-foreground" aria-hidden />
-              <span className="text-center text-sm leading-tight font-medium break-keep">
-                기부물품
-              </span>
-            </a>
           </nav>
         </section>
 

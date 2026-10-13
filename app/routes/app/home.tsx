@@ -1,5 +1,5 @@
 import { SearchIcon, UtensilsIcon } from "lucide-react";
-import { Suspense, use } from "react";
+import { Suspense, use, useSyncExternalStore } from "react";
 import { Link } from "react-router";
 
 import { StoryRail } from "~/features/stories/components/story-rail";
@@ -8,12 +8,7 @@ import {
   listActiveStories,
   type StoryItem,
 } from "~/features/stories/data/queries";
-import {
-  defineAppChrome,
-  PageHeader,
-  useAppShell,
-  useDesktopShell,
-} from "~/features/app-shell";
+import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import { hasActiveSession } from "~/features/auth";
 import { FeedScreen, feedQuery } from "~/features/feed";
 import {
@@ -128,10 +123,27 @@ export async function clientLoader() {
   return { mealDay, birthdays, stories };
 }
 
+// 위 aside의 `lg:flex`와 같은 경계다.
+const WIDE_HOME_QUERY = "(min-width: 1024px)";
+
+function subscribeWideHome(onChange: () => void) {
+  const query = window.matchMedia(WIDE_HOME_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function useWideHome() {
+  return useSyncExternalStore(
+    subscribeWideHome,
+    () => window.matchMedia(WIDE_HOME_QUERY).matches,
+    () => false,
+  );
+}
+
 export default function FeedPage({ loaderData }: Route.ComponentProps) {
   const { mealDay, birthdays, stories } = loaderData;
   const { profile } = useAppShell();
-  const desktop = useDesktopShell();
+  const wide = useWideHome();
   const { openSearch: openDirectorySearch } = useSearchDialogParam();
 
   return (
@@ -189,7 +201,8 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
             <DeferredMeal mealDay={mealDay} />
           </Suspense>
           <Separator />
-          {desktop ? <HomeTimetableSummary profileId={profile.id} /> : null}
+          {/* aside가 보이지 않는 폭에서는 시간표를 불러오지 않는다. */}
+          {wide ? <HomeTimetableSummary profileId={profile.id} /> : null}
         </aside>
       </div>
     </>
