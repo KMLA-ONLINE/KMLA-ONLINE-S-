@@ -7,7 +7,6 @@ import {
   LinkIcon,
   SettingsIcon,
   ShieldCheckIcon,
-  SparklesIcon,
   UtensilsIcon,
 } from "lucide-react";
 import type { ComponentType } from "react";
@@ -120,8 +119,6 @@ export default function MenuPage() {
             label="도움말"
             icon={CircleQuestionMarkIcon}
           />
-
-          <ListLinkRow to="/update" label="업데이트 기록" icon={SparklesIcon} />
 
           <ListLinkRow to="/menu/links" label="바로가기" icon={LinkIcon} />
         </div>

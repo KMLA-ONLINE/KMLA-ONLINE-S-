@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
 /**
- * 도움말·업데이트 기록의 내용은 DB나 외부 CMS가 아니라 `../content/` 파일이다. 런타임 서버가 없어
- * CMS는 프록시가 필요하고, 업데이트 기록은 기능을 내보내는 커밋에서 같이 고쳐야 어긋나지 않는다.
+ * 도움말의 내용은 DB나 외부 CMS가 아니라 `../content/` 파일이다. 런타임 서버가 없어
+ * CMS는 프록시가 필요하다.
  * 나중에 DB로 옮겨도 화면은 이 모델만 받으므로 바뀌는 곳은 route 하나다.
  */
 
@@ -29,20 +29,4 @@ export interface SupportContact {
   description?: string;
   /** 앱 안 경로면 `Link`, 그 밖이면 새 탭으로 연다. */
   to: string;
-}
-
-export type ReleaseChangeKind = "added" | "fixed" | "deleted";
-
-export interface ReleaseChange {
-  kind: ReleaseChangeKind;
-  text: string;
-}
-
-export interface Release {
-  /**
-   * `YYYY-MM-DD`. 순간이 아니라 달력 날짜라서 문자열로 둔다. 사전순 정렬이 곧 시간순이다.
-   */
-  date: string;
-  title: string;
-  changes: ReleaseChange[];
 }
