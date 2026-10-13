@@ -77,7 +77,10 @@ export function AppHeader({ className }: { className?: string }) {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => setLogoutOpen(true)}>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => setLogoutOpen(true)}
+              >
                 <LogOutIcon aria-hidden />
                 로그아웃
               </DropdownMenuItem>
