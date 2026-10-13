@@ -1,9 +1,4 @@
-import {
-  LogOutIcon,
-  MessagesSquareIcon,
-  SettingsIcon,
-  UserRoundIcon,
-} from "lucide-react";
+import { LogOutIcon, SettingsIcon, UserRoundIcon } from "lucide-react";
 import { Link } from "react-router";
 import { useRef, useState } from "react";
 
@@ -50,16 +45,7 @@ export function AppHeader({ className }: { className?: string }) {
 
       <GlobalSearchDropdown />
 
-      <div className="flex flex-1 basis-0 items-center justify-end gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          nativeButton={false}
-          aria-label="메시지"
-          render={<Link to="/messenger" />}
-        >
-          <MessagesSquareIcon />
-        </Button>
+      <div className="flex flex-1 basis-0 items-center justify-end">
         <DropdownMenu>
           <DropdownMenuTrigger
             ref={avatarRef}

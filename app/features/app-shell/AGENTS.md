@@ -1,15 +1,14 @@
 # app-shell feature
 
 로그인한 사용자가 보는 앱 chrome과 bootstrap 데이터를 소유한다. 인증/승인 redirect는
-`app/routes/app/gate.tsx`, React Router 레이아웃은 `app/routes/app/layout.tsx`와
-`app/routes/messenger/layout.tsx`가 담당한다.
+`app/routes/app/gate.tsx`, React Router 레이아웃은 `app/routes/app/layout.tsx` 하나가 담당한다.
 
 ## 불변조건
 
-- `app/routes.ts`가 인증 게이트 아래에 일반 앱과 메신저 layout branch를 명시한다.
-- 일반 앱 route는 typed `handle.chrome`으로 전역 헤더와 모바일 하단 nav를 설정한다.
+- `app/routes.ts`가 인증 게이트 아래에 셸 layout 하나를 두고 메신저를 포함한 모든 앱 route를 그 아래에 둔다. 헤더와 사이드바가 화면 이동마다 다시 마운트되면 hover로 펼친 사이드바가 접혔다 펴진다.
+- 앱 route는 typed `handle.chrome`으로 전역 헤더, 모바일 하단 nav와 스크롤 소유(`scroll`)를 설정한다.
 - 일반 앱의 데스크톱 콘텐츠 폭도 `handle.chrome.contentWidth`가 소유한다. 기본은 `model/chrome.ts`의 `DEFAULT_APP_CHROME.contentWidth`(`4xl`)이고, 목록이나 폼처럼 다른 폭이 필요한 route만 명시적으로 override한다.
-- 메신저 layout은 데스크톱 전역 헤더를 유지하지만 사이드바와 하단 nav를 렌더하지 않는다.
+- 메신저 route는 `scroll: "route"`다. 셸은 `ScrollRegion`, 콘텐츠 폭, 당겨서 새로고침과 navigation skeleton 없이 `Outlet`을 셸 높이에 꽉 채운다. 모바일 하단 nav는 대화 목록에서 표시하고 대화방에서는 숨긴다.
 - 인증/승인 게이트는 `app/routes/app/gate.tsx` 한 곳에만 둔다.
 - 셸 loader는 첫 진입과 셸 데이터를 바꾸는 mutation(`gate.tsx`의 `SHELL_MUTATION_ACTIONS`) 이후에만 다시 실행한다. 프로필·역할·뱃지를 바꾸는 action을 새로 만들면 그 목록에 더한다. 자식 route의 명시적 revalidation은 셸 프로필을 다시 읽지 않는다.
 - 게이트 loader는 아바타를 서명하지 않는다. `avatar_url`은 `AppShellProvider`가 `shellAvatarQuery`로 나중에 채우므로 첫 페인트에는 `null`일 수 있다.
@@ -20,7 +19,7 @@
 - 데스크톱 헤더 아바타는 호버 배경색 변화 없이 내 프로필·설정·로그아웃만 제공하며 포커스 표시와 드롭다운 동작은 유지한다. 바로가기 그룹은 두지 않는다. 학교 사이트 URL·라벨·아이콘은 `model/school-links.ts`가 소유하며 메뉴 홈의 학교 사이트 타일에서 사용한다. 외부 링크는 새 탭으로 연다.
 - 데스크톱 전역 헤더에는 공강·노래방 버튼을 두지 않는다. 모바일 홈 급식 버튼은 page route가 그대로 소유한다. 모바일 메뉴 헤더는 설정 버튼과 그 오른쪽의 프로필 직접 진입 아바타를 소유한다.
 - `PageHeader`는 기본적으로 고정이다. 아래로 스크롤할 때 숨겨야 하는 긴 목록 화면만 `hideOnScroll`을 명시한다.
-- 일반 앱의 스크롤 컨테이너는 `ScrollRegion`의 `main` 하나이며 window가 아니다. 메신저는 각 패널이 스크롤을 소유한다.
+- `scroll: "page"`(기본) route의 스크롤 컨테이너는 `ScrollRegion`의 `main` 하나이며 window가 아니다. `scroll: "route"`인 메신저는 각 패널이 스크롤을 소유한다.
 - `ScrollRegion`의 `main`은 `relative`다. 빼면 위치 기준이 없는 absolute 자손(Base UI 폼 컨트롤의 숨은 input)이 스크롤을 따라오지 않고, 포커스 때 셸 전체가 밀려 올라간다.
 - 스크롤 위치 복원은 `ScrollRegion`이 한다. 새 화면은 맨 위, 뒤로·앞으로 가기는 그 기록 항목의 위치이고, `handle.chrome.rememberScroll`인 화면은 탭·링크로 다시 들어와도 마지막 위치로 돌아간다. 같은 경로 안의 이동과 게시물 상세 오버레이는 위치를 건드리지 않는다.
 - 이미 있는 탭을 하단 nav에서 다시 누르면 이동하지 않고 스크롤 영역을 맨 위로 올린다. 같은 경로로 다시 이동하면 loader가 돌아 새로고침이 된다.

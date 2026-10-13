@@ -16,6 +16,14 @@ const validPayload = {
   body: "확인할 새 알림이 있습니다.",
   tag: "notification-category:content:018f3f16-40c7-7d25-b2c3-abcdef012345",
 };
+const messagePayload = {
+  type: "message",
+  conversationId: "018f3f17-40c7-7d25-b2c3-abcdef012345",
+  messageId: "018f3f18-40c7-7d25-b2c3-abcdef012345",
+  deliveryId: "018f3f19-40c7-7d25-b2c3-abcdef012345",
+  title: "홍길동",
+  body: "도서관 앞이야",
+};
 const validClickData = {
   notificationId: validPayload.notificationId,
   deliveryIds: [validPayload.deliveryId],
@@ -65,6 +73,9 @@ function loadPushWorker(
 
   runInNewContext(source, {
     URL,
+    MessageChannel,
+    setTimeout,
+    clearTimeout,
     self: {
       location: { origin: "https://kmla.example" },
       // 데스크톱 Firefox처럼 Badging API가 없는 환경도 정상 경로다.
@@ -107,6 +118,94 @@ function loadPushWorker(
 describe("public push service worker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("shows a message push on one card per conversation and re-alerts on the next message", async () => {
+    const worker = loadPushWorker();
+
+    await worker.dispatch("push", { data: { json: () => messagePayload } });
+    await worker.dispatch("push", {
+      data: {
+        json: () => ({
+          ...messagePayload,
+          messageId: "018f3f1a-40c7-7d25-b2c3-abcdef012345",
+          deliveryId: "018f3f1b-40c7-7d25-b2c3-abcdef012345",
+          body: "어디야?",
+        }),
+      },
+    });
+
+    expect(worker.showNotification).toHaveBeenLastCalledWith("홍길동", {
+      body: "어디야?",
+      icon: "/pwa-192x192.png",
+      badge: "/badge-96x96.png",
+      lang: "ko",
+      tag: `message:${messagePayload.conversationId}`,
+      renotify: true,
+      data: {
+        conversationId: messagePayload.conversationId,
+        deliveryId: "018f3f1b-40c7-7d25-b2c3-abcdef012345",
+      },
+    });
+    expect(worker.notifications).toHaveLength(1);
+    // 메시지 카드는 알림함 뱃지에 세지 않는다.
+    expect(worker.setAppBadge).not.toHaveBeenCalled();
+  });
+
+  it("shows a repeated message delivery again quietly and rejects a message push with extra fields", async () => {
+    const worker = loadPushWorker();
+
+    await worker.dispatch("push", { data: { json: () => messagePayload } });
+    await worker.dispatch("push", { data: { json: () => messagePayload } });
+    // 카드를 띄우지 않으면 브라우저가 기본 카드를 대신 띄운다. 다시 울리지는 않는다.
+    expect(worker.showNotification).toHaveBeenCalledTimes(2);
+    expect(worker.showNotification).toHaveBeenLastCalledWith(
+      "홍길동",
+      expect.objectContaining({ renotify: false }),
+    );
+
+    await worker.dispatch("push", {
+      data: {
+        json: () => ({ ...messagePayload, url: "https://evil.example" }),
+      },
+    });
+    expect(worker.showNotification).toHaveBeenLastCalledWith(
+      "새 알림",
+      expect.objectContaining({ tag: "notification-inbox" }),
+    );
+  });
+
+  it("measures message bodies in code points like the server does", async () => {
+    const worker = loadPushWorker();
+    // 이모지 240개는 code point로 240자, UTF-16으로는 480자다.
+    const body = "😀".repeat(240);
+
+    await worker.dispatch("push", {
+      data: { json: () => ({ ...messagePayload, body }) },
+    });
+
+    expect(worker.showNotification).toHaveBeenCalledWith(
+      "홍길동",
+      expect.objectContaining({ body }),
+    );
+  });
+
+  it("opens the conversation from a message card", async () => {
+    const worker = loadPushWorker();
+
+    await worker.dispatch("notificationclick", {
+      notification: {
+        close: vi.fn(),
+        data: {
+          conversationId: messagePayload.conversationId,
+          deliveryId: messagePayload.deliveryId,
+        },
+      },
+    });
+
+    expect(worker.openWindow).toHaveBeenCalledWith(
+      `/messenger/${messagePayload.conversationId}`,
+    );
   });
 
   it("shows a validated push with fixed local assets and stable identifiers", async () => {
@@ -393,6 +492,35 @@ describe("public push service worker", () => {
       `navigate:https://kmla.example/noti/open/${validPayload.notificationId}`,
     ]);
     expect(worker.openWindow).not.toHaveBeenCalled();
+  });
+
+  it("lets an app window move by itself instead of reloading it", async () => {
+    const appClient = {
+      url: "https://kmla.example/groups/1",
+      focus: vi.fn(() => Promise.resolve()),
+      navigate: vi.fn(() => Promise.resolve()),
+      postMessage: vi.fn(
+        (
+          _message: unknown,
+          [port]: { postMessage: (value: string) => void }[],
+        ) => port.postMessage("navigated"),
+      ),
+    };
+    const worker = loadPushWorker([appClient]);
+
+    await worker.dispatch("notificationclick", {
+      notification: { close: vi.fn(), data: validClickData },
+    });
+
+    expect(appClient.postMessage).toHaveBeenCalledWith(
+      {
+        type: "navigate",
+        path: `/noti/open/${validPayload.notificationId}`,
+      },
+      // 포트 배열은 워커 쪽 realm에서 만들어져 `expect.any(Array)`에 걸리지 않는다.
+      expect.anything(),
+    );
+    expect(appClient.navigate).not.toHaveBeenCalled();
   });
 
   it("opens the local resolver when no app window exists", async () => {

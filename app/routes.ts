@@ -58,8 +58,6 @@ export default [
       route("admin/gongang-managers", "routes/app/admin/gongang-managers.tsx"),
       route("admin/app-admins", "routes/app/admin/app-admins.tsx"),
       route("admin/storage-cleanup", "routes/app/admin/storage-cleanup.tsx"),
-    ]),
-    layout("routes/messenger/layout.tsx", [
       route("messenger", "routes/messenger/index.tsx", [
         route(":roomId", "routes/messenger/room.tsx"),
       ]),

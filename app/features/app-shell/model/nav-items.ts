@@ -1,4 +1,10 @@
-import { BellIcon, HomeIcon, ShapesIcon, UsersRoundIcon } from "lucide-react";
+import {
+  BellIcon,
+  HomeIcon,
+  MessagesSquareIcon,
+  ShapesIcon,
+  UsersRoundIcon,
+} from "lucide-react";
 import type { ComponentType } from "react";
 
 export interface NavItem {
@@ -12,6 +18,7 @@ export interface NavItem {
 /** 모바일 탭바와 데스크톱 사이드바가 공유하는 주요 내비게이션. */
 export const navItems: NavItem[] = [
   { to: "/", label: "홈", icon: HomeIcon, end: true },
+  { to: "/messenger", label: "메시지", icon: MessagesSquareIcon },
   { to: "/groups", label: "그룹", icon: UsersRoundIcon },
   { to: "/noti", label: "알림", icon: BellIcon },
   { to: "/menu", label: "메뉴", icon: ShapesIcon },

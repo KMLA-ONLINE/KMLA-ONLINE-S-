@@ -17,6 +17,14 @@ supabase/tests/          ← pgTAP DB 통합 테스트
 
 ## 레이어
 
+문서의 viewport는 `app/shared/components/viewport-meta.tsx`가 소유한다. 정적 문서의 기본값은
+`width=device-width, initial-scale=1`이고, head의 초기 인라인 스크립트가 iOS에서만
+`viewport-fit=cover`를 추가한다. iPadOS의 데스크톱 UA도 포함한다. iOS 하단 탭바와 댓글
+입력창은 기존 `--app-safe-b`로 홈 인디케이터 여백을 확보한다. Android Chrome 135+의 시스템
+내비게이션 바 배경 회귀를 피하기 위해 Android에는 `cover`를 적용하지 않는다.
+viewport 메타의 빈 `itemProp`은 React의 메타데이터 hoisting을 끈다. 초기 스크립트가 바꾼
+`content` 때문에 하이드레이션 시 두 번째 viewport 메타가 추가되지 않도록 유지한다.
+
 의존성은 `routes → features → shared` 한 방향이다.
 
 - `routes/**`는 `clientLoader`, `clientAction`, URL 파싱, redirect, route error, `Outlet`, page chrome을

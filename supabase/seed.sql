@@ -32,6 +32,18 @@ where not exists (
   where name = 'notification_dispatch_secret'
 );
 
+-- 메시지 본문 암호화 키(docs/MESSAGING_TECHNICAL_DESIGN.md §4). 운영 키는 환경마다 따로 만든다.
+select vault.create_secret(
+  'local-message-key-only-0123456789abcdef',
+  'message_key_v1',
+  'Development-only message encryption key'
+)
+where not exists (
+  select 1
+  from vault.decrypted_secrets
+  where name = 'message_key_v1'
+);
+
 insert into auth.users (
   instance_id,
   id,
@@ -888,3 +900,91 @@ values
     'wow', '2026-08-13 00:55:00+00'
   )
 on conflict (comment_id, profile_id) do nothing;
+
+-- 메시지 화면 확인용 대화. 홍길동과 김민준의 1:1 대화, 홍길동이 만든 그룹 대화다.
+insert into public.conversations (
+  id, type, name, created_by, direct_profile_low, direct_profile_high, created_at
+)
+select
+  'c0000000-0000-0000-0000-000000000001',
+  'direct',
+  null,
+  hong.id,
+  least(hong.id, minjun.id),
+  greatest(hong.id, minjun.id),
+  '2026-08-20 00:00:00+00'
+from public.profiles as hong, public.profiles as minjun
+where hong.auth_user_id = '10000000-0000-0000-0000-000000000001'
+  and minjun.auth_user_id = '10000000-0000-0000-0000-000000000100'
+on conflict (id) do nothing;
+
+insert into public.conversations (id, type, name, created_by, created_at)
+select
+  'c0000000-0000-0000-0000-000000000002',
+  'group',
+  '학생회 기획부',
+  hong.id,
+  '2026-08-20 00:00:00+00'
+from public.profiles as hong
+where hong.auth_user_id = '10000000-0000-0000-0000-000000000001'
+on conflict (id) do nothing;
+
+insert into public.conversation_members (
+  conversation_id, profile_id, joined_at, last_read_sent_at
+)
+select member.conversation_id::uuid, profile.id, member.joined_at::timestamptz, member.joined_at::timestamptz
+from (
+  values
+    ('c0000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', null, '2026-08-20 00:00:00+00'),
+    ('c0000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000100', null, '2026-08-20 00:00:00+00'),
+    ('c0000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', null, '2026-08-20 00:00:00+00'),
+    ('c0000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000100', null, '2026-08-20 00:00:00+00'),
+    ('c0000000-0000-0000-0000-000000000002', null, 'saebyeok-24', '2026-08-20 00:00:00+00'),
+    ('c0000000-0000-0000-0000-000000000002', null, 'hanbyeol-25', '2026-08-21 00:00:00+00')
+) as member(conversation_id, auth_user_id, pub_id, joined_at)
+join public.profiles as profile
+  on profile.auth_user_id = member.auth_user_id::uuid
+  or profile.pub_id = member.pub_id
+where not exists (
+  select 1
+  from public.conversation_members as existing
+  where existing.conversation_id = member.conversation_id::uuid
+    and existing.profile_id = profile.id
+);
+
+insert into private.messages (
+  id, conversation_id, sender_id, sent_at, reply_to_id, body_ciphertext, key_version
+)
+select
+  message.id::uuid,
+  message.conversation_id::uuid,
+  profile.id,
+  message.sent_at::timestamptz,
+  message.reply_to_id::uuid,
+  encrypted.ciphertext,
+  encrypted.key_version
+from (
+  values
+    ('d0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000100', null, '2026-08-27 11:02:00+00', null, '내일 자습 끝나고 도서관 갈래?'),
+    ('d0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', null, '2026-08-27 11:05:00+00', null, '좋아! 9시에 앞에서 보자'),
+    ('d0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000100', null, '2026-08-28 06:12:00+00', 'd0000000-0000-0000-0000-000000000002', '나 5분 늦을 것 같아 🙏'),
+    ('d0000000-0000-0000-0000-000000000011', 'c0000000-0000-0000-0000-000000000002', null, 'saebyeok-24', '2026-08-20 06:12:00+00', null, '축제 부스 배치 초안 확인했어요?'),
+    ('d0000000-0000-0000-0000-000000000012', 'c0000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', null, '2026-08-20 06:18:00+00', null, '확인했습니다! 2층 체험 부스 동선만 조금 넓히면 좋을 것 같아요.'),
+    ('d0000000-0000-0000-0000-000000000013', 'c0000000-0000-0000-0000-000000000002', null, 'hanbyeol-25', '2026-08-21 01:00:00+00', null, '오늘부터 같이 하게 됐어요. 잘 부탁드립니다!'),
+    ('d0000000-0000-0000-0000-000000000014', 'c0000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000100', null, '2026-08-21 01:03:00+00', null, '환영해요 👋')
+) as message(id, conversation_id, auth_user_id, pub_id, sent_at, reply_to_id, body)
+join public.profiles as profile
+  on profile.auth_user_id = message.auth_user_id::uuid
+  or profile.pub_id = message.pub_id
+cross join lateral private.encrypt_message_text(message.body, private.message_keys()) as encrypted
+order by message.sent_at
+on conflict (id) do nothing;
+
+update public.conversation_members as member
+set last_read_sent_at = '2026-08-27 11:05:00+00',
+  last_read_message_id = 'd0000000-0000-0000-0000-000000000002'
+from public.profiles as profile
+where member.conversation_id = 'c0000000-0000-0000-0000-000000000001'
+  and member.profile_id = profile.id
+  and profile.auth_user_id = '10000000-0000-0000-0000-000000000001'
+  and member.last_read_message_id = '00000000-0000-0000-0000-000000000000';

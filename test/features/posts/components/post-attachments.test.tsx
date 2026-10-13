@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { useNavigate } from "react-router";
 
 import {
@@ -8,6 +8,12 @@ import {
 } from "~/features/posts/components/post-attachments";
 import type { PostAttachment } from "~/features/posts/model/types";
 import { renderRoute } from "../../../router";
+
+// 이미지 뷰어는 처음 열 때 지연 import된다. 전체 테스트가 몰리면 그 첫 로딩이 `findBy`의 기본 대기 시간을
+// 넘겨 흔들리므로 미리 불러 둔다.
+beforeAll(async () => {
+  await import("~/shared/components/image-viewer");
+});
 
 function attachment(overrides: Partial<PostAttachment>): PostAttachment {
   return {

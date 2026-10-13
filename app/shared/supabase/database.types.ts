@@ -169,6 +169,109 @@ export type Database = {
           },
         ]
       }
+      conversation_members: {
+        Row: {
+          conversation_id: string
+          id: number
+          joined_at: string
+          last_read_message_id: string
+          last_read_sent_at: string
+          left_at: string | null
+          left_by_self: boolean
+          muted_until: string | null
+          profile_id: number
+        }
+        Insert: {
+          conversation_id: string
+          id?: number
+          joined_at?: string
+          last_read_message_id?: string
+          last_read_sent_at?: string
+          left_at?: string | null
+          left_by_self?: boolean
+          muted_until?: string | null
+          profile_id: number
+        }
+        Update: {
+          conversation_id?: string
+          id?: number
+          joined_at?: string
+          last_read_message_id?: string
+          last_read_sent_at?: string
+          left_at?: string | null
+          left_by_self?: boolean
+          muted_until?: string | null
+          profile_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_members_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_members_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversations: {
+        Row: {
+          created_at: string
+          created_by: number | null
+          direct_profile_high: number | null
+          direct_profile_low: number | null
+          id: string
+          name: string | null
+          type: Database["public"]["Enums"]["conversation_type"]
+        }
+        Insert: {
+          created_at?: string
+          created_by?: number | null
+          direct_profile_high?: number | null
+          direct_profile_low?: number | null
+          id?: string
+          name?: string | null
+          type: Database["public"]["Enums"]["conversation_type"]
+        }
+        Update: {
+          created_at?: string
+          created_by?: number | null
+          direct_profile_high?: number | null
+          direct_profile_low?: number | null
+          id?: string
+          name?: string | null
+          type?: Database["public"]["Enums"]["conversation_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_direct_profile_high_fkey"
+            columns: ["direct_profile_high"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_direct_profile_low_fkey"
+            columns: ["direct_profile_low"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gongang_schedule: {
         Row: {
           configured_by: number | null
@@ -419,7 +522,7 @@ export type Database = {
           member_count?: number
           name: string
           posting_policy: Database["public"]["Enums"]["group_posting_policy"]
-          search_name?: string | null
+          search_name?: never
           slug: string
           slug_is_custom?: boolean
           updated_at?: string
@@ -438,7 +541,7 @@ export type Database = {
           member_count?: number
           name?: string
           posting_policy?: Database["public"]["Enums"]["group_posting_policy"]
-          search_name?: string | null
+          search_name?: never
           slug?: string
           slug_is_custom?: boolean
           updated_at?: string
@@ -458,6 +561,7 @@ export type Database = {
           account_push_enabled: boolean
           content_push_enabled: boolean
           group_push_enabled: boolean
+          message_preview_hidden: boolean
           profile_id: number
           school_push_enabled: boolean
           timeline_push_enabled: boolean
@@ -467,6 +571,7 @@ export type Database = {
           account_push_enabled?: boolean
           content_push_enabled?: boolean
           group_push_enabled?: boolean
+          message_preview_hidden?: boolean
           profile_id: number
           school_push_enabled?: boolean
           timeline_push_enabled?: boolean
@@ -476,6 +581,7 @@ export type Database = {
           account_push_enabled?: boolean
           content_push_enabled?: boolean
           group_push_enabled?: boolean
+          message_preview_hidden?: boolean
           profile_id?: number
           school_push_enabled?: boolean
           timeline_push_enabled?: boolean
@@ -835,8 +941,7 @@ export type Database = {
       posts: {
         Row: {
           activity_kind:
-            | Database["public"]["Enums"]["profile_media_activity_kind"]
-            | null
+            Database["public"]["Enums"]["profile_media_activity_kind"] | null
           activity_media_path: string | null
           author_identity: Database["public"]["Enums"]["post_identity"]
           body: string
@@ -858,8 +963,7 @@ export type Database = {
         }
         Insert: {
           activity_kind?:
-            | Database["public"]["Enums"]["profile_media_activity_kind"]
-            | null
+            Database["public"]["Enums"]["profile_media_activity_kind"] | null
           activity_media_path?: string | null
           author_identity: Database["public"]["Enums"]["post_identity"]
           body?: string
@@ -874,15 +978,14 @@ export type Database = {
           kind: Database["public"]["Enums"]["post_kind"]
           pinned_at?: string | null
           published_at?: string | null
-          search_text?: string | null
+          search_text?: never
           timeline_profile_id?: number | null
           title?: string | null
           visibility?: Database["public"]["Enums"]["post_visibility"] | null
         }
         Update: {
           activity_kind?:
-            | Database["public"]["Enums"]["profile_media_activity_kind"]
-            | null
+            Database["public"]["Enums"]["profile_media_activity_kind"] | null
           activity_media_path?: string | null
           author_identity?: Database["public"]["Enums"]["post_identity"]
           body?: string
@@ -897,7 +1000,7 @@ export type Database = {
           kind?: Database["public"]["Enums"]["post_kind"]
           pinned_at?: string | null
           published_at?: string | null
-          search_text?: string | null
+          search_text?: never
           timeline_profile_id?: number | null
           title?: string | null
           visibility?: Database["public"]["Enums"]["post_visibility"] | null
@@ -1094,8 +1197,7 @@ export type Database = {
       profiles: {
         Row: {
           academic_track:
-            | Database["public"]["Enums"]["profile_academic_track"]
-            | null
+            Database["public"]["Enums"]["profile_academic_track"] | null
           allow_timeline_posts: boolean
           anonymous_username: string | null
           auth_user_id: string | null
@@ -1129,8 +1231,7 @@ export type Database = {
         }
         Insert: {
           academic_track?:
-            | Database["public"]["Enums"]["profile_academic_track"]
-            | null
+            Database["public"]["Enums"]["profile_academic_track"] | null
           allow_timeline_posts?: boolean
           anonymous_username?: string | null
           auth_user_id?: string | null
@@ -1153,7 +1254,7 @@ export type Database = {
           phone_number?: string | null
           pub_id?: string
           role?: Database["public"]["Enums"]["app_role"]
-          search_name?: string | null
+          search_name?: never
           status?: Database["public"]["Enums"]["profile_status"]
           status_updated_at?: string
           status_updated_by?: number | null
@@ -1164,8 +1265,7 @@ export type Database = {
         }
         Update: {
           academic_track?:
-            | Database["public"]["Enums"]["profile_academic_track"]
-            | null
+            Database["public"]["Enums"]["profile_academic_track"] | null
           allow_timeline_posts?: boolean
           anonymous_username?: string | null
           auth_user_id?: string | null
@@ -1188,7 +1288,7 @@ export type Database = {
           phone_number?: string | null
           pub_id?: string
           role?: Database["public"]["Enums"]["app_role"]
-          search_name?: string | null
+          search_name?: never
           status?: Database["public"]["Enums"]["profile_status"]
           status_updated_at?: string
           status_updated_by?: number | null
@@ -1270,19 +1370,19 @@ export type Database = {
         Row: {
           active_semester: string
           profile_id: number
-          semesters: Json
+          semesters: NonNullable<Json>
           updated_at: string
         }
         Insert: {
           active_semester?: string
           profile_id: number
-          semesters?: Json
+          semesters?: NonNullable<Json>
           updated_at?: string
         }
         Update: {
           active_semester?: string
           profile_id?: number
-          semesters?: Json
+          semesters?: NonNullable<Json>
           updated_at?: string
         }
         Relationships: [
@@ -1354,6 +1454,10 @@ export type Database = {
     }
     Functions: {
       accept_group_invite: { Args: { p_token: string }; Returns: string }
+      add_conversation_members: {
+        Args: { p_conversation_id: string; p_profile_ids: number[] }
+        Returns: undefined
+      }
       admin_list_accepted_users: {
         Args: {
           p_limit?: number
@@ -1436,7 +1540,7 @@ export type Database = {
         }[]
       }
       admin_storage_cleanup_status: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           last_cron_at: string
           last_cron_status: string
@@ -1480,11 +1584,13 @@ export type Database = {
           body: string
           category: Database["public"]["Enums"]["notification_category"]
           channel: "web_push" | "email"
+          conversation_id: string
           delivery_id: string
           endpoint: string
           grouping_key: string
           importance: Database["public"]["Enums"]["notification_importance"]
           lease_id: string
+          message_id: string
           notification_id: string
           p256dh: string
           recipient_email: string
@@ -1591,6 +1697,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_group_conversation: {
+        Args: { p_name: string; p_profile_ids: number[] }
+        Returns: string
+      }
       create_group_post: {
         Args: {
           p_author_identity: Database["public"]["Enums"]["post_identity"]
@@ -1666,7 +1776,12 @@ export type Database = {
         Args: { p_category_id: string }
         Returns: undefined
       }
+      delete_group_conversation: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
+      }
       delete_group_post: { Args: { p_post_id: string }; Returns: undefined }
+      delete_messages: { Args: { p_message_ids: string[] }; Returns: undefined }
       delete_my_story: { Args: { p_story_id: number }; Returns: undefined }
       delete_post_attachment: {
         Args: { p_attachment_id: string }
@@ -1702,6 +1817,10 @@ export type Database = {
       dismiss_group_post_reports: {
         Args: { p_post_id: string }
         Returns: undefined
+      }
+      edit_message: {
+        Args: { p_body: string; p_message_id: string }
+        Returns: string
       }
       finalize_comment_image: {
         Args: { p_image_id: string }
@@ -1759,8 +1878,7 @@ export type Database = {
         Args: { p_media_id: string }
         Returns: {
           academic_track:
-            | Database["public"]["Enums"]["profile_academic_track"]
-            | null
+            Database["public"]["Enums"]["profile_academic_track"] | null
           allow_timeline_posts: boolean
           anonymous_username: string | null
           auth_user_id: string | null
@@ -1822,6 +1940,13 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"]
           student_number: string
           type: Database["public"]["Enums"]["profile_type"]
+        }[]
+      }
+      get_conversation_attachment_counts: {
+        Args: { p_conversation_id: string }
+        Returns: {
+          file_count: number
+          media_count: number
         }[]
       }
       get_group_invite: {
@@ -1902,28 +2027,28 @@ export type Database = {
         }[]
       }
       get_my_group_new_post_counts: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           group_id: string
           new_post_count: number
         }[]
       }
       get_my_notification_preferences: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           account_push_enabled: boolean
           content_push_enabled: boolean
           group_push_enabled: boolean
+          message_preview_hidden: boolean
           school_push_enabled: boolean
           timeline_push_enabled: boolean
         }[]
       }
       get_my_profile: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           academic_track:
-            | Database["public"]["Enums"]["profile_academic_track"]
-            | null
+            Database["public"]["Enums"]["profile_academic_track"] | null
           allow_timeline_posts: boolean
           anonymous_username: string | null
           auth_user_id: string | null
@@ -1962,7 +2087,14 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      get_my_recent_unread_notification_count: { Args: never; Returns: number }
+      get_my_recent_unread_notification_count: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      get_my_unread_message_count: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       get_my_web_push_status: {
         Args: { p_endpoint: string }
         Returns: {
@@ -2006,8 +2138,12 @@ export type Database = {
           token: string
         }[]
       }
+      leave_conversation: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
+      }
       list_active_stories: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           avatar_path: string
           background: string
@@ -2059,6 +2195,48 @@ export type Database = {
           reactor_avatar_path: string
           reactor_name: string
           reactor_pub_id: string
+        }[]
+      }
+      list_conversation_attachments: {
+        Args: {
+          p_before_id?: string
+          p_before_sent_at?: string
+          p_conversation_id: string
+          p_limit?: number
+          p_media: boolean
+        }
+        Returns: {
+          file_name: string
+          height: number
+          id: string
+          kind: string
+          message_id: string
+          mime_type: string
+          object_path: string
+          sender_id: number
+          sent_at: string
+          size_bytes: number
+          thumbnail_path: string
+          width: number
+        }[]
+      }
+      list_conversations: {
+        Args: { p_conversation_id?: string }
+        Returns: {
+          can_delete: boolean
+          conversation_id: string
+          last_message_attachment_kind: string
+          last_message_body: string
+          last_message_deleted: boolean
+          last_message_id: string
+          last_message_sender_id: number
+          last_message_sent_at: string
+          muted: boolean
+          name: string
+          participants: Json
+          type: Database["public"]["Enums"]["conversation_type"]
+          unread_count: number
+          viewer_id: number
         }[]
       }
       list_feed_posts: {
@@ -2214,6 +2392,78 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      list_message_changes: {
+        Args: { p_conversation_id: string; p_limit?: number; p_since: string }
+        Returns: {
+          attachments: Json
+          body: string
+          changed_at: string
+          deleted: boolean
+          edited_at: string
+          id: string
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          pinned: boolean
+          reactions: Json
+          reply_attachment_kind: string
+          reply_body: string
+          reply_deleted: boolean
+          reply_sender_id: number
+          reply_to_id: string
+          sender_id: number
+          sent_at: string
+          system_kind: string
+          system_name: string
+          system_profile_ids: number[]
+          unread_member_count: number
+        }[]
+      }
+      list_message_reactors: {
+        Args: { p_message_id: string }
+        Returns: {
+          avatar_path: string
+          name: string
+          profile_id: number
+          reacted_at: string
+          reaction: Database["public"]["Enums"]["post_reaction"]
+        }[]
+      }
+      list_message_read_counts: {
+        Args: { p_conversation_id: string; p_message_ids: string[] }
+        Returns: {
+          id: string
+          unread_member_count: number
+        }[]
+      }
+      list_messages: {
+        Args: {
+          p_before_id?: string
+          p_before_sent_at?: string
+          p_conversation_id: string
+          p_limit?: number
+        }
+        Returns: {
+          attachments: Json
+          body: string
+          changed_at: string
+          deleted: boolean
+          edited_at: string
+          id: string
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          pinned: boolean
+          reactions: Json
+          reply_attachment_kind: string
+          reply_body: string
+          reply_deleted: boolean
+          reply_sender_id: number
+          reply_to_id: string
+          sender_id: number
+          sent_at: string
+          system_kind: string
+          system_name: string
+          system_profile_ids: number[]
+          unread_member_count: number
+        }[]
+      }
       list_my_notifications: {
         Args: {
           p_before_id?: string
@@ -2243,6 +2493,31 @@ export type Database = {
           restriction_expires_at: string
           target_profile_id: number
           title: string
+        }[]
+      }
+      list_pinned_messages: {
+        Args: { p_conversation_id: string }
+        Returns: {
+          attachments: Json
+          body: string
+          changed_at: string
+          deleted: boolean
+          edited_at: string
+          id: string
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          pinned: boolean
+          reactions: Json
+          reply_attachment_kind: string
+          reply_body: string
+          reply_deleted: boolean
+          reply_sender_id: number
+          reply_to_id: string
+          sender_id: number
+          sent_at: string
+          system_kind: string
+          system_name: string
+          system_profile_ids: number[]
+          unread_member_count: number
         }[]
       }
       list_post_attachments: {
@@ -2282,8 +2557,8 @@ export type Database = {
           created_at: string
           depth: number
           edited_at: string
-          is_author: boolean
           images: Json
+          is_author: boolean
           is_deleted: boolean
           is_effective_feed_bump: boolean
           mentions: Json
@@ -2320,8 +2595,8 @@ export type Database = {
           created_at: string
           depth: number
           edited_at: string
-          is_author: boolean
           images: Json
+          is_author: boolean
           is_deleted: boolean
           is_effective_feed_bump: boolean
           mentions: Json
@@ -2375,7 +2650,14 @@ export type Database = {
           visibility: Database["public"]["Enums"]["post_visibility"]
         }[]
       }
-      mark_all_my_notifications_read: { Args: never; Returns: number }
+      mark_all_my_notifications_read: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      mark_conversation_read: {
+        Args: { p_conversation_id: string; p_message_id: string }
+        Returns: boolean
+      }
       mark_group_posts_visited: {
         Args: { p_group_id: string }
         Returns: undefined
@@ -2400,6 +2682,14 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      next_message_delivery_at: {
+        Args: { p_within_seconds?: number }
+        Returns: string
+      }
+      open_direct_conversation: {
+        Args: { p_profile_id: number }
+        Returns: string
       }
       prepare_comment_image: {
         Args: {
@@ -2456,6 +2746,14 @@ export type Database = {
         Returns: {
           object_path: string
           story_id: number
+          thumbnail_path: string
+        }[]
+      }
+      prepare_message_attachments: {
+        Args: { p_conversation_id: string; p_files: Json; p_message_id: string }
+        Returns: {
+          attachment_id: string
+          object_path: string
           thumbnail_path: string
         }[]
       }
@@ -2538,8 +2836,7 @@ export type Database = {
         Args: { p_slot: string }
         Returns: {
           academic_track:
-            | Database["public"]["Enums"]["profile_academic_track"]
-            | null
+            Database["public"]["Enums"]["profile_academic_track"] | null
           allow_timeline_posts: boolean
           anonymous_username: string | null
           auth_user_id: string | null
@@ -2577,6 +2874,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      rename_conversation: {
+        Args: { p_conversation_id: string; p_name: string }
+        Returns: undefined
       }
       report_group_post: {
         Args: {
@@ -2647,6 +2948,39 @@ export type Database = {
           title: string
         }[]
       }
+      search_message_recipients: {
+        Args: { p_query: string }
+        Returns: {
+          avatar_path: string
+          cohort: number
+          name: string
+          profile_id: number
+          profile_type: Database["public"]["Enums"]["profile_type"]
+          pub_id: string
+        }[]
+      }
+      search_messages: {
+        Args: {
+          p_before_id?: string
+          p_before_sent_at?: string
+          p_conversation_id: string
+          p_limit?: number
+          p_query: string
+        }
+        Returns: Json
+      }
+      send_message: {
+        Args: {
+          p_body: string
+          p_conversation_id: string
+          p_message_id: string
+          p_reply_to_id?: string
+        }
+        Returns: {
+          id: string
+          sent_at: string
+        }[]
+      }
       set_comment_reaction: {
         Args: {
           p_comment_id: string
@@ -2658,9 +2992,27 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      set_conversation_muted: {
+        Args: { p_conversation_id: string; p_muted: boolean }
+        Returns: undefined
+      }
       set_group_post_pinned: {
         Args: { p_pinned: boolean; p_post_id: string }
         Returns: string
+      }
+      set_message_pinned: {
+        Args: { p_message_id: string; p_pinned: boolean }
+        Returns: undefined
+      }
+      set_message_reaction: {
+        Args: {
+          p_message_id: string
+          p_reaction?: Database["public"]["Enums"]["post_reaction"]
+        }
+        Returns: {
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          reactions: Json
+        }[]
       }
       set_my_group_notification_preferences: {
         Args: {
@@ -2669,6 +3021,10 @@ export type Database = {
           p_new_post_push_enabled: boolean
           p_notification_level: Database["public"]["Enums"]["group_notification_level"]
         }
+        Returns: undefined
+      }
+      set_my_message_preview_hidden: {
+        Args: { p_hidden: boolean }
         Returns: undefined
       }
       set_post_reaction: {
@@ -2697,8 +3053,7 @@ export type Database = {
         }
         Returns: {
           academic_track:
-            | Database["public"]["Enums"]["profile_academic_track"]
-            | null
+            Database["public"]["Enums"]["profile_academic_track"] | null
           allow_timeline_posts: boolean
           anonymous_username: string | null
           auth_user_id: string | null
@@ -2826,8 +3181,7 @@ export type Database = {
         }
         Returns: {
           academic_track:
-            | Database["public"]["Enums"]["profile_academic_track"]
-            | null
+            Database["public"]["Enums"]["profile_academic_track"] | null
           allow_timeline_posts: boolean
           anonymous_username: string | null
           auth_user_id: string | null
@@ -2908,6 +3262,7 @@ export type Database = {
     Enums: {
       app_role: "member" | "admin"
       comment_image_status: "pending" | "finalized" | "ready" | "deleted"
+      conversation_type: "direct" | "group"
       group_identity_policy: "identified" | "optional_anonymous"
       group_join_policy: "open" | "request" | "invite_only"
       group_kind: "official" | "unofficial"
@@ -2916,25 +3271,12 @@ export type Database = {
       group_member_role: "owner" | "admin" | "manager" | "member"
       group_notification_level: "none" | "direct" | "all"
       group_post_report_reason:
-        | "abuse"
-        | "sexual"
-        | "privacy"
-        | "impersonation"
-        | "spam"
-        | "other"
+        "abuse" | "sexual" | "privacy" | "impersonation" | "spam" | "other"
       group_posting_policy: "members" | "staff"
       notification_actor_identity:
-        | "identified"
-        | "anonymous"
-        | "staff"
-        | "system"
+        "identified" | "anonymous" | "staff" | "system"
       notification_category:
-        | "content"
-        | "timeline"
-        | "group"
-        | "account"
-        | "school"
-        | "moderation"
+        "content" | "timeline" | "group" | "account" | "school" | "moderation"
       notification_importance: "low" | "normal" | "high"
       notification_kind:
         | "post_commented"
@@ -3021,8 +3363,7 @@ export type Tables<
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
@@ -3046,8 +3387,7 @@ export type TablesInsert<
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
@@ -3071,8 +3411,7 @@ export type TablesUpdate<
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Enums"] | { schema: keyof DatabaseWithoutInternals },
   EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
@@ -3111,6 +3450,7 @@ export const Constants = {
     Enums: {
       app_role: ["member", "admin"],
       comment_image_status: ["pending", "finalized", "ready", "deleted"],
+      conversation_type: ["direct", "group"],
       group_identity_policy: ["identified", "optional_anonymous"],
       group_join_policy: ["open", "request", "invite_only"],
       group_kind: ["official", "unofficial"],
@@ -3189,4 +3529,3 @@ export const Constants = {
     },
   },
 } as const
-

@@ -30,8 +30,8 @@ describe("desktop navigation", () => {
         { path },
       );
       const nav = within(screen.getByRole("navigation", { name: "주요 메뉴" }));
-      expect(nav.getAllByRole("link")).toHaveLength(4);
-      for (const name of ["홈", "그룹", "알림"]) {
+      expect(nav.getAllByRole("link")).toHaveLength(5);
+      for (const name of ["홈", "메시지", "그룹", "알림"]) {
         expect(nav.getByRole("link", { name })).toBeInTheDocument();
       }
       expect(nav.getByRole("link", { name: "메뉴" })).toHaveAttribute(

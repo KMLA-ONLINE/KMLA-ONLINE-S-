@@ -18,7 +18,7 @@
 - 관리자 선예약으로 종료된 장기 공강 예약
 - 가입 승인·차단·해제 이메일
 
-메시지 알림과 예약 리마인더는 원본 기능 도입 시 추가할 범위다. 비밀번호 변경·초기화의
+메시지 알림(§11)과 예약 리마인더는 원본 기능 도입 시 추가할 범위다. 비밀번호 변경·초기화의
 보안 이메일은 이 알림 worker의 현재 지원 범위에 포함하지 않는다.
 그룹 초대는 수신자를 지정하지 않는 공유 링크이므로 초대 알림을 만들지 않는다(기능 명세 §14.4).
 노래방 참여자 알림은 현재 제공하지 않으며, 셀프 서비스 탈퇴와 그 완료 이메일도 제공하지 않는다
@@ -211,9 +211,11 @@ badge를 쓰므로, 주지 않으면 브라우저 기본 도형이 대신 나간
 빌드하지 않는 정적 파일이라 VAPID 공개키를 읽을 수 없고, 옛 구독의 생성 옵션이 그 자리를
 대신한다.
 
-클릭 시 payload URL을 열지 않고 `/noti/open/:notificationId`만 구성한다. 기존 앱 창이 있으면 focus와
-navigate를 사용하고 없으면 새 창을 연다. 보이는 창을 숨은 탭보다 먼저 고르고, 이 워커가 제어하지 않는
-창이라 navigate가 거부되면 새 창으로 연다. resolver route는 인증, 현재 계정, 대상 접근 권한과 읽음
+클릭 시 payload URL을 열지 않고 `/noti/open/:notificationId`만 구성한다. 기존 앱 창이 있으면 focus한 뒤
+창에 이동을 부탁하고(`postMessage`), 앱(`use-service-worker-navigation`)이 1초 안에 답하면 router로 옮겨 가게
+둔다. 창을 다시 불러오지 않기 위해서다. 답이 없으면(로그인 전 화면, 옛 버전의 창) navigate로 그 주소를 열고,
+창이 없으면 새 창을 연다. 보이는 창을 숨은 탭보다 먼저 고르고, 이 워커가 제어하지 않는 창이라 navigate가
+거부되면 새 창으로 연다. resolver route는 인증, 현재 계정, 대상 접근 권한과 읽음
 처리를 다시 확인한다. 로그인하지 않았다면 안전하게 검증한 상대 `next` 경로를 로그인 후 복원한다.
 
 resolver route는 history에 남지 않는다. 남으면 뒤로가기가 resolver의 loader를 다시 돌려 목적지로
@@ -283,3 +285,67 @@ iOS/iPadOS의 일반 Safari 탭에는 설치 안내를 제공하고 설치형 PW
 - Edge Function 테스트: 최신 설정, payload allowlist, Push 응답과 Resend/Mailpit adapter
 - Playwright: production worker 생성, permission 상태, 로그인 복귀와 click resolver
 - 수동: `NOTIFICATION_MANUAL_TESTING.md` 전체 및 출시 전 필수 시나리오
+
+## 11. 메시지 Push
+
+> **상태**: 구현. 그룹의 멘션 중심 알림과 첨부 종류 본문은 메시지 멘션과 첨부가 생길 때 함께 넣는다.
+> 데이터 모델과 암호화는 [메시지 기술 설계](MESSAGING_TECHNICAL_DESIGN.md)를 따른다.
+
+메시지 Push는 `public.notifications`를 만들지 않는다(§2). 같은 outbox, worker와 서비스 워커를 쓰되 원본
+참조가 알림이 아니라 메시지다.
+
+### 11.1 큐잉
+
+- 메시지 전송 RPC가 같은 transaction에서 수신 멤버의 활성 구독마다 web_push delivery를 만든다. outbox
+  행은 `notification_id` 대신 메시지 참조를 가지며 둘 중 정확히 하나만 채우도록 제약한다.
+- outbox에는 본문을 복사하지 않는다. 미리보기는 발송 직전에 복호화한다(§11.3).
+- 발신자 본인, 대화 알림을 끈 멤버, 그룹의 멘션 중심 설정에서 멘션되지 않은 멤버는 큐잉하지 않는다.
+- 메시지 delivery의 `available_at`은 전송 시각 2초 뒤다. 그 사이 대화방을 보고 있던 수신자의 읽음 위치가
+  갱신될 시간을 준다.
+
+### 11.2 즉시 깨우기
+
+30초 Cron만으로는 메시지가 늦다. 전송 RPC가 `pg_net`으로 dispatcher를 한 번 호출한다
+(`private.wake_notification_dispatcher`). pg_net 요청은
+transaction이 commit된 뒤에 나가므로 아직 보이지 않는 행을 찾는 일은 없다. 빠르게 오가는 대화에서 호출이
+메시지마다 나가지 않도록, 1초 안에 이미 깨운 기록이 있으면 다시 호출하지 않는다. Cron은 놓친 호출과
+재시도를 맡는 fallback으로 남는다.
+
+dispatcher는 한 배치를 보낸 뒤 5초 안에 `available_at`이 되는 메시지 delivery가 있으면
+(`next_message_delivery_at`) 그 시각까지 기다렸다 다시 claim한다. 깨운 직후에는 2초 대기 중인 행만 있고,
+깨우기를 건너뛴 1초 사이의 메시지도 이 대기가 받는다. 한 호출이 기다리며 머무는 시간은 20초까지다.
+
+### 11.3 발송 직전 확인
+
+`prepare_notification_delivery`가 메시지 delivery에 대해 다음을 다시 확인하고, 하나라도 맞지 않으면 외부
+호출 없이 suppress한다.
+
+- 수신자가 아직 그 메시지를 볼 수 있는 멤버인가
+- 메시지가 삭제되지 않았는가
+- 대화 알림이 지금 꺼져 있지 않은가
+- 수신자의 읽음 위치가 아직 그 메시지 앞인가. 대화방을 보고 있던 기기가 있으면 여기서 걸러지며, 계정
+  기준이라 다른 기기로도 보내지 않는다.
+- 같은 구독, 같은 대화에 더 새로운 pending delivery가 있는가. 있으면 오래된 쪽을 suppress하고 최신 하나만
+  보낸다. 다만 상대가 2초보다 짧은 간격으로 계속 보내면 더 새로운 delivery가 늘 있어 아무것도 나가지 않으므로,
+  그 구독으로 마지막 메시지 Push를 보낸 뒤 suppress된 안 읽은 메시지가 10초 넘게 기다렸으면 더 새로운 것이
+  있어도 보낸다.
+
+통과하면 같은 함수가 payload를 만든다. 수신자의 `알림에 메시지 내용 가리기`가 꺼져 있으면 본문을 복호화해
+§7의 본문 한도(240자)로 자르고, 켜져 있으면 고정 안내 문구를 쓴다. 첨부만 있는 메시지는 첨부 종류를
+본문으로 쓰고 파일 이름은 넣지 않는다. 설정은 `public.notification_preferences`의 계정 공통 열로 둔다.
+
+Push service로 나간 payload는 브라우저 Push 암호화(RFC 8291)로 보호되지만, worker 로그와 오류 기록에는
+여전히 본문을 남기지 않는다(§6).
+
+### 11.4 서비스 워커
+
+- 메시지 payload는 `type: "message"`와 대화·메시지·delivery ID, 제목, 본문만 담는 별도 형식으로 검증한다. 클릭 시 payload URL을 열지 않고
+  `/messenger/:conversationId`를 직접 구성한다. 대화방 loader가 접근 권한을 다시 확인한다.
+- tag는 서비스 워커가 정하는 대화별 값(`message:<대화 ID>`)이다. 카드는 구독한 기기마다 따로 뜨므로
+  subscription 범위가 된다. 같은 대화의 새 메시지는 카드를 교체하고 `renotify`한다. 같은 delivery가 다시 오면
+  같은 카드를 조용히 다시 띄운다. 아무것도 띄우지 않으면 브라우저가 기본 카드를 대신 띄울 수 있다. 메시지
+  카드는 앱 아이콘 뱃지에 세지 않는다.
+- 앱에서 대화를 읽으면 앱이 그 대화의 카드를 `getNotifications({ tag })`로 찾아 닫는다.
+- 서비스 워커는 화면에 그 대화가 열려 있는지로 카드를 생략하지 않는다. `userVisibleOnly` 구독에서 카드를
+  생략하면 iOS가 구독을 끊을 수 있으므로, 억제는 §11.3의 서버 확인만 맡는다.
+- 메시지 unread는 일반 알림함 badge와 따로 센다(§2).

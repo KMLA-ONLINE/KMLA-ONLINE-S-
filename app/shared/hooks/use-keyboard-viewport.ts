@@ -16,7 +16,7 @@ const DEFAULT_VIEWPORT: KeyboardViewport = {
   height: null,
 };
 
-/** 열린 댓글 시트를 현재 visual viewport 안에 가둔다. */
+/** 모바일 키보드가 떠 있을 때 보이는 영역(visual viewport)을 잰다. 댓글 시트와 대화방이 그 안에 화면을 가둔다. */
 export function useKeyboardViewport(enabled: boolean): KeyboardViewport {
   const [viewport, setViewport] = useState(DEFAULT_VIEWPORT);
 

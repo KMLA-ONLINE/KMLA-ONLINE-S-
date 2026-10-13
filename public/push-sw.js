@@ -13,6 +13,15 @@ const PUSH_KEYS = [
   "title",
 ];
 const CLICK_KEYS = ["count", "deliveryIds", "notificationId"];
+const MESSAGE_PUSH_KEYS = [
+  "body",
+  "conversationId",
+  "deliveryId",
+  "messageId",
+  "title",
+  "type",
+];
+const MESSAGE_CLICK_KEYS = ["conversationId", "deliveryId"];
 const CATEGORIES = [
   "content",
   "timeline",
@@ -69,6 +78,70 @@ function isPushPayload(value) {
     isBoundedText(value.body, 240) &&
     value.tag === expectedTag
   );
+}
+
+/**
+ * 메시지 Push(알림 기술 설계 §11.4). 대화 ID만 믿고, 누르면 그 ID로 대화방 주소를 직접 만든다.
+ * 대화방 loader가 접근 권한을 다시 확인한다.
+ */
+// 서버는 메시지 본문을 code point 기준으로 자른다(`left(..., 240)`). `String.length`는 UTF-16 단위라
+// 이모지가 많은 본문이 한도를 넘은 것으로 보인다.
+function isBoundedCodePoints(value, maxLength) {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    [...value].length <= maxLength
+  );
+}
+
+function isMessagePushPayload(value) {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, MESSAGE_PUSH_KEYS) &&
+    value.type === "message" &&
+    ID_PATTERN.test(value.conversationId) &&
+    ID_PATTERN.test(value.messageId) &&
+    ID_PATTERN.test(value.deliveryId) &&
+    isBoundedCodePoints(value.title, 160) &&
+    isBoundedCodePoints(value.body, 240)
+  );
+}
+
+function isMessageClickData(value) {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, MESSAGE_CLICK_KEYS) &&
+    ID_PATTERN.test(value.conversationId) &&
+    ID_PATTERN.test(value.deliveryId)
+  );
+}
+
+/**
+ * 같은 대화의 새 메시지는 대화별 카드 하나를 교체하고 다시 알린다. 대화방이 화면에 열려 있어도
+ * 카드를 생략하지 않는다. `userVisibleOnly` 구독에서 생략하면 iOS가 구독을 끊을 수 있어 억제는 서버의
+ * 발송 직전 확인만 맡는다. 메시지 카드는 알림함 뱃지에 세지 않는다(메시지 unread는 따로 센다).
+ */
+async function showMessagePush(payload) {
+  const tag = `message:${payload.conversationId}`;
+  const existing = (await self.registration.getNotifications({ tag }))[0];
+  // 같은 delivery가 다시 와도 카드는 띄운다. 아무것도 띄우지 않으면 브라우저가 기본 카드("백그라운드에서
+  // 업데이트됨")를 대신 띄울 수 있다. 같은 카드를 조용히 다시 띄운다.
+  const repeated =
+    isMessageClickData(existing?.data) &&
+    existing.data.deliveryId === payload.deliveryId;
+
+  await self.registration.showNotification(payload.title, {
+    body: payload.body,
+    icon: "/pwa-192x192.png",
+    badge: "/badge-96x96.png",
+    lang: "ko",
+    tag,
+    renotify: !repeated,
+    data: {
+      conversationId: payload.conversationId,
+      deliveryId: payload.deliveryId,
+    },
+  });
 }
 
 // 검증을 통과하지 못한 Push에 띄우는 카드의 data. 내용은 믿을 수 없으니 아무것도 싣지 않고
@@ -155,6 +228,11 @@ async function showPush(data) {
     payload = undefined;
   }
 
+  if (isMessagePushPayload(payload)) {
+    await showMessagePush(payload);
+    return;
+  }
+
   if (!isPushPayload(payload)) {
     await showInboxCard();
     await syncAppBadge();
@@ -209,9 +287,29 @@ function enqueuePush(data) {
   return task;
 }
 
+/** 창 안의 앱(`use-service-worker-navigation`)에 이동을 부탁한다. 1초 안에 답하면 맡긴다. */
+function askWindowToNavigate(client, path) {
+  return new Promise((resolve) => {
+    let timer;
+    try {
+      const channel = new MessageChannel();
+      timer = setTimeout(() => resolve(false), 1000);
+      channel.port1.onmessage = () => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+      client.postMessage({ type: "navigate", path }, [channel.port2]);
+    } catch {
+      clearTimeout(timer);
+      resolve(false);
+    }
+  });
+}
+
 async function openNotification(data) {
   let path;
   if (isInboxCardData(data)) path = "/noti";
+  else if (isMessageClickData(data)) path = `/messenger/${data.conversationId}`;
   else if (isClickData(data)) {
     path = data.count > 1 ? "/noti" : `/noti/open/${data.notificationId}`;
   } else return;
@@ -234,10 +332,16 @@ async function openNotification(data) {
     appWindows[0];
 
   if (appWindow) {
+    try {
+      await appWindow.focus();
+    } catch {
+      // 포커스를 못 줘도 이동은 시도한다.
+    }
+    // 앱이 router로 옮겨 가면 창을 다시 불러오지 않는다. 답이 없으면 창을 그 주소로 연다.
+    if (await askWindowToNavigate(appWindow, path)) return;
     // 이 워커가 제어하지 않는 창(업데이트 대기 중 등)에서는 navigate가 거부된다. 그때 카드는
     // 이미 닫혔으므로 새 창으로라도 열어야 탭이 허공에 사라지지 않는다.
     try {
-      await appWindow.focus();
       await appWindow.navigate(destination);
       return;
     } catch {

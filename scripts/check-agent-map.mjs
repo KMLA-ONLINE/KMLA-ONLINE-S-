@@ -208,7 +208,8 @@ function tableRows(markdown, kind) {
 
 /**
  * 라우트 표의 Chrome 열을 `defineAppChrome` 설정에서 다시 뽑는다. 형식은 문서와 같은
- * `header/bottomNav/contentWidth`이고 `pullToRefresh`가 켜져 있으면 `/PTR`이 붙는다.
+ * `header/bottomNav/contentWidth`이고 `pullToRefresh`가 켜져 있으면 `/PTR`, `scroll: "route"`면
+ * `/route-scroll`이 붙는다.
  *
  * 생략된 `contentWidth`는 `DEFAULT_APP_CHROME`이 채우므로, 기본값을 여기 적어 두지 않고
  * `chrome.ts`에서 읽는다. 기본이 바뀌면 지도도 같이 틀려야 한다.
@@ -236,8 +237,9 @@ async function routeChrome(file, fallbackWidth) {
 
   const width = field("contentWidth") ?? fallbackWidth;
   const ptr = /\bpullToRefresh\s*:\s*true\b/.test(body);
+  const routeScroll = field("scroll") === "route";
 
-  return `${header}/${bottomNav}/${width}${ptr ? "/PTR" : ""}`;
+  return `${header}/${bottomNav}/${width}${ptr ? "/PTR" : ""}${routeScroll ? "/route-scroll" : ""}`;
 }
 
 /** `DEFAULT_APP_CHROME`의 `contentWidth`. Chrome 열의 생략된 폭이 이 값으로 풀린다. */

@@ -22,6 +22,7 @@ const preferences = {
   group_push_enabled: true,
   school_push_enabled: true,
   timeline_push_enabled: true,
+  message_preview_hidden: false,
 };
 
 describe("NotificationSettings", () => {
@@ -129,6 +130,47 @@ describe("NotificationSettings", () => {
     expect(
       screen.getByText("이 기기에서 새 소식을 받을 수 있습니다."),
     ).toBeInTheDocument();
+  });
+
+  it("saves the message preview setting on its own and explains the lock screen option", async () => {
+    const submitted: FormData[] = [];
+    const { user } = renderRoute(
+      () => (
+        <NotificationSettings
+          initialPreferences={preferences}
+          pushSupport={{
+            state: "available",
+            permission: "granted",
+            subscribed: true,
+          }}
+          groupPreferences={[]}
+        />
+      ),
+      {
+        action: async ({ request }) => {
+          submitted.push(await request.formData());
+          return { saved: true };
+        },
+      },
+    );
+
+    const toggle = screen.getByRole("switch", {
+      name: "알림에 메시지 내용 가리기",
+    });
+    expect(toggle).not.toBeChecked();
+    expect(
+      screen.getByText(
+        "잠금 화면에서만 내용을 가리려면 기기 설정의 알림 미리보기를 사용해 주세요.",
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(toggle);
+
+    await waitFor(() => expect(submitted).toHaveLength(1));
+    expect(Object.fromEntries(submitted[0])).toEqual({
+      intent: "message-preview",
+      hidden: "true",
+    });
   });
 
   it("lists only groups whose notification settings differ from the default", () => {
@@ -245,6 +287,7 @@ describe("NotificationSettings", () => {
           group_push_enabled: false,
           school_push_enabled: false,
           timeline_push_enabled: false,
+          message_preview_hidden: false,
         }}
         pushSupport={{
           state: "available",

@@ -39,8 +39,8 @@ The [source structure](docs/structure.md) is the detailed source of truth.
 ### App Shell
 
 - `app/features/app-shell/` owns chrome and bootstrap data; follow its local `AGENTS.md` for shell changes.
-- `app/routes/app/gate.tsx` is the single auth/approval gate. Standard and sidebar-free messenger shells live in `app/routes/app/layout.tsx` and `app/routes/messenger/layout.tsx`.
-- Standard routes configure the global header and mobile bottom nav through typed `handle.chrome`. `PageHeader` is page-owned, not part of that configuration.
+- `app/routes/app/gate.tsx` is the single auth/approval gate. `app/routes/app/layout.tsx` is the one app shell for every signed-in route, messenger included, so the header and sidebar never remount between screens.
+- Routes configure the global header, mobile bottom nav, and scroll ownership through typed `handle.chrome`. `PageHeader` is page-owned, not part of that configuration.
 
 ## Browser I/O and Caches
 
