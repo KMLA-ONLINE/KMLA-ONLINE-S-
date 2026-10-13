@@ -35,7 +35,6 @@ export default [
       route("menu/settings/lab", "routes/app/menu/settings-lab.tsx"),
       route("menu/timetable", "routes/app/menu/timetable.tsx"),
       route("support", "routes/app/support.tsx"),
-      route("update", "routes/app/update.tsx"),
       route("groups", "routes/app/groups/index.tsx"),
       route("groups/discover", "routes/app/groups/discover.tsx"),
       route("groups/member-page", "routes/app/groups/member-page.ts"),

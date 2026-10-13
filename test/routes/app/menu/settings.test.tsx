@@ -54,7 +54,6 @@ describe("settings route", () => {
       ["비밀번호 변경", "/menu/password"],
       ["알림 설정", "/noti/settings"],
       ["도움말", "/support"],
-      ["업데이트 기록", "/update"],
       ["오픈소스 라이선스", "/menu/licenses"],
       ["관리자 페이지", "/admin"],
     ]) {

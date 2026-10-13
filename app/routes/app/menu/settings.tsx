@@ -5,7 +5,6 @@ import {
   FlaskConicalIcon,
   KeyRoundIcon,
   ShieldCheckIcon,
-  SparklesIcon,
 } from "lucide-react";
 import { useId, type ReactNode } from "react";
 
@@ -102,7 +101,6 @@ export default function SettingsPage() {
             label="도움말"
             icon={CircleQuestionMarkIcon}
           />
-          <ListLinkRow to="/update" label="업데이트 기록" icon={SparklesIcon} />
           <ListLinkRow
             to="/menu/licenses"
             label="오픈소스 라이선스"
