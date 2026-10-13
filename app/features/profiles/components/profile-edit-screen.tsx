@@ -15,7 +15,7 @@ import {
   useRevalidator,
 } from "react-router";
 
-import { PageHeader } from "~/features/app-shell";
+import { PageHeader, refreshShellProfile } from "~/features/app-shell";
 import { ProfileMediaEditor } from "~/features/profiles/components/profile-media-editor";
 import type {
   EditableProfile,
@@ -76,7 +76,7 @@ export function ProfileEditScreen({
 
   /**
    * 사진은 폼과 따로 바로 저장된다. 새로고침이 모든 캐시를 가장 확실히 비우지만, 고치던 값이 있으면
-   * 그것까지 날아가므로 이 화면의 로더만 다시 읽는다. 머리말 아바타는 폼을 저장할 때 따라 갱신된다.
+   * 그것까지 날아가므로 이 화면의 로더와 셸 프로필(헤더 아바타)만 다시 읽는다.
    */
   const onMediaSaved = async () => {
     if (!dirty) {
@@ -84,7 +84,7 @@ export function ProfileEditScreen({
       return;
     }
 
-    await revalidator.revalidate();
+    await Promise.all([revalidator.revalidate(), refreshShellProfile()]);
   };
 
   const saveButton = (size?: "sm") => (

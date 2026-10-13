@@ -8,6 +8,7 @@ export { PullToRefresh } from "~/features/app-shell/components/pull-to-refresh";
 export { ScrollRegion } from "~/features/app-shell/components/scroll-region";
 export {
   appShellKeys,
+  isShellProfile,
   loadShellData,
   refreshShellProfile,
 } from "~/features/app-shell/data/queries";
