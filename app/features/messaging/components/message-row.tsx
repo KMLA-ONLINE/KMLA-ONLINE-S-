@@ -44,6 +44,8 @@ const REACTION_BAR_HEIGHT = 48;
 const CONTEXT_ACTION_HEIGHT = 42;
 const INLINE_TIMESTAMP_HEIGHT = 15;
 const CONTEXT_MENU_MOVE_DURATION = 200;
+/** 이보다 오래 누르면 탭이 아니라 길게 누르기다. 길게 누르기는 메뉴를 연다. */
+const TAP_MAX_DURATION_MS = 400;
 
 export function MessageRow({
   message,
@@ -108,12 +110,35 @@ export function MessageRow({
   const rowRef = useRef<HTMLElement>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
   const replySwipeStart = useRef<{ x: number; y: number } | null>(null);
+  // 손가락으로 버블을 탭하면 버블 안쪽 하단의 시각을 켜고 끈다. 마우스는 시간 카드가 맡는다.
+  const [timeShownByTap, setTimeShownByTap] = useState(false);
+  const tapStart = useRef<{ pointerType: string; at: number } | null>(null);
+  const timeVisible = showTimestamp || timeShownByTap;
   const hasVisibleReactions =
     showReactions && (message.reactions?.length ?? 0) > 0;
 
   function startReplySwipe(event: PointerEvent<HTMLElement>) {
     if (event.pointerType !== "touch" || !onReply || message.deleted) return;
     replySwipeStart.current = { x: event.clientX, y: event.clientY };
+  }
+
+  function startTap(event: PointerEvent<HTMLElement>) {
+    tapStart.current = { pointerType: event.pointerType, at: event.timeStamp };
+  }
+
+  function toggleTimeOnTap(event: MouseEvent<HTMLElement>) {
+    const start = tapStart.current;
+    tapStart.current = null;
+    if (start?.pointerType !== "touch" || contextMenuOpenRef.current) return;
+    if (event.timeStamp - start.at > TAP_MAX_DURATION_MS) return;
+    // 사진, 링크, 답장 인용, 반응 표시처럼 자기 일이 있는 곳을 누른 것은 시각을 켜지 않는다.
+    if (
+      event.target instanceof Element &&
+      event.target.closest("a, button, input, audio")
+    ) {
+      return;
+    }
+    setTimeShownByTap((shown) => !shown);
   }
 
   function finishReplySwipe(event: PointerEvent<HTMLElement>) {
@@ -168,7 +193,7 @@ export function MessageRow({
         : 0;
       const messageHeight =
         rowRect.height +
-        (contextTouchActiveRef.current && !showTimestamp
+        (contextTouchActiveRef.current && !timeVisible
           ? INLINE_TIMESTAMP_HEIGHT
           : 0);
       const rowHalfHeight = messageHeight / 2;
@@ -268,7 +293,7 @@ export function MessageRow({
       );
       const messageHeight =
         rowRect.height +
-        (contextOpenedByTouch && !showTimestamp ? INLINE_TIMESTAMP_HEIGHT : 0);
+        (contextOpenedByTouch && !timeVisible ? INLINE_TIMESTAMP_HEIGHT : 0);
       const constrainedToViewport = messageHeight > availableMessageHeight;
       const nextAnchor = {
         x: bubbleRect.left,
@@ -359,7 +384,7 @@ export function MessageRow({
     contextOpenedByTouch,
     contextViewportRef,
     hasReactionBar,
-    showTimestamp,
+    timeVisible,
   ]);
 
   const contextMenuAnchor = contextMenuLayout
@@ -417,7 +442,7 @@ export function MessageRow({
             className={cn(
               hasVisibleReactions ? "mb-[1.125rem]" : "mb-0.5",
               "size-7",
-              contextOpenedByTouch && "translate-y-[15px]",
+              contextOpenedByTouch && !timeVisible && "translate-y-[15px]",
             )}
           />
         ) : (
@@ -449,10 +474,16 @@ export function MessageRow({
             고정됨
           </span>
         ) : null}
-        <div className={cn("flex w-full min-w-0 items-center gap-1.5")}>
+        {/* 탭으로 시각을 보는 것은 손가락 전용 지름길이다. 마우스는 시간 카드로 본다. */}
+        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+        <div
+          className={cn("flex w-full min-w-0 items-center gap-1.5")}
+          onPointerDown={startTap}
+          onClick={toggleTimeOnTap}
+        >
           {isOwn ? actionRail : null}
           {isOwn ? unreadCount : null}
-          <MessageTimeCard message={message} showTimeCard={!showTimestamp}>
+          <MessageTimeCard message={message} showTimeCard={!timeVisible}>
             <MessageBubble
               anchorRef={bubbleRef}
               message={message}
@@ -461,7 +492,7 @@ export function MessageRow({
               startsGroup={startsGroup}
               endsGroup={endsGroup}
               showReactions={showReactions}
-              showTimestamp={showTimestamp || contextOpenedByTouch}
+              showTimestamp={timeVisible || contextOpenedByTouch}
               replyTarget={replyTarget}
               replyTargetAuthor={replyTargetAuthor}
               onViewReply={onViewReply}
@@ -596,22 +627,36 @@ function MessageTimeCard({
   children: ReactElement;
 }) {
   const [open, setOpen] = useState(false);
-  if (!showTimeCard) return children;
+  // 손가락으로 누를 때는 길게 누르기가 버블 안에 시각을 보이므로 카드를 띄우지 않는다. `hover: none`
+  // 미디어 쿼리로 가리면 터치스크린이 달린 노트북에서 터치패드로 눌러도 카드가 숨으므로, 기기가 아니라
+  // 이번에 누른 포인터의 종류로 가른다.
+  const pointerType = useRef("");
 
   // 툴팁은 기본으로 누르면 닫힌다. 터치패드로 탭해 시각을 보려는 사람에게는 반대가 되므로, 눌러도
-  // 닫지 않고 닫혀 있었으면 연다. 포인터가 떠나면 평소처럼 닫힌다.
+  // 닫지 않고 닫혀 있었으면 연다. 포인터가 떠나면 평소처럼 닫힌다. 시각이 버블 안에 보일 때는 끄기만
+  // 하고 감싼 구조는 그대로 둔다. 구조가 바뀌면 버블이 다시 마운트되어 사진을 다시 그리고 재생 중인
+  // 오디오가 멈춘다.
   return (
-    <Tooltip open={open} onOpenChange={setOpen}>
+    <Tooltip
+      disabled={!showTimeCard}
+      open={showTimeCard && open}
+      onOpenChange={(next) => {
+        if (next && pointerType.current === "touch") return;
+        setOpen(next);
+      }}
+    >
       <TooltipTrigger
         closeOnClick={false}
         render={<span className="block w-fit max-w-full" />}
-        onClick={() => setOpen(true)}
+        onPointerEnter={(event) => (pointerType.current = event.pointerType)}
+        onPointerDown={(event) => (pointerType.current = event.pointerType)}
+        onClick={() => {
+          if (pointerType.current !== "touch") setOpen(true);
+        }}
       >
         {children}
       </TooltipTrigger>
-      <TooltipContent className="[@media(hover:none)]:hidden">
-        {formatMessageTime(message.sentAt)}
-      </TooltipContent>
+      <TooltipContent>{formatMessageTime(message.sentAt)}</TooltipContent>
     </Tooltip>
   );
 }
