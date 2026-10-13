@@ -36,7 +36,7 @@ export default function SettingsLabPage() {
   if (!experimentalFeaturesEnabled) {
     return (
       <>
-        <PageHeader title="실험실" back="/menu/settings" />
+        <PageHeader title="실험실" back="/settings" />
 
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
           <h1 className="hidden text-2xl font-semibold md:block">실험실</h1>
@@ -50,7 +50,7 @@ export default function SettingsLabPage() {
 
   return (
     <>
-      <PageHeader title="실험실" back="/menu/settings" />
+      <PageHeader title="실험실" back="/settings" />
 
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
         <div>

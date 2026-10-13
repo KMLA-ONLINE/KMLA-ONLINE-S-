@@ -47,7 +47,7 @@ export default function AdminHubPage() {
   if (profile.role !== "admin") return <Navigate to="/" replace />;
   return (
     <>
-      <PageHeader title="관리자" back="/menu/settings" />
+      <PageHeader title="관리자" back="/menu" />
       <div className="grid gap-4 px-4 py-6 md:grid-cols-3">
         {links.map(({ to, title, description, icon: Icon }) => (
           <Link

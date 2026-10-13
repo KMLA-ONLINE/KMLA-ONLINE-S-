@@ -71,10 +71,12 @@ test("모바일 메뉴는 도구와 설정·프로필 진입을 분리한다", a
   await expect(tools.getByRole("link")).toHaveCount(5);
   await expect(tools.getByRole("link", { name: "기부물품" })).toHaveAttribute(
     "href",
-    "#",
+    "/menu/donations",
   );
   await tools.getByRole("link", { name: "기부물품" }).click();
-  await expect(page).toHaveURL(/\/menu#$/);
+  await expect(page).toHaveURL(/\/menu\/donations$/);
+  await page.getByRole("button", { name: "뒤로" }).click();
+  await expect(page).toHaveURL(/\/menu$/);
   await expect(page.getByRole("link", { name: "도움말" })).toHaveCount(0);
 
   await tools.getByRole("link", { name: "공강 · 노래방", exact: true }).click();
@@ -103,13 +105,13 @@ test("모바일 메뉴는 도구와 설정·프로필 진입을 분리한다", a
   }
 
   await page.getByRole("link", { name: "설정", exact: true }).click();
-  await expect(page).toHaveURL(/\/menu\/settings$/);
+  await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByRole("link", { name: "관리자 페이지" })).toHaveCount(
     0,
   );
   await page.getByRole("link", { name: "도움말" }).click();
   await page.getByRole("button", { name: "뒤로" }).click();
-  await expect(page).toHaveURL(/\/menu\/settings$/);
+  await expect(page).toHaveURL(/\/settings$/);
   await page.getByRole("button", { name: "뒤로" }).click();
   await expect(page).toHaveURL(/\/menu$/);
   await page.getByRole("link", { name: "내 프로필", exact: true }).click();
@@ -374,7 +376,7 @@ test("데스크톱 아바타 메뉴에서 설정과 확인 후 로그아웃을 �
     await expect(page.getByRole("menuitem", { name })).toHaveCount(0);
   }
   await page.getByRole("menuitem", { name: "설정", exact: true }).click();
-  await expect(page).toHaveURL(/\/menu\/settings$/);
+  await expect(page).toHaveURL(/\/settings$/);
 
   await avatar.click();
   await page.getByRole("menuitem", { name: "로그아웃" }).click();
@@ -383,7 +385,7 @@ test("데스크톱 아바타 메뉴에서 설정과 확인 후 로그아웃을 �
   await dialog.getByRole("button", { name: "취소" }).click();
   await expect(dialog).toBeHidden();
   await expect(avatar).toBeFocused();
-  await expect(page).toHaveURL(/\/menu\/settings$/);
+  await expect(page).toHaveURL(/\/settings$/);
 
   await avatar.click();
   await page.getByRole("menuitem", { name: "로그아웃" }).click();

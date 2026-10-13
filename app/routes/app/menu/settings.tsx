@@ -4,11 +4,10 @@ import {
   FileTextIcon,
   FlaskConicalIcon,
   KeyRoundIcon,
-  ShieldCheckIcon,
 } from "lucide-react";
 import { useId, type ReactNode } from "react";
 
-import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { defineAppChrome, PageHeader } from "~/features/app-shell";
 import { LogoutButton } from "~/features/auth";
 import { AppVersionCard } from "~/features/support";
 import { ListLinkRow } from "~/shared/components/list-link-row";
@@ -52,7 +51,6 @@ function SettingsSection({
 }
 
 export default function SettingsPage() {
-  const { profile } = useAppShell();
   const [experimentalFeaturesEnabled, setExperimentalFeaturesEnabled] =
     useExperimentalFeatures();
 
@@ -65,14 +63,14 @@ export default function SettingsPage() {
 
         <SettingsSection title="계정">
           <ListLinkRow
-            to="/menu/password"
+            to="/settings/password"
             label="비밀번호 변경"
             icon={KeyRoundIcon}
           />
         </SettingsSection>
 
         <SettingsSection title="앱 설정">
-          <ListLinkRow to="/noti/settings" label="알림 설정" icon={BellIcon} />
+          <ListLinkRow to="/settings/noti" label="알림 설정" icon={BellIcon} />
           <Field orientation="horizontal" className="px-4 py-3">
             <FieldContent>
               <FieldTitle>실험실 기능 사용</FieldTitle>
@@ -88,7 +86,7 @@ export default function SettingsPage() {
           </Field>
           {experimentalFeaturesEnabled ? (
             <ListLinkRow
-              to="/menu/settings/lab"
+              to="/settings/lab"
               label="실험실 설정"
               icon={FlaskConicalIcon}
             />
@@ -102,22 +100,12 @@ export default function SettingsPage() {
             icon={CircleQuestionMarkIcon}
           />
           <ListLinkRow
-            to="/menu/licenses"
+            to="/licenses"
             label="오픈소스 라이선스"
             icon={FileTextIcon}
           />
           <AppVersionCard appearance="row" />
         </SettingsSection>
-
-        {profile.role === "admin" ? (
-          <SettingsSection title="관리">
-            <ListLinkRow
-              to="/admin"
-              label="관리자 페이지"
-              icon={ShieldCheckIcon}
-            />
-          </SettingsSection>
-        ) : null}
 
         <LogoutButton />
       </div>

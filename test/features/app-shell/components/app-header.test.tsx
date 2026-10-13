@@ -18,10 +18,10 @@ const shell = {
   },
 } satisfies ShellData;
 
-function renderHeader(path = "/") {
+function renderHeader(path = "/", data: ShellData = shell) {
   return renderRoute(
     () => (
-      <AppShellProvider value={shell}>
+      <AppShellProvider value={data}>
         <AppHeader />
       </AppShellProvider>
     ),
@@ -95,12 +95,32 @@ describe("AppHeader account menu", () => {
     ).toHaveAttribute("href", "/profile");
     expect(screen.getByRole("menuitem", { name: "설정" })).toHaveAttribute(
       "href",
-      "/menu/settings",
+      "/settings",
     );
-    expect(screen.getAllByRole("menuitem")).toHaveLength(3);
+    expect(
+      screen.getAllByRole("menuitem").map((item) => item.textContent),
+    ).toEqual(["내 프로필", "설정", "로그아웃"]);
+    expect(
+      screen.queryByRole("menuitem", { name: "관리자 페이지" }),
+    ).not.toBeInTheDocument();
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "계정 메뉴" })).toHaveFocus();
+  });
+
+  it("shows the admin page between settings and logout for administrators", async () => {
+    const { user } = renderHeader("/", {
+      ...shell,
+      profile: { ...shell.profile, role: "admin" },
+    });
+    await user.click(screen.getByRole("button", { name: "계정 메뉴" }));
+
+    expect(
+      await screen.findByRole("menuitem", { name: "관리자 페이지" }),
+    ).toHaveAttribute("href", "/admin");
+    expect(
+      screen.getAllByRole("menuitem").map((item) => item.textContent),
+    ).toEqual(["내 프로필", "설정", "관리자 페이지", "로그아웃"]);
   });
 
   it("keeps only account actions in the avatar menu", async () => {

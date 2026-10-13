@@ -29,7 +29,7 @@ function renderSettings(role: ProfileRole = "member") {
         <SettingsPage />
       </AppShellProvider>
     ),
-    { path: "/menu/settings" },
+    { path: "/settings" },
   );
 }
 
@@ -44,21 +44,26 @@ describe("settings route", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("groups account, app, service and administration without a profile card", () => {
+  it("groups account, app and service without administration or a profile card", () => {
     renderSettings("admin");
 
-    for (const name of ["계정", "앱 설정", "서비스 안내", "관리"]) {
+    for (const name of ["계정", "앱 설정", "서비스 안내"]) {
       expect(screen.getByRole("heading", { name })).toBeInTheDocument();
     }
     for (const [name, href] of [
-      ["비밀번호 변경", "/menu/password"],
-      ["알림 설정", "/noti/settings"],
+      ["비밀번호 변경", "/settings/password"],
+      ["알림 설정", "/settings/noti"],
       ["도움말", "/support"],
-      ["오픈소스 라이선스", "/menu/licenses"],
-      ["관리자 페이지", "/admin"],
+      ["오픈소스 라이선스", "/licenses"],
     ]) {
       expect(screen.getByRole("link", { name })).toHaveAttribute("href", href);
     }
+    expect(
+      screen.queryByRole("heading", { name: "관리" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "관리자 페이지" }),
+    ).not.toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: "서비스 안내" })).getByRole(
         "region",
@@ -97,7 +102,7 @@ describe("settings route", () => {
     ).toBe("true");
     expect(screen.getByRole("link", { name: "실험실 설정" })).toHaveAttribute(
       "href",
-      "/menu/settings/lab",
+      "/settings/lab",
     );
   });
 });

@@ -245,7 +245,7 @@ double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
 enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
-# `/menu/password` always sends the reauthentication nonce, so this only adds the server-side check
+# `/settings/password` always sends the reauthentication nonce, so this only adds the server-side check
 # for sessions older than 24 hours. Password recovery is unaffected: `verifyOtp` mints a fresh
 # session, and a fresh session is what Auth accepts in place of a nonce.
 secure_password_change = true
