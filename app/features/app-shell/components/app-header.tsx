@@ -1,4 +1,9 @@
-import { LogOutIcon, SettingsIcon, UserRoundIcon } from "lucide-react";
+import {
+  LogOutIcon,
+  SettingsIcon,
+  ShieldCheckIcon,
+  UserRoundIcon,
+} from "lucide-react";
 import { Link } from "react-router";
 import { useRef, useState } from "react";
 
@@ -59,14 +64,23 @@ export function AppHeader({ className }: { className?: string }) {
               <DropdownMenuItem render={<Link to="/profile" />}>
                 <UserRoundIcon aria-hidden />내 프로필
               </DropdownMenuItem>
-              <DropdownMenuItem render={<Link to="/menu/settings" />}>
+              <DropdownMenuItem render={<Link to="/settings" />}>
                 <SettingsIcon aria-hidden />
                 설정
               </DropdownMenuItem>
+              {profile.role === "admin" ? (
+                <DropdownMenuItem render={<Link to="/admin" />}>
+                  <ShieldCheckIcon aria-hidden />
+                  관리자 페이지
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => setLogoutOpen(true)}>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => setLogoutOpen(true)}
+              >
                 <LogOutIcon aria-hidden />
                 로그아웃
               </DropdownMenuItem>

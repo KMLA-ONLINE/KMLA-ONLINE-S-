@@ -26,6 +26,28 @@ const preferences = {
 };
 
 describe("NotificationSettings", () => {
+  it("returns to settings from the notification settings header", async () => {
+    const { user } = renderRoute(
+      () => (
+        <NotificationSettings
+          initialPreferences={preferences}
+          pushSupport={{ state: "unsupported" }}
+          groupPreferences={[]}
+        />
+      ),
+      {
+        path: "/settings/noti",
+        routes: [{ path: "/settings", Component: () => <h1>설정 도착</h1> }],
+      },
+    );
+
+    await user.click(screen.getByRole("button", { name: "뒤로" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "설정 도착" }),
+    ).toBeVisible();
+  });
+
   it("guides a blocked device and restores the switch once allowed", async () => {
     let notifyChange: (() => void) | null = null;
     mocks.watchNotificationPermission.mockImplementation(

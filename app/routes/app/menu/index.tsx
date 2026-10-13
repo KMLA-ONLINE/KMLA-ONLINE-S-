@@ -5,6 +5,7 @@ import {
   ExternalLinkIcon,
   GiftIcon,
   SettingsIcon,
+  ShieldCheckIcon,
   UtensilsIcon,
 } from "lucide-react";
 import type { ComponentType } from "react";
@@ -15,6 +16,7 @@ import { schoolLinks } from "~/features/app-shell/model/school-links";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { buttonVariants } from "~/shared/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -49,8 +51,20 @@ export default function MenuPage() {
         title="메뉴"
         actions={
           <div className="flex items-center gap-1">
+            {profile.role === "admin" ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={<Link to="/admin" />}
+                  aria-label="관리자 페이지"
+                  className={buttonVariants({ variant: "ghost", size: "icon" })}
+                >
+                  <ShieldCheckIcon aria-hidden />
+                </TooltipTrigger>
+                <TooltipContent>관리자 페이지</TooltipContent>
+              </Tooltip>
+            ) : null}
             <Link
-              to="/menu/settings"
+              to="/settings"
               aria-label="설정"
               className={buttonVariants({ variant: "ghost", size: "icon" })}
             >

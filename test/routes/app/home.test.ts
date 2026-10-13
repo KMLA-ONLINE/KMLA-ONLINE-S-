@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   hasActiveSession: vi.fn(),
@@ -60,7 +60,13 @@ function load() {
 }
 
 describe("home feed loader", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
   beforeEach(() => {
+    vi.stubGlobal("window", {
+      matchMedia: () => ({ matches: true }),
+      localStorage: { getItem: () => null },
+    });
     vi.clearAllMocks();
     resetQueryClientForTests();
     mocks.hasActiveSession.mockResolvedValue(true);
@@ -69,6 +75,43 @@ describe("home feed loader", () => {
     mocks.getMealDay.mockResolvedValue(mealDay);
     mocks.listBirthdays.mockResolvedValue(birthdays);
   });
+
+  it("skips sidebar requests on mobile while loading the feed and stories", async () => {
+    vi.stubGlobal("window", {
+      matchMedia: () => ({ matches: false }),
+      localStorage: { getItem: () => null },
+    });
+
+    await load();
+
+    expect(mocks.getMealDay).not.toHaveBeenCalled();
+    expect(mocks.listBirthdays).not.toHaveBeenCalled();
+    expect(mocks.listFeedPosts).toHaveBeenCalled();
+    expect(mocks.listActiveStories).toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ enabled: false }, false, false],
+    [{ birthdays: false }, false, true],
+    [{ meal: false }, true, false],
+    [{ birthdays: false, meal: false, timetable: false }, false, false],
+  ])(
+    "requests only enabled desktop widgets with %j",
+    async (preferences, birthdayEnabled, mealEnabled) => {
+      vi.stubGlobal("window", {
+        matchMedia: () => ({ matches: true }),
+        localStorage: { getItem: () => JSON.stringify(preferences) },
+      });
+
+      await load();
+
+      expect(mocks.listBirthdays).toHaveBeenCalledTimes(
+        birthdayEnabled ? 1 : 0,
+      );
+      expect(mocks.getMealDay).toHaveBeenCalledTimes(mealEnabled ? 1 : 0);
+      expect(mocks.listFeedPosts).toHaveBeenCalled();
+    },
+  );
 
   // 피드는 화면이 무한 쿼리로 구독한다. 로더는 캐시를 데우기만 하고 loaderData로 넘기지
   // 않는다 — 넘기면 같은 데이터의 진실 소스가 둘이 된다.
@@ -108,6 +151,28 @@ describe("home feed loader", () => {
     await load();
 
     expect(mocks.listFeedPosts).not.toHaveBeenCalled();
+  });
+
+  it("keeps the feed session while loading widgets after a mobile-to-desktop change", async () => {
+    let wide = false;
+    vi.stubGlobal("window", {
+      matchMedia: () => ({ matches: wide }),
+      localStorage: { getItem: () => JSON.stringify({ meal: false }) },
+    });
+    await load();
+    mocks.listFeedPosts.mockClear();
+    mocks.listActiveStories.mockClear();
+
+    wide = true;
+    const result = await load();
+
+    await expect(result.birthdays).resolves.toEqual([]);
+    expect(mocks.getMealDay).not.toHaveBeenCalled();
+    expect(mocks.listFeedPosts).not.toHaveBeenCalled();
+    expect(mocks.listActiveStories).not.toHaveBeenCalled();
+    expect(getQueryClient().getQueryData(feedKeys.list())).toMatchObject({
+      pages: [page],
+    });
   });
 
   // 오래된 스토리 캐시라도 홈 진입을 목록 RPC에 묶지 않는다. 다시 읽기는 레일의 observer 몫이다.

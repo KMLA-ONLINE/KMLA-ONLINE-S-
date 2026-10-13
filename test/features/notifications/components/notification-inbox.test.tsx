@@ -41,6 +41,22 @@ function restrictedNotification(): NotificationItem {
 }
 
 describe("NotificationInbox", () => {
+  it("keeps mark-all-read actions without notification settings entry points", () => {
+    renderRoute(
+      () => (
+        <NotificationInbox
+          initialPage={{ items: [], nextCursor: null }}
+          profileId={1}
+        />
+      ),
+      { path: "/noti" },
+    );
+
+    expect(screen.queryAllByLabelText("알림 설정")).toHaveLength(0);
+    expect(screen.getAllByRole("button", { name: "모두 읽음" })).toHaveLength(
+      2,
+    );
+  });
   it("shows restriction detail and expiry only for the restriction kind", () => {
     renderRoute(() => (
       <NotificationInbox

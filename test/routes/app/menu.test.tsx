@@ -72,14 +72,23 @@ describe("menu route", () => {
     }
     expect(screen.getByRole("link", { name: "설정" })).toHaveAttribute(
       "href",
-      "/menu/settings",
+      "/settings",
     );
     expect(screen.getByRole("link", { name: "내 프로필" })).toHaveAttribute(
       "href",
       "/profile",
     );
+    expect(screen.getByRole("link", { name: "관리자 페이지" })).toHaveAttribute(
+      "href",
+      "/admin",
+    );
+    const header = within(screen.getAllByRole("banner")[0]);
+    expect(
+      header
+        .getAllByRole("link")
+        .map((link) => link.getAttribute("aria-label")),
+    ).toEqual(["관리자 페이지", "설정", "내 프로필"]);
     for (const name of [
-      "관리자 페이지",
       "도움말",
       "업데이트 기록",
       "오픈소스 라이선스",
@@ -90,6 +99,12 @@ describe("menu route", () => {
     }
     expect(
       screen.queryByRole("button", { name: "로그아웃" }),
+    ).not.toBeInTheDocument();
+  });
+  it("does not show the administrator entry to a member", () => {
+    renderMenu("member");
+    expect(
+      screen.queryByRole("link", { name: "관리자 페이지" }),
     ).not.toBeInTheDocument();
   });
   it("opens school sites directly from a separate menu section in new tabs", () => {

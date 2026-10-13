@@ -1,6 +1,6 @@
 import { SearchIcon, UtensilsIcon } from "lucide-react";
-import { Suspense, use, useSyncExternalStore } from "react";
-import { Link } from "react-router";
+import { Suspense, use, useEffect } from "react";
+import { Link, useRevalidator } from "react-router";
 
 import { StoryRail } from "~/features/stories/components/story-rail";
 import { STORY_STALE_TIME, storyKeys } from "~/features/stories/data/cache";
@@ -9,6 +9,12 @@ import {
   type StoryItem,
 } from "~/features/stories/data/queries";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import {
+  isWideHome,
+  useWideHome,
+} from "~/features/app-shell/hooks/use-wide-home";
+import { useHomeSidebarPreferences } from "~/features/app-shell/hooks/use-home-sidebar-preferences";
+import { readHomeSidebarPreferences } from "~/features/app-shell/storage/home-sidebar-preferences";
 import { hasActiveSession } from "~/features/auth";
 import { FeedScreen, feedQuery } from "~/features/feed";
 import {
@@ -24,6 +30,7 @@ import {
   birthdayKeys,
   type BirthdayProfile,
   HomeBirthdaySummary,
+  HomeBirthdaySummarySkeleton,
   listBirthdays,
 } from "~/features/profiles";
 import { createPostListRevalidation } from "~/features/posts";
@@ -32,6 +39,7 @@ import { HomeTimetableSummary } from "~/features/timetable";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { getKoreaDateIso } from "~/shared/lib/korea-date";
+import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Separator } from "~/shared/ui/separator";
 import type { Route } from "./+types/home";
@@ -91,15 +99,23 @@ export async function clientLoader() {
   // 특히 외부 NEIS API — 에 묶이므로 promise째 넘기고 옆 칸만 따로 채운다.
   // 끼니는 시간대로 고르므로(19시 이후는 조식) 날짜도 같은 기준으로 넘긴다. 오늘 날짜로 받으면
   // 저녁에 이미 지난 오늘 아침 조식이 뜬다. 급식 화면과 같은 기준이다.
-  const mealDay = getMealDay(getMealReferenceDate()).catch(() => null);
-  const birthdays = queryClient
-    .query({
-      queryKey: birthdayKeys.today(referenceDate),
-      queryFn: () => listBirthdays(referenceDate, "today"),
-      staleTime: BIRTHDAY_STALE_TIME,
-      gcTime: BIRTHDAY_GC_TIME,
-    })
-    .catch(() => null);
+  const preferences = readHomeSidebarPreferences();
+  const sidebarEnabled = isWideHome() && preferences.enabled;
+  const mealDay =
+    sidebarEnabled && preferences.meal
+      ? getMealDay(getMealReferenceDate()).catch(() => null)
+      : null;
+  const birthdays =
+    sidebarEnabled && preferences.birthdays
+      ? queryClient
+          .query({
+            queryKey: birthdayKeys.today(referenceDate),
+            queryFn: () => listBirthdays(referenceDate, "today"),
+            staleTime: BIRTHDAY_STALE_TIME,
+            gcTime: BIRTHDAY_GC_TIME,
+          })
+          .catch(() => null)
+      : null;
 
   // 스토리 캐시가 있으면 오래됐어도 그대로 그린다. 기다리면 2분이 지날 때마다 홈 진입이 목록 RPC와
   // 서명 왕복에 묶인다. 다시 읽는 일은 마운트되는 레일의 `useQuery`가 뒤에서 맡는다.
@@ -123,27 +139,26 @@ export async function clientLoader() {
   return { mealDay, birthdays, stories };
 }
 
-// 위 aside의 `lg:flex`와 같은 경계다.
-const WIDE_HOME_QUERY = "(min-width: 1024px)";
-
-function subscribeWideHome(onChange: () => void) {
-  const query = window.matchMedia(WIDE_HOME_QUERY);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-}
-
-function useWideHome() {
-  return useSyncExternalStore(
-    subscribeWideHome,
-    () => window.matchMedia(WIDE_HOME_QUERY).matches,
-    () => false,
-  );
-}
-
 export default function FeedPage({ loaderData }: Route.ComponentProps) {
   const { mealDay, birthdays, stories } = loaderData;
   const { profile } = useAppShell();
   const wide = useWideHome();
+  const [preferences] = useHomeSidebarPreferences();
+  const showSidebar =
+    wide &&
+    preferences.enabled &&
+    (preferences.birthdays || preferences.meal || preferences.timetable);
+  const { revalidate } = useRevalidator();
+  const needsSidebarData =
+    showSidebar &&
+    ((preferences.birthdays && birthdays === null) ||
+      (preferences.meal && mealDay === null));
+  // 모바일 진입 때 생략한 요약은 넓어진 뒤 로더로 채운다. 피드 세션은 캐시에서 재사용한다.
+  // 필요해진 순간 한 번만 부른다. 다른 탭에서 바꾼 설정이나 폭 경계로 loader가 또 생략해도
+  // 반복하지 않는다 — 재검증 상태를 의존성에 넣으면 끝날 때마다 다시 불러 NEIS를 계속 두드린다.
+  useEffect(() => {
+    if (needsSidebarData) void revalidate();
+  }, [needsSidebarData, revalidate]);
   const { openSearch: openDirectorySearch } = useSearchDialogParam();
 
   return (
@@ -175,7 +190,15 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
       />
       <GlobalSearchDialog />
 
-      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-6">
+      {/* 사이드바가 없을 때의 최대 폭: 기존 5xl(64rem) - 사이드바(18rem) - 간격(1.5rem). */}
+      <div
+        className={cn(
+          "grid min-w-0 gap-5",
+          showSidebar
+            ? "lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-6"
+            : "mx-auto w-full lg:max-w-[44.5rem]",
+        )}
+      >
         <div className="min-w-0">
           <StoryRail
             initialItems={stories}
@@ -190,20 +213,45 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
           <FeedScreen />
         </div>
 
-        <aside
-          aria-label="학교생활 요약"
-          className="hidden min-w-0 flex-col gap-3 self-start lg:flex"
-        >
-          {/* 한 경계로 묶어 생일과 급식이 함께 들어선다. 따로 두면 생일 카드가 늦게 끼어들며 급식을 밀어낸다. */}
-          <Suspense fallback={<HomeMealSummarySkeleton />}>
-            <DeferredBirthdays birthdays={birthdays} />
-            <Separator />
-            <DeferredMeal mealDay={mealDay} />
-          </Suspense>
-          <Separator />
-          {/* aside가 보이지 않는 폭에서는 시간표를 불러오지 않는다. */}
-          {wide ? <HomeTimetableSummary profileId={profile.id} /> : null}
-        </aside>
+        {showSidebar ? (
+          <aside
+            aria-label="학교생활 요약"
+            className="hidden min-w-0 flex-col gap-3 self-start lg:flex"
+          >
+            {/* 경계 밖에서 공간을 확보해 준비된 요약부터 독립적으로 표시한다. */}
+            {preferences.birthdays ? (
+              <div className="grid min-h-20 min-w-0">
+                <Suspense fallback={<HomeBirthdaySummarySkeleton />}>
+                  {birthdays ? (
+                    <DeferredBirthdays birthdays={birthdays} />
+                  ) : (
+                    <HomeBirthdaySummarySkeleton />
+                  )}
+                </Suspense>
+              </div>
+            ) : null}
+            {preferences.birthdays && preferences.meal ? <Separator /> : null}
+            {preferences.meal ? (
+              <div className="grid min-h-48 min-w-0">
+                <Suspense fallback={<HomeMealSummarySkeleton />}>
+                  {mealDay ? (
+                    <DeferredMeal mealDay={mealDay} />
+                  ) : (
+                    <HomeMealSummarySkeleton />
+                  )}
+                </Suspense>
+              </div>
+            ) : null}
+            {preferences.timetable &&
+            (preferences.birthdays || preferences.meal) ? (
+              <Separator />
+            ) : null}
+            {/* aside가 보이지 않는 폭에서는 시간표를 불러오지 않는다. */}
+            {preferences.timetable ? (
+              <HomeTimetableSummary profileId={profile.id} />
+            ) : null}
+          </aside>
+        ) : null}
       </div>
     </>
   );
@@ -215,10 +263,10 @@ function DeferredBirthdays({
   birthdays: Promise<BirthdayProfile[] | null>;
 }) {
   const value = use(birthdays);
-  return value ? <HomeBirthdaySummary birthdays={value} /> : null;
+  return <HomeBirthdaySummary birthdays={value} />;
 }
 
 function DeferredMeal({ mealDay }: { mealDay: Promise<MealDay | null> }) {
   const value = use(mealDay);
-  return value ? <HomeMealSummary day={value} /> : null;
+  return <HomeMealSummary day={value} />;
 }

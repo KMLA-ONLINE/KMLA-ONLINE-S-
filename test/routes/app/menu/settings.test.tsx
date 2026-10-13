@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AppShellProvider,
@@ -9,6 +9,19 @@ import SettingsPage from "~/routes/app/menu/settings";
 import { renderRoute, screen, within } from "../../../router";
 
 afterEach(() => window.localStorage.clear());
+
+function mockDesktop() {
+  vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+    matches: query === "(min-width: 1024px)",
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
 
 function renderSettings(role: ProfileRole = "member") {
   const shell = {
@@ -29,11 +42,63 @@ function renderSettings(role: ProfileRole = "member") {
         <SettingsPage />
       </AppShellProvider>
     ),
-    { path: "/menu/settings" },
+    { path: "/settings" },
   );
 }
 
 describe("settings route", () => {
+  it("defaults all desktop home sidebar switches to on", () => {
+    mockDesktop();
+    renderSettings();
+
+    for (const name of ["홈 우측 사이드바", "생일", "급식", "시간표"]) {
+      expect(screen.getByRole("switch", { name })).toBeChecked();
+    }
+  });
+
+  it("hides individual switches when disabled and preserves their choices after remounting", async () => {
+    mockDesktop();
+    const { user, unmount } = renderSettings();
+    await user.click(screen.getByRole("switch", { name: "생일" }));
+    await user.click(screen.getByRole("switch", { name: "홈 우측 사이드바" }));
+    for (const name of ["생일", "급식", "시간표"]) {
+      expect(screen.queryByRole("switch", { name })).not.toBeInTheDocument();
+    }
+
+    unmount();
+    const view = renderSettings("admin");
+    expect(
+      screen.getByRole("switch", { name: "홈 우측 사이드바" }),
+    ).not.toBeChecked();
+    await view.user.click(
+      screen.getByRole("switch", { name: "홈 우측 사이드바" }),
+    );
+    expect(screen.getByRole("switch", { name: "생일" })).not.toBeChecked();
+    expect(screen.getByRole("switch", { name: "급식" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "시간표" })).toBeChecked();
+  });
+
+  it("does not expose desktop home settings on mobile", () => {
+    renderSettings();
+    expect(
+      screen.queryByRole("switch", { name: "홈 우측 사이드바" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    "invalid JSON",
+    JSON.stringify({ meal: false, birthdays: "false" }),
+  ])("uses on defaults for missing or invalid choices in %s", (stored) => {
+    mockDesktop();
+    window.localStorage.setItem("kmla-online:home-sidebar:v1", stored);
+    renderSettings();
+    expect(
+      screen.getByRole("switch", { name: "홈 우측 사이드바" }),
+    ).toBeChecked();
+    expect(screen.getByRole("switch", { name: "생일" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "시간표" })).toBeChecked();
+  });
+
   it("hides administration from a member", () => {
     renderSettings();
     expect(
@@ -44,21 +109,26 @@ describe("settings route", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("groups account, app, service and administration without a profile card", () => {
+  it("groups account, app and service without administration or a profile card", () => {
     renderSettings("admin");
 
-    for (const name of ["계정", "앱 설정", "서비스 안내", "관리"]) {
+    for (const name of ["계정", "앱 설정", "서비스 안내"]) {
       expect(screen.getByRole("heading", { name })).toBeInTheDocument();
     }
     for (const [name, href] of [
-      ["비밀번호 변경", "/menu/password"],
-      ["알림 설정", "/noti/settings"],
+      ["비밀번호 변경", "/settings/password"],
+      ["알림 설정", "/settings/noti"],
       ["도움말", "/support"],
-      ["오픈소스 라이선스", "/menu/licenses"],
-      ["관리자 페이지", "/admin"],
+      ["오픈소스 라이선스", "/licenses"],
     ]) {
       expect(screen.getByRole("link", { name })).toHaveAttribute("href", href);
     }
+    expect(
+      screen.queryByRole("heading", { name: "관리" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "관리자 페이지" }),
+    ).not.toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: "서비스 안내" })).getByRole(
         "region",
@@ -97,7 +167,7 @@ describe("settings route", () => {
     ).toBe("true");
     expect(screen.getByRole("link", { name: "실험실 설정" })).toHaveAttribute(
       "href",
-      "/menu/settings/lab",
+      "/settings/lab",
     );
   });
 });

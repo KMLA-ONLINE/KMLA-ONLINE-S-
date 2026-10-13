@@ -23,7 +23,7 @@ export function LogoutButton() {
     <>
       <Button
         type="button"
-        variant="secondary"
+        variant="destructive"
         className="h-11 w-full rounded-xl"
         onClick={() => setOpen(true)}
       >
@@ -82,6 +82,7 @@ export function LogoutDialog({
 
           <Button
             type="button"
+            variant="destructive"
             disabled={pending}
             onClick={() => {
               // 세션 정리가 다이얼로그를 unmount해도 redirect가 유지되도록 navigation으로 제출한다.
