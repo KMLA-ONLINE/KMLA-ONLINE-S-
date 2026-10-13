@@ -16,6 +16,8 @@ function delivery(overrides: Partial<Delivery> = {}): Delivery {
     auth: "auth",
     recipient_email: null,
     notification_id: "33333333-3333-4333-8333-333333333333",
+    message_id: null,
+    conversation_id: null,
     importance: "normal",
     category: "content",
     grouping_key: "44444444-4444-4444-8444-444444444444",
@@ -42,6 +44,9 @@ function dependencies(items: Delivery[]) {
       return Promise.resolve({ status: 201 });
     },
     sendEmail: () => Promise.resolve({ status: 200 }),
+    nextMessageDeliveryAt: () => Promise.resolve(null),
+    sleep: () => Promise.resolve(),
+    now: () => Date.parse("2026-10-12T00:00:00.000Z"),
   };
   return { deps, completions, payloads };
 }
@@ -260,5 +265,85 @@ Deno.test(
     await createDispatchHandler(deps)(post());
     assertEquals(peak, 1);
     assertEquals(order, [key(0), key(1), key(2)]);
+  },
+);
+
+function messageDelivery(overrides: Partial<Delivery> = {}): Delivery {
+  return delivery({
+    notification_id: null,
+    message_id: "55555555-5555-4555-8555-555555555555",
+    conversation_id: "66666666-6666-4666-8666-666666666666",
+    importance: null,
+    category: null,
+    title: "홍길동",
+    body: "도서관 앞이야",
+    tag: "message:66666666-6666-4666-8666-666666666666",
+    ...overrides,
+  });
+}
+
+Deno.test(
+  "message pushes carry the conversation instead of a notification",
+  async () => {
+    const { deps, payloads } = dependencies([messageDelivery()]);
+    await createDispatchHandler(deps)(post());
+    assertEquals(payloads[0], {
+      type: "message",
+      conversationId: "66666666-6666-4666-8666-666666666666",
+      messageId: "55555555-5555-4555-8555-555555555555",
+      deliveryId: "11111111-1111-4111-8111-111111111111",
+      title: "홍길동",
+      body: "도서관 앞이야",
+    });
+  },
+);
+
+Deno.test(
+  "a woken dispatcher waits for a message push that is about to become due",
+  async () => {
+    const start = Date.parse("2026-10-12T00:00:00.000Z");
+    let clock = start;
+    let claims = 0;
+    const { deps, payloads } = dependencies([]);
+    deps.now = () => clock;
+    deps.claim = () => {
+      claims += 1;
+      return Promise.resolve(claims === 2 ? [messageDelivery()] : []);
+    };
+    deps.nextMessageDeliveryAt = () =>
+      Promise.resolve(
+        claims === 1 ? new Date(start + 2_000).toISOString() : null,
+      );
+    const sleeps: number[] = [];
+    deps.sleep = (milliseconds) => {
+      sleeps.push(milliseconds);
+      clock += milliseconds;
+      return Promise.resolve();
+    };
+
+    const response = await createDispatchHandler(deps)(post());
+
+    assertEquals(sleeps, [2_050]);
+    assertEquals(claims, 2);
+    assertEquals(payloads.length, 1);
+    assertEquals((await response.json()).sent, 1);
+  },
+);
+
+Deno.test(
+  "the dispatcher does not wait for message pushes due later than a few seconds",
+  async () => {
+    const start = Date.parse("2026-10-12T00:00:00.000Z");
+    const { deps } = dependencies([]);
+    deps.now = () => start;
+    deps.nextMessageDeliveryAt = () =>
+      Promise.resolve(new Date(start + 9_000).toISOString());
+    let slept = false;
+    deps.sleep = () => {
+      slept = true;
+      return Promise.resolve();
+    };
+    await createDispatchHandler(deps)(post());
+    assertFalse(slept);
   },
 );

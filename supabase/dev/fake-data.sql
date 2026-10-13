@@ -4,7 +4,7 @@
 -- 모든 행은 `md5('fake-…')::uuid`나 `fake-` 접두사로 정해진 키를 가져 여러 번 넣어도 늘어나지 않는다.
 -- 지우려면 `npm run db:reset`.
 --
--- 받는 사람은 seed의 로그인 계정 홍길동(student@kmla.hs.kr / password123)이다.
+-- 받는 사람은 seed의 로그인 계정 홍길동(student@kmla.hs.kr / password123)이다. 메시지 대화도 홍길동의 것이다.
 
 begin;
 
@@ -254,6 +254,191 @@ cross join lateral (
 ) as kind
 on conflict (id) do nothing;
 
+-- 메시지. 1:1 대화 30개(1번은 메시지 400개라 위로 올려 이전 메시지를 불러온다), 그룹 대화 3개(1번은
+-- 61명이라 읽음 수와 멤버 목록이 길다, 3번은 알림을 꺼 두었다). 대화마다 안 읽은 메시지가 섞여 있다.
+-- 본문은 seed와 같이 `private.encrypt_message_text`로 암호화해 넣는다.
+create temporary table fake_conversations on commit drop as
+select
+  md5('fake-direct-' || person.n)::uuid as id,
+  'direct'::public.conversation_type as type,
+  null::text as name,
+  case when person.n = 1 then 400 else 1 + person.n % 6 end as message_count,
+  now() - person.n * interval '2 hours' as last_sent_at,
+  case when person.n = 1 then interval '13 minutes' else interval '7 minutes' end as gap,
+  person.n as person_n,
+  null::int as g
+from fake_people as person
+where person.n <= 30
+union all
+select
+  md5('fake-group-chat-' || g)::uuid,
+  'group',
+  (array['가짜 단톡 전체', '가짜 단톡 기획', '가짜 단톡 조용'])[g],
+  (array[300, 40, 20])[g],
+  now() - g * interval '25 minutes',
+  interval '19 minutes',
+  null,
+  g
+from generate_series(1, 3) as g;
+
+insert into public.conversations (
+  id, type, name, created_by, direct_profile_low, direct_profile_high, created_at
+)
+select
+  conversation.id,
+  conversation.type,
+  conversation.name,
+  (select id from fake_viewer),
+  case when conversation.type = 'direct'
+    then least((select id from fake_viewer), person.id) end,
+  case when conversation.type = 'direct'
+    then greatest((select id from fake_viewer), person.id) end,
+  conversation.last_sent_at - conversation.message_count * conversation.gap - interval '1 day'
+from fake_conversations as conversation
+left join fake_people as person on person.n = conversation.person_n
+-- 앱에서 같은 사람과 이미 1:1 대화를 열었으면 그 대화를 두고 넘어간다.
+on conflict do nothing;
+
+-- 넣지 못한 1:1 대화는 이후 단계에서 뺀다.
+delete from fake_conversations as conversation
+where not exists (
+  select 1 from public.conversations as existing where existing.id = conversation.id
+);
+
+-- 멤버. 1:1은 나와 상대, 그룹 1은 60명 전원, 2는 8명, 3은 7명이다.
+create temporary table fake_members on commit drop as
+select conversation.id as conversation_id, (select id from fake_viewer) as profile_id,
+  conversation.g, 0 as member_n
+from fake_conversations as conversation
+union all
+select conversation.id, person.id, conversation.g, person.n
+from fake_conversations as conversation
+join fake_people as person
+  on (conversation.type = 'direct' and person.n = conversation.person_n)
+  or (conversation.g = 1)
+  or (conversation.g = 2 and person.n <= 8)
+  or (conversation.g = 3 and person.n between 9 and 15);
+
+insert into public.conversation_members (
+  conversation_id, profile_id, joined_at, last_read_sent_at, muted_until
+)
+select
+  member.conversation_id,
+  member.profile_id,
+  conversation.last_sent_at - conversation.message_count * conversation.gap - interval '1 day',
+  conversation.last_sent_at - conversation.message_count * conversation.gap - interval '1 day',
+  case when member.member_n = 0 and conversation.g = 3 then 'infinity'::timestamptz end
+from fake_members as member
+join fake_conversations as conversation on conversation.id = member.conversation_id
+on conflict do nothing;
+
+create temporary table fake_messages on commit drop as
+select
+  md5('fake-message-' || conversation.id || '-' || i)::uuid as id,
+  conversation.id as conversation_id,
+  i,
+  conversation.last_sent_at - (conversation.message_count - i) * conversation.gap as sent_at,
+  case
+    when conversation.type = 'direct' then
+      case when (i * 7) % 3 = 0 then (select id from fake_viewer) else person.id end
+    when i % 5 = 0 then (select id from fake_viewer)
+    else (select id from fake_people where n = 1 + (i * 13 + conversation.g) % 60)
+  end as sender_id,
+  case when i % 17 = 0 and i > 3
+    then md5('fake-message-' || conversation.id || '-' || (i - 3))::uuid end as reply_to_id,
+  case
+    when i % 50 = 0 then repeat('긴 메시지가 말풍선 안에서 어떻게 줄바꿈되는지 확인하는 문장입니다. ', 8)
+    when i % 23 = 0 then (array['👍', '😂😂', '🎉🎉🎉'])[1 + i % 3]
+    when i % 31 = 0 then '공지 확인해 주세요 https://www.kmlaonline.net'
+    else (array[
+      '내일 자습 끝나고 도서관 갈래?', '좋아, 9시에 앞에서 보자', '과제 범위 어디까지야?',
+      '방금 공지 올라왔어', '점심 뭐 먹을래?', '오늘 동아리 모임 있어?', '나 5분 늦을 것 같아',
+      '사진 확인했어!', '그거 내가 정리해서 올릴게', '고마워 👍', '수행평가 언제까지지?',
+      '체육관 예약했어', '회의록 공유 부탁해', '내일 봐!'
+    ])[1 + (i * 5 + coalesce(conversation.person_n, conversation.g)) % 14]
+  end as body
+from fake_conversations as conversation
+left join fake_people as person on person.n = conversation.person_n
+cross join lateral generate_series(1, conversation.message_count) as i;
+
+-- 그룹 2·3에서 멤버가 아닌 사람이 보낸 것으로 나온 메시지는 그 그룹의 멤버에게 돌린다.
+update fake_messages as message
+set sender_id = (
+  select member.profile_id
+  from fake_members as member
+  where member.conversation_id = message.conversation_id
+    and member.member_n > 0
+  order by member.member_n
+  offset message.i % (
+    select count(*) from fake_members as counted
+    where counted.conversation_id = message.conversation_id and counted.member_n > 0
+  )
+  limit 1
+)
+where not exists (
+  select 1 from fake_members as member
+  where member.conversation_id = message.conversation_id
+    and member.profile_id = message.sender_id
+);
+
+insert into private.messages (
+  id, conversation_id, sender_id, sent_at, reply_to_id, body_ciphertext, key_version
+)
+select
+  message.id, message.conversation_id, message.sender_id, message.sent_at,
+  message.reply_to_id, encrypted.ciphertext, encrypted.key_version
+from fake_messages as message
+cross join lateral private.encrypt_message_text(message.body, private.message_keys()) as encrypted
+order by message.sent_at
+on conflict (id) do nothing;
+
+-- 그룹 1의 첫 줄은 멤버를 초대한 시스템 메시지다.
+insert into private.messages (id, conversation_id, sent_at, system_kind, system_profile_ids)
+select
+  md5('fake-message-system-' || conversation.id)::uuid,
+  conversation.id,
+  conversation.last_sent_at - (conversation.message_count + 1) * conversation.gap,
+  'member_added',
+  array(select person.id from fake_people as person where person.n <= 5 order by person.n)
+from fake_conversations as conversation
+where conversation.g = 1
+on conflict (id) do nothing;
+
+-- 반응과 고정. 일곱 번째 메시지마다 몇 명이 반응하고, 큰 대화방마다 두 개를 고정한다.
+insert into private.message_reactions (message_id, profile_id, reaction, created_at)
+select message.id, member.profile_id,
+  (array['like','love','haha','wow','sad','angry'])[1 + (message.i + member.member_n) % 6]::public.post_reaction,
+  message.sent_at + interval '1 minute'
+from fake_messages as message
+join fake_members as member
+  on member.conversation_id = message.conversation_id
+  and member.profile_id is distinct from message.sender_id
+  and member.member_n <= 1 + message.i % 4
+where message.i % 7 = 0
+on conflict (message_id, profile_id) do nothing;
+
+insert into private.message_pins (message_id, conversation_id, pinned_by, pinned_at)
+select message.id, message.conversation_id, (select id from fake_viewer), message.sent_at + interval '5 minutes'
+from fake_messages as message
+join fake_conversations as conversation on conversation.id = message.conversation_id
+where conversation.message_count >= 40 and message.i in (12, conversation.message_count - 8)
+on conflict (message_id) do nothing;
+
+-- 읽음 위치. 나는 대화 셋 중 하나에서 마지막 세 개를 안 읽었다. 다른 멤버는 여섯 중 하나꼴로 끝까지
+-- 읽었고 나머지는 최근 몇 개를 덜 읽어, 그룹의 읽음 수가 메시지마다 다르게 보인다.
+update public.conversation_members as member
+set last_read_sent_at = conversation.last_sent_at + interval '1 second'
+    - case
+        when member.profile_id = (select id from fake_viewer)
+          then case when abs(hashtext(conversation.id::text)) % 3 = 0 then 3 else 0 end
+        else (abs(hashtext(member.profile_id::text)) % 6)
+      end * conversation.gap,
+  last_read_message_id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
+from fake_conversations as conversation
+where member.conversation_id = conversation.id
+  and member.left_at is null
+  and member.last_read_message_id = '00000000-0000-0000-0000-000000000000';
+
 commit;
 
 select
@@ -263,4 +448,8 @@ select
      from generate_series(1, 8) as g, generate_series(1, 320) as n)) as group_posts,
   (select count(*) from public.notifications where recipient_profile_id = (
      select id from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001'))
-    as my_notifications;
+    as my_notifications,
+  (select count(*) from public.conversations
+    where id in (select md5('fake-direct-' || n)::uuid from generate_series(1, 30) as n)
+      or id in (select md5('fake-group-chat-' || g)::uuid from generate_series(1, 3) as g))
+    as my_conversations;

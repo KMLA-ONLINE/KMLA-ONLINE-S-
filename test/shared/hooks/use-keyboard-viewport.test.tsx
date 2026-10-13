@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useKeyboardViewport } from "~/features/posts/hooks/use-keyboard-viewport";
+import { useKeyboardViewport } from "~/shared/hooks/use-keyboard-viewport";
 
 class TestVisualViewport extends EventTarget {
   height = 800;

@@ -15,6 +15,7 @@ export {
   markAllNotificationsRead,
   updateGroupNotificationPreferences,
   updateNotificationPreferences,
+  setMessagePreviewHidden,
 } from "~/features/notifications/data/mutations";
 export {
   disconnectWebPushForLogout,

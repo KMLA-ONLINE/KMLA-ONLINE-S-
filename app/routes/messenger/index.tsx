@@ -1,20 +1,49 @@
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Outlet, useParams } from "react-router";
 
-import { MessagingScreen } from "~/features/messaging";
+import { defineAppChrome } from "~/features/app-shell";
+import { conversationListQuery, MessagingScreen } from "~/features/messaging";
+import { getQueryClient } from "~/shared/lib/query-client";
+import type { Route } from "./+types/index";
+
+// 셸 안에서 목록과 대화창이 각자 스크롤하도록 셸의 공통 스크롤 영역을 쓰지 않는다.
+export const handle = defineAppChrome({
+  header: "sticky",
+  bottomNav: "sticky",
+  scroll: "route",
+});
+
+// cache가 있으면 오래됐어도 기다리지 않고 넘긴다. 낡았으면 화면의 `useQuery`가 뒤에서 다시 읽는다.
+export async function clientLoader() {
+  return {
+    conversations: await getQueryClient().ensureQueryData(
+      conversationListQuery(),
+    ),
+  };
+}
 
 /**
- * 별도 메신저 레이아웃 아래에서 **스크롤은 이 라우트가 직접 소유한다**. 방 목록과 대화창이
+ * `handle.chrome.scroll = "route"`로 **스크롤은 이 라우트가 직접 소유한다**. 방 목록과 대화창이
  * 각자 자기 영역에서만 스크롤한다.
  *
  * 모바일에서는 방을 열면 목록이 사라지고 대화창이 전체를 차지한다(URL이 곧 화면 상태라
  * 뒤로가기가 그대로 동작한다). 데스크톱에서는 둘이 나란히 있다.
  */
-export default function MessengerPage() {
+export default function MessengerPage({ loaderData }: Route.ComponentProps) {
   const { roomId } = useParams();
+  const [desktopDetailsOpen, setDesktopDetailsOpen] = useState(true);
+  const { data: conversations = loaderData.conversations } = useQuery(
+    conversationListQuery(),
+  );
 
   return (
-    <MessagingScreen hasRoom={Boolean(roomId)}>
-      <Outlet />
+    <MessagingScreen
+      conversations={conversations}
+      selectedRoomId={roomId}
+      hasRoom={Boolean(roomId)}
+    >
+      <Outlet context={{ desktopDetailsOpen, setDesktopDetailsOpen }} />
     </MessagingScreen>
   );
 }

@@ -34,6 +34,7 @@ create table if not exists private.storage_cleanup_queue (
       'profile_media',
       'profile_media_activity',
       'story_media',
+      'message_attachment',
       'unreferenced_sweep'
     )
   ),
@@ -122,7 +123,15 @@ where story.image_path is not null
 union all
 select 'story-media'::text, story.thumbnail_path
 from public.stories as story
-where story.thumbnail_path is not null;
+where story.thumbnail_path is not null
+union all
+-- 지운 첨부도 행이 남아 있는 동안은 참조다. 행 삭제가 경로를 큐로 옮긴다.
+select 'message-attachments'::text, attachment.object_path
+from private.message_attachments as attachment
+union all
+select 'message-attachments'::text, attachment.thumbnail_path
+from private.message_attachments as attachment
+where attachment.thumbnail_path is not null;
 alter view private.referenced_storage_objects owner to postgres;
 
 -- 1층. 수명을 다한 행을 지우면서 경로를 큐로 옮긴다. 행 삭제와 큐 적재가 한 문장이라 경로를
@@ -275,6 +284,29 @@ begin
   insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
   select 'profile-media', deleted.object_path, 'profile_media_activity'
   from deleted
+  on conflict (bucket, object_path) do update
+    set dry_run = queue.dry_run and excluded.dry_run;
+  get diagnostics moved = row_count;
+  enqueued := enqueued + moved;
+
+  -- 메시지 첨부. 지운 첨부와 전송되지 않은 채 48시간이 지난 업로드 예고를 회수한다. 사진은 원본과
+  -- 축소본 두 object다.
+  with expired as (
+    delete from private.message_attachments as attachment
+    where attachment.status = 'deleted'
+      or (
+        attachment.status = 'pending'
+        and attachment.created_at <= now() - interval '48 hours'
+      )
+    returning attachment.object_path, attachment.thumbnail_path
+  )
+  insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+  select 'message-attachments', path.object_path, 'message_attachment'
+  from expired
+  cross join lateral (
+    values (expired.object_path), (expired.thumbnail_path)
+  ) as path(object_path)
+  where path.object_path is not null
   on conflict (bucket, object_path) do update
     set dry_run = queue.dry_run and excluded.dry_run;
   get diagnostics moved = row_count;
