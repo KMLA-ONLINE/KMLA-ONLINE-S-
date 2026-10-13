@@ -2,7 +2,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useEffectEvent, useRef } from "react";
 import { useLocation, useRevalidator, useRouteLoaderData } from "react-router";
 
-import { refreshGroupAccess } from "~/features/groups/data/cache";
+import {
+  groupKeys,
+  invalidateGroupContent,
+  refreshGroupAccess,
+} from "~/features/groups/data/cache";
 import type { GroupDetail } from "~/features/groups/model/types";
 import {
   notificationBadgeQuery,
@@ -19,11 +23,17 @@ const INBOX_REVALIDATION_DELAY_MS = 50;
 /** 복귀 신호가 겹칠 때 뒤엣것을 버리는 간격. `focus`와 `visibilitychange`가 한 복귀에 둘 다 오기 때문이다. */
 const RESUME_COALESCE_MS = 300;
 
+/** 복귀 접근 확인 잠금을 붙들 수 있는 최대 시간. 응답 없는 연결이 이후 복귀 확인을 영영 막지 않게 한다. */
+const GROUP_RESUME_TIMEOUT_MS = 10_000;
+
+/** 게시물 목록을 그리지 않는 그룹 탭. 복귀 때 재검증해도 잃을 누적 페이지가 없다. */
+const NON_POST_TABS = new Set(["members", "settings", "reports"]);
+
 /**
  * 알림 Realtime과 창 focus 복귀를 받아 알림함과 셸 뱃지를 갱신한다 (`docs/DATA_CACHE_POLICY.md` §4).
  *
  * 신호는 뱃지 키만 무효화한다. 라우트 재검증은 대상을 고를 수 없어 그룹 상세·게시물까지 다시 받기 때문이다.
- * 알림함을 보고 있을 때와 그룹 복귀 확인에서 접근·권한 변경이 확인됐을 때만 재검증한다.
+ * 알림함을 보고 있을 때, 그룹 복귀 확인에서 접근·권한 변경이 확인됐을 때, 게시물 목록이 없는 그룹 탭에서만 재검증한다.
  */
 export function NotificationSync({ profileId }: { profileId: number }) {
   const queryClient = useQueryClient();
@@ -36,15 +46,27 @@ export function NotificationSync({ profileId }: { profileId: number }) {
     null,
   );
   const groupResume = useRef<{ slug: string; viewerId: number } | null>(null);
+  const mounted = useRef(true);
 
   const finishGroupResume = useEffectEvent(
     (slug: string, viewerId: number, changed: boolean) => {
       if (
+        !mounted.current ||
         viewerId !== profileId ||
         GROUP_ROUTE.exec(location.pathname)?.[1] !== slug
       )
         return;
-      if (changed) void revalidator.revalidate();
+      const tab = new URLSearchParams(location.search).get("tab");
+      if (changed) {
+        void revalidator.revalidate();
+      } else if (tab && NON_POST_TABS.has(tab) && groupData?.group) {
+        // 멤버·신고·설정 탭은 지킬 누적 목록이 없다. 남이 바꾼 목록을 복귀 때 다시 읽는다.
+        void invalidateGroupContent(
+          queryClient,
+          groupData.group.group_id,
+          slug,
+        ).then(() => revalidator.revalidate());
+      }
     },
   );
 
@@ -57,17 +79,28 @@ export function NotificationSync({ profileId }: { profileId: number }) {
       return;
     const resume = { slug, viewerId };
     groupResume.current = resume;
-    let changed = true;
+    const release = () => {
+      if (groupResume.current === resume) groupResume.current = null;
+    };
+    // 진행 중인 요청을 취소해야 다음 복귀의 `fetchQuery`가 멈춘 요청을 이어받지 않고 새로 묻는다.
+    const timeout = setTimeout(() => {
+      release();
+      void queryClient.cancelQueries({
+        queryKey: groupKeys.detail(slug),
+        exact: true,
+      });
+    }, GROUP_RESUME_TIMEOUT_MS);
+    let changed = false;
     try {
       changed = await refreshGroupAccess(queryClient, slug, groupData?.group);
     } catch {
-      // 접근 확인 실패는 route의 오류/접근 확인 경로로 넘긴다.
+      // 일시적인 조회 실패로 누적 목록을 버리지 않는다. 화면을 유지하고 다음 복귀가 다시 확인한다.
+      return;
     } finally {
-      if (groupResume.current === resume) {
-        groupResume.current = null;
-        finishGroupResume(slug, viewerId, changed);
-      }
+      clearTimeout(timeout);
+      release();
     }
+    finishGroupResume(slug, viewerId, changed);
   });
 
   const scheduleInboxRevalidation = useEffectEvent(() => {
@@ -102,6 +135,7 @@ export function NotificationSync({ profileId }: { profileId: number }) {
    * 한 복귀에 둘 다 오면 짧은 간격 안의 두 번째와, 창이 안 보이는 동안의 신호는 버린다.
    */
   useEffect(() => {
+    mounted.current = true;
     let lastResumeAt = 0;
 
     const onResume = () => {
@@ -116,6 +150,7 @@ export function NotificationSync({ profileId }: { profileId: number }) {
     window.addEventListener("focus", onResume);
     document.addEventListener("visibilitychange", onResume);
     return () => {
+      mounted.current = false;
       groupResume.current = null;
       window.removeEventListener("focus", onResume);
       document.removeEventListener("visibilitychange", onResume);

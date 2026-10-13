@@ -201,7 +201,7 @@ describe("NotificationSync", () => {
     await waitFor(() => expect(mocks.setAppBadgeCount).toHaveBeenCalledWith(3));
   });
 
-  it("drops protected group pages and revalidates when membership is revoked", async () => {
+  it("marks protected group pages stale and revalidates when membership is revoked", async () => {
     const { queryClient } = renderSync("/groups/private-club/posts/post-id");
     const firstKey = groupKeys.posts(group.group_id, null, null);
     const nextKey = groupKeys.posts(group.group_id, "category", {
@@ -224,32 +224,80 @@ describe("NotificationSync", () => {
     mocks.loadGroupDetail.mockResolvedValueOnce(revoked);
     window.dispatchEvent(new Event("focus"));
     await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
-    expect(queryClient.getQueryData(firstKey)).toBeUndefined();
-    expect(queryClient.getQueryData(nextKey)).toBeUndefined();
+    expect(queryClient.getQueryState(firstKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(nextKey)?.isInvalidated).toBe(true);
     expect(
-      queryClient.getQueryData(groupKeys.invite(group.group_id)),
-    ).toBeUndefined();
-    expect(queryClient.getQueryData(otherKey)).toEqual({ posts: ["other"] });
+      queryClient.getQueryState(groupKeys.invite(group.group_id))
+        ?.isInvalidated,
+    ).toBe(true);
+    expect(queryClient.getQueryState(otherKey)?.isInvalidated).toBe(false);
     expect(queryClient.getQueryData(groupKeys.detail(group.slug))).toEqual(
       revoked,
     );
   });
 
-  it("forces the route to retry access instead of trusting cached permissions after a failed check", async () => {
+  it("keeps the screen and cached pages when the access check fails", async () => {
     const { queryClient } = renderSync("/groups/private-club");
     const key = groupKeys.posts(group.group_id, null, null);
-    queryClient.setQueryData(key, { posts: ["cached permissions"] });
+    const page = { posts: ["loaded page"] };
+    queryClient.setQueryData(key, page);
     await waitFor(() =>
       expect(mocks.subscribeToNotifications).toHaveBeenCalledOnce(),
     );
     mocks.loadGroupDetail.mockRejectedValueOnce(new Error("offline"));
     window.dispatchEvent(new Event("focus"));
-    await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
-    expect(
-      queryClient.getQueryState(groupKeys.detail(group.slug))?.isInvalidated,
-    ).toBe(true);
-    expect(queryClient.getQueryData(key)).toBeUndefined();
+    await waitFor(() => expect(mocks.loadGroupDetail).toHaveBeenCalledOnce());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mocks.revalidate).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData(key)).toBe(page);
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 1_000);
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(mocks.loadGroupDetail).toHaveBeenCalledTimes(2));
   });
+
+  it("releases a hung access check so a later return checks again", async () => {
+    renderSync("/groups/private-club");
+    await waitFor(() =>
+      expect(mocks.subscribeToNotifications).toHaveBeenCalledOnce(),
+    );
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      mocks.loadGroupDetail.mockImplementationOnce(
+        () => new Promise<GroupDetail>(() => undefined),
+      );
+      window.dispatchEvent(new Event("focus"));
+      await vi.waitFor(() =>
+        expect(mocks.loadGroupDetail).toHaveBeenCalledOnce(),
+      );
+      vi.advanceTimersByTime(10_000);
+      vi.spyOn(Date, "now").mockReturnValue(Date.now() + 1_000);
+      window.dispatchEvent(new Event("focus"));
+      await vi.waitFor(() =>
+        expect(mocks.loadGroupDetail).toHaveBeenCalledTimes(2),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(["members", "reports", "settings"])(
+    "refreshes the %s tab on return even when access is unchanged",
+    async (tab) => {
+      const { queryClient } = renderSync(`/groups/private-club?tab=${tab}`);
+      const key = groupKeys.memberLists(group.group_id);
+      queryClient.setQueryData(key, ["member"]);
+      await waitFor(() =>
+        expect(mocks.subscribeToNotifications).toHaveBeenCalledOnce(),
+      );
+      window.dispatchEvent(new Event("focus"));
+      await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
+      expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+    },
+  );
 
   it("preserves pages even after the inactive detail cache has been collected", async () => {
     const { queryClient } = renderSync("/groups/private-club");
@@ -284,18 +332,18 @@ describe("NotificationSync", () => {
       mocks.loadGroupDetail.mockResolvedValueOnce({ ...group, ...change });
       window.dispatchEvent(new Event("focus"));
       await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
-      expect(queryClient.getQueryData(key)).toBeUndefined();
+      expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
     },
   );
 
-  it("revalidates a deleted group and removes its protected pages", async () => {
+  it("revalidates a deleted group and marks its protected pages stale", async () => {
     const { queryClient } = renderSync("/groups/private-club");
     const key = groupKeys.posts(group.group_id, null, null);
     queryClient.setQueryData(key, { posts: ["deleted group"] });
     mocks.loadGroupDetail.mockResolvedValueOnce(null);
     window.dispatchEvent(new Event("focus"));
     await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
-    expect(queryClient.getQueryData(key)).toBeUndefined();
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryData(groupKeys.detail(group.slug))).toBeNull();
   });
 
