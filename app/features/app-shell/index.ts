@@ -3,7 +3,10 @@ export { AppSidebar } from "~/features/app-shell/components/app-sidebar";
 export { MobileTabBar } from "~/features/app-shell/components/mobile-tab-bar";
 export { NavigationProgress } from "~/features/app-shell/components/navigation-progress";
 export { NavigationSkeleton } from "~/features/app-shell/components/navigation-skeleton";
-export { PageHeader } from "~/features/app-shell/components/page-header";
+export {
+  PageHeader,
+  useGoBack,
+} from "~/features/app-shell/components/page-header";
 export { PullToRefresh } from "~/features/app-shell/components/pull-to-refresh";
 export { ScrollRegion } from "~/features/app-shell/components/scroll-region";
 export {

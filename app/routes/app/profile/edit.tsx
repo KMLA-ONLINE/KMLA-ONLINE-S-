@@ -1,4 +1,8 @@
-import { data, redirect } from "react-router";
+import {
+  data,
+  redirect,
+  type ShouldRevalidateFunctionArgs,
+} from "react-router";
 
 import { defineAppChrome, refreshShellProfile } from "~/features/app-shell";
 import {
@@ -10,6 +14,7 @@ import {
   readProfileEditForm,
   updateMyProfile,
   validateProfileEdit,
+  type ProfileEditActionData,
 } from "~/features/profiles";
 import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/edit";
@@ -72,7 +77,18 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     );
   }
 
-  throw redirect(`/profile/${pubId}`);
+  // 프로필로 보내지 않고 화면이 돌아가게 한다. redirect는 history에 프로필을 하나 더 쌓아 뒤로가기가 편집 화면을 다시 연다.
+  return { savedPubId: pubId };
+}
+
+/** 저장 직후 이 화면은 곧 떠난다. 다시 읽으면 공개 ID를 바꾼 경우 loader가 새 편집 주소로 보내 버린다. */
+export function shouldRevalidate({
+  actionResult,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  const result = actionResult as ProfileEditActionData | undefined;
+  if (result?.savedPubId !== undefined) return false;
+  return defaultShouldRevalidate;
 }
 
 export default function ProfileEditPage({
