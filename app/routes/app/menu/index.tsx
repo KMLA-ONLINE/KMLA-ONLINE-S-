@@ -132,7 +132,7 @@ export default function MenuPage() {
           </h2>
           <nav
             aria-label="학교 사이트"
-            className="grid grid-cols-1 gap-3 md:grid-cols-3"
+            className="grid grid-cols-2 gap-3 md:grid-cols-3"
           >
             {schoolLinks.map(({ href, label, icon: Icon }) => (
               <a

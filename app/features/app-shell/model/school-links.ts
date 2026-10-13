@@ -10,7 +10,7 @@ interface SchoolLink {
 export const schoolLinks: SchoolLink[] = [
   {
     href: "https://www.minjok.hs.kr/",
-    label: "민사고 홈페이지",
+    label: "홈페이지",
     icon: SchoolIcon,
   },
   {

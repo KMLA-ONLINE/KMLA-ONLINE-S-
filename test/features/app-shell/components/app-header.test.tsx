@@ -110,7 +110,7 @@ describe("AppHeader account menu", () => {
     expect(
       screen.queryByRole("group", { name: "바로가기" }),
     ).not.toBeInTheDocument();
-    for (const name of ["민사고 홈페이지", "인트라넷", "리로스쿨"]) {
+    for (const name of ["홈페이지", "인트라넷", "리로스쿨"]) {
       expect(screen.queryByRole("menuitem", { name })).not.toBeInTheDocument();
     }
   });

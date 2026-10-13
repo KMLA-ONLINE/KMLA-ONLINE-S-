@@ -106,7 +106,7 @@ describe("menu route", () => {
     );
     expect(sites.getAllByRole("link")).toHaveLength(3);
     for (const [name, href] of [
-      ["민사고 홈페이지", "https://www.minjok.hs.kr/"],
+      ["홈페이지", "https://www.minjok.hs.kr/"],
       ["인트라넷", "https://old.minjok.hs.kr/members/login.php"],
       ["리로스쿨", "https://minjok.riroschool.kr/"],
     ]) {

@@ -93,7 +93,7 @@ test("모바일 메뉴는 도구와 설정·프로필 진입을 분리한다", a
 
   const sites = page.getByRole("navigation", { name: "학교 사이트" });
   await expect(sites.getByRole("link")).toHaveCount(3);
-  for (const name of ["민사고 홈페이지", "인트라넷", "리로스쿨"]) {
+  for (const name of ["홈페이지", "인트라넷", "리로스쿨"]) {
     const link = sites.getByRole("link", {
       name: `${name} (새 탭)`,
       exact: true,
@@ -130,9 +130,9 @@ test("메뉴는 모바일과 데스크톱에서 구역별로 정돈되고 가로
   const tools = page.getByRole("navigation", { name: "학교생활 기능" });
   const sites = page.getByRole("navigation", { name: "학교 사이트" });
   for (const [width, toolRows, siteRows] of [
-    [320, 3, 3],
-    [390, 3, 3],
-    [767, 3, 3],
+    [320, 3, 2],
+    [390, 3, 2],
+    [767, 3, 2],
     [768, 2, 1],
     [820, 2, 1],
     [1280, 2, 1],
@@ -370,7 +370,7 @@ test("데스크톱 아바타 메뉴에서 설정과 확인 후 로그아웃을 �
   ).toHaveAttribute("href", "/profile");
   await expect(page.getByRole("menuitem")).toHaveCount(3);
   await expect(page.getByRole("group", { name: "바로가기" })).toHaveCount(0);
-  for (const name of ["민사고 홈페이지", "인트라넷", "리로스쿨"]) {
+  for (const name of ["홈페이지", "인트라넷", "리로스쿨"]) {
     await expect(page.getByRole("menuitem", { name })).toHaveCount(0);
   }
   await page.getByRole("menuitem", { name: "설정", exact: true }).click();
