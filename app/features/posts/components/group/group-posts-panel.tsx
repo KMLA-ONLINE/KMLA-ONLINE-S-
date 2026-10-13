@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 
 import {
@@ -19,6 +19,7 @@ import type {
   GroupCategory,
   GroupPost,
   GroupPostPage,
+  PostAttachment,
 } from "~/features/posts/model/types";
 import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
 import { Button } from "~/shared/ui/button";
@@ -40,8 +41,8 @@ export function GroupPostsPanel({
 }) {
   const mutationFetcher = useFetcher<{ error?: string }>();
   const [viewMode] = usePostViewMode();
-  const [posts, setPosts] = useState(initialPage.posts);
-  const [cursor, setCursor] = useState(initialPage.nextCursor);
+  const [page, setPage] = useState(initialPage);
+  const { posts, nextCursor: cursor } = page;
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,39 +51,74 @@ export function GroupPostsPanel({
   const hydratedPostIds = useRef(new Set<string>());
   const [loadedInitialPage, setLoadedInitialPage] = useState(initialPage);
 
+  // 응답이 아니라 목록·커서·loading이 함께 화면에 반영된 뒤 다음 요청을 허용한다.
+  useEffect(() => {
+    if (!loading) loadingMore.current = false;
+  }, [loading, posts, cursor]);
+
   // loader가 새 첫 페이지를 내려주면(고정·삭제 뒤 재검증) 그 페이지는 카테고리를 거치지 않은
   // 전체 목록이다. 칩만 그대로 두면 "공지"를 고른 채 전체 글이 깔린다 — 선택도 함께 되돌린다.
   if (loadedInitialPage !== initialPage) {
     setLoadedInitialPage(initialPage);
-    setPosts(initialPage.posts);
-    setCursor(initialPage.nextCursor);
+    setPage(initialPage);
     setCategoryId(null);
+    setLoading(false);
+    setError(null);
   }
 
   useEffect(() => {
     requestId.current += 1;
+    loadingMore.current = false;
     hydratedPostIds.current.clear();
   }, [initialPage]);
 
   useEffect(() => {
-    if (viewMode !== "card") return;
+    if (viewMode !== "card" || loading) return;
+    const currentRequest = requestId.current;
     const unhydrated = posts.filter(
       (post) => !hydratedPostIds.current.has(post.post_id),
     );
     if (unhydrated.length === 0) return;
     unhydrated.forEach((post) => hydratedPostIds.current.add(post.post_id));
     void hydrateGroupPostMedia(unhydrated).then((hydrated) => {
+      if (currentRequest !== requestId.current) return;
       const byId = new Map(hydrated.map((post) => [post.post_id, post]));
-      setPosts((current) =>
-        current.map((post) => byId.get(post.post_id) ?? post),
-      );
+      setPage((current) => ({
+        ...current,
+        posts: current.posts.map((post) => {
+          const media = byId.get(post.post_id);
+          if (!media) return post;
+          const signedAttachments: readonly PostAttachment[] =
+            media.attachments;
+          return {
+            ...post,
+            author_avatar_url: media.author_avatar_url,
+            attachments: post.attachments.map((attachment) => {
+              const signed = signedAttachments.find(
+                (item) =>
+                  item.attachment_id === attachment.attachment_id &&
+                  item.object_path === attachment.object_path &&
+                  item.thumbnail_path === attachment.thumbnail_path,
+              );
+              return signed
+                ? {
+                    ...attachment,
+                    signedUrl: signed.signedUrl,
+                    thumbnailUrl: signed.thumbnailUrl,
+                  }
+                : attachment;
+            }),
+          };
+        }),
+      }));
     });
-  }, [posts, viewMode]);
+  }, [posts, viewMode, loading]);
 
   const selectCategory = async (nextCategoryId: string | null) => {
     const currentRequest = ++requestId.current;
+    hydratedPostIds.current.clear();
     setCategoryId(nextCategoryId);
-    setCursor(null);
+    setPage((current) => ({ ...current, nextCursor: null }));
     setLoading(true);
     setError(null);
     try {
@@ -96,11 +132,7 @@ export function GroupPostsPanel({
         staleTime: GROUP_CONTENT_STALE_TIME,
       });
       if (currentRequest !== requestId.current) return;
-      hydratedPostIds.current.clear();
-      startTransition(() => {
-        setPosts(page.posts);
-        setCursor(page.nextCursor);
-      });
+      setPage(page);
     } catch {
       if (currentRequest !== requestId.current) return;
       setError("게시물을 불러오지 못했습니다.");
@@ -127,15 +159,24 @@ export function GroupPostsPanel({
         staleTime: GROUP_CONTENT_STALE_TIME,
       });
       if (currentRequest !== requestId.current) return;
-      startTransition(() => {
-        setPosts((current) => [...current, ...page.posts]);
-        setCursor(page.nextCursor);
+      setPage((current) => {
+        const seen = new Set(current.posts.map((post) => post.post_id));
+        return {
+          posts: [
+            ...current.posts,
+            ...page.posts.filter((post) => {
+              if (seen.has(post.post_id)) return false;
+              seen.add(post.post_id);
+              return true;
+            }),
+          ],
+          nextCursor: page.nextCursor,
+        };
       });
     } catch {
       if (currentRequest !== requestId.current) return;
       setError("이전 게시물을 불러오지 못했습니다.");
     } finally {
-      loadingMore.current = false;
       if (currentRequest === requestId.current) setLoading(false);
     }
   };
