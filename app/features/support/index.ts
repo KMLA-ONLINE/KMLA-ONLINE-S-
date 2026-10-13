@@ -1,6 +1,4 @@
 export { AppVersionCard } from "./components/app-version-card";
 export { FaqScreen } from "./components/faq-screen";
-export { ReleaseNotesScreen } from "./components/release-notes-screen";
 export { faqSections, supportContacts, supportNote } from "./content/faq";
-export { releases } from "./content/releases";
-export type { FaqSection, Release } from "./model/types";
+export type { FaqSection } from "./model/types";

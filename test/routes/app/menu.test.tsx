@@ -71,17 +71,16 @@ describe("menu route", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("reaches the help and update pages from the menu", () => {
+  it("reaches the help page but no update log from the menu", () => {
     renderMenu("member");
 
     expect(screen.getByRole("link", { name: "도움말" })).toHaveAttribute(
       "href",
       "/support",
     );
-    expect(screen.getByRole("link", { name: "업데이트 기록" })).toHaveAttribute(
-      "href",
-      "/update",
-    );
+    expect(
+      screen.queryByRole("link", { name: "업데이트 기록" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "바로가기" })).toHaveAttribute(
       "href",
       "/menu/links",
