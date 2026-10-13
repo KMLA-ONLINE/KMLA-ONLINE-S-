@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RouterContextProvider } from "react-router";
 
+import { rememberRenamedPubId } from "~/features/profiles";
+
 const { deleteProfilePost, listProfilePosts, loadAcceptedProfile } = vi.hoisted(
   () => ({
     deleteProfilePost: vi.fn(),
@@ -64,6 +66,33 @@ describe("profile detail loader", () => {
    * 게시물을 부르면 화면 하나에 왕복이 두 번 쌓인다(`AGENTS.md`: loader는 종속 왕복을 만들지
    * 않는다).
    */
+  // 공개 ID를 바꾼 뒤 뒤로가기로 옛 주소에 오면 없는 프로필이 아니라 새 주소가 그 자리를 차지한다.
+  it("replaces an address this tab renamed with the new one", async () => {
+    loadAcceptedProfile.mockResolvedValue(null);
+    rememberRenamedPubId("old-29", "jieun-29");
+
+    const rejection = (await loader(
+      "old-29",
+      "/profile/old-29/posts/p1?image=2",
+    ).catch((error: unknown) => error)) as Response;
+
+    expect(rejection.status).toBe(302);
+    expect(rejection.headers.get("Location")).toBe(
+      "/profile/jieun-29/posts/p1?image=2",
+    );
+    expect(rejection.headers.get("X-Remix-Replace")).toBe("true");
+  });
+
+  it("still shows a missing profile for an address nobody renamed", async () => {
+    loadAcceptedProfile.mockResolvedValue(null);
+
+    const rejection = (await loader("nobody").catch(
+      (error: unknown) => error,
+    )) as Response;
+
+    expect(rejection.status).toBe(404);
+  });
+
   it("asks for the profile and its timeline at the same time", async () => {
     const order: string[] = [];
     loadAcceptedProfile.mockImplementation(

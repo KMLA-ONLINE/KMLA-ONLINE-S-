@@ -12,6 +12,7 @@ import {
   ProfileEditScreen,
   readProfileEditFailure,
   readProfileEditForm,
+  rememberRenamedPubId,
   updateMyProfile,
   validateProfileEdit,
   type ProfileEditActionData,
@@ -64,6 +65,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   try {
     // 공개 ID를 바꿨다면 저장 전의 주소는 이미 없는 주소다. RPC가 돌려준 값으로만 옮긴다.
     pubId = await updateMyProfile(values);
+    rememberRenamedPubId(profile.pub_id, pubId);
     await Promise.all([
       refreshShellProfile(),
       getQueryClient().invalidateQueries({ queryKey: birthdayKeys.all }),

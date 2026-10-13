@@ -439,6 +439,41 @@ describe("CommentComposer", () => {
     ]);
   });
 
+  it("widens a word deletion that reaches into a mention", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
+    const { user, input } = renderComposer({
+      onSubmit,
+      mentionGroupId: "g",
+      initialValue: "앞 [@첫 멤버](m:1)",
+      initialMentions: [
+        { ordinal: 1, pub_id: "member-1", name: "첫 멤버", avatar_path: null },
+      ],
+    });
+    const field = input as HTMLTextAreaElement;
+
+    // Ctrl+Delete는 공백을 건너 다음 단어까지 지운다. `textarea`는 그 범위를 미리 알려 주지
+    // 않으므로 캐럿 옆 한 글자(공백)만 보면 멘션에 닿지 않는다.
+    field.setSelectionRange(1, 1);
+    const deletion = new InputEvent("beforeinput", {
+      inputType: "deleteWordForward",
+      bubbles: true,
+      cancelable: true,
+    });
+    fireEvent(field, deletion);
+    expect(deletion.defaultPrevented).toBe(false);
+
+    // 브라우저가 ` @첫`까지 지운 결과. 반쪽 `멤버`가 남으면 안 된다.
+    // React가 바뀐 값을 알아채도록 prototype의 setter로 넣는다. 캐럿은 그 뒤에 옮긴다.
+    Reflect.set(HTMLTextAreaElement.prototype, "value", "앞 멤버", field);
+    field.setSelectionRange(1, 1);
+    fireEvent.input(field);
+    await vi.waitFor(() => expect(field).toHaveValue("앞"));
+
+    await user.click(screen.getByRole("button", { name: "댓글 게시" }));
+    // 본문에 토큰이 없으니 아무도 부르지 않는다.
+    expect(onSubmit).toHaveBeenCalledWith("앞", undefined, expect.any(Array));
+  });
+
   it("drops the hidden mark when the name is edited in place", async () => {
     const onSubmit = vi.fn().mockResolvedValue({ comment_id: "c1" });
     const { user, input } = renderComposer({ onSubmit, mentionGroupId: "g" });

@@ -1,5 +1,5 @@
 import { ChevronLeftIcon } from "lucide-react";
-import { useCallback, type ReactNode } from "react";
+import { useCallback, type MouseEvent, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router";
 
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
@@ -10,7 +10,7 @@ import { cn } from "~/shared/lib/utils";
 interface PageHeaderProps {
   title: ReactNode;
   /**
-   * 문자열이면 그 경로로, `true`면 이전 화면으로(없으면 홈) 간다. `{ fallback }`은 이전 화면으로 가되 없으면 그 경로로 바꿔 든다 —
+   * 문자열이면 그 경로로, `true`는 `{ fallback: "/" }`와 같다. `{ fallback }`은 이전 화면으로 가되 없으면 그 경로로 바꿔 든다(`useGoBack()`) —
    * 편집·생성 화면처럼 들어온 곳으로 돌아가야 하는 화면이 쓴다. 문자열로 앞으로 보내면 두 화면이 history에 번갈아 쌓여 뒤로가기가 둘 사이를 맴돈다.
    */
   back?: boolean | string | { fallback: string };
@@ -32,7 +32,6 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   const navigate = useNavigate();
-  const location = useLocation();
   const goBack = useGoBack();
   const hidden = useHideOnScroll({ enabled: hideOnScroll });
   const onTap = useScrollToTopOnTap();
@@ -65,13 +64,7 @@ export function PageHeader({
               void navigate(back);
               return;
             }
-            if (typeof back === "object") {
-              goBack(back.fallback);
-              return;
-            }
-            // 링크로 바로 들어와 앱 안의 이전 화면이 없으면 -1은 앱 밖으로 나간다. 홈으로 보낸다.
-            if (location.key === "default") void navigate("/");
-            else void navigate(-1);
+            goBack(typeof back === "object" ? back.fallback : "/");
           }}
         >
           <ChevronLeftIcon />
@@ -104,4 +97,21 @@ export function useGoBack() {
     },
     [location.key, navigate],
   );
+}
+
+/** 데스크톱의 돌아가기 링크에 단다. 새 탭·새 창으로 여는 손짓은 브라우저에 맡기고, 그냥 누르면 `useGoBack()`으로 돌아간다. */
+export function useBackLinkClick(fallback: string) {
+  const goBack = useGoBack();
+  return (event: MouseEvent<HTMLAnchorElement>) => {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
+    event.preventDefault();
+    goBack(fallback);
+  };
 }

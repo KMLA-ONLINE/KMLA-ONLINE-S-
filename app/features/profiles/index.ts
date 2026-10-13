@@ -6,6 +6,8 @@ export {
   BIRTHDAY_GC_TIME,
   BIRTHDAY_STALE_TIME,
   birthdayKeys,
+  rememberRenamedPubId,
+  renamedPubId,
 } from "~/features/profiles/data/cache";
 export {
   readProfileEditFailure,

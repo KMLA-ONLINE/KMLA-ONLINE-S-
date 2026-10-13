@@ -21,6 +21,7 @@ import {
   normalizeMentions,
   parseMentions,
   mentionDisplayRanges,
+  removedRange,
   sanitizeMentionDisplay,
   sanitizeMentionLabel,
   toMentionDisplay,
@@ -415,6 +416,22 @@ describe("deleting a mention as one piece", () => {
     ["insertText", false],
   ])("treats %s as a deletion to widen: %s", (inputType, expected) => {
     expect(isMentionDeleteInput(inputType)).toBe(expected);
+  });
+
+  it("finds the span a native deletion removed, ending at the caret", () => {
+    expect(removedRange("앞 @첫 멤버", "앞 멤버", 1)).toEqual({
+      from: 1,
+      to: 4,
+    });
+    // 같은 글자가 이어지면 어느 쪽을 지웠는지 글자만으로는 모른다. 캐럿이 정한다.
+    expect(removedRange("aab", "ab", 0)).toEqual({ from: 0, to: 1 });
+    expect(removedRange("aab", "ab", 1)).toEqual({ from: 1, to: 2 });
+  });
+
+  it("returns null when the change is not a single removal at the caret", () => {
+    expect(removedRange("abc", "abcd", 3)).toBeNull();
+    expect(removedRange("abc", "axc", 1)).toBeNull();
+    expect(removedRange("abcd", "ad", 2)).toBeNull();
   });
 
   it("reads a collapsed caret as the character before or after it", () => {

@@ -2,7 +2,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { Form, Link } from "react-router";
 
-import { useGoBack } from "~/features/app-shell";
+import { useBackLinkClick } from "~/features/app-shell";
 import { GroupConfirmDialog } from "~/features/groups/components/group-confirm-dialog";
 import {
   getGroupJoinPolicyLabel,
@@ -57,7 +57,7 @@ export function GroupCreateForm({
   errors?: CreateGroupErrors;
   pending: boolean;
 }) {
-  const goBack = useGoBack();
+  const onBackClick = useBackLinkClick("/groups");
   const [kind, setKind] = useState<GroupKind>(values.kind);
   const [joinPolicy, setJoinPolicy] = useState<GroupJoinPolicy>(
     values.joinPolicy,
@@ -117,10 +117,7 @@ export function GroupCreateForm({
       <div className="hidden flex-col gap-2 md:flex">
         <Link
           to="/groups"
-          onClick={(event) => {
-            event.preventDefault();
-            goBack("/groups");
-          }}
+          onClick={onBackClick}
           className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeftIcon aria-hidden className="size-4" />

@@ -105,6 +105,8 @@
   방법뿐이다 — 댓글은 `mentionDisplayRanges()`, 본문은 `m:` link mark. 반쪽이 남으면 댓글은 멘션이
   아닌 글자가 되고, 본문은 반쪽 링크도 멘션이라 `normalizeMentions()`가 이름을 되살려 지운 줄 아는
   사람을 부른다. keydown으로 되돌리지 마라 — 모바일 키보드는 Backspace를 keyCode 229로 보낸다.
+  `textarea`는 지울 범위를 미리 알려 주지 않아, 캐럿만 둔 단어·줄 삭제는 브라우저가 지운 뒤
+  `removedRange()`로 지운 자리를 찾아 넓힌다.
 - 편집마다 `sanitizeMentionDisplay()`로 짝 잃은 표시를 걷되, 한글 조합 중에는 미루고
   `compositionend`에서 한 번 정리한다. 조합 중에 값과 캐럿을 건드리면 쓰던 글자가 끊긴다. 남겨 두면 깨진 이름을 원래대로
   다시 쳤을 때 멘션이 조용히 되살아난다 — 평범한 글자를 쓴 줄 아는 사람이 알림을 보낸다.

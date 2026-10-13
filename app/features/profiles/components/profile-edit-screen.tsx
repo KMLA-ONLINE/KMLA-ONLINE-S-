@@ -11,7 +11,6 @@ import {
   Link,
   useBeforeUnload,
   useBlocker,
-  useNavigate,
   useNavigation,
   useRevalidator,
 } from "react-router";
@@ -19,6 +18,7 @@ import {
 import {
   PageHeader,
   refreshShellProfile,
+  useBackLinkClick,
   useGoBack,
 } from "~/features/app-shell";
 import { ProfileMediaEditor } from "~/features/profiles/components/profile-media-editor";
@@ -78,21 +78,21 @@ export function ProfileEditScreen({
     submittedRef.current = savedPubId !== undefined;
   }, [actionData, savedPubId]);
 
-  const navigate = useNavigate();
   const goBack = useGoBack();
-  const profilePath = `/profile/${profile.pub_id}`;
+  const profilePath = profilePathOf(profile.pub_id);
+  const onCancelClick = useBackLinkClick(profilePath);
 
   /**
    * 편집 화면은 프로필에서 들어온다. 저장·취소 모두 그 프로필로 돌아가며 앞으로 보내지 않는다 — 앞으로 보내면 저장 뒤 뒤로가기가
-   * 편집 화면을 다시 열고, 프로필 ⇄ 편집이 번갈아 쌓여 둘 사이에 갇힌다. 공개 ID를 바꿨다면 이전 주소는 이미 없으므로 새 주소로 바꿔 든다.
+   * 편집 화면을 다시 열고, 프로필 ⇄ 편집이 번갈아 쌓여 둘 사이에 갇힌다. 공개 ID를 바꿨다면 돌아간 옛 주소를 프로필 loader가
+   * 새 주소로 바꿔 든다. 저장 결과마다 한 번만 떠난다 — 떠나는 동안 다시 그려져도 두 번 물러나지 않고, 떠나지 못했으면 다시 저장해 떠난다.
    */
-  const leftRef = useRef(false);
+  const leftForRef = useRef<ProfileEditActionData | undefined>(undefined);
   useEffect(() => {
-    if (savedPubId === undefined || leftRef.current) return;
-    leftRef.current = true;
-    if (savedPubId === profile.pub_id) goBack(profilePath);
-    else void navigate(`/profile/${savedPubId}`, { replace: true });
-  }, [goBack, navigate, profile.pub_id, profilePath, savedPubId]);
+    if (savedPubId === undefined || leftForRef.current === actionData) return;
+    leftForRef.current = actionData;
+    goBack(profilePathOf(savedPubId));
+  }, [actionData, goBack, savedPubId]);
 
   const markDirty = () => setDirty(true);
 
@@ -134,10 +134,7 @@ export function ProfileEditScreen({
           <h1 className="min-w-0 flex-1 text-2xl font-semibold">프로필 편집</h1>
           <Link
             to={profilePath}
-            onClick={(event) => {
-              event.preventDefault();
-              goBack(profilePath);
-            }}
+            onClick={onCancelClick}
             className={buttonVariants({ variant: "outline" })}
           >
             취소
@@ -626,6 +623,10 @@ function LeaveGuard({
       onConfirm={() => blocker.proceed()}
     />
   );
+}
+
+function profilePathOf(pubId: string) {
+  return `/profile/${pubId}`;
 }
 
 function initialValues(profile: EditableProfile): ProfileEditValues {

@@ -30,6 +30,7 @@ import {
   fromMentionDisplay,
   isMentionDeleteInput,
   mentionDisplayRanges,
+  removedRange,
   mentionDisplayText,
   sanitizeMentionDisplay,
   toMentionDisplay,
@@ -177,6 +178,8 @@ export function CommentComposer({
   const fallbackRef = useRef<HTMLTextAreaElement>(null);
   const input = inputRef ?? fallbackRef;
   const pendingCaret = useRef<number | null>(null);
+  // `beforeinput`이 브라우저에 맡긴 단어·줄 삭제. 바로 뒤의 `onChange`가 지운 자리를 본다.
+  const nativeDeletion = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const preparedImage = useRef<PreparedCommentImage | null>(null);
 
@@ -257,12 +260,15 @@ export function CommentComposer({
     element: HTMLTextAreaElement,
     inputType: string,
   ) => {
-    // `textarea`는 `getTargetRanges()`가 늘 비어 있어 선택 영역으로 판단한다.
+    const { selectionStart: from, selectionEnd: to } = element;
+    // `textarea`는 `getTargetRanges()`가 늘 비어 있어 선택 영역으로 판단한다. 캐럿만 둔 단어·줄
+    // 삭제는 어디까지 지울지 알 수 없어 브라우저에 지우게 하고 `widenNativeDeletion()`이 넓힌다.
+    if (from === to && !inputType.startsWith("deleteContent")) {
+      nativeDeletion.current = true;
+      return false;
+    }
     const range = expandDeletionOverMentions(
-      caretDeletionRange(
-        { from: element.selectionStart, to: element.selectionEnd },
-        inputType,
-      ),
+      caretDeletionRange({ from, to }, inputType),
       mentionDisplayRanges(draft, mentionDraft.entries),
     );
     if (!range) return false;
@@ -272,16 +278,37 @@ export function CommentComposer({
     );
     return true;
   };
+  // 커밋 직후 들어온 입력도 그 커밋의 초안을 보게 그리기 전에 바꿔 단다.
   const deleteAtomicallyRef = useRef(deleteAtomically);
-  useEffect(() => {
+  useLayoutEffect(() => {
     deleteAtomicallyRef.current = deleteAtomically;
   });
+
+  /** 브라우저가 지운 단어·줄이 멘션에 걸쳤으면 그 멘션까지 지운다. 넓혔으면 `true`. */
+  const widenNativeDeletion = (element: HTMLTextAreaElement) => {
+    if (!nativeDeletion.current) return false;
+    nativeDeletion.current = false;
+    const removed = removedRange(draft, element.value, element.selectionStart);
+    const range =
+      removed &&
+      expandDeletionOverMentions(
+        removed,
+        mentionDisplayRanges(draft, mentionDraft.entries),
+      );
+    if (!range) return false;
+    replaceDraft(
+      draft.slice(0, range.from) + draft.slice(range.to),
+      range.from,
+    );
+    return true;
+  };
 
   // React의 `onBeforeInput`은 `inputType`이 없는 합성 이벤트라 DOM에 직접 단다.
   useEffect(() => {
     const element = input.current;
     if (!element) return;
     const onBeforeInput = (event: InputEvent) => {
+      nativeDeletion.current = false;
       if (!isMentionDeleteInput(event.inputType)) return;
       if (composing.current || event.isComposing) return;
       if (deleteAtomicallyRef.current(element, event.inputType))
@@ -501,7 +528,8 @@ export function CommentComposer({
                 // 이름이 깨진 자리의 보이지 않는 표시를 걷어낸다. 남겨 두면 원래 이름을 다시
                 // 쳤을 때 멘션이 되살아난다. 조합 중에는 미뤘다가 조합이 끝나면 정리한다.
                 if (composing.current) setDraft(event.target.value);
-                else repairDraft(event.target);
+                else if (!widenNativeDeletion(event.target))
+                  repairDraft(event.target);
                 if (localError) setLocalError(null);
               }}
               onPaste={(event) => {

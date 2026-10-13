@@ -5,6 +5,7 @@ export { NavigationProgress } from "~/features/app-shell/components/navigation-p
 export { NavigationSkeleton } from "~/features/app-shell/components/navigation-skeleton";
 export {
   PageHeader,
+  useBackLinkClick,
   useGoBack,
 } from "~/features/app-shell/components/page-header";
 export { PullToRefresh } from "~/features/app-shell/components/pull-to-refresh";
