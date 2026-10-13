@@ -3,7 +3,13 @@ import { useEffect, useState } from "react";
 import { cn } from "~/shared/lib/utils";
 import { Spinner } from "~/shared/ui/spinner";
 
-import { getDefaultMeal, getMealDay, type MealDay } from "../data/neis";
+import {
+  ALLERGEN_NAMES,
+  getDefaultMeal,
+  getMealDay,
+  type MealDay,
+  type MealMenu,
+} from "../data/neis";
 
 const MEALS = [
   { api: "조식", label: "아침" },
@@ -50,6 +56,32 @@ function MealNotice({ children }: { children: string }) {
     <p className="py-16 text-center text-sm text-muted-foreground">
       {children}
     </p>
+  );
+}
+
+function allergenName(code: string) {
+  return ALLERGEN_NAMES[code] ?? code;
+}
+
+/** 이 끼니에 나온 번호만 오름차순으로 풀이한다. */
+function AllergenLegend({ items }: { items: MealMenu["items"] }) {
+  const codes = [...new Set(items.flatMap((item) => item.allergens))].sort(
+    (a, b) => Number(a) - Number(b),
+  );
+
+  if (codes.length === 0) return null;
+
+  return (
+    <ul
+      aria-label="알레르기 유발 식품"
+      className="mt-4 flex flex-wrap gap-x-3 gap-y-1 px-1 text-xs text-muted-foreground md:px-0"
+    >
+      {codes.map((code) => (
+        <li key={code}>
+          <span className="tabular-nums">{code}</span> {allergenName(code)}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -179,16 +211,33 @@ export function MealScreen({
         ) : selectedDay?.unavailable ? (
           <MealNotice>불러오지 못했습니다</MealNotice>
         ) : activeMeal ? (
-          <ul className="md:rounded-2xl md:border md:bg-card md:py-2">
-            {activeMeal.items.map((item) => (
-              <li
-                key={`${item.name}-${item.allergens.join(".")}`}
-                className="px-1 py-2.5 text-[15px] leading-6 md:px-5"
-              >
-                {item.name}
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="md:rounded-2xl md:border md:bg-card md:py-2">
+              {activeMeal.items.map((item) => (
+                <li
+                  key={`${item.name}-${item.allergens.join(".")}`}
+                  className="px-1 py-2.5 text-[15px] leading-6 md:px-5"
+                >
+                  {item.name}
+                  {item.allergens.length > 0 && (
+                    <>
+                      <span
+                        aria-hidden="true"
+                        className="ml-1.5 align-super text-[11px] text-muted-foreground tabular-nums"
+                      >
+                        {item.allergens.join("·")}
+                      </span>
+                      <span className="sr-only">
+                        , 알레르기:{" "}
+                        {item.allergens.map(allergenName).join(", ")}
+                      </span>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <AllergenLegend items={activeMeal.items} />
+          </>
         ) : selectedDay ? (
           <MealNotice>식단 없음</MealNotice>
         ) : (
