@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router";
+import { act, render, waitFor } from "@testing-library/react";
+import { createRoutesStub } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getRecentUnreadNotificationCount: vi.fn(() => Promise.resolve(0)),
   resyncWebPushSubscription: vi.fn(() => Promise.resolve()),
   setAppBadgeCount: vi.fn(),
+  loadGroupDetail: vi.fn(),
 }));
 
 vi.mock("react-router", async (importOriginal) => ({
@@ -32,14 +33,40 @@ vi.mock("~/features/notifications/data/push", () => ({
 vi.mock("~/shared/lib/app-badge", () => ({
   setAppBadgeCount: mocks.setAppBadgeCount,
 }));
+vi.mock("~/features/groups/data/queries", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  loadGroupDetail: mocks.loadGroupDetail,
+}));
 
 import { groupKeys } from "~/features/groups/data/cache";
+import type { GroupDetail } from "~/features/groups/model/types";
 import { NotificationSync } from "~/features/notifications/components/notification-sync";
 import { notificationKeys } from "~/features/notifications/data/cache";
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
+
+const group: GroupDetail = {
+  id: "group-id",
+  group_id: "group-id",
+  slug: "private-club",
+  name: "그룹",
+  description: "",
+  kind: "unofficial",
+  join_policy: "request",
+  identity_policy: "identified",
+  posting_policy: "members",
+  hide_staff_roles: false,
+  icon_path: null,
+  cover_path: null,
+  member_count: 3,
+  membership_state: "member",
+  member_role: "member",
+  pinned_at: null,
+  requested_at: null,
+};
 
 function renderSync(pathname: string) {
   const queryClient = new QueryClient({
@@ -47,21 +74,45 @@ function renderSync(pathname: string) {
   });
   const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
   mocks.subscribeToNotifications.mockReturnValue(() => undefined);
+  queryClient.setQueryData(groupKeys.detail(group.slug), group);
+  mocks.loadGroupDetail.mockResolvedValue(group);
+  const Stub = createRoutesStub([
+    {
+      id: "routes/app/groups/detail",
+      path: "*",
+      loader: () => ({ group }),
+      Component: () => <NotificationSync profileId={7} />,
+    },
+  ]);
 
-  render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[pathname]}>
-        <NotificationSync profileId={7} />
-      </MemoryRouter>
+      <Stub
+        initialEntries={[pathname]}
+        hydrationData={{
+          loaderData: { "routes/app/groups/detail": { group } },
+        }}
+      />
     </QueryClientProvider>,
   );
 
-  return { invalidateQueries };
+  return { invalidateQueries, queryClient, unmount: view.unmount };
 }
 
 describe("NotificationSync", () => {
-  it("revalidates a focused group route after making its cached access data stale", async () => {
-    const { invalidateQueries } = renderSync("/groups/private-club");
+  it("preserves even expired post pages when access is unchanged on focus", async () => {
+    const { invalidateQueries, queryClient } = renderSync(
+      "/groups/private-club",
+    );
+    const pages = {
+      posts: [
+        { post_id: "first" },
+        { post_id: "second" },
+        { post_id: "third" },
+      ],
+    };
+    const key = groupKeys.posts(group.group_id, null, null);
+    queryClient.setQueryData(key, pages, { updatedAt: Date.now() - 180_000 });
 
     await waitFor(() =>
       expect(mocks.subscribeToNotifications).toHaveBeenCalledWith(
@@ -71,14 +122,17 @@ describe("NotificationSync", () => {
     );
     window.dispatchEvent(new Event("focus"));
 
-    await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.loadGroupDetail).toHaveBeenCalledOnce());
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: notificationKeys.badge(),
     });
-    expect(invalidateQueries).toHaveBeenCalledWith({
+    expect(invalidateQueries).not.toHaveBeenCalledWith({
       queryKey: groupKeys.all,
       refetchType: "none",
     });
+    expect(mocks.revalidate).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData(key)).toBe(pages);
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
   });
 
   it("does not revalidate a group route for an unrelated notification event", async () => {
@@ -123,7 +177,8 @@ describe("NotificationSync", () => {
         queryKey: notificationKeys.badge(),
       }),
     );
-    expect(mocks.revalidate).toHaveBeenCalledOnce();
+    await waitFor(() => expect(mocks.loadGroupDetail).toHaveBeenCalledOnce());
+    expect(mocks.revalidate).not.toHaveBeenCalled();
   });
 
   it("coalesces focus and visibilitychange from one return into a single sync", async () => {
@@ -135,7 +190,8 @@ describe("NotificationSync", () => {
     window.dispatchEvent(new Event("focus"));
     document.dispatchEvent(new Event("visibilitychange"));
 
-    await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.loadGroupDetail).toHaveBeenCalledOnce());
+    expect(mocks.revalidate).not.toHaveBeenCalled();
   });
 
   it("mirrors the shell badge onto the app icon", async () => {
@@ -143,6 +199,144 @@ describe("NotificationSync", () => {
     renderSync("/");
 
     await waitFor(() => expect(mocks.setAppBadgeCount).toHaveBeenCalledWith(3));
+  });
+
+  it("drops protected group pages and revalidates when membership is revoked", async () => {
+    const { queryClient } = renderSync("/groups/private-club/posts/post-id");
+    const firstKey = groupKeys.posts(group.group_id, null, null);
+    const nextKey = groupKeys.posts(group.group_id, "category", {
+      postId: "cursor",
+      publishedAt: "2026-10-13",
+      isPinned: false,
+    });
+    const otherKey = groupKeys.posts("other-group", null, null);
+    queryClient.setQueryData(firstKey, { posts: ["protected"] });
+    queryClient.setQueryData(nextKey, { posts: ["more protected"] });
+    queryClient.setQueryData(groupKeys.invite(group.group_id), {
+      token: "protected",
+    });
+    queryClient.setQueryData(otherKey, { posts: ["other"] });
+    const revoked: GroupDetail = {
+      ...group,
+      membership_state: "none",
+      member_role: null,
+    };
+    mocks.loadGroupDetail.mockResolvedValueOnce(revoked);
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
+    expect(queryClient.getQueryData(firstKey)).toBeUndefined();
+    expect(queryClient.getQueryData(nextKey)).toBeUndefined();
+    expect(
+      queryClient.getQueryData(groupKeys.invite(group.group_id)),
+    ).toBeUndefined();
+    expect(queryClient.getQueryData(otherKey)).toEqual({ posts: ["other"] });
+    expect(queryClient.getQueryData(groupKeys.detail(group.slug))).toEqual(
+      revoked,
+    );
+  });
+
+  it("forces the route to retry access instead of trusting cached permissions after a failed check", async () => {
+    const { queryClient } = renderSync("/groups/private-club");
+    const key = groupKeys.posts(group.group_id, null, null);
+    queryClient.setQueryData(key, { posts: ["cached permissions"] });
+    await waitFor(() =>
+      expect(mocks.subscribeToNotifications).toHaveBeenCalledOnce(),
+    );
+    mocks.loadGroupDetail.mockRejectedValueOnce(new Error("offline"));
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
+    expect(
+      queryClient.getQueryState(groupKeys.detail(group.slug))?.isInvalidated,
+    ).toBe(true);
+    expect(queryClient.getQueryData(key)).toBeUndefined();
+  });
+
+  it("preserves pages even after the inactive detail cache has been collected", async () => {
+    const { queryClient } = renderSync("/groups/private-club");
+    await waitFor(() =>
+      expect(mocks.subscribeToNotifications).toHaveBeenCalledOnce(),
+    );
+    queryClient.removeQueries({
+      queryKey: groupKeys.detail(group.slug),
+      exact: true,
+    });
+    const key = groupKeys.posts(group.group_id, null, null);
+    const page = { posts: ["loaded page"] };
+    queryClient.setQueryData(key, page);
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(mocks.loadGroupDetail).toHaveBeenCalledOnce());
+    expect(mocks.revalidate).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData(key)).toBe(page);
+  });
+
+  it.each([
+    { member_role: "admin" },
+    { posting_policy: "staff" },
+    { identity_policy: "optional_anonymous" },
+    { join_policy: "invite_only" },
+    { hide_staff_roles: true },
+  ] satisfies Partial<GroupDetail>[])(
+    "refreshes screen permissions when %j changes",
+    async (change) => {
+      const { queryClient } = renderSync("/groups/private-club");
+      const key = groupKeys.posts(group.group_id, null, null);
+      queryClient.setQueryData(key, { posts: ["outdated permissions"] });
+      mocks.loadGroupDetail.mockResolvedValueOnce({ ...group, ...change });
+      window.dispatchEvent(new Event("focus"));
+      await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
+      expect(queryClient.getQueryData(key)).toBeUndefined();
+    },
+  );
+
+  it("revalidates a deleted group and removes its protected pages", async () => {
+    const { queryClient } = renderSync("/groups/private-club");
+    const key = groupKeys.posts(group.group_id, null, null);
+    queryClient.setQueryData(key, { posts: ["deleted group"] });
+    mocks.loadGroupDetail.mockResolvedValueOnce(null);
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
+    expect(queryClient.getQueryData(key)).toBeUndefined();
+    expect(queryClient.getQueryData(groupKeys.detail(group.slug))).toBeNull();
+  });
+
+  it("coalesces returns while an access check is still pending", async () => {
+    renderSync("/groups/private-club");
+    let resolve!: (value: GroupDetail) => void;
+    mocks.loadGroupDetail.mockImplementationOnce(
+      () =>
+        new Promise<GroupDetail>((next) => {
+          resolve = next;
+        }),
+    );
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(mocks.loadGroupDetail).toHaveBeenCalledOnce());
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 1_000);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await act(async () => {
+      resolve({ ...group, member_role: "admin" });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
+    expect(mocks.loadGroupDetail).toHaveBeenCalledOnce();
+  });
+
+  it("does not revalidate after the shell unmounts during an access check", async () => {
+    const { unmount } = renderSync("/groups/private-club");
+    let resolve!: (value: GroupDetail) => void;
+    mocks.loadGroupDetail.mockImplementationOnce(
+      () =>
+        new Promise<GroupDetail>((next) => {
+          resolve = next;
+        }),
+    );
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(mocks.loadGroupDetail).toHaveBeenCalledOnce());
+    unmount();
+    await act(async () => {
+      resolve({ ...group, member_role: "admin" });
+      await Promise.resolve();
+    });
+    expect(mocks.revalidate).not.toHaveBeenCalled();
   });
 
   it("checks the stored push subscription once the shell mounts", async () => {

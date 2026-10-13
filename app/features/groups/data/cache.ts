@@ -1,8 +1,15 @@
-import type { GroupDiscoveryCursor } from "~/features/groups/model/types";
+import type {
+  GroupDetail,
+  GroupDiscoveryCursor,
+} from "~/features/groups/model/types";
 import type { PostCursor } from "~/features/posts/model/types";
-import { queryOptions, type QueryKey } from "@tanstack/react-query";
+import {
+  queryOptions,
+  type QueryClient,
+  type QueryKey,
+} from "@tanstack/react-query";
 
-import { loadGroupHome } from "~/features/groups/data/queries";
+import { loadGroupDetail, loadGroupHome } from "~/features/groups/data/queries";
 
 /**
  * 두 값 모두 2분이다. 짧은 값은 모바일의 앱 왕복 복귀마다 재요청해 데이터 사용량이 컸다.
@@ -65,4 +72,62 @@ export function isGroupAccessQuery(
     queryKey[0] === groupKeys.all[0] &&
     (queryKey.includes(groupId) || queryKey.includes(slug))
   );
+}
+
+/** 복귀는 접근 상태만 확인한다. 변화가 없으면 오래된 게시물 캐시도 건드리지 않는다. */
+export async function refreshGroupAccess(
+  queryClient: QueryClient,
+  slug: string,
+  previous: GroupDetail | undefined,
+): Promise<boolean> {
+  // 비교 기준은 표시 중인 loader snapshot이다. inactive 상세 cache는 화면을 보는 중에도 GC된다.
+  const clearContent = () => {
+    if (previous)
+      queryClient.removeQueries({
+        predicate: (query) =>
+          query.queryKey[1] !== "detail" &&
+          isGroupAccessQuery(query.queryKey, previous.group_id, slug),
+      });
+  };
+  let current: GroupDetail | null;
+  try {
+    current = await queryClient.fetchQuery({
+      queryKey: groupKeys.detail(slug),
+      queryFn: () => loadGroupDetail(slug),
+      staleTime: 0,
+      retry: false,
+    });
+  } catch (error) {
+    // route 재시도에서 권한 변경이 확인돼도 오래된 권한 표시를 가진 게시물 cache를 재사용하지 않는다.
+    clearContent();
+    throw error;
+  }
+  const fields = [
+    "group_id",
+    "membership_state",
+    "member_role",
+    "kind",
+    "join_policy",
+    "identity_policy",
+    "posting_policy",
+    "hide_staff_roles",
+  ] as const;
+  const changed =
+    !previous ||
+    !current ||
+    fields.some((field) => previous[field] !== current[field]);
+  if (changed) {
+    clearContent();
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: groupKeys.home(),
+        refetchType: "none",
+      }),
+      queryClient.invalidateQueries({
+        queryKey: groupKeys.discoveries(),
+        refetchType: "none",
+      }),
+    ]);
+  }
+  return changed;
 }
