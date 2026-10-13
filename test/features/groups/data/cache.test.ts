@@ -44,4 +44,25 @@ describe("group query keys", () => {
       false,
     );
   });
+
+  it("matches a slug only in the detail key", () => {
+    for (const slug of ["home", "posts", "members", "invite", "reports"]) {
+      expect(isGroupAccessQuery(groupKeys.home(), "group-id", slug)).toBe(
+        false,
+      );
+      expect(
+        isGroupAccessQuery(
+          groupKeys.posts("other", null, null),
+          "group-id",
+          slug,
+        ),
+      ).toBe(false);
+      expect(
+        isGroupAccessQuery(groupKeys.members("other", ""), "group-id", slug),
+      ).toBe(false);
+      expect(isGroupAccessQuery(groupKeys.detail(slug), "group-id", slug)).toBe(
+        true,
+      );
+    }
+  });
 });
