@@ -9,10 +9,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MessagingSync } from "~/features/messaging/components/messaging-sync";
 import { messagingKeys } from "~/features/messaging/data/cache";
-import type { MessagingSignalHandlers } from "~/features/messaging/data/subscriptions";
+import type {
+  MessagingSignalHandlers,
+  RoomSignalHandlers,
+} from "~/features/messaging/data/subscriptions";
 import * as sync from "~/features/messaging/data/sync";
 
 let handlers: MessagingSignalHandlers;
+/** 지금 구독 중인 대화방 topic과 그 핸들러. */
+const rooms = new Map<string, RoomSignalHandlers>();
 
 vi.mock("~/features/messaging/data/subscriptions", () => ({
   subscribeToMessagingSignals: (
@@ -22,7 +27,21 @@ vi.mock("~/features/messaging/data/subscriptions", () => ({
     handlers = next;
     return () => undefined;
   },
+  subscribeToRoomSignals: (
+    conversationId: string,
+    _profileId: number,
+    next: RoomSignalHandlers,
+  ) => {
+    rooms.set(conversationId, next);
+    return () => rooms.delete(conversationId);
+  },
 }));
+
+function room(id: string): RoomSignalHandlers {
+  const subscribed = rooms.get(id);
+  if (!subscribed) throw new Error(`room ${id} is not subscribed`);
+  return subscribed;
+}
 vi.mock("~/features/messaging/data/sync", () => ({
   catchUpConversation: vi.fn(() => Promise.resolve()),
   refreshReadState: vi.fn(() => Promise.resolve()),
@@ -47,6 +66,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  rooms.clear();
   vi.useRealTimers();
   vi.mocked(sync.catchUpConversation).mockClear();
   vi.mocked(sync.refreshReadState).mockClear();
@@ -56,15 +76,20 @@ afterEach(() => {
 function renderSync() {
   const queryClient = new QueryClient();
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
-  render(
+  const tree = (openRoom: boolean) => (
     <MemoryRouter>
       <QueryClientProvider client={queryClient}>
-        <OpenRoom id="open" />
+        {openRoom && <OpenRoom id="open" />}
         <MessagingSync profileId={1} />
       </QueryClientProvider>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
-  return { invalidate, queryClient };
+  const view = render(tree(true));
+  return {
+    invalidate,
+    queryClient,
+    closeRoom: () => view.rerender(tree(false)),
+  };
 }
 
 describe("MessagingSync", () => {
@@ -101,8 +126,8 @@ describe("MessagingSync", () => {
     renderSync();
 
     act(() => {
-      handlers.onReadChanged("open");
-      handlers.onReadChanged("open");
+      room("open").onReadChanged();
+      room("open").onReadChanged();
     });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(200);
@@ -123,7 +148,7 @@ describe("MessagingSync", () => {
   it("읽음을 기다리는 중에 온 새 메시지는 읽음 간격만큼 늦추지 않는다", async () => {
     renderSync();
 
-    act(() => handlers.onReadChanged("open"));
+    act(() => room("open").onReadChanged());
     act(() => handlers.onMessageChanged("open", "content"));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(200);
@@ -221,5 +246,33 @@ describe("MessagingSync", () => {
       expect.anything(),
       "open",
     );
+  });
+
+  it("열린 대화방만 읽음 topic을 구독하고, 방을 닫으면 구독을 끊는다", async () => {
+    const { closeRoom } = renderSync();
+
+    expect([...rooms.keys()]).toEqual(["open"]);
+
+    closeRoom();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(rooms.size).toBe(0);
+  });
+
+  it("대화방 채널이 붙으면 신호를 기다리지 않고 그 방의 읽음을 다시 받는다", async () => {
+    renderSync();
+
+    act(() => room("open").onSubscribed());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+
+    expect(sync.refreshReadState).toHaveBeenCalledTimes(1);
+    expect(sync.refreshReadState).toHaveBeenCalledWith(
+      expect.anything(),
+      "open",
+    );
+    expect(sync.catchUpConversation).not.toHaveBeenCalled();
   });
 });

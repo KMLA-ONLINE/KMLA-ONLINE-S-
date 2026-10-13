@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(20);
 
 -- seed: 홍길동(…0001)과 김민준(…0100)의 1:1 대화 c…01. d…01은 김민준, d…02는 홍길동의 메시지다.
 create temp table profile_ids as
@@ -57,12 +57,18 @@ select ok(
 );
 
 select results_eq(
-  $$select topic
+  $$select topic, payload - 'id'
     from realtime.messages
     where id not in (select id from earlier_signals)
       and event = 'read_changed'$$,
-  $$values ('messaging:' || (select minjun from profile_ids))$$,
-  'moving my read position signals the other members only'
+  $$values (
+    'messaging-room:c0000000-0000-0000-0000-000000000001',
+    jsonb_build_object(
+      'conversation_id', 'c0000000-0000-0000-0000-000000000001'::uuid,
+      'profile_id', (select hong from profile_ids)
+    )
+  )$$,
+  'moving my read position sends one signal on the room topic, not per member'
 );
 
 -- 바뀐 시각
@@ -257,6 +263,51 @@ select is(
   (select count(*) from realtime.messages where topic like 'messaging:%'),
   0::bigint,
   'nobody reads another member''s topic'
+);
+
+select set_config(
+  'realtime.topic', 'messaging-room:c0000000-0000-0000-0000-000000000001', true
+);
+
+select ok(
+  exists (
+    select 1
+    from realtime.messages
+    where topic = 'messaging-room:c0000000-0000-0000-0000-000000000001'
+  ),
+  'a current member reads signals on the room topic'
+);
+
+-- 김민준이 그룹 c…02를 나간 뒤에는 그 대화방 topic을 받지 못한다.
+reset role;
+select realtime.send(
+  jsonb_build_object('conversation_id', 'c0000000-0000-0000-0000-000000000002'::uuid),
+  'read_changed',
+  'messaging-room:c0000000-0000-0000-0000-000000000002',
+  true
+);
+update public.conversation_members
+set left_at = now()
+where conversation_id = 'c0000000-0000-0000-0000-000000000002'
+  and profile_id = (select minjun from profile_ids);
+set local role authenticated;
+
+select set_config(
+  'realtime.topic', 'messaging-room:c0000000-0000-0000-0000-000000000002', true
+);
+
+select is(
+  (select count(*) from realtime.messages where topic like 'messaging-room:%'),
+  0::bigint,
+  'a member who left no longer reads the room topic'
+);
+
+select set_config('realtime.topic', 'messaging-room:not-a-uuid', true);
+
+select is(
+  (select count(*) from realtime.messages where topic like 'messaging-room:%'),
+  0::bigint,
+  'an unknown room topic is denied without an error'
 );
 
 select * from finish();

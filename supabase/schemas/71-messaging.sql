@@ -1464,7 +1464,9 @@ after insert or update on private.messages
 for each row
 execute function private.broadcast_message_change();
 
--- 읽음 위치가 바뀌면 다른 현재 멤버가 보는 "읽지 않은 수"와 대화 목록이 바뀐다.
+-- 읽음 위치가 바뀌면 다른 현재 멤버가 보는 메시지의 "읽지 않은 수"가 바뀐다. 그 수는 대화방을 연
+-- 사람만 그리므로 멤버마다 보내지 않고 대화방 topic(`messaging-room:<conversation_id>`)으로 한 번만
+-- 보낸다. 방을 연 멤버만 그 topic을 구독한다. 읽은 사람의 ID를 넣어 본인은 자기 신호를 거른다.
 create function private.broadcast_read_change()
 returns trigger
 language plpgsql
@@ -1476,15 +1478,14 @@ begin
     return null;
   end if;
   perform realtime.send(
-    jsonb_build_object('conversation_id', new.conversation_id),
+    jsonb_build_object(
+      'conversation_id', new.conversation_id,
+      'profile_id', new.profile_id
+    ),
     'read_changed',
-    'messaging:' || member.profile_id::text,
+    'messaging-room:' || new.conversation_id::text,
     true
-  )
-  from public.conversation_members as member
-  where member.conversation_id = new.conversation_id
-    and member.left_at is null
-    and member.profile_id <> new.profile_id;
+  );
   return null;
 end;
 $$;
@@ -1506,6 +1507,41 @@ to authenticated
 using (
   realtime.messages.extension = 'broadcast'
   and (select realtime.topic()) = 'messaging:' || (select private.current_profile_id())::text
+);
+
+-- 이 topic이 호출자가 지금 멤버인 대화의 대화방 topic인지. 멤버 테이블은 client가 직접 읽지 못하므로
+-- Realtime 정책이 이 함수로 확인한다. topic을 uuid로 바꾸지 않고 문자열로 비교해 엉뚱한 topic에도
+-- 오류 없이 false다.
+create function private.can_receive_room_signals(p_topic text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.conversation_members as member
+    where member.profile_id = private.current_profile_id()
+      and member.left_at is null
+      and 'messaging-room:' || member.conversation_id::text = p_topic
+  );
+$$;
+
+revoke all on function private.can_receive_room_signals(text)
+  from public;
+
+grant execute on function private.can_receive_room_signals(text)
+  to authenticated;
+
+-- 대화방 topic은 그 대화의 현재 멤버만 받는다. Realtime은 채널에 붙을 때 이 정책을 확인한다.
+create policy "messaging_room_signals_receive_member"
+on realtime.messages
+for select
+to authenticated
+using (
+  realtime.messages.extension = 'broadcast'
+  and (select private.can_receive_room_signals((select realtime.topic())))
 );
 
 -- 메시지들의 "읽지 않은 수"만. 다른 멤버가 읽었다는 신호를 받았을 때 본문을 다시 복호화하지 않고

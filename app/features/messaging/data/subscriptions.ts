@@ -8,8 +8,6 @@ export type MessageChangeKind = "content" | "meta";
 export interface MessagingSignalHandlers {
   /** 이 대화의 메시지가 새로 오거나 바뀌었다. */
   onMessageChanged: (conversationId: string, kind: MessageChangeKind) => void;
-  /** 이 대화의 다른 멤버가 읽음 위치를 옮겼다. */
-  onReadChanged: (conversationId: string) => void;
   /** 소유주나 앱 관리자가 이 그룹 대화를 지웠다. */
   onConversationDeleted: (conversationId: string) => void;
   /**
@@ -48,15 +46,49 @@ export function subscribeToMessagingSignals(
         handlers.onMessageChanged(conversationId, kind);
       }
     })
-    .on("broadcast", { event: "read_changed" }, ({ payload }) => {
-      const conversationId = conversationOf(payload);
-      if (active && conversationId) handlers.onReadChanged(conversationId);
-    })
     .on("broadcast", { event: "conversation_deleted" }, ({ payload }) => {
       const conversationId = conversationOf(payload);
       if (active && conversationId) {
         handlers.onConversationDeleted(conversationId);
       }
+    })
+    .subscribe((status) => {
+      if (active && status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
+        handlers.onSubscribed();
+      }
+    });
+
+  return () => {
+    active = false;
+    void supabase.removeChannel(channel);
+  };
+}
+
+export interface RoomSignalHandlers {
+  /** 이 대화의 다른 멤버가 읽음 위치를 옮겼다. */
+  onReadChanged: () => void;
+  /** 채널이 붙었다. 처음 붙을 때도 부른다. 붙기 전이나 끊긴 동안의 읽음 신호는 잃었을 수 있다. */
+  onSubscribed: () => void;
+}
+
+/**
+ * 열린 대화방의 topic(`messaging-room:<conversation_id>`)으로 오는 읽음 신호를 받는다. 읽음은 방을 연
+ * 사람만 그리므로 서버가 멤버마다 보내지 않고 이 topic으로 한 번 보낸다. 내가 읽은 신호는 내 화면의
+ * 읽지 않은 수를 바꾸지 않으므로 거른다. private 채널이라 `realtime.messages` RLS가 현재 멤버인지 확인한다.
+ */
+export function subscribeToRoomSignals(
+  conversationId: string,
+  viewerProfileId: number,
+  handlers: RoomSignalHandlers,
+): () => void {
+  const supabase = getSupabase();
+  let active = true;
+
+  const channel = supabase
+    .channel(`messaging-room:${conversationId}`, { config: { private: true } })
+    .on("broadcast", { event: "read_changed" }, ({ payload }) => {
+      const reader = (payload as { profile_id?: unknown } | null)?.profile_id;
+      if (active && reader !== viewerProfileId) handlers.onReadChanged();
     })
     .subscribe((status) => {
       if (active && status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {

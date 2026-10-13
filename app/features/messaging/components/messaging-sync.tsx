@@ -6,10 +6,14 @@ import { toast } from "sonner";
 import {
   invalidateConversationList,
   invalidateUnreadMessageCount,
+  messagingKeys,
   openConversationIds,
   removeConversationFromList,
 } from "~/features/messaging/data/cache";
-import { subscribeToMessagingSignals } from "~/features/messaging/data/subscriptions";
+import {
+  subscribeToMessagingSignals,
+  subscribeToRoomSignals,
+} from "~/features/messaging/data/subscriptions";
 import {
   catchUpConversation,
   refreshConversationInList,
@@ -37,7 +41,8 @@ type SyncKind = "changes" | "reads";
 
 /**
  * 메시지 Realtime 신호와 창 복귀를 받아 대화 목록과 열린 대화방을 서버와 맞춘다(기술 설계 §5). 신호는
- * 지연을 줄이는 수단일 뿐이다. 놓쳐도 다음 신호나 복귀가 따라잡기로 빈 구간을 메운다.
+ * 지연을 줄이는 수단일 뿐이다. 놓쳐도 다음 신호나 복귀가 따라잡기로 빈 구간을 메운다. 메시지 신호는 내
+ * topic 하나로 받고, 읽음 신호는 열린 대화방마다 그 방의 topic을 구독해 받는다.
  */
 export function MessagingSync({ profileId }: { profileId: number }) {
   const queryClient = useQueryClient();
@@ -78,9 +83,6 @@ export function MessagingSync({ profileId }: { profileId: number }) {
         if (isOpen(conversationId))
           scheduler.schedule(conversationId, "changes");
       },
-      onReadChanged: (conversationId) => {
-        if (isOpen(conversationId)) scheduler.schedule(conversationId, "reads");
-      },
       // 지운 그룹은 목록에서 바로 뺀다. 그 방을 보고 있었으면 알리고 대화 목록으로 돌아간다.
       onConversationDeleted: (conversationId) => {
         removeConversationFromList(queryClient, conversationId);
@@ -93,11 +95,15 @@ export function MessagingSync({ profileId }: { profileId: number }) {
       // 처음 붙을 때도 맞춘다. loader가 읽은 뒤 채널이 붙기 전의 신호는 받을 수 없었다.
       onSubscribed: resync,
     });
+    const rooms = createRoomSubscriptions(queryClient, profileId, (id) =>
+      scheduler.schedule(id, "reads"),
+    );
     document.addEventListener("visibilitychange", onResume);
     window.addEventListener("online", resync);
 
     return () => {
       unsubscribe();
+      rooms.dispose();
       document.removeEventListener("visibilitychange", onResume);
       window.removeEventListener("online", resync);
       scheduler.dispose();
@@ -105,6 +111,65 @@ export function MessagingSync({ profileId }: { profileId: number }) {
   }, [profileId, queryClient]);
 
   return null;
+}
+
+/**
+ * 열린 대화방(메시지 cache를 구독하는 화면이 있는 방)마다 그 방의 읽음 topic을 구독한다. 방이 열리고
+ * 닫히는 것은 cache의 observer 변화로 안다. 같은 tick에 떨어졌다 다시 붙는 observer(다시 마운트)에
+ * 채널을 끊었다 맺지 않도록 다음 tick에 맞춘다. 채널이 붙을 때도 읽음을 다시 받는다. loader가 읽은 뒤
+ * 채널이 붙기 전의 신호는 받을 수 없었다.
+ */
+function createRoomSubscriptions(
+  queryClient: QueryClient,
+  profileId: number,
+  onReadChanged: (conversationId: string) => void,
+) {
+  const rooms = new Map<string, () => void>();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  function reconcile() {
+    timer = null;
+    const open = new Set(openConversationIds(queryClient));
+    for (const [id, unsubscribe] of rooms) {
+      if (open.has(id)) continue;
+      unsubscribe();
+      rooms.delete(id);
+    }
+    for (const id of open) {
+      if (rooms.has(id)) continue;
+      const refresh = () => onReadChanged(id);
+      rooms.set(
+        id,
+        subscribeToRoomSignals(id, profileId, {
+          onReadChanged: refresh,
+          onSubscribed: refresh,
+        }),
+      );
+    }
+  }
+
+  reconcile();
+  const cache = queryClient.getQueryCache();
+  const unsubscribeCache = cache.subscribe((event) => {
+    if (timer) return;
+    if (event.type !== "observerAdded" && event.type !== "observerRemoved") {
+      return;
+    }
+    // cache 이벤트의 query는 `any`로 타입이 잡혀 있어 hash로 다시 찾아 키를 좁힌다.
+    const key = cache.get(event.query.queryHash)?.queryKey ?? [];
+    if (key[0] === messagingKeys.all[0] && key[1] === "messages") {
+      timer = setTimeout(reconcile, 0);
+    }
+  });
+
+  return {
+    dispose() {
+      unsubscribeCache();
+      if (timer) clearTimeout(timer);
+      for (const unsubscribe of rooms.values()) unsubscribe();
+      rooms.clear();
+    },
+  };
 }
 
 /**
