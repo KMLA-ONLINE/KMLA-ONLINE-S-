@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { cn } from "~/shared/lib/utils";
 import { Spinner } from "~/shared/ui/spinner";
+import { Switch } from "~/shared/ui/switch";
 
 import {
   ALLERGEN_NAMES,
@@ -10,6 +11,7 @@ import {
   type MealDay,
   type MealMenu,
 } from "../data/neis";
+import { useShowAllergens } from "../hooks/use-show-allergens";
 
 const MEALS = [
   { api: "조식", label: "아침" },
@@ -63,6 +65,17 @@ function allergenName(code: string) {
   return ALLERGEN_NAMES[code] ?? code;
 }
 
+function AllergenChip({ code }: { code: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-[11px] font-medium text-muted-foreground tabular-nums"
+    >
+      {code}
+    </span>
+  );
+}
+
 /** 이 끼니에 나온 번호만 오름차순으로 풀이한다. */
 function AllergenLegend({ items }: { items: MealMenu["items"] }) {
   const codes = [...new Set(items.flatMap((item) => item.allergens))].sort(
@@ -74,11 +87,12 @@ function AllergenLegend({ items }: { items: MealMenu["items"] }) {
   return (
     <ul
       aria-label="알레르기 유발 식품"
-      className="mt-4 flex flex-wrap gap-x-3 gap-y-1 px-1 text-xs text-muted-foreground md:px-0"
+      className="mt-4 flex flex-wrap gap-x-3 gap-y-2 border-t px-1 pt-4 text-xs text-muted-foreground md:rounded-2xl md:border md:bg-card md:px-5 md:py-3"
     >
       {codes.map((code) => (
-        <li key={code}>
-          <span className="tabular-nums">{code}</span> {allergenName(code)}
+        <li key={code} className="inline-flex items-center gap-1">
+          <AllergenChip code={code} />
+          {allergenName(code)}
         </li>
       ))}
     </ul>
@@ -118,6 +132,8 @@ export function MealScreen({
       active = false;
     };
   }, [initialDay]);
+
+  const [showAllergens, setShowAllergens] = useShowAllergens();
 
   const [loadingDate, setLoadingDate] = useState<string | null>(null);
 
@@ -205,7 +221,19 @@ export function MealScreen({
         })}
       </div>
 
-      <div className="mt-3 md:mt-4">
+      <div className="mt-2 flex justify-end">
+        <div className="flex min-h-9 items-center gap-2 px-1 text-xs text-muted-foreground md:px-0">
+          <span aria-hidden="true">알레르기 표시</span>
+          <Switch
+            size="sm"
+            aria-label="알레르기 표시"
+            checked={showAllergens}
+            onCheckedChange={setShowAllergens}
+          />
+        </div>
+      </div>
+
+      <div className="mt-1 md:mt-2">
         {loadingDate === selectedDate ? (
           <MealLoading />
         ) : selectedDay?.unavailable ? (
@@ -216,16 +244,15 @@ export function MealScreen({
               {activeMeal.items.map((item) => (
                 <li
                   key={`${item.name}-${item.allergens.join(".")}`}
-                  className="px-1 py-2.5 text-[15px] leading-6 md:px-5"
+                  className="flex items-center justify-between gap-3 px-1 py-2.5 text-[15px] leading-6 md:px-5"
                 >
                   {item.name}
-                  {item.allergens.length > 0 && (
+                  {showAllergens && item.allergens.length > 0 && (
                     <>
-                      <span
-                        aria-hidden="true"
-                        className="ml-1.5 align-super text-[11px] text-muted-foreground tabular-nums"
-                      >
-                        {item.allergens.join("·")}
+                      <span className="flex shrink-0 gap-1">
+                        {item.allergens.map((code) => (
+                          <AllergenChip key={code} code={code} />
+                        ))}
                       </span>
                       <span className="sr-only">
                         , 알레르기:{" "}
@@ -236,7 +263,7 @@ export function MealScreen({
                 </li>
               ))}
             </ul>
-            <AllergenLegend items={activeMeal.items} />
+            {showAllergens && <AllergenLegend items={activeMeal.items} />}
           </>
         ) : selectedDay ? (
           <MealNotice>식단 없음</MealNotice>

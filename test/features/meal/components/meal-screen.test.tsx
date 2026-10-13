@@ -1,9 +1,13 @@
 import { screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { MealScreen } from "~/features/meal/components/meal-screen";
 import { getDefaultMeal, type MealDay } from "~/features/meal/data/neis";
 import { renderRoute } from "../../../router";
+
+const LEGEND = { name: "알레르기 유발 식품" };
+const TOGGLE = { name: "알레르기 표시" };
 
 function dayWith(items: MealDay["meals"][number]["items"]): MealDay {
   return {
@@ -32,43 +36,67 @@ function dish(name: string) {
 }
 
 function renderMeal(day: MealDay) {
-  renderRoute(() => (
+  return renderRoute(() => (
     <MealScreen dates={[day.date]} initialDate={day.date} initialDay={day} />
   ));
 }
 
+const STEW_DAY = dayWith([
+  { name: "돈육김치찌개", allergens: ["5", "9", "10"] },
+  { name: "쌀밥", allergens: [] },
+  { name: "우유", allergens: ["2"] },
+]);
+
+afterEach(() => {
+  window.localStorage.clear();
+});
+
 describe("MealScreen allergens", () => {
-  it("shows allergen numbers beside each dish and a legend for them", () => {
-    renderMeal(
-      dayWith([
-        { name: "돈육김치찌개", allergens: ["5", "9", "10"] },
-        { name: "쌀밥", allergens: [] },
-        { name: "우유", allergens: ["2"] },
-      ]),
-    );
+  it("hides allergen info until the toggle is turned on", () => {
+    renderMeal(STEW_DAY);
+
+    expect(screen.getByRole("switch", TOGGLE)).not.toBeChecked();
+    expect(dish("돈육김치찌개")).toHaveTextContent(/^돈육김치찌개$/);
+    expect(screen.queryByRole("list", LEGEND)).not.toBeInTheDocument();
+  });
+
+  it("shows allergen numbers per dish and a legend when turned on", async () => {
+    renderMeal(STEW_DAY);
+    await userEvent.click(screen.getByRole("switch", TOGGLE));
 
     const stew = dish("돈육김치찌개");
-    expect(within(stew).getByText("5·9·10")).toHaveAttribute(
-      "aria-hidden",
-      "true",
-    );
+    for (const code of ["5", "9", "10"]) {
+      expect(within(stew).getByText(code)).toHaveAttribute(
+        "aria-hidden",
+        "true",
+      );
+    }
     // 번호는 화면용이고 보조기기에는 이름을 읽힌다.
     expect(stew).toHaveTextContent("알레르기: 대두, 새우, 돼지고기");
     expect(dish("쌀밥")).toHaveTextContent(/^쌀밥$/);
 
-    const legend = screen.getByRole("list", { name: "알레르기 유발 식품" });
+    const legend = screen.getByRole("list", LEGEND);
     expect(
       within(legend)
         .getAllByRole("listitem")
         .map((item) => item.textContent),
-    ).toEqual(["2 우유", "5 대두", "9 새우", "10 돼지고기"]);
+    ).toEqual(["2우유", "5대두", "9새우", "10돼지고기"]);
   });
 
-  it("omits the legend when no dish lists allergens", () => {
-    renderMeal(dayWith([{ name: "쌀밥", allergens: [] }]));
+  it("remembers the toggle on this device", async () => {
+    const { unmount } = renderMeal(STEW_DAY);
+    await userEvent.click(screen.getByRole("switch", TOGGLE));
+    unmount();
 
-    expect(
-      screen.queryByRole("list", { name: "알레르기 유발 식품" }),
-    ).not.toBeInTheDocument();
+    renderMeal(STEW_DAY);
+
+    expect(await screen.findByRole("list", LEGEND)).toBeVisible();
+  });
+
+  it("omits the legend when no dish lists allergens", async () => {
+    renderMeal(dayWith([{ name: "쌀밥", allergens: [] }]));
+    await userEvent.click(screen.getByRole("switch", TOGGLE));
+
+    expect(screen.queryByRole("list", LEGEND)).not.toBeInTheDocument();
   });
 });
