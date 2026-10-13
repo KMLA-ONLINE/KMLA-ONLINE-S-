@@ -5,9 +5,11 @@ import {
   getNotificationCursor,
   listNotifications,
   markAllNotificationsRead,
+  notificationKeys,
 } from "~/features/notifications";
 import { NotificationInbox } from "~/features/notifications/components/notification-inbox";
 import type { NotificationCursor } from "~/features/notifications";
+import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/notifications";
 
 // 헤더와 탭바를 고정으로 둔다. 자동 숨김은 숨길 때 둘의 자리를 음수 마진으로 반납해
@@ -35,10 +37,11 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
-  // POST 뒤 게이트 loader가 notification badge query를 항상 새로 읽는다. 여기서 같은 키를
-  // 다시 invalidate하면 그 RPC를 한 번 더 끝낸 뒤 gate가 또 요청하게 된다.
   if (intent === "mark-all") {
     const marked = await markAllNotificationsRead();
+    await getQueryClient().invalidateQueries({
+      queryKey: notificationKeys.badge(),
+    });
     return { marked };
   }
 

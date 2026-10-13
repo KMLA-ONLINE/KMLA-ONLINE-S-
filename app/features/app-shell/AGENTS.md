@@ -10,7 +10,7 @@
 - 일반 앱의 데스크톱 콘텐츠 폭도 `handle.chrome.contentWidth`가 소유한다. 기본은 `model/chrome.ts`의 `DEFAULT_APP_CHROME.contentWidth`(`4xl`)이고, 목록이나 폼처럼 다른 폭이 필요한 route만 명시적으로 override한다.
 - 메신저 route는 `scroll: "route"`다. 셸은 `ScrollRegion`, 콘텐츠 폭, 당겨서 새로고침과 navigation skeleton 없이 `Outlet`을 셸 높이에 꽉 채운다. 모바일 하단 nav는 대화 목록에서 표시하고 대화방에서는 숨긴다.
 - 인증/승인 게이트는 `app/routes/app/gate.tsx` 한 곳에만 둔다.
-- 셸 loader는 첫 진입과 셸 데이터를 바꾸는 mutation(`gate.tsx`의 `SHELL_MUTATION_ACTIONS`) 이후에만 다시 실행한다. 프로필·역할·뱃지를 바꾸는 action을 새로 만들면 그 목록에 더한다. 자식 route의 명시적 revalidation은 셸 프로필을 다시 읽지 않는다.
+- 셸 loader(게이트)는 첫 진입에만 실행한다. 이후 셸 프로필은 `AppShellProvider`가 `shellProfileQuery`에서 읽으므로, 이름·아바타·역할을 바꾸는 action은 `refreshShellProfile()`을, 알림 뱃지를 바꾸는 action은 `notificationKeys.badge()` 무효화를 직접 부른다.
 - 게이트 loader는 아바타를 서명하지 않는다. `avatar_url`은 `AppShellProvider`가 `shellAvatarQuery`로 나중에 채우므로 첫 페인트에는 `null`일 수 있다.
 - 모바일 전역 헤더는 없다. 각 page route가 `PageHeader`를 조립하며 이는 `handle.chrome` 설정과 무관하다.
 - 모바일 하단 nav와 데스크톱 사이드바는 홈·메시지·그룹·알림·메뉴 다섯 항목(`model/nav-items.ts`)을 공유하며 메뉴는 기존 `/menu` 경로와 도형(`Shapes`) 아이콘을 사용한다. 데스크톱 사이드바의 아이콘 레일과 hover·키보드 포커스 확장 동작은 유지한다.

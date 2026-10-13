@@ -1,12 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RouterContextProvider } from "react-router";
 
-const { loadMyEditableProfile, loadProfileDepartments, updateMyProfile } =
-  vi.hoisted(() => ({
-    loadMyEditableProfile: vi.fn(),
-    loadProfileDepartments: vi.fn(),
-    updateMyProfile: vi.fn(),
-  }));
+const {
+  loadMyEditableProfile,
+  loadProfileDepartments,
+  refreshShellProfile,
+  updateMyProfile,
+} = vi.hoisted(() => ({
+  loadMyEditableProfile: vi.fn(),
+  loadProfileDepartments: vi.fn(),
+  refreshShellProfile: vi.fn(),
+  updateMyProfile: vi.fn(),
+}));
+
+vi.mock("~/features/app-shell", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  refreshShellProfile,
+}));
 
 vi.mock("~/features/profiles", async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -78,6 +88,21 @@ describe("profile edit action", () => {
     );
     expect(rejection.status).toBe(302);
     expect(rejection.headers.get("Location")).toBe("/profile/byeol");
+  });
+
+  // 게이트는 다시 돌지 않는다. 헤더의 이름·아바타는 이 호출로만 바뀐다.
+  it("refreshes the shell profile after saving", async () => {
+    await action().catch(() => undefined);
+
+    expect(refreshShellProfile).toHaveBeenCalledOnce();
+  });
+
+  it("leaves the shell profile alone when the save fails", async () => {
+    updateMyProfile.mockRejectedValue({ code: "23505" });
+
+    await action();
+
+    expect(refreshShellProfile).not.toHaveBeenCalled();
   });
 
   it("rejects a malformed public id without asking the server", async () => {

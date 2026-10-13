@@ -12,6 +12,8 @@ vi.mock("~/features/notifications", async (importOriginal) => ({
   markAllNotificationsRead: mocks.markAllNotificationsRead,
 }));
 
+import { notificationKeys } from "~/features/notifications";
+import { getQueryClient } from "~/shared/lib/query-client";
 import { clientAction, clientLoader } from "~/routes/app/notifications";
 
 function loaderRequest(search = "") {
@@ -68,5 +70,17 @@ describe("notification inbox route", () => {
     });
 
     expect(mocks.markAllNotificationsRead).toHaveBeenCalledOnce();
+  });
+
+  // 게이트는 다시 돌지 않는다. 뱃지는 이 무효화로만 0이 된다.
+  it("invalidates the badge after marking all read", async () => {
+    mocks.markAllNotificationsRead.mockResolvedValue(3);
+    getQueryClient().setQueryData(notificationKeys.badge(), 3);
+
+    await actionRequest({ intent: "mark-all" });
+
+    expect(
+      getQueryClient().getQueryState(notificationKeys.badge())?.isInvalidated,
+    ).toBe(true);
   });
 });

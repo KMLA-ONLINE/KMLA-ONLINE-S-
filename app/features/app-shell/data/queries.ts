@@ -12,6 +12,7 @@ import {
 } from "~/features/auth/data/queries";
 // 배럴(`~/features/profiles`)은 화면 컴포넌트를 전부 끌고 온다. 서명 헬퍼만 필요하다.
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
+import { getQueryClient } from "~/shared/lib/query-client";
 import { getSupabase } from "~/shared/supabase/client";
 
 /**
@@ -29,6 +30,37 @@ export function shellAvatarQuery(path: string | null) {
     enabled: Boolean(path),
     // 서명 캐시(55분)보다 짧게 둬서, 다시 읽을 때는 아직 유효한 URL을 캐시에서 받는다.
     staleTime: 30 * 60 * 1000,
+  });
+}
+
+export const appShellKeys = {
+  profile: () => ["app-shell", "profile"] as const,
+};
+
+/**
+ * 셸 프로필. 게이트 loader가 첫 값을 넣고, 그 뒤로는 `refreshShellProfile()`이 부를 때만 다시 읽는다.
+ * 게이트를 mutation마다 재검증하지 않으므로, 셸 프로필이 바뀌는 곳이 직접 이 쿼리를 갱신한다.
+ */
+export function shellProfileQuery() {
+  return queryOptions({
+    queryKey: appShellKeys.profile(),
+    queryFn: fetchShellData,
+    staleTime: Infinity,
+  });
+}
+
+/** 셸에 떠 있는 사용자인지. 다른 사람의 프로필을 바꾼 action이 셸을 다시 읽지 않게 거른다. */
+export function isShellProfile(profileId: number): boolean {
+  return (
+    getQueryClient().getQueryData(shellProfileQuery().queryKey)?.profile?.id ===
+    profileId
+  );
+}
+
+/** 이름·아바타·역할처럼 셸 프로필 필드를 바꾼 action이 부른다. 다시 읽을 때까지 기다린다. */
+export function refreshShellProfile(): Promise<void> {
+  return getQueryClient().invalidateQueries({
+    queryKey: appShellKeys.profile(),
   });
 }
 
@@ -79,7 +111,7 @@ let prefetched: {
  * 결과를 넘겨받는다. 실패하면 그때 새로 읽어 복구하므로 여기서는 삼킨다.
  *
  * 띄운 화면이 게이트로 가지 않게 되면(로그인 이동, 목적지 확인 실패) `discardPrefetchedShellData()`로
- * 버린다. 남겨 두면 그 뒤 다른 이유로 돈 게이트, 예를 들어 프로필 수정 직후의 재검증이 수정 전 값을 받는다.
+ * 버린다. 남겨 두면 TTL 안에 다른 경로로 들어온 게이트가 그 사이 바뀌었을 수 있는 값을 받는다.
  */
 export function prefetchShellData(): void {
   const promise = fetchShellData();

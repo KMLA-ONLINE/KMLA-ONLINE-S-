@@ -1,6 +1,6 @@
 import { data, redirect } from "react-router";
 
-import { defineAppChrome } from "~/features/app-shell";
+import { defineAppChrome, refreshShellProfile } from "~/features/app-shell";
 import {
   birthdayKeys,
   loadMyEditableProfile,
@@ -59,7 +59,10 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   try {
     // 공개 ID를 바꿨다면 저장 전의 주소는 이미 없는 주소다. RPC가 돌려준 값으로만 옮긴다.
     pubId = await updateMyProfile(values);
-    await getQueryClient().invalidateQueries({ queryKey: birthdayKeys.all });
+    await Promise.all([
+      refreshShellProfile(),
+      getQueryClient().invalidateQueries({ queryKey: birthdayKeys.all }),
+    ]);
   } catch (error) {
     return data(
       { values, errors: readProfileEditFailure(error) },
