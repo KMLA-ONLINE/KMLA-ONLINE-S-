@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as mutations from "~/features/messaging/data/mutations";
+import * as queries from "~/features/messaging/data/queries";
 import { loadConversation } from "~/features/messaging/data/queries";
 import { messagingKeys } from "~/features/messaging/data/cache";
 import { useConversationMessages } from "~/features/messaging/hooks/use-conversation-messages";
@@ -304,6 +305,42 @@ describe("useConversationMessages", () => {
         messagingKeys.conversations(),
       )?.[0]?.unreadCount,
     ).toBe(0);
+  });
+
+  it("이미 읽은 방이면 읽음을 기록해도 대화 목록을 다시 읽지 않고, 읽음이 옮겨졌으면 다시 읽는다", async () => {
+    const conversation = (await loadConversation("student-council"))!;
+    const summary = vi.spyOn(queries, "getConversationSummary");
+    const markRead = vi
+      .spyOn(mutations, "markConversationRead")
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const render = () => {
+      const queryClient = new QueryClient();
+      queryClient.setQueryData(messagingKeys.conversations(), [
+        { id: "student-council", unreadCount: 0 },
+      ]);
+      return renderHook(() => useConversationMessages(conversation), {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>
+            {children}
+          </QueryClientProvider>
+        ),
+      });
+    };
+
+    const { unmount } = render();
+    await waitFor(() => expect(markRead).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(summary).not.toHaveBeenCalled();
+    unmount();
+
+    render();
+    await waitFor(() => expect(markRead).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(summary).toHaveBeenCalledWith("student-council"),
+    );
   });
 
   it("보내지 못한 메시지는 목록에 남고, 다시 보내면 같은 ID로 확정되며, 지우면 사라진다", async () => {

@@ -10,21 +10,41 @@ import {
   messagingKeys,
   patchUnreadCounts,
   replaceConversationSummary,
+  resumeConversationCache,
+  seedConversationCache,
   type MessagePages,
 } from "~/features/messaging/data/cache";
 import {
   getConversationSummary,
+  loadConversation,
   listMessageChanges,
   listMessageReadCounts,
   listMessages,
   listPinnedMessages,
 } from "~/features/messaging/data/queries";
+import type { Conversation } from "~/features/messaging/model/types";
 
 /** 아무것도 불러오지 않은 방의 따라잡기 기준. 서버가 바뀐 시각 순서로 한도까지 준다. */
 const EMPTY_ROOM_SINCE = "1970-01-01T00:00:00Z";
 
 /** 읽음 표시를 고칠 내 메시지 수. 읽음 표시는 최근 메시지에서만 의미가 있다. */
 const READ_COUNT_LIMIT = 100;
+
+/**
+ * 대화방 loader. 다시 들어온 방은 남아 있는 cache로 기다리지 않고 열며, 닫혀 있던 동안의 변경은 방이
+ * 열리면 `MessagingSync`가 따라잡는다. cache가 없으면 대화 정보, 최신 페이지, 고정 메시지를 읽어 cache를
+ * 채운다. 내 대화가 아니면 `null`이다.
+ */
+export async function openConversation(
+  queryClient: QueryClient,
+  conversationId: string,
+): Promise<Conversation | null> {
+  const cached = resumeConversationCache(queryClient, conversationId);
+  if (cached) return cached;
+  const conversation = await loadConversation(conversationId);
+  if (conversation) seedConversationCache(queryClient, conversation);
+  return conversation;
+}
 
 /**
  * 열린 대화방을 서버와 맞춘다(기술 설계 §5). 마지막으로 본 변경 이후의 메시지만 받아 합친다. 바뀐

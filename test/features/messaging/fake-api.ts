@@ -155,10 +155,11 @@ export function sendMessage(
 export function markConversationRead(
   conversationId: string,
   _messageId: string,
-): Promise<void> {
+): Promise<boolean> {
   const conversation = findConversation(conversationId);
+  const moved = Boolean(conversation?.unreadCount);
   if (conversation) conversation.unreadCount = 0;
-  return Promise.resolve();
+  return Promise.resolve(moved);
 }
 
 export function setMessageReaction(

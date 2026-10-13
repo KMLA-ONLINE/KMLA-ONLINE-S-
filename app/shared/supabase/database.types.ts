@@ -2656,7 +2656,7 @@ export type Database = {
       }
       mark_conversation_read: {
         Args: { p_conversation_id: string; p_message_id: string }
-        Returns: undefined
+        Returns: boolean
       }
       mark_group_posts_visited: {
         Args: { p_group_id: string }

@@ -29,16 +29,20 @@ export async function sendMessage(
   return { ...draft, id: saved.id, body: input.body, sentAt: saved.sent_at };
 }
 
-/** 읽음 위치를 이 메시지로 옮긴다. 서버는 앞으로만 옮기므로 순서가 뒤바뀐 요청도 안전하다. */
+/**
+ * 읽음 위치를 이 메시지로 옮긴다. 서버는 앞으로만 옮기므로 순서가 뒤바뀐 요청도 안전하다. 옮겼는지
+ * 돌려주며, 이미 그 메시지까지 읽었으면 false다.
+ */
 export async function markConversationRead(
   conversationId: string,
   messageId: string,
-): Promise<void> {
-  const { error } = await getSupabase().rpc("mark_conversation_read", {
+): Promise<boolean> {
+  const { data, error } = await getSupabase().rpc("mark_conversation_read", {
     p_conversation_id: conversationId,
     p_message_id: messageId,
   });
   if (error) throw error;
+  return data;
 }
 
 /** 내 반응을 정하거나 지우고(`null`), 서버가 확정한 집계를 돌려준다. */

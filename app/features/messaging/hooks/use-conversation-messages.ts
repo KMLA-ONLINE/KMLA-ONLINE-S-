@@ -84,7 +84,7 @@ export interface SendDraft {
 }
 
 /**
- * 대화방 메시지와 고정 메시지 cache. 둘 다 대화방 loader가 `seedConversationCache`로 채우고,
+ * 대화방 메시지와 고정 메시지 cache. 둘 다 대화방 loader(`openConversation`)가 채우고,
  * 위로 스크롤하면 앞선 페이지를 붙인다. 신선도는 시간이 아니라 Realtime 신호와 따라잡기가 맡으므로(기술 설계 §5,
  * `MessagingSync`) 시간 경과로 다시 읽지 않는다.
  *
@@ -147,11 +147,14 @@ export function useConversationMessages(conversation: Conversation) {
       if (!pending || document.visibilityState !== "visible") return;
       pending = false;
       // 가장 최근 상대 메시지까지 읽었으니 이 대화의 읽지 않은 수는 0이다. 목록을 먼저 그린다.
-      markConversationListRead(queryClient, conversationId);
+      const cleared = markConversationListRead(queryClient, conversationId);
       // 읽은 대화의 알림 카드는 알림센터에서도 거둔다.
       void closeMessageNotifications(conversationId);
       markConversationRead(conversationId, unreadLatestId).then(
-        () => {
+        (moved) => {
+          // 이미 읽은 방이고 목록도 읽음이었으면 서버도 목록도 그대로라 다시 읽지 않는다. 서버가 옮기지
+          // 않았어도 목록에서 뺀 수가 있으면 목록이 낡았던 것이므로 다시 읽는다.
+          if (!moved && cleared === 0) return;
           refreshConversationInList(queryClient, conversationId).catch(
             () => void invalidateConversationList(queryClient),
           );

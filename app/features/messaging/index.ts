@@ -4,11 +4,8 @@ export {
   RoomScreen,
   type DesktopDetailsContext,
 } from "~/features/messaging/components/room-screen";
-export {
-  conversationListQuery,
-  seedConversationCache,
-} from "~/features/messaging/data/cache";
-export { loadConversation } from "~/features/messaging/data/queries";
+export { conversationListQuery } from "~/features/messaging/data/cache";
+export { openConversation } from "~/features/messaging/data/sync";
 export type {
   Conversation,
   ConversationMessage,

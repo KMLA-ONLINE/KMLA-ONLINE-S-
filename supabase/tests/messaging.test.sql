@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(30);
 
 -- seed: 홍길동(…0001)과 김민준(…0100)의 1:1 대화 c…01, 홍길동·김민준·박새벽·이한별의 그룹 대화
 -- c…02. 이한별은 2026-08-21에 참여해 그 이전 메시지(d…11, d…12)를 볼 수 없다.
@@ -258,14 +258,22 @@ select is(
   'the recipient has unread messages'
 );
 
-select public.mark_conversation_read(
-  'c0000000-0000-0000-0000-000000000001',
-  'e0000000-0000-0000-0000-000000000010'
+select is(
+  public.mark_conversation_read(
+    'c0000000-0000-0000-0000-000000000001',
+    'e0000000-0000-0000-0000-000000000010'
+  ),
+  true,
+  'reading a newer message moves the read position'
 );
 
-select public.mark_conversation_read(
-  'c0000000-0000-0000-0000-000000000001',
-  'd0000000-0000-0000-0000-000000000001'
+select is(
+  public.mark_conversation_read(
+    'c0000000-0000-0000-0000-000000000001',
+    'd0000000-0000-0000-0000-000000000001'
+  ),
+  false,
+  'reading an older message reports that nothing moved'
 );
 
 select is(

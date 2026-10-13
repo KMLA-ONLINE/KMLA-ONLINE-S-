@@ -12,11 +12,17 @@ import {
 import * as queries from "~/features/messaging/data/queries";
 import {
   catchUpConversation,
+  openConversation,
   refreshReadState,
 } from "~/features/messaging/data/sync";
-import type { ConversationMessage } from "~/features/messaging/model/types";
+import type {
+  Conversation,
+  ConversationMessage,
+  ConversationSummary,
+} from "~/features/messaging/model/types";
 
 vi.mock("~/features/messaging/data/queries", () => ({
+  loadConversation: vi.fn(),
   listMessageChanges: vi.fn(),
   listMessageReadCounts: vi.fn(),
   listMessages: vi.fn(),
@@ -60,6 +66,7 @@ beforeEach(() => {
   vi.mocked(queries.listMessages).mockReset();
   vi.mocked(queries.listPinnedMessages).mockReset();
   vi.mocked(queries.listMessageReadCounts).mockReset();
+  vi.mocked(queries.loadConversation).mockReset();
 });
 
 describe("mergeServerMessages", () => {
@@ -320,5 +327,71 @@ describe("markConversationListRead", () => {
         messagingKeys.conversations(),
       )?.[0]?.unreadCount,
     ).toBe(0);
+  });
+});
+
+describe("openConversation", () => {
+  const summary = {
+    id: ID,
+    type: "group",
+    name: "학생회",
+    viewerId: "1",
+    participants: [],
+    lastMessage: null,
+    unreadCount: 0,
+    muted: false,
+    canDelete: false,
+  } satisfies ConversationSummary;
+
+  it("목록과 메시지 cache가 남은 방은 서버를 기다리지 않고 최신 페이지부터 연다", async () => {
+    queryClient.setQueryData(messagingKeys.conversations(), [summary]);
+    const failedPhoto = message("photo", 6, {
+      failed: true,
+      attachments: [
+        {
+          id: "photo:0",
+          kind: "image",
+          mimeType: "image/png",
+          sizeBytes: 1,
+          width: null,
+          height: null,
+          fileName: "a.png",
+          objectPath: "",
+          thumbnailPath: null,
+        },
+      ],
+    });
+    const failedText = message("text", 7, { failed: true });
+    seed(
+      queryClient,
+      [[message("c", 3), failedPhoto, failedText], [message("a", 1)]],
+      [message("c", 3, { pinned: true })],
+    );
+
+    const conversation = await openConversation(queryClient, ID);
+
+    expect(queries.loadConversation).not.toHaveBeenCalled();
+    expect(conversation?.name).toBe("학생회");
+    expect(conversation?.messages.map(({ id }) => id)).toEqual(["c", "text"]);
+    expect(conversation?.pinnedMessages.map(({ id }) => id)).toEqual(["c"]);
+    // 앞선 페이지와 다시 보낼 파일이 없는 첨부 메시지는 버리고, 다시 보낼 수 있는 글은 남긴다.
+    expect(pageIds(queryClient)).toEqual([["c", "text"]]);
+  });
+
+  it("목록이나 메시지 cache가 없으면 서버에서 읽어 cache를 채운다", async () => {
+    seed(queryClient, [[message("c", 3)]]);
+    const loaded: Conversation = {
+      ...summary,
+      messages: [message("d", 4)],
+      olderCursor: null,
+      pinnedMessages: [],
+    };
+    vi.mocked(queries.loadConversation).mockResolvedValue(loaded);
+
+    const conversation = await openConversation(queryClient, ID);
+
+    expect(queries.loadConversation).toHaveBeenCalledWith(ID);
+    expect(conversation).toBe(loaded);
+    expect(pageIds(queryClient)).toEqual([["d"]]);
   });
 });

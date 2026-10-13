@@ -5,9 +5,8 @@ import {
 
 import { defineAppChrome } from "~/features/app-shell";
 import {
-  loadConversation,
+  openConversation,
   RoomScreen,
-  seedConversationCache,
   type DesktopDetailsContext,
 } from "~/features/messaging";
 import { getQueryClient } from "~/shared/lib/query-client";
@@ -22,8 +21,8 @@ export const handle = defineAppChrome({
 
 /**
  * 같은 대화방 안에서는 loader를 다시 돌리지 않는다. 사진 뷰어의 `?image=`처럼 주소의 쿼리만 바뀌어도
- * 다시 돌면 `seedConversationCache`가 불러온 앞선 페이지와 보내는 중·보내지 못한 메시지를 지운다.
- * 새 메시지는 Realtime 신호와 따라잡기가 맡는다.
+ * 다시 돌면 불러온 앞선 페이지를 버리고 최신 페이지부터 다시 시작한다. 새 메시지는 Realtime 신호와
+ * 따라잡기가 맡는다.
  */
 export function shouldRevalidate({
   currentParams,
@@ -35,12 +34,12 @@ export function shouldRevalidate({
     : defaultShouldRevalidate;
 }
 
+// 다시 들어온 방은 남은 cache로 기다리지 않고 연다.
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
-  const conversation = await loadConversation(params.roomId);
+  const conversation = await openConversation(getQueryClient(), params.roomId);
   if (!conversation) {
     throw new Response("대화를 찾을 수 없습니다.", { status: 404 });
   }
-  seedConversationCache(getQueryClient(), conversation);
   return { conversation };
 }
 

@@ -89,11 +89,14 @@ export function removeConversationFromList(
   );
 }
 
-/** 목록의 이 대화를 읽음으로 그린다. 서버가 확정하면 `replaceConversationSummary`가 덮는다. */
+/**
+ * 목록의 이 대화를 읽음으로 그린다. 서버가 확정하면 `replaceConversationSummary`가 덮는다. 목록에서
+ * 지운 읽지 않은 수를 돌려준다.
+ */
 export function markConversationListRead(
   queryClient: QueryClient,
   conversationId: string,
-) {
+): number {
   const cleared =
     queryClient
       .getQueryData<ConversationSummary[]>(messagingKeys.conversations())
@@ -113,6 +116,7 @@ export function markConversationListRead(
       count === undefined ? count : Math.max(0, count - cleared),
     );
   }
+  return cleared;
 }
 
 /** 서버 `list_conversations`의 순서. 최근 메시지가 위, 메시지가 없는 대화는 아래다. */
@@ -173,9 +177,8 @@ export function initialMessagePages(conversation: Conversation): MessagePages {
 }
 
 /**
- * 대화방 loader가 방금 받은 값으로 cache를 덮는다. 메시지 cache는 시간으로 낡지 않으므로
- * (`staleTime: Infinity`) 덮지 않으면 다시 들어온 방이 이전 방문 때의 메시지를 그대로 보여 준다.
- * 이어 붙였던 앞선 페이지도 버리고 최신 페이지부터 다시 시작한다.
+ * 대화방 loader가 서버에서 방금 받은 값으로 cache를 채운다. cache가 남은 방은 이 함수 대신
+ * `resumeConversationCache`로 연다.
  */
 export function seedConversationCache(
   queryClient: QueryClient,
@@ -189,6 +192,50 @@ export function seedConversationCache(
     messagingKeys.pinned(conversation.id),
     conversation.pinnedMessages,
   );
+}
+
+/**
+ * 다시 들어온 대화방을 cache로 바로 연다. 대화 목록의 그 대화와 메시지·고정 cache가 모두 남아 있을 때만
+ * 열고, 하나라도 없으면 `null`이라 loader가 서버에서 읽는다. 닫혀 있던 동안의 변경은 방이 열리면
+ * `MessagingSync`가 따라잡기로 메운다(기술 설계 §5).
+ *
+ * 처음 열 때처럼 최신 페이지부터 시작하도록 이어 붙였던 앞선 페이지는 버린다. 보내는 중인 내 메시지는
+ * 전송이 끝나며 자리를 고치므로 두고, 보내지 못한 첨부 메시지는 거둔다. 다시 보낼 원본 파일은 닫힌
+ * 화면과 함께 사라졌다.
+ */
+export function resumeConversationCache(
+  queryClient: QueryClient,
+  conversationId: string,
+): Conversation | null {
+  const summary = queryClient
+    .getQueryData<ConversationSummary[]>(messagingKeys.conversations())
+    ?.find(({ id }) => id === conversationId);
+  const data = queryClient.getQueryData<MessagePages>(
+    messagingKeys.messages(conversationId),
+  );
+  const latest = data?.pages[0];
+  const pinnedMessages = queryClient.getQueryData<ConversationMessage[]>(
+    messagingKeys.pinned(conversationId),
+  );
+  if (!summary || !latest || !pinnedMessages) return null;
+
+  const orphaned = latest.messages.filter(
+    (message) => message.failed && message.attachments?.length,
+  );
+  for (const message of orphaned) {
+    for (const { previewUrl } of message.attachments ?? []) {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    }
+  }
+  const page: MessagePage = {
+    ...latest,
+    messages: latest.messages.filter((message) => !orphaned.includes(message)),
+  };
+  queryClient.setQueryData<MessagePages>(
+    messagingKeys.messages(conversationId),
+    { pages: [page], pageParams: [null] },
+  );
+  return { ...summary, ...page, pinnedMessages };
 }
 
 /** 화면에 그릴 순서(오래된 것부터)로 펼친다. */
@@ -514,7 +561,7 @@ export function latestMessageChange(
   return latest;
 }
 
-/** 화면이 지금 구독하고 있는 대화방. 닫힌 방의 cache는 다시 열 때 loader가 새로 채운다. */
+/** 화면이 지금 구독하고 있는 대화방. 닫힌 방의 cache는 따라잡지 않으며, 다시 열면 그때 따라잡는다. */
 export function openConversationIds(queryClient: QueryClient): string[] {
   return queryClient
     .getQueryCache()

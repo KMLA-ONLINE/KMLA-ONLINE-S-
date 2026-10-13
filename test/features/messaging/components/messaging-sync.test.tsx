@@ -92,6 +92,14 @@ function renderSync() {
   };
 }
 
+/** 방이 열릴 때의 따라잡기를 끝내고 호출 기록을 비운다. */
+async function settleOpenedRoom() {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(200);
+  });
+  vi.mocked(sync.catchUpConversation).mockClear();
+}
+
 describe("MessagingSync", () => {
   it("한 변경의 여러 신호를 모아 열린 방만 한 번 따라잡고 목록에서는 바뀐 대화만 다시 받는다", async () => {
     const { invalidate } = renderSync();
@@ -124,6 +132,7 @@ describe("MessagingSync", () => {
 
   it("다른 멤버들이 읽으면 1초 동안 모아 열린 방의 읽음 상태를 한 번 다시 받는다", async () => {
     renderSync();
+    await settleOpenedRoom();
 
     act(() => {
       room("open").onReadChanged();
@@ -262,6 +271,7 @@ describe("MessagingSync", () => {
 
   it("대화방 채널이 붙으면 신호를 기다리지 않고 그 방의 읽음을 다시 받는다", async () => {
     renderSync();
+    await settleOpenedRoom();
 
     act(() => room("open").onSubscribed());
     await act(async () => {
@@ -274,5 +284,19 @@ describe("MessagingSync", () => {
       "open",
     );
     expect(sync.catchUpConversation).not.toHaveBeenCalled();
+  });
+
+  it("방이 열리면 닫혀 있던 동안의 변경을 신호를 기다리지 않고 따라잡는다", async () => {
+    renderSync();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+
+    expect(sync.catchUpConversation).toHaveBeenCalledTimes(1);
+    expect(sync.catchUpConversation).toHaveBeenCalledWith(
+      expect.anything(),
+      "open",
+    );
   });
 });

@@ -95,9 +95,11 @@ export function MessagingSync({ profileId }: { profileId: number }) {
       // 처음 붙을 때도 맞춘다. loader가 읽은 뒤 채널이 붙기 전의 신호는 받을 수 없었다.
       onSubscribed: resync,
     });
-    const rooms = createRoomSubscriptions(queryClient, profileId, (id) =>
-      scheduler.schedule(id, "reads"),
-    );
+    const rooms = createRoomSubscriptions(queryClient, profileId, {
+      // 닫혀 있던 동안, 또는 loader가 읽은 뒤 화면이 붙기 전의 메시지 신호는 열린 방이 아니라 버렸다.
+      onOpened: (id) => scheduler.schedule(id, "changes"),
+      onReadChanged: (id) => scheduler.schedule(id, "reads"),
+    });
     document.addEventListener("visibilitychange", onResume);
     window.addEventListener("online", resync);
 
@@ -116,13 +118,16 @@ export function MessagingSync({ profileId }: { profileId: number }) {
 /**
  * 열린 대화방(메시지 cache를 구독하는 화면이 있는 방)마다 그 방의 읽음 topic을 구독한다. 방이 열리고
  * 닫히는 것은 cache의 observer 변화로 안다. 같은 tick에 떨어졌다 다시 붙는 observer(다시 마운트)에
- * 채널을 끊었다 맺지 않도록 다음 tick에 맞춘다. 채널이 붙을 때도 읽음을 다시 받는다. loader가 읽은 뒤
- * 채널이 붙기 전의 신호는 받을 수 없었다.
+ * 채널을 끊었다 맺지 않도록 다음 tick에 맞춘다. 방이 열리면 `onOpened`를 부르고, 채널이 붙을 때도
+ * 읽음을 다시 받는다. loader가 읽은 뒤 채널이 붙기 전의 신호는 받을 수 없었다.
  */
 function createRoomSubscriptions(
   queryClient: QueryClient,
   profileId: number,
-  onReadChanged: (conversationId: string) => void,
+  handlers: {
+    onOpened: (conversationId: string) => void;
+    onReadChanged: (conversationId: string) => void;
+  },
 ) {
   const rooms = new Map<string, () => void>();
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -137,7 +142,8 @@ function createRoomSubscriptions(
     }
     for (const id of open) {
       if (rooms.has(id)) continue;
-      const refresh = () => onReadChanged(id);
+      const refresh = () => handlers.onReadChanged(id);
+      handlers.onOpened(id);
       rooms.set(
         id,
         subscribeToRoomSignals(id, profileId, {

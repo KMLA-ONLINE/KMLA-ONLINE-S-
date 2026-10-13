@@ -964,12 +964,13 @@ grant execute on function public.send_message(uuid, uuid, text, uuid)
   to authenticated;
 
 -- 읽음 위치를 이 메시지로 옮긴다. 앞으로만 움직이며, 내 현재 참여 기간 밖의 메시지나 다른 대화의
--- 메시지면 아무것도 하지 않는다. 이 위치가 메시지 Push 억제의 근거다(알림 기술 설계 §11).
+-- 메시지면 아무것도 하지 않는다. 이 위치가 메시지 Push 억제의 근거다(알림 기술 설계 §11). 위치를
+-- 옮겼는지 돌려준다. 이미 읽은 대화면 false이고, 클라이언트는 목록과 배지를 다시 읽지 않는다.
 create function public.mark_conversation_read(
   p_conversation_id uuid,
   p_message_id uuid
 )
-returns void
+returns boolean
 language plpgsql
 security definer
 set search_path = ''
@@ -993,6 +994,7 @@ begin
     and member.left_at is null
     and target.sent_at >= member.joined_at
     and (member.last_read_sent_at, member.last_read_message_id) < (target.sent_at, target.id);
+  return found;
 end;
 $$;
 
