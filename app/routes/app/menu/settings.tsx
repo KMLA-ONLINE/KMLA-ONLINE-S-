@@ -8,6 +8,7 @@ import {
 import { useId, type ReactNode } from "react";
 
 import { defineAppChrome, PageHeader } from "~/features/app-shell";
+import { HomeSidebarSettings } from "~/features/app-shell/components/home-sidebar-settings";
 import { LogoutButton } from "~/features/auth";
 import { AppVersionCard } from "~/features/support";
 import { ListLinkRow } from "~/shared/components/list-link-row";
@@ -71,6 +72,7 @@ export default function SettingsPage() {
 
         <SettingsSection title="앱 설정">
           <ListLinkRow to="/settings/noti" label="알림 설정" icon={BellIcon} />
+          <HomeSidebarSettings />
           <Field orientation="horizontal" className="px-4 py-3">
             <FieldContent>
               <FieldTitle>실험실 기능 사용</FieldTitle>

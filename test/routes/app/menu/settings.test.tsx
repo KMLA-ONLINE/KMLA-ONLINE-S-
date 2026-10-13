@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AppShellProvider,
@@ -9,6 +9,19 @@ import SettingsPage from "~/routes/app/menu/settings";
 import { renderRoute, screen, within } from "../../../router";
 
 afterEach(() => window.localStorage.clear());
+
+function mockDesktop() {
+  vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+    matches: query === "(min-width: 1024px)",
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
 
 function renderSettings(role: ProfileRole = "member") {
   const shell = {
@@ -34,6 +47,58 @@ function renderSettings(role: ProfileRole = "member") {
 }
 
 describe("settings route", () => {
+  it("defaults all desktop home sidebar switches to on", () => {
+    mockDesktop();
+    renderSettings();
+
+    for (const name of ["홈 우측 사이드바", "생일", "급식", "시간표"]) {
+      expect(screen.getByRole("switch", { name })).toBeChecked();
+    }
+  });
+
+  it("hides individual switches when disabled and preserves their choices after remounting", async () => {
+    mockDesktop();
+    const { user, unmount } = renderSettings();
+    await user.click(screen.getByRole("switch", { name: "생일" }));
+    await user.click(screen.getByRole("switch", { name: "홈 우측 사이드바" }));
+    for (const name of ["생일", "급식", "시간표"]) {
+      expect(screen.queryByRole("switch", { name })).not.toBeInTheDocument();
+    }
+
+    unmount();
+    const view = renderSettings("admin");
+    expect(
+      screen.getByRole("switch", { name: "홈 우측 사이드바" }),
+    ).not.toBeChecked();
+    await view.user.click(
+      screen.getByRole("switch", { name: "홈 우측 사이드바" }),
+    );
+    expect(screen.getByRole("switch", { name: "생일" })).not.toBeChecked();
+    expect(screen.getByRole("switch", { name: "급식" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "시간표" })).toBeChecked();
+  });
+
+  it("does not expose desktop home settings on mobile", () => {
+    renderSettings();
+    expect(
+      screen.queryByRole("switch", { name: "홈 우측 사이드바" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    "invalid JSON",
+    JSON.stringify({ meal: false, birthdays: "false" }),
+  ])("uses on defaults for missing or invalid choices in %s", (stored) => {
+    mockDesktop();
+    window.localStorage.setItem("kmla-online:home-sidebar:v1", stored);
+    renderSettings();
+    expect(
+      screen.getByRole("switch", { name: "홈 우측 사이드바" }),
+    ).toBeChecked();
+    expect(screen.getByRole("switch", { name: "생일" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "시간표" })).toBeChecked();
+  });
+
   it("hides administration from a member", () => {
     renderSettings();
     expect(
