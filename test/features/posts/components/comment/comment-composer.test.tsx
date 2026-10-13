@@ -422,7 +422,14 @@ describe("CommentComposer", () => {
     // 이름 가운데(`첫` 뒤)에 캐럿을 두고 한 글자만 지운다. 반쪽이 남으면 화면에는 멀쩡한
     // 글자처럼 보이는데 멘션은 아닌 상태가 된다.
     field.setSelectionRange(3, 3);
-    fireEvent.keyDown(field, { key: "Backspace" });
+    // 모바일 키보드는 Backspace를 keyCode 229로 보내 keydown으로는 못 잡는다. beforeinput을 본다.
+    const deletion = new InputEvent("beforeinput", {
+      inputType: "deleteContentBackward",
+      bubbles: true,
+      cancelable: true,
+    });
+    fireEvent(field, deletion);
+    expect(deletion.defaultPrevented).toBe(true);
     await vi.waitFor(() => expect(field).toHaveValue(" "));
 
     // 지운 이름을 그대로 다시 쳐도 멘션이 아니다. 보이지 않는 표시까지 함께 지워졌다.

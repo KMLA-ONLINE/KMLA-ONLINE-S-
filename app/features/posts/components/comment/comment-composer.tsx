@@ -24,8 +24,11 @@ import {
   useMentionDraft,
 } from "~/features/posts/hooks/use-mention-draft";
 import {
+  caretDeletionRange,
   countMentionTargets,
+  expandDeletionOverMentions,
   fromMentionDisplay,
+  isMentionDeleteInput,
   mentionDisplayRanges,
   mentionDisplayText,
   sanitizeMentionDisplay,
@@ -249,28 +252,44 @@ export function CommentComposer({
     replaceDraft(next, Math.max(0, caret - (value.length - next.length)));
   };
 
-  /** 멘션은 한 덩어리로 지운다. 반쪽이 남으면 멘션이 아닌 채로 조용히 되살아난다. */
+  /** 멘션은 한 덩어리로 지운다(`expandDeletionOverMentions()`). 반쪽이 남으면 멘션이 아닌 채로 조용히 되살아난다. */
   const deleteAtomically = (
     element: HTMLTextAreaElement,
-    key: "Backspace" | "Delete",
+    inputType: string,
   ) => {
-    const { selectionStart, selectionEnd } = element;
-    const collapsed = selectionStart === selectionEnd;
-    const from =
-      collapsed && key === "Backspace" ? selectionStart - 1 : selectionStart;
-    const to =
-      collapsed && key === "Delete" ? selectionStart + 1 : selectionEnd;
-
-    const touched = mentionDisplayRanges(draft, mentionDraft.entries).filter(
-      (range) => range.start < to && from < range.end,
+    // `textarea`는 `getTargetRanges()`가 늘 비어 있어 선택 영역으로 판단한다.
+    const range = expandDeletionOverMentions(
+      caretDeletionRange(
+        { from: element.selectionStart, to: element.selectionEnd },
+        inputType,
+      ),
+      mentionDisplayRanges(draft, mentionDraft.entries),
     );
-    if (touched.length === 0) return false;
-
-    const start = Math.min(from, ...touched.map((range) => range.start));
-    const end = Math.max(to, ...touched.map((range) => range.end));
-    replaceDraft(draft.slice(0, start) + draft.slice(end), start);
+    if (!range) return false;
+    replaceDraft(
+      draft.slice(0, range.from) + draft.slice(range.to),
+      range.from,
+    );
     return true;
   };
+  const deleteAtomicallyRef = useRef(deleteAtomically);
+  useEffect(() => {
+    deleteAtomicallyRef.current = deleteAtomically;
+  });
+
+  // React의 `onBeforeInput`은 `inputType`이 없는 합성 이벤트라 DOM에 직접 단다.
+  useEffect(() => {
+    const element = input.current;
+    if (!element) return;
+    const onBeforeInput = (event: InputEvent) => {
+      if (!isMentionDeleteInput(event.inputType)) return;
+      if (composing.current || event.isComposing) return;
+      if (deleteAtomicallyRef.current(element, event.inputType))
+        event.preventDefault();
+    };
+    element.addEventListener("beforeinput", onBeforeInput);
+    return () => element.removeEventListener("beforeinput", onBeforeInput);
+  }, [input]);
   const overLimit = length > COMMENT_MAX_LENGTH;
   const canSend =
     (draft.trim() !== "" || image !== null) &&
@@ -497,15 +516,6 @@ export function CommentComposer({
                 repairDraft(event.currentTarget);
               }}
               onKeyDown={(event) => {
-                if (
-                  (event.key === "Backspace" || event.key === "Delete") &&
-                  !composing.current &&
-                  !event.nativeEvent.isComposing
-                ) {
-                  if (deleteAtomically(event.currentTarget, event.key))
-                    event.preventDefault();
-                  return;
-                }
                 if (event.key === "Escape" && onCancel) {
                   event.preventDefault();
                   onCancel();
