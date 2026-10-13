@@ -26,6 +26,7 @@ import {
   type RefObject,
   type SetStateAction,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -131,8 +132,13 @@ export interface DesktopDetailsContext {
 const BOTTOM_SCROLL_BUTTON_THRESHOLD = 200;
 /** 맨 아래에서 이만큼 안이면 맨 아래를 보고 있는 것으로 보고, 새 메시지가 오면 따라 내려간다. */
 const FOLLOW_NEW_MESSAGES_THRESHOLD = 80;
-/** 맨 위에서 이만큼 남았을 때 앞선 메시지를 미리 읽는다. */
-const OLDER_MESSAGES_THRESHOLD = 400;
+/**
+ * 맨 위까지 대화 영역 높이의 이 배수만큼 남으면 앞선 메시지를 미리 읽는다. 한 화면보다 짧으면 빠르게
+ * 넘길 때 다 읽기 전에 맨 위에 닿아 스크롤이 멈춘다.
+ */
+const OLDER_MESSAGES_THRESHOLD_SCREENS = 2;
+/** 대화 영역이 아주 낮아도(키보드가 떠 있을 때 등) 이만큼은 미리 읽는다. */
+const OLDER_MESSAGES_MIN_THRESHOLD = 400;
 /** 메시지·좋아요를 보내거나 반응을 바꾼 뒤 다음 전송까지 쉬는 시간. 도배를 막는 UI 제한이다. */
 const SEND_COOLDOWN_MS = 500;
 /**
@@ -922,7 +928,11 @@ function MessageThread({
   function maybeLoadOlderMessages() {
     const messageThread = messageThreadRef.current;
     if (!messageThread) return;
-    if (messageThread.scrollTop > OLDER_MESSAGES_THRESHOLD) {
+    const threshold = Math.max(
+      OLDER_MESSAGES_MIN_THRESHOLD,
+      messageThread.clientHeight * OLDER_MESSAGES_THRESHOLD_SCREENS,
+    );
+    if (messageThread.scrollTop > threshold) {
       olderLoadFailed.current = false;
       return;
     }
@@ -934,6 +944,7 @@ function MessageThread({
       oldestMessageId,
     };
     olderAnchor.current = anchor;
+    continueOlderLoad.current = true;
     void onLoadOlderMessages().then((result) => {
       if (result === "failed") olderLoadFailed.current = true;
       // 붙인 메시지가 없으면 맨 위가 바뀌지 않아 layout effect가 거두지 않으므로 여기서 버린다.
@@ -942,6 +953,19 @@ function MessageThread({
       }
     });
   }
+
+  // 한 페이지를 붙인 뒤에도 아직 맨 위 가까이에 있으면 다음 페이지를 이어 읽는다. 스크롤할 때만
+  // 판단하면 맨 위 근처에서 멈춰 기다린 사람은 다시 스크롤할 때까지 다음 페이지를 받지 못한다.
+  // 페이지가 붙으면 맨 위 메시지가 바뀌고, 위 layout effect가 스크롤 자리를 되돌린 뒤에 이 effect가 돈다.
+  const continueOlderLoad = useRef(false);
+  const loadMoreIfStillNearTop = useEffectEvent(() => {
+    if (!continueOlderLoad.current) return;
+    continueOlderLoad.current = false;
+    maybeLoadOlderMessages();
+  });
+  useEffect(() => {
+    loadMoreIfStillNearTop();
+  }, [oldestMessageId]);
 
   function updateScrollToBottomVisibility() {
     const messageThread = messageThreadRef.current;

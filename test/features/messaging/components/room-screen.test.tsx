@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { RoomScreen } from "~/features/messaging/components/room-screen";
 import { mergeServerMessages } from "~/features/messaging/data/cache";
 import * as mutations from "~/features/messaging/data/mutations";
+import * as queries from "~/features/messaging/data/queries";
 import { clearRoomDrafts } from "~/features/messaging/hooks/room-drafts";
 import { loadConversation } from "~/features/messaging/data/queries";
 import type { Conversation } from "~/features/messaging/model/types";
@@ -1215,6 +1216,57 @@ describe("RoomScreen", () => {
     expect(
       screen.getByRole("button", { name: /^새 메시지: .+, 맨 아래로 이동$/ }),
     ).toHaveTextContent("new-2");
+  });
+
+  it("맨 위까지 두 화면 안쪽이면 앞선 메시지를 읽고, 붙인 뒤에도 가까우면 이어 읽는다", async () => {
+    const conversation = await loadConversation("hyunwoo", 1);
+    expect(conversation?.olderCursor).not.toBeNull();
+    let page = 0;
+    const listMessages = vi
+      .spyOn(queries, "listMessages")
+      .mockImplementation(() => {
+        page += 1;
+        return Promise.resolve({
+          messages: [
+            {
+              id: `older-${page}`,
+              senderId: "hyunwoo-user",
+              body: `앞선 메시지 ${page}`,
+              sentAt: `2026-01-0${4 - page}T09:00:00+09:00`,
+            },
+          ],
+          // 두 페이지 뒤에는 더 앞선 메시지가 없다.
+          olderCursor:
+            page < 2
+              ? {
+                  sentAt: `2026-01-0${4 - page}T09:00:00+09:00`,
+                  id: `older-${page}`,
+                }
+              : null,
+        });
+      });
+
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/hyunwoo",
+    });
+    const messageThread = screen
+      .getByRole("region", { name: "이현우 대화" })
+      .querySelector(".overflow-y-auto")!;
+    // 높이가 변하지 않으므로 페이지를 붙여도 맨 위까지 남은 거리가 그대로다.
+    Object.defineProperties(messageThread, {
+      clientHeight: { configurable: true, value: 300 },
+      scrollHeight: { configurable: true, value: 2000 },
+      scrollTop: { configurable: true, writable: true, value: 500 },
+    });
+    listMessages.mockClear();
+
+    // 맨 위까지 500px. 예전 기준(400px)으로는 읽지 않았지만 두 화면(600px) 안쪽이다.
+    fireEvent.scroll(messageThread);
+
+    expect(await screen.findByText("앞선 메시지 2")).toBeInTheDocument();
+    expect(screen.getByText("앞선 메시지 1")).toBeInTheDocument();
+    // 다시 스크롤하지 않아도 두 번째 페이지까지 이어 읽고, 더 없으면 멈춘다.
+    expect(listMessages).toHaveBeenCalledTimes(2);
   });
 
   it("대화방을 열면 맨 아래로 이동하고 위로 스크롤하면 하단 이동 버튼을 표시한다", async () => {
