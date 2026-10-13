@@ -23,4 +23,20 @@ describe("app navigation items", () => {
     expect(isNavItemActive("/messenger/room-id", messaging!)).toBe(true);
     expect(isNavItemActive("/messenger-other", messaging!)).toBe(false);
   });
+
+  it("keeps the menu active on settings screens reached from it", () => {
+    const menu = navItems.find(({ to }) => to === "/menu");
+
+    expect(menu).toBeDefined();
+    for (const pathname of [
+      "/settings",
+      "/settings/noti",
+      "/settings/lab",
+      "/settings/password",
+      "/licenses",
+    ]) {
+      expect(isNavItemActive(pathname, menu!)).toBe(true);
+    }
+    expect(isNavItemActive("/settingsx", menu!)).toBe(false);
+  });
 });
