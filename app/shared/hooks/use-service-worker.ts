@@ -25,7 +25,7 @@ export interface AppUpdateState {
 }
 
 /**
- * 워커는 루트의 `useServiceWorker` 하나가 소유한다. 설정·업데이트 기록 화면의 버전 카드가 같은 상태를
+ * 워커는 루트의 `useServiceWorker` 하나가 소유한다. 설정 화면의 버전 카드가 같은 상태를
  * 읽고 같은 확인·적용을 부르도록 그 훅이 여기에 내놓는다. 두 번째 Workbox를 만들면 이벤트가 갈라진다.
  */
 const INITIAL_APP_UPDATE: AppUpdateState = {

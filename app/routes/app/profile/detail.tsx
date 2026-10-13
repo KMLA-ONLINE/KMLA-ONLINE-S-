@@ -1,4 +1,4 @@
-import { data, Outlet, redirect } from "react-router";
+import { data, Outlet, redirect, replace } from "react-router";
 
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import {
@@ -7,7 +7,11 @@ import {
   getPostErrorMessage,
   listProfilePosts,
 } from "~/features/posts";
-import { loadAcceptedProfile, ProfileDetail } from "~/features/profiles";
+import {
+  loadAcceptedProfile,
+  ProfileDetail,
+  renamedPubId,
+} from "~/features/profiles";
 import type { Route } from "./+types/detail";
 import { invalidateDeletedProfilePost } from "~/routes/app/profile/post-cache";
 
@@ -51,6 +55,14 @@ export async function clientLoader({
   const posts = loadedPosts ?? deferredPosts;
 
   if (!profile) {
+    // 공개 ID를 바꾸기 전 주소로 뒤로 온 것이면 새 주소가 이 기록 항목을 차지한다.
+    const renamed = renamedPubId(requestedPubId);
+    if (renamed) {
+      const { pathname, search } = new URL(request.url);
+      throw replace(
+        pathname.replace(/^\/profile\/[^/]+/, `/profile/${renamed}`) + search,
+      );
+    }
     throw new Response("프로필을 찾을 수 없습니다.", { status: 404 });
   }
 

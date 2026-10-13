@@ -31,3 +31,31 @@ CREATE POLICY "profile_media_select_accepted" ON "storage"."objects" FOR SELECT 
 CREATE POLICY "story_media_storage_insert_pending_author" ON "storage"."objects" FOR INSERT TO "authenticated" WITH CHECK ((("bucket_id" = 'story-media'::"text") AND ("owner_id" = ( SELECT ("auth"."uid"())::"text" AS "uid")) AND "private"."can_upload_story_media"("name")));
 
 CREATE POLICY "story_media_storage_select_reader" ON "storage"."objects" FOR SELECT TO "authenticated" USING ((("bucket_id" = 'story-media'::"text") AND "storage"."allow_any_operation"(ARRAY['object.get_authenticated_info'::"text", 'object.get_authenticated'::"text", 'object.sign'::"text", 'object.sign_many'::"text"]) AND "private"."can_read_story_media"("name")));
+
+-- 메시지 첨부(Storage 설계 §4.4). 업로드는 `prepare_message_attachments`가 예고한 정확한 경로에만,
+-- 읽기는 메시지가 읽는 사람의 참여 기간 안에 있고 삭제되지 않았을 때만 허용한다.
+create policy "message_attachments_storage_insert_pending_uploader"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'message-attachments'
+  and owner_id = (select auth.uid()::text)
+  and private.can_upload_message_object(name)
+);
+
+create policy "message_attachments_storage_select_member"
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'message-attachments'
+  and storage.allow_any_operation(array[
+    'object.get_authenticated_info',
+    'object.get_authenticated',
+    'object.sign',
+    'object.sign_many'
+  ])
+  and private.can_read_message_object(name)
+);
+

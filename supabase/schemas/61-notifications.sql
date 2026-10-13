@@ -115,6 +115,8 @@ create table public.notification_preferences (
   group_push_enabled boolean not null default true,
   account_push_enabled boolean not null default true,
   school_push_enabled boolean not null default true,
+  -- `알림에 메시지 내용 가리기`(기능 명세 §13.17). 켜면 메시지 Push에 본문 대신 안내 문구를 쓴다.
+  message_preview_hidden boolean not null default false,
   updated_at timestamptz not null default now()
 );
 alter table public.notification_preferences owner to postgres;
@@ -276,7 +278,10 @@ create or replace function private.notification_delivery_allowed(
 language sql stable security definer
 set search_path = ''
 as $$
-  select p_delivery.channel = 'email'
+  -- 메시지 Push는 발송 직전 확인이 따로 있다(메시지 기술 설계, 알림 기술 설계 §11.3).
+  select case when p_delivery.message_id is not null
+    then private.message_delivery_allowed(p_delivery)
+    else p_delivery.channel = 'email'
     or exists (
       select 1
       from public.notifications as notification
@@ -322,7 +327,8 @@ as $$
           )
           or (notification.post_id is null and notification.group_id is null)
         )
-    );
+    )
+  end;
 $$;
 alter function private.notification_delivery_allowed(private.notification_delivery_outbox) owner to postgres;
 
@@ -662,7 +668,8 @@ returns table (
   timeline_push_enabled boolean,
   group_push_enabled boolean,
   account_push_enabled boolean,
-  school_push_enabled boolean
+  school_push_enabled boolean,
+  message_preview_hidden boolean
 )
 language plpgsql security definer
 set search_path = ''
@@ -679,7 +686,7 @@ begin
   return query
   select preference.content_push_enabled, preference.timeline_push_enabled,
     preference.group_push_enabled, preference.account_push_enabled,
-    preference.school_push_enabled
+    preference.school_push_enabled, preference.message_preview_hidden
   from public.notification_preferences as preference
   where preference.profile_id = caller_profile_id;
 end;
@@ -724,6 +731,30 @@ begin
 end;
 $$;
 alter function public.update_my_notification_preferences(boolean, boolean, boolean, boolean, boolean) owner to postgres;
+
+-- `알림에 메시지 내용 가리기`. 계정의 모든 기기에 적용한다(기능 명세 §13.17).
+create or replace function public.set_my_message_preview_hidden(p_hidden boolean)
+returns void
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+begin
+  if auth.uid() is null or caller_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  if p_hidden is null then
+    raise exception 'message preview setting must not be null' using errcode = '22023';
+  end if;
+  insert into public.notification_preferences as preference (profile_id, message_preview_hidden)
+  values (caller_profile_id, p_hidden)
+  on conflict (profile_id) do update set
+    message_preview_hidden = excluded.message_preview_hidden,
+    updated_at = now();
+end;
+$$;
+alter function public.set_my_message_preview_hidden(boolean) owner to postgres;
 
 create or replace function public.set_my_group_notification_preferences(
   p_group_id uuid,
@@ -895,7 +926,7 @@ begin
       and profile.status = 'accepted' and profile.deleted_at is null;
     if profile_pub_id is not null then destination := '/profile/' || profile_pub_id; end if;
   elsif target.kind = 'gongang_preempted' then
-    destination := '/util/gongang';
+    destination := '/menu/gongang';
   end if;
 
   update public.notifications set read_at = coalesce(read_at, now()) where id = target.id;
@@ -916,6 +947,9 @@ create or replace function public.claim_notification_deliveries(
   auth text,
   recipient_email text,
   notification_id uuid,
+  -- 메시지 Push면 채운다. 이때 `notification_id`, `importance`, `category`는 비어 있다.
+  message_id uuid,
+  conversation_id uuid,
   importance public.notification_importance,
   category public.notification_category,
   grouping_key uuid,
@@ -973,14 +1007,23 @@ begin
     from candidates
     where delivery.id = candidates.id
     returning delivery.*
+  ), keys as (
+    -- 메시지 본문은 이 배치에 메시지 Push가 있을 때만 키를 읽어 복호화한다.
+    select case
+      when exists (select 1 from claimed where claimed.message_id is not null)
+        then private.message_keys()
+    end as value
   )
   select claimed.id, claimed.lease_id, claimed.channel,
     subscription.endpoint, subscription.p256dh, subscription.auth,
     claimed.recipient_email, notification.id,
+    claimed.message_id, message_content.conversation_id,
     notification.importance, notification.category,
     subscription.id,
-    notification.title,
-    case notification.kind
+    coalesce(message_content.title, notification.title),
+    case
+      when claimed.message_id is not null then message_content.body
+      else case notification.kind
       when 'post_commented' then '내 게시물에 새 댓글이 등록되었습니다.'
       when 'comment_replied' then '내 댓글에 새 답글이 등록되었습니다.'
       when 'group_posted' then '그룹에 새 게시물이 등록되었습니다.'
@@ -991,8 +1034,11 @@ begin
       when 'post_mentioned' then '게시물에서 회원님을 멘션했습니다.'
       when 'comment_mentioned' then '댓글에서 회원님을 멘션했습니다.'
       else '새 알림이 있습니다.'
+      end
     end,
     case
+      when claimed.message_id is not null
+        then 'message:' || message_content.conversation_id::text
       when notification.importance = 'high'
         then 'notification:' || notification.id::text
       else 'notification-category:' || notification.category::text || ':' || subscription.id::text
@@ -1001,7 +1047,11 @@ begin
   left join private.web_push_subscriptions as subscription
     on subscription.id = claimed.subscription_id
   left join public.notifications as notification
-    on notification.id = claimed.notification_id;
+    on notification.id = claimed.notification_id
+  cross join keys
+  left join lateral private.message_push_content(
+    claimed.message_id, claimed.recipient_profile_id, keys.value
+  ) as message_content on true;
 end;
 $$;
 alter function public.claim_notification_deliveries(integer, integer) owner to postgres;
@@ -1115,6 +1165,10 @@ begin
   where notification_id is null and created_at < now() - interval '30 days';
   delete from private.web_push_subscriptions
   where gone_at < now() - interval '30 days';
+  -- 메시지 Push 행은 알림처럼 cascade로 지워지지 않는다. 메시지는 삭제해도 행이 남기 때문이다.
+  delete from private.notification_delivery_outbox
+  where message_id is not null
+    and completed_at < now() - interval '30 days';
   return removed;
 end;
 $$;
@@ -1148,6 +1202,64 @@ begin
 end;
 $$;
 alter function private.invoke_notification_dispatcher() owner to postgres;
+
+-- dispatcher를 곧바로 깨운 마지막 시각. 한 행만 둔다.
+create table private.notification_dispatcher_wakes (
+  id smallint primary key default 1,
+  woken_at timestamptz not null,
+  constraint notification_dispatcher_wakes_singleton check (id = 1)
+);
+alter table private.notification_dispatcher_wakes owner to postgres;
+
+-- 30초 Cron을 기다리지 않고 dispatcher를 깨운다(알림 기술 설계 §11.2). 1초 안에 이미 깨웠으면 다시
+-- 부르지 않는다. 깨어난 dispatcher가 곧 발송 시각이 되는 메시지를 기다렸다 가져가므로 그 사이의
+-- 메시지도 놓치지 않는다. pg_net 요청은 commit 뒤에 나가므로 아직 보이지 않는 행을 찾지 않는다.
+create or replace function private.wake_notification_dispatcher()
+returns void
+language plpgsql security definer
+set search_path = ''
+as $$
+begin
+  -- 이 함수는 전송 트랜잭션 안에서 돈다. 모든 전송이 한 행의 잠금에 줄을 서지 않도록, 먼저 잠그지
+  -- 않고 읽어 최근에 깨웠으면 넘어가고, 다른 트랜잭션이 지금 깨우는 중이면 기다리지 않고 넘어간다.
+  if exists (
+    select 1
+    from private.notification_dispatcher_wakes as wake
+    where wake.woken_at >= now() - interval '1 second'
+  ) then
+    return;
+  end if;
+  if not pg_catalog.pg_try_advisory_xact_lock(
+    pg_catalog.hashtext('private.wake_notification_dispatcher')
+  ) then
+    return;
+  end if;
+
+  insert into private.notification_dispatcher_wakes as wake (id, woken_at)
+  values (1, now())
+  on conflict (id) do update set woken_at = excluded.woken_at
+  where wake.woken_at < now() - interval '1 second';
+  if found then
+    perform private.invoke_notification_dispatcher();
+  end if;
+end;
+$$;
+alter function private.wake_notification_dispatcher() owner to postgres;
+
+-- 곧(`p_within_seconds` 안에) 발송 시각이 되는 대기 중 메시지 Push의 가장 이른 시각. dispatcher가
+-- 이 시각까지 기다렸다 다시 가져간다. 없으면 `null`이다.
+create or replace function public.next_message_delivery_at(p_within_seconds integer default 5)
+returns timestamptz
+language sql stable security definer
+set search_path = ''
+as $$
+  select min(delivery.available_at)
+  from private.notification_delivery_outbox as delivery
+  where delivery.message_id is not null
+    and delivery.status = 'pending'
+    and delivery.available_at <= now() + make_interval(secs => least(greatest(p_within_seconds, 0), 10));
+$$;
+alter function public.next_message_delivery_at(integer) owner to postgres;
 
 create or replace function private.prepare_group_notification_preferences()
 returns trigger
@@ -1717,6 +1829,9 @@ using (false) with check (false);
 alter table private.notification_delivery_attempts enable row level security;
 create policy notification_delivery_attempts_deny_client on private.notification_delivery_attempts
 using (false) with check (false);
+alter table private.notification_dispatcher_wakes enable row level security;
+create policy notification_dispatcher_wakes_deny_client on private.notification_dispatcher_wakes
+using (false) with check (false);
 
 revoke all on function private.notification_push_allowed(public.notifications, timestamptz, timestamptz) from public;
 revoke all on function private.notification_delivery_allowed(private.notification_delivery_outbox) from public;
@@ -1772,6 +1887,11 @@ revoke all on function public.prepare_notification_delivery(uuid, uuid) from pub
 grant execute on function public.prepare_notification_delivery(uuid, uuid) to service_role;
 revoke all on function public.complete_notification_delivery(uuid, uuid, text, integer, text) from public;
 grant execute on function public.complete_notification_delivery(uuid, uuid, text, integer, text) to service_role;
+revoke all on function public.next_message_delivery_at(integer) from public;
+grant execute on function public.next_message_delivery_at(integer) to service_role;
+revoke all on function public.set_my_message_preview_hidden(boolean) from public;
+grant execute on function public.set_my_message_preview_hidden(boolean) to authenticated;
+revoke all on function private.wake_notification_dispatcher() from public;
 
 revoke maintain, references, trigger, truncate
 on table public.notifications from anon, authenticated;
@@ -1784,6 +1904,7 @@ revoke all on table private.web_push_subscriptions from anon, authenticated;
 revoke all on table private.notification_event_keys from anon, authenticated;
 revoke all on table private.notification_delivery_outbox from anon, authenticated;
 revoke all on table private.notification_delivery_attempts from anon, authenticated;
+revoke all on table private.notification_dispatcher_wakes from anon, authenticated;
 
 grant references, trigger, truncate, maintain on table public.notifications to service_role;
 grant references, trigger, truncate, maintain on table public.notification_preferences to service_role;

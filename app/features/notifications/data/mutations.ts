@@ -28,6 +28,14 @@ export async function updateNotificationPreferences(
   if (error) throw error;
 }
 
+/** `알림에 메시지 내용 가리기`. 계정의 모든 기기에 적용한다. */
+export async function setMessagePreviewHidden(hidden: boolean): Promise<void> {
+  const { error } = await getSupabase().rpc("set_my_message_preview_hidden", {
+    p_hidden: hidden,
+  });
+  if (error) throw error;
+}
+
 export async function updateGroupNotificationPreferences(
   groupId: string,
   level: GroupNotificationLevel,

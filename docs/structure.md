@@ -5,6 +5,7 @@
 
 ```text
 app/
+  entry.client.tsx        ← 브라우저 진입점. hydration 전에 QueryClient 이벤트 구독 활성화
   root.tsx               ← document shell. 빌드 타임 렌더에서 브라우저 전역 금지
   routes.ts              ← 명시적 route tree
   routes/                ← 얇은 route module
@@ -15,7 +16,19 @@ e2e/                     ← Playwright
 supabase/tests/          ← pgTAP DB 통합 테스트
 ```
 
+`entry.client.tsx`는 초기 loader가 기다리는 쿼리도 탭·네트워크 복귀 시 재개되도록
+QueryClient를 hydration 전에 마운트한다. HMR dispose에서는 React root와 해당 구독을
+정리한다. `QueryProvider`의 인증·보호 저장소 동기화와 화면 gate는 그대로 유지한다.
+
 ## 레이어
+
+문서의 viewport는 `app/shared/components/viewport-meta.tsx`가 소유한다. 정적 문서의 기본값은
+`width=device-width, initial-scale=1`이고, head의 초기 인라인 스크립트가 iOS에서만
+`viewport-fit=cover`를 추가한다. iPadOS의 데스크톱 UA도 포함한다. iOS 하단 탭바와 댓글
+입력창은 기존 `--app-safe-b`로 홈 인디케이터 여백을 확보한다. Android Chrome 135+의 시스템
+내비게이션 바 배경 회귀를 피하기 위해 Android에는 `cover`를 적용하지 않는다.
+viewport 메타의 빈 `itemProp`은 React의 메타데이터 hoisting을 끈다. 초기 스크립트가 바꾼
+`content` 때문에 하이드레이션 시 두 번째 viewport 메타가 추가되지 않도록 유지한다.
 
 의존성은 `routes → features → shared` 한 방향이다.
 
@@ -26,8 +39,10 @@ supabase/tests/          ← pgTAP DB 통합 테스트
 - 다른 feature는 상대 feature의 좁은 `index.ts`를 우선 사용한다. 다만 큰 barrel import, 순환 의존 또는 불필요한 공개 API 확장을 피할 수 있고 대상 모듈이 안정적인 경계라면 직접 module import를 허용한다.
 - 애플리케이션 코드는 `~/*` alias를 사용하고 테스트는 `test/` 아래에 둔다.
 
-Supabase 호출은 `features/<feature>/data/**`에서만 한다. ESLint가 모든 내부 경계를 막지는 않으므로
-component와 model에서 `getSupabase()`를 부르지 않는다.
+제품별 Supabase I/O는 `features/<feature>/data/**`에 둔다. 기존 공용 클라이언트 인프라,
+signed URL 배치, `QueryProvider`의 Auth 동기화는 공유 인프라 예외다.
+이 예외를 근거로 일반 route, component, hook, model에 직접 Supabase 접근을 추가하지 않는다.
+ESLint가 모든 내부 경계를 강제하지는 않으므로 이 경계는 코드 검토에서도 확인한다.
 
 ## Feature
 

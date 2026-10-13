@@ -2,6 +2,7 @@ import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { FaqScreen } from "~/features/support/components/faq-screen";
+import { faqSections } from "~/features/support/content/faq";
 import type { FaqSection } from "~/features/support";
 import { renderRoute } from "../../../router";
 
@@ -16,6 +17,23 @@ const sections: FaqSection[] = [
 ];
 
 describe("FaqScreen", () => {
+  it("links password and notification help to the settings URLs", async () => {
+    const { user } = renderRoute(() => (
+      <FaqScreen sections={faqSections} contacts={[]} />
+    ));
+    await user.click(screen.getByText("비밀번호를 바꾸고 싶어요."));
+    expect(screen.getByRole("link", { name: "비밀번호 변경" })).toHaveAttribute(
+      "href",
+      "/settings/password",
+    );
+    await user.click(screen.getByText("그룹 별 알림은 어떻게 설정하나요?"));
+    await user.click(
+      screen.getByText("알림 설정을 바꾸면 다른 기기에도 똑같이 적용되나요?"),
+    );
+    for (const link of screen.getAllByRole("link", { name: "알림 설정" })) {
+      expect(link).toHaveAttribute("href", "/settings/noti");
+    }
+  });
   it("keeps every answer collapsed until its question is opened", () => {
     renderRoute(() => <FaqScreen sections={sections} contacts={[]} />);
 

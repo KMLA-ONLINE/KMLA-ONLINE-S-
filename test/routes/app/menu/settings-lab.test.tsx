@@ -14,13 +14,33 @@ function renderSettingsLab() {
         <SettingsLabPage />
       </ThemeProvider>
     ),
-    { path: "/menu/settings/lab" },
+    {
+      path: "/settings/lab",
+      routes: [{ path: "/settings", Component: () => <h1>설정 도착</h1> }],
+    },
   );
 }
 
 afterEach(() => window.localStorage.clear());
 
 describe("settings laboratory route", () => {
+  it.each([false, true])(
+    "returns to settings with experimental features enabled=%s",
+    async (enabled) => {
+      window.localStorage.setItem(
+        EXPERIMENTAL_FEATURES_STORAGE_KEY,
+        String(enabled),
+      );
+      const { user } = renderSettingsLab();
+
+      await user.click(screen.getByRole("button", { name: "뒤로" }));
+
+      expect(
+        await screen.findByRole("heading", { name: "설정 도착" }),
+      ).toBeVisible();
+    },
+  );
+
   it("does not expose experimental settings while disabled", () => {
     renderSettingsLab();
 

@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { useActionData } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -25,7 +26,7 @@ import MenuPasswordPage, {
 import ForgotPasswordPage, {
   clientAction as forgotPasswordAction,
 } from "~/routes/auth/forgot-password";
-import { renderRoute, screen } from "../router";
+import { fireEvent, renderRoute, screen } from "../router";
 
 const SHELL = {
   email: "student@kmla.hs.kr",
@@ -114,13 +115,72 @@ describe("password change", () => {
           <Page />
         </AppShellProvider>
       ),
-      { path: "/menu/password" },
+      { path: "/settings/password" },
     );
 
     expect(
       screen.getByRole("button", { name: "인증 코드 받기" }),
     ).toBeVisible();
     expect(screen.queryByLabelText("새 비밀번호")).not.toBeInTheDocument();
+  });
+
+  it("returns to settings from the password page header", async () => {
+    const Page = MenuPasswordPage as ComponentType<any>;
+    const { user } = renderRoute(
+      () => (
+        <AppShellProvider value={SHELL}>
+          <Page />
+        </AppShellProvider>
+      ),
+      {
+        path: "/settings/password",
+        routes: [{ path: "/settings", Component: () => <h1>설정 도착</h1> }],
+      },
+    );
+
+    await user.click(screen.getByRole("button", { name: "뒤로" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "설정 도착" }),
+    ).toBeVisible();
+  });
+
+  it("keeps the success screen until returning to settings", async () => {
+    const Page = MenuPasswordPage as ComponentType<any>;
+    function PasswordRoute() {
+      const actionData = useActionData();
+      return (
+        <AppShellProvider value={SHELL}>
+          <Page actionData={actionData} />
+        </AppShellProvider>
+      );
+    }
+    const { user } = renderRoute(PasswordRoute, {
+      path: "/settings/password",
+      action: (args) =>
+        menuPasswordAction({
+          ...args,
+          serverAction: () => Promise.resolve(undefined),
+        }),
+      routes: [{ path: "/settings", Component: () => <h1>설정 도착</h1> }],
+    });
+
+    await user.click(screen.getByRole("button", { name: "인증 코드 받기" }));
+    fireEvent.change(await screen.findByLabelText("인증 코드"), {
+      target: { value: "123456" },
+    });
+    await user.type(
+      screen.getByLabelText("새 비밀번호", { exact: true }),
+      "new-password",
+    );
+    await user.type(screen.getByLabelText("새 비밀번호 확인"), "new-password");
+    await user.click(screen.getByRole("button", { name: "비밀번호 변경" }));
+
+    expect(await screen.findByText("비밀번호를 변경했습니다")).toBeVisible();
+    await user.click(screen.getByRole("link", { name: "설정으로 돌아가기" }));
+    expect(
+      await screen.findByRole("heading", { name: "설정 도착" }),
+    ).toBeVisible();
   });
 });
 

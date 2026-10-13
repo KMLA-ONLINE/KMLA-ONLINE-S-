@@ -1,4 +1,10 @@
-import { BellIcon, HomeIcon, MenuIcon, UsersRoundIcon } from "lucide-react";
+import {
+  BellIcon,
+  HomeIcon,
+  MessagesSquareIcon,
+  ShapesIcon,
+  UsersRoundIcon,
+} from "lucide-react";
 import type { ComponentType } from "react";
 
 export interface NavItem {
@@ -7,14 +13,22 @@ export interface NavItem {
   icon: ComponentType<{ className?: string; strokeWidth?: number }>;
   /** 정확히 이 경로일 때만 활성. 루트("/")는 이게 없으면 모든 경로에서 활성이 된다. */
   end?: boolean;
+  /** `to` 밖에 있지만 이 탭에서 들어가는 화면들의 경로. */
+  also?: string[];
 }
 
-/** 사이드바와 탭바의 단일 소스. 순서·라벨·아이콘이 두 곳에서 갈라지지 않게 여기서만 정의한다. */
+/** 모바일 탭바와 데스크톱 사이드바가 공유하는 주요 내비게이션. */
 export const navItems: NavItem[] = [
   { to: "/", label: "홈", icon: HomeIcon, end: true },
+  { to: "/messenger", label: "메시지", icon: MessagesSquareIcon },
   { to: "/groups", label: "그룹", icon: UsersRoundIcon },
   { to: "/noti", label: "알림", icon: BellIcon },
-  { to: "/menu", label: "메뉴", icon: MenuIcon },
+  {
+    to: "/menu",
+    label: "메뉴",
+    icon: ShapesIcon,
+    also: ["/settings", "/licenses"],
+  },
 ];
 
 /**
@@ -23,5 +37,7 @@ export const navItems: NavItem[] = [
  */
 export function isNavItemActive(pathname: string, item: NavItem) {
   if (item.end) return pathname === item.to;
-  return pathname === item.to || pathname.startsWith(`${item.to}/`);
+  return [item.to, ...(item.also ?? [])].some(
+    (to) => pathname === to || pathname.startsWith(`${to}/`),
+  );
 }

@@ -3,6 +3,7 @@
   "watcher": {
     "ignore": ["**/.claude/**", ".claude/**/*"]
   },
+  "lsp": true,
   "mcp": {
     "shadcn": {
       "type": "local",

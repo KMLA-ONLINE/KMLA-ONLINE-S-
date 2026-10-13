@@ -2,6 +2,7 @@ import {
   BellOffIcon,
   BellRingIcon,
   CalendarClockIcon,
+  EyeOffIcon,
   MessageCircleIcon,
   PenLineIcon,
   ShieldCheckIcon,
@@ -464,6 +465,56 @@ function PushCard({
   );
 }
 
+/** `알림에 메시지 내용 가리기`(기능 명세 §15.2, §13.17). 다른 유형별 설정과 따로 저장한다. */
+function MessagePreviewSection({
+  initialHidden,
+  disabled,
+}: {
+  initialHidden: boolean;
+  disabled: boolean;
+}) {
+  const fetcher = useFetcher<SettingsActionResult>();
+  const hidden = fetcher.formData
+    ? fetcher.formData.get("hidden") === "true"
+    : initialHidden;
+
+  return (
+    <SettingsSection
+      title="메시지"
+      footnote="잠금 화면에서만 내용을 가리려면 기기 설정의 알림 미리보기를 사용해 주세요."
+    >
+      <div className="flex items-center gap-3 px-4 py-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+          <EyeOffIcon className="size-4.5" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">알림에 메시지 내용 가리기</p>
+          <p className="text-xs text-muted-foreground">
+            켜면 새 메시지 Push에 내용 대신 새 메시지가 있다는 안내만 보입니다.
+            계정의 모든 기기에 적용됩니다.
+          </p>
+        </div>
+        <Switch
+          aria-label="알림에 메시지 내용 가리기"
+          checked={hidden}
+          disabled={disabled}
+          onCheckedChange={(checked) =>
+            void fetcher.submit(
+              { intent: "message-preview", hidden: String(checked) },
+              { method: "post" },
+            )
+          }
+        />
+      </div>
+      {fetcher.data?.error ? (
+        <p role="alert" className="px-4 py-3 text-xs text-destructive">
+          {fetcher.data.error}
+        </p>
+      ) : null}
+    </SettingsSection>
+  );
+}
+
 export function NotificationSettings({
   initialPreferences,
   pushSupport,
@@ -501,6 +552,7 @@ export function NotificationSettings({
           fetcher.formData.get("school_push_enabled") === "true",
         timeline_push_enabled:
           fetcher.formData.get("timeline_push_enabled") === "true",
+        message_preview_hidden: initialPreferences.message_preview_hidden,
       }
     : initialPreferences;
 
@@ -520,7 +572,8 @@ export function NotificationSettings({
     (item) =>
       item.state !== "idle" &&
       (item.formData?.get("intent") === "preferences" ||
-        item.formData?.get("intent") === "group-preferences"),
+        item.formData?.get("intent") === "group-preferences" ||
+        item.formData?.get("intent") === "message-preview"),
   );
   const settingsPending = pushPending || preferencePending;
   const adjustedGroups = groupPreferences.filter(
@@ -531,7 +584,7 @@ export function NotificationSettings({
 
   return (
     <>
-      <PageHeader title="알림 설정" back="/menu/settings" />
+      <PageHeader title="알림 설정" back="/settings" />
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
         <h1 className="hidden text-2xl font-semibold md:block">알림 설정</h1>
 
@@ -578,6 +631,11 @@ export function NotificationSettings({
             </p>
           ) : null}
         </SettingsSection>
+
+        <MessagePreviewSection
+          initialHidden={initialPreferences.message_preview_hidden}
+          disabled={settingsPending}
+        />
 
         <SettingsSection
           title="그룹별 알림"

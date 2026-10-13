@@ -9,8 +9,11 @@ import {
   MENTION_DISPLAY_MARK,
   MENTION_LIMIT,
   buildMentionToken,
+  caretDeletionRange,
   countMentionTargets,
+  expandDeletionOverMentions,
   fromMentionDisplay,
+  isMentionDeleteInput,
   mentionDisplaySlot,
   mentionDisplayText,
   mentionOrdinalFromHref,
@@ -18,6 +21,7 @@ import {
   normalizeMentions,
   parseMentions,
   mentionDisplayRanges,
+  removedRange,
   sanitizeMentionDisplay,
   sanitizeMentionLabel,
   toMentionDisplay,
@@ -396,5 +400,76 @@ describe("mention display form", () => {
 
     expect(fromMentionDisplay(orphan, [한별])).toBe("@이한벌");
     expect(fromMentionDisplay(orphan, [])).toBe("@이한벌");
+  });
+});
+
+describe("deleting a mention as one piece", () => {
+  const mention = { start: 2, end: 6 };
+
+  it.each([
+    ["deleteContentBackward", true],
+    ["deleteWordBackward", true],
+    ["deleteSoftLineForward", true],
+    // 잘라내기·끌어 옮기기는 사람이 고른 범위라 넓히지 않는다.
+    ["deleteByCut", false],
+    ["deleteByDrag", false],
+    ["insertText", false],
+  ])("treats %s as a deletion to widen: %s", (inputType, expected) => {
+    expect(isMentionDeleteInput(inputType)).toBe(expected);
+  });
+
+  it("finds the span a native deletion removed, ending at the caret", () => {
+    expect(removedRange("앞 @첫 멤버", "앞 멤버", 1)).toEqual({
+      from: 1,
+      to: 4,
+    });
+    // 같은 글자가 이어지면 어느 쪽을 지웠는지 글자만으로는 모른다. 캐럿이 정한다.
+    expect(removedRange("aab", "ab", 0)).toEqual({ from: 0, to: 1 });
+    expect(removedRange("aab", "ab", 1)).toEqual({ from: 1, to: 2 });
+  });
+
+  it("returns null when the change is not a single removal at the caret", () => {
+    expect(removedRange("abc", "abcd", 3)).toBeNull();
+    expect(removedRange("abc", "axc", 1)).toBeNull();
+    expect(removedRange("abcd", "ad", 2)).toBeNull();
+  });
+
+  it("reads a collapsed caret as the character before or after it", () => {
+    expect(
+      caretDeletionRange({ from: 4, to: 4 }, "deleteContentBackward"),
+    ).toEqual({ from: 3, to: 4 });
+    expect(
+      caretDeletionRange({ from: 4, to: 4 }, "deleteContentForward"),
+    ).toEqual({ from: 4, to: 5 });
+    expect(
+      caretDeletionRange({ from: 1, to: 4 }, "deleteContentBackward"),
+    ).toEqual({ from: 1, to: 4 });
+  });
+
+  it.each([
+    // 가운데 한 글자, 마지막 글자, 걸친 선택 모두 멘션 전체로 넓힌다.
+    [
+      { from: 3, to: 4 },
+      { from: 2, to: 6 },
+    ],
+    [
+      { from: 5, to: 6 },
+      { from: 2, to: 6 },
+    ],
+    [
+      { from: 0, to: 3 },
+      { from: 0, to: 6 },
+    ],
+  ])("widens %j to %j", (range, expected) => {
+    expect(expandDeletionOverMentions(range, [mention])).toEqual(expected);
+  });
+
+  it("leaves a range that only borders a mention to the browser", () => {
+    expect(
+      expandDeletionOverMentions({ from: 6, to: 7 }, [mention]),
+    ).toBeNull();
+    expect(
+      expandDeletionOverMentions({ from: 1, to: 2 }, [mention]),
+    ).toBeNull();
   });
 });

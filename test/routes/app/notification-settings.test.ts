@@ -57,7 +57,7 @@ describe("notification settings route", () => {
 
   it("writes a complete preference snapshot", async () => {
     await clientAction({
-      request: new Request("https://example.com/noti/settings", {
+      request: new Request("https://example.com/settings/noti", {
         method: "POST",
         body: new URLSearchParams({
           intent: "preferences",
@@ -81,7 +81,7 @@ describe("notification settings route", () => {
 
   it("writes one complete group preference snapshot", async () => {
     await clientAction({
-      request: new Request("https://example.com/noti/settings", {
+      request: new Request("https://example.com/settings/noti", {
         method: "POST",
         body: new URLSearchParams({
           intent: "group-preferences",
@@ -103,7 +103,7 @@ describe("notification settings route", () => {
 
   it("turns group Push off when the inbox level is none", async () => {
     await clientAction({
-      request: new Request("https://example.com/noti/settings", {
+      request: new Request("https://example.com/settings/noti", {
         method: "POST",
         body: new URLSearchParams({
           intent: "group-preferences",
@@ -131,7 +131,7 @@ describe("notification settings route", () => {
     // 던지면 화면이 에러 바운더리로 떨어진다. 저장 실패는 다시 눌러 볼 수 있어야 한다.
     await expect(
       clientAction({
-        request: new Request("https://example.com/noti/settings", {
+        request: new Request("https://example.com/settings/noti", {
           method: "POST",
           body: new URLSearchParams({
             intent: "preferences",

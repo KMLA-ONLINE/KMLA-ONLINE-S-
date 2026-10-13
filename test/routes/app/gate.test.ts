@@ -1,49 +1,57 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { shouldRevalidate } from "~/routes/app/gate";
+const mocks = vi.hoisted(() => ({ loadShellData: vi.fn() }));
 
-function afterSubmit(formAction: string, formMethod = "POST") {
-  const url = new URL("https://example.com/groups/private-club");
-  return shouldRevalidate({
-    currentUrl: url,
-    nextUrl: url,
-    formMethod,
-    formAction,
-  } as never);
-}
+vi.mock("~/features/app-shell", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  loadShellData: mocks.loadShellData,
+}));
 
-describe("app gate revalidation", () => {
-  it("does not reload the profile for an explicit child-route refresh", () => {
-    const url = new URL("https://example.com/groups/private-club?tab=members");
+vi.mock("~/features/notifications", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  notificationBadgeQuery: () => ({
+    queryKey: ["notifications", "badge"],
+    queryFn: () => 0,
+  }),
+}));
 
-    expect(shouldRevalidate({ currentUrl: url, nextUrl: url } as never)).toBe(
-      false,
+import { appShellKeys } from "~/features/app-shell";
+import { getQueryClient } from "~/shared/lib/query-client";
+import { clientLoader } from "~/routes/app/gate";
+
+const profile = {
+  id: 1,
+  pub_id: "student",
+  name: "홍길동",
+  role: "member",
+  type: "student",
+  status: "accepted",
+  avatar_path: null,
+} as const;
+
+describe("app gate loader", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // 게이트는 첫 진입에만 돈다. 이후 `refreshShellProfile()`이 이 쿼리를 다시 읽는다.
+  it("seeds the shell profile query on entry", async () => {
+    const shell = { email: "student@kmla.hs.kr", profile };
+    mocks.loadShellData.mockResolvedValue(shell);
+
+    await expect(clientLoader()).resolves.toEqual(shell);
+    expect(getQueryClient().getQueryData(appShellKeys.profile())).toEqual(
+      shell,
     );
   });
 
-  it("does not reload the profile on navigation", () => {
+  it("does not seed the query for a user it turns away", async () => {
+    mocks.loadShellData.mockResolvedValue({
+      email: "student@kmla.hs.kr",
+      profile: { ...profile, status: "pending" },
+    });
+
+    await expect(clientLoader()).rejects.toMatchObject({ status: 302 });
     expect(
-      shouldRevalidate({
-        currentUrl: new URL("https://example.com/groups"),
-        nextUrl: new URL("https://example.com/noti"),
-      } as never),
-    ).toBe(false);
-  });
-
-  it("reloads the profile after a mutation that changes it", () => {
-    expect(afterSubmit("/profile/student/edit")).toBe(true);
-    expect(afterSubmit("/admin/app-admins")).toBe(true);
-  });
-
-  it("reloads the badge after marking notifications read", () => {
-    expect(afterSubmit("/noti")).toBe(true);
-  });
-
-  // 댓글·반응·그룹 관리처럼 셸과 무관한 mutation 뒤에 셸 RPC를 다시 보내지 않는다.
-  it("skips mutations that cannot change shell data", () => {
-    expect(afterSubmit("/groups/private-club")).toBe(false);
-    expect(afterSubmit("/groups/private-club/posts/post-id?index")).toBe(false);
-    expect(afterSubmit("/profile/student/posts/post-id")).toBe(false);
-    expect(afterSubmit("/noti/settings")).toBe(false);
+      getQueryClient().getQueryData(appShellKeys.profile()),
+    ).toBeUndefined();
   });
 });

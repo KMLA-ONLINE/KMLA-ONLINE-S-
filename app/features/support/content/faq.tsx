@@ -17,8 +17,10 @@ export const faqSections: FaqSection[] = [
         question: "비밀번호를 바꾸고 싶어요.",
         answer: (
           <>
-            메뉴 → 설정 → <Link to="/menu/password">비밀번호 변경</Link>에서
-            바꿉니다. 가입할 때 쓴 메일로 인증 코드를 보내 본인을 확인합니다.
+            설정 → <Link to="/settings/password">비밀번호 변경</Link>에서
+            바꿉니다. 설정은 모바일에서는 메뉴 화면의 톱니바퀴, 데스크톱에서는
+            상단 프로필 아바타 메뉴에서 엽니다. 가입할 때 쓴 메일로 인증 코드를
+            보내 본인을 확인합니다.
           </>
         ),
       },
@@ -54,7 +56,7 @@ export const faqSections: FaqSection[] = [
         answer: (
           <>
             기본적으로 공식 그룹은 새 게시물을 받고, 비공식 그룹은 나와 관련된
-            활동만 받습니다. <Link to="/noti/settings">알림 설정</Link>
+            활동만 받습니다. <Link to="/settings/noti">알림 설정</Link>
             이나 그룹에서 ...을 눌러 바꿀 수 있습니다.
           </>
         ),
@@ -65,7 +67,7 @@ export const faqSections: FaqSection[] = [
           <>
             Web Push 전체 켜기/끄기는 지금 쓰는 기기에만 적용됩니다. 반면 알림
             종류나 그룹별 알림 수신 여부 같은 설정은 계정 전체에 적용됩니다.{" "}
-            <Link to="/noti/settings">알림 설정</Link>에서 확인할 수 있습니다.
+            <Link to="/settings/noti">알림 설정</Link>에서 확인할 수 있습니다.
           </>
         ),
       },

@@ -1,5 +1,6 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useActionData, useNavigationType, useParams } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -84,6 +85,82 @@ function renderScreen(actionData?: ProfileEditActionData) {
 }
 
 describe("ProfileEditScreen", () => {
+  /** 프로필 → 편집으로 들어온 history에서 저장한다. 프로필 화면은 어떤 이동으로 왔는지 보여 준다. */
+  function renderFromProfile(savedPubId: string) {
+    function Profile() {
+      const { pubId } = useParams();
+      return <p>{`${pubId} ${useNavigationType()}`}</p>;
+    }
+
+    return renderRoute(
+      () => (
+        <ProfileEditScreen
+          profile={student}
+          departments={[]}
+          actionData={useActionData<ProfileEditActionData>()}
+        />
+      ),
+      {
+        path: "/profile/:pubId/edit",
+        action: () => ({ savedPubId }),
+        routes: [{ path: "/profile/:pubId", Component: Profile }],
+        initialEntries: [
+          `/profile/${student.pub_id}`,
+          `/profile/${student.pub_id}/edit`,
+        ],
+        initialIndex: 1,
+      },
+    );
+  }
+
+  // 프로필로 앞으로 보내면 저장 뒤 뒤로가기가 편집 화면을 다시 열고, 둘 사이를 맴돌게 된다.
+  it("goes back to the profile it came from after saving", async () => {
+    const { user } = renderFromProfile(student.pub_id);
+
+    await user.type(screen.getByLabelText("반"), "3");
+    await user.click(screen.getAllByRole("button", { name: "저장" })[0]);
+
+    expect(
+      await screen.findByText(`${student.pub_id} POP`),
+    ).toBeInTheDocument();
+  });
+
+  // 편집 화면만 새 주소로 바꾸면 그 앞의 옛 프로필 주소가 history에 남아 뒤로가기가 없는 주소로 간다.
+  // 돌아가서 옛 주소를 프로필 loader가 새 주소로 바꿔 든다.
+  it("goes back to the old address when the public id changed", async () => {
+    const { user } = renderFromProfile("byeol");
+
+    await user.type(screen.getByLabelText("반"), "3");
+    await user.click(screen.getAllByRole("button", { name: "저장" })[0]);
+
+    expect(
+      await screen.findByText(`${student.pub_id} POP`),
+    ).toBeInTheDocument();
+  });
+
+  it("goes back instead of stacking another profile on cancel", async () => {
+    const { user } = renderFromProfile(student.pub_id);
+
+    await user.click(screen.getByRole("link", { name: "취소" }));
+
+    expect(
+      await screen.findByText(`${student.pub_id} POP`),
+    ).toBeInTheDocument();
+  });
+
+  it("leaves a modified click on cancel to the browser", async () => {
+    const { user } = renderFromProfile(student.pub_id);
+    const cancel = screen.getByRole("link", { name: "취소" });
+
+    await user.keyboard("{Control>}");
+    await user.click(cancel);
+    await user.keyboard("{/Control}");
+
+    // 새 탭으로 여는 손짓이다. 이 탭은 고치던 화면에 그대로 있다.
+    expect(cancel).toBeInTheDocument();
+    expect(screen.queryByText(`${student.pub_id} POP`)).not.toBeInTheDocument();
+  });
+
   it("shows every editable field without collapsing any section", () => {
     renderScreen();
 

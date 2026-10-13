@@ -35,7 +35,7 @@ export function MobileTabBar({
         className,
       )}
     >
-      <ul className="grid h-[var(--app-tabbar-h)] grid-cols-4">
+      <ul className="grid h-[var(--app-tabbar-h)] grid-cols-5">
         {navItems.map((item) => {
           const isActive = isNavItemActive(location.pathname, item);
           const unread = badges[item.to] ?? 0;

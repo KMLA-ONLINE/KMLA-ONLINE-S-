@@ -99,6 +99,76 @@ describe("DesktopMarkdownEditor", () => {
     },
   );
 
+  /* eslint-disable testing-library/no-node-access --
+     캐럿은 글자 노드 안에 놓아야 하고 멘션 링크는 그 노드를 감싼 `a`다. Testing Library에는 둘 다 없다. */
+  describe("deleting a mention", () => {
+    /** 캐럿을 글자 노드의 한 자리에 두고 ProseMirror가 읽게 한다. */
+    async function placeCaret(node: Node, offset: number) {
+      document.getSelection()?.collapse(node, offset);
+      await act(async () => {
+        document.dispatchEvent(new Event("selectionchange"));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+    }
+
+    async function renderEditor(initialValue: string) {
+      const onValueChange = vi.fn();
+      render(
+        <DesktopMarkdownEditor
+          initialValue={initialValue}
+          onValueChange={onValueChange}
+        />,
+      );
+      const editor = await screen.findByLabelText("본문");
+      await waitFor(() => expect(editor).toHaveTextContent("끝"));
+      editor.focus();
+      return { editor, onValueChange };
+    }
+
+    function deleteInput(editor: HTMLElement, inputType: string) {
+      const event = new InputEvent("beforeinput", {
+        inputType,
+        bubbles: true,
+        cancelable: true,
+      });
+      fireEvent(editor, event);
+      return event;
+    }
+
+    it.each([
+      // 이름 가운데에서 지워도 반쪽이 남지 않는다. 남으면 저장 때 이름이 되살아나 그 사람을 부른다.
+      ["deleteContentBackward", 2],
+      ["deleteContentForward", 1],
+      // 멘션 바로 뒤에서 Backspace를 눌러도 마지막 글자만 지우지 않는다.
+      ["deleteContentBackward", 3],
+    ])("removes the whole mention on %s at offset %i", async (type, offset) => {
+      const { editor, onValueChange } =
+        await renderEditor("앞 [@한별](m:1) 끝");
+      const mention = editor.querySelector("a")!;
+      await placeCaret(mention.firstChild!, offset);
+
+      const event = deleteInput(editor, type);
+
+      expect(event.defaultPrevented).toBe(true);
+      await waitFor(() =>
+        expect(onValueChange).toHaveBeenLastCalledWith("앞  끝"),
+      );
+      expect(editor.querySelector("a")).toBeNull();
+    });
+
+    it("leaves plain text and ordinary links to the browser", async () => {
+      const { editor } = await renderEditor(
+        "[링크](https://example.com) [@한별](m:1) 끝",
+      );
+      await placeCaret(editor.querySelector("a")!.firstChild!, 1);
+
+      expect(
+        deleteInput(editor, "deleteContentBackward").defaultPrevented,
+      ).toBe(false);
+    });
+  });
+  /* eslint-enable testing-library/no-node-access */
+
   it("copies one stored line per line instead of a blank line between each", async () => {
     render(
       <DesktopMarkdownEditor initialValue={"첫 줄\n둘째 줄\n\n넷째 줄"} />,

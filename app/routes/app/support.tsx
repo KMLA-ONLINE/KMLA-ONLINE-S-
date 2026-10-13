@@ -15,7 +15,7 @@ export const handle = defineAppChrome({
 export default function SupportPage() {
   return (
     <>
-      <PageHeader title="도움말" back="/menu" />
+      <PageHeader title="도움말" back="/settings" />
 
       <FaqScreen
         sections={faqSections}

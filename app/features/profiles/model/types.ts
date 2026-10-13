@@ -76,4 +76,6 @@ export type ProfileEditErrors = Partial<
 export interface ProfileEditActionData {
   values?: ProfileEditValues;
   errors?: ProfileEditErrors;
+  /** 저장에 성공한 뒤의 공개 ID. 화면이 이것을 보고 프로필로 돌아간다. */
+  savedPubId?: string;
 }

@@ -15,7 +15,12 @@ import {
   useRevalidator,
 } from "react-router";
 
-import { PageHeader } from "~/features/app-shell";
+import {
+  PageHeader,
+  refreshShellProfile,
+  useBackLinkClick,
+  useGoBack,
+} from "~/features/app-shell";
 import { ProfileMediaEditor } from "~/features/profiles/components/profile-media-editor";
 import type {
   EditableProfile,
@@ -65,18 +70,35 @@ export function ProfileEditScreen({
   const [descriptionLength, setDescriptionLength] = useState(
     values.description.length,
   );
-  // 저장이 성공하면 action이 프로필로 보낸다. 그 이동을 나가기 확인이 막으면 안 된다.
+  // 저장이 성공하면 프로필로 돌아간다. 그 이동을 나가기 확인이 막으면 안 된다.
   const submittedRef = useRef(false);
+  const savedPubId = actionData?.savedPubId;
 
   useEffect(() => {
-    submittedRef.current = false;
-  }, [actionData]);
+    submittedRef.current = savedPubId !== undefined;
+  }, [actionData, savedPubId]);
+
+  const goBack = useGoBack();
+  const profilePath = profilePathOf(profile.pub_id);
+  const onCancelClick = useBackLinkClick(profilePath);
+
+  /**
+   * 편집 화면은 프로필에서 들어온다. 저장·취소 모두 그 프로필로 돌아가며 앞으로 보내지 않는다 — 앞으로 보내면 저장 뒤 뒤로가기가
+   * 편집 화면을 다시 열고, 프로필 ⇄ 편집이 번갈아 쌓여 둘 사이에 갇힌다. 공개 ID를 바꿨다면 돌아간 옛 주소를 프로필 loader가
+   * 새 주소로 바꿔 든다. 저장 결과마다 한 번만 떠난다 — 떠나는 동안 다시 그려져도 두 번 물러나지 않고, 떠나지 못했으면 다시 저장해 떠난다.
+   */
+  const leftForRef = useRef<ProfileEditActionData | undefined>(undefined);
+  useEffect(() => {
+    if (savedPubId === undefined || leftForRef.current === actionData) return;
+    leftForRef.current = actionData;
+    goBack(profilePathOf(savedPubId));
+  }, [actionData, goBack, savedPubId]);
 
   const markDirty = () => setDirty(true);
 
   /**
    * 사진은 폼과 따로 바로 저장된다. 새로고침이 모든 캐시를 가장 확실히 비우지만, 고치던 값이 있으면
-   * 그것까지 날아가므로 이 화면의 로더만 다시 읽는다. 머리말 아바타는 폼을 저장할 때 따라 갱신된다.
+   * 그것까지 날아가므로 이 화면의 로더와 셸 프로필(헤더 아바타)만 다시 읽는다.
    */
   const onMediaSaved = async () => {
     if (!dirty) {
@@ -84,7 +106,7 @@ export function ProfileEditScreen({
       return;
     }
 
-    await revalidator.revalidate();
+    await Promise.all([revalidator.revalidate(), refreshShellProfile()]);
   };
 
   const saveButton = (size?: "sm") => (
@@ -103,7 +125,7 @@ export function ProfileEditScreen({
     <>
       <PageHeader
         title="프로필 편집"
-        back={`/profile/${profile.pub_id}`}
+        back={{ fallback: profilePath }}
         actions={saveButton("sm")}
       />
 
@@ -111,7 +133,8 @@ export function ProfileEditScreen({
         <div className="hidden items-center gap-2 md:flex">
           <h1 className="min-w-0 flex-1 text-2xl font-semibold">프로필 편집</h1>
           <Link
-            to={`/profile/${profile.pub_id}`}
+            to={profilePath}
+            onClick={onCancelClick}
             className={buttonVariants({ variant: "outline" })}
           >
             취소
@@ -600,6 +623,10 @@ function LeaveGuard({
       onConfirm={() => blocker.proceed()}
     />
   );
+}
+
+function profilePathOf(pubId: string) {
+  return `/profile/${pubId}`;
 }
 
 function initialValues(profile: EditableProfile): ProfileEditValues {

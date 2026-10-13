@@ -1,10 +1,25 @@
-import { MessagesSquareIcon } from "lucide-react";
+import {
+  LogOutIcon,
+  SettingsIcon,
+  ShieldCheckIcon,
+  UserRoundIcon,
+} from "lucide-react";
 import { Link } from "react-router";
+import { useRef, useState } from "react";
 
 import { useAppShell } from "~/features/app-shell/context/app-shell-context";
+import { LogoutDialog } from "~/features/auth/components/logout-button";
 import { GlobalSearchDropdown } from "~/features/search";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { Button } from "~/shared/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/shared/ui/dropdown-menu";
 import { cn } from "~/shared/lib/utils";
 
 /**
@@ -13,6 +28,8 @@ import { cn } from "~/shared/lib/utils";
  */
 export function AppHeader({ className }: { className?: string }) {
   const { profile } = useAppShell();
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const avatarRef = useRef<HTMLButtonElement>(null);
 
   return (
     <header
@@ -33,19 +50,48 @@ export function AppHeader({ className }: { className?: string }) {
 
       <GlobalSearchDropdown />
 
-      <div className="flex flex-1 basis-0 items-center justify-end gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          nativeButton={false}
-          aria-label="메시지"
-          render={<Link to="/messenger" />}
-        >
-          <MessagesSquareIcon />
-        </Button>
-        <Link to="/profile" aria-label="내 프로필">
-          <UserAvatar src={profile.avatar_url} name={profile.name} />
-        </Link>
+      <div className="flex flex-1 basis-0 items-center justify-end">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            ref={avatarRef}
+            aria-label="계정 메뉴"
+            render={<Button variant={null} size="icon" />}
+          >
+            <UserAvatar src={profile.avatar_url} name={profile.name} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-40">
+            <DropdownMenuGroup>
+              <DropdownMenuItem render={<Link to="/profile" />}>
+                <UserRoundIcon aria-hidden />내 프로필
+              </DropdownMenuItem>
+              <DropdownMenuItem render={<Link to="/settings" />}>
+                <SettingsIcon aria-hidden />
+                설정
+              </DropdownMenuItem>
+              {profile.role === "admin" ? (
+                <DropdownMenuItem render={<Link to="/admin" />}>
+                  <ShieldCheckIcon aria-hidden />
+                  관리자 페이지
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => setLogoutOpen(true)}
+              >
+                <LogOutIcon aria-hidden />
+                로그아웃
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <LogoutDialog
+          open={logoutOpen}
+          onOpenChange={setLogoutOpen}
+          finalFocus={avatarRef}
+        />
       </div>
     </header>
   );

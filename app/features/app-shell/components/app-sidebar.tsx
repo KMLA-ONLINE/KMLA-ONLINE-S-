@@ -52,7 +52,7 @@ export function AppSidebar({ className }: { className?: string }) {
                     // 행이 flex라 아이콘(20px) + gap(12px)만으로도 레일 안쪽 폭을 넘겨서
                     // 라벨과 오른쪽 패딩이 잘려 나가고, 아이콘 위치는 왼쪽 패딩만으로 정해진다.
                     // 그래서 `ul`의 p-2(8px) + 여기 패딩 = (64 - 20) / 2 = 22px여야 한다.
-                    "flex h-10 items-center gap-3 rounded-md px-3.5 transition-colors",
+                    "flex h-10 items-center gap-3 rounded-md px-3.5",
                     isActive
                       ? "bg-sidebar-primary text-sidebar-primary-foreground"
                       : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
