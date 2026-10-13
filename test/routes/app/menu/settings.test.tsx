@@ -6,7 +6,7 @@ import {
   type ShellData,
 } from "~/features/app-shell";
 import SettingsPage from "~/routes/app/menu/settings";
-import { renderRoute, screen } from "../../../router";
+import { renderRoute, screen, within } from "../../../router";
 
 afterEach(() => window.localStorage.clear());
 
@@ -60,6 +60,19 @@ describe("settings route", () => {
     ]) {
       expect(screen.getByRole("link", { name })).toHaveAttribute("href", href);
     }
+    expect(
+      within(screen.getByRole("region", { name: "서비스 안내" })).getByRole(
+        "region",
+        { name: "앱 버전" },
+      ),
+    ).toBeInTheDocument();
+    // 로그아웃은 계정 카드 안이 아니라 맨 아래에 따로 둔다.
+    expect(
+      within(screen.getByRole("region", { name: "계정" })).queryByRole(
+        "button",
+        { name: "로그아웃" },
+      ),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "로그아웃" }),
     ).toBeInTheDocument();

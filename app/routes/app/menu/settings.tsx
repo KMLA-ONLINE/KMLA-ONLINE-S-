@@ -1,6 +1,5 @@
 import {
   BellIcon,
-  ChevronRightIcon,
   CircleQuestionMarkIcon,
   FileTextIcon,
   FlaskConicalIcon,
@@ -8,7 +7,7 @@ import {
   ShieldCheckIcon,
   SparklesIcon,
 } from "lucide-react";
-import { Link } from "react-router";
+import { useId, type ReactNode } from "react";
 
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import { LogoutButton } from "~/features/auth";
@@ -28,6 +27,31 @@ export const handle = defineAppChrome({
   bottomNav: "sticky",
 });
 
+/** 모든 묶음을 `제목 + 카드 한 장`으로 맞춘다. 행 사이 선은 카드의 `divide-y`가 그린다. */
+function SettingsSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  const headingId = useId();
+
+  return (
+    <section aria-labelledby={headingId} className="flex flex-col gap-1.5">
+      <h2
+        id={headingId}
+        className="px-1 text-xs font-semibold tracking-wide text-muted-foreground"
+      >
+        {title}
+      </h2>
+      <div className="divide-y overflow-hidden rounded-xl border bg-card">
+        {children}
+      </div>
+    </section>
+  );
+}
+
 export default function SettingsPage() {
   const { profile } = useAppShell();
   const [experimentalFeaturesEnabled, setExperimentalFeaturesEnabled] =
@@ -40,112 +64,64 @@ export default function SettingsPage() {
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
         <h1 className="hidden text-2xl font-semibold md:block">설정</h1>
 
-        <section className="flex flex-col gap-1.5">
-          <h2 className="px-1 text-xs font-semibold tracking-wide text-muted-foreground">
-            계정
-          </h2>
+        <SettingsSection title="계정">
+          <ListLinkRow
+            to="/menu/password"
+            label="비밀번호 변경"
+            icon={KeyRoundIcon}
+          />
+        </SettingsSection>
 
-          <div className="divide-y overflow-hidden rounded-xl border bg-card">
-            <ListLinkRow
-              to="/menu/password"
-              label="비밀번호 변경"
-              icon={KeyRoundIcon}
+        <SettingsSection title="앱 설정">
+          <ListLinkRow to="/noti/settings" label="알림 설정" icon={BellIcon} />
+          <Field orientation="horizontal" className="px-4 py-3">
+            <FieldContent>
+              <FieldTitle>실험실 기능 사용</FieldTitle>
+              <FieldDescription>
+                완성 전 기능을 먼저 써 봅니다. 변경되거나 제거될 수 있습니다.
+              </FieldDescription>
+            </FieldContent>
+            <Switch
+              aria-label="실험실 기능 사용"
+              checked={experimentalFeaturesEnabled}
+              onCheckedChange={setExperimentalFeaturesEnabled}
             />
-            <LogoutButton appearance="row" />
-          </div>
-        </section>
+          </Field>
+          {experimentalFeaturesEnabled ? (
+            <ListLinkRow
+              to="/menu/settings/lab"
+              label="실험실 설정"
+              icon={FlaskConicalIcon}
+            />
+          ) : null}
+        </SettingsSection>
 
-        <section className="flex flex-col gap-2">
-          <h2 className="px-1 text-xs font-semibold tracking-wide text-muted-foreground">
-            앱 설정
-          </h2>
-          <div className="overflow-hidden rounded-xl border bg-card">
-            <ListLinkRow
-              to="/noti/settings"
-              label="알림 설정"
-              icon={BellIcon}
-            />
-          </div>
-          <div className="px-1">
-            <h3 className="text-sm font-semibold">실험실</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              완성 전 기능을 먼저 사용해 볼 수 있습니다.
-            </p>
-          </div>
-
-          <div className="overflow-hidden rounded-xl border bg-card">
-            <Field orientation="horizontal" className="px-4 py-3">
-              <FieldContent>
-                <FieldTitle>실험실 기능 사용</FieldTitle>
-                <FieldDescription>
-                  기능이 변경되거나 제거될 수 있습니다.
-                </FieldDescription>
-              </FieldContent>
-              <Switch
-                aria-label="실험실 기능 사용"
-                checked={experimentalFeaturesEnabled}
-                onCheckedChange={setExperimentalFeaturesEnabled}
-              />
-            </Field>
-
-            {experimentalFeaturesEnabled ? (
-              <Link
-                to="/menu/settings/lab"
-                className="flex items-center gap-3 border-t px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/60"
-              >
-                <FlaskConicalIcon
-                  className="size-4.5 shrink-0 text-muted-foreground"
-                  aria-hidden
-                />
-                <span className="min-w-0 flex-1">실험실 설정</span>
-                <ChevronRightIcon
-                  className="size-4 shrink-0 text-muted-foreground"
-                  aria-hidden
-                />
-              </Link>
-            ) : null}
-          </div>
-        </section>
-
-        <section className="flex flex-col gap-1.5">
-          <h2 className="px-1 text-xs font-semibold tracking-wide text-muted-foreground">
-            서비스 안내
-          </h2>
-          <div className="divide-y overflow-hidden rounded-xl border bg-card">
-            <ListLinkRow
-              to="/support"
-              label="도움말"
-              icon={CircleQuestionMarkIcon}
-            />
-            <ListLinkRow
-              to="/update"
-              label="업데이트 기록"
-              icon={SparklesIcon}
-            />
-            <ListLinkRow
-              to="/menu/licenses"
-              label="오픈소스 라이선스"
-              icon={FileTextIcon}
-            />
-          </div>
-        </section>
+        <SettingsSection title="서비스 안내">
+          <ListLinkRow
+            to="/support"
+            label="도움말"
+            icon={CircleQuestionMarkIcon}
+          />
+          <ListLinkRow to="/update" label="업데이트 기록" icon={SparklesIcon} />
+          <ListLinkRow
+            to="/menu/licenses"
+            label="오픈소스 라이선스"
+            icon={FileTextIcon}
+          />
+          <AppVersionCard appearance="row" />
+        </SettingsSection>
 
         {profile.role === "admin" ? (
-          <section className="flex flex-col gap-1.5">
-            <h2 className="px-1 text-xs font-semibold tracking-wide text-muted-foreground">
-              관리
-            </h2>
-            <div className="overflow-hidden rounded-xl border bg-card">
-              <ListLinkRow
-                to="/admin"
-                label="관리자 페이지"
-                icon={ShieldCheckIcon}
-              />
-            </div>
-          </section>
+          <SettingsSection title="관리">
+            <ListLinkRow
+              to="/admin"
+              label="관리자 페이지"
+              icon={ShieldCheckIcon}
+            />
+          </SettingsSection>
         ) : null}
 
-        <AppVersionCard />
+        <LogoutButton />
       </div>
     </>
   );
