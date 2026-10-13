@@ -289,6 +289,69 @@ export function fromMentionDisplay(
   return result + stripDisplayMarks(text.slice(last));
 }
 
+/** 지울 범위의 [from, to). 멘션 자리는 [start, end)다. */
+export interface DeletionRange {
+  from: number;
+  to: number;
+}
+
+const MENTION_DELETE_INPUT =
+  /^delete(Content|Word|SoftLine|HardLine|EntireSoftLine)/;
+
+/**
+ * 멘션을 한 덩어리로 지울지 볼 `beforeinput`. 댓글 입력창과 본문 편집기가 함께 쓴다. keydown이 아니라 이것을 보는 것은
+ * 모바일 키보드가 Backspace를 keyCode 229로 보내 `key`가 비기 때문이다. 잘라내기·끌어 옮기기는 범위를 사람이 직접 고른 것이라 그대로 둔다.
+ */
+export function isMentionDeleteInput(inputType: string): boolean {
+  return MENTION_DELETE_INPUT.test(inputType);
+}
+
+/** 브라우저가 범위를 알려 주지 않을 때의 지울 범위. 선택이 있으면 그 범위, 없으면 캐럿 앞뒤 한 글자다. */
+export function caretDeletionRange(
+  selection: DeletionRange,
+  inputType: string,
+): DeletionRange {
+  const { from, to } = selection;
+  if (from !== to) return selection;
+  return inputType.endsWith("Backward")
+    ? { from: from - 1, to }
+    : { from, to: to + 1 };
+}
+
+/**
+ * 브라우저가 이미 지운 범위. `after`가 `before`에서 캐럿 자리의 한 덩어리만 빠진 값이면 그 자리, 아니면 `null`이다.
+ * `textarea`의 단어·줄 삭제는 지우기 전에 범위를 알 수 없어 지운 뒤에 찾는다. 지운 뒤 캐럿은 앞뒤 어느 방향이든 지운 자리의 앞이다.
+ */
+export function removedRange(
+  before: string,
+  after: string,
+  caret: number,
+): DeletionRange | null {
+  const removed = before.length - after.length;
+  if (removed <= 0) return null;
+  if (
+    before.slice(0, caret) !== after.slice(0, caret) ||
+    before.slice(caret + removed) !== after.slice(caret)
+  )
+    return null;
+  return { from: caret, to: caret + removed };
+}
+
+/** 지울 범위가 멘션에 조금이라도 닿으면 그 멘션까지 넓힌다. 닿지 않으면 `null` — 브라우저에 맡긴다. 반쪽 멘션은 남기지 않는다. */
+export function expandDeletionOverMentions(
+  range: DeletionRange,
+  mentions: { start: number; end: number }[],
+): DeletionRange | null {
+  const touched = mentions.filter(
+    (mention) => mention.start < range.to && range.from < mention.end,
+  );
+  if (touched.length === 0) return null;
+  return {
+    from: Math.min(range.from, ...touched.map((mention) => mention.start)),
+    to: Math.max(range.to, ...touched.map((mention) => mention.end)),
+  };
+}
+
 /** 본문에서 쓰지 않는 가장 작은 멘션 번호. 모든 번호가 사용 중이면 `null`이다. */
 export function nextMentionOrdinal(body: string): number | null {
   const used = new Set<number>();

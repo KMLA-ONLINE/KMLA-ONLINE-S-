@@ -2,6 +2,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { Form, Link } from "react-router";
 
+import { useBackLinkClick } from "~/features/app-shell";
 import { GroupConfirmDialog } from "~/features/groups/components/group-confirm-dialog";
 import {
   getGroupJoinPolicyLabel,
@@ -56,6 +57,7 @@ export function GroupCreateForm({
   errors?: CreateGroupErrors;
   pending: boolean;
 }) {
+  const onBackClick = useBackLinkClick("/groups");
   const [kind, setKind] = useState<GroupKind>(values.kind);
   const [joinPolicy, setJoinPolicy] = useState<GroupJoinPolicy>(
     values.joinPolicy,
@@ -115,6 +117,7 @@ export function GroupCreateForm({
       <div className="hidden flex-col gap-2 md:flex">
         <Link
           to="/groups"
+          onClick={onBackClick}
           className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeftIcon aria-hidden className="size-4" />
@@ -123,9 +126,11 @@ export function GroupCreateForm({
         <h1 className="text-2xl font-semibold">그룹 만들기</h1>
       </div>
 
+      {/* 만든 뒤 뒤로가기로 이 화면이 다시 열리지 않게 새 그룹이 이 자리를 차지한다. */}
       <Form
         ref={formRef}
         method="post"
+        replace
         className="flex flex-col gap-4"
         onSubmit={handleSubmit}
       >

@@ -1,9 +1,38 @@
+import { redirect, useNavigationType } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { GroupCreateForm } from "~/features/groups/components/group-create-form";
 import { renderRoute, screen, within } from "../../../router";
 
 describe("GroupCreateForm", () => {
+  // 만든 뒤 뒤로가기가 생성 화면을 다시 열지 않게, 새 그룹이 생성 화면 자리를 차지한다.
+  it("replaces itself with the new group after creating it", async () => {
+    function Group() {
+      return <p>{`새 그룹 ${useNavigationType()}`}</p>;
+    }
+    const { user } = renderRoute(
+      () => <GroupCreateForm canCreateOfficial={false} pending={false} />,
+      {
+        path: "/groups/create",
+        action: () => redirect("/groups/new-group"),
+        routes: [{ path: "/groups/new-group", Component: Group }],
+      },
+    );
+
+    await user.type(
+      screen.getByRole("textbox", { name: "그룹 이름" }),
+      "새 그룹",
+    );
+    await user.click(screen.getByRole("button", { name: "그룹 만들기" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "만들기",
+      }),
+    );
+
+    expect(await screen.findByText("새 그룹 REPLACE")).toBeInTheDocument();
+  });
+
   it("shows the address warning only when creating a public group", async () => {
     const { user: privateUser, unmount } = renderRoute(() => (
       <GroupCreateForm canCreateOfficial={false} pending={false} />

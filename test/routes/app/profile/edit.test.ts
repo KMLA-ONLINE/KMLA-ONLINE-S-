@@ -25,7 +25,7 @@ vi.mock("~/features/profiles", async (importOriginal) => ({
   updateMyProfile,
 }));
 
-import { clientAction } from "~/routes/app/profile/edit";
+import { clientAction, shouldRevalidate } from "~/routes/app/profile/edit";
 
 /** 화면이 실제로 내보내는 칸. 생일은 년/월/일 세 칸으로 나간다. */
 const SUBMITTED_FIELDS: Record<string, string> = {
@@ -79,15 +79,27 @@ describe("profile edit action", () => {
    * 방금 저장한 사용자가 자기 프로필에서 404를 본다(기능 명세 §12.2).
    */
   it("moves to the address the save actually produced", async () => {
-    const rejection = (await action({ pubId: "byeol" }).catch(
-      (error: unknown) => error,
-    )) as Response;
+    const result = await action({ pubId: "byeol" });
 
     expect(updateMyProfile).toHaveBeenCalledWith(
       expect.objectContaining({ pubId: "byeol" }),
     );
-    expect(rejection.status).toBe(302);
-    expect(rejection.headers.get("Location")).toBe("/profile/byeol");
+    // redirect로 보내면 history에 프로필이 하나 더 쌓여 뒤로가기가 편집 화면을 다시 연다.
+    // 돌아가는 일은 화면이 맡는다.
+    expect(result).toEqual({ savedPubId: "byeol" });
+  });
+
+  it("does not reload the editor it is about to leave", () => {
+    const args = {
+      defaultShouldRevalidate: true,
+    } as Parameters<typeof shouldRevalidate>[0];
+
+    expect(
+      shouldRevalidate({ ...args, actionResult: { savedPubId: "byeol" } }),
+    ).toBe(false);
+    expect(shouldRevalidate({ ...args, actionResult: { errors: {} } })).toBe(
+      true,
+    );
   });
 
   // 게이트는 다시 돌지 않는다. 헤더의 이름·아바타는 이 호출로만 바뀐다.

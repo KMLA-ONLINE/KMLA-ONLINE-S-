@@ -57,7 +57,11 @@ export default function GroupCreatePage({ actionData }: Route.ComponentProps) {
 
   return (
     <>
-      <PageHeader title="그룹 만들기" back="/groups" hideOnScroll={false} />
+      <PageHeader
+        title="그룹 만들기"
+        back={{ fallback: "/groups" }}
+        hideOnScroll={false}
+      />
       <GroupCreateForm
         canCreateOfficial={canCreateOfficial}
         values={actionData?.values}

@@ -42,7 +42,9 @@ import {
 import { Milkdown, MilkdownProvider, useEditor } from "@milkdown/react";
 import { toggleMark } from "@milkdown/prose/commands";
 import { redo, undo } from "@milkdown/prose/history";
+import type { Node as ProseNode } from "@milkdown/prose/model";
 import { Plugin } from "@milkdown/prose/state";
+import type { EditorView } from "@milkdown/prose/view";
 import {
   $command,
   $markSchema,
@@ -70,7 +72,14 @@ import {
   toMilkdownMarkdown,
 } from "~/features/posts/model/markdown";
 import type { PostBodyInputHandle } from "~/features/posts/components/editor/post-body-input";
-import { sanitizeMentionLabel } from "~/features/posts/model/mentions";
+import {
+  caretDeletionRange,
+  expandDeletionOverMentions,
+  isMentionDeleteInput,
+  isMentionHref,
+  sanitizeMentionLabel,
+  type DeletionRange,
+} from "~/features/posts/model/mentions";
 import {
   remarkPostUnderline,
   UNDERLINE_DIRECTIVE,
@@ -214,6 +223,67 @@ const imeSafeShortcuts = $prose(
     }),
 );
 
+/** 본문의 멘션 링크 자리. 같은 멘션이 서식으로 쪼개진 글자 노드들은 한 자리로 잇는다. */
+function mentionRanges(doc: ProseNode): { start: number; end: number }[] {
+  const ranges: { start: number; end: number; href: string }[] = [];
+  doc.descendants((node, pos) => {
+    if (!node.isText) return;
+    const href = node.marks.find(
+      (mark) =>
+        mark.type.name === "link" &&
+        typeof mark.attrs.href === "string" &&
+        isMentionHref(mark.attrs.href),
+    )?.attrs.href as string | undefined;
+    if (href === undefined) return;
+    const last = ranges.at(-1);
+    if (last?.end === pos && last.href === href) {
+      last.end = pos + node.nodeSize;
+      return;
+    }
+    ranges.push({ start: pos, end: pos + node.nodeSize, href });
+  });
+  return ranges;
+}
+
+/** 브라우저가 지우려는 범위. 단어·줄 단위 삭제는 `getTargetRanges()`가 알려 준다. */
+function deletionRange(view: EditorView, event: InputEvent): DeletionRange {
+  try {
+    const [target] = event.getTargetRanges?.() ?? [];
+    if (target) {
+      const from = view.posAtDOM(target.startContainer, target.startOffset);
+      const to = view.posAtDOM(target.endContainer, target.endOffset);
+      if (from < to) return { from, to };
+    }
+  } catch {
+    // DOM 위치를 문서 위치로 못 옮기면 선택 영역으로 판단한다.
+  }
+  return caretDeletionRange(view.state.selection, event.inputType);
+}
+
+/** 멘션은 한 덩어리로 지운다(`expandDeletionOverMentions()`). 반쪽만 남은 링크도 저장 때 `normalizeMentions()`가 이름을 되살려 지운 줄 아는 사람을 부른다. */
+const atomicMentions = $prose(
+  () =>
+    new Plugin({
+      props: {
+        handleDOMEvents: {
+          beforeinput(view, event) {
+            if (!isMentionDeleteInput(event.inputType)) return false;
+            if (event.isComposing || view.composing) return false;
+
+            const range = expandDeletionOverMentions(
+              deletionRange(view, event),
+              mentionRanges(view.state.doc),
+            );
+            if (!range) return false;
+            event.preventDefault();
+            view.dispatch(view.state.tr.delete(range.from, range.to));
+            return true;
+          },
+        },
+      },
+    }),
+);
+
 export default function DesktopMarkdownEditor({
   initialValue,
   onValueChange,
@@ -278,6 +348,7 @@ function EditorSurface({
         .use(markdownSchema)
         .use(history)
         .use(imeSafeShortcuts)
+        .use(atomicMentions)
         .use(listener),
     [],
   );
