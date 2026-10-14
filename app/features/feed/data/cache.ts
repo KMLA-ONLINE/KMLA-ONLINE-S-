@@ -1,16 +1,16 @@
 import {
   infiniteQueryOptions,
-  keepPreviousData,
   queryOptions,
   type InfiniteData,
   type QueryClient,
 } from "@tanstack/react-query";
 
-import {
-  hydrateFeedPostMedia,
-  listFeedPosts,
-} from "~/features/feed/data/queries";
-import type { FeedPage, FeedPost } from "~/features/feed/model/types";
+import { listFeedPosts, signFeedMedia } from "~/features/feed/data/queries";
+import type {
+  FeedMediaPaths,
+  FeedMediaUrls,
+} from "~/features/feed/model/media";
+import type { FeedPage } from "~/features/feed/model/types";
 
 const FEED_STALE_TIME = 15_000;
 
@@ -36,53 +36,46 @@ export function feedQuery() {
   });
 }
 
-/** 목록과 별도 수명으로 서명한다. 같은 버킷의 경로는 공용 서명 배치가 한 요청으로 묶는다. */
+/**
+ * 피드 페이지 하나의 미디어를 목록과 별도 수명으로 서명한다. 페이지가 붙어도 앞 페이지는 다시 서명하지 않는다.
+ * 경로 목록을 키에 담고 `queryFn`은 키에서 읽는다 — 본문·반응이 든 게시물 snapshot을 캐시가 붙잡지 않게.
+ */
 export function feedMediaQuery(
-  posts: FeedPost[],
-  feedEpoch: string | null,
-  viewerId: number,
+  queryClient: QueryClient,
+  page: {
+    viewerId: number;
+    feedEpoch: string | null;
+    pageParam: string | null;
+    paths: FeedMediaPaths;
+  },
 ) {
-  return queryOptions({
-    queryKey: [
-      ...feedKeys.all,
-      "media",
-      viewerId,
-      feedEpoch,
-      posts.map((post) => [
-        post.post_id,
-        post.author_avatar_path,
-        post.activity_media_path,
-        post.attachments.map((item) => [
-          item.attachment_id,
-          item.storage_bucket,
-          item.object_path,
-          item.thumbnail_path,
-        ]),
-      ]),
-    ] as const,
-    queryFn: async () => ({
-      viewerId,
-      feedEpoch,
-      // 수화 시점의 본문·반응 snapshot은 보관하지 않는다.
-      posts: (await hydrateFeedPostMedia(posts)).map((post) => ({
-        post_id: post.post_id,
-        author_avatar_path: post.author_avatar_path,
-        author_avatar_url: post.author_avatar_url,
-        activity_media_path: post.activity_media_path,
-        activity_media_url: post.activity_media_url,
-        attachments: post.attachments.map((item) => ({
-          attachment_id: item.attachment_id,
-          storage_bucket: item.storage_bucket,
-          object_path: item.object_path,
-          thumbnail_path: item.thumbnail_path,
-          signedUrl: item.signedUrl,
-          thumbnailUrl: item.thumbnailUrl,
-        })),
-      })),
-    }),
-    // 다음 페이지 서명 중에도 같은 계정·세션의 기존 이미지 URL은 유지한다.
-    placeholderData: keepPreviousData,
-    // URL의 유효 기간은 공용 서명 캐시가 판단한다. 이 투영 캐시에서 수명을 새로 시작하지 않는다.
+  const pageKey = [
+    ...feedKeys.all,
+    "media",
+    page.viewerId,
+    page.feedEpoch,
+    page.pageParam,
+  ] as const;
+  const queryKey = [...pageKey, page.paths] as const;
+  return queryOptions<FeedMediaUrls, Error, FeedMediaUrls, typeof queryKey>({
+    queryKey,
+    queryFn: ({ queryKey }) => signFeedMedia(queryKey[5]),
+    // 게시물을 빼면 키가 바뀐다. 같은 페이지의 이전 결과로 남은 이미지를 유지한다 — 병합은 경로로 찾으므로
+    // 빠진 게시물의 URL이 섞여도 해가 없다.
+    placeholderData: (): FeedMediaUrls | undefined => {
+      const cached = queryClient
+        .getQueriesData<FeedMediaUrls>({ queryKey: pageKey })
+        .flatMap(([, data]) => (data ? [data] : []));
+      if (cached.length === 0) return undefined;
+      return cached.reduce<FeedMediaUrls>(
+        (merged, data) => ({
+          attachments: { ...merged.attachments, ...data.attachments },
+          profiles: { ...merged.profiles, ...data.profiles },
+        }),
+        { attachments: {}, profiles: {} },
+      );
+    },
+    // URL의 유효 기간은 공용 서명 캐시가 판단한다. 이 캐시에서 수명을 새로 시작하지 않는다.
     staleTime: 0,
     retry: false,
     refetchOnWindowFocus: false,
