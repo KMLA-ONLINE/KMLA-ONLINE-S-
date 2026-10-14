@@ -111,7 +111,7 @@ The table defines minimum required usage, not an inventory of installed skills. 
 | shadcn, registries, `components.json`                                        | `shadcn`                |
 | UI, accessibility, or UX reviews                                             | `web-design-guidelines` |
 
-Recommended: use `grilling` to settle ambiguous plans or unspecified product behavior with the user before implementing.
+Before implementing a non-trivial plan or unspecified product behavior, use `grilling` to settle the specification with the user.
 
 ### MCP
 
@@ -121,19 +121,15 @@ Recommended: use `grilling` to settle ambiguous plans or unspecified product beh
 
 ## Verification
 
-- Always use TDD, except for tasks that need no tests or changes sufficiently verified by existing tests.
-
 `package.json` owns commands. Run checks appropriate to the changed files:
 
-| Change/stage                            | Required verification                                                                     |
-| --------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Source edit loop                        | `npm run check:static`: typegen, ESLint, TypeScript, Agent Map                            |
-| Source handoff                          | Prettier on touched files; CI runs `npm run verify` after push (`gh pr checks --watch`)   |
-| App verification and production build   | `npm run verify`                                                                          |
-| Check passed after the last source edit | Add `npm run build` instead of repeating check through verify                             |
-| Documentation-only                      | Prettier on touched files, `npm run check:docs`; also `npm run check:map` for map changes |
-| DB changes                              | DB workflow: reset, pgTAP, lint, advisors, types, final drift check                       |
-| E2E changes or affected browser flows   | Relevant Playwright file/project                                                          |
+| Change/stage                          | Required verification                                                                                       |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Source edit loop                      | `npm run check:static`: typegen, ESLint, TypeScript, Agent Map                                              |
+| Source handoff                        | Prettier on touched files and `npm run build`; CI runs `npm run verify` after push (`gh pr checks --watch`) |
+| Documentation-only                    | Prettier on touched files, `npm run check:docs`; also `npm run check:map` for map changes                   |
+| DB changes                            | DB workflow: reset, pgTAP, lint, advisors, types, final drift check                                         |
+| E2E changes or affected browser flows | Relevant Playwright file/project                                                                            |
 
 - `verify` runs app check plus build; it does not replace CI's separate DB checks. Report executed checks and any skipped or blocked verification.
 - `check` does not auto-fix source files, though typegen and caches may write generated output. It runs static checks before Vitest; leave scheduling to `scripts/check.mjs`. `check:static` skips formatting, document links, and tests, so it is not a source handoff substitute.
