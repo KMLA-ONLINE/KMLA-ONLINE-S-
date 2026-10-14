@@ -94,6 +94,31 @@ describe("FeedPostCard", () => {
   });
 });
 
+describe("FeedPostCard menu", () => {
+  it("offers edit and delete on the caller's own post", async () => {
+    const post = { ...pinnedFeedPost(), is_author: true };
+    const { user } = renderRoute(() => <FeedPostCard post={post} />);
+
+    await user.click(screen.getByRole("button", { name: "게시물 옵션" }));
+
+    expect(
+      await screen.findByRole("menuitem", { name: "수정" }),
+    ).toHaveAttribute("href", "/groups/notice/posts/post-id/edit");
+    expect(screen.getByRole("menuitem", { name: "삭제" })).toBeInTheDocument();
+  });
+
+  // 피드 RPC에는 운영진 권한이 없다. 남의 글의 운영 메뉴는 상세가 맡는다.
+  it("shows no menu on someone else's post", () => {
+    renderRoute(() => (
+      <FeedPostCard post={{ ...pinnedFeedPost(), is_author: false }} />
+    ));
+
+    expect(
+      screen.queryByRole("button", { name: "게시물 옵션" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("FeedPostRow", () => {
   it("dims a visited row and reports the visit", async () => {
     const onVisit = vi.fn();

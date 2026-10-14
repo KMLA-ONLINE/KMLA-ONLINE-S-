@@ -7,12 +7,18 @@ import {
   getPushSupport,
 } from "~/features/notifications/data/push";
 import {
-  hasHandledNotificationPrompt,
-  recordNotificationPromptHandled,
+  recordInboxReminderDismissed,
+  recordNotificationEnabled,
+  shouldShowInboxReminder,
 } from "~/features/notifications/model/prompt-storage";
 import { useOffline } from "~/shared/hooks/use-offline";
 import { Button } from "~/shared/ui/button";
 
+/**
+ * 첫 진입 창(`NotificationPermissionPrompt`)에서 넘긴 사람에게 알림함에서 다시 권하는 카드.
+ * 닫기를 `INBOX_REMINDER_LIMIT`번 누르면 더 띄우지 않는다. 창에 아직 답하지 않았으면 그 창이
+ * 먼저라 띄우지 않는다.
+ */
 export function NotificationPermissionCard({
   profileId,
 }: {
@@ -25,12 +31,11 @@ export function NotificationPermissionCard({
   const visible = eligible && !offline && !dismissed;
 
   useEffect(() => {
-    if (hasHandledNotificationPrompt(profileId)) return;
+    if (!shouldShowInboxReminder(profileId)) return;
     let cancelled = false;
     void getPushSupport().then((support) => {
-      // 아직 한 번도 묻지 않은 기기에만 띄운다(기능 명세 §14.10). 허용한 기기의 서버 구독 확인은
-      // 앱을 열 때 빠진 기록을 다시 등록하는 중이거나 요청이 실패하면 "아니오"로 올 수 있어 믿지 않는다.
-      // 허용한 뒤 끈 사람은 알림 설정에서 다시 켠다. 거절한 기기에는 묻기를 반복하지 않는다.
+      // 브라우저 권한을 아직 정하지 않은 기기에만 띄운다(기능 명세 §14.10). 거절한 기기에는 브라우저가
+      // 다시 묻지 못하고, 허용한 뒤 끈 사람은 알림 설정에서 다시 켠다.
       if (!cancelled) {
         setEligible(
           support.state === "available" && support.permission === "default",
@@ -43,15 +48,21 @@ export function NotificationPermissionCard({
   }, [profileId]);
 
   const dismiss = () => {
-    recordNotificationPromptHandled(profileId);
+    recordInboxReminderDismissed(profileId);
     setDismissed(true);
   };
 
   const enable = async () => {
     setPending(true);
     try {
-      await enableWebPush();
-      dismiss();
+      const result = await enableWebPush();
+      // 브라우저 권한 창을 그냥 닫았으면 닫기와 같게 센다.
+      if (result.state === "available" && result.subscribed) {
+        recordNotificationEnabled(profileId);
+      } else {
+        recordInboxReminderDismissed(profileId);
+      }
+      setDismissed(true);
     } catch (error) {
       console.error("Failed to enable Web Push", error);
       toast.error("알림을 켜지 못했습니다. 알림 설정에서 다시 시도해 주세요.");

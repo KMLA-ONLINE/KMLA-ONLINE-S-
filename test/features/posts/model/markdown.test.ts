@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractPostPlainText,
   fromPostEditorMarkdown,
+  normalizePostLinkInput,
   normalizePostMarkdownSource,
   parsePostMarkdown,
   sanitizePostMarkdown,
@@ -195,5 +196,33 @@ describe("CJK emphasis", () => {
 
   it("keeps CommonMark rules between Latin letters", () => {
     expect(sanitizePostMarkdown("a**(b)**c")).toBe("a\\*\\*(b)\\*\\*c");
+  });
+});
+
+describe("normalizePostLinkInput", () => {
+  it("adds https:// to an address typed without a scheme", () => {
+    expect(normalizePostLinkInput(" naver.com/path ")).toBe(
+      "https://naver.com/path",
+    );
+    expect(normalizePostLinkInput("localhost:3000")).toBe(
+      "https://localhost:3000",
+    );
+  });
+
+  it("keeps an explicit scheme so unsafe ones are still rejected", () => {
+    expect(normalizePostLinkInput("http://example.com")).toBe(
+      "http://example.com",
+    );
+    expect(normalizePostLinkInput("javascript:alert(1)")).toBe(
+      "javascript:alert(1)",
+    );
+  });
+
+  it("leaves an email address alone so it is rejected rather than linking to its domain", () => {
+    expect(normalizePostLinkInput("user@example.com")).toBe("user@example.com");
+  });
+
+  it("returns an empty string for blank input", () => {
+    expect(normalizePostLinkInput("   ")).toBe("");
   });
 });

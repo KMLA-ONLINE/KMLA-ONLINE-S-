@@ -1,4 +1,4 @@
-import { data, redirect } from "react-router";
+import { data, redirect, replace } from "react-router";
 
 import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import {
@@ -7,6 +7,7 @@ import {
   getProfilePost,
   listPostComments,
   ProfilePostDetail,
+  readFeedDeleteOrigin,
   shouldRevalidatePostDetail,
 } from "~/features/posts";
 import type { Route } from "./+types/post";
@@ -50,6 +51,10 @@ export async function clientAction({
   try {
     await deleteProfilePost(params.postId);
     invalidateDeletedProfilePost(params.postId);
+    // 피드에서 지웠으면 피드에 남는다(`FeedDeleteOrigin`).
+    const origin = readFeedDeleteOrigin(formData);
+    if (origin === "card") return data({ ok: true });
+    if (origin === "overlay") throw replace("/");
     throw redirect(`/profile/${params.pubId}`);
   } catch (error) {
     if (error instanceof Response) throw error;

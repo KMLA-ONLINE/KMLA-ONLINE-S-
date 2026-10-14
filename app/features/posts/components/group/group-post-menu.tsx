@@ -6,17 +6,20 @@ import type { GroupPost, GroupPostDetail } from "~/features/posts/model/types";
 export function GroupPostMenu({
   post,
   slug,
+  editState,
   onPin,
   onDelete,
 }: {
   post: GroupPost | GroupPostDetail;
   slug: string;
+  editState?: unknown;
   onPin: () => void;
   onDelete: () => void;
 }) {
   return (
     <PostMenu
       editTo={`${groupPostPath(slug, post.post_id)}/edit`}
+      editState={editState}
       isPinned={post.is_pinned}
       canEdit={post.can_edit}
       canPin={post.can_pin}

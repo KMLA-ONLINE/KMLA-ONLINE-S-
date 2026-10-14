@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from "react";
-import { useNavigate, useRevalidator } from "react-router";
+import { useLocation, useNavigate, useRevalidator } from "react-router";
 
 import {
   createGroupPostWithAttachments,
@@ -10,7 +10,11 @@ import {
   updateGroupPostWithAttachments,
 } from "~/features/posts/data/mutations";
 import { releasePostFile } from "~/features/posts/model/attachment-preparation";
-import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
+import {
+  FROM_GROUP,
+  groupPostPath,
+  isFromFeed,
+} from "~/features/posts/model/navigation";
 import { usePostAttachmentDraft } from "~/features/posts/hooks/use-post-attachment-draft";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
 import { getPostErrorMessage } from "~/features/posts/model/format";
@@ -76,6 +80,7 @@ export function GroupPostEditor({
   anonymousActivityRestriction?: AnonymousActivityRestriction | null;
 }) {
   const navigate = useNavigate();
+  const fromFeed = isFromFeed(useLocation().state);
   const revalidator = useRevalidator();
   // 그룹으로 `navigate`하면 히스토리에 작성 화면이 남아서, 뒤로 가기를 누른 사용자가 방금
   // 버린 초안을 다시 마주하게 된다. 들어온 경로를 되감는 게 맞다.
@@ -176,6 +181,11 @@ export function GroupPostEditor({
       additions.forEach(releasePostFile);
       await onSaved?.();
       await revalidator.revalidate();
+      // 피드 오버레이에서 고쳤으면 그 오버레이로 되감는다. 피드는 `onSaved`가 새 세션으로 연다.
+      if (fromFeed) {
+        void navigate(-1);
+        return;
+      }
       // 새 글은 그룹 → 작성 화면 → 상세라 방금 갈아치운 entry 밑이 그룹이다. 수정은 밑이
       // 이전 상세 entry여서 뒤로가기가 한 번에 그룹에 닿지 않으므로 표식을 심지 않는다.
       void navigate(groupPostPath(slug, postId), {

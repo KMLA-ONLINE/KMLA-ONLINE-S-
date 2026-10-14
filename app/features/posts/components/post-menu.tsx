@@ -23,6 +23,7 @@ import {
 /** 카드와 상세가 함께 쓰는 ⋯ 메뉴. 권한은 RPC의 `can_*`를 그대로 받고 클라이언트가 다시 계산하지 않는다. 고정은 그룹 게시물에만 있다(기능 명세 §8.1). */
 export function PostMenu({
   editTo,
+  editState,
   isPinned = false,
   canEdit,
   canPin = false,
@@ -37,6 +38,8 @@ export function PostMenu({
   anonymousSourceId,
 }: {
   editTo: string;
+  /** 수정 화면 history entry의 `state`. 저장 뒤 돌아갈 곳을 알린다(`FROM_FEED`). */
+  editState?: unknown;
   isPinned?: boolean;
   canEdit: boolean;
   canPin?: boolean;
@@ -89,7 +92,7 @@ export function PostMenu({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           {canEdit ? (
-            <DropdownMenuItem render={<Link to={editTo} />}>
+            <DropdownMenuItem render={<Link to={editTo} state={editState} />}>
               수정
             </DropdownMenuItem>
           ) : null}

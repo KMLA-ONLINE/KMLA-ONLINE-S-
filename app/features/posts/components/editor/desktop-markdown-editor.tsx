@@ -43,7 +43,7 @@ import { Milkdown, MilkdownProvider, useEditor } from "@milkdown/react";
 import { toggleMark } from "@milkdown/prose/commands";
 import { redo, undo } from "@milkdown/prose/history";
 import type { Node as ProseNode } from "@milkdown/prose/model";
-import { Plugin } from "@milkdown/prose/state";
+import { Plugin, Selection } from "@milkdown/prose/state";
 import type { EditorView } from "@milkdown/prose/view";
 import {
   $command,
@@ -63,7 +63,13 @@ import {
   UnderlineIcon,
   Undo2Icon,
 } from "lucide-react";
-import { useEffect, useImperativeHandle, useRef, type RefObject } from "react";
+import {
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 
 import {
   fromPostEditorMarkdown,
@@ -72,6 +78,10 @@ import {
   toMilkdownMarkdown,
 } from "~/features/posts/model/markdown";
 import type { PostBodyInputHandle } from "~/features/posts/components/editor/post-body-input";
+import {
+  LinkDialog,
+  type LinkDraft,
+} from "~/features/posts/components/editor/link-dialog";
 import {
   caretDeletionRange,
   expandDeletionOverMentions,
@@ -383,14 +393,77 @@ function EditorSurface({
     }),
     [get],
   );
-  const link = () => {
-    const value = window.prompt("링크 URL (https:// 또는 http://)");
-    if (!value) return;
-    if (!isSafePostLink(value)) {
-      window.alert("절대 HTTP(S) 주소만 사용할 수 있습니다.");
-      return;
-    }
-    run(callCommand(toggleLinkCommand.key, { href: value }));
+  // 창이 뜨면 편집기 포커스가 빠지므로 열 때의 선택 범위를 들고 있다가 그 자리에 넣는다.
+  const [linkDraft, setLinkDraft] = useState<
+    (LinkDraft & { from: number; to: number }) | null
+  >(null);
+
+  const openLink = () => {
+    get()?.action((ctx) => {
+      const { state } = ctx.get(editorViewCtx);
+      const { from, to, $from } = state.selection;
+      const current: unknown = linkSchema.type(ctx).isInSet($from.marks())
+        ?.attrs.href;
+      setLinkDraft({
+        from,
+        to,
+        text: state.doc.textBetween(from, to, " "),
+        // 멘션도 link mark라 그 주소(`m:`)는 채우지 않는다.
+        href:
+          typeof current === "string" && !isMentionHref(current) ? current : "",
+      });
+    });
+  };
+
+  const insertLink = ({ text, href }: { text: string; href: string }) => {
+    const draft = linkDraft;
+    setLinkDraft(null);
+    if (!draft) return;
+    get()?.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      const { state } = view;
+      const linkType = linkSchema.type(ctx);
+      const mark = linkType.create({ href });
+      const max = state.doc.content.size;
+      const from = Math.min(draft.from, max);
+      const to = Math.min(draft.to, max);
+      const tr = state.tr;
+      let end: number;
+      if (from < to && text === draft.text) {
+        // 고른 글자에는 mark만 더해 굵게·기울임 같은 서식을 지킨다. 멘션도 link mark라 덮으면
+        // 멘션이 주소 링크로 바뀌어 사라지므로, 멘션이 아닌 글자에만 건다.
+        state.doc.nodesBetween(from, to, (node, pos) => {
+          if (!node.isText) return;
+          const isMention = node.marks.some((existing) => {
+            const href: unknown = existing.attrs.href;
+            return (
+              existing.type === linkType &&
+              typeof href === "string" &&
+              isMentionHref(href)
+            );
+          });
+          if (isMention) return;
+          const start = Math.max(from, pos);
+          const stop = Math.min(to, pos + node.nodeSize);
+          tr.removeMark(start, stop, linkType).addMark(start, stop, mark);
+        });
+        end = to;
+      } else {
+        const marks = state.doc
+          .resolve(from)
+          .marks()
+          .filter((existing) => existing.type !== linkType);
+        tr.replaceWith(from, to, state.schema.text(text, [...marks, mark]));
+        end = from + text.length;
+      }
+      // 이어 쓰는 글자가 링크에 빨려 들어가지 않게 한다.
+      // 전체 선택이면 `end`가 블록 사이라 글자 자리로 당겨 놓는다.
+      tr.setSelection(Selection.near(tr.doc.resolve(end), -1)).removeStoredMark(
+        linkType,
+      );
+      view.dispatch(tr);
+      view.focus();
+    });
   };
 
   const tools: {
@@ -433,7 +506,7 @@ function EditorSurface({
       icon: <Heading3Icon />,
       run: () => run(callCommand(wrapInHeadingCommand.key, 3)),
     },
-    { label: "링크", icon: <LinkIcon />, run: link },
+    { label: "링크", icon: <LinkIcon />, run: openLink },
     {
       label: "실행 취소",
       keys: "Control+Z Meta+Z",
@@ -496,6 +569,13 @@ function EditorSurface({
       >
         <Milkdown />
       </div>
+      <LinkDialog
+        draft={linkDraft}
+        onOpenChange={(open) => {
+          if (!open) setLinkDraft(null);
+        }}
+        onSubmit={insertLink}
+      />
     </div>
   );
 }
