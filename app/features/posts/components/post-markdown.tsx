@@ -61,16 +61,20 @@ function copiedPlainText(fragment: DocumentFragment): string {
     if (node.nodeName === "BR") return "\n";
     return Array.from(node.childNodes, inlineText).join("");
   };
+  // react-markdown은 블록 사이에 `\n` 글자 노드를 끼운다. 블록 밖의 공백만 있는 조각은 줄이 아니다.
+  const flush = () => {
+    if (inline.trim()) lines.push(inline);
+    inline = "";
+  };
   for (const node of Array.from(fragment.childNodes)) {
     if (["P", "H2", "H3"].includes(node.nodeName)) {
-      if (inline) lines.push(inline);
-      inline = "";
+      flush();
       lines.push(inlineText(node));
     } else {
       inline += inlineText(node);
     }
   }
-  if (inline) lines.push(inline);
+  flush();
   return lines.join("\n").replaceAll("\u200b", "");
 }
 
