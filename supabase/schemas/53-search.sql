@@ -56,7 +56,16 @@ begin
       end::smallint
     from public.groups as group_record
     where caller_profile.type <> 'teacher'
-      and (group_record.kind = 'official' or group_record.join_policy = 'open')
+      and (
+        group_record.kind = 'official'
+        or group_record.join_policy = 'open'
+        or exists (
+          select 1
+          from public.group_memberships as membership
+          where membership.group_id = group_record.id
+            and membership.profile_id = caller_profile.id
+        )
+      )
       and group_record.search_name like '%' || normalized_query || '%'
     order by 5, group_record.name
     limit 5

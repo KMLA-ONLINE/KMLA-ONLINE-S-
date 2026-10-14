@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(7);
+select plan(8);
 
 -- Rename an existing seeded profile so it has a distinctive, unambiguous name for
 -- this test. Renaming (rather than inserting) sidesteps profiles.auth_user_id's
@@ -19,7 +19,27 @@ values
   (
     'sd-invite-group', true, 'unofficial', '검색대상초대전용', 'invite_only', 'identified', 'members',
     (select id from public.profiles where pub_id = 'kim-admin')
+  ),
+  (
+    'sd-request', false, 'unofficial', '검색대상승인가입', 'request', 'identified', 'members',
+    (select id from public.profiles where pub_id = 'kim-admin')
+  ),
+  (
+    'sd-mine-invite', false, 'unofficial', '검색대상내초대전용', 'invite_only', 'identified', 'members',
+    (select id from public.profiles where pub_id = 'kim-admin')
+  ),
+  (
+    'sd-mine-request', false, 'unofficial', '검색대상내승인가입', 'request', 'identified', 'members',
+    (select id from public.profiles where pub_id = 'kim-admin')
   );
+
+-- The caller (auth user ...0001) belongs to two of the private groups.
+insert into public.group_memberships (group_id, profile_id)
+select group_record.id, caller.id
+from public.groups as group_record
+cross join public.profiles as caller
+where group_record.slug in ('sd-mine-invite', 'sd-mine-request')
+  and caller.auth_user_id = '10000000-0000-0000-0000-000000000001';
 
 select set_config(
   'request.jwt.claim.sub',
@@ -45,12 +65,22 @@ select is(
 
 select is(
   (
-    select array_agg(result_id order by result_name)
+    select array_agg(result_id order by result_id)
     from public.search_directory(p_query => '검색대상')
     where result_kind = 'group'
   ),
-  array['sd-open-group'],
-  'invite-only unofficial groups are excluded from group results'
+  array['sd-mine-invite', 'sd-mine-request', 'sd-open-group'],
+  'private groups appear only to their members; open groups appear to everyone'
+);
+
+select is(
+  (
+    select count(*) from public.search_directory(p_query => '검색대상')
+    where result_kind = 'group'
+      and result_id in ('sd-invite-group', 'sd-request')
+  ),
+  0::bigint,
+  'private groups the caller does not belong to stay hidden'
 );
 
 select is(
