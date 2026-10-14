@@ -1,4 +1,4 @@
-import { WifiOffIcon, XIcon } from "lucide-react";
+import { WifiOffIcon } from "lucide-react";
 
 import { InstallPrompt } from "~/shared/components/install-prompt";
 import { useInAppEscape } from "~/shared/hooks/use-in-app-escape";
@@ -20,29 +20,28 @@ const BANNER_CLASS =
  *
  *  - 연결 끊김 배너: 브라우저가 연결이 없다고 말하는 동안만 나타난다.
  *  - 서비스 워커 배너: 새 빌드가 대기 중일 때만 나타난다.
- *  - 인앱 브라우저 배너: 카카오톡·페이스북·인스타그램 안에서 열렸을 때 앱이나 브라우저로 넘긴다.
  *  - 홈 화면 추가 다이얼로그: 스스로 뜰 때를 판단하므로 항상 렌더한다.
  *
  * 한 컴포넌트에 둔 이유는 서로 자리를 다투기 때문이다. 셋 다 같은 구석에 뜨는 데다,
  * 배너가 떠 있는 동안에는 설치 모달을 미뤄야 한다. 상태를 아는 곳이 여기뿐이라
  * `blocked`를 여기서 내려 준다.
  *
- * 우선순위는 연결 끊김 > 서비스 워커 > 인앱 브라우저 > 설치다. 연결이 없으면 다른 둘은 지금 할 수
+ * 우선순위는 연결 끊김 > 서비스 워커 > 설치다. 연결이 없으면 다른 둘은 지금 할 수
  * 있는 일이 아니고("새로고침"도 "홈 화면에 추가"도), 사용자가 알아야 할 것은 왜 화면이
  * 채워지지 않는지 하나다.
  *
  * 화면을 그리지 않는 청크 복구도 여기서 켠다. 배포와 서비스 워커가 얽힌 같은 문제를
- * 다루는 데다, 루트에 단 한 번만 마운트되는 컴포넌트가 여기이기 때문이다.
+ * 다루는 데다, 루트에 단 한 번만 마운트되는 컴포넌트가 여기이기 때문이다. 인앱 브라우저에서
+ * 앱으로 넘기는 것도 같은 이유로 여기서 한다.
  */
 export function PwaPrompts() {
   useStaleChunkRecovery();
+  useInAppEscape();
 
   const offline = useOffline();
   const { updateReady, applyingUpdate, updateAppliedElsewhere, applyUpdate } =
     useServiceWorker();
   const showServiceWorkerPrompt = !offline && updateReady;
-  const inApp = useInAppEscape();
-  const showInAppPrompt = !offline && !showServiceWorkerPrompt && inApp.open;
 
   useEffect(() => {
     setPromptActive("offline", offline);
@@ -53,11 +52,6 @@ export function PwaPrompts() {
     setPromptActive("service-worker", showServiceWorkerPrompt);
     return () => setPromptActive("service-worker", false);
   }, [showServiceWorkerPrompt]);
-
-  useEffect(() => {
-    setPromptActive("in-app", showInAppPrompt);
-    return () => setPromptActive("in-app", false);
-  }, [showInAppPrompt]);
 
   return (
     <>
@@ -91,40 +85,7 @@ export function PwaPrompts() {
           </button>
         </div>
       )}
-      {showInAppPrompt && inApp.escape && (
-        <div role="status" className={BANNER_CLASS}>
-          <p className="flex-1 text-sm">
-            {inApp.escape.kind === "guide"
-              ? "로그인이 유지되지 않는 화면이에요. 오른쪽 위 메뉴에서 '외부 브라우저에서 열기'를 눌러 주세요."
-              : inApp.escape.kind === "kakao" &&
-                  inApp.escape.target === "safari"
-                ? "카카오톡 안에서는 로그인이 유지되지 않아요."
-                : "앱 안의 브라우저에서는 로그인이 유지되지 않아요."}
-          </p>
-          {inApp.escape.kind !== "guide" && (
-            <button
-              type="button"
-              onClick={inApp.leave}
-              className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
-            >
-              {inApp.escape.kind === "kakao" && inApp.escape.target === "safari"
-                ? "Safari에서 열기"
-                : "앱에서 열기"}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={inApp.dismiss}
-            aria-label="닫기"
-            className="shrink-0 rounded-md p-1 text-muted-foreground"
-          >
-            <XIcon className="size-4" />
-          </button>
-        </div>
-      )}
-      <InstallPrompt
-        blocked={offline || showServiceWorkerPrompt || showInAppPrompt}
-      />
+      <InstallPrompt blocked={offline || showServiceWorkerPrompt} />
     </>
   );
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { getInAppEscape } from "~/shared/lib/install-platform";
+import { getInAppEscapeUrl } from "~/shared/lib/install-platform";
 
 const ANDROID_WEBVIEW =
   "Mozilla/5.0 (Linux; Android 14; SM-S921N Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.0.0 Mobile Safari/537.36";
@@ -22,46 +22,40 @@ afterEach(() => {
   Reflect.deleteProperty(navigator, "userAgent");
 });
 
-describe("getInAppEscape", () => {
+describe("getInAppEscapeUrl", () => {
   it("opens KakaoTalk links outside through KakaoTalk's own scheme", () => {
+    const kakao = `kakaotalk://web/openExternal?url=${encodeURIComponent(HREF)}`;
+
     useUserAgent(`${ANDROID_WEBVIEW} KAKAOTALK 10.5.0`);
-    expect(getInAppEscape(HREF)).toEqual({
-      kind: "kakao",
-      url: `kakaotalk://web/openExternal?url=${encodeURIComponent(HREF)}`,
-      target: "app",
-    });
+    expect(getInAppEscapeUrl(HREF)).toBe(kakao);
 
     useUserAgent(`${IPHONE_WEBVIEW} KAKAOTALK 10.5.0`);
-    expect(getInAppEscape(HREF)).toMatchObject({
-      kind: "kakao",
-      target: "safari",
-    });
+    expect(getInAppEscapeUrl(HREF)).toBe(kakao);
   });
 
   it("hands Facebook and Instagram on Android to the OS with a fallback", () => {
+    const intent = `intent://kmla.example/group/1/post/2?tab=a#Intent;scheme=https;S.browser_fallback_url=${encodeURIComponent(HREF)};end`;
+
     useUserAgent(`${ANDROID_WEBVIEW} Instagram 300.0.0.0 Android`);
-    expect(getInAppEscape(HREF)).toEqual({
-      kind: "intent",
-      url: `intent://kmla.example/group/1/post/2?tab=a#Intent;scheme=https;S.browser_fallback_url=${encodeURIComponent(HREF)};end`,
-    });
+    expect(getInAppEscapeUrl(HREF)).toBe(intent);
 
     useUserAgent(`${ANDROID_WEBVIEW} [FB_IAB/FB4A;FBAV/470.0.0.0;]`);
-    expect(getInAppEscape(HREF)).toMatchObject({ kind: "intent" });
+    expect(getInAppEscapeUrl(HREF)).toBe(intent);
   });
 
-  it("only guides Facebook and Instagram on iOS", () => {
+  it("has no way out of Facebook and Instagram on iOS", () => {
     useUserAgent(`${IPHONE_WEBVIEW} [FBAN/FBIOS;FBAV/470.0.0.0]`);
-    expect(getInAppEscape(HREF)).toEqual({ kind: "guide" });
+    expect(getInAppEscapeUrl(HREF)).toBeNull();
 
     useUserAgent(`${IPHONE_WEBVIEW} Instagram 300.0.0.0`);
-    expect(getInAppEscape(HREF)).toEqual({ kind: "guide" });
+    expect(getInAppEscapeUrl(HREF)).toBeNull();
   });
 
   it("leaves ordinary browsers and other in-app browsers alone", () => {
     useUserAgent(ANDROID_CHROME);
-    expect(getInAppEscape(HREF)).toBeNull();
+    expect(getInAppEscapeUrl(HREF)).toBeNull();
 
     useUserAgent(`${ANDROID_WEBVIEW} NAVER(inapp; search; 2000; 12.0.0)`);
-    expect(getInAppEscape(HREF)).toBeNull();
+    expect(getInAppEscapeUrl(HREF)).toBeNull();
   });
 });
