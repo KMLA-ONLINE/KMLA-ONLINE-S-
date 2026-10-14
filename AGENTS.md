@@ -112,6 +112,7 @@ The table defines minimum required usage, not an inventory of installed skills. 
 | Writing, reviewing, or refactoring React                                     | `vercel-react-best-practices` |
 | UI, accessibility, or UX reviews                                             | `web-design-guidelines`       |
 | Implementation under the [TDD policy](#verification)                         | `tdd`                         |
+| Implementation completion review before handoff                              | `code-review`                 |
 
 ### MCP
 
@@ -146,3 +147,11 @@ The table defines minimum required usage, not an inventory of installed skills. 
 - Run Supabase CLI commands sequentially on Windows; prefer npm scripts or `npx supabase` for the repository CLI version.
 - Keep build order: `react-router build` → `scripts/inline-root-css.mjs` → `scripts/build-sw.mjs`. React Router emits `index.html` after Vite `closeBundle`, so do not move post-steps into plugins. CSS rewriting must precede precaching. Use `build:app` only to intentionally skip both post-steps.
 - Husky runs staged lint/format on commit and typecheck/Vitest on push. Keep LF endings as enforced by `.gitattributes`.
+
+### Completion review
+
+- After implementation changes and required verification are complete, load `code-review` and review the request-scoped changes before handoff.
+- Record the review baseline and pre-existing working-tree changes at task start. Include relevant uncommitted changes without treating unrelated user work as part of the implementation.
+- Report Standards and Spec findings separately. Fix in-scope issues; ask before expanding scope or deciding unspecified product behavior.
+- After review-driven edits, rerun affected checks and reassess the findings. Include unresolved findings and review limitations in the final handoff.
+- Documentation- or configuration-only tasks do not require this review unless requested.
