@@ -1,0 +1,4 @@
+# Whole-project type check that lint-staged cannot do from a partial file list:
+# a type error usually lives in a file the commit did not touch. Tests and the
+# build run in CI (`.github/workflows/quality.yml`).
+npm run typecheck
