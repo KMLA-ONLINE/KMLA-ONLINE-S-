@@ -6,9 +6,10 @@ import {
 } from "@tanstack/react-query";
 
 import { listFeedPosts, signFeedMedia } from "~/features/feed/data/queries";
-import type {
-  FeedMediaPaths,
-  FeedMediaUrls,
+import {
+  feedMediaPaths,
+  type FeedMediaPaths,
+  type FeedMediaUrls,
 } from "~/features/feed/model/media";
 import type { FeedPage } from "~/features/feed/model/types";
 
@@ -81,6 +82,38 @@ export function feedMediaQuery(
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
+}
+
+/** 쌓인 피드 페이지마다의 미디어 쿼리. 화면과 로더의 prefetch가 같은 키를 만들도록 한 곳에서 짓는다. */
+export function feedPageMediaQueries(
+  queryClient: QueryClient,
+  feed: InfiniteData<FeedPage, unknown> | undefined,
+  viewerId: number,
+) {
+  const pages = feed?.pages ?? [];
+  const feedEpoch = pages[0]?.feedEpoch ?? null;
+  return pages.map((page, index) => ({
+    postIds: page.posts.map((post) => post.post_id),
+    query: feedMediaQuery(queryClient, {
+      viewerId,
+      feedEpoch,
+      pageParam: (feed?.pageParams[index] as string | null | undefined) ?? null,
+      paths: feedMediaPaths(page.posts),
+    }),
+  }));
+}
+
+/**
+ * 로더가 목록을 받자마자 서명을 띄운다. 화면이 마운트된 뒤 `useQueries`가 시작하길 기다리지 않는다.
+ * 기다리지 않고 실패도 삼킨다 — 화면이 같은 키로 이어받고 재시도도 화면이 맡는다.
+ */
+export function prefetchFeedMedia(queryClient: QueryClient, viewerId: number) {
+  const feed = queryClient.getQueryData<InfiniteData<FeedPage, string | null>>(
+    feedKeys.list(),
+  );
+  for (const { query } of feedPageMediaQueries(queryClient, feed, viewerId)) {
+    void queryClient.query(query).catch(() => undefined);
+  }
 }
 
 /**

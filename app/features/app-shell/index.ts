@@ -14,6 +14,7 @@ export {
   appShellKeys,
   isShellProfile,
   loadShellData,
+  readShellProfileId,
   refreshShellProfile,
 } from "~/features/app-shell/data/queries";
 export {

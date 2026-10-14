@@ -14,14 +14,13 @@ import {
   FeedPostRow,
 } from "~/features/feed/components/feed-post";
 import {
-  feedMediaQuery,
+  feedPageMediaQueries,
   feedQuery,
   resetFeed,
 } from "~/features/feed/data/cache";
 import {
   applyFeedMediaUrls,
   type FeedMediaUrls,
-  feedMediaPaths,
   hasMissingMedia,
   missingImagePaths,
 } from "~/features/feed/model/media";
@@ -111,7 +110,6 @@ export function FeedScreen() {
   }, [activePostId, detailFetcher, detailRequest]);
 
   const pages = data?.pages;
-  const pageParams = data?.pageParams;
   // 같은 게시물이 두 페이지에 걸쳐 나타날 수 있다(그 사이에 새 글이 올라온 경우).
   const rawPosts = useMemo(
     () =>
@@ -125,19 +123,9 @@ export function FeedScreen() {
     [pages],
   );
 
-  const feedEpoch = pages?.[0]?.feedEpoch ?? null;
   const mediaPages = useMemo(
-    () =>
-      (pages ?? []).map((page, index) => ({
-        postIds: page.posts.map((post) => post.post_id),
-        query: feedMediaQuery(queryClient, {
-          viewerId: profile.id,
-          feedEpoch,
-          pageParam: (pageParams?.[index] as string | null | undefined) ?? null,
-          paths: feedMediaPaths(page.posts),
-        }),
-      })),
-    [feedEpoch, pageParams, pages, profile.id, queryClient],
+    () => feedPageMediaQueries(queryClient, data, profile.id),
+    [data, profile.id, queryClient],
   );
   const media = useQueries({
     queries: mediaPages.map(({ query }) => ({

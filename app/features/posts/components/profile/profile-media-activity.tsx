@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 
+import { useUnavailableMediaLabel } from "~/features/posts/hooks/use-media-pending";
 import {
   imageDownloadName,
   toAttachmentDownloadUrl,
@@ -17,12 +18,11 @@ type ProfileMediaActivityPost = Pick<
 export function ProfileMediaActivity({
   post,
   className,
-  mediaPending = false,
 }: {
   post: ProfileMediaActivityPost;
   className?: string;
-  mediaPending?: boolean;
 }) {
+  const unavailableLabel = useUnavailableMediaLabel("image");
   const imageId = `profile-activity-${post.post_id}`;
   const downloadName = imageDownloadName(post.post_id);
   // 아무것도 그리지 않는 경우까지 등록하면 열 수단이 없는 사진이 `?image=`로만 열린다.
@@ -81,7 +81,7 @@ export function ProfileMediaActivity({
       )}
     >
       <p className="px-4 text-center text-sm text-muted-foreground">
-        {mediaPending ? "이미지 불러오는 중" : "이미지를 불러오지 못했습니다"}
+        {unavailableLabel}
       </p>
     </div>
   );
