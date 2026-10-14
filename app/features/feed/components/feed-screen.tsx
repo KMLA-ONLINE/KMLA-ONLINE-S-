@@ -1,9 +1,11 @@
 import {
   useInfiniteQuery,
+  useQueries,
   useQuery,
   useQueryClient,
+  type UseQueryResult,
 } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher, useSearchParams } from "react-router";
 
 import { useAppShell } from "~/features/app-shell";
@@ -11,13 +13,19 @@ import {
   FeedPostCard,
   FeedPostRow,
 } from "~/features/feed/components/feed-post";
-import { feedQuery, resetFeed } from "~/features/feed/data/cache";
-import { hydrateFeedPostMedia } from "~/features/feed/data/queries";
+import {
+  feedPageMediaQueries,
+  feedQuery,
+  resetFeed,
+} from "~/features/feed/data/cache";
+import {
+  applyFeedMediaUrls,
+  type FeedMediaUrls,
+  hasMissingMedia,
+  missingImagePaths,
+} from "~/features/feed/model/media";
 import { previewFeedPostDetail } from "~/features/feed/model/detail-preview";
-import type {
-  FeedPost,
-  FeedPostDetailResult,
-} from "~/features/feed/model/types";
+import type { FeedPostDetailResult } from "~/features/feed/model/types";
 import {
   anonymousActivityRestrictionQuery,
   GroupPostDetail,
@@ -32,6 +40,17 @@ import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
+
+/** 페이지별 서명 결과를 경로 하나의 표로 모은다. 모듈 함수라 결과가 같으면 같은 참조가 유지된다. */
+function combineFeedMedia(results: UseQueryResult<FeedMediaUrls>[]) {
+  const urls: FeedMediaUrls = { attachments: {}, profiles: {} };
+  for (const { data } of results) {
+    if (!data) continue;
+    Object.assign(urls.attachments, data.attachments);
+    Object.assign(urls.profiles, data.profiles);
+  }
+  return { urls, fetching: results.map((result) => result.isFetching) };
+}
 
 export function FeedScreen() {
   const detailFetcher = useFetcher<FeedPostDetailResult>();
@@ -90,69 +109,69 @@ export function FeedScreen() {
     void detailFetcher.load(detailRequest);
   }, [activePostId, detailFetcher, detailRequest]);
 
-  const pages = data?.pages ?? [];
+  const pages = data?.pages;
   // 같은 게시물이 두 페이지에 걸쳐 나타날 수 있다(그 사이에 새 글이 올라온 경우).
-  const rawPosts = Array.from(
-    new Map(
-      pages.flatMap((page) => page.posts).map((post) => [post.post_id, post]),
-    ).values(),
+  const rawPosts = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          (pages ?? [])
+            .flatMap((page) => page.posts)
+            .map((post) => [post.post_id, post]),
+        ).values(),
+      ),
+    [pages],
   );
 
-  const feedEpoch = pages[0]?.feedEpoch ?? null;
-  const hydratedPostIds = useRef(new Set<string>());
-  const [hydratedState, setHydratedState] = useState(() => ({
-    feedEpoch,
-    posts: new Map<string, FeedPost>(),
-  }));
-  const hydratedPosts =
-    hydratedState.feedEpoch === feedEpoch
-      ? hydratedState.posts
-      : new Map<string, FeedPost>();
-  /** 수화본은 만들어진 시점에 멈춰 있어, 수화가 채운 필드만 쓰고 engagement는 최신 raw post의 것을 얹는다. */
-  const posts = rawPosts.map((post) => {
-    const hydrated = hydratedPosts.get(post.post_id);
-    return hydrated
-      ? {
-          ...hydrated,
-          comment_count: post.comment_count,
-          reaction_count: post.reaction_count,
-          top_reactions: post.top_reactions,
-          my_reaction: post.my_reaction,
-        }
-      : post;
+  const mediaPages = useMemo(
+    () => feedPageMediaQueries(queryClient, data, profile.id),
+    [data, profile.id, queryClient],
+  );
+  const media = useQueries({
+    queries: mediaPages.map(({ query }) => ({
+      ...query,
+      enabled: viewMode === "card",
+    })),
+    combine: combineFeedMedia,
   });
+  /** 서명은 URL 필드만 채운다. 늦은 응답이 본문·첨부·engagement를 되돌리지 않는다. */
+  const posts = useMemo(
+    () => rawPosts.map((post) => applyFeedMediaUrls(post, media.urls)),
+    [media.urls, rawPosts],
+  );
+  // 로딩 표시는 서명이 진행 중인 페이지의, 아직 URL이 없는 게시물에만 붙인다.
+  const pendingPostIds = new Set(
+    mediaPages.flatMap(({ postIds }, index) =>
+      media.fetching[index] ? postIds : [],
+    ),
+  );
+  // 한 번 다시 시도해도 남은 경로는 버튼을 다시 띄우지 않는다. 지워진 객체처럼 재시도로 고칠 수 없는 실패다.
+  const [retriedPaths, setRetriedPaths] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const retryablePaths = posts
+    .flatMap(missingImagePaths)
+    .filter((path) => !retriedPaths.has(path));
+  const canRetryMedia =
+    viewMode === "card" &&
+    retryablePaths.length > 0 &&
+    !media.fetching.some(Boolean);
 
-  /** 지금 화면의 세션. resolve 시점에 클로저의 epoch가 아직 유효한지 확인한다. */
-  const liveFeedEpoch = useRef(feedEpoch);
-
-  // 세션이 바뀌면 이전 세션에서 채운 미디어는 버린다.
-  useEffect(() => {
-    liveFeedEpoch.current = feedEpoch;
-    hydratedPostIds.current.clear();
-  }, [feedEpoch]);
-
-  useEffect(() => {
-    if (viewMode !== "card") return;
-    const unhydrated = rawPosts.filter(
-      (post) => !hydratedPostIds.current.has(post.post_id),
-    );
-    if (unhydrated.length === 0) return;
-    unhydrated.forEach((post) => hydratedPostIds.current.add(post.post_id));
-    void hydrateFeedPostMedia(unhydrated).then((hydrated) => {
-      // 이 결과는 이미 지나간 세션의 것이다. 지금 세션이 채워 둔 걸 덮어쓰면, 그 글들은
-      // `hydratedPostIds`에 이미 올라가 있어 다시 시도되지도 않는다.
-      if (liveFeedEpoch.current !== feedEpoch) return;
-
-      setHydratedState((current) => {
-        const next =
-          current.feedEpoch === feedEpoch
-            ? new Map(current.posts)
-            : new Map<string, FeedPost>();
-        hydrated.forEach((post) => next.set(post.post_id, post));
-        return { feedEpoch, posts: next };
-      });
+  function retryMedia() {
+    setRetriedPaths((current) => new Set([...current, ...retryablePaths]));
+    const targets = new Set(retryablePaths);
+    mediaPages.forEach(({ query }) => {
+      if (
+        query.queryKey[5].attachments.some((path) => targets.has(path)) ||
+        query.queryKey[5].profiles.some((path) => targets.has(path))
+      ) {
+        void queryClient.refetchQueries({
+          queryKey: query.queryKey,
+          exact: true,
+        });
+      }
     });
-  }, [feedEpoch, rawPosts, viewMode]);
+  }
 
   const pending = isFetchingNextPage || isRefetching;
   const activeDetailResult =
@@ -213,7 +232,13 @@ export function FeedScreen() {
       {viewMode === "card" ? (
         <div className="flex flex-col md:gap-3">
           {posts.map((post) => (
-            <FeedPostCard key={post.post_id} post={post} />
+            <FeedPostCard
+              key={post.post_id}
+              post={post}
+              mediaPending={
+                pendingPostIds.has(post.post_id) && hasMissingMedia(post)
+              }
+            />
           ))}
         </div>
       ) : (
@@ -236,6 +261,19 @@ export function FeedScreen() {
         </p>
       ) : null}
 
+      {canRetryMedia ? (
+        <div className="flex justify-center px-4 py-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={retryMedia}
+          >
+            이미지 다시 불러오기
+          </Button>
+        </div>
+      ) : null}
+
       {loadError ? (
         <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
           <p className="text-sm text-muted-foreground">{loadError}</p>
@@ -244,12 +282,14 @@ export function FeedScreen() {
             variant="outline"
             size="sm"
             onClick={
-              pages.length > 0 && !sessionExpired
+              pages && pages.length > 0 && !sessionExpired
                 ? loadMore
                 : () => void refresh()
             }
           >
-            {pages.length > 0 && !sessionExpired ? "다시 시도" : "새로고침"}
+            {pages && pages.length > 0 && !sessionExpired
+              ? "다시 시도"
+              : "새로고침"}
           </Button>
         </div>
       ) : null}

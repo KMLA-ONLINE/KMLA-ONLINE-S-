@@ -1,18 +1,18 @@
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, type InfiniteData } from "@tanstack/react-query";
 import { act, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { hydrateFeedPostMedia, listFeedPosts } = vi.hoisted(() => ({
-  hydrateFeedPostMedia: vi.fn(),
+const { signFeedMedia, listFeedPosts } = vi.hoisted(() => ({
+  signFeedMedia: vi.fn(),
   listFeedPosts: vi.fn(),
 }));
 
 vi.mock("~/features/feed/data/queries", () => ({
-  hydrateFeedPostMedia,
+  signFeedMedia,
   listFeedPosts,
 }));
 vi.mock("~/features/app-shell", () => ({
-  useAppShell: () => ({ profile: { name: "나", avatar_url: null } }),
+  useAppShell: () => ({ profile: { id: 1, name: "나", avatar_url: null } }),
 }));
 vi.mock("~/features/posts", () => ({
   anonymousActivityRestrictionQuery: (groupId: string) => ({
@@ -42,13 +42,17 @@ vi.mock("~/features/feed/components/feed-post", async () => {
   return {
     FeedPostCard: ({
       post,
+      mediaPending,
     }: {
       post: {
         post_id: string;
-        author_avatar_path: string | null;
+        author_avatar_url: string | null;
+        attachments: { object_path: string; signedUrl: string | null }[];
+        body?: string;
         comment_count?: number;
         reaction_count?: number;
       };
+      mediaPending: boolean;
     }) => {
       const engagement = usePostEngagement(post.post_id, {
         comment_count: post.comment_count ?? 0,
@@ -58,9 +62,15 @@ vi.mock("~/features/feed/components/feed-post", async () => {
       });
       return (
         <div>
-          {`${post.post_id}=${post.author_avatar_path ?? "unsigned"}`}
+          {`${post.post_id}=${post.author_avatar_url ?? "unsigned"}`}
+          <span>{post.body}</span>
           <span>{`${post.post_id}:comments=${engagement.comment_count}`}</span>
           <span>{`${post.post_id}:reactions=${engagement.reaction_count}`}</span>
+          {post.attachments.map((item) => (
+            <span key={item.object_path}>
+              {`${item.object_path}=${item.signedUrl ?? (mediaPending ? "pending" : "failed")}`}
+            </span>
+          ))}
         </div>
       );
     },
@@ -72,6 +82,8 @@ vi.mock("~/shared/hooks/use-infinite-scroll", () => ({
 }));
 
 import { FeedScreen } from "~/features/feed/components/feed-screen";
+import type { FeedMediaPaths } from "~/features/feed/model/media";
+import type { FeedPage } from "~/features/feed/model/types";
 import { feedKeys } from "~/features/feed";
 import { patchPostEngagement } from "~/features/posts/data/cache";
 import {
@@ -81,30 +93,72 @@ import {
 import { renderRoute } from "../../../router";
 import { useSearchParams } from "react-router";
 
+function feedPost(
+  post_id: string,
+  { commentCount = 0, reactionCount = 0, image = false } = {},
+) {
+  return {
+    post_id,
+    author_avatar_path: `avatar:${post_id}`,
+    author_avatar_url: null,
+    activity_media_path: null,
+    activity_media_url: null,
+    attachments: image
+      ? [
+          {
+            attachment_id: `attachment:${post_id}`,
+            storage_bucket: "post-attachments",
+            object_path: `image:${post_id}`,
+            thumbnail_path: null,
+            mime_type: "image/webp",
+            signedUrl: null,
+            thumbnailUrl: null,
+          },
+        ]
+      : [],
+    comment_count: commentCount,
+    reaction_count: reactionCount,
+    top_reactions: [],
+    my_reaction: null,
+  };
+}
+
 function seedSession(
   feedEpoch: string,
   postIds: string[],
   commentCount = 0,
   reactionCount = 0,
 ) {
+  seedPages(feedEpoch, [
+    postIds.map((postId) => feedPost(postId, { commentCount, reactionCount })),
+  ]);
+}
+
+function seedPages(feedEpoch: string, pages: ReturnType<typeof feedPost>[][]) {
   getQueryClient().setQueryData(feedKeys.list(), {
-    pages: [
-      {
-        posts: postIds.map((post_id) => ({
-          post_id,
-          author_avatar_path: null,
-          attachments: [],
-          comment_count: commentCount,
-          reaction_count: reactionCount,
-          top_reactions: [],
-          my_reaction: null,
-        })),
-        feedEpoch,
-        nextPageToken: null,
-      },
-    ],
-    pageParams: [null],
+    pages: pages.map((posts, index) => ({
+      posts,
+      feedEpoch,
+      nextPageToken: index < pages.length - 1 ? `token-${index + 1}` : null,
+    })),
+    pageParams: pages.map((_, index) =>
+      index === 0 ? null : `token-${index}`,
+    ),
   });
+}
+
+/** 받은 경로를 모두 `signed:<경로>`로 서명한다. `skip`에 든 경로는 서명 실패로 뺀다. */
+function signAll(paths: FeedMediaPaths, skip: string[] = []) {
+  const sign = (list: string[]) =>
+    Object.fromEntries(
+      list
+        .filter((path) => !skip.includes(path))
+        .map((path) => [path, `signed:${path}`]),
+    );
+  return {
+    attachments: sign(paths.attachments),
+    profiles: sign(paths.profiles),
+  };
 }
 
 function Harness() {
@@ -115,99 +169,299 @@ function Harness() {
   );
 }
 
-describe("FeedScreen media hydration", () => {
+describe("FeedScreen media signing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetQueryClientForTests();
   });
 
   /**
-   * 서명이 날아가는 사이 피드가 리셋될 수 있다. 늦게 도착한 이전 세션의 결과가 현재 세션이
-   * 채워 둔 미디어를 덮어쓰면, 그 글들은 이미 "하이드레이션 했음"으로 표시돼 있어 다시
-   * 시도되지도 않는다 — 다음 세션 교체 전까지 서명 없는 이미지로 남는다.
+   * 서명이 날아가는 사이 피드가 리셋될 수 있다. 늦게 도착한 이전 세션의 결과가 현재 세션의
+   * 미디어로 쓰이면 안 된다.
    */
-  it("ignores a hydrate response from a superseded feed session", async () => {
+  it("ignores a signing response from a superseded feed session", async () => {
     const pending: (() => void)[] = [];
-    hydrateFeedPostMedia.mockImplementation(
-      (posts: { post_id: string }[]) =>
+    signFeedMedia.mockImplementation(
+      (paths: FeedMediaPaths) =>
         new Promise((resolve) => {
+          const session = pending.length + 1;
           pending.push(() =>
-            resolve(
-              posts.map((post) => ({
-                ...post,
-                author_avatar_path: `signed:${post.post_id}`,
-              })),
-            ),
+            resolve({
+              attachments: {},
+              profiles: Object.fromEntries(
+                paths.profiles.map((path) => [path, `session-${session}`]),
+              ),
+            }),
           );
         }),
     );
 
-    seedSession("epoch-1", ["post-old"]);
+    seedSession("epoch-1", ["post-a"]);
     renderRoute(Harness);
     await waitFor(() => expect(pending).toHaveLength(1));
 
-    // 이전 세션의 서명이 아직 날아가는 중에 피드가 리셋된다.
-    act(() => seedSession("epoch-2", ["post-new"]));
+    // 이전 세션의 서명이 아직 날아가는 중에 피드가 리셋된다. 경로는 같다.
+    act(() => seedSession("epoch-2", ["post-a"]));
     await waitFor(() => expect(pending).toHaveLength(2));
 
-    // 새 세션이 먼저 도착하고, 지나간 세션이 뒤늦게 도착한다.
-    await act(async () => {
-      pending[1]?.();
-      await Promise.resolve();
-    });
     await act(async () => {
       pending[0]?.();
       await Promise.resolve();
     });
+    expect(screen.getByText("post-a=unsigned")).toBeInTheDocument();
+    await act(async () => {
+      pending[1]?.();
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText("post-a=session-2")).toBeInTheDocument();
+  });
+
+  /** 페이지가 붙어도 앞 페이지는 다시 서명하지 않는다. */
+  it("signs only the new page when the next page arrives", async () => {
+    signFeedMedia.mockImplementation((paths: FeedMediaPaths) =>
+      Promise.resolve(signAll(paths)),
+    );
+    seedPages("epoch-1", [[feedPost("post-a")]]);
+    renderRoute(Harness);
+    expect(
+      await screen.findByText("post-a=signed:avatar:post-a"),
+    ).toBeInTheDocument();
+
+    act(() =>
+      seedPages("epoch-1", [[feedPost("post-a")], [feedPost("post-b")]]),
+    );
 
     expect(
-      await screen.findByText("post-new=signed:post-new"),
+      await screen.findByText("post-b=signed:avatar:post-b"),
+    ).toBeInTheDocument();
+    expect(signFeedMedia).toHaveBeenCalledTimes(2);
+    expect(signFeedMedia).toHaveBeenLastCalledWith({
+      attachments: [],
+      profiles: ["avatar:post-b"],
+    });
+  });
+
+  /** 다른 페이지가 서명 중이어도 이미 실패한 이미지를 '불러오는 중'으로 되돌리지 않는다. */
+  it("marks only the page that is signing as pending", async () => {
+    let finishSecond!: () => void;
+    signFeedMedia.mockImplementation((paths: FeedMediaPaths) =>
+      paths.attachments.includes("image:post-b")
+        ? new Promise((resolve) => {
+            finishSecond = () => resolve(signAll(paths));
+          })
+        : Promise.resolve(signAll(paths, ["image:post-a"])),
+    );
+    seedPages("epoch-1", [[feedPost("post-a", { image: true })]]);
+    renderRoute(Harness);
+    expect(await screen.findByText("image:post-a=failed")).toBeInTheDocument();
+
+    act(() =>
+      seedPages("epoch-1", [
+        [feedPost("post-a", { image: true })],
+        [feedPost("post-b", { image: true })],
+      ]),
+    );
+
+    expect(await screen.findByText("image:post-b=pending")).toBeInTheDocument();
+    expect(screen.getByText("image:post-a=failed")).toBeInTheDocument();
+    act(() => finishSecond());
+    expect(
+      await screen.findByText("image:post-b=signed:image:post-b"),
     ).toBeInTheDocument();
   });
 
   /**
    * overlay는 내 뮤테이션만 담는다. 남이 남긴 댓글·반응은 배경 리페치가 가져온 raw post로만
-   * 들어오므로, 수화본이 화면을 통째로 이기면 그 게시물의 수는 수화 시점에 얼어붙는다.
+   * 들어오므로, 서명본이 화면을 통째로 이기면 그 게시물의 수는 서명 시점에 얼어붙는다.
    */
-  it("shows engagement from a background refetch on a hydrated card", async () => {
-    hydrateFeedPostMedia.mockImplementation((posts: { post_id: string }[]) =>
-      Promise.resolve(
-        posts.map((post) => ({
-          ...post,
-          author_avatar_path: `signed:${post.post_id}`,
-        })),
-      ),
+  it("shows engagement from a background refetch on a signed card", async () => {
+    signFeedMedia.mockImplementation((paths: FeedMediaPaths) =>
+      Promise.resolve(signAll(paths)),
     );
 
     seedSession("epoch-1", ["post-a"], 0, 0);
     renderRoute(Harness);
 
-    expect(await screen.findByText("post-a=signed:post-a")).toBeInTheDocument();
+    expect(
+      await screen.findByText("post-a=signed:avatar:post-a"),
+    ).toBeInTheDocument();
     expect(screen.getByText("post-a:comments=0")).toBeInTheDocument();
 
-    // 다른 사용자가 댓글과 반응을 남긴 뒤의 리페치. 같은 세션이라 수화본은 그대로 쓰인다.
     act(() => seedSession("epoch-1", ["post-a"], 2, 5));
 
     expect(await screen.findByText("post-a:comments=2")).toBeInTheDocument();
     expect(screen.getByText("post-a:reactions=5")).toBeInTheDocument();
-    // 수화가 채운 미디어는 그대로 남아야 한다.
-    expect(screen.getByText("post-a=signed:post-a")).toBeInTheDocument();
+    expect(screen.getByText("post-a=signed:avatar:post-a")).toBeInTheDocument();
   });
 
-  it("keeps hydrated media for the session that is on screen", async () => {
-    hydrateFeedPostMedia.mockImplementation((posts: { post_id: string }[]) =>
-      Promise.resolve(
-        posts.map((post) => ({
-          ...post,
-          author_avatar_path: `signed:${post.post_id}`,
-        })),
-      ),
+  it("keeps the latest body when an older media response arrives", async () => {
+    let finish!: () => void;
+    signFeedMedia.mockImplementation(
+      (paths: FeedMediaPaths) =>
+        new Promise((resolve) => {
+          finish = () => resolve(signAll(paths));
+        }),
+    );
+    seedSession("epoch-1", ["post-a"]);
+    renderRoute(Harness);
+    await waitFor(() => expect(finish).toBeDefined());
+
+    act(() => {
+      getQueryClient().setQueryData<InfiniteData<FeedPage>>(
+        feedKeys.list(),
+        (current) =>
+          current && {
+            ...current,
+            pages: current.pages.map((page) => ({
+              ...page,
+              posts: page.posts.map((post) => ({
+                ...post,
+                body: "수정된 본문",
+              })),
+            })),
+          },
+      );
+    });
+    await screen.findByText("수정된 본문");
+    act(() => finish());
+
+    expect(
+      await screen.findByText("post-a=signed:avatar:post-a"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("수정된 본문")).toBeInTheDocument();
+  });
+
+  it("keeps the feed visible and lets the user retry a failed image", async () => {
+    signFeedMedia
+      .mockImplementationOnce((paths: FeedMediaPaths) =>
+        Promise.resolve(signAll(paths, ["image:post-b"])),
+      )
+      .mockImplementation((paths: FeedMediaPaths) =>
+        Promise.resolve(signAll(paths)),
+      );
+    seedPages("epoch-1", [
+      [
+        feedPost("post-a", { image: true }),
+        feedPost("post-b", { image: true }),
+      ],
+    ]);
+    const { user } = renderRoute(Harness);
+
+    const retry = await screen.findByRole("button", {
+      name: "이미지 다시 불러오기",
+    });
+    expect(
+      screen.getByText("image:post-a=signed:image:post-a"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("image:post-b=failed")).toBeInTheDocument();
+    await user.click(retry);
+
+    expect(
+      await screen.findByText("image:post-b=signed:image:post-b"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("image:post-a=signed:image:post-a"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "이미지 다시 불러오기" }),
+    ).not.toBeInTheDocument();
+  });
+
+  /** 지워진 객체처럼 재시도로 고칠 수 없는 실패에 버튼을 계속 남기지 않는다. */
+  it("hides the retry button when a retry cannot sign the image", async () => {
+    signFeedMedia.mockImplementation((paths: FeedMediaPaths) =>
+      Promise.resolve(signAll(paths, ["image:post-a"])),
+    );
+    seedPages("epoch-1", [[feedPost("post-a", { image: true })]]);
+    const { user } = renderRoute(Harness);
+
+    await user.click(
+      await screen.findByRole("button", { name: "이미지 다시 불러오기" }),
     );
 
+    await waitFor(() => expect(signFeedMedia).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("image:post-a=failed")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "이미지 다시 불러오기" }),
+    ).not.toBeInTheDocument();
+  });
+
+  /** 아바타는 대체 이미지가 있어 재시도 버튼 대상이 아니다. */
+  it("does not offer an image retry for a missing avatar", async () => {
+    signFeedMedia.mockResolvedValue({ attachments: {}, profiles: {} });
     seedSession("epoch-1", ["post-a"]);
     renderRoute(Harness);
 
-    expect(await screen.findByText("post-a=signed:post-a")).toBeInTheDocument();
+    await waitFor(() => expect(signFeedMedia).toHaveBeenCalled());
+    expect(screen.getByText("post-a=unsigned")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "이미지 다시 불러오기" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("ignores the old avatar when its path changes during signing", async () => {
+    const pending: (() => void)[] = [];
+    signFeedMedia.mockImplementation(
+      (paths: FeedMediaPaths) =>
+        new Promise((resolve) => {
+          pending.push(() => resolve(signAll(paths)));
+        }),
+    );
+    seedSession("epoch-1", ["post-a"]);
+    renderRoute(Harness);
+    await waitFor(() => expect(pending).toHaveLength(1));
+    await act(() =>
+      getQueryClient().setQueryData<InfiniteData<FeedPage>>(
+        feedKeys.list(),
+        (current) =>
+          current && {
+            ...current,
+            pages: current.pages.map((page) => ({
+              ...page,
+              posts: page.posts.map((post) => ({
+                ...post,
+                author_avatar_path: "new-avatar",
+              })),
+            })),
+          },
+      ),
+    );
+    await waitFor(() => expect(pending).toHaveLength(2));
+    act(() => pending[0]());
+    expect(screen.getByText("post-a=unsigned")).toBeInTheDocument();
+    act(() => pending[1]());
+    expect(
+      await screen.findByText("post-a=signed:new-avatar"),
+    ).toBeInTheDocument();
+  });
+
+  /** 게시물 하나를 빼도 같은 페이지에 남은 이미지가 다시 '불러오는 중'으로 깜박이지 않는다. */
+  it("keeps signed media on the page when a post is removed", async () => {
+    let calls = 0;
+    signFeedMedia.mockImplementation((paths: FeedMediaPaths) => {
+      calls += 1;
+      return calls === 1
+        ? Promise.resolve(signAll(paths))
+        : new Promise(() => undefined);
+    });
+    seedPages("epoch-1", [
+      [
+        feedPost("post-a", { image: true }),
+        feedPost("post-b", { image: true }),
+      ],
+    ]);
+    renderRoute(Harness);
+    expect(
+      await screen.findByText("image:post-a=signed:image:post-a"),
+    ).toBeInTheDocument();
+
+    act(() => seedPages("epoch-1", [[feedPost("post-a", { image: true })]]));
+
+    await waitFor(() => expect(calls).toBe(2));
+    expect(
+      screen.getByText("image:post-a=signed:image:post-a"),
+    ).toBeInTheDocument();
   });
 });
 
@@ -215,7 +469,7 @@ describe("FeedScreen detail re-entry", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetQueryClientForTests();
-    hydrateFeedPostMedia.mockResolvedValue([]);
+    signFeedMedia.mockResolvedValue({ attachments: {}, profiles: {} });
   });
 
   /**
@@ -428,31 +682,28 @@ describe("FeedScreen detail re-entry", () => {
   });
 
   /**
-   * 미디어 수화본은 만들어진 시점에 멈춰 있다. 그 복사본이 화면을 이기면, 댓글을 쓰고 상세를
-   * 닫은 순간 캐시가 고친 수를 수화본의 옛 수가 도로 덮는다.
+   * 서명 결과가 게시물 복사본이면, 댓글을 쓰고 상세를 닫은 순간 캐시가 고친 수를 그 복사본의
+   * 옛 수가 도로 덮는다.
    */
-  it("keeps a patched comment count that media hydration would overwrite", async () => {
-    hydrateFeedPostMedia.mockImplementation((posts: { post_id: string }[]) =>
-      Promise.resolve(
-        posts.map((post) => ({
-          ...post,
-          author_avatar_path: `signed:${post.post_id}`,
-        })),
-      ),
+  it("keeps a patched comment count after media signing", async () => {
+    signFeedMedia.mockImplementation((paths: FeedMediaPaths) =>
+      Promise.resolve(signAll(paths)),
     );
 
     seedSession("epoch-1", ["post-a"], 0);
     renderRoute(Harness);
 
-    // 수화가 끝난 뒤에 댓글 수가 갱신된다.
-    expect(await screen.findByText("post-a=signed:post-a")).toBeInTheDocument();
+    // 서명이 끝난 뒤에 댓글 수가 갱신된다.
+    expect(
+      await screen.findByText("post-a=signed:avatar:post-a"),
+    ).toBeInTheDocument();
 
     act(() =>
       patchPostEngagement(getQueryClient(), "post-a", { comment_count: 3 }),
     );
 
     expect(await screen.findByText("post-a:comments=3")).toBeInTheDocument();
-    // 수화가 채운 미디어는 그대로 남아야 한다.
-    expect(screen.getByText("post-a=signed:post-a")).toBeInTheDocument();
+    // 서명이 채운 미디어는 그대로 남아야 한다.
+    expect(screen.getByText("post-a=signed:avatar:post-a")).toBeInTheDocument();
   });
 });

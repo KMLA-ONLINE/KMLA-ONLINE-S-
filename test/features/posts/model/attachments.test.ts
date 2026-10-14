@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   imageDownloadName,
-  prepareCommentImage,
-  preparePostFiles,
   splitPostAttachments,
   toAttachmentDownloadUrl,
 } from "~/features/posts/model/attachments";
+import {
+  prepareCommentImage,
+  preparePostFiles,
+} from "~/features/posts/model/attachment-preparation";
 import type {
   PostAttachment,
   PreparedPostFile,

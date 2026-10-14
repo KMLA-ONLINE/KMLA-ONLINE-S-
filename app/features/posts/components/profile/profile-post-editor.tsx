@@ -17,7 +17,7 @@ import {
   updateProfilePostWithAttachments,
 } from "~/features/posts/data/mutations";
 import { usePostAttachmentDraft } from "~/features/posts/hooks/use-post-attachment-draft";
-import { releasePostFile } from "~/features/posts/model/attachments";
+import { releasePostFile } from "~/features/posts/model/attachment-preparation";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
 import type {
   PostSaveProgress,

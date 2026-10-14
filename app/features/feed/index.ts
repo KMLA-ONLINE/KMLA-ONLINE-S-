@@ -2,6 +2,7 @@ export { FeedScreen } from "~/features/feed/components/feed-screen";
 export {
   feedKeys,
   feedQuery,
+  prefetchFeedMedia,
   removeFeedPost,
   resetFeed,
 } from "~/features/feed/data/cache";

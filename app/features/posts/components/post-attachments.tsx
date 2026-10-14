@@ -12,6 +12,7 @@ import {
   imageDownloadName,
   toAttachmentDownloadUrl,
 } from "~/features/posts/model/attachments";
+import { useUnavailableMediaLabel } from "~/features/posts/hooks/use-media-pending";
 import { formatFileSize } from "~/features/posts/model/format";
 import type { PostAttachment } from "~/features/posts/model/types";
 import type { ViewerImage } from "~/shared/components/image-viewer";
@@ -60,6 +61,7 @@ export function PostImageGrid({
   /** 전폭 한 장짜리 타일에 한해 원본을 그린다(상세만 켬). 축소본(800px)은 그 폭에서 흐리고, 두 장부터는 충분하다. */
   allowOriginalTile?: boolean;
 }) {
+  const unavailableLabel = useUnavailableMediaLabel("image");
   // signed URL을 못 받은 첨부는 뷰어에 넣지 않는다. 슬라이드에 빈 칸이 생기고 좌우 이동이
   // 어긋나느니, 그리드에서만 깨진 타일로 보이는 편이 낫다.
   const viewerImages = useMemo<ViewerImage[]>(
@@ -134,7 +136,7 @@ export function PostImageGrid({
               />
             ) : (
               <span className="flex h-full w-full items-center justify-center bg-muted px-2 text-center text-xs text-muted-foreground">
-                이미지를 불러오지 못했습니다
+                {unavailableLabel}
               </span>
             )}
             {hidesOverflow ? (
@@ -161,6 +163,7 @@ function fileIcon(mimeType: string) {
 
 export function PostFileList({ files }: { files: PostAttachment[] }) {
   const [expanded, setExpanded] = useState(false);
+  const unavailableLabel = useUnavailableMediaLabel("file");
   if (files.length === 0) return null;
   const canExpand = files.length > 3;
   const visibleFiles = expanded ? files : files.slice(0, 3);
@@ -215,7 +218,7 @@ export function PostFileList({ files }: { files: PostAttachment[] }) {
                     sizeBytes={item.size_bytes}
                     mimeType={item.mime_type}
                   />
-                  <span className="shrink-0 text-xs">다운로드할 수 없음</span>
+                  <span className="shrink-0 text-xs">{unavailableLabel}</span>
                 </div>
               )}
             </li>

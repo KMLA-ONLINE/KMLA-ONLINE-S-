@@ -19,6 +19,7 @@ import { PostMarkdown } from "~/features/posts/components/post-markdown";
 import { ProfileMediaActivity } from "~/features/posts/components/profile/profile-media-activity";
 import { StaffMark } from "~/features/posts/components/staff-mark";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
+import { MediaPendingContext } from "~/features/posts/hooks/use-media-pending";
 import { usePostEngagement } from "~/features/posts/hooks/use-post-engagement";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
 import { groupPostPath } from "~/features/posts/model/navigation";
@@ -168,63 +169,74 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
   );
 }
 
-export function FeedPostCard({ post }: { post: FeedPost }) {
+export function FeedPostCard({
+  post,
+  mediaPending = false,
+}: {
+  post: FeedPost;
+  mediaPending?: boolean;
+}) {
   const path = feedPostPath(post);
   const overlayPath = feedPostOverlayPath(post);
   const { images, files } = splitPostAttachments(post.attachments);
   const isMediaActivity = post.kind === "profile" && post.activity_kind;
 
   return (
-    <article className="overflow-hidden border-b-2 border-foreground/20 bg-card shadow-none md:rounded-xl md:border md:border-border md:shadow-sm">
-      {post.kind === "group" && post.is_pinned ? (
-        <div className="flex items-center gap-1.5 px-4 pt-3 text-xs font-semibold text-muted-foreground">
-          <PinIcon className="size-3.5 -rotate-45 fill-current" />
-          고정된 게시물
-        </div>
-      ) : null}
-      <FeedPostHeader post={post} />
-      {isMediaActivity ? (
-        <ProfileMediaActivity post={post} />
-      ) : (
-        <>
-          <div className="px-4">
-            {post.kind === "group" ? (
-              <h2 className="mb-2 text-xl font-semibold">
-                <Link
-                  to={overlayPath}
-                  preventScrollReset
-                  className="hover:underline"
-                >
-                  {post.title}
-                </Link>
-              </h2>
-            ) : null}
-            <PostBodyClamp postId={post.post_id} testId="feed-post-body">
-              <PostMarkdown mentions={post.mentions}>{post.body}</PostMarkdown>
-            </PostBodyClamp>
+    // 홈 피드는 서명을 뒤에서 채운다. 서명 중인 카드의 빈 미디어는 실패가 아니라 로딩으로 그린다.
+    <MediaPendingContext value={mediaPending}>
+      <article className="overflow-hidden border-b-2 border-foreground/20 bg-card shadow-none md:rounded-xl md:border md:border-border md:shadow-sm">
+        {post.kind === "group" && post.is_pinned ? (
+          <div className="flex items-center gap-1.5 px-4 pt-3 text-xs font-semibold text-muted-foreground">
+            <PinIcon className="size-3.5 -rotate-45 fill-current" />
+            고정된 게시물
           </div>
-          <PostImageGrid images={images} className="mt-3" />
-          {files.length > 0 ? (
-            <div className="mt-3 px-4">
-              <PostFileList files={files} />
+        ) : null}
+        <FeedPostHeader post={post} />
+        {isMediaActivity ? (
+          <ProfileMediaActivity post={post} />
+        ) : (
+          <>
+            <div className="px-4">
+              {post.kind === "group" ? (
+                <h2 className="mb-2 text-xl font-semibold">
+                  <Link
+                    to={overlayPath}
+                    preventScrollReset
+                    className="hover:underline"
+                  >
+                    {post.title}
+                  </Link>
+                </h2>
+              ) : null}
+              <PostBodyClamp postId={post.post_id} testId="feed-post-body">
+                <PostMarkdown mentions={post.mentions}>
+                  {post.body}
+                </PostMarkdown>
+              </PostBodyClamp>
             </div>
-          ) : null}
-        </>
-      )}
-      <PostActionBar
-        postId={post.post_id}
-        reaction={post}
-        sharePath={path}
-        shareTitle={
-          post.kind === "group"
-            ? post.title
-            : `${post.author_name ?? "사용자"}님의 게시물`
-        }
-        commentCount={post.comment_count}
-        commentTo={feedPostOverlayPath(post, true)}
-        className="mt-1"
-      />
-    </article>
+            <PostImageGrid images={images} className="mt-3" />
+            {files.length > 0 ? (
+              <div className="mt-3 px-4">
+                <PostFileList files={files} />
+              </div>
+            ) : null}
+          </>
+        )}
+        <PostActionBar
+          postId={post.post_id}
+          reaction={post}
+          sharePath={path}
+          shareTitle={
+            post.kind === "group"
+              ? post.title
+              : `${post.author_name ?? "사용자"}님의 게시물`
+          }
+          commentCount={post.comment_count}
+          commentTo={feedPostOverlayPath(post, true)}
+          className="mt-1"
+        />
+      </article>
+    </MediaPendingContext>
   );
 }
 

@@ -9,7 +9,7 @@ import {
   preuploadPostFiles,
   updateGroupPostWithAttachments,
 } from "~/features/posts/data/mutations";
-import { releasePostFile } from "~/features/posts/model/attachments";
+import { releasePostFile } from "~/features/posts/model/attachment-preparation";
 import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import { usePostAttachmentDraft } from "~/features/posts/hooks/use-post-attachment-draft";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";

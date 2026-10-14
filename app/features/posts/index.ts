@@ -90,7 +90,7 @@ export {
   preparePostFiles,
   prepareCommentImage,
   releasePostFile,
-} from "~/features/posts/model/attachments";
+} from "~/features/posts/model/attachment-preparation";
 export {
   extractPostPlainText,
   fromPostEditorMarkdown,

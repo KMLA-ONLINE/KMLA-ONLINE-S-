@@ -6,6 +6,10 @@ import {
   readAttachmentsJson,
 } from "~/features/posts/model/attachment-json";
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
+import type {
+  FeedMediaPaths,
+  FeedMediaUrls,
+} from "~/features/feed/model/media";
 import type { FeedPage, FeedPost } from "~/features/feed/model/types";
 import { getSupabase } from "~/shared/supabase/client";
 
@@ -93,6 +97,20 @@ export async function listFeedPosts(
     posts: hydrateMedia ? await hydrateFeedPostMedia(posts) : posts,
     feedEpoch: rows[0]?.feed_epoch ?? null,
     nextPageToken: rows[0]?.next_page_token ?? null,
+  };
+}
+
+/** 피드 페이지 하나의 미디어 경로를 서명한다. 같은 tick의 다른 페이지 경로와는 공용 서명 배치가 묶는다. */
+export async function signFeedMedia(
+  paths: FeedMediaPaths,
+): Promise<FeedMediaUrls> {
+  const [attachments, profiles] = await Promise.all([
+    createPostAttachmentUrls(paths.attachments),
+    createProfileMediaUrls(paths.profiles),
+  ]);
+  return {
+    attachments: Object.fromEntries(attachments),
+    profiles: Object.fromEntries(profiles),
   };
 }
 

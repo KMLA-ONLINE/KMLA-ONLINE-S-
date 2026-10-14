@@ -8,8 +8,8 @@ import {
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { preparePostFiles } from "~/features/posts/model/attachments";
-import type * as PostAttachmentModule from "~/features/posts/model/attachments";
+import { preparePostFiles } from "~/features/posts/model/attachment-preparation";
+import type * as PostAttachmentModule from "~/features/posts/model/attachment-preparation";
 import type { PreparedPostFile } from "~/features/posts/model/types";
 import { usePostAttachmentDraft } from "~/features/posts/hooks/use-post-attachment-draft";
 
@@ -26,10 +26,13 @@ vi.mock("~/features/posts/data/mutations", () => ({
   subscribePostUploadSession: vi.fn(() => () => undefined),
 }));
 
-vi.mock("~/features/posts/model/attachments", async (importOriginal) => {
-  const actual = await importOriginal<typeof PostAttachmentModule>();
-  return { ...actual, preparePostFiles: vi.fn() };
-});
+vi.mock(
+  "~/features/posts/model/attachment-preparation",
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof PostAttachmentModule>();
+    return { ...actual, preparePostFiles: vi.fn() };
+  },
+);
 
 const prepare = vi.mocked(preparePostFiles);
 

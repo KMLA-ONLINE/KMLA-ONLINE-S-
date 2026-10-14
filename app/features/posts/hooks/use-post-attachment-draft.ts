@@ -15,7 +15,7 @@ import {
 import {
   preparePostFiles,
   releasePostFile,
-} from "~/features/posts/model/attachments";
+} from "~/features/posts/model/attachment-preparation";
 import type {
   PostAttachment,
   PostFileUploadState,

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 
+import { useUnavailableMediaLabel } from "~/features/posts/hooks/use-media-pending";
 import {
   imageDownloadName,
   toAttachmentDownloadUrl,
@@ -21,6 +22,7 @@ export function ProfileMediaActivity({
   post: ProfileMediaActivityPost;
   className?: string;
 }) {
+  const unavailableLabel = useUnavailableMediaLabel("image");
   const imageId = `profile-activity-${post.post_id}`;
   const downloadName = imageDownloadName(post.post_id);
   // 아무것도 그리지 않는 경우까지 등록하면 열 수단이 없는 사진이 `?image=`로만 열린다.
@@ -73,13 +75,13 @@ export function ProfileMediaActivity({
     <div
       data-testid="profile-media-activity"
       className={cn(
-        "flex w-full items-center justify-center overflow-hidden bg-muted",
+        "flex w-full items-center justify-center overflow-hidden border-y border-border/60 bg-muted",
         isAvatar ? "aspect-square" : "aspect-[3/1]",
         className,
       )}
     >
       <p className="px-4 text-center text-sm text-muted-foreground">
-        이미지를 불러오지 못했습니다
+        {unavailableLabel}
       </p>
     </div>
   );
