@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   DownloadIcon,
   FileIcon,
+  ImageOffIcon,
   MusicIcon,
   PauseIcon,
   PlayIcon,
@@ -18,6 +19,7 @@ import { formatFileSize } from "~/features/messaging/model/attachments";
 import type { MessageAttachment } from "~/features/messaging/model/types";
 import type { ViewerImage } from "~/shared/components/image-viewer";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
+import { previewDocumentOnClick } from "~/shared/lib/document-preview";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
@@ -25,7 +27,10 @@ import { Spinner } from "~/shared/ui/spinner";
 /** 말풍선 격자에 까는 최대 칸 수. */
 const MEDIA_GRID_LIMIT = 6;
 
-/** 첨부 object의 signed URL. 서버에 올라가지 않은(보내는 중인) 첨부는 건너뛴다. */
+/**
+ * 첨부 object의 signed URL query. 서버에 올라가지 않은(보내는 중인) 첨부는 건너뛴다. 사진 칸은
+ * `isError`를 보고 끝없이 도는 대신 깨진 사진을 그린다.
+ */
 function useAttachmentUrls(attachments: MessageAttachment[]) {
   const paths = attachments
     .flatMap((attachment) => [attachment.objectPath, attachment.thumbnailPath])
@@ -36,7 +41,7 @@ function useAttachmentUrls(attachments: MessageAttachment[]) {
     enabled: paths.length > 0,
     staleTime: 55 * 60_000,
     gcTime: 55 * 60_000,
-  }).data;
+  });
 }
 
 /**
@@ -52,7 +57,7 @@ export function MessageAttachments({
   isOwn: boolean;
   pending?: boolean;
 }) {
-  const urls = useAttachmentUrls(attachments);
+  const { data: urls, isError: urlsFailed } = useAttachmentUrls(attachments);
   const media = attachments.filter(({ kind }) => kind === "image");
   const others = attachments.filter(({ kind }) => kind !== "image");
 
@@ -66,7 +71,12 @@ export function MessageAttachments({
       aria-busy={pending}
     >
       {media.length > 0 ? (
-        <MediaGrid media={media} urls={urls} pending={pending} />
+        <MediaGrid
+          media={media}
+          urls={urls}
+          urlsFailed={urlsFailed}
+          pending={pending}
+        />
       ) : null}
       {others.map((attachment) =>
         attachment.kind === "audio" ? (
@@ -91,10 +101,12 @@ export function MessageAttachments({
 function MediaGrid({
   media,
   urls,
+  urlsFailed,
   pending,
 }: {
   media: MessageAttachment[];
   urls: Map<string, string> | undefined;
+  urlsFailed: boolean;
   pending: boolean;
 }) {
   const images = useMemo<ViewerImage[]>(
@@ -125,12 +137,18 @@ function MediaGrid({
   const hiddenCount = media.length - visible.length;
   // 다섯 장은 3열에 놓으면 오른쪽 아래가 비므로 위 2장, 아래 3장으로 6열을 나눠 깐다.
   const five = visible.length === 5;
+  const [first] = visible;
+  // 사진이 오기 전에 자리를 잡도록 격자 폭을 먼저 정한다. 폭이 사진에서 나오면 사진이 뜰 때까지 칸이
+  // 0으로 접혀 있다가 갑자기 펴지며 대화를 밀어낸다. 작은 사진 한 장은 원래 크기보다 키우지 않는다.
+  const gridWidth =
+    single && first?.width ? `min(18rem, ${first.width}px)` : "18rem";
 
   return (
     <>
       <div
+        style={{ width: gridWidth }}
         className={cn(
-          "grid max-w-72 gap-0.5 overflow-hidden rounded-2xl",
+          "grid max-w-full gap-0.5 overflow-hidden rounded-2xl",
           single
             ? "grid-cols-1"
             : visible.length === 2 || visible.length === 4
@@ -173,17 +191,13 @@ function MediaGrid({
               onClick={() => viewer.open(attachment.id)}
             >
               {thumb ? (
-                // 방을 열면 한 페이지(50개) 안의 사진을 다 그린다. 화면 밖 사진은 스크롤해 다가갈
-                // 때 받는다. 칸의 비율이 미리 정해져 있어 늦게 떠도 자리가 밀리지 않는다.
-                <img
-                  src={thumb}
-                  alt=""
-                  crossOrigin="anonymous"
-                  loading="lazy"
-                  decoding="async"
-                  className="size-full object-cover"
-                />
-              ) : null}
+                <GridImage src={thumb} showLoading={!pending} />
+              ) : urlsFailed || urls ? (
+                // 받은 signed URL에 이 사진이 없으면 지워진 object다. 기다려도 오지 않는다.
+                <TileMark failed />
+              ) : pending ? null : (
+                <TileMark />
+              )}
               {more > 0 ? (
                 <span
                   aria-hidden
@@ -202,6 +216,61 @@ function MediaGrid({
         })}
       </div>
     </>
+  );
+}
+
+/**
+ * 격자 칸 하나의 사진. 칸은 비율로 자리를 미리 잡고 있으므로, 사진이 다 올 때까지 그 자리에서 돌다가
+ * 사진으로 바꿔 그린다. 방을 열면 한 페이지(50개) 안의 사진을 다 그린다. 화면 밖 사진은 스크롤해
+ * 다가갈 때 받는다.
+ *
+ * 한 번 그린 사진은 주소가 바뀌어도(보낸 뒤 서버 주소로, signed URL 갱신) 가리지 않는다. 가리면 방의
+ * 사진이 모두 스피너로 깜빡인다. 브라우저는 새 주소가 올 때까지 앞 사진을 그대로 둔다.
+ */
+function GridImage({
+  src,
+  showLoading,
+}: {
+  src: string;
+  showLoading: boolean;
+}) {
+  const [shown, setShown] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const failed = failedSrc === src;
+
+  return (
+    <>
+      <img
+        src={src}
+        alt=""
+        crossOrigin="anonymous"
+        loading="lazy"
+        decoding="async"
+        className={cn(
+          "size-full object-cover",
+          (!shown || failed) && "opacity-0",
+        )}
+        onLoad={() => {
+          setShown(true);
+          setFailedSrc(null);
+        }}
+        onError={() => setFailedSrc(src)}
+      />
+      {failed ? (
+        <TileMark failed />
+      ) : !shown && showLoading ? (
+        <TileMark />
+      ) : null}
+    </>
+  );
+}
+
+/** 사진 칸 가운데의 표시. 받는 중이면 스피너, 받지 못했으면 깨진 사진이다. */
+function TileMark({ failed = false }: { failed?: boolean }) {
+  return (
+    <span className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+      {failed ? <ImageOffIcon aria-hidden className="size-6" /> : <Spinner />}
+    </span>
   );
 }
 
@@ -427,6 +496,13 @@ function FileAttachment({
   return url ? (
     <a
       href={toDownloadUrl(url, attachment.fileName)}
+      onClick={(event) =>
+        previewDocumentOnClick(event, {
+          url,
+          downloadUrl: event.currentTarget.href,
+          fileName: attachment.fileName,
+        })
+      }
       aria-label={`내려받기: ${attachment.fileName}`}
       className={cn(className, "hover:bg-muted/70")}
     >

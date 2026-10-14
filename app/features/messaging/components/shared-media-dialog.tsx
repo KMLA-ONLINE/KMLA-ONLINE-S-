@@ -16,6 +16,7 @@ import { formatMessageDay } from "~/features/messaging/model/message-time";
 import type { MessageCursor } from "~/features/messaging/model/types";
 import type { ViewerImage } from "~/shared/components/image-viewer";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
+import { previewDocumentOnClick } from "~/shared/lib/document-preview";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
@@ -235,6 +236,14 @@ function FileRow({
   return (
     <a
       href={url ? toDownloadUrl(url, item.fileName) : undefined}
+      onClick={(event) => {
+        if (!url) return;
+        previewDocumentOnClick(event, {
+          url,
+          downloadUrl: event.currentTarget.href,
+          fileName: item.fileName,
+        });
+      }}
       aria-label={`내려받기: ${item.fileName}`}
       aria-disabled={!url}
       className={cn(

@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 
 import { PostWriteRow } from "~/features/posts/components/post-write-row";
@@ -31,25 +31,33 @@ export function ProfilePostsPanel({
   initialPage: ProfilePostPage;
 }) {
   const mutationFetcher = useFetcher<{ error?: string }>();
-  const [posts, setPosts] = useState(initialPage.posts);
-  const [cursor, setCursor] = useState(initialPage.nextCursor);
+  const [page, setPage] = useState(initialPage);
+  const { posts, nextCursor: cursor } = page;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadingMore = useRef(false);
   const requestId = useRef(0);
   const [loadedInitialPage, setLoadedInitialPage] = useState(initialPage);
 
+  // 응답이 아니라 목록·커서·loading이 함께 화면에 반영된 뒤 다음 요청을 허용한다. 응답 직후에
+  // 풀면 새 커서가 커밋되기 전 sentinel이 다시 닿아 옛 커서로 같은 페이지를 또 붙인다.
+  useEffect(() => {
+    if (!loading) loadingMore.current = false;
+  }, [loading, posts, cursor]);
+
   // loader가 새 첫 페이지를 내려주면(작성·삭제 뒤 재검증) 더 불러온 페이지는 버린다.
   if (loadedInitialPage !== initialPage) {
     setLoadedInitialPage(initialPage);
-    setPosts(initialPage.posts);
-    setCursor(initialPage.nextCursor);
+    setPage(initialPage);
+    setLoading(false);
+    setError(null);
   }
 
   // 재검증이 목록을 처음으로 되돌리면 그 전에 띄운 요청의 결과는 버린다. 그대로 이어 붙이면
   // 방금 지운 게시물이 되살아나거나 새 첫 페이지 위에 옛 뒷장이 얹힌다.
   useEffect(() => {
     requestId.current += 1;
+    loadingMore.current = false;
   }, [initialPage]);
 
   const loadMore = async () => {
@@ -59,17 +67,27 @@ export function ProfilePostsPanel({
     setLoading(true);
     setError(null);
     try {
-      const page = await listProfilePosts(timelinePubId, cursor);
+      const next = await listProfilePosts(timelinePubId, cursor);
       if (currentRequest !== requestId.current) return;
-      startTransition(() => {
-        setPosts((current) => [...current, ...page.posts]);
-        setCursor(page.nextCursor);
+      // 페이지 경계에서 겹친 게시물은 다시 붙이지 않는다.
+      setPage((current) => {
+        const seen = new Set(current.posts.map((post) => post.post_id));
+        return {
+          posts: [
+            ...current.posts,
+            ...next.posts.filter((post) => {
+              if (seen.has(post.post_id)) return false;
+              seen.add(post.post_id);
+              return true;
+            }),
+          ],
+          nextCursor: next.nextCursor,
+        };
       });
     } catch {
       if (currentRequest !== requestId.current) return;
       setError("이전 게시물을 불러오지 못했습니다.");
     } finally {
-      loadingMore.current = false;
       if (currentRequest === requestId.current) setLoading(false);
     }
   };

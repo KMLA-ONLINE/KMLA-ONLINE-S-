@@ -169,6 +169,115 @@ describe("ProfilePostsPanel", () => {
     expect(screen.queryByText("newest")).not.toBeInTheDocument();
   });
 
+  /**
+   * 응답이 오고 새 커서가 화면에 반영되기 전에 sentinel이 다시 닿으면, 옛 커서로 같은 페이지를
+   * 또 불러와 이어 붙였다(그룹 목록 #225와 같은 경합).
+   */
+  it("does not request the same page twice before the result commits", async () => {
+    listProfilePosts.mockResolvedValue({
+      posts: [profilePost({ post_id: "older" })],
+      nextCursor: null,
+    });
+    renderPanel({
+      initialPage: {
+        posts: [profilePost({ post_id: "newest" })],
+        nextCursor: { publishedAt: "2026-08-18T00:00:00Z", postId: "newest" },
+      },
+    });
+
+    await act(async () => {
+      const loadMore = infiniteScroll.loadMore!;
+      loadMore();
+      // 응답은 끝났지만 React가 새 커서를 아직 커밋하지 않은 틈.
+      for (let index = 0; index < 20; index++) await Promise.resolve();
+      loadMore();
+      for (let index = 0; index < 20; index++) await Promise.resolve();
+    });
+
+    expect(screen.getAllByText("older")).toHaveLength(1);
+    expect(listProfilePosts).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps one card when adjacent pages overlap", async () => {
+    listProfilePosts.mockResolvedValueOnce({
+      posts: [
+        profilePost({ post_id: "newest" }),
+        profilePost({ post_id: "older" }),
+      ],
+      nextCursor: null,
+    });
+    renderPanel({
+      initialPage: {
+        posts: [profilePost({ post_id: "newest" })],
+        nextCursor: { publishedAt: "2026-08-18T00:00:00Z", postId: "newest" },
+      },
+    });
+
+    act(() => infiniteScroll.loadMore?.());
+
+    expect(await screen.findByText("older")).toBeVisible();
+    expect(screen.getAllByText("newest")).toHaveLength(1);
+  });
+
+  /**
+   * 다음 페이지를 받는 중에 재검증이 첫 페이지를 바꾸면, 버려진 요청의 `finally`가 loading을
+   * 풀지 않아 스피너가 남고 무한스크롤이 멈췄다.
+   */
+  it("clears loading when the first page replaces an in-flight page request", async () => {
+    let deliver!: (page: ProfilePostPage) => void;
+    listProfilePosts.mockReturnValueOnce(
+      new Promise<ProfilePostPage>((resolve) => {
+        deliver = resolve;
+      }),
+    );
+    let replacePage!: (page: ProfilePostPage) => void;
+    renderRoute(function Harness() {
+      const [page, setPage] = useState<ProfilePostPage>({
+        posts: [profilePost({ post_id: "newest" })],
+        nextCursor: { publishedAt: "2026-08-18T00:00:00Z", postId: "newest" },
+      });
+      replacePage = setPage;
+      return (
+        <ProfilePostsPanel
+          timelinePubId="jieun-29"
+          canWrite
+          isOwnTimeline={false}
+          viewerName="홍길동"
+          viewerAvatarUrl={null}
+          initialPage={page}
+        />
+      );
+    });
+
+    act(() => infiniteScroll.loadMore?.());
+    expect(screen.getByRole("status")).toBeVisible();
+    act(() =>
+      replacePage({
+        posts: [profilePost({ post_id: "fresh" })],
+        nextCursor: { publishedAt: "2026-08-19T00:00:00Z", postId: "fresh" },
+      }),
+    );
+    await act(async () => {
+      deliver({ posts: [profilePost({ post_id: "stale" })], nextCursor: null });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("fresh")).toBeVisible();
+    expect(screen.queryByText("stale")).not.toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    listProfilePosts.mockResolvedValueOnce({
+      posts: [profilePost({ post_id: "next" })],
+      nextCursor: null,
+    });
+    act(() => infiniteScroll.loadMore?.());
+    expect(await screen.findByText("next")).toBeVisible();
+    expect(listProfilePosts).toHaveBeenLastCalledWith("jieun-29", {
+      publishedAt: "2026-08-19T00:00:00Z",
+      postId: "fresh",
+    });
+  });
+
   it("reports a failed page load without losing what is on screen", async () => {
     listProfilePosts.mockRejectedValue(new Error("network"));
     renderPanel({

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(38);
+select plan(42);
 
 select is(
   (select array_agg(enumlabel order by enumsortorder) from pg_enum
@@ -31,8 +31,8 @@ select results_eq(
     where namespace.nspname = 'public'
       and procedure.proname like 'admin_%'
       and has_function_privilege('authenticated', procedure.oid, 'EXECUTE')$$,
-  array[8],
-  'authenticated clients can execute all eight admin RPCs'
+  array[9],
+  'authenticated clients can execute all nine admin RPCs'
 );
 select results_eq(
   $$select count(*)::integer
@@ -92,6 +92,11 @@ select throws_ok(
   $$select * from public.admin_list_applications('pending', 50, 0)$$,
   '42501', 'app administrator required',
   'an accepted non-admin cannot read application data'
+);
+select throws_ok(
+  $$select * from public.admin_list_roster()$$,
+  '42501', 'app administrator required',
+  'an accepted non-admin cannot read the member roster'
 );
 
 reset role;
@@ -168,6 +173,18 @@ select is(
   'a rejected batch leaves its pending row unchanged'
 );
 set local role authenticated;
+select ok(
+  exists (select 1 from public.admin_list_roster() where pub_id = 'pending-second'),
+  'the member roster lists newly accepted users'
+);
+select ok(
+  not exists (select 1 from public.admin_list_roster() where pub_id = 'pending-user'),
+  'the member roster excludes pending applications'
+);
+select ok(
+  not exists (select 1 from public.admin_list_roster() where pub_id = 'pending-third'),
+  'the member roster excludes blocked applications'
+);
 
 reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);

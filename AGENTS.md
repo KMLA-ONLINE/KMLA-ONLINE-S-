@@ -128,7 +128,7 @@ The table defines minimum required usage, not an inventory of installed skills. 
 | Change/stage                            | Required verification                                                                     |
 | --------------------------------------- | ----------------------------------------------------------------------------------------- |
 | Source edit loop                        | `npm run check:static`: typegen, ESLint, TypeScript, Agent Map                            |
-| Source handoff                          | Prettier on touched files, then `npm run check`                                           |
+| Source handoff                          | Prettier on touched files; CI runs `npm run verify` after push (`gh pr checks --watch`)   |
 | App verification and production build   | `npm run verify`                                                                          |
 | Check passed after the last source edit | Add `npm run build` instead of repeating check through verify                             |
 | Documentation-only                      | Prettier on touched files, `npm run check:docs`; also `npm run check:map` for map changes |
@@ -145,4 +145,4 @@ The table defines minimum required usage, not an inventory of installed skills. 
 - Reset DB after migration/seed changes or test-data drift, not merely to rerun rollback-wrapped pgTAP. Use `npm run test:db` for the full DB suite.
 - Run Supabase CLI commands sequentially on Windows; prefer npm scripts or `npx supabase` for the repository CLI version.
 - Keep build order: `react-router build` → `scripts/inline-root-css.mjs` → `scripts/build-sw.mjs`. React Router emits `index.html` after Vite `closeBundle`, so do not move post-steps into plugins. CSS rewriting must precede precaching. Use `build:app` only to intentionally skip both post-steps.
-- Husky runs staged lint/format on commit and typecheck/Vitest on push. Keep LF endings as enforced by `.gitattributes`.
+- Husky runs staged lint/format on commit and typecheck on push. Vitest, build and DB checks run in CI (`quality.yml`) on PRs and pushes to `dev`/`main`; don't run `npm run check`/`verify` locally unless the user asks. Keep LF endings as enforced by `.gitattributes`.

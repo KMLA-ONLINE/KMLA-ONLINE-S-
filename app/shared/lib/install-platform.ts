@@ -99,7 +99,7 @@ export function isStandalone(): boolean {
   );
 }
 
-function isIOS(): boolean {
+export function isIOS(): boolean {
   // iPadOS 13+ Safari는 데스크톱 Mac UA를 보낸다. 터치 포인트 수로만 갈라낼 수 있다.
   return (
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -107,7 +107,7 @@ function isIOS(): boolean {
   );
 }
 
-function isAndroid(): boolean {
+export function isAndroid(): boolean {
   return /Android/i.test(navigator.userAgent);
 }
 
@@ -178,4 +178,32 @@ export function getFallbackInstallMode(): InstallMode | null {
   if (isAndroid()) return isInAppBrowser() ? "android-other" : "android-help";
 
   return null;
+}
+
+/**
+ * 인앱 브라우저에서 빠져나갈 방법.
+ *
+ * 인앱 브라우저는 로그인과 저장소가 따로라서 링크를 눌러 들어오면 늘 로그아웃된 화면이다.
+ * 웹에는 "앱 밖에서 열어라"는 표준이 없어 앱과 OS마다 길이 다르다.
+ *
+ *  - 카카오톡은 자체 주소(`kakaotalk://web/openExternal`)로 기본 브라우저를 연다. 공식 기능이다.
+ *  - 페이스북·인스타그램의 Android WebView는 `intent://`로 Android에 주소를 넘긴다. PWA가
+ *    설치되어 있으면 그 범위의 주소를 PWA가 받고, 아니면 `S.browser_fallback_url`로 그 자리에
+ *    다시 열린다. 공식 기능이 아니라 막는 버전도 있다.
+ *  - iOS의 페이스북·인스타그램에는 밖으로 나갈 주소가 없어 `null`이다. 이때는 설치 안내의
+ *    `ios-other` 모드가 Safari로 옮기라고 안내한다.
+ *
+ * iOS 카카오톡은 홈 화면 PWA가 아니라 Safari로 열린다 — iOS에는 링크로 PWA를 여는 길이 없다.
+ */
+export function getInAppEscapeUrl(href: string): string | null {
+  const ua = navigator.userAgent;
+
+  if (/KAKAOTALK/i.test(ua))
+    return `kakaotalk://web/openExternal?url=${encodeURIComponent(href)}`;
+  if (!/Instagram|FBAN|FBAV|FB_IAB/i.test(ua) || !isAndroid()) return null;
+
+  // `#Intent`가 fragment 자리를 쓰므로 원래 주소의 hash는 버린다. 앱 라우팅은 hash를 쓰지 않는다.
+  const url = new URL(href);
+  const scheme = url.protocol.replace(/:$/, "");
+  return `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=${scheme};S.browser_fallback_url=${encodeURIComponent(href)};end`;
 }

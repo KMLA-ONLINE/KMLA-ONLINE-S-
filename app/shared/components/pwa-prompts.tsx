@@ -1,6 +1,7 @@
 import { WifiOffIcon } from "lucide-react";
 
 import { InstallPrompt } from "~/shared/components/install-prompt";
+import { useInAppEscape } from "~/shared/hooks/use-in-app-escape";
 import { useOffline } from "~/shared/hooks/use-offline";
 import { useServiceWorker } from "~/shared/hooks/use-service-worker";
 import { useStaleChunkRecovery } from "~/shared/hooks/use-stale-chunk-recovery";
@@ -30,10 +31,12 @@ const BANNER_CLASS =
  * 채워지지 않는지 하나다.
  *
  * 화면을 그리지 않는 청크 복구도 여기서 켠다. 배포와 서비스 워커가 얽힌 같은 문제를
- * 다루는 데다, 루트에 단 한 번만 마운트되는 컴포넌트가 여기이기 때문이다.
+ * 다루는 데다, 루트에 단 한 번만 마운트되는 컴포넌트가 여기이기 때문이다. 인앱 브라우저에서
+ * 앱으로 넘기는 것도 같은 이유로 여기서 한다.
  */
 export function PwaPrompts() {
   useStaleChunkRecovery();
+  useInAppEscape();
 
   const offline = useOffline();
   const { updateReady, applyingUpdate, updateAppliedElsewhere, applyUpdate } =
