@@ -99,7 +99,7 @@ export function isStandalone(): boolean {
   );
 }
 
-function isIOS(): boolean {
+export function isIOS(): boolean {
   // iPadOS 13+ Safari는 데스크톱 Mac UA를 보낸다. 터치 포인트 수로만 갈라낼 수 있다.
   return (
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -107,7 +107,7 @@ function isIOS(): boolean {
   );
 }
 
-function isAndroid(): boolean {
+export function isAndroid(): boolean {
   return /Android/i.test(navigator.userAgent);
 }
 
