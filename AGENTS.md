@@ -111,7 +111,7 @@ The table defines minimum required usage, not an inventory of installed skills. 
 | shadcn, registries, `components.json`                                        | `shadcn`                |
 | UI, accessibility, or UX reviews                                             | `web-design-guidelines` |
 
-Before implementing a non-trivial plan or unspecified product behavior, use `grilling` to settle the specification with the user.
+Before implementing a non-trivial plan or unspecified product behavior, load `grilling` and `domain-modeling` (what `/grill-with-docs` combines) to settle the specification with the user and record the resolved terms and decisions in their owning documents.
 
 ### MCP
 
