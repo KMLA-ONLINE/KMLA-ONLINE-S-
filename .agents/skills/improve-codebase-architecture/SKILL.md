@@ -11,7 +11,7 @@ Surface architectural friction and propose **deepening opportunities**: refactor
 This command is _informed_ by the project's domain model and built on a shared design vocabulary:
 
 - Load the "codebase-design" skill for the architecture vocabulary (**module**, **interface**, **depth**, **seam**, **adapter**, **leverage**, **locality**) and its principles (the deletion test, "the interface is the test surface", "one adapter = hypothetical seam, two = real"). Use these terms exactly in every suggestion, and don't drift into "component," "service," "API," or "boundary."
-- The domain language in `docs/functional-spec/glossary.md` gives names to good seams; existing technical designs, applicable feature `AGENTS.md` files, and any ADRs record decisions this command should not re-litigate. Follow `docs/README.md` for document responsibilities and ADR criteria.
+- The domain language in `docs/functional-spec/glossary.md` gives names to good seams; existing technical designs, applicable feature `AGENTS.md` files, and rationale comments in the code record decisions this command should not re-litigate. Follow `docs/README.md` for document responsibilities.
 
 ## Project constraints
 
@@ -59,7 +59,7 @@ End the report with a **Top recommendation** section: which candidate you'd tack
 
 **Use `docs/functional-spec/glossary.md` vocabulary for the domain, and the `/codebase-design` vocabulary for the architecture.** If the glossary defines "Order," talk about "the Order intake module," not "the FooBarHandler," and not "the Order service."
 
-**Decision conflicts**: if a candidate contradicts an existing technical design, feature invariant, or ADR, only surface it when the friction is real enough to warrant revisiting that decision. Mark it clearly in the card (e.g. a warning callout: _"contradicts ADR-0007, but worth reopening because…"_), citing the actual source. Don't list every theoretical refactor a documented decision forbids. A candidate is a proposal, not permission to override a mandatory project rule.
+**Decision conflicts**: if a candidate contradicts an existing technical design, feature invariant, or rationale comment, only surface it when the friction is real enough to warrant revisiting that decision. Mark it clearly in the card (e.g. a warning callout: _"contradicts `docs/DATA_CACHE_POLICY.md` §1, but worth reopening because…"_), citing the actual source. Don't list every theoretical refactor a documented decision forbids. A candidate is a proposal, not permission to override a mandatory project rule.
 
 See [HTML-REPORT.md](HTML-REPORT.md) for the full HTML scaffold, diagram patterns, and styling guidance.
 
@@ -73,5 +73,5 @@ Within the editing permissions and approved scope above, side effects happen inl
 
 - **Naming a deepened module after a concept not in `docs/functional-spec/glossary.md`?** Add the term to the existing glossary, preserving its format and code/schema mappings. Do not create a second glossary at the repository root.
 - **Sharpening a fuzzy term during the conversation?** Update the existing glossary right there when edits are permitted; otherwise describe the proposed change in the conversation.
-- **User rejects the candidate with a load-bearing reason?** Offer an ADR, framed as: _"Want me to record this as an ADR so future architecture reviews don't re-suggest it?"_ Only offer when the reason would actually be needed by a future explorer to avoid re-suggesting the same thing; skip ephemeral reasons ("not worth it right now") and self-evident ones. First check whether an existing design already owns the decision; follow `docs/README.md` before creating a separate ADR.
+- **User rejects the candidate with a load-bearing reason?** Offer to record it, framed as: _"Want me to record why, so future architecture reviews don't re-suggest it?"_ Only offer when the reason would actually be needed by a future explorer to avoid re-suggesting the same thing; skip ephemeral reasons ("not worth it right now") and self-evident ones. Put a local reason in a code comment at the module and a cross-cutting one in the owning design or feature `AGENTS.md`. Never create ADRs.
 - **Want to explore alternative interfaces for the deepened module?** Load the "codebase-design" skill and use its design-it-twice pattern, including its sequential fallback when parallel sub-agents are unavailable or not permitted.
