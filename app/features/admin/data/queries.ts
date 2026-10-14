@@ -2,6 +2,7 @@ import type {
   AcceptedUser,
   AdminApplication,
   AdminMember,
+  RosterMember,
   StorageCleanupStatus,
 } from "~/features/admin/model/types";
 import { getSupabase } from "~/shared/supabase/client";
@@ -43,6 +44,12 @@ export async function listAdminMembers(
     p_offset: 0,
     p_admins_only: adminsOnly,
   });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function listRoster(): Promise<RosterMember[]> {
+  const { data, error } = await getSupabase().rpc("admin_list_roster");
   if (error) throw error;
   return data ?? [];
 }

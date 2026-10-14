@@ -1,4 +1,5 @@
 import {
+  ContactIcon,
   HardDriveIcon,
   ShieldCheckIcon,
   UserCheckIcon,
@@ -17,6 +18,12 @@ const links = [
     title: "가입 승인",
     description: "대기 신청 승인, 차단 및 차단 해제",
     icon: UserCheckIcon,
+  },
+  {
+    to: "/admin/members",
+    title: "전체 인원",
+    description: "승인된 사용자를 기수·유형별로 보고 CSV로 내려받기",
+    icon: ContactIcon,
   },
   {
     to: "/admin/gongang-managers",

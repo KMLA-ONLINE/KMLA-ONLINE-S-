@@ -55,6 +55,7 @@ export default [
       ]),
       route("admin", "routes/app/admin/index.tsx"),
       route("admin/approvals", "routes/app/admin/approvals.tsx"),
+      route("admin/members", "routes/app/admin/members.tsx"),
       route("admin/gongang-managers", "routes/app/admin/gongang-managers.tsx"),
       route("admin/app-admins", "routes/app/admin/app-admins.tsx"),
       route("admin/storage-cleanup", "routes/app/admin/storage-cleanup.tsx"),

@@ -4,12 +4,14 @@ export {
 } from "~/features/admin/components/app-admins-screen";
 export { ApprovalsScreen } from "~/features/admin/components/approvals-screen";
 export { GongangManagersScreen } from "~/features/admin/components/gongang-managers-screen";
+export { RosterScreen } from "~/features/admin/components/roster-screen";
 export { StorageCleanupScreen } from "~/features/admin/components/storage-cleanup-screen";
 export {
   getStorageCleanupStatus,
   listAcceptedUsers,
   listAdminMembers,
   listApplications,
+  listRoster,
 } from "~/features/admin/data/queries";
 export {
   reauthenticateWithPassword,
