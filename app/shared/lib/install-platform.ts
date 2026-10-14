@@ -186,11 +186,10 @@ export function getFallbackInstallMode(): InstallMode | null {
  * 인앱 브라우저는 로그인과 저장소가 따로라서 링크를 눌러 들어오면 늘 로그아웃된 화면이다.
  * 웹에는 "앱 밖에서 열어라"는 표준이 없어 앱과 OS마다 길이 다르다.
  *
- *  - 카카오톡은 자체 주소(`kakaotalk://web/openExternal`)로 기본 브라우저를 연다. 공식 기능이라
- *    가장 믿을 만해서 자동으로 한 번 넘긴다.
+ *  - 카카오톡은 자체 주소(`kakaotalk://web/openExternal`)로 기본 브라우저를 연다. 공식 기능이다.
  *  - 페이스북·인스타그램의 Android WebView는 `intent://`로 Android에 주소를 넘긴다. PWA가
  *    설치되어 있으면 그 범위의 주소를 PWA가 받고, 아니면 `S.browser_fallback_url`로 그 자리에
- *    다시 열린다. 막는 버전도 있어서 사용자가 누를 때만 시도한다.
+ *    다시 열린다. 공식 기능이 아니라 막는 버전도 있다.
  *  - iOS의 페이스북·인스타그램에는 밖으로 나갈 주소가 없다. 앱 메뉴를 안내할 수밖에 없다.
  *
  * iOS는 어느 경우든 홈 화면 PWA가 아니라 Safari로 열린다 — iOS에는 링크로 PWA를 여는 길이 없다.

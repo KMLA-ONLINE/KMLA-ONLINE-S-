@@ -50,8 +50,9 @@ function recordTried(): void {
 /**
  * 인앱 브라우저로 들어온 사용자를 앱이나 브라우저로 넘긴다.
  *
- * 카카오톡만 탭에서 처음 한 번 자동으로 넘긴다. 나머지는 막혀 있을 수 있어서 배너의 버튼으로만
- * 시도한다 — 자동으로 넘겼다가 실패하면 사용자는 영문 모를 빈 화면이나 오류 창에 갇힌다.
+ * 넘길 길이 있으면 탭에서 처음 한 번 자동으로 넘긴다. `intent://`는 막는 버전이 있어 오류 화면이
+ * 뜰 수 있지만, 돌아오면 배너가 남아 있어 버튼으로 다시 시도할 수 있다. 한 번만 시도하는 것은
+ * 실패한 뒤 돌아오거나 새로고침할 때마다 다시 튕겨 내지 않기 위해서다.
  */
 export function useInAppEscape(): InAppEscapeState {
   const escape = useSyncExternalStore(subscribeNever, readEscape, () => null);
@@ -59,7 +60,7 @@ export function useInAppEscape(): InAppEscapeState {
 
   useEffect(() => {
     const current = getInAppEscape(window.location.href);
-    if (current?.kind !== "kakao" || readTried()) return;
+    if (!current || current.kind === "guide" || readTried()) return;
     recordTried();
     window.location.href = current.url;
   }, []);
