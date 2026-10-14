@@ -36,7 +36,22 @@ const GATE_REDIRECT = {
   withdrawn: "/login",
 } as const;
 
-export async function clientLoader(): Promise<ShellData> {
+/**
+ * 로그인 화면으로 보낼 때 들어오려던 주소를 `next`로 넘긴다. 공유받은 게시물 링크로 들어왔다가
+ * 로그인 화면을 한 번 거치면 그 글로 돌아갈 길이 없어진다. 받는 쪽(`getProfileDestination()`)이
+ * 앱 안의 경로만 통과시킨다. 홈은 로그인 뒤 기본 목적지라 붙이지 않는다.
+ */
+function redirectToLogin(request: Request): Response {
+  const url = new URL(request.url);
+  const next = `${url.pathname}${url.search}`;
+  return redirect(
+    next === "/" ? "/login" : `/login?${new URLSearchParams({ next })}`,
+  );
+}
+
+export async function clientLoader({
+  request,
+}: Route.ClientLoaderArgs): Promise<ShellData> {
   // `staleTime: 0`으로 항상 새로 읽는다. Push 알림 경로에서 `resolve_my_notification_destination()`이
   // `read_at`을 찍은 직후 게이트가 마운트되므로, 캐시를 쓰면 읽은 알림이 최대 1분간 안 읽음으로 남는다.
   // 게이트 로더는 첫 진입에만 돌아 매번 읽어도 비싸지 않다.
@@ -49,7 +64,7 @@ export async function clientLoader(): Promise<ShellData> {
   const shell = await loadShellData();
 
   if (!shell) {
-    throw redirect("/login");
+    throw redirectToLogin(request);
   }
 
   if (!shell.profile) {
