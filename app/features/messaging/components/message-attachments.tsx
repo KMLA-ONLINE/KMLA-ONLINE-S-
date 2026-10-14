@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   DownloadIcon,
   FileIcon,
+  ImageOffIcon,
   MusicIcon,
   PauseIcon,
   PlayIcon,
@@ -26,7 +27,10 @@ import { Spinner } from "~/shared/ui/spinner";
 /** 말풍선 격자에 까는 최대 칸 수. */
 const MEDIA_GRID_LIMIT = 6;
 
-/** 첨부 object의 signed URL. 서버에 올라가지 않은(보내는 중인) 첨부는 건너뛴다. */
+/**
+ * 첨부 object의 signed URL. 서버에 올라가지 않은(보내는 중인) 첨부는 건너뛴다. 받지 못했으면
+ * `failed`다. 사진 칸이 끝없이 도는 대신 깨진 사진을 그린다.
+ */
 function useAttachmentUrls(attachments: MessageAttachment[]) {
   const paths = attachments
     .flatMap((attachment) => [attachment.objectPath, attachment.thumbnailPath])
@@ -37,7 +41,7 @@ function useAttachmentUrls(attachments: MessageAttachment[]) {
     enabled: paths.length > 0,
     staleTime: 55 * 60_000,
     gcTime: 55 * 60_000,
-  }).data;
+  });
 }
 
 /**
@@ -53,7 +57,7 @@ export function MessageAttachments({
   isOwn: boolean;
   pending?: boolean;
 }) {
-  const urls = useAttachmentUrls(attachments);
+  const { data: urls, isError: urlsFailed } = useAttachmentUrls(attachments);
   const media = attachments.filter(({ kind }) => kind === "image");
   const others = attachments.filter(({ kind }) => kind !== "image");
 
@@ -67,7 +71,12 @@ export function MessageAttachments({
       aria-busy={pending}
     >
       {media.length > 0 ? (
-        <MediaGrid media={media} urls={urls} pending={pending} />
+        <MediaGrid
+          media={media}
+          urls={urls}
+          urlsFailed={urlsFailed}
+          pending={pending}
+        />
       ) : null}
       {others.map((attachment) =>
         attachment.kind === "audio" ? (
@@ -92,10 +101,12 @@ export function MessageAttachments({
 function MediaGrid({
   media,
   urls,
+  urlsFailed,
   pending,
 }: {
   media: MessageAttachment[];
   urls: Map<string, string> | undefined;
+  urlsFailed: boolean;
   pending: boolean;
 }) {
   const images = useMemo<ViewerImage[]>(
@@ -126,12 +137,18 @@ function MediaGrid({
   const hiddenCount = media.length - visible.length;
   // 다섯 장은 3열에 놓으면 오른쪽 아래가 비므로 위 2장, 아래 3장으로 6열을 나눠 깐다.
   const five = visible.length === 5;
+  const [first] = visible;
+  // 사진이 오기 전에 자리를 잡도록 격자 폭을 먼저 정한다. 폭이 사진에서 나오면 사진이 뜰 때까지 칸이
+  // 0으로 접혀 있다가 갑자기 펴지며 대화를 밀어낸다. 작은 사진 한 장은 원래 크기보다 키우지 않는다.
+  const gridWidth =
+    single && first?.width ? `min(18rem, ${first.width}px)` : "18rem";
 
   return (
     <>
       <div
+        style={{ width: gridWidth }}
         className={cn(
-          "grid max-w-72 gap-0.5 overflow-hidden rounded-2xl",
+          "grid max-w-full gap-0.5 overflow-hidden rounded-2xl",
           single
             ? "grid-cols-1"
             : visible.length === 2 || visible.length === 4
@@ -174,17 +191,12 @@ function MediaGrid({
               onClick={() => viewer.open(attachment.id)}
             >
               {thumb ? (
-                // 방을 열면 한 페이지(50개) 안의 사진을 다 그린다. 화면 밖 사진은 스크롤해 다가갈
-                // 때 받는다. 칸의 비율이 미리 정해져 있어 늦게 떠도 자리가 밀리지 않는다.
-                <img
-                  src={thumb}
-                  alt=""
-                  crossOrigin="anonymous"
-                  loading="lazy"
-                  decoding="async"
-                  className="size-full object-cover"
-                />
-              ) : null}
+                <GridImage key={thumb} src={thumb} showLoading={!pending} />
+              ) : urlsFailed ? (
+                <BrokenImageMark />
+              ) : pending ? null : (
+                <LoadingMark />
+              )}
               {more > 0 ? (
                 <span
                   aria-hidden
@@ -203,6 +215,62 @@ function MediaGrid({
         })}
       </div>
     </>
+  );
+}
+
+/**
+ * 격자 칸 하나의 사진. 칸은 비율로 자리를 미리 잡고 있으므로, 사진이 다 올 때까지 그 자리에서 돌다가
+ * 사진으로 바꿔 그린다. 방을 열면 한 페이지(50개) 안의 사진을 다 그린다. 화면 밖 사진은 스크롤해
+ * 다가갈 때 받는다.
+ */
+function GridImage({
+  src,
+  showLoading,
+}: {
+  src: string;
+  showLoading: boolean;
+}) {
+  const [status, setStatus] = useState<"loading" | "loaded" | "failed">(
+    "loading",
+  );
+
+  return (
+    <>
+      <img
+        src={src}
+        alt=""
+        crossOrigin="anonymous"
+        loading="lazy"
+        decoding="async"
+        className={cn(
+          "size-full object-cover",
+          status !== "loaded" && "opacity-0",
+        )}
+        onLoad={() => setStatus("loaded")}
+        onError={() => setStatus("failed")}
+      />
+      {status === "failed" ? (
+        <BrokenImageMark />
+      ) : status === "loading" && showLoading ? (
+        <LoadingMark />
+      ) : null}
+    </>
+  );
+}
+
+function LoadingMark() {
+  return (
+    <span className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+      <Spinner />
+    </span>
+  );
+}
+
+function BrokenImageMark() {
+  return (
+    <span className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+      <ImageOffIcon aria-hidden className="size-6" />
+    </span>
   );
 }
 
