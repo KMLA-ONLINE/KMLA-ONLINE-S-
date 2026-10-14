@@ -23,7 +23,7 @@ interface Props {
   loading: boolean;
   /** Admins also see donors and every applicant. */
   isAdmin: boolean;
-  /** Current students and admins may apply; teachers and alumni browse. */
+  /** Only current students apply; teachers and alumni browse. */
   canApply: boolean;
   isOpen: boolean;
   busyItem: number | null;

@@ -177,19 +177,31 @@ select set_config('test.donation_free_item',
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000099', true);
 select throws_ok(
   $$select public.donation_claim_item(current_setting('test.donation_free_item')::bigint)$$,
-  '42501', 'only students and administrators can apply', 'teachers cannot apply');
+  '42501', 'only students can apply', 'teachers cannot apply');
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000007001', true);
+select throws_ok(
+  $$select public.donation_claim_item(current_setting('test.donation_free_item')::bigint)$$,
+  '42501', 'only students can apply', 'administrator rights alone do not allow applying');
+
+reset role;
+update public.profiles set role = 'admin'
+where auth_user_id = '10000000-0000-0000-0000-000000000001';
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+select lives_ok(
+  $$select public.donation_claim_item(current_setting('test.donation_free_item')::bigint)$$,
+  'an administrator who is a current student can apply');
+select lives_ok(
+  $$select public.donation_cancel_claim(current_setting('test.donation_free_item')::bigint)$$,
+  'the student administrator releases the item again');
+
 reset role;
 update public.profiles set type = 'alumni'
 where auth_user_id = '10000000-0000-0000-0000-000000000001';
 set local role authenticated;
-select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 select throws_ok(
   $$select public.donation_claim_item(current_setting('test.donation_free_item')::bigint)$$,
-  '42501', 'only students and administrators can apply', 'alumni cannot apply');
-select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000007001', true);
-select lives_ok(
-  $$select public.donation_claim_item(current_setting('test.donation_free_item')::bigint)$$,
-  'an administrator can apply even when not a current student');
+  '42501', 'only students can apply', 'alumni cannot apply');
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000007001', true);
 select set_config('test.donation_invalid',

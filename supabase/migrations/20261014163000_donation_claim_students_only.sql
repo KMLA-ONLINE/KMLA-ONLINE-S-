@@ -18,14 +18,14 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
-  -- Current students apply; teachers and alumni only browse, except admins.
+  -- Only current students apply; admin rights do not grant eligibility.
   IF NOT EXISTS (
     SELECT 1
     FROM public.profiles AS p
     WHERE p.id = caller_id
-      AND (p.type = 'student' OR p.role = 'admin')
+      AND p.type = 'student'
   ) THEN
-    RAISE EXCEPTION 'only students and administrators can apply'
+    RAISE EXCEPTION 'only students can apply'
       USING ERRCODE = '42501';
   END IF;
 

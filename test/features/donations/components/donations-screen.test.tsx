@@ -208,9 +208,20 @@ describe("DonationsScreen application eligibility", () => {
     },
   );
 
-  it("lets an administrator who is not a student apply", async () => {
+  it("does not let a non-student administrator apply", async () => {
     viewer.role = "admin";
     viewer.type = "alumni";
+    data.loadDonationItems.mockResolvedValue([item({ id: 2 })]);
+    render(<DonationsScreen />);
+
+    expect(await screen.findByText("수학 교재")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "수학 교재 신청" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("lets a student administrator apply", async () => {
+    viewer.role = "admin";
     data.loadDonationItems.mockResolvedValue([item({ id: 2 })]);
     data.claimDonationItem.mockResolvedValue(undefined);
     const user = userEvent.setup();

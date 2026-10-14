@@ -89,8 +89,8 @@ function LoadError({
 export function DonationsScreen() {
   const { profile } = useAppShell();
   const isAdmin = profile.role === "admin";
-  // Mirrors donation_claim_item, which enforces the same rule.
-  const canApply = isAdmin || profile.type === "student";
+  // Mirrors donation_claim_item: only current students apply, admins included.
+  const canApply = profile.type === "student";
 
   const [rounds, setRounds] = useState<DonationRound[]>([]);
   const [roundId, setRoundId] = useState<number | null>(null);
@@ -299,7 +299,7 @@ export function DonationsScreen() {
               items={items}
               loading={itemsLoading}
               isAdmin
-              canApply
+              canApply={canApply}
               isOpen={isOpen}
               busyItem={busyItem}
               mineCount={mineCount}

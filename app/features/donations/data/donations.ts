@@ -29,7 +29,7 @@ function handleError(error: { code?: string; message: string }): never {
     throw new Error("이미 다른 학생이 신청한 물품입니다.");
   }
 
-  if (error.message.includes("only students and administrators can apply")) {
+  if (error.message.includes("only students can apply")) {
     throw new Error("기부물품은 재학생만 신청할 수 있습니다.");
   }
 
