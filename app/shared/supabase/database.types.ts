@@ -403,6 +403,8 @@ export type Database = {
           created_at: string
           detail: string | null
           location: string
+          recurring: boolean
+          recurring_until: string | null
           reserved: boolean
           schedule_date: string
           slot: string
@@ -413,6 +415,8 @@ export type Database = {
           created_at?: string
           detail?: string | null
           location: string
+          recurring?: boolean
+          recurring_until?: string | null
           reserved?: boolean
           schedule_date: string
           slot: string
@@ -423,6 +427,8 @@ export type Database = {
           created_at?: string
           detail?: string | null
           location?: string
+          recurring?: boolean
+          recurring_until?: string | null
           reserved?: boolean
           schedule_date?: string
           slot?: string
@@ -3107,6 +3113,7 @@ export type Database = {
         }[]
       }
       revoke_group_invite: { Args: { p_group_id: string }; Returns: undefined }
+      save_gongang_schedule: { Args: { p_entries: Json }; Returns: undefined }
       search_directory: {
         Args: { p_query?: string }
         Returns: {

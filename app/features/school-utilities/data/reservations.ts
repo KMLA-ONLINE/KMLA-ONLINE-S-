@@ -172,3 +172,27 @@ export async function deleteUtilityReservation(
     throw error;
   }
 }
+
+/** One insert statement makes a multi-slot booking all-or-nothing. */
+export async function createUtilityReservations(
+  inputs: CreateUtilityReservationInput[],
+): Promise<void> {
+  const sorted = [...inputs].sort((a, b) =>
+    `${a.slot}:${a.location}`.localeCompare(`${b.slot}:${b.location}`),
+  );
+  const { error } = await getSupabase()
+    .from("utility_reservations")
+    .insert(
+      sorted.map((input) => ({
+        profile_id: input.profileId,
+        mode: input.mode,
+        reservation_date: input.reservationDate,
+        slot: input.slot,
+        location: input.location,
+        detail: input.detail,
+        recurring: input.recurring,
+        applicant_name: "",
+      })),
+    );
+  if (error) throw error;
+}

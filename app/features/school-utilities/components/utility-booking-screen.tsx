@@ -1,3 +1,4 @@
+import { GongangBookingScreen } from "./gongang-booking-screen";
 import { PlusIcon, Repeat2Icon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
@@ -581,7 +582,7 @@ function BookingRow({
   );
 }
 
-export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
+function ExistingBookingScreen({ mode }: UtilityBookingScreenProps) {
   const { profile } = useAppShell();
   const today = useKoreaToday();
   const weekStart = useMemo(() => startOfKoreaWeek(today), [today]);
@@ -1013,5 +1014,13 @@ export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
         )}
       </div>
     </div>
+  );
+}
+
+export function UtilityBookingScreen({ mode }: UtilityBookingScreenProps) {
+  return mode === "gongang" ? (
+    <GongangBookingScreen />
+  ) : (
+    <ExistingBookingScreen mode="karaoke" />
   );
 }
