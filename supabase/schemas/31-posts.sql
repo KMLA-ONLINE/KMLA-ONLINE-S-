@@ -669,7 +669,7 @@ CREATE INDEX "post_attachments_cleanup_idx" ON "public"."post_attachments" USING
 
 CREATE UNIQUE INDEX "post_mentions_target_idx" ON "public"."post_mentions" USING "btree" ("post_id", "profile_id");
 
-CREATE INDEX "post_attachments_post_list_idx" ON "public"."post_attachments" USING "btree" ("post_id", "position", "id") WHERE ("status" = 'ready'::"public"."post_attachment_status");
+CREATE INDEX "post_attachments_post_list_idx" ON "public"."post_attachments" USING "btree" ("post_id", "position", "id");
 
 CREATE INDEX "posts_category_recent_idx" ON "public"."posts" USING "btree" ("group_id", "category_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'group'::"public"."post_kind") AND ("category_id" IS NOT NULL) AND ("published_at" IS NOT NULL));
 
