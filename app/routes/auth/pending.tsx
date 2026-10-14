@@ -7,6 +7,10 @@ import {
   loadAuthState,
   signOut,
 } from "~/features/auth";
+import {
+  DeferredAdminContactList,
+  listAdminContacts,
+} from "~/features/support";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 import type { Route } from "./+types/pending";
@@ -19,7 +23,7 @@ export async function clientLoader() {
     if (destination === "/login") await signOut();
     throw redirect(destination);
   }
-  return state;
+  return { ...state, contacts: listAdminContacts().catch(() => []) };
 }
 
 export default function PendingPage({ loaderData }: Route.ComponentProps) {
@@ -59,6 +63,10 @@ export default function PendingPage({ loaderData }: Route.ComponentProps) {
             다른 계정으로 로그인
           </Button>
         </Form>
+        <DeferredAdminContactList
+          contacts={loaderData.contacts}
+          prompt="승인이 너무 오래 걸리나요?"
+        />
       </div>
     </AuthCard>
   );

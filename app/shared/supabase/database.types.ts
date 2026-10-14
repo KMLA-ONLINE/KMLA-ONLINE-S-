@@ -34,6 +34,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_contacts: {
+        Row: {
+          kind: string
+          label: string
+          position: number
+          value: string
+        }
+        Insert: {
+          kind: string
+          label: string
+          position: number
+          value: string
+        }
+        Update: {
+          kind?: string
+          label?: string
+          position?: number
+          value?: string
+        }
+        Relationships: []
+      }
       comment_images: {
         Row: {
           comment_id: string | null
@@ -1631,6 +1652,7 @@ export type Database = {
           pub_id: string
         }[]
       }
+      admin_replace_contacts: { Args: { p_contacts: Json }; Returns: undefined }
       admin_review_applications: {
         Args: {
           p_profile_ids: number[]

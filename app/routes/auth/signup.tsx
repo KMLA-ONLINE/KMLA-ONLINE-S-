@@ -37,6 +37,10 @@ import {
   type ProfileFormValues,
   type SignupDraft,
 } from "~/features/auth";
+import {
+  DeferredAdminContactList,
+  listAdminContacts,
+} from "~/features/support";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
@@ -109,7 +113,11 @@ export async function clientLoader() {
     await signOut();
   }
 
-  return { draft: getSignupDraft() };
+  // 인증 메일이 오지 않아 가입이 막힌 사람을 위해 인증 단계에서만 보인다.
+  return {
+    draft: getSignupDraft(),
+    contacts: listAdminContacts().catch(() => []),
+  };
 }
 
 /**
@@ -380,6 +388,11 @@ export default function SignupPage({
               로그인
             </Link>
           </p>
+        ) : step === "verify" ? (
+          <DeferredAdminContactList
+            contacts={loaderData.contacts}
+            prompt="인증 메일이 오지 않나요?"
+          />
         ) : undefined
       }
     >

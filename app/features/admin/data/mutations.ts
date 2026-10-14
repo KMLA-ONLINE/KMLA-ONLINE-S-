@@ -1,3 +1,5 @@
+import type { AdminContact } from "~/features/support";
+import type { Json } from "~/shared/supabase/database.types";
 import { getSupabase } from "~/shared/supabase/client";
 
 export async function reviewApplications(
@@ -51,6 +53,15 @@ export async function reauthenticateWithPassword(
   const { error } = await supabase.auth.signInWithPassword({
     email: userData.user.email,
     password,
+  });
+  if (error) throw error;
+}
+
+export async function replaceAdminContacts(
+  contacts: AdminContact[],
+): Promise<void> {
+  const { error } = await getSupabase().rpc("admin_replace_contacts", {
+    p_contacts: contacts as unknown as Json,
   });
   if (error) throw error;
 }

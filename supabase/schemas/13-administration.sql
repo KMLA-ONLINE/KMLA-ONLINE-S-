@@ -369,3 +369,68 @@ GRANT ALL ON FUNCTION "public"."admin_set_gongang_manager"("p_profile_id" bigint
 
 REVOKE ALL ON FUNCTION "public"."admin_unblock_application"("p_profile_id" bigint) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."admin_unblock_application"("p_profile_id" bigint) TO "authenticated";
+
+-- 앱 밖 사람도 관리자에게 닿을 수 있도록 로그인 전 화면에 공개하는 연락처. 순서(position)를 키로 써 최대 10개를 제약만으로 지킨다.
+CREATE TABLE IF NOT EXISTS "public"."admin_contacts" (
+    "position" smallint NOT NULL,
+    "kind" "text" NOT NULL,
+    "label" "text" NOT NULL,
+    "value" "text" NOT NULL,
+    CONSTRAINT "admin_contacts_position_check" CHECK ((("position" >= 0) AND ("position" <= 9))),
+    CONSTRAINT "admin_contacts_kind_check" CHECK (("kind" = ANY (ARRAY['link'::"text", 'email'::"text"]))),
+    CONSTRAINT "admin_contacts_label_check" CHECK ((("label" = "btrim"("label")) AND (("char_length"("label") >= 1) AND ("char_length"("label") <= 40)))),
+    CONSTRAINT "admin_contacts_value_check" CHECK (
+CASE "kind"
+    WHEN 'link'::"text" THEN (("char_length"("value") <= 500) AND ("value" ~ '^https://[^[:space:]]+$'::"text"))
+    WHEN 'email'::"text" THEN (("char_length"("value") <= 254) AND ("value" ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'::"text"))
+    ELSE false
+END)
+);
+
+ALTER TABLE "public"."admin_contacts" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."admin_contacts"
+    ADD CONSTRAINT "admin_contacts_pkey" PRIMARY KEY ("position");
+
+ALTER TABLE "public"."admin_contacts" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "admin_contacts_select_public" ON "public"."admin_contacts" FOR SELECT TO "anon", "authenticated" USING (true);
+
+CREATE OR REPLACE FUNCTION "public"."admin_replace_contacts"("p_contacts" "jsonb") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  perform private.require_app_admin();
+
+  if p_contacts is null or jsonb_typeof(p_contacts) <> 'array' then
+    raise exception 'contacts must be an array' using errcode = '22023';
+  end if;
+  if jsonb_array_length(p_contacts) > 10 then
+    raise exception 'too many contacts' using errcode = '22023';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('admin-contacts-replace', 0));
+
+  delete from public.admin_contacts where true;
+
+  insert into public.admin_contacts (position, kind, label, value)
+  select
+    (item.ordinality - 1)::smallint,
+    item.contact ->> 'kind',
+    btrim(item.contact ->> 'label'),
+    btrim(item.contact ->> 'value')
+  from jsonb_array_elements(p_contacts) with ordinality as item(contact, ordinality);
+end;
+$$;
+
+ALTER FUNCTION "public"."admin_replace_contacts"("p_contacts" "jsonb") OWNER TO "postgres";
+
+REVOKE ALL ON FUNCTION "public"."admin_replace_contacts"("p_contacts" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."admin_replace_contacts"("p_contacts" "jsonb") TO "authenticated";
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."admin_contacts" TO "service_role";
+GRANT SELECT ON TABLE "public"."admin_contacts" TO "anon";
+GRANT SELECT ON TABLE "public"."admin_contacts" TO "authenticated";
+
+REVOKE MAINTAIN, REFERENCES, TRIGGER, TRUNCATE ON TABLE "public"."admin_contacts" FROM "anon", "authenticated";
