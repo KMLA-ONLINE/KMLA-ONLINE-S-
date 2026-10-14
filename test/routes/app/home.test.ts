@@ -118,7 +118,7 @@ describe("home feed loader", () => {
   it("warms the feed cache and loads today's meal independently", async () => {
     const result = await load();
 
-    expect(mocks.listFeedPosts).toHaveBeenCalledWith(null, true);
+    expect(mocks.listFeedPosts).toHaveBeenCalledWith(null, false);
     expect(mocks.getMealDay).toHaveBeenCalledWith("20260824");
     expect(mocks.listBirthdays).toHaveBeenCalledWith("2026-08-24", "today");
     await expect(result.mealDay).resolves.toBe(mealDay);

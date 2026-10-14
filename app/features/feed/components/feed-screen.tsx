@@ -3,7 +3,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useFetcher, useSearchParams } from "react-router";
 
 import { useAppShell } from "~/features/app-shell";
@@ -11,8 +11,11 @@ import {
   FeedPostCard,
   FeedPostRow,
 } from "~/features/feed/components/feed-post";
-import { feedQuery, resetFeed } from "~/features/feed/data/cache";
-import { hydrateFeedPostMedia } from "~/features/feed/data/queries";
+import {
+  feedMediaQuery,
+  feedQuery,
+  resetFeed,
+} from "~/features/feed/data/cache";
 import { previewFeedPostDetail } from "~/features/feed/model/detail-preview";
 import type {
   FeedPost,
@@ -99,60 +102,59 @@ export function FeedScreen() {
   );
 
   const feedEpoch = pages[0]?.feedEpoch ?? null;
-  const hydratedPostIds = useRef(new Set<string>());
-  const [hydratedState, setHydratedState] = useState(() => ({
-    feedEpoch,
-    posts: new Map<string, FeedPost>(),
-  }));
-  const hydratedPosts =
-    hydratedState.feedEpoch === feedEpoch
-      ? hydratedState.posts
-      : new Map<string, FeedPost>();
-  /** 수화본은 만들어진 시점에 멈춰 있어, 수화가 채운 필드만 쓰고 engagement는 최신 raw post의 것을 얹는다. */
-  const posts = rawPosts.map((post) => {
-    const hydrated = hydratedPosts.get(post.post_id);
-    return hydrated
-      ? {
-          ...hydrated,
-          comment_count: post.comment_count,
-          reaction_count: post.reaction_count,
-          top_reactions: post.top_reactions,
-          my_reaction: post.my_reaction,
-        }
-      : post;
+  const media = useQuery({
+    ...feedMediaQuery(rawPosts, feedEpoch, profile.id),
+    enabled: viewMode === "card" && rawPosts.length > 0,
   });
-
-  /** 지금 화면의 세션. resolve 시점에 클로저의 epoch가 아직 유효한지 확인한다. */
-  const liveFeedEpoch = useRef(feedEpoch);
-
-  // 세션이 바뀌면 이전 세션에서 채운 미디어는 버린다.
-  useEffect(() => {
-    liveFeedEpoch.current = feedEpoch;
-    hydratedPostIds.current.clear();
-  }, [feedEpoch]);
-
-  useEffect(() => {
-    if (viewMode !== "card") return;
-    const unhydrated = rawPosts.filter(
-      (post) => !hydratedPostIds.current.has(post.post_id),
-    );
-    if (unhydrated.length === 0) return;
-    unhydrated.forEach((post) => hydratedPostIds.current.add(post.post_id));
-    void hydrateFeedPostMedia(unhydrated).then((hydrated) => {
-      // 이 결과는 이미 지나간 세션의 것이다. 지금 세션이 채워 둔 걸 덮어쓰면, 그 글들은
-      // `hydratedPostIds`에 이미 올라가 있어 다시 시도되지도 않는다.
-      if (liveFeedEpoch.current !== feedEpoch) return;
-
-      setHydratedState((current) => {
-        const next =
-          current.feedEpoch === feedEpoch
-            ? new Map(current.posts)
-            : new Map<string, FeedPost>();
-        hydrated.forEach((post) => next.set(post.post_id, post));
-        return { feedEpoch, posts: next };
-      });
-    });
-  }, [feedEpoch, rawPosts, viewMode]);
+  const hydratedPosts = new Map(
+    media.data?.feedEpoch === feedEpoch && media.data.viewerId === profile.id
+      ? media.data.posts.map((post) => [post.post_id, post])
+      : [],
+  );
+  /** 수화는 URL만 채운다. 늦은 응답이 본문·첨부·engagement를 되돌리지 않는다. */
+  const posts = rawPosts.map((post): FeedPost => {
+    const hydrated = hydratedPosts.get(post.post_id);
+    if (!hydrated) return post;
+    const urls = {
+      author_avatar_url:
+        post.author_avatar_path === hydrated.author_avatar_path
+          ? hydrated.author_avatar_url
+          : post.author_avatar_url,
+      attachments: post.attachments.map((attachment) => {
+        const signed = hydrated.attachments.find(
+          (item) =>
+            item.attachment_id === attachment.attachment_id &&
+            item.storage_bucket === attachment.storage_bucket,
+        );
+        return {
+          ...attachment,
+          signedUrl:
+            signed?.object_path === attachment.object_path
+              ? signed.signedUrl
+              : attachment.signedUrl,
+          thumbnailUrl:
+            signed?.thumbnail_path === attachment.thumbnail_path
+              ? (signed?.thumbnailUrl ?? null)
+              : attachment.thumbnailUrl,
+        };
+      }),
+    };
+    if (post.kind === "group") return { ...post, ...urls };
+    return {
+      ...post,
+      ...urls,
+      activity_media_url:
+        post.activity_media_path === hydrated.activity_media_path
+          ? hydrated.activity_media_url
+          : post.activity_media_url,
+    };
+  });
+  const missingMedia = posts.some(
+    (post) =>
+      Boolean(post.author_avatar_path && !post.author_avatar_url) ||
+      Boolean(post.activity_media_path && !post.activity_media_url) ||
+      post.attachments.some((item) => !item.signedUrl),
+  );
 
   const pending = isFetchingNextPage || isRefetching;
   const activeDetailResult =
@@ -213,7 +215,11 @@ export function FeedScreen() {
       {viewMode === "card" ? (
         <div className="flex flex-col md:gap-3">
           {posts.map((post) => (
-            <FeedPostCard key={post.post_id} post={post} />
+            <FeedPostCard
+              key={post.post_id}
+              post={post}
+              mediaPending={media.isPending || media.isFetching}
+            />
           ))}
         </div>
       ) : (
@@ -234,6 +240,19 @@ export function FeedScreen() {
         <p className="px-4 py-12 text-center text-sm text-muted-foreground">
           아직 게시물이 없습니다.
         </p>
+      ) : null}
+
+      {viewMode === "card" && missingMedia && !media.isFetching ? (
+        <div className="flex justify-center px-4 py-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void media.refetch()}
+          >
+            이미지 다시 불러오기
+          </Button>
+        </div>
       ) : null}
 
       {loadError ? (

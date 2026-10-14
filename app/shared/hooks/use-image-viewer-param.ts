@@ -97,7 +97,7 @@ export function ImageViewerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // 이미지가 있는 화면이 뜨면 미리 받아 둬서, 첫 탭에서 뷰어가 늦게 뜨지 않게 한다.
-  const hasRegistrations = registrations.length > 0;
+  const hasRegistrations = registrations.some((item) => item.images.length > 0);
   useEffect(() => {
     if (hasRegistrations) void loadImageViewer();
   }, [hasRegistrations]);

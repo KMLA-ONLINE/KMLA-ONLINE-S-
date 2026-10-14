@@ -1,4 +1,4 @@
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, type InfiniteData } from "@tanstack/react-query";
 import { act, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,7 +12,7 @@ vi.mock("~/features/feed/data/queries", () => ({
   listFeedPosts,
 }));
 vi.mock("~/features/app-shell", () => ({
-  useAppShell: () => ({ profile: { name: "나", avatar_url: null } }),
+  useAppShell: () => ({ profile: { id: 1, name: "나", avatar_url: null } }),
 }));
 vi.mock("~/features/posts", () => ({
   anonymousActivityRestrictionQuery: (groupId: string) => ({
@@ -45,7 +45,8 @@ vi.mock("~/features/feed/components/feed-post", async () => {
     }: {
       post: {
         post_id: string;
-        author_avatar_path: string | null;
+        author_avatar_url: string | null;
+        body?: string;
         comment_count?: number;
         reaction_count?: number;
       };
@@ -58,7 +59,8 @@ vi.mock("~/features/feed/components/feed-post", async () => {
       });
       return (
         <div>
-          {`${post.post_id}=${post.author_avatar_path ?? "unsigned"}`}
+          {`${post.post_id}=${post.author_avatar_url ?? "unsigned"}`}
+          <span>{post.body}</span>
           <span>{`${post.post_id}:comments=${engagement.comment_count}`}</span>
           <span>{`${post.post_id}:reactions=${engagement.reaction_count}`}</span>
         </div>
@@ -72,6 +74,7 @@ vi.mock("~/shared/hooks/use-infinite-scroll", () => ({
 }));
 
 import { FeedScreen } from "~/features/feed/components/feed-screen";
+import type { FeedPage, FeedPost } from "~/features/feed/model/types";
 import { feedKeys } from "~/features/feed";
 import { patchPostEngagement } from "~/features/posts/data/cache";
 import {
@@ -92,7 +95,10 @@ function seedSession(
       {
         posts: postIds.map((post_id) => ({
           post_id,
-          author_avatar_path: null,
+          author_avatar_path: `avatar:${post_id}`,
+          author_avatar_url: null,
+          activity_media_path: null,
+          activity_media_url: null,
           attachments: [],
           comment_count: commentCount,
           reaction_count: reactionCount,
@@ -135,7 +141,7 @@ describe("FeedScreen media hydration", () => {
             resolve(
               posts.map((post) => ({
                 ...post,
-                author_avatar_path: `signed:${post.post_id}`,
+                author_avatar_url: `signed:${post.post_id}`,
               })),
             ),
           );
@@ -174,7 +180,7 @@ describe("FeedScreen media hydration", () => {
       Promise.resolve(
         posts.map((post) => ({
           ...post,
-          author_avatar_path: `signed:${post.post_id}`,
+          author_avatar_url: `signed:${post.post_id}`,
         })),
       ),
     );
@@ -199,7 +205,7 @@ describe("FeedScreen media hydration", () => {
       Promise.resolve(
         posts.map((post) => ({
           ...post,
-          author_avatar_path: `signed:${post.post_id}`,
+          author_avatar_url: `signed:${post.post_id}`,
         })),
       ),
     );
@@ -208,6 +214,152 @@ describe("FeedScreen media hydration", () => {
     renderRoute(Harness);
 
     expect(await screen.findByText("post-a=signed:post-a")).toBeInTheDocument();
+  });
+});
+
+describe("FeedScreen delayed media", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetQueryClientForTests();
+  });
+
+  it("keeps the latest body when an older media response arrives", async () => {
+    let finish!: () => void;
+    hydrateFeedPostMedia.mockImplementation(
+      (posts: FeedPost[]) =>
+        new Promise((resolve) => {
+          finish = () =>
+            resolve(
+              posts.map((post) => ({
+                ...post,
+                author_avatar_url: "signed:post-a",
+              })),
+            );
+        }),
+    );
+    seedSession("epoch-1", ["post-a"]);
+    renderRoute(Harness);
+    await waitFor(() => expect(finish).toBeDefined());
+
+    act(() => {
+      getQueryClient().setQueryData<InfiniteData<FeedPage>>(
+        feedKeys.list(),
+        (current) =>
+          current && {
+            ...current,
+            pages: current.pages.map((page) => ({
+              ...page,
+              posts: page.posts.map((post) => ({
+                ...post,
+                body: "수정된 본문",
+              })),
+            })),
+          },
+      );
+    });
+    await screen.findByText("수정된 본문");
+    act(() => finish());
+
+    expect(await screen.findByText("post-a=signed:post-a")).toBeInTheDocument();
+    expect(screen.getByText("수정된 본문")).toBeInTheDocument();
+  });
+
+  it("keeps the feed visible and lets the user retry failed media", async () => {
+    hydrateFeedPostMedia
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockImplementation((posts: FeedPost[]) =>
+        Promise.resolve(
+          posts.map((post) => ({
+            ...post,
+            author_avatar_url: "signed:post-a",
+          })),
+        ),
+      );
+    seedSession("epoch-1", ["post-a"]);
+    const { user } = renderRoute(Harness);
+
+    const retry = await screen.findByRole("button", {
+      name: "이미지 다시 불러오기",
+    });
+    expect(screen.getByText("post-a=unsigned")).toBeInTheDocument();
+    await user.click(retry);
+
+    expect(await screen.findByText("post-a=signed:post-a")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "이미지 다시 불러오기" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps successful media visible while retrying a partial signing failure", async () => {
+    hydrateFeedPostMedia
+      .mockImplementationOnce((posts: FeedPost[]) =>
+        Promise.resolve(
+          posts.map((post) => ({
+            ...post,
+            author_avatar_url:
+              post.post_id === "post-a" ? "signed:post-a" : null,
+          })),
+        ),
+      )
+      .mockImplementation((posts: FeedPost[]) =>
+        Promise.resolve(
+          posts.map((post) => ({
+            ...post,
+            author_avatar_url: `signed:${post.post_id}`,
+          })),
+        ),
+      );
+    seedSession("epoch-1", ["post-a", "post-b"]);
+    const { user } = renderRoute(Harness);
+    expect(await screen.findByText("post-a=signed:post-a")).toBeInTheDocument();
+    await user.click(
+      await screen.findByRole("button", { name: "이미지 다시 불러오기" }),
+    );
+    expect(screen.getByText("post-a=signed:post-a")).toBeInTheDocument();
+    expect(await screen.findByText("post-b=signed:post-b")).toBeInTheDocument();
+  });
+
+  it("ignores the old avatar when its path changes during signing", async () => {
+    const pending: (() => void)[] = [];
+    hydrateFeedPostMedia.mockImplementation(
+      (posts: FeedPost[]) =>
+        new Promise((resolve) => {
+          pending.push(() =>
+            resolve(
+              posts.map((post) => ({
+                ...post,
+                author_avatar_url: `signed:${post.author_avatar_path}`,
+              })),
+            ),
+          );
+        }),
+    );
+    seedSession("epoch-1", ["post-a"]);
+    renderRoute(Harness);
+    await waitFor(() => expect(pending).toHaveLength(1));
+    await act(() =>
+      getQueryClient().setQueryData<InfiniteData<FeedPage>>(
+        feedKeys.list(),
+        (current) =>
+          current && {
+            ...current,
+            pages: current.pages.map((page) => ({
+              ...page,
+              posts: page.posts.map((post) => ({
+                ...post,
+                author_avatar_path: "new-avatar",
+              })),
+            })),
+          },
+      ),
+    );
+    await waitFor(() => expect(pending).toHaveLength(2));
+    act(() => pending[0]());
+    expect(screen.getByText("post-a=unsigned")).toBeInTheDocument();
+    act(() => pending[1]());
+    expect(
+      await screen.findByText("post-a=signed:new-avatar"),
+    ).toBeInTheDocument();
   });
 });
 
@@ -436,7 +588,7 @@ describe("FeedScreen detail re-entry", () => {
       Promise.resolve(
         posts.map((post) => ({
           ...post,
-          author_avatar_path: `signed:${post.post_id}`,
+          author_avatar_url: `signed:${post.post_id}`,
         })),
       ),
     );

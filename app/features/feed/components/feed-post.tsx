@@ -168,7 +168,13 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
   );
 }
 
-export function FeedPostCard({ post }: { post: FeedPost }) {
+export function FeedPostCard({
+  post,
+  mediaPending = false,
+}: {
+  post: FeedPost;
+  mediaPending?: boolean;
+}) {
   const path = feedPostPath(post);
   const overlayPath = feedPostOverlayPath(post);
   const { images, files } = splitPostAttachments(post.attachments);
@@ -184,7 +190,7 @@ export function FeedPostCard({ post }: { post: FeedPost }) {
       ) : null}
       <FeedPostHeader post={post} />
       {isMediaActivity ? (
-        <ProfileMediaActivity post={post} />
+        <ProfileMediaActivity post={post} mediaPending={mediaPending} />
       ) : (
         <>
           <div className="px-4">
@@ -203,10 +209,14 @@ export function FeedPostCard({ post }: { post: FeedPost }) {
               <PostMarkdown mentions={post.mentions}>{post.body}</PostMarkdown>
             </PostBodyClamp>
           </div>
-          <PostImageGrid images={images} className="mt-3" />
+          <PostImageGrid
+            images={images}
+            className="mt-3"
+            mediaPending={mediaPending}
+          />
           {files.length > 0 ? (
             <div className="mt-3 px-4">
-              <PostFileList files={files} />
+              <PostFileList files={files} mediaPending={mediaPending} />
             </div>
           ) : null}
         </>

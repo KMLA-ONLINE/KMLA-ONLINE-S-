@@ -53,11 +53,14 @@ export function PostImageGrid({
   images,
   className,
   allowOriginalTile = false,
+  mediaPending = false,
 }: {
   images: PostAttachment[];
   className?: string;
   /** 전폭 한 장짜리 타일에 한해 원본을 그린다(상세만 켬). 축소본(800px)은 그 폭에서 흐리고, 두 장부터는 충분하다. */
   allowOriginalTile?: boolean;
+  /** 홈 피드만 서명을 뒤에서 채운다. 다른 화면의 실패 표현은 유지한다. */
+  mediaPending?: boolean;
 }) {
   // signed URL을 못 받은 첨부는 뷰어에 넣지 않는다. 슬라이드에 빈 칸이 생기고 좌우 이동이
   // 어긋나느니, 그리드에서만 깨진 타일로 보이는 편이 낫다.
@@ -133,7 +136,9 @@ export function PostImageGrid({
               />
             ) : (
               <span className="flex h-full w-full items-center justify-center bg-muted px-2 text-center text-xs text-muted-foreground">
-                이미지를 불러오지 못했습니다
+                {mediaPending
+                  ? "이미지 불러오는 중"
+                  : "이미지를 불러오지 못했습니다"}
               </span>
             )}
             {hidesOverflow ? (
@@ -158,7 +163,13 @@ function fileIcon(mimeType: string) {
   return FileIcon;
 }
 
-export function PostFileList({ files }: { files: PostAttachment[] }) {
+export function PostFileList({
+  files,
+  mediaPending = false,
+}: {
+  files: PostAttachment[];
+  mediaPending?: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   if (files.length === 0) return null;
   const canExpand = files.length > 3;
@@ -207,7 +218,9 @@ export function PostFileList({ files }: { files: PostAttachment[] }) {
                     sizeBytes={item.size_bytes}
                     mimeType={item.mime_type}
                   />
-                  <span className="shrink-0 text-xs">다운로드할 수 없음</span>
+                  <span className="shrink-0 text-xs">
+                    {mediaPending ? "파일 준비 중" : "다운로드할 수 없음"}
+                  </span>
                 </div>
               )}
             </li>

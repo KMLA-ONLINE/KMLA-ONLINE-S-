@@ -17,9 +17,11 @@ type ProfileMediaActivityPost = Pick<
 export function ProfileMediaActivity({
   post,
   className,
+  mediaPending = false,
 }: {
   post: ProfileMediaActivityPost;
   className?: string;
+  mediaPending?: boolean;
 }) {
   const imageId = `profile-activity-${post.post_id}`;
   const downloadName = imageDownloadName(post.post_id);
@@ -73,13 +75,13 @@ export function ProfileMediaActivity({
     <div
       data-testid="profile-media-activity"
       className={cn(
-        "flex w-full items-center justify-center overflow-hidden bg-muted",
+        "flex w-full items-center justify-center overflow-hidden border-y border-border/60 bg-muted",
         isAvatar ? "aspect-square" : "aspect-[3/1]",
         className,
       )}
     >
       <p className="px-4 text-center text-sm text-muted-foreground">
-        이미지를 불러오지 못했습니다
+        {mediaPending ? "이미지 불러오는 중" : "이미지를 불러오지 못했습니다"}
       </p>
     </div>
   );

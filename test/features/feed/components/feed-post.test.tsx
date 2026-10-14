@@ -35,6 +35,41 @@ function pinnedFeedPost(): GroupFeedPost {
 afterEach(() => vi.restoreAllMocks());
 
 describe("FeedPostCard", () => {
+  it("shows the body and reserves image space while signing is pending", () => {
+    const post = pinnedFeedPost();
+    post.body = "서명을 기다리지 않는 본문";
+    post.attachments = [
+      {
+        attachment_id: "photo",
+        post_id: post.post_id,
+        storage_bucket: "post-attachments",
+        object_path: "post/photo",
+        original_filename: "photo.webp",
+        position: 0,
+        mime_type: "image/webp",
+        size_bytes: 10,
+        width: 900,
+        height: 1200,
+        signedUrl: null,
+        thumbnail_path: null,
+        thumbnailUrl: null,
+      },
+    ];
+    renderRoute(() => <FeedPostCard post={post} mediaPending />);
+
+    expect(screen.getByText("서명을 기다리지 않는 본문")).toBeInTheDocument();
+    expect(screen.getByText("이미지 불러오는 중")).toBeInTheDocument();
+    expect(
+      screen.queryByText("이미지를 불러오지 못했습니다"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("post-image-grid")).toHaveStyle({
+      aspectRatio: 0.75,
+    });
+    expect(
+      screen.getByRole("button", { name: "photo.webp 크게 보기" }),
+    ).toBeDisabled();
+  });
+
   it("keeps feed metadata out of the group post title", () => {
     vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(60);
     vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(66);
