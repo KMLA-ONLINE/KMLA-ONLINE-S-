@@ -90,6 +90,15 @@ export function resolveBackStack(destination: string): string[] {
   return stack;
 }
 
+/**
+ * 표가 목적지의 직속 부모를 선언했는가. 선언하지 않은 화면에는 홈만 깔리므로 그 위 entry에
+ * `ABOVE_SEEDED_PARENT_STATE`를 붙이면 안 된다.
+ */
+export function declaresParent(destination: string): boolean {
+  const matched = matchRoute(destination);
+  return matched !== null && PARENT_ROUTE[matched.pattern] !== null;
+}
+
 /** 깔아 둔 화면 위에 올린 목적지 entry의 location state. 바로 밑 entry가 이 화면의 선언된 부모다. */
 export const ABOVE_SEEDED_PARENT_STATE = { aboveSeededParent: true } as const;
 
@@ -148,9 +157,8 @@ export function seedBackStack(stack: readonly string[]): void {
 export function seedColdStartBackStack(): void {
   if (hasBackEntry()) return;
   const { pathname, search, hash } = window.location;
-  if (matchRoute(pathname) === null) return;
+  if (!declaresParent(pathname)) return;
   const stack = resolveBackStack(pathname);
-  if (stack.length === 0) return;
 
   const { usr } = currentState();
   seedBackStack(stack);

@@ -15,6 +15,7 @@ import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/notification-open";
 import {
   ABOVE_SEEDED_PARENT_STATE,
+  declaresParent,
   hasBackEntry,
   resolveBackStack,
   seedBackStack,
@@ -81,12 +82,16 @@ export default function NotificationOpenRoute({
     const stack = resolveSeedStack(loaderData.target);
     if (stack.length > 0) seedBackStack(stack);
 
-    void navigate(
-      loaderData.target,
-      stack.length > 0
-        ? { state: ABOVE_SEEDED_PARENT_STATE }
-        : { replace: true },
-    );
+    if (stack.length === 0) {
+      void navigate(loaderData.target, { replace: true });
+      return;
+    }
+    // 표에 없는 목적지 밑에는 홈만 깔렸으므로 직속 부모가 밑에 있다고 표시하지 않는다.
+    void navigate(loaderData.target, {
+      state: declaresParent(loaderData.target)
+        ? ABOVE_SEEDED_PARENT_STATE
+        : undefined,
+    });
   }, [loaderData.target, navigate]);
 
   return null;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveBackStack } from "~/shared/lib/back-stack";
+import { declaresParent, resolveBackStack } from "~/shared/lib/back-stack";
 
 describe("back stack", () => {
   it("puts the group and its list under a group post", () => {
@@ -37,6 +37,12 @@ describe("back stack", () => {
 
   it("falls back to home for a screen the table does not declare", () => {
     expect(resolveBackStack("/menu/meal")).toEqual(["/"]);
+  });
+
+  it("tells a declared parent apart from the home fallback", () => {
+    expect(declaresParent("/messenger/room-id")).toBe(true);
+    expect(declaresParent("/menu/meal")).toBe(false);
+    expect(declaresParent("/")).toBe(false);
   });
 
   it("has nothing to put under home itself", () => {
