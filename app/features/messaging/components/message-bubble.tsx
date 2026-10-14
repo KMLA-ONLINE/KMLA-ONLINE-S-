@@ -123,7 +123,8 @@ export function MessageBubble({
                 type="button"
                 aria-label={`${replyTargetAuthor ?? "알 수 없는 사용자"}의 원문 메시지 보기`}
                 className={cn(
-                  "mb-1.5 block w-full max-w-full min-w-0 border-l-2 pl-2 text-left text-xs leading-4",
+                  // 원문이 길어도 짧은 답장의 버블을 넓히지 않게 인용 폭에 상한을 둔다.
+                  "mb-1.5 block w-full max-w-56 min-w-0 border-l-2 pl-2 text-left text-xs leading-4",
                   isOwn && !isEmojiOnly && !message.deleted
                     ? "border-primary-foreground/50 text-primary-foreground/85 hover:bg-primary-foreground/10"
                     : "border-primary text-muted-foreground hover:bg-background/60",

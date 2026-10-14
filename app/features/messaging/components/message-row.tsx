@@ -647,7 +647,7 @@ function MessageTimeCard({
     >
       <TooltipTrigger
         closeOnClick={false}
-        render={<span className="block w-fit max-w-full" />}
+        render={<span className="block w-fit max-w-full min-w-0" />}
         onPointerEnter={(event) => (pointerType.current = event.pointerType)}
         onPointerDown={(event) => (pointerType.current = event.pointerType)}
         onClick={() => {
