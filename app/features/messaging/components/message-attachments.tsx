@@ -28,8 +28,8 @@ import { Spinner } from "~/shared/ui/spinner";
 const MEDIA_GRID_LIMIT = 6;
 
 /**
- * 첨부 object의 signed URL. 서버에 올라가지 않은(보내는 중인) 첨부는 건너뛴다. 받지 못했으면
- * `failed`다. 사진 칸이 끝없이 도는 대신 깨진 사진을 그린다.
+ * 첨부 object의 signed URL query. 서버에 올라가지 않은(보내는 중인) 첨부는 건너뛴다. 사진 칸은
+ * `isError`를 보고 끝없이 도는 대신 깨진 사진을 그린다.
  */
 function useAttachmentUrls(attachments: MessageAttachment[]) {
   const paths = attachments
@@ -191,11 +191,12 @@ function MediaGrid({
               onClick={() => viewer.open(attachment.id)}
             >
               {thumb ? (
-                <GridImage key={thumb} src={thumb} showLoading={!pending} />
-              ) : urlsFailed ? (
-                <BrokenImageMark />
+                <GridImage src={thumb} showLoading={!pending} />
+              ) : urlsFailed || urls ? (
+                // 받은 signed URL에 이 사진이 없으면 지워진 object다. 기다려도 오지 않는다.
+                <TileMark failed />
               ) : pending ? null : (
-                <LoadingMark />
+                <TileMark />
               )}
               {more > 0 ? (
                 <span
@@ -222,6 +223,9 @@ function MediaGrid({
  * 격자 칸 하나의 사진. 칸은 비율로 자리를 미리 잡고 있으므로, 사진이 다 올 때까지 그 자리에서 돌다가
  * 사진으로 바꿔 그린다. 방을 열면 한 페이지(50개) 안의 사진을 다 그린다. 화면 밖 사진은 스크롤해
  * 다가갈 때 받는다.
+ *
+ * 한 번 그린 사진은 주소가 바뀌어도(보낸 뒤 서버 주소로, signed URL 갱신) 가리지 않는다. 가리면 방의
+ * 사진이 모두 스피너로 깜빡인다. 브라우저는 새 주소가 올 때까지 앞 사진을 그대로 둔다.
  */
 function GridImage({
   src,
@@ -230,9 +234,9 @@ function GridImage({
   src: string;
   showLoading: boolean;
 }) {
-  const [status, setStatus] = useState<"loading" | "loaded" | "failed">(
-    "loading",
-  );
+  const [shown, setShown] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const failed = failedSrc === src;
 
   return (
     <>
@@ -244,32 +248,28 @@ function GridImage({
         decoding="async"
         className={cn(
           "size-full object-cover",
-          status !== "loaded" && "opacity-0",
+          (!shown || failed) && "opacity-0",
         )}
-        onLoad={() => setStatus("loaded")}
-        onError={() => setStatus("failed")}
+        onLoad={() => {
+          setShown(true);
+          setFailedSrc(null);
+        }}
+        onError={() => setFailedSrc(src)}
       />
-      {status === "failed" ? (
-        <BrokenImageMark />
-      ) : status === "loading" && showLoading ? (
-        <LoadingMark />
+      {failed ? (
+        <TileMark failed />
+      ) : !shown && showLoading ? (
+        <TileMark />
       ) : null}
     </>
   );
 }
 
-function LoadingMark() {
+/** 사진 칸 가운데의 표시. 받는 중이면 스피너, 받지 못했으면 깨진 사진이다. */
+function TileMark({ failed = false }: { failed?: boolean }) {
   return (
     <span className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-      <Spinner />
-    </span>
-  );
-}
-
-function BrokenImageMark() {
-  return (
-    <span className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-      <ImageOffIcon aria-hidden className="size-6" />
+      {failed ? <ImageOffIcon aria-hidden className="size-6" /> : <Spinner />}
     </span>
   );
 }
