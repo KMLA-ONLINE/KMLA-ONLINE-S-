@@ -2,6 +2,7 @@ export {
   AppAdminsScreen,
   AdminReauthentication,
 } from "~/features/admin/components/app-admins-screen";
+export { AdminContactsScreen } from "~/features/admin/components/admin-contacts-screen";
 export { ApprovalsScreen } from "~/features/admin/components/approvals-screen";
 export { GongangManagersScreen } from "~/features/admin/components/gongang-managers-screen";
 export { RosterScreen } from "~/features/admin/components/roster-screen";
@@ -15,6 +16,7 @@ export {
 } from "~/features/admin/data/queries";
 export {
   reauthenticateWithPassword,
+  replaceAdminContacts,
   reviewApplications,
   setAppAdmin,
   setGongangManager,

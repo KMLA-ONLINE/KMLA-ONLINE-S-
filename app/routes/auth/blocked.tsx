@@ -6,10 +6,14 @@ import {
   getProfileDestination,
   loadAuthState,
   signOut,
-  type AuthState,
 } from "~/features/auth";
+import {
+  DeferredAdminContactList,
+  listAdminContacts,
+} from "~/features/support";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
+import type { Route } from "./+types/blocked";
 
 export async function clientLoader() {
   const state = await loadAuthState();
@@ -19,10 +23,10 @@ export async function clientLoader() {
     if (destination === "/login") await signOut();
     throw redirect(destination);
   }
-  return state;
+  return { ...state, contacts: listAdminContacts().catch(() => []) };
 }
 
-export default function BlockedPage({ loaderData }: { loaderData: AuthState }) {
+export default function BlockedPage({ loaderData }: Route.ComponentProps) {
   const revalidator = useRevalidator();
   const checking = revalidator.state === "loading";
   const profile = loaderData.profile!;
@@ -63,6 +67,10 @@ export default function BlockedPage({ loaderData }: { loaderData: AuthState }) {
             다른 계정으로 로그인
           </Button>
         </Form>
+        <DeferredAdminContactList
+          contacts={loaderData.contacts}
+          prompt="차단이 잘못된 것 같나요?"
+        />
       </div>
     </AuthCard>
   );

@@ -1,6 +1,7 @@
 import {
   ContactIcon,
   HardDriveIcon,
+  MessageCircleIcon,
   ShieldCheckIcon,
   UserCheckIcon,
   UsersIcon,
@@ -36,6 +37,12 @@ const links = [
     title: "앱 관리자",
     description: "앱 관리자 명단, 임명 및 강등",
     icon: UsersIcon,
+  },
+  {
+    to: "/admin/contacts",
+    title: "관리자 연락처",
+    description: "앱 밖에서 관리자에게 연락할 링크와 이메일",
+    icon: MessageCircleIcon,
   },
   {
     to: "/admin/storage-cleanup",
