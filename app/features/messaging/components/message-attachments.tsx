@@ -18,6 +18,7 @@ import { formatFileSize } from "~/features/messaging/model/attachments";
 import type { MessageAttachment } from "~/features/messaging/model/types";
 import type { ViewerImage } from "~/shared/components/image-viewer";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
+import { previewDocumentOnClick } from "~/shared/lib/document-preview";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
@@ -427,6 +428,13 @@ function FileAttachment({
   return url ? (
     <a
       href={toDownloadUrl(url, attachment.fileName)}
+      onClick={(event) =>
+        previewDocumentOnClick(event, {
+          url,
+          downloadUrl: event.currentTarget.href,
+          fileName: attachment.fileName,
+        })
+      }
       aria-label={`내려받기: ${attachment.fileName}`}
       className={cn(className, "hover:bg-muted/70")}
     >

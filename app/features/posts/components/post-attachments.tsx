@@ -16,6 +16,7 @@ import { formatFileSize } from "~/features/posts/model/format";
 import type { PostAttachment } from "~/features/posts/model/types";
 import type { ViewerImage } from "~/shared/components/image-viewer";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
+import { previewDocumentOnClick } from "~/shared/lib/document-preview";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 
@@ -186,6 +187,13 @@ export function PostFileList({ files }: { files: PostAttachment[] }) {
                     item.original_filename,
                   )}
                   download={item.original_filename}
+                  onClick={(event) =>
+                    previewDocumentOnClick(event, {
+                      url: item.signedUrl!,
+                      downloadUrl: event.currentTarget.href,
+                      fileName: item.original_filename,
+                    })
+                  }
                   className="group flex min-w-0 items-center gap-3 rounded-md px-1.5 py-2.5 transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 >
                   <FileBadge icon={<Icon aria-hidden="true" />} />
