@@ -151,7 +151,8 @@ The table defines minimum required usage, not an inventory of installed skills. 
 ### Completion review
 
 - After implementation changes and required verification are complete, load `code-review` and review the request-scoped changes before handoff.
-- Record the review baseline and pre-existing working-tree changes at task start. Include relevant uncommitted changes without treating unrelated user work as part of the implementation.
-- Report Standards and Spec findings separately. Fix in-scope issues; ask before expanding scope or deciding unspecified product behavior.
+- At task start, record the resolved `HEAD`, approved request, working-tree status, staged/unstaged diffs, and relevant untracked paths and contents. Preserve relevant pre-edit file contents before the first task edit, including pre-existing changes. Keep baseline artifacts outside the repository only when writes are allowed; in Plan mode retain evidence in the conversation.
+- Completion review compares the recorded start state with the finished task, not all uncommitted changes by default. Exclude unrelated user changes without excluding task edits in the same file. If the baseline is missing or concurrent edits cannot be separated, ask to confirm the scope rather than infer it.
+- Report Correctness, Standards, and Spec findings separately. Fix in-scope issues; ask before expanding scope or deciding unspecified product behavior.
 - After review-driven edits, rerun affected checks and reassess the findings. Include unresolved findings and review limitations in the final handoff.
 - Documentation- or configuration-only tasks do not require this review unless requested.
