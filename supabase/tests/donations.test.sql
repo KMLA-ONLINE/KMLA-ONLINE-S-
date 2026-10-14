@@ -172,6 +172,25 @@ select lives_ok(
   $$select public.donation_claim_item((select id from public.donation_list_items(current_setting('test.donation_limit')::bigint) where name = '한도 물품 51'))$$,
   'a freed slot can be used again');
 
+select set_config('test.donation_free_item',
+  (select id from public.donation_list_items(current_setting('test.donation_limit')::bigint) where name = '한도 물품 1')::text, true);
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000099', true);
+select throws_ok(
+  $$select public.donation_claim_item(current_setting('test.donation_free_item')::bigint)$$,
+  '42501', 'only students and administrators can apply', 'teachers cannot apply');
+reset role;
+update public.profiles set type = 'alumni'
+where auth_user_id = '10000000-0000-0000-0000-000000000001';
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+select throws_ok(
+  $$select public.donation_claim_item(current_setting('test.donation_free_item')::bigint)$$,
+  '42501', 'only students and administrators can apply', 'alumni cannot apply');
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000007001', true);
+select lives_ok(
+  $$select public.donation_claim_item(current_setting('test.donation_free_item')::bigint)$$,
+  'an administrator can apply even when not a current student');
+
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000007001', true);
 select set_config('test.donation_invalid',
   public.donation_create_round('업로드 검증', now() + interval '5 hours', now() + interval '6 hours')::text, true);

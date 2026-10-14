@@ -17,11 +17,11 @@ const data = vi.hoisted(() => ({
   importDonationItems: vi.fn(),
   updateDonationRound: vi.fn(),
 }));
-const role = vi.hoisted(() => ({ value: "user" }));
+const viewer = vi.hoisted(() => ({ role: "user", type: "student" }));
 
 vi.mock("~/features/donations/data/donations", () => data);
 vi.mock("~/features/app-shell", () => ({
-  useAppShell: () => ({ profile: { role: role.value } }),
+  useAppShell: () => ({ profile: { role: viewer.role, type: viewer.type } }),
 }));
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
@@ -62,7 +62,8 @@ beforeEach(() => {
       disconnect = vi.fn();
     },
   );
-  role.value = "user";
+  viewer.role = "user";
+  viewer.type = "student";
   data.loadDonationRounds.mockResolvedValue([openRound]);
   data.loadDonationClaims.mockResolvedValue([]);
 });
@@ -188,6 +189,40 @@ describe("DonationsScreen for students", () => {
   });
 });
 
+describe("DonationsScreen application eligibility", () => {
+  it.each(["teacher", "alumni"])(
+    "lets a %s browse without applying",
+    async (type) => {
+      viewer.type = type;
+      data.loadDonationItems.mockResolvedValue([item({ id: 2 })]);
+      render(<DonationsScreen />);
+
+      expect(await screen.findByText("수학 교재")).toBeInTheDocument();
+      expect(
+        screen.getByText(/재학생만 신청할 수 있습니다/),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "수학 교재 신청" }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/내 신청/)).not.toBeInTheDocument();
+    },
+  );
+
+  it("lets an administrator who is not a student apply", async () => {
+    viewer.role = "admin";
+    viewer.type = "alumni";
+    data.loadDonationItems.mockResolvedValue([item({ id: 2 })]);
+    data.claimDonationItem.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<DonationsScreen />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "수학 교재 신청" }),
+    );
+    await waitFor(() => expect(data.claimDonationItem).toHaveBeenCalledWith(2));
+  });
+});
+
 describe("DonationsScreen load errors", () => {
   it("clears a round error once a later refresh succeeds", async () => {
     const polls: (() => void)[] = [];
@@ -227,7 +262,7 @@ describe("DonationsScreen load errors", () => {
 
 describe("DonationsScreen for administrators", () => {
   it("shows applicants from the history without the claimant read", async () => {
-    role.value = "admin";
+    viewer.role = "admin";
     data.loadDonationItems.mockResolvedValue([
       item({ id: 5, is_claimed: true, donor_name: "김기증" }),
     ]);

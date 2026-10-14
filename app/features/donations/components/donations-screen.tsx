@@ -89,6 +89,8 @@ function LoadError({
 export function DonationsScreen() {
   const { profile } = useAppShell();
   const isAdmin = profile.role === "admin";
+  // Mirrors donation_claim_item, which enforces the same rule.
+  const canApply = isAdmin || profile.type === "student";
 
   const [rounds, setRounds] = useState<DonationRound[]>([]);
   const [roundId, setRoundId] = useState<number | null>(null);
@@ -297,10 +299,13 @@ export function DonationsScreen() {
               items={items}
               loading={itemsLoading}
               isAdmin
+              canApply
               isOpen={isOpen}
-              busyItem={null}
-              mineCount={0}
+              busyItem={busyItem}
+              mineCount={mineCount}
               claimants={claimants}
+              onClaim={(item) => void changeClaim(item, true)}
+              onCancel={setCancelTarget}
             />
           )}
         </>
@@ -318,21 +323,27 @@ export function DonationsScreen() {
             <p className="mt-1 text-sm text-muted-foreground">
               {formatDonationDate(selected.closes_at)}까지 · 선착순
             </p>
-            <div className="mt-3 flex items-center gap-3">
-              <div
-                className="h-2 flex-1 overflow-hidden rounded-full bg-muted"
-                aria-hidden
-              >
+            {canApply ? (
+              <div className="mt-3 flex items-center gap-3">
                 <div
-                  className="h-full rounded-full bg-primary transition-[width]"
-                  style={{ width: `${(mineCount / CLAIM_LIMIT) * 100}%` }}
-                />
+                  className="h-2 flex-1 overflow-hidden rounded-full bg-muted"
+                  aria-hidden
+                >
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width]"
+                    style={{ width: `${(mineCount / CLAIM_LIMIT) * 100}%` }}
+                  />
+                </div>
+                <p className="shrink-0 text-sm tabular-nums">
+                  내 신청 <span className="font-semibold">{mineCount}</span>/
+                  {CLAIM_LIMIT}
+                </p>
               </div>
-              <p className="shrink-0 text-sm tabular-nums">
-                내 신청 <span className="font-semibold">{mineCount}</span>/
-                {CLAIM_LIMIT}
+            ) : (
+              <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-sm">
+                기부물품은 재학생만 신청할 수 있습니다. 목록은 볼 수 있어요.
               </p>
-            </div>
+            )}
           </section>
 
           <DonationItemList
@@ -340,6 +351,7 @@ export function DonationsScreen() {
             items={items}
             loading={itemsLoading}
             isAdmin={false}
+            canApply={canApply}
             isOpen={isOpen}
             busyItem={busyItem}
             mineCount={mineCount}

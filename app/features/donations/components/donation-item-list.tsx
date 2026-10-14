@@ -21,8 +21,10 @@ export interface Claimant {
 interface Props {
   items: DonationItem[];
   loading: boolean;
-  /** Admins see donors and applicants and cannot apply. */
+  /** Admins also see donors and every applicant. */
   isAdmin: boolean;
+  /** Current students and admins may apply; teachers and alumni browse. */
+  canApply: boolean;
   isOpen: boolean;
   busyItem: number | null;
   mineCount: number;
@@ -68,6 +70,7 @@ export function DonationItemList({
   items,
   loading,
   isAdmin,
+  canApply,
   isOpen,
   busyItem,
   mineCount,
@@ -149,11 +152,16 @@ export function DonationItemList({
           { value: "all", label: "전체", count: counts.all },
           { value: "claimed", label: "신청됨", count: counts.claimed },
           { value: "available", label: "미신청", count: counts.available },
+          ...(canApply && counts.mine > 0
+            ? [{ value: "mine" as const, label: "내 신청", count: counts.mine }]
+            : []),
         ]
       : [
           { value: "all", label: "전체", count: counts.all },
           { value: "available", label: "신청 가능", count: counts.available },
-          { value: "mine", label: "내 신청", count: counts.mine },
+          ...(canApply
+            ? [{ value: "mine" as const, label: "내 신청", count: counts.mine }]
+            : []),
         ];
 
   const limitReached = mineCount >= CLAIM_LIMIT;
@@ -161,16 +169,7 @@ export function DonationItemList({
   function renderAction(item: DonationItem) {
     const claimant = formatClaimant(claimants?.get(item.id));
 
-    if (isAdmin) {
-      return item.is_claimed ? (
-        <span className="text-right text-sm break-keep">
-          {claimant ?? "신청됨"}
-        </span>
-      ) : (
-        <span className="text-sm text-muted-foreground">미신청</span>
-      );
-    }
-
+    // A former applicant keeps the cancel button even after losing access.
     if (item.is_mine) {
       return (
         <Button
@@ -189,23 +188,36 @@ export function DonationItemList({
 
     if (item.is_claimed) {
       return (
-        <span className="text-right text-sm break-keep text-muted-foreground">
-          {claimant ?? "신청 마감"}
+        <span
+          className={cn(
+            "text-right text-sm break-keep",
+            !isAdmin && "text-muted-foreground",
+          )}
+        >
+          {claimant ?? (isAdmin ? "신청됨" : "신청 마감")}
         </span>
       );
     }
 
+    if (canApply && isOpen) {
+      return (
+        <Button
+          type="button"
+          size="sm"
+          disabled={busyItem !== null || limitReached}
+          aria-label={`${item.name} 신청`}
+          onClick={() => onClaim?.(item)}
+        >
+          {busyItem === item.id ? <Spinner data-icon="inline-start" /> : null}
+          신청
+        </Button>
+      );
+    }
+
     return (
-      <Button
-        type="button"
-        size="sm"
-        disabled={!isOpen || busyItem !== null || limitReached}
-        aria-label={`${item.name} 신청`}
-        onClick={() => onClaim?.(item)}
-      >
-        {busyItem === item.id ? <Spinner data-icon="inline-start" /> : null}
-        신청
-      </Button>
+      <span className="text-sm text-muted-foreground">
+        {isAdmin ? "미신청" : "신청 가능"}
+      </span>
     );
   }
 
@@ -269,7 +281,7 @@ export function DonationItemList({
         </div>
       )}
 
-      {!isAdmin && limitReached && (
+      {canApply && limitReached && (
         <p className="rounded-lg bg-muted px-3 py-2 text-sm">
           한 회차에 최대 {CLAIM_LIMIT}개까지 신청할 수 있습니다. 다른 물품을
           신청하려면 기존 신청을 취소해주세요.

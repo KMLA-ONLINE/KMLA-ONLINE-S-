@@ -316,6 +316,17 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
+  -- Current students apply; teachers and alumni only browse, except admins.
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.profiles AS p
+    WHERE p.id = caller_id
+      AND (p.type = 'student' OR p.role = 'admin')
+  ) THEN
+    RAISE EXCEPTION 'only students and administrators can apply'
+      USING ERRCODE = '42501';
+  END IF;
+
   SELECT i.id, i.round_id
   INTO target_id, target_round_id
   FROM public.donation_items AS i
