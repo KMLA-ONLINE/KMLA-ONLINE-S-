@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor, renderRoute } from "../../../router";
+import { screen, waitFor, renderRoute, within } from "../../../router";
 const data = vi.hoisted(() => ({
   loadUtilityReservations: vi.fn(),
   createUtilityReservations: vi.fn(),
@@ -35,6 +35,38 @@ beforeEach(() => {
   data.saveGongangSchedule.mockResolvedValue(undefined);
 });
 describe("gongang booking flow", () => {
+  it("shows another applicant once in the detail dialog and keeps the profile link", async () => {
+    data.loadUtilityReservations.mockResolvedValue([
+      {
+        id: 10,
+        profileId: 2,
+        mode: "gongang",
+        reservationDate: "2026-10-14",
+        slot: "study-1",
+        location: "floor_b1",
+        detail: "합주 연습",
+        recurring: false,
+        recurringUntil: null,
+        applicantName: "홍길동",
+        applicantPubId: "hong-gildong",
+        applicantCohort: 30,
+        avatarUrl: null,
+      },
+    ]);
+    const { user } = renderRoute(GongangBookingScreen);
+    await user.click(
+      await screen.findByRole("button", { name: "1자습 지하 1층 홍길동" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getAllByText("홍길동", { exact: true })).toHaveLength(
+      1,
+    );
+    expect(
+      within(dialog).getByRole("link", { name: "홍길동" }),
+    ).toHaveAttribute("href", "/profile/hong-gildong");
+    expect(within(dialog).getByText("합주 연습")).toBeVisible();
+  });
+
   it("books several weekend times with one purpose and retains selection across floors", async () => {
     const { user } = renderRoute(GongangBookingScreen);
     await screen.findByRole("table", { name: "공강 예약" });

@@ -69,11 +69,28 @@ export function GongangBoard({
           <span className="font-medium tabular-nums">{slot.label}</span>
         )}
         {entry ? (
-          <span className="flex max-w-full items-center gap-1">
-            <span className="truncate">{entry.label}</span>
-            {checked && <CheckIcon aria-hidden className="size-3 shrink-0" />}
-            {entry.recurring && (
-              <Repeat2Icon aria-label="매주 반복" className="size-3 shrink-0" />
+          <span className="flex w-full min-w-0 flex-col items-center gap-1">
+            <span className="flex max-w-full items-center gap-1">
+              <span className="truncate">{entry.label}</span>
+              {checked && <CheckIcon aria-hidden className="size-3 shrink-0" />}
+              {entry.recurring && (
+                <Repeat2Icon
+                  aria-label="매주 반복"
+                  className="size-3 shrink-0"
+                />
+              )}
+            </span>
+            {entry.detail && (
+              <span
+                className={cn(
+                  "line-clamp-2 w-full text-[10px] leading-snug break-words sm:text-xs",
+                  checked
+                    ? "text-primary-foreground/80"
+                    : "text-muted-foreground",
+                )}
+              >
+                {entry.detail}
+              </span>
             )}
           </span>
         ) : checked ? (

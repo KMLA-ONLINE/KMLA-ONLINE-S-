@@ -331,18 +331,19 @@ export function GongangBookingScreen() {
               · {slots.find((slot) => slot.id === inspected.slot)?.label}
             </DialogTitle>
             <DialogDescription>
-              {inspected.label}
+              {inspected.state !== "manager" && inspectedReservation ? (
+                <Link
+                  to={`/profile/${inspectedReservation.applicantPubId}`}
+                  className="text-primary"
+                >
+                  {inspectedReservation.applicantName}
+                </Link>
+              ) : (
+                inspected.label
+              )}
               {inspected.recurring && " · 매주 반복"}
             </DialogDescription>
             <p className="break-words">{inspected.detail}</p>
-            {inspected.state !== "manager" && inspectedReservation && (
-              <Link
-                to={`/profile/${inspectedReservation.applicantPubId}`}
-                className="text-sm text-primary"
-              >
-                {inspectedReservation.applicantName}
-              </Link>
-            )}
             {inspected.state === "mine" &&
               inspectedReservation &&
               date >= today && (
