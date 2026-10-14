@@ -24,6 +24,8 @@ const PARENT_ROUTE: Record<string, string | null> = {
   "/profile/:pubId/posts/:postId": "/profile/:pubId",
   "/noti": HOME,
   "/menu/gongang": HOME,
+  "/messenger": HOME,
+  "/messenger/:roomId": "/messenger",
 };
 
 /** react-router의 `createKey`와 같은 모양. entry끼리 구분만 되면 된다. */
@@ -88,6 +90,27 @@ export function resolveBackStack(destination: string): string[] {
   return stack;
 }
 
+/**
+ * 표가 목적지의 직속 부모를 선언했는가. 선언하지 않은 화면에는 홈만 깔리므로 그 위 entry에
+ * `ABOVE_SEEDED_PARENT_STATE`를 붙이면 안 된다.
+ */
+export function declaresParent(destination: string): boolean {
+  const matched = matchRoute(destination);
+  return matched !== null && PARENT_ROUTE[matched.pattern] !== null;
+}
+
+/** 깔아 둔 화면 위에 올린 목적지 entry의 location state. 바로 밑 entry가 이 화면의 선언된 부모다. */
+export const ABOVE_SEEDED_PARENT_STATE = { aboveSeededParent: true } as const;
+
+/** 이 entry 바로 밑에 선언된 부모를 깔아 두었는가. */
+export function isAboveSeededParent(state: unknown): boolean {
+  return (
+    typeof state === "object" &&
+    state !== null &&
+    (state as Record<string, unknown>).aboveSeededParent === true
+  );
+}
+
 /** 이 창에 뒤로 갈 수 있는 entry가 있는가. 서비스 워커가 새 창으로 열었다면 항상 없다. */
 export function hasBackEntry(): boolean {
   return window.history.length > 1;
@@ -121,4 +144,34 @@ export function seedBackStack(stack: readonly string[]): void {
       path,
     );
   });
+}
+
+/**
+ * 앱이 딥링크로 처음 열렸을 때 목적지 밑에 부모 화면들을 깐다. 알림으로 연 대화방이나 알림함,
+ * 직접 연 링크에서 뒤로가기가 앱을 닫지 않고 부모 화면으로 가게 한다. 라우터가 history를 읽기
+ * **전에** 부른다. 그래야 라우터가 처음부터 맨 위 entry의 `idx`와 state를 그대로 읽는다.
+ *
+ * 표에 선언된 화면만 깐다. 로그인·초대처럼 게이트 밖 화면 밑에 홈을 깔면 뒤로가기가 게이트를
+ * 다시 지나 그 화면으로 되돌아온다. 알림 착지점(`/noti/open/:id`)은 목적지를 안 뒤에 스스로 깐다.
+ */
+export function seedColdStartBackStack(): void {
+  if (hasBackEntry()) return;
+  const { pathname, search, hash } = window.location;
+  if (!declaresParent(pathname)) return;
+  const stack = resolveBackStack(pathname);
+
+  const { usr } = currentState();
+  seedBackStack(stack);
+  window.history.pushState(
+    {
+      usr: {
+        ...(typeof usr === "object" && usr !== null ? usr : {}),
+        ...ABOVE_SEEDED_PARENT_STATE,
+      },
+      key: createEntryKey(),
+      idx: currentIndex() + 1,
+    },
+    "",
+    `${pathname}${search}${hash}`,
+  );
 }

@@ -122,6 +122,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/shared/ui/dropdown-menu";
+import { isAboveSeededParent } from "~/shared/lib/back-stack";
+import { isHandheld } from "~/shared/lib/install-platform";
 import { cn } from "~/shared/lib/utils";
 
 export interface DesktopDetailsContext {
@@ -299,11 +301,12 @@ export function RoomScreen({
   /**
    * 대화 목록으로 돌아간다. 목록에서 들어왔으면 대화방과 그 위의 오버레이 entry를 함께 되돌려
    * 뒤로가기가 대화방으로 다시 들어오지 않게 한다. 프로필처럼 다른 곳에서 들어왔으면 오버레이를
-   * 닫고 대화방 entry를 목록으로 바꾼다. 그 아래는 들어오기 전 화면이다.
+   * 닫고 대화방 entry를 목록으로 바꾼다. 그 아래는 들어오기 전 화면이다. 앱이 대화방으로 처음 열려
+   * 밑에 목록을 깔아 두었으면 목록에서 들어온 것과 같다.
    */
   async function backToList() {
     const entry = location.state as RoomEntryState | null;
-    if (entry?.roomAboveList) {
+    if (entry?.roomAboveList || isAboveSeededParent(entry)) {
       await navigate(-(roomOverlay.depth + 1));
       return;
     }
@@ -1906,6 +1909,8 @@ function ComposerShell({
                 return;
               }
               if (event.key !== "Enter" || event.shiftKey) return;
+              // 폰·태블릿의 화면 키보드에는 Shift+Enter가 없다. Enter로 줄을 바꾸고 보내기는 버튼이 맡는다.
+              if (isHandheld()) return;
               // Safari는 compositionend를 Enter keydown보다 먼저 보내 isComposing도 false다.
               // 그 keydown은 keyCode 229로 온다.
               if (composingText) return;
