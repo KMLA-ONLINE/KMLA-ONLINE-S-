@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import { PostMarkdown } from "~/features/posts/components/post-markdown";
 
@@ -53,5 +53,35 @@ describe("PostMarkdown", () => {
 
     expect(screen.getByText(/첫째 줄/)).toHaveTextContent(/둘째 줄/);
     expect(screen.getByText(/첫째 줄/)).toHaveClass("whitespace-pre-wrap");
+  });
+
+  it("copies one line break per line and keeps blank lines single", () => {
+    const { container } = render(
+      <PostMarkdown>{`첫째 줄
+둘째 줄
+
+## 제목
+셋째 **줄**`}</PostMarkdown>,
+    );
+    /* eslint-disable testing-library/no-node-access --
+       The copy handler sits on the wrapper that the selection must stay inside. */
+    const body = container.firstElementChild as HTMLElement;
+    /* eslint-enable testing-library/no-node-access */
+    const range = document.createRange();
+    range.selectNodeContents(body);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    const setData = vi.fn();
+
+    fireEvent.copy(body, { clipboardData: { setData } });
+
+    expect(setData).toHaveBeenCalledWith(
+      "text/plain",
+      `첫째 줄
+둘째 줄
+
+제목
+셋째 줄`,
+    );
   });
 });
