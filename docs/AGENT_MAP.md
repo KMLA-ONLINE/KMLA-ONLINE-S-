@@ -52,7 +52,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `/menu`                              | `app/routes/app/menu/index.tsx`             | sticky/sticky/3xl              | —     | app-shell                                                   | §15.1, §15.13    | `test/routes/app/menu.test.tsx`                                                                         |
 | `/licenses`                          | `app/routes/app/menu/licenses.tsx`          | sticky/sticky/4xl              | —     | app-shell                                                   | §15.7            | `test/routes/app/settings-navigation.test.tsx`                                                          |
 | `/menu/birthdays`                    | `app/routes/app/menu/birthdays.tsx`         | sticky/none/5xl                | L     | profiles                                                    | §17.5, §17.8     | `test/routes/app/menu/birthdays.test.ts`                                                                |
-| `/menu/donations`                    | `app/routes/app/menu/donations.tsx`         | sticky/sticky/4xl              | —     | —                                                           | §15.1            | —                                                                                                       |
+| `/menu/donations`                    | `app/routes/app/menu/donations.tsx`         | sticky/sticky/5xl              | —     | donations                                                   | §17.9            | —                                                                                                       |
 | `/menu/meal`                         | `app/routes/app/menu/meal.tsx`              | sticky/sticky/5xl              | L     | meal                                                        | §17.4            | `test/routes/app/menu/meal.test.ts`                                                                     |
 | `/settings/password`                 | `app/routes/app/menu/password.tsx`          | sticky/sticky/4xl              | A     | auth                                                        | §4.5             | `test/routes/password.test.tsx`                                                                         |
 | `/settings`                          | `app/routes/app/menu/settings.tsx`          | sticky/sticky/4xl              | —     | app-shell, auth, support                                    | §15.3            | `test/routes/app/menu/settings.test.tsx`, `test/routes/app/settings-navigation.test.tsx`                |
@@ -113,6 +113,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `stories`          | 24-hour photo/text story rail, viewer and composer                                                                                          | §17.6, §6.6                                         |
 | `support`          | FAQ (static content in `content/`, no Supabase) and app version card                                                                        | §15.11, §15.12                                      |
 | `timetable`        | Personal timetable, stored per account in the database with a device-local cache                                                            | §17.7                                               |
+| `donations`        | 기부물품 회차 관리, 엑셀 등록, 학생 신청 및 취소, 결과 다운로드                                                                             | —                                                   |
 
 <!-- features:end -->
 
@@ -251,6 +252,15 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `update_my_notification_preferences`          | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
 | `update_my_profile`                           | `profiles/data/mutations.ts`                                                    | `11-identity.sql`             |
 | `update_post_comment`                         | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
+| `donation_cancel_claim`                       | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_claim_item`                         | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_create_round`                       | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_import_items`                       | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_list_claimed_by`                    | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_list_claims`                        | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_list_items`                         | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_list_rounds`                        | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_update_round`                       | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
 
 <!-- rpc:end -->
 

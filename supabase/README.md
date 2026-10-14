@@ -13,6 +13,7 @@
 | `41-*`           | Integrated feed                                                |
 | `42-*`           | Stories                                                        |
 | `51-*` to `52-*` | Reservations and timetables                                    |
+| `54-*`           | Donation rounds, items, and application history                |
 | `53-*`           | Directory search                                               |
 | `61-*`           | Notifications, delivery preferences, and outbox                |
 | `71-*`           | Messaging: conversations, membership periods, and messages     |
