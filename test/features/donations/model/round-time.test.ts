@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  roundPhase,
   seoulInputToIso,
   toSeoulInput,
 } from "~/features/donations/model/round-time";
@@ -30,5 +31,24 @@ describe("donation round Seoul time inputs", () => {
 
   it("rejects empty input", () => {
     expect(seoulInputToIso("")).toBeNull();
+  });
+});
+
+describe("donation round phase", () => {
+  const now = Date.parse("2026-10-14T00:00:00Z");
+
+  it("trusts the server open flag", () => {
+    expect(
+      roundPhase({ opens_at: "2026-10-15T00:00:00Z", is_open: true }, now),
+    ).toBe("open");
+  });
+
+  it("separates upcoming and ended closed rounds", () => {
+    expect(
+      roundPhase({ opens_at: "2026-10-15T00:00:00Z", is_open: false }, now),
+    ).toBe("upcoming");
+    expect(
+      roundPhase({ opens_at: "2026-10-13T00:00:00Z", is_open: false }, now),
+    ).toBe("ended");
   });
 });

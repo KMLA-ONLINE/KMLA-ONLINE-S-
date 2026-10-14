@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { toast } from "sonner";
 
 import {
   updateDonationRound,
@@ -8,8 +9,10 @@ import {
   seoulInputToIso,
   toSeoulInput,
 } from "~/features/donations/model/round-time";
+import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
+import { Spinner } from "~/shared/ui/spinner";
 import { TextField } from "~/shared/ui/text-field";
 
 export interface RoundFieldValues {
@@ -91,9 +94,11 @@ export function readRoundFields(
 interface Props {
   round: DonationRound;
   onSaved: () => Promise<void>;
+  onClose: () => void;
 }
 
-export function DonationRoundManagement({ round, onSaved }: Props) {
+/** Inline editor for a round's title and Seoul-time period. */
+export function DonationRoundManagement({ round, onSaved, onClose }: Props) {
   const [values, setValues] = useState<RoundFieldValues>({
     title: round.title,
     opensAt: toSeoulInput(round.opens_at),
@@ -102,34 +107,11 @@ export function DonationRoundManagement({ round, onSaved }: Props) {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [pending, setPending] = useState<NonNullable<
+    ReturnType<typeof readRoundFields>
+  > | null>(null);
 
-  async function save() {
-    const next = readRoundFields(values, round);
-
-    setError("");
-    setNotice("");
-
-    if (!next) {
-      setError("회차 이름과 신청 기간을 확인해주세요.");
-      return;
-    }
-
-    const periodChanged =
-      Date.parse(next.opensAt) !== Date.parse(round.opens_at) ||
-      Date.parse(next.closesAt) !== Date.parse(round.closes_at);
-    const started = round.is_open || Date.parse(round.closes_at) <= Date.now();
-
-    if (
-      periodChanged &&
-      started &&
-      !window.confirm(
-        "이미 시작된 회차의 신청 기간을 바꾸면 학생 신청이 즉시 열리거나 닫힐 수 있습니다. 변경할까요?",
-      )
-    ) {
-      return;
-    }
-
+  async function submit(next: NonNullable<ReturnType<typeof readRoundFields>>) {
     setBusy(true);
 
     try {
@@ -141,17 +123,42 @@ export function DonationRoundManagement({ round, onSaved }: Props) {
       );
 
       await onSaved();
-      setNotice("회차가 수정되었습니다.");
+      toast.success("회차를 수정했습니다.");
+      onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "수정 중 오류가 발생했습니다.");
     } finally {
       setBusy(false);
+      setPending(null);
     }
   }
 
+  function save() {
+    const next = readRoundFields(values, round);
+
+    setError("");
+
+    if (!next) {
+      setError("회차 이름과 신청 기간을 확인해주세요.");
+      return;
+    }
+
+    const periodChanged =
+      Date.parse(next.opensAt) !== Date.parse(round.opens_at) ||
+      Date.parse(next.closesAt) !== Date.parse(round.closes_at);
+    const started = round.is_open || Date.parse(round.closes_at) <= Date.now();
+
+    if (periodChanged && started) {
+      setPending(next);
+      return;
+    }
+
+    void submit(next);
+  }
+
   return (
-    <section className="space-y-4 rounded-xl border bg-card p-4">
-      <h2 className="font-semibold">회차 수정</h2>
+    <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+      <RoundFields values={values} onChange={setValues} />
 
       {error && (
         <p role="alert" className="text-sm text-destructive">
@@ -159,25 +166,26 @@ export function DonationRoundManagement({ round, onSaved }: Props) {
         </p>
       )}
 
-      {notice && (
-        <p role="status" className="text-sm">
-          {notice}
-        </p>
-      )}
-
-      <RoundFields values={values} onChange={setValues} />
-
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            void save();
-          }}
-        >
-          변경사항 저장
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="ghost" onClick={onClose}>
+          닫기
+        </Button>
+        <Button type="button" disabled={busy} onClick={save}>
+          {busy ? <Spinner data-icon="inline-start" /> : null}
+          저장
         </Button>
       </div>
-    </section>
+
+      {pending && (
+        <ConfirmDialog
+          title="신청 기간 변경"
+          description="이미 시작된 회차입니다. 기간을 바꾸면 학생 신청이 바로 열리거나 닫힐 수 있습니다."
+          confirmLabel="변경"
+          pending={busy}
+          onCancel={() => setPending(null)}
+          onConfirm={() => void submit(pending)}
+        />
+      )}
+    </div>
   );
 }

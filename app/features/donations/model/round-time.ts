@@ -24,3 +24,14 @@ export function seoulInputToIso(value: string, stored?: string): string | null {
 
   return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
+
+export type RoundPhase = "upcoming" | "open" | "ended";
+
+/** Uses the server's open flag and a clock only to tell upcoming from ended. */
+export function roundPhase(
+  round: { opens_at: string; is_open: boolean },
+  now: number,
+): RoundPhase {
+  if (round.is_open) return "open";
+  return Date.parse(round.opens_at) > now ? "upcoming" : "ended";
+}
