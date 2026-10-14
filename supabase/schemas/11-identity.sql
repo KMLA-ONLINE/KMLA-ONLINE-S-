@@ -893,8 +893,6 @@ ALTER TABLE ONLY "public"."profiles"
 ALTER TABLE ONLY "public"."profiles"
     ADD CONSTRAINT "profiles_student_number_key" UNIQUE ("student_number");
 
-CREATE INDEX "profiles_accepted_students_idx" ON "public"."profiles" USING "btree" ("id") WHERE (("status" = 'accepted'::"public"."profile_status") AND ("type" = 'student'::"public"."profile_type") AND ("deleted_at" IS NULL));
-
 CREATE INDEX "profiles_active_student_cohort_idx" ON "public"."profiles" USING "btree" ("cohort") WHERE (("type" = 'student'::"public"."profile_type") AND ("status" = 'accepted'::"public"."profile_status") AND ("deleted_at" IS NULL));
 
 CREATE UNIQUE INDEX "profiles_pub_id_case_insensitive_key" ON "public"."profiles" USING "btree" ("lower"("pub_id"));
