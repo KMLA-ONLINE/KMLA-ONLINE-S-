@@ -2,7 +2,11 @@ import { startTransition, StrictMode } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { HydratedRouter } from "react-router/dom";
 
+import { seedColdStartBackStack } from "~/shared/lib/back-stack";
 import { getQueryClient } from "~/shared/lib/query-client";
+
+// 라우터가 history를 읽기 전에 깔아야 첫 화면의 location state에 표시가 실린다.
+seedColdStartBackStack();
 
 startTransition(() => {
   // 초기 loader도 focus/online 복귀로 재시도를 재개해야 한다. Provider는

@@ -14,6 +14,7 @@ import {
 import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/notification-open";
 import {
+  ABOVE_SEEDED_PARENT_STATE,
   hasBackEntry,
   resolveBackStack,
   seedBackStack,
@@ -80,7 +81,12 @@ export default function NotificationOpenRoute({
     const stack = resolveSeedStack(loaderData.target);
     if (stack.length > 0) seedBackStack(stack);
 
-    void navigate(loaderData.target, { replace: stack.length === 0 });
+    void navigate(
+      loaderData.target,
+      stack.length > 0
+        ? { state: ABOVE_SEEDED_PARENT_STATE }
+        : { replace: true },
+    );
   }, [loaderData.target, navigate]);
 
   return null;

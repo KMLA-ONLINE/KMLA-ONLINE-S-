@@ -30,6 +30,11 @@ describe("back stack", () => {
     expect(resolveBackStack("/menu/gongang")).toEqual(["/"]);
   });
 
+  it("puts the conversation list under a conversation", () => {
+    expect(resolveBackStack("/messenger/room-id")).toEqual(["/", "/messenger"]);
+    expect(resolveBackStack("/messenger")).toEqual(["/"]);
+  });
+
   it("falls back to home for a screen the table does not declare", () => {
     expect(resolveBackStack("/menu/meal")).toEqual(["/"]);
   });
