@@ -7,6 +7,13 @@ export type AdminApplication =
 export type AcceptedUser =
   Functions["admin_list_accepted_users"]["Returns"][number];
 export type AdminMember = Functions["admin_list_members"]["Returns"][number];
+type RawRosterMember = Functions["admin_list_roster"]["Returns"][number];
+
+/** 교직원은 기수가, 학생 외에는 부서가 비어 있다. 생성 타입은 `returns table` 컬럼을 non-null로 적어 여기서 고친다. */
+export type RosterMember = Omit<RawRosterMember, "cohort" | "department"> & {
+  cohort: RawRosterMember["cohort"] | null;
+  department: RawRosterMember["department"] | null;
+};
 
 type RawStorageCleanupStatus =
   Functions["admin_storage_cleanup_status"]["Returns"][number];

@@ -1,12 +1,16 @@
 import { Form, Link } from "react-router";
 
 import { formatProfileType } from "~/features/admin/model/format";
-import type { AcceptedUser, AdminMember } from "~/features/admin/model/types";
+import type {
+  AcceptedUser,
+  AdminMember,
+  RosterMember,
+} from "~/features/admin/model/types";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
 
-type Person = AcceptedUser | AdminMember;
+type Person = AcceptedUser | AdminMember | RosterMember;
 
 export function AdminSearch({
   query,
@@ -58,7 +62,7 @@ export function AdminPersonRow({
         <p className="mt-1 text-xs text-muted-foreground">
           @{person.pub_id} · {formatProfileType(person.profile_type)} ·{" "}
           {person.cohort ? `${person.cohort}기` : "기수 없음"} ·{" "}
-          {person.department || "부서 없음"}
+          {person.department ?? "부서 없음"}
         </p>
       </div>
       {action}

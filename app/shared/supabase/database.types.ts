@@ -1514,6 +1514,19 @@ export type Database = {
           total_count: number
         }[]
       }
+      admin_list_roster: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          approved_at: string
+          cohort: number
+          department: string
+          is_app_admin: boolean
+          name: string
+          profile_id: number
+          profile_type: Database["public"]["Enums"]["profile_type"]
+          pub_id: string
+        }[]
+      }
       admin_review_applications: {
         Args: {
           p_profile_ids: number[]
