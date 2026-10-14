@@ -123,6 +123,7 @@ import {
   DropdownMenuTrigger,
 } from "~/shared/ui/dropdown-menu";
 import { isAboveSeededParent } from "~/shared/lib/back-stack";
+import { isHandheld } from "~/shared/lib/install-platform";
 import { cn } from "~/shared/lib/utils";
 
 export interface DesktopDetailsContext {
@@ -1908,6 +1909,8 @@ function ComposerShell({
                 return;
               }
               if (event.key !== "Enter" || event.shiftKey) return;
+              // 폰·태블릿의 화면 키보드에는 Shift+Enter가 없다. Enter로 줄을 바꾸고 보내기는 버튼이 맡는다.
+              if (isHandheld()) return;
               // Safari는 compositionend를 Enter keydown보다 먼저 보내 isComposing도 false다.
               // 그 keydown은 keyCode 229로 온다.
               if (composingText) return;
