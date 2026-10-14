@@ -5,6 +5,8 @@ import {
   getFallbackInstallMode,
   INSTALL_PREFERENCE_KEY,
   isHandheld,
+  isInAppBrowser,
+  isSamsungInternet,
   isStandalone,
   neverShowInstallPrompt,
   recordInstallAvailable,
@@ -57,7 +59,8 @@ export function useInstallPrompt(
   const dismissedForSessionRef = useRef(false);
 
   useEffect(() => {
-    if (!isHandheld()) return;
+    // 인앱 브라우저는 설치할 수 없고 링크를 잠깐 열어 본 경우가 대부분이라 아예 권하지 않는다.
+    if (!isHandheld() || isInAppBrowser()) return;
 
     if (isStandalone()) {
       // 설치된 창으로 들어왔다는 건 설치가 끝났다는 뜻이다. `appinstalled`를 놓친
@@ -89,6 +92,8 @@ export function useInstallPrompt(
     const onBeforeInstallPrompt = (event: Event) => {
       // 기본 mini-infobar를 막고, 설치 시점을 우리 다이얼로그의 버튼으로 옮긴다.
       event.preventDefault();
+      // 삼성 인터넷은 설치할 수 있어도 Chrome으로 옮기라고 권한다(`android-samsung`).
+      if (isSamsungInternet()) return;
       const current = getInstallPreference();
       if (current.neverShow) return;
 

@@ -84,12 +84,12 @@ describe("group post routes reuse the parent loader data", () => {
  * 비어 있다고 조용히 건너뛰면 방금 지운 글이 목록과 피드에 남는다.
  */
 describe("deleting a group post keeps the caches honest", () => {
-  function remove() {
+  function remove(fields: Record<string, string> = {}) {
     return post.clientAction({
       params: { slug: "group-slug", postId: "post-id" },
       request: new Request("https://example.com/", {
         method: "POST",
-        body: new URLSearchParams({ intent: "delete" }),
+        body: new URLSearchParams({ intent: "delete", ...fields }),
       }),
     } as never);
   }
@@ -131,6 +131,34 @@ describe("deleting a group post keeps the caches honest", () => {
     expect(loadGroupDetail).toHaveBeenCalledWith("group-slug");
     expect(queryClient.getQueryData(feedKeys.list())).toMatchObject({
       pages: [{ posts: [] }],
+    });
+  });
+
+  it("returns to the group after deleting from the group screen", async () => {
+    const response = await remove().catch((error: unknown) => error);
+
+    expect(response).toBeInstanceOf(Response);
+    expect((response as Response).headers.get("Location")).toBe(
+      "/groups/group-slug",
+    );
+  });
+
+  // 피드 오버레이에서 지웠는데 그룹으로 넘어가면 보던 피드를 잃는다. 지운 글의 오버레이 entry는
+  // 갈아치워야 뒤로가기가 사라진 글을 다시 열지 않는다.
+  it("stays on the feed, replacing the overlay entry, after deleting from it", async () => {
+    const response = await remove({ from: "feed-overlay" }).catch(
+      (error: unknown) => error,
+    );
+
+    expect(response).toBeInstanceOf(Response);
+    expect((response as Response).headers.get("Location")).toBe("/");
+    expect((response as Response).headers.has("X-Remix-Replace")).toBe(true);
+  });
+
+  // 카드 메뉴는 이미 피드에 있다. 같은 경로로 다시 이동하면 스크롤이 흔들리므로 그 자리에 둔다.
+  it("stays in place after deleting from a feed card", async () => {
+    await expect(remove({ from: "feed-card" })).resolves.toMatchObject({
+      data: { ok: true },
     });
   });
 });

@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { getInAppEscapeUrl } from "~/shared/lib/install-platform";
+import {
+  getChromeIntentUrl,
+  getInAppEscapeUrl,
+} from "~/shared/lib/install-platform";
 
 const ANDROID_WEBVIEW =
   "Mozilla/5.0 (Linux; Android 14; SM-S921N Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.0.0 Mobile Safari/537.36";
@@ -57,5 +60,13 @@ describe("getInAppEscapeUrl", () => {
 
     useUserAgent(`${ANDROID_WEBVIEW} NAVER(inapp; search; 2000; 12.0.0)`);
     expect(getInAppEscapeUrl(HREF)).toBeNull();
+  });
+});
+
+describe("getChromeIntentUrl", () => {
+  it("opens the current address in Android Chrome, dropping the hash", () => {
+    expect(getChromeIntentUrl(HREF)).toBe(
+      "intent://kmla.example/group/1/post/2?tab=a#Intent;scheme=https;package=com.android.chrome;end",
+    );
   });
 });

@@ -90,7 +90,7 @@ describe("InstallPrompt", () => {
    * 설치가 막힌 브라우저에서 「설치완료」를 보여 주면, 할 수 없다고 안내해 놓고 완료를
    * 묻는 꼴이 된다. 눌러도 정작 설치할 브라우저가 아닌 이곳의 기록만 바뀐다.
    */
-  it("iOS 인앱 브라우저 모드에서는 Safari로 옮기라고 안내하고 설치완료를 숨긴다", async () => {
+  it("홈 화면에 추가할 수 없는 iOS 브라우저에서는 Safari로 옮기라고 안내하고 설치완료를 숨긴다", async () => {
     renderWith({ mode: "ios-other" });
 
     expect(
@@ -100,6 +100,27 @@ describe("InstallPrompt", () => {
       screen.queryByRole("button", { name: "설치완료" }),
     ).not.toBeInTheDocument();
     await enabledButton("알겠어요");
+  });
+
+  it("삼성 인터넷에서는 설치 대신 Chrome으로 열기를 권한다", async () => {
+    const { dismiss, dismissForSession } = renderWith({
+      mode: "android-samsung",
+    });
+
+    expect(
+      screen.getByRole("heading", { name: /Chrome에서 열어/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "설치완료" }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(await enabledButton("나중에"));
+    expect(dismiss).toHaveBeenCalledOnce();
+    // 옮겨 가기는 거절 횟수에 세지 않는다. 실제 이동(intent)은 jsdom이 따라가지 않는다.
+    expect(
+      screen.getByRole("button", { name: "Chrome으로 열기" }),
+    ).toBeInTheDocument();
+    expect(dismissForSession).not.toHaveBeenCalled();
   });
 
   it("android-help 모드에서는 브라우저 메뉴 절차를 안내한다", () => {
@@ -113,25 +134,6 @@ describe("InstallPrompt", () => {
     expect(
       screen.getByRole("button", { name: "설치완료" }),
     ).toBeInTheDocument();
-  });
-
-  it("android-other 모드에서는 Chrome으로 옮기라고 안내하고 설치완료를 숨긴다", async () => {
-    const { dismiss } = renderWith({ mode: "android-other" });
-
-    expect(
-      screen.getByRole("heading", { name: /Chrome에서 열어/ }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/외부 브라우저에서 열기/)).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "설치하기" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "설치완료" }),
-    ).not.toBeInTheDocument();
-
-    // 남는 버튼은 하나뿐이라 「나중에」가 아니라 확인 문구로 읽혀야 한다.
-    await userEvent.click(await enabledButton("알겠어요"));
-    expect(dismiss).toHaveBeenCalledOnce();
   });
 
   it("열릴 때 거절 버튼에 포커스가 가지 않는다", async () => {

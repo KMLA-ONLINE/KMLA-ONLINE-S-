@@ -245,3 +245,18 @@ export function extractPostPlainText(markdown: string): string {
 export function isSafePostLink(value: string): boolean {
   return isSafeLink(value);
 }
+
+/**
+ * 링크 입력값을 저장할 주소로 다듬는다. 사람들은 주소창에서 보던 대로 `naver.com`처럼
+ * scheme 없이 적으므로 그때만 `https://`를 붙인다. scheme이 있으면 그대로 두어
+ * `javascript:` 같은 값이 `isSafePostLink()`에서 걸러지게 한다.
+ */
+export function normalizePostLinkInput(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  // `user@example.com`에 붙이면 example.com으로 가는 주소가 되어 버린다. 그대로 두어 거절되게 한다.
+  if (/^[^/:]+@/.test(trimmed)) return trimmed;
+  return /^[a-z][a-z\d+.-]*:/i.test(trimmed) && !/^[^:/]+:\d/.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+}

@@ -312,6 +312,7 @@ export function FeedScreen() {
           viewer={{ name: profile.name, avatarUrl: profile.avatar_url }}
           onClose={closeDetail}
           action={groupPostPath(detail.slug, detail.post.post_id)}
+          fromFeed
         />
       ) : null}
 
@@ -322,6 +323,7 @@ export function FeedScreen() {
           viewer={{ name: profile.name, avatarUrl: profile.avatar_url }}
           onClose={closeDetail}
           action={`/profile/${detail.post.timeline_pub_id}/posts/${detail.post.post_id}`}
+          fromFeed
         />
       ) : null}
 
