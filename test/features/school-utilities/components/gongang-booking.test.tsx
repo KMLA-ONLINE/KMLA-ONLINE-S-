@@ -85,6 +85,9 @@ describe("gongang booking flow", () => {
         },
       ]),
     );
+    expect(
+      await screen.findByRole("button", { name: "10:00–11:00 2층 선택" }),
+    ).toBeInTheDocument();
   });
   it("does not expose an empty bookable board when loading fails", async () => {
     data.loadGongangSchedule.mockRejectedValueOnce(new Error("offline"));

@@ -18,6 +18,7 @@ interface Props {
   onSelect: (slot: string, location: string) => void;
   onInspect?: (entry: GongangBoardEntry) => void;
   disabled?: boolean;
+  readOnly?: boolean;
   allowPreempt?: boolean;
 }
 export function GongangBoard({
@@ -27,6 +28,7 @@ export function GongangBoard({
   onSelect,
   onInspect,
   disabled = false,
+  readOnly = false,
   allowPreempt = false,
 }: Props) {
   const [floorId, setFloorId] = useState<string>(GONGANG_FLOORS[0].id);
@@ -46,7 +48,7 @@ export function GongangBoard({
     return (
       <button
         type="button"
-        disabled={disabled}
+        disabled={disabled || (readOnly && !entry)}
         aria-label={`${slot.label} ${floor.label}${entry ? ` ${entry.label}` : ""}${selectable ? " 선택" : ""}`}
         aria-pressed={selectable ? checked : undefined}
         onClick={() =>
@@ -76,6 +78,8 @@ export function GongangBoard({
           </span>
         ) : checked ? (
           <CheckIcon aria-hidden className="size-4" />
+        ) : readOnly ? (
+          <span aria-hidden>—</span>
         ) : (
           <PlusIcon aria-hidden className="size-4 text-muted-foreground" />
         )}
@@ -112,7 +116,14 @@ export function GongangBoard({
                 )}
               >
                 {item.label}
-                {count > 0 && <span className="ml-1 text-xs">{count}</span>}
+                {count > 0 && (
+                  <span
+                    aria-hidden
+                    className="ml-1 inline-flex size-4 items-center justify-center rounded-full bg-primary/10 text-[10px] text-primary"
+                  >
+                    {count}
+                  </span>
+                )}
               </button>
             );
           })}

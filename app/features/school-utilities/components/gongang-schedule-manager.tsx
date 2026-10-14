@@ -189,11 +189,12 @@ export function GongangScheduleManager() {
           </Button>
         </div>
       )}
-      {loading ? (
+      {loading && (
         <div className="flex justify-center py-16">
-          <Spinner aria-label="선예약 불러오는 중" />
+          <Spinner aria-label="예약 불러오는 중" />
         </div>
-      ) : (
+      )}
+      <div hidden={loading}>
         <GongangBoard
           key={date}
           date={date}
@@ -212,7 +213,7 @@ export function GongangScheduleManager() {
             setError("");
           }}
         />
-      )}
+      </div>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}

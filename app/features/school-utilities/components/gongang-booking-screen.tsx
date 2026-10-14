@@ -239,15 +239,17 @@ export function GongangBookingScreen() {
           </Button>
         </div>
       )}
-      {loading ? (
+      {loading && (
         <div className="flex justify-center py-16">
           <Spinner aria-label="예약 불러오는 중" />
         </div>
-      ) : (
+      )}
+      <div hidden={loading}>
         <GongangBoard
           key={date}
           date={date}
           entries={entries}
+          readOnly={date < today}
           selected={selection}
           disabled={busy || Boolean(loadError)}
           onSelect={(slot, location) => {
@@ -262,7 +264,7 @@ export function GongangBookingScreen() {
           }}
           onInspect={setInspected}
         />
-      )}
+      </div>
       {date < today && (
         <p className="text-center text-xs text-muted-foreground">
           지난 날짜입니다.
