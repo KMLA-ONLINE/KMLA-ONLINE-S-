@@ -96,7 +96,7 @@ Before DB changes, follow [Database workflow](supabase/README.md), including its
 
 ## Skills and MCP
 
-Project skills live in `.agents/skills/`; do not hand-edit them. Load the relevant skill and follow its workflow and references with the project constraints above.
+Project skills live in `.agents/skills/`; do not hand-edit them. `npm install`/`npm ci` links them into the ignored `.claude/skills/` via `scripts/link-skills.mjs`. Load the relevant skill and follow its workflow and references with the project constraints above.
 
 Apply only skill recommendations compatible with this React Router SPA. Do not apply Next.js-specific APIs or components, or optimization patterns that require a runtime app server.
 
@@ -104,14 +104,14 @@ Apply only skill recommendations compatible with this React Router SPA. Do not a
 
 The table defines minimum required usage, not an inventory of installed skills. Load other relevant skills according to their descriptions.
 
-| Work                                                                         | Skill                         |
-| ---------------------------------------------------------------------------- | ----------------------------- |
-| Routes, navigation, framework configuration                                  | `react-router`                |
-| Any Supabase work, including Auth, RLS, Storage, Realtime, migrations, types | `supabase`                    |
-| shadcn, registries, `components.json`                                        | `shadcn`                      |
-| Writing, reviewing, or refactoring React                                     | `vercel-react-best-practices` |
-| UI, accessibility, or UX reviews                                             | `web-design-guidelines`       |
-| Implementation under the [TDD policy](#verification)                         | `tdd`                         |
+| Work                                                                         | Skill                   |
+| ---------------------------------------------------------------------------- | ----------------------- |
+| Routes, navigation, framework configuration                                  | `react-router`          |
+| Any Supabase work, including Auth, RLS, Storage, Realtime, migrations, types | `supabase`              |
+| shadcn, registries, `components.json`                                        | `shadcn`                |
+| UI, accessibility, or UX reviews                                             | `web-design-guidelines` |
+
+Recommended: use `grilling` to settle ambiguous plans or unspecified product behavior with the user before implementing.
 
 ### MCP
 
@@ -121,7 +121,7 @@ The table defines minimum required usage, not an inventory of installed skills. 
 
 ## Verification
 
-- Always use TDD and load the `tdd` skill, except for tasks that need no tests or changes sufficiently verified by existing tests.
+- Always use TDD, except for tasks that need no tests or changes sufficiently verified by existing tests.
 
 `package.json` owns commands. Run checks appropriate to the changed files:
 
