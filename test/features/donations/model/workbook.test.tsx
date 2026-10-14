@@ -96,7 +96,7 @@ describe("donation workbook validation", () => {
         ["물품명", "상세 정보"],
         ["교재", "좋음"],
         ["물품명", "상세 정보"],
-        [42, "좋음"],
+        ["가".repeat(301), "좋음"],
       ]),
     );
     expect(result.items).toHaveLength(1);
@@ -104,6 +104,43 @@ describe("donation workbook validation", () => {
       "domestic 3행: 반복된 헤더 행입니다. 중복 헤더를 제거해주세요.",
       "domestic 4행: 물품명은 1~300자의 문자여야 합니다.",
     ]);
+  });
+
+  it("reads numeric cells such as sizes and numeric titles as text", async () => {
+    const result = await parseDonationWorkbook(
+      await workbookFile(
+        [
+          ["물품명", "사이즈", "기증자"],
+          [1984, 95, 2026],
+        ],
+        "uniform_male",
+      ),
+    );
+    expect(result).toEqual({
+      items: [
+        {
+          category: "남학생 교복",
+          name: "1984",
+          detail: "95",
+          donorName: "2026",
+          sourceSheet: "uniform_male",
+          sourceRow: 2,
+        },
+      ],
+      errors: [],
+    });
+  });
+
+  it("rejects sheet names that match inherited object properties", async () => {
+    const result = await parseDonationWorkbook(
+      await workbookFile([["교재"]], "constructor"),
+    );
+    expect(result).toEqual({
+      items: [],
+      errors: [
+        "constructor: 지원하지 않는 시트입니다. 엑셀 양식을 확인해주세요.",
+      ],
+    });
   });
 
   it("requires the uniform template's color and donor columns", async () => {

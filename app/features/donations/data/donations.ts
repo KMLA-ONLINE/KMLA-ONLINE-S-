@@ -9,6 +9,7 @@ export interface DonationRound {
   title: string;
   opens_at: string;
   closes_at: string;
+  is_open: boolean;
 }
 
 export interface DonationItem {
@@ -39,6 +40,10 @@ function handleError(error: { code?: string; message: string }): never {
     throw new Error("신청 기간이 아닙니다.");
   }
 
+  if (error.message.includes("application limit reached")) {
+    throw new Error("한 회차에 최대 50개까지 신청할 수 있습니다.");
+  }
+
   if (error.message.includes("donation rounds cannot overlap")) {
     throw new Error("다른 회차와 신청 기간이 겹칩니다.");
   }
@@ -67,40 +72,51 @@ export async function loadDonationRounds(): Promise<DonationRound[]> {
 
 export async function loadDonationItems(
   roundId: number,
+  { includeClaimants }: { includeClaimants: boolean },
 ): Promise<DonationItem[]> {
-  const items: Omit<DonationItem, "claimant_name" | "claimant_cohort">[] = [];
+  const loadItems = async () => {
+    const items: Omit<DonationItem, "claimant_name" | "claimant_cohort">[] = [];
 
-  for (let start = 0; ; start += 500) {
-    const { data, error } = await getSupabase()
-      .rpc("donation_list_items", { p_round_id: roundId })
-      .range(start, start + 499);
+    for (let start = 0; ; start += 500) {
+      const { data, error } = await getSupabase()
+        .rpc("donation_list_items", { p_round_id: roundId })
+        .range(start, start + 499);
 
-    if (error) handleError(error);
+      if (error) handleError(error);
 
-    const chunk = data ?? [];
-    items.push(...chunk);
+      const chunk = data ?? [];
+      items.push(...chunk);
 
-    if (chunk.length < 500) break;
-  }
+      if (chunk.length < 500) return items;
+    }
+  };
 
-  const occupants: {
-    item_id: number;
-    applicant_name: string | null;
-    applicant_cohort: number | null;
-  }[] = [];
+  const loadClaimants = async () => {
+    const occupants: {
+      item_id: number;
+      applicant_name: string | null;
+      applicant_cohort: number | null;
+    }[] = [];
 
-  for (let start = 0; ; start += 500) {
-    const { data, error } = await getSupabase()
-      .rpc("donation_list_claimed_by", { p_round_id: roundId })
-      .range(start, start + 499);
+    for (let start = 0; ; start += 500) {
+      const { data, error } = await getSupabase()
+        .rpc("donation_list_claimed_by", { p_round_id: roundId })
+        .range(start, start + 499);
 
-    if (error) handleError(error);
+      if (error) handleError(error);
 
-    const chunk = data ?? [];
-    occupants.push(...chunk);
+      const chunk = data ?? [];
+      occupants.push(...chunk);
 
-    if (chunk.length < 500) break;
-  }
+      if (chunk.length < 500) return occupants;
+    }
+  };
+
+  // Admins see the full history instead, so they skip the claimant read.
+  const [items, occupants] = await Promise.all([
+    loadItems(),
+    includeClaimants ? loadClaimants() : Promise.resolve([]),
+  ]);
 
   const byItem = new Map(occupants.map((person) => [person.item_id, person]));
 

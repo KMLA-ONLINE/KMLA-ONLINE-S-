@@ -19,10 +19,14 @@ import {
   type DonationExportRecord,
   type DonationImportPreview,
 } from "~/features/donations/model/workbook";
-import { DonationRoundManagement } from "~/features/donations/components/round-management";
+import {
+  DonationRoundManagement,
+  readRoundFields,
+  RoundFields,
+  type RoundFieldValues,
+} from "~/features/donations/components/round-management";
 import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
-import { TextField } from "~/shared/ui/text-field";
 
 const formatter = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul",
@@ -43,11 +47,7 @@ function getError(error: unknown) {
     : "처리 중 오류가 발생했습니다.";
 }
 
-function toKoreanISO(value: string) {
-  if (!value) return null;
-  const date = new Date(`${value}:00+09:00`);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
+const EMPTY_ROUND: RoundFieldValues = { title: "", opensAt: "", closesAt: "" };
 
 export function DonationsScreen() {
   const { profile } = useAppShell();
@@ -65,32 +65,20 @@ export function DonationsScreen() {
 
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [now, setNow] = useState(0);
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("전체");
   const [visibleCount, setVisibleCount] = useState(50);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [title, setTitle] = useState("");
-  const [opensAt, setOpensAt] = useState("");
-  const [closesAt, setClosesAt] = useState("");
+  const [newRound, setNewRound] = useState<RoundFieldValues>(EMPTY_ROUND);
   const [preview, setPreview] = useState<DonationImportPreview | null>(null);
 
-  useEffect(() => {
-    const initialTimer = window.setTimeout(() => {
-      setNow(Date.now());
-    }, 0);
-
-    const timer = window.setInterval(() => {
-      setNow(Date.now());
-    }, 30000);
-
-    return () => {
-      window.clearTimeout(initialTimer);
-      window.clearInterval(timer);
-    };
-  }, []);
+  function clearPreview() {
+    setPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   useEffect(() => {
     let active = true;
@@ -100,7 +88,6 @@ export function DonationsScreen() {
         const data = await loadDonationRounds();
         if (!active) return;
         setRounds(data);
-        setNow(Date.now());
         setRoundId((previous) =>
           isAdmin && data.some((round) => round.id === previous)
             ? previous
@@ -113,22 +100,19 @@ export function DonationsScreen() {
       }
     }
 
+    // The server decides whether a round is open, so device clock skew
+    // cannot show or hide application buttons out of step with it.
     void refreshRounds();
-    const timer = isAdmin
-      ? null
-      : window.setInterval(() => void refreshRounds(), 30000);
+    const timer = window.setInterval(() => void refreshRounds(), 30000);
 
     return () => {
       active = false;
-      if (timer !== null) window.clearInterval(timer);
+      window.clearInterval(timer);
     };
   }, [isAdmin]);
 
   const selected = rounds.find((round) => round.id === roundId) ?? null;
-  const isOpen =
-    selected !== null &&
-    new Date(selected.opens_at).getTime() <= now &&
-    now < new Date(selected.closes_at).getTime();
+  const isOpen = selected?.is_open ?? false;
 
   useEffect(() => {
     if (roundId === null) {
@@ -148,7 +132,7 @@ export function DonationsScreen() {
     });
 
     Promise.all([
-      loadDonationItems(roundId),
+      loadDonationItems(roundId, { includeClaimants: !isAdmin }),
       isAdmin ? loadDonationClaims(roundId) : Promise.resolve([]),
     ])
       .then(([nextItems, nextClaims]) => {
@@ -211,7 +195,7 @@ export function DonationsScreen() {
 
   async function reload(id: number) {
     const [nextItems, nextClaims] = await Promise.all([
-      loadDonationItems(id),
+      loadDonationItems(id, { includeClaimants: !isAdmin }),
       isAdmin ? loadDonationClaims(id) : Promise.resolve([]),
     ]);
 
@@ -256,10 +240,9 @@ export function DonationsScreen() {
   }
 
   async function handleCreateRound() {
-    const start = toKoreanISO(opensAt);
-    const end = toKoreanISO(closesAt);
+    const next = readRoundFields(newRound);
 
-    if (!title.trim() || !start || !end || start >= end) {
+    if (!next) {
       setError("회차 이름과 신청 시작 및 종료 시간을 확인해주세요.");
       return;
     }
@@ -269,16 +252,18 @@ export function DonationsScreen() {
     setNotice("");
 
     try {
-      const newId = await createDonationRound(title.trim(), start, end);
+      const newId = await createDonationRound(
+        next.title,
+        next.opensAt,
+        next.closesAt,
+      );
 
       const updated = await loadDonationRounds();
 
       setRounds(updated);
       setRoundId(newId);
-      setTitle("");
-      setOpensAt("");
-      setClosesAt("");
-      setPreview(null);
+      setNewRound(EMPTY_ROUND);
+      clearPreview();
       setNotice("회차가 생성되었습니다.");
     } catch (e) {
       setError(getError(e));
@@ -342,7 +327,7 @@ export function DonationsScreen() {
       const count = await importDonationItems(selected.id, preview.items);
 
       await reload(selected.id);
-      setPreview(null);
+      clearPreview();
       setNotice(`${count}개 물품을 등록했습니다.`);
     } catch (e) {
       setError(getError(e));
@@ -401,38 +386,11 @@ export function DonationsScreen() {
         <section className="space-y-4 rounded-xl border bg-card p-4">
           <h2 className="font-semibold">회차 관리</h2>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="space-y-1 text-sm" htmlFor="donation-field-366">
-              <span>회차 이름</span>
-              <TextField
-                value={title}
-                placeholder="예: 2026년 2학기"
-                maxLength={100}
-                onChange={(e) => setTitle(e.currentTarget.value)}
-                id="donation-field-366"
-              />
-            </label>
-
-            <label className="space-y-1 text-sm" htmlFor="donation-field-376">
-              <span>신청 시작 (한국 시간)</span>
-              <Input
-                type="datetime-local"
-                value={opensAt}
-                onChange={(e) => setOpensAt(e.currentTarget.value)}
-                id="donation-field-376"
-              />
-            </label>
-
-            <label className="space-y-1 text-sm" htmlFor="donation-field-385">
-              <span>신청 종료 (한국 시간)</span>
-              <Input
-                type="datetime-local"
-                value={closesAt}
-                onChange={(e) => setClosesAt(e.currentTarget.value)}
-                id="donation-field-385"
-              />
-            </label>
-          </div>
+          <RoundFields
+            values={newRound}
+            onChange={setNewRound}
+            titlePlaceholder="예: 2026년 2학기"
+          />
 
           <Button
             type="button"
@@ -458,7 +416,7 @@ export function DonationsScreen() {
                   setError("");
                   setNotice("");
                   setRoundId(Number(e.currentTarget.value));
-                  setPreview(null);
+                  clearPreview();
                   setSearch("");
                   setCategory("전체");
                   setVisibleCount(50);
@@ -519,12 +477,17 @@ export function DonationsScreen() {
               <h2 className="font-semibold">엑셀 일괄등록</h2>
 
               <Input
+                ref={fileInputRef}
                 type="file"
                 accept=".xlsx"
                 aria-label="물품 엑셀 파일"
                 disabled={
                   adminBusy || reading || itemsLoading || items.length > 0
                 }
+                onClick={(e) => {
+                  // Clearing first lets a fixed file with the same name re-parse.
+                  e.currentTarget.value = "";
+                }}
                 onChange={(e) => {
                   void handleFile(e.currentTarget.files?.[0]);
                 }}

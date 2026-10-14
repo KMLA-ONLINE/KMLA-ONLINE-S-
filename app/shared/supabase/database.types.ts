@@ -1985,6 +1985,7 @@ export type Database = {
         Returns: {
           closes_at: string
           id: number
+          is_open: boolean
           opens_at: string
           title: string
         }[]

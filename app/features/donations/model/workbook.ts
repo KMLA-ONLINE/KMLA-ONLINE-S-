@@ -40,6 +40,11 @@ function readText(value: unknown): string | null {
     return "";
   }
 
+  // Excel stores sizes such as 95 and titles such as 1984 as numbers.
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
   if (typeof value !== "string") {
     return null;
   }
@@ -116,7 +121,9 @@ export async function parseDonationWorkbook(
     );
 
   for (const { sheet, data } of sheets) {
-    const category = CATEGORIES[sheet];
+    const category = Object.hasOwn(CATEGORIES, sheet)
+      ? CATEGORIES[sheet]
+      : undefined;
 
     if (!category) {
       errors.push(

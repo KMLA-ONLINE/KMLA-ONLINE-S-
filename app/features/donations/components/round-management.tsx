@@ -1,59 +1,144 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import {
   updateDonationRound,
   type DonationRound,
 } from "~/features/donations/data/donations";
+import {
+  seoulInputToIso,
+  toSeoulInput,
+} from "~/features/donations/model/round-time";
 import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
 import { TextField } from "~/shared/ui/text-field";
+
+export interface RoundFieldValues {
+  title: string;
+  opensAt: string;
+  closesAt: string;
+}
+
+interface RoundFieldsProps {
+  values: RoundFieldValues;
+  onChange: (values: RoundFieldValues) => void;
+  titlePlaceholder?: string;
+}
+
+/** Title and Seoul-time period inputs shared by round creation and editing. */
+export function RoundFields({
+  values,
+  onChange,
+  titlePlaceholder,
+}: RoundFieldsProps) {
+  const id = useId();
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      <label className="space-y-1 text-sm" htmlFor={`${id}-title`}>
+        <span>회차 이름</span>
+        <TextField
+          id={`${id}-title`}
+          value={values.title}
+          placeholder={titlePlaceholder}
+          maxLength={100}
+          onChange={(e) =>
+            onChange({ ...values, title: e.currentTarget.value })
+          }
+        />
+      </label>
+
+      <label className="space-y-1 text-sm" htmlFor={`${id}-opens`}>
+        <span>신청 시작 (한국 시간)</span>
+        <Input
+          id={`${id}-opens`}
+          type="datetime-local"
+          value={values.opensAt}
+          onChange={(e) =>
+            onChange({ ...values, opensAt: e.currentTarget.value })
+          }
+        />
+      </label>
+
+      <label className="space-y-1 text-sm" htmlFor={`${id}-closes`}>
+        <span>신청 종료 (한국 시간)</span>
+        <Input
+          id={`${id}-closes`}
+          type="datetime-local"
+          value={values.closesAt}
+          onChange={(e) =>
+            onChange({ ...values, closesAt: e.currentTarget.value })
+          }
+        />
+      </label>
+    </div>
+  );
+}
+
+/** Returns trimmed title and ISO period, or null when the input is invalid. */
+export function readRoundFields(
+  values: RoundFieldValues,
+  stored?: DonationRound,
+): { title: string; opensAt: string; closesAt: string } | null {
+  const title = values.title.trim();
+  const opensAt = seoulInputToIso(values.opensAt, stored?.opens_at);
+  const closesAt = seoulInputToIso(values.closesAt, stored?.closes_at);
+
+  if (!title || !opensAt || !closesAt || opensAt >= closesAt) return null;
+
+  return { title, opensAt, closesAt };
+}
 
 interface Props {
   round: DonationRound;
   onSaved: () => Promise<void>;
 }
 
-function toSeoulInput(value: string): string {
-  const time = new Date(value).getTime();
-
-  if (!Number.isFinite(time)) return "";
-
-  return new Date(time + 9 * 60 * 60 * 1000).toISOString().slice(0, 16);
-}
-
-function toIso(value: string): string | null {
-  if (!value) return null;
-
-  const date = new Date(`${value}:00+09:00`);
-
-  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
-}
-
 export function DonationRoundManagement({ round, onSaved }: Props) {
-  const [title, setTitle] = useState(round.title);
-  const [opensAt, setOpensAt] = useState(toSeoulInput(round.opens_at));
-  const [closesAt, setClosesAt] = useState(toSeoulInput(round.closes_at));
+  const [values, setValues] = useState<RoundFieldValues>({
+    title: round.title,
+    opensAt: toSeoulInput(round.opens_at),
+    closesAt: toSeoulInput(round.closes_at),
+  });
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
   async function save() {
-    const start = toIso(opensAt);
-    const end = toIso(closesAt);
+    const next = readRoundFields(values, round);
 
     setError("");
     setNotice("");
 
-    if (!title.trim() || !start || !end || start >= end) {
+    if (!next) {
       setError("회차 이름과 신청 기간을 확인해주세요.");
+      return;
+    }
+
+    const periodChanged =
+      Date.parse(next.opensAt) !== Date.parse(round.opens_at) ||
+      Date.parse(next.closesAt) !== Date.parse(round.closes_at);
+    const started = round.is_open || Date.parse(round.closes_at) <= Date.now();
+
+    if (
+      periodChanged &&
+      started &&
+      !window.confirm(
+        "이미 시작된 회차의 신청 기간을 바꾸면 학생 신청이 즉시 열리거나 닫힐 수 있습니다. 변경할까요?",
+      )
+    ) {
       return;
     }
 
     setBusy(true);
 
     try {
-      await updateDonationRound(round.id, title.trim(), start, end);
+      await updateDonationRound(
+        round.id,
+        next.title,
+        next.opensAt,
+        next.closesAt,
+      );
 
       await onSaved();
       setNotice("회차가 수정되었습니다.");
@@ -80,37 +165,7 @@ export function DonationRoundManagement({ round, onSaved }: Props) {
         </p>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <label className="space-y-1 text-sm" htmlFor="donation-field-108">
-          <span>회차 이름</span>
-          <TextField
-            value={title}
-            maxLength={100}
-            onChange={(e) => setTitle(e.currentTarget.value)}
-            id="donation-field-108"
-          />
-        </label>
-
-        <label className="space-y-1 text-sm" htmlFor="donation-field-117">
-          <span>신청 시작 (한국 시간)</span>
-          <Input
-            type="datetime-local"
-            value={opensAt}
-            onChange={(e) => setOpensAt(e.currentTarget.value)}
-            id="donation-field-117"
-          />
-        </label>
-
-        <label className="space-y-1 text-sm" htmlFor="donation-field-126">
-          <span>신청 종료 (한국 시간)</span>
-          <Input
-            type="datetime-local"
-            value={closesAt}
-            onChange={(e) => setClosesAt(e.currentTarget.value)}
-            id="donation-field-126"
-          />
-        </label>
-      </div>
+      <RoundFields values={values} onChange={setValues} />
 
       <div className="flex flex-wrap gap-2">
         <Button

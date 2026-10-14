@@ -142,6 +142,37 @@ select lives_ok(
   'applications open at the exact start time');
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000007001', true);
+select set_config('test.donation_limit',
+  public.donation_create_round('신청 한도', now() + interval '10 hours', now() + interval '11 hours')::text, true);
+select is(public.donation_import_items(current_setting('test.donation_limit')::bigint,
+  (select jsonb_agg(jsonb_build_object('category', '생활용품', 'name', '한도 물품 ' || n,
+    'sourceSheet', 'daily', 'sourceRow', n)) from generate_series(1, 51) as n)),
+  51, 'an administrator imports more items than one user may claim');
+select lives_ok(
+  $$select public.donation_update_round(current_setting('test.donation_future')::bigint, '새 회차', now() + interval '20 hours', now() + interval '21 hours')$$,
+  'a round with applications can be moved later');
+select lives_ok(
+  $$select public.donation_update_round(current_setting('test.donation_limit')::bigint, '신청 한도', now(), now() + interval '1 hour')$$,
+  'the limit round opens now');
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000100', true);
+select ok((select is_open from public.donation_list_rounds() where id = current_setting('test.donation_limit')::bigint),
+  'the round list reports the server-side open state');
+select is((select count(*)::integer from public.donation_list_items(current_setting('test.donation_limit')::bigint) as item,
+  lateral (select public.donation_claim_item(item.id)) as claimed
+  where item.name <> '한도 물품 51'),
+  50, 'a user can hold 50 active claims in one round');
+select throws_ok(
+  $$select public.donation_claim_item((select id from public.donation_list_items(current_setting('test.donation_limit')::bigint) where name = '한도 물품 51'))$$,
+  '22023', 'application limit reached', 'the 51st active claim in a round is rejected');
+select lives_ok(
+  $$select public.donation_cancel_claim((select id from public.donation_list_items(current_setting('test.donation_limit')::bigint) where name = '한도 물품 1'))$$,
+  'cancelling frees one claim slot');
+select lives_ok(
+  $$select public.donation_claim_item((select id from public.donation_list_items(current_setting('test.donation_limit')::bigint) where name = '한도 물품 51'))$$,
+  'a freed slot can be used again');
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000007001', true);
 select set_config('test.donation_invalid',
   public.donation_create_round('업로드 검증', now() + interval '5 hours', now() + interval '6 hours')::text, true);
 select throws_ok(

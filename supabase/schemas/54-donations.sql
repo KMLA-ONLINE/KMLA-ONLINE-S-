@@ -33,6 +33,15 @@ CREATE UNIQUE INDEX donation_claims_one_active_per_item
   ON public.donation_claims(item_id)
   WHERE cancelled_at IS NULL;
 
+CREATE INDEX donation_items_round_id_idx
+  ON public.donation_items(round_id);
+
+CREATE INDEX donation_claims_item_id_idx
+  ON public.donation_claims(item_id);
+
+CREATE INDEX donation_claims_profile_id_idx
+  ON public.donation_claims(profile_id);
+
 ALTER TABLE public.donation_rounds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.donation_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.donation_claims ENABLE ROW LEVEL SECURITY;
@@ -48,7 +57,8 @@ RETURNS TABLE(
   id bigint,
   title text,
   opens_at timestamptz,
-  closes_at timestamptz
+  closes_at timestamptz,
+  is_open boolean
 )
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER
@@ -68,7 +78,12 @@ BEGIN
   WHERE p.id = private.current_profile_id();
 
   RETURN QUERY
-  SELECT r.id, r.title, r.opens_at, r.closes_at
+  SELECT
+    r.id,
+    r.title,
+    r.opens_at,
+    r.closes_at,
+    now() >= r.opens_at AND now() < r.closes_at
   FROM public.donation_rounds AS r
   WHERE admin_access OR r.id = COALESCE(
     (
@@ -294,14 +309,15 @@ AS $$
 DECLARE
   caller_id bigint := private.current_profile_id();
   target_id bigint;
+  target_round_id bigint;
 BEGIN
   IF caller_id IS NULL THEN
     RAISE EXCEPTION 'accepted profile required'
       USING ERRCODE = '42501';
   END IF;
 
-  SELECT i.id
-  INTO target_id
+  SELECT i.id, i.round_id
+  INTO target_id, target_round_id
   FROM public.donation_items AS i
   JOIN public.donation_rounds AS r
     ON r.id = i.round_id
@@ -312,6 +328,24 @@ BEGIN
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'applications are closed'
+      USING ERRCODE = '22023';
+  END IF;
+
+  -- Serialize one applicant's claims so parallel requests cannot pass the limit.
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('donation-claims:' || caller_id, 0)
+  );
+
+  IF (
+    SELECT count(*)
+    FROM public.donation_claims AS c
+    JOIN public.donation_items AS i
+      ON i.id = c.item_id
+    WHERE c.profile_id = caller_id
+      AND c.cancelled_at IS NULL
+      AND i.round_id = target_round_id
+  ) >= 50 THEN
+    RAISE EXCEPTION 'application limit reached'
       USING ERRCODE = '22023';
   END IF;
 
