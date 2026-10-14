@@ -20,6 +20,7 @@ import {
 } from "~/features/donations/components/donation-item-list";
 import { formatDonationDate } from "~/features/donations/components/round-summary";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 
 function errorMessage(error: unknown) {
@@ -65,6 +66,26 @@ function fetchRound(id: number, isAdmin: boolean) {
   ]);
 }
 
+function LoadError({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      role="alert"
+      className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 p-3 text-sm text-destructive"
+    >
+      <span className="min-w-0 break-words">{message}</span>
+      <Button type="button" size="sm" variant="outline" onClick={onRetry}>
+        다시 시도
+      </Button>
+    </div>
+  );
+}
+
 export function DonationsScreen() {
   const { profile } = useAppShell();
   const isAdmin = profile.role === "admin";
@@ -78,11 +99,16 @@ export function DonationsScreen() {
   const [itemsLoading, setItemsLoading] = useState(false);
   const [busyItem, setBusyItem] = useState<number | null>(null);
   const [cancelTarget, setCancelTarget] = useState<DonationItem | null>(null);
-  const [error, setError] = useState("");
+  // Each error clears on that request's next success, so a transient
+  // failure does not linger after a later refresh works.
+  const [roundsError, setRoundsError] = useState("");
+  const [itemsError, setItemsError] = useState("");
+  const [itemsAttempt, setItemsAttempt] = useState(0);
 
   async function refreshRounds(selectId?: number) {
     const data = await loadDonationRounds();
     setRounds(data);
+    setRoundsError("");
     setCheckedAt(Date.now());
     setRoundId((previous) => pickRound(data, selectId ?? previous, isAdmin));
   }
@@ -95,10 +121,11 @@ export function DonationsScreen() {
         const data = await loadDonationRounds();
         if (!active) return;
         setRounds(data);
+        setRoundsError("");
         setCheckedAt(Date.now());
         setRoundId((previous) => pickRound(data, previous, isAdmin));
       } catch (e) {
-        if (active) setError(errorMessage(e));
+        if (active) setRoundsError(errorMessage(e));
       } finally {
         if (active) setLoading(false);
       }
@@ -127,6 +154,7 @@ export function DonationsScreen() {
     queueMicrotask(() => {
       if (!active) return;
       setItemsLoading(true);
+      setItemsError("");
       setItems([]);
       setClaims([]);
     });
@@ -138,7 +166,7 @@ export function DonationsScreen() {
         setClaims(nextClaims);
       })
       .catch((e: unknown) => {
-        if (active) setError(errorMessage(e));
+        if (active) setItemsError(errorMessage(e));
       })
       .finally(() => {
         if (active) setItemsLoading(false);
@@ -147,12 +175,13 @@ export function DonationsScreen() {
     return () => {
       active = false;
     };
-  }, [roundId, isAdmin, isOpen]);
+  }, [roundId, isAdmin, isOpen, itemsAttempt]);
 
   async function reload(id: number) {
     const [nextItems, nextClaims] = await fetchRound(id, isAdmin);
     setItems(nextItems);
     setClaims(nextClaims);
+    setItemsError("");
   }
 
   const mineCount = useMemo(
@@ -226,13 +255,22 @@ export function DonationsScreen() {
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4 md:py-5">
       <h1 className="hidden text-2xl font-semibold md:block">기부물품</h1>
 
-      {error && (
-        <div
-          role="alert"
-          className="rounded-lg border border-destructive/30 p-3 text-sm text-destructive"
-        >
-          {error}
-        </div>
+      {roundsError && (
+        <LoadError
+          message={roundsError}
+          onRetry={() =>
+            void refreshRounds().catch((e: unknown) =>
+              setRoundsError(errorMessage(e)),
+            )
+          }
+        />
+      )}
+
+      {itemsError && (
+        <LoadError
+          message={itemsError}
+          onRetry={() => setItemsAttempt((count) => count + 1)}
+        />
       )}
 
       {isAdmin ? (
@@ -245,7 +283,7 @@ export function DonationsScreen() {
             itemsLoading={itemsLoading}
             claims={claims}
             onSelectRound={(id) => {
-              setError("");
+              setItemsError("");
               setRoundId(id);
             }}
             onRoundsChanged={refreshRounds}
@@ -266,7 +304,8 @@ export function DonationsScreen() {
             />
           )}
         </>
-      ) : selected === null || !isOpen ? (
+      ) : roundsError && rounds.length === 0 ? null : selected === null ||
+        !isOpen ? (
         <div className="rounded-xl border border-dashed p-10 text-center font-medium">
           신청 기간이 아닙니다
         </div>

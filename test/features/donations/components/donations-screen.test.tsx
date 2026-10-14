@@ -67,7 +67,10 @@ beforeEach(() => {
   data.loadDonationClaims.mockResolvedValue([]);
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe("DonationsScreen for students", () => {
   it("shows only the closed message outside the application period", async () => {
@@ -182,6 +185,43 @@ describe("DonationsScreen for students", () => {
     expect(
       screen.getByText(/최대 50개까지 신청할 수 있습니다/),
     ).toBeInTheDocument();
+  });
+});
+
+describe("DonationsScreen load errors", () => {
+  it("clears a round error once a later refresh succeeds", async () => {
+    const polls: (() => void)[] = [];
+    vi.spyOn(window, "setInterval").mockImplementation(((
+      handler: () => void,
+    ) => {
+      polls.push(handler);
+      return 1;
+    }) as unknown as typeof window.setInterval);
+    data.loadDonationRounds
+      .mockRejectedValueOnce(new Error("네트워크 오류"))
+      .mockResolvedValue([openRound]);
+    data.loadDonationItems.mockResolvedValue([item({ id: 2 })]);
+    render(<DonationsScreen />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("네트워크 오류");
+
+    polls[0]();
+    expect(await screen.findByText("수학 교재")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("retries a failed item load and clears its error", async () => {
+    data.loadDonationItems
+      .mockRejectedValueOnce(new Error("목록 오류"))
+      .mockResolvedValue([item({ id: 2 })]);
+    const user = userEvent.setup();
+    render(<DonationsScreen />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("목록 오류");
+
+    await user.click(screen.getByRole("button", { name: "다시 시도" }));
+    expect(await screen.findByText("수학 교재")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
 
