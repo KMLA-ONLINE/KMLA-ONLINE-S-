@@ -22,6 +22,7 @@
 - Cite a `§` only when the spec is the sole justification for a constant or invariant, not as decoration in a doc-comment title.
 - Mark unbuilt specification sections with `> **상태**: 미구현` under the heading. Follow the documentation guide for inherited chapter status and partial implementation.
 - Register new project documents in the documentation guide. Keep current policy, future design, and historical implementation notes separate.
+- Do not create ADRs. Record why a surprising local decision was made in a code comment at that code; record cross-cutting decisions in the owning technical design or feature `AGENTS.md`.
 
 ## Code Boundaries
 
