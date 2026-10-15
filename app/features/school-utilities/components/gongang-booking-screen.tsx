@@ -30,6 +30,7 @@ import {
 } from "../model/gongang-slots";
 import { GongangBoard, type GongangBoardEntry } from "./gongang-board";
 import { GongangWeekStrip } from "./gongang-week-strip";
+import { UtilityModeTabs } from "./utility-mode-tabs";
 import { Button } from "~/shared/ui/button";
 import { TextField } from "~/shared/ui/text-field";
 import { Spinner } from "~/shared/ui/spinner";
@@ -187,21 +188,7 @@ export function GongangBookingScreen() {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 px-3 pb-6 sm:px-4 md:px-0">
-      <nav aria-label="공강 및 노래방" className="flex border-b">
-        <Link
-          to="/menu/gongang"
-          aria-current="page"
-          className="flex min-h-11 flex-1 items-center justify-center border-b-2 border-primary text-sm font-medium text-primary"
-        >
-          공강
-        </Link>
-        <Link
-          to="/menu/karaoke"
-          className="flex min-h-11 flex-1 items-center justify-center text-sm text-muted-foreground"
-        >
-          노래방
-        </Link>
-      </nav>
+      <UtilityModeTabs mode="gongang" />
       {canManage && (
         <div className="flex justify-end">
           <Button
