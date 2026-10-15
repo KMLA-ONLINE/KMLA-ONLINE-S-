@@ -135,15 +135,12 @@ describe("gongang booking flow", () => {
       screen.getByRole("button", { name: "08:00–09:00 10층 선택" }),
     ).toBeInTheDocument();
   });
-  it("drops a cell from the selection through its chip", async () => {
+  it("replaces the weekday choice instead of adding to it", async () => {
     const { user } = renderRoute(GongangBookingScreen);
     await user.click(
       await screen.findByRole("button", { name: "점심 지하 1층 선택" }),
     );
     await user.click(screen.getByRole("button", { name: "저녁 2층 선택" }));
-    await user.click(
-      screen.getByRole("button", { name: "지하 1층 점심 선택 해제" }),
-    );
     expect(
       screen.getByRole("button", { name: "점심 지하 1층 선택" }),
     ).toHaveAttribute("aria-pressed", "false");
@@ -157,6 +154,24 @@ describe("gongang booking flow", () => {
         expect.objectContaining({ slot: "dinner", location: "floor_2" }),
       ]),
     );
+  });
+  it("drops a weekend cell from the selection through its chip", async () => {
+    const { user } = renderRoute(GongangBookingScreen);
+    await screen.findByRole("table", { name: "공강 예약" });
+    await user.click(screen.getByRole("button", { name: "10월 17일 토요일" }));
+    await user.click(
+      screen.getByRole("button", { name: "08:00–09:00 지하 1층 선택" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "09:00–10:00 지하 1층 선택" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "지하 1층 08:00–09:00 선택 해제" }),
+    );
+    expect(screen.getByRole("button", { name: "1건 신청" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "08:00–09:00 지하 1층 선택" }),
+    ).toHaveAttribute("aria-pressed", "false");
   });
   it("does not expose an empty bookable board when loading fails", async () => {
     data.loadGongangSchedule.mockRejectedValueOnce(new Error("offline"));

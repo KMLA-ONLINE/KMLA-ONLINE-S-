@@ -22,6 +22,7 @@ import { gongangEntries, occursOn } from "../model/gongang-entries";
 import {
   GONGANG_FLOORS,
   gongangKey,
+  isGongangWeekend,
   parseGongangKey,
   toggleGongangKey,
 } from "../model/gongang-slots";
@@ -188,8 +189,15 @@ export function GongangBookingScreen() {
           disabled={busy || loadFailed}
           onSelect={(slot, location) => {
             if (past) return;
+            const key = gongangKey(slot, location);
+            // Students rarely need more than one weekday period, so a weekday tap replaces
+            // the choice. Weekend hours are booked in runs, so those stay multi-select.
             changeSelection((values) =>
-              toggleGongangKey(values, gongangKey(slot, location)),
+              isGongangWeekend(date)
+                ? toggleGongangKey(values, key)
+                : values.includes(key)
+                  ? []
+                  : [key],
             );
           }}
           onInspect={setInspected}
