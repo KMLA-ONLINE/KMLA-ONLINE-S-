@@ -47,8 +47,12 @@ begin
   get diagnostics affected = row_count;
   removed := removed + affected;
 
-  delete from public.gongang_schedule
-  where schedule_date < korea_today - 14;
+  -- 관리자 반복 선예약도 같다. 첫 날짜가 지나도 반복이 끝나기 전에는 학생 예약을 막고 있다.
+  delete from public.gongang_schedule as schedule
+  where case
+      when schedule.recurring then schedule.recurring_until
+      else schedule.schedule_date
+    end < korea_today - 14;
   get diagnostics affected = row_count;
   removed := removed + affected;
 

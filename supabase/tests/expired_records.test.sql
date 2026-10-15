@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(11);
+select plan(12);
 
 -- 이 파일이 보는 것은 하나다. 기간이 지난 행만 사라지고 경계 안의 행은 남는가. 보존 기간을
 -- 잘못 잡으면 아직 쓰는 데이터가 사라지므로 종류마다 "지워질 것"과 "남을 것"을 짝지어 넣는다.
@@ -76,10 +76,18 @@ from (
     '열린 반복', true, null::date
 ) as sample;
 
-insert into public.gongang_schedule (schedule_date, slot, location, reserved, detail)
+insert into public.gongang_schedule (
+  schedule_date, slot, location, reserved, detail, recurring, recurring_until
+)
 values
-  ((now() at time zone 'Asia/Seoul')::date - 20, 'study-1', 'floor_2', true, '오래된 일정'),
-  ((now() at time zone 'Asia/Seoul')::date - 3, 'study-1', 'floor_4', true, '최근 일정');
+  ((now() at time zone 'Asia/Seoul')::date - 20, 'study-1', 'floor_2', true, '오래된 일정',
+    false, null),
+  ((now() at time zone 'Asia/Seoul')::date - 3, 'study-1', 'floor_4', true, '최근 일정',
+    false, null),
+  ((now() at time zone 'Asia/Seoul')::date - 42, 'study-2', 'floor_2', true, '끝난 반복 일정',
+    true, (now() at time zone 'Asia/Seoul')::date - 21),
+  ((now() at time zone 'Asia/Seoul')::date - 42, 'study-2', 'floor_4', true, '열린 반복 일정',
+    true, null);
 
 alter table public.utility_reservations enable trigger utility_reservations_prepare;
 alter table public.gongang_schedule enable trigger gongang_schedule_prepare;
@@ -165,6 +173,14 @@ select ok(
     select 1 from public.gongang_schedule where detail = '오래된 일정'
   ),
   'gongang schedule rows follow the same two week window'
+);
+select ok(
+  exists (
+    select 1 from public.gongang_schedule where detail = '열린 반복 일정'
+  ) and not exists (
+    select 1 from public.gongang_schedule where detail = '끝난 반복 일정'
+  ),
+  'recurring gongang schedules are counted from the date they stop'
 );
 
 select is(
