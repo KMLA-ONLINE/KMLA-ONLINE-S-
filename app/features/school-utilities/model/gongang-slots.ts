@@ -45,8 +45,11 @@ export function gongangCellLabel(date: string, slot: string, location: string) {
   const time = gongangSlots(date).find((item) => item.id === slot);
   return `${floor?.label ?? location} ${time?.label ?? slot}`;
 }
-export function toggleGongangKey(values: string[], key: string) {
-  return values.includes(key)
-    ? values.filter((value) => value !== key)
-    : [...values, key];
+/**
+ * Weekday gongang is rarely needed for more than one period, so a weekday tap
+ * replaces the choice. Weekend hours are booked in runs and stay multi-select.
+ */
+export function toggleGongangKey(values: string[], key: string, date: string) {
+  if (values.includes(key)) return values.filter((value) => value !== key);
+  return isGongangWeekend(date) ? [...values, key] : [key];
 }

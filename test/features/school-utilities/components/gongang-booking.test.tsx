@@ -308,4 +308,21 @@ describe("gongang booking flow", () => {
       ]),
     );
   });
+  it("limits a manager to one weekday cell but several weekend hours", async () => {
+    viewer.role = "admin";
+    const { user } = renderRoute(GongangScheduleManager);
+    await user.click(
+      await screen.findByRole("button", { name: "점심 지하 1층 선택" }),
+    );
+    await user.click(screen.getByRole("button", { name: "저녁 2층 선택" }));
+    expect(screen.getByRole("button", { name: "1건 선예약" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "10월 24일 토요일" }));
+    await user.click(
+      screen.getByRole("button", { name: "08:00–09:00 지하 1층 선택" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "09:00–10:00 지하 1층 선택" }),
+    );
+    expect(screen.getByRole("button", { name: "2건 선예약" })).toBeVisible();
+  });
 });

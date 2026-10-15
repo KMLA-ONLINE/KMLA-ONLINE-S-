@@ -196,7 +196,7 @@ export function GongangScheduleManager() {
           onInspect={setInspected}
           onSelect={(slot, location) =>
             changeSelection((values) =>
-              toggleGongangKey(values, gongangKey(slot, location)),
+              toggleGongangKey(values, gongangKey(slot, location), date),
             )
           }
         />
@@ -311,7 +311,7 @@ export function GongangScheduleManager() {
                   onClick={() => {
                     setInspected(null);
                     changeSelection((values) =>
-                      toggleGongangKey(values, inspectedKey),
+                      toggleGongangKey(values, inspectedKey, date),
                     );
                   }}
                 >
