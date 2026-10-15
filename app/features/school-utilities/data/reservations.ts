@@ -136,18 +136,7 @@ export async function createUtilityReservation(
 ): Promise<UtilityReservation> {
   const { data, error } = await getSupabase()
     .from("utility_reservations")
-    .insert({
-      profile_id: input.profileId,
-      mode: input.mode,
-      reservation_date: input.reservationDate,
-      slot: input.slot,
-      location: input.location,
-      detail: input.detail,
-      recurring: input.recurring,
-
-      // DB trigger가 실제 로그인 프로필 값으로 덮어쓴다.
-      applicant_name: "",
-    })
+    .insert(toInsertRow(input))
     .select(SELECT_COLUMNS)
     .single();
 
@@ -171,4 +160,45 @@ export async function deleteUtilityReservation(
   if (error) {
     throw error;
   }
+}
+
+/**
+ * One insert statement makes a multi-slot booking all-or-nothing.
+ *
+ * The insert trigger takes one advisory lock per slot and location, and so does
+ * `save_gongang_schedule`. Both walk their rows in the same code-unit order
+ * (`COLLATE "C"` there) so that two overlapping batches cannot deadlock.
+ */
+export async function createUtilityReservations(
+  inputs: CreateUtilityReservationInput[],
+): Promise<void> {
+  const sorted = [...inputs].sort(
+    (a, b) =>
+      compareCodeUnits(a.slot, b.slot) ||
+      compareCodeUnits(a.location ?? "", b.location ?? "") ||
+      compareCodeUnits(a.reservationDate, b.reservationDate),
+  );
+  const { error } = await getSupabase()
+    .from("utility_reservations")
+    .insert(sorted.map(toInsertRow));
+  if (error) throw error;
+}
+
+function compareCodeUnits(a: string, b: string) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function toInsertRow(input: CreateUtilityReservationInput) {
+  return {
+    profile_id: input.profileId,
+    mode: input.mode,
+    reservation_date: input.reservationDate,
+    slot: input.slot,
+    location: input.location,
+    detail: input.detail,
+    recurring: input.recurring,
+
+    // DB trigger가 실제 로그인 프로필 값으로 덮어쓴다.
+    applicant_name: "",
+  };
 }

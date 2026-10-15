@@ -1,484 +1,337 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-
+import { toast } from "sonner";
 import { useAppShell } from "~/features/app-shell";
 import {
   canManageGongang,
-  loadGongangSchedule,
   saveGongangSchedule,
-} from "~/features/school-utilities/data/gongang-schedule";
-import {
-  loadUtilityReservations,
-  type UtilityReservation,
-} from "~/features/school-utilities/data/reservations";
+  type GongangScheduleEntry,
+} from "../data/gongang-schedule";
+import { useGongangWeek } from "../hooks/use-gongang-week";
+import { gongangScheduleSaveErrorMessage } from "../model/reservation-error";
 import {
   addCalendarDays,
-  calendarDate,
-  calendarWeekday,
   startOfKoreaWeek,
   useKoreaToday,
-} from "~/features/school-utilities/model/korea-date";
-import { cn } from "~/shared/lib/utils";
+} from "../model/korea-date";
+import { gongangEntries, occursOn } from "../model/gongang-entries";
+import {
+  GONGANG_FLOORS,
+  gongangCellLabel,
+  gongangKey,
+  parseGongangKey,
+  toggleGongangKey,
+} from "../model/gongang-slots";
+import { GongangBoard, type GongangBoardEntry } from "./gongang-board";
+import { GongangEntryDialog } from "./gongang-entry-dialog";
+import {
+  GongangLoadError,
+  GongangSelectionForm,
+} from "./gongang-selection-form";
+import { GongangWeekStrip } from "./gongang-week-strip";
 import { Button } from "~/shared/ui/button";
-import { TextField } from "~/shared/ui/text-field";
 import { Spinner } from "~/shared/ui/spinner";
-
-const FLOORS = [
-  { id: "floor_b1", label: "지하 1층" },
-  { id: "floor_2", label: "2층" },
-  { id: "floor_4", label: "4층" },
-  { id: "floor_10", label: "10층" },
-] as const;
-
-const NORMAL_SLOTS = [
-  { id: "study-1", label: "1자습" },
-  { id: "honjeong-end", label: "혼정끝" },
-  { id: "study-2", label: "2자습" },
-] as const;
-
-const HOURLY_SLOTS = Array.from({ length: 11 }, (_, position) => {
-  const start = position + 8;
-
-  return {
-    id: `hour-${start}`,
-    label: `${String(start).padStart(2, "0")}:00–${String(start + 1).padStart(
-      2,
-      "0",
-    )}:00`,
-  };
-});
-
-interface ScheduleDraft {
-  reserved: boolean;
-  detail: string;
-}
-
-function scheduleKey(date: string, slot: string, location: string) {
-  return `${date}:${slot}:${location}`;
-}
-
-const weekdayFormatter = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "UTC",
-  weekday: "short",
-});
-
-const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "UTC",
-  month: "numeric",
-  day: "numeric",
-});
+import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 
 export function GongangScheduleManager() {
   const { profile } = useAppShell();
   const today = useKoreaToday();
-
-  const nextWeekStart = useMemo(
-    () => addCalendarDays(startOfKoreaWeek(today), 7),
-    [today],
-  );
-
+  const week = addCalendarDays(startOfKoreaWeek(today), 7);
   const dates = useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, position) =>
-        addCalendarDays(nextWeekStart, position),
-      ),
-    [nextWeekStart],
+    () => Array.from({ length: 7 }, (_, i) => addCalendarDays(week, i)),
+    [week],
   );
-
-  const nextWeekEnd = dates[6] ?? nextWeekStart;
-
-  const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [selection, setSelection] = useState(() => ({
-    weekStart: nextWeekStart,
-    day: 0,
-  }));
-  const selectedDay = selection.weekStart === nextWeekStart ? selection.day : 0;
-  const setSelectedDay = (day: number) =>
-    setSelection({ weekStart: nextWeekStart, day });
-  const [selectedSlot, setSelectedSlot] = useState("study-1");
-  const [schedule, setSchedule] = useState<Record<string, ScheduleDraft>>({});
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [recurringConflicts, setRecurringConflicts] = useState<
-    Record<string, UtilityReservation>
-  >({});
-  const [refreshVersion, setRefreshVersion] = useState(0);
-
-  const selectedDate = dates[selectedDay] ?? nextWeekStart;
-  const selectedWeekday = calendarWeekday(selectedDate);
-  const weekend = selectedWeekday === 0 || selectedWeekday === 6;
-
-  const slots = weekend
-    ? [...HOURLY_SLOTS, ...NORMAL_SLOTS]
-    : [...NORMAL_SLOTS];
-
-  const activeSlot = slots.some((slot) => slot.id === selectedSlot)
-    ? selectedSlot
-    : (slots[0]?.id ?? "");
+  const [chosen, setChosen] = useState(week);
+  const date = dates.includes(chosen) ? chosen : week;
+  const [allowed, setAllowed] = useState<boolean | null>(
+    profile.role === "admin" ? true : null,
+  );
+  const [permissionFailed, setPermissionFailed] = useState(false);
+  const [permissionAttempt, setPermissionAttempt] = useState(0);
+  const [floorId, setFloorId] = useState<string>(GONGANG_FLOORS[0].id);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [detail, setDetail] = useState("");
+  const [recurring, setRecurring] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [inspected, setInspected] = useState<GongangBoardEntry | null>(null);
+  const [pending, setPending] = useState<GongangScheduleEntry[] | null>(null);
+  const { reservations, schedules, loading, loadFailed, refresh } =
+    useGongangWeek(week, dates[6], allowed === true);
 
   useEffect(() => {
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const canManage = await canManageGongang(profile.id);
-        if (cancelled) return;
-
-        setAllowed(canManage);
-        if (!canManage) return;
-
-        const [entries, reservations] = await Promise.all([
-          loadGongangSchedule(nextWeekStart, nextWeekEnd),
-          loadUtilityReservations("gongang", nextWeekStart, nextWeekEnd),
-        ]);
-        if (cancelled) return;
-
-        const next: Record<string, ScheduleDraft> = {};
-
-        for (const entry of entries) {
-          next[scheduleKey(entry.scheduleDate, entry.slot, entry.location)] = {
-            reserved: entry.reserved,
-            detail: entry.detail ?? "",
-          };
-        }
-
-        setSchedule(next);
-
-        const conflicts: Record<string, UtilityReservation> = {};
-        for (const reservation of reservations) {
-          if (!reservation.recurring || !reservation.location) continue;
-
-          const occurrenceDate = dates.find(
-            (date) =>
-              calendarWeekday(date) ===
-                calendarWeekday(reservation.reservationDate) &&
-              date >= reservation.reservationDate &&
-              (reservation.recurringUntil === null ||
-                date < reservation.recurringUntil),
-          );
-
-          if (!occurrenceDate) continue;
-
-          conflicts[
-            scheduleKey(occurrenceDate, reservation.slot, reservation.location)
-          ] = reservation;
-        }
-        setRecurringConflicts(conflicts);
-        setLoadError(null);
-      } catch (caughtError) {
-        console.error("Failed to load gongang schedule", caughtError);
-        if (!cancelled) {
-          setLoadError("공강 선예약 정보를 불러오지 못했습니다.");
-        }
-      }
-    })();
-
+    if (profile.role === "admin") return;
+    let active = true;
+    void canManageGongang(profile.id)
+      .then((value) => {
+        if (active) setAllowed(value);
+      })
+      .catch(() => {
+        if (active) setPermissionFailed(true);
+      });
     return () => {
-      cancelled = true;
+      active = false;
     };
-  }, [profile.id, nextWeekStart, nextWeekEnd, dates, refreshVersion]);
+  }, [profile.id, profile.role, permissionAttempt]);
 
-  useEffect(() => {
-    const refresh = () => setRefreshVersion((current) => current + 1);
-    window.addEventListener("focus", refresh);
-    return () => window.removeEventListener("focus", refresh);
-  }, []);
+  const entries = gongangEntries(date, reservations, schedules, profile.id);
+  const conflicts = reservations.filter(
+    (row) =>
+      row.recurring &&
+      occursOn(row, date) &&
+      row.location &&
+      selected.includes(gongangKey(row.slot, row.location)),
+  );
+  const warnings = new Map(
+    conflicts.map((row) => [
+      gongangKey(row.slot, row.location ?? ""),
+      `${row.applicantName} 장기 예약 종료`,
+    ]),
+  );
+  const inspectedKey = inspected
+    ? gongangKey(inspected.slot, inspected.location)
+    : "";
+  const inspectedReservation =
+    inspected && inspected.state !== "manager"
+      ? reservations.find(
+          (row) =>
+            row.slot === inspected.slot &&
+            row.location === inspected.location &&
+            occursOn(row, date),
+        )
+      : undefined;
 
-  if (allowed === null) {
-    if (loadError) {
-      return (
-        <div className="mx-auto w-full max-w-2xl px-4 py-10">
-          <p role="alert" className="text-sm text-destructive">
-            {loadError}
-          </p>
-          <Button
-            type="button"
-            className="mt-4"
-            onClick={() => setRefreshVersion((current) => current + 1)}
-          >
-            다시 시도
-          </Button>
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex justify-center py-20">
-        <Spinner aria-label="공강 설정 불러오는 중" />
-      </div>
-    );
+  function changeSelection(next: (values: string[]) => string[]) {
+    setSelected(next);
+    setError("");
   }
 
-  if (!allowed) {
-    return (
-      <div className="mx-auto w-full max-w-2xl px-4 py-10">
-        <h1 className="text-xl font-semibold">접근 권한이 없습니다</h1>
+  async function save(next: GongangScheduleEntry[]) {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await saveGongangSchedule(next);
+      setSelected([]);
+      setDetail("");
+      setRecurring(false);
+      setInspected(null);
+      toast.success("선예약을 저장했습니다.");
+    } catch (e) {
+      setError(gongangScheduleSaveErrorMessage(e));
+    } finally {
+      setBusy(false);
+      setPending(null);
+      refresh();
+    }
+  }
+  function submit() {
+    if (!selected.length || !detail.trim() || busy) return;
+    const next = selected.map((key) => ({
+      ...parseGongangKey(key),
+      scheduleDate: date,
+      reserved: true,
+      detail: detail.trim(),
+      recurring,
+      recurringUntil: null,
+    }));
+    if (conflicts.length > 0) setPending(next);
+    else void save(next);
+  }
 
-        <Link
-          to="/menu/gongang"
-          className="mt-4 inline-block text-sm font-medium text-primary"
-        >
+  if (allowed === false)
+    return (
+      <div className="p-4">
+        <p>접근 권한이 없습니다.</p>
+        <Link to="/menu/gongang" className="text-primary">
           공강으로 돌아가기
         </Link>
       </div>
     );
-  }
-
-  const saveCurrentSlot = async () => {
-    const selectedDateKey = selectedDate;
-
-    const entries = FLOORS.map((floor) => {
-      const key = scheduleKey(selectedDateKey, activeSlot, floor.id);
-
-      const draft = schedule[key] ?? {
-        reserved: false,
-        detail: "",
-      };
-
-      return {
-        scheduleDate: selectedDateKey,
-        slot: activeSlot,
-        location: floor.id,
-        reserved: draft.reserved,
-        detail: draft.reserved ? draft.detail.trim() : null,
-      };
-    });
-
-    const missingDetail = entries.some(
-      (entry) => entry.reserved && !entry.detail?.trim(),
-    );
-
-    if (missingDetail) {
-      setMessage(null);
-      setError("선예약할 공강의 목적을 입력해주세요.");
-      return;
-    }
-
-    const terminatingReservations = entries
-      .filter((entry) => entry.reserved)
-      .map(
-        (entry) =>
-          recurringConflicts[
-            scheduleKey(entry.scheduleDate, entry.slot, entry.location)
-          ],
-      )
-      .filter((reservation): reservation is UtilityReservation =>
-        Boolean(reservation),
-      );
-
-    if (
-      terminatingReservations.length > 0 &&
-      !window.confirm(
-        `${terminatingReservations
-          .map((reservation) => reservation.applicantName)
-          .join(
-            ", ",
-          )}의 장기 예약 ${terminatingReservations.length}건이 이 날짜부터 종료됩니다. 계속할까요?`,
-      )
-    ) {
-      return;
-    }
-
-    setSaving(true);
-    setMessage(null);
-    setError(null);
-
-    try {
-      await saveGongangSchedule(entries);
-      setRecurringConflicts((current) => {
-        const next = { ...current };
-        for (const entry of entries) {
-          if (entry.reserved) {
-            delete next[
-              scheduleKey(entry.scheduleDate, entry.slot, entry.location)
-            ];
-          }
-        }
-        return next;
-      });
-      setMessage("저장되었습니다.");
-    } catch (saveError) {
-      console.error("Failed to save gongang schedule", saveError);
-      setError("저장 중 오류가 발생했습니다.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-10 md:px-0">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">다음 주 공강 선예약</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            미리 사용할 공강과 목적을 입력합니다.
-          </p>
-        </div>
-
-        <Link to="/menu/gongang" className="text-sm font-medium text-primary">
-          돌아가기
+    <div className="mx-auto w-full max-w-2xl space-y-4 px-3 pb-6 sm:px-4 md:px-0">
+      <div className="flex min-h-12 items-center justify-between gap-2">
+        <h1 className="text-lg font-semibold">다음 주 선예약</h1>
+        <Link
+          to="/menu/gongang"
+          className="inline-flex min-h-11 items-center text-sm text-primary"
+        >
+          공강으로 돌아가기
         </Link>
       </div>
-
-      <div className="mt-5 grid grid-cols-7 gap-1">
-        {dates.map((date, position) => (
-          <button
-            key={date}
-            type="button"
-            onClick={() => {
-              setSelectedDay(position);
-              setSelectedSlot("study-1");
-              setMessage(null);
-              setError(null);
-            }}
-            className={cn(
-              "rounded-lg px-1 py-2 text-center text-sm",
-              selectedDay === position
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted",
-            )}
-          >
-            <span className="block text-xs">
-              {weekdayFormatter.format(calendarDate(date))}
-            </span>
-            <span className="mt-1 block">
-              {dateFormatter.format(calendarDate(date))}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-        {slots.map((slot) => (
-          <button
-            key={slot.id}
-            type="button"
-            onClick={() => {
-              setSelectedSlot(slot.id);
-              setMessage(null);
-              setError(null);
-            }}
-            className={cn(
-              "shrink-0 rounded-lg border px-3 py-2 text-sm font-medium",
-              activeSlot === slot.id
-                ? "border-primary bg-primary text-primary-foreground"
-                : "bg-background",
-            )}
-          >
-            {slot.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-4 divide-y overflow-hidden rounded-xl border">
-        {FLOORS.map((floor) => {
-          const key = scheduleKey(selectedDate, activeSlot, floor.id);
-
-          const draft = schedule[key] ?? {
-            reserved: false,
-            detail: "",
-          };
-
-          return (
-            <div key={floor.id} className="px-4 py-3">
-              <label className="flex min-h-9 cursor-pointer items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={draft.reserved}
-                  onChange={(event) => {
-                    setSchedule((current) => ({
-                      ...current,
-                      [key]: {
-                        reserved: event.target.checked,
-                        detail: current[key]?.detail ?? "",
-                      },
-                    }));
-
-                    setMessage(null);
-                    setError(null);
-                  }}
-                  className="size-4"
-                />
-
-                <span className="text-sm font-medium">{floor.label}</span>
-
-                <span className="ml-auto text-sm text-muted-foreground">
-                  {draft.reserved ? "선예약" : "사용 가능"}
-                </span>
-              </label>
-
-              {draft.reserved ? (
-                <TextField
-                  value={draft.detail}
-                  placeholder="사용 목적"
-                  maxLength={200}
-                  className="mt-2"
-                  onChange={(event) => {
-                    setSchedule((current) => ({
-                      ...current,
-                      [key]: {
-                        reserved: true,
-                        detail: event.target.value,
-                      },
-                    }));
-
-                    setMessage(null);
-                    setError(null);
-                  }}
-                />
-              ) : null}
-
-              {recurringConflicts[key] ? (
-                <p className="mt-2 text-xs text-destructive">
-                  저장 시 {recurringConflicts[key].applicantName}의 장기 예약이
-                  종료됩니다.
-                </p>
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
-
-      {loadError ? (
-        <div className="mt-3 flex items-center justify-between gap-3">
-          <p role="alert" className="text-sm text-destructive">
-            {loadError}
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setRefreshVersion((current) => current + 1)}
-          >
-            다시 시도
-          </Button>
+      <GongangWeekStrip
+        dates={dates}
+        selected={date}
+        disabled={busy}
+        onSelect={(next) => {
+          setChosen(next);
+          setSelected([]);
+          setError("");
+          setInspected(null);
+        }}
+      />
+      {(loadFailed || permissionFailed) && (
+        <GongangLoadError
+          message="선예약을 불러오지 못했습니다. 다시 시도해주세요."
+          onRetry={() => {
+            if (!permissionFailed) return refresh();
+            setPermissionFailed(false);
+            setPermissionAttempt((value) => value + 1);
+          }}
+        />
+      )}
+      {(loading || allowed === null) && !permissionFailed && (
+        <div className="flex justify-center py-16">
+          <Spinner aria-label="예약 불러오는 중" />
         </div>
-      ) : null}
-
-      {error ? (
-        <p role="alert" className="mt-3 text-sm text-destructive">
+      )}
+      <div hidden={loading || allowed !== true}>
+        <GongangBoard
+          date={date}
+          floorId={floorId}
+          onFloorChange={setFloorId}
+          entries={entries}
+          selected={selected}
+          disabled={busy || loadFailed}
+          onInspect={setInspected}
+          onSelect={(slot, location) =>
+            changeSelection((values) =>
+              toggleGongangKey(values, gongangKey(slot, location), date),
+            )
+          }
+        />
+      </div>
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
-      ) : null}
-
-      {message ? (
-        <p role="status" className="mt-3 text-sm text-muted-foreground">
-          {message}
-        </p>
-      ) : null}
-
-      <Button
-        type="button"
-        className="mt-4 w-full"
-        disabled={saving}
-        onClick={() => {
-          void saveCurrentSlot();
-        }}
-      >
-        {saving ? "저장 중..." : "선예약 저장"}
-      </Button>
+      )}
+      {selected.length > 0 && (
+        <GongangSelectionForm
+          date={date}
+          selected={selected}
+          warnings={warnings}
+          notice={
+            conflicts.length > 0 && (
+              <p className="text-xs text-destructive">
+                표시된 칸의 장기 예약은 이 날짜부터 종료됩니다.
+              </p>
+            )
+          }
+          detail={detail}
+          recurring={recurring}
+          busy={busy}
+          submitLabel={`${selected.length}건 선예약`}
+          onRemove={(key) =>
+            changeSelection((values) => values.filter((value) => value !== key))
+          }
+          onClear={() => changeSelection(() => [])}
+          onDetailChange={setDetail}
+          onRecurringChange={setRecurring}
+          onSubmit={submit}
+        />
+      )}
+      {pending && (
+        <ConfirmDialog
+          title={
+            pending.some((entry) => entry.reserved)
+              ? "장기 예약 종료"
+              : "선예약 취소"
+          }
+          description={
+            pending.some((entry) => entry.reserved) ? (
+              <>
+                {conflicts
+                  .map(
+                    (row) =>
+                      `${row.applicantName} · ${gongangCellLabel(date, row.slot, row.location ?? "")}`,
+                  )
+                  .join(", ")}
+                <br />이 날짜부터 해당 장기 예약이 종료되며 자동으로 복구되지
+                않습니다.
+              </>
+            ) : (
+              "선택한 날짜부터 선예약을 해제합니다. 과거 기록은 유지됩니다."
+            )
+          }
+          confirmLabel={
+            pending.some((entry) => entry.reserved)
+              ? "종료하고 선예약"
+              : "선예약 취소"
+          }
+          destructive
+          pending={busy}
+          onCancel={() => setPending(null)}
+          onConfirm={() => void save(pending)}
+        />
+      )}
+      {inspected && (
+        <GongangEntryDialog
+          date={date}
+          entry={inspected}
+          onClose={() => setInspected(null)}
+          description={
+            inspectedReservation ? (
+              <Link
+                to={`/profile/${inspectedReservation.applicantPubId}`}
+                className="text-primary"
+              >
+                {inspectedReservation.applicantName}
+              </Link>
+            ) : (
+              inspected.label
+            )
+          }
+          actions={
+            inspected.state === "manager" ? (
+              <Button
+                variant="destructive"
+                disabled={busy}
+                onClick={() => {
+                  setInspected(null);
+                  setPending([
+                    {
+                      scheduleDate: date,
+                      slot: inspected.slot,
+                      location: inspected.location,
+                      reserved: false,
+                      detail: null,
+                      recurring: false,
+                      recurringUntil: null,
+                    },
+                  ]);
+                }}
+              >
+                {inspected.recurring ? "이 날짜부터 종료" : "선예약 취소"}
+              </Button>
+            ) : (
+              inspected.recurring && (
+                <Button
+                  disabled={busy}
+                  onClick={() => {
+                    setInspected(null);
+                    changeSelection((values) =>
+                      toggleGongangKey(values, inspectedKey, date),
+                    );
+                  }}
+                >
+                  {selected.includes(inspectedKey)
+                    ? "선택 해제"
+                    : "선예약으로 대체"}
+                </Button>
+              )
+            )
+          }
+        >
+          {inspected.state !== "manager" && (
+            <p className="text-sm text-muted-foreground">
+              {inspected.recurring
+                ? "선예약으로 대체하면 이 날짜부터 학생의 장기 예약이 끝납니다."
+                : "단발 예약이 있는 칸은 선예약할 수 없습니다."}
+            </p>
+          )}
+        </GongangEntryDialog>
+      )}
     </div>
   );
 }

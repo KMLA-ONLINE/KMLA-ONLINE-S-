@@ -69,3 +69,27 @@ export function reservationCancelErrorMessage(error: unknown): string {
 
   return "취소하지 못했습니다. 잠시 후 다시 시도해주세요.";
 }
+
+/**
+ * 선예약 저장 실패를 옮긴다. `save_gongang_schedule`과 `prepare_gongang_schedule` trigger가
+ * 던지는 값이다. 23505는 겹친 상대가 다른 선예약인지 학생 예약인지 문구로 가른다.
+ */
+export function gongangScheduleSaveErrorMessage(error: unknown): string {
+  if (isNetworkError(error)) return NETWORK_MESSAGE;
+
+  const { code, text } = readError(error);
+
+  if (code === "42501") return "선예약을 관리할 권한이 없습니다.";
+  if (code === "22023" && text.includes("only next week")) {
+    return "다음 주 일정만 선예약할 수 있습니다. 주가 바뀌었다면 화면을 새로 고쳐주세요.";
+  }
+  if (code === "23505") {
+    if (text.includes("manager schedule is already occupied")) {
+      return "다른 반복 선예약과 겹칩니다. 기존 선예약을 먼저 종료해주세요.";
+    }
+    return "학생의 단발 예약이 있는 칸은 선예약할 수 없습니다.";
+  }
+  if (code === "23514") return "입력한 내용을 다시 확인해주세요.";
+
+  return "저장하지 못했습니다. 잠시 후 다시 시도해주세요.";
+}
