@@ -2819,6 +2819,19 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      list_post_previews: {
+        Args: { p_post_ids: string[] }
+        Returns: {
+          author_avatar_path: string
+          author_label: string
+          body: string
+          group_name: string
+          image_path: string
+          kind: Database["public"]["Enums"]["post_kind"]
+          post_id: string
+          title: string
+        }[]
+      }
       list_post_reactors: {
         Args: { p_post_id: string }
         Returns: {

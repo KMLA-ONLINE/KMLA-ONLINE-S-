@@ -265,3 +265,18 @@ export interface PostCommentPage {
   /** 이보다 더 최신 댓글이 남아 있을 때의 커서. 없으면 스레드의 끝까지 불러온 것이다. */
   nextCursor: CommentCursor | null;
 }
+
+/** 메시지 안 게시물 카드에 그리는 요약(기능 명세 §13.21). 작성자는 게시물에 보이는 이름만 담는다. */
+export interface PostPreview {
+  postId: string;
+  kind: Database["public"]["Enums"]["post_kind"];
+  /** 개인 게시물은 null. */
+  groupName: string | null;
+  title: string | null;
+  /** 앞부분만 온 Markdown 원문. */
+  body: string;
+  /** 계정이 사라진 실명 작성자는 null. */
+  authorLabel: string | null;
+  authorAvatarUrl: string | null;
+  imageUrl: string | null;
+}

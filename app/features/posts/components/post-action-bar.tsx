@@ -1,8 +1,8 @@
 import { MessageCircleIcon, SendIcon } from "lucide-react";
-import { useEffect, useEffectEvent } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { Link } from "react-router";
-import { toast } from "sonner";
 
+import { SharePostDialog } from "~/features/messaging/components/share-post-dialog";
 import { PostReactionButton } from "~/features/posts/components/reaction/post-reaction-button";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { ReactionListDialog } from "~/features/posts/components/reaction/reaction-list-dialog";
@@ -14,9 +14,6 @@ import { cn } from "~/shared/lib/utils";
 
 const ACTION_CLASS =
   "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted hover:text-foreground";
-
-/** 운영체제 공유 시트를 여는 기기. 폰·태블릿은 메신저로 바로 이어지고, 데스크톱은 링크 복사가 더 빠르다. */
-const NATIVE_SHARE_QUERY = "(hover: none) and (pointer: coarse)";
 
 /**
  * 게시물 하단 액션 바(반응·댓글·공유 + 반응 요약). 반응 상태는 여기서 들고 route를 다시 읽지 않고 제자리에서 갱신한다.
@@ -35,7 +32,7 @@ export function PostActionBar({
 }: {
   postId: string;
   reaction: ReactionSummary;
-  /** 게시물 상세의 앱 내부 경로. 절대 URL은 공유하는 순간에 만든다 — `window`를 render 중에 읽으면 build-time render가 깨진다. */
+  /** 게시물 상세의 앱 내부 경로. 절대 URL은 보내는 순간에 만든다 — `window`를 render 중에 읽으면 build-time render가 깨진다. */
   sharePath: string;
   shareTitle: string;
   commentCount: number;
@@ -57,21 +54,10 @@ export function PostActionBar({
     if (reactorList.open) loadReactors();
   }, [reactorList.open]);
 
-  const share = async () => {
-    try {
-      const url = new URL(sharePath, window.location.origin).toString();
-      if (navigator.share && window.matchMedia(NATIVE_SHARE_QUERY).matches) {
-        await navigator.share({ title: shareTitle, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      toast.success("링크를 복사했습니다.");
-    } catch (error) {
-      // 공유 시트를 사용자가 닫은 것은 실패가 아니다.
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      toast.error("링크를 공유하지 못했습니다.");
-    }
-  };
+  const [sharing, setSharing] = useState(false);
+  // 보내기 시트는 처음 열 때 만든다. 피드의 카드마다 미리 두면 닫힌 시트의 대화 목록 구독이 카드 수만큼
+  // 쌓인다. 한 번 연 뒤에는 남겨 닫히는 애니메이션을 지킨다.
+  const [shareMounted, setShareMounted] = useState(false);
 
   const commentLabel = `댓글 ${engagement.comment_count}개`;
   // 0은 숫자로 적지 않는다. 아직 아무도 남기지 않은 자리에 0이 붙으면 눈에 걸린다.
@@ -119,7 +105,10 @@ export function PostActionBar({
           type="button"
           aria-label="공유"
           className={ACTION_CLASS}
-          onClick={() => void share()}
+          onClick={() => {
+            setShareMounted(true);
+            setSharing(true);
+          }}
         >
           <SendIcon className="size-5" aria-hidden="true" />
         </button>
@@ -138,6 +127,14 @@ export function PostActionBar({
         </button>
       ) : null}
 
+      {shareMounted ? (
+        <SharePostDialog
+          open={sharing}
+          onOpenChange={setSharing}
+          path={sharePath}
+          title={shareTitle}
+        />
+      ) : null}
       <ReactionListDialog
         open={reactorList.open}
         onOpenChange={(open) => {

@@ -100,6 +100,55 @@ export async function openDirectConversation(
   return data;
 }
 
+/** 게시물 하나를 한 번에 보낼 수 있는 대화 수(기능 명세 §8.13). 대상마다 RPC가 나란히 나간다. */
+export const SEND_TARGET_LIMIT = 10;
+
+export type SendTarget =
+  | { type: "conversation"; conversationId: string }
+  /** 아직 1:1 대화가 없을 수 있는 사람. 보내기 직전에 대화를 연다. */
+  | { type: "person"; profileId: string };
+
+/**
+ * 같은 본문을 여러 대화에 한 번씩 보낸다(기능 명세 §8.13). 사람은 1:1 대화로 바꾼 뒤 대화 ID로 겹침을
+ * 없앤다 — 최근 대화와 검색에서 같은 사람을 함께 골라도 두 번 가지 않는다. 한 대상의 실패가 나머지를
+ * 막지 않는다.
+ */
+export async function sendToConversations(
+  targets: readonly SendTarget[],
+  body: string,
+): Promise<{ sent: number; failed: number }> {
+  if (targets.length > SEND_TARGET_LIMIT) {
+    throw new Error(`Too many targets: ${targets.length}`);
+  }
+  const resolved = await Promise.allSettled(
+    targets.map((target) =>
+      target.type === "person"
+        ? openDirectConversation(target.profileId)
+        : Promise.resolve(target.conversationId),
+    ),
+  );
+  const conversationIds = new Set<string>();
+  let failed = 0;
+  for (const result of resolved) {
+    if (result.status === "fulfilled") conversationIds.add(result.value);
+    else failed += 1;
+  }
+
+  const sent = await Promise.allSettled(
+    [...conversationIds].map(async (conversationId) => {
+      const { data, error } = await getSupabase().rpc("send_message", {
+        p_conversation_id: conversationId,
+        p_message_id: crypto.randomUUID(),
+        p_body: body,
+      });
+      if (error) throw error;
+      if (!data?.[0]) throw new Error("Message was not saved");
+    }),
+  );
+  const sentCount = sent.filter(({ status }) => status === "fulfilled").length;
+  return { sent: sentCount, failed: failed + sent.length - sentCount };
+}
+
 /** 그룹 대화를 만든다. 만든 사람은 자동으로 멤버가 된다. */
 export async function createGroupConversation(
   name: string,

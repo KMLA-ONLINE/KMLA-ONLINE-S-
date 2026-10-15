@@ -14,6 +14,7 @@ import type {
   PostComment,
   PostCommentPage,
   PostCursor,
+  PostPreview,
   PostReactor,
   ProfilePost,
   ProfilePostCursor,
@@ -418,4 +419,63 @@ export async function searchGroupMentionCandidates(
     cohort: row.cohort ?? null,
     avatar_url: row.avatar_path ? (urls.get(row.avatar_path) ?? null) : null,
   }));
+}
+
+/** 한 번에 묻는 게시물 수. 서버 `list_post_previews`가 같은 상한을 강제한다. */
+const POST_PREVIEW_BATCH_SIZE = 100;
+
+/**
+ * 메시지 안 게시물 카드(기능 명세 §13.21). 읽을 수 없는 게시물은 결과에서 빠지므로 `null`로 채워
+ * 돌려준다. RPC 실패는 그대로 던져 카드가 `null`(볼 수 없음)이 아닌 오류로 그리게 한다. 사진과
+ * 아바타는 버킷이 달라 나란히 서명한다.
+ */
+export async function listPostPreviews(
+  postIds: readonly string[],
+): Promise<Map<string, PostPreview | null>> {
+  const rows = (
+    await Promise.all(
+      chunk(postIds, POST_PREVIEW_BATCH_SIZE).map(async (ids) => {
+        const { data, error } = await getSupabase().rpc("list_post_previews", {
+          p_post_ids: ids,
+        });
+        if (error) throw error;
+        return data ?? [];
+      }),
+    )
+  ).flat();
+  // 서명 실패는 사진만 잃는다. 카드 글자까지 버리면 읽을 수 있는 게시물이 실패 카드로 바뀐다.
+  const [imageUrls, avatarUrls] = await Promise.all([
+    createPostAttachmentUrls(rows.map((row) => row.image_path)).catch(
+      () => new Map<string, string>(),
+    ),
+    createProfileMediaUrls(rows.map((row) => row.author_avatar_path)).catch(
+      () => new Map<string, string>(),
+    ),
+  ]);
+  const previews = new Map<string, PostPreview | null>(
+    postIds.map((id) => [id, null]),
+  );
+  for (const row of rows) {
+    previews.set(row.post_id, {
+      postId: row.post_id,
+      kind: row.kind,
+      groupName: row.group_name,
+      title: row.title,
+      body: row.body,
+      authorLabel: row.author_label,
+      authorAvatarUrl: row.author_avatar_path
+        ? (avatarUrls.get(row.author_avatar_path) ?? null)
+        : null,
+      imageUrl: row.image_path ? (imageUrls.get(row.image_path) ?? null) : null,
+    });
+  }
+  return previews;
+}
+
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let start = 0; start < items.length; start += size) {
+    chunks.push(items.slice(start, start + size));
+  }
+  return chunks;
 }

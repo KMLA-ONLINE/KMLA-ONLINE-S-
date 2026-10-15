@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { sendMessage } from "~/features/messaging/data/mutations";
+import {
+  SEND_TARGET_LIMIT,
+  sendMessage,
+  sendToConversations,
+} from "~/features/messaging/data/mutations";
 import type { ConversationMessage } from "~/features/messaging/model/types";
 
 const rpc = vi.fn();
@@ -57,5 +61,87 @@ describe("sendMessage", () => {
     await expect(
       sendMessage({ conversationId: "c", id: draft.id, body: "안녕" }, draft),
     ).rejects.toThrow();
+  });
+});
+
+describe("sendToConversations", () => {
+  const LINK = "https://kmla.online/groups/band/posts/1";
+
+  function rpcCalls(name: string) {
+    return (rpc.mock.calls as [string, Record<string, unknown>][]).filter(
+      ([called]) => called === name,
+    );
+  }
+
+  it("대화가 없는 사람은 1:1 대화를 열고, 같은 대화로 겹친 대상에는 한 번만 보낸다", async () => {
+    rpc.mockImplementation((name: string, args: Record<string, unknown>) => {
+      if (name === "open_direct_conversation") {
+        return Promise.resolve({
+          data: args.p_profile_id === 7 ? "direct-7" : "direct-9",
+          error: null,
+        });
+      }
+      return Promise.resolve({
+        data: [{ id: args.p_message_id, sent_at: "2026-10-15T00:00:00Z" }],
+        error: null,
+      });
+    });
+
+    const result = await sendToConversations(
+      [
+        { type: "conversation", conversationId: "group-1" },
+        { type: "conversation", conversationId: "direct-7" },
+        { type: "person", profileId: "7" },
+        { type: "person", profileId: "9" },
+      ],
+      LINK,
+    );
+
+    expect(result).toEqual({ sent: 3, failed: 0 });
+    const sends = rpcCalls("send_message").map(([, args]) => args);
+    expect(sends.map((args) => args.p_conversation_id).sort()).toEqual([
+      "direct-7",
+      "direct-9",
+      "group-1",
+    ]);
+    expect(sends.every((args) => args.p_body === LINK)).toBe(true);
+    expect(new Set(sends.map((args) => args.p_message_id)).size).toBe(3);
+  });
+
+  it("일부 대상이 실패해도 나머지에는 보내고 실패한 수를 센다", async () => {
+    rpc.mockImplementation((name: string, args: Record<string, unknown>) => {
+      if (name === "open_direct_conversation") {
+        return Promise.resolve({ data: null, error: new Error("blocked") });
+      }
+      if (args.p_conversation_id === "left") {
+        return Promise.resolve({ data: null, error: new Error("not member") });
+      }
+      return Promise.resolve({
+        data: [{ id: args.p_message_id, sent_at: "2026-10-15T00:00:00Z" }],
+        error: null,
+      });
+    });
+
+    const result = await sendToConversations(
+      [
+        { type: "conversation", conversationId: "ok" },
+        { type: "conversation", conversationId: "left" },
+        { type: "person", profileId: "3" },
+      ],
+      LINK,
+    );
+
+    expect(result).toEqual({ sent: 1, failed: 2 });
+  });
+
+  it("refuses more than 10 targets before sending anything", async () => {
+    const targets = Array.from({ length: 11 }, (_, index) => ({
+      type: "conversation" as const,
+      conversationId: `c${index}`,
+    }));
+
+    expect(SEND_TARGET_LIMIT).toBe(10);
+    await expect(sendToConversations(targets, LINK)).rejects.toThrow();
+    expect(rpc).not.toHaveBeenCalled();
   });
 });

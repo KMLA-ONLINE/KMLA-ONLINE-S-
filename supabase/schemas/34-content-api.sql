@@ -1732,6 +1732,62 @@ $$;
 
 ALTER FUNCTION "public"."get_profile_post"("p_post_id" "uuid") OWNER TO "postgres";
 
+-- 메시지 안 게시물 카드(기능 명세 §13.21). 보는 사람이 읽을 수 있는 게시물만 돌려주고 나머지는 행을 빼서
+-- 클라이언트가 `볼 수 없는 게시물` 카드로 그린다. 권한은 `can_read_post()` 하나로 판정한다. 작성자는
+-- 게시물에 보이는 이름만 내보내고 익명 글의 실제 작성자는 감춘다. 방 하나의 카드를 한 번에 읽는다.
+CREATE OR REPLACE FUNCTION "public"."list_post_previews"("p_post_ids" "uuid"[]) RETURNS TABLE("post_id" "uuid", "kind" "public"."post_kind", "group_name" "text", "title" "text", "body" "text", "author_label" "text", "author_avatar_path" "text", "image_path" "text")
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if auth.uid() is null or private.current_profile_id() is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  if coalesce(cardinality(p_post_ids), 0) > 100 then
+    raise exception 'too many posts' using errcode = '22023';
+  end if;
+
+  return query
+  select
+    post.id,
+    post.kind,
+    grp.name,
+    post.title,
+    left(post.body, 300),
+    case post.author_identity
+      when 'identified' then profile.name
+      when 'anonymous' then '익명'
+      when 'staff' then '운영진'
+    end,
+    case when post.author_identity in ('identified', 'staff') then profile.avatar_path end,
+    cover.path
+  from public.posts as post
+  join private.post_authors as author on author.post_id = post.id
+  left join public.groups as grp on grp.id = post.group_id
+  left join public.profiles as profile
+    on (
+      (post.author_identity = 'identified' and profile.id = post.display_author_profile_id)
+      or (post.author_identity = 'staff' and profile.id = author.profile_id)
+    )
+    and profile.status = 'accepted'
+    and profile.deleted_at is null
+  left join lateral (
+    select coalesce(attachment.thumbnail_path, attachment.object_path) as path
+    from public.post_attachments as attachment
+    where attachment.post_id = post.id
+      and attachment.status = 'ready'
+      and attachment.mime_type like 'image/%'
+    order by attachment.position
+    limit 1
+  ) as cover on true
+  where post.id = any(p_post_ids)
+    and post.published_at is not null
+    and private.can_read_post(post.id);
+end;
+$$;
+
+ALTER FUNCTION "public"."list_post_previews"("p_post_ids" "uuid"[]) OWNER TO "postgres";
+
 CREATE OR REPLACE FUNCTION "public"."list_comment_images"("p_comment_ids" "uuid"[]) RETURNS TABLE("image_id" "uuid", "comment_id" "uuid", "post_id" "uuid", "storage_bucket" "text", "object_path" "text", "mime_type" "text", "size_bytes" bigint, "width" integer, "height" integer, "ready_at" timestamp with time zone)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
@@ -2787,6 +2843,9 @@ GRANT ALL ON FUNCTION "public"."get_group_post"("p_post_id" "uuid") TO "authenti
 
 REVOKE ALL ON FUNCTION "public"."get_profile_post"("p_post_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_profile_post"("p_post_id" "uuid") TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."list_post_previews"("p_post_ids" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."list_post_previews"("p_post_ids" "uuid"[]) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."list_comment_images"("p_comment_ids" "uuid"[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."list_comment_images"("p_comment_ids" "uuid"[]) TO "authenticated";

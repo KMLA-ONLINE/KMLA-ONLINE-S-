@@ -207,6 +207,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `list_post_attachments`                       | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_post_comment_replies`                   | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_post_comments`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
+| `list_post_previews`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_post_reactors`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_profile_posts`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `mark_all_my_notifications_read`              | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |

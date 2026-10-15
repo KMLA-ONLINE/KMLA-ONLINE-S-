@@ -18,6 +18,7 @@ import {
   hydrateGroupPostMedia,
   listGroupPosts,
   listPostComments,
+  listPostPreviews,
   listPostReactors,
   listProfilePosts,
   searchGroupPosts,
@@ -500,5 +501,35 @@ describe("post queries", () => {
     const [reactor] = await listPostReactors("post-id");
 
     expect(reactor?.reactor_avatar_url).toBe("https://signed.example/avatar");
+  });
+
+  it("keeps post card text when photo or avatar signing fails", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          post_id: "p1",
+          kind: "group",
+          group_name: "밴드부",
+          title: "공연 안내",
+          body: "토요일 7시",
+          author_label: "이한별",
+          author_avatar_path: "avatars/4",
+          image_path: "p1/a/thumb",
+        },
+      ],
+      error: null,
+    });
+    getSupabase.mockReturnValue({ rpc });
+    createPostAttachmentUrls.mockRejectedValueOnce(new Error("storage 503"));
+    createProfileMediaUrls.mockRejectedValueOnce(new Error("storage 503"));
+
+    const previews = await listPostPreviews(["p1", "gone"]);
+
+    expect(previews.get("p1")).toMatchObject({
+      title: "공연 안내",
+      imageUrl: null,
+      authorAvatarUrl: null,
+    });
+    expect(previews.get("gone")).toBeNull();
   });
 });
