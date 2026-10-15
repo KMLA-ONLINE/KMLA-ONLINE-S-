@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(18);
 
 -- 메시지 안 게시물 카드(기능 명세 §13.21). 보는 사람 = 시드 학생(홍길동, profile 1).
 --   29기 수학 탐구(…0002)는 멤버, 메이커스 랩(…0003)은 비멤버다.
@@ -17,7 +17,8 @@ insert into ids (name, id) values
   ('private_profile', gen_random_uuid()),
   ('draft', gen_random_uuid()),
   ('member_staff', gen_random_uuid()),
-  ('avatar_activity', gen_random_uuid());
+  ('avatar_activity', gen_random_uuid()),
+  ('withdrawn_timeline', gen_random_uuid());
 
 insert into public.posts (
   id, kind, group_id, timeline_profile_id, title, body, author_identity,
@@ -42,7 +43,9 @@ values
     'identified', 4, null, null),
   ((select id from ids where name = 'member_staff'), 'group',
     '20000000-0000-0000-0000-000000000002', null, '운영 공지', '모두 보세요',
-    'staff', null, null, now());
+    'staff', null, null, now()),
+  ((select id from ids where name = 'withdrawn_timeline'), 'profile',
+    null, 6, null, '탈퇴 처리된 사람의 공개 글', 'identified', 6, 'public', now());
 
 -- 프로필 사진 변경 활동은 본문이 비고 사진이 profile-media 버킷의 activity_media_path에 있다. 경로는
 -- 타임라인 주인의 auth 계정 아래여야 하므로 로그인 계정이 있는 시드 학생(profile 1) 자신의 활동으로 둔다.
@@ -58,6 +61,7 @@ insert into private.post_authors (post_id, profile_id)
 select id, case
   when name = 'avatar_activity' then 1
   when name in ('public_profile', 'private_profile') then 5
+  when name = 'withdrawn_timeline' then 6
   else 4
 end
 from ids;
@@ -85,6 +89,9 @@ cross join (values
 ) as attachment (id, filename, position, mime, status)
 where post.name = 'member_identified';
 
+-- 관리자가 탈퇴 처리한 계정의 타임라인 글은 상세(`get_profile_post`)에서 숨는다. 카드도 같아야 한다.
+update public.profiles set status = 'withdrawn' where id = 6;
+
 set local role anon;
 select throws_ok(
   $$select * from public.list_post_previews(array[gen_random_uuid()])$$,
@@ -104,6 +111,14 @@ select is(
   (select array_agg(ids.name order by ids.name) from previews join ids on ids.id = previews.post_id),
   array['avatar_activity', 'member_anonymous', 'member_identified', 'member_staff', 'public_profile'],
   'only posts the viewer can read come back; outsider groups, private timelines, drafts and unknown ids are left out'
+);
+
+select ok(
+  not exists (
+    select 1 from previews
+    where post_id = (select id from ids where name = 'withdrawn_timeline')
+  ),
+  'a post on a withdrawn timeline stays hidden like its detail'
 );
 
 select is(

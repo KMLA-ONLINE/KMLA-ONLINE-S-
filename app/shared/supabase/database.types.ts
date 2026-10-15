@@ -3200,6 +3200,7 @@ export type Database = {
         Args: {
           p_body: string
           p_conversation_id: string
+          p_mark_read?: boolean
           p_message_id: string
           p_reply_to_id?: string
         }

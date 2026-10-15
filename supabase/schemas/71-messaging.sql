@@ -828,7 +828,10 @@ create function public.send_message(
   p_conversation_id uuid,
   p_message_id uuid,
   p_body text,
-  p_reply_to_id uuid default null
+  p_reply_to_id uuid default null,
+  -- 보낸 사람의 읽은 위치를 이 메시지로 옮길지. 대화방 안에서 보내면 앞의 메시지를 다 본 것이다.
+  -- 방을 열지 않고 보내는 게시물 공유(기능 명세 §8.13)는 false로 보내 안 읽은 메시지를 남긴다.
+  p_mark_read boolean default true
 )
 returns table (id uuid, sent_at timestamptz)
 language plpgsql
@@ -931,13 +934,15 @@ begin
     if saved.id is not null then
       perform private.enqueue_message_push(saved);
 
-      update public.conversation_members as member
-      set last_read_sent_at = saved.sent_at,
-        last_read_message_id = saved.id
-      where member.conversation_id = p_conversation_id
-        and member.profile_id = caller_profile_id
-        and member.left_at is null
-        and (member.last_read_sent_at, member.last_read_message_id) < (saved.sent_at, saved.id);
+      if p_mark_read then
+        update public.conversation_members as member
+        set last_read_sent_at = saved.sent_at,
+          last_read_message_id = saved.id
+        where member.conversation_id = p_conversation_id
+          and member.profile_id = caller_profile_id
+          and member.left_at is null
+          and (member.last_read_sent_at, member.last_read_message_id) < (saved.sent_at, saved.id);
+      end if;
     else
       -- 같은 ID를 동시에 보낸 다른 요청이 먼저 저장했다.
       select message.*
@@ -957,10 +962,10 @@ begin
 end;
 $$;
 
-revoke all on function public.send_message(uuid, uuid, text, uuid)
+revoke all on function public.send_message(uuid, uuid, text, uuid, boolean)
   from public, anon;
 
-grant execute on function public.send_message(uuid, uuid, text, uuid)
+grant execute on function public.send_message(uuid, uuid, text, uuid, boolean)
   to authenticated;
 
 -- 읽음 위치를 이 메시지로 옮긴다. 앞으로만 움직이며, 내 현재 참여 기간 밖의 메시지나 다른 대화의

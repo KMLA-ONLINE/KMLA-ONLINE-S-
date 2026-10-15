@@ -1770,6 +1770,12 @@ begin
   from public.posts as post
   join private.post_authors as author on author.post_id = post.id
   left join public.groups as grp on grp.id = post.group_id
+  -- 타임라인 주인이 탈퇴 처리된 개인 게시물은 상세(`read_profile_posts`)에서 숨으므로 카드도 숨긴다.
+  -- `can_read_post()`는 주인의 상태를 보지 않는다.
+  left join public.profiles as timeline
+    on timeline.id = post.timeline_profile_id
+    and timeline.status = 'accepted'
+    and timeline.deleted_at is null
   left join public.profiles as profile
     on (
       (post.author_identity = 'identified' and profile.id = post.display_author_profile_id)
@@ -1788,6 +1794,7 @@ begin
   ) as cover on true
   where post.id = any(p_post_ids)
     and post.published_at is not null
+    and (post.kind <> 'profile' or timeline.id is not null)
     and private.can_read_post(post.id);
 end;
 $$;

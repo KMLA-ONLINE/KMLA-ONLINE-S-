@@ -105,6 +105,8 @@ describe("sendToConversations", () => {
       "group-1",
     ]);
     expect(sends.every((args) => args.p_body === LINK)).toBe(true);
+    // 방을 열지 않고 보내므로 그 방의 안 읽은 메시지를 읽음으로 만들지 않는다.
+    expect(sends.every((args) => args.p_mark_read === false)).toBe(true);
     expect(new Set(sends.map((args) => args.p_message_id)).size).toBe(3);
   });
 

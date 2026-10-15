@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { listPostPreviews } = vi.hoisted(() => ({
   listPostPreviews: vi.fn(),
@@ -133,8 +134,54 @@ describe("PostPreviewCard", () => {
       name: /프로필 사진을 바꾸었습니다/,
     });
     expect(link).not.toHaveTextContent("게시물 보기");
-    expect(
-      link.querySelector("img[src='https://signed/avatar']"),
-    ).not.toBeNull();
+    // 장식용 사진(alt="")이라 presentation 역할로 찾는다.
+    expect(within(link).getByRole("presentation")).toHaveAttribute(
+      "src",
+      "https://signed/avatar",
+    );
+  });
+
+  describe("while the room stays open", () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("re-checks a mounted card so a deleted post stops looking readable", async () => {
+      listPostPreviews
+        .mockResolvedValueOnce(
+          new Map([
+            [
+              POST_ID,
+              {
+                postId: POST_ID,
+                kind: "group",
+                groupName: "밴드부",
+                title: "공연 안내",
+                body: "",
+                authorIdentity: "identified",
+                authorName: "이한별",
+                authorLabel: "이한별",
+                authorAvatarUrl: null,
+                imageUrl: null,
+                activityKind: null,
+              },
+            ],
+          ]),
+        )
+        .mockResolvedValue(new Map([[POST_ID, null]]));
+      renderCard();
+      expect(
+        await screen.findByRole("link", { name: /공연 안내/ }),
+      ).toBeInTheDocument();
+
+      await act(() => vi.advanceTimersByTimeAsync(2 * 60_000 + 1_000));
+
+      expect(
+        await screen.findByText("볼 수 없는 게시물입니다"),
+      ).toBeInTheDocument();
+    });
   });
 });

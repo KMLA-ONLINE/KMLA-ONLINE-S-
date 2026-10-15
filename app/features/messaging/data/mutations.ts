@@ -146,6 +146,8 @@ export async function sendToConversations(
         p_conversation_id: conversationId,
         p_message_id: messageId,
         p_body: body,
+        // 방을 열지 않고 보낸다. 읽은 위치를 옮기면 그 방에 와 있던 안 읽은 메시지가 읽음이 된다.
+        p_mark_read: false,
       });
       if (error) throw error;
       if (!data?.[0]) throw new Error("Message was not saved");

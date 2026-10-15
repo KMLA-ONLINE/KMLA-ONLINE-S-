@@ -76,6 +76,10 @@ export function postPreviewQuery(postId: string) {
     queryKey: postKeys.preview(postId),
     queryFn: () => loadPostPreview(postId),
     staleTime: POST_PREVIEW_STALE_TIME,
+    // staleTime만으로는 다시 읽지 않는다. 대화방을 열어 둔 동안에도 남이 지우거나 비공개로 돌린 게시물,
+    // 내보내진 그룹의 게시물이 2분 안에 바뀌게 화면에 떠 있는 카드만 주기적으로 다시 읽는다. 같은 순간에
+    // 그려진 카드는 같은 tick에 다시 읽혀 한 번의 RPC로 묶인다.
+    refetchInterval: POST_PREVIEW_STALE_TIME,
   });
 }
 
