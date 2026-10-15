@@ -10,6 +10,8 @@ describe("gongang availability", () => {
       render(
         <GongangBoard
           date={date}
+          floorId="floor_b1"
+          onFloorChange={vi.fn()}
           selected={[]}
           entries={[
             {
@@ -37,6 +39,8 @@ describe("gongang availability", () => {
     render(
       <GongangBoard
         date="2026-10-14"
+        floorId="floor_b1"
+        onFloorChange={vi.fn()}
         selected={[]}
         entries={[]}
         onSelect={onSelect}

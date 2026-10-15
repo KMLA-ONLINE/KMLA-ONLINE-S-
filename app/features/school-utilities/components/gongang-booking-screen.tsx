@@ -20,6 +20,7 @@ import {
 } from "../model/korea-date";
 import { gongangEntries, occursOn } from "../model/gongang-entries";
 import {
+  GONGANG_FLOORS,
   gongangKey,
   parseGongangKey,
   toggleGongangKey,
@@ -46,6 +47,7 @@ export function GongangBookingScreen() {
   );
   const [chosen, setChosen] = useState(today);
   const date = dates.includes(chosen) ? chosen : today;
+  const [floorId, setFloorId] = useState<string>(GONGANG_FLOORS[0].id);
   const [selected, setSelected] = useState<string[]>([]);
   const [detail, setDetail] = useState("");
   const [recurring, setRecurring] = useState(false);
@@ -177,8 +179,9 @@ export function GongangBookingScreen() {
       )}
       <div hidden={loading}>
         <GongangBoard
-          key={date}
           date={date}
+          floorId={floorId}
+          onFloorChange={setFloorId}
           entries={entries}
           readOnly={past}
           selected={selection}

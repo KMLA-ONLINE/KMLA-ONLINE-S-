@@ -121,6 +121,20 @@ describe("gongang booking flow", () => {
       await screen.findByRole("button", { name: "10:00–11:00 2층 선택" }),
     ).toBeInTheDocument();
   });
+  it("keeps the chosen weekend floor when moving to another day", async () => {
+    const { user } = renderRoute(GongangBookingScreen);
+    await screen.findByRole("table", { name: "공강 예약" });
+    await user.click(screen.getByRole("button", { name: "10월 17일 토요일" }));
+    await user.click(screen.getByRole("button", { name: "10층" }));
+    await user.click(screen.getByRole("button", { name: "10월 18일 일요일" }));
+    expect(screen.getByRole("button", { name: "10층" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(
+      screen.getByRole("button", { name: "08:00–09:00 10층 선택" }),
+    ).toBeInTheDocument();
+  });
   it("drops a cell from the selection through its chip", async () => {
     const { user } = renderRoute(GongangBookingScreen);
     await user.click(

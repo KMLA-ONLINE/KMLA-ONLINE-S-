@@ -1,5 +1,4 @@
 import { CheckIcon, PlusIcon, Repeat2Icon } from "lucide-react";
-import { useState } from "react";
 import {
   GONGANG_FLOORS,
   gongangKey,
@@ -13,6 +12,9 @@ export type { GongangBoardEntry } from "../model/gongang-entries";
 
 interface Props {
   date: string;
+  /** Weekend boards show one floor at a time. The screen owns it so a date change keeps it. */
+  floorId: string;
+  onFloorChange: (floorId: string) => void;
   selected: string[];
   entries: GongangBoardEntry[];
   onSelect: (slot: string, location: string) => void;
@@ -23,6 +25,8 @@ interface Props {
 }
 export function GongangBoard({
   date,
+  floorId,
+  onFloorChange,
   selected,
   entries,
   onSelect,
@@ -31,7 +35,6 @@ export function GongangBoard({
   readOnly = false,
   allowPreempt = false,
 }: Props) {
-  const [floorId, setFloorId] = useState<string>(GONGANG_FLOORS[0].id);
   const slots = gongangSlots(date);
   const byKey = new Map(
     entries.map((entry) => [gongangKey(entry.slot, entry.location), entry]),
@@ -124,7 +127,7 @@ export function GongangBoard({
                 type="button"
                 disabled={disabled}
                 aria-pressed={floorId === item.id}
-                onClick={() => setFloorId(item.id)}
+                onClick={() => onFloorChange(item.id)}
                 className={cn(
                   "min-h-11 touch-manipulation rounded-lg px-1 text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                   floorId === item.id
