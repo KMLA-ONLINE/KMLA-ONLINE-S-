@@ -8,6 +8,7 @@ import {
   type GongangScheduleEntry,
 } from "../data/gongang-schedule";
 import { useGongangWeek } from "../hooks/use-gongang-week";
+import { gongangScheduleSaveErrorMessage } from "../model/reservation-error";
 import {
   addCalendarDays,
   startOfKoreaWeek,
@@ -116,8 +117,8 @@ export function GongangScheduleManager() {
       setRecurring(false);
       setInspected(null);
       toast.success("선예약을 저장했습니다.");
-    } catch {
-      setError("저장하지 못했습니다. 예약 현황을 확인한 뒤 다시 시도해주세요.");
+    } catch (e) {
+      setError(gongangScheduleSaveErrorMessage(e));
     } finally {
       setBusy(false);
       setPending(null);
