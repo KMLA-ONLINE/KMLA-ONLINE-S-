@@ -18,12 +18,21 @@ export function ThemeColorSync() {
   const { resolvedTheme } = useTheme();
 
   useEffect(() => {
-    document
-      .querySelector('meta[name="theme-color"]')
-      ?.setAttribute(
-        "content",
-        resolvedTheme === "dark" ? THEME_COLORS.dark : THEME_COLORS.light,
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) return;
+    const dark = resolvedTheme === "dark";
+    // 갤럭시 Chrome 설치 앱은 값이 바뀔 때만 아이콘 대비를 다시 계산했다. 정적 값과 같은
+    // 라이트로 켜면 흰 아이콘이 남으므로, 반대 색을 거쳐 변화로 인식시킨다.
+    meta.setAttribute("content", dark ? THEME_COLORS.light : THEME_COLORS.dark);
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() =>
+        meta.setAttribute(
+          "content",
+          dark ? THEME_COLORS.dark : THEME_COLORS.light,
+        ),
       );
+    });
+    return () => cancelAnimationFrame(frame);
   }, [resolvedTheme]);
 
   return null;
