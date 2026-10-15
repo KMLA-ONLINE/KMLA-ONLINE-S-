@@ -21,6 +21,7 @@ import {
 import { gongangEntries, occursOn } from "../model/gongang-entries";
 import {
   GONGANG_FLOORS,
+  gongangCellLabel,
   gongangKey,
   isGongangWeekend,
   parseGongangKey,
@@ -79,10 +80,13 @@ export function GongangBookingScreen() {
 
   const past = date < today;
   const entries = gongangEntries(date, reservations, schedules, profile.id);
-  const selection = (chosen === date ? selected : []).filter(
-    (key) =>
-      !entries.some((entry) => gongangKey(entry.slot, entry.location) === key),
+  const occupied = new Set(
+    entries.map((entry) => gongangKey(entry.slot, entry.location)),
   );
+  const picked = chosen === date ? selected : [];
+  const selection = picked.filter((key) => !occupied.has(key));
+  // Cells someone else took after they were picked, usually the reason a batch failed.
+  const taken = picked.filter((key) => occupied.has(key));
   const inspectedReservation = inspected
     ? reservations.find(
         (row) =>
@@ -93,7 +97,9 @@ export function GongangBookingScreen() {
     : undefined;
 
   function changeSelection(next: (values: string[]) => string[]) {
-    setSelected(next);
+    setSelected((values) =>
+      next(values.filter((value) => !occupied.has(value))),
+    );
     setError("");
   }
 
@@ -211,6 +217,18 @@ export function GongangBookingScreen() {
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
+        </p>
+      )}
+      {taken.length > 0 && (
+        <p role="status" className="text-sm text-destructive">
+          {taken
+            .map((key) => {
+              const { slot, location } = parseGongangKey(key);
+              return gongangCellLabel(date, slot, location);
+            })
+            .join(", ")}
+          은(는) 방금 다른 예약이 생겨 선택에서 뺐습니다.
+          {selection.length > 0 && " 나머지 칸은 그대로 신청할 수 있습니다."}
         </p>
       )}
       {selection.length > 0 && !past && (

@@ -173,6 +173,50 @@ describe("gongang booking flow", () => {
       screen.getByRole("button", { name: "08:00–09:00 지하 1층 선택" }),
     ).toHaveAttribute("aria-pressed", "false");
   });
+  it("names the cell someone else took when a batch fails", async () => {
+    data.createUtilityReservations.mockRejectedValueOnce({
+      code: "23505",
+      message: "reservation slot is already occupied",
+    });
+    const { user } = renderRoute(GongangBookingScreen);
+    await screen.findByRole("table", { name: "공강 예약" });
+    await user.click(screen.getByRole("button", { name: "10월 17일 토요일" }));
+    await user.click(
+      screen.getByRole("button", { name: "08:00–09:00 지하 1층 선택" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "09:00–10:00 지하 1층 선택" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "사용 목적" }),
+      "동아리 연습",
+    );
+    data.loadUtilityReservations.mockResolvedValue([
+      {
+        id: 12,
+        profileId: 2,
+        mode: "gongang",
+        reservationDate: "2026-10-17",
+        slot: "hour-9",
+        location: "floor_b1",
+        detail: "밴드",
+        recurring: false,
+        recurringUntil: null,
+        applicantName: "홍길동",
+        applicantPubId: "hong-gildong",
+        applicantCohort: 30,
+        avatarUrl: null,
+      },
+    ]);
+    await user.click(screen.getByRole("button", { name: "2건 신청" }));
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "지하 1층 09:00–10:00은(는) 방금 다른 예약이 생겨 선택에서 뺐습니다.",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "다른 사용자가 먼저 신청했습니다.",
+    );
+    expect(screen.getByRole("button", { name: "1건 신청" })).toBeEnabled();
+  });
   it("does not expose an empty bookable board when loading fails", async () => {
     data.loadGongangSchedule.mockRejectedValueOnce(new Error("offline"));
     renderRoute(GongangBookingScreen);
