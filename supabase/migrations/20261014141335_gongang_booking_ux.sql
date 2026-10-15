@@ -335,7 +335,8 @@ BEGIN
     RAISE EXCEPTION 'invalid schedule batch' USING ERRCODE = '22023';
   END IF;
   FOR entry IN SELECT * FROM jsonb_to_recordset(p_entries) AS x(schedule_date date, slot text, location text, reserved boolean, detail text, recurring boolean)
-    ORDER BY slot, location, schedule_date
+    -- Same code-unit order as the student batch insert, so overlapping batches cannot deadlock.
+    ORDER BY slot COLLATE "C", location COLLATE "C", schedule_date
   LOOP
     IF entry.schedule_date IS NULL OR entry.schedule_date < next_monday OR entry.schedule_date > next_monday + 6 THEN
       RAISE EXCEPTION 'only next week can be configured' USING ERRCODE = '22023';
