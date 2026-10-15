@@ -195,4 +195,58 @@ describe("gongang booking flow", () => {
     );
     expect(data.canManageGongang).not.toHaveBeenCalled();
   });
+  it("lets a manager inspect a student repeat before replacing it", async () => {
+    viewer.role = "admin";
+    data.loadUtilityReservations.mockResolvedValue([
+      {
+        id: 11,
+        profileId: 2,
+        mode: "gongang",
+        reservationDate: "2026-10-12",
+        slot: "study-1",
+        location: "floor_b1",
+        detail: "합주 연습",
+        recurring: true,
+        recurringUntil: null,
+        applicantName: "홍길동",
+        applicantPubId: "hong-gildong",
+        applicantCohort: 30,
+        avatarUrl: null,
+      },
+    ]);
+    const { user } = renderRoute(GongangScheduleManager);
+    await user.click(
+      await screen.findByRole("button", { name: "1자습 지하 1층 홍길동" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByRole("link", { name: "홍길동" }),
+    ).toHaveAttribute("href", "/profile/hong-gildong");
+    expect(within(dialog).getByText("합주 연습")).toBeVisible();
+    expect(data.saveGongangSchedule).not.toHaveBeenCalled();
+    await user.click(
+      within(dialog).getByRole("button", { name: "선예약으로 대체" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "지하 1층 1자습 선택 해제" }),
+    ).toHaveTextContent("홍길동 장기 예약 종료");
+    await user.type(
+      screen.getByRole("textbox", { name: "사용 목적" }),
+      "학생회 회의",
+    );
+    await user.click(screen.getByRole("button", { name: "1건 선예약" }));
+    await user.click(
+      await screen.findByRole("button", { name: "종료하고 선예약" }),
+    );
+    await waitFor(() =>
+      expect(data.saveGongangSchedule).toHaveBeenCalledExactlyOnceWith([
+        expect.objectContaining({
+          scheduleDate: "2026-10-19",
+          slot: "study-1",
+          location: "floor_b1",
+          detail: "학생회 회의",
+        }),
+      ]),
+    );
+  });
 });

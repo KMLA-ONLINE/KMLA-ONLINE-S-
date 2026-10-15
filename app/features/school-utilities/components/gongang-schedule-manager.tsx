@@ -81,6 +81,24 @@ export function GongangScheduleManager() {
       row.location &&
       selected.includes(gongangKey(row.slot, row.location)),
   );
+  const warnings = new Map(
+    conflicts.map((row) => [
+      gongangKey(row.slot, row.location ?? ""),
+      `${row.applicantName} 장기 예약 종료`,
+    ]),
+  );
+  const inspectedKey = inspected
+    ? gongangKey(inspected.slot, inspected.location)
+    : "";
+  const inspectedReservation =
+    inspected && inspected.state !== "manager"
+      ? reservations.find(
+          (row) =>
+            row.slot === inspected.slot &&
+            row.location === inspected.location &&
+            occursOn(row, date),
+        )
+      : undefined;
 
   function changeSelection(next: (values: string[]) => string[]) {
     setSelected(next);
@@ -172,7 +190,6 @@ export function GongangScheduleManager() {
           floorId={floorId}
           onFloorChange={setFloorId}
           entries={entries}
-          allowPreempt
           selected={selected}
           disabled={busy || loadFailed}
           onInspect={setInspected}
@@ -192,10 +209,11 @@ export function GongangScheduleManager() {
         <GongangSelectionForm
           date={date}
           selected={selected}
+          warnings={warnings}
           notice={
             conflicts.length > 0 && (
               <p className="text-xs text-destructive">
-                기존 장기 예약 {conflicts.length}건이 종료됩니다.
+                표시된 칸의 장기 예약은 이 날짜부터 종료됩니다.
               </p>
             )
           }
@@ -251,30 +269,67 @@ export function GongangScheduleManager() {
           date={date}
           entry={inspected}
           onClose={() => setInspected(null)}
-          description="선예약"
-          actions={
-            <Button
-              variant="destructive"
-              disabled={busy}
-              onClick={() => {
-                setInspected(null);
-                setPending([
-                  {
-                    scheduleDate: date,
-                    slot: inspected.slot,
-                    location: inspected.location,
-                    reserved: false,
-                    detail: null,
-                    recurring: false,
-                    recurringUntil: null,
-                  },
-                ]);
-              }}
-            >
-              {inspected.recurring ? "이 날짜부터 종료" : "선예약 취소"}
-            </Button>
+          description={
+            inspectedReservation ? (
+              <Link
+                to={`/profile/${inspectedReservation.applicantPubId}`}
+                className="text-primary"
+              >
+                {inspectedReservation.applicantName}
+              </Link>
+            ) : (
+              inspected.label
+            )
           }
-        />
+          actions={
+            inspected.state === "manager" ? (
+              <Button
+                variant="destructive"
+                disabled={busy}
+                onClick={() => {
+                  setInspected(null);
+                  setPending([
+                    {
+                      scheduleDate: date,
+                      slot: inspected.slot,
+                      location: inspected.location,
+                      reserved: false,
+                      detail: null,
+                      recurring: false,
+                      recurringUntil: null,
+                    },
+                  ]);
+                }}
+              >
+                {inspected.recurring ? "이 날짜부터 종료" : "선예약 취소"}
+              </Button>
+            ) : (
+              inspected.recurring && (
+                <Button
+                  disabled={busy}
+                  onClick={() => {
+                    setInspected(null);
+                    changeSelection((values) =>
+                      toggleGongangKey(values, inspectedKey),
+                    );
+                  }}
+                >
+                  {selected.includes(inspectedKey)
+                    ? "선택 해제"
+                    : "선예약으로 대체"}
+                </Button>
+              )
+            )
+          }
+        >
+          {inspected.state !== "manager" && (
+            <p className="text-sm text-muted-foreground">
+              {inspected.recurring
+                ? "선예약으로 대체하면 이 날짜부터 학생의 장기 예약이 끝납니다."
+                : "단발 예약이 있는 칸은 선예약할 수 없습니다."}
+            </p>
+          )}
+        </GongangEntryDialog>
       )}
     </div>
   );

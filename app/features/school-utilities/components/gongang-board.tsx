@@ -21,7 +21,6 @@ interface Props {
   onInspect?: (entry: GongangBoardEntry) => void;
   disabled?: boolean;
   readOnly?: boolean;
-  allowPreempt?: boolean;
 }
 export function GongangBoard({
   date,
@@ -33,7 +32,6 @@ export function GongangBoard({
   onInspect,
   disabled = false,
   readOnly = false,
-  allowPreempt = false,
 }: Props) {
   const slots = gongangSlots(date);
   const byKey = new Map(
@@ -46,8 +44,10 @@ export function GongangBoard({
     floor: (typeof GONGANG_FLOORS)[number],
   ) {
     const entry = byKey.get(gongangKey(slot.id, floor.id));
-    const selectable = !entry || (allowPreempt && entry.state !== "manager");
     const checked = selected.includes(gongangKey(slot.id, floor.id));
+    // An occupied cell opens its details first; the screen decides whether it can be selected.
+    // Once selected, tapping it again simply drops it.
+    const selectable = !entry || checked;
     return (
       <button
         type="button"
