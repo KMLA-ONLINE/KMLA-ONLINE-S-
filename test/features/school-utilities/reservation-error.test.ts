@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  gongangScheduleSaveErrorMessage,
   reservationCancelErrorMessage,
   reservationCreateErrorMessage,
 } from "~/features/school-utilities/model/reservation-error";
@@ -92,5 +93,28 @@ describe("reservationCancelErrorMessage", () => {
     expect(reservationCancelErrorMessage(new Error("boom"))).toBe(
       "취소하지 못했습니다. 잠시 후 다시 시도해주세요.",
     );
+  });
+});
+
+describe("gongangScheduleSaveErrorMessage", () => {
+  it.each([
+    [
+      { code: "42501", message: "gongang manager permission required" },
+      "선예약을 관리할 권한이 없습니다.",
+    ],
+    [
+      { code: "22023", message: "only next week can be configured" },
+      "다음 주 일정만 선예약할 수 있습니다. 주가 바뀌었다면 화면을 새로 고쳐주세요.",
+    ],
+    [
+      { code: "23505", message: "manager schedule is already occupied" },
+      "다른 반복 선예약과 겹칩니다. 기존 선예약을 먼저 종료해주세요.",
+    ],
+    [
+      { code: "23505", message: "reservation slot is already occupied" },
+      "학생의 단발 예약이 있는 칸은 선예약할 수 없습니다.",
+    ],
+  ])("explains %o", (error, message) => {
+    expect(gongangScheduleSaveErrorMessage(error)).toBe(message);
   });
 });

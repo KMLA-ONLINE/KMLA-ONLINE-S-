@@ -143,7 +143,10 @@ export function MessagingScreen({
                               "font-medium text-foreground",
                           )}
                         >
-                          {formatLastMessagePreview(conversation)}
+                          {formatLastMessagePreview(
+                            conversation,
+                            window.location.origin,
+                          )}
                         </span>
                         {conversation.unreadCount > 0 ? (
                           <Badge

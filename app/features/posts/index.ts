@@ -22,6 +22,7 @@ export { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
 export { anonymousActivityRestrictionQuery } from "~/features/posts/data/cache";
 export {
   clearPostEngagement,
+  invalidatePostPreviews,
   patchPostEngagement,
   postKeys,
 } from "~/features/posts/data/cache";

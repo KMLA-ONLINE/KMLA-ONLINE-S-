@@ -164,6 +164,16 @@ export function isInAppBrowser(): boolean {
   );
 }
 
+/** UA의 iOS 버전. iOS가 아니거나 읽을 수 없으면 `null`. */
+function getIOSVersion(): { major: number; minor: number } | null {
+  const version = /(?:CPU (?:iPhone )?OS|iPhone OS) (\d+)_(\d+)/i.exec(
+    navigator.userAgent,
+  );
+  if (!version) return null;
+
+  return { major: Number(version[1]), minor: Number(version[2]) };
+}
+
 /**
  * iOS에서 '홈 화면에 추가'가 실제로 가능한 브라우저인지.
  *
@@ -179,12 +189,10 @@ function supportsIOSHomeScreenInstall(): boolean {
   if (/Version\/.*Safari\//i.test(ua)) return true;
 
   const alternativeBrowser = /CriOS|FxiOS|EdgiOS|Orion/i.test(ua);
-  const version = /(?:CPU (?:iPhone )?OS|iPhone OS) (\d+)_(\d+)/i.exec(ua);
+  const version = getIOSVersion();
   if (!alternativeBrowser || !version) return false;
 
-  const major = Number(version[1]);
-  const minor = Number(version[2]);
-  return major > 16 || (major === 16 && minor >= 4);
+  return version.major > 16 || (version.major === 16 && version.minor >= 4);
 }
 
 /**
@@ -211,10 +219,14 @@ export function getFallbackInstallMode(): InstallMode | null {
  *
  *  - 카카오톡은 자체 주소(`kakaotalk://web/openExternal`)로 기본 브라우저를 연다. 공식 기능이다.
  *  - 페이스북·인스타그램의 Android WebView는 `intent://`로 Android에 주소를 넘긴다. PWA가
- *    설치되어 있으면 그 범위의 주소를 PWA가 받고, 아니면 `S.browser_fallback_url`로 그 자리에
- *    다시 열린다. 공식 기능이 아니라 막는 버전도 있다.
- *  - iOS의 페이스북·인스타그램에는 밖으로 나갈 주소가 없어 `null`이다. 설치 안내도 띄우지
- *    않으므로(`isInAppBrowser()`) 그 안에서 그대로 쓴다.
+ *    설치되어 있으면 그 범위의 주소를 PWA가 받고, 아니면 기본 브라우저가 받는다. 막히면
+ *    `S.browser_fallback_url`로 그 자리에 다시 열린다. 공식 기능이 아니다.
+ *    `package`로 Chrome을 지정하지 않는 이유: 지정하면 PWA가 설치돼 있어도 Chrome 탭으로
+ *    열린다. WebView 안에서는 설치 여부를 알 수 없어 둘 중 하나만 고를 수 있고, 설치된 PWA를
+ *    앞세운다. 기본 브라우저가 삼성 인터넷이면 설치 안내가 Chrome으로 옮기라고 권한다.
+ *  - iOS 17+ 의 페이스북·인스타그램은 `x-safari-https://`로 Safari에 넘긴다. 그보다 낮은
+ *    iOS에는 밖으로 나갈 주소가 없어 `null`이고, 설치 안내도 띄우지 않으므로
+ *    (`isInAppBrowser()`) 그 안에서 그대로 쓴다.
  *
  * iOS 카카오톡은 홈 화면 PWA가 아니라 Safari로 열린다 — iOS에는 링크로 PWA를 여는 길이 없다.
  */
@@ -223,7 +235,13 @@ export function getInAppEscapeUrl(href: string): string | null {
 
   if (/KAKAOTALK/i.test(ua))
     return `kakaotalk://web/openExternal?url=${encodeURIComponent(href)}`;
-  if (!/Instagram|FBAN|FBAV|FB_IAB/i.test(ua) || !isAndroid()) return null;
+  if (!/Instagram|FBAN|FBAV|FB_IAB/i.test(ua)) return null;
+
+  if (isIOS()) {
+    const version = getIOSVersion();
+    return version && version.major >= 17 ? `x-safari-${href}` : null;
+  }
+  if (!isAndroid()) return null;
 
   // `#Intent`가 fragment 자리를 쓰므로 원래 주소의 hash는 버린다. 앱 라우팅은 hash를 쓰지 않는다.
   const url = new URL(href);

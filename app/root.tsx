@@ -10,9 +10,18 @@ import {
 
 import type { Route } from "./+types/root";
 import { ErrorPage } from "~/shared/components/error-page";
+import {
+  SplashTyping,
+  SplashTypingScript,
+  waitForSplashEgg,
+} from "~/shared/components/splash-typing";
 import { Spinner } from "~/shared/ui/spinner";
 import { PwaPrompts } from "~/shared/components/pwa-prompts";
 import { QueryProvider } from "~/shared/components/query-provider";
+import {
+  ThemeColorMeta,
+  ThemeColorSync,
+} from "~/shared/components/theme-color-meta";
 import { ViewportMeta } from "~/shared/components/viewport-meta";
 import { env } from "~/shared/lib/env";
 import { cn } from "~/shared/lib/utils";
@@ -92,8 +101,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <ViewportMeta />
+        <SplashTypingScript />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
+        <ThemeColorMeta />
         <Meta />
         <Links />
       </head>
@@ -105,6 +116,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           defaultTheme="light"
           disableTransitionOnChange
         >
+          <ThemeColorSync />
           <TooltipProvider>
             {children}
             <Toaster />
@@ -115,6 +127,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </body>
     </html>
   );
+}
+
+/**
+ * 첫 로딩에만 돈다. 자식 라우트의 로더와 함께 기다리므로, 이스터에그 문구가 다 쳐질 때까지
+ * {@link HydrateFallback}이 남는다. 데이터가 없으니 화면 이동 때마다 다시 돌 이유가 없다.
+ */
+export async function clientLoader() {
+  await waitForSplashEgg();
+  return null;
+}
+clientLoader.hydrate = true as const;
+
+// 루트 로더가 데이터를 돌려주게 되면 이 값도 다시 정해야 한다.
+export function shouldRevalidate() {
+  return false;
 }
 
 export default function App() {
@@ -132,13 +159,14 @@ export default function App() {
  * 셸의 `clientLoader`가 도는 동안(세션 확인 + 프로필 + 뱃지) 보이는 화면.
  *
  * SPA 모드에서는 **root 라우트에서만** `HydrateFallback`을 export 할 수 있다 — 다른 라우트에
- * 두면 빌드가 `SPA Mode: Invalid HydrateFallback export`로 끊긴다. 그래서 셸 골격을 여기에 둔다.
+ * 두면 빌드가 `SPA Mode: Invalid HydrateFallback export`로 끊긴다. 그래서 로딩 화면을 여기에 둔다.
  *
- * 스피너가 아니라 골격을 그리는 이유: 첫 페인트에서 화면 구조가 자리를 잡고 있으면 데이터가
- * 도착할 때 레이아웃이 튀지 않는다. 어차피 정적으로 프리렌더되는 유일한 부분이기도 하다.
+ * 브라우저에서는 빈 화면 가운데에 글자가 쳐지는 {@link SplashTyping}을 그린다. 예전에는 셸
+ * 골격(헤더·사이드바 테두리)을 그렸는데, 내용 없이 선만 먼저 그려졌다 채워지는 게 오히려
+ * 덜 된 화면처럼 보여서 걷어냈다.
  *
- * 설치된 PWA에서는 골격 대신 로고를 그린다. OS 스플래시는 첫 페인트에 걷히므로, 그 자리에
- * 같은 로고를 이어 그려야 JS를 받는 동안 빈 골격이 보이지 않는다. 일부러 붙잡지는 않는다 —
+ * 설치된 PWA에서는 글자 대신 로고를 그린다. OS 스플래시는 첫 페인트에 걷히므로, 그 자리에
+ * 같은 로고를 이어 그려야 JS를 받는 동안 다른 화면이 끼지 않는다. 일부러 붙잡지는 않는다 —
  * 앱이 준비되는 순간 사라지고, 길어질 때만 스피너가 늦게 나타나 멈춘 화면처럼 보이지 않게 한다.
  */
 export function HydrateFallback() {
@@ -164,7 +192,9 @@ export function HydrateFallback() {
           </span>
         </div>
       </div>
-      <ShellSkeleton />
+      <div className="flex h-dvh items-center justify-center bg-background [@media(display-mode:standalone)]:hidden">
+        <SplashTyping />
+      </div>
     </>
   );
 }
@@ -192,19 +222,6 @@ function SplashConnectionHint() {
         ? "인터넷에 연결되어 있지 않아요."
         : "Wi-Fi나 데이터 연결을 확인해 주세요."}
     </p>
-  );
-}
-
-function ShellSkeleton() {
-  return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background [@media(display-mode:standalone)]:hidden">
-      <div className="h-[var(--app-header-h)] shrink-0 border-b max-md:hidden" />
-      <div className="flex min-h-0 flex-1">
-        <div className="w-[var(--app-rail-w)] shrink-0 border-r max-md:hidden" />
-        <div className="min-h-0 flex-1" />
-      </div>
-      <div className="h-[calc(var(--app-tabbar-h)+var(--app-safe-b))] shrink-0 border-t md:hidden" />
-    </div>
   );
 }
 

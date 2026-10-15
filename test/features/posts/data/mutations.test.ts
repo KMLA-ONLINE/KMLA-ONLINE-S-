@@ -26,7 +26,12 @@ import {
   updatePostComment,
   restrictGroupAnonymousActivity,
   cancelGroupAnonymousActivityRestriction,
+  deleteGroupPost,
+  deleteProfilePost,
+  updateProfilePostWithAttachments,
 } from "~/features/posts/data/mutations";
+import { postKeys } from "~/features/posts/data/cache";
+import { getQueryClient } from "~/shared/lib/query-client";
 
 describe("anonymous activity restriction mutations", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -477,5 +482,50 @@ describe("comment image orchestration", () => {
       p_remove_image: true,
       p_mention_pub_ids: [],
     });
+  });
+});
+
+describe("message post cards after a post changes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    rpc.mockResolvedValue({ data: null, error: null });
+  });
+
+  function cachePreview(postId: string) {
+    getQueryClient().setQueryData(postKeys.preview(postId), null);
+  }
+
+  function isStale(postId: string) {
+    return getQueryClient().getQueryState(postKeys.preview(postId))
+      ?.isInvalidated;
+  }
+
+  it("invalidates the card of a deleted group or profile post", async () => {
+    cachePreview("group-post");
+    cachePreview("profile-post");
+    cachePreview("other-post");
+
+    await deleteGroupPost("group-post");
+    await deleteProfilePost("profile-post");
+
+    expect(isStale("group-post")).toBe(true);
+    expect(isStale("profile-post")).toBe(true);
+    expect(isStale("other-post")).toBe(false);
+  });
+
+  it("invalidates the card of an edited post", async () => {
+    cachePreview("edited-post");
+
+    await updateProfilePostWithAttachments(
+      "edited-post",
+      { body: "고친 글", visibility: "public" },
+      [],
+      new Set(),
+      [],
+      [],
+      createPostUploadSession(),
+    );
+
+    expect(isStale("edited-post")).toBe(true);
   });
 });

@@ -14,6 +14,10 @@ vi.mock("~/features/posts/data/mutations", () => ({
   clearPostReaction,
 }));
 vi.mock("~/features/posts/data/queries", () => ({ listPostReactors }));
+vi.mock(
+  "~/features/messaging/data/queries",
+  () => import("../../messaging/fake-api"),
+);
 
 import { PostActionBar } from "~/features/posts/components/post-action-bar";
 import { patchPostEngagement } from "~/features/posts/data/cache";
@@ -153,23 +157,47 @@ describe("PostActionBar", () => {
       } as MediaQueryList);
     }
 
-    it("copies the link on desktop even when the browser can share", async () => {
+    it("opens the send sheet with recent conversations", async () => {
       stubTouchPrimary(false);
       const { user } = renderBar();
 
       await user.click(screen.getByRole("button", { name: "공유" }));
 
+      expect(
+        await screen.findByRole("dialog", { name: "보내기" }),
+      ).toBeInTheDocument();
+      expect(
+        await screen.findByRole("list", { name: "최근 대화" }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "보내기" })).toBeDisabled();
+    });
+
+    it("copies the link from the sheet and offers no other apps on desktop", async () => {
+      stubTouchPrimary(false);
+      const { user } = renderBar();
+
+      await user.click(screen.getByRole("button", { name: "공유" }));
+      await user.click(
+        await screen.findByRole("button", { name: "링크 복사" }),
+      );
+
+      expect(
+        screen.queryByRole("button", { name: "다른 앱으로 공유" }),
+      ).not.toBeInTheDocument();
       expect(share).not.toHaveBeenCalled();
       expect(await navigator.clipboard.readText()).toBe(
         `${window.location.origin}/groups/group/posts/post-id`,
       );
     });
 
-    it("opens the system share sheet on touch devices", async () => {
+    it("hands the link to the system share sheet on touch devices", async () => {
       stubTouchPrimary(true);
       const { user } = renderBar();
 
       await user.click(screen.getByRole("button", { name: "공유" }));
+      await user.click(
+        await screen.findByRole("button", { name: "다른 앱으로 공유" }),
+      );
 
       expect(share).toHaveBeenCalledWith({
         title: "제목",

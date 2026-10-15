@@ -403,6 +403,8 @@ export type Database = {
           created_at: string
           detail: string | null
           location: string
+          recurring: boolean
+          recurring_until: string | null
           reserved: boolean
           schedule_date: string
           slot: string
@@ -413,6 +415,8 @@ export type Database = {
           created_at?: string
           detail?: string | null
           location: string
+          recurring?: boolean
+          recurring_until?: string | null
           reserved?: boolean
           schedule_date: string
           slot: string
@@ -423,6 +427,8 @@ export type Database = {
           created_at?: string
           detail?: string | null
           location?: string
+          recurring?: boolean
+          recurring_until?: string | null
           reserved?: boolean
           schedule_date?: string
           slot?: string
@@ -2813,6 +2819,23 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      list_post_previews: {
+        Args: { p_post_ids: string[] }
+        Returns: {
+          activity_kind: Database["public"]["Enums"]["profile_media_activity_kind"]
+          activity_media_path: string
+          author_avatar_path: string
+          author_identity: Database["public"]["Enums"]["post_identity"]
+          author_label: string
+          author_name: string
+          body: string
+          group_name: string
+          image_path: string
+          kind: Database["public"]["Enums"]["post_kind"]
+          post_id: string
+          title: string
+        }[]
+      }
       list_post_reactors: {
         Args: { p_post_id: string }
         Returns: {
@@ -3107,6 +3130,7 @@ export type Database = {
         }[]
       }
       revoke_group_invite: { Args: { p_group_id: string }; Returns: undefined }
+      save_gongang_schedule: { Args: { p_entries: Json }; Returns: undefined }
       search_directory: {
         Args: { p_query?: string }
         Returns: {
@@ -3176,6 +3200,7 @@ export type Database = {
         Args: {
           p_body: string
           p_conversation_id: string
+          p_mark_read?: boolean
           p_message_id: string
           p_reply_to_id?: string
         }

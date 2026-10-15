@@ -115,17 +115,20 @@ describe("message attachments", () => {
   it("첨부만 있는 메시지는 목록에서 첨부 종류로 부른다", () => {
     expect(attachmentKindLabel("audio")).toBe("파일");
     expect(
-      formatLastMessagePreview({
-        type: "direct",
-        viewerId: "me",
-        participants: [],
-        lastMessage: {
-          senderId: "other",
-          body: "",
-          sentAt: "2026-08-28T06:00:00Z",
-          attachmentKind: "image",
+      formatLastMessagePreview(
+        {
+          type: "direct",
+          viewerId: "me",
+          participants: [],
+          lastMessage: {
+            senderId: "other",
+            body: "",
+            sentAt: "2026-08-28T06:00:00Z",
+            attachmentKind: "image",
+          },
         },
-      }),
+        "https://kmla.online",
+      ),
     ).toBe("사진");
   });
 });

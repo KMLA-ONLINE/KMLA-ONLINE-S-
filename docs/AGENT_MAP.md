@@ -142,6 +142,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `approve_group_join_request`                  | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |
 | `cancel_group_anonymous_activity_restriction` | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `cancel_utility_reservation`                  | `school-utilities/data/reservations.ts`                                         | `51-utility-reservations.sql` |
+| `save_gongang_schedule`                       | `school-utilities/data/gongang-schedule.ts`                                     | `51-utility-reservations.sql` |
 | `clear_comment_reaction`                      | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `clear_post_reaction`                         | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `commit_group_post`                           | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
@@ -206,6 +207,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `list_post_attachments`                       | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_post_comment_replies`                   | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_post_comments`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
+| `list_post_previews`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_post_reactors`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_profile_posts`                          | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `mark_all_my_notifications_read`              | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |

@@ -7,6 +7,7 @@
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#ffffff",
   "lang": "ko",
   "dir": "ltr",
   "categories": ["social", "education"],

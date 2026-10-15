@@ -41,6 +41,7 @@ import {
   deleteGroupCategory,
   deleteGroupPost,
   getPostErrorMessage,
+  invalidatePostPreviews,
   listGroupPosts,
   moveGroupCategory,
   setGroupPostPinned,
@@ -433,6 +434,7 @@ export async function clientAction({
         return data({ error: "이 그룹은 나갈 수 없습니다." }, { status: 400 });
       }
       removeGroupAccessCache(groupId, params.slug);
+      invalidatePostPreviews();
       await getQueryClient().invalidateQueries({ queryKey: groupKeys.all });
       return redirect("/groups");
     } else if (intent === "issue-invite") {
@@ -469,6 +471,7 @@ export async function clientAction({
       // 삭제하는 순간 호출자도 멤버가 아니게 되므로 이 화면에 남아 있으면 재검증이 404가 된다.
       await deleteGroup(groupId);
       removeGroupAccessCache(groupId, params.slug);
+      invalidatePostPreviews();
       await getQueryClient().invalidateQueries({ queryKey: groupKeys.all });
       return redirect("/groups");
     } else {
