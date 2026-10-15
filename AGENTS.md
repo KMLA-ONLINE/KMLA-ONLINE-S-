@@ -105,12 +105,15 @@ Apply only skill recommendations compatible with this React Router SPA. Do not a
 
 The table defines minimum required usage, not an inventory of installed skills. Load other relevant skills according to their descriptions.
 
-| Work                                                                         | Skill                   |
-| ---------------------------------------------------------------------------- | ----------------------- |
-| Routes, navigation, framework configuration                                  | `react-router`          |
-| Any Supabase work, including Auth, RLS, Storage, Realtime, migrations, types | `supabase`              |
-| shadcn, registries, `components.json`                                        | `shadcn`                |
-| UI, accessibility, or UX reviews                                             | `web-design-guidelines` |
+| Work                                                                                                                 | Skill                   |
+| -------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| Routes, navigation, framework configuration                                                                          | `react-router`          |
+| Any Supabase work, including Auth, RLS, Storage, Realtime, migrations, types                                         | `supabase`              |
+| shadcn, registries, `components.json`                                                                                | `shadcn`                |
+| UI, accessibility, or UX reviews                                                                                     | `web-design-guidelines` |
+| Bug fixes; new or changed logic in `model/`, `shared/lib/`, `clientLoader`/`clientAction`, `data/` mapping, RPCs/RLS | `tdd`                   |
+
+Under `tdd`, observe the new test failing for the expected reason before writing the fix or implementation, and report that red run. For bug fixes the failing reproduction is the seam; propose seams yourself and confirm them with the user only for new features or interface changes. DB behavior goes red-first in pgTAP (`supabase/tests/`), app logic in Vitest (`test/`). Exempt: documentation/config-only changes, pure styling/layout, generated files, and `app/shared/ui/` registry code. `tdd` mentions `GLOSSARY.md` and ADRs: use `docs/functional-spec/glossary.md`, and record decisions per this guide (no ADRs).
 
 Before implementing a non-trivial plan or unspecified product behavior, load `grilling` and `domain-modeling` (what `/grill-with-docs` combines) to settle the specification with the user and record the resolved terms and decisions in their owning documents.
 
