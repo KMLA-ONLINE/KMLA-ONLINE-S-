@@ -1,6 +1,13 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
+select ok(not has_function_privilege('anon', 'public.save_gongang_schedule(jsonb)', 'execute')
+ and not has_function_privilege('service_role', 'public.save_gongang_schedule(jsonb)', 'execute')
+ and has_function_privilege('authenticated', 'public.save_gongang_schedule(jsonb)', 'execute'),
+ 'only signed-in users can call the prebooking batch; it authorizes them itself');
+select ok(not has_function_privilege('anon', 'private.can_manage_gongang()', 'execute')
+ and not has_function_privilege('service_role', 'private.can_manage_gongang()', 'execute'),
+ 'the manager check is not exposed beyond signed-in users');
 insert into auth.users (id, email) values
  ('20000000-0000-0000-0000-000000007001', 'gongang-ux-admin@kmla.hs.kr'),
  ('20000000-0000-0000-0000-000000007002', 'gongang-ux-user@kmla.hs.kr');

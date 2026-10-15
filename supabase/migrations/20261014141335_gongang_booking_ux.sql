@@ -354,6 +354,8 @@ BEGIN
 END;
 $function$;
 
+ALTER FUNCTION "public"."save_gongang_schedule"(jsonb) OWNER TO "postgres";
+
 REVOKE ALL ON FUNCTION "public"."save_gongang_schedule"(jsonb) FROM PUBLIC, "anon", "service_role";
 
 ALTER TABLE "public"."gongang_schedule"
@@ -399,15 +401,13 @@ CREATE POLICY "gongang_schedule_update_manager" ON "public"."gongang_schedule"
   USING (private.can_manage_gongang())
   WITH CHECK (private.can_manage_gongang());
 
-REVOKE ALL ON FUNCTION "private"."can_manage_gongang"() FROM PUBLIC;
+ALTER FUNCTION "private"."can_manage_gongang"() OWNER TO "postgres";
+
+REVOKE ALL ON FUNCTION "private"."can_manage_gongang"() FROM PUBLIC, "anon", "service_role";
 
 GRANT EXECUTE ON FUNCTION "private"."can_manage_gongang"() TO "authenticated";
 
 GRANT EXECUTE ON FUNCTION "public"."save_gongang_schedule"(jsonb) TO "authenticated";
-
-REVOKE ALL ON FUNCTION "public"."save_gongang_schedule"(jsonb) FROM "postgres";
-
-GRANT EXECUTE ON FUNCTION "public"."save_gongang_schedule"(jsonb) TO "postgres";
 
 -- 반복 선예약은 첫 날짜가 아니라 반복이 끝난 날부터 보존 기간을 센다.
 create or replace function private.cleanup_expired_records()

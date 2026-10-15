@@ -12,7 +12,8 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
       ))
   );
 $$;
-REVOKE ALL ON FUNCTION private.can_manage_gongang() FROM PUBLIC, anon;
+ALTER FUNCTION private.can_manage_gongang() OWNER TO postgres;
+REVOKE ALL ON FUNCTION private.can_manage_gongang() FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION private.can_manage_gongang() TO authenticated;
 
 CREATE OR REPLACE FUNCTION "private"."prepare_gongang_schedule"() RETURNS "trigger"
@@ -506,5 +507,6 @@ BEGIN
   END LOOP;
 END;
 $$;
-REVOKE ALL ON FUNCTION public.save_gongang_schedule(jsonb) FROM PUBLIC, anon;
+ALTER FUNCTION public.save_gongang_schedule(jsonb) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.save_gongang_schedule(jsonb) FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.save_gongang_schedule(jsonb) TO authenticated;
