@@ -130,6 +130,11 @@ export default function MainAppLayout() {
       data-slot="app-shell"
       className="fixed inset-0 flex flex-col overflow-hidden bg-background"
     >
+      {/* 본문 열이 아니라 셸 맨 위에 둔다. 본문 열에 두면 데스크톱에서 헤더 아래, 사이드바 오른쪽부터
+          그려지고, 스크롤로 숨는 헤더를 따라 위아래로 움직인다. */}
+      {showNavigationProgress ? (
+        <NavigationProgress className="absolute inset-x-0 top-[var(--app-safe-t)] z-50" />
+      ) : null}
       {chrome.header === "none" ? null : (
         <AppHeader
           className={cn(
@@ -149,9 +154,6 @@ export default function MainAppLayout() {
         <AppSidebar className="max-md:hidden" />
 
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-          {showNavigationProgress ? (
-            <NavigationProgress className="absolute inset-x-0 top-[var(--app-safe-t)] z-50" />
-          ) : null}
           {routeOwnsScroll ? (
             <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
               <Outlet />
