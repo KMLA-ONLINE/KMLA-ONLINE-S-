@@ -522,7 +522,10 @@ export function RoomScreen({
                 {pinnedMessageAuthor ?? "알 수 없는 사용자"}
               </p>
               <p className="truncate text-sm text-muted-foreground">
-                {formatReplyPreview(toReplyPreview(pinnedMessage))}
+                {formatReplyPreview(
+                  toReplyPreview(pinnedMessage),
+                  window.location.origin,
+                )}
               </p>
             </div>
             {/* 가장 최근 것만 보이므로 여럿이면 몇 개인지 알린다. 누르면 목록이 열린다. */}
@@ -1142,7 +1145,10 @@ function MessageThread({
               {incomingSender?.name ?? "알 수 없는 사용자"}
             </span>{" "}
             <span className="text-muted-foreground">
-              {formatReplyPreview(toReplyPreview(incomingMessage))}
+              {formatReplyPreview(
+                toReplyPreview(incomingMessage),
+                window.location.origin,
+              )}
             </span>
           </span>
           <ChevronDownIcon
@@ -1747,7 +1753,10 @@ function ComposerShell({
               {replyAuthor ?? "알 수 없는 사용자"}에게 답장
             </p>
             <p className="truncate text-xs text-muted-foreground">
-              {formatReplyPreview(toReplyPreview(replyTarget))}
+              {formatReplyPreview(
+                toReplyPreview(replyTarget),
+                window.location.origin,
+              )}
             </p>
           </div>
           <Button

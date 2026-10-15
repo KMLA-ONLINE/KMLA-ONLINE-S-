@@ -20,6 +20,7 @@ import type {
   ReactionSummary,
   AnonymousActivitySourceKind,
 } from "~/features/posts/model/types";
+import { invalidatePostPreview } from "~/features/posts/data/cache";
 import { uploadPostAttachment } from "~/features/posts/data/files";
 import { hydratePostComments } from "~/features/posts/data/queries";
 import { getSupabase } from "~/shared/supabase/client";
@@ -351,6 +352,7 @@ async function commitGroupPost(
     p_mention_pub_ids: mentions.pubIds,
   });
   if (error) throw error;
+  invalidatePostPreview(postId);
 }
 
 async function preparePostAttachment(postId: string, item: PreparedPostFile) {
@@ -813,6 +815,8 @@ async function commitProfilePost(
     p_visibility: values.visibility,
   });
   if (error) throw error;
+  // 고친 제목·본문·사진과 바뀐 공개 범위가 메시지 안 카드에 바로 반영되게 한다.
+  invalidatePostPreview(postId);
 }
 
 export async function createProfilePostWithAttachments(
@@ -876,6 +880,7 @@ export async function deleteProfilePost(postId: string): Promise<void> {
     p_post_id: postId,
   });
   if (error) throw error;
+  invalidatePostPreview(postId);
 }
 
 export async function deleteGroupPost(postId: string): Promise<void> {
@@ -883,6 +888,7 @@ export async function deleteGroupPost(postId: string): Promise<void> {
     p_post_id: postId,
   });
   if (error) throw error;
+  invalidatePostPreview(postId);
 }
 
 export async function setGroupPostPinned(

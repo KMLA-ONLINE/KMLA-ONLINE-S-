@@ -265,3 +265,24 @@ export interface PostCommentPage {
   /** 이보다 더 최신 댓글이 남아 있을 때의 커서. 없으면 스레드의 끝까지 불러온 것이다. */
   nextCursor: CommentCursor | null;
 }
+
+/** 메시지 안 게시물 카드에 그리는 요약(기능 명세 §13.21). 작성자는 게시물에 보이는 이름만 담는다. */
+export interface PostPreview {
+  postId: string;
+  kind: Database["public"]["Enums"]["post_kind"];
+  /** 개인 게시물은 null. */
+  groupName: string | null;
+  title: string | null;
+  /** 앞부분만 온 Markdown 원문. */
+  body: string;
+  authorIdentity: PostIdentity;
+  /** 실명·운영진 글의 실제 이름. 익명 글과 계정이 사라진 작성자는 null. */
+  authorName: string | null;
+  /** 게시물에 보이는 이름. 익명은 `익명`, 운영진은 `운영진`이다. */
+  authorLabel: string | null;
+  authorAvatarUrl: string | null;
+  imageUrl: string | null;
+  /** 프로필 사진·커버 변경 활동이면 무엇을 바꿨는지. 본문이 비어 있어 이 문구로 대신한다. */
+  activityKind:
+    Database["public"]["Enums"]["profile_media_activity_kind"] | null;
+}

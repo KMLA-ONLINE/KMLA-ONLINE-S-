@@ -8,10 +8,12 @@ import {
   parseMessageText,
 } from "~/features/messaging/model/message-text";
 import { formatMessageTime } from "~/features/messaging/model/message-time";
+import { sharedPostOf } from "~/features/messaging/model/shared-post";
 import type {
   ConversationMessage,
   MessageReplyPreview,
 } from "~/features/messaging/model/types";
+import { PostPreviewCard } from "~/features/posts/components/post-preview-card";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
@@ -52,9 +54,65 @@ export function MessageBubble({
   const isEmojiOnly = emojiGraphemes !== null;
   const hasReactions = showReactions && reactions.size > 0;
   const attachments = message.deleted ? [] : (message.attachments ?? []);
+  // 게시물 링크 하나뿐인 메시지는 글자 버블 대신 게시물 카드로 그린다(기능 명세 §13.21). 판정은 대화
+  // 목록·답장 인용과 같은 `sharedPostOf` 하나다.
+  const sharedPost = sharedPostOf(
+    { ...message, attachmentKind: attachments[0]?.kind },
+    window.location.origin,
+  );
   // 첨부만 있는 메시지는 글자 버블 없이 첨부만 그린다.
   const hasText =
-    Boolean(message.deleted) || message.body !== "" || attachments.length === 0;
+    !sharedPost &&
+    (Boolean(message.deleted) ||
+      message.body !== "" ||
+      attachments.length === 0);
+  const showEdited = Boolean(message.editedAt) && !message.deleted;
+  // 내 메시지의 primary 버블 위에서만 밝은 글자색을 쓴다.
+  const onPrimary = isOwn && !isEmojiOnly && !message.deleted && !sharedPost;
+  const replyQuote =
+    replyTarget && onViewReply ? (
+      <button
+        type="button"
+        aria-label={`${replyTargetAuthor ?? "알 수 없는 사용자"}의 원문 메시지 보기`}
+        className={cn(
+          // 원문이 길어도 짧은 답장의 버블을 14rem 넘게 넓히지 않는다. 버블이 본문이나 사진으로
+          // 그보다 넓으면 `min-w-full`로 버블 폭을 채운다(백분율 최소 폭은 버블 폭 계산에 들지 않는다).
+          "mb-1.5 block w-56 max-w-full min-w-full border-l-2 pl-2 text-left text-xs leading-4",
+          onPrimary
+            ? "border-primary-foreground/50 text-primary-foreground/85 hover:bg-primary-foreground/10"
+            : "border-primary text-muted-foreground hover:bg-background/60",
+        )}
+        onClick={onViewReply}
+      >
+        <span className="block truncate font-semibold">
+          {replyTargetAuthor ?? "알 수 없는 사용자"}
+        </span>
+        <span className="block truncate">
+          {formatReplyPreview(replyTarget, window.location.origin)}
+        </span>
+      </button>
+    ) : null;
+  const editedMark = showEdited ? (
+    <span
+      className={cn(
+        "ml-1.5 align-baseline text-[11px] leading-none whitespace-nowrap",
+        onPrimary ? "text-primary-foreground/75" : "text-muted-foreground",
+      )}
+    >
+      수정됨
+    </span>
+  ) : null;
+  const timestamp = showTimestamp ? (
+    <time
+      dateTime={message.sentAt}
+      className={cn(
+        "mt-1 block text-right text-[11px] leading-none",
+        onPrimary ? "text-primary-foreground/75" : "text-muted-foreground",
+      )}
+    >
+      {formatMessageTime(message.sentAt)}
+    </time>
+  ) : null;
   const reactionCount = [...reactions.values()].reduce(
     (total, count) => total + count,
     0,
@@ -96,6 +154,26 @@ export function MessageBubble({
             pending={message.pending}
           />
         ) : null}
+        {sharedPost ? (
+          <>
+            {/* 답장 인용은 카드 위 옅은 띠에 둔다. 카드 안에 넣으면 카드 전체가 링크라 누를 곳이 겹친다. */}
+            {replyQuote ? (
+              <div className="mb-1 w-fit max-w-full rounded-2xl bg-muted px-3.5 pt-2 pb-0.5">
+                {replyQuote}
+              </div>
+            ) : null}
+            <PostPreviewCard
+              postId={sharedPost.postId}
+              path={sharedPost.path}
+            />
+            {editedMark || timestamp ? (
+              <div className={cn("mt-1", isOwn ? "text-right" : "text-left")}>
+                {editedMark}
+                {timestamp}
+              </div>
+            ) : null}
+          </>
+        ) : null}
         {hasText ? (
           <div
             className={cn(
@@ -118,28 +196,7 @@ export function MessageBubble({
               !isEmojiOnly && !endsGroup && !isOwn && "rounded-bl-md",
             )}
           >
-            {replyTarget && onViewReply ? (
-              <button
-                type="button"
-                aria-label={`${replyTargetAuthor ?? "알 수 없는 사용자"}의 원문 메시지 보기`}
-                className={cn(
-                  // 원문이 길어도 짧은 답장의 버블을 14rem 넘게 넓히지 않는다. 버블이 본문이나 사진으로
-                  // 그보다 넓으면 `min-w-full`로 버블 폭을 채운다(백분율 최소 폭은 버블 폭 계산에 들지 않는다).
-                  "mb-1.5 block w-56 max-w-full min-w-full border-l-2 pl-2 text-left text-xs leading-4",
-                  isOwn && !isEmojiOnly && !message.deleted
-                    ? "border-primary-foreground/50 text-primary-foreground/85 hover:bg-primary-foreground/10"
-                    : "border-primary text-muted-foreground hover:bg-background/60",
-                )}
-                onClick={onViewReply}
-              >
-                <span className="block truncate font-semibold">
-                  {replyTargetAuthor ?? "알 수 없는 사용자"}
-                </span>
-                <span className="block truncate">
-                  {formatReplyPreview(replyTarget)}
-                </span>
-              </button>
-            ) : null}
+            {replyQuote}
             {message.deleted ? (
               // inline-flex는 바깥 줄의 글자 기준선에 얹혀 아래에 빈 줄 높이가 남아 글이 위로 뜬다.
               <span className="flex items-center gap-1.5">
@@ -151,31 +208,8 @@ export function MessageBubble({
             ) : (
               <MessageBody body={messageBody} isOwn={isOwn} />
             )}
-            {message.editedAt && !message.deleted ? (
-              <span
-                className={cn(
-                  "ml-1.5 align-baseline text-[11px] leading-none whitespace-nowrap",
-                  !isEmojiOnly && isOwn
-                    ? "text-primary-foreground/75"
-                    : "text-muted-foreground",
-                )}
-              >
-                수정됨
-              </span>
-            ) : null}
-            {showTimestamp ? (
-              <time
-                dateTime={message.sentAt}
-                className={cn(
-                  "mt-1 block text-right text-[11px] leading-none",
-                  !isEmojiOnly && isOwn && !message.deleted
-                    ? "text-primary-foreground/75"
-                    : "text-muted-foreground",
-                )}
-              >
-                {formatMessageTime(message.sentAt)}
-              </time>
-            ) : null}
+            {editedMark}
+            {timestamp}
           </div>
         ) : null}
       </div>

@@ -11,6 +11,7 @@ const mutations = vi.hoisted(() => ({
   listGroupCategories: vi.fn(),
   listGroupPosts: vi.fn(),
   markGroupPostsVisited: vi.fn(),
+  leaveGroup: vi.fn(),
 }));
 
 vi.mock("~/features/groups", async (importOriginal) => ({
@@ -25,6 +26,7 @@ vi.mock("~/features/posts", async (importOriginal) => ({
 }));
 
 import { groupKeys } from "~/features/groups";
+import { postKeys } from "~/features/posts";
 import {
   clientAction,
   clientLoader,
@@ -436,5 +438,26 @@ describe("group detail revalidation", () => {
     expect(shouldRevalidate({ currentUrl: url, nextUrl: url } as never)).toBe(
       true,
     );
+  });
+});
+
+describe("leaving a group", () => {
+  it("makes message post cards re-check access after leaving", async () => {
+    mutations.leaveGroup.mockResolvedValue(true);
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(postKeys.preview("group-post"), null);
+
+    await action(
+      new URLSearchParams({
+        intent: "leave",
+        groupId: "group-id",
+        profileId: "1",
+      }),
+    ).catch((response: unknown) => response);
+
+    expect(mutations.leaveGroup).toHaveBeenCalledWith("group-id", 1);
+    expect(
+      queryClient.getQueryState(postKeys.preview("group-post"))?.isInvalidated,
+    ).toBe(true);
   });
 });
