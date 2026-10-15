@@ -275,8 +275,14 @@ export interface PostPreview {
   title: string | null;
   /** 앞부분만 온 Markdown 원문. */
   body: string;
-  /** 계정이 사라진 실명 작성자는 null. */
+  authorIdentity: PostIdentity;
+  /** 실명·운영진 글의 실제 이름. 익명 글과 계정이 사라진 작성자는 null. */
+  authorName: string | null;
+  /** 게시물에 보이는 이름. 익명은 `익명`, 운영진은 `운영진`이다. */
   authorLabel: string | null;
   authorAvatarUrl: string | null;
   imageUrl: string | null;
+  /** 프로필 사진·커버 변경 활동이면 무엇을 바꿨는지. 본문이 비어 있어 이 문구로 대신한다. */
+  activityKind:
+    Database["public"]["Enums"]["profile_media_activity_kind"] | null;
 }

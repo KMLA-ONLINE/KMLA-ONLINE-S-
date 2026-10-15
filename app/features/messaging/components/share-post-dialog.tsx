@@ -6,7 +6,7 @@ import {
   ShareIcon,
   XIcon,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
@@ -68,6 +68,8 @@ export function SharePostDialog({
   const [searchTerm, setSearchTerm] = useState("");
   const [selected, setSelected] = useState<Choice[]>([]);
   const [sending, setSending] = useState(false);
+  // 시트가 열려 있는 동안 대화별 메시지 ID를 기억해, 다시 보내기가 같은 링크를 두 번 저장하지 않게 한다.
+  const messageIds = useRef(new Map<string, string>());
 
   const conversations = useQuery({ ...conversationListQuery(), enabled: open });
   const people = useQuery({
@@ -78,6 +80,7 @@ export function SharePostDialog({
   });
 
   function reset() {
+    messageIds.current = new Map();
     setQuery("");
     setSearchTerm("");
     setSelected([]);
@@ -105,6 +108,7 @@ export function SharePostDialog({
       const { sent, failed } = await sendToConversations(
         selected.map(({ target }) => target),
         url(),
+        messageIds.current,
       );
       void invalidateConversationList(queryClient);
       if (failed === 0) {

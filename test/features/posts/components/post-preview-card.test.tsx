@@ -74,4 +74,67 @@ describe("PostPreviewCard", () => {
       await screen.findByText("볼 수 없는 게시물입니다"),
     ).toBeInTheDocument();
   });
+
+  it("shows a staff post under its real author with the staff mark", async () => {
+    listPostPreviews.mockResolvedValue(
+      new Map([
+        [
+          POST_ID,
+          {
+            postId: POST_ID,
+            kind: "group",
+            groupName: "학생회",
+            title: "공지",
+            body: "",
+            authorIdentity: "staff",
+            authorName: "이한별",
+            authorLabel: "운영진",
+            authorAvatarUrl: null,
+            imageUrl: null,
+            activityKind: null,
+          },
+        ],
+      ]),
+    );
+    renderCard();
+
+    const link = await screen.findByRole("link", { name: /공지/ });
+    expect(link).toHaveTextContent("이한별");
+    expect(link).not.toHaveTextContent("운영진 ·");
+    expect(
+      screen.getByRole("img", { name: "운영진 명의" }),
+    ).toBeInTheDocument();
+  });
+
+  it("describes a profile photo change instead of an empty body", async () => {
+    listPostPreviews.mockResolvedValue(
+      new Map([
+        [
+          POST_ID,
+          {
+            postId: POST_ID,
+            kind: "profile",
+            groupName: null,
+            title: null,
+            body: "",
+            authorIdentity: "identified",
+            authorName: "박새벽",
+            authorLabel: "박새벽",
+            authorAvatarUrl: null,
+            imageUrl: "https://signed/avatar",
+            activityKind: "avatar_changed",
+          },
+        ],
+      ]),
+    );
+    renderCard();
+
+    const link = await screen.findByRole("link", {
+      name: /프로필 사진을 바꾸었습니다/,
+    });
+    expect(link).not.toHaveTextContent("게시물 보기");
+    expect(
+      link.querySelector("img[src='https://signed/avatar']"),
+    ).not.toBeNull();
+  });
 });

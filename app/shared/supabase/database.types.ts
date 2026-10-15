@@ -2822,8 +2822,12 @@ export type Database = {
       list_post_previews: {
         Args: { p_post_ids: string[] }
         Returns: {
+          activity_kind: Database["public"]["Enums"]["profile_media_activity_kind"]
+          activity_media_path: string
           author_avatar_path: string
+          author_identity: Database["public"]["Enums"]["post_identity"]
           author_label: string
+          author_name: string
           body: string
           group_name: string
           image_path: string

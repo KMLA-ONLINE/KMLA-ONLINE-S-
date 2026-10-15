@@ -112,10 +112,14 @@ export type SendTarget =
  * 같은 본문을 여러 대화에 한 번씩 보낸다(기능 명세 §8.13). 사람은 1:1 대화로 바꾼 뒤 대화 ID로 겹침을
  * 없앤다 — 최근 대화와 검색에서 같은 사람을 함께 골라도 두 번 가지 않는다. 한 대상의 실패가 나머지를
  * 막지 않는다.
+ *
+ * `messageIds`는 대화별 메시지 ID를 다시 시도 사이에 기억한다. 저장은 됐는데 응답만 끊긴 대화에 같은
+ * ID로 다시 보내면 서버가 한 번만 저장한다. 새 ID를 만들면 같은 링크가 두 번 간다.
  */
 export async function sendToConversations(
   targets: readonly SendTarget[],
   body: string,
+  messageIds = new Map<string, string>(),
 ): Promise<{ sent: number; failed: number }> {
   if (targets.length > SEND_TARGET_LIMIT) {
     throw new Error(`Too many targets: ${targets.length}`);
@@ -136,9 +140,11 @@ export async function sendToConversations(
 
   const sent = await Promise.allSettled(
     [...conversationIds].map(async (conversationId) => {
+      const messageId = messageIds.get(conversationId) ?? crypto.randomUUID();
+      messageIds.set(conversationId, messageId);
       const { data, error } = await getSupabase().rpc("send_message", {
         p_conversation_id: conversationId,
-        p_message_id: crypto.randomUUID(),
+        p_message_id: messageId,
         p_body: body,
       });
       if (error) throw error;

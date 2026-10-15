@@ -448,9 +448,9 @@ export async function listPostPreviews(
     createPostAttachmentUrls(rows.map((row) => row.image_path)).catch(
       () => new Map<string, string>(),
     ),
-    createProfileMediaUrls(rows.map((row) => row.author_avatar_path)).catch(
-      () => new Map<string, string>(),
-    ),
+    createProfileMediaUrls(
+      rows.flatMap((row) => [row.author_avatar_path, row.activity_media_path]),
+    ).catch(() => new Map<string, string>()),
   ]);
   const previews = new Map<string, PostPreview | null>(
     postIds.map((id) => [id, null]),
@@ -462,11 +462,19 @@ export async function listPostPreviews(
       groupName: row.group_name,
       title: row.title,
       body: row.body,
+      authorIdentity: row.author_identity,
+      authorName: row.author_name,
       authorLabel: row.author_label,
       authorAvatarUrl: row.author_avatar_path
         ? (avatarUrls.get(row.author_avatar_path) ?? null)
         : null,
-      imageUrl: row.image_path ? (imageUrls.get(row.image_path) ?? null) : null,
+      // 프로필 사진·커버 변경 활동의 사진은 첨부가 아니라 profile-media 버킷에 있다.
+      imageUrl: row.image_path
+        ? (imageUrls.get(row.image_path) ?? null)
+        : row.activity_media_path
+          ? (avatarUrls.get(row.activity_media_path) ?? null)
+          : null,
+      activityKind: row.activity_kind,
     });
   }
   return previews;

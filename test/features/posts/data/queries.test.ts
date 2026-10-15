@@ -532,4 +532,58 @@ describe("post queries", () => {
     });
     expect(previews.get("gone")).toBeNull();
   });
+
+  it("signs a profile activity photo from profile media and keeps a staff author's name", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          post_id: "activity",
+          kind: "profile",
+          group_name: null,
+          title: null,
+          body: "",
+          author_identity: "identified",
+          author_name: "박새벽",
+          author_label: "박새벽",
+          author_avatar_path: null,
+          image_path: null,
+          activity_kind: "cover_changed",
+          activity_media_path: "u/cover/c1",
+        },
+        {
+          post_id: "staff",
+          kind: "group",
+          group_name: "학생회",
+          title: "공지",
+          body: "본문",
+          author_identity: "staff",
+          author_name: "이한별",
+          author_label: "운영진",
+          author_avatar_path: null,
+          image_path: null,
+          activity_kind: null,
+          activity_media_path: null,
+        },
+      ],
+      error: null,
+    });
+    getSupabase.mockReturnValue({ rpc });
+    createProfileMediaUrls.mockResolvedValueOnce(
+      new Map([["u/cover/c1", "https://signed/cover"]]),
+    );
+
+    const previews = await listPostPreviews(["activity", "staff"]);
+
+    expect(createProfileMediaUrls).toHaveBeenCalledWith(
+      expect.arrayContaining(["u/cover/c1"]),
+    );
+    expect(previews.get("activity")).toMatchObject({
+      imageUrl: "https://signed/cover",
+      activityKind: "cover_changed",
+    });
+    expect(previews.get("staff")).toMatchObject({
+      authorName: "이한별",
+      authorIdentity: "staff",
+    });
+  });
 });

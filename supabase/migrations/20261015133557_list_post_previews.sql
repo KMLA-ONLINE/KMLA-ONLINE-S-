@@ -4,14 +4,18 @@ CREATE OR REPLACE FUNCTION public.list_post_previews (
   p_post_ids uuid[]
 )
   RETURNS TABLE (
-    post_id            uuid,
-    kind               public.post_kind,
-    group_name         text,
-    title              text,
-    body               text,
-    author_label       text,
-    author_avatar_path text,
-    image_path         text
+    post_id             uuid,
+    kind                public.post_kind,
+    group_name          text,
+    title               text,
+    body                text,
+    author_identity     public.post_identity,
+    author_name         text,
+    author_label        text,
+    author_avatar_path  text,
+    image_path          text,
+    activity_kind       public.profile_media_activity_kind,
+    activity_media_path text
   )
   LANGUAGE plpgsql
   STABLE
@@ -33,13 +37,17 @@ begin
     grp.name,
     post.title,
     left(post.body, 300),
+    post.author_identity,
+    case when post.author_identity in ('identified', 'staff') then profile.name end,
     case post.author_identity
       when 'identified' then profile.name
       when 'anonymous' then '익명'
       when 'staff' then '운영진'
     end,
     case when post.author_identity in ('identified', 'staff') then profile.avatar_path end,
-    cover.path
+    cover.path,
+    post.activity_kind,
+    post.activity_media_path
   from public.posts as post
   join private.post_authors as author on author.post_id = post.id
   left join public.groups as grp on grp.id = post.group_id

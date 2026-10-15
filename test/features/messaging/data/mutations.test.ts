@@ -144,4 +144,43 @@ describe("sendToConversations", () => {
     await expect(sendToConversations(targets, LINK)).rejects.toThrow();
     expect(rpc).not.toHaveBeenCalled();
   });
+
+  it("reuses each conversation's message id when retrying, so a lost response cannot duplicate", async () => {
+    let lose = true;
+    rpc.mockImplementation((name: string, args: Record<string, unknown>) => {
+      if (name === "open_direct_conversation") {
+        return Promise.resolve({ data: "direct-7", error: null });
+      }
+      // 첫 시도는 서버에 저장됐지만 응답이 끊긴 것처럼 실패한다.
+      if (lose) return Promise.reject(new TypeError("Failed to fetch"));
+      return Promise.resolve({
+        data: [{ id: args.p_message_id, sent_at: "2026-10-15T00:00:00Z" }],
+        error: null,
+      });
+    });
+    const messageIds = new Map<string, string>();
+    const targets = [
+      { type: "conversation" as const, conversationId: "group-1" },
+      { type: "person" as const, profileId: "7" },
+    ];
+
+    await expect(
+      sendToConversations(targets, LINK, messageIds),
+    ).resolves.toEqual({ sent: 0, failed: 2 });
+    lose = false;
+    await expect(
+      sendToConversations(targets, LINK, messageIds),
+    ).resolves.toEqual({ sent: 2, failed: 0 });
+
+    const idsByConversation = new Map<string, Set<unknown>>();
+    for (const [, args] of rpcCalls("send_message")) {
+      const conversationId = String(args.p_conversation_id);
+      const ids = idsByConversation.get(conversationId) ?? new Set();
+      ids.add(args.p_message_id);
+      idsByConversation.set(conversationId, ids);
+    }
+    expect([...idsByConversation.values()].map((ids) => ids.size)).toEqual([
+      1, 1,
+    ]);
+  });
 });

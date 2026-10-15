@@ -1734,8 +1734,10 @@ ALTER FUNCTION "public"."get_profile_post"("p_post_id" "uuid") OWNER TO "postgre
 
 -- 메시지 안 게시물 카드(기능 명세 §13.21). 보는 사람이 읽을 수 있는 게시물만 돌려주고 나머지는 행을 빼서
 -- 클라이언트가 `볼 수 없는 게시물` 카드로 그린다. 권한은 `can_read_post()` 하나로 판정한다. 작성자는
--- 게시물에 보이는 이름만 내보내고 익명 글의 실제 작성자는 감춘다. 방 하나의 카드를 한 번에 읽는다.
-CREATE OR REPLACE FUNCTION "public"."list_post_previews"("p_post_ids" "uuid"[]) RETURNS TABLE("post_id" "uuid", "kind" "public"."post_kind", "group_name" "text", "title" "text", "body" "text", "author_label" "text", "author_avatar_path" "text", "image_path" "text")
+-- `get_group_post`와 같은 표시 규칙(운영진 글은 실제 이름 + 운영진 표시)을 따르고 익명 글의 실제 작성자는
+-- 감춘다. 프로필 사진·커버 변경 활동은 본문이 비어 있어 profile-media 버킷의 활동 사진을 함께 준다.
+-- 방 하나의 카드를 한 번에 읽는다.
+CREATE OR REPLACE FUNCTION "public"."list_post_previews"("p_post_ids" "uuid"[]) RETURNS TABLE("post_id" "uuid", "kind" "public"."post_kind", "group_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_name" "text", "author_label" "text", "author_avatar_path" "text", "image_path" "text", "activity_kind" "public"."profile_media_activity_kind", "activity_media_path" "text")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1754,13 +1756,17 @@ begin
     grp.name,
     post.title,
     left(post.body, 300),
+    post.author_identity,
+    case when post.author_identity in ('identified', 'staff') then profile.name end,
     case post.author_identity
       when 'identified' then profile.name
       when 'anonymous' then '익명'
       when 'staff' then '운영진'
     end,
     case when post.author_identity in ('identified', 'staff') then profile.avatar_path end,
-    cover.path
+    cover.path,
+    post.activity_kind,
+    post.activity_media_path
   from public.posts as post
   join private.post_authors as author on author.post_id = post.id
   left join public.groups as grp on grp.id = post.group_id

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(12);
+select plan(17);
 
 -- 메시지 안 게시물 카드(기능 명세 §13.21). 보는 사람 = 시드 학생(홍길동, profile 1).
 --   29기 수학 탐구(…0002)는 멤버, 메이커스 랩(…0003)은 비멤버다.
@@ -15,7 +15,9 @@ insert into ids (name, id) values
   ('outsider_group', gen_random_uuid()),
   ('public_profile', gen_random_uuid()),
   ('private_profile', gen_random_uuid()),
-  ('draft', gen_random_uuid());
+  ('draft', gen_random_uuid()),
+  ('member_staff', gen_random_uuid()),
+  ('avatar_activity', gen_random_uuid());
 
 insert into public.posts (
   id, kind, group_id, timeline_profile_id, title, body, author_identity,
@@ -37,10 +39,27 @@ values
     null, 5, null, '나만 보기', 'identified', 5, 'private', now()),
   ((select id from ids where name = 'draft'), 'group',
     '20000000-0000-0000-0000-000000000002', null, '초안', '아직',
-    'identified', 4, null, null);
+    'identified', 4, null, null),
+  ((select id from ids where name = 'member_staff'), 'group',
+    '20000000-0000-0000-0000-000000000002', null, '운영 공지', '모두 보세요',
+    'staff', null, null, now());
+
+-- 프로필 사진 변경 활동은 본문이 비고 사진이 profile-media 버킷의 activity_media_path에 있다. 경로는
+-- 타임라인 주인의 auth 계정 아래여야 하므로 로그인 계정이 있는 시드 학생(profile 1) 자신의 활동으로 둔다.
+insert into public.posts (
+  id, kind, timeline_profile_id, body, author_identity, display_author_profile_id,
+  visibility, published_at, activity_kind, activity_media_path
+)
+select id, 'profile', 1, '', 'identified', 1, 'public', now(), 'avatar_changed',
+  '10000000-0000-0000-0000-000000000001/avatar/b0000000-0000-0000-0000-000000000001'
+from ids where name = 'avatar_activity';
 
 insert into private.post_authors (post_id, profile_id)
-select id, case when name in ('public_profile', 'private_profile') then 5 else 4 end
+select id, case
+  when name = 'avatar_activity' then 1
+  when name in ('public_profile', 'private_profile') then 5
+  else 4
+end
 from ids;
 
 -- 첫 사진은 썸네일로 쓴다. 파일과 준비 안 된 사진은 고르지 않는다.
@@ -83,7 +102,7 @@ select * from public.list_post_previews(array(
 
 select is(
   (select array_agg(ids.name order by ids.name) from previews join ids on ids.id = previews.post_id),
-  array['member_anonymous', 'member_identified', 'public_profile'],
+  array['avatar_activity', 'member_anonymous', 'member_identified', 'member_staff', 'public_profile'],
   'only posts the viewer can read come back; outsider groups, private timelines, drafts and unknown ids are left out'
 );
 
@@ -129,6 +148,28 @@ select is(
 select ok(
   (select image_path is null from previews where post_id = (select id from ids where name = 'public_profile')),
   'a post without photos has no card image'
+);
+
+select is(
+  (select author_name from previews where post_id = (select id from ids where name = 'member_staff')),
+  '이한별', 'a staff post shows its real author name like the post itself does'
+);
+select is(
+  (select author_identity::text from previews where post_id = (select id from ids where name = 'member_staff')),
+  'staff', 'a staff post says it was posted as staff'
+);
+select ok(
+  (select author_name is null from previews where post_id = (select id from ids where name = 'member_anonymous')),
+  'an anonymous post does not leak the author name'
+);
+select is(
+  (select activity_kind::text from previews where post_id = (select id from ids where name = 'avatar_activity')),
+  'avatar_changed', 'a profile media activity says what changed'
+);
+select is(
+  (select activity_media_path from previews where post_id = (select id from ids where name = 'avatar_activity')),
+  '10000000-0000-0000-0000-000000000001/avatar/b0000000-0000-0000-0000-000000000001',
+  'a profile media activity carries its profile-media image path'
 );
 
 select * from finish();

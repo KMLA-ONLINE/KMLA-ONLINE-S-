@@ -3,6 +3,7 @@ import { EyeOffIcon, RotateCwIcon } from "lucide-react";
 import { useMemo } from "react";
 import { Link } from "react-router";
 
+import { StaffMark } from "~/features/posts/components/staff-mark";
 import { postPreviewQuery } from "~/features/posts/data/cache";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
 import { UserAvatar } from "~/shared/components/user-avatar";
@@ -33,7 +34,15 @@ export function PostPreviewCard({
   const query = useQuery(postPreviewQuery(postId));
   const preview = query.data;
   const excerpt = useMemo(
-    () => (preview ? extractPostPlainText(preview.body).trim() : ""),
+    () =>
+      !preview
+        ? ""
+        : preview.activityKind
+          ? // 프로필 사진·커버 변경 활동은 본문이 비어 있다. 피드와 같은 문구로 대신한다.
+            preview.activityKind === "avatar_changed"
+            ? "프로필 사진을 바꾸었습니다."
+            : "프로필 커버를 바꾸었습니다."
+          : extractPostPlainText(preview.body).trim(),
     [preview],
   );
 
@@ -89,7 +98,8 @@ export function PostPreviewCard({
     );
   }
 
-  const author = preview.authorLabel ?? UNKNOWN_AUTHOR;
+  // 운영진 글은 다른 게시물 화면처럼 실제 이름에 운영진 표시를 붙인다.
+  const author = preview.authorName ?? preview.authorLabel ?? UNKNOWN_AUTHOR;
   return (
     <Link
       to={path}
@@ -116,6 +126,9 @@ export function PostPreviewCard({
             className="size-5"
           />
           <span className="truncate font-medium text-foreground">{author}</span>
+          {preview.authorIdentity === "staff" ? (
+            <StaffMark className="size-3.5" />
+          ) : null}
           {preview.groupName ? (
             <span className="truncate">· {preview.groupName}</span>
           ) : null}

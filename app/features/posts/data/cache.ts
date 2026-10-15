@@ -60,6 +60,16 @@ export function invalidatePostPreview(postId: string) {
   });
 }
 
+/**
+ * 그룹을 나가 읽을 수 있는 게시물이 줄었을 때 메시지 안 카드를 모두 다시 읽게 한다. 어느 카드가 그
+ * 그룹 글인지 클라이언트는 모르므로 전부 무효화한다 — 화면에 떠 있는 카드만 다시 받는다.
+ */
+export function invalidatePostPreviews() {
+  void getQueryClient().invalidateQueries({
+    queryKey: [...postKeys.all, "preview"],
+  });
+}
+
 /** 메시지 안 게시물 카드 하나. 같은 tick에 그려지는 카드들은 한 번의 RPC로 묶어 읽는다. */
 export function postPreviewQuery(postId: string) {
   return queryOptions({
