@@ -18,6 +18,10 @@ import {
 import { Spinner } from "~/shared/ui/spinner";
 import { PwaPrompts } from "~/shared/components/pwa-prompts";
 import { QueryProvider } from "~/shared/components/query-provider";
+import {
+  ThemeColorMeta,
+  ThemeColorSync,
+} from "~/shared/components/theme-color-meta";
 import { ViewportMeta } from "~/shared/components/viewport-meta";
 import { env } from "~/shared/lib/env";
 import { cn } from "~/shared/lib/utils";
@@ -100,6 +104,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <SplashTypingScript />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
+        <ThemeColorMeta />
         <Meta />
         <Links />
       </head>
@@ -111,6 +116,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           defaultTheme="light"
           disableTransitionOnChange
         >
+          <ThemeColorSync />
           <TooltipProvider>
             {children}
             <Toaster />
