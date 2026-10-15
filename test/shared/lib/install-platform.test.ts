@@ -9,6 +9,8 @@ const ANDROID_WEBVIEW =
   "Mozilla/5.0 (Linux; Android 14; SM-S921N Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.0.0 Mobile Safari/537.36";
 const IPHONE_WEBVIEW =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
+const IPHONE_WEBVIEW_16 =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 16_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
 const ANDROID_CHROME =
   "Mozilla/5.0 (Linux; Android 14; SM-S921N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36";
 
@@ -46,11 +48,18 @@ describe("getInAppEscapeUrl", () => {
     expect(getInAppEscapeUrl(HREF)).toBe(intent);
   });
 
-  it("has no way out of Facebook and Instagram on iOS", () => {
+  it("opens Facebook and Instagram on iOS 17+ in Safari", () => {
+    const safari = `x-safari-${HREF}`;
+
     useUserAgent(`${IPHONE_WEBVIEW} [FBAN/FBIOS;FBAV/470.0.0.0]`);
-    expect(getInAppEscapeUrl(HREF)).toBeNull();
+    expect(getInAppEscapeUrl(HREF)).toBe(safari);
 
     useUserAgent(`${IPHONE_WEBVIEW} Instagram 300.0.0.0`);
+    expect(getInAppEscapeUrl(HREF)).toBe(safari);
+  });
+
+  it("has no way out of Facebook and Instagram before iOS 17", () => {
+    useUserAgent(`${IPHONE_WEBVIEW_16} [FBAN/FBIOS;FBAV/470.0.0.0]`);
     expect(getInAppEscapeUrl(HREF)).toBeNull();
   });
 
