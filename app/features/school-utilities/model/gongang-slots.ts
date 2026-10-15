@@ -35,3 +35,18 @@ export function gongangSlots(date: string) {
 export function gongangKey(slot: string, location: string) {
   return `${slot}:${location}`;
 }
+export function parseGongangKey(key: string) {
+  const [slot = "", location = ""] = key.split(":");
+  return { slot, location };
+}
+/** Unknown ids fall back to the raw id so a stale key never renders "undefined". */
+export function gongangCellLabel(date: string, slot: string, location: string) {
+  const floor = GONGANG_FLOORS.find((item) => item.id === location);
+  const time = gongangSlots(date).find((item) => item.id === slot);
+  return `${floor?.label ?? location} ${time?.label ?? slot}`;
+}
+export function toggleGongangKey(values: string[], key: string) {
+  return values.includes(key)
+    ? values.filter((value) => value !== key)
+    : [...values, key];
+}
