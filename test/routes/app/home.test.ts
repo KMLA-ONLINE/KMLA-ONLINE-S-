@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   hasActiveSession: vi.fn(),
   listFeedPosts: vi.fn(),
+  signFeedMedia: vi.fn(),
   getMealDay: vi.fn(),
   listBirthdays: vi.fn(),
   listActiveStories: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock("~/features/stories/data/queries", () => ({
 vi.mock("~/features/feed/data/queries", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   listFeedPosts: mocks.listFeedPosts,
+  signFeedMedia: mocks.signFeedMedia,
 }));
 
 vi.mock("~/features/meal", async (importOriginal) => ({
@@ -38,6 +40,7 @@ vi.mock("~/shared/lib/korea-date", () => ({
 }));
 
 import { clientLoader, shouldRevalidate } from "~/routes/app/home";
+import { appShellKeys } from "~/features/app-shell";
 import { feedKeys } from "~/features/feed";
 import { storyKeys } from "~/features/stories/data/cache";
 import type { BirthdayProfile } from "~/features/profiles";
@@ -118,7 +121,7 @@ describe("home feed loader", () => {
   it("warms the feed cache and loads today's meal independently", async () => {
     const result = await load();
 
-    expect(mocks.listFeedPosts).toHaveBeenCalledWith(null, true);
+    expect(mocks.listFeedPosts).toHaveBeenCalledWith(null, false);
     expect(mocks.getMealDay).toHaveBeenCalledWith("20260824");
     expect(mocks.listBirthdays).toHaveBeenCalledWith("2026-08-24", "today");
     await expect(result.mealDay).resolves.toBe(mealDay);
@@ -141,6 +144,50 @@ describe("home feed loader", () => {
       pages: [page],
     });
   });
+
+  // 화면 마운트 뒤 `useQueries`를 기다리지 않고 로더가 서명을 띄운다. 키는 화면과 같아야 이어받는다.
+  it.each([
+    ["card", { profile: { id: 7 } }, true],
+    ["list", { profile: { id: 7 } }, false],
+    ["card", undefined, false],
+  ] as const)(
+    "prefetches feed media in %s mode when the shell is %j",
+    async (mode, shell, prefetched) => {
+      vi.stubGlobal("window", {
+        matchMedia: () => ({ matches: false }),
+        localStorage: {
+          getItem: (key: string) =>
+            key === "kmla-online:posts-view:v1" ? mode : null,
+        },
+      });
+      if (shell) getQueryClient().setQueryData(appShellKeys.profile(), shell);
+      mocks.listFeedPosts.mockResolvedValue({
+        ...page,
+        posts: [
+          {
+            post_id: "post-a",
+            author_avatar_path: "avatar",
+            activity_media_path: null,
+            attachments: [],
+          },
+        ],
+      });
+      mocks.signFeedMedia.mockResolvedValue({ attachments: {}, profiles: {} });
+
+      await load();
+      // 로더는 서명을 기다리지 않는다. 띄운 요청이 queryFn에 닿을 때까지만 넘긴다.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      if (prefetched) {
+        expect(mocks.signFeedMedia).toHaveBeenCalledWith({
+          attachments: [],
+          profiles: ["avatar"],
+        });
+      } else {
+        expect(mocks.signFeedMedia).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   // 뒤로 가기로 돌아왔을 때 쌓아 둔 페이지를 유지하기 위한 것이다. 여기서 다시 읽으면
   // 무한 쿼리가 모든 페이지를 다시 읽고, 새 feedEpoch가 목록을 통째로 갈아치운다.

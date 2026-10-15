@@ -1,4 +1,11 @@
-import { data, Form, Link, replace, useNavigation } from "react-router";
+import {
+  data,
+  Form,
+  Link,
+  replace,
+  useNavigation,
+  type ShouldRevalidateFunctionArgs,
+} from "react-router";
 import { useState } from "react";
 
 import {
@@ -14,6 +21,10 @@ import {
   validateEmail,
   validatePassword,
 } from "~/features/auth";
+import {
+  DeferredAdminContactList,
+  listAdminContacts,
+} from "~/features/support";
 import { Button } from "~/shared/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "~/shared/ui/field";
 import { Input } from "~/shared/ui/input";
@@ -28,15 +39,25 @@ import type { Route } from "./+types/login";
  */
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const state = await loadAuthState();
-  if (!state) return null;
-
-  const next = new URL(request.url).searchParams.get("next");
-  const destination = getProfileDestination(state.profile, next);
-  if (destination === "/login") {
+  if (state) {
+    const next = new URL(request.url).searchParams.get("next");
+    const destination = getProfileDestination(state.profile, next);
+    if (destination !== "/login") throw replace(destination);
     await signOut();
-    return null;
   }
-  throw replace(destination);
+  // 로그인에 실패한 사람에게만 보이지만, 그때 다시 부르지 않도록 미리 받아 둔다. 폼은 기다리지 않는다.
+  return { contacts: listAdminContacts().catch(() => []) };
+}
+
+/**
+ * 실패한 로그인은 같은 화면에 남고 세션도 그대로다. 다시 불러올 것이 없고, 다시 부르면 새 연락처
+ * promise가 Suspense를 다시 걸어 펼쳐 둔 연락처가 접힌다. 성공은 action이 redirect하므로 해당 없다.
+ */
+export function shouldRevalidate({
+  actionResult,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  return actionResult === undefined ? defaultShouldRevalidate : false;
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
@@ -76,7 +97,10 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   }
 }
 
-export default function LoginPage({ actionData }: Route.ComponentProps) {
+export default function LoginPage({
+  loaderData,
+  actionData,
+}: Route.ComponentProps) {
   const navigation = useNavigation();
   const pending = navigation.state === "submitting";
   const result = actionData as
@@ -99,7 +123,7 @@ export default function LoginPage({ actionData }: Route.ComponentProps) {
       title="다시 만나서 반가워요"
       description="로그인해 소식과 이야기를 이어가세요."
       footer={
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex w-full flex-col items-center gap-1">
           <p>
             아직 계정이 없나요?{" "}
             <Link
@@ -118,6 +142,14 @@ export default function LoginPage({ actionData }: Route.ComponentProps) {
               비밀번호 찾기
             </Link>
           </p>
+          {loaderData && errors.form ? (
+            <div className="mt-4 w-full">
+              <DeferredAdminContactList
+                contacts={loaderData.contacts}
+                prompt="계속 로그인이 안 되나요?"
+              />
+            </div>
+          ) : null}
         </div>
       }
     >

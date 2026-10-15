@@ -6,13 +6,13 @@
  */
 
 /**
- * 안내 모드 4분기.
+ * 안내 모드.
  *
- * `install`만 브라우저가 실제 설치 프롬프트를 넘겨준 경우이고, 나머지 셋은 우리가 손으로
- * 절차를 알려주는 수밖에 없는 경우다.
+ * `install`만 브라우저가 실제 설치 프롬프트를 넘겨준 경우이고, 나머지는 우리가 손으로
+ * 절차를 알려주는 수밖에 없는 경우다. 인앱 브라우저에는 안내를 띄우지 않으므로 모드가 없다.
  */
 export type InstallMode =
-  "install" | "ios-browser" | "ios-other" | "android-help" | "android-other";
+  "install" | "ios-browser" | "ios-other" | "android-help" | "android-samsung";
 
 export const INSTALL_PREFERENCE_KEY = "kmla-online:pwa-install-preference";
 
@@ -112,6 +112,24 @@ export function isAndroid(): boolean {
 }
 
 /**
+ * 삼성 인터넷인가. 설치는 되지만 Web Push와 설치 앱 동작이 Chrome보다 불안정해서 설치 대신
+ * Chrome으로 옮기라고 권한다.
+ */
+export function isSamsungInternet(): boolean {
+  return /SamsungBrowser/i.test(navigator.userAgent);
+}
+
+/**
+ * 지금 주소를 Android Chrome으로 여는 intent. Chrome이 없으면 Android가 Play 스토어로 보낸다.
+ * `#Intent`가 fragment 자리를 쓰므로 원래 주소의 hash는 버린다.
+ */
+export function getChromeIntentUrl(href: string): string {
+  const url = new URL(href);
+  const scheme = url.protocol.replace(/:$/, "");
+  return `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=${scheme};package=com.android.chrome;end`;
+}
+
+/**
  * 설치 유도를 띄울 기기인가 — 폰과 태블릿만이고 데스크톱은 제외한다.
  *
  * 데스크톱 Chrome도 `beforeinstallprompt`를 발생시키기 때문에, 이벤트만 믿으면 노트북에서도
@@ -127,20 +145,22 @@ export function isHandheld(): boolean {
 /**
  * 다른 앱이 자기 안에 띄운 브라우저인가.
  *
- * 어느 플랫폼이든 인앱 브라우저에는 홈 화면 추가·앱 설치 메뉴가 없다. 그런데도 "메뉴에서
- * 앱 설치를 고르세요"라고 안내하면 존재하지 않는 메뉴를 찾게 만든다. 국내에서는 카카오톡
- * 링크로 들어오는 비중이 커서 이 갈래가 드물지 않다.
+ * 어느 플랫폼이든 인앱 브라우저에는 홈 화면 추가·앱 설치 메뉴가 없다. 예전에는 다른
+ * 브라우저로 옮기라는 안내를 띄웠지만, 링크를 잠깐 열어 본 사람에게 모달부터 들이미는 꼴이라
+ * (특히 밖으로 나갈 길이 없는 iOS 페이스북) 설치 안내 자체를 띄우지 않는다.
  *
  * 판별은 두 갈래다. Android WebView는 UA에 `; wv)` 마커를 남기므로 앱 이름을 몰라도
  * 잡힌다 — 반대로 Chrome 커스텀 탭은 이 마커가 없고 실제로 설치도 되므로 걸리지 않는다.
  * iOS의 WKWebView에는 그런 마커가 없어서 앱 이름을 하나씩 나열하는 수밖에 없다.
  */
-function isInAppBrowser(): boolean {
+export function isInAppBrowser(): boolean {
   const ua = navigator.userAgent;
 
   return (
     /;\s*wv\)/i.test(ua) ||
-    /NAVER|KAKAOTALK|DaumApps|Instagram|FBAN|FBAV|Line/i.test(ua)
+    /NAVER|KAKAOTALK|DaumApps|Instagram|FBAN|FBAV|FB_IAB/i.test(ua) ||
+    // 안내를 아예 숨기므로 다른 낱말 속 `line`에 걸리지 않게 LINE 앱 표식(`Line/13.x`)만 본다.
+    /\bLine\//.test(ua)
   );
 }
 
@@ -169,13 +189,16 @@ function supportsIOSHomeScreenInstall(): boolean {
 
 /**
  * `beforeinstallprompt`가 오지 않는 브라우저에서 대신 보여줄 수동 안내 모드.
- * 폰·태블릿이 아니면 `null`.
+ * 폰·태블릿이 아니거나 인앱 브라우저면 `null`.
  */
 export function getFallbackInstallMode(): InstallMode | null {
+  if (isInAppBrowser()) return null;
   if (isIOS()) {
     return supportsIOSHomeScreenInstall() ? "ios-browser" : "ios-other";
   }
-  if (isAndroid()) return isInAppBrowser() ? "android-other" : "android-help";
+  if (isAndroid()) {
+    return isSamsungInternet() ? "android-samsung" : "android-help";
+  }
 
   return null;
 }
@@ -190,8 +213,8 @@ export function getFallbackInstallMode(): InstallMode | null {
  *  - 페이스북·인스타그램의 Android WebView는 `intent://`로 Android에 주소를 넘긴다. PWA가
  *    설치되어 있으면 그 범위의 주소를 PWA가 받고, 아니면 `S.browser_fallback_url`로 그 자리에
  *    다시 열린다. 공식 기능이 아니라 막는 버전도 있다.
- *  - iOS의 페이스북·인스타그램에는 밖으로 나갈 주소가 없어 `null`이다. 이때는 설치 안내의
- *    `ios-other` 모드가 Safari로 옮기라고 안내한다.
+ *  - iOS의 페이스북·인스타그램에는 밖으로 나갈 주소가 없어 `null`이다. 설치 안내도 띄우지
+ *    않으므로(`isInAppBrowser()`) 그 안에서 그대로 쓴다.
  *
  * iOS 카카오톡은 홈 화면 PWA가 아니라 Safari로 열린다 — iOS에는 링크로 PWA를 여는 길이 없다.
  */

@@ -7,6 +7,8 @@ import { getInstallPreference } from "~/shared/lib/install-platform";
 const IPHONE_SAFARI =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
 const IPHONE_KAKAO = `${IPHONE_SAFARI} KAKAOTALK 10.5.0`;
+const IPHONE_FACEBOOK =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/470.0.0.0;FBBV/600000000;FBDV/iPhone15,2;FBMD/iPhone;FBSN/iOS;FBSV/17.5;FBSS/3;FBCR/;FBID/phone;FBLC/ko_KR;FBOP/5]";
 const IPHONE_CHROME_17 =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0.0.0 Mobile/15E148 Safari/604.1";
 const IPHONE_CHROME_16_3 = IPHONE_CHROME_17.replace("OS 17_5", "OS 16_3");
@@ -174,20 +176,39 @@ describe("useInstallPrompt", () => {
     expect(result.current.mode).toBe("android-help");
   });
 
-  it("Android 인앱 브라우저는 android-other 모드로 연다", () => {
+  it("Android 인앱 브라우저에는 띄우지 않는다", () => {
     usePlatform({ userAgent: ANDROID_KAKAO });
 
     const { result } = renderRevealed();
 
-    expect(result.current.mode).toBe("android-other");
+    expect(result.current.open).toBe(false);
+    expect(result.current.mode).toBeNull();
   });
 
-  it("삼성 인터넷은 인앱이 아니라 설치 메뉴를 안내한다", () => {
-    usePlatform({ userAgent: ANDROID_SAMSUNG });
+  // 숨기는 쪽으로 판정이 바뀌었으니 다른 낱말 속 `line`에 걸리면 안내가 조용히 사라진다.
+  it("UA에 line이 들어 있을 뿐인 브라우저는 인앱으로 보지 않는다", () => {
+    usePlatform({ userAgent: `${ANDROID_CHROME} Streamline/2.0` });
 
     const { result } = renderRevealed();
 
     expect(result.current.mode).toBe("android-help");
+  });
+
+  it("삼성 인터넷은 Chrome으로 옮기라고 안내한다", () => {
+    usePlatform({ userAgent: ANDROID_SAMSUNG });
+
+    const { result } = renderRevealed();
+
+    expect(result.current.mode).toBe("android-samsung");
+  });
+
+  it("삼성 인터넷은 설치 이벤트가 와도 Chrome 안내를 유지한다", () => {
+    usePlatform({ userAgent: ANDROID_SAMSUNG });
+
+    const { result } = renderRevealed();
+    fireBeforeInstallPrompt();
+
+    expect(result.current.mode).toBe("android-samsung");
   });
 
   it("iOS Safari는 ios-browser 모드로 연다", () => {
@@ -214,12 +235,16 @@ describe("useInstallPrompt", () => {
     expect(result.current.mode).toBe("ios-other");
   });
 
-  it("iOS 인앱 브라우저는 ios-other 모드로 연다", () => {
-    usePlatform({ userAgent: IPHONE_KAKAO });
+  it.each([
+    ["카카오톡", IPHONE_KAKAO],
+    ["페이스북", IPHONE_FACEBOOK],
+  ])("iOS %s 인앱 브라우저에는 띄우지 않는다", (_name, userAgent) => {
+    usePlatform({ userAgent });
 
     const { result } = renderRevealed();
 
-    expect(result.current.mode).toBe("ios-other");
+    expect(result.current.open).toBe(false);
+    expect(result.current.mode).toBeNull();
   });
 
   it("iPadOS는 데스크톱 UA를 보내도 iOS로 인식한다", () => {

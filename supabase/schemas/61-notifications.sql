@@ -107,6 +107,13 @@ on public.notifications (recipient_profile_id, last_activity_at desc, id desc);
 create index notifications_recent_unread_idx
 on public.notifications (recipient_profile_id, last_activity_at desc)
 where read_at is null;
+-- Posts and comments are hard-deleted; these keep the ON DELETE CASCADE lookups off a sequential scan.
+create index notifications_post_idx
+on public.notifications (post_id)
+where post_id is not null;
+create index notifications_comment_idx
+on public.notifications (comment_id)
+where comment_id is not null;
 
 create table public.notification_preferences (
   profile_id bigint primary key references public.profiles(id) on delete cascade,
@@ -204,6 +211,10 @@ where channel = 'email';
 create index notification_delivery_claim_idx
 on private.notification_delivery_outbox (available_at, created_at, id)
 where status in ('pending', 'leased');
+-- 위 unique 인덱스는 channel 부분 인덱스라 알림 삭제 cascade 조회에 쓰이지 않는다.
+create index notification_delivery_outbox_notification_idx
+on private.notification_delivery_outbox (notification_id)
+where notification_id is not null;
 
 create table private.notification_delivery_attempts (
   id bigint generated always as identity primary key,
@@ -217,6 +228,8 @@ create table private.notification_delivery_attempts (
   )
 );
 alter table private.notification_delivery_attempts owner to postgres;
+create index notification_delivery_attempts_delivery_idx
+on private.notification_delivery_attempts (delivery_id);
 
 create or replace function private.notification_push_allowed(
   p_notification public.notifications,

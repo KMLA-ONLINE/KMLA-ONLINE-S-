@@ -406,11 +406,15 @@ CREATE INDEX "comment_image_uploaders_profile_idx" ON "private"."comment_image_u
 
 CREATE INDEX "comment_images_cleanup_idx" ON "public"."comment_images" USING "btree" ("created_at", "id") WHERE ("status" = ANY (ARRAY['pending'::"public"."comment_image_status", 'finalized'::"public"."comment_image_status", 'deleted'::"public"."comment_image_status"]));
 
-CREATE INDEX "comment_images_post_idx" ON "public"."comment_images" USING "btree" ("post_id", "comment_id") WHERE ("status" = 'ready'::"public"."comment_image_status");
+CREATE INDEX "comment_images_post_idx" ON "public"."comment_images" USING "btree" ("post_id", "comment_id");
+
+CREATE INDEX "comment_images_comment_idx" ON "public"."comment_images" USING "btree" ("comment_id");
 
 CREATE UNIQUE INDEX "comment_images_ready_comment_idx" ON "public"."comment_images" USING "btree" ("comment_id") WHERE ("status" = 'ready'::"public"."comment_image_status");
 
-CREATE INDEX "post_comments_live_child_idx" ON "public"."post_comments" USING "btree" ("parent_comment_id") WHERE ("deleted_at" IS NULL);
+CREATE INDEX "post_comments_parent_idx" ON "public"."post_comments" USING "btree" ("parent_comment_id");
+
+CREATE INDEX "post_comments_post_idx" ON "public"."post_comments" USING "btree" ("post_id");
 
 CREATE INDEX "post_comments_thread_idx" ON "public"."post_comments" USING "btree" ("root_comment_id", "created_at", "id");
 
@@ -419,6 +423,10 @@ CREATE INDEX "post_comments_top_level_idx" ON "public"."post_comments" USING "bt
 CREATE UNIQUE INDEX "group_anonymous_restrictions_active_idx" ON "private"."group_anonymous_activity_restrictions" USING "btree" ("group_id", "profile_id") WHERE ("ended_at" IS NULL);
 
 CREATE INDEX "group_anonymous_restrictions_profile_idx" ON "private"."group_anonymous_activity_restrictions" USING "btree" ("profile_id", "group_id", "expires_at" DESC);
+
+CREATE INDEX "group_anonymous_restrictions_source_post_idx" ON "private"."group_anonymous_activity_restrictions" USING "btree" ("source_post_id") WHERE ("source_post_id" IS NOT NULL);
+
+CREATE INDEX "group_anonymous_restrictions_source_comment_idx" ON "private"."group_anonymous_activity_restrictions" USING "btree" ("source_comment_id") WHERE ("source_comment_id" IS NOT NULL);
 
 CREATE OR REPLACE TRIGGER "post_comments_prevent_immutable_changes" BEFORE UPDATE ON "public"."post_comments" FOR EACH ROW EXECUTE FUNCTION "private"."prevent_comment_immutable_changes"();
 

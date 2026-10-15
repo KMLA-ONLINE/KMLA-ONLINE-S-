@@ -34,6 +34,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_contacts: {
+        Row: {
+          kind: string
+          label: string
+          position: number
+          value: string
+        }
+        Insert: {
+          kind: string
+          label: string
+          position: number
+          value: string
+        }
+        Update: {
+          kind?: string
+          label?: string
+          position?: number
+          value?: string
+        }
+        Relationships: []
+      }
       comment_images: {
         Row: {
           comment_id: string | null
@@ -271,6 +292,110 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      donation_claims: {
+        Row: {
+          cancelled_at: string | null
+          created_at: string
+          id: number
+          item_id: number
+          profile_id: number | null
+        }
+        Insert: {
+          cancelled_at?: string | null
+          created_at?: string
+          id?: never
+          item_id: number
+          profile_id?: number | null
+        }
+        Update: {
+          cancelled_at?: string | null
+          created_at?: string
+          id?: never
+          item_id?: number
+          profile_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "donation_claims_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "donation_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "donation_claims_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      donation_items: {
+        Row: {
+          category: string
+          detail: string | null
+          donor_name: string | null
+          id: number
+          name: string
+          round_id: number
+          source_row: number
+          source_sheet: string
+        }
+        Insert: {
+          category: string
+          detail?: string | null
+          donor_name?: string | null
+          id?: never
+          name: string
+          round_id: number
+          source_row: number
+          source_sheet: string
+        }
+        Update: {
+          category?: string
+          detail?: string | null
+          donor_name?: string | null
+          id?: never
+          name?: string
+          round_id?: number
+          source_row?: number
+          source_sheet?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "donation_items_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "donation_rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      donation_rounds: {
+        Row: {
+          closes_at: string
+          created_at: string
+          id: number
+          opens_at: string
+          title: string
+        }
+        Insert: {
+          closes_at: string
+          created_at?: string
+          id?: never
+          opens_at: string
+          title: string
+        }
+        Update: {
+          closes_at?: string
+          created_at?: string
+          id?: never
+          opens_at?: string
+          title?: string
+        }
+        Relationships: []
       }
       gongang_schedule: {
         Row: {
@@ -1527,6 +1652,7 @@ export type Database = {
           pub_id: string
         }[]
       }
+      admin_replace_contacts: { Args: { p_contacts: Json }; Returns: undefined }
       admin_review_applications: {
         Args: {
           p_profile_ids: number[]
@@ -1829,6 +1955,70 @@ export type Database = {
       }
       dismiss_group_post_reports: {
         Args: { p_post_id: string }
+        Returns: undefined
+      }
+      donation_cancel_claim: { Args: { p_item_id: number }; Returns: undefined }
+      donation_claim_item: { Args: { p_item_id: number }; Returns: undefined }
+      donation_create_round: {
+        Args: { p_closes_at: string; p_opens_at: string; p_title: string }
+        Returns: number
+      }
+      donation_import_items: {
+        Args: { p_items: Json; p_round_id: number }
+        Returns: number
+      }
+      donation_list_claimed_by: {
+        Args: { p_round_id: number }
+        Returns: {
+          applicant_cohort: number
+          applicant_name: string
+          item_id: number
+        }[]
+      }
+      donation_list_claims: {
+        Args: { p_round_id: number }
+        Returns: {
+          applicant: string
+          applicant_cohort: number
+          applicant_pub_id: string
+          applied_at: string
+          cancelled_at: string
+          category: string
+          detail: string
+          donor_name: string
+          item_id: number
+          item_name: string
+        }[]
+      }
+      donation_list_items: {
+        Args: { p_round_id: number }
+        Returns: {
+          category: string
+          detail: string
+          donor_name: string
+          id: number
+          is_claimed: boolean
+          is_mine: boolean
+          name: string
+        }[]
+      }
+      donation_list_rounds: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          closes_at: string
+          id: number
+          is_open: boolean
+          opens_at: string
+          title: string
+        }[]
+      }
+      donation_update_round: {
+        Args: {
+          p_closes_at: string
+          p_opens_at: string
+          p_round_id: number
+          p_title: string
+        }
         Returns: undefined
       }
       edit_message: {

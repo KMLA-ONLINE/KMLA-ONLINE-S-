@@ -22,6 +22,7 @@
 - Cite a `§` only when the spec is the sole justification for a constant or invariant, not as decoration in a doc-comment title.
 - Mark unbuilt specification sections with `> **상태**: 미구현` under the heading. Follow the documentation guide for inherited chapter status and partial implementation.
 - Register new project documents in the documentation guide. Keep current policy, future design, and historical implementation notes separate.
+- Do not create ADRs. Record why a surprising local decision was made in a code comment at that code; record cross-cutting decisions in the owning technical design or feature `AGENTS.md`.
 
 ## Code Boundaries
 
@@ -96,7 +97,7 @@ Before DB changes, follow [Database workflow](supabase/README.md), including its
 
 ## Skills and MCP
 
-Project skills live in `.agents/skills/`; do not hand-edit them. Load the relevant skill and follow its workflow and references with the project constraints above.
+Project skills live in `.agents/skills/`; do not hand-edit them. `npm install`/`npm ci` links them into the ignored `.claude/skills/` via `scripts/link-skills.mjs`. Load the relevant skill and follow its workflow and references with the project constraints above.
 
 Apply only skill recommendations compatible with this React Router SPA. Do not apply Next.js-specific APIs or components, or optimization patterns that require a runtime app server.
 
@@ -104,14 +105,14 @@ Apply only skill recommendations compatible with this React Router SPA. Do not a
 
 The table defines minimum required usage, not an inventory of installed skills. Load other relevant skills according to their descriptions.
 
-| Work                                                                         | Skill                         |
-| ---------------------------------------------------------------------------- | ----------------------------- |
-| Routes, navigation, framework configuration                                  | `react-router`                |
-| Any Supabase work, including Auth, RLS, Storage, Realtime, migrations, types | `supabase`                    |
-| shadcn, registries, `components.json`                                        | `shadcn`                      |
-| Writing, reviewing, or refactoring React                                     | `vercel-react-best-practices` |
-| UI, accessibility, or UX reviews                                             | `web-design-guidelines`       |
-| Implementation under the [TDD policy](#verification)                         | `tdd`                         |
+| Work                                                                         | Skill                   |
+| ---------------------------------------------------------------------------- | ----------------------- |
+| Routes, navigation, framework configuration                                  | `react-router`          |
+| Any Supabase work, including Auth, RLS, Storage, Realtime, migrations, types | `supabase`              |
+| shadcn, registries, `components.json`                                        | `shadcn`                |
+| UI, accessibility, or UX reviews                                             | `web-design-guidelines` |
+
+Before implementing a non-trivial plan or unspecified product behavior, load `grilling` and `domain-modeling` (what `/grill-with-docs` combines) to settle the specification with the user and record the resolved terms and decisions in their owning documents.
 
 ### MCP
 
@@ -121,19 +122,15 @@ The table defines minimum required usage, not an inventory of installed skills. 
 
 ## Verification
 
-- Always use TDD and load the `tdd` skill, except for tasks that need no tests or changes sufficiently verified by existing tests.
-
 `package.json` owns commands. Run checks appropriate to the changed files:
 
-| Change/stage                            | Required verification                                                                     |
-| --------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Source edit loop                        | `npm run check:static`: typegen, ESLint, TypeScript, Agent Map                            |
-| Source handoff                          | Prettier on touched files; CI runs `npm run verify` after push (`gh pr checks --watch`)   |
-| App verification and production build   | `npm run verify`                                                                          |
-| Check passed after the last source edit | Add `npm run build` instead of repeating check through verify                             |
-| Documentation-only                      | Prettier on touched files, `npm run check:docs`; also `npm run check:map` for map changes |
-| DB changes                              | DB workflow: reset, pgTAP, lint, advisors, types, final drift check                       |
-| E2E changes or affected browser flows   | Relevant Playwright file/project                                                          |
+| Change/stage                          | Required verification                                                                                       |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Source edit loop                      | `npm run check:static`: typegen, ESLint, TypeScript, Agent Map                                              |
+| Source handoff                        | Prettier on touched files and `npm run build`; CI runs `npm run verify` after push (`gh pr checks --watch`) |
+| Documentation-only                    | Prettier on touched files, `npm run check:docs`; also `npm run check:map` for map changes                   |
+| DB changes                            | DB workflow: reset, pgTAP, lint, advisors, types, final drift check                                         |
+| E2E changes or affected browser flows | Relevant Playwright file/project                                                                            |
 
 - `verify` runs app check plus build; it does not replace CI's separate DB checks. Report executed checks and any skipped or blocked verification.
 - `check` does not auto-fix source files, though typegen and caches may write generated output. It runs static checks before Vitest; leave scheduling to `scripts/check.mjs`. `check:static` skips formatting, document links, and tests, so it is not a source handoff substitute.
@@ -146,3 +143,4 @@ The table defines minimum required usage, not an inventory of installed skills. 
 - Run Supabase CLI commands sequentially on Windows; prefer npm scripts or `npx supabase` for the repository CLI version.
 - Keep build order: `react-router build` → `scripts/inline-root-css.mjs` → `scripts/build-sw.mjs`. React Router emits `index.html` after Vite `closeBundle`, so do not move post-steps into plugins. CSS rewriting must precede precaching. Use `build:app` only to intentionally skip both post-steps.
 - Husky runs staged lint/format on commit and typecheck on push. Vitest, build and DB checks run in CI (`quality.yml`) on PRs and pushes to `dev`/`main`; don't run `npm run check`/`verify` locally unless the user asks. Keep LF endings as enforced by `.gitattributes`.
+- Write PR bodies from `.github/pull_request_template.md`: write the PR title in English and the body in Korean, and delete sections that do not apply. `gh pr create --body` does not apply the template, so read it first.

@@ -31,8 +31,8 @@ select results_eq(
     where namespace.nspname = 'public'
       and procedure.proname like 'admin_%'
       and has_function_privilege('authenticated', procedure.oid, 'EXECUTE')$$,
-  array[9],
-  'authenticated clients can execute all nine admin RPCs'
+  array[10],
+  'authenticated clients can execute all ten admin RPCs'
 );
 select results_eq(
   $$select count(*)::integer

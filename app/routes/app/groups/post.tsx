@@ -1,4 +1,4 @@
-import { data, redirect, useRouteLoaderData } from "react-router";
+import { data, redirect, replace, useRouteLoaderData } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { defineAppChrome, useAppShell } from "~/features/app-shell";
@@ -10,6 +10,7 @@ import {
   getPostErrorMessage,
   GroupPostDetail,
   listPostComments,
+  readFeedDeleteOrigin,
   resolveIdentityOptions,
   setGroupPostPinned,
   shouldRevalidatePostDetail,
@@ -58,6 +59,10 @@ export async function clientAction({
     if (formData.get("intent") === "delete") {
       await deleteGroupPost(params.postId);
       await invalidateDeletedGroupPost(group.group_id, params.postId);
+      // 피드에서 지웠으면 피드에 남는다(`FeedDeleteOrigin`).
+      const origin = readFeedDeleteOrigin(formData);
+      if (origin === "card") return data({ ok: true });
+      if (origin === "overlay") throw replace("/");
       throw redirect(`/groups/${params.slug}`);
     }
     if (formData.get("intent") === "pin") {

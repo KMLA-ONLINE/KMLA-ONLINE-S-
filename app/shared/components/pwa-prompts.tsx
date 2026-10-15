@@ -6,7 +6,10 @@ import { useOffline } from "~/shared/hooks/use-offline";
 import { useServiceWorker } from "~/shared/hooks/use-service-worker";
 import { useStaleChunkRecovery } from "~/shared/hooks/use-stale-chunk-recovery";
 import { useEffect } from "react";
-import { setPromptActive } from "~/shared/lib/prompt-coordinator";
+import {
+  setPromptActive,
+  usePromptActive,
+} from "~/shared/lib/prompt-coordinator";
 
 /**
  * 두 배너는 같은 자리를 쓴다. 겹치지 않는 것은 아래 우선순위가 보장한다 — 연결이 끊긴
@@ -42,6 +45,8 @@ export function PwaPrompts() {
   const { updateReady, applyingUpdate, updateAppliedElsewhere, applyUpdate } =
     useServiceWorker();
   const showServiceWorkerPrompt = !offline && updateReady;
+  // 알림 권한 안내는 로그인한 셸이 띄운다(`NotificationPermissionPrompt`). 설치보다 앞선다.
+  const notificationPromptActive = usePromptActive("notification");
 
   useEffect(() => {
     setPromptActive("offline", offline);
@@ -85,7 +90,9 @@ export function PwaPrompts() {
           </button>
         </div>
       )}
-      <InstallPrompt blocked={offline || showServiceWorkerPrompt} />
+      <InstallPrompt
+        blocked={offline || showServiceWorkerPrompt || notificationPromptActive}
+      />
     </>
   );
 }

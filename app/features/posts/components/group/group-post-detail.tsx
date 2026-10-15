@@ -18,7 +18,12 @@ import type {
 import { GroupPostHeader } from "~/features/posts/components/group/group-post-header";
 import { GroupPostMenu } from "~/features/posts/components/group/group-post-menu";
 import { postAuthorName } from "~/features/posts/model/identity";
-import { groupPostPath, isFromGroup } from "~/features/posts/model/navigation";
+import {
+  feedDeleteFields,
+  FROM_FEED,
+  groupPostPath,
+  isFromGroup,
+} from "~/features/posts/model/navigation";
 import { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
 
@@ -31,6 +36,7 @@ export function GroupPostDetail({
   comments,
   onClose,
   action,
+  fromFeed = false,
   anonymousActivityRestriction,
 }: {
   post: GroupPostDetailModel;
@@ -44,6 +50,8 @@ export function GroupPostDetail({
   comments: PostCommentPage | null;
   onClose?: () => void;
   action?: string;
+  /** 홈 피드 오버레이로 열었는가. 수정·삭제 뒤 그룹이 아니라 피드로 돌아간다. */
+  fromFeed?: boolean;
   anonymousActivityRestriction?: AnonymousActivityRestriction | null;
 }) {
   const fetcher = useFetcher<{ error?: string }>();
@@ -114,13 +122,19 @@ export function GroupPostDetail({
             <GroupPostMenu
               post={post}
               slug={slug}
+              editState={fromFeed ? FROM_FEED : undefined}
               onPin={() =>
                 submitIntent({
                   intent: "pin",
                   pinned: String(!post.is_pinned),
                 })
               }
-              onDelete={() => submitIntent({ intent: "delete" })}
+              onDelete={() =>
+                submitIntent({
+                  intent: "delete",
+                  ...feedDeleteFields(fromFeed ? "overlay" : null),
+                })
+              }
             />
           }
         />

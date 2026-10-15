@@ -47,7 +47,7 @@ import {
 import {
   prepareCommentImage,
   releasePostFile,
-} from "~/features/posts/model/attachments";
+} from "~/features/posts/model/attachment-preparation";
 import type {
   CommentImage,
   CommentImageInput,

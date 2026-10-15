@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from "react";
-import { useNavigate, useRevalidator } from "react-router";
+import { useLocation, useNavigate, useRevalidator } from "react-router";
 
 import { PostLeaveGuard } from "~/features/posts/components/editor/post-leave-guard";
 import { PostAttachmentEditor } from "~/features/posts/components/editor/post-attachment-editor";
@@ -17,8 +17,9 @@ import {
   updateProfilePostWithAttachments,
 } from "~/features/posts/data/mutations";
 import { usePostAttachmentDraft } from "~/features/posts/hooks/use-post-attachment-draft";
-import { releasePostFile } from "~/features/posts/model/attachments";
+import { releasePostFile } from "~/features/posts/model/attachment-preparation";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
+import { isFromFeed } from "~/features/posts/model/navigation";
 import type {
   PostSaveProgress,
   PostVisibility,
@@ -52,6 +53,7 @@ export function ProfilePostEditor({
   onSaved?: () => Promise<void>;
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const revalidator = useRevalidator();
   // 프로필로 `navigate`하면 히스토리에 작성 화면이 남아서, 뒤로 가기를 누른 사용자가 방금
   // 버린 초안을 다시 마주하게 된다. 들어온 경로를 되감는 게 맞다.
@@ -142,6 +144,11 @@ export function ProfilePostEditor({
       additions.forEach(releasePostFile);
       await onSaved?.();
       await revalidator.revalidate();
+      // 피드 오버레이에서 고쳤으면 그 오버레이로 되감는다.
+      if (isFromFeed(location.state)) {
+        void navigate(-1);
+        return;
+      }
       void navigate(`/profile/${timelinePubId}/posts/${postId}`, {
         replace: true,
       });

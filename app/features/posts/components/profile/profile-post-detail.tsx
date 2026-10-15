@@ -15,6 +15,7 @@ import {
   profilePostAuthorName,
   profilePostPath,
 } from "~/features/posts/model/profile-post";
+import { feedDeleteFields, FROM_FEED } from "~/features/posts/model/navigation";
 import type {
   PostCommentPage,
   ProfilePost,
@@ -28,6 +29,7 @@ export function ProfilePostDetail({
   comments,
   onClose,
   action,
+  fromFeed = false,
 }: {
   post: ProfilePost;
   viewer: CommentViewer;
@@ -35,6 +37,8 @@ export function ProfilePostDetail({
   comments: PostCommentPage | null;
   onClose?: () => void;
   action?: string;
+  /** 홈 피드 오버레이로 열었는가. 수정·삭제 뒤 타임라인이 아니라 피드로 돌아간다. */
+  fromFeed?: boolean;
 }) {
   const fetcher = useFetcher<{ error?: string }>();
   const defaultClose = useModalClose(`/profile/${post.timeline_pub_id}`);
@@ -72,11 +76,15 @@ export function ProfilePostDetail({
           menu={
             <PostMenu
               editTo={`${postPath}/edit`}
+              editState={fromFeed ? FROM_FEED : undefined}
               canEdit={post.can_edit}
               canDelete={post.can_delete}
               onDelete={() =>
                 void fetcher.submit(
-                  { intent: "delete" },
+                  {
+                    intent: "delete",
+                    ...feedDeleteFields(fromFeed ? "overlay" : null),
+                  },
                   { method: "post", action },
                 )
               }

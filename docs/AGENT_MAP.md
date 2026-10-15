@@ -32,12 +32,12 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 
 | URL                                  | Module                                      | Chrome                         | Data  | Features                                                    | Spec             | Test                                                                                                    |
 | ------------------------------------ | ------------------------------------------- | ------------------------------ | ----- | ----------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------- |
-| `/login`                             | `app/routes/auth/login.tsx`                 | —                              | L A   | auth                                                        | §4.2             | `test/routes/auth.test.tsx`                                                                             |
-| `/signup`                            | `app/routes/auth/signup.tsx`                | —                              | L A   | auth                                                        | §4.1             | `test/routes/auth.test.tsx`                                                                             |
+| `/login`                             | `app/routes/auth/login.tsx`                 | —                              | L A S | auth, support                                               | §4.2, §16.9      | `test/routes/auth.test.tsx`                                                                             |
+| `/signup`                            | `app/routes/auth/signup.tsx`                | —                              | L A   | auth, support                                               | §4.1             | `test/routes/auth.test.tsx`                                                                             |
 | `/forgot-password`                   | `app/routes/auth/forgot-password.tsx`       | —                              | A     | auth                                                        | §4.4             | `test/routes/password.test.tsx`                                                                         |
 | `/setup`                             | `app/routes/auth/setup.tsx`                 | —                              | L A   | auth                                                        | §5.1–5.6         | `test/routes/auth.test.tsx`                                                                             |
-| `/pending`                           | `app/routes/auth/pending.tsx`               | —                              | L     | auth                                                        | §5.7             | —                                                                                                       |
-| `/blocked`                           | `app/routes/auth/blocked.tsx`               | —                              | L     | auth                                                        | §2.2, §16.2      | `test/routes/auth.test.tsx`                                                                             |
+| `/pending`                           | `app/routes/auth/pending.tsx`               | —                              | L     | auth, support                                               | §5.7             | —                                                                                                       |
+| `/blocked`                           | `app/routes/auth/blocked.tsx`               | —                              | L     | auth, support                                               | §2.2, §16.2      | `test/routes/auth.test.tsx`                                                                             |
 | `/logout`                            | `app/routes/auth/logout.tsx`                | —                              | A     | auth                                                        | §4.3             | `test/features/auth/components/logout-button.test.tsx`                                                  |
 | `/noti/open/:notificationId`         | `app/routes/notification-open.tsx`          | —                              | L     | notifications                                               | §14.1            | `test/routes/notification-open.test.tsx`                                                                |
 | `/dokkaebi`                          | `app/routes/dokkaebi.tsx`                   | —                              | —     | —                                                           | none             | —                                                                                                       |
@@ -52,7 +52,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `/menu`                              | `app/routes/app/menu/index.tsx`             | sticky/sticky/3xl              | —     | app-shell                                                   | §15.1, §15.13    | `test/routes/app/menu.test.tsx`                                                                         |
 | `/licenses`                          | `app/routes/app/menu/licenses.tsx`          | sticky/sticky/4xl              | —     | app-shell                                                   | §15.7            | `test/routes/app/settings-navigation.test.tsx`                                                          |
 | `/menu/birthdays`                    | `app/routes/app/menu/birthdays.tsx`         | sticky/none/5xl                | L     | profiles                                                    | §17.5, §17.8     | `test/routes/app/menu/birthdays.test.ts`                                                                |
-| `/menu/donations`                    | `app/routes/app/menu/donations.tsx`         | sticky/sticky/4xl              | —     | —                                                           | §15.1            | —                                                                                                       |
+| `/menu/donations`                    | `app/routes/app/menu/donations.tsx`         | sticky/sticky/5xl              | —     | donations                                                   | §17.9            | —                                                                                                       |
 | `/menu/meal`                         | `app/routes/app/menu/meal.tsx`              | sticky/sticky/5xl              | L     | meal                                                        | §17.4            | `test/routes/app/menu/meal.test.ts`                                                                     |
 | `/settings/password`                 | `app/routes/app/menu/password.tsx`          | sticky/sticky/4xl              | A     | auth                                                        | §4.5             | `test/routes/password.test.tsx`                                                                         |
 | `/settings`                          | `app/routes/app/menu/settings.tsx`          | sticky/sticky/4xl              | —     | app-shell, auth, support                                    | §15.3            | `test/routes/app/menu/settings.test.tsx`, `test/routes/app/settings-navigation.test.tsx`                |
@@ -82,6 +82,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `/admin/members`                     | `app/routes/app/admin/members.tsx`          | sticky/none/5xl                | L     | admin                                                       | §16.8            | —                                                                                                       |
 | `/admin/gongang-managers`            | `app/routes/app/admin/gongang-managers.tsx` | sticky/none/5xl                | L A   | admin                                                       | §16.6            | —                                                                                                       |
 | `/admin/app-admins`                  | `app/routes/app/admin/app-admins.tsx`       | sticky/none/5xl                | L A   | admin                                                       | §16.3–16.5       | `test/routes/app/admin/actions.test.ts`                                                                 |
+| `/admin/contacts`                    | `app/routes/app/admin/contacts.tsx`         | sticky/none/2xl                | L A   | admin, support                                              | §16.9            | `test/routes/app/admin/contacts.test.ts`                                                                |
 | `/admin/storage-cleanup`             | `app/routes/app/admin/storage-cleanup.tsx`  | sticky/none/5xl/PTR            | L     | admin                                                       | §16.7            | `test/routes/app/admin/storage-cleanup.test.ts`                                                         |
 | `/messenger`                         | `app/routes/messenger/index.tsx`            | sticky/sticky/4xl/route-scroll | L     | messaging                                                   | §13.2            | —                                                                                                       |
 | `/messenger/:roomId`                 | `app/routes/messenger/room.tsx`             | sticky/none/4xl/route-scroll   | L S   | messaging                                                   | §13.3            | `test/routes/messenger-room-revalidation.test.ts`                                                       |
@@ -98,7 +99,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 
 | Feature            | Owns                                                                                                                                        | Spec                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `admin`            | Approval review, admin roster, permission-based managers, storage cleanup status                                                            | §16                                                 |
+| `admin`            | Approval review, admin roster, permission-based managers, admin contacts editor, storage cleanup status                                     | §16                                                 |
 | `app-shell`        | Header, sidebar, tab bar, `PageHeader`, `ScrollRegion`, pull-to-refresh, shell data, `handle.chrome`, home sidebar preferences              | §3, §6.7, §15.3                                     |
 | `auth`             | Sign-up, login, OTP, password reset and change, profile setup, signup draft                                                                 | §4, §5                                              |
 | `feed`             | Home integrated feed, infinite feed session, feed cache surgery                                                                             | §6 and `docs/FEED_ALGORITHM.md`                     |
@@ -111,8 +112,9 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `school-utilities` | Gongang and karaoke reservations, gongang schedule manager                                                                                  | §17.1–17.3                                          |
 | `search`           | Global search dialog, directory search, recent searches                                                                                     | §3.3, §3.6                                          |
 | `stories`          | 24-hour photo/text story rail, viewer and composer                                                                                          | §17.6, §6.6                                         |
-| `support`          | FAQ (static content in `content/`, no Supabase) and app version card                                                                        | §15.11, §15.12                                      |
+| `support`          | FAQ (static content in `content/`), app version card, public admin contacts on auth screens                                                 | §15.11, §15.12, §16.9                               |
 | `timetable`        | Personal timetable, stored per account in the database with a device-local cache                                                            | §17.7                                               |
+| `donations`        | 기부물품 회차 관리, 엑셀 등록, 학생 신청 및 취소, 결과 다운로드                                                                             | —                                                   |
 
 <!-- features:end -->
 
@@ -131,6 +133,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `admin_list_applications`                     | `admin/data/queries.ts`                                                         | `13-administration.sql`       |
 | `admin_list_members`                          | `admin/data/queries.ts`                                                         | `13-administration.sql`       |
 | `admin_list_roster`                           | `admin/data/queries.ts`                                                         | `13-administration.sql`       |
+| `admin_replace_contacts`                      | `admin/data/mutations.ts`                                                       | `13-administration.sql`       |
 | `admin_review_applications`                   | `admin/data/mutations.ts`                                                       | `13-administration.sql`       |
 | `admin_set_app_admin`                         | `admin/data/mutations.ts`                                                       | `13-administration.sql`       |
 | `admin_set_gongang_manager`                   | `admin/data/mutations.ts`                                                       | `13-administration.sql`       |
@@ -251,6 +254,15 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `update_my_notification_preferences`          | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
 | `update_my_profile`                           | `profiles/data/mutations.ts`                                                    | `11-identity.sql`             |
 | `update_post_comment`                         | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
+| `donation_cancel_claim`                       | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_claim_item`                         | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_create_round`                       | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_import_items`                       | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_list_claimed_by`                    | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_list_claims`                        | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_list_items`                         | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_list_rounds`                        | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
+| `donation_update_round`                       | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
 
 <!-- rpc:end -->
 
@@ -263,6 +275,7 @@ browser reads or writes directly.
 
 | Table                  | Accessed from                                                                         |
 | ---------------------- | ------------------------------------------------------------------------------------- |
+| `admin_contacts`       | `support/data/queries.ts`                                                             |
 | `gongang_schedule`     | `school-utilities/data/gongang-schedule.ts`                                           |
 | `group_categories`     | `posts/data/queries.ts`                                                               |
 | `group_join_requests`  | `groups/data/mutations.ts`, `groups/data/queries.ts`                                  |

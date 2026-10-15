@@ -2,6 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NotificationPermissionCard } from "~/features/notifications/components/notification-permission-card";
+import { recordNotificationPromptHandled } from "~/features/notifications/model/prompt-storage";
 import { renderRoute } from "../../../router";
 
 const mocks = vi.hoisted(() => ({
@@ -11,9 +12,17 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("~/features/notifications/data/push", () => mocks);
 
+const TITLE = "중요한 소식을 기기에서도 받아보세요";
+
+function renderCard() {
+  return renderRoute(() => <NotificationPermissionCard profileId={42} />);
+}
+
 describe("NotificationPermissionCard", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    // 알림함 카드는 첫 진입 창에서 넘긴 사람에게만 다시 권한다.
+    recordNotificationPromptHandled(42);
     mocks.getPushSupport.mockResolvedValue({
       state: "available",
       permission: "default",
@@ -30,33 +39,44 @@ describe("NotificationPermissionCard", () => {
     vi.clearAllMocks();
   });
 
-  it("브라우저 권한을 요청하지 않고 알림함 안에 안내한다", async () => {
-    renderRoute(() => <NotificationPermissionCard profileId={42} />);
+  it("첫 진입 창에 아직 답하지 않았으면 그 창에 맡긴다", async () => {
+    window.localStorage.clear();
+    renderCard();
 
-    expect(
-      await screen.findByText("중요한 소식을 기기에서도 받아보세요"),
-    ).toBeInTheDocument();
+    // 기록이 없으면 지원 여부도 묻지 않는다.
+    await Promise.resolve();
+    expect(mocks.getPushSupport).not.toHaveBeenCalled();
+    expect(screen.queryByText(TITLE)).not.toBeInTheDocument();
+  });
+
+  it("첫 진입 창에서 넘긴 뒤에는 알림함에서 다시 권한다", async () => {
+    renderCard();
+
+    expect(await screen.findByText(TITLE)).toBeInTheDocument();
     expect(mocks.enableWebPush).not.toHaveBeenCalled();
   });
 
-  it("알림 받기를 선택한 뒤에만 Web Push를 켠다", async () => {
-    const { user } = renderRoute(() => (
-      <NotificationPermissionCard profileId={42} />
-    ));
+  it("알림 받기를 선택한 뒤에만 Web Push를 켜고 더 권하지 않는다", async () => {
+    const view = renderCard();
 
-    await user.click(await screen.findByRole("button", { name: "알림 받기" }));
+    await view.user.click(
+      await screen.findByRole("button", { name: "알림 받기" }),
+    );
 
     expect(mocks.enableWebPush).toHaveBeenCalledOnce();
     await waitFor(() =>
-      expect(
-        screen.queryByText("중요한 소식을 기기에서도 받아보세요"),
-      ).not.toBeInTheDocument(),
+      expect(screen.queryByText(TITLE)).not.toBeInTheDocument(),
     );
+    view.unmount();
+
+    renderCard();
+    await Promise.resolve();
+    expect(mocks.getPushSupport).toHaveBeenCalledOnce();
   });
 
   /**
    * 회귀: 권한을 허용한 기기인데도 서버 구독 확인이 "아니오"로 오면 카드가 떴다. 앱을 열 때 빠진
-   * 서버 기록을 다시 등록하는 동안이나 확인 요청이 실패한 경우다. 설정의 스위치는 켜져 있는데 안내가 떴다.
+   * 서버 기록을 다시 등록하는 동안이나 확인 요청이 실패한 경우다. 설정의 스위치는 켜져 있는데 카드가 떴다.
    */
   it("권한을 이미 허용한 기기에는 서버 구독 확인과 관계없이 띄우지 않는다", async () => {
     mocks.getPushSupport.mockResolvedValue({
@@ -65,27 +85,33 @@ describe("NotificationPermissionCard", () => {
       subscribed: false,
     });
 
-    renderRoute(() => <NotificationPermissionCard profileId={42} />);
+    renderCard();
 
     await waitFor(() => expect(mocks.getPushSupport).toHaveBeenCalledOnce());
-    expect(
-      screen.queryByText("중요한 소식을 기기에서도 받아보세요"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(TITLE)).not.toBeInTheDocument();
   });
 
-  it("닫은 계정에는 다시 표시하지 않는다", async () => {
-    const view = renderRoute(() => (
-      <NotificationPermissionCard profileId={42} />
-    ));
+  it("두 번 닫으면 더 표시하지 않는다", async () => {
+    for (let shown = 0; shown < 2; shown += 1) {
+      const view = renderCard();
+      await view.user.click(
+        await screen.findByRole("button", { name: "닫기" }),
+      );
+      view.unmount();
+    }
 
-    await view.user.click(await screen.findByRole("button", { name: "닫기" }));
-    view.unmount();
+    renderCard();
 
-    renderRoute(() => <NotificationPermissionCard profileId={42} />);
+    await Promise.resolve();
+    expect(mocks.getPushSupport).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText(TITLE)).not.toBeInTheDocument();
+  });
 
-    await waitFor(() => expect(mocks.getPushSupport).toHaveBeenCalledOnce());
-    expect(
-      screen.queryByText("중요한 소식을 기기에서도 받아보세요"),
-    ).not.toBeInTheDocument();
+  it("읽을 수 없는 기록은 이미 답한 것으로 보고 더 권하지 않는다", async () => {
+    window.localStorage.setItem("kmla-online:notification-prompt:v2:42", "{");
+    renderCard();
+
+    await Promise.resolve();
+    expect(mocks.getPushSupport).not.toHaveBeenCalled();
   });
 });

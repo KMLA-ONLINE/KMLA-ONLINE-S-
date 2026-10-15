@@ -7,12 +7,6 @@
       "skillPath": "skills/codebase-design/SKILL.md",
       "computedHash": "f449bde75c15a857610439c1ee003674905a197338782b30bb475498c121f907"
     },
-    "karpathy-guidelines": {
-      "source": "szkocot/andrej-karpathy-skills",
-      "sourceType": "github",
-      "skillPath": "skills/karpathy-guidelines/SKILL.md",
-      "computedHash": "0ec1641120accbb458780e0bd19a50a4182f2b97863e90851b91307f29802c9f"
-    },
     "shadcn": {
       "source": "shadcn/ui",
       "sourceType": "github",
@@ -24,12 +18,6 @@
       "sourceType": "github",
       "skillPath": "skills/supabase/SKILL.md",
       "computedHash": "c4cbf2d313f6afb1ff810623b732961752bb64638f648c7a355449eb6aac9530"
-    },
-    "tdd": {
-      "source": "cjeonguk/skills",
-      "sourceType": "github",
-      "skillPath": "skills/tdd/SKILL.md",
-      "computedHash": "21d5549f7fd3f6ef365594c17853b84f0864dc17023048068c4b7726c02f0d57"
     },
     "vercel-react-best-practices": {
       "source": "vercel-labs/agent-skills",

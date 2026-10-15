@@ -9,7 +9,10 @@ import {
 import { useEffect, useState, type ComponentType } from "react";
 
 import { useInstallPrompt } from "~/shared/hooks/use-install-prompt";
-import type { InstallMode } from "~/shared/lib/install-platform";
+import {
+  getChromeIntentUrl,
+  type InstallMode,
+} from "~/shared/lib/install-platform";
 import { setPromptActive } from "~/shared/lib/prompt-coordinator";
 import { Button } from "~/shared/ui/button";
 import {
@@ -47,6 +50,8 @@ interface InstallCopy {
    * 이곳의 기록만 바뀐다. 모드를 추가할 때 이 값을 반드시 정하게 하려고 필수로 둔다.
    */
   installable: boolean;
+  /** 설치 대신 이 주소를 Chrome으로 여는 버튼을 둔다. */
+  openInChrome?: boolean;
 }
 
 const ANDROID_STEPS: InstallStep[] = [
@@ -87,18 +92,13 @@ const COPY: Record<InstallMode, InstallCopy> = {
     steps: ANDROID_STEPS,
     installable: true,
   },
-  "android-other": {
+  "android-samsung": {
     title: "Chrome에서 열어 주세요",
     description:
-      "앱 안에서 열린 웹에서는 설치가 불가능해요. Chrome/구글로 옮긴 뒤 아래 순서대로 진행하세요.",
-    steps: [
-      {
-        icon: ExternalLinkIcon,
-        text: "오른쪽 위 메뉴에서 '외부 브라우저에서 열기'를 선택하세요.",
-      },
-      ...ANDROID_STEPS,
-    ],
+      "*추천* 삼성 인터넷보다 Chrome에서 알림과 앱 설치가 더 안정적으로 동작해요.",
+    steps: [],
     installable: false,
+    openInChrome: true,
   },
 };
 
@@ -214,14 +214,31 @@ export function InstallPrompt({
 
             <DialogFooter>
               <Button
-                variant={copy.installable ? "ghost" : "default"}
+                variant={
+                  copy.installable || copy.openInChrome ? "ghost" : "default"
+                }
                 size="lg"
                 disabled={locked}
                 onClick={dismiss}
               >
-                {copy.installable ? "나중에" : "알겠어요"}
+                {copy.installable || copy.openInChrome ? "나중에" : "알겠어요"}
               </Button>
-              {canInstall ? (
+              {copy.openInChrome ? (
+                <Button
+                  size="lg"
+                  disabled={locked}
+                  onClick={() => {
+                    // 옮겨 가는 것은 거절이 아니므로 네 번 거절 횟수에 세지 않는다.
+                    dismissForSession();
+                    window.location.href = getChromeIntentUrl(
+                      window.location.href,
+                    );
+                  }}
+                >
+                  <ExternalLinkIcon />
+                  Chrome으로 열기
+                </Button>
+              ) : canInstall ? (
                 <Button
                   size="lg"
                   disabled={locked}

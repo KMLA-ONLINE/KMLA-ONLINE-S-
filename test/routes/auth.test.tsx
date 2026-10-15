@@ -55,6 +55,33 @@ function defaultButtons() {
 }
 
 describe("auth routes", () => {
+  it("offers admin contacts on login only after a failed sign-in", async () => {
+    const contacts = Promise.resolve([
+      { kind: "email", label: "학생회 메일", value: "council@kmla.hs.kr" },
+    ]);
+    const { user } = renderRoute(LoginPage as ComponentType<any>, {
+      path: "/login",
+      loader: () => ({ contacts }),
+      action: () => ({
+        errors: { form: "이메일 또는 비밀번호가 올바르지 않습니다." },
+        email: "student@kmla.hs.kr",
+      }),
+    });
+
+    await screen.findByRole("heading", { name: "다시 만나서 반가워요" });
+    expect(
+      screen.queryByRole("button", { name: "계속 로그인이 안 되나요?" }),
+    ).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("이메일"), "student@kmla.hs.kr");
+    await user.type(screen.getByLabelText("비밀번호"), "wrong-password");
+    await user.click(screen.getByRole("button", { name: "로그인" }));
+
+    expect(
+      await screen.findByRole("button", { name: "계속 로그인이 안 되나요?" }),
+    ).toBeVisible();
+  });
+
   it("renders login controls and toggles password visibility", async () => {
     const { user } = renderRoute(LoginPage, { path: "/login" });
     const password = screen.getByLabelText("비밀번호");
@@ -71,7 +98,7 @@ describe("auth routes", () => {
   it("renders signup credential fields", async () => {
     renderRoute(SignupPage as ComponentType<any>, {
       path: "/signup",
-      loader: () => ({ draft: null }),
+      loader: () => ({ draft: null, contacts: Promise.resolve([]) }),
     });
 
     expect(
@@ -84,7 +111,7 @@ describe("auth routes", () => {
   it("collects the profile before asking for a verification code", async () => {
     const { user } = renderRoute(SignupPage as ComponentType<any>, {
       path: "/signup",
-      loader: () => ({ draft: null }),
+      loader: () => ({ draft: null, contacts: Promise.resolve([]) }),
       action: signupStubAction,
     });
 
@@ -113,6 +140,7 @@ describe("auth routes", () => {
       path: "/signup",
       loader: () => ({
         draft: { email: "student@kmla.hs.kr", values: draftValues },
+        contacts: Promise.resolve([]),
       }),
     });
 
@@ -192,15 +220,27 @@ describe("auth routes", () => {
     expect(screen.queryByLabelText("인증 코드")).not.toBeInTheDocument();
   });
 
-  it("shows blocked external-member guidance and account actions", () => {
+  it("shows blocked external-member guidance and account actions", async () => {
     const state = {
       email: "student@kmla.hs.kr",
       profile: { ...draftProfile, status: "blocked" },
     } as AuthState;
+    const Blocked = BlockedPage as ComponentType<any>;
+    const contacts = Promise.resolve([
+      { kind: "email", label: "학생회 메일", value: "council@kmla.hs.kr" },
+    ]);
 
-    renderRoute(() => <BlockedPage loaderData={state} />, {
-      path: "/blocked",
-    });
+    const { user } = renderRoute(
+      () => <Blocked loaderData={{ ...state, contacts }} />,
+      { path: "/blocked" },
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "차단이 잘못된 것 같나요?" }),
+    );
+    expect(
+      screen.getByRole("link", { name: "council@kmla.hs.kr" }),
+    ).toHaveAttribute("href", "mailto:council@kmla.hs.kr");
 
     expect(
       screen.getByRole("heading", { name: "가입 신청이 차단되었어요" }),

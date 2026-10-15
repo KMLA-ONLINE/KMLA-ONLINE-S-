@@ -49,6 +49,14 @@ export function shellProfileQuery() {
   });
 }
 
+/** 게이트가 이미 채워 둔 셸 프로필 ID. 게이트와 병렬로 도는 로더가 기다리지 않고 읽는다. */
+export function readShellProfileId(): number | null {
+  return (
+    getQueryClient().getQueryData(shellProfileQuery().queryKey)?.profile?.id ??
+    null
+  );
+}
+
 /** 셸에 떠 있는 사용자인지. 다른 사람의 프로필을 바꾼 action이 셸을 다시 읽지 않게 거른다. */
 export function isShellProfile(profileId: number): boolean {
   return (

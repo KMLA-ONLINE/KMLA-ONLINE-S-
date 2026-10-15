@@ -8,7 +8,12 @@ import {
   listActiveStories,
   type StoryItem,
 } from "~/features/stories/data/queries";
-import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import {
+  defineAppChrome,
+  PageHeader,
+  readShellProfileId,
+  useAppShell,
+} from "~/features/app-shell";
 import {
   isWideHome,
   useWideHome,
@@ -16,7 +21,7 @@ import {
 import { useHomeSidebarPreferences } from "~/features/app-shell/hooks/use-home-sidebar-preferences";
 import { readHomeSidebarPreferences } from "~/features/app-shell/storage/home-sidebar-preferences";
 import { hasActiveSession } from "~/features/auth";
-import { FeedScreen, feedQuery } from "~/features/feed";
+import { FeedScreen, feedQuery, prefetchFeedMedia } from "~/features/feed";
 import {
   getMealDay,
   getMealReferenceDate,
@@ -34,6 +39,7 @@ import {
   listBirthdays,
 } from "~/features/profiles";
 import { createPostListRevalidation } from "~/features/posts";
+import { readPostViewMode } from "~/features/posts/model/view-preference";
 import { GlobalSearchDialog } from "~/features/search";
 import { HomeTimetableSummary } from "~/features/timetable";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
@@ -135,6 +141,13 @@ export async function clientLoader() {
     // 유지하려는 것이고, 갱신은 당겨서 새로고침처럼 명시적인 경로가 맡는다.
     queryClient.ensureInfiniteQueryData(feedQuery()).catch(() => null),
   ]);
+
+  // 목록을 받았으니 화면 마운트를 기다리지 않고 카드 미디어 서명을 띄운다. 키에 들어갈 프로필 ID는
+  // 병렬로 도는 게이트가 넣는다. 아직 없으면 건너뛰고 화면이 같은 키로 시작한다.
+  const viewerId = readShellProfileId();
+  if (viewerId !== null && readPostViewMode() === "card") {
+    prefetchFeedMedia(queryClient, viewerId);
+  }
 
   return { mealDay, birthdays, stories };
 }

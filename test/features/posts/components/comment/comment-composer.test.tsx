@@ -38,11 +38,14 @@ const { mentionState, mentionCandidates } = vi.hoisted(() => ({
   ],
 }));
 
-vi.mock("~/features/posts/model/attachments", async (importActual) => ({
-  ...(await importActual()),
-  prepareCommentImage,
-  releasePostFile,
-}));
+vi.mock(
+  "~/features/posts/model/attachment-preparation",
+  async (importActual) => ({
+    ...(await importActual()),
+    prepareCommentImage,
+    releasePostFile,
+  }),
+);
 
 vi.mock("~/features/posts/components/mention-button", () => ({
   MentionButton: ({
