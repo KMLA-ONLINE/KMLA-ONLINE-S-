@@ -2389,6 +2389,18 @@ export type Database = {
           visibility: Database["public"]["Enums"]["post_visibility"]
         }[]
       }
+      get_school_notice: {
+        Args: { p_post_id: number }
+        Returns: {
+          attachments: Json
+          author: string
+          body: string
+          category: string
+          post_id: number
+          posted_on: string
+          title: string
+        }[]
+      }
       issue_group_invite: {
         Args: {
           p_allowed_profile_types?: Database["public"]["Enums"]["profile_type"][]

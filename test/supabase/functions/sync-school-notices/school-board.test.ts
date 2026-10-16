@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { parseNoticeList } from "../../../../supabase/functions/sync-school-notices/school-board";
+import {
+  parseNoticeDetail,
+  parseNoticeList,
+} from "../../../../supabase/functions/sync-school-notices/school-board";
 
 // 학교 게시판 목록 응답의 행 모양을 본뜬 가짜 HTML. 고정 공지는 번호 칸이 비어 있고 배경색이 붙는다.
 function row({
@@ -97,5 +100,65 @@ describe("parseNoticeList", () => {
 
   it("로그인이 풀린 응답처럼 행이 없으면 빈 배열이다", () => {
     expect(parseNoticeList(header + "</table>")).toEqual([]);
+  });
+});
+
+// 학교 상세 응답(`task=read`)을 본뜬 값. JSON이 아니라 작은따옴표 객체 리터럴이고 학교 화면은 이를
+// eval로 읽는다.
+function detail({
+  useHtml = 0,
+  original,
+  content,
+  attachment = "[]",
+}: {
+  useHtml?: number;
+  original: string;
+  content: string;
+  attachment?: string;
+}) {
+  return (
+    `{ 'username' : '<strong>가</strong>','user_id' : 6,'date' : '2026-10-14','time' : '08:07:09',` +
+    `'use_html' : ${useHtml},'announcement' : 0,'category_id' : 24,'category_name' : '교무',` +
+    `'title' : '대강 안내','content_original' : '${original}','content' : '${content}',` +
+    `'attachment' : ${attachment}}`
+  );
+}
+
+describe("parseNoticeDetail", () => {
+  it("일반 글은 원문 텍스트를 본문으로 쓰고 첨부 목록을 읽는다", () => {
+    const raw = detail({
+      original: "1. 대상: \\'1학년\\'\\n2. 시간: 3교시",
+      content: "1. 대상: &#039;1학년&#039;<br />2. 시간: 3교시",
+      attachment:
+        "[{ 'name' : '대강 시간표.pdf', 'size' : 65365, 'attachment_id' : 24105},{ 'name' : '안내문.hwpx', 'size' : 93967, 'attachment_id' : 23836}]",
+    });
+
+    expect(parseNoticeDetail(raw)).toEqual({
+      body: "1. 대상: '1학년'\n2. 시간: 3교시",
+      attachments: [
+        { attachmentId: 24105, name: "대강 시간표.pdf", size: 65365 },
+        { attachmentId: 23836, name: "안내문.hwpx", size: 93967 },
+      ],
+    });
+  });
+
+  it("HTML 글은 태그를 걷어 낸 텍스트만 본문으로 남긴다", () => {
+    const raw = detail({
+      useHtml: 1,
+      original: "<p>원문</p>",
+      content:
+        "<p>준비물 &amp; 일정</p><div>[[0]]<script>alert(1)</script></div>장소:&nbsp;강당<br />끝",
+      attachment: "[{ 'name' : '사진.jpg', 'size' : 10, 'attachment_id' : 7}]",
+    });
+
+    expect(parseNoticeDetail(raw)?.body).toBe(
+      "준비물 & 일정\n\n장소: 강당\n끝",
+    );
+  });
+
+  it("상세 응답 모양이 아니면 null이다", () => {
+    expect(parseNoticeDetail("<script>location='/members/'</script>")).toBe(
+      null,
+    );
   });
 });

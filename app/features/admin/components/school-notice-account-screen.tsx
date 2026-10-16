@@ -30,7 +30,9 @@ const NO_RESPONSE_AFTER_MS = 5 * 60 * 1000;
 const SYNC_ERRORS: Record<string, string> = {
   missing_credentials: "학교 계정이 설정되지 않았습니다.",
   empty_list:
-    "공지를 한 건도 읽지 못했습니다. 학교 아이디·비밀번호가 맞는지 확인해 주세요.",
+    "공지 목록을 끝까지 읽지 못했습니다. 학교 아이디·비밀번호가 맞는지 확인해 주세요.",
+  detail_unreadable:
+    "공지 본문을 읽지 못했습니다. 도중에 학교 로그인이 풀렸을 수 있어 다음 동기화 때 다시 시도합니다.",
   school_unreachable: "학교 서버에 연결하지 못했습니다.",
   school_timeout: "학교 서버가 제때 응답하지 않았습니다.",
 };

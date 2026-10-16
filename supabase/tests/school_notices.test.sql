@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(20);
+select plan(24);
 
 -- 클라이언트 권한 경계
 select ok(
@@ -24,6 +24,10 @@ select ok(
 select ok(
   has_function_privilege('service_role', 'public.record_school_notice_sync(jsonb, text)', 'EXECUTE'),
   'the sync function can write school notices'
+);
+select ok(
+  not has_function_privilege('anon', 'public.get_school_notice(integer)', 'EXECUTE'),
+  'signed-out visitors cannot read a school notice'
 );
 select ok(
   not has_table_privilege('authenticated', 'private.school_notices', 'SELECT'),
@@ -53,8 +57,11 @@ select is(
 set local role service_role;
 select lives_ok(
   $$select public.record_school_notice_sync('[
-    {"postId": 5866, "category": "학생", "title": "새 공지", "author": "다", "postedOn": "2026-10-16", "hasAttachment": false},
-    {"postId": 5865, "category": "교무", "title": "대강 안내(수정)", "author": "가", "postedOn": "2026-10-14", "hasAttachment": true}
+    {"postId": 5866, "category": "학생", "title": "새 공지", "author": "다", "postedOn": "2026-10-16", "hasAttachment": false,
+     "body": "새 본문", "attachments": []},
+    {"postId": 5865, "category": "교무", "title": "대강 안내(수정)", "author": "가", "postedOn": "2026-10-14", "hasAttachment": true,
+     "body": "1. 대상: 1학년\n2. 시간: 3교시",
+     "attachments": [{"attachmentId": 24105, "name": "대강 시간표.pdf", "size": 65365}]}
   ]', null)$$,
   'a later sync replaces the list'
 );
@@ -72,6 +79,16 @@ select results_eq(
 select isnt(
   (select synced_at from public.list_school_notices() limit 1), null,
   'the list carries when it was last synced'
+);
+select results_eq(
+  $$select title, body, attachments from public.get_school_notice(5865)$$,
+  $$values ('대강 안내(수정)'::text, E'1. 대상: 1학년\n2. 시간: 3교시'::text,
+    '[{"attachment_id": 24105, "name": "대강 시간표.pdf", "size": 65365}]'::jsonb)$$,
+  'approved members read a notice body and its attachments'
+);
+select is_empty(
+  $$select * from public.get_school_notice(5863)$$,
+  'a notice the school removed can no longer be opened'
 );
 select throws_ok(
   $$select public.admin_set_school_notice_account('someone', 'pw')$$,
@@ -91,6 +108,10 @@ set local role authenticated;
 select is_empty(
   $$select * from public.list_school_notices()$$,
   'a signed-in user without an approved profile sees no notices'
+);
+select is_empty(
+  $$select * from public.get_school_notice(5865)$$,
+  'a signed-in user without an approved profile cannot open a notice'
 );
 reset role;
 

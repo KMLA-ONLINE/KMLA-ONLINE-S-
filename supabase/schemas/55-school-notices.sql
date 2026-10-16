@@ -12,7 +12,12 @@ create table if not exists private.school_notices (
   author text not null,
   posted_on date not null,
   has_attachment boolean not null default false,
-  constraint school_notices_list_position_check check (list_position >= 0)
+  -- 텍스트로만 보여 줄 본문. 학교 HTML은 동기화 함수가 걷어 내고 저장한다.
+  body text not null default '',
+  -- [{attachment_id, name, size}]. 파일은 받지 않고 학교 다운로드 주소를 만들 ID만 둔다.
+  attachments jsonb not null default '[]'::jsonb,
+  constraint school_notices_list_position_check check (list_position >= 0),
+  constraint school_notices_attachments_check check (jsonb_typeof(attachments) = 'array')
 );
 
 alter table private.school_notices owner to postgres;
@@ -148,7 +153,7 @@ begin
   delete from private.school_notices where true;
 
   insert into private.school_notices (
-    post_id, list_position, category, title, author, posted_on, has_attachment
+    post_id, list_position, category, title, author, posted_on, has_attachment, body, attachments
   )
   select
     (item.value ->> 'postId')::integer,
@@ -157,7 +162,22 @@ begin
     item.value ->> 'title',
     item.value ->> 'author',
     (item.value ->> 'postedOn')::date,
-    coalesce((item.value ->> 'hasAttachment')::boolean, false)
+    coalesce((item.value ->> 'hasAttachment')::boolean, false),
+    left(coalesce(item.value ->> 'body', ''), 50000),
+    coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'attachment_id', (file.value ->> 'attachmentId')::integer,
+          'name', file.value ->> 'name',
+          'size', coalesce((file.value ->> 'size')::bigint, 0)
+        )
+        order by file.ordinality
+      )
+      from jsonb_array_elements(
+        case when jsonb_typeof(item.value -> 'attachments') = 'array'
+          then item.value -> 'attachments' else '[]'::jsonb end
+      ) with ordinality as file(value, ordinality)
+    ), '[]'::jsonb)
   from jsonb_array_elements(p_notices) with ordinality as item(value, ordinality);
 
   insert into private.school_notice_sync_state (id, last_attempt_at, last_success_at)
@@ -197,6 +217,34 @@ as $$
   order by notice.list_position;
 $$;
 alter function public.list_school_notices() owner to postgres;
+
+-- 승인된 사용자의 공지 상세. 목록에서 빠진 공지는 열리지 않는다.
+create or replace function public.get_school_notice(p_post_id integer)
+returns table (
+  post_id integer,
+  category text,
+  title text,
+  author text,
+  posted_on date,
+  body text,
+  attachments jsonb
+)
+language sql stable security definer
+set search_path = ''
+as $$
+  select
+    notice.post_id,
+    notice.category,
+    notice.title,
+    notice.author,
+    notice.posted_on,
+    notice.body,
+    notice.attachments
+  from private.school_notices as notice
+  where notice.post_id = p_post_id
+    and private.current_profile_id() is not null;
+$$;
+alter function public.get_school_notice(integer) owner to postgres;
 
 -- 관리자가 학교 계정을 바꾼다. 바꾼 즉시 동기화를 한 번 요청해 새 계정으로 로그인되는지 확인한다.
 create or replace function public.admin_set_school_notice_account(p_login_id text, p_password text)
@@ -298,6 +346,8 @@ grant execute on function public.record_school_notice_sync(jsonb, text) to servi
 
 revoke all on function public.list_school_notices() from public, anon;
 grant execute on function public.list_school_notices() to authenticated;
+revoke all on function public.get_school_notice(integer) from public, anon;
+grant execute on function public.get_school_notice(integer) to authenticated;
 revoke all on function public.admin_set_school_notice_account(text, text) from public, anon;
 grant execute on function public.admin_set_school_notice_account(text, text) to authenticated;
 revoke all on function public.admin_sync_school_notices() from public, anon;

@@ -1,7 +1,7 @@
-import { ExternalLinkIcon, MegaphoneIcon, PaperclipIcon } from "lucide-react";
+import { ChevronRightIcon, MegaphoneIcon, PaperclipIcon } from "lucide-react";
+import { Link } from "react-router";
 
 import type { SchoolNotice } from "~/features/school-notices/data/school-notices";
-import { schoolNoticeUrl } from "~/features/school-notices/model/school-notice-link";
 import { RelativeTime } from "~/shared/components/relative-time";
 import {
   Empty,
@@ -12,8 +12,8 @@ import {
 } from "~/shared/ui/empty";
 
 /**
- * 학교 인트라넷 공지의 최신 목록. 본문은 가져오지 않고, 누르면 학교 사이트의 해당 공지를 새 탭으로
- * 연다. 학교 사이트는 로그인이 필요해 그 사실을 목록 위에 먼저 알린다.
+ * 학교 인트라넷 공지의 최신 목록. 누르면 앱 안에서 본문을 연다. 첨부만 학교 사이트 로그인이
+ * 필요하다.
  */
 export function SchoolNoticesScreen({
   notices,
@@ -49,7 +49,6 @@ export function SchoolNoticesScreen({
   return (
     <div className="py-4">
       <div className="space-y-1 px-4 pb-3 text-sm text-muted-foreground">
-        <p>학교 사이트에 로그인되어 있어야 공지가 열려요.</p>
         {syncedAt ? (
           <p>
             <RelativeTime value={syncedAt} /> 업데이트
@@ -59,10 +58,8 @@ export function SchoolNoticesScreen({
       <ul className="divide-y border-y md:rounded-xl md:border-x">
         {notices.map((notice) => (
           <li key={notice.post_id}>
-            <a
-              href={schoolNoticeUrl(notice.post_id)}
-              target="_blank"
-              rel="noreferrer"
+            <Link
+              to={`/menu/notices/${notice.post_id}`}
               className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none"
             >
               <span className="min-w-0 flex-1">
@@ -83,12 +80,11 @@ export function SchoolNoticesScreen({
                   {notice.title}
                 </span>
               </span>
-              <ExternalLinkIcon
+              <ChevronRightIcon
                 className="mt-1 size-4 shrink-0 text-muted-foreground"
                 aria-hidden
               />
-              <span className="sr-only">(새 탭)</span>
-            </a>
+            </Link>
           </li>
         ))}
       </ul>
