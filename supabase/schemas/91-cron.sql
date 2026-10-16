@@ -20,3 +20,5 @@ SELECT cron.schedule('reconcile-storage-cleanup-runs', '*/5 * * * *', 'select pr
 
 SELECT cron.schedule('sweep-unreferenced-storage-weekly', '41 4 * * 0', 'select private.sweep_unreferenced_storage_objects(p_dry_run => false)');
 
+SELECT cron.schedule('sync-school-notices', '7,37 * * * *', 'select private.invoke_school_notice_sync()');
+

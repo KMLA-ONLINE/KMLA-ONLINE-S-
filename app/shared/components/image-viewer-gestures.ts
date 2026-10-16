@@ -182,7 +182,13 @@ interface GestureState {
   pointers: Map<number, Point>;
   start: Point;
   base: ZoomTransform;
-  pinch: { midpoint: Point; distance: number; zoom: ZoomTransform } | null;
+  pinch: {
+    midpoint: Point;
+    distance: number;
+    zoom: ZoomTransform;
+    /** 지금 두 손가락의 가운데. 손을 떼며 최대 배율로 돌아갈 때 이 자리를 붙잡는다. */
+    focus: Point;
+  } | null;
   samples: Sample[];
   /** 이번 제스처 중에 손가락이 둘 이상 닿았다. 그 뒤의 손 떼기는 탭이 아니다. */
   multiTouch: boolean;
@@ -364,7 +370,7 @@ export function useViewerGestures(options: ViewerGestureOptions) {
     if (state.mode === "dismiss") current.setDismiss(NO_OFFSET, 0, SETTLE_MS);
     current.grab();
     state.mode = "pinch";
-    state.pinch = { ...pair, zoom: current.zoom };
+    state.pinch = { ...pair, zoom: current.zoom, focus: pair.midpoint };
     options.onZoomGesture();
   };
 
@@ -399,6 +405,7 @@ export function useViewerGestures(options: ViewerGestureOptions) {
     if (state.mode === "pinch") {
       const pair = pointerPair(state.pointers);
       if (!state.pinch || !pair || !layout) return;
+      state.pinch.focus = pair.midpoint;
       current.setZoom(
         rubberBandZoom(
           pinchZoom(
@@ -410,6 +417,7 @@ export function useViewerGestures(options: ViewerGestureOptions) {
             layout,
           ),
           layout,
+          pair.midpoint,
         ),
       );
       return;
@@ -549,10 +557,12 @@ export function useViewerGestures(options: ViewerGestureOptions) {
     if (mode === "pinch") {
       const pair = pointerPair(state.pointers);
       if (pair && pair.distance > 0) {
-        state.pinch = { ...pair, zoom: current.zoom };
+        state.pinch = { ...pair, zoom: current.zoom, focus: pair.midpoint };
         return;
       }
-      const settled = layout ? clampZoom(current.zoom, layout) : IDENTITY;
+      const settled = layout
+        ? clampZoom(current.zoom, layout, state.pinch?.focus)
+        : IDENTITY;
       zoomTo(settled, SETTLE_MS);
       // 한 손가락이 남아 있고 확대된 상태라면 그 손가락으로 이어서 옮긴다.
       const [remaining] = Array.from(state.pointers.values());

@@ -32,6 +32,17 @@ where not exists (
   where name = 'notification_dispatch_secret'
 );
 
+select vault.create_secret(
+  'local-school-notice-sync-only',
+  'school_notice_sync_secret',
+  'Development-only school notice sync function secret'
+)
+where not exists (
+  select 1
+  from vault.decrypted_secrets
+  where name = 'school_notice_sync_secret'
+);
+
 -- 메시지 본문 암호화 키(docs/MESSAGING_TECHNICAL_DESIGN.md §4). 운영 키는 환경마다 따로 만든다.
 select vault.create_secret(
   'local-message-key-only-0123456789abcdef',

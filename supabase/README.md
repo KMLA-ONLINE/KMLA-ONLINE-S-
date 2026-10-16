@@ -58,12 +58,14 @@ Migrations do not carry these. Set them per project before scheduled work functi
 
 **Vault.** `seed.sql` covers the local stack only. Elsewhere the cron helpers read `vault.decrypted_secrets`; missing-secret behavior differs by helper as described below.
 
-| Name                           | Read by                                   |
-| ------------------------------ | ----------------------------------------- |
-| `project_url`                  | both helpers, as the `net.http_post` base |
-| `notification_dispatch_secret` | `private.invoke_notification_dispatcher`  |
-| `storage_cleanup_secret`       | `private.invoke_storage_cleanup`          |
-| `message_key_v<N>`             | `private.message_keys`                    |
+| Name                                               | Read by                                                                     |
+| -------------------------------------------------- | --------------------------------------------------------------------------- |
+| `project_url`                                      | both helpers, as the `net.http_post` base                                   |
+| `notification_dispatch_secret`                     | `private.invoke_notification_dispatcher`                                    |
+| `storage_cleanup_secret`                           | `private.invoke_storage_cleanup`                                            |
+| `school_notice_sync_secret`                        | `private.invoke_school_notice_sync`                                         |
+| `school_notice_login_id`, `school_notice_password` | `public.school_notice_credentials`; written only by `/admin/school-notices` |
+| `message_key_v<N>`                                 | `private.message_keys`                                                      |
 
 ```sql
 select vault.create_secret('https://<ref>.supabase.co', 'project_url', '');
@@ -85,7 +87,9 @@ Rotate with `vault.update_secret` — `create_secret` fails on an existing name.
 
 **Edge Function.** Copy `.env.example` to `.env.<environment>.local`; `npm run fn:secrets:dev`, or `npx supabase secrets set --project-ref <ref> --env-file …` for prod. Values are per project.
 
-Each Vault name pairs with the function variable of the same meaning — `notification_dispatch_secret` with `NOTIFICATION_DISPATCH_SECRET`, `storage_cleanup_secret` with `STORAGE_CLEANUP_SECRET`. The handler compares with `!==`, so a mismatch 401s every cron call; `/admin/storage-cleanup` surfaces that as a failed last run.
+Each Vault name pairs with the function variable of the same meaning — `notification_dispatch_secret` with `NOTIFICATION_DISPATCH_SECRET`, `storage_cleanup_secret` with `STORAGE_CLEANUP_SECRET`, `school_notice_sync_secret` with `SCHOOL_NOTICE_SYNC_SECRET`. The handler compares with `!==`, so a mismatch 401s every cron call; `/admin/storage-cleanup` surfaces that as a failed last run.
+
+The school account names are not set by hand: an app admin enters them on `/admin/school-notices`, which never reads the password back. `invoke_school_notice_sync` raises on a missing sync secret like the storage helper, and `/admin/school-notices` warns when Vault is unconfigured or a requested sync never reports back.
 
 **Auth URL configuration.** Dashboard, per project.
 

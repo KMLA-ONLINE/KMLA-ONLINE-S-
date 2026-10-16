@@ -65,3 +65,20 @@ export async function replaceAdminContacts(
   });
   if (error) throw error;
 }
+
+/** 비밀번호는 저장만 한다. 서버는 저장한 비밀번호를 다시 돌려주지 않는다. */
+export async function setSchoolNoticeAccount(
+  loginId: string,
+  password: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("admin_set_school_notice_account", {
+    p_login_id: loginId,
+    p_password: password,
+  });
+  if (error) throw error;
+}
+
+export async function syncSchoolNotices(): Promise<void> {
+  const { error } = await getSupabase().rpc("admin_sync_school_notices");
+  if (error) throw error;
+}

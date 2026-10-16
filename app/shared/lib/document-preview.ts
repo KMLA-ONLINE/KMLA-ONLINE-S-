@@ -58,14 +58,15 @@ export function shouldPreviewDocument(fileName: string): boolean {
   return isAndroid() && ANDROID_PREVIEW.has(extension);
 }
 
-/** 다운로드 링크의 클릭 핸들러. 열어 줄 파일이 아니면 링크의 기본 다운로드를 그대로 둔다. */
+/** 다운로드 링크의 클릭 핸들러. 열어 줄 파일이 아니면 링크를 건드리지 않고 `false`를 돌려준다. */
 export function previewDocumentOnClick(
   event: { preventDefault(): void },
   file: { url: string; downloadUrl: string; fileName: string },
-): void {
-  if (!shouldPreviewDocument(file.fileName)) return;
+): boolean {
+  if (!shouldPreviewDocument(file.fileName)) return false;
   event.preventDefault();
   void openDocumentPreview(file);
+  return true;
 }
 
 /**

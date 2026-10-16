@@ -227,12 +227,12 @@ describe("RoomScreen", () => {
 
     // 같은 메시지의 반응은 0.5초 안에 다시 바꾸지 않는다.
     await user.click(reactionButton);
-    await user.click(screen.getByRole("button", { name: "하트 반응 남기기" }));
+    await user.click(screen.getByRole("button", { name: "하트 반응 취소" }));
     expect(within(message).getByRole("img", { name: "하트" })).toBeVisible();
 
     now.mockReturnValue(1_001_000);
     await user.click(reactionButton);
-    await user.click(screen.getByRole("button", { name: "하트 반응 남기기" }));
+    await user.click(screen.getByRole("button", { name: "하트 반응 취소" }));
     expect(
       within(message).queryByRole("img", { name: "하트" }),
     ).not.toBeInTheDocument();
