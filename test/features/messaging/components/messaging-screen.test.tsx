@@ -21,7 +21,9 @@ describe("MessagingScreen", () => {
 
     expect(screen.getByText("아직 대화가 없습니다")).toBeVisible();
     expect(screen.getByRole("button", { name: "새 대화" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "새 대화 시작하기" })).toHaveLength(2);
+    expect(
+      screen.getAllByRole("button", { name: "새 대화 시작하기" }),
+    ).toHaveLength(2);
     expect(
       screen.queryByText("새 대화 버튼으로 대화를 시작해 보세요."),
     ).not.toBeInTheDocument();
