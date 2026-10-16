@@ -169,7 +169,7 @@ describe("PostActionBar", () => {
         await screen.findByRole("dialog", { name: "보내기" }),
       ).toBeInTheDocument();
       expect(
-        await screen.findByRole("list", { name: "최근 대화" }),
+        await screen.findByRole("list", { name: "최근 채팅" }),
       ).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "보내기" })).toBeDisabled();
     });

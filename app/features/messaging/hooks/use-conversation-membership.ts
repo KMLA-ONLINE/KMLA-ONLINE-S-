@@ -78,7 +78,7 @@ export function useConversationMembership(conversationId: string) {
       try {
         await leaveConversation(conversationId);
       } catch {
-        toast.error("대화에서 나가지 못했습니다.");
+        toast.error("채팅에서 나가지 못했습니다.");
         return false;
       }
       removeConversationFromList(queryClient, conversationId);
@@ -91,13 +91,13 @@ export function useConversationMembership(conversationId: string) {
       try {
         await deleteGroupConversation(conversationId);
       } catch {
-        toast.error("대화방을 삭제하지 못했습니다.");
+        toast.error("채팅방을 삭제하지 못했습니다.");
         return false;
       }
       removeConversationFromList(queryClient, conversationId);
       void invalidateConversationList(queryClient);
       await navigate("/messenger", { replace: true });
-      toast.success("대화방을 삭제했습니다.");
+      toast.success("채팅방을 삭제했습니다.");
       return true;
     },
     rename: (name: string) =>
@@ -132,7 +132,7 @@ export function useStartConversation(entry: {
       await invalidateConversationList(queryClient);
       await navigate(`/messenger/${conversationId}`, entry);
     } catch (error) {
-      toast.error("대화를 시작하지 못했습니다.");
+      toast.error("채팅을 시작하지 못했습니다.");
       throw error;
     }
   };

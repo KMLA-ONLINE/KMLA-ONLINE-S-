@@ -109,7 +109,7 @@ export function SharedMediaDialog({
         <DialogHeader className="flex-row items-center justify-between gap-2">
           <DialogTitle>공유된 미디어</DialogTitle>
           <DialogDescription className="sr-only">
-            이 대화에서 주고받은 사진과 파일
+            이 채팅에서 주고받은 사진과 파일
           </DialogDescription>
           <Button
             variant="ghost"

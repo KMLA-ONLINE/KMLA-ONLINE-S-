@@ -40,7 +40,7 @@ describe("formatSystemMessage", () => {
         { kind: "renamed", profileIds: ["a"], name: "축제 기획" },
         people,
       ),
-    ).toBe("홍길동님이 대화 이름을 ‘축제 기획’(으)로 변경했습니다.");
+    ).toBe("홍길동님이 채팅 이름을 ‘축제 기획’(으)로 변경했습니다.");
   });
 
   it("모르는 사람은 알 수 없는 사용자로 쓴다", () => {

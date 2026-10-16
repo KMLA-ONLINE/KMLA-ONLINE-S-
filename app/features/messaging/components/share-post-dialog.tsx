@@ -172,7 +172,7 @@ export function SharePostDialog({
         <DialogHeader>
           <DialogTitle>보내기</DialogTitle>
           <DialogDescription className="sr-only">
-            게시물을 보낼 대화나 사람을 고르세요.
+            게시물을 보낼 채팅이나 사람을 고르세요.
           </DialogDescription>
         </DialogHeader>
 
@@ -220,8 +220,8 @@ export function SharePostDialog({
               setQuery(event.currentTarget.value);
               if (event.currentTarget.value.trim() === "") setSearchTerm("");
             }}
-            placeholder="대화 또는 사람 찾기"
-            aria-label="대화 또는 사람 찾기"
+            placeholder="채팅 또는 사람 찾기"
+            aria-label="채팅 또는 사람 찾기"
             className="rounded-full pl-9"
           />
         </form>
@@ -273,11 +273,11 @@ export function SharePostDialog({
           ) : recent.length === 0 ? (
             <Centered>
               {filter === ""
-                ? "최근 대화가 없습니다. 이름으로 사람을 찾아보세요."
+                ? "최근 채팅이 없습니다. 이름으로 사람을 찾아보세요."
                 : "Enter를 눌러 사람을 찾아보세요."}
             </Centered>
           ) : (
-            <ul aria-label="최근 대화" className="flex flex-col gap-0.5">
+            <ul aria-label="최근 채팅" className="flex flex-col gap-0.5">
               {recent.map((conversation) => {
                 const choice: Choice = {
                   key: `conversation:${conversation.id}`,

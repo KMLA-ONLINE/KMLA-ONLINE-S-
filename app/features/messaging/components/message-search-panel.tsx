@@ -135,8 +135,8 @@ export function MessageSearchPanel({
               const value = event.currentTarget.value;
               onSessionChange((current) => ({ ...current, query: value }));
             }}
-            placeholder="대화에서 찾기"
-            aria-label="대화에서 찾기"
+            placeholder="채팅에서 찾기"
+            aria-label="채팅에서 찾기"
             className="rounded-full border-0 bg-muted pl-9"
           />
         </div>

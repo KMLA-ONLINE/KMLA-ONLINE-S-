@@ -25,7 +25,7 @@ export function formatSystemMessage(
     case "member_removed":
       return `${actor}님이 ${targets}을 내보냈습니다.`;
     case "renamed":
-      return `${actor}님이 대화 이름을 ‘${event.name ?? ""}’(으)로 변경했습니다.`;
+      return `${actor}님이 채팅 이름을 ‘${event.name ?? ""}’(으)로 변경했습니다.`;
   }
 }
 
