@@ -178,8 +178,8 @@ function ReservationEditor({
         <TextField
           ref={inputRef}
           value={detail}
-          aria-label="사용자 명단"
-          placeholder="사용자 명단"
+          aria-label="이용자 명단"
+          placeholder="이용자 명단"
           maxLength={200}
           onChange={(event) => onChange(event.target.value)}
         />
@@ -191,7 +191,7 @@ function ReservationEditor({
         </Button>
 
         <Button type="submit" size="sm" disabled={saving || !detail.trim()}>
-          {saving ? "신청 중..." : "신청"}
+          {saving ? "예약 중…" : "예약"}
         </Button>
       </div>
     </form>
@@ -217,7 +217,7 @@ interface BookingRowProps {
 /**
  * 시간 한 줄.
  *
- * 비어 있으면 줄 전체가 신청 버튼이고, 열리면 같은 자리에서 바로 입력한다.
+ * 비어 있으면 줄 전체가 예약 버튼이고, 열리면 같은 자리에서 바로 입력한다.
  * 카드 안에 카드를 겹치지 않는 게 이 화면의 규칙이다.
  */
 function BookingRow({
@@ -304,7 +304,7 @@ function BookingRow({
         <span className={cn("shrink-0 text-sm font-semibold", labelClassName)}>
           {label}
         </span>
-        <span className="ml-auto text-sm text-muted-foreground">신청 마감</span>
+        <span className="ml-auto text-sm text-muted-foreground">예약 마감</span>
       </div>
     );
   }
@@ -323,7 +323,7 @@ function BookingRow({
 
       <span className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors group-hover:text-primary">
         <PlusIcon className="size-4" aria-hidden />
-        신청
+        예약
       </span>
     </button>
   );

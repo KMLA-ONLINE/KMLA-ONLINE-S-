@@ -96,7 +96,7 @@ export function getGroupErrorMessage(error: unknown): string {
   if (candidate.code === "42501") return "이 작업을 수행할 권한이 없습니다.";
   if (candidate.code === "P0002") {
     if (candidate.message?.includes("invite not found")) {
-      return "쓸 수 없는 초대 링크입니다.";
+      return "사용할 수 없는 초대 링크입니다.";
     }
     return "그룹을 찾을 수 없습니다.";
   }

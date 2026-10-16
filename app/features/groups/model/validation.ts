@@ -53,12 +53,12 @@ export function validateCreateGroup(
     errors.description = "그룹 설명은 2,000자 이하로 입력해 주세요.";
   }
   if (!JOIN_POLICIES.has(values.joinPolicy)) {
-    errors.joinPolicy = "가입 정책을 선택해 주세요.";
+    errors.joinPolicy = "가입 방식을 선택해 주세요.";
   } else if (values.kind === "official" && values.joinPolicy !== "open") {
     errors.joinPolicy = "공식 그룹은 공개 그룹입니다.";
   }
   if (!IDENTITY_POLICIES.has(values.identityPolicy)) {
-    errors.identityPolicy = "활동 신원 정책을 선택해 주세요.";
+    errors.identityPolicy = "실명·익명 설정을 선택해 주세요.";
   }
   if (!POSTING_POLICIES.has(values.postingPolicy)) {
     errors.postingPolicy = "글쓰기 정책을 선택해 주세요.";

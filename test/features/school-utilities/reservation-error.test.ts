@@ -19,7 +19,7 @@ describe("reservationCreateErrorMessage", () => {
         { code: "23505", message: "reservation slot is already occupied" },
         false,
       ),
-    ).toBe("다른 사용자가 먼저 신청했습니다.");
+    ).toBe("다른 사용자가 먼저 예약했습니다.");
   });
 
   it("explains a recurring conflict as a long-term booking failure", () => {
@@ -29,7 +29,7 @@ describe("reservationCreateErrorMessage", () => {
         true,
       ),
     ).toBe(
-      "같은 요일·시간에 이미 신청된 예약이 있어 장기 예약을 할 수 없습니다.",
+      "같은 요일·시간에 이미 등록된 예약이 있어 장기 예약을 할 수 없습니다.",
     );
   });
 
@@ -42,18 +42,18 @@ describe("reservationCreateErrorMessage", () => {
         },
         false,
       ),
-    ).toBe("오늘부터 이번 주 일요일까지만 신청할 수 있습니다.");
+    ).toBe("오늘부터 이번 주 일요일까지만 예약할 수 있습니다.");
   });
 
   it("points at the connection when the request never arrived", () => {
     expect(
       reservationCreateErrorMessage({ message: "Failed to fetch" }, false),
-    ).toBe("인터넷 연결을 확인한 뒤 다시 시도해주세요.");
+    ).toBe("인터넷 연결을 확인한 뒤 다시 시도해 주세요.");
   });
 
   it("falls back to a retry message for anything else", () => {
     expect(reservationCreateErrorMessage(new Error("boom"), false)).toBe(
-      "신청하지 못했습니다. 잠시 후 다시 시도해주세요.",
+      "예약하지 못했습니다. 잠시 후 다시 시도해 주세요.",
     );
   });
 });
@@ -91,7 +91,7 @@ describe("reservationCancelErrorMessage", () => {
 
   it("falls back to a retry message for anything else", () => {
     expect(reservationCancelErrorMessage(new Error("boom"))).toBe(
-      "취소하지 못했습니다. 잠시 후 다시 시도해주세요.",
+      "취소하지 못했습니다. 잠시 후 다시 시도해 주세요.",
     );
   });
 });
@@ -104,11 +104,11 @@ describe("gongangScheduleSaveErrorMessage", () => {
     ],
     [
       { code: "22023", message: "only next week can be configured" },
-      "다음 주 일정만 선예약할 수 있습니다. 주가 바뀌었다면 화면을 새로 고쳐주세요.",
+      "다음 주 일정만 선예약할 수 있습니다. 주가 바뀌었다면 화면을 새로고침해 주세요.",
     ],
     [
       { code: "23505", message: "manager schedule is already occupied" },
-      "다른 반복 선예약과 겹칩니다. 기존 선예약을 먼저 종료해주세요.",
+      "다른 반복 선예약과 겹칩니다. 기존 선예약을 먼저 종료해 주세요.",
     ],
     [
       { code: "23505", message: "reservation slot is already occupied" },

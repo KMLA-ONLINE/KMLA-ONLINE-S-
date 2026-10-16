@@ -75,7 +75,7 @@ const POLICY = {
     icon: UserRoundCheckIcon,
     name: "identityPolicy",
     options: [
-      ["identified", "실명만", "모든 활동에 프로필 이름을 표시합니다."],
+      ["identified", "실명만", "게시물과 댓글에 프로필 이름을 표시합니다."],
       [
         "optional_anonymous",
         "작성할 때 선택",
@@ -89,13 +89,17 @@ const POLICY = {
     icon: FilePenLineIcon,
     name: "postingPolicy",
     options: [
-      ["members", "모든 멤버", "그룹의 모든 멤버가 게시물을 작성합니다."],
-      ["staff", "매니저 이상", "매니저, 관리자와 소유자만 작성합니다."],
+      ["members", "모든 멤버", "모든 멤버가 게시물을 작성할 수 있습니다."],
+      [
+        "staff",
+        "매니저 이상",
+        "소유자·관리자·매니저만 게시물을 작성할 수 있습니다.",
+      ],
     ],
   },
   staffRoles: {
     title: "운영진 역할",
-    description: "멤버 명부에서 운영진 역할을 표시하는 방식",
+    description: "멤버 목록에서 운영진 역할을 표시하는 방식",
     icon: ShieldCheckIcon,
     name: "hideStaffRoles",
     options: [
@@ -103,7 +107,7 @@ const POLICY = {
       [
         "true",
         "일반 멤버에게 숨김",
-        "소유자와 관리자를 제외한 멤버 명부에서는 운영진도 일반 멤버처럼 표시합니다.",
+        "소유자와 관리자를 제외한 멤버 목록에서는 운영진도 일반 멤버처럼 표시합니다.",
       ],
     ],
   },
@@ -228,7 +232,7 @@ function PolicyRow({
                       운영진만 게시 가능
                     </FieldLabel>
                     <FieldDescription>
-                      매니저, 관리자와 소유자만 게시물을 작성합니다.
+                      소유자·관리자·매니저만 게시물을 작성할 수 있습니다.
                     </FieldDescription>
                   </FieldContent>
                 </Field>
@@ -255,8 +259,8 @@ function PolicyRow({
                 </p>
               ) : kind === "staffRoles" ? (
                 <p className="rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
-                  일반 멤버는 관리자 역할을 가진 사람을 볼 수 없습니다. 게시물의
-                  운영진 명의 표시는 유지됩니다.
+                  멤버 목록에서 운영진의 역할을 숨깁니다. 소유자와 관리자는 모든
+                  역할을 볼 수 있습니다. 게시물의 운영진 표시는 유지됩니다.
                 </p>
               ) : null}
               <FormActions pending={pending} cancel={onCancel} />

@@ -115,7 +115,7 @@ export function DangerSettings({
           setOfficialConfirmOpen(next);
           if (!next) close();
         }}
-        title={`'${group.name}' *공식 그룹*을 삭제할까요?`}
+        title={`‘${group.name}’ 공식 그룹을 삭제할까요?`}
         description="이 작업은 되돌릴 수 없습니다."
         confirmLabel="공식 그룹 삭제"
         confirmVariant="destructive"

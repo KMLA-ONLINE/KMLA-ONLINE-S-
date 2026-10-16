@@ -227,10 +227,10 @@ export function DonationsScreen() {
     try {
       if (claim) {
         await claimDonationItem(item.id);
-        toast.success(`${item.name} 신청 완료`);
+        toast.success(`‘${item.name}’ 신청이 완료되었습니다.`);
       } else {
         await cancelDonationClaim(item.id);
-        toast.success(`${item.name} 신청 취소`);
+        toast.success(`‘${item.name}’ 신청을 취소했습니다.`);
       }
     } catch (e) {
       toast.error(errorMessage(e));
@@ -341,7 +341,8 @@ export function DonationsScreen() {
               </div>
             ) : (
               <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-sm">
-                기부물품은 재학생만 신청할 수 있습니다. 목록은 볼 수 있어요.
+                기부물품은 재학생만 신청할 수 있습니다. 목록은 열람할 수
+                있습니다.
               </p>
             )}
           </section>

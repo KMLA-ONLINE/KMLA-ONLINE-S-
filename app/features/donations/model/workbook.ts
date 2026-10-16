@@ -127,7 +127,7 @@ export async function parseDonationWorkbook(
 
     if (!category) {
       errors.push(
-        `${sheet}: 지원하지 않는 시트입니다. 엑셀 양식을 확인해주세요.`,
+        `${sheet}: 지원하지 않는 시트입니다. 엑셀 양식을 확인해 주세요.`,
       );
       continue;
     }
@@ -163,7 +163,7 @@ export async function parseDonationWorkbook(
 
     if (hasHeader && nameColumn === -1) {
       errors.push(
-        `${sheet} ${firstRowIndex + 1}행: 필수 컬럼 '물품명'이 없습니다.`,
+        `${sheet} ${firstRowIndex + 1}행: 필수 열 ‘물품명’이 없습니다.`,
       );
       continue;
     }
@@ -173,14 +173,14 @@ export async function parseDonationWorkbook(
 
       if (detailColumn === -1) {
         errors.push(
-          `${sheet} ${firstRowIndex + 1}행: 필수 컬럼 '색상'이 없습니다.`,
+          `${sheet} ${firstRowIndex + 1}행: 필수 열 ‘색상’이 없습니다.`,
         );
         missing = true;
       }
 
       if (donorColumn === -1) {
         errors.push(
-          `${sheet} ${firstRowIndex + 1}행: 필수 컬럼 '기증자'가 없습니다.`,
+          `${sheet} ${firstRowIndex + 1}행: 필수 열 ‘기증자’가 없습니다.`,
         );
         missing = true;
       }
@@ -205,7 +205,7 @@ export async function parseDonationWorkbook(
         nameHeaders.has(normalize(row[nameColumn]))
       ) {
         errors.push(
-          `${location}: 반복된 헤더 행입니다. 중복 헤더를 제거해주세요.`,
+          `${location}: 반복된 헤더 행입니다. 중복 헤더를 제거해 주세요.`,
         );
         continue;
       }
@@ -219,17 +219,21 @@ export async function parseDonationWorkbook(
       let invalid = false;
 
       if (!name || name.length > 300) {
-        errors.push(`${location}: 물품명은 1~300자의 문자여야 합니다.`);
+        errors.push(`${location}: 물품명은 1~300자의 텍스트로 입력해 주세요.`);
         invalid = true;
       }
 
       if (detail === null || detail.length > 200) {
-        errors.push(`${location}: 상세 정보는 200자 이하의 문자여야 합니다.`);
+        errors.push(
+          `${location}: 상세 정보는 200자 이하의 텍스트로 입력해 주세요.`,
+        );
         invalid = true;
       }
 
       if (donorName === null || donorName.length > 100) {
-        errors.push(`${location}: 기증자 이름은 100자 이하의 문자여야 합니다.`);
+        errors.push(
+          `${location}: 기증자 이름은 100자 이하의 텍스트로 입력해 주세요.`,
+        );
         invalid = true;
       }
 

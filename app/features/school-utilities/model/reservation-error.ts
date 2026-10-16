@@ -1,6 +1,6 @@
 import { isNetworkError } from "~/shared/lib/network-error";
 
-const NETWORK_MESSAGE = "인터넷 연결을 확인한 뒤 다시 시도해주세요.";
+const NETWORK_MESSAGE = "인터넷 연결을 확인한 뒤 다시 시도해 주세요.";
 
 function readError(error: unknown): { code: unknown; text: string } {
   const { code, message } =
@@ -11,7 +11,7 @@ function readError(error: unknown): { code: unknown; text: string } {
 }
 
 /**
- * 예약 신청 실패를 사용자가 할 수 있는 조치로 옮긴다. 코드와 문구는
+ * 예약 등록 실패를 사용자가 할 수 있는 조치로 옮긴다. 코드와 문구는
  * `supabase/schemas/51-utility-reservations.sql`의 insert trigger가 던지는 값이다.
  *
  * 23505는 trigger가 두 경우에 같이 쓰므로 문구로 가른다.
@@ -29,16 +29,16 @@ export function reservationCreateErrorMessage(
       return "공강 관리자가 미리 예약한 일정입니다.";
     }
     return recurring
-      ? "같은 요일·시간에 이미 신청된 예약이 있어 장기 예약을 할 수 없습니다."
-      : "다른 사용자가 먼저 신청했습니다.";
+      ? "같은 요일·시간에 이미 등록된 예약이 있어 장기 예약을 할 수 없습니다."
+      : "다른 사용자가 먼저 예약했습니다.";
   }
   if (code === "22023" && text.includes("current Korea week")) {
-    return "오늘부터 이번 주 일요일까지만 신청할 수 있습니다.";
+    return "오늘부터 이번 주 일요일까지만 예약할 수 있습니다.";
   }
-  if (code === "42501") return "신청할 권한이 없습니다.";
-  if (code === "23514") return "입력한 내용을 다시 확인해주세요.";
+  if (code === "42501") return "예약할 권한이 없습니다.";
+  if (code === "23514") return "입력한 내용을 다시 확인해 주세요.";
 
-  return "신청하지 못했습니다. 잠시 후 다시 시도해주세요.";
+  return "예약하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
 /**
@@ -67,7 +67,7 @@ export function reservationCancelErrorMessage(error: unknown): string {
     }
   }
 
-  return "취소하지 못했습니다. 잠시 후 다시 시도해주세요.";
+  return "취소하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
 /**
@@ -81,15 +81,15 @@ export function gongangScheduleSaveErrorMessage(error: unknown): string {
 
   if (code === "42501") return "선예약을 관리할 권한이 없습니다.";
   if (code === "22023" && text.includes("only next week")) {
-    return "다음 주 일정만 선예약할 수 있습니다. 주가 바뀌었다면 화면을 새로 고쳐주세요.";
+    return "다음 주 일정만 선예약할 수 있습니다. 주가 바뀌었다면 화면을 새로고침해 주세요.";
   }
   if (code === "23505") {
     if (text.includes("manager schedule is already occupied")) {
-      return "다른 반복 선예약과 겹칩니다. 기존 선예약을 먼저 종료해주세요.";
+      return "다른 반복 선예약과 겹칩니다. 기존 선예약을 먼저 종료해 주세요.";
     }
     return "학생의 단발 예약이 있는 칸은 선예약할 수 없습니다.";
   }
-  if (code === "23514") return "입력한 내용을 다시 확인해주세요.";
+  if (code === "23514") return "입력한 내용을 다시 확인해 주세요.";
 
-  return "저장하지 못했습니다. 잠시 후 다시 시도해주세요.";
+  return "저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }

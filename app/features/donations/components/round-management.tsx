@@ -139,7 +139,7 @@ export function DonationRoundManagement({ round, onSaved, onClose }: Props) {
     setError("");
 
     if (!next) {
-      setError("회차 이름과 신청 기간을 확인해주세요.");
+      setError("회차 이름과 신청 기간을 확인해 주세요.");
       return;
     }
 

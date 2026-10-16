@@ -100,7 +100,7 @@ export function PinnedMessagesDialog({
                     variant="ghost"
                     size="icon-sm"
                     className="rounded-full text-muted-foreground"
-                    aria-label="고정 취소"
+                    aria-label="고정 해제"
                     onClick={() => onUnpin(message)}
                   >
                     <PinOffIcon aria-hidden />
@@ -150,7 +150,7 @@ export function PinnedMessagesDialog({
                           onSelect: () => onViewMessage(message.id),
                         },
                         {
-                          label: "고정 취소",
+                          label: "고정 해제",
                           icon: <PinOffIcon aria-hidden />,
                           onSelect: () => onUnpin(message),
                         },

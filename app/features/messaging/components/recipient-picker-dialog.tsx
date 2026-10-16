@@ -132,7 +132,7 @@ export function RecipientPickerDialog({
                   variant="secondary"
                   size="sm"
                   className="h-7 rounded-full pr-1.5"
-                  aria-label={`${recipient.name} 빼기`}
+                  aria-label={`${recipient.name} 선택 해제`}
                   onClick={() => toggle(recipient)}
                 >
                   {recipient.name}
@@ -192,7 +192,7 @@ export function RecipientPickerDialog({
               role="alert"
               className="py-8 text-center text-sm text-destructive"
             >
-              찾지 못했습니다. 잠시 후 다시 시도해 주세요.
+              검색 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
             </p>
           ) : results.data.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">

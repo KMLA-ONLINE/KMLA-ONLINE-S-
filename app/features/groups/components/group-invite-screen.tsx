@@ -32,10 +32,10 @@ export function GroupInviteScreen({
             <LinkIcon aria-hidden="true" className="size-5" />
           </div>
           <div className="flex flex-col gap-1">
-            <p className="font-medium">쓸 수 없는 초대 링크입니다</p>
+            <p className="font-medium">사용할 수 없는 초대 링크입니다</p>
             <p className="text-sm leading-6 text-muted-foreground">
-              기한이 지났거나 그룹 운영진이 링크를 끊었습니다. 초대한 사람에게
-              새 링크를 받아 주세요.
+              만료되었거나 더 이상 사용할 수 없는 링크입니다. 초대한 사람에게 새
+              링크를 요청해 주세요.
             </p>
           </div>
           <Button
@@ -119,7 +119,7 @@ export function GroupInviteScreen({
               가입하기
             </Button>
             <p className="text-center text-xs text-muted-foreground">
-              가입하면 이 그룹의 게시물과 멤버 명부를 볼 수 있습니다.
+              가입하면 이 그룹의 게시물과 멤버 목록을 볼 수 있습니다.
             </p>
           </fetcher.Form>
         )}
