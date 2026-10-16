@@ -140,7 +140,7 @@ describe("home school-life summaries", () => {
     });
 
     expect(
-      await screen.findByText("오늘 생일인 학생이 없습니다"),
+      await screen.findByText("오늘 생일인 사람이 없습니다"),
     ).toBeVisible();
     expect(
       await screen.findByText("현재 시간대에 등록된 식단이 없습니다."),
@@ -204,7 +204,7 @@ describe("home school-life summaries", () => {
     renderHome(Promise.resolve([]), new Promise(() => undefined));
 
     expect(
-      await screen.findByText("오늘 생일인 학생이 없습니다"),
+      await screen.findByText("오늘 생일인 사람이 없습니다"),
     ).toBeVisible();
     expect(
       screen.getByRole("region", { name: "급식을 불러오는 중" }),
@@ -256,7 +256,7 @@ describe("home school-life summaries", () => {
       await birthdays;
     });
 
-    expect(screen.getByText("오늘 생일인 학생이 없습니다")).toBeVisible();
+    expect(screen.getByText("오늘 생일인 사람이 없습니다")).toBeVisible();
     expect(
       screen.queryByRole("region", { name: "생일을 불러오는 중" }),
     ).not.toBeInTheDocument();
