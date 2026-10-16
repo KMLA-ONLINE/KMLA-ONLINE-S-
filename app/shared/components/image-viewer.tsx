@@ -1,5 +1,6 @@
 import { Dialog } from "@base-ui/react/dialog";
 import {
+  CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   DownloadIcon,
@@ -37,6 +38,13 @@ import {
   type Point,
   type Size,
 } from "~/shared/lib/image-viewer-geometry";
+import {
+  managedDownloadLabel,
+  managedDownloadNote,
+  useManagedDownload,
+  type ManagedDownloadState,
+} from "~/shared/hooks/use-managed-download";
+import { usesManagedDownload } from "~/shared/lib/file-download";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
@@ -204,6 +212,49 @@ function DownloadControl({
   downloadAll: boolean;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // 실패는 알림으로만 알린다. 이 자리에 '다시 받기'를 남기면 다운로드 메뉴가 가려진다.
+  const single = useManagedDownload({ failureMessage: PHOTO_DOWNLOAD_FAILED });
+  const all = useManagedDownload({ failureMessage: PHOTO_DOWNLOAD_FAILED });
+  // 한 장 받기는 받기 시작한 사진에만 보인다. 받는 사이 다른 사진으로 넘기면 그 사진은 처음 상태다.
+  const [singleFor, setSingleFor] = useState<string | null>(null);
+  // 모든 사진의 저장 결과는 저장한 사진에서만 보인다. 넘기면 다운로드 메뉴가 돌아온다.
+  const [allSavedOn, setAllSavedOn] = useState<string | null>(null);
+
+  // 휴대폰에서는 링크 대신 앱이 받는다(`file-download.ts`). 데스크톱은 링크 기본 동작을 둔다.
+  function downloadCurrent(event: { preventDefault(): void }) {
+    if (!usesManagedDownload()) return;
+    event.preventDefault();
+    setSingleFor(image.id);
+    void single.start([{ url: image.downloadSrc, fileName: image.name }]);
+  }
+
+  const showsAll =
+    all.state.status === "saved"
+      ? allSavedOn === image.id
+      : all.state.status !== "idle";
+  if (showsAll) {
+    return (
+      <ManagedDownloadControl
+        state={all.state}
+        count={images.length}
+        onSave={() => {
+          setAllSavedOn(image.id);
+          void all.save();
+        }}
+        onShare={() => void all.share()}
+      />
+    );
+  }
+  if (singleFor === image.id && single.state.status !== "idle") {
+    return (
+      <ManagedDownloadControl
+        state={single.state}
+        count={1}
+        onSave={() => void single.save()}
+        onShare={() => void single.share()}
+      />
+    );
+  }
 
   if (!downloadAll || images.length < 2) {
     return (
@@ -214,6 +265,7 @@ function DownloadControl({
         rel="noopener noreferrer"
         aria-label="다운로드"
         className={CONTROL_CLASS}
+        onClick={downloadCurrent}
       >
         <DownloadIcon className="size-5" />
       </a>
@@ -234,6 +286,7 @@ function DownloadControl({
         >
           <DropdownMenuItem
             className={MENU_ITEM_CLASS}
+            onClick={downloadCurrent}
             render={
               // 내용은 Menu.Item이 children으로 채운다.
               // eslint-disable-next-line jsx-a11y/anchor-has-content
@@ -286,7 +339,16 @@ function DownloadControl({
               type="button"
               onClick={() => {
                 setConfirmOpen(false);
-                downloadEach(images);
+                if (usesManagedDownload()) {
+                  void all.start(
+                    images.map((item) => ({
+                      url: item.downloadSrc,
+                      fileName: item.name,
+                    })),
+                  );
+                } else {
+                  downloadEach(images);
+                }
               }}
             >
               다운로드
@@ -296,6 +358,87 @@ function DownloadControl({
       </Dialog.Root>
     </>
   );
+}
+
+const PHOTO_DOWNLOAD_FAILED = "사진을 받지 못했어요";
+
+const PILL_CLASS = "w-auto gap-1.5 px-3 text-sm font-medium";
+
+/** 휴대폰에서 받는 중·저장 대기·저장함을 다운로드 버튼 자리에 보인다. */
+function ManagedDownloadControl({
+  state,
+  count,
+  onSave,
+  onShare,
+}: {
+  state: ManagedDownloadState;
+  count: number;
+  onSave: () => void;
+  onShare: () => void;
+}) {
+  const label = managedDownloadLabel(state) ?? "다운로드";
+
+  switch (state.status) {
+    case "idle":
+    case "failed":
+      return null;
+    case "loading":
+      return (
+        <ControlButton
+          aria-label={label}
+          aria-busy
+          className={cn(PILL_CLASS, "tabular-nums")}
+        >
+          <Spinner aria-hidden className="size-4" />
+          {state.progress === null
+            ? null
+            : `${Math.round(state.progress * 100)}%`}
+        </ControlButton>
+      );
+    case "ready":
+      return (
+        <ControlButton
+          aria-label={label}
+          onClick={onSave}
+          className={cn(
+            PILL_CLASS,
+            "bg-white text-black hover:bg-white/90 hover:text-black",
+          )}
+        >
+          {count > 1 ? `${count}장 저장` : "저장"}
+        </ControlButton>
+      );
+    case "saved": {
+      // 저장 위치는 알림 대신 이 자리에 남긴다. 공유도 사라지지 않는 버튼으로 둔다.
+      const note = managedDownloadNote(state);
+      return (
+        <>
+          {note ? (
+            <span
+              aria-hidden
+              className="min-w-0 truncate text-xs text-white/80"
+            >
+              {note}
+            </span>
+          ) : null}
+          {state.shareable ? (
+            <ControlButton
+              aria-label={label}
+              onClick={onShare}
+              className={PILL_CLASS}
+            >
+              <CheckIcon aria-hidden className="size-4" />
+              공유
+            </ControlButton>
+          ) : (
+            <ControlButton aria-label={label}>
+              <CheckIcon className="size-5" />
+            </ControlButton>
+          )}
+        </>
+      );
+    }
+  }
 }
 
 function Filmstrip({

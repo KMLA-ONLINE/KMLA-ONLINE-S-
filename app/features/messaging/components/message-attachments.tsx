@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import {
-  DownloadIcon,
   FileIcon,
   ImageOffIcon,
   MusicIcon,
@@ -17,8 +16,16 @@ import {
 import { messagingKeys } from "~/features/messaging/data/cache";
 import { formatFileSize } from "~/features/messaging/model/attachments";
 import type { MessageAttachment } from "~/features/messaging/model/types";
+import {
+  DownloadNote,
+  DownloadStatus,
+} from "~/shared/components/download-status";
 import type { ViewerImage } from "~/shared/components/image-viewer";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
+import {
+  managedDownloadLabel,
+  useManagedDownload,
+} from "~/shared/hooks/use-managed-download";
 import { previewDocumentOnClick } from "~/shared/lib/document-preview";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -470,6 +477,8 @@ function FileAttachment({
   url: string | undefined;
   pending: boolean;
 }) {
+  const download = useManagedDownload();
+  const status = managedDownloadLabel(download.state);
   const content = (
     <>
       <FileIcon aria-hidden className="size-5 shrink-0 text-muted-foreground" />
@@ -478,16 +487,10 @@ function FileAttachment({
         <span className="block text-xs text-muted-foreground">
           {formatFileSize(attachment.sizeBytes)}
         </span>
+        <DownloadNote state={download.state} />
       </span>
       {/* 올리는 동안은 사진처럼 돌아가는 표시를 둔다. 흐리게만 그리면 멈춘 것처럼 보인다. */}
-      {pending ? (
-        <Spinner />
-      ) : (
-        <DownloadIcon
-          aria-hidden
-          className="size-4 shrink-0 text-muted-foreground"
-        />
-      )}
+      {pending ? <Spinner /> : <DownloadStatus state={download.state} />}
     </>
   );
   const className =
@@ -496,14 +499,22 @@ function FileAttachment({
   return url ? (
     <a
       href={toDownloadUrl(url, attachment.fileName)}
-      onClick={(event) =>
-        previewDocumentOnClick(event, {
+      onClick={(event) => {
+        // 올리는 중에는 아직 받을 파일이 없다. 업로드 표시 뒤에서 다운로드가 돌지 않게 막는다.
+        if (pending) {
+          event.preventDefault();
+          return;
+        }
+        const previewed = previewDocumentOnClick(event, {
           url,
           downloadUrl: event.currentTarget.href,
           fileName: attachment.fileName,
-        })
-      }
-      aria-label={`내려받기: ${attachment.fileName}`}
+        });
+        if (previewed) return;
+        download.handleClick(event, [{ url, fileName: attachment.fileName }]);
+      }}
+      aria-label={`${status ?? "내려받기"}: ${attachment.fileName}`}
+      aria-busy={download.state.status === "loading" || undefined}
       className={cn(className, "hover:bg-muted/70")}
     >
       {content}

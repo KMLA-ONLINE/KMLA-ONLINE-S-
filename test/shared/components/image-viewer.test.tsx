@@ -242,6 +242,170 @@ describe("ImageViewer", () => {
     expect(append).not.toHaveBeenCalled();
   });
 
+  describe("on an iPhone", () => {
+    let share: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      Object.defineProperty(navigator, "userAgent", {
+        configurable: true,
+        value:
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+      });
+      share = vi.fn(() => Promise.resolve());
+      Object.defineProperty(navigator, "canShare", {
+        configurable: true,
+        value: () => true,
+      });
+      Object.defineProperty(navigator, "share", {
+        configurable: true,
+        value: share,
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() => Promise.resolve(new Response("RIFF", { status: 200 }))),
+      );
+    });
+
+    afterEach(() => {
+      Reflect.deleteProperty(navigator, "userAgent");
+      Reflect.deleteProperty(navigator, "canShare");
+      Reflect.deleteProperty(navigator, "share");
+      vi.unstubAllGlobals();
+    });
+
+    it("downloads the current image in the app, then saves it on the next tap", async () => {
+      const { user } = renderViewer("a", makeImages(1));
+
+      await user.click(screen.getByRole("link", { name: "다운로드" }));
+      await user.click(
+        await screen.findByRole("button", { name: "다 받음, 눌러서 저장" }),
+      );
+
+      await vi.waitFor(() => expect(share).toHaveBeenCalledOnce());
+      const [[data]] = share.mock.calls as unknown as [[{ files: File[] }]];
+      expect(data.files.map((file) => file.name)).toEqual(["a.webp"]);
+    });
+
+    it("shares every image at once after downloading them all", async () => {
+      const { user } = renderViewer("b", makeImages(), { downloadAll: true });
+
+      await user.click(screen.getByRole("button", { name: "다운로드" }));
+      await user.click(
+        await screen.findByRole("menuitem", {
+          name: "모든 사진 다운로드 (3장)",
+        }),
+      );
+      const confirm = await screen.findByRole("dialog", {
+        name: "모든 사진을 다운로드할까요?",
+      });
+      await user.click(
+        within(confirm).getByRole("button", { name: "다운로드" }),
+      );
+      const save = await screen.findByRole("button", {
+        name: "다 받음, 눌러서 저장",
+      });
+      expect(save).toHaveTextContent("3장 저장");
+      await user.click(save);
+
+      await vi.waitFor(() => expect(share).toHaveBeenCalledOnce());
+      const [[data]] = share.mock.calls as unknown as [[{ files: File[] }]];
+      expect(data.files.map((file) => file.name)).toEqual([
+        "a.webp",
+        "b.webp",
+        "c.webp",
+      ]);
+    });
+
+    it("returns to the download button when the image cannot be fetched", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() => Promise.resolve(new Response("", { status: 403 }))),
+      );
+      const { user } = renderViewer("a", makeImages(1));
+
+      await user.click(screen.getByRole("link", { name: "다운로드" }));
+
+      // 실패를 이 자리에 남기면 다운로드 메뉴가 가려진다. 알림으로 알리고 버튼을 되돌린다.
+      expect(
+        await screen.findByRole("link", { name: "다운로드" }),
+      ).toBeInTheDocument();
+      expect(share).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("on an Android phone", () => {
+    beforeEach(() => {
+      Object.defineProperty(navigator, "userAgent", {
+        configurable: true,
+        value:
+          "Mozilla/5.0 (Linux; Android 14; SM-S921N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+      });
+      Object.defineProperty(navigator, "canShare", {
+        configurable: true,
+        value: () => true,
+      });
+      Object.defineProperty(navigator, "share", {
+        configurable: true,
+        value: vi.fn(() => Promise.resolve()),
+      });
+      // jsdom에는 Blob URL이 없다.
+      Object.defineProperty(URL, "createObjectURL", {
+        configurable: true,
+        value: () => "blob:x",
+      });
+      Object.defineProperty(URL, "revokeObjectURL", {
+        configurable: true,
+        value: () => undefined,
+      });
+      vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+        () => undefined,
+      );
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() => Promise.resolve(new Response("RIFF", { status: 200 }))),
+      );
+    });
+
+    afterEach(() => {
+      Reflect.deleteProperty(navigator, "userAgent");
+      Reflect.deleteProperty(navigator, "canShare");
+      Reflect.deleteProperty(navigator, "share");
+      vi.unstubAllGlobals();
+    });
+
+    it("keeps where the photos went and a share button in place of a toast, until the next photo", async () => {
+      const { user } = renderViewer("b", makeImages(), { downloadAll: true });
+
+      await user.click(screen.getByRole("button", { name: "다운로드" }));
+      await user.click(
+        await screen.findByRole("menuitem", {
+          name: "모든 사진 다운로드 (3장)",
+        }),
+      );
+      const confirm = await screen.findByRole("dialog", {
+        name: "모든 사진을 다운로드할까요?",
+      });
+      await user.click(
+        within(confirm).getByRole("button", { name: "다운로드" }),
+      );
+      await user.click(
+        await screen.findByRole("button", { name: "다 받음, 눌러서 저장" }),
+      );
+
+      expect(
+        await screen.findByRole("button", {
+          name: "다운로드 폴더에 저장됨, 눌러서 공유",
+        }),
+      ).toBeInTheDocument();
+      expect(screen.getByText("다운로드 폴더에 저장됨")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "3번째 이미지" }));
+      expect(
+        await screen.findByRole("button", { name: "다운로드" }),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("closes on the close button", async () => {
     const { user, onClose } = renderViewer();
     await user.click(screen.getByRole("button", { name: "닫기" }));
