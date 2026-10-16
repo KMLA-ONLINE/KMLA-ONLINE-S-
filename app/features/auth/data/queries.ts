@@ -1,7 +1,7 @@
 import { isAuthApiError, type Session } from "@supabase/supabase-js";
 
 import { getSupabase } from "~/shared/supabase/client";
-import type { AuthState } from "~/features/auth/model/types";
+import type { AuthState, MySuspension } from "~/features/auth/model/types";
 
 /**
  * 서버가 세션을 거절했다는 오류 코드. `42501`은 인증 전용 RPC에 요청이 익명으로 나갔다는 뜻이다.
@@ -63,6 +63,13 @@ export async function loadAuthState(): Promise<AuthState | null> {
     email: session.user.email ?? "",
     profile: profiles[0] ?? null,
   };
+}
+
+/** 내 활성 이용 정지. 없으면 `null`. 정지 중에도 읽을 수 있는 RPC다. */
+export async function loadMySuspension(): Promise<MySuspension | null> {
+  const { data, error } = await getSupabase().rpc("get_my_suspension");
+  if (error) throw error;
+  return data[0] ?? null;
 }
 
 /**

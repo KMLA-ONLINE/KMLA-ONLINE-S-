@@ -1614,7 +1614,7 @@ grant execute on function public.list_message_read_counts(uuid, uuid[])
 alter table private.notification_delivery_outbox
   add column message_id uuid references private.messages(id) on delete cascade,
   add constraint notification_delivery_outbox_source
-    check (num_nonnulls(notification_id, message_id) = 1),
+    check (num_nonnulls(notification_id, message_id, suspension_id) = 1),
   add constraint notification_delivery_outbox_message_channel
     check (message_id is null or channel = 'web_push');
 
@@ -1659,6 +1659,7 @@ begin
     and member.left_at is null
     and member.profile_id is distinct from p_message.sender_id
     and (member.muted_until is null or member.muted_until <= now())
+    and not private.profile_suspended(member.profile_id)
   on conflict do nothing;
 
   if found then

@@ -3,6 +3,9 @@ import type { Database } from "~/shared/supabase/database.types";
 export type AuthProfile =
   Database["public"]["Functions"]["get_my_profile"]["Returns"][number];
 
+export type MySuspension =
+  Database["public"]["Functions"]["get_my_suspension"]["Returns"][number];
+
 export interface AuthState {
   email: string;
   profile: AuthProfile | null;

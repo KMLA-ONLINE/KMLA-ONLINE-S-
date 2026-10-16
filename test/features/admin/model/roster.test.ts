@@ -19,6 +19,8 @@ function member(overrides: Partial<RosterMember>): RosterMember {
     department: null,
     is_app_admin: false,
     approved_at: "2026-03-01T00:00:00+00:00",
+    is_suspended: false,
+    suspension_expires_at: null,
     ...overrides,
   };
 }
@@ -62,7 +64,13 @@ const members = [
   }),
 ];
 
-const all: RosterFilter = { type: "all", group: null, query: "", sort: "name" };
+const all: RosterFilter = {
+  type: "all",
+  group: null,
+  query: "",
+  sort: "name",
+  suspendedOnly: false,
+};
 
 describe("roster", () => {
   it("counts members by type", () => {
@@ -93,6 +101,15 @@ describe("roster", () => {
 
     expect(names({ type: "student", group: "29" })).toEqual(["이학생"]);
     expect(names({ query: "학생회" })).toEqual(["김학생"]);
+    expect(
+      filterRoster(
+        [
+          ...members,
+          member({ profile_id: 9, name: "정지중", is_suspended: true }),
+        ],
+        { ...all, suspendedOnly: true },
+      ).map((row) => row.name),
+    ).toEqual(["정지중"]);
     expect(names({ query: "PARK" })).toEqual(["박졸업"]);
   });
 

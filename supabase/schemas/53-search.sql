@@ -13,7 +13,8 @@ begin
   from public.profiles as profile
   where profile.auth_user_id = auth.uid()
     and profile.status = 'accepted'
-    and profile.deleted_at is null;
+    and profile.deleted_at is null
+    and not private.profile_suspended(profile.id);
 
   if caller_profile.id is null then
     raise exception 'search requires an accepted profile' using errcode = '42501';

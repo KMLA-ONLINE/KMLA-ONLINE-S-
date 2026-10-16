@@ -43,7 +43,7 @@ describe("app gate loader", () => {
   // 게이트는 첫 진입에만 돈다. 이후 `refreshShellProfile()`이 이 쿼리를 다시 읽는다.
   it("seeds the shell profile query on entry", async () => {
     const shell = { email: "student@kmla.hs.kr", profile };
-    mocks.loadShellData.mockResolvedValue(shell);
+    mocks.loadShellData.mockResolvedValue({ ...shell, suspended: false });
 
     await expect(clientLoader(args())).resolves.toEqual(shell);
     expect(getQueryClient().getQueryData(appShellKeys.profile())).toEqual(
@@ -55,12 +55,25 @@ describe("app gate loader", () => {
     mocks.loadShellData.mockResolvedValue({
       email: "student@kmla.hs.kr",
       profile: { ...profile, status: "pending" },
+      suspended: false,
     });
 
     await expect(clientLoader(args())).rejects.toMatchObject({ status: 302 });
     expect(
       getQueryClient().getQueryData(appShellKeys.profile()),
     ).toBeUndefined();
+  });
+
+  // 이용 정지된 사람의 상태는 `accepted` 그대로라 상태만 보면 앱으로 들어온다.
+  it("sends a suspended member to the suspension notice", async () => {
+    mocks.loadShellData.mockResolvedValue({
+      email: "student@kmla.hs.kr",
+      profile,
+      suspended: true,
+    });
+
+    const thrown = await clientLoader(args()).catch((error: unknown) => error);
+    expect((thrown as Response).headers.get("Location")).toBe("/suspended");
   });
 
   // 공유받은 링크로 들어왔다가 로그인을 거쳐도 그 화면으로 돌아오게 한다.

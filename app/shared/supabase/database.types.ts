@@ -1620,6 +1620,7 @@ export type Database = {
         Args: { p_conversation_id: string; p_profile_ids: number[] }
         Returns: undefined
       }
+      admin_lift_suspension: { Args: { p_profile_id: number }; Returns: number }
       admin_list_accepted_users: {
         Args: {
           p_limit?: number
@@ -1683,10 +1684,12 @@ export type Database = {
           cohort: number
           department: string
           is_app_admin: boolean
+          is_suspended: boolean
           name: string
           profile_id: number
           profile_type: Database["public"]["Enums"]["profile_type"]
           pub_id: string
+          suspension_expires_at: string
         }[]
       }
       admin_replace_contacts: { Args: { p_contacts: Json }; Returns: undefined }
@@ -1750,6 +1753,17 @@ export type Database = {
           queue_pending: number
           queue_retrying: number
           secrets_configured: boolean
+        }[]
+      }
+      admin_suspend_profile: {
+        Args: {
+          p_duration_days?: number
+          p_profile_id: number
+          p_reason: string
+        }
+        Returns: {
+          expires_at: string
+          suspension_id: number
         }[]
       }
       admin_sync_school_notices: {
@@ -2353,6 +2367,13 @@ export type Database = {
       get_my_recent_unread_notification_count: {
         Args: Record<PropertyKey, never>
         Returns: number
+      }
+      get_my_suspension: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          expires_at: string
+          reason: string
+        }[]
       }
       get_my_unread_message_count: {
         Args: Record<PropertyKey, never>
