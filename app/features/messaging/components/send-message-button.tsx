@@ -31,7 +31,7 @@ export function SendMessageButton({
       void invalidateConversationList(queryClient);
       await navigate(`/messenger/${conversationId}`);
     } catch {
-      toast.error("대화를 열지 못했습니다.");
+      toast.error("채팅을 열지 못했습니다.");
       setOpening(false);
     }
   }

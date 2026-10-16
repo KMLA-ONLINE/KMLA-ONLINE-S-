@@ -13,6 +13,7 @@ import * as queries from "~/features/messaging/data/queries";
 import {
   catchUpConversation,
   openConversation,
+  refreshConversationInList,
   refreshReadState,
 } from "~/features/messaging/data/sync";
 import type {
@@ -22,6 +23,7 @@ import type {
 } from "~/features/messaging/model/types";
 
 vi.mock("~/features/messaging/data/queries", () => ({
+  getConversationSummary: vi.fn(),
   loadConversation: vi.fn(),
   listMessageChanges: vi.fn(),
   listMessageReadCounts: vi.fn(),
@@ -67,6 +69,7 @@ beforeEach(() => {
   vi.mocked(queries.listPinnedMessages).mockReset();
   vi.mocked(queries.listMessageReadCounts).mockReset();
   vi.mocked(queries.loadConversation).mockReset();
+  vi.mocked(queries.getConversationSummary).mockReset();
 });
 
 describe("mergeServerMessages", () => {
@@ -393,5 +396,75 @@ describe("openConversation", () => {
     expect(queries.loadConversation).toHaveBeenCalledWith(ID);
     expect(conversation).toBe(loaded);
     expect(pageIds(queryClient)).toEqual([["d"]]);
+  });
+});
+
+describe("refreshConversationInList", () => {
+  function summary(unreadCount: number): ConversationSummary {
+    return {
+      id: ID,
+      type: "direct",
+      name: "상대",
+      viewerId: "1",
+      participants: [],
+      lastMessage: null,
+      unreadCount,
+      muted: false,
+      canDelete: false,
+    };
+  }
+
+  it("같은 대화의 갱신이 겹치면 도는 요청 하나와 그 뒤의 요청 하나로 합친다", async () => {
+    queryClient.setQueryData(messagingKeys.conversations(), [summary(3)]);
+    const responses: ((value: ConversationSummary) => void)[] = [];
+    vi.mocked(queries.getConversationSummary).mockImplementation(
+      () => new Promise((resolve) => responses.push(resolve)),
+    );
+
+    const first = refreshConversationInList(queryClient, ID);
+    // 첫 요청이 도는 동안 온 갱신들은 그 요청이 시작된 뒤의 변경일 수 있어 한 번 더 읽는다.
+    const second = refreshConversationInList(queryClient, ID);
+    const third = refreshConversationInList(queryClient, ID);
+    expect(queries.getConversationSummary).toHaveBeenCalledTimes(1);
+
+    responses[0]?.(summary(2));
+    await first;
+    await vi.waitFor(() =>
+      expect(queries.getConversationSummary).toHaveBeenCalledTimes(2),
+    );
+    responses[1]?.(summary(0));
+    await Promise.all([second, third]);
+
+    expect(queries.getConversationSummary).toHaveBeenCalledTimes(2);
+    expect(
+      queryClient.getQueryData<ConversationSummary[]>(
+        messagingKeys.conversations(),
+      )?.[0]?.unreadCount,
+    ).toBe(0);
+
+    // 다 끝난 뒤의 갱신은 새로 읽는다.
+    vi.mocked(queries.getConversationSummary).mockResolvedValue(summary(1));
+    await refreshConversationInList(queryClient, ID);
+    expect(queries.getConversationSummary).toHaveBeenCalledTimes(3);
+  });
+
+  it("첨부가 바뀌지 않는 갱신(읽음)은 공유된 첨부 수를 다시 읽게 하지 않는다", async () => {
+    queryClient.setQueryData(messagingKeys.conversations(), [summary(1)]);
+    vi.mocked(queries.getConversationSummary).mockResolvedValue(summary(0));
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const countsInvalidated = () =>
+      invalidate.mock.calls.some(
+        ([filters]) =>
+          filters?.queryKey?.[1] ===
+          messagingKeys.sharedAttachmentCounts(ID)[1],
+      );
+
+    await refreshConversationInList(queryClient, ID, {
+      attachmentsChanged: false,
+    });
+    expect(countsInvalidated()).toBe(false);
+
+    await refreshConversationInList(queryClient, ID);
+    expect(countsInvalidated()).toBe(true);
   });
 });

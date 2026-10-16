@@ -200,7 +200,7 @@ describe("RoomScreen", () => {
     const pinnedLabel =
       within(pinnedMessage).getByText("고정됨").parentElement!;
     expect(pinnedLabel).toHaveTextContent("최민준·고정됨");
-    expect(screen.getByText("대화 멤버 4명")).toBeInTheDocument();
+    expect(screen.getByText("채팅 멤버 4명")).toBeInTheDocument();
   });
 
   it("메시지 반응을 로컬에서 선택하고 제거한다", async () => {
@@ -401,7 +401,7 @@ describe("RoomScreen", () => {
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;
     const messageThread = screen
-      .getByRole("region", { name: "학생회 기획부 대화" })
+      .getByRole("region", { name: "학생회 기획부 채팅" })
       .querySelector(".overflow-y-auto")!;
     const scrollTo = vi.fn();
     Object.defineProperty(messageThread, "scrollTo", {
@@ -409,8 +409,8 @@ describe("RoomScreen", () => {
       value: scrollTo,
     });
 
-    await user.click(screen.getByRole("button", { name: "대화 검색" }));
-    const searchBox = screen.getByRole("searchbox", { name: "대화에서 찾기" });
+    await user.click(screen.getByRole("button", { name: "채팅 검색" }));
+    const searchBox = screen.getByRole("searchbox", { name: "채팅에서 찾기" });
     expect(searchBox).toHaveFocus();
     await user.type(searchBox, "부스 배치{Enter}");
 
@@ -422,7 +422,7 @@ describe("RoomScreen", () => {
     await user.click(result);
 
     expect(
-      screen.queryByRole("searchbox", { name: "대화에서 찾기" }),
+      screen.queryByRole("searchbox", { name: "채팅에서 찾기" }),
     ).not.toBeInTheDocument();
     // 대화 영역만 움직인다. `scrollIntoView`는 바깥 틀까지 밀어 화면 전체가 밀린다.
     await waitFor(() =>
@@ -433,9 +433,9 @@ describe("RoomScreen", () => {
     expect(scrollIntoView).not.toHaveBeenCalled();
 
     // 다시 열면 입력과 결과가 남아 있어 다음 결과를 이어 고른다. 찾은 말은 따로 표시한다.
-    await user.click(screen.getByRole("button", { name: "대화 검색" }));
+    await user.click(screen.getByRole("button", { name: "채팅 검색" }));
     expect(
-      screen.getByRole("searchbox", { name: "대화에서 찾기" }),
+      screen.getByRole("searchbox", { name: "채팅에서 찾기" }),
     ).toHaveValue("부스 배치");
     const reopened = screen.getByRole("list", { name: "검색 결과" });
     expect(within(reopened).getAllByText("부스 배치")[0]?.tagName).toBe("MARK");
@@ -717,7 +717,7 @@ describe("RoomScreen", () => {
       },
     );
 
-    await user.click(screen.getByRole("button", { name: "대화방 삭제" }));
+    await user.click(screen.getByRole("button", { name: "채팅방 삭제" }));
     await user.click(await screen.findByRole("button", { name: "삭제" }));
 
     expect(await screen.findByText("대화 목록")).toBeInTheDocument();
@@ -732,7 +732,7 @@ describe("RoomScreen", () => {
     });
 
     expect(
-      screen.queryByRole("button", { name: "대화방 삭제" }),
+      screen.queryByRole("button", { name: "채팅방 삭제" }),
     ).not.toBeInTheDocument();
   });
 
@@ -767,15 +767,15 @@ describe("RoomScreen", () => {
       { path: "/messenger/student-council" },
     );
 
-    await user.click(screen.getByRole("button", { name: "대화 알림 끄기" }));
+    await user.click(screen.getByRole("button", { name: "채팅 알림 끄기" }));
     expect(
-      screen.getByRole("button", { name: "대화 알림 켜기" }),
+      screen.getByRole("button", { name: "채팅 알림 켜기" }),
     ).toHaveAttribute("aria-pressed", "true");
     expect(setMuted).toHaveBeenLastCalledWith("student-council", true);
 
-    await user.click(screen.getByRole("button", { name: "대화 알림 켜기" }));
+    await user.click(screen.getByRole("button", { name: "채팅 알림 켜기" }));
     expect(
-      screen.getByRole("button", { name: "대화 알림 끄기" }),
+      screen.getByRole("button", { name: "채팅 알림 끄기" }),
     ).toHaveAttribute("aria-pressed", "false");
     expect(setMuted).toHaveBeenLastCalledWith("student-council", false);
     setMuted.mockRestore();
@@ -883,7 +883,7 @@ describe("RoomScreen", () => {
       .getByText("축제 부스 배치 초안 확인했어요?")
       .closest("article")!;
     const messageViewport = screen
-      .getByRole("region", { name: "학생회 기획부 대화" })
+      .getByRole("region", { name: "학생회 기획부 채팅" })
       .querySelector(".overflow-y-auto")!;
     const messageSurface = message.children[1].lastElementChild!;
     const composer = screen.getByRole("textbox", { name: "메시지 입력" });
@@ -983,7 +983,7 @@ describe("RoomScreen", () => {
       .getByText("축제 부스 배치 초안 확인했어요?")
       .closest("article")!;
     const messageViewport = screen
-      .getByRole("region", { name: "학생회 기획부 대화" })
+      .getByRole("region", { name: "학생회 기획부 채팅" })
       .querySelector(".overflow-y-auto")!;
     const messageSurface = message.children[1].lastElementChild!;
     vi.spyOn(message, "getBoundingClientRect").mockReturnValue(
@@ -1054,7 +1054,7 @@ describe("RoomScreen", () => {
       .getByRole("link", { name: "https://www.kmlaonline.net" })
       .closest("article")!;
     await user.click(
-      within(linkedMessage).getByRole("button", { name: "대화에서 보기" }),
+      within(linkedMessage).getByRole("button", { name: "채팅에서 보기" }),
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
@@ -1122,7 +1122,7 @@ describe("RoomScreen", () => {
     const input = screen.getByRole("textbox", { name: "메시지 입력" });
     const likeButton = screen.getByRole("button", { name: "좋아요 보내기" });
     const messageThread = screen
-      .getByRole("region", { name: "이현우 대화" })
+      .getByRole("region", { name: "이현우 채팅" })
       .querySelector(".overflow-y-auto")!;
     Object.defineProperty(messageThread, "scrollHeight", {
       configurable: true,
@@ -1206,7 +1206,7 @@ describe("RoomScreen", () => {
       { path: "/messenger/hyunwoo" },
     );
     const messageThread = screen
-      .getByRole("region", { name: "이현우 대화" })
+      .getByRole("region", { name: "이현우 채팅" })
       .querySelector(".overflow-y-auto")!;
     let scrollHeight = 500;
     Object.defineProperties(messageThread, {
@@ -1277,7 +1277,7 @@ describe("RoomScreen", () => {
       path: "/messenger/hyunwoo",
     });
     const messageThread = screen
-      .getByRole("region", { name: "이현우 대화" })
+      .getByRole("region", { name: "이현우 채팅" })
       .querySelector(".overflow-y-auto")!;
     // 높이가 변하지 않으므로 페이지를 붙여도 맨 위까지 남은 거리가 그대로다.
     Object.defineProperties(messageThread, {
@@ -1312,7 +1312,7 @@ describe("RoomScreen", () => {
       { path: "/messenger/hyunwoo" },
     );
     const messageThread = screen
-      .getByRole("region", { name: "이현우 대화" })
+      .getByRole("region", { name: "이현우 채팅" })
       .querySelector(".overflow-y-auto")!;
     Object.defineProperties(messageThread, {
       clientHeight: { configurable: true, value: 100 },
@@ -1380,19 +1380,19 @@ describe("RoomScreen", () => {
       { path: "/messenger/hyunwoo" },
     );
 
-    const closeButton = screen.getByRole("button", { name: "대화 정보 닫기" });
+    const closeButton = screen.getByRole("button", { name: "채팅 정보 닫기" });
     expect(closeButton).toHaveAttribute("aria-pressed", "true");
 
     await user.click(closeButton);
     const openButton = screen.getByRole("button", {
-      name: "대화 정보 열기",
+      name: "채팅 정보 열기",
       pressed: false,
     });
     expect(openButton).toHaveAttribute("aria-pressed", "false");
 
     await user.click(openButton);
     expect(
-      screen.getByRole("button", { name: "대화 정보 닫기" }),
+      screen.getByRole("button", { name: "채팅 정보 닫기" }),
     ).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -1406,14 +1406,14 @@ describe("RoomScreen", () => {
     );
 
     const conversationRegion = screen.getByRole("region", {
-      name: "이현우 대화",
+      name: "이현우 채팅",
     });
     await user.click(
-      screen.getAllByRole("button", { name: "대화 정보 열기" })[0],
+      screen.getAllByRole("button", { name: "채팅 정보 열기" })[0],
     );
     expect(conversationRegion).toHaveClass("hidden", "xl:flex");
 
-    await user.click(screen.getByRole("button", { name: "대화로 돌아가기" }));
+    await user.click(screen.getByRole("button", { name: "채팅으로 돌아가기" }));
     expect(conversationRegion).toHaveClass("flex");
   });
 });

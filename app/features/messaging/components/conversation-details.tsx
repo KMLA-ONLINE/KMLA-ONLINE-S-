@@ -73,7 +73,7 @@ export function ConversationDetails({
       : undefined;
   return (
     <aside
-      aria-label="대화 상세"
+      aria-label="채팅 상세"
       className={cn(
         "min-h-0 w-full flex-col border-l bg-background xl:w-80 xl:shrink-0",
         className,
@@ -84,12 +84,12 @@ export function ConversationDetails({
           variant="ghost"
           size="icon"
           className="-ml-1 rounded-full"
-          aria-label="대화로 돌아가기"
+          aria-label="채팅으로 돌아가기"
           onClick={onMobileBack}
         >
           <ChevronLeftIcon aria-hidden />
         </Button>
-        <h2 className="text-xl font-semibold">대화 정보</h2>
+        <h2 className="text-xl font-semibold">채팅 정보</h2>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-[calc(1rem+var(--app-safe-b))]">
@@ -122,21 +122,21 @@ export function ConversationDetails({
             <DetailQuickAction
               icon={muted ? BellOffIcon : BellIcon}
               label={muted ? "알림 꺼짐" : "알림"}
-              actionLabel={muted ? "대화 알림 켜기" : "대화 알림 끄기"}
+              actionLabel={muted ? "채팅 알림 켜기" : "채팅 알림 끄기"}
               pressed={muted}
               onClick={onToggleMuted}
             />
             <DetailQuickAction
               icon={SearchIcon}
               label="검색"
-              actionLabel="대화에서 찾기"
+              actionLabel="채팅에서 찾기"
               onClick={onSearch}
             />
           </div>
         </section>
 
         <div className="flex flex-col gap-1">
-          {/* 패널 제목이 이미 `대화 정보`라 이 묶음에는 제목을 달지 않는다. */}
+          {/* 패널 제목이 이미 `채팅 정보`라 이 묶음에는 제목을 달지 않는다. */}
           <DetailRow
             icon={PinIcon}
             label="고정된 메시지"
@@ -152,7 +152,7 @@ export function ConversationDetails({
           ) : null}
 
           {conversation.type === "group" ? (
-            <DetailSection title={`대화 멤버 ${members.length}명`}>
+            <DetailSection title={`채팅 멤버 ${members.length}명`}>
               <div className="flex flex-col gap-1 px-2 pb-2">
                 {members.map((participant) => (
                   <div
@@ -204,7 +204,7 @@ export function ConversationDetails({
               {conversation.canDelete ? (
                 <DetailRow
                   icon={Trash2Icon}
-                  label="대화방 삭제"
+                  label="채팅방 삭제"
                   destructive
                   onClick={onDeleteGroup}
                 />

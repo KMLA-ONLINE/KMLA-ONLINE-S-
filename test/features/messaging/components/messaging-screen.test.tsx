@@ -19,11 +19,12 @@ describe("MessagingScreen", () => {
       </MessagingScreen>
     ));
 
-    expect(screen.getByText("아직 대화가 없습니다")).toBeVisible();
-    expect(screen.getByRole("button", { name: "새 대화" })).toBeInTheDocument();
+    expect(screen.getByText("아직 채팅이 없습니다")).toBeVisible();
+    expect(screen.getByRole("button", { name: "새 채팅" })).toBeInTheDocument();
+    // 채팅을 고르지 않은 넓은 화면의 빈 자리에는 버튼을 두지 않는다. 목록이 빌 때만 시작 버튼이 있다.
     expect(
-      screen.getAllByRole("button", { name: "새 대화 시작하기" }),
-    ).toHaveLength(2);
+      screen.getAllByRole("button", { name: "새 채팅 시작하기" }),
+    ).toHaveLength(1);
     expect(
       screen.queryByText("새 대화 버튼으로 대화를 시작해 보세요."),
     ).not.toBeInTheDocument();
@@ -45,14 +46,14 @@ describe("MessagingScreen", () => {
       },
     );
 
-    await user.click(screen.getByRole("button", { name: "새 대화" }));
-    const dialog = await screen.findByRole("dialog", { name: "새 대화" });
+    await user.click(screen.getByRole("button", { name: "새 채팅" }));
+    const dialog = await screen.findByRole("dialog", { name: "새 채팅" });
     await user.type(within(dialog).getByRole("searchbox"), "새봄{Enter}");
     await user.click(
       await within(dialog).findByRole("button", { name: /최새봄/ }),
     );
     expect(dialog).toHaveAccessibleDescription(
-      "최새봄님과 1:1 대화를 시작합니다.",
+      "최새봄님과 1:1 채팅을 시작합니다.",
     );
     expect(
       within(dialog).queryByRole("textbox", { name: "그룹 이름" }),
@@ -63,7 +64,7 @@ describe("MessagingScreen", () => {
     await user.click(
       await within(dialog).findByRole("button", { name: /정여름/ }),
     );
-    expect(dialog).toHaveAccessibleDescription("2명과 그룹 대화를 만듭니다.");
+    expect(dialog).toHaveAccessibleDescription("2명과 그룹 채팅을 만듭니다.");
     const create = within(dialog).getByRole("button", { name: "그룹 만들기" });
     expect(create).toBeDisabled();
     await user.type(
@@ -101,7 +102,7 @@ describe("MessagingScreen", () => {
     );
 
     await user.type(
-      screen.getByRole("searchbox", { name: "대화 검색" }),
+      screen.getByRole("searchbox", { name: "채팅 검색" }),
       "현우",
     );
 

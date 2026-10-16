@@ -92,8 +92,57 @@ export async function refreshReadState(
 /**
  * 대화 목록에서 이 대화 한 줄만 다시 받는다. 목록 전체를 다시 읽으면 모든 대화의 마지막 메시지를
  * 복호화한다. 목록에 없던 대화(새로 초대된 대화)면 전체를 다시 읽는다.
+ *
+ * 내가 보낸 메시지는 전송 응답과 내게도 오는 메시지 신호가, 열린 방의 새 메시지는 신호와 읽음 기록이
+ * 거의 동시에 이 갱신을 부른다. 같은 대화의 갱신이 도는 중이면 새로 띄우지 않고 그 뒤에 한 번만 더
+ * 읽는다. 도는 요청은 나중 변경보다 먼저 읽었을 수 있으므로 뒤의 한 번은 빼지 않는다.
  */
-export async function refreshConversationInList(
+export function refreshConversationInList(
+  queryClient: QueryClient,
+  conversationId: string,
+  {
+    attachmentsChanged = true,
+  }: {
+    /** 새 메시지나 지운 메시지는 첨부를 더하거나 뺐을 수 있다. 읽음이나 멤버 변경은 아니다. */
+    attachmentsChanged?: boolean;
+  } = {},
+): Promise<void> {
+  if (attachmentsChanged) {
+    void queryClient.invalidateQueries({
+      queryKey: messagingKeys.sharedAttachmentCounts(conversationId),
+    });
+  }
+  let flights = summaryFlights.get(queryClient);
+  if (!flights) {
+    flights = new Map();
+    summaryFlights.set(queryClient, flights);
+  }
+  const running = flights.get(conversationId);
+  if (running?.queued) return running.tail;
+
+  const flight = running ?? { tail: Promise.resolve(), queued: false };
+  const start = () => {
+    flight.queued = false;
+    return refreshSummary(queryClient, conversationId);
+  };
+  const tail = running ? running.tail.then(start, start) : start();
+  flight.tail = tail;
+  flight.queued = Boolean(running);
+  flights.set(conversationId, flight);
+  const settle = () => {
+    if (flight.tail === tail) flights.delete(conversationId);
+  };
+  tail.then(settle, settle);
+  return tail;
+}
+
+/** 대화마다 도는 목록 한 줄 갱신과, 그 뒤에 한 번 더 읽기로 잡아 둔 요청이 있는지. */
+const summaryFlights = new WeakMap<
+  QueryClient,
+  Map<string, { tail: Promise<void>; queued: boolean }>
+>();
+
+async function refreshSummary(
   queryClient: QueryClient,
   conversationId: string,
 ): Promise<void> {
@@ -104,10 +153,6 @@ export async function refreshConversationInList(
   }
   // 이 대화의 읽지 않은 수가 바뀌었으면 탭 배지도 바뀐다.
   void invalidateUnreadMessageCount(queryClient);
-  // 새 메시지나 지운 메시지가 첨부를 더하거나 뺐을 수 있다.
-  void queryClient.invalidateQueries({
-    queryKey: messagingKeys.sharedAttachmentCounts(conversationId),
-  });
 }
 
 async function reloadLatestPage(

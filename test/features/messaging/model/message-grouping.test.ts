@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  canConnectMessages,
-  hasVisibleMessageReaction,
-} from "~/features/messaging/model/message-grouping";
+import { layoutMessageThread } from "~/features/messaging/model/message-grouping";
 import type { ConversationMessage } from "~/features/messaging/model/types";
 
 function message(
@@ -18,24 +15,41 @@ function message(
   };
 }
 
-describe("message grouping", () => {
+/** 두 메시지를 나란히 놓았을 때 이어 붙는지. */
+function connects(
+  previous: ConversationMessage,
+  next: ConversationMessage,
+): boolean {
+  const [first, second] = layoutMessageThread([previous, next]);
+  expect(first?.endsGroup).toBe(second?.startsGroup);
+  return !second?.startsGroup;
+}
+
+describe("layoutMessageThread", () => {
   it("동일 작성자와 동일 표시 시각의 인접 메시지만 연결한다", () => {
     const previous = message({ id: "previous" });
 
-    expect(canConnectMessages(previous, message({ id: "next" }))).toBe(true);
+    expect(connects(previous, message({ id: "next" }))).toBe(true);
     expect(
-      canConnectMessages(
+      connects(
         previous,
         message({ id: "next", sentAt: "2026-08-28T15:12:59+09:00" }),
       ),
     ).toBe(true);
+    expect(connects(previous, message({ id: "next", senderId: "other" }))).toBe(
+      false,
+    );
     expect(
-      canConnectMessages(previous, message({ id: "next", senderId: "other" })),
-    ).toBe(false);
-    expect(
-      canConnectMessages(
+      connects(
         previous,
         message({ id: "next", sentAt: "2026-08-28T15:13:00+09:00" }),
+      ),
+    ).toBe(false);
+    // 탈퇴로 지워진 발신자끼리는 같은 사람인지 모른다.
+    expect(
+      connects(
+        message({ id: "previous", senderId: null }),
+        message({ id: "next", senderId: null }),
       ),
     ).toBe(false);
   });
@@ -44,14 +58,14 @@ describe("message grouping", () => {
     const previous = message({ id: "previous" });
 
     expect(
-      canConnectMessages(
+      connects(
         previous,
         // 같은 "오후 3:12"라도 날짜가 다르면 묶지 않는다.
         message({ id: "next", sentAt: "2026-08-29T15:12:05+09:00" }),
       ),
     ).toBe(false);
     expect(
-      canConnectMessages(
+      connects(
         previous,
         message({
           id: "next",
@@ -59,24 +73,55 @@ describe("message grouping", () => {
         }),
       ),
     ).toBe(false);
-    expect(
-      canConnectMessages(previous, message({ id: "next", pinned: true })),
-    ).toBe(false);
+    expect(connects(previous, message({ id: "next", pinned: true }))).toBe(
+      false,
+    );
   });
 
   it("반응이 있는 메시지 뒤에서 연결을 끊는다", () => {
-    const previous = message({
-      id: "previous",
-      reactions: [{ reaction: "like", count: 1 }],
-    });
-    const next = message({ id: "next" });
-
-    expect(hasVisibleMessageReaction(previous)).toBe(true);
-    expect(canConnectMessages(previous, next, true)).toBe(false);
     expect(
-      hasVisibleMessageReaction(
-        message({ reactions: [{ reaction: "love", count: 1 }] }),
+      connects(
+        message({
+          id: "previous",
+          reactions: [{ reaction: "like", count: 1 }],
+        }),
+        message({ id: "next" }),
+      ),
+    ).toBe(false);
+    // 집계가 0인 반응은 보이지 않으므로 끊지 않는다.
+    expect(
+      connects(
+        message({
+          id: "previous",
+          reactions: [{ reaction: "like", count: 0 }],
+        }),
+        message({ id: "next" }),
       ),
     ).toBe(true);
+  });
+
+  it("첫 메시지와 한국 날짜가 바뀌는 메시지에서 날짜 구분선을 연다", () => {
+    const layout = layoutMessageThread([
+      message({ id: "a", sentAt: "2026-08-28T23:59:30+09:00" }),
+      message({ id: "b", sentAt: "2026-08-28T23:59:50+09:00" }),
+      message({ id: "c", sentAt: "2026-08-29T00:01:00+09:00" }),
+    ]);
+
+    expect(layout.map(({ startsDay }) => startsDay)).toEqual([
+      true,
+      false,
+      true,
+    ]);
+    expect(
+      layout.map(({ startsGroup, endsGroup }) => [startsGroup, endsGroup]),
+    ).toEqual([
+      [true, false],
+      [false, true],
+      [true, true],
+    ]);
+  });
+
+  it("빈 대화는 빈 배치다", () => {
+    expect(layoutMessageThread([])).toEqual([]);
   });
 });

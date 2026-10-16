@@ -88,7 +88,7 @@ export function MessagingSync({ profileId }: { profileId: number }) {
         removeConversationFromList(queryClient, conversationId);
         void invalidateUnreadMessageCount(queryClient);
         if (window.location.pathname === `/messenger/${conversationId}`) {
-          toast("대화방이 삭제되었습니다.");
+          toast("채팅방이 삭제되었습니다.");
           void navigateRef.current("/messenger", { replace: true });
         }
       },
