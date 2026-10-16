@@ -49,9 +49,13 @@ describe("MentionPickerDialog", () => {
     );
 
     const active = await screen.findByRole("button", {
-      name: /^이미 멘션됨(?! 빼기)/,
+      name: /^이미 멘션됨/,
+      pressed: false,
     });
-    const newTarget = screen.getByRole("button", { name: /^새 대상(?! 빼기)/ });
+    const newTarget = screen.getByRole("button", {
+      name: /^새 대상/,
+      pressed: false,
+    });
     expect(active).toBeEnabled();
     expect(newTarget).toBeDisabled();
 
@@ -80,20 +84,22 @@ describe("MentionPickerDialog", () => {
     expect(confirm).toBeDisabled();
 
     await user.click(
-      await screen.findByRole("button", { name: /^새 대상(?! 빼기)/ }),
+      await screen.findByRole("button", { name: /^새 대상/, pressed: false }),
     );
     await user.click(
-      screen.getByRole("button", { name: /^이미 멘션됨(?! 빼기)/ }),
+      screen.getByRole("button", { name: /^이미 멘션됨/, pressed: false }),
     );
     expect(
-      screen.getByRole("button", { name: /^새 대상(?! 빼기)/ }),
-    ).toHaveAttribute("aria-pressed", "true");
+      screen.getByRole("button", { name: /^새 대상/, pressed: true }),
+    ).toBeVisible();
 
     // 검색 결과가 바뀌어도 고른 사람은 남는다.
     searchGroupMentionCandidates.mockResolvedValueOnce([]);
     await user.type(screen.getByRole("searchbox"), "없는 이름{Enter}");
     await screen.findByText("찾는 멤버가 없습니다.");
-    await user.click(screen.getByRole("button", { name: "이미 멘션됨 빼기" }));
+    await user.click(
+      screen.getByRole("button", { name: "이미 멘션됨 선택 해제" }),
+    );
 
     await user.click(screen.getByRole("button", { name: "1명 멘션" }));
     expect(onSelect).toHaveBeenCalledWith([
@@ -114,14 +120,14 @@ describe("MentionPickerDialog", () => {
     );
 
     await user.click(
-      await screen.findByRole("button", { name: /^새 대상(?! 빼기)/ }),
+      await screen.findByRole("button", { name: /^새 대상/, pressed: false }),
     );
     expect(
-      screen.getByRole("button", { name: /^이미 멘션됨(?! 빼기)/ }),
+      screen.getByRole("button", { name: /^이미 멘션됨/, pressed: false }),
     ).toBeDisabled();
     // 고른 사람은 상한에서도 다시 눌러 뺄 수 있다.
     expect(
-      screen.getByRole("button", { name: /^새 대상(?! 빼기)/ }),
+      screen.getByRole("button", { name: /^새 대상/, pressed: true }),
     ).toBeEnabled();
   });
 });

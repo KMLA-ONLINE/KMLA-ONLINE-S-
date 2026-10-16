@@ -248,9 +248,7 @@ describe("GroupPostSearchDialog", () => {
       "placeholder",
       "제목, 내용, 작성자 검색",
     );
-    expect(
-      screen.getByText("제목, 내용 또는 작성자 이름으로 검색..."),
-    ).toBeVisible();
+    expect(screen.getByText("제목·내용·작성자 이름으로 검색")).toBeVisible();
     await waitFor(() => expect(searchInput()).toHaveFocus());
   });
 

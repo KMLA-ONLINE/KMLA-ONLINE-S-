@@ -225,7 +225,7 @@ describe("GroupDetailScreen", () => {
       "?tab=members",
     );
     expect(
-      screen.getByText("멤버 명부를 불러오는 중입니다."),
+      screen.getByText("멤버 목록을 불러오는 중입니다."),
     ).toBeInTheDocument();
   });
 

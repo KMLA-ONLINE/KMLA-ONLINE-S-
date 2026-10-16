@@ -165,7 +165,9 @@ describe("ProfileEditScreen", () => {
     renderScreen();
 
     expect(screen.getByLabelText(/이름/)).toBeVisible();
-    expect(screen.getByLabelText(/slug/)).toBeVisible();
+    expect(screen.getByLabelText(/공개 ID/)).toBeVisible();
+    expect(screen.getByRole("option", { name: "국내반" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "국제반" })).toBeInTheDocument();
     expect(screen.getByLabelText("반")).toBeVisible();
     expect(screen.getByLabelText("기숙사 방")).toBeVisible();
   });
@@ -182,18 +184,34 @@ describe("ProfileEditScreen", () => {
     expect(save).toBeEnabled();
   });
 
-  /** 바꾸면 이전 주소로 공유한 링크가 끊긴다는 사실을 저장 전에 알린다(기능 명세 §12.2). */
-  it("warns before a slug change breaks shared links", async () => {
+  it("warns that changing the public ID disconnects old links and releases the address", async () => {
     const user = userEvent.setup();
     renderScreen();
 
     expect(
-      screen.queryByText(/더 이상 열리지 않습니다/),
+      screen.queryByText(/이전 주소는 더 이상 내 프로필로 연결되지 않으며/),
     ).not.toBeInTheDocument();
 
-    await user.type(screen.getByLabelText(/slug/), "x");
+    await user.type(screen.getByLabelText(/공개 ID/), "x");
 
-    expect(screen.getByText(/더 이상 열리지 않습니다/)).toBeVisible();
+    expect(
+      screen.getByText(
+        "저장하면 프로필 주소가 바로 바뀝니다. 이전 주소는 더 이상 내 프로필로 연결되지 않으며, 다른 사용자가 사용할 수 있습니다.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("explains that disabling timeline posts affects new posts, not existing ones", () => {
+    renderScreen();
+
+    expect(
+      screen.getByText(
+        "끄면 다른 사람이 내 타임라인에 새 글을 작성할 수 없습니다. 기존 게시물은 유지됩니다.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("switch", { name: "내 타임라인에 다른 사람의 글 허용" }),
+    ).toBeChecked();
   });
 
   it("shows a rejected slug next to its field", () => {

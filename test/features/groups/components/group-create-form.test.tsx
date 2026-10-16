@@ -24,6 +24,7 @@ describe("GroupCreateForm", () => {
       "새 그룹",
     );
     await user.click(screen.getByRole("button", { name: "그룹 만들기" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("가입 방식");
     await user.click(
       within(screen.getByRole("dialog")).getByRole("button", {
         name: "만들기",
@@ -82,12 +83,23 @@ describe("GroupCreateForm", () => {
     );
   });
 
-  it("offers identified and optional-anonymous activity", () => {
+  it("offers joining and identity choices with user-facing policy labels", () => {
     renderRoute(() => (
       <GroupCreateForm canCreateOfficial={false} pending={false} />
     ));
 
-    const identity = screen.getByRole("combobox", { name: "활동 신원" });
+    expect(screen.getByRole("combobox", { name: "가입 방식" })).toHaveValue(
+      "invite_only",
+    );
+    expect(
+      screen.getByText("소유자·관리자·매니저만 게시물을 작성할 수 있습니다."),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        "소유자와 관리자를 제외한 멤버 목록에서는 운영진도 일반 멤버처럼 표시합니다.",
+      ),
+    ).toBeVisible();
+    const identity = screen.getByRole("combobox", { name: "실명·익명 설정" });
     expect(identity).toHaveValue("optional_anonymous");
     expect(within(identity).getAllByRole("option")).toHaveLength(2);
     expect(
