@@ -60,9 +60,10 @@ describe("menu route", () => {
     const tools = within(
       screen.getByRole("navigation", { name: "학교생활 기능" }),
     );
-    expect(tools.getAllByRole("link")).toHaveLength(5);
+    expect(tools.getAllByRole("link")).toHaveLength(6);
     for (const [name, href] of [
       ["급식", "/menu/meal"],
+      ["학교 공지", "/menu/notices"],
       ["시간표", "/menu/timetable"],
       ["공강 · 노래방", "/menu/gongang"],
       ["생일", "/menu/birthdays"],
