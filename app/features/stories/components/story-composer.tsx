@@ -148,7 +148,7 @@ export function StoryComposer({
       setError(
         isStoryLimitError(cause)
           ? "24시간 동안 스토리는 20개까지 올릴 수 있습니다."
-          : "올리지 못했습니다.",
+          : "스토리를 올리지 못했습니다. 다시 시도해 주세요.",
       );
       setPending(false);
       return;

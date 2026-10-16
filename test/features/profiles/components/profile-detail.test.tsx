@@ -49,7 +49,7 @@ describe("ProfileDetail", () => {
     // 공개 ID는 주소에만 쓰고 화면에는 드러내지 않는다(기능 명세 §12.1).
     expect(screen.queryByText("@hanbyeol-25")).not.toBeInTheDocument();
     // 기수와 계열은 한 줄로 합쳐 낸다.
-    expect(screen.getByText("25기 · 국제 계열")).toBeVisible();
+    expect(screen.getByText("25기 · 국제반")).toBeVisible();
     expect(screen.getByText("관리자")).toBeVisible();
     expect(screen.getByRole("link", { name: "프로필 편집" })).toHaveAttribute(
       "href",
@@ -278,11 +278,11 @@ describe("ProfileDetail", () => {
 
     const descriptionElement = screen.getByText(/소개 첫 줄/);
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "더보기" })).toBeVisible();
+      expect(screen.getByRole("button", { name: "더 보기" })).toBeVisible();
     });
     expect(descriptionElement).toHaveClass("line-clamp-2");
 
-    await user.click(screen.getByRole("button", { name: "더보기" }));
+    await user.click(screen.getByRole("button", { name: "더 보기" }));
 
     expect(descriptionElement).not.toHaveClass("line-clamp-2");
     expect(screen.getByRole("button", { name: "접기" })).toBeVisible();

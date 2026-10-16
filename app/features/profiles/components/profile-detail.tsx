@@ -35,8 +35,8 @@ const TRACK_LABELS: Record<
   NonNullable<AcceptedProfile["academic_track"]>,
   string
 > = {
-  domestic: "국내 계열",
-  international: "국제 계열",
+  domestic: "국내반",
+  international: "국제반",
 };
 
 const GENDER_LABELS: Record<NonNullable<AcceptedProfile["gender"]>, string> = {
@@ -175,7 +175,7 @@ function ProfileDescription({ description }: { description: string }) {
           aria-expanded={expanded}
           onClick={() => setExpanded((current) => !current)}
         >
-          {expanded ? "접기" : "더보기"}
+          {expanded ? "접기" : "더 보기"}
         </Button>
       ) : null}
     </div>

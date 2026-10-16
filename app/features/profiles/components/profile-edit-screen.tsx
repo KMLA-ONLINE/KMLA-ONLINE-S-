@@ -253,10 +253,10 @@ export function ProfileEditScreen({
                     className="w-full"
                   >
                     <NativeSelectOption value="domestic">
-                      국내 계열
+                      국내반
                     </NativeSelectOption>
                     <NativeSelectOption value="international">
-                      국제 계열
+                      국제반
                     </NativeSelectOption>
                   </NativeSelect>
                   <FieldError>{errors.academicTrack}</FieldError>
@@ -393,7 +393,7 @@ export function ProfileEditScreen({
               id="profile-timeline-posts"
               name="allowTimelinePosts"
               label="내 타임라인에 다른 사람의 글 허용"
-              description="끄면 다른 사람에게 내 타임라인의 글쓰기 버튼이 보이지 않습니다."
+              description="끄면 다른 사람이 내 타임라인에 새 글을 작성할 수 없습니다. 기존 게시물은 유지됩니다."
               defaultChecked={values.allowTimelinePosts}
               onCheckedChange={markDirty}
             />
@@ -402,7 +402,7 @@ export function ProfileEditScreen({
           <Section title="프로필 주소">
             <Field data-invalid={Boolean(errors.pubId)}>
               <FieldLabel htmlFor="profile-slug">
-                <RequiredLabel>slug</RequiredLabel>
+                <RequiredLabel>공개 ID</RequiredLabel>
               </FieldLabel>
               <div className="flex items-center rounded-lg border border-input focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 has-aria-invalid:border-destructive">
                 <span
@@ -452,8 +452,8 @@ export function ProfileEditScreen({
                       aria-hidden="true"
                       className="mt-0.5 size-4 shrink-0"
                     />
-                    저장하면 프로필 주소가 바로 바뀌고, /profile/
-                    {profile.pub_id} 로 공유된 링크는 더 이상 열리지 않습니다.
+                    저장하면 프로필 주소가 바로 바뀝니다. 이전 주소는 더 이상 내
+                    프로필로 연결되지 않으며, 다른 사용자가 사용할 수 있습니다.
                   </span>
                 ) : null}
               </div>

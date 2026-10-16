@@ -2,13 +2,7 @@ import { ChevronDownIcon, LifeBuoyIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "~/shared/ui/empty";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "~/shared/ui/empty";
 import type { FaqSection, SupportContact } from "../model/types";
 
 interface FaqScreenProps {
@@ -30,10 +24,7 @@ export function FaqScreen({ sections, contacts, note }: FaqScreenProps) {
             <EmptyMedia variant="icon">
               <LifeBuoyIcon aria-hidden />
             </EmptyMedia>
-            <EmptyTitle>아직 등록된 도움말이 없어요</EmptyTitle>
-            <EmptyDescription>
-              자주 묻는 질문이 정리되면 여기에 올라옵니다.
-            </EmptyDescription>
+            <EmptyTitle>등록된 도움말이 없습니다</EmptyTitle>
           </EmptyHeader>
         </Empty>
       ) : (

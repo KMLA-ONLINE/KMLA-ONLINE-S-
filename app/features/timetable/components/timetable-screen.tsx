@@ -379,7 +379,7 @@ export function TimetableScreen() {
 
               {overlap ? (
                 <p className="px-1 text-xs text-destructive">
-                  시간상 겹치는 수업이 있습니다
+                  시간이 겹치는 수업이 있습니다.
                 </p>
               ) : null}
 

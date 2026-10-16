@@ -215,7 +215,7 @@ function SearchPanel({
           </p>
         ) : !current ? (
           <p className="p-8 text-center text-sm text-muted-foreground">
-            제목, 내용 또는 작성자 이름으로 검색...
+            제목·내용·작성자 이름으로 검색
           </p>
         ) : current.results.length === 0 ? (
           <p className="p-8 text-center text-sm text-muted-foreground">

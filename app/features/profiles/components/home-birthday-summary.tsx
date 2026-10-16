@@ -22,7 +22,7 @@ export function HomeBirthdaySummary({
         </p>
       ) : birthdays.length === 0 ? (
         <p className="py-2 text-sm text-muted-foreground">
-          오늘 생일인 학생이 없습니다
+          오늘 생일인 사람이 없습니다
         </p>
       ) : (
         <div className="flex gap-3 overflow-x-auto">

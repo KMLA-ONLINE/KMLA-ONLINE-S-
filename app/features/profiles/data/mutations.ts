@@ -88,9 +88,9 @@ export function validateProfileEdit(
   const name = values.name.trim();
 
   if (!PUB_ID_PATTERN.test(values.pubId)) {
-    errors.pubId = "slug는 영문 소문자, 숫자, 하이픈으로 된 5~15자여야 합니다.";
+    errors.pubId = "영문 소문자·숫자·하이픈으로 5~15자를 입력해 주세요.";
   } else if (RESERVED_PUB_IDS.has(values.pubId)) {
-    errors.pubId = "이 slug는 쓸 수 없습니다.";
+    errors.pubId = "사용할 수 없는 ID입니다.";
   }
 
   if (name.length < 1 || name.length > 50) {
@@ -165,14 +165,14 @@ export function readProfileEditFailure(error: unknown): ProfileEditErrors {
   const candidate = (error ?? {}) as { code?: string; message?: string };
 
   if (candidate.code === "23505") {
-    return { pubId: "이미 쓰고 있는 slug입니다." };
+    return { pubId: "이미 사용 중인 ID입니다." };
   }
 
   if (
     candidate.code === "23514" &&
     candidate.message?.includes("profiles_pub_id")
   ) {
-    return { pubId: "쓸 수 없는 slug입니다. 다른 값을 입력해 주세요." };
+    return { pubId: "사용할 수 없는 ID입니다. 다른 ID를 입력해 주세요." };
   }
 
   return {
