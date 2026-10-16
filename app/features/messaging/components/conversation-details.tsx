@@ -136,7 +136,7 @@ export function ConversationDetails({
         </section>
 
         <div className="flex flex-col gap-1">
-          {/* 패널 제목이 이미 `대화 정보`라 이 묶음에는 제목을 달지 않는다. */}
+          {/* 패널 제목이 이미 `채팅 정보`라 이 묶음에는 제목을 달지 않는다. */}
           <DetailRow
             icon={PinIcon}
             label="고정된 메시지"

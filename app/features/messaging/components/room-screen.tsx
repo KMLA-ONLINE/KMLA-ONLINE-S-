@@ -239,9 +239,9 @@ export function RoomScreen({
     queryFn: () => getSharedAttachmentCounts(conversation.id),
     staleTime: 60_000,
     enabled:
-      compactDetailsOpen ||
       overlay?.kind === "shared" ||
-      (wideRoom && desktopDetailsOpen),
+      // 넓은 화면은 옆 패널, 좁은 화면은 덮는 패널이 보인다. 다른 쪽 상태는 CSS로 숨겨져 있다.
+      (wideRoom ? desktopDetailsOpen : compactDetailsOpen),
   });
   const reactionsTarget =
     overlay?.kind === "reactions"

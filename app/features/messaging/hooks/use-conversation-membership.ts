@@ -60,9 +60,9 @@ export function useConversationMembership(conversationId: string) {
       toast.error(failure);
       return false;
     }
-    await refreshConversationInList(queryClient, conversationId).catch(() =>
-      invalidateConversationList(queryClient),
-    );
+    await refreshConversationInList(queryClient, conversationId, {
+      attachmentsChanged: false,
+    }).catch(() => invalidateConversationList(queryClient));
     return true;
   }
 
