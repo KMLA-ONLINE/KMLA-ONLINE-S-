@@ -224,10 +224,7 @@ describe("PostActionBar", () => {
       },
     });
 
-    const summary = screen.getByRole("button", { name: "반응 3개 보기" });
-    // 총 수는 반응 버튼이 아니라 여기 적는다.
-    expect(summary).toHaveTextContent("3");
-    await user.click(summary);
+    await user.click(screen.getByRole("button", { name: "반응 3개 보기" }));
 
     expect(listPostReactors).toHaveBeenCalledWith("post-id");
     expect(await screen.findByText("이한별")).toBeInTheDocument();

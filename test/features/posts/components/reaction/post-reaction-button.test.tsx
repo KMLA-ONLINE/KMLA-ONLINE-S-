@@ -159,20 +159,10 @@ describe("PostReactionButton", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("names my reaction instead of showing the total", () => {
-    // 내 이모지 옆에 총 수가 붙으면 그 반응의 수로 읽힌다. 총 수는 액션 바 요약이 맡는다.
-    renderButton({ my_reaction: "love", reaction_count: 12 });
-
-    const button = screen.getByRole("button", { name: "하트 취소" });
-    expect(button).toHaveTextContent("하트");
-    expect(button).not.toHaveTextContent("12");
-  });
-
-  it("offers the default reaction by name before I react", () => {
-    renderButton({ reaction_count: 3 });
-
-    const button = screen.getByRole("button", { name: "좋아요 남기기" });
-    expect(button).toHaveTextContent("좋아요");
-    expect(button).not.toHaveTextContent("3");
+  it("hides the count until someone reacts", () => {
+    renderButton({ reaction_count: 0 });
+    expect(
+      screen.getByRole("button", { name: "좋아요 남기기" }),
+    ).not.toHaveTextContent("0");
   });
 });

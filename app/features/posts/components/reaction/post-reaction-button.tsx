@@ -26,8 +26,6 @@ const HOVER_CLOSE_MS = 250;
 
 /**
  * 게시물 반응 버튼. 짧게 누르면 기본 반응 토글, 꾹 누르거나(터치) 호버하면(데스크톱) 종류 줄이 뜬다(기능 명세 §10.1).
- * 버튼에는 내 반응의 이름만 적고 총 수는 적지 않는다 — 내 이모지 옆에 총 수가 붙으면 그 반응의 수로 읽힌다.
- * 총 수는 액션 바 오른쪽 요약이 맡는다.
  */
 export function PostReactionButton({
   summary,
@@ -109,7 +107,7 @@ export function PostReactionButton({
 
       <button
         type="button"
-        // 이름에 보이는 글자를 담는다. 음성 입력은 화면의 "좋아요"로 버튼을 부른다.
+        // 짧게 누르면 무엇이 붙는지 이름에 담는다. 화면에는 아이콘과 숫자뿐이다.
         aria-label={`${reactionLabel(mine ?? DEFAULT_REACTION)} ${mine ? "취소" : "남기기"}`}
         aria-pressed={mine !== null}
         className={cn(
@@ -145,7 +143,7 @@ export function PostReactionButton({
         ) : (
           <ThumbsUpIcon className="size-5" aria-hidden="true" />
         )}
-        {reactionLabel(mine ?? DEFAULT_REACTION)}
+        {summary.reaction_count > 0 ? summary.reaction_count : null}
       </button>
     </div>
   );
