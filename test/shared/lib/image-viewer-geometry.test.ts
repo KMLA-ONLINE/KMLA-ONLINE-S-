@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   IDENTITY,
+  MAX_ZOOM,
   clampZoom,
   fitSize,
   frameContains,
@@ -101,6 +102,29 @@ describe("rubberBandZoom", () => {
     const stretched = rubberBandZoom({ scale: 2, x: 200, y: 0 }, layout);
     expect(stretched.x).toBeGreaterThan(100);
     expect(stretched.x).toBeLessThan(200);
+  });
+
+  it("keeps the image under the fingers while pinching past the max zoom", () => {
+    // 최대 배율에서 손가락 가운데(300, 300)를 기준으로 더 벌렸다.
+    const focus = { x: 300, y: 300 };
+    const start = { scale: MAX_ZOOM, x: -200, y: 0 };
+    const raw = pinchZoom(start, focus, 100, focus, 200, layout);
+    const stretched = rubberBandZoom(raw, layout, focus);
+    // 손가락 아래 이미지 지점(틀 기준 좌표)이 시작할 때와 같다.
+    const imagePoint = (zoom: typeof start) =>
+      (focus.x - layout.center.x - zoom.x) / zoom.scale;
+    expect(stretched.scale).toBeGreaterThan(MAX_ZOOM);
+    expect(stretched.scale).toBeLessThan(raw.scale);
+    expect(imagePoint(stretched)).toBeCloseTo(imagePoint(start));
+  });
+});
+
+describe("clampZoom with a focus", () => {
+  it("returns to the max zoom around the pinch midpoint", () => {
+    const focus = { x: 300, y: 300 };
+    const start = { scale: MAX_ZOOM, x: -200, y: 0 };
+    const overshot = zoomAt(start, MAX_ZOOM * 1.2, focus, layout);
+    expect(clampZoom(overshot, layout, focus)).toEqual(start);
   });
 });
 
