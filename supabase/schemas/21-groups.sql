@@ -118,6 +118,7 @@ CREATE OR REPLACE FUNCTION "private"."can_read_group_media"("p_object_path" "tex
         on profile.auth_user_id = auth.uid()
         and profile.status = 'accepted'
         and profile.deleted_at is null
+        and not private.profile_suspended(profile.id)
       where p_object_path in (group_record.icon_path, group_record.cover_path)
         and (
           (
@@ -379,7 +380,8 @@ begin
   from public.profiles as profile
   where profile.auth_user_id = auth.uid()
     and profile.status = 'accepted'
-    and profile.deleted_at is null;
+    and profile.deleted_at is null
+    and not private.profile_suspended(profile.id);
 
   if caller_profile.id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -518,7 +520,8 @@ begin
   from public.profiles as profile
   where profile.auth_user_id = auth.uid()
     and profile.status = 'accepted'
-    and profile.deleted_at is null;
+    and profile.deleted_at is null
+    and not private.profile_suspended(profile.id);
 
   if caller_profile.id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -680,7 +683,8 @@ begin
   from public.profiles as profile
   where profile.auth_user_id = auth.uid()
     and profile.status = 'accepted'
-    and profile.deleted_at is null;
+    and profile.deleted_at is null
+    and not private.profile_suspended(profile.id);
 
   if caller_profile.id is null or caller_profile.type = 'teacher' then
     raise exception 'group discovery is not allowed' using errcode = '42501';

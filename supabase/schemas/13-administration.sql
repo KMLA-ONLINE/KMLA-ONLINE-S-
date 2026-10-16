@@ -14,7 +14,8 @@ begin
   where profile.auth_user_id = auth.uid()
     and profile.status = 'accepted'
     and profile.role = 'admin'
-    and profile.deleted_at is null;
+    and profile.deleted_at is null
+    and not private.profile_suspended(profile.id);
 
   if caller_profile_id is null then
     raise exception 'app administrator required' using errcode = '42501';
@@ -160,7 +161,7 @@ $$;
 
 ALTER FUNCTION "public"."admin_list_members"("p_query" "text", "p_limit" integer, "p_offset" integer, "p_admins_only" boolean) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."admin_list_roster"() RETURNS TABLE("profile_id" bigint, "pub_id" "text", "name" "text", "profile_type" "public"."profile_type", "cohort" smallint, "department" "text", "is_app_admin" boolean, "approved_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."admin_list_roster"() RETURNS TABLE("profile_id" bigint, "pub_id" "text", "name" "text", "profile_type" "public"."profile_type", "cohort" smallint, "department" "text", "is_app_admin" boolean, "approved_at" timestamp with time zone, "is_suspended" boolean, "suspension_expires_at" timestamp with time zone)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -171,8 +172,13 @@ begin
   return query
   select
     profile.id, profile.pub_id, profile.name, profile.type, profile.cohort,
-    profile.department, profile.role = 'admin', profile.status_updated_at
+    profile.department, profile.role = 'admin', profile.status_updated_at,
+    suspension.id is not null, suspension.expires_at
   from public.profiles as profile
+  left join private.profile_suspensions as suspension
+    on suspension.profile_id = profile.id
+    and suspension.ended_at is null
+    and (suspension.expires_at is null or suspension.expires_at > now())
   where profile.status = 'accepted'
     and profile.deleted_at is null
   order by profile.name, profile.id;
@@ -342,6 +348,92 @@ $$;
 
 ALTER FUNCTION "public"."admin_unblock_application"("p_profile_id" bigint) OWNER TO "postgres";
 
+CREATE OR REPLACE FUNCTION "public"."admin_suspend_profile"("p_profile_id" bigint, "p_reason" "text", "p_duration_days" integer) RETURNS TABLE("suspension_id" bigint, "expires_at" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.require_app_admin();
+  trimmed_reason text := btrim(coalesce(p_reason, ''));
+  target_role public.app_role;
+  suspension_expires_at timestamp with time zone;
+  created_suspension_id bigint;
+begin
+  perform private.require_recent_password_auth();
+
+  select profile.role
+  into target_role
+  from public.profiles as profile
+  where profile.id = p_profile_id
+    and profile.status = 'accepted'
+    and profile.deleted_at is null
+  for update;
+
+  if target_role is null then
+    raise exception 'accepted profile required' using errcode = '22023';
+  end if;
+  -- 관리자끼리 서로 잠그는 사고를 막는다. 관리자를 정지하려면 먼저 강등한다.
+  if target_role = 'admin' then
+    raise exception 'app administrators cannot be suspended' using errcode = '22023';
+  end if;
+  if char_length(trimmed_reason) not between 5 and 300 then
+    raise exception 'reason must be 5 to 300 characters' using errcode = '22023';
+  end if;
+  if p_duration_days is not null and p_duration_days not between 1 and 180 then
+    raise exception 'days must be between 1 and 180' using errcode = '22023';
+  end if;
+
+  update private.profile_suspensions as suspension
+  set ended_at = suspension.expires_at
+  where suspension.profile_id = p_profile_id
+    and suspension.ended_at is null
+    and suspension.expires_at <= now();
+  if private.profile_suspended(p_profile_id) then
+    raise exception 'profile is already suspended' using errcode = '55000';
+  end if;
+
+  suspension_expires_at := now() + make_interval(days => p_duration_days);
+  insert into private.profile_suspensions (profile_id, reason, expires_at, suspended_by_profile_id)
+  values (p_profile_id, trimmed_reason, suspension_expires_at, caller_profile_id)
+  returning id into created_suspension_id;
+  perform private.enqueue_suspension_email(created_suspension_id, 'suspended');
+
+  return query select created_suspension_id, suspension_expires_at;
+end;
+$$;
+
+ALTER FUNCTION "public"."admin_suspend_profile"("p_profile_id" bigint, "p_reason" "text", "p_duration_days" integer) OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."admin_lift_suspension"("p_profile_id" bigint) RETURNS bigint
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.require_app_admin();
+  lifted_suspension_id bigint;
+begin
+  perform private.require_recent_password_auth();
+
+  perform 1 from public.profiles as profile where profile.id = p_profile_id for update;
+
+  update private.profile_suspensions as suspension
+  set ended_at = now(), cancelled_at = now(), cancelled_by_profile_id = caller_profile_id
+  where suspension.profile_id = p_profile_id
+    and suspension.ended_at is null
+    and (suspension.expires_at is null or suspension.expires_at > now())
+  returning suspension.id into lifted_suspension_id;
+
+  if lifted_suspension_id is null then
+    raise exception 'profile is not suspended' using errcode = '55000';
+  end if;
+  perform private.enqueue_suspension_email(lifted_suspension_id, 'lifted');
+
+  return lifted_suspension_id;
+end;
+$$;
+
+ALTER FUNCTION "public"."admin_lift_suspension"("p_profile_id" bigint) OWNER TO "postgres";
+
 REVOKE ALL ON FUNCTION "private"."require_app_admin"() FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."require_recent_password_auth"() FROM PUBLIC;
@@ -369,6 +461,12 @@ GRANT ALL ON FUNCTION "public"."admin_set_gongang_manager"("p_profile_id" bigint
 
 REVOKE ALL ON FUNCTION "public"."admin_unblock_application"("p_profile_id" bigint) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."admin_unblock_application"("p_profile_id" bigint) TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."admin_suspend_profile"("p_profile_id" bigint, "p_reason" "text", "p_duration_days" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."admin_suspend_profile"("p_profile_id" bigint, "p_reason" "text", "p_duration_days" integer) TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."admin_lift_suspension"("p_profile_id" bigint) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."admin_lift_suspension"("p_profile_id" bigint) TO "authenticated";
 
 -- 앱 밖 사람도 관리자에게 닿을 수 있도록 로그인 전 화면에 공개하는 연락처. 순서(position)를 키로 써 최대 10개를 제약만으로 지킨다.
 CREATE TABLE IF NOT EXISTS "public"."admin_contacts" (

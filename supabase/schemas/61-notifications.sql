@@ -180,6 +180,9 @@ create table private.notification_delivery_outbox (
   channel private.notification_delivery_channel not null,
   status private.notification_delivery_status not null default 'pending',
   recipient_email text,
+  -- 이용 정지 이메일(§16.11). 정지된 사람은 알림함을 볼 수 없으므로 알림 행 없이 이메일만 보낸다.
+  suspension_id bigint references private.profile_suspensions(id) on delete cascade,
+  suspension_event text,
   available_at timestamptz not null default now(),
   attempt_count integer not null default 0,
   lease_id uuid,
@@ -193,6 +196,10 @@ create table private.notification_delivery_outbox (
     (channel = 'web_push' and subscription_id is not null and recipient_email is null)
     or (channel = 'email' and subscription_id is null and recipient_email is not null)
   ),
+  constraint notification_delivery_outbox_suspension_shape check (
+    (suspension_id is null and suspension_event is null)
+    or (suspension_id is not null and suspension_event in ('suspended', 'lifted') and channel = 'email')
+  ),
   constraint notification_delivery_outbox_lease_shape check (
     (status = 'leased' and lease_id is not null and lease_expires_at is not null)
     or (status <> 'leased' and lease_id is null and lease_expires_at is null)
@@ -202,6 +209,9 @@ create table private.notification_delivery_outbox (
   )
 );
 alter table private.notification_delivery_outbox owner to postgres;
+create unique index notification_delivery_suspension_unique_idx
+on private.notification_delivery_outbox (suspension_id, suspension_event)
+where suspension_id is not null;
 create unique index notification_delivery_push_unique_idx
 on private.notification_delivery_outbox (notification_id, subscription_id, channel)
 where channel = 'web_push';
@@ -292,7 +302,11 @@ language sql stable security definer
 set search_path = ''
 as $$
   -- 메시지 Push는 발송 직전 확인이 따로 있다(메시지 기술 설계, 알림 기술 설계 §11.3).
-  select case when p_delivery.message_id is not null
+  -- 정지 기간에는 정지 이메일 말고는 보내지 않는다. 정지 전에 쌓인 Push도 여기서 걸러진다.
+  select case
+    when p_delivery.suspension_id is not null then true
+    when private.profile_suspended(p_delivery.recipient_profile_id) then false
+    when p_delivery.message_id is not null
     then private.message_delivery_allowed(p_delivery)
     else p_delivery.channel = 'email'
     or exists (
@@ -405,6 +419,29 @@ end;
 $$;
 alter function private.enqueue_notification_email(uuid, text) owner to postgres;
 
+create or replace function private.enqueue_suspension_email(
+  p_suspension_id bigint,
+  p_event text
+) returns boolean
+language plpgsql security definer
+set search_path = ''
+as $$
+begin
+  insert into private.notification_delivery_outbox (
+    recipient_profile_id, channel, recipient_email, suspension_id, suspension_event
+  )
+  select suspension.profile_id, 'email', btrim(user_record.email), suspension.id, p_event
+  from private.profile_suspensions as suspension
+  join public.profiles as profile on profile.id = suspension.profile_id
+  join auth.users as user_record on user_record.id = profile.auth_user_id
+  where suspension.id = p_suspension_id
+    and nullif(btrim(user_record.email), '') is not null
+  on conflict do nothing;
+  return found;
+end;
+$$;
+alter function private.enqueue_suspension_email(bigint, text) owner to postgres;
+
 create or replace function private.emit_notification(
   p_event_key text,
   p_recipient_profile_id bigint,
@@ -432,6 +469,11 @@ begin
   if p_recipient_profile_id is null
     or p_event_key is null
     or p_actor_profile_id = p_recipient_profile_id then
+    return null;
+  end if;
+
+  -- 정지 기간에 생긴 알림은 해제 뒤에도 몰아서 보내지 않는다(§14.12).
+  if private.profile_suspended(p_recipient_profile_id) then
     return null;
   end if;
 
@@ -1033,9 +1075,10 @@ begin
     claimed.message_id, message_content.conversation_id,
     notification.importance, notification.category,
     subscription.id,
-    coalesce(message_content.title, notification.title),
+    coalesce(message_content.title, suspension_content.title, notification.title),
     case
       when claimed.message_id is not null then message_content.body
+      when claimed.suspension_id is not null then suspension_content.body
       else case notification.kind
       when 'post_commented' then '내 게시물에 새 댓글이 등록되었습니다.'
       when 'comment_replied' then '내 댓글에 새 답글이 등록되었습니다.'
@@ -1052,6 +1095,8 @@ begin
     case
       when claimed.message_id is not null
         then 'message:' || message_content.conversation_id::text
+      when claimed.suspension_id is not null
+        then 'suspension:' || claimed.suspension_id::text || ':' || claimed.suspension_event
       when notification.importance = 'high'
         then 'notification:' || notification.id::text
       else 'notification-category:' || notification.category::text || ':' || subscription.id::text
@@ -1064,7 +1109,24 @@ begin
   cross join keys
   left join lateral private.message_push_content(
     claimed.message_id, claimed.recipient_profile_id, keys.value
-  ) as message_content on true;
+  ) as message_content on true
+  left join lateral (
+    select
+      case claimed.suspension_event
+        when 'suspended' then '이용이 정지되었습니다.'
+        else '이용 정지가 해제되었습니다.'
+      end as title,
+      case claimed.suspension_event
+        when 'suspended' then
+          '사유: ' || suspension.reason || chr(10) || '해제 예정: ' || coalesce(
+            to_char(suspension.expires_at at time zone 'Asia/Seoul', 'YYYY"년" FMMM"월" FMDD"일" HH24:MI') || ' (한국 시간)',
+            '무기한'
+          )
+        else '다시 KMLA Online을 이용할 수 있습니다.'
+      end as body
+    from private.profile_suspensions as suspension
+    where suspension.id = claimed.suspension_id
+  ) as suspension_content on true;
 end;
 $$;
 alter function public.claim_notification_deliveries(integer, integer) owner to postgres;
@@ -1850,6 +1912,7 @@ revoke all on function private.notification_push_allowed(public.notifications, t
 revoke all on function private.notification_delivery_allowed(private.notification_delivery_outbox) from public;
 revoke all on function private.enqueue_notification_push(uuid) from public;
 revoke all on function private.enqueue_notification_email(uuid, text) from public;
+revoke all on function private.enqueue_suspension_email(bigint, text) from public;
 revoke all on function private.emit_notification(
   text, bigint, public.notification_kind, public.notification_importance,
   public.notification_category, public.notification_actor_identity, bigint,
