@@ -2,3 +2,10 @@
 # a type error usually lives in a file the commit did not touch. Tests and the
 # build run in CI (`.github/workflows/quality.yml`).
 npm run typecheck
+
+# Formatting drift slips past the commit hook when it fails or is skipped, and
+# then costs a CI round trip. Check only what this branch changed against dev.
+base=$(git merge-base origin/dev HEAD 2>/dev/null) || exit 0
+git diff --name-only --diff-filter=d "$base" HEAD \
+  | grep -E '\.(ts|tsx|mjs|json|jsonc|md|css|html|webmanifest|yml|yaml)$' \
+  | xargs -r npx prettier --check
