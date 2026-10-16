@@ -17,17 +17,17 @@ export type ManagedDownloadState =
   /** 다 받았고, 저장하는 두 번째 탭을 기다린다. */
   | { status: "ready" }
   /**
-   * 저장했다. 어디로 갔는지와 공유 가능 여부를 화면을 떠날 때까지 그 자리에 남긴다. 알림으로 띄우면
-   * 연달아 저장할 때 쌓여 화면을 가리고, 알림의 공유 버튼은 몇 초 뒤 사라져 놓치면 끝이다.
+   * 저장했다. 어디로 갔는지를 화면을 떠날 때까지 그 자리에 남긴다. 알림으로 띄우면 연달아 저장할 때
+   * 쌓여 화면을 가린다.
    */
-  | { status: "saved"; location: "downloads" | "share"; shareable: boolean }
+  | { status: "saved"; location: "downloads" | "share" }
   | { status: "failed" };
 
 /**
  * 휴대폰에서 파일 하나 또는 묶음을 받아 저장하는 상태. 흐름과 이유는 `file-download.ts`에 있다.
  *
- * 받는 중에 다시 탭해도 새로 받지 않는다. 저장한 뒤 다시 탭하면 받아 둔 파일을 공유 시트로 넘긴다
- * (공유할 수 없는 형식이면 다시 저장한다). 언마운트하면 받던 요청을 끊고 파일을 놓는다.
+ * 받는 중에 다시 탭해도 새로 받지 않는다. 저장한 뒤 다시 탭하면 받아 둔 파일을 다시 저장한다.
+ * 언마운트하면 받던 요청을 끊고 파일을 놓는다.
  *
  * `failureMessage`를 주면 실패를 그 자리에 남기지 않고 알림으로 알린 뒤 처음 상태로 돌아간다.
  * 상태 표시가 버튼 자체를 대신하는 곳(뷰어)에서 '다시 받기'가 다른 선택지를 가리지 않게 한다.
@@ -92,17 +92,20 @@ export function useManagedDownload({
     [clear, failureMessage],
   );
 
-  /** 저장 중 탭을 막고, 공유 시트를 열지 못하면 다운로드 폴더로 저장한다. */
-  const runSave = useCallback(async (preferShare: boolean) => {
+  /**
+   * iOS는 공유 시트로 저장한다. 시트에 '파일에 저장'이 있고, 홈 화면 앱에서 Blob을 직접 내려받으면
+   * 돌아올 길 없는 미리보기로 열린다. Android 공유 시트에는 기기에 저장하는 항목이 없는 경우가
+   * 많아 다운로드 폴더에 저장한다.
+   */
+  const save = useCallback(async () => {
     const files = filesRef.current;
     if (!files || savingRef.current) return;
     savingRef.current = true;
-    const shareable = canShareFiles(files);
     try {
-      if (preferShare && shareable) {
+      if (isIOS() && canShareFiles(files)) {
         try {
           if (await shareFiles(files)) {
-            setState({ status: "saved", location: "share", shareable });
+            setState({ status: "saved", location: "share" });
           }
           return;
         } catch {
@@ -110,40 +113,15 @@ export function useManagedDownload({
         }
       }
       saveFiles(files);
-      setState({ status: "saved", location: "downloads", shareable });
+      setState({ status: "saved", location: "downloads" });
     } finally {
       savingRef.current = false;
     }
   }, []);
 
   /**
-   * iOS는 공유 시트로 저장한다. 시트에 '파일에 저장'이 있고, 홈 화면 앱에서 Blob을 직접 내려받으면
-   * 돌아올 길 없는 미리보기로 열린다. Android 공유 시트에는 기기에 저장하는 항목이 없는 경우가
-   * 많아 다운로드 폴더에 저장하고, 공유는 저장한 뒤 다시 탭해 따로 한다.
-   */
-  const save = useCallback(() => runSave(isIOS()), [runSave]);
-
-  /** 저장한 파일을 다른 앱으로 넘긴다. 공유할 수 없는 형식이면 다시 저장한다. */
-  const share = useCallback(async () => {
-    const files = filesRef.current;
-    if (!files || savingRef.current) return;
-    if (!canShareFiles(files)) {
-      await runSave(false);
-      return;
-    }
-    savingRef.current = true;
-    try {
-      await shareFiles(files);
-    } catch {
-      // 공유 시트를 열지 못했다. 이미 저장했으므로 그대로 둔다.
-    } finally {
-      savingRef.current = false;
-    }
-  }, [runSave]);
-
-  /**
    * 다운로드 링크의 클릭 핸들러. 링크 다운로드를 쓰는 기기(데스크톱)면 기본 동작을 그대로 둔다.
-   * 휴대폰에서는 상태에 따라 받기·저장·공유·다시 받기를 한다.
+   * 휴대폰에서는 상태에 따라 받기·저장·다시 받기를 한다.
    */
   const handleClick = useCallback(
     (event: { preventDefault(): void }, targets: readonly DownloadTarget[]) => {
@@ -153,19 +131,17 @@ export function useManagedDownload({
         case "loading":
           return;
         case "ready":
-          void save();
-          return;
         case "saved":
-          void share();
+          void save();
           return;
         default:
           void start(targets);
       }
     },
-    [save, share, start, state.status],
+    [save, start, state.status],
   );
 
-  return { state, start, save, share, reset, handleClick };
+  return { state, start, save, reset, handleClick };
 }
 
 /** 낭독기에 쓰는 상태 문구. 처음 상태는 `null`이다. */
@@ -181,11 +157,10 @@ export function managedDownloadLabel(
         : `받는 중 ${Math.round(state.progress * 100)}%`;
     case "ready":
       return "다 받음, 눌러서 저장";
-    case "saved": {
-      const where =
-        state.location === "downloads" ? "다운로드 폴더에 저장됨" : "저장함";
-      return state.shareable ? `${where}, 눌러서 공유` : where;
-    }
+    case "saved":
+      return state.location === "downloads"
+        ? "다운로드 폴더에 저장됨"
+        : "저장함";
     case "failed":
       return "받지 못함, 눌러서 다시 받기";
   }

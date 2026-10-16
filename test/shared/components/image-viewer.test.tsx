@@ -373,7 +373,7 @@ describe("ImageViewer", () => {
       vi.unstubAllGlobals();
     });
 
-    it("keeps where the photos went and a share button in place of a toast, until the next photo", async () => {
+    it("keeps where the photos went in place of a toast, until the next photo", async () => {
       const { user } = renderViewer("b", makeImages(), { downloadAll: true });
 
       await user.click(screen.getByRole("button", { name: "다운로드" }));
@@ -394,7 +394,7 @@ describe("ImageViewer", () => {
 
       expect(
         await screen.findByRole("button", {
-          name: "다운로드 폴더에 저장됨, 눌러서 공유",
+          name: "다운로드 폴더에 저장됨",
         }),
       ).toBeInTheDocument();
       expect(screen.getByText("다운로드 폴더에 저장됨")).toBeInTheDocument();

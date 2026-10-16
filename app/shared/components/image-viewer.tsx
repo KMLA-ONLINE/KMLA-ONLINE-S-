@@ -241,7 +241,6 @@ function DownloadControl({
           setAllSavedOn(image.id);
           void all.save();
         }}
-        onShare={() => void all.share()}
       />
     );
   }
@@ -251,7 +250,6 @@ function DownloadControl({
         state={single.state}
         count={1}
         onSave={() => void single.save()}
-        onShare={() => void single.share()}
       />
     );
   }
@@ -369,12 +367,10 @@ function ManagedDownloadControl({
   state,
   count,
   onSave,
-  onShare,
 }: {
   state: ManagedDownloadState;
   count: number;
   onSave: () => void;
-  onShare: () => void;
 }) {
   const label = managedDownloadLabel(state) ?? "다운로드";
 
@@ -409,7 +405,7 @@ function ManagedDownloadControl({
         </ControlButton>
       );
     case "saved": {
-      // 저장 위치는 알림 대신 이 자리에 남긴다. 공유도 사라지지 않는 버튼으로 둔다.
+      // 저장 위치는 알림 대신 이 자리에 남긴다. 다시 누르면 받아 둔 사진을 다시 저장한다.
       const note = managedDownloadNote(state);
       return (
         <>
@@ -421,20 +417,9 @@ function ManagedDownloadControl({
               {note}
             </span>
           ) : null}
-          {state.shareable ? (
-            <ControlButton
-              aria-label={label}
-              onClick={onShare}
-              className={PILL_CLASS}
-            >
-              <CheckIcon aria-hidden className="size-4" />
-              공유
-            </ControlButton>
-          ) : (
-            <ControlButton aria-label={label}>
-              <CheckIcon className="size-5" />
-            </ControlButton>
-          )}
+          <ControlButton aria-label={label} onClick={onSave}>
+            <CheckIcon className="size-5" />
+          </ControlButton>
         </>
       );
     }

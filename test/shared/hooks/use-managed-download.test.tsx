@@ -116,7 +116,7 @@ describe("useManagedDownload", () => {
   });
 
   it("on Android, downloads on the first tap and saves to the downloads folder on the second", async () => {
-    stubFetch();
+    const fetchMock = stubFetch();
     const share = stubShare(true);
     const anchorClick = stubAnchorSave();
     const { result } = renderHook(() => useManagedDownload());
@@ -132,44 +132,21 @@ describe("useManagedDownload", () => {
       expect(result.current.state).toEqual({
         status: "saved",
         location: "downloads",
-        shareable: true,
       }),
     );
     await waitFor(() => expect(anchorClick).toHaveBeenCalledOnce());
-    // 공유 시트에는 기기 저장 항목이 없을 수 있어 저장이 먼저고, 공유는 저장한 뒤 다시 탭해 한다.
+    // 공유 시트에는 기기 저장 항목이 없을 수 있어, 공유할 수 있는 파일도 다운로드 폴더에 저장한다.
     expect(share).not.toHaveBeenCalled();
     expect(managedDownloadNote(result.current.state)).toBe(
       "다운로드 폴더에 저장됨",
     );
     expect(toast.success).not.toHaveBeenCalled();
 
-    act(() => result.current.handleClick(click(), [TARGET]));
-    await waitFor(() => expect(share).toHaveBeenCalledOnce());
-    const [[data]] = share.mock.calls as unknown as [[{ files: File[] }]];
-    expect(data.files.map((file) => file.name)).toEqual(["시간표.pdf"]);
-    expect(result.current.state.status).toBe("saved");
-  });
-
-  it("on Android, saves again instead of sharing files the share sheet refuses", async () => {
-    stubFetch();
-    stubShare(false);
-    const anchorClick = stubAnchorSave();
-    const { result } = renderHook(() => useManagedDownload());
-
-    act(() => result.current.handleClick(click(), [TARGET]));
-    await waitFor(() => expect(result.current.state.status).toBe("ready"));
-    await act(() => result.current.save());
-
-    expect(result.current.state).toEqual({
-      status: "saved",
-      location: "downloads",
-      shareable: false,
-    });
-    // 저장은 타이머로 미뤄진다. 다음 테스트로 새지 않게 끝까지 기다린다.
-    await waitFor(() => expect(anchorClick).toHaveBeenCalledOnce());
-
+    // 저장한 뒤 다시 탭하면 받아 둔 파일을 다시 저장한다. 새로 받지 않는다.
     act(() => result.current.handleClick(click(), [TARGET]));
     await waitFor(() => expect(anchorClick).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(share).not.toHaveBeenCalled();
   });
 
   it("on iOS, saves through the share sheet", async () => {

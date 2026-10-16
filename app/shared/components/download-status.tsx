@@ -45,15 +45,7 @@ export function DownloadStatus({
         </span>
       );
     case "saved":
-      return state.shareable ? (
-        <span
-          aria-hidden
-          className="flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium"
-        >
-          <CheckIcon className="size-3.5 text-primary" />
-          공유
-        </span>
-      ) : (
+      return (
         <CheckIcon aria-hidden className={cn(iconClass, "text-primary")} />
       );
     case "failed":
