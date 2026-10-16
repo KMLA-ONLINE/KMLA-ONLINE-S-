@@ -1,6 +1,7 @@
 import {
   ContactIcon,
   HardDriveIcon,
+  MegaphoneIcon,
   MessageCircleIcon,
   ShieldCheckIcon,
   UserCheckIcon,
@@ -49,6 +50,12 @@ const links = [
     title: "파일 정리",
     description: "고아 파일 정리 상태와 실패 확인",
     icon: HardDriveIcon,
+  },
+  {
+    to: "/admin/school-notices",
+    title: "학교 공지 계정",
+    description: "공지 동기화에 쓰는 학교 계정 교체와 동기화 상태",
+    icon: MegaphoneIcon,
   },
 ];
 

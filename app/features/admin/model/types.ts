@@ -40,6 +40,26 @@ export type StorageCleanupStatus = Omit<
   [Field in NullableStorageCleanupField]: RawStorageCleanupStatus[Field] | null;
 };
 
+type RawSchoolNoticeStatus =
+  Functions["admin_school_notice_status"]["Returns"][number];
+
+/** 계정을 넣기 전이나 동기화가 한 번도 돌지 않았으면 비어 있다. 생성 타입은 이를 non-null로 적는다. */
+type NullableSchoolNoticeField =
+  | "login_id"
+  | "account_updated_at"
+  | "last_requested_at"
+  | "last_attempt_at"
+  | "last_success_at"
+  | "last_error"
+  | "last_error_at";
+
+export type SchoolNoticeStatus = Omit<
+  RawSchoolNoticeStatus,
+  NullableSchoolNoticeField
+> & {
+  [Field in NullableSchoolNoticeField]: RawSchoolNoticeStatus[Field] | null;
+};
+
 export interface AdminActionResult {
   ok?: boolean;
   error?: string;
@@ -70,6 +90,15 @@ export function getAdminErrorMessage(error: unknown): string {
   }
   if (message.includes("Invalid login credentials")) {
     return "비밀번호가 올바르지 않습니다.";
+  }
+  if (message.includes("school notice sync vault configuration is missing")) {
+    return "동기화 설정(Vault)이 없어 실행하지 못했습니다.";
+  }
+  if (message.includes("school id must be")) {
+    return "학교 아이디를 입력해 주세요.";
+  }
+  if (message.includes("school password must be")) {
+    return "학교 비밀번호를 입력해 주세요.";
   }
   if (errorCode(error) === "42501") return "관리자 권한이 필요합니다.";
   return "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";

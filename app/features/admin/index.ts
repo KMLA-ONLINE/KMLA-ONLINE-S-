@@ -6,8 +6,10 @@ export { AdminContactsScreen } from "~/features/admin/components/admin-contacts-
 export { ApprovalsScreen } from "~/features/admin/components/approvals-screen";
 export { GongangManagersScreen } from "~/features/admin/components/gongang-managers-screen";
 export { RosterScreen } from "~/features/admin/components/roster-screen";
+export { SchoolNoticeAccountScreen } from "~/features/admin/components/school-notice-account-screen";
 export { StorageCleanupScreen } from "~/features/admin/components/storage-cleanup-screen";
 export {
+  getSchoolNoticeStatus,
   getStorageCleanupStatus,
   listAcceptedUsers,
   listAdminMembers,
@@ -20,6 +22,8 @@ export {
   reviewApplications,
   setAppAdmin,
   setGongangManager,
+  setSchoolNoticeAccount,
+  syncSchoolNotices,
   unblockApplication,
 } from "~/features/admin/data/mutations";
 export {

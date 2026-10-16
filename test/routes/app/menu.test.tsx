@@ -60,9 +60,10 @@ describe("menu route", () => {
     const tools = within(
       screen.getByRole("navigation", { name: "학교생활 기능" }),
     );
-    expect(tools.getAllByRole("link")).toHaveLength(5);
+    expect(tools.getAllByRole("link")).toHaveLength(6);
     for (const [name, href] of [
       ["급식", "/menu/meal"],
+      ["학교 공지", "/menu/notices"],
       ["시간표", "/menu/timetable"],
       ["공강 · 노래방", "/menu/gongang"],
       ["생일", "/menu/birthdays"],
@@ -100,6 +101,19 @@ describe("menu route", () => {
     expect(
       screen.queryByRole("button", { name: "로그아웃" }),
     ).not.toBeInTheDocument();
+  });
+  it.each([
+    ["teacher", ["급식", "시간표", "생일"]],
+    ["alumni", ["급식", "시간표"]],
+  ] as const)("shows only the school tools a %s uses", (type, expected) => {
+    renderMenu("member", type);
+
+    const tools = within(
+      screen.getByRole("navigation", { name: "학교생활 기능" }),
+    );
+    expect(tools.getAllByRole("link").map((link) => link.textContent)).toEqual(
+      expected,
+    );
   });
   it("does not show the administrator entry to a member", () => {
     renderMenu("member");

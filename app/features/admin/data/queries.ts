@@ -3,6 +3,7 @@ import type {
   AdminApplication,
   AdminMember,
   RosterMember,
+  SchoolNoticeStatus,
   StorageCleanupStatus,
 } from "~/features/admin/model/types";
 import { getSupabase } from "~/shared/supabase/client";
@@ -58,6 +59,12 @@ export async function getStorageCleanupStatus(): Promise<StorageCleanupStatus | 
   const { data, error } = await getSupabase().rpc(
     "admin_storage_cleanup_status",
   );
+  if (error) throw error;
+  return data?.[0] ?? null;
+}
+
+export async function getSchoolNoticeStatus(): Promise<SchoolNoticeStatus | null> {
+  const { data, error } = await getSupabase().rpc("admin_school_notice_status");
   if (error) throw error;
   return data?.[0] ?? null;
 }

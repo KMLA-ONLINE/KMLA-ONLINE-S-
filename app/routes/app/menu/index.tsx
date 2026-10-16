@@ -4,6 +4,7 @@ import {
   CalendarDaysIcon,
   ExternalLinkIcon,
   GiftIcon,
+  MegaphoneIcon,
   SettingsIcon,
   ShieldCheckIcon,
   UtensilsIcon,
@@ -11,7 +12,12 @@ import {
 import type { ComponentType } from "react";
 import { Link } from "react-router";
 
-import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import {
+  defineAppChrome,
+  PageHeader,
+  useAppShell,
+  type ShellData,
+} from "~/features/app-shell";
 import { schoolLinks } from "~/features/app-shell/model/school-links";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
@@ -24,19 +30,48 @@ export const handle = defineAppChrome({
   contentWidth: "3xl",
 });
 
+type ProfileType = ShellData["profile"]["type"];
+
 interface Shortcut {
   to: string;
   label: string;
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  /** 이 타일을 보여 줄 프로필 유형. 없으면 모두에게 보인다. */
+  for?: readonly ProfileType[];
 }
 
-/** 학교생활 도구만 모으고 계정·서비스 관리는 설정으로 분리한다. */
+/**
+ * 학교생활 도구만 모으고 계정·서비스 관리는 설정으로 분리한다. 학교 공지·공강·기부물품은 재학생
+ * 기능이라 선생님과 졸업생에게 숨기고, 생일은 졸업생에게 숨긴다. 메뉴에서만 숨기며 주소로 들어오는
+ * 접근은 막지 않는다.
+ */
 const shortcuts: Shortcut[] = [
   { to: "/menu/meal", label: "급식", icon: UtensilsIcon },
+  {
+    to: "/menu/notices",
+    label: "학교 공지",
+    icon: MegaphoneIcon,
+    for: ["student"],
+  },
   { to: "/menu/timetable", label: "시간표", icon: CalendarDaysIcon },
-  { to: "/menu/gongang", label: "공강 · 노래방", icon: CalendarClockIcon },
-  { to: "/menu/birthdays", label: "생일", icon: CakeIcon },
-  { to: "/menu/donations", label: "기부물품", icon: GiftIcon },
+  {
+    to: "/menu/gongang",
+    label: "공강 · 노래방",
+    icon: CalendarClockIcon,
+    for: ["student"],
+  },
+  {
+    to: "/menu/birthdays",
+    label: "생일",
+    icon: CakeIcon,
+    for: ["student", "teacher"],
+  },
+  {
+    to: "/menu/donations",
+    label: "기부물품",
+    icon: GiftIcon,
+    for: ["student"],
+  },
 ];
 
 const tileClassName =
@@ -102,23 +137,28 @@ export default function MenuPage() {
             aria-label="학교생활 기능"
             className="grid grid-cols-2 gap-3 md:grid-cols-4"
           >
-            {shortcuts.map(({ to, label, icon: Icon }) => (
-              <Link
-                key={to}
-                to={to}
-                className={cn(
-                  tileClassName,
-                  "flex min-h-22 min-w-0 flex-col items-center justify-center gap-3 px-3 py-4",
-                )}
-              >
-                <Icon className="size-6 text-muted-foreground" aria-hidden />
+            {shortcuts
+              .filter(
+                (shortcut) =>
+                  !shortcut.for || shortcut.for.includes(profile.type),
+              )
+              .map(({ to, label, icon: Icon }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  className={cn(
+                    tileClassName,
+                    "flex min-h-22 min-w-0 flex-col items-center justify-center gap-3 px-3 py-4",
+                  )}
+                >
+                  <Icon className="size-6 text-muted-foreground" aria-hidden />
 
-                {/* `break-keep`이 없으면 두 줄 라벨이 어절 가운데서 잘린다. */}
-                <span className="text-center text-sm leading-tight font-medium break-keep">
-                  {label}
-                </span>
-              </Link>
-            ))}
+                  {/* `break-keep`이 없으면 두 줄 라벨이 어절 가운데서 잘린다. */}
+                  <span className="text-center text-sm leading-tight font-medium break-keep">
+                    {label}
+                  </span>
+                </Link>
+              ))}
           </nav>
         </section>
 
