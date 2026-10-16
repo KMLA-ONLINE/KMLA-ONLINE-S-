@@ -41,7 +41,7 @@ export function QuickReactionBar({
               className={cn(
                 "flex size-10 shrink-0 origin-bottom items-center justify-center rounded-full text-2xl transition-[transform,background-color] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] [-webkit-touch-callout:none] hover:-translate-y-0.5 hover:scale-125 focus-visible:-translate-y-1.5 focus-visible:scale-125 focus-visible:outline-none",
                 // 말풍선 바탕(`bg-popover`)과 붙어 보이지 않게 회색보다 한 단계 짙은 브랜드 색을 연하게 깐다.
-                chosen && "bg-primary/15",
+                chosen && "bg-primary/10",
               )}
               onClick={() => onSelect(type.key)}
             >
