@@ -1193,7 +1193,7 @@ begin
       'post-moderated:' || p_post_id::text,
       author_profile_id, 'post_moderated', 'high', 'moderation', 'staff',
       caller_profile_id, '운영진', null,
-      '“' || post_record.title || '” 게시물이 운영자에 의해 삭제되었습니다.',
+      '“' || post_record.title || '” 게시물을 운영진이 삭제했습니다.',
       post_record.group_id
     );
   end if;
@@ -1388,9 +1388,9 @@ begin
       author_profile_id, 'comment_moderated', 'high', 'moderation', 'staff',
       caller_profile_id, '운영진', null,
       case when comment_post_title is null
-        then '댓글이 운영자에 의해 삭제되었습니다.'
+        then '운영진이 댓글을 삭제했습니다.'
         else '“' || comment_post_title
-          || '” 게시물에 남긴 내 댓글이 운영자에 의해 삭제되었습니다.'
+          || '” 게시물에 남긴 내 댓글을 운영진이 삭제했습니다.'
       end,
       comment_group_id, target_post_id
     );

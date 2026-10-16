@@ -284,7 +284,7 @@ export function DonationItemList({
       {canApply && limitReached && (
         <p className="rounded-lg bg-muted px-3 py-2 text-sm">
           한 회차에 최대 {CLAIM_LIMIT}개까지 신청할 수 있습니다. 다른 물품을
-          신청하려면 기존 신청을 취소해주세요.
+          신청하려면 기존 신청을 취소해 주세요.
         </p>
       )}
 

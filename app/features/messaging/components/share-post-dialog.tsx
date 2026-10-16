@@ -184,7 +184,7 @@ export function SharePostDialog({
                   variant="secondary"
                   size="sm"
                   className="h-7 rounded-full pr-1.5"
-                  aria-label={`${choice.name} 빼기`}
+                  aria-label={`${choice.name} 선택 해제`}
                   onClick={() => toggle(choice)}
                 >
                   {choice.name}
@@ -234,7 +234,7 @@ export function SharePostDialog({
               </Centered>
             ) : people.isError ? (
               <Centered role="alert" className="text-destructive">
-                찾지 못했습니다. 잠시 후 다시 시도해 주세요.
+                검색 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
               </Centered>
             ) : people.data.length === 0 ? (
               <Centered>일치하는 사람이 없습니다.</Centered>

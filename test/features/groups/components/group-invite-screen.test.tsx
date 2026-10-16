@@ -25,6 +25,11 @@ describe("GroupInviteScreen", () => {
 
     expect(screen.getByText("29기 수학 탐구")).toBeVisible();
     expect(screen.getByText("12명")).toBeVisible();
+    expect(
+      screen.getByText(
+        "가입하면 이 그룹의 게시물과 멤버 목록을 볼 수 있습니다.",
+      ),
+    ).toBeVisible();
     expect(screen.getByRole("button", { name: "가입하기" })).toBeVisible();
   });
 
@@ -32,7 +37,12 @@ describe("GroupInviteScreen", () => {
     // 만료와 취소를 구분해 봐야 받는 사람이 할 수 있는 일은 같다 — 새 링크를 받는 것뿐이다.
     renderRoute(() => <GroupInviteScreen preview={null} />);
 
-    expect(screen.getByText("쓸 수 없는 초대 링크입니다")).toBeVisible();
+    expect(screen.getByText("사용할 수 없는 초대 링크입니다")).toBeVisible();
+    expect(
+      screen.getByText(
+        "만료되었거나 더 이상 사용할 수 없는 링크입니다. 초대한 사람에게 새 링크를 요청해 주세요.",
+      ),
+    ).toBeVisible();
     // Button이 `render` prop으로 Link를 감싸면 anchor에 role="button"이 붙는다.
     expect(
       screen.getByRole("button", { name: "그룹 목록으로" }),

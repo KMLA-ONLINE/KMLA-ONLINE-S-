@@ -53,6 +53,11 @@ describe("NotificationPermissionCard", () => {
     renderCard();
 
     expect(await screen.findByText(TITLE)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "댓글·답글과 그룹 가입 결과를 이 기기로 알립니다. 알림 종류는 알림 설정에서 변경할 수 있습니다.",
+      ),
+    ).toBeVisible();
     expect(mocks.enableWebPush).not.toHaveBeenCalled();
   });
 

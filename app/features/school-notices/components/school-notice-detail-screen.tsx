@@ -42,7 +42,7 @@ export function SchoolNoticeDetailScreen({
         <section className="space-y-2 border-t pt-3">
           <h3 className="text-sm font-medium">첨부 파일</h3>
           <p className="text-xs text-muted-foreground">
-            학교 사이트에 로그인되어 있어야 받을 수 있어요.
+            첨부 파일을 받으려면 학교 사이트에 로그인해야 합니다.
           </p>
           <ul className="space-y-1">
             {notice.attachments.map((file) => (

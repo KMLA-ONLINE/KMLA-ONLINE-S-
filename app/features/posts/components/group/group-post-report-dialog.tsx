@@ -151,7 +151,7 @@ export function GroupPostReportDialog({
             value={description}
             maxLength={300}
             rows={4}
-            placeholder="필요한 내용을 입력해 주세요."
+            placeholder="신고 사유를 구체적으로 적어 주세요."
             onChange={(event) => {
               setDescription(event.target.value);
               setError(null);

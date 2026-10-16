@@ -12,6 +12,23 @@ afterEach(() => resetFakeMessaging());
 vi.mock("~/features/messaging/data/mutations", () => import("../fake-api"));
 
 describe("MessagingScreen", () => {
+  it("keeps new-conversation actions without repeating instructions in the empty list", () => {
+    renderRoute(() => (
+      <MessagingScreen conversations={[]} hasRoom={false}>
+        <div />
+      </MessagingScreen>
+    ));
+
+    expect(screen.getByText("아직 대화가 없습니다")).toBeVisible();
+    expect(screen.getByRole("button", { name: "새 대화" })).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "새 대화 시작하기" }),
+    ).toHaveLength(2);
+    expect(
+      screen.queryByText("새 대화 버튼으로 대화를 시작해 보세요."),
+    ).not.toBeInTheDocument();
+  });
+
   it("새 대화에서 한 명을 고르면 1:1 대화를, 여러 명이면 이름을 받아 그룹을 열고 그 대화로 간다", async () => {
     const conversations = await listConversations();
     const { user } = renderRoute(

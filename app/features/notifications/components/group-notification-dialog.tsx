@@ -124,7 +124,7 @@ export function GroupNotificationFields({
 
       <div className="flex items-center justify-between gap-4 border-t pt-3">
         <div className="min-w-0">
-          <p className="text-sm">관련 활동 Push</p>
+          <p className="text-sm">관련 활동 기기 알림</p>
           <p className="text-xs text-muted-foreground">
             {level === "none"
               ? "앱 알림함을 켜야 사용할 수 있습니다."
@@ -132,7 +132,7 @@ export function GroupNotificationFields({
           </p>
         </div>
         <Switch
-          aria-label={`${groupName} 관련 활동 Push`}
+          aria-label={`${groupName} 관련 활동 기기 알림`}
           checked={contentPushEnabled}
           disabled={pending || level === "none"}
           onCheckedChange={(checked) =>
@@ -144,13 +144,13 @@ export function GroupNotificationFields({
       {level === "all" ? (
         <div className="flex items-center justify-between gap-4 border-t pt-3">
           <div className="min-w-0">
-            <p className="text-sm">새 게시물 Push</p>
+            <p className="text-sm">새 게시물 기기 알림</p>
             <p className="text-xs text-muted-foreground">
               새 게시물은 기본적으로 알림함에만 표시됩니다.
             </p>
           </div>
           <Switch
-            aria-label={`${groupName} 새 게시물 Push`}
+            aria-label={`${groupName} 새 게시물 기기 알림`}
             checked={newPostPushEnabled}
             disabled={pending}
             onCheckedChange={(checked) =>

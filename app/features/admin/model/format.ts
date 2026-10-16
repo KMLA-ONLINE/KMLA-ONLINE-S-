@@ -1,7 +1,7 @@
 import type { AdminApplication } from "~/features/admin/model/types";
 
 export function formatProfileType(type: string): string {
-  return type === "student" ? "학생" : type === "teacher" ? "교직원" : "졸업생";
+  return type === "student" ? "재학생" : type === "teacher" ? "교사" : "졸업생";
 }
 
 export function formatApplicationField(

@@ -526,7 +526,7 @@ export function useConversationMessages(conversation: Conversation) {
       return true;
     } catch {
       if (isLatest()) apply(previous);
-      toast.error("메시지를 고치지 못했습니다.");
+      toast.error("메시지를 수정하지 못했습니다.");
       return false;
     } finally {
       release();

@@ -173,7 +173,7 @@ export function GroupSummaryRow({
               <DialogTitle>{group.name}</DialogTitle>
               <DialogDescription>
                 {group.pinned_at
-                  ? "이 그룹을 내 그룹 목록의 일반 정렬 위치로 돌릴까요?"
+                  ? "이 그룹의 고정을 해제할까요?"
                   : "이 그룹을 내 그룹 목록 상단에 고정할까요?"}
               </DialogDescription>
             </DialogHeader>

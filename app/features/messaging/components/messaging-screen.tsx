@@ -177,11 +177,11 @@ export function MessagingScreen({
                     ? "대화를 찾지 못했습니다"
                     : "아직 대화가 없습니다"}
                 </EmptyTitle>
-                <EmptyDescription>
-                  {deferredSearch
-                    ? "다른 이름으로 다시 검색해 보세요."
-                    : "새 대화 버튼으로 대화를 시작해 보세요."}
-                </EmptyDescription>
+                {deferredSearch ? (
+                  <EmptyDescription>
+                    다른 이름으로 다시 검색해 보세요.
+                  </EmptyDescription>
+                ) : null}
               </EmptyHeader>
               {/* 넓은 화면에서는 오른쪽 빈 화면에 같은 버튼이 있다. */}
               {deferredSearch ? null : (

@@ -213,8 +213,20 @@ export function ApprovalsScreen({
                 ? "가입 승인"
                 : "가입 차단"
           }
-          description={`${action.ids.length}명의 상태를 변경합니다. 계속할까요?`}
-          confirmLabel="확인"
+          description={
+            action.kind === "unblock"
+              ? `선택한 ${action.ids.length}명의 가입 차단을 해제할까요?`
+              : action.status === "accepted"
+                ? `선택한 ${action.ids.length}명의 가입을 승인할까요?`
+                : `선택한 ${action.ids.length}명의 가입을 차단할까요?`
+          }
+          confirmLabel={
+            action.kind === "unblock"
+              ? "차단 해제"
+              : action.status === "accepted"
+                ? "승인"
+                : "차단"
+          }
           destructive={action.kind === "review" && action.status === "blocked"}
           pending={busy}
           onCancel={() => setAction(null)}
@@ -238,7 +250,7 @@ function ApplicationCard({
 }) {
   const fields: [string, AdminApplication[keyof AdminApplication]][] = [
     ["사용자 유형", formatProfileType(application.profile_type)],
-    ["재입학", application.is_returning_student],
+    ["복학생", application.is_returning_student],
     ["기수", application.cohort],
     ["학번", application.student_number],
     ["성별", application.gender],

@@ -26,6 +26,34 @@ const group: DiscoverGroupItem = {
 };
 
 describe("group cards", () => {
+  it("describes unpinning directly in the long-press confirmation", async () => {
+    const { user } = renderRoute(() => (
+      <GroupSummaryRow
+        group={{
+          ...group,
+          id: group.group_id,
+          kind: "unofficial",
+          posting_policy: "members",
+          membership_state: "member",
+          pinned_at: "2026-10-16T00:00:00Z",
+          new_post_count: 0,
+          section: "mine",
+        }}
+        profileId={1}
+      />
+    ));
+
+    await user.pointer({
+      keys: "[TouchA>]",
+      target: screen.getByRole("link", { name: group.name }),
+    });
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent(
+      "이 그룹의 고정을 해제할까요?",
+    );
+    await user.pointer({ keys: "[/TouchA]" });
+  });
+
   it("shows the join policy on a mobile discover card", () => {
     renderRoute(() => <GroupMobileDiscoverCard group={group} profileId={1} />);
 

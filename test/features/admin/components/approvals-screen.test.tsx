@@ -32,7 +32,7 @@ describe("ApprovalsScreen", () => {
     expect(screen.getByText(/신청/)).toBeVisible();
     for (const label of [
       "사용자 유형",
-      "재입학",
+      "복학생",
       "기수",
       "학번",
       "성별",

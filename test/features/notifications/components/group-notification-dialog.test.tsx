@@ -64,7 +64,7 @@ describe("GroupNotificationDialog", () => {
 
     const { user } = renderRoute(Harness);
     const contentSwitch = await screen.findByRole("switch", {
-      name: "테스트 그룹 관련 활동 Push",
+      name: "테스트 그룹 관련 활동 기기 알림",
     });
 
     await user.click(contentSwitch);
@@ -85,7 +85,7 @@ describe("GroupNotificationDialog", () => {
       screen.getByRole("status", { name: "알림 설정 불러오는 중" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("switch", { name: "테스트 그룹 관련 활동 Push" }),
+      screen.queryByRole("switch", { name: "테스트 그룹 관련 활동 기기 알림" }),
     ).not.toBeInTheDocument();
 
     await act(async () => {
@@ -94,7 +94,7 @@ describe("GroupNotificationDialog", () => {
     });
     await waitFor(() =>
       expect(
-        screen.getByRole("switch", { name: "테스트 그룹 관련 활동 Push" }),
+        screen.getByRole("switch", { name: "테스트 그룹 관련 활동 기기 알림" }),
       ).not.toBeChecked(),
     );
   });

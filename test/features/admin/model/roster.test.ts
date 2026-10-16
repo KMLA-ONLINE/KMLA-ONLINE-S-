@@ -120,7 +120,7 @@ describe("roster", () => {
     expect(csv.charCodeAt(0)).toBe(0xfeff);
     expect(header).toBe("이름,공개 ID,유형,기수,부서,앱 관리자,승인 시각");
     expect(row).toBe(
-      `"'=HYPERLINK(""x"")",member,학생,30,"a,b",,2026-03-01T00:00:00+00:00`,
+      `"'=HYPERLINK(""x"")",member,재학생,30,"a,b",,2026-03-01T00:00:00+00:00`,
     );
   });
 });

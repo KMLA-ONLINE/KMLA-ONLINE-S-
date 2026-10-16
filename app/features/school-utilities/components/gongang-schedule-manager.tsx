@@ -172,7 +172,7 @@ export function GongangScheduleManager() {
       />
       {(loadFailed || permissionFailed) && (
         <GongangLoadError
-          message="선예약을 불러오지 못했습니다. 다시 시도해주세요."
+          message="선예약을 불러오지 못했습니다. 다시 시도해 주세요."
           onRetry={() => {
             if (!permissionFailed) return refresh();
             setPermissionFailed(false);

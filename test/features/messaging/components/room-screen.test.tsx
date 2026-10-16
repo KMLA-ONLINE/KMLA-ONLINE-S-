@@ -344,7 +344,7 @@ describe("RoomScreen", () => {
     await user.type(input, "늦은 수정{Enter}");
 
     expect(toastError).toHaveBeenCalledWith(
-      "보낸 지 15분이 지나 고칠 수 없습니다.",
+      "보낸 지 15분이 지나 수정할 수 없습니다.",
     );
     expect(editSpy).not.toHaveBeenCalled();
     expect(screen.queryByText("메시지 수정")).not.toBeInTheDocument();
@@ -361,6 +361,7 @@ describe("RoomScreen", () => {
     vi.spyOn(mutations, "editMessage").mockRejectedValueOnce(
       new Error("offline"),
     );
+    const toastError = vi.spyOn(toast, "error");
     const conversation = await loadConversation("student-council");
     const { user } = renderRoute(
       () => <RoomScreen conversation={conversation!} />,
@@ -378,6 +379,7 @@ describe("RoomScreen", () => {
 
     expect(await screen.findByText("메시지 수정")).toBeInTheDocument();
     expect(input).toHaveValue("실패할 수정");
+    expect(toastError).toHaveBeenCalledWith("메시지를 수정하지 못했습니다.");
     expect(within(ownMessage()).queryByText("수정됨")).not.toBeInTheDocument();
 
     fireEvent.compositionStart(input);
@@ -387,6 +389,7 @@ describe("RoomScreen", () => {
     fireEvent.keyDown(input, { key: "Escape" });
     expect(screen.queryByText("메시지 수정")).not.toBeInTheDocument();
     now.mockRestore();
+    toastError.mockRestore();
   });
 
   it("대화에서 찾은 메시지를 고르면 검색을 닫고 그 메시지로 이동해 강조한다", async () => {
@@ -1084,7 +1087,7 @@ describe("RoomScreen", () => {
       .getByRole("link", { name: "https://www.kmlaonline.net" })
       .closest("article")!;
     await user.click(
-      within(linkedPinnedMessage).getByRole("button", { name: "고정 취소" }),
+      within(linkedPinnedMessage).getByRole("button", { name: "고정 해제" }),
     );
     const ownPinnedMessage = within(dialog)
       .getByText(
@@ -1092,7 +1095,7 @@ describe("RoomScreen", () => {
       )
       .closest("article")!;
     await user.click(
-      within(ownPinnedMessage).getByRole("button", { name: "고정 취소" }),
+      within(ownPinnedMessage).getByRole("button", { name: "고정 해제" }),
     );
 
     expect(within(dialog).getByText("고정된 메시지가 없습니다")).toBeVisible();

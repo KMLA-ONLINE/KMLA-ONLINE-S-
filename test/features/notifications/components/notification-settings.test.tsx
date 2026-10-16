@@ -26,6 +26,23 @@ const preferences = {
 };
 
 describe("NotificationSettings", () => {
+  it("explains unavailable device notifications without exposing server configuration terms", () => {
+    renderRoute(() => (
+      <NotificationSettings
+        initialPreferences={preferences}
+        pushSupport={{ state: "unconfigured" }}
+        groupPreferences={[]}
+      />
+    ));
+
+    expect(
+      screen.getByText("현재 기기 알림을 사용할 수 없습니다."),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("switch", { name: "이 기기의 알림" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("returns to settings from the notification settings header", async () => {
     const { user } = renderRoute(
       () => (
@@ -80,7 +97,7 @@ describe("NotificationSettings", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("switch", { name: "이 기기의 Web Push" }),
+      screen.queryByRole("switch", { name: "이 기기의 알림" }),
     ).not.toBeInTheDocument();
 
     await act(async () => {
@@ -89,7 +106,7 @@ describe("NotificationSettings", () => {
     });
 
     expect(
-      await screen.findByRole("switch", { name: "이 기기의 Web Push" }),
+      await screen.findByRole("switch", { name: "이 기기의 알림" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(/앱 정보 → 알림에서 허용해 주세요/),
@@ -122,17 +139,17 @@ describe("NotificationSettings", () => {
       />
     ));
     const pushSwitch = screen.getByRole("switch", {
-      name: "이 기기의 Web Push",
+      name: "이 기기의 알림",
     });
 
     await user.click(pushSwitch);
 
     expect(pushSwitch).toHaveAttribute("aria-disabled", "true");
     expect(
-      screen.getByText("Web Push 설정을 변경하고 있습니다."),
+      screen.getByText("기기 알림 설정을 변경하고 있습니다."),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("status", { name: "Web Push 설정 변경 중" }),
+      screen.getByRole("status", { name: "기기 알림 설정 변경 중" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "댓글 · 답글" })).toHaveAttribute(
       "aria-disabled",
@@ -253,13 +270,20 @@ describe("NotificationSettings", () => {
     ));
 
     expect(
+      screen.getByText("앱 알림함과 기기 알림을 각각 설정할 수 있습니다."),
+    ).toBeVisible();
+    expect(
       screen.getByRole("combobox", { name: "채널 분리 그룹 알림 수준" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("switch", { name: "채널 분리 그룹 관련 활동 Push" }),
+      screen.getByRole("switch", {
+        name: "채널 분리 그룹 관련 활동 기기 알림",
+      }),
     ).not.toBeChecked();
     expect(
-      screen.getByRole("switch", { name: "채널 분리 그룹 새 게시물 Push" }),
+      screen.getByRole("switch", {
+        name: "채널 분리 그룹 새 게시물 기기 알림",
+      }),
     ).toBeChecked();
   });
 
@@ -296,7 +320,7 @@ describe("NotificationSettings", () => {
     ));
 
     expect(
-      screen.getByText("이 기기로 오는 Push가 없습니다."),
+      screen.getByText("이 기기로 오는 기기 알림이 없습니다."),
     ).toBeInTheDocument();
   });
 
@@ -321,7 +345,7 @@ describe("NotificationSettings", () => {
     ));
 
     expect(
-      screen.getByText("이 기기로 운영 조치 Push만 받습니다."),
+      screen.getByText("이 기기로 운영 조치 기기 알림만 받습니다."),
     ).toBeInTheDocument();
     expect(
       screen.getByText("그 밖의 알림은 앱 알림함에서 확인합니다."),

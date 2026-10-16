@@ -207,7 +207,7 @@ export function GroupPostEditor({
     if (preparingCount > 0) {
       setFormErrors((current) => ({
         ...current,
-        form: "선택한 파일을 준비하고 있습니다. 잠시만 기다려 주세요.",
+        form: "첨부 파일을 준비 중입니다.",
       }));
       return;
     }

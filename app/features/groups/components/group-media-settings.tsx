@@ -216,7 +216,11 @@ function MediaField({
       {removeOpen ? (
         <ConfirmDialog
           title={`${isIcon ? "그룹 아이콘" : "커버 이미지"} 삭제`}
-          description={`현재 ${isIcon ? "그룹 아이콘" : "커버 이미지"}을 삭제할까요?`}
+          description={
+            isIcon
+              ? "현재 그룹 아이콘을 삭제할까요?"
+              : "현재 커버 이미지를 삭제할까요?"
+          }
           confirmLabel="삭제"
           destructive
           pending={pending}

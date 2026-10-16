@@ -48,7 +48,7 @@ const links = [
   {
     to: "/admin/storage-cleanup",
     title: "파일 정리",
-    description: "고아 파일 정리 상태와 실패 확인",
+    description: "사용하지 않는 파일의 정리 상태 확인",
     icon: HardDriveIcon,
   },
   {

@@ -23,6 +23,20 @@ describe("group creation validation", () => {
     expect(validateCreateGroup(VALID_GROUP)).toEqual({});
   });
 
+  it("names invalid policy selections after the creation form fields", () => {
+    const errors = validateCreateGroup({
+      ...VALID_GROUP,
+      slug: "",
+      joinPolicy: "" as CreateGroupValues["joinPolicy"],
+      identityPolicy: "" as CreateGroupValues["identityPolicy"],
+    });
+
+    expect(errors).toEqual({
+      joinPolicy: "가입 방식을 선택해 주세요.",
+      identityPolicy: "실명·익명 설정을 선택해 주세요.",
+    });
+  });
+
   it("rejects custom addresses for invite-only groups", () => {
     const errors = validateCreateGroup({
       ...VALID_GROUP,
