@@ -37,7 +37,7 @@ describe("PostReactionButton", () => {
   it("adds the default reaction on a short press", () => {
     const { onSelect } = renderButton();
 
-    press(screen.getByRole("button", { name: "반응 남기기" }), 100);
+    press(screen.getByRole("button", { name: "좋아요 남기기" }), 100);
 
     expect(onSelect).toHaveBeenCalledWith("like");
   });
@@ -54,7 +54,7 @@ describe("PostReactionButton", () => {
   it("opens the picker on a long press without toggling", () => {
     const { onSelect, onClear } = renderButton();
 
-    press(screen.getByRole("button", { name: "반응 남기기" }), 400);
+    press(screen.getByRole("button", { name: "좋아요 남기기" }), 400);
 
     // 꾹 누른 손가락은 떼면서 click도 낸다. 그 click까지 토글로 처리하면 피커를 여는 동시에
     // 기본 반응이 붙는다.
@@ -68,7 +68,7 @@ describe("PostReactionButton", () => {
   it("picks a specific reaction from the picker", () => {
     const { onSelect } = renderButton();
 
-    press(screen.getByRole("button", { name: "반응 남기기" }), 400);
+    press(screen.getByRole("button", { name: "좋아요 남기기" }), 400);
     fireEvent.click(screen.getByRole("button", { name: "슬퍼요 반응 남기기" }));
 
     expect(onSelect).toHaveBeenCalledWith("sad");
@@ -78,9 +78,10 @@ describe("PostReactionButton", () => {
     const { onClear, onSelect } = renderButton({ my_reaction: "wow" });
 
     press(screen.getByRole("button", { name: "놀라워요 취소" }), 400);
-    fireEvent.click(
-      screen.getByRole("button", { name: "놀라워요 반응 남기기" }),
-    );
+    // 줄이 여는 버튼을 덮으므로 줄 안에서도 지금 반응을 알려 준다.
+    const current = screen.getByRole("button", { name: "놀라워요 반응 취소" });
+    expect(current).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(current);
 
     expect(onClear).toHaveBeenCalled();
     expect(onSelect).not.toHaveBeenCalled();
@@ -89,9 +90,51 @@ describe("PostReactionButton", () => {
   it("opens the picker for a mouse that lingers on the button", () => {
     renderButton();
 
-    fireEvent.pointerOver(screen.getByRole("button", { name: "반응 남기기" }), {
-      pointerType: "mouse",
-    });
+    fireEvent.pointerOver(
+      screen.getByRole("button", { name: "좋아요 남기기" }),
+      {
+        pointerType: "mouse",
+      },
+    );
+    act(() => void vi.advanceTimersByTime(1000));
+
+    expect(
+      screen.getByRole("button", { name: "웃겨요 반응 남기기" }),
+    ).toBeInTheDocument();
+  });
+
+  it("closes a hover-opened picker once the mouse moves away", () => {
+    renderButton();
+    const button = screen.getByRole("button", { name: "좋아요 남기기" });
+
+    fireEvent.pointerOver(button, { pointerType: "mouse" });
+    act(() => void vi.advanceTimersByTime(1000));
+    // hover로 연 줄에는 바깥 클릭 막이를 깔지 않는다. 깔면 마우스가 떠나도 닫히지 않는다.
+    expect(
+      screen.queryByRole("button", { name: "반응 선택 닫기" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.pointerOut(button, { pointerType: "mouse" });
+    act(() => void vi.advanceTimersByTime(1000));
+
+    expect(
+      screen.queryByRole("button", { name: "웃겨요 반응 남기기" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps a hover-opened picker while the mouse crosses into it", () => {
+    renderButton();
+    const button = screen.getByRole("button", { name: "좋아요 남기기" });
+
+    fireEvent.pointerOver(button, { pointerType: "mouse" });
+    act(() => void vi.advanceTimersByTime(1000));
+    // 버튼과 줄 사이 틈을 건너는 동안 잠깐 밖에 나간다.
+    fireEvent.pointerOut(button, { pointerType: "mouse" });
+    act(() => void vi.advanceTimersByTime(100));
+    fireEvent.pointerOver(
+      screen.getByRole("button", { name: "웃겨요 반응 남기기" }),
+      { pointerType: "mouse" },
+    );
     act(() => void vi.advanceTimersByTime(1000));
 
     expect(
@@ -103,9 +146,12 @@ describe("PostReactionButton", () => {
     // 터치에는 hover가 없다. 여기서 열면 스크롤하다 스친 버튼이 멋대로 피커를 편다.
     renderButton();
 
-    fireEvent.pointerOver(screen.getByRole("button", { name: "반응 남기기" }), {
-      pointerType: "touch",
-    });
+    fireEvent.pointerOver(
+      screen.getByRole("button", { name: "좋아요 남기기" }),
+      {
+        pointerType: "touch",
+      },
+    );
     act(() => void vi.advanceTimersByTime(1000));
 
     expect(
@@ -116,7 +162,7 @@ describe("PostReactionButton", () => {
   it("hides the count until someone reacts", () => {
     renderButton({ reaction_count: 0 });
     expect(
-      screen.getByRole("button", { name: "반응 남기기" }),
+      screen.getByRole("button", { name: "좋아요 남기기" }),
     ).not.toHaveTextContent("0");
   });
 });

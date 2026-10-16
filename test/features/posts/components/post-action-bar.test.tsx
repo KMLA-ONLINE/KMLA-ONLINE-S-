@@ -94,7 +94,7 @@ describe("PostActionBar", () => {
   it("leaves the default reaction on a short press and counts it right away", async () => {
     const { user } = renderBar();
 
-    await user.click(screen.getByRole("button", { name: "반응 남기기" }));
+    await user.click(screen.getByRole("button", { name: "좋아요 남기기" }));
 
     expect(setPostReaction).toHaveBeenCalledWith("post-id", "like");
     // 서버 응답을 기다리지 않고 먼저 오른다. 응답이 오면 정본으로 덮인다.
@@ -130,7 +130,9 @@ describe("PostActionBar", () => {
       await screen.findAllByRole("button", { name: "댓글 3개" }),
     ).toHaveLength(2);
 
-    await user.click(screen.getAllByRole("button", { name: "반응 남기기" })[0]);
+    await user.click(
+      screen.getAllByRole("button", { name: "좋아요 남기기" })[0],
+    );
 
     expect(
       await screen.findAllByRole("button", { name: "좋아요 취소" }),

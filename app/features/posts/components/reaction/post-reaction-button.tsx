@@ -9,6 +9,7 @@ import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emo
 import {
   DEFAULT_REACTION,
   reactionLabel,
+  reactionTone,
 } from "~/features/posts/model/reactions";
 import type {
   PostReaction,
@@ -19,9 +20,13 @@ import { cn } from "~/shared/lib/utils";
 /** 이 시간을 넘겨 누르고 있으면 종류 선택으로 본다. 짧은 탭과 겹치지 않을 만큼만 준다. */
 const LONG_PRESS_MS = 350;
 /** 데스크톱에서 마우스를 올린 채 기다렸을 때 피커가 뜨는 시간(기능 명세 §10.1). */
-const HOVER_OPEN_MS = 700;
+const HOVER_OPEN_MS = 500;
+/** 마우스가 떠난 뒤 피커를 닫기까지의 여유. 버튼과 줄 사이 틈을 건너는 동안 닫히지 않게 한다. */
+const HOVER_CLOSE_MS = 250;
 
-/** 게시물 반응 버튼. 짧게 누르면 기본 반응 토글, 꾹 누르거나(터치) 호버하면(데스크톱) 종류 줄이 뜬다(기능 명세 §10.1). */
+/**
+ * 게시물 반응 버튼. 짧게 누르면 기본 반응 토글, 꾹 누르거나(터치) 호버하면(데스크톱) 종류 줄이 뜬다(기능 명세 §10.1).
+ */
 export function PostReactionButton({
   summary,
   onSelect,
@@ -33,7 +38,8 @@ export function PostReactionButton({
   onClear: () => void;
   className?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  // hover로 연 줄은 마우스가 떠나면 닫히고, 누르거나 꾹 눌러 연 줄은 바깥을 눌러야 닫힌다.
+  const [open, setOpen] = useState<"hover" | "press" | null>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const hoverTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   // 길게 눌러 피커를 연 손가락은 떼면서 click도 발생시킨다. 그 click까지 토글로 처리하면
@@ -42,6 +48,12 @@ export function PostReactionButton({
 
   const clearPressTimer = () => clearTimeout(pressTimer.current);
   const clearHoverTimer = () => clearTimeout(hoverTimer.current);
+  const close = () => {
+    clearHoverTimer();
+    // 롱프레스 표시는 다음 pointerdown까지 남는다. 닫을 때 지우지 않으면 키보드의 첫 Enter가 롱프레스 뒤 click으로 오인돼 삼켜진다.
+    longPressed.current = false;
+    setOpen(null);
+  };
 
   useEffect(
     () => () => {
@@ -56,13 +68,15 @@ export function PostReactionButton({
   const handlePointerEnter = (event: PointerEvent) => {
     if (event.pointerType !== "mouse") return;
     clearHoverTimer();
-    hoverTimer.current = setTimeout(() => setOpen(true), HOVER_OPEN_MS);
+    if (open) return;
+    hoverTimer.current = setTimeout(() => setOpen("hover"), HOVER_OPEN_MS);
   };
 
   const handlePointerLeave = (event: PointerEvent) => {
     if (event.pointerType !== "mouse") return;
     clearHoverTimer();
-    setOpen(false);
+    if (open === "press") return;
+    hoverTimer.current = setTimeout(() => setOpen(null), HOVER_CLOSE_MS);
   };
 
   const mine = summary.my_reaction;
@@ -75,13 +89,14 @@ export function PostReactionButton({
     >
       {open ? (
         <ReactionPickerSurface
-          onDismiss={() => setOpen(false)}
+          modal={open === "press"}
+          onDismiss={close}
           className="mb-2"
         >
           <QuickReactionBar
             current={mine}
             onSelect={(reaction) => {
-              setOpen(false);
+              close();
               // 이미 고른 것을 다시 고르면 해제다(기능 명세 §10.1).
               if (reaction === mine) onClear();
               else onSelect(reaction);
@@ -92,12 +107,13 @@ export function PostReactionButton({
 
       <button
         type="button"
-        aria-label={mine ? `${reactionLabel(mine)} 취소` : "반응 남기기"}
+        // 짧게 누르면 무엇이 붙는지 이름에 담는다. 화면에는 아이콘과 숫자뿐이다.
+        aria-label={`${reactionLabel(mine ?? DEFAULT_REACTION)} ${mine ? "취소" : "남기기"}`}
         aria-pressed={mine !== null}
         className={cn(
           "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors select-none [-webkit-touch-callout:none] hover:bg-muted",
           mine
-            ? "font-medium text-primary"
+            ? cn("font-medium", reactionTone(mine))
             : "text-muted-foreground hover:text-foreground",
           className,
         )}
@@ -106,7 +122,8 @@ export function PostReactionButton({
           clearPressTimer();
           pressTimer.current = setTimeout(() => {
             longPressed.current = true;
-            setOpen(true);
+            clearHoverTimer();
+            setOpen("press");
           }, LONG_PRESS_MS);
         }}
         onPointerUp={clearPressTimer}
@@ -115,6 +132,7 @@ export function PostReactionButton({
         onContextMenu={(event) => event.preventDefault()}
         onClick={() => {
           if (longPressed.current) return;
+          close();
           if (mine) onClear();
           else onSelect(DEFAULT_REACTION);
         }}
