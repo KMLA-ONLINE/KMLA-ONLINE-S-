@@ -98,19 +98,27 @@ export function panBounds(layout: FrameLayout, scale: number) {
   };
 }
 
-/** 손을 뗐을 때 돌아가야 할 자리. 배율과 이동을 모두 한계 안으로 넣는다. */
+/**
+ * 손을 뗐을 때 돌아가야 할 자리. 배율과 이동을 모두 한계 안으로 넣는다.
+ *
+ * `focus`를 주면 최대 배율로 줄어들 때 그 지점 아래의 이미지를 그대로 둔다. 손가락 사이를 확대하다
+ * 놓았는데 배율만 줄고 이동은 그대로면 이미지가 엉뚱한 곳으로 밀려난다.
+ */
 export function clampZoom(
   zoom: ZoomTransform,
   layout: FrameLayout,
+  focus?: Point,
 ): ZoomTransform {
   const scale = clamp(zoom.scale, MIN_ZOOM, MAX_ZOOM);
   if (scale === MIN_ZOOM) return IDENTITY;
 
+  const anchored =
+    focus && scale !== zoom.scale ? zoomAt(zoom, scale, focus, layout) : zoom;
   const bounds = panBounds(layout, scale);
   return {
     scale,
-    x: clamp(zoom.x, ...bounds.x),
-    y: clamp(zoom.y, ...bounds.y),
+    x: clamp(anchored.x, ...bounds.x),
+    y: clamp(anchored.y, ...bounds.y),
   };
 }
 
@@ -123,10 +131,14 @@ export function rubberBand(value: number, min: number, max: number): number {
 /**
  * 손가락이 붙어 있는 동안의 자리. 한계를 넘어도 막지 않고 저항만 준다 — 딱 멈추면 제스처가
  * 고장 난 것처럼 느껴진다. 손을 떼면 `clampZoom`으로 되돌아간다.
+ *
+ * 배율에 저항을 줄 때는 `focus`(핀치의 두 손가락 가운데) 아래의 이미지를 그대로 둔다. 이동은
+ * 저항 전 배율로 계산된 값이라, 배율만 줄이면 이미지가 손가락에서 미끄러져 나간다.
  */
 export function rubberBandZoom(
   zoom: ZoomTransform,
   layout: FrameLayout,
+  focus?: Point,
 ): ZoomTransform {
   const scale =
     zoom.scale > MAX_ZOOM
@@ -134,11 +146,13 @@ export function rubberBandZoom(
       : zoom.scale < MIN_ZOOM
         ? MIN_ZOOM * (zoom.scale / MIN_ZOOM) ** 0.5
         : zoom.scale;
+  const anchored =
+    focus && scale !== zoom.scale ? zoomAt(zoom, scale, focus, layout) : zoom;
   const bounds = panBounds(layout, Math.max(MIN_ZOOM, scale));
   return {
     scale,
-    x: rubberBand(zoom.x, ...bounds.x),
-    y: rubberBand(zoom.y, ...bounds.y),
+    x: rubberBand(anchored.x, ...bounds.x),
+    y: rubberBand(anchored.y, ...bounds.y),
   };
 }
 
