@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { DownloadIcon, FileIcon, XIcon } from "lucide-react";
+import { FileIcon, XIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -14,8 +14,16 @@ import { messagingKeys } from "~/features/messaging/data/cache";
 import { formatFileSize } from "~/features/messaging/model/attachments";
 import { formatMessageDay } from "~/features/messaging/model/message-time";
 import type { MessageCursor } from "~/features/messaging/model/types";
+import {
+  DownloadNote,
+  DownloadStatus,
+} from "~/shared/components/download-status";
 import type { ViewerImage } from "~/shared/components/image-viewer";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
+import {
+  managedDownloadLabel,
+  useManagedDownload,
+} from "~/shared/hooks/use-managed-download";
 import { previewDocumentOnClick } from "~/shared/lib/document-preview";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -230,6 +238,8 @@ function FileRow({
   item: SharedAttachment;
   url: string | undefined;
 }) {
+  const download = useManagedDownload();
+  const status = managedDownloadLabel(download.state);
   const extension = item.fileName.includes(".")
     ? item.fileName.split(".").pop()?.toUpperCase()
     : undefined;
@@ -238,13 +248,16 @@ function FileRow({
       href={url ? toDownloadUrl(url, item.fileName) : undefined}
       onClick={(event) => {
         if (!url) return;
-        previewDocumentOnClick(event, {
+        const previewed = previewDocumentOnClick(event, {
           url,
           downloadUrl: event.currentTarget.href,
           fileName: item.fileName,
         });
+        if (previewed) return;
+        download.handleClick(event, [{ url, fileName: item.fileName }]);
       }}
-      aria-label={`내려받기: ${item.fileName}`}
+      aria-label={`${status ?? "내려받기"}: ${item.fileName}`}
+      aria-busy={download.state.status === "loading" || undefined}
       aria-disabled={!url}
       className={cn(
         "flex items-center gap-3 rounded-lg px-2 py-2",
@@ -263,11 +276,9 @@ function FileRow({
             .filter(Boolean)
             .join(" · ")}
         </span>
+        <DownloadNote state={download.state} />
       </span>
-      <DownloadIcon
-        aria-hidden
-        className="size-4 shrink-0 text-muted-foreground"
-      />
+      <DownloadStatus state={download.state} />
     </a>
   );
 }

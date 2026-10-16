@@ -1,7 +1,6 @@
 import {
   ChevronDownIcon,
   ChevronUpIcon,
-  DownloadIcon,
   FileIcon,
   FilesIcon,
   FileTextIcon,
@@ -15,7 +14,15 @@ import {
 import { useUnavailableMediaLabel } from "~/features/posts/hooks/use-media-pending";
 import { formatFileSize } from "~/features/posts/model/format";
 import type { PostAttachment } from "~/features/posts/model/types";
+import {
+  DownloadNote,
+  DownloadStatus,
+} from "~/shared/components/download-status";
 import type { ViewerImage } from "~/shared/components/image-viewer";
+import {
+  managedDownloadLabel,
+  useManagedDownload,
+} from "~/shared/hooks/use-managed-download";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
 import { previewDocumentOnClick } from "~/shared/lib/document-preview";
 import { cn } from "~/shared/lib/utils";
@@ -184,32 +191,11 @@ export function PostFileList({ files }: { files: PostAttachment[] }) {
           return (
             <li key={item.attachment_id} className="min-w-0">
               {item.signedUrl ? (
-                <a
-                  href={toAttachmentDownloadUrl(
-                    item.signedUrl,
-                    item.original_filename,
-                  )}
-                  download={item.original_filename}
-                  onClick={(event) =>
-                    previewDocumentOnClick(event, {
-                      url: item.signedUrl!,
-                      downloadUrl: event.currentTarget.href,
-                      fileName: item.original_filename,
-                    })
-                  }
-                  className="group flex min-w-0 items-center gap-3 rounded-md px-1.5 py-2.5 transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                >
-                  <FileBadge icon={<Icon aria-hidden="true" />} />
-                  <FileMeta
-                    name={item.original_filename}
-                    sizeBytes={item.size_bytes}
-                    mimeType={item.mime_type}
-                  />
-                  <DownloadIcon
-                    className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground"
-                    aria-hidden="true"
-                  />
-                </a>
+                <PostFileLink
+                  item={item}
+                  url={item.signedUrl}
+                  icon={<Icon aria-hidden="true" />}
+                />
               ) : (
                 <div className="flex min-w-0 items-center gap-3 px-1.5 py-2.5 text-muted-foreground">
                   <FileBadge icon={<Icon aria-hidden="true" />} />
@@ -248,6 +234,53 @@ export function PostFileList({ files }: { files: PostAttachment[] }) {
   );
 }
 
+/** 링크 다운로드는 데스크톱에, 휴대폰은 앱이 받아 저장한다(`useManagedDownload`). */
+function PostFileLink({
+  item,
+  url,
+  icon,
+}: {
+  item: PostAttachment;
+  url: string;
+  icon: React.ReactNode;
+}) {
+  const download = useManagedDownload();
+  const status = managedDownloadLabel(download.state);
+
+  return (
+    <a
+      href={toAttachmentDownloadUrl(url, item.original_filename)}
+      download={item.original_filename}
+      onClick={(event) => {
+        const previewed = previewDocumentOnClick(event, {
+          url,
+          downloadUrl: event.currentTarget.href,
+          fileName: item.original_filename,
+        });
+        if (previewed) return;
+        download.handleClick(event, [
+          { url, fileName: item.original_filename },
+        ]);
+      }}
+      aria-label={`${status ?? "내려받기"}: ${item.original_filename}`}
+      aria-busy={download.state.status === "loading" || undefined}
+      className="group flex min-w-0 items-center gap-3 rounded-md px-1.5 py-2.5 transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    >
+      <FileBadge icon={icon} />
+      <FileMeta
+        name={item.original_filename}
+        sizeBytes={item.size_bytes}
+        mimeType={item.mime_type}
+        note={<DownloadNote state={download.state} />}
+      />
+      <DownloadStatus
+        state={download.state}
+        className="group-hover:text-foreground"
+      />
+    </a>
+  );
+}
+
 function FileBadge({ icon }: { icon: React.ReactNode }) {
   return (
     <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&>svg]:size-4.5">
@@ -260,10 +293,12 @@ function FileMeta({
   name,
   sizeBytes,
   mimeType,
+  note,
 }: {
   name: string;
   sizeBytes: number;
   mimeType: string;
+  note?: React.ReactNode;
 }) {
   const typeLabel = mimeType === "application/pdf" ? "PDF" : "파일";
   return (
@@ -274,6 +309,7 @@ function FileMeta({
       <p className="text-xs text-muted-foreground">
         {typeLabel} · {formatFileSize(sizeBytes)}
       </p>
+      {note}
     </div>
   );
 }
