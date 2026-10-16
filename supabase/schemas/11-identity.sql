@@ -949,7 +949,8 @@ CREATE POLICY "profile_departments_select_active" ON "public"."profile_departmen
 
 ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "profiles_select_accepted" ON "public"."profiles" FOR SELECT TO "authenticated" USING ((("status" = 'accepted'::"public"."profile_status") AND ("deleted_at" IS NULL)));
+-- 읽는 사람도 앱을 쓸 수 있어야 한다. 승인 대기·차단·이용 정지(§16.11)된 사람은 자기 행만 읽는다.
+CREATE POLICY "profiles_select_accepted" ON "public"."profiles" FOR SELECT TO "authenticated" USING ((("status" = 'accepted'::"public"."profile_status") AND ("deleted_at" IS NULL) AND (( SELECT "private"."current_profile_id"() AS "current_profile_id") IS NOT NULL)));
 
 CREATE POLICY "profiles_select_own" ON "public"."profiles" FOR SELECT TO "authenticated" USING (((( SELECT "auth"."uid"() AS "uid") = "auth_user_id") AND ("deleted_at" IS NULL)));
 

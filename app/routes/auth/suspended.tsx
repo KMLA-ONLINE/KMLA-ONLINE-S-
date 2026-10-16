@@ -70,7 +70,10 @@ export default function SuspendedPage({ loaderData }: Route.ComponentProps) {
                     {end.label}
                     <span className="text-muted-foreground">
                       {" "}
-                      · {end.remainingDays}일 남음
+                      ·{" "}
+                      {end.remainingDays
+                        ? `${end.remainingDays}일 남음`
+                        : "기간이 끝났어요. 상태를 확인해 주세요"}
                     </span>
                   </>
                 ) : (

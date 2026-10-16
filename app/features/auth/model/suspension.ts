@@ -13,7 +13,7 @@ const KOREA_PARTS_FORMAT = new Intl.DateTimeFormat("en-US", {
 export interface SuspensionEnd {
   /** 한국 시간 해제 예정 시각. 예: `2026년 10월 23일 21:05` */
   label: string;
-  /** 남은 일수. 하루가 안 남아도 1이다. */
+  /** 남은 일수. 하루가 안 남아도 1이고, 해제 시각이 지났으면 0이다. */
   remainingDays: number;
 }
 
@@ -31,6 +31,6 @@ export function describeSuspensionEnd(
 
   return {
     label: `${read("year")}년 ${read("month")}월 ${read("day")}일 ${read("hour")}:${read("minute")}`,
-    remainingDays: Math.max(1, Math.ceil((ms - now) / DAY_MS)),
+    remainingDays: ms <= now ? 0 : Math.ceil((ms - now) / DAY_MS),
   };
 }

@@ -261,13 +261,20 @@ begin
   if target_role is null then
     raise exception 'accepted profile required' using errcode = '22023';
   end if;
+  -- 정지된 관리자는 관리자 권한을 쓰지 못한다. 그런 관리자가 생기면 마지막 관리자 보호가 무너진다.
+  if p_enabled and private.profile_suspended(p_profile_id) then
+    raise exception 'suspended profiles cannot become app administrators' using errcode = '22023';
+  end if;
 
-  if not p_enabled and target_role = 'admin' and (
+  -- 일할 수 있는(정지되지 않은) 관리자만 센다.
+  if not p_enabled and target_role = 'admin'
+    and not private.profile_suspended(p_profile_id) and (
     select count(*)
     from public.profiles as profile
     where profile.role = 'admin'
       and profile.status = 'accepted'
       and profile.deleted_at is null
+      and not private.profile_suspended(profile.id)
   ) = 1 then
     raise exception 'the final app administrator cannot be demoted'
       using errcode = '55000';
@@ -348,7 +355,7 @@ $$;
 
 ALTER FUNCTION "public"."admin_unblock_application"("p_profile_id" bigint) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."admin_suspend_profile"("p_profile_id" bigint, "p_reason" "text", "p_duration_days" integer) RETURNS TABLE("suspension_id" bigint, "expires_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."admin_suspend_profile"("p_profile_id" bigint, "p_reason" "text", "p_duration_days" integer DEFAULT NULL::integer) RETURNS TABLE("suspension_id" bigint, "expires_at" timestamp with time zone)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$

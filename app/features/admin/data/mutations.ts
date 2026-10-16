@@ -51,8 +51,8 @@ export async function suspendProfile(
   const { error } = await getSupabase().rpc("admin_suspend_profile", {
     p_profile_id: profileId,
     p_reason: reason,
-    // 생성 타입은 인자를 non-null로 적지만 RPC는 `null`을 무기한으로 받는다.
-    p_duration_days: days!,
+    // 빼면 RPC 기본값 `null`, 곧 무기한이다.
+    p_duration_days: days ?? undefined,
   });
   if (error) throw error;
 }

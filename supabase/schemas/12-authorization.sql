@@ -34,6 +34,13 @@ ALTER TABLE ONLY "private"."profile_suspensions"
 
 CREATE UNIQUE INDEX "profile_suspensions_active_idx" ON "private"."profile_suspensions" USING "btree" ("profile_id") WHERE ("ended_at" IS NULL);
 
+-- 프로필을 지울 때 외래 키 동작(cascade, set null)이 순차 탐색을 하지 않게 덮는다.
+CREATE INDEX "profile_suspensions_profile_idx" ON "private"."profile_suspensions" USING "btree" ("profile_id");
+
+CREATE INDEX "profile_suspensions_suspended_by_idx" ON "private"."profile_suspensions" USING "btree" ("suspended_by_profile_id") WHERE ("suspended_by_profile_id" IS NOT NULL);
+
+CREATE INDEX "profile_suspensions_cancelled_by_idx" ON "private"."profile_suspensions" USING "btree" ("cancelled_by_profile_id") WHERE ("cancelled_by_profile_id" IS NOT NULL);
+
 ALTER TABLE "private"."profile_suspensions" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "profile_suspensions_deny_client_access" ON "private"."profile_suspensions" USING (false) WITH CHECK (false);

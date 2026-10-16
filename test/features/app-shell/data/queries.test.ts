@@ -13,6 +13,7 @@ import {
   discardPrefetchedShellData,
   loadShellData,
   prefetchShellData,
+  shellProfileQuery,
 } from "~/features/app-shell/data/queries";
 
 /** 셸 데이터를 한 번 읽을 때마다 프로필을 한 번 읽는다. */
@@ -136,5 +137,14 @@ describe("shell data", () => {
       }),
     );
     await expect(loadShellData()).resolves.toMatchObject({ suspended: false });
+  });
+
+  // 정지 여부는 게이트만 본다. 프로필을 바꾼 뒤 다시 읽을 때 쓰지 않는 RPC를 보내지 않는다.
+  it("refreshes the shell profile without reading the suspension", async () => {
+    rpc.mockResolvedValue({ data: [], error: null });
+
+    await shellProfileQuery().queryFn!({} as never);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith("get_my_profile");
   });
 });

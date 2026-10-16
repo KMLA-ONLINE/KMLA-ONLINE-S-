@@ -43,6 +43,15 @@ function suspensionLabel(member: RosterMember, now: number): string {
   return end ? `정지 중 · ${end.label}까지` : "정지 중 · 무기한";
 }
 
+/** 목록을 연 뒤 해제 시각이 지났으면 더는 정지 중이 아니다. 해제 대신 다시 정지할 수 있다. */
+function isSuspendedNow(member: RosterMember, now: number): boolean {
+  return (
+    member.is_suspended &&
+    (member.suspension_expires_at === null ||
+      Date.parse(member.suspension_expires_at) > now)
+  );
+}
+
 function downloadCsv(members: RosterMember[]) {
   const url = URL.createObjectURL(
     new Blob([rosterCsv(members)], { type: "text/csv;charset=utf-8" }),
@@ -222,7 +231,7 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
                       {member.is_app_admin ? (
                         <Badge variant="secondary">앱 관리자</Badge>
                       ) : null}
-                      {member.is_suspended ? (
+                      {isSuspendedNow(member, now) ? (
                         <Badge variant="destructive">
                           {suspensionLabel(member, now)}
                         </Badge>
@@ -231,13 +240,19 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
                   }
                   action={
                     // 앱 관리자는 정지할 수 없다. 먼저 관리자에서 내려야 한다.
-                    member.is_app_admin && !member.is_suspended ? null : (
+                    member.is_app_admin &&
+                    !isSuspendedNow(member, now) ? null : (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setTarget(member)}
+                        onClick={() =>
+                          setTarget({
+                            ...member,
+                            is_suspended: isSuspendedNow(member, now),
+                          })
+                        }
                       >
-                        {member.is_suspended ? "정지 해제" : "정지"}
+                        {isSuspendedNow(member, now) ? "정지 해제" : "정지"}
                       </Button>
                     )
                   }

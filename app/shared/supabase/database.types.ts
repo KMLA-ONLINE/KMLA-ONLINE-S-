@@ -1757,7 +1757,7 @@ export type Database = {
       }
       admin_suspend_profile: {
         Args: {
-          p_duration_days: number
+          p_duration_days?: number
           p_profile_id: number
           p_reason: string
         }

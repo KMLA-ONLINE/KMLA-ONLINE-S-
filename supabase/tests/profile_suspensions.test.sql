@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(38);
+select plan(47);
 
 -- 홍길동(…001)을 정지 대상으로, 김관리(…098)를 앱 관리자로 쓴다.
 select set_config('test.target_id', (select id::text from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001'), true);
@@ -259,6 +259,95 @@ select pg_temp.act_as_admin(interval '0 minutes');
 select lives_ok(
   $$select * from public.admin_suspend_profile(current_setting('test.target_id')::bigint, '만료 뒤 다시 정지', 3)$$,
   'an expired suspension does not prevent a new one'
+);
+
+-- 정지된 사람은 프로필 테이블을 직접 읽어도 다른 사람의 행을 받지 못한다.
+reset role;
+select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-000000000001"}', true);
+set local role authenticated;
+select is(
+  (select count(*) from public.profiles where id <> current_setting('test.target_id')::bigint),
+  0::bigint,
+  'a suspended user cannot read other profiles from the table'
+);
+select is(
+  (select count(*) from public.profiles where id = current_setting('test.target_id')::bigint),
+  1::bigint,
+  'a suspended user can still read their own profile row'
+);
+
+-- 정지 중인 사람은 앱 관리자가 될 수 없다.
+select pg_temp.act_as_admin(interval '0 minutes');
+select throws_ok(
+  $$select * from public.admin_set_app_admin(current_setting('test.target_id')::bigint, true)$$,
+  '22023', 'suspended profiles cannot become app administrators',
+  'a suspended member cannot be promoted'
+);
+
+-- 마지막 관리자 보호는 일할 수 있는 관리자만 센다. 정지된 관리자는 예전 데이터처럼 직접 만든다.
+reset role;
+insert into private.profile_suspensions (profile_id, reason)
+values (current_setting('test.other_admin_id')::bigint, '정지된 관리자 데이터');
+select pg_temp.act_as_admin(interval '0 minutes');
+set local role authenticated;
+select throws_ok(
+  $$select * from public.admin_set_app_admin(current_setting('test.admin_id')::bigint, false)$$,
+  '55000', 'the final app administrator cannot be demoted',
+  'a suspended admin does not count toward the last usable admin'
+);
+
+-- 정지 중 막힌 알림도 중복 방지 기록은 남겨, 해제 뒤 같은 사건으로 다시 알리지 않는다.
+reset role;
+select is(
+  private.emit_notification(
+    'test-suppressed-mention', current_setting('test.target_id')::bigint,
+    'post_mentioned', 'normal', 'content', 'system', null, '시스템', null, '제목'
+  ),
+  null,
+  'an event for a suspended member creates no notification'
+);
+update private.profile_suspensions
+set ended_at = now(), cancelled_at = now()
+where profile_id = current_setting('test.target_id')::bigint and ended_at is null;
+select is(
+  private.emit_notification(
+    'test-suppressed-mention', current_setting('test.target_id')::bigint,
+    'post_mentioned', 'normal', 'content', 'system', null, '시스템', null, '제목'
+  ),
+  null,
+  'the same event after the suspension still creates no notification'
+);
+select is(
+  (select count(*) from public.notifications
+   where recipient_profile_id = current_setting('test.target_id')::bigint
+     and kind = 'post_mentioned'),
+  0::bigint,
+  'a suppressed event is not delivered later'
+);
+
+-- 이미 풀린 정지의 정지 메일은 늦게 발송되지 않는다.
+select set_config('test.stale_ok', (
+  select bool_and(not public.prepare_notification_delivery(delivery.delivery_id, delivery.lease_id))::text
+  from public.claim_notification_deliveries(200, 120) as delivery
+  where delivery.recipient_email = 'student@kmla.hs.kr'
+    and delivery.title = '이용이 정지되었습니다.'
+), true);
+select is(
+  current_setting('test.stale_ok'),
+  'true',
+  'a suspension email whose suspension has ended is suppressed'
+);
+
+-- 완료된 정지 메일 행은 다른 알림처럼 30일 뒤 지운다.
+update private.notification_delivery_outbox
+set status = 'sent', lease_id = null, lease_expires_at = null,
+  completed_at = now() - interval '31 days'
+where suspension_id is not null;
+select private.cleanup_expired_notifications();
+select is(
+  (select count(*) from private.notification_delivery_outbox where suspension_id is not null),
+  0::bigint,
+  'completed suspension emails are purged after 30 days'
 );
 
 select * from finish();

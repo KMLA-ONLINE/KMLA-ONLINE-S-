@@ -304,7 +304,15 @@ as $$
   -- 메시지 Push는 발송 직전 확인이 따로 있다(메시지 기술 설계, 알림 기술 설계 §11.3).
   -- 정지 기간에는 정지 이메일 말고는 보내지 않는다. 정지 전에 쌓인 Push도 여기서 걸러진다.
   select case
-    when p_delivery.suspension_id is not null then true
+    -- 정지 메일은 그 정지가 아직 유효할 때만 보낸다. 바로 해제했거나 만료된 뒤 재시도로 늦게 나가지 않게 한다.
+    when p_delivery.suspension_id is not null then p_delivery.suspension_event = 'lifted'
+      or exists (
+        select 1
+        from private.profile_suspensions as suspension
+        where suspension.id = p_delivery.suspension_id
+          and suspension.ended_at is null
+          and (suspension.expires_at is null or suspension.expires_at > now())
+      )
     when private.profile_suspended(p_delivery.recipient_profile_id) then false
     when p_delivery.message_id is not null
     then private.message_delivery_allowed(p_delivery)
@@ -472,11 +480,6 @@ begin
     return null;
   end if;
 
-  -- 정지 기간에 생긴 알림은 해제 뒤에도 몰아서 보내지 않는다(§14.12).
-  if private.profile_suspended(p_recipient_profile_id) then
-    return null;
-  end if;
-
   if p_group_id is not null and p_category = 'content' and exists (
     select 1
     from public.group_memberships as membership
@@ -499,6 +502,12 @@ begin
     from private.notification_event_keys as event
     where event.event_key = p_event_key;
     return created_notification_id;
+  end if;
+
+  -- 정지 기간에 생긴 알림은 만들지 않고 해제 뒤에도 보내지 않는다(§14.12). event key는 남겨, 멘션을
+  -- 고쳐 다시 넣는 것처럼 같은 사건이 해제 뒤 다시 들어와도 새 알림이 되지 않게 한다.
+  if private.profile_suspended(p_recipient_profile_id) then
+    return null;
   end if;
 
   if p_aggregate_key is not null then
@@ -1241,8 +1250,9 @@ begin
   delete from private.web_push_subscriptions
   where gone_at < now() - interval '30 days';
   -- 메시지 Push 행은 알림처럼 cascade로 지워지지 않는다. 메시지는 삭제해도 행이 남기 때문이다.
+  -- 이용 정지 메일 행도 알림 행이 없어 cascade로 지워지지 않는다. 받는 주소를 오래 남기지 않는다.
   delete from private.notification_delivery_outbox
-  where message_id is not null
+  where (message_id is not null or suspension_id is not null)
     and completed_at < now() - interval '30 days';
   return removed;
 end;

@@ -1,5 +1,7 @@
 SET local check_function_bodies = off;
 
+DROP POLICY "profiles_select_accepted" ON "public"."profiles";
+
 ALTER TABLE "private"."notification_delivery_outbox"
   DROP CONSTRAINT "notification_delivery_outbox_source";
 
@@ -195,6 +197,31 @@ CREATE OR REPLACE FUNCTION private.can_upload_story_media (
   );
 $function$;
 
+CREATE OR REPLACE FUNCTION private.cleanup_expired_notifications()
+  RETURNS bigint
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path TO ''
+  AS $function$
+declare
+  removed bigint;
+begin
+  delete from public.notifications
+  where last_activity_at < now() - interval '30 days';
+  get diagnostics removed = row_count;
+  delete from private.notification_event_keys
+  where notification_id is null and created_at < now() - interval '30 days';
+  delete from private.web_push_subscriptions
+  where gone_at < now() - interval '30 days';
+  -- 메시지 Push 행은 알림처럼 cascade로 지워지지 않는다. 메시지는 삭제해도 행이 남기 때문이다.
+  -- 이용 정지 메일 행도 알림 행이 없어 cascade로 지워지지 않는다. 받는 주소를 오래 남기지 않는다.
+  delete from private.notification_delivery_outbox
+  where (message_id is not null or suspension_id is not null)
+    and completed_at < now() - interval '30 days';
+  return removed;
+end;
+$function$;
+
 CREATE OR REPLACE FUNCTION private.current_profile_id()
   RETURNS bigint
   LANGUAGE sql
@@ -242,11 +269,6 @@ begin
     return null;
   end if;
 
-  -- 정지 기간에 생긴 알림은 해제 뒤에도 몰아서 보내지 않는다(§14.12).
-  if private.profile_suspended(p_recipient_profile_id) then
-    return null;
-  end if;
-
   if p_group_id is not null and p_category = 'content' and exists (
     select 1
     from public.group_memberships as membership
@@ -269,6 +291,12 @@ begin
     from private.notification_event_keys as event
     where event.event_key = p_event_key;
     return created_notification_id;
+  end if;
+
+  -- 정지 기간에 생긴 알림은 만들지 않고 해제 뒤에도 보내지 않는다(§14.12). event key는 남겨, 멘션을
+  -- 고쳐 다시 넣는 것처럼 같은 사건이 해제 뒤 다시 들어와도 새 알림이 되지 않게 한다.
+  if private.profile_suspended(p_recipient_profile_id) then
+    return null;
   end if;
 
   if p_aggregate_key is not null then
@@ -389,7 +417,15 @@ CREATE OR REPLACE FUNCTION private.notification_delivery_allowed (
   -- 메시지 Push는 발송 직전 확인이 따로 있다(메시지 기술 설계, 알림 기술 설계 §11.3).
   -- 정지 기간에는 정지 이메일 말고는 보내지 않는다. 정지 전에 쌓인 Push도 여기서 걸러진다.
   select case
-    when p_delivery.suspension_id is not null then true
+    -- 정지 메일은 그 정지가 아직 유효할 때만 보낸다. 바로 해제했거나 만료된 뒤 재시도로 늦게 나가지 않게 한다.
+    when p_delivery.suspension_id is not null then p_delivery.suspension_event = 'lifted'
+      or exists (
+        select 1
+        from private.profile_suspensions as suspension
+        where suspension.id = p_delivery.suspension_id
+          and suspension.ended_at is null
+          and (suspension.expires_at is null or suspension.expires_at > now())
+      )
     when private.profile_suspended(p_delivery.recipient_profile_id) then false
     when p_delivery.message_id is not null
     then private.message_delivery_allowed(p_delivery)
@@ -687,10 +723,74 @@ $function$;
 
 REVOKE ALL ON FUNCTION "public"."admin_list_roster"() FROM PUBLIC, "anon", "service_role";
 
+CREATE OR REPLACE FUNCTION public.admin_set_app_admin (
+  p_profile_id bigint,
+  p_enabled    boolean
+)
+  RETURNS TABLE (
+    profile_id   bigint,
+    is_app_admin boolean
+  )
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path TO ''
+  AS $function$
+declare
+  target_role public.app_role;
+begin
+  perform pg_advisory_xact_lock(hashtextextended('app-admin-role-mutations', 0));
+  perform private.require_app_admin();
+  perform private.require_recent_password_auth();
+
+  if p_enabled is null then
+    raise exception 'enabled must not be null' using errcode = '22023';
+  end if;
+
+  select profile.role
+  into target_role
+  from public.profiles as profile
+  where profile.id = p_profile_id
+    and profile.status = 'accepted'
+    and profile.deleted_at is null
+  for update;
+
+  if target_role is null then
+    raise exception 'accepted profile required' using errcode = '22023';
+  end if;
+  -- 정지된 관리자는 관리자 권한을 쓰지 못한다. 그런 관리자가 생기면 마지막 관리자 보호가 무너진다.
+  if p_enabled and private.profile_suspended(p_profile_id) then
+    raise exception 'suspended profiles cannot become app administrators' using errcode = '22023';
+  end if;
+
+  -- 일할 수 있는(정지되지 않은) 관리자만 센다.
+  if not p_enabled and target_role = 'admin'
+    and not private.profile_suspended(p_profile_id) and (
+    select count(*)
+    from public.profiles as profile
+    where profile.role = 'admin'
+      and profile.status = 'accepted'
+      and profile.deleted_at is null
+      and not private.profile_suspended(profile.id)
+  ) = 1 then
+    raise exception 'the final app administrator cannot be demoted'
+      using errcode = '55000';
+  end if;
+
+  update public.profiles
+  set role = case
+    when p_enabled then 'admin'::public.app_role
+    else 'member'::public.app_role
+  end
+  where id = p_profile_id;
+
+  return query select p_profile_id, p_enabled;
+end;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.admin_suspend_profile (
   p_profile_id    bigint,
   p_reason        text,
-  p_duration_days integer
+  p_duration_days integer DEFAULT NULL::integer
 )
   RETURNS TABLE (
     suspension_id bigint,
@@ -2080,11 +2180,24 @@ CREATE UNIQUE INDEX notification_delivery_suspension_unique_idx ON private.notif
 CREATE UNIQUE INDEX profile_suspensions_active_idx ON private.profile_suspensions USING btree (profile_id)
   WHERE (ended_at IS NULL);
 
+CREATE INDEX profile_suspensions_cancelled_by_idx ON private.profile_suspensions USING btree (cancelled_by_profile_id)
+  WHERE (cancelled_by_profile_id IS NOT NULL);
+
+CREATE INDEX profile_suspensions_profile_idx ON private.profile_suspensions USING btree (profile_id);
+
+CREATE INDEX profile_suspensions_suspended_by_idx ON private.profile_suspensions USING btree (suspended_by_profile_id)
+  WHERE (suspended_by_profile_id IS NOT NULL);
+
 CREATE POLICY "profile_suspensions_deny_client_access" ON "private"."profile_suspensions"
   FOR ALL
   TO PUBLIC
   USING (false)
   WITH CHECK (false);
+
+CREATE POLICY "profiles_select_accepted" ON "public"."profiles"
+  FOR SELECT
+  TO "authenticated"
+  USING (((status = 'accepted'::public.profile_status) AND (deleted_at IS NULL) AND (( SELECT private.current_profile_id() AS current_profile_id) IS NOT NULL)));
 
 REVOKE ALL ON FUNCTION "private"."enqueue_suspension_email"(bigint, text) FROM PUBLIC;
 

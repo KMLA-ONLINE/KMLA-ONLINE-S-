@@ -30,4 +30,11 @@ describe("describeSuspensionEnd", () => {
       describeSuspensionEnd("2026-10-16T12:30:00Z", NOW)?.remainingDays,
     ).toBe(1);
   });
+
+  // 화면을 열어 둔 채 해제 시각이 지나면 남은 기간이 없다. 하루로 올려 보이면 안 된다.
+  it("reports no remaining days once the end has passed", () => {
+    expect(
+      describeSuspensionEnd("2026-10-16T11:59:00Z", NOW)?.remainingDays,
+    ).toBe(0);
+  });
 });
