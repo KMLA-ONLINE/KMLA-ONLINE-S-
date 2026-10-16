@@ -44,7 +44,11 @@ export const appShellKeys = {
 export function shellProfileQuery() {
   return queryOptions({
     queryKey: appShellKeys.profile(),
-    queryFn: fetchShellData,
+    // 정지 여부는 게이트만 본다. 셸 값(`ShellData`)과 모양을 맞춘다.
+    queryFn: async () => {
+      const shell = await fetchShellData();
+      return shell && { email: shell.email, profile: shell.profile };
+    },
     staleTime: Infinity,
   });
 }
@@ -81,16 +85,27 @@ async function fetchShellData(): Promise<ShellLoadData | null> {
   const session = await readLiveSession();
   if (!session) return null;
 
-  const { data: profiles, error: profileError } =
-    await supabase.rpc("get_my_profile");
+  const [
+    { data: profiles, error: profileError },
+    { data: suspensions, error: suspensionError },
+  ] = await Promise.all([
+    supabase.rpc("get_my_profile"),
+    supabase.rpc("get_my_suspension"),
+  ]);
   if (profileError) {
     await clearSessionOrThrow(profileError);
     return null;
   }
+  if (suspensionError) {
+    await clearSessionOrThrow(suspensionError);
+    return null;
+  }
 
+  const email = session.user.email ?? "";
+  const suspended = suspensions.length > 0;
   const profile = profiles[0];
   if (!profile) {
-    return { email: session.user.email ?? "", profile: null };
+    return { email, profile: null, suspended };
   }
 
   const shellProfile: ShellData["profile"] = {
@@ -103,7 +118,7 @@ async function fetchShellData(): Promise<ShellLoadData | null> {
     avatar_path: profile.avatar_path,
   };
 
-  return { email: session.user.email ?? "", profile: shellProfile };
+  return { email, profile: shellProfile, suspended };
 }
 
 /** 미리 띄운 셸 데이터가 게이트에서 쓰일 수 있는 시간. 그 뒤라면 낡았을 수 있어 새로 읽는다. */

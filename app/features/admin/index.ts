@@ -17,12 +17,14 @@ export {
   listRoster,
 } from "~/features/admin/data/queries";
 export {
+  liftSuspension,
   reauthenticateWithPassword,
   replaceAdminContacts,
   reviewApplications,
   setAppAdmin,
   setGongangManager,
   setSchoolNoticeAccount,
+  suspendProfile,
   syncSchoolNotices,
   unblockApplication,
 } from "~/features/admin/data/mutations";

@@ -76,11 +76,16 @@ export async function clientLoader({
     throw redirect(GATE_REDIRECT[shell.profile.status]);
   }
 
+  // 정지돼도 상태는 `accepted`다. 들여보내면 DB가 모든 요청을 거부해 빈 앱만 보게 된다.
+  if (shell.suspended) {
+    throw redirect("/suspended");
+  }
+
   // 여기서 기다려야 첫 페인트부터 숫자가 맞다. 위에서 병렬로 띄웠으므로 셸 데이터보다
   // 먼저 끝나 있는 것이 보통이고, 그때는 기다리는 시간이 0이다.
   await badge;
 
-  const data = { ...shell, profile: shell.profile };
+  const data: ShellData = { email: shell.email, profile: shell.profile };
   // 이후 갱신은 `refreshShellProfile()`이 이 쿼리로 한다. 게이트를 다시 돌리지 않는다.
   getQueryClient().setQueryData(appShellKeys.profile(), data);
   return data;

@@ -9,10 +9,17 @@ export type AcceptedUser =
 export type AdminMember = Functions["admin_list_members"]["Returns"][number];
 type RawRosterMember = Functions["admin_list_roster"]["Returns"][number];
 
-/** 교직원은 기수가, 학생 외에는 부서가 비어 있다. 생성 타입은 `returns table` 컬럼을 non-null로 적어 여기서 고친다. */
-export type RosterMember = Omit<RawRosterMember, "cohort" | "department"> & {
+/**
+ * 교직원은 기수가, 학생 외에는 부서가 비어 있다. 정지 중이 아니거나 무기한 정지면 해제 예정 시각이 비어 있다.
+ * 생성 타입은 `returns table` 컬럼을 non-null로 적어 여기서 고친다.
+ */
+export type RosterMember = Omit<
+  RawRosterMember,
+  "cohort" | "department" | "suspension_expires_at"
+> & {
   cohort: RawRosterMember["cohort"] | null;
   department: RawRosterMember["department"] | null;
+  suspension_expires_at: RawRosterMember["suspension_expires_at"] | null;
 };
 
 type RawStorageCleanupStatus =
@@ -84,6 +91,21 @@ export function getAdminErrorMessage(error: unknown): string {
   const message = errorMessage(error);
   if (message.includes("final app administrator")) {
     return "마지막 앱 관리자는 강등할 수 없습니다.";
+  }
+  if (message.includes("app administrators cannot be suspended")) {
+    return "앱 관리자는 정지할 수 없습니다. 먼저 관리자에서 내려 주세요.";
+  }
+  if (message.includes("profile is already suspended")) {
+    return "이미 정지 중인 사용자입니다.";
+  }
+  if (message.includes("profile is not suspended")) {
+    return "정지 중인 사용자가 아닙니다.";
+  }
+  if (message.includes("reason must be 5 to 300 characters")) {
+    return "사유를 5~300자로 입력해 주세요.";
+  }
+  if (message.includes("days must be between 1 and 180")) {
+    return "기간은 1~180일로 입력해 주세요.";
   }
   if (message.includes("recent password authentication required")) {
     return "보안을 위해 현재 비밀번호를 다시 확인해 주세요.";

@@ -13,7 +13,7 @@
 | 계열               | 국내반 또는 국제반                                                                                                                | `profiles.academic_track` = `domestic` / `international` |
 | 공개 ID            | 프로필 URL에 쓰는 5–15자 문자열. 예약어를 쓸 수 없다 (§12.1)                                                                      | `profiles.pub_id`                                        |
 | 앱 관리자          | 가입 심사와 관리자 임명 권한. 개별 그룹의 운영 권한과 별개다 (§2.1)                                                               | `profiles.role = 'admin'`                                |
-| 이용 정지          | 앱 관리자가 승인 사용자의 앱 이용을 기간 동안 막는 제재. 계정 상태는 `승인`으로 남으며 가입 차단·익명 활동 제한과 다르다 (§16.11) | `private.profile_suspensions` (미구현)                   |
+| 이용 정지          | 앱 관리자가 승인 사용자의 앱 이용을 기간 동안 막는 제재. 계정 상태는 `승인`으로 남으며 가입 차단·익명 활동 제한과 다르다 (§16.11) | `private.profile_suspensions`                            |
 
 ## 그룹
 

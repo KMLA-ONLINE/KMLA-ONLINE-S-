@@ -42,4 +42,6 @@ export interface AppShellValue {
 export interface ShellLoadData {
   email: string;
   profile: ShellProfileRow | null;
+  /** 이용 정지(§16.11) 중인지. 정지돼도 `profile.status`는 `accepted`라 게이트가 따로 본다. */
+  suspended: boolean;
 }

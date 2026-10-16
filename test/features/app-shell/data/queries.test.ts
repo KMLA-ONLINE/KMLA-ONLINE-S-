@@ -15,6 +15,11 @@ import {
   prefetchShellData,
 } from "~/features/app-shell/data/queries";
 
+/** 셸 데이터를 한 번 읽을 때마다 프로필을 한 번 읽는다. */
+function profileReads(): number {
+  return rpc.mock.calls.filter(([name]) => name === "get_my_profile").length;
+}
+
 describe("shell data", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -66,10 +71,10 @@ describe("shell data", () => {
     await expect(loadShellData()).resolves.toMatchObject({
       profile: { pub_id: "student" },
     });
-    expect(rpc).toHaveBeenCalledOnce();
+    expect(profileReads()).toBe(1);
 
     await loadShellData();
-    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(profileReads()).toBe(2);
   });
 
   // 착지점에서 로그인으로 보낸 뒤 돌아오면, 미리 읽은 "로그인 안 됨"을 쓰면 안 된다.
@@ -79,7 +84,7 @@ describe("shell data", () => {
 
     prefetchShellData();
     await expect(loadShellData()).resolves.toMatchObject({ profile: null });
-    expect(rpc).toHaveBeenCalledOnce();
+    expect(profileReads()).toBe(1);
   });
 
   // 미리 읽기가 일시적 오류로 실패했다고 원래 열렸을 화면이 에러가 되면 안 된다.
@@ -89,7 +94,7 @@ describe("shell data", () => {
 
     prefetchShellData();
     await expect(loadShellData()).resolves.toMatchObject({ profile: null });
-    expect(rpc).toHaveBeenCalledOnce();
+    expect(profileReads()).toBe(1);
   });
 
   it("does not hand over a discarded prefetch", async () => {
@@ -98,6 +103,38 @@ describe("shell data", () => {
     prefetchShellData();
     discardPrefetchedShellData();
     await loadShellData();
-    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(profileReads()).toBe(2);
+  });
+
+  // 정지돼도 프로필 상태는 `accepted`다. 게이트가 정지 안내로 보낼 수 있게 따로 싣는다.
+  it("reports whether the member is suspended", async () => {
+    const row = {
+      id: 1,
+      pub_id: "student",
+      name: "홍길동",
+      role: "member",
+      type: "student",
+      status: "accepted",
+      avatar_path: null,
+    };
+    rpc.mockImplementation((name: string) =>
+      Promise.resolve({
+        data:
+          name === "get_my_suspension"
+            ? [{ reason: "분탕 행위 확인", expires_at: null }]
+            : [row],
+        error: null,
+      }),
+    );
+
+    await expect(loadShellData()).resolves.toMatchObject({ suspended: true });
+
+    rpc.mockImplementation((name: string) =>
+      Promise.resolve({
+        data: name === "get_my_suspension" ? [] : [row],
+        error: null,
+      }),
+    );
+    await expect(loadShellData()).resolves.toMatchObject({ suspended: false });
   });
 });
