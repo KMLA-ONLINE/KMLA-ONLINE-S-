@@ -41,6 +41,7 @@ export type Database = {
           position: number
           value: string
         }
+        ComputedFields: never
         Insert: {
           kind: string
           label: string
@@ -72,6 +73,7 @@ export type Database = {
           storage_bucket: string
           width: number
         }
+        ComputedFields: never
         Insert: {
           comment_id?: string | null
           created_at?: string
@@ -127,6 +129,7 @@ export type Database = {
           ordinal: number
           profile_id: number
         }
+        ComputedFields: never
         Insert: {
           comment_id: string
           ordinal: number
@@ -161,6 +164,7 @@ export type Database = {
           profile_id: number
           reaction: Database["public"]["Enums"]["post_reaction"]
         }
+        ComputedFields: never
         Insert: {
           comment_id: string
           created_at?: string
@@ -202,6 +206,7 @@ export type Database = {
           muted_until: string | null
           profile_id: number
         }
+        ComputedFields: never
         Insert: {
           conversation_id: string
           id?: number
@@ -251,6 +256,7 @@ export type Database = {
           name: string | null
           type: Database["public"]["Enums"]["conversation_type"]
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           created_by?: number | null
@@ -301,6 +307,7 @@ export type Database = {
           item_id: number
           profile_id: number | null
         }
+        ComputedFields: never
         Insert: {
           cancelled_at?: string | null
           created_at?: string
@@ -343,6 +350,7 @@ export type Database = {
           source_row: number
           source_sheet: string
         }
+        ComputedFields: never
         Insert: {
           category: string
           detail?: string | null
@@ -381,6 +389,7 @@ export type Database = {
           opens_at: string
           title: string
         }
+        ComputedFields: never
         Insert: {
           closes_at: string
           created_at?: string
@@ -410,6 +419,7 @@ export type Database = {
           slot: string
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           configured_by?: number | null
           created_at?: string
@@ -453,6 +463,7 @@ export type Database = {
           position: number
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           group_id: string
@@ -486,6 +497,7 @@ export type Database = {
           profile_id: number
           requested_at: string
         }
+        ComputedFields: never
         Insert: {
           group_id: string
           id?: string
@@ -529,6 +541,7 @@ export type Database = {
           status: Database["public"]["Enums"]["group_media_status"]
           width: number
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           deleted_at?: string | null
@@ -578,6 +591,7 @@ export type Database = {
           profile_id: number
           role: Database["public"]["Enums"]["group_member_role"]
         }
+        ComputedFields: never
         Insert: {
           content_push_enabled?: boolean
           group_id: string
@@ -639,6 +653,7 @@ export type Database = {
           slug_is_custom: boolean
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           cover_path?: string | null
           created_at?: string
@@ -698,6 +713,7 @@ export type Database = {
           timeline_push_enabled: boolean
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           account_push_enabled?: boolean
           content_push_enabled?: boolean
@@ -752,6 +768,7 @@ export type Database = {
           target_profile_id: number | null
           title: string
         }
+        ComputedFields: never
         Insert: {
           actor_avatar_path?: string | null
           actor_count?: number
@@ -857,6 +874,7 @@ export type Database = {
           key: string
           name: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           description?: string | null
@@ -889,6 +907,7 @@ export type Database = {
           thumbnail_path: string | null
           width: number | null
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           deleted_at?: string | null
@@ -948,6 +967,7 @@ export type Database = {
           post_id: string
           root_comment_id: string
         }
+        ComputedFields: never
         Insert: {
           anon_alias_number?: number | null
           author_identity: Database["public"]["Enums"]["post_identity"]
@@ -1006,6 +1026,7 @@ export type Database = {
           post_id: string
           profile_id: number
         }
+        ComputedFields: never
         Insert: {
           ordinal: number
           post_id: string
@@ -1040,6 +1061,7 @@ export type Database = {
           profile_id: number
           reaction: Database["public"]["Enums"]["post_reaction"]
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           post_id: string
@@ -1092,6 +1114,7 @@ export type Database = {
           title: string | null
           visibility: Database["public"]["Enums"]["post_visibility"] | null
         }
+        ComputedFields: never
         Insert: {
           activity_kind?:
             Database["public"]["Enums"]["profile_media_activity_kind"] | null
@@ -1173,6 +1196,7 @@ export type Database = {
           name: string
           sort_order: number
         }
+        ComputedFields: never
         Insert: {
           is_active?: boolean
           name: string
@@ -1198,6 +1222,7 @@ export type Database = {
           status: Database["public"]["Enums"]["profile_media_status"]
           width: number
         }
+        ComputedFields: never
         Insert: {
           auth_user_id: string
           created_at?: string
@@ -1247,6 +1272,7 @@ export type Database = {
           status: Database["public"]["Enums"]["profile_media_status"]
           width: number
         }
+        ComputedFields: never
         Insert: {
           activity_media_id?: string | null
           auth_user_id: string
@@ -1298,6 +1324,7 @@ export type Database = {
           permission_key: string
           profile_id: number
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           permission_key: string
@@ -1360,6 +1387,7 @@ export type Database = {
           type: Database["public"]["Enums"]["profile_type"]
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           academic_track?:
             Database["public"]["Enums"]["profile_academic_track"] | null
@@ -1455,6 +1483,7 @@ export type Database = {
           status: Database["public"]["Enums"]["story_status"]
           thumbnail_path: string | null
         }
+        ComputedFields: never
         Insert: {
           background?: string | null
           content?: string
@@ -1504,6 +1533,7 @@ export type Database = {
           semesters: NonNullable<Json>
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           active_semester?: string
           profile_id: number
@@ -1541,6 +1571,7 @@ export type Database = {
           reservation_date: string
           slot: string
         }
+        ComputedFields: never
         Insert: {
           applicant_name: string
           avatar_path?: string | null
@@ -1670,6 +1701,21 @@ export type Database = {
           status_updated_at: string
         }[]
       }
+      admin_school_notice_status: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          account_configured: boolean
+          account_updated_at: string
+          last_attempt_at: string
+          last_error: string
+          last_error_at: string
+          last_requested_at: string
+          last_success_at: string
+          login_id: string
+          notice_count: number
+          sync_configured: boolean
+        }[]
+      }
       admin_set_app_admin: {
         Args: { p_enabled: boolean; p_profile_id: number }
         Returns: {
@@ -1683,6 +1729,10 @@ export type Database = {
           has_gongang_manage: boolean
           profile_id: number
         }[]
+      }
+      admin_set_school_notice_account: {
+        Args: { p_login_id: string; p_password: string }
+        Returns: undefined
       }
       admin_storage_cleanup_status: {
         Args: Record<PropertyKey, never>
@@ -1701,6 +1751,10 @@ export type Database = {
           queue_retrying: number
           secrets_configured: boolean
         }[]
+      }
+      admin_sync_school_notices: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       admin_unblock_application: {
         Args: { p_profile_id: number }
@@ -2876,6 +2930,18 @@ export type Database = {
           visibility: Database["public"]["Enums"]["post_visibility"]
         }[]
       }
+      list_school_notices: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          author: string
+          category: string
+          has_attachment: boolean
+          post_id: number
+          posted_on: string
+          synced_at: string
+          title: string
+        }[]
+      }
       mark_all_my_notifications_read: {
         Args: Record<PropertyKey, never>
         Returns: number
@@ -3038,6 +3104,10 @@ export type Database = {
         }[]
       }
       publish_image_story: { Args: { p_story_id: number }; Returns: undefined }
+      record_school_notice_sync: {
+        Args: { p_error: string; p_notices: Json }
+        Returns: undefined
+      }
       register_my_web_push_subscription: {
         Args: {
           p_auth: string
@@ -3131,6 +3201,13 @@ export type Database = {
       }
       revoke_group_invite: { Args: { p_group_id: string }; Returns: undefined }
       save_gongang_schedule: { Args: { p_entries: Json }; Returns: undefined }
+      school_notice_credentials: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          login_id: string
+          password: string
+        }[]
+      }
       search_directory: {
         Args: { p_query?: string }
         Returns: {

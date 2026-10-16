@@ -31,6 +31,7 @@ export default [
       route("menu/gongang/manage", "routes/app/menu/gongang-manage.tsx"),
       route("menu/karaoke", "routes/app/menu/karaoke.tsx"),
       route("menu/meal", "routes/app/menu/meal.tsx"),
+      route("menu/notices", "routes/app/menu/notices.tsx"),
       route("settings/password", "routes/app/menu/password.tsx"),
       route("settings", "routes/app/menu/settings.tsx"),
       route("settings/lab", "routes/app/menu/settings-lab.tsx"),
@@ -60,6 +61,7 @@ export default [
       route("admin/app-admins", "routes/app/admin/app-admins.tsx"),
       route("admin/contacts", "routes/app/admin/contacts.tsx"),
       route("admin/storage-cleanup", "routes/app/admin/storage-cleanup.tsx"),
+      route("admin/school-notices", "routes/app/admin/school-notices.tsx"),
       route("messenger", "routes/messenger/index.tsx", [
         route(":roomId", "routes/messenger/room.tsx"),
       ]),

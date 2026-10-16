@@ -4,6 +4,7 @@ import {
   CalendarDaysIcon,
   ExternalLinkIcon,
   GiftIcon,
+  MegaphoneIcon,
   SettingsIcon,
   ShieldCheckIcon,
   UtensilsIcon,
@@ -33,6 +34,7 @@ interface Shortcut {
 /** 학교생활 도구만 모으고 계정·서비스 관리는 설정으로 분리한다. */
 const shortcuts: Shortcut[] = [
   { to: "/menu/meal", label: "급식", icon: UtensilsIcon },
+  { to: "/menu/notices", label: "학교 공지", icon: MegaphoneIcon },
   { to: "/menu/timetable", label: "시간표", icon: CalendarDaysIcon },
   { to: "/menu/gongang", label: "공강 · 노래방", icon: CalendarClockIcon },
   { to: "/menu/birthdays", label: "생일", icon: CakeIcon },
