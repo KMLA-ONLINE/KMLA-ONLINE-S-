@@ -8,7 +8,7 @@ import type { Route } from "./+types/notices";
 
 export const handle = defineAppChrome({
   header: "sticky",
-  bottomNav: "sticky",
+  bottomNav: "none",
   contentWidth: "3xl",
   pullToRefresh: true,
 });
