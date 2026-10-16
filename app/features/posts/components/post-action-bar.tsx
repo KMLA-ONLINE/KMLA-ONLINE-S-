@@ -118,12 +118,15 @@ export function PostActionBar({
         <button
           type="button"
           aria-label={`반응 ${reactions.summary.reaction_count}개 보기`}
-          className="-mr-1 flex items-center gap-0.5 rounded-md px-2 py-1 text-sm transition-colors hover:bg-muted"
+          className="-mr-1 flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground tabular-nums transition-colors hover:bg-muted hover:text-foreground"
           onClick={reactorList.show}
         >
-          {reactions.summary.top_reactions.map((item) => (
-            <ReactionEmoji key={item} reaction={item} />
-          ))}
+          <span className="flex items-center gap-0.5">
+            {reactions.summary.top_reactions.map((item) => (
+              <ReactionEmoji key={item} reaction={item} />
+            ))}
+          </span>
+          {reactions.summary.reaction_count}
         </button>
       ) : null}
 

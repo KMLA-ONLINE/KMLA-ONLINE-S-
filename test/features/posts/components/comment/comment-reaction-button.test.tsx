@@ -37,19 +37,37 @@ describe("CommentReactionButton", () => {
     expect(onSelect).toHaveBeenCalledWith("love");
   });
 
-  it("removes the reaction in place instead of reopening the picker", async () => {
+  it("opens the picker to change an existing reaction", async () => {
+    const { user, onSelect, onClear } = renderButton({
+      my_reaction: "haha",
+      reaction_count: 1,
+      top_reactions: ["haha"],
+    });
+
+    // 누르자마자 지우면 종류를 바꾸려 해도 한 번 지워야 하고, 잘못 누른 손에 반응이 사라진다.
+    await user.click(
+      screen.getByRole("button", { name: "웃겨요 반응 바꾸기" }),
+    );
+    expect(onClear).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "하트 반응 남기기" }));
+
+    expect(onSelect).toHaveBeenCalledWith("love");
+    expect(onClear).not.toHaveBeenCalled();
+  });
+
+  it("removes the reaction when the picker repeats it", async () => {
     const { user, onClear } = renderButton({
       my_reaction: "haha",
       reaction_count: 1,
       top_reactions: ["haha"],
     });
 
-    await user.click(screen.getByRole("button", { name: "웃겨요 취소" }));
+    await user.click(
+      screen.getByRole("button", { name: "웃겨요 반응 바꾸기" }),
+    );
+    await user.click(screen.getByRole("button", { name: "웃겨요 반응 취소" }));
 
     expect(onClear).toHaveBeenCalled();
-    expect(
-      screen.queryByRole("button", { name: "하트 반응 남기기" }),
-    ).not.toBeInTheDocument();
   });
 });
 

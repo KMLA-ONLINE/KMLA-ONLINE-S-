@@ -8,16 +8,43 @@ import type {
  * `codepoint`는 `public/twemoji/` 파일 이름이다.
  */
 export const REACTION_TYPES = [
-  { key: "like", label: "좋아요", codepoint: "1f44d" },
-  { key: "love", label: "하트", codepoint: "2764" },
-  { key: "haha", label: "웃겨요", codepoint: "1f606" },
-  { key: "wow", label: "놀라워요", codepoint: "1f62e" },
-  { key: "sad", label: "슬퍼요", codepoint: "1f622" },
-  { key: "angry", label: "화나요", codepoint: "1f621" },
+  { key: "like", label: "좋아요", codepoint: "1f44d", tone: "text-primary" },
+  {
+    key: "love",
+    label: "하트",
+    codepoint: "2764",
+    tone: "text-rose-700 dark:text-rose-400",
+  },
+  {
+    key: "haha",
+    label: "웃겨요",
+    codepoint: "1f606",
+    tone: "text-amber-700 dark:text-amber-400",
+  },
+  {
+    key: "wow",
+    label: "놀라워요",
+    codepoint: "1f62e",
+    tone: "text-amber-700 dark:text-amber-400",
+  },
+  {
+    key: "sad",
+    label: "슬퍼요",
+    codepoint: "1f622",
+    tone: "text-amber-700 dark:text-amber-400",
+  },
+  {
+    key: "angry",
+    label: "화나요",
+    codepoint: "1f621",
+    tone: "text-orange-700 dark:text-orange-400",
+  },
 ] as const satisfies readonly {
   key: PostReaction;
   label: string;
   codepoint: string;
+  /** 내 반응 이름에 입히는 글자색. 이모지 그림의 색과 맞추되, 작은 글씨라 밝은 테마는 `-700`으로 대비 4.5:1을 맞춘다. */
+  tone: string;
 }[];
 
 /** 반응 버튼을 짧게 눌렀을 때 붙는 반응(기능 명세 §10.1). */
@@ -27,6 +54,10 @@ const BY_KEY = new Map(REACTION_TYPES.map((type) => [type.key, type]));
 
 export function reactionLabel(reaction: PostReaction): string {
   return BY_KEY.get(reaction)?.label ?? "반응";
+}
+
+export function reactionTone(reaction: PostReaction): string {
+  return BY_KEY.get(reaction)?.tone ?? "text-primary";
 }
 
 /**

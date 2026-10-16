@@ -12,7 +12,11 @@ import type {
   ReactionSummary,
 } from "~/features/posts/model/types";
 
-/** 댓글 반응. 롱프레스 없이 누르면 바로 종류 줄이 뜨고, 고른 게 있으면 해제한다 — 작은 아이콘에서 짧게/길게 구분이 어렵다. */
+/**
+ * 댓글 반응. 롱프레스 없이 누르면 언제나 종류 줄이 뜬다 — 작은 아이콘에서 짧게/길게 구분이 어렵다.
+ * 고른 게 있어도 바로 해제하지 않는다. 그러면 종류를 바꾸려 해도 한 번 지워야 하고, 잘못 누른 손에 반응이 사라진다.
+ * 해제는 줄에서 지금 반응을 다시 고르는 것이다.
+ */
 export function CommentReactionButton({
   summary,
   onSelect,
@@ -45,13 +49,10 @@ export function CommentReactionButton({
 
       <button
         type="button"
-        aria-label={mine ? `${reactionLabel(mine)} 취소` : "반응 남기기"}
-        aria-pressed={mine !== null}
+        aria-label={mine ? `${reactionLabel(mine)} 반응 바꾸기` : "반응 남기기"}
+        aria-expanded={open}
         className="flex items-center hover:text-foreground"
-        onClick={() => {
-          if (mine) onClear();
-          else setOpen(true);
-        }}
+        onClick={() => setOpen(true)}
       >
         {mine ? (
           <ReactionEmoji reaction={mine} className="text-sm" />
