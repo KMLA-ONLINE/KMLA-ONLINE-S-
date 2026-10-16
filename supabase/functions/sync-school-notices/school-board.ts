@@ -46,16 +46,30 @@ const entities: Record<string, string> = {
   times: "×",
 };
 
+/**
+ * 글자로 쓸 수 없는 코드(0, 서로게이트, 유니코드 범위 밖)는 지운다. 0은 Postgres `text`에 넣을 수
+ * 없고, 범위 밖 값은 `fromCodePoint`가 예외를 던져 동기화 전체를 멈추게 한다.
+ */
+function codePointText(code: number): string {
+  const valid =
+    Number.isSafeInteger(code) &&
+    code > 0 &&
+    code <= 0x10ffff &&
+    (code < 0xd800 || code > 0xdfff);
+  return valid ? String.fromCodePoint(code) : "";
+}
+
 function decodeEntities(text: string): string {
   return text.replace(
     /&(#x[0-9a-f]+|#\d+|[a-z]+);/gi,
     (match, name: string) => {
       if (name.startsWith("#x") || name.startsWith("#X")) {
-        return String.fromCodePoint(parseInt(name.slice(2), 16));
+        return codePointText(parseInt(name.slice(2), 16));
       }
-      if (name.startsWith("#"))
-        return String.fromCodePoint(Number(name.slice(1)));
-      return entities[name.toLowerCase()] ?? match;
+      if (name.startsWith("#")) return codePointText(Number(name.slice(1)));
+      const key = name.toLowerCase();
+      // `constructor` 같은 이름이 Object.prototype에서 함수를 찾아오지 않도록 자기 속성만 본다.
+      return Object.hasOwn(entities, key) ? entities[key] : match;
     },
   );
 }
@@ -99,7 +113,16 @@ export function parseNoticeList(html: string): SchoolNotice[] {
 
 type Literal = string | number | Literal[] | { [key: string]: Literal };
 
-const ESCAPES: Record<string, string> = { n: "\n", r: "\r", t: "\t" };
+const ESCAPES = new Map([
+  ["n", "\n"],
+  ["r", "\r"],
+  ["t", "\t"],
+  ["b", "\b"],
+  ["f", "\f"],
+  ["v", "\v"],
+  // NUL은 Postgres `text`에 넣을 수 없어 버린다.
+  ["0", ""],
+]);
 
 /**
  * 상세 응답은 JSON이 아니라 작은따옴표 객체 리터럴이다(학교 화면은 eval로 읽는다). 실행하지 않고
@@ -125,7 +148,20 @@ function readLiteral(source: string): Literal | null {
         continue;
       }
       const escaped = source[index++] ?? "";
-      text += ESCAPES[escaped] ?? escaped;
+      // 학교 화면은 이 응답을 eval로 읽으므로 자바스크립트 문자열 이스케이프를 모두 따른다.
+      const hex =
+        escaped === "u"
+          ? /^[0-9a-f]{4}/i.exec(source.slice(index))
+          : escaped === "x"
+            ? /^[0-9a-f]{2}/i.exec(source.slice(index))
+            : null;
+      if (hex) {
+        index += hex[0].length;
+        const code = parseInt(hex[0], 16);
+        text += code === 0 ? "" : String.fromCharCode(code);
+        continue;
+      }
+      text += ESCAPES.get(escaped) ?? escaped;
     }
     return fail();
   };
@@ -191,15 +227,23 @@ function htmlToText(html: string): string {
   return decodeEntities(
     html
       .replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, "")
-      .replace(/\[\[\d+\]\]/g, "")
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<\/?(p|div|li|tr|h[1-6])\b[^>]*>/gi, "\n")
       .replace(/<[^>]*>/g, ""),
   );
 }
 
+/**
+ * 두 형식 공통 정리. `[[n]]`은 학교 화면이 글 형식과 상관없이 n번째 첨부 이미지로 바꾸는 자리라
+ * 지운다. 짝 없는 서로게이트는 Postgres로 보내는 JSON에서 거절되므로 지운다.
+ */
 function normalizeBody(text: string): string {
   return text
+    .replace(/\[\[\d+\]\]/g, "")
+    .replace(
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
+      "",
+    )
     .replace(/\r\n?/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -230,7 +274,8 @@ export function parseNoticeDetail(raw: string): SchoolNoticeDetail | null {
   }
 
   return {
-    body: normalizeBody(useHtml === 1 ? htmlToText(content) : original),
+    // 학교는 숫자로 주지만 문자열 '1'로 와도 HTML 글로 다뤄 태그가 화면에 드러나지 않게 한다.
+    body: normalizeBody(Number(useHtml) === 1 ? htmlToText(content) : original),
     attachments,
   };
 }

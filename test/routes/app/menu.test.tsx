@@ -102,6 +102,19 @@ describe("menu route", () => {
       screen.queryByRole("button", { name: "로그아웃" }),
     ).not.toBeInTheDocument();
   });
+  it.each([
+    ["teacher", ["급식", "시간표", "생일"]],
+    ["alumni", ["급식", "시간표"]],
+  ] as const)("shows only the school tools a %s uses", (type, expected) => {
+    renderMenu("member", type);
+
+    const tools = within(
+      screen.getByRole("navigation", { name: "학교생활 기능" }),
+    );
+    expect(tools.getAllByRole("link").map((link) => link.textContent)).toEqual(
+      expected,
+    );
+  });
   it("does not show the administrator entry to a member", () => {
     renderMenu("member");
     expect(

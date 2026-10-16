@@ -111,7 +111,8 @@ function detail({
   content,
   attachment = "[]",
 }: {
-  useHtml?: number;
+  /** 숫자 또는 따옴표까지 포함한 리터럴 문자열(`"'1'"`) */
+  useHtml?: number | string;
   original: string;
   content: string;
   attachment?: string;
@@ -153,6 +154,48 @@ describe("parseNoticeDetail", () => {
 
     expect(parseNoticeDetail(raw)?.body).toBe(
       "준비물 & 일정\n\n장소: 강당\n끝",
+    );
+  });
+
+  it("일반 글에 남은 첨부 이미지 자리 표시도 지운다", () => {
+    const raw = detail({
+      original: "포스터는 아래와 같습니다.\\n[[0]]\\n많은 참여 바랍니다.",
+      content: "포스터는 아래와 같습니다.<br />[[0]]<br />많은 참여 바랍니다.",
+    });
+
+    expect(parseNoticeDetail(raw)?.body).toBe(
+      "포스터는 아래와 같습니다.\n\n많은 참여 바랍니다.",
+    );
+  });
+
+  it("use_html이 문자열로 와도 HTML 글로 다룬다", () => {
+    const raw = detail({
+      useHtml: "'1'",
+      original: "<b>원문</b>",
+      content: "<b>굵게</b> 쓴 글",
+    });
+
+    expect(parseNoticeDetail(raw)?.body).toBe("굵게 쓴 글");
+  });
+
+  it("자바스크립트 문자열 이스케이프를 글자로 되돌린다", () => {
+    const raw = detail({
+      original: "\\uD55C\\uAE00 \\x41\\tB",
+      content: "",
+    });
+
+    expect(parseNoticeDetail(raw)?.body).toBe("한글 A\tB");
+  });
+
+  it("범위를 벗어나거나 이름이 아닌 엔티티는 글자로 바꾸지 않는다", () => {
+    const raw = detail({
+      useHtml: 1,
+      original: "",
+      content: "가&#0;나&#99999999;다&#xD800;라 &constructor; &toString; &#65;",
+    });
+
+    expect(parseNoticeDetail(raw)?.body).toBe(
+      "가나다라 &constructor; &toString; A",
     );
   });
 

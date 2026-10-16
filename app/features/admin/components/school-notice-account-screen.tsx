@@ -3,6 +3,7 @@ import {
   CheckCircle2Icon,
   RefreshCwIcon,
 } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 
 import type {
@@ -60,6 +61,12 @@ export function SchoolNoticeAccountScreen({
   const saving = save.state !== "idle";
   const syncing = sync.state !== "idle";
   const now = useClientNow();
+  const saveForm = useRef<HTMLFormElement>(null);
+
+  // 저장에 성공했을 때만 비밀번호를 지운다. 실패하면 고쳐서 다시 보낼 수 있게 입력을 남긴다.
+  useEffect(() => {
+    if (save.state === "idle" && save.data?.ok) saveForm.current?.reset();
+  }, [save.state, save.data]);
 
   if (!status) {
     return (
@@ -200,15 +207,7 @@ export function SchoolNoticeAccountScreen({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <save.Form
-            method="post"
-            className="space-y-4"
-            onSubmit={(event) => {
-              // 제출한 뒤에는 비밀번호를 화면에 남기지 않는다.
-              const form = event.currentTarget;
-              queueMicrotask(() => form.reset());
-            }}
-          >
+          <save.Form ref={saveForm} method="post" className="space-y-4">
             <input type="hidden" name="intent" value="save" />
             <Field>
               <FieldLabel htmlFor="school-login-id">학교 아이디</FieldLabel>
