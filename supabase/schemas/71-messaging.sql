@@ -395,7 +395,7 @@ begin
     coalesce(latest_period.muted_until > now(), false),
     conversation.type = 'group'
       and latest_period.left_at is null
-      and (conversation.created_by = caller_profile_id or caller.role = 'admin'),
+      and conversation.created_by = caller_profile_id,
     (
       select attachment.kind
       from private.message_attachments as attachment
@@ -405,7 +405,6 @@ begin
       limit 1
     )
   from latest_period
-  join public.profiles as caller on caller.id = caller_profile_id
   join public.conversations as conversation
     on conversation.id = latest_period.conversation_id
     and (p_conversation_id is not null or not latest_period.left_by_self)
@@ -2254,13 +2253,8 @@ begin
 
   target := private.lock_group_for_member(caller_profile_id, p_conversation_id);
 
-  if target.created_by is distinct from caller_profile_id and not exists (
-    select 1
-    from public.profiles as profile
-    where profile.id = caller_profile_id
-      and profile.role = 'admin'
-  ) then
-    raise exception 'group owner or app administrator required'
+  if target.created_by is distinct from caller_profile_id then
+    raise exception 'group owner required'
       using errcode = '42501';
   end if;
 
