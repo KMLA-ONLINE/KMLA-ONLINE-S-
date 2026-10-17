@@ -405,22 +405,7 @@ function StoryRailCard({
 
       <span className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60" />
 
-      {count > 1 ? (
-        // 장이 여럿이라는 것과 지금 몇 번째인지를 뷰어의 진행 막대와 같은 모양으로 알린다.
-        <span className="absolute inset-x-2 top-1 flex gap-0.5" aria-hidden>
-          {group.stories.map((item) => (
-            <span
-              key={item.id}
-              className={cn(
-                "h-0.5 flex-1 rounded-full",
-                item.id === story.id ? "bg-white" : "bg-white/40",
-              )}
-            />
-          ))}
-        </span>
-      ) : null}
-
-      <span className="absolute top-2.5 left-2 rounded-full bg-primary p-[2px]">
+      <span className="absolute top-2 left-2 rounded-full bg-primary p-[2px]">
         <UserAvatar src={story.avatarUrl} name={name} className="size-8" />
       </span>
 
