@@ -155,7 +155,9 @@ outbox 행의 원본은 알림, 메시지, 이용 정지 중 정확히 하나다
 
 ## 6. 전달 worker
 
-Supabase Cron이 30초마다 `pg_net`으로 `dispatch-notifications` Edge Function을 호출한다. worker는 전용
+Supabase Cron이 30초마다 claim할 delivery나 5초 안에 발송 시각이 되는 delivery(§11.2의 대기 범위)가 있는지 보고, 있을 때만 `pg_net`으로 `dispatch-notifications`
+Edge Function을 호출한다(`private.invoke_notification_dispatcher_if_due`). 큐가 빈 시간이 대부분이라 무조건
+부르면 빈 호출만 하루 2,880번 나간다. worker는 전용
 shared secret을 검증하고 service role로 bounded batch를 처리한다. 배치 안의 항목은 최대 10개씩 겹쳐
 보낸다. 같은 구독으로 가는 항목은 한 줄로 보내 기기에 도착하는 순서를 지킨다. 순서대로 보내면 느린 Push service 몇 곳만으로 lease를 넘겨 다음 실행이 같은 항목을 다시 보낸다.
 
@@ -259,8 +261,9 @@ route가 history에 확정된 다음 그 entry를 replace한다. SPA navigation�
 ## 8. 클라이언트 동기화
 
 알림 첫 페이지는 route `clientLoader`, 읽음 변경은 `clientAction`과 fetcher를 사용한다. 이전 페이지는
-커서 기반으로 추가 로딩한다. `public.notifications`의 Realtime INSERT·UPDATE·DELETE는 알림 캐시와 셸
-badge를 갱신하며 창 복귀 시 revalidation을 fallback으로 사용한다.
+커서 기반으로 추가 로딩한다. 수신자 본인 행의 `public.notifications` Realtime INSERT·UPDATE는 알림함과 셸
+badge를 갱신하며, 삭제와 놓친 신호는 창 복귀 시 revalidation이 맡는다. Realtime은 바뀐 행마다 따로 오므로
+`모두 읽음` 한 번이 안 읽은 알림 수만큼 신호가 된다. 신호는 300ms 동안 모아 한 번만 처리한다.
 
 복귀 신호는 `focus`와 `visibilitychange`를 함께 듣는다. 설치형 PWA를 배경에서 되살릴 때 `focus`가
 오지 않는 경우가 있어 한쪽만으로는 배지가 이전 값에 머문다. 두 이벤트는 같은 복귀에서 함께 오는

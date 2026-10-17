@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(29);
 
 -- seed: 홍길동(…0001), 김민준(…0100), 김관리(kim-admin, 앱 관리자), 박새벽, 이한별.
 insert into auth.users (
@@ -204,7 +204,7 @@ select throws_ok(
   'a direct conversation has no name to change'
 );
 
--- 그룹 지우기. 다른 멤버를 내보내는 기능은 없고, 소유주와 앱 관리자가 그룹을 지운다.
+-- 그룹 지우기. 다른 멤버를 내보내는 기능은 없고, 소유주만 그룹을 지운다.
 
 reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000302', true);
@@ -278,7 +278,7 @@ select ok(
   'a deleted group is gone and its attachment objects are queued for cleanup'
 );
 
--- 앱 관리자는 소유주가 아니어도 지울 수 있다.
+-- 앱 관리자도 소유주가 아니면 지울 수 없다.
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
 insert into made
@@ -289,9 +289,17 @@ reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000301', true);
 set local role authenticated;
 
-select lives_ok(
+select is(
+  (select can_delete from public.list_conversations((select id from made where name = 'admin'))),
+  false,
+  'an app administrator who does not own the group is not offered deletion'
+);
+
+select throws_ok(
   $$select public.delete_group_conversation((select id from made where name = 'admin'))$$,
-  'an app administrator can delete a group they do not own'
+  '42501',
+  null,
+  'an app administrator cannot delete a group they do not own'
 );
 
 -- 나가기

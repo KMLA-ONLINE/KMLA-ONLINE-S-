@@ -188,7 +188,7 @@ export async function leaveConversation(conversationId: string): Promise<void> {
   if (error) throw error;
 }
 
-/** 그룹 대화를 모두에게서 지운다. 소유주와 앱 관리자만 할 수 있다. */
+/** 그룹 대화를 모두에게서 지운다. 소유주만 할 수 있다. */
 export async function deleteGroupConversation(
   conversationId: string,
 ): Promise<void> {
