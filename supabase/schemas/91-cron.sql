@@ -10,7 +10,7 @@ SELECT cron.schedule('cleanup-expired-records-daily', '13 4 * * *', 'select priv
 
 SELECT cron.schedule('cleanup-notifications-daily', '23 4 * * *', 'select private.cleanup_expired_notifications()');
 
-SELECT cron.schedule('dispatch-notifications-every-30-seconds', '30 seconds', 'select private.invoke_notification_dispatcher()');
+SELECT cron.schedule('dispatch-notifications-every-30-seconds', '30 seconds', 'select private.invoke_notification_dispatcher_if_due()');
 
 SELECT cron.schedule('drain-storage-cleanup-hourly', '47 * * * *', 'select private.invoke_storage_cleanup()');
 

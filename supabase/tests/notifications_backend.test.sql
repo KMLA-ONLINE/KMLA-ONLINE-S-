@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(29);
+select plan(37);
 
 select is(
   (
@@ -325,6 +325,73 @@ select is((select count(*) from public.notifications where title = '만료 알�
 select ok(
   not exists (select 1 from private.web_push_subscriptions where id = '71000000-0000-0000-0000-000000000001'),
   'retention removes subscriptions that have been gone for 30 days'
+);
+
+-- 큐가 빈 동안 Cron은 Edge Function을 부르지 않는다.
+select is(
+  (select command from cron.job where jobname = 'dispatch-notifications-every-30-seconds'),
+  'select private.invoke_notification_dispatcher_if_due()',
+  'the cron job only invokes the dispatcher when work is due'
+);
+update private.notification_delivery_outbox
+set status = 'sent', completed_at = now(), lease_id = null, lease_expires_at = null
+where status in ('pending', 'leased');
+select is(
+  private.invoke_notification_dispatcher_if_due(),
+  null,
+  'an empty queue does not invoke the dispatcher'
+);
+insert into private.notification_delivery_outbox (
+  id, notification_id, recipient_profile_id, channel, recipient_email, available_at
+) values (
+  '72000000-0000-0000-0000-000000000014',
+  '70000000-0000-0000-0000-000000000013',
+  (select id from public.profiles where pub_id = 'hanbyeol-25'),
+  'email', 'hanbyeol@example.com', now() + interval '1 minute'
+);
+select is(
+  private.invoke_notification_dispatcher_if_due(),
+  null,
+  'a delivery that is not available yet does not invoke the dispatcher'
+);
+update private.notification_delivery_outbox
+set available_at = now() + interval '3 seconds'
+where id = '72000000-0000-0000-0000-000000000014';
+select isnt(
+  private.invoke_notification_dispatcher_if_due(),
+  null,
+  'a delivery due within the dispatcher wait invokes the dispatcher'
+);
+create temp table before_leased_dispatch as select id from net.http_request_queue;
+update private.notification_delivery_outbox
+set status = 'leased', available_at = now(),
+  lease_id = '73000000-0000-0000-0000-000000000014', lease_expires_at = now() + interval '1 minute'
+where id = '72000000-0000-0000-0000-000000000014';
+select is(
+  private.invoke_notification_dispatcher_if_due(),
+  null,
+  'a delivery under a live lease does not invoke the dispatcher'
+);
+select is(
+  (select count(*) from net.http_request_queue where id not in (select id from before_leased_dispatch)),
+  0::bigint,
+  'no dispatcher request is queued while nothing is due'
+);
+update private.notification_delivery_outbox
+set lease_expires_at = now()
+where id = '72000000-0000-0000-0000-000000000014';
+select isnt(
+  private.invoke_notification_dispatcher_if_due(),
+  null,
+  'an expired lease invokes the dispatcher'
+);
+update private.notification_delivery_outbox
+set status = 'pending', lease_id = null, lease_expires_at = null
+where id = '72000000-0000-0000-0000-000000000014';
+select isnt(
+  private.invoke_notification_dispatcher_if_due(),
+  null,
+  'a due pending delivery invokes the dispatcher'
 );
 
 select * from finish();

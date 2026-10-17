@@ -163,6 +163,31 @@ describe("NotificationSync", () => {
     await waitFor(() => expect(mocks.revalidate).toHaveBeenCalledOnce());
   });
 
+  it("refreshes the badge once for a burst of notification events", async () => {
+    const { invalidateQueries } = renderSync("/");
+
+    await waitFor(() =>
+      expect(mocks.subscribeToNotifications).toHaveBeenCalledOnce(),
+    );
+    const onChange = mocks.subscribeToNotifications.mock
+      .calls[0][1] as () => void;
+    // `모두 읽음` 한 번이 바뀐 행마다 Realtime 신호로 온다.
+    for (let index = 0; index < 20; index += 1) onChange();
+
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: notificationKeys.badge(),
+      }),
+    );
+    expect(
+      invalidateQueries.mock.calls.filter(
+        ([filters]) =>
+          JSON.stringify(filters?.queryKey) ===
+          JSON.stringify(notificationKeys.badge()),
+      ),
+    ).toHaveLength(1);
+  });
+
   it("treats becoming visible again as a return, not only window focus", async () => {
     const { invalidateQueries } = renderSync("/groups/private-club");
 
