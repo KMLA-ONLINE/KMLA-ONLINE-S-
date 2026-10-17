@@ -320,6 +320,23 @@ function StoryRailCard({
     return () => window.clearInterval(timer);
   }, [cycling, count]);
 
+  // 다음 장의 축소본을 지금 받아 둔다. 넘어가는 순간에 받기 시작하면 느린 망에서 카드가 잠깐
+  // 빈다. 돌지 않는 동안에는 받지 않는다.
+  const upcomingThumbnail =
+    count > 1
+      ? group.stories[(shownIndex + 1) % count]?.thumbnailUrl
+      : undefined;
+
+  useEffect(() => {
+    if (!cycling || !upcomingThumbnail) return;
+    if (window.matchMedia?.(REDUCED_MOTION_QUERY).matches) return;
+
+    // 카드의 <img>와 같은 CORS 모드로 받아야 같은 캐시 항목을 쓴다.
+    const preload = new Image();
+    preload.crossOrigin = "anonymous";
+    preload.src = upcomingThumbnail;
+  }, [cycling, upcomingThumbnail]);
+
   useEffect(() => {
     const button = buttonRef.current;
 

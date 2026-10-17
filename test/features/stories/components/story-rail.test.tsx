@@ -216,4 +216,37 @@ describe("StoryRail cards", () => {
     });
     expect(card).toHaveTextContent("스토리 2");
   });
+
+  it("fetches the next thumbnail before the card turns to it", () => {
+    const requested: string[] = [];
+    vi.stubGlobal(
+      "Image",
+      class {
+        crossOrigin = "";
+        set src(url: string) {
+          requested.push(url);
+        }
+      },
+    );
+    const photo = (id: number): StoryItem => ({
+      ...textStory(id, "a"),
+      background: null,
+      imagePath: `a/${id}`,
+      thumbnailUrl: `https://example.com/a/${id}-thumb`,
+    });
+
+    try {
+      renderRoute(() => (
+        <StoryRail
+          initialItems={[photo(1), photo(2)]}
+          viewer={{ pubId: "me", name: "나", avatarUrl: null }}
+          canWrite={false}
+        />
+      ));
+
+      expect(requested).toContain("https://example.com/a/2-thumb");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
