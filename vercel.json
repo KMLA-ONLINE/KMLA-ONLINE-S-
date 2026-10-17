@@ -16,7 +16,7 @@
   ],
   "headers": [
     {
-      "source": "/(.+)",
+      "source": "/((?!login$).+)",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
     },
     {
