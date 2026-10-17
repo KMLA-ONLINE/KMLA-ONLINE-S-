@@ -182,6 +182,26 @@ export async function getPushSupport(): Promise<PushSupport> {
   };
 }
 
+/**
+ * Push를 쓸 수 있는 기기인데 꺼져 있는가. 알림함의 안내 한 줄이 쓴다. 서버 구독 확인은 앱을 열 때
+ * 빠진 기록을 다시 등록하는 동안이나 요청이 실패하면 "아니오"로 와서, 브라우저 권한과 구독만 본다.
+ */
+export async function isWebPushOffOnThisDevice(): Promise<boolean> {
+  if (
+    !("Notification" in window) ||
+    !("serviceWorker" in navigator) ||
+    !("PushManager" in window) ||
+    (isIOS() && !isStandalone()) ||
+    !readVapidKey()
+  ) {
+    return false;
+  }
+  if (Notification.permission !== "granted") return true;
+  const registration = await getRegistration();
+  if (!registration) return false;
+  return !(await registration.pushManager.getSubscription());
+}
+
 export async function enableWebPush(): Promise<PushSupport> {
   // 권한은 첫 await보다 먼저 묻는다. 서비스 워커·구독 확인을 기다린 뒤에 물으면 탭의
   // 사용자 활성화가 식어, 브라우저가 첫 요청을 창 없이 흘려보내고 두 번째 탭에서야 묻는다.

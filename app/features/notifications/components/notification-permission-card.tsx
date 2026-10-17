@@ -1,10 +1,12 @@
-import { BellRingIcon } from "lucide-react";
+import { BellOffIcon, BellRingIcon } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { toast } from "sonner";
 
 import {
   enableWebPush,
   getPushSupport,
+  isWebPushOffOnThisDevice,
 } from "~/features/notifications/data/push";
 import {
   recordInboxReminderDismissed,
@@ -18,6 +20,9 @@ import { Button } from "~/shared/ui/button";
  * 첫 진입 창(`NotificationPermissionPrompt`)에서 넘긴 사람에게 알림함에서 다시 권하는 카드.
  * 닫기를 `INBOX_REMINDER_LIMIT`번 누르면 더 띄우지 않는다. 창에 아직 답하지 않았으면 그 창이
  * 먼저라 띄우지 않는다.
+ *
+ * 카드가 없는 동안 이 기기의 Push가 꺼져 있으면 알림 설정으로 가는 한 줄을 대신 둔다. 닫을 수 없고
+ * 브라우저 권한도 묻지 않는다. 묻는 일은 첫 진입 창과 카드가 맡는다.
  */
 export function NotificationPermissionCard({
   profileId,
@@ -27,8 +32,19 @@ export function NotificationPermissionCard({
   const [eligible, setEligible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [pending, setPending] = useState(false);
+  const [pushOff, setPushOff] = useState(false);
   const offline = useOffline();
   const visible = eligible && !offline && !dismissed;
+
+  useEffect(() => {
+    let cancelled = false;
+    void isWebPushOffOnThisDevice().then((off) => {
+      if (!cancelled) setPushOff(off);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dismissed]);
 
   useEffect(() => {
     if (!shouldShowInboxReminder(profileId)) return;
@@ -70,7 +86,21 @@ export function NotificationPermissionCard({
     }
   };
 
-  if (!visible) return null;
+  if (!visible) {
+    if (!pushOff) return null;
+    return (
+      <p className="mx-4 flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground md:mx-1">
+        <BellOffIcon aria-hidden className="size-4 shrink-0" />
+        <span className="min-w-0 flex-1">이 기기에서 알림이 꺼져 있어요</span>
+        <Link
+          to="/settings/noti"
+          className="shrink-0 font-medium text-foreground underline-offset-4 hover:underline"
+        >
+          알림 설정
+        </Link>
+      </p>
+    );
+  }
 
   return (
     <section
