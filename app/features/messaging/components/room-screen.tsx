@@ -1675,6 +1675,14 @@ function ComposerShell({
   useEffect(() => {
     if (replyingId) textareaRef.current?.focus();
   }, [replyingId]);
+  // 방에 들어오면 바로 칠 수 있게 입력창으로 간다. 폰·태블릿은 화면 키보드가 대화를 덮으므로 두지
+  // 않는다. 되살린 초안이 있으면 그 끝에서 이어 쓴다.
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea || isHandheld()) return;
+    textarea.focus({ preventScroll: true });
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  }, []);
   const [attachmentActionsExpanded, setAttachmentActionsExpanded] =
     useState(false);
   const composing = useRef(false);

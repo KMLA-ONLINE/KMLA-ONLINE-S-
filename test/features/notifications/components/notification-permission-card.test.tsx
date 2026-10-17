@@ -8,11 +8,13 @@ import { renderRoute } from "../../../router";
 const mocks = vi.hoisted(() => ({
   enableWebPush: vi.fn(),
   getPushSupport: vi.fn(),
+  isWebPushOffOnThisDevice: vi.fn(),
 }));
 
 vi.mock("~/features/notifications/data/push", () => mocks);
 
 const TITLE = "중요한 소식을 기기에서도 받아보세요";
+const OFF_NOTICE = "이 기기에서 알림이 꺼져 있어요";
 
 function renderCard() {
   return renderRoute(() => <NotificationPermissionCard profileId={42} />);
@@ -33,6 +35,7 @@ describe("NotificationPermissionCard", () => {
       permission: "granted",
       subscribed: true,
     });
+    mocks.isWebPushOffOnThisDevice.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -118,5 +121,53 @@ describe("NotificationPermissionCard", () => {
 
     await Promise.resolve();
     expect(mocks.getPushSupport).not.toHaveBeenCalled();
+  });
+
+  describe("꺼져 있다는 표시", () => {
+    it("권하는 카드가 떠 있으면 함께 띄우지 않는다", async () => {
+      renderCard();
+
+      expect(await screen.findByText(TITLE)).toBeInTheDocument();
+      expect(screen.queryByText(OFF_NOTICE)).not.toBeInTheDocument();
+    });
+
+    it("카드를 더 띄우지 않는 기기에는 알림 설정으로 가는 한 줄을 띄운다", async () => {
+      mocks.getPushSupport.mockResolvedValue({
+        state: "available",
+        permission: "denied",
+        subscribed: false,
+      });
+
+      renderCard();
+
+      expect(await screen.findByText(OFF_NOTICE)).toBeVisible();
+      expect(screen.getByRole("link", { name: "알림 설정" })).toHaveAttribute(
+        "href",
+        "/settings/noti",
+      );
+      expect(screen.queryByText(TITLE)).not.toBeInTheDocument();
+    });
+
+    it("카드를 닫으면 그 자리에 한 줄을 띄운다", async () => {
+      const view = renderCard();
+
+      await view.user.click(
+        await screen.findByRole("button", { name: "닫기" }),
+      );
+
+      expect(await screen.findByText(OFF_NOTICE)).toBeVisible();
+    });
+
+    it("이 기기에서 알림을 받고 있으면 띄우지 않는다", async () => {
+      window.localStorage.clear();
+      mocks.isWebPushOffOnThisDevice.mockResolvedValue(false);
+
+      renderCard();
+
+      await waitFor(() =>
+        expect(mocks.isWebPushOffOnThisDevice).toHaveBeenCalledOnce(),
+      );
+      expect(screen.queryByText(OFF_NOTICE)).not.toBeInTheDocument();
+    });
   });
 });

@@ -11,6 +11,7 @@ import {
   disconnectWebPushForLogout,
   enableWebPush,
   getPushSupport,
+  isWebPushOffOnThisDevice,
   resyncWebPushSubscription,
 } from "~/features/notifications/data/push";
 
@@ -440,5 +441,58 @@ describe("Web Push configuration", () => {
     await vi.advanceTimersByTimeAsync(5000);
 
     await expect(support).resolves.toEqual({ state: "unsupported" });
+  });
+
+  describe("whether Push is off on this device", () => {
+    function stubSubscription(subscription: { endpoint: string } | null) {
+      getRegistration.mockResolvedValue({
+        active: {},
+        pushManager: {
+          getSubscription: vi.fn().mockResolvedValue(subscription),
+        },
+      });
+    }
+
+    beforeEach(() => {
+      vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", VALID_VAPID_KEY);
+    });
+
+    it.each(["default", "denied"])(
+      "is off while permission is %s",
+      async (permission) => {
+        vi.stubGlobal("Notification", { permission, requestPermission });
+        stubSubscription(null);
+
+        await expect(isWebPushOffOnThisDevice()).resolves.toBe(true);
+      },
+    );
+
+    it("is off when permission is granted but the browser has no subscription", async () => {
+      vi.stubGlobal("Notification", {
+        permission: "granted",
+        requestPermission,
+      });
+      stubSubscription(null);
+
+      await expect(isWebPushOffOnThisDevice()).resolves.toBe(true);
+    });
+
+    // 서버 기록은 앱을 열 때 다시 등록하는 동안이나 요청이 실패하면 "아니오"로 올 수 있다.
+    it("trusts the browser subscription without asking the server", async () => {
+      vi.stubGlobal("Notification", {
+        permission: "granted",
+        requestPermission,
+      });
+      stubSubscription({ endpoint: "https://push.example/subscription" });
+
+      await expect(isWebPushOffOnThisDevice()).resolves.toBe(false);
+      expect(rpc).not.toHaveBeenCalled();
+    });
+
+    it("is not off where Push cannot be used at all", async () => {
+      vi.stubEnv("VITE_WEB_PUSH_VAPID_PUBLIC_KEY", "");
+
+      await expect(isWebPushOffOnThisDevice()).resolves.toBe(false);
+    });
   });
 });
