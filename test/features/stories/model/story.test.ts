@@ -83,6 +83,12 @@ describe("readStoryGesture", () => {
     ).toEqual({ kind: "author", direction: "previous" });
   });
 
+  it("counts a short, fast flick as an author swipe", () => {
+    expect(
+      readStoryGesture({ dx: -40, dy: 4, durationMs: 80, x: 200, width }),
+    ).toEqual({ kind: "author", direction: "next" });
+  });
+
   it("closes on a vertical swipe", () => {
     expect(
       readStoryGesture({ dx: 20, dy: 120, durationMs: 200, x: 200, width }),

@@ -123,6 +123,13 @@ export const STORY_SWIPE_CLOSE_DISTANCE_PX = 80;
 /** 옆으로 이만큼 쓸고 떼면 다음이나 이전 작성자로 건너뛴다. */
 export const STORY_SWIPE_AUTHOR_DISTANCE_PX = 60;
 
+/**
+ * 거리가 모자라도 이만큼 움직였고 이보다 빨랐으면(px/ms) 튕긴 것으로 보고 건너뛴다. 손가락을
+ * 짧게 튕겨 넘기는 습관이 흔한데, 거리만 보면 그 동작이 제자리로 돌아온다.
+ */
+const STORY_FLICK_MIN_DISTANCE_PX = 25;
+const STORY_FLICK_MIN_SPEED = 0.3;
+
 export type StoryGesture =
   | { kind: "tap"; side: "previous" | "next" }
   | { kind: "author"; direction: "previous" | "next" }
@@ -131,8 +138,9 @@ export type StoryGesture =
 
 /**
  * 뷰어에서 누르고 뗀 한 번을 동작으로 읽는다. 탭은 그 작성자 안에서 장을 넘기고(왼쪽 3분의 1은
- * 이전), 옆으로 쓸면 작성자를 건너뛴다(왼쪽으로 쓸면 다음). 쓸기는 걸린 시간과 상관없이 이동
- * 거리로만 판정한다. 시간으로 먼저 가르면 빠른 쓸기가 탭이 되어 장이 넘어간다.
+ * 이전), 옆으로 쓸면 작성자를 건너뛴다(왼쪽으로 쓸면 다음). 탭과 쓸기는 이동 거리로 가른다.
+ * 시간으로 먼저 가르면 빠른 쓸기가 탭이 되어 장이 넘어간다. 시간은 짧게 튕긴 것을 알아보는
+ * 데만 쓴다.
  */
 export function readStoryGesture({
   dx,
@@ -153,7 +161,14 @@ export function readStoryGesture({
   if (!horizontal && Math.abs(dy) >= STORY_SWIPE_CLOSE_DISTANCE_PX) {
     return { kind: "close" };
   }
-  if (horizontal && Math.abs(dx) >= STORY_SWIPE_AUTHOR_DISTANCE_PX) {
+  const flicked =
+    Math.abs(dx) >= STORY_FLICK_MIN_DISTANCE_PX &&
+    Math.abs(dx) / Math.max(durationMs, 1) >= STORY_FLICK_MIN_SPEED;
+
+  if (
+    horizontal &&
+    (Math.abs(dx) >= STORY_SWIPE_AUTHOR_DISTANCE_PX || flicked)
+  ) {
     return { kind: "author", direction: dx < 0 ? "next" : "previous" };
   }
   if (Math.max(Math.abs(dx), Math.abs(dy)) > STORY_TAP_SLOP_PX) {

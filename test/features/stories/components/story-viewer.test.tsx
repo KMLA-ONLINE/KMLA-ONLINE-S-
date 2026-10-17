@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { StoryViewer } from "~/features/stories/components/story-viewer";
 import type { StoryItem } from "~/features/stories/data/queries";
 import { groupStoriesByAuthor } from "~/features/stories/model/story";
-import { fireEvent, renderRoute, screen } from "../../../router";
+import { act, fireEvent, renderRoute, screen } from "../../../router";
 
 vi.mock("~/features/stories/data/mutations", () => ({
   deleteMyStory: vi.fn(),
@@ -81,5 +81,27 @@ describe("StoryViewer gestures", () => {
 
     expect(onClose).toHaveBeenCalled();
     expect(onShow).not.toHaveBeenCalled();
+  });
+
+  describe("with a measured card", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("slides the next author in before showing their story", () => {
+      vi.useFakeTimers();
+      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(
+        390,
+      );
+      const { onShow } = renderViewer(1);
+
+      swipe({ x: 250, y: 300 }, { x: 120, y: 310 });
+
+      expect(onShow).not.toHaveBeenCalled();
+      act(() => {
+        vi.advanceTimersByTime(260);
+      });
+      expect(onShow).toHaveBeenCalledWith(3);
+    });
   });
 });
