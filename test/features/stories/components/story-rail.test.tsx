@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useLocation, useNavigate } from "react-router";
 
 import { StoryRail } from "~/features/stories/components/story-rail";
+import type { StoryItem } from "~/features/stories/data/queries";
 import { act, fireEvent, renderRoute, screen, waitFor } from "../../../router";
 
 const mutations = vi.hoisted(() => ({
@@ -145,5 +146,73 @@ describe("StoryRail composer", () => {
       expect(toast.success).toHaveBeenCalledWith("스토리를 올렸습니다."),
     );
     expect(screen.getByTestId("location")).toHaveTextContent(/^$/);
+  });
+});
+
+function textStory(id: number, pubId: string): StoryItem {
+  return {
+    id,
+    pubId,
+    name: `작성자 ${pubId}`,
+    avatarUrl: null,
+    content: `스토리 ${id}`,
+    background: "blue",
+    imagePath: null,
+    thumbnailUrl: null,
+    linkUrl: null,
+    publishedAt: "2026-10-17T00:00:00Z",
+  };
+}
+
+function renderRail() {
+  return renderRoute(() => (
+    <>
+      <StoryRail
+        initialItems={[textStory(1, "a"), textStory(2, "a"), textStory(3, "b")]}
+        viewer={{ pubId: "me", name: "나", avatarUrl: null }}
+        canWrite={false}
+      />
+      <LocationProbe />
+    </>
+  ));
+}
+
+describe("StoryRail cards", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("cycles an author's card every five seconds and opens the story it shows", () => {
+    vi.useFakeTimers();
+    renderRail();
+    const card = screen.getByRole("button", { name: /작성자 a 스토리 2개/ });
+
+    expect(card).toHaveTextContent("스토리 1");
+
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(card).toHaveTextContent("스토리 2");
+
+    fireEvent.click(card);
+    expect(screen.getByTestId("location")).toHaveTextContent("?story=2");
+  });
+
+  it("holds the card still while the pointer rests on it", () => {
+    vi.useFakeTimers();
+    renderRail();
+    const card = screen.getByRole("button", { name: /작성자 a 스토리 2개/ });
+
+    fireEvent.pointerEnter(card, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(card).toHaveTextContent("스토리 1");
+
+    fireEvent.pointerLeave(card, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(card).toHaveTextContent("스토리 2");
   });
 });

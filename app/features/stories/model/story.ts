@@ -110,3 +110,76 @@ export function groupStoriesByAuthor<T extends { pubId: string }>(
 
   return groups;
 }
+
+/** 누르고 있는 동안은 멈춘다. 이보다 짧게 눌렀다 떼면 탭으로 본다. */
+export const STORY_HOLD_THRESHOLD_MS = 250;
+
+/** 손가락이 이보다 덜 움직였으면 탭이다. 더 움직였으면 쓸기 시도라서 장을 넘기지 않는다. */
+const STORY_TAP_SLOP_PX = 10;
+
+/** 화면을 위나 아래로 이만큼 쓸고 떼면 뷰어를 닫는다. */
+export const STORY_SWIPE_CLOSE_DISTANCE_PX = 80;
+
+/** 옆으로 이만큼 쓸고 떼면 다음이나 이전 작성자로 건너뛴다. */
+export const STORY_SWIPE_AUTHOR_DISTANCE_PX = 60;
+
+export type StoryGesture =
+  | { kind: "tap"; side: "previous" | "next" }
+  | { kind: "author"; direction: "previous" | "next" }
+  | { kind: "close" }
+  | { kind: "none" };
+
+/**
+ * 뷰어에서 누르고 뗀 한 번을 동작으로 읽는다. 탭은 그 작성자 안에서 장을 넘기고(왼쪽 3분의 1은
+ * 이전), 옆으로 쓸면 작성자를 건너뛴다(왼쪽으로 쓸면 다음). 쓸기는 걸린 시간과 상관없이 이동
+ * 거리로만 판정한다. 시간으로 먼저 가르면 빠른 쓸기가 탭이 되어 장이 넘어간다.
+ */
+export function readStoryGesture({
+  dx,
+  dy,
+  durationMs,
+  x,
+  width,
+}: {
+  dx: number;
+  dy: number;
+  durationMs: number;
+  /** 카드 왼쪽 끝에서 뗀 자리까지의 거리. */
+  x: number;
+  width: number;
+}): StoryGesture {
+  const horizontal = Math.abs(dx) > Math.abs(dy);
+
+  if (!horizontal && Math.abs(dy) >= STORY_SWIPE_CLOSE_DISTANCE_PX) {
+    return { kind: "close" };
+  }
+  if (horizontal && Math.abs(dx) >= STORY_SWIPE_AUTHOR_DISTANCE_PX) {
+    return { kind: "author", direction: dx < 0 ? "next" : "previous" };
+  }
+  if (Math.max(Math.abs(dx), Math.abs(dy)) > STORY_TAP_SLOP_PX) {
+    return { kind: "none" };
+  }
+  if (durationMs > STORY_HOLD_THRESHOLD_MS) return { kind: "none" };
+
+  return { kind: "tap", side: x < width / 3 ? "previous" : "next" };
+}
+
+export type StoryAuthorJump =
+  { kind: "show"; id: number } | { kind: "close" } | { kind: "stay" };
+
+/**
+ * 옆으로 쓸었을 때 갈 곳. Facebook처럼 이웃 작성자의 첫 장으로 간다. 마지막 작성자에서 더 넘기면
+ * 볼 것이 없으니 닫고, 첫 작성자에서 되돌리면 그 자리에 둔다.
+ */
+export function findAuthorJump<T extends { pubId: string; id: number }>(
+  groups: readonly StoryAuthorGroup<T>[],
+  groupIndex: number,
+  direction: "previous" | "next",
+): StoryAuthorJump {
+  const target = groups[groupIndex + (direction === "next" ? 1 : -1)];
+  const first = target?.stories[0];
+
+  if (first) return { kind: "show", id: first.id };
+
+  return direction === "next" ? { kind: "close" } : { kind: "stay" };
+}

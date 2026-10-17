@@ -19,6 +19,8 @@ import { createStoryMediaUrls } from "~/features/stories/data/files";
 import { deleteMyStory } from "~/features/stories/data/mutations";
 import type { StoryItem } from "~/features/stories/data/queries";
 import {
+  findAuthorJump,
+  readStoryGesture,
   STORY_BACKGROUNDS,
   STORY_DURATION_MS,
   type StoryAuthorGroup,
@@ -37,12 +39,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/shared/ui/dropdown-menu";
-
-/** 누르고 있는 동안은 멈춘다. 이보다 짧게 눌렀다 떼면 탭으로 보고 장을 넘긴다. */
-const HOLD_THRESHOLD_MS = 250;
-
-/** 화면을 위나 아래로 이만큼 쓸고 떼면 뷰어를 닫는다. */
-const SWIPE_CLOSE_DISTANCE_PX = 80;
 
 /** 쓰는 동안 카드가 움직여 보이는 최대 거리. 놓으면 닫힌다는 걸 알릴 만큼만 움직인다. */
 const SWIPE_DRAG_LIMIT_PX = 48;
@@ -119,17 +115,33 @@ export function StoryViewer({
 
   /**
    * 쓰는 동안 카드가 손가락 쪽으로 조금 밀리고 작아진다. 움직이지 않으면 사용자는 쓸기가
-   * 닫기 동작이라는 걸 알 수 없고, 끝까지 따라가면 어색하다. 그래서 저항을 두어
-   * `SWIPE_DRAG_LIMIT_PX` 근처에서 멈추게 한다. 프레임마다 React를 다시 그리지 않도록 style을
-   * 직접 쓴다.
+   * 닫기(위아래)나 작성자 건너뛰기(옆) 동작이라는 걸 알 수 없고, 끝까지 따라가면 어색하다.
+   * 그래서 저항을 두어 `SWIPE_DRAG_LIMIT_PX` 근처에서 멈추게 한다. 프레임마다 React를 다시
+   * 그리지 않도록 style을 직접 쓴다.
    */
-  function dragCard(dy: number) {
+  function dragCard(dx: number, dy: number) {
     const card = cardRef.current;
     if (!card) return;
 
-    const shrink = Math.min(Math.abs(dy) / 2000, 0.04);
+    const shrink = Math.min(Math.max(Math.abs(dx), Math.abs(dy)) / 2000, 0.04);
     card.style.transition = "none";
-    card.style.transform = `translateY(${resistDrag(dy, SWIPE_DRAG_LIMIT_PX)}px) scale(${1 - shrink})`;
+    card.style.transform = `translate(${resistDrag(dx, SWIPE_DRAG_LIMIT_PX)}px, ${resistDrag(dy, SWIPE_DRAG_LIMIT_PX)}px) scale(${1 - shrink})`;
+  }
+
+  /**
+   * 작성자를 건너뛰면 새 작성자의 카드가 쓴 방향 반대편에서 밀려 들어온다. 이웃 작성자의 카드를
+   * 미리 그려 두지 않으므로 손가락을 끝까지 따라가게 하지는 않는다.
+   */
+  function slideCardIn(direction: "previous" | "next") {
+    const card = cardRef.current;
+    if (!card) return;
+
+    card.style.transition = "none";
+    card.style.transform = `translateX(${direction === "next" ? SWIPE_DRAG_LIMIT_PX : -SWIPE_DRAG_LIMIT_PX}px)`;
+    // 위 위치를 한 번 그린 뒤에 전환을 건다. 같은 프레임에 바꾸면 브라우저가 둘을 합쳐 버린다.
+    void card.offsetWidth;
+    card.style.transition = "transform 200ms ease-out";
+    card.style.transform = "";
   }
 
   /** 닫을 만큼 쓸지 않고 떼면 제자리로 돌아간다. */
@@ -352,10 +364,11 @@ export function StoryViewer({
               />
             ) : null}
 
-            {/* 탭 영역. 왼쪽 3분의 1은 이전, 나머지는 다음이다. 누르고 있으면 멈추고, 위나 아래로
-                쓸면 닫는다. `touch-none`이 없으면 브라우저가 쓸기를 스크롤로 가져가며
+            {/* 탭 영역. 왼쪽 3분의 1은 이전, 나머지는 다음이다. 누르고 있으면 멈추고, 옆으로 쓸면
+                작성자를 건너뛰고, 위나 아래로 쓸면 닫는다. `touch-none`이 없으면 브라우저가 쓸기를 스크롤로 가져가며
                 pointercancel을 보내 떼는 순간을 받지 못한다. */}
             <div
+              data-testid="story-gesture-area"
               className="absolute inset-0 touch-none"
               onPointerDown={(event) => {
                 // 마우스로 끌다 카드 밖으로 나가도 떼는 순간을 받는다. 터치는 원래 이렇게 묶인다.
@@ -374,7 +387,8 @@ export function StoryViewer({
                 const dx = event.clientX - press.x;
                 const dy = event.clientY - press.y;
 
-                dragCard(Math.abs(dy) > Math.abs(dx) ? dy : 0);
+                if (Math.abs(dy) > Math.abs(dx)) dragCard(0, dy);
+                else dragCard(dx, 0);
               }}
               onPointerUp={(event) => {
                 const press = pressRef.current;
@@ -385,22 +399,39 @@ export function StoryViewer({
                 // 다른 곳(버튼·링크)에서 누르기 시작한 손가락이 여기서 떨어진 것은 탭이 아니다.
                 if (!press) return;
 
-                const dx = event.clientX - press.x;
-                const dy = event.clientY - press.y;
+                const rect = event.currentTarget.getBoundingClientRect();
+                const gesture = readStoryGesture({
+                  dx: event.clientX - press.x,
+                  dy: event.clientY - press.y,
+                  durationMs: Date.now() - press.startedAt,
+                  x: event.clientX - rect.left,
+                  width: rect.width,
+                });
 
-                if (
-                  Math.abs(dy) >= SWIPE_CLOSE_DISTANCE_PX &&
-                  Math.abs(dy) > Math.abs(dx)
-                ) {
+                if (gesture.kind === "close") {
                   onClose();
                   return;
                 }
+                if (gesture.kind === "author" && position) {
+                  const jump = findAuthorJump(
+                    groups,
+                    position.group,
+                    gesture.direction,
+                  );
+
+                  if (jump.kind === "close") {
+                    onClose();
+                    return;
+                  }
+                  if (jump.kind === "show") {
+                    onShow(jump.id);
+                    slideCardIn(gesture.direction);
+                    return;
+                  }
+                }
                 settleCard();
-                if (Date.now() - press.startedAt > HOLD_THRESHOLD_MS) return;
-
-                const rect = event.currentTarget.getBoundingClientRect();
-
-                if (event.clientX - rect.left < rect.width / 3) previous();
+                if (gesture.kind !== "tap") return;
+                if (gesture.side === "previous") previous();
                 else next();
               }}
               onPointerCancel={() => {

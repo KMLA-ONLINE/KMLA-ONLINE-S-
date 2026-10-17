@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  findAuthorJump,
   groupStoriesByAuthor,
   isStoryContentValid,
   normalizeStoryLink,
+  readStoryGesture,
 } from "~/features/stories/model/story";
 
 describe("story content", () => {
@@ -53,5 +55,69 @@ describe("groupStoriesByAuthor", () => {
 
     expect(groups.map((group) => group.pubId)).toEqual(["me", "a", "b"]);
     expect(groups[1]?.stories.map((story) => story.id)).toEqual([1, 2]);
+  });
+});
+
+describe("readStoryGesture", () => {
+  const width = 300;
+
+  it("pages within the author on a short, still tap", () => {
+    expect(
+      readStoryGesture({ dx: 2, dy: 3, durationMs: 120, x: 50, width }),
+    ).toEqual({ kind: "tap", side: "previous" });
+    expect(
+      readStoryGesture({ dx: 0, dy: 0, durationMs: 120, x: 200, width }),
+    ).toEqual({ kind: "tap", side: "next" });
+  });
+
+  it("jumps to another author on a quick horizontal swipe instead of paging", () => {
+    expect(
+      readStoryGesture({ dx: -90, dy: 10, durationMs: 120, x: 200, width }),
+    ).toEqual({ kind: "author", direction: "next" });
+    expect(
+      readStoryGesture({ dx: 90, dy: -10, durationMs: 400, x: 50, width }),
+    ).toEqual({ kind: "author", direction: "previous" });
+  });
+
+  it("closes on a vertical swipe", () => {
+    expect(
+      readStoryGesture({ dx: 20, dy: 120, durationMs: 200, x: 200, width }),
+    ).toEqual({ kind: "close" });
+  });
+
+  it("does nothing after a hold or a swipe too short to count", () => {
+    expect(
+      readStoryGesture({ dx: 0, dy: 0, durationMs: 600, x: 200, width }),
+    ).toEqual({ kind: "none" });
+    expect(
+      readStoryGesture({ dx: -30, dy: 0, durationMs: 120, x: 200, width }),
+    ).toEqual({ kind: "none" });
+  });
+});
+
+describe("findAuthorJump", () => {
+  const groups = [
+    { pubId: "me", stories: [{ pubId: "me", id: 1 }] },
+    {
+      pubId: "a",
+      stories: [
+        { pubId: "a", id: 2 },
+        { pubId: "a", id: 3 },
+      ],
+    },
+    { pubId: "b", stories: [{ pubId: "b", id: 4 }] },
+  ];
+
+  it("lands on the first story of the neighbouring author", () => {
+    expect(findAuthorJump(groups, 0, "next")).toEqual({ kind: "show", id: 2 });
+    expect(findAuthorJump(groups, 2, "previous")).toEqual({
+      kind: "show",
+      id: 2,
+    });
+  });
+
+  it("closes past the last author and stays put before the first", () => {
+    expect(findAuthorJump(groups, 2, "next")).toEqual({ kind: "close" });
+    expect(findAuthorJump(groups, 0, "previous")).toEqual({ kind: "stay" });
   });
 });
