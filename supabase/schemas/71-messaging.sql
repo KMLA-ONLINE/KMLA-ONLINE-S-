@@ -15,7 +15,7 @@ create table public.conversations (
   -- 그룹 대화의 이름. 1:1 대화는 상대 이름을 표시하므로 비워 둔다.
   name text,
   -- 그룹의 소유주. 처음에는 만든 사람이고, 소유주가 나가면 가장 먼저 들어온 남은 멤버에게 넘어간다.
-  -- 소유주와 앱 관리자만 그룹을 지울 수 있다(기능 명세 §13.16).
+  -- 소유주만 그룹을 지울 수 있다(기능 명세 §13.16).
   created_by bigint references public.profiles(id) on delete set null,
   -- 1:1 대화의 두 프로필. 작은 ID를 앞에 두어 같은 두 사람 사이에 대화가 하나만 생기게 한다.
   direct_profile_low bigint references public.profiles(id) on delete cascade,
@@ -345,7 +345,7 @@ returns table (
   last_message_deleted boolean,
   unread_count integer,
   muted boolean,
-  -- 그룹을 지울 수 있는지. 소유주와 앱 관리자다.
+  -- 그룹을 지울 수 있는지. 소유주만 지운다.
   can_delete boolean,
   -- 마지막 메시지의 첫 첨부 종류. 본문 없이 첨부만 있는 메시지의 미리보기에 쓴다.
   last_message_attachment_kind text
@@ -395,7 +395,7 @@ begin
     coalesce(latest_period.muted_until > now(), false),
     conversation.type = 'group'
       and latest_period.left_at is null
-      and (conversation.created_by = caller_profile_id or caller.role = 'admin'),
+      and conversation.created_by = caller_profile_id,
     (
       select attachment.kind
       from private.message_attachments as attachment
@@ -405,7 +405,6 @@ begin
       limit 1
     )
   from latest_period
-  join public.profiles as caller on caller.id = caller_profile_id
   join public.conversations as conversation
     on conversation.id = latest_period.conversation_id
     and (p_conversation_id is not null or not latest_period.left_by_self)
@@ -2234,7 +2233,7 @@ revoke all on function public.leave_conversation(uuid)
 grant execute on function public.leave_conversation(uuid)
   to authenticated;
 
--- 그룹 대화를 지운다(기능 명세 §13.16). 소유주와 앱 관리자만 할 수 있다. 다른 멤버를 내보내는 기능은
+-- 그룹 대화를 지운다(기능 명세 §13.16). 소유주만 할 수 있다. 다른 멤버를 내보내는 기능은
 -- 두지 않는다. 멤버, 메시지, 반응, 고정과 첨부 행은 외래 키 CASCADE로 함께 사라지고, 첨부 object 경로는
 -- 그 전에 정리 큐로 옮긴다. 지우기 전에 현재 멤버에게 신호를 보내 열린 화면이 대화 목록으로 돌아가게 한다.
 create function public.delete_group_conversation(p_conversation_id uuid)
@@ -2254,13 +2253,8 @@ begin
 
   target := private.lock_group_for_member(caller_profile_id, p_conversation_id);
 
-  if target.created_by is distinct from caller_profile_id and not exists (
-    select 1
-    from public.profiles as profile
-    where profile.id = caller_profile_id
-      and profile.role = 'admin'
-  ) then
-    raise exception 'group owner or app administrator required'
+  if target.created_by is distinct from caller_profile_id then
+    raise exception 'group owner required'
       using errcode = '42501';
   end if;
 
