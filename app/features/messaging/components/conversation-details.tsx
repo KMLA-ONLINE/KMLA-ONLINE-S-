@@ -57,7 +57,7 @@ export function ConversationDetails({
   onInvite: () => void;
   onRename: () => void;
   onLeave: () => void;
-  /** 소유주와 앱 관리자에게만 보인다. */
+  /** 소유주에게만 보인다. */
   onDeleteGroup: () => void;
   /** 공유된 사진과 파일 수. 아직 모르면 비어 있다. */
   sharedCounts: { media: number; files: number } | undefined;

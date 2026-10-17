@@ -8,7 +8,7 @@ export type MessageChangeKind = "content" | "meta";
 export interface MessagingSignalHandlers {
   /** 이 대화의 메시지가 새로 오거나 바뀌었다. */
   onMessageChanged: (conversationId: string, kind: MessageChangeKind) => void;
-  /** 소유주나 앱 관리자가 이 그룹 대화를 지웠다. */
+  /** 소유주가 이 그룹 대화를 지웠다. */
   onConversationDeleted: (conversationId: string) => void;
   /**
    * 채널이 붙었다. 처음 붙을 때도 부른다. 대화방 loader가 읽은 뒤 채널이 붙기 전까지, 또는 끊긴
