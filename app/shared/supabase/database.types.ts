@@ -1529,6 +1529,73 @@ export type Database = {
           },
         ]
       }
+      story_reactions: {
+        Row: {
+          created_at: string
+          id: number
+          profile_id: number
+          reaction: Database["public"]["Enums"]["post_reaction"]
+          story_id: number
+        }
+        ComputedFields: never
+        Insert: {
+          created_at?: string
+          id?: number
+          profile_id: number
+          reaction: Database["public"]["Enums"]["post_reaction"]
+          story_id: number
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          profile_id?: number
+          reaction?: Database["public"]["Enums"]["post_reaction"]
+          story_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "story_reactions_story_id_profile_id_fkey"
+            columns: ["story_id", "profile_id"]
+            isOneToOne: false
+            referencedRelation: "story_views"
+            referencedColumns: ["story_id", "profile_id"]
+          },
+        ]
+      }
+      story_views: {
+        Row: {
+          profile_id: number
+          story_id: number
+          viewed_at: string
+        }
+        ComputedFields: never
+        Insert: {
+          profile_id: number
+          story_id: number
+          viewed_at?: string
+        }
+        Update: {
+          profile_id?: number
+          story_id?: number
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "story_views_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "story_views_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "stories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_timetables: {
         Row: {
           active_semester: string
@@ -2984,6 +3051,16 @@ export type Database = {
           title: string
         }[]
       }
+      list_story_viewers: {
+        Args: { p_story_id: number }
+        Returns: {
+          avatar_path: string
+          name: string
+          pub_id: string
+          reactions: Database["public"]["Enums"]["post_reaction"][]
+          viewed_at: string
+        }[]
+      }
       mark_all_my_notifications_read: {
         Args: Record<PropertyKey, never>
         Returns: number
@@ -3000,6 +3077,7 @@ export type Database = {
         Args: { p_notification_id: string }
         Returns: boolean
       }
+      mark_story_viewed: { Args: { p_story_id: number }; Returns: undefined }
       move_group_category: {
         Args: { p_category_id: string; p_direction: number }
         Returns: {
@@ -3328,6 +3406,13 @@ export type Database = {
           id: string
           sent_at: string
         }[]
+      }
+      send_story_reaction: {
+        Args: {
+          p_reaction: Database["public"]["Enums"]["post_reaction"]
+          p_story_id: number
+        }
+        Returns: undefined
       }
       set_comment_reaction: {
         Args: {

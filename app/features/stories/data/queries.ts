@@ -1,3 +1,4 @@
+import type { PostReaction } from "~/features/posts/model/types";
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import { createStoryMediaUrls } from "~/features/stories/data/files";
 import {
@@ -58,5 +59,40 @@ export async function listActiveStories(): Promise<StoryItem[]> {
     linkUrl: row.link_url,
     layout: parseStoryLayout(row.layout),
     publishedAt: row.published_at,
+  }));
+}
+
+export interface StoryViewerEntry {
+  pubId: string;
+  name: string;
+  avatarUrl: string | null;
+  viewedAt: string;
+  /** 보낸 순서대로. 같은 반응을 여러 번 보냈으면 그만큼 들어 있다. */
+  reactions: PostReaction[];
+}
+
+/** 작성자만 부를 수 있다. 다른 사람이 부르면 DB가 `42501`을 던진다. */
+export async function listStoryViewers(
+  storyId: number,
+): Promise<StoryViewerEntry[]> {
+  const { data, error } = await getSupabase().rpc("list_story_viewers", {
+    p_story_id: storyId,
+  });
+
+  if (error) throw error;
+
+  const rows = data ?? [];
+  const avatarUrls = await createProfileMediaUrls(
+    rows.map((row) => row.avatar_path),
+  );
+
+  return rows.map((row) => ({
+    pubId: row.pub_id,
+    name: row.name,
+    avatarUrl: row.avatar_path
+      ? (avatarUrls.get(row.avatar_path) ?? null)
+      : null,
+    viewedAt: row.viewed_at,
+    reactions: row.reactions,
   }));
 }

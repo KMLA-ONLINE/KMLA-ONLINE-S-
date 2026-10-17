@@ -14,9 +14,19 @@ import {
   StoryCaption,
   StoryLinkPill,
 } from "~/features/stories/components/story-canvas";
+import {
+  StoryReactionBar,
+  StoryViewersPanel,
+  StoryViewersTrigger,
+  useStoryViewers,
+  useStoryViewersPanel,
+} from "~/features/stories/components/story-engagement";
 import { storyKeys } from "~/features/stories/data/cache";
 import { createStoryMediaUrls } from "~/features/stories/data/files";
-import { deleteMyStory } from "~/features/stories/data/mutations";
+import {
+  deleteMyStory,
+  markStoryViewed,
+} from "~/features/stories/data/mutations";
 import type { StoryItem } from "~/features/stories/data/queries";
 import {
   findAuthorJump,
@@ -85,9 +95,19 @@ export function StoryViewer({
   const [menuOpen, setMenuOpen] = useState(false);
   // 다른 탭으로 가거나 화면을 끄면 멈춘다. 그러지 않으면 아무도 보지 않는 사이 다음 작성자들의
   // 스토리로 넘어간다.
-  const [hidden, setHidden] = useState(false);
+  // 처음부터 읽어 둔다. 가려진 탭에서 연 장을 첫 커밋에 본 것으로 남기지 않는다.
+  const [hidden, setHidden] = useState(
+    () =>
+      typeof document !== "undefined" && document.visibilityState === "hidden",
+  );
   const [loadedId, setLoadedId] = useState<number | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // 목록에서 프로필에 다녀와도 열린 채로 돌아오게 history 항목에 기억한다.
+  const viewersPanel = useStoryViewersPanel();
+  const viewersOpen = viewersPanel.open;
+  const setViewersOpen = viewersPanel.setOpen;
+  // 반응 줄을 누르는 중이다. 연달아 누르는 사이 다음 장으로 넘어가면 반응이 엉뚱한 장에 간다.
+  const [reacting, setReacting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [imageUrls, setImageUrls] = useState<ReadonlyMap<string, string>>(
     () => new Map(),
@@ -132,6 +152,7 @@ export function StoryViewer({
     ? groups[position.group + 1]?.stories[0]
     : undefined;
   const isMine = group?.pubId === viewerPubId;
+  const viewersQuery = useStoryViewers(isMine ? story?.id : undefined);
   const imageUrl = story?.imagePath
     ? (imageUrls.get(story.imagePath) ?? null)
     : null;
@@ -141,6 +162,8 @@ export function StoryViewer({
     hidden ||
     menuOpen ||
     confirmingDelete ||
+    viewersOpen ||
+    reacting ||
     waitingForImage ||
     sliding;
 
@@ -269,6 +292,22 @@ export function StoryViewer({
     navigationRef.current = { next, previous };
   });
 
+  // 다른 사람의 장이 화면에 뜨면 봤다고 남긴다. 사진이 아직 안 떴거나 탭이 가려졌으면 본 게
+  // 아니다. 처음 본 때만 의미가 있으니 이 뷰어를 연 동안 같은 장은 한 번만 보낸다. 실패해도 보는
+  // 데는 지장이 없어 알리지 않고, 그 장에 다시 오면 또 보낸다.
+  const markedRef = useRef(new Set<number>());
+  const shownId = story?.id;
+
+  useEffect(() => {
+    if (shownId === undefined || isMine || waitingForImage || hidden) return;
+    if (markedRef.current.has(shownId)) return;
+
+    markedRef.current.add(shownId);
+    markStoryViewed(shownId).catch(() => {
+      markedRef.current.delete(shownId);
+    });
+  }, [shownId, isMine, waitingForImage, hidden]);
+
   // 원본은 그 장을 열 때 서명한다. 다음 장 것도 함께 서명하고 미리 받아 두어 넘길 때 바로
   // 뜨게 한다. 옆으로 쓸어 건너뛸 작성자의 원본은 미리 받지 않는다. 쓸지 않으면 낭비이고, 쓸어도
   // 원본이 올 때까지 축소본을 깔아 둔다. 서명에 실패하면 이미지 없이 진행한다 — 기다리면 막대가
@@ -349,11 +388,11 @@ export function StoryViewer({
     }
 
     // 메뉴가 열려 있으면 화살표는 메뉴 항목을 움직이는 데 쓴다.
-    if (confirmingDelete || menuOpen) return;
+    if (confirmingDelete || menuOpen || viewersOpen) return;
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [confirmingDelete, menuOpen]);
+  }, [confirmingDelete, menuOpen, viewersOpen]);
 
   useEffect(() => {
     function onVisibilityChange() {
@@ -401,18 +440,27 @@ export function StoryViewer({
     await Promise.resolve(onDeleted()).catch(() => undefined);
   }
 
+  // 목록을 열 때 새로 받는다. 보는 동안에도 사람이 늘기 때문이다.
+  function openViewers() {
+    setViewersOpen(true);
+    void viewersQuery.refetch();
+  }
+
   if (!position || !group || !story) return null;
 
   return (
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) onClose();
+        if (open) return;
+        // 읽은 사람 목록이 올라와 있으면 Esc는 목록만 내린다.
+        if (viewersOpen) setViewersOpen(false);
+        else onClose();
       }}
     >
       <DialogContent
         showCloseButton={false}
-        className="inset-0 top-0 left-0 h-dvh max-w-none translate-x-0 translate-y-0 place-items-center gap-0 rounded-none bg-black p-0 text-white ring-0 sm:max-w-none data-open:zoom-in-100 data-closed:zoom-out-100"
+        className="inset-0 top-0 left-0 h-dvh max-w-none translate-x-0 translate-y-0 place-items-center gap-0 overflow-hidden rounded-none bg-black p-0 text-white ring-0 sm:max-w-none data-open:zoom-in-100 data-closed:zoom-out-100"
       >
         {/* 데스크톱은 카드 양옆이 비어 있어 그 자리에 넘김 버튼을 둔다. 양 끝에서도 자리는 남겨
             카드가 가운데에서 움직이지 않게 한다. 모바일은 카드가 화면을 채우므로 탭만 쓴다. */}
@@ -428,7 +476,12 @@ export function StoryViewer({
               들어온다. 바깥은 잘라서 데스크톱에서도 이웃 카드가 넘김 버튼 쪽으로 새지 않는다. */}
           <div
             ref={viewportRef}
-            className="relative size-full overflow-hidden select-none sm:aspect-[9/16] sm:h-[min(100dvh,56rem)] sm:w-auto sm:rounded-xl"
+            className={cn(
+              "relative size-full origin-top overflow-hidden transition-[scale,translate,border-radius] duration-300 ease-out select-none motion-reduce:transition-none sm:aspect-[9/16] sm:h-[min(100dvh,56rem)] sm:w-auto sm:rounded-xl",
+              // 읽은 사람 목록이 올라오면 위쪽 남은 자리로 작게 줄어든다.
+              viewersOpen &&
+                "translate-y-[max(0.75rem,env(safe-area-inset-top))] scale-[0.34] rounded-xl",
+            )}
           >
             <div
               ref={trackRef}
@@ -542,7 +595,19 @@ export function StoryViewer({
                       width: rect.width,
                     });
 
+                    // 목록이 올라와 줄어든 장을 누르거나 쓸면 목록만 내린다.
+                    if (viewersOpen) {
+                      settleTrack();
+                      setViewersOpen(false);
+                      return;
+                    }
                     if (gesture.kind === "close") {
+                      // 자기 장은 위로 쓸면 읽은 사람이 올라온다. 인스타그램과 같다.
+                      if (isMine && event.clientY < press.y) {
+                        settleTrack();
+                        openViewers();
+                        return;
+                      }
                       onClose();
                       return;
                     }
@@ -687,6 +752,26 @@ export function StoryViewer({
                     placement={story.layout?.link}
                   />
                 ) : null}
+
+                {/* 발치. 작성자에게는 읽은 사람, 다른 사람에게는 반응 줄이다. 버튼 밖의 빈 곳은 터치를
+                    받지 않아 그 아래의 링크와 탭 영역이 그대로 받는다. */}
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end bg-gradient-to-t from-black/40 to-transparent px-3 pt-10 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                  {isMine ? (
+                    <StoryViewersTrigger
+                      viewers={viewersQuery.data}
+                      open={viewersOpen}
+                      onOpen={openViewers}
+                    />
+                  ) : (
+                    <div className="flex-1">
+                      <StoryReactionBar
+                        key={story.id}
+                        storyId={story.id}
+                        onActiveChange={setReacting}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -698,6 +783,17 @@ export function StoryViewer({
             <ChevronRightIcon />
           </StoryNavButton>
         </div>
+
+        {isMine ? (
+          <StoryViewersPanel
+            open={viewersOpen}
+            viewers={viewersQuery.data}
+            failed={viewersQuery.isError}
+            scrollTop={viewersPanel.scrollTop}
+            onScroll={viewersPanel.onScroll}
+            onClose={() => setViewersOpen(false)}
+          />
+        ) : null}
 
         {confirmingDelete ? (
           <ConfirmDialog
