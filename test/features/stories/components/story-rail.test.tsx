@@ -160,6 +160,7 @@ function textStory(id: number, pubId: string): StoryItem {
     imagePath: null,
     thumbnailUrl: null,
     linkUrl: null,
+    layout: null,
     publishedAt: "2026-10-17T00:00:00Z",
   };
 }

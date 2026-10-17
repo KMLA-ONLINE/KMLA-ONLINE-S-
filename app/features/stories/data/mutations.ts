@@ -1,15 +1,21 @@
-import type { StoryBackground } from "~/features/stories/model/story";
+import type {
+  StoryBackground,
+  StoryLayout,
+} from "~/features/stories/model/story";
 import { getSupabase } from "~/shared/supabase/client";
+import type { Json } from "~/shared/supabase/database.types";
 
 export async function createTextStory(input: {
   content: string;
   background: StoryBackground;
   linkUrl: string | null;
+  layout: StoryLayout | null;
 }): Promise<void> {
   const { error } = await getSupabase().rpc("create_text_story", {
     p_content: input.content,
     p_background: input.background,
     p_link_url: input.linkUrl ?? undefined,
+    p_layout: (input.layout ?? undefined) as Json | undefined,
   });
 
   if (error) throw error;

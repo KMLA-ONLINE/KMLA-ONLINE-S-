@@ -2,7 +2,9 @@ import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import { createStoryMediaUrls } from "~/features/stories/data/files";
 import {
   isStoryBackground,
+  parseStoryLayout,
   type StoryBackground,
+  type StoryLayout,
 } from "~/features/stories/model/story";
 import { getSupabase } from "~/shared/supabase/client";
 
@@ -19,6 +21,8 @@ export interface StoryItem {
   /** 레일 카드용 축소본. 글 스토리는 `null`. */
   thumbnailUrl: string | null;
   linkUrl: string | null;
+  /** 글과 링크를 놓은 자리. 위치 편집 전에 올린 스토리는 `null`이라 기본 자리에 그린다. */
+  layout: StoryLayout | null;
   publishedAt: string;
 }
 
@@ -52,6 +56,7 @@ export async function listActiveStories(): Promise<StoryItem[]> {
       ? (thumbnailUrls.get(row.thumbnail_path) ?? null)
       : null,
     linkUrl: row.link_url,
+    layout: parseStoryLayout(row.layout),
     publishedAt: row.published_at,
   }));
 }

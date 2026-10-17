@@ -361,6 +361,7 @@ export function StoryViewer({
                 text={story.content}
                 overlay={story.imagePath !== null}
                 hasLink={story.linkUrl !== null}
+                placement={story.layout?.text}
               />
             ) : null}
 
@@ -541,7 +542,11 @@ export function StoryViewer({
             </div>
 
             {story.linkUrl ? (
-              <StoryLinkPill url={story.linkUrl} interactive />
+              <StoryLinkPill
+                url={story.linkUrl}
+                interactive
+                placement={story.layout?.link}
+              />
             ) : null}
           </div>
           <StoryNavButton

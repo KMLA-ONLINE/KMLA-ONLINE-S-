@@ -183,3 +183,123 @@ export function findAuthorJump<T extends { pubId: string; id: number }>(
 
   return direction === "next" ? { kind: "close" } : { kind: "stay" };
 }
+
+/**
+ * 글이나 링크를 캔버스 어디에 얼마나 크게 놓았는지. `x`·`y`는 9:16 캔버스 안의 0~1 비율 좌표로
+ * 요소의 중심이고, `scale`은 기본 크기에 대한 배율이다. 범위는 DB check(`is_story_layout`)와
+ * 같아야 한다.
+ */
+export interface StoryPlacement {
+  x: number;
+  y: number;
+  scale: number;
+}
+
+/** 키가 없는 요소는 예전처럼 기본 자리에 그린다. 위치 편집 전에 올린 스토리가 그렇다. */
+export interface StoryLayout {
+  text?: StoryPlacement;
+  link?: StoryPlacement;
+}
+
+export type StoryLayoutElement = keyof StoryLayout;
+
+export const STORY_SCALE_MIN = 0.5;
+export const STORY_SCALE_MAX = 2.5;
+
+/** 작성 창이 처음 놓는 자리. 사진 위 글은 사진을 가리지 않게 아래쪽에 둔다. */
+export function defaultStoryPlacement(
+  element: StoryLayoutElement,
+  { overlay }: { overlay: boolean },
+): StoryPlacement {
+  if (element === "link") return { x: 0.5, y: 0.88, scale: 1 };
+
+  return { x: 0.5, y: overlay ? 0.74 : 0.5, scale: 1 };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+/** jsonb로 저장해도 길어지지 않게 자른다. 화면에서 구분되지 않는 차이다. */
+function round(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
+}
+
+function clampPlacement({ x, y, scale }: StoryPlacement): StoryPlacement {
+  return {
+    x: round(clamp(x, 0, 1)),
+    y: round(clamp(y, 0, 1)),
+    scale: round(clamp(scale, STORY_SCALE_MIN, STORY_SCALE_MAX)),
+  };
+}
+
+/** 중심이 캔버스를 벗어나지 않게 끈다. `dx`·`dy`는 캔버스 폭·높이에 대한 비율이다. */
+export function moveStoryPlacement(
+  placement: StoryPlacement,
+  dx: number,
+  dy: number,
+): StoryPlacement {
+  return clampPlacement({
+    ...placement,
+    x: placement.x + dx,
+    y: placement.y + dy,
+  });
+}
+
+export function scaleStoryPlacement(
+  placement: StoryPlacement,
+  factor: number,
+): StoryPlacement {
+  return clampPlacement({ ...placement, scale: placement.scale * factor });
+}
+
+function isPlacement(value: unknown): value is StoryPlacement {
+  if (typeof value !== "object" || value === null) return false;
+
+  const keys = Object.keys(value);
+  const { x, y, scale } = value as Record<string, unknown>;
+
+  return (
+    keys.every((key) => key === "x" || key === "y" || key === "scale") &&
+    typeof x === "number" &&
+    typeof y === "number" &&
+    typeof scale === "number" &&
+    x >= 0 &&
+    x <= 1 &&
+    y >= 0 &&
+    y <= 1 &&
+    scale >= STORY_SCALE_MIN &&
+    scale <= STORY_SCALE_MAX
+  );
+}
+
+/** 목록 RPC의 `layout`을 읽는다. DB가 이미 지키는 모양이지만 틀리면 기본 자리로 그린다. */
+export function parseStoryLayout(value: unknown): StoryLayout | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const layout: StoryLayout = {};
+
+  for (const [key, placement] of Object.entries(value)) {
+    if ((key !== "text" && key !== "link") || !isPlacement(placement)) {
+      return null;
+    }
+    layout[key] = placement;
+  }
+
+  return layout.text || layout.link ? layout : null;
+}
+
+/** 저장할 레이아웃. 없는 글이나 링크의 자리는 DB가 거절하므로 뺀다. */
+export function buildStoryLayout(
+  placements: Required<StoryLayout>,
+  { hasText, hasLink }: { hasText: boolean; hasLink: boolean },
+): StoryLayout | null {
+  const layout: StoryLayout = {};
+
+  if (hasText) layout.text = placements.text;
+  if (hasLink) layout.link = placements.link;
+
+  return layout.text || layout.link ? layout : null;
+}
