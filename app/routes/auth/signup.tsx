@@ -10,6 +10,7 @@ import {
 
 import {
   AuthCard,
+  claimSignupPassword,
   clearSignupDraft,
   getAuthErrorMessage,
   getProfileDestination,
@@ -62,9 +63,13 @@ import type { Route } from "./+types/signup";
  * 늙어 있고, 그게 "한 번에 인증이 안 되는" 원인이었다. 대신 이메일과 비밀번호는 인증
  * 단계로 넘어갈 때까지 폼 안에 들고 있는다 — 어디에도 저장하지 않는다.
  *
- * 인증 단계에 들어선 뒤부터는 계정이 이미 있으므로 비밀번호가 더 필요 없다. 그 시점의
- * 입력값만 `sessionStorage` 초안으로 남겨서, 모바일에서 메일 앱을 다녀오다 페이지가 다시
- * 로드돼도 코드 입력 화면으로 돌아오게 한다.
+ * 인증 단계에서도 비밀번호는 폼 안에만 들고 있다가 코드 확인 직후 계정에 다시 저장한다
+ * (`claimSignupPassword`). 인증 전 계정에 다시 가입하면 Auth가 처음 비밀번호를 그대로 두기
+ * 때문인데, 그 계정을 남이 만들어 뒀을 수도 있으니 이 저장은 건너뛸 수 없다.
+ *
+ * 이메일과 프로필 값만 `sessionStorage` 초안으로 남겨서, 모바일에서 메일 앱을 다녀오다
+ * 페이지가 다시 로드돼도 코드 입력 화면으로 돌아오게 한다. 그렇게 돌아오면 비밀번호가 없으므로
+ * 인증 단계에서 다시 입력받는다(`askPassword`).
  */
 const STEPS = [
   { id: "credentials", label: "계정" },
@@ -79,6 +84,8 @@ interface SignupState {
   email: string;
   password: string;
   values: ProfileFormValues;
+  /** 인증 단계에서 비밀번호를 입력란으로 받을지. 아니면 앞 단계 값을 hidden으로 넘긴다. */
+  askPassword?: boolean;
   resent?: boolean;
   verified?: boolean;
   errors?: FieldErrors;
@@ -121,12 +128,16 @@ export async function clientLoader() {
 }
 
 /**
- * 인증 단계의 제출은 폼이 아니라 초안에서 값을 읽는다.
+ * 인증 단계의 제출은 비밀번호를 뺀 값을 폼이 아니라 초안에서 읽는다.
  *
- * 계정이 만들어진 뒤라 화면에 남아 있어야 할 것은 코드 입력란뿐이고, 프로필 값을 hidden
- * 필드로 다시 실어 보내면 새로고침 한 번에 같이 사라진다.
+ * 프로필 값을 hidden 필드로 다시 실어 보내면 새로고침 한 번에 같이 사라진다. 비밀번호는
+ * 초안에 넣지 않으므로 늘 폼에서 읽는다.
  */
-async function submitVerifyStep(intent: string, otp: string) {
+async function submitVerifyStep(intent: string, formData: FormData) {
+  const otp = readFormText(formData, "otp");
+  const password = readFormText(formData, "password");
+  // 확인란이 있었다는 건 이 화면에서 비밀번호를 직접 받았다는 뜻이다.
+  const askPassword = formData.has("passwordConfirm");
   const draft = getSignupDraft();
   if (!draft) {
     return data(
@@ -143,8 +154,9 @@ async function submitVerifyStep(intent: string, otp: string) {
   const base = {
     step: "verify" as const,
     email: draft.email,
-    password: "",
+    password,
     values: draft.values,
+    askPassword,
   };
 
   if (intent === "resend") {
@@ -163,15 +175,32 @@ async function submitVerifyStep(intent: string, otp: string) {
   // 요구하면 이미 소모된 코드라 영영 통과하지 못하므로, 세션이 있으면 확인을 건너뛴다.
   const verified = await hasActiveSession();
 
-  if (!verified) {
-    const otpError = validateOtpCode(otp);
-    if (otpError) {
-      return data({ ...base, errors: { otp: otpError } }, { status: 400 });
-    }
+  // 코드는 한 번 쓰면 사라지므로, 비밀번호 문제로 막힐 제출이면 코드를 쓰기 전에 돌려보낸다.
+  const errors: FieldErrors = {
+    otp: verified ? undefined : validateOtpCode(otp),
+    password: validatePassword(password),
+    passwordConfirm: askPassword
+      ? validatePasswordConfirm(
+          password,
+          readFormText(formData, "passwordConfirm"),
+        )
+      : undefined,
+  };
+  if (hasErrors(errors)) {
+    // hidden으로 넘어온 비밀번호가 틀렸다면 고칠 입력란이 있어야 한다.
+    const ask = askPassword || Boolean(errors.password);
+    return data(
+      { ...base, askPassword: ask, verified, errors },
+      { status: 400 },
+    );
   }
 
+  let claiming = false;
   try {
     if (!verified) await verifySignupOtp(draft.email, otp);
+    claiming = true;
+    await claimSignupPassword(password);
+    claiming = false;
     await submitProfile(draft.values);
     throw redirect("/pending");
   } catch (error) {
@@ -179,6 +208,8 @@ async function submitVerifyStep(intent: string, otp: string) {
     return data(
       {
         ...base,
+        // 서버가 거절한 비밀번호를 hidden으로 계속 보내면 빠져나올 수 없다.
+        askPassword: askPassword || claiming,
         verified: await hasActiveSession(),
         errors: { form: getAuthErrorMessage(error) },
       },
@@ -197,7 +228,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   }
 
   if (intent === "resend" || intent === "verify") {
-    return submitVerifyStep(intent, readFormText(formData, "otp"));
+    return submitVerifyStep(intent, formData);
   }
 
   const email = readFormText(formData, "email");
@@ -233,7 +264,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     }
 
     saveSignupDraft({ email, values });
-    return data({ step: "verify" as const, email, password: "", values });
+    return data({ step: "verify" as const, email, password, values });
   }
 
   const errors: FieldErrors = {
@@ -263,6 +294,7 @@ function initialState(draft: SignupDraft | null): SignupState {
     email: draft.email,
     password: "",
     values: draft.values,
+    askPassword: true,
   };
 }
 
@@ -487,6 +519,9 @@ export default function SignupPage({
 
         {step === "verify" ? (
           <>
+            {result.askPassword ? null : (
+              <input type="hidden" name="password" value={password} />
+            )}
             {result.resent ? (
               <p role="status" className="text-sm text-primary">
                 인증 코드를 다시 보냈습니다.
@@ -515,6 +550,33 @@ export default function SignupPage({
                 </Button>
               </FieldGroup>
             )}
+
+            {result.askPassword ? (
+              <FieldGroup>
+                <PasswordField
+                  id="signup-password"
+                  name="password"
+                  label="비밀번호"
+                  autoComplete="new-password"
+                  defaultValue={password}
+                  error={errors.password}
+                  disabled={pending}
+                />
+                <PasswordField
+                  id="signup-password-confirm"
+                  name="passwordConfirm"
+                  label="비밀번호 확인"
+                  autoComplete="new-password"
+                  defaultValue={password}
+                  error={errors.passwordConfirm}
+                  disabled={pending}
+                />
+                <FieldDescription>
+                  로그인에 쓸 비밀번호를 한 번 더 입력해 주세요. 인증을 마치면
+                  이 비밀번호로 정해져요.
+                </FieldDescription>
+              </FieldGroup>
+            ) : null}
 
             <Button
               type="submit"

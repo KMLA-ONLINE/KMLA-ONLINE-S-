@@ -7,6 +7,7 @@ import { readDateField } from "~/shared/lib/date-field";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+?[0-9 -]{8,20}$/;
 const STUDENT_NUMBER_PATTERN = /^[0-9]{6}$/;
+const KOREAN_NAME_PATTERN = /^[가-힣]+$/;
 
 export function readFormText(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -68,6 +69,12 @@ export function validateProfileForm(values: ProfileFormValues): FieldErrors {
 
   if (!values.name || values.name.length > 50) {
     errors.name = "이름은 1자 이상 50자 이하로 입력해 주세요.";
+  } else if (
+    values.type !== "teacher" &&
+    !KOREAN_NAME_PATTERN.test(values.name)
+  ) {
+    // 외국인 교사도 가입할 수 있게 교사는 한글 외 이름을 허용한다.
+    errors.name = "이름은 한글로 입력해 주세요.";
   }
 
   if (!(["student", "alumni", "teacher"] as string[]).includes(values.type)) {
