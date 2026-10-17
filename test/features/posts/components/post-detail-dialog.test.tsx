@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PostDetailDialog } from "~/features/posts/components/post-detail-dialog";
@@ -196,7 +196,9 @@ describe("PostDetailDialog", () => {
 
     await waitFor(() =>
       expect(screen.getByRole("dialog")).toHaveStyle({
-        bottom: "200px",
+        bottom: "auto",
+        top: "100px",
+        height: "500px",
         maxHeight: "500px",
       }),
     );
@@ -212,8 +214,9 @@ describe("PostDetailDialog", () => {
 
     await waitFor(() =>
       expect(screen.getByRole("dialog")).toHaveStyle({
-        bottom: "200px",
-        top: "auto",
+        bottom: "auto",
+        top: "100px",
+        height: "500px",
         maxHeight: "500px",
       }),
     );
@@ -234,12 +237,61 @@ describe("PostDetailDialog", () => {
 
     await waitFor(() =>
       expect(screen.getByRole("dialog")).toHaveStyle({
-        bottom: "0px",
-        top: "auto",
+        bottom: "auto",
+        top: "300px",
+        height: "500px",
         maxHeight: "500px",
       }),
     );
   });
+
+  it.each(["", "?view=comments"])(
+    "tracks keyboard panning and restores the dialog after dismissal (%s)",
+    async (query) => {
+      stubPostDetailViewport({ sheet: true });
+      stubVisualViewport(800);
+      const { user } = renderRoute(() => <Detail withComment />, {
+        path: "/posts/:postId",
+        initialEntries: [`/posts/post-id${query}`],
+      });
+      await user.click(screen.getByRole("button", { name: "답글" }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole("textbox", { name: "댓글 입력" }),
+        ).toHaveFocus(),
+      );
+      const dialog = screen.getByRole("dialog");
+      const viewport = window.visualViewport;
+      if (!viewport) throw new Error("visual viewport missing");
+
+      act(() => {
+        Object.assign(viewport, { height: 500, offsetTop: 100 });
+        viewport.dispatchEvent(new Event("resize"));
+      });
+      expect(dialog).toHaveStyle({
+        top: "100px",
+        height: "500px",
+        bottom: "auto",
+      });
+      act(() => {
+        Object.assign(viewport, { offsetTop: 300 });
+        viewport.dispatchEvent(new Event("scroll"));
+      });
+      expect(dialog).toHaveStyle({
+        top: "300px",
+        height: "500px",
+        bottom: "auto",
+      });
+      act(() => {
+        Object.assign(viewport, { height: 800, offsetTop: 0 });
+        viewport.dispatchEvent(new Event("resize"));
+      });
+      expect(dialog).not.toHaveStyle({ top: "300px" });
+      expect(dialog).toHaveStyle({ maxHeight: "800px" });
+      expect(dialog).not.toHaveStyle({ height: "500px" });
+      expect(screen.getByRole("textbox", { name: "댓글 입력" })).toHaveFocus();
+    },
+  );
 
   it("scrolls only enough to reveal a reply target after resizing", async () => {
     stubPostDetailViewport({ sheet: true });
@@ -322,6 +374,93 @@ describe("PostDetailDialog", () => {
     pullDown(commentList(), 160);
 
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("focuses a mobile reply without scrolling the page", async () => {
+    stubPostDetailViewport({ sheet: true });
+    stubVisualViewport(800);
+    const { user } = renderRoute(() => <Detail withComment />, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id?view=comments"],
+    });
+    const composer = screen.getByRole("textbox", { name: "댓글 입력" });
+    const focus = vi.spyOn(composer, "focus");
+
+    await user.click(screen.getByRole("button", { name: "답글" }));
+
+    await waitFor(() => expect(composer).toHaveFocus());
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+  });
+
+  it("focuses an iPhone reply in the tap before Safari can pan the viewport", async () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("iPhone");
+    stubPostDetailViewport({ sheet: true });
+    stubVisualViewport(800);
+    renderRoute(() => <Detail withComment />, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id?view=comments"],
+    });
+    const composer = screen.getByRole("textbox", { name: "댓글 입력" });
+    const nativeFocus = composer.focus.bind(composer);
+    const pan = vi
+      .spyOn(window, "scrollTo")
+      .mockImplementation(() => undefined);
+    vi.spyOn(composer, "focus").mockImplementation((options) => {
+      // iOS may pan the viewport before emitting its keyboard resize event.
+      if (composer.style.opacity !== "0") window.scrollTo(0, 500);
+      nativeFocus(options);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "답글" }));
+
+    expect(composer).toHaveFocus();
+    expect(pan).not.toHaveBeenCalled();
+    await waitFor(() => expect(composer).not.toHaveStyle({ opacity: "0" }));
+  });
+
+  it("leaves Safari panning available in an unmanaged wide iPad dialog", () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("iPad");
+    stubPostDetailViewport({ sheet: false, touchPrimary: true });
+    renderRoute(() => <Detail withComment />, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id?view=comments"],
+    });
+    const composer = screen.getByRole("textbox", { name: "댓글 입력" });
+    const nativeFocus = composer.focus.bind(composer);
+    let canPan = false;
+    vi.spyOn(composer, "focus").mockImplementation((options) => {
+      canPan = composer.style.opacity !== "0";
+      nativeFocus(options);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "답글" }));
+
+    expect(composer).toHaveFocus();
+    expect(canPan).toBe(true);
+  });
+
+  it("preserves native scrolling when iPhone pinch zoom disables viewport tracking", () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("iPhone");
+    stubPostDetailViewport({ sheet: true });
+    stubVisualViewport(500);
+    const viewport = window.visualViewport;
+    if (!viewport) throw new Error("visual viewport missing");
+    Object.assign(viewport, { scale: 1.5 });
+    renderRoute(() => <Detail withComment />, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id?view=comments"],
+    });
+    const composer = screen.getByRole("textbox", { name: "댓글 입력" });
+    const nativeFocus = composer.focus.bind(composer);
+    const focus = vi.spyOn(composer, "focus").mockImplementation((options) => {
+      expect(composer).not.toHaveStyle({ opacity: "0" });
+      nativeFocus(options);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "답글" }));
+
+    expect(composer).toHaveFocus();
+    expect(focus).toHaveBeenCalledWith({ preventScroll: false });
   });
 
   it("does not refocus the composer when cancelling a reply", async () => {

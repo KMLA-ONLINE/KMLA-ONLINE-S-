@@ -1,4 +1,5 @@
 import { XIcon } from "lucide-react";
+import { flushSync } from "react-dom";
 import {
   useCallback,
   useEffect,
@@ -30,6 +31,7 @@ import type {
   AnonymousActivityRestriction,
 } from "~/features/posts/model/types";
 import { cn } from "~/shared/lib/utils";
+import { isIOS } from "~/shared/lib/install-platform";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -125,6 +127,8 @@ export function PostDetailDialog({
     setListElement(node);
   }, []);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const restoreComposerFocus = useRef<(() => void) | null>(null);
+  useEffect(() => () => restoreComposerFocus.current?.(), []);
   const thread = usePostComments(postId, comments, actionBar.commentCount);
   const [identity, setIdentity] = useState<PostIdentity>(identities[0]);
   const [replyingTo, setReplyingTo] = useState<PostComment | null>(null);
@@ -170,7 +174,7 @@ export function PostDetailDialog({
 
     return () => cancelAnimationFrame(frame);
   }, [
-    keyboardViewport.bottomInset,
+    keyboardViewport.offsetTop,
     keyboardViewport.height,
     keyboardViewport.keyboardOpen,
     replyingTo,
@@ -178,11 +182,39 @@ export function PostDetailDialog({
 
   // 본문 영역이 액션 바에서 부르는 핸들러다. JSX 안에서 즉석 클로저로 만들면 render 중에
   // ref를 읽는 것으로 잡힌다.
-  const focusComposer = useCallback(() => composerRef.current?.focus(), []);
+  const focusComposer = useCallback(() => {
+    const element = composerRef.current;
+    if (!element || document.activeElement === element) return;
+    restoreComposerFocus.current?.();
+
+    const managedViewport = sheetViewport && window.visualViewport?.scale === 1;
+    if (!managedViewport || !isIOS()) {
+      element.focus({ preventScroll: managedViewport });
+      return;
+    }
+
+    // iOS는 preventScroll을 줘도 키보드 resize 전에 입력창으로 화면을 밀 수 있다.
+    // 포커스를 주는 한 프레임만 그리기에서 빼면 그 이동 없이 키보드가 열린다.
+    // visibility/display는 포커스도 막으므로 쓰지 않는다. 팝업 위치는 viewport가 맡는다.
+    const opacity = element.style.opacity;
+    element.style.opacity = "0";
+    element.focus({ preventScroll: true });
+    const restore = () => {
+      element.style.opacity = opacity;
+      restoreComposerFocus.current = null;
+    };
+    const frame = requestAnimationFrame(restore);
+    restoreComposerFocus.current = () => {
+      cancelAnimationFrame(frame);
+      restore();
+    };
+  }, [sheetViewport]);
 
   const startReply = (comment: PostComment) => {
-    setReplyingTo(comment);
-    requestAnimationFrame(() => composerRef.current?.focus());
+    // 답글 대상 줄을 먼저 반영하고 같은 탭 안에서 포커스를 준다. 다음 프레임까지
+    // 미루면 iOS가 갱신 전 입력창 위치로 자동 스크롤을 시작할 수 있다.
+    flushSync(() => setReplyingTo(comment));
+    focusComposer();
   };
 
   const submitComment = async (
@@ -343,12 +375,15 @@ export function PostDetailDialog({
         style={
           sheetViewport
             ? ({
-                // 보이는 영역의 아래에 붙인다. 화면이 끌어올려졌으면 가려진 아래쪽이 0이라
-                // 레이아웃 바닥에 붙고, 그 자리가 곧 보이는 영역의 바닥이다.
-                bottom: keyboardViewport.keyboardOpen
-                  ? `${keyboardViewport.bottomInset}px`
+                // 키보드가 뜨면 보이는 영역의 위쪽과 높이로 팝업을 잡는다.
+                // 아래 여백으로 보정하면 iOS의 포커스 이동과 겹쳐 입력창만 위에 남는다.
+                top: keyboardViewport.keyboardOpen
+                  ? `${keyboardViewport.offsetTop}px`
                   : undefined,
-                top: mobileDetailKeyboardOpen ? "auto" : undefined,
+                bottom: keyboardViewport.keyboardOpen ? "auto" : undefined,
+                height: keyboardViewport.keyboardOpen
+                  ? `${keyboardViewport.height}px`
+                  : undefined,
                 maxHeight:
                   keyboardViewport.height === null
                     ? undefined

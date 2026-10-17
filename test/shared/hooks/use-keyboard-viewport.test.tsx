@@ -51,6 +51,7 @@ describe("useKeyboardViewport", () => {
     expect(result.current).toEqual({
       keyboardOpen: true,
       bottomInset: 300,
+      offsetTop: 0,
       height: 500,
     });
   });
@@ -70,6 +71,7 @@ describe("useKeyboardViewport", () => {
     expect(result.current).toEqual({
       keyboardOpen: false,
       bottomInset: 0,
+      offsetTop: 0,
       height: 500,
     });
   });
@@ -86,6 +88,7 @@ describe("useKeyboardViewport", () => {
     expect(result.current).toEqual({
       keyboardOpen: true,
       bottomInset: 200,
+      offsetTop: 100,
       height: 500,
     });
   });
@@ -103,6 +106,7 @@ describe("useKeyboardViewport", () => {
     expect(result.current).toEqual({
       keyboardOpen: true,
       bottomInset: 0,
+      offsetTop: 300,
       height: 500,
     });
   });
@@ -114,6 +118,7 @@ describe("useKeyboardViewport", () => {
     expect(result.current).toEqual({
       keyboardOpen: false,
       bottomInset: 0,
+      offsetTop: 0,
       height: 760,
     });
 
@@ -124,6 +129,7 @@ describe("useKeyboardViewport", () => {
     expect(result.current).toEqual({
       keyboardOpen: false,
       bottomInset: 0,
+      offsetTop: 0,
       height: null,
     });
   });
@@ -136,6 +142,7 @@ describe("useKeyboardViewport", () => {
     expect(result.current).toEqual({
       keyboardOpen: false,
       bottomInset: 0,
+      offsetTop: 0,
       height: null,
     });
   });
