@@ -7,6 +7,11 @@
 
 create type public.story_status as enum ('pending', 'ready');
 
+-- 재학생 작성자가 고르는 공개 범위(기능 명세 §17.6). `everyone`은 작성자 유형의 기본 노출을
+-- 따르고, `students`는 재학생만, `cohort`는 같은 기수 재학생만 본다. 교사의 스토리는 늘
+-- `everyone`이다.
+create type public.story_audience as enum ('everyone', 'students', 'cohort');
+
 -- 글과 링크를 캔버스 어디에 얼마나 크게 놓았는지. 9:16 캔버스 안의 비율 좌표(요소의 중심)와
 -- 기본 크기에 대한 배율이다. 키가 없으면 그 요소는 기본 자리에 그린다. 모든 뷰어가 같은 자리에
 -- 그려야 하므로 모양을 여기서 지킨다. 형식이 틀린 값에서 캐스트가 터지지 않도록 `case`로
@@ -56,6 +61,7 @@ create table public.stories (
   image_height integer,
   link_url text,
   layout jsonb,
+  audience public.story_audience not null default 'everyone',
   created_at timestamptz not null default now(),
   published_at timestamptz,
   expires_at timestamptz,
@@ -203,6 +209,99 @@ $$;
 revoke all on function private.story_writer_profile_id()
   from public;
 
+-- 공개 범위는 재학생만 좁힐 수 있다. 교사의 스토리는 모두가 보는 것이 노출 규칙이라 범위를
+-- 고르게 하지 않는다.
+create function private.check_story_audience(
+  p_profile_id bigint,
+  p_audience public.story_audience
+)
+returns public.story_audience
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if p_audience is null then
+    return 'everyone';
+  end if;
+
+  if p_audience <> 'everyone' and not exists (
+    select 1
+    from public.profiles as profile
+    where profile.id = p_profile_id
+      and profile.type = 'student'
+  ) then
+    raise exception 'only students can narrow a story audience'
+      using errcode = '22023';
+  end if;
+
+  return p_audience;
+end;
+$$;
+
+revoke all on function private.check_story_audience(bigint, public.story_audience)
+  from public;
+
+-- 두 재학생이 같은 기수인지. 생일 목록과 같이 센다. 복학생은 원래 기수와 다음 기수 양쪽에
+-- 속하고, 두 사람이 속한 기수가 하나라도 겹치면 같은 기수다(기능 명세 §17.5). 공개 범위와 레일
+-- 순서가 같은 정의를 쓰도록 한곳에 둔다.
+create function private.shares_cohort(
+  p_cohort smallint,
+  p_returning boolean,
+  p_other_cohort smallint,
+  p_other_returning boolean
+)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(
+    p_cohort = p_other_cohort
+      or (p_returning and p_cohort + 1 = p_other_cohort)
+      or (p_other_returning and p_other_cohort + 1 = p_cohort),
+    false
+  );
+$$;
+
+revoke all on function private.shares_cohort(smallint, boolean, smallint, boolean)
+  from public;
+
+-- 보는 사람이 이 스토리를 볼 수 있는지. 목록과 단건 판정(`can_read_story`)이 같은 규칙을 쓰도록
+-- 값만 받는 함수로 둔다. 교사 스토리는 모두가, 재학생 스토리는 기본으로 재학생과 교사가 본다.
+-- `cohort`의 같은 기수는 `private.shares_cohort`로 판정한다.
+create function private.story_visible_to(
+  p_audience public.story_audience,
+  p_author_type public.profile_type,
+  p_author_cohort smallint,
+  p_author_returning boolean,
+  p_viewer_type public.profile_type,
+  p_viewer_cohort smallint,
+  p_viewer_returning boolean
+)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select case
+    when p_author_type = 'teacher' then true
+    when p_author_type <> 'student' then false
+    when p_audience = 'everyone' then p_viewer_type in ('student', 'teacher')
+    when p_viewer_type <> 'student' then false
+    when p_audience = 'students' then true
+    else private.shares_cohort(
+      p_author_cohort, p_author_returning, p_viewer_cohort, p_viewer_returning
+    )
+  end;
+$$;
+
+revoke all on function private.story_visible_to(
+  public.story_audience, public.profile_type, smallint, boolean,
+  public.profile_type, smallint, boolean
+) from public;
+
 -- 노출은 작성자의 유형으로만 판정한다. 교사 스토리는 모두가 보고, 재학생 스토리는 학교에 있는
 -- 사람만 본다. 기수는 판정에 쓰지 않는다(기능 명세 §6.6). 목록과 Storage 읽기 정책이 같은
 -- 판정을 쓰도록 한곳에 둔다.
@@ -228,9 +327,10 @@ as $$
     where story.id = p_story_id
       and story.status = 'ready'
       and story.expires_at > now()
-      and (
-        author.type = 'teacher'
-        or (author.type = 'student' and viewer.type in ('student', 'teacher'))
+      and private.story_visible_to(
+        story.audience,
+        author.type, author.cohort, author.is_returning_student,
+        viewer.type, viewer.cohort, viewer.is_returning_student
       )
   );
 $$;
@@ -289,7 +389,8 @@ create function public.create_text_story(
   p_content text,
   p_background text,
   p_link_url text default null,
-  p_layout jsonb default null
+  p_layout jsonb default null,
+  p_audience public.story_audience default 'everyone'
 )
 returns bigint
 language plpgsql
@@ -307,7 +408,8 @@ begin
   end if;
 
   insert into public.stories (
-    profile_id, status, content, background, link_url, layout, published_at, expires_at
+    profile_id, status, content, background, link_url, layout, audience, published_at,
+    expires_at
   ) values (
     caller_profile_id,
     'ready',
@@ -315,6 +417,7 @@ begin
     p_background,
     nullif(private.normalize_story_text(p_link_url), ''),
     p_layout,
+    private.check_story_audience(caller_profile_id, p_audience),
     published,
     published + interval '24 hours'
   )
@@ -324,10 +427,10 @@ begin
 end;
 $$;
 
-revoke all on function public.create_text_story(text, text, text, jsonb)
+revoke all on function public.create_text_story(text, text, text, jsonb, public.story_audience)
   from public, anon;
 
-grant execute on function public.create_text_story(text, text, text, jsonb)
+grant execute on function public.create_text_story(text, text, text, jsonb, public.story_audience)
   to authenticated;
 
 create function public.prepare_image_story(
@@ -336,7 +439,8 @@ create function public.prepare_image_story(
   p_height integer,
   p_content text default '',
   p_link_url text default null,
-  p_layout jsonb default null
+  p_layout jsonb default null,
+  p_audience public.story_audience default 'everyone'
 )
 returns table (story_id bigint, object_path text, thumbnail_path text)
 language plpgsql
@@ -363,7 +467,7 @@ begin
 
   insert into public.stories (
     profile_id, content, image_path, thumbnail_path, image_size_bytes, image_width,
-    image_height, link_url, layout
+    image_height, link_url, layout, audience
   ) values (
     caller_profile_id,
     private.normalize_story_text(p_content),
@@ -373,7 +477,8 @@ begin
     p_width,
     p_height,
     nullif(private.normalize_story_text(p_link_url), ''),
-    p_layout
+    p_layout,
+    private.check_story_audience(caller_profile_id, p_audience)
   )
   returning id into created_id;
 
@@ -381,10 +486,10 @@ begin
 end;
 $$;
 
-revoke all on function public.prepare_image_story(bigint, integer, integer, text, text, jsonb)
+revoke all on function public.prepare_image_story(bigint, integer, integer, text, text, jsonb, public.story_audience)
   from public, anon;
 
-grant execute on function public.prepare_image_story(bigint, integer, integer, text, text, jsonb)
+grant execute on function public.prepare_image_story(bigint, integer, integer, text, text, jsonb, public.story_audience)
   to authenticated;
 
 create function public.publish_image_story(p_story_id bigint)
@@ -480,7 +585,8 @@ returns table (
   image_height integer,
   link_url text,
   published_at timestamptz,
-  layout jsonb
+  layout jsonb,
+  audience public.story_audience
 )
 language sql
 stable
@@ -488,7 +594,7 @@ security definer
 set search_path = ''
 as $$
   with viewer as (
-    select profile.type, profile.cohort
+    select profile.type, profile.cohort, profile.is_returning_student
     from public.profiles as profile
     where profile.auth_user_id = auth.uid()
       and profile.status = 'accepted'
@@ -502,7 +608,10 @@ as $$
       author.avatar_path,
       viewer.type = 'student'
         and author.type = 'student'
-        and author.cohort = viewer.cohort as same_cohort
+        and private.shares_cohort(
+          author.cohort, author.is_returning_student,
+          viewer.cohort, viewer.is_returning_student
+        ) as same_cohort
     from viewer
     cross join public.stories as story
     join public.profiles as author
@@ -511,10 +620,11 @@ as $$
       and author.deleted_at is null
     where story.status = 'ready'
       and story.expires_at > now()
-      -- private.can_read_story와 같은 판정이다. 행마다 그 함수를 부르지 않으려고 풀어 쓴다.
-      and (
-        author.type = 'teacher'
-        or (author.type = 'student' and viewer.type in ('student', 'teacher'))
+      -- private.can_read_story와 같은 판정이다. 값만 받는 함수라 행마다 조회하지 않는다.
+      and private.story_visible_to(
+        story.audience,
+        author.type, author.cohort, author.is_returning_student,
+        viewer.type, viewer.cohort, viewer.is_returning_student
       )
   )
   select
@@ -530,7 +640,8 @@ as $$
     visible.image_height,
     visible.link_url,
     visible.published_at,
-    visible.layout
+    visible.layout,
+    visible.audience
   from visible
   order by
     visible.same_cohort desc,

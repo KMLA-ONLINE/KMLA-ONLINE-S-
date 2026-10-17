@@ -49,6 +49,7 @@ function textStory(id: number, pubId: string): StoryItem {
     thumbnailUrl: null,
     linkUrl: null,
     layout: null,
+    audience: "everyone",
     publishedAt: "2026-10-17T00:00:00Z",
   };
 }

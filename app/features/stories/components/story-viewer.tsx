@@ -33,6 +33,7 @@ import {
   readStoryGesture,
   STORY_BACKGROUNDS,
   STORY_DURATION_MS,
+  storyAudienceBadge,
   type StoryAuthorGroup,
 } from "~/features/stories/model/story";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
@@ -694,6 +695,12 @@ export function StoryViewer({
                       value={story.publishedAt}
                       className="shrink-0 text-xs text-white/70"
                     />
+                    {/* 범위를 좁힌 스토리는 누구에게 보이는지 알린다. 인스타그램의 친한 친구 표시와 같다. */}
+                    {storyAudienceBadge(story.audience) ? (
+                      <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-medium text-white">
+                        {storyAudienceBadge(story.audience)}
+                      </span>
+                    ) : null}
 
                     <div className="pointer-events-auto ml-auto flex items-center">
                       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>

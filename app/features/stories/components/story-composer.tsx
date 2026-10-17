@@ -23,11 +23,13 @@ import {
   isStoryContentValid,
   normalizeStoryContent,
   normalizeStoryLink,
+  STORY_AUDIENCES,
   STORY_BACKGROUND_KEYS,
   STORY_BACKGROUNDS,
   STORY_CONTENT_MAX_LENGTH,
   STORY_SCALE_MAX,
   STORY_SCALE_MIN,
+  type StoryAudience,
   type StoryBackground,
   type StoryLayout,
   type StoryLayoutElement,
@@ -95,9 +97,12 @@ async function prepareStoryImage(source: File) {
 }
 
 export function StoryComposer({
+  canNarrowAudience = false,
   onDone,
   onPendingChange,
 }: {
+  /** 재학생이면 공개 범위를 좁힐 수 있다. 교사의 스토리는 늘 전체 공개다. */
+  canNarrowAudience?: boolean;
   onDone: () => void | Promise<void>;
   /**
    * 올리는 동안 부모가 창을 닫지 못하게 막는 데 쓴다. 실패하면 `false`를 알리고, 성공하면 알리지
@@ -112,6 +117,7 @@ export function StoryComposer({
   const [content, setContent] = useState("");
   const [background, setBackground] = useState<StoryBackground>("blue");
   const [link, setLink] = useState("");
+  const [audience, setAudience] = useState<StoryAudience>("everyone");
   const [placements, setPlacements] = useState(() => defaultPlacements(mode));
   const [selected, setSelected] = useState<StoryLayoutElement | null>(null);
   const [cropping, setCropping] = useState(false);
@@ -271,6 +277,7 @@ export function StoryComposer({
           content: normalizedContent,
           linkUrl: normalizedLink,
           layout,
+          audience,
         });
       } else {
         await createTextStory({
@@ -278,6 +285,7 @@ export function StoryComposer({
           background,
           linkUrl: normalizedLink,
           layout,
+          audience,
         });
       }
     } catch (cause) {
@@ -556,6 +564,44 @@ export function StoryComposer({
             </p>
           ) : null}
         </div>
+
+        {canNarrowAudience ? (
+          <div className="flex min-w-0 flex-col gap-2">
+            <span id="story-audience" className="text-sm font-medium">
+              공개 범위
+            </span>
+            <div
+              role="radiogroup"
+              aria-labelledby="story-audience"
+              className="flex flex-wrap gap-2"
+            >
+              {STORY_AUDIENCES.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={audience === item.key}
+                  disabled={pending}
+                  onClick={() => setAudience(item.key)}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
+                    audience === item.key
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "hover:bg-accent",
+                  )}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {
+                STORY_AUDIENCES.find((item) => item.key === audience)
+                  ?.description
+              }
+            </p>
+          </div>
+        ) : null}
 
         {error ? (
           <p role="alert" className="text-xs text-destructive">

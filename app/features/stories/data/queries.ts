@@ -4,6 +4,7 @@ import { createStoryMediaUrls } from "~/features/stories/data/files";
 import {
   isStoryBackground,
   parseStoryLayout,
+  type StoryAudience,
   type StoryBackground,
   type StoryLayout,
 } from "~/features/stories/model/story";
@@ -24,6 +25,8 @@ export interface StoryItem {
   linkUrl: string | null;
   /** 글과 링크를 놓은 자리. 위치 편집 전에 올린 스토리는 `null`이라 기본 자리에 그린다. */
   layout: StoryLayout | null;
+  /** 공개 범위. 교사 스토리와 범위를 고르지 않은 스토리는 `everyone`. */
+  audience: StoryAudience;
   publishedAt: string;
 }
 
@@ -58,6 +61,7 @@ export async function listActiveStories(): Promise<StoryItem[]> {
       : null,
     linkUrl: row.link_url,
     layout: parseStoryLayout(row.layout),
+    audience: row.audience,
     publishedAt: row.published_at,
   }));
 }

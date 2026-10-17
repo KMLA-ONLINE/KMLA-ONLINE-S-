@@ -1,5 +1,6 @@
 import type { PostReaction } from "~/features/posts/model/types";
 import type {
+  StoryAudience,
   StoryBackground,
   StoryLayout,
 } from "~/features/stories/model/story";
@@ -11,12 +12,14 @@ export async function createTextStory(input: {
   background: StoryBackground;
   linkUrl: string | null;
   layout: StoryLayout | null;
+  audience: StoryAudience;
 }): Promise<void> {
   const { error } = await getSupabase().rpc("create_text_story", {
     p_content: input.content,
     p_background: input.background,
     p_link_url: input.linkUrl ?? undefined,
     p_layout: (input.layout ?? undefined) as Json | undefined,
+    p_audience: input.audience,
   });
 
   if (error) throw error;

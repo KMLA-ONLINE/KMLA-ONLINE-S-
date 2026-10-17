@@ -25,6 +25,41 @@ export function isStoryBackground(value: unknown): value is StoryBackground {
   return typeof value === "string" && value in STORY_BACKGROUNDS;
 }
 
+/**
+ * 재학생 작성자가 고르는 공개 범위(기능 명세 §17.6). 키는 DB `public.story_audience`와 같다.
+ * 교사의 스토리는 늘 `everyone`이다.
+ */
+export const STORY_AUDIENCES = [
+  {
+    key: "everyone",
+    label: "전체",
+    description: "재학생과 선생님",
+    badge: null,
+  },
+  {
+    key: "students",
+    label: "재학생만",
+    description: "선생님에게는 보이지 않아요",
+    badge: "재학생 공개",
+  },
+  {
+    key: "cohort",
+    label: "우리 기수만",
+    description: "같은 기수 재학생만 봐요",
+    badge: "기수 공개",
+  },
+] as const;
+
+export type StoryAudience = (typeof STORY_AUDIENCES)[number]["key"];
+
+/**
+ * 뷰어 머리에 붙이는 표시. 작성 창의 선택지 이름("우리 기수만")은 작성자 시점이라 보는 사람에게는
+ * 자기 기수로 읽힌다. 그래서 따로 둔다. 전체 공개는 표시하지 않는다.
+ */
+export function storyAudienceBadge(audience: StoryAudience): string | null {
+  return STORY_AUDIENCES.find((item) => item.key === audience)?.badge ?? null;
+}
+
 export function normalizeStoryContent(value: string): string {
   return value.trim();
 }

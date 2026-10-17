@@ -1468,6 +1468,7 @@ export type Database = {
       }
       stories: {
         Row: {
+          audience: Database["public"]["Enums"]["story_audience"]
           background: string | null
           content: string
           created_at: string
@@ -1486,6 +1487,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          audience?: Database["public"]["Enums"]["story_audience"]
           background?: string | null
           content?: string
           created_at?: string
@@ -1503,6 +1505,7 @@ export type Database = {
           thumbnail_path?: string | null
         }
         Update: {
+          audience?: Database["public"]["Enums"]["story_audience"]
           background?: string | null
           content?: string
           created_at?: string
@@ -2052,6 +2055,7 @@ export type Database = {
       }
       create_text_story: {
         Args: {
+          p_audience?: Database["public"]["Enums"]["story_audience"]
           p_background: string
           p_content: string
           p_layout?: Json
@@ -2516,6 +2520,7 @@ export type Database = {
       list_active_stories: {
         Args: Record<PropertyKey, never>
         Returns: {
+          audience: Database["public"]["Enums"]["story_audience"]
           avatar_path: string
           background: string
           content: string
@@ -3149,6 +3154,7 @@ export type Database = {
       }
       prepare_image_story: {
         Args: {
+          p_audience?: Database["public"]["Enums"]["story_audience"]
           p_content?: string
           p_height: number
           p_layout?: Json
@@ -3753,6 +3759,7 @@ export type Database = {
       profile_media_status: "pending" | "ready"
       profile_status: "draft" | "pending" | "accepted" | "blocked" | "withdrawn"
       profile_type: "student" | "alumni" | "teacher"
+      story_audience: "everyone" | "students" | "cohort"
       story_status: "pending" | "ready"
     }
     CompositeTypes: {
@@ -3958,6 +3965,7 @@ export const Constants = {
       profile_media_status: ["pending", "ready"],
       profile_status: ["draft", "pending", "accepted", "blocked", "withdrawn"],
       profile_type: ["student", "alumni", "teacher"],
+      story_audience: ["everyone", "students", "cohort"],
       story_status: ["pending", "ready"],
     },
   },

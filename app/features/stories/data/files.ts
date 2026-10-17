@@ -1,5 +1,8 @@
 import { deleteMyStory } from "~/features/stories/data/mutations";
-import type { StoryLayout } from "~/features/stories/model/story";
+import type {
+  StoryAudience,
+  StoryLayout,
+} from "~/features/stories/model/story";
 import { getSupabase } from "~/shared/supabase/client";
 import type { Json } from "~/shared/supabase/database.types";
 import { createSignedUrls } from "~/shared/supabase/signed-urls";
@@ -30,6 +33,7 @@ export async function createImageStory(input: {
   content: string;
   linkUrl: string | null;
   layout: StoryLayout | null;
+  audience: StoryAudience;
 }): Promise<void> {
   const supabase = getSupabase();
   const { data, error } = await supabase.rpc("prepare_image_story", {
@@ -39,6 +43,7 @@ export async function createImageStory(input: {
     p_content: input.content,
     p_link_url: input.linkUrl ?? undefined,
     p_layout: (input.layout ?? undefined) as Json | undefined,
+    p_audience: input.audience,
   });
 
   if (error) throw error;

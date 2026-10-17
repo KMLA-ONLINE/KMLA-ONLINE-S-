@@ -71,10 +71,13 @@ export function StoryRail({
   initialItems,
   viewer,
   canWrite,
+  canNarrowAudience = false,
 }: {
   initialItems: StoryItem[];
   viewer: { pubId: string; name: string; avatarUrl: string | null };
   canWrite: boolean;
+  /** 재학생이면 작성 창에서 공개 범위를 좁힐 수 있다. */
+  canNarrowAudience?: boolean;
 }) {
   // 레일은 쿼리 캐시를 구독한다. 로더가 채운 값을 그대로 읽고, 작성·삭제 뒤의 무효화와 당겨서
   // 새로고침이 다시 받은 값도 같은 경로로 들어온다.
@@ -206,6 +209,7 @@ export function StoryRail({
       {canWrite ? (
         <StoryComposerDialog
           open={param.kind === "composer"}
+          canNarrowAudience={canNarrowAudience}
           onClose={() => {
             // 올리는 중에는 닫지 않는다. 닫아도 업로드는 계속되고, 끝날 때 다시 닫으려 한다.
             if (!uploadingRef.current) close();
@@ -232,11 +236,13 @@ export function StoryRail({
 
 function StoryComposerDialog({
   open,
+  canNarrowAudience,
   onClose,
   onPendingChange,
   onDone,
 }: {
   open: boolean;
+  canNarrowAudience: boolean;
   onClose: () => void;
   onPendingChange: (pending: boolean) => void;
   onDone: () => void | Promise<void>;
@@ -271,7 +277,11 @@ function StoryComposerDialog({
         </DialogHeader>
 
         {open ? (
-          <StoryComposer onDone={onDone} onPendingChange={onPendingChange} />
+          <StoryComposer
+            canNarrowAudience={canNarrowAudience}
+            onDone={onDone}
+            onPendingChange={onPendingChange}
+          />
         ) : null}
       </DialogContent>
     </Dialog>

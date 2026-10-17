@@ -221,6 +221,7 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
               avatarUrl: profile.avatar_url,
             }}
             canWrite={profile.type !== "alumni"}
+            canNarrowAudience={profile.type === "student"}
           />
 
           <FeedScreen />
