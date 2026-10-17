@@ -82,6 +82,31 @@ describe("auth routes", () => {
     ).toBeVisible();
   });
 
+  // 인증을 안 끝낸 계정은 로그인 화면에서 코드를 받을 길이 없다. 가입을 다시 진행하면
+  // 같은 이메일로 코드를 새로 받을 수 있으니 그쪽으로 이어 준다.
+  it("links an unconfirmed account back to signup", async () => {
+    const { user } = renderRoute(LoginPage as ComponentType<any>, {
+      path: "/login",
+      loader: () => ({ contacts: Promise.resolve([]) }),
+      action: () => ({
+        errors: { form: "이메일 인증이 끝나지 않은 계정이에요." },
+        email: "student@kmla.hs.kr",
+        unconfirmed: true,
+      }),
+    });
+
+    await user.type(
+      await screen.findByLabelText("이메일"),
+      "student@kmla.hs.kr",
+    );
+    await user.type(screen.getByLabelText("비밀번호"), "password123");
+    await user.click(screen.getByRole("button", { name: "로그인" }));
+
+    expect(
+      await screen.findByRole("link", { name: "회원가입에서 인증 이어가기" }),
+    ).toHaveAttribute("href", "/signup");
+  });
+
   it("renders login controls and toggles password visibility", async () => {
     const { user } = renderRoute(LoginPage, { path: "/login" });
     const password = screen.getByLabelText("비밀번호");
@@ -148,6 +173,9 @@ describe("auth routes", () => {
     expect(
       screen.getByRole("button", { name: "인증 코드 다시 보내기" }),
     ).toBeVisible();
+    // 다시 로드돼 돌아온 인증 단계라 비밀번호가 없다. 계정을 넘겨받으려면 다시 받아야 한다.
+    expect(screen.getByLabelText("비밀번호")).toBeVisible();
+    expect(screen.getByLabelText("비밀번호 확인")).toBeVisible();
 
     // 코드를 입력하고 '이동'을 눌렀을 때 재발송이 아니라 제출이 실행되어야 한다.
     expect(defaultButtons()).toHaveLength(1);

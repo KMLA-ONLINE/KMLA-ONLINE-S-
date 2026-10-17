@@ -4,6 +4,7 @@ export { OtpField } from "~/features/auth/components/otp-field";
 export { PasswordField } from "~/features/auth/components/password-field";
 export { ProfileFields } from "~/features/auth/components/profile-fields";
 export {
+  claimSignupPassword,
   resendSignupOtp,
   sendPasswordChangeOtp,
   sendPasswordResetOtp,
@@ -21,7 +22,10 @@ export {
   loadMySuspension,
 } from "~/features/auth/data/queries";
 export { describeSuspensionEnd } from "~/features/auth/model/suspension";
-export { getAuthErrorMessage } from "~/features/auth/model/format";
+export {
+  getAuthErrorMessage,
+  isEmailNotConfirmedError,
+} from "~/features/auth/model/format";
 export {
   clearSignupDraft,
   getSignupDraft,

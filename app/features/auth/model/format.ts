@@ -1,15 +1,23 @@
+function readErrorCode(error: unknown): string {
+  return typeof error === "object" && error && "code" in error
+    ? String(error.code)
+    : "";
+}
+
+/** 인증을 안 끝낸 계정의 로그인 실패. 로그인 화면이 가입 화면으로 이어 주는 데 쓴다. */
+export function isEmailNotConfirmedError(error: unknown): boolean {
+  return readErrorCode(error) === "email_not_confirmed";
+}
+
 /** Supabase auth 에러를 문구로 바꾼다. 출력이 화면이라 `data/`가 아닌 여기에 두고 client 대역 없이 테스트한다. */
 export function getAuthErrorMessage(error: unknown): string {
-  const code =
-    typeof error === "object" && error && "code" in error
-      ? String(error.code)
-      : "";
+  const code = readErrorCode(error);
 
   if (code === "invalid_credentials") {
     return "이메일 또는 비밀번호가 올바르지 않습니다.";
   }
   if (code === "email_not_confirmed") {
-    return "이메일 인증을 먼저 완료해 주세요.";
+    return "이메일 인증이 끝나지 않은 계정이에요. 같은 이메일로 다시 가입하면 인증 코드를 새로 보내 드려요.";
   }
   if (code === "user_already_exists" || code === "email_exists") {
     return "이미 가입된 이메일입니다.";

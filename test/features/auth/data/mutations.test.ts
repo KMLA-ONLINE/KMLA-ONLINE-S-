@@ -6,24 +6,26 @@ const {
   getSupabase,
   signInWithPassword,
   signOut,
+  updateUser,
 } = vi.hoisted(() => ({
   disconnectWebPushForLogout: vi.fn(),
   getSession: vi.fn(),
   getSupabase: vi.fn(),
   signInWithPassword: vi.fn(),
   signOut: vi.fn(),
+  updateUser: vi.fn(),
 }));
 
 vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 vi.mock("~/features/notifications", () => ({ disconnectWebPushForLogout }));
 
-import { signIn } from "~/features/auth/data/mutations";
+import { claimSignupPassword, signIn } from "~/features/auth/data/mutations";
 
 describe("auth mutations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getSupabase.mockReturnValue({
-      auth: { getSession, signInWithPassword, signOut },
+      auth: { getSession, signInWithPassword, signOut, updateUser },
     });
     getSession.mockResolvedValue({ data: { session: null }, error: null });
     disconnectWebPushForLogout.mockResolvedValue(undefined);
@@ -81,5 +83,21 @@ describe("auth mutations", () => {
     await signIn("next@kmla.hs.kr", "password");
 
     expect(signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+
+  // 다시 가입하며 처음과 같은 비밀번호를 고른 경우다. 계정은 이미 원하던 상태다.
+  it("treats an unchanged signup password as claimed", async () => {
+    updateUser.mockResolvedValue({ error: { code: "same_password" } });
+
+    await expect(claimSignupPassword("password123")).resolves.toBeUndefined();
+    expect(updateUser).toHaveBeenCalledWith({ password: "password123" });
+  });
+
+  it("surfaces other failures while claiming the signup password", async () => {
+    updateUser.mockResolvedValue({ error: { code: "weak_password" } });
+
+    await expect(claimSignupPassword("password123")).rejects.toMatchObject({
+      code: "weak_password",
+    });
   });
 });
