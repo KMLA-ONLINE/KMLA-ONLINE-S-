@@ -4,8 +4,10 @@
 # 게이트가 `/login`으로 보낸다. `/login`이 noindex면 루트까지 검색 결과에서 빠질 수 있다.
 #
 # 막는 수단은 여기의 Disallow가 아니라 `X-Robots-Tag: noindex` 헤더다
-# (`vercel.json`, `/`와 `/login` 외 모든 경로). 카카오톡·Facebook 같은 링크 미리보기 수집기는
-# robots.txt를 따르므로, Disallow로 막으면 색인과 함께 공유 카드까지 사라진다. noindex는
+# (`vercel.json`, `/`와 `/login` 외 모든 경로). 아이콘 이미지(.ico/.svg/.png)는 예외다 —
+# 구글은 파비콘 파일을 따로 가져와 검색 결과에 쓰므로, noindex면 기본 아이콘으로 나온다.
+#
+# 카카오톡·Facebook 같은 링크 미리보기 수집기는 robots.txt를 따르므로, Disallow로 막으면 색인과 함께 공유 카드까지 사라진다. noindex는
 # "가져가도 되지만 검색 결과에는 싣지 말라"는 뜻이라 카드만 남는다.
 #
 # 크롤링 자체를 막아야 할 경로가 생기면 여기에 적는다.
