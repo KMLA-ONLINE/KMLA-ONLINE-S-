@@ -91,7 +91,18 @@ export function StoryViewer({
   onClose: () => void;
   onDeleted: () => void | Promise<void>;
 }) {
-  const position = findStoryPosition(groups, storyId);
+  // 넘긴 장은 주소가 따라오기 전에 먼저 그린다. 주소가 바뀌면 홈 화면 전체가 다시 그려져 한
+  // 박자 늦는데, 그사이 들어온 탭이 이전 장 기준으로 계산되면 빠르게 연달아 눌러도 넘어가지
+  // 않는다. 주소가 그 장에 닿으면 다시 주소를 따른다.
+  const [requestedId, setRequestedId] = useState<number | null>(null);
+  if (requestedId !== null && requestedId === storyId) setRequestedId(null);
+  const shownStoryId = requestedId ?? storyId;
+  const position = findStoryPosition(groups, shownStoryId);
+
+  function show(id: number) {
+    setRequestedId(id);
+    onShow(id);
+  }
   const [held, setHeld] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   // 다른 탭으로 가거나 화면을 끄면 멈춘다. 그러지 않으면 아무도 보지 않는 사이 다음 작성자들의
@@ -177,7 +188,7 @@ export function StoryViewer({
       groups[position.group + 1]?.stories[0];
 
     // 마지막 장이 끝나면 닫지 않고 그 자리에 멈춘다. 닫기는 사용자가 한다.
-    if (target) onShow(target.id);
+    if (target) show(target.id);
   }
 
   /**
@@ -220,7 +231,7 @@ export function StoryViewer({
 
     if (!track || !width || reduced) {
       if (track) track.style.transform = "";
-      onShow(storyId);
+      show(storyId);
       return;
     }
 
@@ -231,7 +242,7 @@ export function StoryViewer({
       slideTimerRef.current = null;
       resetTrackRef.current = true;
       setSliding(false);
-      onShow(storyId);
+      show(storyId);
       resetFallbackRef.current = window.setTimeout(
         resetTrack,
         TRACK_RESET_FALLBACK_MS,
@@ -273,7 +284,7 @@ export function StoryViewer({
       groups[position.group - 1]?.stories.at(-1);
 
     if (target) {
-      onShow(target.id);
+      show(target.id);
       return;
     }
 
@@ -772,7 +783,6 @@ export function StoryViewer({
                   ) : (
                     <div className="flex-1">
                       <StoryReactionBar
-                        key={story.id}
                         storyId={story.id}
                         onActiveChange={setReacting}
                       />

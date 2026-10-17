@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { StoryComposer } from "~/features/stories/components/story-composer";
+import { preloadStoryReactions } from "~/features/stories/components/story-engagement";
 import { useStoryParam } from "~/features/stories/components/use-story-param";
 import { StoryViewer } from "~/features/stories/components/story-viewer";
 import { STORY_STALE_TIME, storyKeys } from "~/features/stories/data/cache";
@@ -109,6 +110,13 @@ export function StoryRail({
     param.kind === "story" &&
     !deletedIds.has(param.id) &&
     !items.some((item) => item.id === param.id);
+
+  // 다른 사람의 스토리가 있으면 뷰어를 열기 전에 반응 그림을 받아 둔다.
+  const hasOthersStory = groups.some((group) => group.pubId !== viewer.pubId);
+
+  useEffect(() => {
+    if (hasOthersStory) preloadStoryReactions();
+  }, [hasOthersStory]);
 
   // 공유 링크로 들어왔는데 이미 만료됐거나 볼 수 없는 스토리면 알리고 param을 걷는다.
   useEffect(() => {

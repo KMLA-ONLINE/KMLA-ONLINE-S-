@@ -5,7 +5,10 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
-import { REACTION_TYPES } from "~/features/posts/model/reactions";
+import {
+  REACTION_TYPES,
+  reactionAssetPath,
+} from "~/features/posts/model/reactions";
 import type { PostReaction } from "~/features/posts/model/types";
 import { storyKeys } from "~/features/stories/data/cache";
 import {
@@ -33,12 +36,25 @@ const FLOAT_MS = 900;
 const REACTING_HOLD_MS = 1_500;
 
 /**
+ * 반응 그림을 미리 받아 둔다. 뷰어를 처음 열 때 받기 시작하면 반응 줄이 한 박자 늦게 뜬다.
+ * 레일이 그려질 때 한 번 부른다.
+ */
+export function preloadStoryReactions() {
+  for (const type of REACTION_TYPES) {
+    const image = new Image();
+    image.src = reactionAssetPath(type.key);
+  }
+}
+
+/**
  * 다른 사람의 스토리 아래에 까는 반응 줄. 누를 때마다 하나씩 보내고(기능 명세 §17.6), 보냈다는
  * 표시로 그 반응이 떠올랐다 사라진다. 실패만 알린다. 성공을 매번 알리면 연타할 때 알림이 쌓인다.
  *
  * 누르는 동안과 마지막으로 누른 뒤 잠깐은 `onActiveChange(true)`로 스토리를 멈추게 한다. 줄의
  * 빈 곳은 터치를 받지 않아 그 아래 링크를 그대로 누를 수 있다.
  */
+// 장마다 새로 그리지 않는다. 넘길 때마다 그림을 다시 붙이면 줄이 깜박이며 늦게 뜬다. 떠오르던
+// 반응은 다음 장으로 넘어가도 끝까지 날아간다.
 export function StoryReactionBar({
   storyId,
   onActiveChange,
