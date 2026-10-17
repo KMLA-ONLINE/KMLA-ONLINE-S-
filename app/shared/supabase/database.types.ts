@@ -1477,6 +1477,7 @@ export type Database = {
           image_path: string | null
           image_size_bytes: number | null
           image_width: number | null
+          layout: Json | null
           link_url: string | null
           profile_id: number
           published_at: string | null
@@ -1494,6 +1495,7 @@ export type Database = {
           image_path?: string | null
           image_size_bytes?: number | null
           image_width?: number | null
+          layout?: Json | null
           link_url?: string | null
           profile_id: number
           published_at?: string | null
@@ -1510,6 +1512,7 @@ export type Database = {
           image_path?: string | null
           image_size_bytes?: number | null
           image_width?: number | null
+          layout?: Json | null
           link_url?: string | null
           profile_id?: number
           published_at?: string | null
@@ -1981,7 +1984,12 @@ export type Database = {
         Returns: string
       }
       create_text_story: {
-        Args: { p_background: string; p_content: string; p_link_url?: string }
+        Args: {
+          p_background: string
+          p_content: string
+          p_layout?: Json
+          p_link_url?: string
+        }
         Returns: number
       }
       delete_group: { Args: { p_group_id: string }; Returns: undefined }
@@ -2447,6 +2455,7 @@ export type Database = {
           image_height: number
           image_path: string
           image_width: number
+          layout: Json
           link_url: string
           name: string
           pub_id: string
@@ -3064,6 +3073,7 @@ export type Database = {
         Args: {
           p_content?: string
           p_height: number
+          p_layout?: Json
           p_link_url?: string
           p_size_bytes: number
           p_width: number

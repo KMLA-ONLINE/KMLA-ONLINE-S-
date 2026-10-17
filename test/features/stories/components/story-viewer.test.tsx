@@ -1,0 +1,150 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { StoryViewer } from "~/features/stories/components/story-viewer";
+import type { StoryItem } from "~/features/stories/data/queries";
+import { groupStoriesByAuthor } from "~/features/stories/model/story";
+import { act, fireEvent, renderRoute, screen } from "../../../router";
+
+vi.mock("~/features/stories/data/mutations", () => ({
+  deleteMyStory: vi.fn(),
+}));
+vi.mock("~/features/stories/data/files", () => ({
+  createStoryMediaUrls: vi.fn(() => Promise.resolve(new Map())),
+}));
+
+function textStory(id: number, pubId: string): StoryItem {
+  return {
+    id,
+    pubId,
+    name: pubId,
+    avatarUrl: null,
+    content: `스토리 ${id}`,
+    background: "blue",
+    imagePath: null,
+    thumbnailUrl: null,
+    linkUrl: null,
+    layout: null,
+    publishedAt: "2026-10-17T00:00:00Z",
+  };
+}
+
+function renderViewer(storyId: number) {
+  const onShow = vi.fn();
+  const onClose = vi.fn();
+  const groups = groupStoriesByAuthor(
+    [textStory(1, "a"), textStory(2, "a"), textStory(3, "b")],
+    "me",
+  );
+  renderRoute(() => (
+    <StoryViewer
+      groups={groups}
+      storyId={storyId}
+      viewerPubId="me"
+      onShow={onShow}
+      onClose={onClose}
+      onDeleted={vi.fn()}
+    />
+  ));
+  return { onShow, onClose };
+}
+
+function swipe(from: { x: number; y: number }, to: { x: number; y: number }) {
+  const area = screen.getByTestId("story-gesture-area");
+  const init = { pointerId: 1, pointerType: "touch", button: 0 };
+
+  fireEvent.pointerDown(area, { ...init, clientX: from.x, clientY: from.y });
+  fireEvent.pointerMove(area, { ...init, clientX: to.x, clientY: to.y });
+  fireEvent.pointerUp(area, { ...init, clientX: to.x, clientY: to.y });
+}
+
+describe("StoryViewer gestures", () => {
+  it("pages within the author on a tap", () => {
+    const { onShow } = renderViewer(1);
+
+    swipe({ x: 200, y: 300 }, { x: 200, y: 300 });
+
+    expect(onShow).toHaveBeenCalledWith(2);
+  });
+
+  it("skips to the next author's first story on a quick left swipe", () => {
+    const { onShow } = renderViewer(1);
+
+    swipe({ x: 250, y: 300 }, { x: 120, y: 310 });
+
+    expect(onShow).toHaveBeenCalledWith(3);
+  });
+
+  it("closes when swiping past the last author", () => {
+    const { onShow, onClose } = renderViewer(3);
+
+    swipe({ x: 250, y: 300 }, { x: 120, y: 310 });
+
+    expect(onClose).toHaveBeenCalled();
+    expect(onShow).not.toHaveBeenCalled();
+  });
+
+  describe("with a measured card", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("slides the next author in before showing their story", () => {
+      vi.useFakeTimers();
+      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(
+        390,
+      );
+      const { onShow } = renderViewer(1);
+
+      swipe({ x: 250, y: 300 }, { x: 120, y: 310 });
+
+      // 터치는 손을 떼면 pointerup 뒤에 pointerleave가 따라온다. 그 때문에 되돌아가면 안 된다.
+      fireEvent.pointerLeave(screen.getByTestId("story-gesture-area"), {
+        pointerId: 1,
+        pointerType: "touch",
+      });
+      expect(screen.getByTestId("story-track")).toHaveStyle({
+        transform: "translateX(-390px)",
+      });
+      expect(onShow).not.toHaveBeenCalled();
+      act(() => {
+        vi.advanceTimersByTime(260);
+      });
+      expect(onShow).toHaveBeenCalledWith(3);
+    });
+
+    it("ignores other paging while sliding to the next author", () => {
+      vi.useFakeTimers();
+      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(
+        390,
+      );
+      const { onShow } = renderViewer(1);
+
+      swipe({ x: 250, y: 300 }, { x: 120, y: 310 });
+      fireEvent.keyDown(window, { key: "ArrowRight" });
+      fireEvent.click(screen.getByRole("button", { name: "다음 스토리" }));
+      act(() => {
+        vi.advanceTimersByTime(260);
+      });
+
+      expect(onShow.mock.calls).toEqual([[3]]);
+    });
+
+    it("returns the track even if the shown story never changes", () => {
+      vi.useFakeTimers();
+      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(
+        390,
+      );
+      // onShow가 장을 바꾸지 않는다. 부모가 그 id를 받아들이지 못한 경우다.
+      renderViewer(1);
+
+      swipe({ x: 250, y: 300 }, { x: 120, y: 310 });
+      act(() => {
+        vi.advanceTimersByTime(5_000);
+      });
+
+      expect(screen.getByTestId("story-track")).not.toHaveStyle({
+        transform: "translateX(-390px)",
+      });
+    });
+  });
+});

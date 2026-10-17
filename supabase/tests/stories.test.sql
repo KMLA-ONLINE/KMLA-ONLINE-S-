@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(14);
+select plan(18);
 
 select ok(
   not has_table_privilege('authenticated', 'public.stories', 'SELECT'),
@@ -32,6 +32,40 @@ select throws_ok(
   '23514',
   null,
   'non-http link is rejected'
+);
+
+-- 글과 링크의 자리는 캔버스 비율 좌표다. 뷰어마다 같은 자리에 그려야 하므로 모양을 DB가 지킨다.
+select lives_ok(
+  $$select public.create_text_story(
+      '자리를 옮긴 글', 'pink', 'https://kmla.kr',
+      '{"text":{"x":0.3,"y":0.2,"scale":1.5},"link":{"x":0.5,"y":0.85,"scale":1}}'
+    )$$,
+  'text story keeps where its text and link were placed'
+);
+
+select is(
+  (select layout -> 'text' ->> 'scale' from public.list_active_stories()
+    where content = '자리를 옮긴 글'),
+  '1.5',
+  'listed story returns its layout'
+);
+
+select throws_ok(
+  $$select public.create_text_story(
+      '캔버스 밖', 'pink', null, '{"text":{"x":1.4,"y":0.2,"scale":1}}'
+    )$$,
+  '23514',
+  null,
+  'a position outside the canvas is rejected'
+);
+
+select throws_ok(
+  $$select public.create_text_story(
+      '링크 없음', 'pink', null, '{"link":{"x":0.5,"y":0.5,"scale":1}}'
+    )$$,
+  '23514',
+  null,
+  'a link position without a link is rejected'
 );
 
 -- 사진 스토리는 prepare가 예고한 경로에만 올릴 수 있고, publish 전에는 보이지 않는다.
