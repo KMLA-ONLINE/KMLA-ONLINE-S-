@@ -52,6 +52,12 @@ const AXIS_LOCK_PX = 10;
 /** 옆 작성자로 밀려 넘어가는 시간. */
 const SLIDE_MS = 260;
 
+/**
+ * 밀려 간 트랙은 새 장이 그려질 때 제자리로 돌린다. 장이 끝내 바뀌지 않아도 이만큼 뒤에는
+ * 돌린다. 그러지 않으면 트랙이 화면 밖에 남아 검은 화면만 보인다.
+ */
+const TRACK_RESET_FALLBACK_MS = 1_000;
+
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 /**
@@ -104,6 +110,10 @@ export function StoryViewer({
   // 밀려 간 트랙을 새 장이 그려지는 커밋에서 제자리로 돌린다. 그보다 먼저 돌리면 한 프레임 동안
   // 이전 작성자가 다시 보인다.
   const resetTrackRef = useRef(false);
+  const resetFallbackRef = useRef<number | null>(null);
+  // 밀려 가는 동안은 진행 막대를 멈춘다. 그 사이 막대가 끝나 다음 장으로 넘어가면 밀려 들어오던
+  // 작성자와 다른 장이 뜬다.
+  const [sliding, setSliding] = useState(false);
 
   const group = position ? groups[position.group] : undefined;
   const story = position ? group?.stories[position.story] : undefined;
@@ -127,10 +137,16 @@ export function StoryViewer({
     : null;
   const waitingForImage = Boolean(story?.imagePath) && loadedId !== story?.id;
   const paused =
-    held || hidden || menuOpen || confirmingDelete || waitingForImage;
+    held ||
+    hidden ||
+    menuOpen ||
+    confirmingDelete ||
+    waitingForImage ||
+    sliding;
 
   function next() {
-    if (!position || !group) return;
+    // 옆 작성자로 밀려 가는 중이다. 여기서 넘기면 끝난 뒤의 이동이 이것을 덮어쓴다.
+    if (!position || !group || slideTimerRef.current !== null) return;
 
     const target =
       group.stories[position.story + 1] ??
@@ -186,34 +202,47 @@ export function StoryViewer({
 
     track.style.transition = `transform ${SLIDE_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`;
     track.style.transform = `translateX(${direction === "next" ? -width : width}px)`;
+    setSliding(true);
     slideTimerRef.current = window.setTimeout(() => {
       slideTimerRef.current = null;
       resetTrackRef.current = true;
+      setSliding(false);
       onShow(storyId);
+      resetFallbackRef.current = window.setTimeout(
+        resetTrack,
+        TRACK_RESET_FALLBACK_MS,
+      );
     }, SLIDE_MS);
   }
 
-  useLayoutEffect(() => {
+  function resetTrack() {
     const track = trackRef.current;
 
+    if (resetFallbackRef.current !== null) {
+      window.clearTimeout(resetFallbackRef.current);
+      resetFallbackRef.current = null;
+    }
     if (!resetTrackRef.current || !track) return;
 
     resetTrackRef.current = false;
     track.style.transition = "none";
     track.style.transform = "";
-  }, [story?.id]);
+  }
+
+  // 새 장이 그려지는 커밋에서 돌린다.
+  useLayoutEffect(resetTrack, [story?.id]);
 
   useEffect(
     () => () => {
-      if (slideTimerRef.current !== null) {
-        window.clearTimeout(slideTimerRef.current);
+      for (const timer of [slideTimerRef.current, resetFallbackRef.current]) {
+        if (timer !== null) window.clearTimeout(timer);
       }
     },
     [],
   );
 
   function previous() {
-    if (!position || !group) return;
+    if (!position || !group || slideTimerRef.current !== null) return;
 
     const target =
       group.stories[position.story - 1] ??
@@ -240,38 +269,32 @@ export function StoryViewer({
     navigationRef.current = { next, previous };
   });
 
-  // 원본은 그 장을 열 때 서명한다. 다음 장과 다음 작성자의 첫 장 것도 함께 서명하고 미리 받아
-  // 두어 탭이나 쓸기로 넘길 때 바로 뜨게 한다. 서명에 실패하면 이미지 없이 진행한다 — 기다리면
-  // 막대가 영영 멈춘다.
+  // 원본은 그 장을 열 때 서명한다. 다음 장 것도 함께 서명하고 미리 받아 두어 넘길 때 바로
+  // 뜨게 한다. 옆으로 쓸어 건너뛸 작성자의 원본은 미리 받지 않는다. 쓸지 않으면 낭비이고, 쓸어도
+  // 원본이 올 때까지 축소본을 깔아 둔다. 서명에 실패하면 이미지 없이 진행한다 — 기다리면 막대가
+  // 영영 멈춘다.
   const currentPath = story?.imagePath ?? null;
   const currentId = story?.id;
   const followingPath = following?.imagePath ?? null;
-  const nextAuthorPath = nextAuthorStory?.imagePath ?? null;
 
   useEffect(() => {
-    if (!currentPath && !followingPath && !nextAuthorPath) return;
+    if (!currentPath && !followingPath) return;
 
     let cancelled = false;
 
-    void createStoryMediaUrls([
-      currentPath,
-      followingPath,
-      nextAuthorPath,
-    ]).then(
+    void createStoryMediaUrls([currentPath, followingPath]).then(
       (urls) => {
         if (cancelled) return;
 
         setImageUrls((previous) => new Map([...previous, ...urls]));
 
-        for (const path of [followingPath, nextAuthorPath]) {
-          const url = path ? urls.get(path) : null;
+        const followingUrl = followingPath ? urls.get(followingPath) : null;
 
-          if (!url) continue;
-
+        if (followingUrl) {
           // 뷰어의 <img>와 같은 CORS 모드로 받아야 같은 캐시 항목을 쓴다.
           const preload = new Image();
           preload.crossOrigin = "anonymous";
-          preload.src = url;
+          preload.src = followingUrl;
         }
         if (currentPath && !urls.has(currentPath) && currentId !== undefined) {
           setLoadedId(currentId);
@@ -285,7 +308,7 @@ export function StoryViewer({
     return () => {
       cancelled = true;
     };
-  }, [currentPath, currentId, followingPath, nextAuthorPath]);
+  }, [currentPath, currentId, followingPath]);
 
   // 진행 막대는 Web Animations로 돌린다. 멈춤과 재개가 `pause()`·`play()` 한 줄이고, 끝나는
   // 시점이 곧 다음 장으로 넘어가는 시점이라 타이머를 따로 두지 않는다.
@@ -561,7 +584,8 @@ export function StoryViewer({
                   aria-hidden
                 />
 
-                <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/50 to-transparent px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-8">
+                {/* 링크를 위쪽에 놓아도 메뉴·닫기 버튼을 덮지 않도록 머리를 그 위에 그린다. */}
+                <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-black/50 to-transparent px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-8">
                   <div className="flex gap-1">
                     {group.stories.map((item, index) => (
                       <span

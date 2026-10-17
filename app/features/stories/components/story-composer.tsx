@@ -8,6 +8,7 @@ import {
 } from "~/features/stories/components/story-canvas";
 import {
   StoryPlacedHandle,
+  StoryPlacedHandleHelp,
   useStoryLayoutGestures,
 } from "~/features/stories/components/story-layout-editor";
 import { storyKeys } from "~/features/stories/data/cache";
@@ -167,6 +168,7 @@ export function StoryComposer({
   const gestures = useStoryLayoutGestures({
     placements,
     selected: activeElement,
+    disabled: pending,
     onSelect: setSelected,
     onChange: placeElement,
   });
@@ -174,11 +176,19 @@ export function StoryComposer({
   function changeMode(next: Mode) {
     if (next === mode) return;
     setMode(next);
-    // 글의 기본 자리가 종류마다 다르다. 사진 위 글은 아래쪽, 글 스토리는 가운데다.
-    setPlacements((previous) => ({
-      ...previous,
-      text: defaultPlacements(next).text,
-    }));
+    // 글의 기본 자리가 종류마다 다르다. 사진 위 글은 아래쪽, 글 스토리는 가운데다. 사용자가 옮기거나
+    // 키운 글은 그대로 둔다. 종류를 잠깐 바꿔 봤다고 맞춰 둔 자리를 잃으면 안 된다.
+    setPlacements((previous) => {
+      const untouched = defaultPlacements(mode).text;
+      const moved =
+        previous.text.x !== untouched.x ||
+        previous.text.y !== untouched.y ||
+        previous.text.scale !== untouched.scale;
+
+      return moved
+        ? previous
+        : { ...previous, text: defaultPlacements(next).text };
+    });
   }
 
   async function pickImage(file: File | undefined) {
@@ -305,11 +315,12 @@ export function StoryComposer({
           데스크톱 창이 필요 이상으로 길어진다. */}
       <div className="contents md:flex md:w-72 md:shrink-0 md:flex-col md:gap-3">
         {/* 캔버스가 곧 편집 화면이다. 글과 링크를 끌어 옮기고 두 손가락으로 크기를 바꾼다.
-            끄는 동안 대화상자가 스크롤되지 않도록 `touch-none`을 건다. */}
+            휴대폰에서는 캔버스가 화면 대부분을 차지하므로 빈 곳에서는 대화상자를 세로로 스크롤할
+            수 있게 두고(`touch-pan-y`), 스크롤을 막는 것은 손잡이(`touch-none`)뿐이다. */}
         <div
           {...gestures}
           className={cn(
-            "@container relative mx-auto aspect-[9/16] w-full max-w-72 touch-none overflow-hidden rounded-xl",
+            "@container relative mx-auto aspect-[9/16] w-full max-w-72 touch-pan-y overflow-hidden rounded-xl",
             mode === "text"
               ? STORY_BACKGROUNDS[background]
               : image
@@ -340,7 +351,6 @@ export function StoryComposer({
           {normalizedContent ? (
             <StoryPlacedHandle
               element="text"
-              label={ELEMENT_LABELS.text}
               placement={placements.text}
               selected={activeElement === "text"}
               disabled={pending}
@@ -355,7 +365,6 @@ export function StoryComposer({
           {normalizedLink ? (
             <StoryPlacedHandle
               element="link"
-              label={ELEMENT_LABELS.link}
               placement={placements.link}
               selected={activeElement === "link"}
               disabled={pending}
@@ -367,6 +376,8 @@ export function StoryComposer({
             </StoryPlacedHandle>
           ) : null}
         </div>
+
+        <StoryPlacedHandleHelp />
 
         {activeElement ? (
           <div className="mx-auto flex w-full max-w-72 flex-col gap-1.5">

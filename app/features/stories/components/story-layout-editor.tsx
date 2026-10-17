@@ -41,11 +41,14 @@ interface Gesture {
 export function useStoryLayoutGestures({
   placements,
   selected,
+  disabled,
   onSelect,
   onChange,
 }: {
   placements: Required<StoryLayout>;
   selected: StoryLayoutElement | null;
+  /** 올리는 중이다. 저장할 자리는 이미 정해졌으니 화면의 자리도 바꾸지 않는다. */
+  disabled: boolean;
   onSelect: (element: StoryLayoutElement) => void;
   onChange: (element: StoryLayoutElement, placement: StoryPlacement) => void;
 }) {
@@ -59,6 +62,8 @@ export function useStoryLayoutGestures({
   }
 
   function onPointerDown(event: PointerEvent<HTMLElement>) {
+    if (disabled) return;
+
     const pointers = pointersRef.current;
     const rect = event.currentTarget.getBoundingClientRect();
 
@@ -110,7 +115,9 @@ export function useStoryLayoutGestures({
 
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
-    if (!gesture || gesture.width === 0 || gesture.height === 0) return;
+    if (!gesture || disabled || gesture.width === 0 || gesture.height === 0) {
+      return;
+    }
 
     if (gesture.kind === "pinch") {
       const current = distance();
@@ -163,9 +170,20 @@ export function useStoryLayoutGestures({
  * 캔버스 위에서 옮길 수 있는 글이나 링크. 보이는 모양은 뷰어와 같은 `storyPlacementStyle`이고,
  * 포커스하면 방향키로 옮기고 `+`·`-`로 크기를 바꾼다.
  */
+export const STORY_HANDLE_HELP_ID = "story-placed-handle-help";
+
+/** 손잡이의 사용법. 손잡이 이름은 글이나 링크 그 자체로 두고 이 설명을 덧붙인다. */
+export function StoryPlacedHandleHelp() {
+  return (
+    <p id={STORY_HANDLE_HELP_ID} className="sr-only">
+      끌어서 옮기고 두 손가락으로 크기를 바꿉니다. 키보드로는 방향키로 옮기고 +,
+      - 키로 크기를 바꿉니다.
+    </p>
+  );
+}
+
 export function StoryPlacedHandle({
   element,
-  label,
   placement,
   selected,
   disabled,
@@ -175,7 +193,6 @@ export function StoryPlacedHandle({
   children,
 }: {
   element: StoryLayoutElement;
-  label: string;
   placement: StoryPlacement;
   selected: boolean;
   disabled: boolean;
@@ -188,7 +205,7 @@ export function StoryPlacedHandle({
     <button
       type="button"
       {...{ [ELEMENT_ATTRIBUTE]: element }}
-      aria-label={`${label} 옮기기. 방향키로 옮기고 +, - 키로 크기를 바꿉니다.`}
+      aria-describedby={STORY_HANDLE_HELP_ID}
       aria-pressed={selected}
       disabled={disabled}
       onFocus={() => onSelect(element)}
@@ -216,7 +233,7 @@ export function StoryPlacedHandle({
       style={storyPlacementStyle(placement)}
       className={cn(
         className,
-        "cursor-move outline-none select-none",
+        "cursor-move touch-none outline-none select-none",
         // 고른 요소를 점선으로 감싸 어느 것의 크기를 바꾸는지 알린다.
         selected &&
           "outline-2 outline-offset-[1.5cqw] outline-white/90 outline-dashed",

@@ -206,11 +206,34 @@ describe("StoryRail cards", () => {
 
     fireEvent.pointerEnter(card, { pointerType: "mouse" });
     act(() => {
-      vi.advanceTimersByTime(10_000);
+      vi.advanceTimersByTime(5_000);
     });
     expect(card).toHaveTextContent("스토리 1");
 
     fireEvent.pointerLeave(card, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(card).toHaveTextContent("스토리 2");
+  });
+
+  it("holds the card still while it has keyboard focus", () => {
+    vi.useFakeTimers();
+    renderRail();
+    const card = screen.getByRole("button", { name: /작성자 a 스토리 2개/ });
+
+    act(() => {
+      card.focus();
+    });
+    // 장이 둘이라 10초를 보내면 두 번 넘어가 제자리로 보인다. 한 번만 넘어갈 시간을 보낸다.
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(card).toHaveTextContent("스토리 1");
+
+    act(() => {
+      card.blur();
+    });
     act(() => {
       vi.advanceTimersByTime(5_000);
     });

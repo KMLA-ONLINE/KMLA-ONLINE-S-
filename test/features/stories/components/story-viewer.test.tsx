@@ -111,5 +111,40 @@ describe("StoryViewer gestures", () => {
       });
       expect(onShow).toHaveBeenCalledWith(3);
     });
+
+    it("ignores other paging while sliding to the next author", () => {
+      vi.useFakeTimers();
+      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(
+        390,
+      );
+      const { onShow } = renderViewer(1);
+
+      swipe({ x: 250, y: 300 }, { x: 120, y: 310 });
+      fireEvent.keyDown(window, { key: "ArrowRight" });
+      fireEvent.click(screen.getByRole("button", { name: "다음 스토리" }));
+      act(() => {
+        vi.advanceTimersByTime(260);
+      });
+
+      expect(onShow.mock.calls).toEqual([[3]]);
+    });
+
+    it("returns the track even if the shown story never changes", () => {
+      vi.useFakeTimers();
+      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(
+        390,
+      );
+      // onShow가 장을 바꾸지 않는다. 부모가 그 id를 받아들이지 못한 경우다.
+      renderViewer(1);
+
+      swipe({ x: 250, y: 300 }, { x: 120, y: 310 });
+      act(() => {
+        vi.advanceTimersByTime(5_000);
+      });
+
+      expect(screen.getByTestId("story-track")).not.toHaveStyle({
+        transform: "translateX(-390px)",
+      });
+    });
   });
 });

@@ -280,7 +280,8 @@ function StoryComposerDialog({
 
 /**
  * 작성자 카드. 장이 여럿이면 `CARD_CYCLE_MS`마다 다음 장을 보여 주고, 누르면 지금 보이는 장부터
- * 뷰어를 연다. 마우스를 올렸거나 누르고 있거나 화면 밖이거나 탭이 숨었으면 멈춘다. 움직임 줄이기
+ * 뷰어를 연다. 마우스를 올렸거나 누르고 있거나 키보드 포커스가 있거나 화면 밖이거나 탭이
+ * 숨었으면 멈춘다. 움직임 줄이기
  * 설정이면 돌리지 않는다.
  */
 function StoryRailCard({
@@ -300,13 +301,20 @@ function StoryRailCard({
   const [shownIndex, setShownIndex] = useState(0);
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [offscreen, setOffscreen] = useState(false);
   const [hidden, setHidden] = useState(false);
   const count = group.stories.length;
   // 목록이 갱신되어 장이 줄었을 수 있다.
   const story = group.stories[shownIndex % count] ?? group.stories[0];
   const cycling =
-    count > 1 && !paused && !hovered && !pressed && !offscreen && !hidden;
+    count > 1 &&
+    !paused &&
+    !hovered &&
+    !pressed &&
+    !focused &&
+    !offscreen &&
+    !hidden;
 
   useEffect(() => {
     if (!cycling) return;
@@ -384,6 +392,8 @@ function StoryRailCard({
         warmStoryImage(story);
       }}
       onPointerUp={() => setPressed(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
       onPointerCancel={() => setPressed(false)}
       onClick={() => onOpen(story.id)}
       className={cn(

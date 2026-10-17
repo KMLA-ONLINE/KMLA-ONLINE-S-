@@ -67,7 +67,8 @@ describe("StoryComposer", () => {
     );
 
     // 방향키 한 번이 캔버스의 2%를 옮긴다. 포인터 없이도 자리를 고를 수 있어야 한다.
-    await user.click(screen.getByRole("button", { name: /글 옮기기/ }));
+    // 손잡이의 이름은 글 그 자체다. 화면 낭독기가 어떤 글을 옮기는지 읽을 수 있어야 한다.
+    await user.click(screen.getByRole("button", { name: "오늘의 이야기" }));
     await user.keyboard("{ArrowUp}{ArrowUp}{ArrowLeft}");
     fireEvent.change(screen.getByRole("slider", { name: "글 크기" }), {
       target: { value: "1.5" },
@@ -91,7 +92,7 @@ describe("StoryComposer", () => {
     await user.click(screen.getByRole("radio", { name: "글" }));
     await user.type(screen.getByRole("textbox", { name: "글" }), "공지");
     await user.type(screen.getByRole("textbox", { name: /링크/ }), "kmla.kr");
-    const pill = screen.getByRole("button", { name: /링크 옮기기/ });
+    const pill = screen.getByRole("button", { name: "kmla.kr" });
     const touch = (pointerId: number, clientX: number, clientY: number) => ({
       pointerId,
       pointerType: "touch",
@@ -153,5 +154,42 @@ describe("StoryComposer", () => {
       .getAttribute("src");
     expect(reopened).toBe(original);
     expect(revoked).not.toContain(reopened);
+  });
+
+  it("keeps a moved caption when switching between photo and text", async () => {
+    data.createTextStory.mockResolvedValueOnce(undefined);
+    const { user } = renderRoute(() => <StoryComposer onDone={vi.fn()} />);
+    await user.click(screen.getByRole("radio", { name: "글" }));
+    await user.type(screen.getByRole("textbox", { name: "글" }), "공지");
+    await user.click(screen.getByRole("button", { name: "공지" }));
+    await user.keyboard("{ArrowUp}");
+
+    await user.click(screen.getByRole("radio", { name: "사진" }));
+    await user.click(screen.getByRole("radio", { name: "글" }));
+    await user.click(screen.getByRole("button", { name: "공유" }));
+
+    expect(data.createTextStory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        layout: { text: { x: 0.5, y: 0.48, scale: 1 } },
+      }),
+    );
+  });
+
+  it("does not move the caption while the story is uploading", async () => {
+    data.createTextStory.mockReturnValueOnce(new Promise(() => undefined));
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 0, width: 300, height: 500 }),
+    );
+    const { user } = renderRoute(() => <StoryComposer onDone={vi.fn()} />);
+    await user.click(screen.getByRole("radio", { name: "글" }));
+    await user.type(screen.getByRole("textbox", { name: "글" }), "공지");
+    await user.click(screen.getByRole("button", { name: "공유" }));
+    const caption = screen.getByRole("button", { name: "공지" });
+    const touch = { pointerId: 1, pointerType: "touch" };
+
+    fireEvent.pointerDown(caption, { ...touch, clientX: 150, clientY: 250 });
+    fireEvent.pointerMove(caption, { ...touch, clientX: 60, clientY: 100 });
+
+    expect(caption).toHaveStyle({ left: "50%", top: "50%" });
   });
 });
