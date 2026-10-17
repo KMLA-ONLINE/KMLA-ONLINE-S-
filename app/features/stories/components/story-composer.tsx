@@ -117,16 +117,21 @@ export function StoryComposer({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(
-    () => () => {
-      if (!image) return;
-      URL.revokeObjectURL(image.baseUrl);
-      if (image.previewUrl !== image.baseUrl) {
-        URL.revokeObjectURL(image.previewUrl);
-      }
-    },
-    [image],
-  );
+  // 두 주소의 수명이 다르다. 원본 주소는 사진을 바꿀 때까지, 자른 결과 주소는 다시 자를 때까지
+  // 산다. `image` 하나에 묶어 정리하면 자르기를 반영할 때 아직 쓰는 원본 주소까지 해제되어 다시
+  // 자르기 창이 빈 사진을 연다.
+  const baseUrl = image?.baseUrl;
+  const previewUrl = image?.previewUrl;
+
+  useEffect(() => {
+    if (!baseUrl) return;
+    return () => URL.revokeObjectURL(baseUrl);
+  }, [baseUrl]);
+
+  useEffect(() => {
+    if (!previewUrl || previewUrl === baseUrl) return;
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [previewUrl, baseUrl]);
 
   const normalizedContent = normalizeStoryContent(content);
   const normalizedLink = normalizeStoryLink(link);
@@ -213,19 +218,13 @@ export function StoryComposer({
 
     try {
       const prepared = await prepareStoryImage(cropped);
-      const { base, baseUrl } = image;
 
-      // 바꾼 뒤의 정리 effect가 base URL을 지우지 않도록 같은 base를 넘긴다.
-      setImage((previous) => {
-        if (previous && previous.previewUrl !== previous.baseUrl) {
-          URL.revokeObjectURL(previous.previewUrl);
-        }
-        return {
-          ...prepared,
-          base,
-          baseUrl,
-          previewUrl: URL.createObjectURL(prepared.file),
-        };
+      // 원본은 그대로 넘긴다. 다시 자를 때도 처음 고른 사진에서 자른다.
+      setImage({
+        ...prepared,
+        base: image.base,
+        baseUrl: image.baseUrl,
+        previewUrl: URL.createObjectURL(prepared.file),
       });
     } catch (cause) {
       setError(

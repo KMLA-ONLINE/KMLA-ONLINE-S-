@@ -8,6 +8,32 @@ const data = vi.hoisted(() => ({
   isStoryLimitError: () => false,
 }));
 vi.mock("~/features/stories/data/mutations", () => data);
+// jsdom은 이미지를 디코딩하지 못한다. 압축은 받은 파일을 그대로 돌려주고, 자르기 창은 받은 사진
+// 주소를 그리고 적용하면 자른 결과를 넘기는 것으로 대신한다.
+vi.mock("~/shared/lib/image/compress", () => ({
+  IMAGE_INPUT_ACCEPT: "image/*",
+  compressImage: (file: File) => Promise.resolve(file),
+  getImageDimensions: () => Promise.resolve([1080, 1920]),
+}));
+vi.mock("~/shared/components/image-cropper", () => ({
+  ImageCropper: ({
+    previewUrl,
+    onComplete,
+  }: {
+    previewUrl: string;
+    onComplete: (file: File) => void;
+  }) => (
+    <div role="dialog" aria-label="사진 맞추기">
+      <img src={previewUrl} alt="자를 사진" />
+      <button
+        type="button"
+        onClick={() => onComplete(new File(["cropped"], "cropped.png"))}
+      >
+        적용
+      </button>
+    </div>
+  ),
+}));
 
 describe("StoryComposer", () => {
   it("names the failed story upload, preserves the draft and allows another attempt", async () => {
@@ -90,5 +116,42 @@ describe("StoryComposer", () => {
         },
       }),
     );
+  });
+
+  it("crops again from the original photo after a first crop", async () => {
+    let created = 0;
+    const revoked = new Set<string>();
+    vi.spyOn(URL, "createObjectURL").mockImplementation(
+      () => `blob:photo-${(created += 1)}`,
+    );
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation((url) => {
+      revoked.add(url);
+    });
+    const { user } = renderRoute(() => <StoryComposer onDone={vi.fn()} />);
+    // 사진 입력은 숨겨 두고 "사진 선택" 버튼이 대신 연다. 파일을 넣을 다른 길이 없다.
+    const input =
+      document.querySelector<HTMLInputElement>('input[type="file"]');
+    await user.upload(
+      input!,
+      new File(["photo"], "photo.jpg", { type: "image/jpeg" }),
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: /사진 맞추기/ }),
+    );
+    const original = screen
+      .getByRole("img", { name: "자를 사진" })
+      .getAttribute("src");
+    await user.click(screen.getByRole("button", { name: "적용" }));
+
+    await user.click(
+      await screen.findByRole("button", { name: /사진 맞추기/ }),
+    );
+
+    const reopened = screen
+      .getByRole("img", { name: "자를 사진" })
+      .getAttribute("src");
+    expect(reopened).toBe(original);
+    expect(revoked).not.toContain(reopened);
   });
 });
