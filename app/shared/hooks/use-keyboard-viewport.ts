@@ -7,12 +7,15 @@ export interface KeyboardViewport {
   keyboardOpen: boolean;
   /** 화면 아래에서 가려진 높이. 키보드가 떠 있어도 브라우저가 화면을 끌어올렸으면 0일 수 있다. */
   bottomInset: number;
+  /** 보이는 영역의 위쪽 위치. 키보드가 화면을 밀 때 팝업의 기준점으로 쓴다. */
+  offsetTop: number;
   height: number | null;
 }
 
 const DEFAULT_VIEWPORT: KeyboardViewport = {
   keyboardOpen: false,
   bottomInset: 0,
+  offsetTop: 0,
   height: null,
 };
 
@@ -42,12 +45,14 @@ export function useKeyboardViewport(enabled: boolean): KeyboardViewport {
       const next = {
         keyboardOpen,
         bottomInset: keyboardOpen ? hiddenBottom : 0,
+        offsetTop: visualViewport.offsetTop,
         height: visualViewport.height,
       };
 
       setViewport((current) =>
         current.keyboardOpen === next.keyboardOpen &&
         current.bottomInset === next.bottomInset &&
+        current.offsetTop === next.offsetTop &&
         current.height === next.height
           ? current
           : next,
