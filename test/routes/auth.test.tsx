@@ -116,8 +116,11 @@ describe("auth routes", () => {
     ).toBeVisible();
     expect(password).toHaveAttribute("type", "password");
 
+    // 입력 중에 누르면 입력란이 포커스를 잃어 모바일 키보드가 닫히면 안 된다.
+    await user.click(password);
     await user.click(screen.getByRole("button", { name: "비밀번호 표시하기" }));
     expect(password).toHaveAttribute("type", "text");
+    expect(password).toHaveFocus();
   });
 
   it("renders signup credential fields", async () => {

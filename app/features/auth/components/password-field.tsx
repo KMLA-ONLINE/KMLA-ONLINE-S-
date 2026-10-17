@@ -44,6 +44,9 @@ export function PasswordField({
           size="icon"
           aria-label={visible ? `${label} 숨기기` : `${label} 표시하기`}
           aria-pressed={visible}
+          // 누를 때 포커스가 버튼으로 옮겨 가면 입력란이 blur돼 모바일 키보드가 닫힌다.
+          // 키보드 사용자는 Tab으로 버튼에 올 수 있으니 포커스 이동만 막는다.
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => setVisible((current) => !current)}
           disabled={disabled}
         >
