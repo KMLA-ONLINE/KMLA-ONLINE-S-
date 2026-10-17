@@ -16,7 +16,7 @@
   ],
   "headers": [
     {
-      "source": "/((?!login$).+)",
+      "source": "/((?!login$|.*\\.(?:ico|svg|png)$).+)",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
     },
     {

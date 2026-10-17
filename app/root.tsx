@@ -33,8 +33,7 @@ import { TooltipProvider } from "~/shared/ui/tooltip";
 import "./app.css";
 
 const SITE_NAME = "KMLA Online";
-const SITE_DESCRIPTION =
-  "민족사관고등학교 구성원을 위한 온라인 커뮤니티. 공지와 그룹 게시판, 급식과 시간표를 한곳에서 봅니다.";
+const SITE_DESCRIPTION = "민족사관고등학교 학생 커뮤니티";
 const OG_IMAGE = "/og-image.png";
 
 /**

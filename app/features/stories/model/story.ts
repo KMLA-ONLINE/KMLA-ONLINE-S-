@@ -25,6 +25,41 @@ export function isStoryBackground(value: unknown): value is StoryBackground {
   return typeof value === "string" && value in STORY_BACKGROUNDS;
 }
 
+/**
+ * 재학생 작성자가 고르는 공개 범위(기능 명세 §17.6). 키는 DB `public.story_audience`와 같다.
+ * 교사의 스토리는 늘 `everyone`이다.
+ */
+export const STORY_AUDIENCES = [
+  {
+    key: "everyone",
+    label: "전체",
+    description: "재학생과 선생님",
+    badge: null,
+  },
+  {
+    key: "students",
+    label: "재학생만",
+    description: "선생님에게는 보이지 않아요",
+    badge: "재학생 공개",
+  },
+  {
+    key: "cohort",
+    label: "우리 기수만",
+    description: "같은 기수 재학생만 봐요",
+    badge: "기수 공개",
+  },
+] as const;
+
+export type StoryAudience = (typeof STORY_AUDIENCES)[number]["key"];
+
+/**
+ * 뷰어 머리에 붙이는 표시. 작성 창의 선택지 이름("우리 기수만")은 작성자 시점이라 보는 사람에게는
+ * 자기 기수로 읽힌다. 그래서 따로 둔다. 전체 공개는 표시하지 않는다.
+ */
+export function storyAudienceBadge(audience: StoryAudience): string | null {
+  return STORY_AUDIENCES.find((item) => item.key === audience)?.badge ?? null;
+}
+
 export function normalizeStoryContent(value: string): string {
   return value.trim();
 }
@@ -109,4 +144,212 @@ export function groupStoriesByAuthor<T extends { pubId: string }>(
   if (mineIndex > 0) groups.unshift(...groups.splice(mineIndex, 1));
 
   return groups;
+}
+
+/** 누르고 있는 동안은 멈춘다. 이보다 짧게 눌렀다 떼면 탭으로 본다. */
+export const STORY_HOLD_THRESHOLD_MS = 250;
+
+/** 손가락이 이보다 덜 움직였으면 탭이다. 더 움직였으면 쓸기 시도라서 장을 넘기지 않는다. */
+const STORY_TAP_SLOP_PX = 10;
+
+/** 화면을 위나 아래로 이만큼 쓸고 떼면 뷰어를 닫는다. */
+export const STORY_SWIPE_CLOSE_DISTANCE_PX = 80;
+
+/** 옆으로 이만큼 쓸고 떼면 다음이나 이전 작성자로 건너뛴다. */
+export const STORY_SWIPE_AUTHOR_DISTANCE_PX = 60;
+
+/**
+ * 거리가 모자라도 이만큼 움직였고 이보다 빨랐으면(px/ms) 튕긴 것으로 보고 건너뛴다. 손가락을
+ * 짧게 튕겨 넘기는 습관이 흔한데, 거리만 보면 그 동작이 제자리로 돌아온다.
+ */
+const STORY_FLICK_MIN_DISTANCE_PX = 25;
+const STORY_FLICK_MIN_SPEED = 0.3;
+
+export type StoryGesture =
+  | { kind: "tap"; side: "previous" | "next" }
+  | { kind: "author"; direction: "previous" | "next" }
+  | { kind: "close" }
+  | { kind: "none" };
+
+/**
+ * 뷰어에서 누르고 뗀 한 번을 동작으로 읽는다. 탭은 그 작성자 안에서 장을 넘기고(왼쪽 3분의 1은
+ * 이전), 옆으로 쓸면 작성자를 건너뛴다(왼쪽으로 쓸면 다음). 탭과 쓸기는 이동 거리로 가른다.
+ * 시간으로 먼저 가르면 빠른 쓸기가 탭이 되어 장이 넘어간다. 시간은 짧게 튕긴 것을 알아보는
+ * 데만 쓴다.
+ */
+export function readStoryGesture({
+  dx,
+  dy,
+  durationMs,
+  x,
+  width,
+}: {
+  dx: number;
+  dy: number;
+  durationMs: number;
+  /** 카드 왼쪽 끝에서 뗀 자리까지의 거리. */
+  x: number;
+  width: number;
+}): StoryGesture {
+  const horizontal = Math.abs(dx) > Math.abs(dy);
+
+  if (!horizontal && Math.abs(dy) >= STORY_SWIPE_CLOSE_DISTANCE_PX) {
+    return { kind: "close" };
+  }
+  const flicked =
+    Math.abs(dx) >= STORY_FLICK_MIN_DISTANCE_PX &&
+    Math.abs(dx) / Math.max(durationMs, 1) >= STORY_FLICK_MIN_SPEED;
+
+  if (
+    horizontal &&
+    (Math.abs(dx) >= STORY_SWIPE_AUTHOR_DISTANCE_PX || flicked)
+  ) {
+    return { kind: "author", direction: dx < 0 ? "next" : "previous" };
+  }
+  if (Math.max(Math.abs(dx), Math.abs(dy)) > STORY_TAP_SLOP_PX) {
+    return { kind: "none" };
+  }
+  if (durationMs > STORY_HOLD_THRESHOLD_MS) return { kind: "none" };
+
+  return { kind: "tap", side: x < width / 3 ? "previous" : "next" };
+}
+
+export type StoryAuthorJump =
+  { kind: "show"; id: number } | { kind: "close" } | { kind: "stay" };
+
+/**
+ * 옆으로 쓸었을 때 갈 곳. Facebook처럼 이웃 작성자의 첫 장으로 간다. 마지막 작성자에서 더 넘기면
+ * 볼 것이 없으니 닫고, 첫 작성자에서 되돌리면 그 자리에 둔다.
+ */
+export function findAuthorJump<T extends { pubId: string; id: number }>(
+  groups: readonly StoryAuthorGroup<T>[],
+  groupIndex: number,
+  direction: "previous" | "next",
+): StoryAuthorJump {
+  const target = groups[groupIndex + (direction === "next" ? 1 : -1)];
+  const first = target?.stories[0];
+
+  if (first) return { kind: "show", id: first.id };
+
+  return direction === "next" ? { kind: "close" } : { kind: "stay" };
+}
+
+/**
+ * 글이나 링크를 캔버스 어디에 얼마나 크게 놓았는지. `x`·`y`는 9:16 캔버스 안의 0~1 비율 좌표로
+ * 요소의 중심이고, `scale`은 기본 크기에 대한 배율이다. 범위는 DB check(`is_story_layout`)와
+ * 같아야 한다.
+ */
+export interface StoryPlacement {
+  x: number;
+  y: number;
+  scale: number;
+}
+
+/** 키가 없는 요소는 예전처럼 기본 자리에 그린다. 위치 편집 전에 올린 스토리가 그렇다. */
+export interface StoryLayout {
+  text?: StoryPlacement;
+  link?: StoryPlacement;
+}
+
+export type StoryLayoutElement = keyof StoryLayout;
+
+export const STORY_SCALE_MIN = 0.5;
+export const STORY_SCALE_MAX = 2.5;
+
+/** 작성 창이 처음 놓는 자리. 사진 위 글은 사진을 가리지 않게 아래쪽에 둔다. */
+export function defaultStoryPlacement(
+  element: StoryLayoutElement,
+  { overlay }: { overlay: boolean },
+): StoryPlacement {
+  if (element === "link") return { x: 0.5, y: 0.88, scale: 1 };
+
+  return { x: 0.5, y: overlay ? 0.74 : 0.5, scale: 1 };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+/** jsonb로 저장해도 길어지지 않게 자른다. 화면에서 구분되지 않는 차이다. */
+function round(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
+}
+
+function clampPlacement({ x, y, scale }: StoryPlacement): StoryPlacement {
+  return {
+    x: round(clamp(x, 0, 1)),
+    y: round(clamp(y, 0, 1)),
+    scale: round(clamp(scale, STORY_SCALE_MIN, STORY_SCALE_MAX)),
+  };
+}
+
+/** 중심이 캔버스를 벗어나지 않게 끈다. `dx`·`dy`는 캔버스 폭·높이에 대한 비율이다. */
+export function moveStoryPlacement(
+  placement: StoryPlacement,
+  dx: number,
+  dy: number,
+): StoryPlacement {
+  return clampPlacement({
+    ...placement,
+    x: placement.x + dx,
+    y: placement.y + dy,
+  });
+}
+
+export function scaleStoryPlacement(
+  placement: StoryPlacement,
+  factor: number,
+): StoryPlacement {
+  return clampPlacement({ ...placement, scale: placement.scale * factor });
+}
+
+function isPlacement(value: unknown): value is StoryPlacement {
+  if (typeof value !== "object" || value === null) return false;
+
+  const keys = Object.keys(value);
+  const { x, y, scale } = value as Record<string, unknown>;
+
+  return (
+    keys.every((key) => key === "x" || key === "y" || key === "scale") &&
+    typeof x === "number" &&
+    typeof y === "number" &&
+    typeof scale === "number" &&
+    x >= 0 &&
+    x <= 1 &&
+    y >= 0 &&
+    y <= 1 &&
+    scale >= STORY_SCALE_MIN &&
+    scale <= STORY_SCALE_MAX
+  );
+}
+
+/** 목록 RPC의 `layout`을 읽는다. DB가 이미 지키는 모양이지만 틀리면 기본 자리로 그린다. */
+export function parseStoryLayout(value: unknown): StoryLayout | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const layout: StoryLayout = {};
+
+  for (const [key, placement] of Object.entries(value)) {
+    if ((key !== "text" && key !== "link") || !isPlacement(placement)) {
+      return null;
+    }
+    layout[key] = placement;
+  }
+
+  return layout.text || layout.link ? layout : null;
+}
+
+/** 저장할 레이아웃. 없는 글이나 링크의 자리는 DB가 거절하므로 뺀다. */
+export function buildStoryLayout(
+  placements: Required<StoryLayout>,
+  { hasText, hasLink }: { hasText: boolean; hasLink: boolean },
+): StoryLayout | null {
+  const layout: StoryLayout = {};
+
+  if (hasText) layout.text = placements.text;
+  if (hasLink) layout.link = placements.link;
+
+  return layout.text || layout.link ? layout : null;
 }

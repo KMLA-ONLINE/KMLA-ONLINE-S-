@@ -1468,6 +1468,7 @@ export type Database = {
       }
       stories: {
         Row: {
+          audience: Database["public"]["Enums"]["story_audience"]
           background: string | null
           content: string
           created_at: string
@@ -1477,6 +1478,7 @@ export type Database = {
           image_path: string | null
           image_size_bytes: number | null
           image_width: number | null
+          layout: Json | null
           link_url: string | null
           profile_id: number
           published_at: string | null
@@ -1485,6 +1487,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          audience?: Database["public"]["Enums"]["story_audience"]
           background?: string | null
           content?: string
           created_at?: string
@@ -1494,6 +1497,7 @@ export type Database = {
           image_path?: string | null
           image_size_bytes?: number | null
           image_width?: number | null
+          layout?: Json | null
           link_url?: string | null
           profile_id: number
           published_at?: string | null
@@ -1501,6 +1505,7 @@ export type Database = {
           thumbnail_path?: string | null
         }
         Update: {
+          audience?: Database["public"]["Enums"]["story_audience"]
           background?: string | null
           content?: string
           created_at?: string
@@ -1510,6 +1515,7 @@ export type Database = {
           image_path?: string | null
           image_size_bytes?: number | null
           image_width?: number | null
+          layout?: Json | null
           link_url?: string | null
           profile_id?: number
           published_at?: string | null
@@ -1522,6 +1528,73 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      story_reactions: {
+        Row: {
+          created_at: string
+          id: number
+          profile_id: number
+          reaction: Database["public"]["Enums"]["post_reaction"]
+          story_id: number
+        }
+        ComputedFields: never
+        Insert: {
+          created_at?: string
+          id?: number
+          profile_id: number
+          reaction: Database["public"]["Enums"]["post_reaction"]
+          story_id: number
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          profile_id?: number
+          reaction?: Database["public"]["Enums"]["post_reaction"]
+          story_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "story_reactions_story_id_profile_id_fkey"
+            columns: ["story_id", "profile_id"]
+            isOneToOne: false
+            referencedRelation: "story_views"
+            referencedColumns: ["story_id", "profile_id"]
+          },
+        ]
+      }
+      story_views: {
+        Row: {
+          profile_id: number
+          story_id: number
+          viewed_at: string
+        }
+        ComputedFields: never
+        Insert: {
+          profile_id: number
+          story_id: number
+          viewed_at?: string
+        }
+        Update: {
+          profile_id?: number
+          story_id?: number
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "story_views_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "story_views_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "stories"
             referencedColumns: ["id"]
           },
         ]
@@ -1981,7 +2054,13 @@ export type Database = {
         Returns: string
       }
       create_text_story: {
-        Args: { p_background: string; p_content: string; p_link_url?: string }
+        Args: {
+          p_audience?: Database["public"]["Enums"]["story_audience"]
+          p_background: string
+          p_content: string
+          p_layout?: Json
+          p_link_url?: string
+        }
         Returns: number
       }
       delete_group: { Args: { p_group_id: string }; Returns: undefined }
@@ -2441,12 +2520,14 @@ export type Database = {
       list_active_stories: {
         Args: Record<PropertyKey, never>
         Returns: {
+          audience: Database["public"]["Enums"]["story_audience"]
           avatar_path: string
           background: string
           content: string
           image_height: number
           image_path: string
           image_width: number
+          layout: Json
           link_url: string
           name: string
           pub_id: string
@@ -2975,6 +3056,16 @@ export type Database = {
           title: string
         }[]
       }
+      list_story_viewers: {
+        Args: { p_story_id: number }
+        Returns: {
+          avatar_path: string
+          name: string
+          pub_id: string
+          reactions: Database["public"]["Enums"]["post_reaction"][]
+          viewed_at: string
+        }[]
+      }
       mark_all_my_notifications_read: {
         Args: Record<PropertyKey, never>
         Returns: number
@@ -2991,6 +3082,7 @@ export type Database = {
         Args: { p_notification_id: string }
         Returns: boolean
       }
+      mark_story_viewed: { Args: { p_story_id: number }; Returns: undefined }
       move_group_category: {
         Args: { p_category_id: string; p_direction: number }
         Returns: {
@@ -3062,8 +3154,10 @@ export type Database = {
       }
       prepare_image_story: {
         Args: {
+          p_audience?: Database["public"]["Enums"]["story_audience"]
           p_content?: string
           p_height: number
+          p_layout?: Json
           p_link_url?: string
           p_size_bytes: number
           p_width: number
@@ -3318,6 +3412,13 @@ export type Database = {
           id: string
           sent_at: string
         }[]
+      }
+      send_story_reaction: {
+        Args: {
+          p_reaction: Database["public"]["Enums"]["post_reaction"]
+          p_story_id: number
+        }
+        Returns: undefined
       }
       set_comment_reaction: {
         Args: {
@@ -3658,6 +3759,7 @@ export type Database = {
       profile_media_status: "pending" | "ready"
       profile_status: "draft" | "pending" | "accepted" | "blocked" | "withdrawn"
       profile_type: "student" | "alumni" | "teacher"
+      story_audience: "everyone" | "students" | "cohort"
       story_status: "pending" | "ready"
     }
     CompositeTypes: {
@@ -3863,6 +3965,7 @@ export const Constants = {
       profile_media_status: ["pending", "ready"],
       profile_status: ["draft", "pending", "accepted", "blocked", "withdrawn"],
       profile_type: ["student", "alumni", "teacher"],
+      story_audience: ["everyone", "students", "cohort"],
       story_status: ["pending", "ready"],
     },
   },
