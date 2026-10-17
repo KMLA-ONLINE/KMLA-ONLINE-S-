@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(77);
+select plan(80);
 
 -- 멘션 대상의 정본은 `public.post_mentions` / `public.comment_mentions`이고 본문에는 ordinal
 -- 토큰만 남는다(기능 명세 §8.14). 이 파일은 그 둘이 어긋날 수 있는 자리를 전부 밟는다.
@@ -644,15 +644,42 @@ select is(
      select name, row_number() over () as ordinality
      from public.search_group_mention_candidates('20000000-0000-0000-0000-000000000002')
    ) as candidate),
-  array['정선생', '이한별', '박새벽', '최푸름'],
+  array['정선생', '홍길동', '이한별', '박새벽', '최푸름'],
   'teachers come first and students follow from the most recent cohort'
 );
 select is(
-  (select count(*)::integer from public.search_group_mention_candidates(
+  (select array_agg(name) from public.search_group_mention_candidates(
      '20000000-0000-0000-0000-000000000002', '홍길동')),
-  0,
-  'the caller is never offered as their own mention candidate'
+  array['홍길동'],
+  'the caller is offered as their own mention candidate'
 );
+select lives_ok(
+  format(
+    $$select public.create_group_post(
+        '20000000-0000-0000-0000-000000000002', '자기 멘션',
+        '[@홍길동](m:1) 이 맡습니다.', 'identified', null, true, array[%L]
+      )$$,
+    (select pub_id from public.search_group_mention_candidates(
+       '20000000-0000-0000-0000-000000000002', '홍길동'))
+  ),
+  'a member can mention themselves'
+);
+reset role;
+select is(
+  (select array_agg(mention.profile_id)
+   from public.post_mentions as mention
+   join public.posts as post on post.id = mention.post_id
+   where post.title = '자기 멘션'),
+  array[1]::bigint[],
+  'the self mention is stored'
+);
+select is(
+  (select count(*)::integer from public.notifications
+   where kind = 'post_mentioned' and recipient_profile_id = 1),
+  0,
+  'a self mention sends no notification'
+);
+set local role authenticated;
 select is(
   (select array_agg(name) from public.search_group_mention_candidates(
      '20000000-0000-0000-0000-000000000002', '한별')),
