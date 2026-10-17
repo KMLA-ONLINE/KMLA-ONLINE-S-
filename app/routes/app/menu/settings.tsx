@@ -77,7 +77,7 @@ export default function SettingsPage() {
             <FieldContent>
               <FieldTitle>실험실 기능 사용</FieldTitle>
               <FieldDescription>
-                완성 전 기능을 먼저 써 봅니다. 변경되거나 제거될 수 있습니다.
+                변경되거나 제거될 수 있습니다.
               </FieldDescription>
             </FieldContent>
             <Switch

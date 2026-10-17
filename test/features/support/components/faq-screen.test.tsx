@@ -24,7 +24,7 @@ describe("FaqScreen", () => {
     await user.click(screen.getByText("기기 알림이 뭔가요?"));
     expect(
       screen.getByText(
-        "휴대폰이나 컴퓨터에 뜨는 알림입니다. 앱을 보고 있지 않아도 기기 알림으로 옵니다.",
+        "휴대폰이나 컴퓨터의 알림창에 뜨는 알림입니다. 앱을 열어 두지 않아도 받을 수 있습니다.",
       ),
     ).toBeVisible();
     await user.click(
