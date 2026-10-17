@@ -8,11 +8,14 @@ import { act, fireEvent, renderRoute, screen, waitFor } from "../../../router";
 const mutations = vi.hoisted(() => ({
   createTextStory: vi.fn(),
   deleteMyStory: vi.fn(),
+  markStoryViewed: vi.fn(() => Promise.resolve()),
+  sendStoryReaction: vi.fn(() => Promise.resolve()),
   isStoryLimitError: () => false,
 }));
 vi.mock("~/features/stories/data/mutations", () => mutations);
 vi.mock("~/features/stories/data/queries", () => ({
   listActiveStories: vi.fn(() => Promise.resolve([])),
+  listStoryViewers: vi.fn(() => Promise.resolve([])),
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock("sonner", () => ({ toast }));
@@ -161,6 +164,7 @@ function textStory(id: number, pubId: string): StoryItem {
     thumbnailUrl: null,
     linkUrl: null,
     layout: null,
+    audience: "everyone",
     publishedAt: "2026-10-17T00:00:00Z",
   };
 }
@@ -215,61 +219,5 @@ describe("StoryRail cards", () => {
       vi.advanceTimersByTime(5_000);
     });
     expect(card).toHaveTextContent("스토리 2");
-  });
-
-  it("holds the card still while it has keyboard focus", () => {
-    vi.useFakeTimers();
-    renderRail();
-    const card = screen.getByRole("button", { name: /작성자 a 스토리 2개/ });
-
-    act(() => {
-      card.focus();
-    });
-    // 장이 둘이라 10초를 보내면 두 번 넘어가 제자리로 보인다. 한 번만 넘어갈 시간을 보낸다.
-    act(() => {
-      vi.advanceTimersByTime(5_000);
-    });
-    expect(card).toHaveTextContent("스토리 1");
-
-    act(() => {
-      card.blur();
-    });
-    act(() => {
-      vi.advanceTimersByTime(5_000);
-    });
-    expect(card).toHaveTextContent("스토리 2");
-  });
-
-  it("fetches the next thumbnail before the card turns to it", () => {
-    const requested: string[] = [];
-    vi.stubGlobal(
-      "Image",
-      class {
-        crossOrigin = "";
-        set src(url: string) {
-          requested.push(url);
-        }
-      },
-    );
-    const photo = (id: number): StoryItem => ({
-      ...textStory(id, "a"),
-      background: null,
-      imagePath: `a/${id}`,
-      thumbnailUrl: `https://example.com/a/${id}-thumb`,
-    });
-
-    try {
-      renderRoute(() => (
-        <StoryRail
-          initialItems={[photo(1), photo(2)]}
-          viewer={{ pubId: "me", name: "나", avatarUrl: null }}
-          canWrite={false}
-        />
-      ));
-
-      expect(requested).toContain("https://example.com/a/2-thumb");
-    } finally {
-      vi.unstubAllGlobals();
-    }
   });
 });

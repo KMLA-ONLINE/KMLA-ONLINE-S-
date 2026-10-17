@@ -200,6 +200,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `issue_group_invite`                          | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |
 | `leave_conversation`                          | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `list_active_stories`                         | `stories/data/queries.ts`                                                       | `42-stories.sql`              |
+| `list_story_viewers`                          | `stories/data/queries.ts`                                                       | `42-stories.sql`              |
 | `list_birthdays`                              | `profiles/data/queries.ts`                                                      | `11-identity.sql`             |
 | `list_comment_images`                         | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_comment_reactors`                       | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
@@ -226,6 +227,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `mark_all_my_notifications_read`              | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
 | `mark_conversation_read`                      | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `mark_group_posts_visited`                    | `groups/data/mutations.ts`                                                      | `31-posts.sql`                |
+| `mark_story_viewed`                           | `stories/data/mutations.ts`                                                     | `42-stories.sql`              |
 | `move_group_category`                         | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `open_direct_conversation`                    | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `prepare_comment_image`                       | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
@@ -251,6 +253,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `search_message_recipients`                   | `messaging/data/queries.ts`                                                     | `71-messaging.sql`            |
 | `search_messages`                             | `messaging/data/queries.ts`                                                     | `71-messaging.sql`            |
 | `send_message`                                | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
+| `send_story_reaction`                         | `stories/data/mutations.ts`                                                     | `42-stories.sql`              |
 | `set_comment_reaction`                        | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `set_conversation_muted`                      | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `set_group_post_pinned`                       | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |

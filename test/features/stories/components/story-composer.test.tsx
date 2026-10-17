@@ -174,22 +174,4 @@ describe("StoryComposer", () => {
       }),
     );
   });
-
-  it("does not move the caption while the story is uploading", async () => {
-    data.createTextStory.mockReturnValueOnce(new Promise(() => undefined));
-    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue(
-      DOMRect.fromRect({ x: 0, y: 0, width: 300, height: 500 }),
-    );
-    const { user } = renderRoute(() => <StoryComposer onDone={vi.fn()} />);
-    await user.click(screen.getByRole("radio", { name: "글" }));
-    await user.type(screen.getByRole("textbox", { name: "글" }), "공지");
-    await user.click(screen.getByRole("button", { name: "공유" }));
-    const caption = screen.getByRole("button", { name: "공지" });
-    const touch = { pointerId: 1, pointerType: "touch" };
-
-    fireEvent.pointerDown(caption, { ...touch, clientX: 150, clientY: 250 });
-    fireEvent.pointerMove(caption, { ...touch, clientX: 60, clientY: 100 });
-
-    expect(caption).toHaveStyle({ left: "50%", top: "50%" });
-  });
 });

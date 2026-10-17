@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { StoryComposer } from "~/features/stories/components/story-composer";
+import { preloadStoryReactions } from "~/features/stories/components/story-engagement";
 import { useStoryParam } from "~/features/stories/components/use-story-param";
 import { StoryViewer } from "~/features/stories/components/story-viewer";
 import { STORY_STALE_TIME, storyKeys } from "~/features/stories/data/cache";
@@ -71,10 +72,13 @@ export function StoryRail({
   initialItems,
   viewer,
   canWrite,
+  canNarrowAudience = false,
 }: {
   initialItems: StoryItem[];
   viewer: { pubId: string; name: string; avatarUrl: string | null };
   canWrite: boolean;
+  /** 재학생이면 작성 창에서 공개 범위를 좁힐 수 있다. */
+  canNarrowAudience?: boolean;
 }) {
   // 레일은 쿼리 캐시를 구독한다. 로더가 채운 값을 그대로 읽고, 작성·삭제 뒤의 무효화와 당겨서
   // 새로고침이 다시 받은 값도 같은 경로로 들어온다.
@@ -106,6 +110,13 @@ export function StoryRail({
     param.kind === "story" &&
     !deletedIds.has(param.id) &&
     !items.some((item) => item.id === param.id);
+
+  // 다른 사람의 스토리가 있으면 뷰어를 열기 전에 반응 그림을 받아 둔다.
+  const hasOthersStory = groups.some((group) => group.pubId !== viewer.pubId);
+
+  useEffect(() => {
+    if (hasOthersStory) preloadStoryReactions();
+  }, [hasOthersStory]);
 
   // 공유 링크로 들어왔는데 이미 만료됐거나 볼 수 없는 스토리면 알리고 param을 걷는다.
   useEffect(() => {
@@ -206,6 +217,7 @@ export function StoryRail({
       {canWrite ? (
         <StoryComposerDialog
           open={param.kind === "composer"}
+          canNarrowAudience={canNarrowAudience}
           onClose={() => {
             // 올리는 중에는 닫지 않는다. 닫아도 업로드는 계속되고, 끝날 때 다시 닫으려 한다.
             if (!uploadingRef.current) close();
@@ -232,11 +244,13 @@ export function StoryRail({
 
 function StoryComposerDialog({
   open,
+  canNarrowAudience,
   onClose,
   onPendingChange,
   onDone,
 }: {
   open: boolean;
+  canNarrowAudience: boolean;
   onClose: () => void;
   onPendingChange: (pending: boolean) => void;
   onDone: () => void | Promise<void>;
@@ -271,7 +285,11 @@ function StoryComposerDialog({
         </DialogHeader>
 
         {open ? (
-          <StoryComposer onDone={onDone} onPendingChange={onPendingChange} />
+          <StoryComposer
+            canNarrowAudience={canNarrowAudience}
+            onDone={onDone}
+            onPendingChange={onPendingChange}
+          />
         ) : null}
       </DialogContent>
     </Dialog>
