@@ -225,7 +225,7 @@ export function GroupDetailScreen({
               <EmptyTabCard
                 icon={<UsersIcon aria-hidden />}
                 title={`멤버 ${group.member_count.toLocaleString("ko-KR")}`}
-                description="멤버 명부를 불러오는 중입니다."
+                description="멤버 목록을 불러오는 중입니다."
               />
             )
           ) : tab === "settings" ? (

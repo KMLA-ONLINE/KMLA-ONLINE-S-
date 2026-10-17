@@ -47,8 +47,8 @@ export function StorageCleanupScreen({
     <div className="space-y-6 px-0 py-4 md:px-4">
       <div className="flex flex-wrap items-start justify-between gap-3 px-4 md:px-0">
         <p className="max-w-prose text-sm text-muted-foreground">
-          쓰이지 않는 첨부·이미지 파일을 워커가 지웁니다. 상태만 보는
-          화면입니다.
+          사용하지 않는 첨부·이미지 파일을 자동으로 정리합니다. 이 화면에서는
+          정리 상태만 확인할 수 있습니다.
         </p>
         <div className="flex flex-col items-end">
           <Button
@@ -90,7 +90,7 @@ export function StorageCleanupScreen({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <HealthIcon tone={status.secrets_configured ? "ok" : "down"} />
-            워커 설정
+            자동 정리 설정
           </CardTitle>
         </CardHeader>
         <CardContent className="text-sm">
@@ -125,9 +125,9 @@ export function StorageCleanupScreen({
               warn={status.queue_retrying > 0}
             />
             <Metric
-              label="스윕 후보"
+              label="정리 후보"
               value={status.queue_dry_run}
-              hint="지우지 않음"
+              hint="미리보기 · 실제로 삭제하지 않음"
             />
             <Field label="가장 오래된 대기">
               {status.queue_oldest_enqueued_at ? (

@@ -155,9 +155,9 @@ export function useConversationMessages(conversation: Conversation) {
           // 이미 읽은 방이고 목록도 읽음이었으면 서버도 목록도 그대로라 다시 읽지 않는다. 서버가 옮기지
           // 않았어도 목록에서 뺀 수가 있으면 목록이 낡았던 것이므로 다시 읽는다.
           if (!moved && cleared === 0) return;
-          refreshConversationInList(queryClient, conversationId).catch(
-            () => void invalidateConversationList(queryClient),
-          );
+          refreshConversationInList(queryClient, conversationId, {
+            attachmentsChanged: false,
+          }).catch(() => void invalidateConversationList(queryClient));
         },
         () => {
           pending = true;
@@ -526,7 +526,7 @@ export function useConversationMessages(conversation: Conversation) {
       return true;
     } catch {
       if (isLatest()) apply(previous);
-      toast.error("메시지를 고치지 못했습니다.");
+      toast.error("메시지를 수정하지 못했습니다.");
       return false;
     } finally {
       release();

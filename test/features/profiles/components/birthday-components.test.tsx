@@ -125,7 +125,7 @@ describe("birthday components", () => {
   it("keeps the full list available when nobody has a birthday today", () => {
     renderRoute(() => <HomeBirthdaySummary birthdays={[]} />);
 
-    expect(screen.getByText("오늘 생일인 학생이 없습니다")).toBeVisible();
+    expect(screen.getByText("오늘 생일인 사람이 없습니다")).toBeVisible();
     expect(screen.getByRole("link", { name: "생일 보기" })).toHaveAttribute(
       "href",
       "/menu/birthdays",

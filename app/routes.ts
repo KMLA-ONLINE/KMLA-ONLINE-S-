@@ -12,6 +12,7 @@ export default [
   route("setup", "routes/auth/setup.tsx"),
   route("pending", "routes/auth/pending.tsx"),
   route("blocked", "routes/auth/blocked.tsx"),
+  route("suspended", "routes/auth/suspended.tsx"),
   route("logout", "routes/auth/logout.tsx"),
   route("noti/open/:notificationId", "routes/notification-open.tsx"),
   route("dokkaebi", "routes/dokkaebi.tsx"),

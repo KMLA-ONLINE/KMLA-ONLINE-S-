@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 
 import type {
   DonationItem,
@@ -139,6 +140,9 @@ describe("DonationsScreen for students", () => {
       expect(data.loadDonationItems).toHaveBeenCalledTimes(2),
     );
     expect(data.claimDonationItem).toHaveBeenCalledWith(2);
+    expect(toast.success).toHaveBeenCalledWith(
+      "‘수학 교재’ 신청이 완료되었습니다.",
+    );
   });
 
   it("asks before cancelling a claim", async () => {
@@ -158,6 +162,9 @@ describe("DonationsScreen for students", () => {
     await user.click(within(dialog).getByRole("button", { name: "신청 취소" }));
     await waitFor(() =>
       expect(data.cancelDonationClaim).toHaveBeenCalledWith(4),
+    );
+    expect(toast.success).toHaveBeenCalledWith(
+      "‘수학 교재’ 신청을 취소했습니다.",
     );
   });
 
@@ -199,7 +206,9 @@ describe("DonationsScreen application eligibility", () => {
 
       expect(await screen.findByText("수학 교재")).toBeInTheDocument();
       expect(
-        screen.getByText(/재학생만 신청할 수 있습니다/),
+        screen.getByText(
+          "기부물품은 재학생만 신청할 수 있습니다. 목록은 열람할 수 있습니다.",
+        ),
       ).toBeInTheDocument();
       expect(
         screen.queryByRole("button", { name: "수학 교재 신청" }),

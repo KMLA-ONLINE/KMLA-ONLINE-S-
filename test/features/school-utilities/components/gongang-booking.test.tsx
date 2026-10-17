@@ -85,7 +85,7 @@ describe("gongang booking flow", () => {
       screen.getByRole("textbox", { name: "사용 목적" }),
       "동아리 연습",
     );
-    await user.click(screen.getByRole("button", { name: "3건 신청" }));
+    await user.click(screen.getByRole("button", { name: "3건 예약" }));
     await waitFor(() =>
       expect(data.createUtilityReservations).toHaveBeenCalledExactlyOnceWith([
         {
@@ -148,7 +148,7 @@ describe("gongang booking flow", () => {
       screen.getByRole("textbox", { name: "사용 목적" }),
       "스터디",
     );
-    await user.click(screen.getByRole("button", { name: "1건 신청" }));
+    await user.click(screen.getByRole("button", { name: "1건 예약" }));
     await waitFor(() =>
       expect(data.createUtilityReservations).toHaveBeenCalledExactlyOnceWith([
         expect.objectContaining({ slot: "dinner", location: "floor_2" }),
@@ -168,7 +168,7 @@ describe("gongang booking flow", () => {
     await user.click(
       screen.getByRole("button", { name: "지하 1층 08:00–09:00 선택 해제" }),
     );
-    expect(screen.getByRole("button", { name: "1건 신청" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "1건 예약" })).toBeDisabled();
     expect(
       screen.getByRole("button", { name: "08:00–09:00 지하 1층 선택" }),
     ).toHaveAttribute("aria-pressed", "false");
@@ -208,20 +208,20 @@ describe("gongang booking flow", () => {
         avatarUrl: null,
       },
     ]);
-    await user.click(screen.getByRole("button", { name: "2건 신청" }));
+    await user.click(screen.getByRole("button", { name: "2건 예약" }));
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "지하 1층 09:00–10:00은(는) 방금 다른 예약이 생겨 선택에서 뺐습니다.",
+      "다른 예약이 등록되어 다음 시간대의 선택을 해제했습니다: 지하 1층 09:00–10:00. 나머지 시간대는 예약할 수 있습니다.",
     );
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "다른 사용자가 먼저 신청했습니다.",
+      "다른 사용자가 먼저 예약했습니다.",
     );
-    expect(screen.getByRole("button", { name: "1건 신청" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "1건 예약" })).toBeEnabled();
   });
   it("does not expose an empty bookable board when loading fails", async () => {
     data.loadGongangSchedule.mockRejectedValueOnce(new Error("offline"));
     renderRoute(GongangBookingScreen);
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "예약을 불러오지 못했습니다",
+      "예약을 불러오지 못했습니다. 다시 시도해 주세요.",
     );
     expect(
       screen.getByRole("button", { name: "점심 지하 1층 선택" }),

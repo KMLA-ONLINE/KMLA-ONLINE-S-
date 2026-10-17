@@ -132,7 +132,7 @@ export function MentionPickerDialog({
                   type="button"
                   size="sm"
                   variant="secondary"
-                  aria-label={`${candidate.name} 빼기`}
+                  aria-label={`${candidate.name} 선택 해제`}
                   className="gap-1 rounded-full"
                   onClick={() => toggle(candidate)}
                 >

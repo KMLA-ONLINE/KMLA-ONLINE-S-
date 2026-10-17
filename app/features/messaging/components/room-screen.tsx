@@ -31,6 +31,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { useLocation, useNavigate } from "react-router";
 
@@ -87,14 +88,8 @@ import {
   EDIT_EXPIRED_MESSAGE,
 } from "~/features/messaging/model/message-edit";
 import { formatReplyPreview } from "~/features/messaging/model/conversation-preview";
-import {
-  canConnectMessages,
-  hasVisibleMessageReaction,
-} from "~/features/messaging/model/message-grouping";
-import {
-  formatMessageDay,
-  startsMessageDay,
-} from "~/features/messaging/model/message-time";
+import { layoutMessageThread } from "~/features/messaging/model/message-grouping";
+import { formatMessageDay } from "~/features/messaging/model/message-time";
 import type {
   Conversation,
   ConversationMessage,
@@ -148,6 +143,18 @@ const SEND_COOLDOWN_MS = 500;
  * 더 누른 손가락이 의도하지 않은 좋아요를 보낸다.
  */
 const LIKE_AFTER_SEND_MS = 1_000;
+/** 대화 정보가 대화 옆에 붙는 폭. 이보다 좁으면 대화 정보는 열 때만 대화를 덮는다. */
+const WIDE_ROOM_QUERY = "(min-width: 80rem)";
+
+function subscribeToWideRoomQuery(onChange: () => void) {
+  const query = window.matchMedia(WIDE_ROOM_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function isWideRoomViewport() {
+  return window.matchMedia(WIDE_ROOM_QUERY).matches;
+}
 
 export function RoomScreen({
   conversation: loadedConversation,
@@ -220,11 +227,21 @@ export function RoomScreen({
     document.addEventListener("keydown", cancelOnEscape);
     return () => document.removeEventListener("keydown", cancelOnEscape);
   }, [selecting]);
-  // 대화 정보가 보일 때 공유된 첨부 수를 센다. 첨부가 바뀌면 메시지 신호가 다시 읽게 한다.
+  // 대화 정보가 보일 때 공유된 첨부 수를 센다. 첨부가 바뀌면 메시지 신호가 다시 읽게 한다. 대화
+  // 정보가 닫힌 동안에는 읽지 않는다. 그동안의 신호는 낡았다고만 표시해 두고 열 때 한 번 읽는다.
+  const wideRoom = useSyncExternalStore(
+    subscribeToWideRoomQuery,
+    isWideRoomViewport,
+    () => false,
+  );
   const { data: sharedCounts } = useQuery({
     queryKey: messagingKeys.sharedAttachmentCounts(conversation.id),
     queryFn: () => getSharedAttachmentCounts(conversation.id),
     staleTime: 60_000,
+    enabled:
+      overlay?.kind === "shared" ||
+      // 넓은 화면은 옆 패널, 좁은 화면은 덮는 패널이 보인다. 다른 쪽 상태는 CSS로 숨겨져 있다.
+      (wideRoom ? desktopDetailsOpen : compactDetailsOpen),
   });
   const reactionsTarget =
     overlay?.kind === "reactions"
@@ -315,7 +332,7 @@ export function RoomScreen({
   }
 
   function openDetails() {
-    if (window.matchMedia("(min-width: 80rem)").matches) {
+    if (isWideRoomViewport()) {
       onDesktopDetailsOpenChange?.(true);
       return;
     }
@@ -435,7 +452,7 @@ export function RoomScreen({
       }
     >
       <section
-        aria-label={`${conversation.name} 대화`}
+        aria-label={`${conversation.name} 채팅`}
         className={cn(
           "min-h-0 min-w-0 flex-1 flex-col bg-background",
           compactDetailsOpen ? "hidden xl:flex" : "flex",
@@ -446,7 +463,7 @@ export function RoomScreen({
             variant="ghost"
             size="icon"
             className="rounded-full md:hidden"
-            aria-label="대화 목록으로 돌아가기"
+            aria-label="채팅 목록으로 돌아가기"
             onClick={() => void backToList()}
           >
             <ChevronLeftIcon aria-hidden />
@@ -454,7 +471,7 @@ export function RoomScreen({
           {/* 이름을 누르면 대화 정보를 연다. 넓은 화면에서 접어 둔 정보 패널도 다시 편다. */}
           <button
             type="button"
-            aria-label={`${conversation.name} 대화 정보 보기`}
+            aria-label={`${conversation.name} 채팅 정보 보기`}
             className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
             onClick={openDetails}
           >
@@ -470,7 +487,7 @@ export function RoomScreen({
             variant="ghost"
             size="icon"
             className="rounded-full"
-            aria-label="대화 검색"
+            aria-label="채팅 검색"
             onClick={() => roomOverlay.open({ kind: "search" })}
           >
             <SearchIcon aria-hidden />
@@ -479,7 +496,7 @@ export function RoomScreen({
             variant="ghost"
             size="icon"
             className="rounded-full xl:hidden"
-            aria-label="대화 정보 열기"
+            aria-label="채팅 정보 열기"
             onClick={() => roomOverlay.open({ kind: "details" })}
           >
             <InfoIcon aria-hidden />
@@ -489,7 +506,7 @@ export function RoomScreen({
             size="icon"
             className="hidden rounded-full xl:inline-flex"
             aria-label={
-              desktopDetailsOpen ? "대화 정보 닫기" : "대화 정보 열기"
+              desktopDetailsOpen ? "채팅 정보 닫기" : "채팅 정보 열기"
             }
             aria-pressed={desktopDetailsOpen}
             onClick={() => onDesktopDetailsOpenChange?.(!desktopDetailsOpen)}
@@ -642,7 +659,7 @@ export function RoomScreen({
           />
         ) : (
           <p className="shrink-0 px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))] text-center text-sm text-muted-foreground">
-            이 대화에서 나왔습니다. 참여한 동안의 메시지만 볼 수 있습니다.
+            이 채팅에서 나왔습니다. 참여한 동안의 메시지만 볼 수 있습니다.
           </p>
         )}
       </section>
@@ -707,7 +724,7 @@ export function RoomScreen({
       {memberDialog?.kind === "leave" ? (
         <ConfirmDialog
           title="그룹에서 나갈까요?"
-          description="나가면 대화 목록에서 사라지고, 이후 메시지는 볼 수 없습니다."
+          description="나가면 채팅 목록에서 사라지고, 이후 메시지는 볼 수 없습니다."
           confirmLabel="나가기"
           destructive
           onCancel={() => setMemberDialog(null)}
@@ -719,8 +736,8 @@ export function RoomScreen({
       ) : null}
       {memberDialog?.kind === "delete" ? (
         <ConfirmDialog
-          title="대화방을 삭제할까요?"
-          description="모든 멤버의 목록에서 대화방이 사라지고, 메시지와 사진·파일도 함께 지워집니다. 되돌릴 수 없습니다."
+          title="채팅방을 삭제할까요?"
+          description="모든 멤버의 목록에서 채팅방이 사라지고, 메시지와 사진·파일도 함께 지워집니다. 되돌릴 수 없습니다."
           confirmLabel="삭제"
           destructive
           onCancel={() => setMemberDialog(null)}
@@ -823,6 +840,9 @@ function MessageThread({
   // 읽기가 실패한 뒤에는 맨 위 근처에서 스크롤할 때마다 다시 부르지 않는다. 사용자가 그 구간을
   // 벗어났다가 다시 올라오면 한 번 더 시도한다.
   const olderLoadFailed = useRef(false);
+  // 날짜 구분선과 묶음 경계는 메시지가 바뀔 때만 다시 센다. 키보드가 오르내리거나 오버레이가 열려
+  // 이 영역이 다시 그려질 때마다 메시지 전체의 시각을 포매팅하지 않는다.
+  const layout = useMemo(() => layoutMessageThread(messages), [messages]);
   const oldestMessageId = messages[0]?.id;
   const newestMessage = messages.at(-1);
   const newestMessageId = newestMessage?.id;
@@ -983,7 +1003,13 @@ function MessageThread({
     followingNewMessagesRef.current =
       distanceFromBottom <= FOLLOW_NEW_MESSAGES_THRESHOLD;
     if (followingNewMessagesRef.current) {
-      setSeen({ conversationId: conversation.id, messageId: newestMessageId });
+      // 맨 아래에서는 스크롤 이벤트마다 여기에 온다. 같은 값이면 이전 객체를 돌려줘 다시 그리지 않는다.
+      setSeen((previous) =>
+        previous.conversationId === conversation.id &&
+        previous.messageId === newestMessageId
+          ? previous
+          : { conversationId: conversation.id, messageId: newestMessageId },
+      );
     }
 
     if (scrollingToBottom.current) {
@@ -1065,18 +1091,7 @@ function MessageThread({
           )}
         >
           {messages.map((message, index) => {
-            const previous = messages[index - 1];
-            const next = messages[index + 1];
-            const startsGroup = !canConnectMessages(
-              previous,
-              message,
-              previous ? hasVisibleMessageReaction(previous) : false,
-            );
-            const endsGroup = !canConnectMessages(
-              message,
-              next,
-              hasVisibleMessageReaction(message),
-            );
+            const slot = layout[index];
             const sender = message.senderId
               ? participantById.get(message.senderId)
               : undefined;
@@ -1086,7 +1101,7 @@ function MessageThread({
 
             return (
               <div key={message.id}>
-                {startsMessageDay(previous, message) ? (
+                {slot?.startsDay ? (
                   <div className="my-4 flex items-center justify-center">
                     <span className="text-xs text-muted-foreground">
                       {formatMessageDay(message.sentAt)}
@@ -1115,8 +1130,8 @@ function MessageThread({
                           : null
                     }
                     isGroup={conversation.type === "group"}
-                    startsGroup={startsGroup}
-                    endsGroup={endsGroup}
+                    startsGroup={slot?.startsGroup ?? true}
+                    endsGroup={slot?.endsGroup ?? true}
                     highlighted={highlightedMessageId === message.id}
                     contextViewportRef={messageThreadRef}
                     contextPortalRef={contextPortalRef}

@@ -86,7 +86,7 @@ describe("donation workbook validation", () => {
       ]),
     );
     expect(result.errors).toEqual([
-      "domestic 1행: 필수 컬럼 '물품명'이 없습니다.",
+      "domestic 1행: 필수 열 ‘물품명’이 없습니다.",
     ]);
   });
 
@@ -101,8 +101,8 @@ describe("donation workbook validation", () => {
     );
     expect(result.items).toHaveLength(1);
     expect(result.errors).toEqual([
-      "domestic 3행: 반복된 헤더 행입니다. 중복 헤더를 제거해주세요.",
-      "domestic 4행: 물품명은 1~300자의 문자여야 합니다.",
+      "domestic 3행: 반복된 헤더 행입니다. 중복 헤더를 제거해 주세요.",
+      "domestic 4행: 물품명은 1~300자의 텍스트로 입력해 주세요.",
     ]);
   });
 
@@ -131,6 +131,21 @@ describe("donation workbook validation", () => {
     });
   });
 
+  it("explains each text limit while keeping the original sheet and row", async () => {
+    const result = await parseDonationWorkbook(
+      await workbookFile([
+        ["물품명", "상세 정보", "기증자"],
+        ["가".repeat(301), "나".repeat(201), "다".repeat(101)],
+      ]),
+    );
+    expect(result.items).toEqual([]);
+    expect(result.errors).toEqual([
+      "domestic 2행: 물품명은 1~300자의 텍스트로 입력해 주세요.",
+      "domestic 2행: 상세 정보는 200자 이하의 텍스트로 입력해 주세요.",
+      "domestic 2행: 기증자 이름은 100자 이하의 텍스트로 입력해 주세요.",
+    ]);
+  });
+
   it("rejects sheet names that match inherited object properties", async () => {
     const result = await parseDonationWorkbook(
       await workbookFile([["교재"]], "constructor"),
@@ -138,7 +153,7 @@ describe("donation workbook validation", () => {
     expect(result).toEqual({
       items: [],
       errors: [
-        "constructor: 지원하지 않는 시트입니다. 엑셀 양식을 확인해주세요.",
+        "constructor: 지원하지 않는 시트입니다. 엑셀 양식을 확인해 주세요.",
       ],
     });
   });
@@ -148,8 +163,8 @@ describe("donation workbook validation", () => {
       await workbookFile([["물품명"], ["하복"]], "uniform_male"),
     );
     expect(result.errors).toEqual([
-      "uniform_male 1행: 필수 컬럼 '색상'이 없습니다.",
-      "uniform_male 1행: 필수 컬럼 '기증자'가 없습니다.",
+      "uniform_male 1행: 필수 열 ‘색상’이 없습니다.",
+      "uniform_male 1행: 필수 열 ‘기증자’가 없습니다.",
     ]);
   });
 

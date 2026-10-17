@@ -212,7 +212,7 @@ export function GroupCreateForm({
             <FieldLegend>참여 방식</FieldLegend>
             <FieldGroup>
               <Field data-invalid={Boolean(errors.joinPolicy)}>
-                <FieldLabel htmlFor="join-policy">가입 정책</FieldLabel>
+                <FieldLabel htmlFor="join-policy">가입 방식</FieldLabel>
                 <NativeSelect
                   id="join-policy"
                   name="joinPolicy"
@@ -306,7 +306,9 @@ export function GroupCreateForm({
             <FieldLegend>활동 정책</FieldLegend>
             <FieldGroup className="grid gap-5 sm:grid-cols-2">
               <Field data-invalid={Boolean(errors.identityPolicy)}>
-                <FieldLabel htmlFor="identity-policy">활동 신원</FieldLabel>
+                <FieldLabel htmlFor="identity-policy">
+                  실명·익명 설정
+                </FieldLabel>
                 <NativeSelect
                   id="identity-policy"
                   name="identityPolicy"
@@ -340,7 +342,7 @@ export function GroupCreateForm({
                     운영진만 게시 가능
                   </FieldLabel>
                   <FieldDescription>
-                    매니저, 관리자와 소유자만 게시물을 작성합니다.
+                    소유자·관리자·매니저만 게시물을 작성할 수 있습니다.
                   </FieldDescription>
                 </FieldContent>
                 <FieldError>{errors.postingPolicy}</FieldError>
@@ -363,7 +365,7 @@ export function GroupCreateForm({
                     일반 멤버에게 운영진 역할 숨기기
                   </FieldLabel>
                   <FieldDescription>
-                    소유자와 관리자를 제외한 멤버 명부에서는 운영진도 일반
+                    소유자와 관리자를 제외한 멤버 목록에서는 운영진도 일반
                     멤버처럼 표시합니다.
                   </FieldDescription>
                 </FieldContent>
@@ -406,7 +408,7 @@ export function GroupCreateForm({
             {canCreateOfficial ? (
               <SummaryRow label="종류">{getGroupKindLabel(kind)}</SummaryRow>
             ) : null}
-            <SummaryRow label="가입 정책">
+            <SummaryRow label="가입 방식">
               {isPrivateJoinPolicy(joinPolicy) ? "비공개" : "공개"} ·{" "}
               {getGroupJoinPolicyLabel(joinPolicy)}
             </SummaryRow>

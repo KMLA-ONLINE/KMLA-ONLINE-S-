@@ -174,7 +174,7 @@ export function GongangBookingScreen() {
       />
       {loadFailed && (
         <GongangLoadError
-          message="예약을 불러오지 못했습니다. 다시 시도해주세요."
+          message="예약을 불러오지 못했습니다. 다시 시도해 주세요."
           onRetry={refresh}
         />
       )}
@@ -213,14 +213,14 @@ export function GongangBookingScreen() {
       )}
       {taken.length > 0 && (
         <p role="status" className="text-sm text-destructive">
+          다른 예약이 등록되어 다음 시간대의 선택을 해제했습니다:{" "}
           {taken
             .map((key) => {
               const { slot, location } = parseGongangKey(key);
               return gongangCellLabel(date, slot, location);
             })
             .join(", ")}
-          은(는) 방금 다른 예약이 생겨 선택에서 뺐습니다.
-          {selection.length > 0 && " 나머지 칸은 그대로 신청할 수 있습니다."}
+          .{selection.length > 0 && " 나머지 시간대는 예약할 수 있습니다."}
         </p>
       )}
       {selection.length > 0 && !past && (
@@ -230,7 +230,7 @@ export function GongangBookingScreen() {
           detail={detail}
           recurring={recurring}
           busy={busy}
-          submitLabel={`${selection.length}건 신청`}
+          submitLabel={`${selection.length}건 예약`}
           onRemove={(key) =>
             changeSelection((values) => values.filter((value) => value !== key))
           }

@@ -10,6 +10,8 @@ export interface RosterFilter {
   group: string | null;
   query: string;
   sort: RosterSort;
+  /** 이용 정지 중인 사람만. */
+  suspendedOnly: boolean;
 }
 
 export interface RosterGroup {
@@ -66,11 +68,12 @@ export function rosterGroups(
 
 export function filterRoster(
   members: RosterMember[],
-  { type, group, query, sort }: RosterFilter,
+  { type, group, query, sort, suspendedOnly }: RosterFilter,
 ): RosterMember[] {
   const needle = query.trim().toLowerCase();
   const filtered = members.filter(
     (member) =>
+      (!suspendedOnly || member.is_suspended) &&
       (type === "all" || member.profile_type === type) &&
       (group === null || groupKey(member) === group) &&
       (!needle ||

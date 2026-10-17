@@ -44,7 +44,7 @@ export const appShellKeys = {
 export function shellProfileQuery() {
   return queryOptions({
     queryKey: appShellKeys.profile(),
-    queryFn: fetchShellData,
+    queryFn: fetchShellProfile,
     staleTime: Infinity,
   });
 }
@@ -74,24 +74,26 @@ export function refreshShellProfile(): Promise<void> {
 
 /**
  * 세션과 프로필을 읽는다. 서버가 세션을 거절한 경우도 `null`로 접는다 — 던지면 루트
- * ErrorBoundary가 잡아 앱이 깨진 것처럼 보인다.
+ * ErrorBoundary가 잡아 앱이 깨진 것처럼 보인다. 정지 여부는 게이트만 보므로 셸 프로필을 다시
+ * 읽을 때(`refreshShellProfile()`)는 이것만 읽는다.
  */
-async function fetchShellData(): Promise<ShellLoadData | null> {
-  const supabase = getSupabase();
+async function fetchShellProfile(): Promise<Omit<
+  ShellLoadData,
+  "suspended"
+> | null> {
   const session = await readLiveSession();
   if (!session) return null;
 
   const { data: profiles, error: profileError } =
-    await supabase.rpc("get_my_profile");
+    await getSupabase().rpc("get_my_profile");
   if (profileError) {
     await clearSessionOrThrow(profileError);
     return null;
   }
 
+  const email = session.user.email ?? "";
   const profile = profiles[0];
-  if (!profile) {
-    return { email: session.user.email ?? "", profile: null };
-  }
+  if (!profile) return { email, profile: null };
 
   const shellProfile: ShellData["profile"] = {
     id: profile.id,
@@ -103,7 +105,29 @@ async function fetchShellData(): Promise<ShellLoadData | null> {
     avatar_path: profile.avatar_path,
   };
 
-  return { email: session.user.email ?? "", profile: shellProfile };
+  return { email, profile: shellProfile };
+}
+
+/** 이용 정지(§16.11) 중인지. 세션이 없거나 거절됐으면 프로필 쪽이 `null`로 접으므로 여기서는 `false`다. */
+async function fetchSuspended(): Promise<boolean> {
+  const session = await readLiveSession();
+  if (!session) return false;
+
+  const { data, error } = await getSupabase().rpc("get_my_suspension");
+  if (error) {
+    await clearSessionOrThrow(error);
+    return false;
+  }
+  return data.length > 0;
+}
+
+/** 게이트가 쓰는 세션·프로필·정지 여부. 둘을 함께 띄운다. */
+async function fetchShellData(): Promise<ShellLoadData | null> {
+  const [shell, suspended] = await Promise.all([
+    fetchShellProfile(),
+    fetchSuspended(),
+  ]);
+  return shell && { ...shell, suspended };
 }
 
 /** 미리 띄운 셸 데이터가 게이트에서 쓰일 수 있는 시간. 그 뒤라면 낡았을 수 있어 새로 읽는다. */

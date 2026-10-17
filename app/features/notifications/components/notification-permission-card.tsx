@@ -85,8 +85,8 @@ export function NotificationPermissionCard({
           중요한 소식을 기기에서도 받아보세요
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          댓글과 답글, 그룹 가입 결과를 알려드립니다. 세부 유형은 알림 설정에서
-          바꿀 수 있습니다.
+          댓글·답글과 그룹 가입 결과를 이 기기로 알립니다. 알림 종류는 알림
+          설정에서 변경할 수 있습니다.
         </p>
       </div>
       <div className="flex shrink-0 justify-end gap-2">

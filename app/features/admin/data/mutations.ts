@@ -42,6 +42,28 @@ export async function setAppAdmin(
   if (error) throw error;
 }
 
+/** `days`가 `null`이면 무기한 정지다. */
+export async function suspendProfile(
+  profileId: number,
+  reason: string,
+  days: number | null,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("admin_suspend_profile", {
+    p_profile_id: profileId,
+    p_reason: reason,
+    // 빼면 RPC 기본값 `null`, 곧 무기한이다.
+    p_duration_days: days ?? undefined,
+  });
+  if (error) throw error;
+}
+
+export async function liftSuspension(profileId: number): Promise<void> {
+  const { error } = await getSupabase().rpc("admin_lift_suspension", {
+    p_profile_id: profileId,
+  });
+  if (error) throw error;
+}
+
 export async function reauthenticateWithPassword(
   password: string,
 ): Promise<void> {

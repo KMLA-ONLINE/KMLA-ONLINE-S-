@@ -29,15 +29,15 @@ export function useConversationMute(conversation: Conversation) {
     setRequested(next);
     try {
       await setConversationMuted(conversation.id, next);
-      await refreshConversationInList(queryClient, conversation.id).catch(() =>
-        invalidateConversationList(queryClient),
-      );
+      await refreshConversationInList(queryClient, conversation.id, {
+        attachmentsChanged: false,
+      }).catch(() => invalidateConversationList(queryClient));
     } catch {
       if (request === latestRequest.current) {
         toast.error(
           next
-            ? "대화 알림을 끄지 못했습니다."
-            : "대화 알림을 켜지 못했습니다.",
+            ? "채팅 알림을 끄지 못했습니다."
+            : "채팅 알림을 켜지 못했습니다.",
         );
       }
     } finally {

@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   reviewApplications: vi.fn(),
   setAppAdmin: vi.fn(),
+  reauthenticateWithPassword: vi.fn(),
+  suspendProfile: vi.fn(),
+  liftSuspension: vi.fn(),
   refreshShellProfile: vi.fn(),
   shellProfileId: 1,
   recentError: new Error("recent"),
@@ -18,7 +21,11 @@ vi.mock("~/features/admin", () => ({
   isRecentAdminAuthError: (error: unknown) => error === mocks.recentError,
   listAdminMembers: vi.fn(),
   listApplications: vi.fn(),
-  reauthenticateWithPassword: vi.fn(),
+  listRoster: vi.fn(),
+  liftSuspension: mocks.liftSuspension,
+  reauthenticateWithPassword: mocks.reauthenticateWithPassword,
+  RosterScreen: () => null,
+  suspendProfile: mocks.suspendProfile,
   reviewApplications: mocks.reviewApplications,
   setAppAdmin: mocks.setAppAdmin,
   unblockApplication: vi.fn(),
@@ -32,6 +39,7 @@ vi.mock("~/features/app-shell", async (importOriginal) => ({
 
 import { clientAction as appAdminAction } from "~/routes/app/admin/app-admins";
 import { clientAction as approvalsAction } from "~/routes/app/admin/approvals";
+import { clientAction as membersAction } from "~/routes/app/admin/members";
 
 function postRequest(entries: Record<string, string>): Request {
   const form = new FormData();
@@ -103,5 +111,60 @@ describe("admin route actions", () => {
       } as never),
       "/",
     );
+  });
+
+  // 정지와 해제는 매번 현재 비밀번호를 확인한 뒤 적용한다(§16.11).
+  it("confirms the password before suspending for a period or indefinitely", async () => {
+    await membersAction({
+      request: postRequest({
+        intent: "suspend",
+        profileId: "12",
+        reason: "분탕 행위 확인",
+        days: "7",
+        password: "pw",
+      }),
+    } as never);
+    expect(mocks.reauthenticateWithPassword).toHaveBeenCalledWith("pw");
+    expect(mocks.suspendProfile).toHaveBeenCalledWith(12, "분탕 행위 확인", 7);
+
+    await membersAction({
+      request: postRequest({
+        intent: "suspend",
+        profileId: "12",
+        reason: "외부인 계정",
+        indefinite: "on",
+        days: "7",
+        password: "pw",
+      }),
+    } as never);
+    expect(mocks.suspendProfile).toHaveBeenLastCalledWith(
+      12,
+      "외부인 계정",
+      null,
+    );
+  });
+
+  it("does not suspend when the password is wrong", async () => {
+    mocks.reauthenticateWithPassword.mockRejectedValueOnce(new Error("bad"));
+
+    const result = await membersAction({
+      request: postRequest({
+        intent: "suspend",
+        profileId: "12",
+        reason: "분탕 행위 확인",
+        days: "7",
+        password: "wrong",
+      }),
+    } as never);
+    expect(result).toMatchObject({ data: { error: "요청 실패" } });
+    expect(mocks.suspendProfile).not.toHaveBeenCalled();
+  });
+
+  it("confirms the password before lifting a suspension", async () => {
+    await membersAction({
+      request: postRequest({ intent: "lift", profileId: "12", password: "pw" }),
+    } as never);
+    expect(mocks.reauthenticateWithPassword).toHaveBeenCalledWith("pw");
+    expect(mocks.liftSuspension).toHaveBeenCalledWith(12);
   });
 });

@@ -244,13 +244,11 @@ export function AnonymousActivityRestrictionDialog({
             restricted ? (
               <span className="grid gap-2">
                 {remainingDays ? (
-                  <span>
-                    앞으로 {remainingDays}일 동안 익명 활동이 차단될
-                    예정이었습니다.
-                  </span>
+                  <span>남은 차단 기간: {remainingDays}일</span>
                 ) : null}
                 <span>
-                  취소하면 다시 익명 게시물과 댓글을 작성할 수 있습니다.
+                  차단을 해제하면 이 그룹에서 다시 익명 게시물과 댓글을 작성할
+                  수 있습니다.
                 </span>
               </span>
             ) : (

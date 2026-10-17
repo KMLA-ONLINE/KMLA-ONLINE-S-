@@ -38,7 +38,7 @@ export function shouldRevalidate({
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const conversation = await openConversation(getQueryClient(), params.roomId);
   if (!conversation) {
-    throw new Response("대화를 찾을 수 없습니다.", { status: 404 });
+    throw new Response("채팅을 찾을 수 없습니다.", { status: 404 });
   }
   return { conversation };
 }

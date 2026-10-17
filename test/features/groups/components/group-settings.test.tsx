@@ -78,6 +78,23 @@ async function fillPhrase(user: User, phrase: string) {
 }
 
 describe("GroupSettings", () => {
+  it.each([
+    ["그룹 아이콘", "현재 그룹 아이콘을 삭제할까요?"],
+    ["커버 이미지", "현재 커버 이미지를 삭제할까요?"],
+  ])(
+    "confirms removal of %s with the correct particle",
+    async (label, message) => {
+      const { user } = renderSettings({
+        icon_path: "/icon.png",
+        cover_path: "/cover.png",
+      });
+
+      await user.click(screen.getByRole("button", { name: `${label} 제거` }));
+
+      expect(screen.getByRole("dialog")).toHaveTextContent(message);
+    },
+  );
+
   it("allows owners to edit basic information and policies", async () => {
     const { user } = renderSettings();
 
@@ -100,10 +117,19 @@ describe("GroupSettings", () => {
   it("opens policy editing without a confirmation dialog", async () => {
     const { user } = renderSettings();
 
+    expect(
+      screen.getByText("모든 멤버가 게시물을 작성할 수 있습니다."),
+    ).toBeVisible();
+    expect(
+      screen.getByText("게시물과 댓글에 프로필 이름을 표시합니다."),
+    ).toBeVisible();
     await user.click(screen.getByRole("button", { name: "게시물 작성 변경" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(
       screen.getByRole("checkbox", { name: "운영진만 게시 가능" }),
+    ).toBeVisible();
+    expect(
+      screen.getByText("소유자·관리자·매니저만 게시물을 작성할 수 있습니다."),
     ).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "저장" }));
@@ -130,6 +156,11 @@ describe("GroupSettings", () => {
     await user.click(screen.getByRole("button", { name: "운영진 역할 변경" }));
     const select = screen.getByRole("combobox", { name: "운영진 역할" });
 
+    expect(
+      screen.getByText(
+        "멤버 목록에서 운영진의 역할을 숨깁니다. 소유자와 관리자는 모든 역할을 볼 수 있습니다. 게시물의 운영진 표시는 유지됩니다.",
+      ),
+    ).toBeVisible();
     expect(select).toHaveValue("false");
     expect(
       within(select).getByRole("option", { name: "모두에게 표시" }),
@@ -194,6 +225,11 @@ describe("GroupSettings", () => {
     );
 
     const officialConfirmation = screen.getByRole("dialog");
+    expect(
+      within(officialConfirmation).getByRole("heading", {
+        name: "‘테스트 그룹’ 공식 그룹을 삭제할까요?",
+      }),
+    ).toBeVisible();
     expect(officialConfirmation).toHaveTextContent(
       "이 작업은 되돌릴 수 없습니다.",
     );

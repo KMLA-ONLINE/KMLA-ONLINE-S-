@@ -104,8 +104,11 @@ describe("PostMenu anonymous activity moderation", () => {
     await user.click(screen.getByRole("button", { name: "차단 해제" }));
     expect(screen.getByText("익명 차단을 해제할까요?")).toBeInTheDocument();
     expect(
-      screen.getByText("앞으로 7일 동안 익명 활동이 차단될 예정이었습니다."),
+      screen.getByText(
+        "차단을 해제하면 이 그룹에서 다시 익명 게시물과 댓글을 작성할 수 있습니다.",
+      ),
     ).toBeInTheDocument();
+    expect(screen.getByText("남은 차단 기간: 7일")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "차단 해제" }));
 
     await waitFor(() =>

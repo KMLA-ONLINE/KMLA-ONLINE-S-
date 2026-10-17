@@ -104,14 +104,14 @@ function describePush(
       label: "확인 실패",
       tone: "off",
       message:
-        "이 기기의 Web Push 상태를 확인하지 못했습니다. 잠시 후 다시 열어 주세요.",
+        "이 기기의 알림 상태를 확인하지 못했습니다. 잠시 후 다시 열어 주세요.",
     };
   }
   if (pending) {
     return {
       label: "변경 중",
       tone: "off",
-      message: "Web Push 설정을 변경하고 있습니다.",
+      message: "기기 알림 설정을 변경하고 있습니다.",
     };
   }
 
@@ -127,13 +127,13 @@ function describePush(
       return {
         label: "사용 불가",
         tone: "off",
-        message: "이 환경에는 Web Push 공개 키가 설정되지 않았습니다.",
+        message: "현재 기기 알림을 사용할 수 없습니다.",
       };
     case "unsupported":
       return {
         label: "사용 불가",
         tone: "off",
-        message: "이 브라우저에서는 Web Push를 사용할 수 없습니다.",
+        message: "이 브라우저에서는 기기 알림을 사용할 수 없습니다.",
       };
     default:
       if (support.permission === "denied") {
@@ -167,7 +167,7 @@ function summarizeDelivery(
 ): { headline: string; detail?: string } {
   if (!pushEnabled) {
     return {
-      headline: "이 기기로 오는 Push가 없습니다.",
+      headline: "이 기기로 오는 기기 알림이 없습니다.",
     };
   }
 
@@ -175,7 +175,7 @@ function summarizeDelivery(
 
   if (enabled.length === 0) {
     return {
-      headline: "이 기기로 운영 조치 Push만 받습니다.",
+      headline: "이 기기로 운영 조치 기기 알림만 받습니다.",
       detail: "그 밖의 알림은 앱 알림함에서 확인합니다.",
     };
   }
@@ -183,7 +183,7 @@ function summarizeDelivery(
   if (enabled.length === PREFERENCE_ROWS.length) {
     return {
       headline: "이 기기로 받는 알림 — 모든 유형",
-      detail: "반응(좋아요 등)은 Push 없이 앱 알림함에만 표시됩니다.",
+      detail: "반응(좋아요 등)은 기기 알림 없이 앱 알림함에만 표시됩니다.",
     };
   }
 
@@ -291,7 +291,7 @@ function GroupPreferenceRow({
 function PushCardSkeleton() {
   return (
     <PendingRegion
-      label="이 기기의 Web Push 상태를"
+      label="이 기기의 알림 상태를"
       className="overflow-hidden rounded-xl border bg-card"
     >
       <div className="flex items-start gap-3 p-4">
@@ -406,7 +406,7 @@ function PushCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-semibold">이 기기의 Web Push</h2>
+            <h2 className="font-semibold">이 기기의 알림</h2>
             <Badge
               variant={
                 push.tone === "on"
@@ -428,10 +428,10 @@ function PushCard({
         pushSupport.permission !== "denied" ? (
           <div className="flex min-w-8 items-center justify-end gap-2">
             {pushPending ? (
-              <Spinner aria-label="Web Push 설정 변경 중" />
+              <Spinner aria-label="기기 알림 설정 변경 중" />
             ) : null}
             <Switch
-              aria-label="이 기기의 Web Push"
+              aria-label="이 기기의 알림"
               checked={pushEnabled}
               disabled={disabled}
               onCheckedChange={() => void togglePush()}
@@ -490,8 +490,8 @@ function MessagePreviewSection({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">알림에 메시지 내용 가리기</p>
           <p className="text-xs text-muted-foreground">
-            켜면 새 메시지 Push에 내용 대신 새 메시지가 있다는 안내만 보입니다.
-            계정의 모든 기기에 적용됩니다.
+            켜면 새 메시지 기기 알림에 내용 대신 새 메시지가 있다는 안내만
+            보입니다. 계정의 모든 기기에 적용됩니다.
           </p>
         </div>
         <Switch
@@ -600,7 +600,7 @@ export function NotificationSettings({
           )}
         </Deferred>
 
-        <SettingsSection title="유형별 Push">
+        <SettingsSection title="종류별 기기 알림">
           {PREFERENCE_ROWS.map(([key, Icon, title, description]) => (
             <div key={key} className="flex items-center gap-3 px-4 py-3">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
@@ -640,7 +640,7 @@ export function NotificationSettings({
         <SettingsSection
           title="그룹별 알림"
           description="기본값을 바꾼 그룹만 보입니다. 그룹 화면의 ⋯ 메뉴에서 그룹마다 바꿀 수 있습니다."
-          footnote="앱 알림함과 Push는 별도로 작용합니다."
+          footnote="앱 알림함과 기기 알림을 각각 설정할 수 있습니다."
         >
           {adjustedGroups.length > 0 ? (
             adjustedGroups.map((preference) => (

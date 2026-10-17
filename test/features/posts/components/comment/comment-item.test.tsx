@@ -68,9 +68,7 @@ describe("CommentItem", () => {
     );
     await user.click(screen.getByRole("button", { name: "차단 해제" }));
 
-    expect(
-      screen.getByText("앞으로 3일 동안 익명 활동이 차단될 예정이었습니다."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("남은 차단 기간: 3일")).toBeInTheDocument();
   });
 
   it("colors an effective #업 comment blue", () => {

@@ -59,13 +59,13 @@ export function MessagingScreen({
           hasRoom && "max-md:hidden",
         )}
       >
-        <header className="flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 px-4 pt-[var(--app-safe-t)] md:h-16 md:border-b md:pt-0">
+        <header className="flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 px-4 pt-[var(--app-safe-t)] md:h-16 md:pt-0">
           <h1 className="min-w-0 flex-1 text-2xl font-bold">메시지</h1>
           <Button
             variant="secondary"
             size="icon"
             className="rounded-full"
-            aria-label="새 대화"
+            aria-label="새 채팅"
             onClick={() => setNewConversationOpen(true)}
           >
             <PenLineIcon aria-hidden />
@@ -81,7 +81,7 @@ export function MessagingScreen({
           />
         </header>
 
-        <div className="relative mx-3 mb-2 shrink-0 md:mt-3">
+        <div className="relative mx-3 mb-2 shrink-0">
           <SearchIcon
             aria-hidden
             className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
@@ -91,15 +91,15 @@ export function MessagingScreen({
             type="search"
             value={search}
             onChange={(event) => setSearch(event.currentTarget.value)}
-            placeholder="대화 검색"
-            aria-label="대화 검색"
+            placeholder="채팅 검색"
+            aria-label="채팅 검색"
             className="rounded-full border-0 bg-muted pr-4 pl-9"
           />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
           {filteredConversations.length > 0 ? (
-            <nav aria-label="대화 목록" className="flex flex-col gap-0.5">
+            <nav aria-label="채팅 목록" className="flex flex-col gap-0.5">
               {filteredConversations.map((conversation) => {
                 const selected = conversation.id === selectedRoomId;
                 return (
@@ -174,23 +174,22 @@ export function MessagingScreen({
                 </EmptyMedia>
                 <EmptyTitle>
                   {deferredSearch
-                    ? "대화를 찾지 못했습니다"
-                    : "아직 대화가 없습니다"}
+                    ? "채팅을 찾지 못했습니다"
+                    : "아직 채팅이 없습니다"}
                 </EmptyTitle>
-                <EmptyDescription>
-                  {deferredSearch
-                    ? "다른 이름으로 다시 검색해 보세요."
-                    : "새 대화 버튼으로 대화를 시작해 보세요."}
-                </EmptyDescription>
+                {deferredSearch ? (
+                  <EmptyDescription>
+                    다른 이름으로 다시 검색해 보세요.
+                  </EmptyDescription>
+                ) : null}
               </EmptyHeader>
-              {/* 넓은 화면에서는 오른쪽 빈 화면에 같은 버튼이 있다. */}
               {deferredSearch ? null : (
                 <Button
                   variant="secondary"
-                  className="rounded-full md:hidden"
+                  className="rounded-full"
                   onClick={() => setNewConversationOpen(true)}
                 >
-                  <PenLineIcon aria-hidden data-icon="inline-start" />새 대화
+                  <PenLineIcon aria-hidden data-icon="inline-start" />새 채팅
                   시작하기
                 </Button>
               )}
@@ -213,19 +212,11 @@ export function MessagingScreen({
               <EmptyMedia variant="icon" className="size-20 rounded-full">
                 <MessageSquareMoreIcon aria-hidden className="size-10" />
               </EmptyMedia>
-              <EmptyTitle>대화를 골라 주세요</EmptyTitle>
+              <EmptyTitle>채팅을 골라 주세요</EmptyTitle>
               <EmptyDescription>
-                왼쪽 목록에서 대화를 고르거나 새 대화를 시작하세요.
+                왼쪽 목록에서 채팅을 고르거나 새 채팅을 시작하세요.
               </EmptyDescription>
             </EmptyHeader>
-            <Button
-              variant="secondary"
-              className="rounded-full"
-              onClick={() => setNewConversationOpen(true)}
-            >
-              <PenLineIcon aria-hidden data-icon="inline-start" />새 대화
-              시작하기
-            </Button>
           </Empty>
         )}
       </div>

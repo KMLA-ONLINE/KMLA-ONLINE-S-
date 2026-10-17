@@ -74,6 +74,7 @@ CREATE OR REPLACE FUNCTION "private"."can_read_profile_media_path"("p_object_pat
     where viewer.auth_user_id = auth.uid()
       and viewer.status = 'accepted'
       and viewer.deleted_at is null
+      and not private.profile_suspended(viewer.id)
   )
   and (
     exists (
@@ -115,6 +116,7 @@ CREATE OR REPLACE FUNCTION "private"."can_upload_profile_media"("p_object_path" 
       and profile.auth_user_id = auth.uid()
       and profile.status = 'accepted'
       and profile.deleted_at is null
+      and not private.profile_suspended(profile.id)
   ) or exists (
     select 1
     from public.profile_media_activity_objects as activity
@@ -124,6 +126,7 @@ CREATE OR REPLACE FUNCTION "private"."can_upload_profile_media"("p_object_path" 
       and profile.auth_user_id = auth.uid()
       and profile.status = 'accepted'
       and profile.deleted_at is null
+      and not private.profile_suspended(profile.id)
   );
 $$;
 
@@ -235,6 +238,7 @@ CREATE OR REPLACE FUNCTION "public"."get_accepted_profile"("p_pub_id" "text") RE
       where viewer.auth_user_id = auth.uid()
         and viewer.status = 'accepted'
         and viewer.deleted_at is null
+        and not private.profile_suspended(viewer.id)
     );
 $$;
 
@@ -259,6 +263,7 @@ begin
     where viewer.auth_user_id = auth.uid()
       and viewer.status = 'accepted'
       and viewer.deleted_at is null
+      and not private.profile_suspended(viewer.id)
   ) then
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
@@ -378,6 +383,7 @@ begin
   where profile.auth_user_id = caller_id
     and profile.status = 'accepted'
     and profile.deleted_at is null
+    and not private.profile_suspended(profile.id)
   for update;
 
   if current_profile.id is null then
@@ -417,7 +423,8 @@ begin
   from public.profiles as profile
   where profile.auth_user_id = caller_id
     and profile.status = 'accepted'
-    and profile.deleted_at is null;
+    and profile.deleted_at is null
+    and not private.profile_suspended(profile.id);
 
   if owner_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -502,6 +509,7 @@ begin
   where profile.id = media.profile_id
     and profile.status = 'accepted'
     and profile.deleted_at is null
+    and not private.profile_suspended(profile.id)
   for update;
 
   if current_profile.id is null then
@@ -707,6 +715,7 @@ begin
   where profile.auth_user_id = caller_id
     and profile.status = 'accepted'
     and profile.deleted_at is null
+    and not private.profile_suspended(profile.id)
   for update;
 
   if current_profile.id is null then
@@ -940,7 +949,8 @@ CREATE POLICY "profile_departments_select_active" ON "public"."profile_departmen
 
 ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "profiles_select_accepted" ON "public"."profiles" FOR SELECT TO "authenticated" USING ((("status" = 'accepted'::"public"."profile_status") AND ("deleted_at" IS NULL)));
+-- 읽는 사람도 앱을 쓸 수 있어야 한다. 승인 대기·차단·이용 정지(§16.11)된 사람은 자기 행만 읽는다.
+CREATE POLICY "profiles_select_accepted" ON "public"."profiles" FOR SELECT TO "authenticated" USING ((("status" = 'accepted'::"public"."profile_status") AND ("deleted_at" IS NULL) AND (( SELECT "private"."current_profile_id"() AS "current_profile_id") IS NOT NULL)));
 
 CREATE POLICY "profiles_select_own" ON "public"."profiles" FOR SELECT TO "authenticated" USING (((( SELECT "auth"."uid"() AS "uid") = "auth_user_id") AND ("deleted_at" IS NULL)));
 

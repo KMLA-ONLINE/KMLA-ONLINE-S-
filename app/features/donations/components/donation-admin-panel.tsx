@@ -95,7 +95,7 @@ export function DonationAdminPanel({
     setCreateError("");
 
     if (!next) {
-      setCreateError("회차 이름과 신청 시작·종료 시간을 확인해주세요.");
+      setCreateError("회차 이름과 신청 시작·종료 시간을 확인해 주세요.");
       return;
     }
 
@@ -199,7 +199,7 @@ export function DonationAdminPanel({
             </label>
           ) : (
             <p className="flex-1 text-sm text-muted-foreground">
-              아직 회차가 없습니다. 첫 회차를 만들어주세요.
+              아직 회차가 없습니다. 첫 회차를 만들어 주세요.
             </p>
           )}
           <Button

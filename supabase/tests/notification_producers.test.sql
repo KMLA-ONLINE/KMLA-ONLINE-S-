@@ -249,14 +249,14 @@ select is(
   (select title from public.notifications
    where kind = 'post_moderated'
      and recipient_profile_id = (select id from public.profiles where pub_id = 'hanbyeol-25')),
-  '“알림 그룹 글” 게시물이 운영자에 의해 삭제되었습니다.',
+  '“알림 그룹 글” 게시물을 운영진이 삭제했습니다.',
   'post moderation names the post that was removed'
 );
 select is(
   (select title from public.notifications
    where kind = 'comment_moderated'
      and recipient_profile_id = (select id from public.profiles where pub_id = 'hanbyeol-25')),
-  '“이번 주 프로젝트 일정” 게시물에 남긴 내 댓글이 운영자에 의해 삭제되었습니다.',
+  '“이번 주 프로젝트 일정” 게시물에 남긴 내 댓글을 운영진이 삭제했습니다.',
   'comment moderation names the post the removed comment was on'
 );
 select ok(

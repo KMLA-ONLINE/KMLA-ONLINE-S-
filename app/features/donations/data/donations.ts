@@ -53,7 +53,9 @@ function handleError(error: { code?: string; message: string }): never {
   }
 
   if (error.message.includes("items already imported")) {
-    throw new Error("이미 물품이 등록된 회차입니다. 새 회차에 업로드해주세요.");
+    throw new Error(
+      "이미 물품이 등록된 회차입니다. 새 회차에 업로드해 주세요.",
+    );
   }
 
   if (error.message.includes("round not found or closed")) {
@@ -61,7 +63,7 @@ function handleError(error: { code?: string; message: string }): never {
   }
 
   if (error.message.includes("invalid donation round")) {
-    throw new Error("회차 이름과 신청 기간을 확인해주세요.");
+    throw new Error("회차 이름과 신청 기간을 확인해 주세요.");
   }
 
   throw new Error(error.message);

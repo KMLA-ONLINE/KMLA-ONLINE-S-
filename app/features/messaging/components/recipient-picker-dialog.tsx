@@ -97,7 +97,7 @@ export function RecipientPickerDialog({
   }
 
   const submitLabel =
-    mode === "invite" ? "초대" : makesGroup ? "그룹 만들기" : "대화 시작";
+    mode === "invite" ? "초대" : makesGroup ? "그룹 만들기" : "채팅 시작";
 
   return (
     <Dialog
@@ -110,17 +110,17 @@ export function RecipientPickerDialog({
       <DialogContent className="flex max-h-[min(36rem,90dvh)] flex-col gap-3 sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {mode === "invite" ? "멤버 초대" : "새 대화"}
+            {mode === "invite" ? "멤버 초대" : "새 채팅"}
           </DialogTitle>
           <DialogDescription>
             {/* 고른 만큼 무엇이 만들어질지 바로 알린다. 한 명이면 1:1, 여럿이면 그룹이다. */}
             {mode === "invite"
               ? "그룹에 초대할 사람을 고르세요."
               : selected.length === 0
-                ? "대화할 사람을 찾아 고르세요."
+                ? "채팅할 사람을 찾아 고르세요."
                 : selected.length === 1
-                  ? `${selected[0].name}님과 1:1 대화를 시작합니다.`
-                  : `${selected.length}명과 그룹 대화를 만듭니다.`}
+                  ? `${selected[0].name}님과 1:1 채팅을 시작합니다.`
+                  : `${selected.length}명과 그룹 채팅을 만듭니다.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -132,7 +132,7 @@ export function RecipientPickerDialog({
                   variant="secondary"
                   size="sm"
                   className="h-7 rounded-full pr-1.5"
-                  aria-label={`${recipient.name} 빼기`}
+                  aria-label={`${recipient.name} 선택 해제`}
                   onClick={() => toggle(recipient)}
                 >
                   {recipient.name}
@@ -192,7 +192,7 @@ export function RecipientPickerDialog({
               role="alert"
               className="py-8 text-center text-sm text-destructive"
             >
-              찾지 못했습니다. 잠시 후 다시 시도해 주세요.
+              검색 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
             </p>
           ) : results.data.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">

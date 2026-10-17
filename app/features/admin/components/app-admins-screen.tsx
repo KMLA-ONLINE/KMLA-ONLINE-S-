@@ -100,7 +100,7 @@ export function AppAdminsScreen({
                     variant="destructive"
                     onClick={() => setTarget(person)}
                   >
-                    강등 선택
+                    권한 해제
                   </Button>
                 }
               />
@@ -131,7 +131,7 @@ export function AppAdminsScreen({
                     disabled={person.is_app_admin}
                     onClick={() => setTarget(person)}
                   >
-                    임명 선택
+                    관리자 임명
                   </Button>
                 }
               />

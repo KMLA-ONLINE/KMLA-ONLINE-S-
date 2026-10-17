@@ -15,7 +15,12 @@ export {
   verifyPasswordResetOtp,
   verifySignupOtp,
 } from "~/features/auth/data/mutations";
-export { hasActiveSession, loadAuthState } from "~/features/auth/data/queries";
+export {
+  hasActiveSession,
+  loadAuthState,
+  loadMySuspension,
+} from "~/features/auth/data/queries";
+export { describeSuspensionEnd } from "~/features/auth/model/suspension";
 export { getAuthErrorMessage } from "~/features/auth/model/format";
 export {
   clearSignupDraft,
@@ -40,6 +45,7 @@ export type {
   AuthProfile,
   AuthState,
   FieldErrors,
+  MySuspension,
   ProfileFormValues,
 } from "~/features/auth/model/types";
 export type { SignupDraft } from "~/features/auth/storage/pending-signup";

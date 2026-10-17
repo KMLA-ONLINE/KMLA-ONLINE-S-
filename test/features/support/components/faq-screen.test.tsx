@@ -17,6 +17,34 @@ const sections: FaqSection[] = [
 ];
 
 describe("FaqScreen", () => {
+  it("explains device notifications separately from the inbox and keeps the device/account scope", async () => {
+    const { user } = renderRoute(() => (
+      <FaqScreen sections={faqSections} contacts={[]} />
+    ));
+    await user.click(screen.getByText("기기 알림이 뭔가요?"));
+    expect(
+      screen.getByText(
+        "휴대폰이나 컴퓨터에 뜨는 알림입니다. 앱을 보고 있지 않아도 기기 알림으로 옵니다.",
+      ),
+    ).toBeVisible();
+    await user.click(
+      screen.getByText("기기 알림을 껐는데 앱 안에는 알림이 왜 떠요?"),
+    );
+    expect(
+      screen.getByText(
+        "기기 알림과 앱 안의 알림함은 별개입니다. 기기 알림을 꺼도 앱 안 알림은 남을 수 있습니다.",
+      ),
+    ).toBeVisible();
+    await user.click(
+      screen.getByText("알림 설정을 바꾸면 다른 기기에도 똑같이 적용되나요?"),
+    );
+    expect(
+      screen.getByText(
+        /기기 알림 전체 켜기\/끄기는 지금 쓰는 기기에만 적용됩니다/,
+      ),
+    ).toBeVisible();
+  });
+
   it("links password and notification help to the settings URLs", async () => {
     const { user } = renderRoute(() => (
       <FaqScreen sections={faqSections} contacts={[]} />
@@ -26,7 +54,7 @@ describe("FaqScreen", () => {
       "href",
       "/settings/password",
     );
-    await user.click(screen.getByText("그룹 별 알림은 어떻게 설정하나요?"));
+    await user.click(screen.getByText("그룹별 알림은 어떻게 설정하나요?"));
     await user.click(
       screen.getByText("알림 설정을 바꾸면 다른 기기에도 똑같이 적용되나요?"),
     );
@@ -98,6 +126,6 @@ describe("FaqScreen", () => {
   it("shows an empty state when there is nothing to answer yet", () => {
     renderRoute(() => <FaqScreen sections={[]} contacts={[]} />);
 
-    expect(screen.getByText("아직 등록된 도움말이 없어요")).toBeInTheDocument();
+    expect(screen.getByText("등록된 도움말이 없습니다")).toBeInTheDocument();
   });
 });

@@ -124,6 +124,7 @@ begin
   where profile.auth_user_id = auth.uid()
     and profile.status = 'accepted'
     and profile.deleted_at is null
+    and not private.profile_suspended(profile.id)
     and profile.type in ('student', 'teacher')
   -- `no key update`면 상한 검사끼리는 순서가 잡히면서도, 이 프로필을 참조하는 다른 행의 외래
   -- 키 검사(`key share`)는 막지 않는다.
@@ -178,6 +179,7 @@ as $$
       on viewer.auth_user_id = auth.uid()
       and viewer.status = 'accepted'
       and viewer.deleted_at is null
+      and not private.profile_suspended(viewer.id)
     where story.id = p_story_id
       and story.status = 'ready'
       and story.expires_at > now()
@@ -228,6 +230,7 @@ as $$
       and profile.auth_user_id = auth.uid()
       and profile.status = 'accepted'
       and profile.deleted_at is null
+      and not private.profile_suspended(profile.id)
   );
 $$;
 
@@ -356,6 +359,7 @@ begin
     and profile.auth_user_id = caller_id
     and profile.status = 'accepted'
     and profile.deleted_at is null
+    and not private.profile_suspended(profile.id)
   for update of item;
 
   if story.id is null then
@@ -439,6 +443,7 @@ as $$
     where profile.auth_user_id = auth.uid()
       and profile.status = 'accepted'
       and profile.deleted_at is null
+      and not private.profile_suspended(profile.id)
   ), visible as (
     select
       story.*,
@@ -509,6 +514,7 @@ begin
       and profile.auth_user_id = auth.uid()
       and profile.status = 'accepted'
       and profile.deleted_at is null
+      and not private.profile_suspended(profile.id)
     returning story.image_path, story.thumbnail_path
   ), queued as (
     insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)

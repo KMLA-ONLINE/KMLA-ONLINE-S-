@@ -1,7 +1,8 @@
 import { DownloadIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { AdminPersonRow } from "~/features/admin/components/member-list";
+import { SuspensionDialog } from "~/features/admin/components/suspension-dialog";
 import { formatProfileType } from "~/features/admin/model/format";
 import {
   filterRoster,
@@ -13,6 +14,9 @@ import {
   type RosterType,
 } from "~/features/admin/model/roster";
 import type { RosterMember } from "~/features/admin/model/types";
+// 배럴(`~/features/auth`)은 인증 화면 컴포넌트까지 끌고 온다. 표시 함수만 필요하다.
+import { describeSuspensionEnd } from "~/features/auth/model/suspension";
+import { useClientNow } from "~/shared/hooks/use-client-now";
 import { getKoreaDateIso } from "~/shared/lib/korea-date";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
@@ -34,6 +38,20 @@ function typeLabel(type: RosterType): string {
   return type === "all" ? "전체" : formatProfileType(type);
 }
 
+function suspensionLabel(member: RosterMember, now: number): string {
+  const end = describeSuspensionEnd(member.suspension_expires_at, now);
+  return end ? `정지 중 · ${end.label}까지` : "정지 중 · 무기한";
+}
+
+/** 목록을 연 뒤 해제 시각이 지났으면 더는 정지 중이 아니다. 해제 대신 다시 정지할 수 있다. */
+function isSuspendedNow(member: RosterMember, now: number): boolean {
+  return (
+    member.is_suspended &&
+    (member.suspension_expires_at === null ||
+      Date.parse(member.suspension_expires_at) > now)
+  );
+}
+
 function downloadCsv(members: RosterMember[]) {
   const url = URL.createObjectURL(
     new Blob([rosterCsv(members)], { type: "text/csv;charset=utf-8" }),
@@ -51,12 +69,29 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<RosterSort>("name");
   const [limit, setLimit] = useState(PAGE_SIZE);
+  const [suspendedOnly, setSuspendedOnly] = useState(false);
+  const [target, setTarget] = useState<RosterMember | null>(null);
+  const closeDialog = useCallback(() => setTarget(null), []);
+  const now = useClientNow();
 
   const typeCounts = useMemo(() => rosterTypeCounts(members), [members]);
   const groups = useMemo(() => rosterGroups(members, type), [members, type]);
+  const suspendedCount = useMemo(
+    () => members.filter((member) => member.is_suspended).length,
+    [members],
+  );
+  // 마지막 정지를 해제하면 필터 칩이 사라지므로, 걸린 채로 빈 목록에 갇히지 않게 함께 푼다.
+  const onlySuspended = suspendedOnly && suspendedCount > 0;
   const visible = useMemo(
-    () => filterRoster(members, { type, group, query, sort }),
-    [members, type, group, query, sort],
+    () =>
+      filterRoster(members, {
+        type,
+        group,
+        query,
+        sort,
+        suspendedOnly: onlySuspended,
+      }),
+    [members, type, group, query, sort, onlySuspended],
   );
 
   const chip = (selected: boolean) =>
@@ -104,6 +139,19 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
                 {typeLabel(value)} {typeCounts[value]}
               </button>
             ))}
+            {suspendedCount ? (
+              <button
+                type="button"
+                aria-pressed={onlySuspended}
+                className={chip(onlySuspended)}
+                onClick={() => {
+                  setSuspendedOnly(!onlySuspended);
+                  setLimit(PAGE_SIZE);
+                }}
+              >
+                정지 중 {suspendedCount}
+              </button>
+            ) : null}
           </div>
 
           {groups.length > 1 ? (
@@ -179,11 +227,35 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
                   key={member.profile_id}
                   person={member}
                   status={
-                    member.is_app_admin ? (
-                      <Badge variant="secondary">앱 관리자</Badge>
-                    ) : null
+                    <>
+                      {member.is_app_admin ? (
+                        <Badge variant="secondary">앱 관리자</Badge>
+                      ) : null}
+                      {isSuspendedNow(member, now) ? (
+                        <Badge variant="destructive">
+                          {suspensionLabel(member, now)}
+                        </Badge>
+                      ) : null}
+                    </>
                   }
-                  action={null}
+                  action={
+                    // 앱 관리자는 정지할 수 없다. 먼저 관리자에서 내려야 한다.
+                    member.is_app_admin &&
+                    !isSuspendedNow(member, now) ? null : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setTarget({
+                            ...member,
+                            is_suspended: isSuspendedNow(member, now),
+                          })
+                        }
+                      >
+                        {isSuspendedNow(member, now) ? "정지 해제" : "정지"}
+                      </Button>
+                    )
+                  }
                 />
               ))}
             </ul>
@@ -204,6 +276,11 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
           ) : null}
         </CardContent>
       </Card>
+      <SuspensionDialog
+        key={target?.profile_id ?? "closed"}
+        member={target}
+        onOpenChange={closeDialog}
+      />
     </div>
   );
 }

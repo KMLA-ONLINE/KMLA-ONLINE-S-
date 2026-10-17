@@ -38,17 +38,13 @@ export function formatMessageDay(sentAt: string, now = Date.now()): string {
 // 한국은 일광 절약 시간이 없어 하루가 늘 24시간이다.
 const DAY_MS = 24 * 60 * 60_000;
 
-export function isSameMessageDay(a: string, b: string): boolean {
-  return (
-    dayKeyFormatter.format(new Date(a)) === dayKeyFormatter.format(new Date(b))
-  );
+/** 한국 날짜("2026-08-28"). 같은 날인지 비교하는 열쇠다. */
+export function messageDayKey(sentAt: string): string {
+  return dayKeyFormatter.format(new Date(sentAt));
 }
 
-/** 같은 날, 같은 표시 시각(분)인지. 메시지 묶음의 시각 조건이다(기능 명세 §13.3). */
-export function isSameMessageMinute(a: string, b: string): boolean {
-  return (
-    isSameMessageDay(a, b) && formatMessageTime(a) === formatMessageTime(b)
-  );
+export function isSameMessageDay(a: string, b: string): boolean {
+  return messageDayKey(a) === messageDayKey(b);
 }
 
 /** 이 메시지 위에 날짜 구분선을 그려야 하는지. */
