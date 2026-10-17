@@ -49,6 +49,7 @@ export function ProfileFields({
             <TextField
               id="profile-name"
               name="name"
+              placeholder="홍길동"
               defaultValue={values.name}
               aria-invalid={Boolean(errors.name)}
               disabled={disabled}
