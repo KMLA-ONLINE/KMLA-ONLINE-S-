@@ -86,7 +86,9 @@ export function StoryRail({
   // 작성 창이 끝나는 시점에는 사용자가 이미 뒤로가기로 닫았을 수 있다. 그때 또 닫으면 홈 밖으로
   // 나가므로 지금도 열려 있는지 최신 값으로 확인한다.
   const paramKindRef = useRef(param.kind);
-  const [uploading, setUploading] = useState(false);
+  // state가 아니라 ref다. 작성 창이 올리기 시작한 바로 그 이벤트 안에서 Esc가 와도 닫기 방어가
+  // 다시 그려지기를 기다리지 않고 최신 값을 읽어야 한다(#244).
+  const uploadingRef = useRef(false);
 
   useLayoutEffect(() => {
     paramKindRef.current = param.kind;
@@ -250,11 +252,20 @@ export function StoryRail({
           open={param.kind === "composer"}
           onClose={() => {
             // 올리는 중에는 닫지 않는다. 닫아도 업로드는 계속되고, 끝날 때 다시 닫으려 한다.
-            if (!uploading) close();
+            if (!uploadingRef.current) close();
           }}
-          onPendingChange={setUploading}
+          onPendingChange={(pending) => {
+            uploadingRef.current = pending;
+            // 브라우저 뒤로가기는 막을 수 없다. 이미 닫힌 창의 실패는 토스트로라도 알린다.
+            if (!pending && paramKindRef.current !== "composer") {
+              toast.error("스토리를 올리지 못했습니다.");
+            }
+          }}
           onDone={async () => {
+            uploadingRef.current = false;
             if (paramKindRef.current === "composer") close();
+            // 올리는 중에 뒤로가기로 닫았다. 취소된 줄 알고 다시 올리지 않게 끝났음을 알린다.
+            else toast.success("스토리를 올렸습니다.");
             await refresh();
           }}
         />

@@ -55,7 +55,10 @@ export function StoryComposer({
   onPendingChange,
 }: {
   onDone: () => void | Promise<void>;
-  /** 올리는 동안 부모가 창을 닫지 못하게 막는 데 쓴다. */
+  /**
+   * 올리는 동안 부모가 창을 닫지 못하게 막는 데 쓴다. 실패하면 `false`를 알리고, 성공하면 알리지
+   * 않고 `onDone`을 부른다.
+   */
   onPendingChange?: (pending: boolean) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,10 +69,6 @@ export function StoryComposer({
   const [background, setBackground] = useState<StoryBackground>("blue");
   const [link, setLink] = useState("");
   const [pending, setPending] = useState(false);
-
-  useEffect(() => {
-    onPendingChange?.(pending);
-  }, [pending, onPendingChange]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(
@@ -124,7 +123,10 @@ export function StoryComposer({
   async function submit() {
     if (!ready || pending || normalizedLink === undefined) return;
 
+    // 부모에게는 effect가 아니라 지금 알린다. "올리는 중"이 그려진 뒤 effect가 돌기 전에 Esc가
+    // 들어오면 부모가 아직 올리기 전이라고 보고 창을 닫는다(#244).
     setPending(true);
+    onPendingChange?.(true);
     setError(null);
 
     try {
@@ -151,6 +153,7 @@ export function StoryComposer({
           : "스토리를 올리지 못했습니다. 다시 시도해 주세요.",
       );
       setPending(false);
+      onPendingChange?.(false);
       return;
     }
 
