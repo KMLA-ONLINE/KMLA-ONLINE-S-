@@ -18,7 +18,12 @@ import { setAppBadgeCount } from "~/shared/lib/app-badge";
 
 const GROUP_ROUTE =
   /^\/groups\/(?!(?:create|discover|member-page|report-page)(?:\/|$))([^/]+)(?:\/|$)/;
-const INBOX_REVALIDATION_DELAY_MS = 50;
+
+/**
+ * Realtime 신호를 모으는 간격. Realtime은 바뀐 행마다 따로 오므로 `모두 읽음` 한 번이 안 읽은 알림 수만큼 신호가 된다.
+ * 신호마다 뱃지를 무효화하면 진행 중인 요청을 취소하고 다시 보내, 취소된 것까지 서버에서 그만큼 돈다.
+ */
+const NOTIFICATION_COALESCE_MS = 300;
 
 /** 복귀 신호가 겹칠 때 뒤엣것을 버리는 간격. `focus`와 `visibilitychange`가 한 복귀에 둘 다 오기 때문이다. */
 const RESUME_COALESCE_MS = 300;
@@ -41,9 +46,6 @@ export function NotificationSync({ profileId }: { profileId: number }) {
   const location = useLocation();
   const groupData = useRouteLoaderData<{ group: GroupDetail }>(
     "routes/app/groups/detail",
-  );
-  const inboxRevalidationTimer = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
   );
   const groupResume = useRef<{ slug: string; viewerId: number } | null>(null);
   const mounted = useRef(true);
@@ -103,21 +105,11 @@ export function NotificationSync({ profileId }: { profileId: number }) {
     finishGroupResume(slug, viewerId, changed);
   });
 
-  const scheduleInboxRevalidation = useEffectEvent(() => {
-    if (inboxRevalidationTimer.current) {
-      clearTimeout(inboxRevalidationTimer.current);
-    }
-    inboxRevalidationTimer.current = setTimeout(() => {
-      inboxRevalidationTimer.current = null;
-      void revalidator.revalidate();
-    }, INBOX_REVALIDATION_DELAY_MS);
-  });
-
   const sync = useEffectEvent((source: "notification" | "focus") => {
     void queryClient.invalidateQueries({ queryKey: notificationKeys.badge() });
 
     if (location.pathname === "/noti") {
-      scheduleInboxRevalidation();
+      void revalidator.revalidate();
       return;
     }
 
@@ -125,10 +117,20 @@ export function NotificationSync({ profileId }: { profileId: number }) {
     if (source === "focus" && slug) void resumeGroup(slug);
   });
 
-  useEffect(
-    () => subscribeToNotifications(profileId, () => sync("notification")),
-    [profileId],
-  );
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = subscribeToNotifications(profileId, () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        sync("notification");
+      }, NOTIFICATION_COALESCE_MS);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [profileId]);
 
   /**
    * 복귀 신호를 `focus`에만 걸지 않는다. 설치형 PWA는 되살릴 때 `focus`가 안 오기도 한다(특히 iOS).
@@ -154,9 +156,6 @@ export function NotificationSync({ profileId }: { profileId: number }) {
       groupResume.current = null;
       window.removeEventListener("focus", onResume);
       document.removeEventListener("visibilitychange", onResume);
-      if (inboxRevalidationTimer.current) {
-        clearTimeout(inboxRevalidationTimer.current);
-      }
     };
   }, []);
 

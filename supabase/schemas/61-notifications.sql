@@ -1288,6 +1288,32 @@ end;
 $$;
 alter function private.invoke_notification_dispatcher() owner to postgres;
 
+-- 30초 Cron의 진입점. 가져갈 delivery가 없으면 Edge Function을 부르지 않는다. 큐가 빈 시간이
+-- 대부분이라 무조건 부르면 하루 2,880번 빈 호출이 나간다. 조건은 claim_notification_deliveries가
+-- 가져가는 행에, 5초 안에 발송 시각이 되는 행을 더한다. dispatcher는 그만큼 기다렸다 메시지를 가져가므로
+-- (next_message_delivery_at), 전송 때 바로 깨우는 요청이 실패해도 예전처럼 이 Cron이 받아 준다.
+create or replace function private.invoke_notification_dispatcher_if_due()
+returns bigint
+language plpgsql security definer
+set search_path = ''
+as $$
+begin
+  if not exists (
+    select 1
+    from private.notification_delivery_outbox as delivery
+    where (
+        delivery.status = 'pending'
+        or (delivery.status = 'leased' and delivery.lease_expires_at <= now())
+      )
+      and delivery.available_at <= now() + interval '5 seconds'
+  ) then
+    return null;
+  end if;
+  return private.invoke_notification_dispatcher();
+end;
+$$;
+alter function private.invoke_notification_dispatcher_if_due() owner to postgres;
+
 -- dispatcher를 곧바로 깨운 마지막 시각. 한 행만 둔다.
 create table private.notification_dispatcher_wakes (
   id smallint primary key default 1,
@@ -1930,6 +1956,7 @@ revoke all on function private.emit_notification(
 ) from public;
 revoke all on function private.cleanup_expired_notifications() from public;
 revoke all on function private.invoke_notification_dispatcher() from public;
+revoke all on function private.invoke_notification_dispatcher_if_due() from public;
 revoke all on function private.prepare_group_notification_preferences() from public;
 revoke all on function private.notify_comment_created() from public;
 revoke all on function private.mention_notification_title(text, boolean) from public;
