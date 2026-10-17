@@ -97,6 +97,14 @@ describe("StoryViewer gestures", () => {
 
       swipe({ x: 250, y: 300 }, { x: 120, y: 310 });
 
+      // 터치는 손을 떼면 pointerup 뒤에 pointerleave가 따라온다. 그 때문에 되돌아가면 안 된다.
+      fireEvent.pointerLeave(screen.getByTestId("story-gesture-area"), {
+        pointerId: 1,
+        pointerType: "touch",
+      });
+      expect(screen.getByTestId("story-track")).toHaveStyle({
+        transform: "translateX(-390px)",
+      });
       expect(onShow).not.toHaveBeenCalled();
       act(() => {
         vi.advanceTimersByTime(260);

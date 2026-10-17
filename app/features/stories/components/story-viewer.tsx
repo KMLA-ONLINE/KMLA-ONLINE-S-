@@ -159,10 +159,10 @@ export function StoryViewer({
     track.style.transform = `translate(${x}px, ${y}px) scale(${1 - shrink})`;
   }
 
-  /** 넘어가지 않고 떼면 제자리로 돌아간다. */
+  /** 넘어가지 않고 떼면 제자리로 돌아간다. 옆 작성자로 밀려 가는 중이면 건드리지 않는다. */
   function settleTrack() {
     const track = trackRef.current;
-    if (!track?.style.transform) return;
+    if (!track?.style.transform || slideTimerRef.current !== null) return;
 
     track.style.transition = "transform 200ms ease-out";
     track.style.transform = "";
@@ -407,7 +407,11 @@ export function StoryViewer({
             ref={viewportRef}
             className="relative size-full overflow-hidden select-none sm:aspect-[9/16] sm:h-[min(100dvh,56rem)] sm:w-auto sm:rounded-xl"
           >
-            <div ref={trackRef} className="absolute inset-0">
+            <div
+              ref={trackRef}
+              data-testid="story-track"
+              className="absolute inset-0"
+            >
               {previousAuthorStory ? (
                 <div className="absolute inset-0 -translate-x-full" aria-hidden>
                   <StoryFace story={previousAuthorStory} />
@@ -540,12 +544,16 @@ export function StoryViewer({
                     if (gesture.side === "previous") previous();
                     else next();
                   }}
+                  // 터치는 손을 떼면 pointerup 바로 뒤에 pointerleave가 온다. 이미 떼서 처리한 손가락이면
+                  // 무시한다. 그러지 않으면 막 밀어 보낸 트랙을 제자리로 되돌린다.
                   onPointerCancel={() => {
+                    if (!pressRef.current) return;
                     pressRef.current = null;
                     setHeld(false);
                     settleTrack();
                   }}
                   onPointerLeave={() => {
+                    if (!pressRef.current) return;
                     pressRef.current = null;
                     setHeld(false);
                     settleTrack();
