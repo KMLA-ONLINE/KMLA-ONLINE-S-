@@ -91,6 +91,9 @@ export function MentionPickerDialog({
   // 한글 조합이 끝난 뒤 제출한다(기능 명세 §8.9와 같은 규칙).
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    // 창은 portal로 뜨지만 React 이벤트는 컴포넌트 트리를 따라 오른다. 막지 않으면 바깥 게시물
+    // 폼의 onSubmit까지 불려 글이 저장된다(`link-dialog.tsx`와 같은 이유).
+    event.stopPropagation();
     setSubmitted(query.trim());
   };
 

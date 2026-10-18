@@ -65,6 +65,7 @@ import {
 } from "~/shared/ui/dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { clipboardImageFiles } from "~/shared/lib/clipboard";
+import { isHandheld } from "~/shared/lib/install-platform";
 import { cn } from "~/shared/lib/utils";
 import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
 import { Button } from "~/shared/ui/button";
@@ -550,6 +551,8 @@ export function CommentComposer({
                   return;
                 }
                 if (event.key !== "Enter" || event.shiftKey) return;
+                // 폰·태블릿의 화면 키보드에는 Shift+Enter가 없다. Enter로 줄을 바꾸고 등록은 버튼이 맡는다(메신저와 같은 규칙).
+                if (isHandheld()) return;
                 if (composing.current || event.nativeEvent.isComposing) return;
                 event.preventDefault();
                 send();
