@@ -190,7 +190,7 @@ export function RoomScreen({
   // 대화 정보, 검색, 고정 메시지, 반응한 사람, 공유된 미디어는 뒤로가기로 닫히도록 URL에 둔다.
   const roomOverlay = useRoomOverlayParam();
   const ios = useSyncExternalStore(subscribeToPlatform, isIOS, () => false);
-  const keyboardViewport = useKeyboardViewport(true, ios);
+  const keyboardViewport = useKeyboardViewport(ios, ios);
   const location = useLocation();
   const navigate = useNavigate();
   const overlay = roomOverlay.overlay;
@@ -447,20 +447,13 @@ export function RoomScreen({
         // 입력창 아래에 빈 공간이 생긴다. 보이는 영역의 위쪽·높이로 대화방 전체를 잡는다.
         keyboardViewport.keyboardOpen &&
           "max-md:fixed max-md:inset-x-0 max-md:z-40 max-md:h-(--room-keyboard-height)",
-        keyboardViewport.keyboardOpen &&
-          (ios
-            ? "max-md:top-(--room-keyboard-top)"
-            : "max-md:bottom-(--room-keyboard-bottom)"),
+        keyboardViewport.keyboardOpen && "max-md:top-(--room-keyboard-top)",
       )}
       style={
         keyboardViewport.keyboardOpen
           ? ({
               "--room-keyboard-height": `${keyboardViewport.height}px`,
-              ...(ios
-                ? { "--room-keyboard-top": `${keyboardViewport.offsetTop}px` }
-                : {
-                    "--room-keyboard-bottom": `${keyboardViewport.bottomInset}px`,
-                  }),
+              "--room-keyboard-top": `${keyboardViewport.offsetTop}px`,
             } as CSSProperties & Record<`--room-keyboard-${string}`, string>)
           : undefined
       }

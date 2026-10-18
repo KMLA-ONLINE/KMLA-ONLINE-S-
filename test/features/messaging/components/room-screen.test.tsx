@@ -237,10 +237,10 @@ describe("RoomScreen", () => {
         viewport.dispatchEvent(new Event("resize"));
       });
       expect(header).toBeVisible();
-      expect(room).toHaveStyle({
-        "--room-keyboard-height": `${viewport.height}px`,
-      });
       if (platform === "iPhone") {
+        expect(room).toHaveStyle({
+          "--room-keyboard-height": `${viewport.height}px`,
+        });
         expect(room).toHaveClass("max-md:top-(--room-keyboard-top)");
         expect(room).not.toHaveClass("max-md:bottom-(--room-keyboard-bottom)");
         expect(room).toHaveStyle({ "--room-keyboard-top": "100px" });
@@ -250,9 +250,10 @@ describe("RoomScreen", () => {
         });
         expect(room).toHaveStyle({ "--room-keyboard-top": "200px" });
       } else {
-        expect(room).toHaveClass("max-md:bottom-(--room-keyboard-bottom)");
+        expect(room).not.toHaveClass("max-md:fixed");
+        expect(room).not.toHaveClass("max-md:bottom-(--room-keyboard-bottom)");
         expect(room).not.toHaveClass("max-md:top-(--room-keyboard-top)");
-        expect(room).toHaveStyle({ "--room-keyboard-bottom": "200px" });
+        expect(room).not.toHaveAttribute("style");
       }
       act(() => {
         viewport.height = window.innerHeight;
