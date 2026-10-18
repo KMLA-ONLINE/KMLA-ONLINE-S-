@@ -7,6 +7,7 @@ import {
   isNavItemActive,
   navItems,
 } from "~/features/app-shell/model/nav-items";
+import { isTabReselectClick } from "~/features/app-shell/model/navigation";
 import { scrollToTop } from "~/shared/lib/scroll-container";
 import { cn } from "~/shared/lib/utils";
 
@@ -48,19 +49,7 @@ export function MobileTabBar({
                 end={item.end}
                 prefetch="intent"
                 onClick={(event) => {
-                  // 정확히 그 탭의 첫 화면일 때만 가로챈다. 쿼리·해시가 붙어 있으면(오버레이 등)
-                  // 탭을 눌러 첫 화면으로 돌아갈 수 있어야 하고, 보조키 클릭은 새 탭 열기다.
-                  if (
-                    location.pathname !== item.to ||
-                    location.search ||
-                    location.hash ||
-                    event.button !== 0 ||
-                    event.metaKey ||
-                    event.ctrlKey ||
-                    event.shiftKey ||
-                    event.altKey
-                  )
-                    return;
+                  if (!isTabReselectClick(event, location, item.to)) return;
                   event.preventDefault();
                   scrollToTop(scrollRef.current);
                 }}

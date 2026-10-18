@@ -22,7 +22,7 @@ function renderHeader(path = "/", data: ShellData = shell) {
   return renderRoute(
     () => (
       <AppShellProvider value={data}>
-        <AppHeader />
+        <AppHeader onHomeReselect={() => undefined} />
       </AppShellProvider>
     ),
     {

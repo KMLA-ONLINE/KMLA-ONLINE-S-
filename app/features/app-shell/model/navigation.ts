@@ -41,3 +41,32 @@ export function isSamePathUiOverlayNavigation(
       current.getAll(key).join("\0") === next.getAll(key).join("\0"),
   );
 }
+
+interface ClickModifiers {
+  button: number;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+}
+
+/**
+ * 이미 그 탭의 첫 화면에 있을 때 같은 탭을 다시 누른 평범한 클릭인지 판정한다. 쿼리·해시가
+ * 붙어 있으면(오버레이 등) 눌러서 첫 화면으로 돌아갈 수 있어야 하고, 보조키 클릭은 새 탭 열기다.
+ */
+export function isTabReselectClick(
+  event: ClickModifiers,
+  location: { pathname: string; search: string; hash: string },
+  to: string,
+): boolean {
+  return (
+    location.pathname === to &&
+    !location.search &&
+    !location.hash &&
+    event.button === 0 &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    !event.altKey
+  );
+}

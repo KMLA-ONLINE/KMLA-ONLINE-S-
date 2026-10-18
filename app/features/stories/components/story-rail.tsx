@@ -92,6 +92,9 @@ export function StoryRail({
     queryKey: storyKeys.active(),
     queryFn: listActiveStories,
     staleTime: STORY_STALE_TIME,
+    // 홈을 띄워 둔 채 다른 창·앱에 다녀오면 다시 읽는다. 전역 기본은 꺼져 있지만, 스토리는 24시간이면
+    // 사라지고 순서가 바뀌어도 읽던 위치를 잃지 않는다. `staleTime` 안의 복귀는 요청하지 않는다.
+    refetchOnWindowFocus: true,
   });
   const { param, openComposer, openStory, showStory, close } = useStoryParam();
   // 방금 지운 스토리. 목록 갱신이 주소에서 `?story=`가 빠지기 전에 도착해도 "찾을 수 없음"으로

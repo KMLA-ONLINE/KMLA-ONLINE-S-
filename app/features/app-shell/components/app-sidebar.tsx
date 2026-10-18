@@ -6,14 +6,24 @@ import {
   isNavItemActive,
   navItems,
 } from "~/features/app-shell/model/nav-items";
+import { isTabReselectClick } from "~/features/app-shell/model/navigation";
 import { cn } from "~/shared/lib/utils";
 
 /**
  * 데스크톱 사이드바. 평소엔 아이콘 레일이고 hover/focus 하면 라벨까지 펼쳐진다.
  * shadcn `Sidebar`는 자체 높이·오프셋 가정이 `h-dvh` 흐름 셸과 싸워 쓰지 않는다. 확장은 CSS만으로 한다.
  * 바깥 `div`가 레일 폭을 예약하고 안쪽 `nav`가 겹쳐 펼쳐진다 — 흐름 안에서 늘리면 hover마다 본문이 밀린다.
+ *
+ * 홈에서 홈을 다시 누르면 이동하지 않고 `onHomeReselect`를 부른다. 데스크톱에는 당겨서 새로고침이
+ * 없어서 이것이 피드를 새로 받는 입구다. 다른 탭은 같은 경로로 다시 이동해 loader가 돈다.
  */
-export function AppSidebar({ className }: { className?: string }) {
+export function AppSidebar({
+  className,
+  onHomeReselect,
+}: {
+  className?: string;
+  onHomeReselect: () => void;
+}) {
   const location = useLocation();
   const badges = useNavBadges();
 
@@ -42,6 +52,15 @@ export function AppSidebar({ className }: { className?: string }) {
                   to={item.to}
                   end={item.end}
                   prefetch="intent"
+                  onClick={(event) => {
+                    if (
+                      item.to !== "/" ||
+                      !isTabReselectClick(event, location, item.to)
+                    )
+                      return;
+                    event.preventDefault();
+                    onHomeReselect();
+                  }}
                   aria-label={
                     unread > 0
                       ? `${item.label} (안 읽음 ${unread}개)`
