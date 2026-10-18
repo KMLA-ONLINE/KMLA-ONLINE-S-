@@ -15,7 +15,9 @@ interface Options {
  * 없어서 그린 뒤 줄 상자를 재서 폭을 정한다. 한 줄이면 이미 내용에 맞으므로 손대지 않는다.
  *
  * `boxRef`는 폭을 바꿀 상자, `textRef`는 그 안에서 줄을 잴 inline 요소다. 쓸 수 있는 폭이 바뀌면
- * (화면이나 옆 패널 크기) 가장 가까운 `article`의 크기 변화를 보고 다시 잰다.
+ * (화면이나 옆 패널 크기) 가장 가까운 `article`의 크기 변화를 보고 다시 잰다. `article`은 그대로인데
+ * 옆 요소가 생겨 상자 자리만 좁아지면 상자의 `max-width`가 상자를 줄이므로, 상자 크기 변화도 보고
+ * 줄어든 폭에서 다시 잰다. 상자는 `max-width: 100%`여야 한다.
  */
 export function useShrinkWrap(
   boxRef: RefObject<HTMLElement | null>,
@@ -59,6 +61,7 @@ export function useShrinkWrap(
     fit();
     const observer = new ResizeObserver(fit);
     observer.observe(box.closest("article") ?? document.documentElement);
+    observer.observe(box);
     // 웹 글꼴이 늦게 오면 글자 폭이 바뀐다. jsdom에는 `document.fonts`가 없다.
     if ("fonts" in document) void document.fonts.ready.then(fit);
 
