@@ -4,6 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
+import { randomUUID } from "~/shared/lib/random-uuid";
 import { toast } from "sonner";
 
 import {
@@ -226,7 +227,7 @@ export function useConversationMessages(conversation: Conversation) {
 
   const send = async ({ id, body, replyTo }: SendDraft) => {
     const draft: ConversationMessage = {
-      id: id ?? crypto.randomUUID(),
+      id: id ?? randomUUID(),
       senderId: conversation.viewerId,
       body,
       sentAt: new Date().toISOString(),
@@ -371,7 +372,7 @@ export function useConversationMessages(conversation: Conversation) {
     for (const notice of notices) toast.error(notice);
     let allSent = files.length === selected.length;
     for (const group of groupAttachmentsIntoMessages(files)) {
-      const id = crypto.randomUUID();
+      const id = randomUUID();
       const draft: ConversationMessage = {
         id,
         senderId: conversation.viewerId,
