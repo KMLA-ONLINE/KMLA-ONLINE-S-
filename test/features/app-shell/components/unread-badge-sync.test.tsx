@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -62,5 +62,35 @@ describe("UnreadBadgeSync", () => {
     view.unmount();
 
     expect(mocks.setTabBadgeCount).toHaveBeenLastCalledWith(0);
+  });
+
+  it("puts the total back after the service worker overwrites the app icon badge", () => {
+    const container = new EventTarget();
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: container,
+    });
+    mocks.useUnreadCounts.mockReturnValue({
+      notifications: 0,
+      messages: 5,
+      pending: false,
+    });
+
+    try {
+      render(<UnreadBadgeSync />);
+      mocks.setAppBadgeCount.mockClear();
+
+      act(() => {
+        container.dispatchEvent(
+          new MessageEvent("message", {
+            data: { type: "app-badge-overwritten" },
+          }),
+        );
+      });
+
+      expect(mocks.setAppBadgeCount).toHaveBeenCalledWith(5);
+    } finally {
+      Reflect.deleteProperty(navigator, "serviceWorker");
+    }
   });
 });
