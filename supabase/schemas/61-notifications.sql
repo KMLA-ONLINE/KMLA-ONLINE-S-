@@ -191,6 +191,10 @@ create table private.notification_delivery_outbox (
   last_error_code text,
   created_at timestamptz not null default now(),
   completed_at timestamptz,
+  -- 이 Push를 일으킨 활동의 event key. 집계된 답글 알림은 한 행으로 답글마다 Push를 보내므로(기능
+  -- 명세 §14.9) 중복은 알림 행이 아니라 활동 단위로 막는다. 이 열이 생기기 전의 행은 비어 있고,
+  -- 알림 보존 기간이 지나면 알림과 함께 사라진다.
+  notification_event_key text,
   constraint notification_delivery_outbox_attempts check (attempt_count between 0 and 10),
   constraint notification_delivery_outbox_channel_shape check (
     (channel = 'web_push' and subscription_id is not null and recipient_email is null)
@@ -213,7 +217,7 @@ create unique index notification_delivery_suspension_unique_idx
 on private.notification_delivery_outbox (suspension_id, suspension_event)
 where suspension_id is not null;
 create unique index notification_delivery_push_unique_idx
-on private.notification_delivery_outbox (notification_id, subscription_id, channel)
+on private.notification_delivery_outbox (notification_id, subscription_id, notification_event_key)
 where channel = 'web_push';
 create unique index notification_delivery_email_unique_idx
 on private.notification_delivery_outbox (notification_id, channel)
@@ -249,7 +253,9 @@ create or replace function private.notification_push_allowed(
 language sql stable security definer
 set search_path = ''
 as $$
-  select p_subscription_created_at <= p_notification.created_at
+  -- 집계 알림은 행이 먼저 있고 활동이 뒤에 붙는다. 구독 뒤에 새로 붙은 답글은 그 기기로 보내야
+  -- 하므로 최초 생성 시각이 아니라 마지막 활동 시각과 비교한다.
+  select p_subscription_created_at <= p_notification.last_activity_at
     and (
       p_subscription_expiration_time is null
       or p_subscription_expiration_time > now()
@@ -368,7 +374,8 @@ $$;
 alter function private.notification_delivery_allowed(private.notification_delivery_outbox) owner to postgres;
 
 create or replace function private.enqueue_notification_push(
-  p_notification_id uuid
+  p_notification_id uuid,
+  p_event_key text
 ) returns integer
 language plpgsql security definer
 set search_path = ''
@@ -377,6 +384,10 @@ declare
   target public.notifications;
   inserted_count integer;
 begin
+  -- 중복 방지 unique index는 event key 단위다. 빈 key는 index가 서로 다르게 보므로 막지 못한다.
+  if p_event_key is null then
+    raise exception 'notification push requires its event key' using errcode = '22023';
+  end if;
   select notification.* into target
   from public.notifications as notification
   where notification.id = p_notification_id;
@@ -386,9 +397,9 @@ begin
   end if;
 
   insert into private.notification_delivery_outbox (
-    notification_id, recipient_profile_id, subscription_id, channel
+    notification_id, recipient_profile_id, subscription_id, channel, notification_event_key
   )
-  select target.id, target.recipient_profile_id, subscription.id, 'web_push'
+  select target.id, target.recipient_profile_id, subscription.id, 'web_push', p_event_key
   from private.web_push_subscriptions as subscription
   where subscription.profile_id = target.recipient_profile_id
     and subscription.gone_at is null
@@ -401,7 +412,7 @@ begin
   return inserted_count;
 end;
 $$;
-alter function private.enqueue_notification_push(uuid) owner to postgres;
+alter function private.enqueue_notification_push(uuid, text) owner to postgres;
 
 create or replace function private.enqueue_notification_email(
   p_notification_id uuid,
@@ -524,9 +535,14 @@ begin
       actor_display_name = p_actor_display_name,
       actor_avatar_path = p_actor_avatar_path,
       actor_count = actor_count + 1,
-      last_activity_at = now(),
+      -- now()는 트랜잭션 시작 시각이다. 먼저 시작해 늦게 모인 활동이 시각을 되돌리거나 created_at보다
+      -- 이르게 만들지 않게 한다.
+      last_activity_at = greatest(last_activity_at, now()),
       read_at = null
     where id = created_notification_id;
+
+    -- 집계된 활동도 Push는 따로 보낸다. 반응처럼 Push를 지원하지 않는 종류는 허용 검사에서 빠진다.
+    perform private.enqueue_notification_push(created_notification_id, p_event_key);
   else
     insert into public.notifications (
       recipient_profile_id, kind, importance, category, actor_identity,
@@ -545,7 +561,7 @@ begin
       on conflict (event_key) do update set notification_id = excluded.notification_id;
     end if;
 
-    perform private.enqueue_notification_push(created_notification_id);
+    perform private.enqueue_notification_push(created_notification_id, p_event_key);
   end if;
 
   update private.notification_event_keys as event
@@ -1251,9 +1267,9 @@ begin
   where gone_at < now() - interval '30 days';
   -- 메시지 Push 행은 알림처럼 cascade로 지워지지 않는다. 메시지는 삭제해도 행이 남기 때문이다.
   -- 이용 정지 메일 행도 알림 행이 없어 cascade로 지워지지 않는다. 받는 주소를 오래 남기지 않는다.
+  -- 답글 집계 알림은 새 답글마다 보존 기간이 늘어나므로, 그 행의 끝난 Push도 알림을 기다리지 않고 지운다.
   delete from private.notification_delivery_outbox
-  where (message_id is not null or suspension_id is not null)
-    and completed_at < now() - interval '30 days';
+  where completed_at < now() - interval '30 days';
   return removed;
 end;
 $$;
@@ -1389,6 +1405,151 @@ end;
 $$;
 alter function private.prepare_group_notification_preferences() owner to postgres;
 
+-- 댓글·답글 알림에 싣는 작성자 표시명(기능 명세 §14.8). 익명 댓글은 실제 신원 대신 `익명`이다.
+create or replace function private.comment_actor_display_name(
+  p_identity public.notification_actor_identity,
+  p_profile_name text
+) returns text
+language sql immutable
+set search_path = ''
+as $$
+  select case p_identity
+    when 'identified' then coalesce(p_profile_name, '탈퇴한 사용자')
+    when 'anonymous' then '익명'
+    else '운영진'
+  end;
+$$;
+alter function private.comment_actor_display_name(public.notification_actor_identity, text) owner to postgres;
+
+-- 한 댓글에 달린 답글 알림을 한 행으로 모으는 aggregate key(기능 명세 §14.9).
+create or replace function private.comment_reply_aggregate_key(p_parent_comment_id uuid)
+returns text
+language sql immutable
+set search_path = ''
+as $$
+  select 'comment-replies:' || p_parent_comment_id::text;
+$$;
+alter function private.comment_reply_aggregate_key(uuid) owner to postgres;
+
+-- 답글 집계 알림을 지금 남아 있는 답글에 맞춘다(기능 명세 §14.9). 이 알림으로 모인 답글(event key가
+-- 이 알림을 가리키는 답글) 가운데 가장 최근 것의 작성자와 본문을 보여 주고, 인원은 서로 다른 작성자로
+-- 센다. 같은 사람의 실명 답글과 익명 답글은 다른 사람으로 세야 익명 답글의 주인이 드러나지 않는다.
+-- 운영진 명의는 누가 썼든 `운영진` 하나다. 남은 답글이 없으면 알림을 지운다.
+--
+-- 새 답글은 `p_added_reply_id`와 그 작성자로 넘긴다. 댓글 insert 트리거에서 부르므로 create_post_comment가
+-- 아직 작성자 행을 넣기 전이고, 이 답글이 방금 알림을 올린 활동이므로 created_at과 관계없이 가장 최근
+-- 답글이다(created_at은 트랜잭션 시작 시각이라 먼저 시작해 늦게 끝난 답글이 더 이를 수 있다).
+--
+-- 지울 답글은 `p_removed_comment_id`로 넘긴다. 삭제가 반영되기 전에 불러도 그 답글을 빼고, 보이던 답글이면
+-- 마지막 활동 시각을 남은 답글로 되돌리며, 아직 나가지 않은 그 답글의 Push를 거둔다. 예전에 답글마다 알림 행이
+-- 있을 때는 행 삭제가 이 일을 했다. 읽음 상태는 되돌리지 않는다 -- 지운 답글 전에 읽었는지 알 수 없다.
+create or replace function private.sync_comment_reply_notification(
+  p_parent_comment_id uuid,
+  p_added_reply_id uuid default null,
+  p_added_author_profile_id bigint default null,
+  p_removed_comment_id uuid default null
+) returns void
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  aggregate_key text := private.comment_reply_aggregate_key(p_parent_comment_id);
+  target_notification_id uuid;
+  shown_comment_id uuid;
+  latest_comment_id uuid;
+  latest_created_at timestamptz;
+  latest_identity public.notification_actor_identity;
+  latest_profile_id bigint;
+  latest_profile_name text;
+  latest_avatar_path text;
+  replier_count integer;
+begin
+  if (p_added_reply_id is null) <> (p_added_author_profile_id is null) then
+    raise exception 'an added reply needs its author' using errcode = '22023';
+  end if;
+
+  -- 새 답글을 모으는 emit_notification과 같은 잠금이다. 동시에 들어온 답글과 삭제가 서로의 결과를
+  -- 덮어쓰지 않는다.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(aggregate_key, 0));
+
+  select notification.id, notification.comment_id
+  into target_notification_id, shown_comment_id
+  from private.notification_event_keys as event
+  join public.notifications as notification on notification.id = event.notification_id
+  where event.event_key = aggregate_key;
+  if target_notification_id is null then return; end if;
+
+  with replies as (
+    select reply.id, reply.created_at, reply_author.profile_id,
+      reply.author_identity::text::public.notification_actor_identity as identity,
+      case reply.author_identity
+        when 'staff' then 'staff'
+        else reply.author_identity::text || ':' || reply_author.profile_id::text
+      end as replier_key
+    from public.post_comments as reply
+    left join private.comment_authors as author on author.comment_id = reply.id
+    cross join lateral (
+      select case
+        when reply.id = p_added_reply_id then p_added_author_profile_id
+        else author.profile_id
+      end as profile_id
+    ) as reply_author
+    join private.notification_event_keys as event
+      on event.event_key = 'comment:' || reply.id::text
+    where reply.parent_comment_id = p_parent_comment_id
+      and reply.deleted_at is null
+      and reply.id is distinct from p_removed_comment_id
+      and event.notification_id = target_notification_id
+      -- 작성자를 알 수 없는 답글은 누구의 것으로도 세지 않는다.
+      and reply_author.profile_id is not null
+  ), latest as (
+    select replies.id, replies.created_at, replies.identity, replies.profile_id
+    from replies
+    -- 새 답글, 아니면 지금 보이는 답글을 그대로 둔다. 보이던 답글이 지워질 때만 created_at으로 고른다.
+    order by replies.id is not distinct from coalesce(p_added_reply_id, shown_comment_id) desc,
+      replies.created_at desc, replies.id desc
+    limit 1
+  )
+  select latest.id, latest.created_at, latest.identity, latest.profile_id,
+    profile.name, profile.avatar_path,
+    (select count(distinct replies.replier_key)::integer from replies)
+  into latest_comment_id, latest_created_at, latest_identity, latest_profile_id,
+    latest_profile_name, latest_avatar_path, replier_count
+  from latest
+  left join public.profiles as profile on profile.id = latest.profile_id;
+
+  if p_removed_comment_id is not null then
+    delete from private.notification_delivery_outbox as delivery
+    where delivery.notification_id = target_notification_id
+      and delivery.notification_event_key = 'comment:' || p_removed_comment_id::text
+      -- 이미 lease를 잡고 보내는 중인 행은 막을 수 없고, 남겨야 결과 기록이 맞는다.
+      and (
+        delivery.status = 'pending'
+        or (delivery.status = 'leased' and delivery.lease_expires_at <= now())
+      );
+  end if;
+
+  if latest_comment_id is null then
+    delete from public.notifications where id = target_notification_id;
+    return;
+  end if;
+
+  update public.notifications as notification
+  set comment_id = latest_comment_id,
+    actor_identity = latest_identity,
+    actor_profile_id = case when latest_identity = 'identified' then latest_profile_id end,
+    actor_display_name = private.comment_actor_display_name(latest_identity, latest_profile_name),
+    actor_avatar_path = case when latest_identity = 'identified' then latest_avatar_path end,
+    actor_count = replier_count,
+    last_activity_at = case
+      when p_removed_comment_id is distinct from shown_comment_id then notification.last_activity_at
+      else greatest(notification.created_at, least(notification.last_activity_at, latest_created_at))
+    end
+  where notification.id = target_notification_id;
+end;
+$$;
+alter function private.sync_comment_reply_notification(uuid, uuid, bigint, uuid) owner to postgres;
+
 create or replace function private.notify_comment_created()
 returns trigger
 language plpgsql security definer
@@ -1401,6 +1562,9 @@ declare
   actor_profile public.profiles;
   actor_identity public.notification_actor_identity := new.author_identity::text::public.notification_actor_identity;
   notification_title text;
+  -- 답글만 부모 댓글 단위로 모은다. 게시물에 바로 단 댓글은 하나씩 알린다(기능 명세 §14.9).
+  reply_aggregate_key text;
+  emitted_notification_id uuid;
 begin
   if actor_profile_id is null then return new; end if;
   select post.* into target_post from public.posts as post where post.id = new.post_id;
@@ -1414,6 +1578,7 @@ begin
     from private.comment_authors as author
     where author.comment_id = new.parent_comment_id;
     notification_title := '내 댓글에 새 답글이 등록되었습니다.';
+    reply_aggregate_key := private.comment_reply_aggregate_key(new.parent_comment_id);
   else
     select author.profile_id into recipient_profile_id
     from private.post_authors as author
@@ -1423,20 +1588,26 @@ begin
 
   select profile.* into actor_profile
   from public.profiles as profile where profile.id = actor_profile_id;
-  perform private.emit_notification(
+  emitted_notification_id := private.emit_notification(
     'comment:' || new.id::text,
     recipient_profile_id,
     (case when new.parent_comment_id is null then 'post_commented' else 'comment_replied' end)::public.notification_kind,
     'normal', 'content', actor_identity, actor_profile_id,
-    case actor_identity
-      when 'identified' then coalesce(actor_profile.name, '탈퇴한 사용자')
-      when 'anonymous' then '익명'
-      else '운영진'
-    end,
+    private.comment_actor_display_name(actor_identity, actor_profile.name),
     case when actor_identity = 'identified' then actor_profile.avatar_path end,
     notification_title, target_post.group_id, new.post_id, new.id,
-    target_post.timeline_profile_id
+    target_post.timeline_profile_id,
+    p_aggregate_key => reply_aggregate_key
   );
+  -- emit_notification은 행위자 수를 활동마다 하나씩 늘리고 댓글 참조를 처음 답글에 둔다. 답글 집계는
+  -- 서로 다른 작성자 수와 가장 최근 답글을 보여야 하므로 여기서 다시 맞춘다.
+  if reply_aggregate_key is not null and emitted_notification_id is not null then
+    perform private.sync_comment_reply_notification(
+      new.parent_comment_id,
+      p_added_reply_id => new.id,
+      p_added_author_profile_id => actor_profile_id
+    );
+  end if;
   return new;
 end;
 $$;
@@ -1946,7 +2117,7 @@ using (false) with check (false);
 
 revoke all on function private.notification_push_allowed(public.notifications, timestamptz, timestamptz) from public;
 revoke all on function private.notification_delivery_allowed(private.notification_delivery_outbox) from public;
-revoke all on function private.enqueue_notification_push(uuid) from public;
+revoke all on function private.enqueue_notification_push(uuid, text) from public;
 revoke all on function private.enqueue_notification_email(uuid, text) from public;
 revoke all on function private.enqueue_suspension_email(bigint, text) from public;
 revoke all on function private.emit_notification(
@@ -1958,6 +2129,9 @@ revoke all on function private.cleanup_expired_notifications() from public;
 revoke all on function private.invoke_notification_dispatcher() from public;
 revoke all on function private.invoke_notification_dispatcher_if_due() from public;
 revoke all on function private.prepare_group_notification_preferences() from public;
+revoke all on function private.comment_actor_display_name(public.notification_actor_identity, text) from public;
+revoke all on function private.comment_reply_aggregate_key(uuid) from public;
+revoke all on function private.sync_comment_reply_notification(uuid, uuid, bigint, uuid) from public;
 revoke all on function private.notify_comment_created() from public;
 revoke all on function private.mention_notification_title(text, boolean) from public;
 revoke all on function private.emit_post_mention_notifications(uuid) from public;
