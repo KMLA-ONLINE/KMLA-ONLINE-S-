@@ -55,6 +55,19 @@ export async function verifySignupOtp(
   if (error) throw error;
 }
 
+/**
+ * 인증을 마친 사람이 고른 비밀번호로 계정을 확정한다.
+ *
+ * 인증 전 계정에 같은 이메일로 다시 `signUp`하면 Auth는 코드만 다시 보내고 비밀번호는
+ * 처음 값을 유지한다. 그대로 두면 다시 가입한 사람은 방금 정한 비밀번호로 로그인하지 못하고,
+ * 남이 먼저 만들어 둔 계정이라면 그 사람의 비밀번호가 살아남는다. 처음과 같은 비밀번호면
+ * Auth가 `same_password`로 거절하는데, 원하던 상태라 성공으로 친다.
+ */
+export async function claimSignupPassword(password: string): Promise<void> {
+  const { error } = await getSupabase().auth.updateUser({ password });
+  if (error && error.code !== "same_password") throw error;
+}
+
 export async function resendSignupOtp(email: string): Promise<void> {
   const { error } = await getSupabase().auth.resend({
     email,

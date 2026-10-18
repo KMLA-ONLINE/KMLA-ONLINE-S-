@@ -13,6 +13,7 @@ import {
   getAuthErrorMessage,
   getProfileDestination,
   hasErrors,
+  isEmailNotConfirmedError,
   loadAuthState,
   PasswordField,
   readFormText,
@@ -91,7 +92,11 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   } catch (error) {
     if (error instanceof Response) throw error;
     return data(
-      { errors: { form: getAuthErrorMessage(error) }, email },
+      {
+        errors: { form: getAuthErrorMessage(error) },
+        email,
+        unconfirmed: isEmailNotConfirmedError(error),
+      },
       { status: 400 },
     );
   }
@@ -107,6 +112,7 @@ export default function LoginPage({
     | {
         errors?: { form?: string; email?: string; password?: string };
         email?: string;
+        unconfirmed?: boolean;
       }
     | undefined;
   const errors = result?.errors ?? {};
@@ -156,6 +162,14 @@ export default function LoginPage({
       <Form method="post" className="flex flex-col gap-6">
         <FieldGroup>
           {errors.form ? <FieldError>{errors.form}</FieldError> : null}
+          {result?.unconfirmed ? (
+            <Link
+              to="/signup"
+              className="w-fit text-sm font-medium text-primary hover:underline"
+            >
+              회원가입에서 인증 이어가기
+            </Link>
+          ) : null}
           <Field data-invalid={Boolean(errors.email)}>
             <FieldLabel htmlFor="login-email">이메일</FieldLabel>
             <Input

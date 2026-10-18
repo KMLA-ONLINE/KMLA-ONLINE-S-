@@ -4,9 +4,14 @@
 const INIT_VIEWPORT = `(() => {
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
     (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-  if (!ios) return;
   const viewport = document.querySelector('meta[name="viewport"]');
-  viewport.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
+  if (ios) {
+    viewport.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
+  } else if (/Android/.test(navigator.userAgent)) {
+    // Resize the layout natively; fixed chat/dialog containers then follow the keyboard
+    // without adding a second visual-viewport offset. Preserve Android's system-bar inset.
+    viewport.content = 'width=device-width, initial-scale=1, interactive-widget=resizes-content';
+  }
 })();`;
 
 export function ViewportMeta() {

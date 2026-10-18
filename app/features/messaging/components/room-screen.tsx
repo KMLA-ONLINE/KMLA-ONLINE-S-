@@ -33,6 +33,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { randomUUID } from "~/shared/lib/random-uuid";
 import { useLocation, useNavigate } from "react-router";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
@@ -118,7 +119,7 @@ import {
   DropdownMenuTrigger,
 } from "~/shared/ui/dropdown-menu";
 import { isAboveSeededParent } from "~/shared/lib/back-stack";
-import { isHandheld } from "~/shared/lib/install-platform";
+import { isHandheld, isIOS } from "~/shared/lib/install-platform";
 import { cn } from "~/shared/lib/utils";
 
 export interface DesktopDetailsContext {
@@ -156,6 +157,10 @@ function isWideRoomViewport() {
   return window.matchMedia(WIDE_ROOM_QUERY).matches;
 }
 
+function subscribeToPlatform() {
+  return () => undefined;
+}
+
 export function RoomScreen({
   conversation: loadedConversation,
   desktopDetailsOpen = true,
@@ -184,7 +189,8 @@ export function RoomScreen({
   >(null);
   // 대화 정보, 검색, 고정 메시지, 반응한 사람, 공유된 미디어는 뒤로가기로 닫히도록 URL에 둔다.
   const roomOverlay = useRoomOverlayParam();
-  const keyboardViewport = useKeyboardViewport(true);
+  const ios = useSyncExternalStore(subscribeToPlatform, isIOS, () => false);
+  const keyboardViewport = useKeyboardViewport(ios, ios);
   const location = useLocation();
   const navigate = useNavigate();
   const overlay = roomOverlay.overlay;
@@ -395,7 +401,7 @@ export function RoomScreen({
   // 되살리지 않는다.
   async function sendMessage(body: string) {
     const target = replyTarget;
-    const id = crypto.randomUUID();
+    const id = randomUUID();
     sentMessageId.current = id;
     followingNewMessagesRef.current = true;
     setReplyTarget(null);
@@ -437,17 +443,18 @@ export function RoomScreen({
     <div
       className={cn(
         "relative flex min-h-0 min-w-0 flex-1 overflow-hidden",
-        // 모바일 키보드가 뜨면 브라우저가 화면을 끌어올려 머리가 밀려난다. 보이는 영역에 가둬 머리를
-        // 늘 위에 둔다. 게시물 댓글 시트와 같은 방식이다.
+        // iOS에서 아래 여백으로 보정하면 Safari의 화면 이동과 겹쳐 이름이 밀리고
+        // 입력창 아래에 빈 공간이 생긴다. 보이는 영역의 위쪽·높이로 대화방 전체를 잡는다.
         keyboardViewport.keyboardOpen &&
-          "max-md:fixed max-md:inset-x-0 max-md:bottom-(--room-keyboard-bottom) max-md:z-40 max-md:h-(--room-keyboard-height)",
+          "max-md:fixed max-md:inset-x-0 max-md:z-40 max-md:h-(--room-keyboard-height)",
+        keyboardViewport.keyboardOpen && "max-md:top-(--room-keyboard-top)",
       )}
       style={
         keyboardViewport.keyboardOpen
           ? ({
-              "--room-keyboard-bottom": `${keyboardViewport.bottomInset}px`,
               "--room-keyboard-height": `${keyboardViewport.height}px`,
-            } as CSSProperties)
+              "--room-keyboard-top": `${keyboardViewport.offsetTop}px`,
+            } as CSSProperties & Record<`--room-keyboard-${string}`, string>)
           : undefined
       }
     >
@@ -638,6 +645,7 @@ export function RoomScreen({
           </div>
         ) : viewerActive ? (
           <ComposerShell
+            keyboardOpenOnIOS={ios && keyboardViewport.keyboardOpen}
             replyTarget={replyTarget ?? undefined}
             replyAuthor={replyAuthor}
             onCancelReply={() => setReplyTarget(null)}
@@ -1580,7 +1588,7 @@ interface StagedAttachment {
 
 function toStagedAttachment(file: File): StagedAttachment {
   return {
-    id: crypto.randomUUID(),
+    id: randomUUID(),
     file,
     previewUrl:
       classifyAttachment(file) === "image" ? URL.createObjectURL(file) : null,
@@ -1588,6 +1596,7 @@ function toStagedAttachment(file: File): StagedAttachment {
 }
 
 function ComposerShell({
+  keyboardOpenOnIOS,
   replyTarget,
   replyAuthor,
   onCancelReply,
@@ -1603,6 +1612,7 @@ function ComposerShell({
   desktopDetailsOpen,
   draftKey,
 }: {
+  keyboardOpenOnIOS: boolean;
   replyTarget?: ConversationMessage;
   replyAuthor: string | null;
   onCancelReply: () => void;
@@ -1727,7 +1737,12 @@ function ComposerShell({
 
   return (
     <footer
-      className="shrink-0 bg-background px-2 pt-2 pb-[calc(0.5rem+var(--app-safe-b))] md:px-3 md:pb-3"
+      className={cn(
+        "shrink-0 bg-background px-2 pt-2 md:px-3 md:pb-3",
+        // iOS는 키보드가 떠도 safe-area-inset-bottom을 남긴다. 이미 키보드 위에
+        // 놓인 입력창에는 홈 인디케이터 여백을 더하지 않는다.
+        keyboardOpenOnIOS ? "pb-0" : "pb-[calc(0.5rem+var(--app-safe-b))]",
+      )}
       onDragOver={(event) => {
         if (canStage && event.dataTransfer.types.includes("Files")) {
           event.preventDefault();
@@ -1953,8 +1968,9 @@ function ComposerShell({
         </div>
         <Button
           variant="ghost"
-          size="icon"
-          className="mb-0.5 rounded-full text-primary"
+          // 입력창 최소 높이(40px)와 같은 크기다. 가장 자주 누르는 버튼이라 옆 첨부 버튼보다 크게 둔다.
+          size="icon-lg"
+          className="shrink-0 rounded-full text-primary"
           aria-label={
             editTarget
               ? "수정한 메시지 저장"
@@ -1984,9 +2000,9 @@ function ComposerShell({
           }}
         >
           {hasDraft || hasStaged || editTarget || justSent ? (
-            <SendIcon aria-hidden className="size-5" />
+            <SendIcon aria-hidden className="size-6" />
           ) : (
-            <ThumbsUpIcon aria-hidden className="size-5" />
+            <ThumbsUpIcon aria-hidden className="size-6" />
           )}
         </Button>
       </div>

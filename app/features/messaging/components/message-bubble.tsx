@@ -1,5 +1,5 @@
 import { BanIcon, ThumbsUpIcon } from "lucide-react";
-import type { Ref } from "react";
+import { useRef, type Ref } from "react";
 
 import { MessageAttachments } from "~/features/messaging/components/message-attachments";
 import { formatReplyPreview } from "~/features/messaging/model/conversation-preview";
@@ -15,6 +15,7 @@ import type {
 } from "~/features/messaging/model/types";
 import { PostPreviewCard } from "~/features/posts/components/post-preview-card";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
+import { useShrinkWrap } from "~/shared/hooks/use-shrink-wrap";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 
@@ -113,6 +114,16 @@ export function MessageBubble({
       {formatMessageTime(message.sentAt)}
     </time>
   ) : null;
+  const textBoxRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  // 여러 줄 글 버블은 가장 긴 줄에 폭을 맞춘다. 첨부가 있으면 글 버블이 첨부 폭을 채우므로 줄이지 않는다.
+  // 답장 인용이 바라는 14rem(`w-56`)보다는 줄이지 않는다.
+  useShrinkWrap(textBoxRef, textRef, {
+    enabled:
+      hasText && !isEmojiOnly && !message.deleted && attachments.length === 0,
+    contentKey: `${messageBody}|${showEdited}`,
+    minContentRem: replyQuote ? 14 : 0,
+  });
   const reactionCount = [...reactions.values()].reduce(
     (total, count) => total + count,
     0,
@@ -176,6 +187,7 @@ export function MessageBubble({
         ) : null}
         {hasText ? (
           <div
+            ref={textBoxRef}
             className={cn(
               "w-full",
               isEmojiOnly
@@ -206,9 +218,12 @@ export function MessageBubble({
             ) : isEmojiOnly ? (
               <EmojiOnlyMessageBody graphemes={emojiGraphemes} />
             ) : (
-              <MessageBody body={messageBody} isOwn={isOwn} />
+              <span ref={textRef}>
+                <MessageBody body={messageBody} isOwn={isOwn} />
+                {editedMark}
+              </span>
             )}
-            {editedMark}
+            {isEmojiOnly ? editedMark : null}
             {timestamp}
           </div>
         ) : null}

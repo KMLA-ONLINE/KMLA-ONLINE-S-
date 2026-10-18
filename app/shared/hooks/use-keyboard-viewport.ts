@@ -7,17 +7,23 @@ export interface KeyboardViewport {
   keyboardOpen: boolean;
   /** 화면 아래에서 가려진 높이. 키보드가 떠 있어도 브라우저가 화면을 끌어올렸으면 0일 수 있다. */
   bottomInset: number;
+  /** 보이는 영역의 위쪽 위치. 키보드가 화면을 밀 때 팝업의 기준점으로 쓴다. */
+  offsetTop: number;
   height: number | null;
 }
 
 const DEFAULT_VIEWPORT: KeyboardViewport = {
   keyboardOpen: false,
   bottomInset: 0,
+  offsetTop: 0,
   height: null,
 };
 
 /** 모바일 키보드가 떠 있을 때 보이는 영역(visual viewport)을 잰다. 댓글 시트와 대화방이 그 안에 화면을 가둔다. */
-export function useKeyboardViewport(enabled: boolean): KeyboardViewport {
+export function useKeyboardViewport(
+  enabled: boolean,
+  useDocumentHeight = false,
+): KeyboardViewport {
   const [viewport, setViewport] = useState(DEFAULT_VIEWPORT);
 
   useEffect(() => {
@@ -33,21 +39,28 @@ export function useKeyboardViewport(enabled: boolean): KeyboardViewport {
 
       // 가려진 아래쪽만 보면 안 된다. 안드로이드 Chrome은 키보드를 띄우며 화면을 키보드
       // 높이만큼 끌어올리므로(offsetTop) 가려진 아래쪽이 0이 된다.
+      // 설치된 iOS 앱은 innerHeight도 키보드에 맞춰 줄지만 문서 높이는 유지한다.
+      // 호출자가 선택한 경우에만 이 기준을 써서 Android의 기존 동작을 보존한다.
+      const referenceHeight = useDocumentHeight
+        ? Math.max(window.innerHeight, document.documentElement.clientHeight)
+        : window.innerHeight;
       const keyboardOpen =
-        window.innerHeight - visualViewport.height >= MIN_KEYBOARD_INSET;
+        referenceHeight - visualViewport.height >= MIN_KEYBOARD_INSET;
       const hiddenBottom = Math.max(
         0,
-        window.innerHeight - (visualViewport.offsetTop + visualViewport.height),
+        referenceHeight - (visualViewport.offsetTop + visualViewport.height),
       );
       const next = {
         keyboardOpen,
         bottomInset: keyboardOpen ? hiddenBottom : 0,
+        offsetTop: visualViewport.offsetTop,
         height: visualViewport.height,
       };
 
       setViewport((current) =>
         current.keyboardOpen === next.keyboardOpen &&
         current.bottomInset === next.bottomInset &&
+        current.offsetTop === next.offsetTop &&
         current.height === next.height
           ? current
           : next,
@@ -64,7 +77,7 @@ export function useKeyboardViewport(enabled: boolean): KeyboardViewport {
       visualViewport?.removeEventListener("scroll", measure);
       window.removeEventListener("resize", measure);
     };
-  }, [enabled]);
+  }, [enabled, useDocumentHeight]);
 
   return enabled ? viewport : DEFAULT_VIEWPORT;
 }

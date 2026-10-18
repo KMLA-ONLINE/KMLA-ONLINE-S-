@@ -1,4 +1,5 @@
 import { XIcon } from "lucide-react";
+import { flushSync } from "react-dom";
 import {
   useCallback,
   useEffect,
@@ -30,6 +31,7 @@ import type {
   AnonymousActivityRestriction,
 } from "~/features/posts/model/types";
 import { cn } from "~/shared/lib/utils";
+import { isIOS } from "~/shared/lib/install-platform";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -75,6 +77,11 @@ function subscribeToTouchPrimaryQuery(onChange: () => void) {
 
 function isTouchPrimaryViewport() {
   return window.matchMedia(TOUCH_PRIMARY_QUERY).matches;
+}
+
+// 플랫폼은 페이지가 열린 동안 바뀌지 않는다. 서버에서는 기본 화면으로 렌더한다.
+function subscribeToPlatform() {
+  return () => undefined;
 }
 
 /** 그룹·개인 게시물 상세가 공유하는 껍데기. 다른 것은 본문 영역뿐이다. */
@@ -125,6 +132,8 @@ export function PostDetailDialog({
     setListElement(node);
   }, []);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const restoreComposerFocus = useRef<(() => void) | null>(null);
+  useEffect(() => () => restoreComposerFocus.current?.(), []);
   const thread = usePostComments(postId, comments, actionBar.commentCount);
   const [identity, setIdentity] = useState<PostIdentity>(identities[0]);
   const [replyingTo, setReplyingTo] = useState<PostComment | null>(null);
@@ -145,14 +154,19 @@ export function PostDetailDialog({
   );
   /** 바텀 시트로 그릴 것인가. 뷰포트만이 아니라 댓글만 보려는 의도(`?view=comments`)도 있어야 한다. */
   const commentSheet = commentsOnly && sheetViewport;
-  const keyboardViewport = useKeyboardViewport(sheetViewport);
+  const ios = useSyncExternalStore(
+    subscribeToPlatform,
+    isIOS,
+    getServerTabletSheetViewport,
+  );
+  const keyboardViewport = useKeyboardViewport(ios && sheetViewport, ios);
   const mobileDetailKeyboardOpen =
     !commentSheet && keyboardViewport.keyboardOpen;
 
   useEffect(() => {
-    if (!replyingTo || keyboardViewport.height === null) return;
-
-    const frame = requestAnimationFrame(() => {
+    if (!replyingTo || !listElement) return;
+    let frame = 0;
+    const revealTarget = () => {
       const container = scrollRef.current;
       const target = document.getElementById(
         commentDomId(replyingTo.comment_id),
@@ -166,11 +180,22 @@ export function PostDetailDialog({
       } else if (targetRect.bottom > containerRect.bottom) {
         container.scrollTop += targetRect.bottom - containerRect.bottom;
       }
-    });
-
-    return () => cancelAnimationFrame(frame);
+    };
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(revealTarget);
+    };
+    // Android는 브라우저가 목록을 줄인다. 화면 위치 보정과 별개로 목록 안의 답글 대상만 드러낸다.
+    const observer = new ResizeObserver(schedule);
+    observer.observe(listElement);
+    schedule();
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
   }, [
-    keyboardViewport.bottomInset,
+    listElement,
+    keyboardViewport.offsetTop,
     keyboardViewport.height,
     keyboardViewport.keyboardOpen,
     replyingTo,
@@ -178,11 +203,54 @@ export function PostDetailDialog({
 
   // 본문 영역이 액션 바에서 부르는 핸들러다. JSX 안에서 즉석 클로저로 만들면 render 중에
   // ref를 읽는 것으로 잡힌다.
-  const focusComposer = useCallback(() => composerRef.current?.focus(), []);
+  const prepareComposerFocus = useCallback(() => {
+    const element = composerRef.current;
+    if (
+      !element ||
+      !ios ||
+      !sheetViewport ||
+      window.visualViewport?.scale !== 1 ||
+      restoreComposerFocus.current
+    )
+      return;
+
+    // iOS는 preventScroll을 줘도 키보드 resize 전에 입력창으로 화면을 밀 수 있다.
+    // 한 프레임만 투명하게 해 그 이동을 막는다. 직접 탭한 경우에도 focus capture에서
+    // 실행해 제목으로 연 상세와 댓글 시트가 같은 처리를 거친다.
+    const opacity = element.style.opacity;
+    element.style.opacity = "0";
+    const restore = () => {
+      element.style.opacity = opacity;
+      restoreComposerFocus.current = null;
+    };
+    const frame = requestAnimationFrame(restore);
+    restoreComposerFocus.current = () => {
+      cancelAnimationFrame(frame);
+      restore();
+    };
+  }, [ios, sheetViewport]);
+
+  const focusComposer = useCallback(() => {
+    const element = composerRef.current;
+    if (!element || document.activeElement === element) return;
+    if (ios && sheetViewport && window.visualViewport?.scale === 1) {
+      prepareComposerFocus();
+      element.focus({ preventScroll: true });
+    } else {
+      // Android·데스크톱·확대 상태에서는 브라우저의 기본 포커스 이동을 유지한다.
+      element.focus();
+    }
+  }, [ios, sheetViewport, prepareComposerFocus]);
 
   const startReply = (comment: PostComment) => {
-    setReplyingTo(comment);
-    requestAnimationFrame(() => composerRef.current?.focus());
+    if (ios) {
+      // iOS에서만 대상 줄을 먼저 반영하고 같은 탭 이벤트 안에서 키보드를 연다.
+      flushSync(() => setReplyingTo(comment));
+      focusComposer();
+    } else {
+      setReplyingTo(comment);
+      requestAnimationFrame(focusComposer);
+    }
   };
 
   const submitComment = async (
@@ -332,6 +400,10 @@ export function PostDetailDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         showCloseButton={false}
+        onFocusCapture={(event) => {
+          if (event.target.isSameNode(composerRef.current))
+            prepareComposerFocus();
+        }}
         className={cn(
           commentSheet ? COMMENT_SHEET_CLASS : DETAIL_DIALOG_CLASS,
           commentSheet &&
@@ -343,12 +415,14 @@ export function PostDetailDialog({
         style={
           sheetViewport
             ? ({
-                // 보이는 영역의 아래에 붙인다. 화면이 끌어올려졌으면 가려진 아래쪽이 0이라
-                // 레이아웃 바닥에 붙고, 그 자리가 곧 보이는 영역의 바닥이다.
-                bottom: keyboardViewport.keyboardOpen
-                  ? `${keyboardViewport.bottomInset}px`
+                // iOS만 visual viewport를 보정한다. Android는 브라우저의 content resize를 쓴다.
+                top: keyboardViewport.keyboardOpen
+                  ? `${keyboardViewport.offsetTop}px`
                   : undefined,
-                top: mobileDetailKeyboardOpen ? "auto" : undefined,
+                bottom: keyboardViewport.keyboardOpen ? "auto" : undefined,
+                height: keyboardViewport.keyboardOpen
+                  ? `${keyboardViewport.height}px`
+                  : undefined,
                 maxHeight:
                   keyboardViewport.height === null
                     ? undefined

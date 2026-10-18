@@ -4,8 +4,14 @@ import {
   PenLineIcon,
   SearchIcon,
 } from "lucide-react";
-import { useDeferredValue, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router";
+import {
+  useDeferredValue,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { Link, useNavigate } from "react-router";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
@@ -14,6 +20,7 @@ import { useRoomEntry } from "~/features/messaging/hooks/use-room-entry";
 import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
 import type { ConversationSummary } from "~/features/messaging/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
+import { isHandheld } from "~/shared/lib/install-platform";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
@@ -41,6 +48,24 @@ export function MessagingScreen({
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const roomEntry = useRoomEntry(hasRoom);
   const startConversation = useStartConversation(roomEntry);
+  const navigate = useNavigate();
+  // 컴퓨터에서 메신저에 들어오면 빈 안내 대신 맨 위 대화를 연다. 그 대화에 읽지 않은 메시지가 있으면
+  // 열지 않는다. 열면 읽음 위치가 갱신되어 보지 않은 메시지가 상대에게 읽음으로 보이고 내 안 읽음
+  // 표시도 사라진다. 메신저 안에서 대화방을 나와 목록으로 온 것은 다시 열지 않도록 들어올 때 한 번만
+  // 정한다. 고르는 동안에는 안내가 깜빡이지 않게 오른쪽을 비워 둔다.
+  const [autoOpenRoomId, setAutoOpenRoomId] = useState(() => {
+    if (hasRoom || isHandheld()) return undefined;
+    if (!window.matchMedia("(min-width: 48rem)").matches) return undefined;
+    const top = conversations.at(0);
+    return top?.unreadCount === 0 ? top.id : undefined;
+  });
+  useEffect(() => {
+    if (!autoOpenRoomId) return;
+    // 기록을 쌓지 않아야 뒤로가기가 빈 목록을 거쳐 다시 대화방으로 튕기지 않는다.
+    void Promise.resolve(
+      navigate(`/messenger/${autoOpenRoomId}`, { replace: true }),
+    ).finally(() => setAutoOpenRoomId(undefined));
+  }, [autoOpenRoomId, navigate]);
   const deferredSearch = useDeferredValue(
     search.trim().toLocaleLowerCase("ko"),
   );
@@ -206,7 +231,7 @@ export function MessagingScreen({
       >
         {hasRoom ? (
           children
-        ) : (
+        ) : autoOpenRoomId ? null : (
           <Empty className="h-full rounded-none border-0">
             <EmptyHeader>
               <EmptyMedia variant="icon" className="size-20 rounded-full">
