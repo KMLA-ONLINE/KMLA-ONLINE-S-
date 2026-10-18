@@ -156,6 +156,34 @@ describe("ImageCropper", () => {
     expect(img).toHaveStyle({ top: "0px" });
   });
 
+  it("1 근처로 끌어 온 배율은 프레임을 정확히 덮는 1로 맞춘다", () => {
+    render(<ImageCropper {...baseProps()} letterboxColor="#000" />);
+    const img = loadPreview();
+
+    const slider = screen.getByLabelText("배율");
+    fireEvent.change(slider, { target: { value: "0.99" } });
+
+    expect(slider).toHaveValue("1");
+    expect(img).toHaveStyle({ height: `${FRAME}px`, top: "0px" });
+  });
+
+  it("버튼으로 움직이는 배율은 1을 건너뛰지 않는다", () => {
+    render(<ImageCropper {...baseProps()} letterboxColor="#000" />);
+    loadPreview();
+
+    const slider = screen.getByLabelText("배율");
+    fireEvent.change(slider, { target: { value: "0.9" } });
+    fireEvent.click(screen.getByRole("button", { name: "확대" }));
+    expect(slider).toHaveValue("1");
+
+    fireEvent.click(screen.getByRole("button", { name: "축소" }));
+    fireEvent.click(screen.getByRole("button", { name: "축소" }));
+    // 0.8 → 0.6이지만 하한이 0.5라 0.6에서 한 번 더 줄이면 0.5에서 멈춘다.
+    fireEvent.click(screen.getByRole("button", { name: "축소" }));
+    expect(slider).toHaveValue("0.5");
+    expect(screen.getByRole("button", { name: "축소" })).toBeDisabled();
+  });
+
   it("여백 색을 크롭에 넘긴다", async () => {
     vi.mocked(cropImage).mockResolvedValue(
       new File(["y"], "photo.png", { type: "image/png" }),

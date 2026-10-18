@@ -166,7 +166,8 @@ export function clipCropRect(
  * 되는데, 중간 단계에서 한 번 더 손실 압축을 하면 화질만 깎인다. `fitOutputSize()`가 이미
  * 치수를 목표까지 줄여 놓으므로 무손실이어도 크기가 터지지 않는다.
  *
- * `rect`가 이미지 밖까지 걸치면 그 자리는 `background` 색으로 채운다. 주지 않으면 투명하다.
+ * `rect`가 이미지 밖까지 걸치면 그 자리만 `background` 색으로 채운다. 주지 않으면 투명하다.
+ * 이미지 안의 투명한 픽셀은 어느 쪽이든 투명하게 남는다.
  */
 export async function cropImage(
   file: File,
@@ -186,12 +187,20 @@ export async function cropImage(
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("2d context unavailable");
 
+    const clip = clipCropRect(rect, bitmap, canvas);
+
+    // 이미지가 덮지 않는 자리만 칠한다. 캔버스 전체를 먼저 칠하면 투명 PNG의 투명한 부분까지
+    // 배경색이 된다. 바깥 사각형에서 이미지 자리를 뚫은(evenodd) 영역이다.
     if (background) {
+      ctx.beginPath();
+      ctx.rect(0, 0, canvas.width, canvas.height);
+      if (clip) {
+        ctx.rect(clip.dest.x, clip.dest.y, clip.dest.width, clip.dest.height);
+      }
       ctx.fillStyle = background;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fill("evenodd");
     }
 
-    const clip = clipCropRect(rect, bitmap, canvas);
     if (clip) {
       const { source, dest } = clip;
       ctx.imageSmoothingQuality = "high";
