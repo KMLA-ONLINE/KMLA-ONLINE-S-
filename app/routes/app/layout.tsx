@@ -18,6 +18,7 @@ import {
   resolveAppChrome,
   ScrollRegion,
 } from "~/features/app-shell";
+import { useShellRefresh } from "~/features/app-shell/hooks/use-shell-refresh";
 import {
   isPostOverlayNavigation,
   isSamePathUiOverlayNavigation,
@@ -30,6 +31,7 @@ import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
 import { useServiceWorkerNavigation } from "~/shared/hooks/use-service-worker-navigation";
 import { useDelayedPending } from "~/shared/hooks/use-delayed-pending";
 import { getQueryClient } from "~/shared/lib/query-client";
+import { scrollToTop } from "~/shared/lib/scroll-container";
 import { cn } from "~/shared/lib/utils";
 
 const CONTENT_WIDTH_CLASS = {
@@ -98,7 +100,7 @@ export default function MainAppLayout() {
   );
   const skeletonPath = pendingPathname ?? location.pathname;
 
-  const refresh = async () => {
+  const refreshCaches = async () => {
     const queryClient = getQueryClient();
     const stale = (queryKey: readonly unknown[]) =>
       queryClient.invalidateQueries({ queryKey, refetchType: "none" });
@@ -124,6 +126,12 @@ export default function MainAppLayout() {
     ]);
     await revalidator.revalidate();
   };
+  const { refreshing, refresh } = useShellRefresh(refreshCaches);
+  // 데스크톱에는 당겨서 새로고침이 없다. 홈에서 홈을 다시 누르면 맨 위로 올리고 같은 새로고침을 한다.
+  // 이미 새로고침 중이면 스크롤도 건드리지 않는다. 비워지는 목록 위에서 미끄러지기가 겹쳐 튄다.
+  const refreshHome = () => {
+    if (refresh()) scrollToTop(scrollRef.current);
+  };
 
   return (
     <div
@@ -137,6 +145,7 @@ export default function MainAppLayout() {
       ) : null}
       {chrome.header === "none" ? null : (
         <AppHeader
+          onHomeReselect={refreshHome}
           className={cn(
             "max-md:hidden",
             chrome.header === "hide-on-scroll" &&
@@ -151,7 +160,7 @@ export default function MainAppLayout() {
       )}
 
       <div className="flex min-h-0 flex-1">
-        <AppSidebar className="max-md:hidden" />
+        <AppSidebar className="max-md:hidden" onHomeReselect={refreshHome} />
 
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {routeOwnsScroll ? (
@@ -163,6 +172,7 @@ export default function MainAppLayout() {
               <PullToRefresh
                 containerRef={scrollRef}
                 enabled={chrome.pullToRefresh}
+                refreshing={refreshing}
                 onRefresh={refresh}
               />
               <ScrollRegion
