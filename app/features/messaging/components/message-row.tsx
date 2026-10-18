@@ -1,4 +1,5 @@
 import { ContextMenu } from "@base-ui/react/context-menu";
+import { ReplyIcon } from "lucide-react";
 import { Link } from "react-router";
 import {
   useEffect,
@@ -21,6 +22,7 @@ import type {
 } from "~/features/messaging/model/types";
 import type { PostReaction } from "~/features/posts/model/types";
 import { QuickReactionBar } from "~/features/posts/components/reaction/quick-reaction-bar";
+import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";
@@ -46,6 +48,18 @@ const INLINE_TIMESTAMP_HEIGHT = 15;
 const CONTEXT_MENU_MOVE_DURATION = 200;
 /** 이보다 오래 누르면 탭이 아니라 길게 누르기다. 길게 누르기는 메뉴를 연다. */
 const TAP_MAX_DURATION_MS = 400;
+/** 두 번째 탭이 이 안에 오면 더블탭이다. 반응을 남길 수 있는 메시지는 한 번 탭(시각)을 이만큼 미룬다. */
+const DOUBLE_TAP_WINDOW_MS = 280;
+/** 손가락이 이만큼 움직이면 가로 스와이프인지 세로 스크롤인지 정한다. 길게 누르기 취소(10px)보다 작다. */
+const GESTURE_SLOP = 8;
+/** 답장 스와이프가 답장을 시작하는 거리. 넘으면 답장 아이콘이 강조된다. */
+const REPLY_SWIPE_THRESHOLD = 60;
+/** 기준을 넘은 뒤로는 손가락 이동의 일부만 따라가 이 거리에서 멈춘다. */
+const REPLY_SWIPE_MAX = 84;
+const REPLY_SWIPE_OVERSHOOT_RATIO = 0.3;
+/** 스와이프로 밀리는 부분. 끄는 동안은 손가락을 바로 따르고, 손을 떼면 transition으로 제자리에 돌아온다. */
+const REPLY_SWIPE_SHIFT =
+  "translate-x-(--reply-swipe-x) transition-transform duration-200 ease-out group-data-swiping/message:transition-none motion-reduce:transition-none";
 
 export function MessageRow({
   message,
@@ -109,24 +123,124 @@ export function MessageRow({
   const contextInteractionReadyRef = useRef(false);
   const rowRef = useRef<HTMLElement>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
-  const replySwipeStart = useRef<{ x: number; y: number } | null>(null);
+  const replySwipe = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+    swiping: boolean;
+    armed: boolean;
+  } | null>(null);
+  // 스와이프를 끝낸 손가락을 뗄 때 오는 click은 탭이 아니다.
+  const swallowClick = useRef(false);
   // 손가락으로 버블을 탭하면 버블 안쪽 하단의 시각을 켜고 끈다. 마우스는 시간 카드가 맡는다.
   const [timeShownByTap, setTimeShownByTap] = useState(false);
   const tapStart = useRef<{ pointerType: string; at: number } | null>(null);
+  const singleTapTimer = useRef(0);
+  // 더블탭으로 ❤️를 남길 때마다 하나씩 올려 하트 애니메이션을 새로 띄운다.
+  const [heartBurst, setHeartBurst] = useState(0);
+  // 상대 메시지는 오른쪽, 내 메시지는 왼쪽(대화 가운데 쪽)으로 민다.
+  const replySwipeDirection = isOwn ? -1 : 1;
   const timeVisible = showTimestamp || timeShownByTap;
   const hasVisibleReactions =
     showReactions && (message.reactions?.length ?? 0) > 0;
 
+  useEffect(() => () => window.clearTimeout(singleTapTimer.current), []);
+
   function startReplySwipe(event: PointerEvent<HTMLElement>) {
-    if (event.pointerType !== "touch" || !onReply || message.deleted) return;
-    replySwipeStart.current = { x: event.clientX, y: event.clientY };
+    swallowClick.current = false;
+    if (
+      event.pointerType !== "touch" ||
+      !onReply ||
+      message.deleted ||
+      contextMenuOpenRef.current
+    ) {
+      return;
+    }
+    replySwipe.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      swiping: false,
+      armed: false,
+    };
+  }
+
+  function moveReplySwipe(event: PointerEvent<HTMLElement>) {
+    const swipe = replySwipe.current;
+    if (swipe?.pointerId !== event.pointerId) return;
+    const horizontal = event.clientX - swipe.x;
+    const vertical = event.clientY - swipe.y;
+    const row = event.currentTarget;
+
+    if (!swipe.swiping) {
+      if (
+        Math.abs(horizontal) < GESTURE_SLOP &&
+        Math.abs(vertical) < GESTURE_SLOP
+      ) {
+        return;
+      }
+      // 세로로 먼저 움직였거나 반대쪽으로 민 것은 스크롤에 넘긴다.
+      if (
+        Math.abs(horizontal) <= Math.abs(vertical) ||
+        horizontal * replySwipeDirection <= 0
+      ) {
+        replySwipe.current = null;
+        return;
+      }
+      swipe.swiping = true;
+      swallowClick.current = true;
+      row.setPointerCapture(event.pointerId);
+      row.dataset.swiping = "";
+    }
+
+    const distance = Math.max(0, horizontal * replySwipeDirection);
+    const offset =
+      distance <= REPLY_SWIPE_THRESHOLD
+        ? distance
+        : Math.min(
+            REPLY_SWIPE_MAX,
+            REPLY_SWIPE_THRESHOLD +
+              (distance - REPLY_SWIPE_THRESHOLD) * REPLY_SWIPE_OVERSHOOT_RATIO,
+          );
+    const armed = distance >= REPLY_SWIPE_THRESHOLD;
+    if (armed && !swipe.armed && "vibrate" in navigator) navigator.vibrate(10);
+    swipe.armed = armed;
+    row.style.setProperty(
+      "--reply-swipe-x",
+      `${offset * replySwipeDirection}px`,
+    );
+    row.style.setProperty(
+      "--reply-swipe-progress",
+      String(Math.min(distance / REPLY_SWIPE_THRESHOLD, 1)),
+    );
+    if (armed) row.dataset.replyArmed = "";
+    else delete row.dataset.replyArmed;
+  }
+
+  function finishReplySwipe(event: PointerEvent<HTMLElement>) {
+    const swipe = replySwipe.current;
+    if (swipe?.pointerId !== event.pointerId) return;
+    replySwipe.current = null;
+    const row = event.currentTarget;
+    delete row.dataset.swiping;
+    delete row.dataset.replyArmed;
+    row.style.removeProperty("--reply-swipe-x");
+    row.style.removeProperty("--reply-swipe-progress");
+    if (swipe.armed && event.type === "pointerup") onReply?.();
+  }
+
+  function swallowSwipeClick(event: MouseEvent<HTMLElement>) {
+    if (!swallowClick.current) return;
+    swallowClick.current = false;
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   function startTap(event: PointerEvent<HTMLElement>) {
     tapStart.current = { pointerType: event.pointerType, at: event.timeStamp };
   }
 
-  function toggleTimeOnTap(event: MouseEvent<HTMLElement>) {
+  function handleTap(event: MouseEvent<HTMLElement>) {
     const start = tapStart.current;
     tapStart.current = null;
     if (start?.pointerType !== "touch" || contextMenuOpenRef.current) return;
@@ -138,18 +252,23 @@ export function MessageRow({
     ) {
       return;
     }
-    setTimeShownByTap((shown) => !shown);
-  }
-
-  function finishReplySwipe(event: PointerEvent<HTMLElement>) {
-    const swipeStart = replySwipeStart.current;
-    replySwipeStart.current = null;
-    if (!swipeStart || event.pointerType !== "touch") return;
-
-    const horizontalDistance = event.clientX - swipeStart.x;
-    const verticalDistance = Math.abs(event.clientY - swipeStart.y);
-    if (horizontalDistance >= 48 && horizontalDistance > verticalDistance)
-      onReply?.();
+    if (!onSelectReaction) {
+      setTimeShownByTap((shown) => !shown);
+      return;
+    }
+    // 두 번째 탭이 오면 ❤️를 남기거나(다른 반응이면 바꾸고) 이미 ❤️면 지운다. 같은 반응을 다시 고르면
+    // 지우는 것은 반응 선택이 맡는다. 첫 탭의 시각 켜기는 더블탭이 아닐 때만 뒤늦게 처리한다.
+    if (singleTapTimer.current) {
+      window.clearTimeout(singleTapTimer.current);
+      singleTapTimer.current = 0;
+      if (message.myReaction !== "love") setHeartBurst((count) => count + 1);
+      onSelectReaction("love");
+      return;
+    }
+    singleTapTimer.current = window.setTimeout(() => {
+      singleTapTimer.current = 0;
+      setTimeShownByTap((shown) => !shown);
+    }, DOUBLE_TAP_WINDOW_MS);
   }
 
   // 부모가 렌더마다 새 콜백을 넘기므로 effect는 함수 대신 반응 막대 유무에만 의존한다.
@@ -394,16 +513,23 @@ export function MessageRow({
     : null;
 
   // 읽지 않은 멤버 수는 버블 바깥쪽 아래에 둔다. 내 메시지는 왼쪽, 상대 메시지는 오른쪽이다.
+  // 숫자가 0이 되어도 자리는 남긴다. 자리가 사라지면 버블이 쓸 수 있는 폭이 넓어져 긴 메시지의 줄바꿈과
+  // 버블 크기가 읽힐 때 바뀐다. 1:1 대화의 상대 메시지는 숫자가 생길 일이 없어 자리를 두지 않는다.
+  const hasUnreadCount = unreadParticipantCount > 0;
   const unreadCount =
-    showUnreadCount && unreadParticipantCount > 0 ? (
+    showUnreadCount && (isOwn || isGroup) ? (
       <span
-        aria-label={`${unreadParticipantCount}명 안 읽음`}
+        aria-label={
+          hasUnreadCount ? `${unreadParticipantCount}명 안 읽음` : undefined
+        }
+        aria-hidden={hasUnreadCount ? undefined : true}
         className={cn(
-          "shrink-0 self-end text-[11px] leading-4 font-medium text-primary",
+          "min-w-[1ch] shrink-0 self-end text-[11px] leading-4 font-medium text-primary tabular-nums",
           hasVisibleReactions ? "mb-[1.125rem]" : "mb-0.5",
+          !hasUnreadCount && "invisible",
         )}
       >
-        {unreadParticipantCount}
+        {hasUnreadCount ? unreadParticipantCount : null}
       </span>
     ) : null;
 
@@ -413,10 +539,12 @@ export function MessageRow({
       id={elementId}
       aria-label={`${isOwn ? "내" : (sender?.name ?? "상대방")} 메시지`}
       className={cn(
-        "group/message flex w-full items-end gap-2 rounded-2xl transition-[transform,box-shadow] duration-200 ease-out motion-reduce:transition-none [@media(hover:none)]:select-none",
+        "group/message relative flex w-full items-end gap-2 rounded-2xl transition-[transform,box-shadow] duration-200 ease-out motion-reduce:transition-none [@media(hover:none)]:select-none",
+        // 가로 이동은 답장 스와이프가 받는다. 두 번 탭해 확대하는 것도 막아 더블탭 반응과 겹치지 않는다.
+        (onReply ?? onSelectReaction) && "touch-pan-y",
         isOwn ? "justify-end" : "justify-start",
         startsGroup && "mt-3",
-        contextMenuOpen && "relative z-50",
+        contextMenuOpen && "z-50",
       )}
       style={
         contextMenuLayout
@@ -429,8 +557,10 @@ export function MessageRow({
           : undefined
       }
       onPointerDown={startReplySwipe}
+      onPointerMove={moveReplySwipe}
       onPointerUp={finishReplySwipe}
-      onPointerCancel={() => (replySwipeStart.current = null)}
+      onPointerCancel={finishReplySwipe}
+      onClickCapture={swallowSwipeClick}
       onTouchStart={() => (contextTouchActiveRef.current = true)}
       onTouchEnd={() => (contextTouchActiveRef.current = false)}
       onTouchCancel={() => (contextTouchActiveRef.current = false)}
@@ -442,6 +572,7 @@ export function MessageRow({
             className={cn(
               hasVisibleReactions ? "mb-[1.125rem]" : "mb-0.5",
               "size-7",
+              REPLY_SWIPE_SHIFT,
               contextOpenedByTouch && !timeVisible && "translate-y-[15px]",
             )}
           />
@@ -454,6 +585,7 @@ export function MessageRow({
         className={cn(
           "flex min-w-0 flex-col",
           "max-w-[78%]",
+          REPLY_SWIPE_SHIFT,
           isOwn ? "items-end" : "items-start",
           contextOpenedByTouch && "self-start",
         )}
@@ -479,11 +611,19 @@ export function MessageRow({
         <div
           className={cn("flex w-full min-w-0 items-center gap-1.5")}
           onPointerDown={startTap}
-          onClick={toggleTimeOnTap}
+          onClick={handleTap}
         >
           {isOwn ? actionRail : null}
           {isOwn ? unreadCount : null}
-          <MessageTimeCard message={message} showTimeCard={!timeVisible}>
+          <MessageTimeCard
+            message={message}
+            showTimeCard={!timeVisible}
+            overlay={
+              heartBurst ? (
+                <HeartBurst key={heartBurst} onDone={() => setHeartBurst(0)} />
+              ) : null
+            }
+          >
             <MessageBubble
               anchorRef={bubbleRef}
               message={message}
@@ -503,6 +643,18 @@ export function MessageRow({
           {!isOwn ? actionRail : null}
         </div>
       </div>
+      {onReply && !message.deleted ? (
+        // 밀어서 드러난 자리에 답장 아이콘이 점점 커지며 나타나고, 답장할 거리를 넘으면 강조된다.
+        <span
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute top-1/2 flex size-8 -translate-y-1/2 scale-[calc(0.5+var(--reply-swipe-progress,0)*0.5)] items-center justify-center rounded-full bg-muted text-muted-foreground opacity-[var(--reply-swipe-progress,0)] transition-[opacity,scale] duration-200 group-data-reply-armed/message:bg-primary group-data-reply-armed/message:text-primary-foreground group-data-swiping/message:transition-none motion-reduce:transition-none",
+            isOwn ? "right-1" : "left-1",
+          )}
+        >
+          <ReplyIcon className="size-4" />
+        </span>
+      ) : null}
     </article>
   );
 
@@ -617,13 +769,33 @@ function SenderAvatar({
   );
 }
 
+/** 더블탭으로 ❤️를 남길 때 버블 위로 톡 튀었다 사라지는 하트. 움직임 줄이기 설정에서는 띄우지 않는다. */
+function HeartBurst({ onDone }: { onDone: () => void }) {
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center motion-reduce:hidden"
+    >
+      <span
+        className="animate-message-heart drop-shadow-md"
+        onAnimationEnd={onDone}
+      >
+        <ReactionEmoji reaction="love" className="size-12" />
+      </span>
+    </span>
+  );
+}
+
 function MessageTimeCard({
   message,
   showTimeCard,
+  overlay,
   children,
 }: {
   message: ConversationMessage;
   showTimeCard: boolean;
+  /** 버블 위에 겹쳐 그릴 것. 버블 뒤에 두어 버블이 다시 마운트되지 않게 한다. */
+  overlay?: ReactNode;
   children: ReactElement;
 }) {
   const [open, setOpen] = useState(false);
@@ -647,7 +819,7 @@ function MessageTimeCard({
     >
       <TooltipTrigger
         closeOnClick={false}
-        render={<span className="block w-fit max-w-full min-w-0" />}
+        render={<span className="relative block w-fit max-w-full min-w-0" />}
         onPointerEnter={(event) => (pointerType.current = event.pointerType)}
         onPointerDown={(event) => (pointerType.current = event.pointerType)}
         onClick={() => {
@@ -655,6 +827,7 @@ function MessageTimeCard({
         }}
       >
         {children}
+        {overlay}
       </TooltipTrigger>
       <TooltipContent>{formatMessageTime(message.sentAt)}</TooltipContent>
     </Tooltip>

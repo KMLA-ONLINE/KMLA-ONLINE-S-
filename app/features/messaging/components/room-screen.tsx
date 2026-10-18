@@ -1953,8 +1953,9 @@ function ComposerShell({
         </div>
         <Button
           variant="ghost"
-          size="icon"
-          className="mb-0.5 rounded-full text-primary"
+          // 입력창 최소 높이(40px)와 같은 크기다. 가장 자주 누르는 버튼이라 옆 첨부 버튼보다 크게 둔다.
+          size="icon-lg"
+          className="shrink-0 rounded-full text-primary"
           aria-label={
             editTarget
               ? "수정한 메시지 저장"
@@ -1984,9 +1985,9 @@ function ComposerShell({
           }}
         >
           {hasDraft || hasStaged || editTarget || justSent ? (
-            <SendIcon aria-hidden className="size-5" />
+            <SendIcon aria-hidden className="size-6" />
           ) : (
-            <ThumbsUpIcon aria-hidden className="size-5" />
+            <ThumbsUpIcon aria-hidden className="size-6" />
           )}
         </Button>
       </div>
