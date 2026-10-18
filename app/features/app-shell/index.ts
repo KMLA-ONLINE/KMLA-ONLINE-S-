@@ -10,6 +10,7 @@ export {
 } from "~/features/app-shell/components/page-header";
 export { PullToRefresh } from "~/features/app-shell/components/pull-to-refresh";
 export { ScrollRegion } from "~/features/app-shell/components/scroll-region";
+export { UnreadBadgeSync } from "~/features/app-shell/components/unread-badge-sync";
 export {
   appShellKeys,
   isShellProfile,
