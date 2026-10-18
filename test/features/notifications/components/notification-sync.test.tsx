@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   subscribeToNotifications: vi.fn(),
   getRecentUnreadNotificationCount: vi.fn(() => Promise.resolve(0)),
   resyncWebPushSubscription: vi.fn(() => Promise.resolve()),
-  setAppBadgeCount: vi.fn(),
   loadGroupDetail: vi.fn(),
 }));
 
@@ -30,9 +29,6 @@ vi.mock("~/features/notifications/data/push", () => ({
   resyncWebPushSubscription: mocks.resyncWebPushSubscription,
 }));
 
-vi.mock("~/shared/lib/app-badge", () => ({
-  setAppBadgeCount: mocks.setAppBadgeCount,
-}));
 vi.mock("~/features/groups/data/queries", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   loadGroupDetail: mocks.loadGroupDetail,
@@ -217,13 +213,6 @@ describe("NotificationSync", () => {
 
     await waitFor(() => expect(mocks.loadGroupDetail).toHaveBeenCalledOnce());
     expect(mocks.revalidate).not.toHaveBeenCalled();
-  });
-
-  it("mirrors the shell badge onto the app icon", async () => {
-    mocks.getRecentUnreadNotificationCount.mockResolvedValueOnce(3);
-    renderSync("/");
-
-    await waitFor(() => expect(mocks.setAppBadgeCount).toHaveBeenCalledWith(3));
   });
 
   it("marks protected group pages stale and revalidates when membership is revoked", async () => {
