@@ -384,6 +384,10 @@ declare
   target public.notifications;
   inserted_count integer;
 begin
+  -- 중복 방지 unique index는 event key 단위다. 빈 key는 index가 서로 다르게 보므로 막지 못한다.
+  if p_event_key is null then
+    raise exception 'notification push requires its event key' using errcode = '22023';
+  end if;
   select notification.* into target
   from public.notifications as notification
   where notification.id = p_notification_id;
@@ -1430,9 +1434,17 @@ alter function private.comment_reply_aggregate_key(uuid) owner to postgres;
 -- 센다. 같은 사람의 실명 답글과 익명 답글은 다른 사람으로 세야 익명 답글의 주인이 드러나지 않는다.
 -- 운영진 명의는 누가 썼든 `운영진` 하나다. 남은 답글이 없으면 알림을 지운다.
 --
--- `p_removed_comment_id`는 곧 지워질 답글이다. 삭제가 아직 반영되기 전에 불러도 그 답글을 뺀다.
+-- 새 답글은 `p_added_reply_id`와 그 작성자로 넘긴다. 댓글 insert 트리거에서 부르므로 create_post_comment가
+-- 아직 작성자 행을 넣기 전이고, 이 답글이 방금 알림을 올린 활동이므로 created_at과 관계없이 가장 최근
+-- 답글이다(created_at은 트랜잭션 시작 시각이라 먼저 시작해 늦게 끝난 답글이 더 이를 수 있다).
+--
+-- 지울 답글은 `p_removed_comment_id`로 넘긴다. 삭제가 반영되기 전에 불러도 그 답글을 빼고, 마지막 활동
+-- 시각을 남은 답글로 되돌리며, 아직 나가지 않은 그 답글의 Push를 거둔다. 예전에 답글마다 알림 행이
+-- 있을 때는 행 삭제가 이 일을 했다. 읽음 상태는 되돌리지 않는다 -- 지운 답글 전에 읽었는지 알 수 없다.
 create or replace function private.sync_comment_reply_notification(
   p_parent_comment_id uuid,
+  p_added_reply_id uuid default null,
+  p_added_author_profile_id bigint default null,
   p_removed_comment_id uuid default null
 ) returns void
 language plpgsql security definer
@@ -1442,12 +1454,17 @@ declare
   aggregate_key text := private.comment_reply_aggregate_key(p_parent_comment_id);
   target_notification_id uuid;
   latest_comment_id uuid;
+  latest_created_at timestamptz;
   latest_identity public.notification_actor_identity;
   latest_profile_id bigint;
   latest_profile_name text;
   latest_avatar_path text;
   replier_count integer;
 begin
+  if (p_added_reply_id is null) <> (p_added_author_profile_id is null) then
+    raise exception 'an added reply needs its author' using errcode = '22023';
+  end if;
+
   -- 새 답글을 모으는 emit_notification과 같은 잠금이다. 동시에 들어온 답글과 삭제가 서로의 결과를
   -- 덮어쓰지 않는다.
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(aggregate_key, 0));
@@ -1457,8 +1474,6 @@ begin
   where event.event_key = aggregate_key;
   if target_notification_id is null then return; end if;
 
-  -- 방금 단 답글은 create_post_comment가 아직 작성자 행을 넣기 전이다(댓글 insert 트리거에서
-  -- 부른다). 작성자 행이 없는 답글은 그 답글이므로 작성자는 지금 호출자다.
   with replies as (
     select reply.id, reply.created_at, reply_author.profile_id,
       reply.author_identity::text::public.notification_actor_identity as identity,
@@ -1469,7 +1484,10 @@ begin
     from public.post_comments as reply
     left join private.comment_authors as author on author.comment_id = reply.id
     cross join lateral (
-      select coalesce(author.profile_id, private.current_profile_id()) as profile_id
+      select case
+        when reply.id = p_added_reply_id then p_added_author_profile_id
+        else author.profile_id
+      end as profile_id
     ) as reply_author
     join private.notification_event_keys as event
       on event.event_key = 'comment:' || reply.id::text
@@ -1477,35 +1495,49 @@ begin
       and reply.deleted_at is null
       and reply.id is distinct from p_removed_comment_id
       and event.notification_id = target_notification_id
+      -- 작성자를 알 수 없는 답글은 누구의 것으로도 세지 않는다.
+      and reply_author.profile_id is not null
   ), latest as (
-    select replies.id, replies.identity, replies.profile_id
+    select replies.id, replies.created_at, replies.identity, replies.profile_id
     from replies
-    order by replies.created_at desc, replies.id desc
+    order by replies.id is not distinct from p_added_reply_id desc, replies.created_at desc, replies.id desc
     limit 1
   )
-  select latest.id, latest.identity, latest.profile_id, profile.name, profile.avatar_path,
+  select latest.id, latest.created_at, latest.identity, latest.profile_id,
+    profile.name, profile.avatar_path,
     (select count(distinct replies.replier_key)::integer from replies)
-  into latest_comment_id, latest_identity, latest_profile_id, latest_profile_name,
-    latest_avatar_path, replier_count
+  into latest_comment_id, latest_created_at, latest_identity, latest_profile_id,
+    latest_profile_name, latest_avatar_path, replier_count
   from latest
   left join public.profiles as profile on profile.id = latest.profile_id;
+
+  if p_removed_comment_id is not null then
+    delete from private.notification_delivery_outbox as delivery
+    where delivery.notification_id = target_notification_id
+      and delivery.notification_event_key = 'comment:' || p_removed_comment_id::text
+      and delivery.status in ('pending', 'leased');
+  end if;
 
   if latest_comment_id is null then
     delete from public.notifications where id = target_notification_id;
     return;
   end if;
 
-  update public.notifications
+  update public.notifications as notification
   set comment_id = latest_comment_id,
     actor_identity = latest_identity,
     actor_profile_id = case when latest_identity = 'identified' then latest_profile_id end,
     actor_display_name = private.comment_actor_display_name(latest_identity, latest_profile_name),
     actor_avatar_path = case when latest_identity = 'identified' then latest_avatar_path end,
-    actor_count = replier_count
-  where id = target_notification_id;
+    actor_count = replier_count,
+    last_activity_at = case
+      when p_removed_comment_id is null then notification.last_activity_at
+      else greatest(notification.created_at, least(notification.last_activity_at, latest_created_at))
+    end
+  where notification.id = target_notification_id;
 end;
 $$;
-alter function private.sync_comment_reply_notification(uuid, uuid) owner to postgres;
+alter function private.sync_comment_reply_notification(uuid, uuid, bigint, uuid) owner to postgres;
 
 create or replace function private.notify_comment_created()
 returns trigger
@@ -1559,7 +1591,11 @@ begin
   -- emit_notification은 행위자 수를 활동마다 하나씩 늘리고 댓글 참조를 처음 답글에 둔다. 답글 집계는
   -- 서로 다른 작성자 수와 가장 최근 답글을 보여야 하므로 여기서 다시 맞춘다.
   if reply_aggregate_key is not null and emitted_notification_id is not null then
-    perform private.sync_comment_reply_notification(new.parent_comment_id);
+    perform private.sync_comment_reply_notification(
+      new.parent_comment_id,
+      p_added_reply_id => new.id,
+      p_added_author_profile_id => actor_profile_id
+    );
   end if;
   return new;
 end;
@@ -2084,7 +2120,7 @@ revoke all on function private.invoke_notification_dispatcher_if_due() from publ
 revoke all on function private.prepare_group_notification_preferences() from public;
 revoke all on function private.comment_actor_display_name(public.notification_actor_identity, text) from public;
 revoke all on function private.comment_reply_aggregate_key(uuid) from public;
-revoke all on function private.sync_comment_reply_notification(uuid, uuid) from public;
+revoke all on function private.sync_comment_reply_notification(uuid, uuid, bigint, uuid) from public;
 revoke all on function private.notify_comment_created() from public;
 revoke all on function private.mention_notification_title(text, boolean) from public;
 revoke all on function private.emit_post_mention_notifications(uuid) from public;

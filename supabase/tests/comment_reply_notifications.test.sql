@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(20);
+select plan(24);
 
 -- 한 댓글에 달린 답글은 알림 한 행으로 모은다(기능 명세 §14.9). 인원은 서로 다른 작성자 수이고,
 -- 같은 사람의 실명·익명 답글은 다른 사람으로 센다. Push는 답글마다 따로 보낸다.
@@ -176,6 +176,22 @@ select ok(
   'opening the notification marks it read'
 );
 
+-- 알림이 생긴 뒤에 등록한 기기도 그 뒤의 답글 Push는 받아야 한다. 같은 트랜잭션에서는 시각이 모두
+-- 같으므로 알림을 먼저 생긴 것으로 옮겨 그 순서를 만든다.
+update public.notifications
+set created_at = now() - interval '2 hours'
+where id = (select id from pg_temp.reply_notification());
+insert into private.web_push_subscriptions (
+  id, profile_id, endpoint, p256dh, auth, created_at
+) values (
+  '71000000-0000-0000-0000-000000000102',
+  (select id from public.profiles where pub_id = 'hanbyeol-25'),
+  'https://push.example.test/later-device',
+  'BNcRdreALRFXTkA0bP8M5bq6fP6w6uLqFhKxqv2QdA',
+  'dGVzdC1hdXRoLWtleQ',
+  now()
+);
+
 select pg_temp.age_replies();
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000005', true);
 set local role authenticated;
@@ -199,6 +215,14 @@ select ok(
     from pg_temp.reply_notification()
   ),
   'an identified latest reply shows its author'
+);
+select is(
+  (
+    select notification_event_key from private.notification_delivery_outbox
+    where subscription_id = '71000000-0000-0000-0000-000000000102'
+  ),
+  'comment:' || (select id from reply_ids where name = 'c_identified')::text,
+  'a device registered after the notification gets pushes for later replies'
 );
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003', true);
@@ -230,6 +254,26 @@ select ok(
     from pg_temp.reply_notification()
   ),
   'the fallback recounts repliers and shows the remaining reply author'
+);
+select ok(
+  not exists (
+    select 1 from private.notification_delivery_outbox
+    where notification_event_key = 'comment:' || (select id from reply_ids where name = 'c_identified')::text
+  ),
+  'deleting a reply withdraws its pushes that have not gone out'
+);
+select is(
+  (
+    select count(*) from private.notification_delivery_outbox
+    where notification_id = (select id from pg_temp.reply_notification())
+  ),
+  4::bigint,
+  'pushes for the remaining replies stay queued'
+);
+select is(
+  (select last_activity_at from pg_temp.reply_notification()),
+  (select created_at from public.post_comments where id = (select id from reply_ids where name = 'b_anonymous')),
+  'deleting the latest reply moves the activity time back to the remaining reply'
 );
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000004', true);
@@ -298,16 +342,14 @@ select ok(
   'post comment notifications are not aggregated'
 );
 
--- 구독보다 먼저 생긴 집계 알림이라도 구독 뒤에 붙은 답글은 그 기기로 보낸다.
-update public.notifications
-set created_at = now() - interval '1 hour'
-where kind = 'post_commented';
-select ok(
-  private.notification_push_allowed(
-    (select notification from public.notifications as notification where kind = 'post_commented' limit 1),
-    now(), null
-  ),
-  'push eligibility follows the latest activity, not the first one'
+-- 빈 event key는 unique index가 서로 다르게 보므로 Push 중복을 막지 못한다.
+select throws_ok(
+  $$select private.enqueue_notification_push(
+      (select id from public.notifications where kind = 'post_commented' limit 1), null
+    )$$,
+  '22023',
+  'notification push requires its event key',
+  'queueing a push without its event key is rejected'
 );
 
 select * from finish();

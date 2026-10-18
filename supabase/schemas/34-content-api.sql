@@ -1320,7 +1320,9 @@ begin
   -- 답글 집계 알림은 이 답글 하나 때문에 통째로 지우지 않는다. 남은 답글로 다시 맞추고, 남은 답글이
   -- 없을 때만 지운다(기능 명세 §14.9).
   if comment_record.parent_comment_id is not null then
-    perform private.sync_comment_reply_notification(comment_record.parent_comment_id, p_comment_id);
+    perform private.sync_comment_reply_notification(
+      comment_record.parent_comment_id, p_removed_comment_id => p_comment_id
+    );
   end if;
   -- 하드 삭제는 외래 키가 이 데이터를 정리하지만, 살아 있는 자식 때문에 답글이 tombstone으로
   -- 남는 경우에도 삭제된 댓글을 가리키는 데이터는 즉시 사라져야 한다.
