@@ -5,6 +5,7 @@ import {
   appShellKeys,
   loadShellData,
   type ShellData,
+  UnreadBadgeSync,
 } from "~/features/app-shell";
 import type { Route } from "./+types/gate";
 import { MessagingSync } from "~/features/messaging";
@@ -109,6 +110,7 @@ export default function Shell({ loaderData }: Route.ComponentProps) {
       <NotificationSync profileId={loaderData.profile.id} />
       <NotificationPermissionPrompt profileId={loaderData.profile.id} />
       <MessagingSync profileId={loaderData.profile.id} />
+      <UnreadBadgeSync />
     </AppShellProvider>
   );
 }

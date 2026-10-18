@@ -67,11 +67,29 @@ export function useAppShell(): AppShellValue {
   return value;
 }
 
+/** 셸이 보여 주는 안 읽은 수. 알림과 메시지는 따로 센다(기능 명세 §13.17). */
+export interface UnreadCounts {
+  notifications: number;
+  messages: number;
+  /** 둘 중 하나라도 첫 응답 전이다. 실패한 쪽은 0으로 센다. */
+  pending: boolean;
+}
+
+/** 사이드바·하단 nav와 같은 쿼리 키를 읽으므로 셸 곳곳에서 불러도 요청은 늘지 않는다. */
+export function useUnreadCounts(): UnreadCounts {
+  const notifications = useQuery(notificationBadgeQuery());
+  const messages = useQuery(unreadMessageCountQuery());
+
+  return {
+    notifications: notifications.data ?? 0,
+    messages: messages.data ?? 0,
+    pending: notifications.isPending || messages.isPending,
+  };
+}
+
 /** 경로별 안 읽은 수. 게이트 로더가 아니라 쿼리에서 읽어 `notificationKeys.badge()` 하나만 무효화하면 된다. */
 export function useNavBadges(): Record<string, number> {
-  const { data } = useQuery(notificationBadgeQuery());
-  // 메시지 읽지 않음은 알림함과 따로 센다(기능 명세 §13.17).
-  const { data: unreadMessages } = useQuery(unreadMessageCountQuery());
+  const { notifications, messages } = useUnreadCounts();
 
-  return { "/noti": data ?? 0, "/messenger": unreadMessages ?? 0 };
+  return { "/noti": notifications, "/messenger": messages };
 }
