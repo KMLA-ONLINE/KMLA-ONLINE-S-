@@ -535,7 +535,9 @@ begin
       actor_display_name = p_actor_display_name,
       actor_avatar_path = p_actor_avatar_path,
       actor_count = actor_count + 1,
-      last_activity_at = now(),
+      -- now()는 트랜잭션 시작 시각이다. 먼저 시작해 늦게 모인 활동이 시각을 되돌리거나 created_at보다
+      -- 이르게 만들지 않게 한다.
+      last_activity_at = greatest(last_activity_at, now()),
       read_at = null
     where id = created_notification_id;
 
@@ -1265,9 +1267,9 @@ begin
   where gone_at < now() - interval '30 days';
   -- 메시지 Push 행은 알림처럼 cascade로 지워지지 않는다. 메시지는 삭제해도 행이 남기 때문이다.
   -- 이용 정지 메일 행도 알림 행이 없어 cascade로 지워지지 않는다. 받는 주소를 오래 남기지 않는다.
+  -- 답글 집계 알림은 새 답글마다 보존 기간이 늘어나므로, 그 행의 끝난 Push도 알림을 기다리지 않고 지운다.
   delete from private.notification_delivery_outbox
-  where (message_id is not null or suspension_id is not null)
-    and completed_at < now() - interval '30 days';
+  where completed_at < now() - interval '30 days';
   return removed;
 end;
 $$;
@@ -1438,8 +1440,8 @@ alter function private.comment_reply_aggregate_key(uuid) owner to postgres;
 -- 아직 작성자 행을 넣기 전이고, 이 답글이 방금 알림을 올린 활동이므로 created_at과 관계없이 가장 최근
 -- 답글이다(created_at은 트랜잭션 시작 시각이라 먼저 시작해 늦게 끝난 답글이 더 이를 수 있다).
 --
--- 지울 답글은 `p_removed_comment_id`로 넘긴다. 삭제가 반영되기 전에 불러도 그 답글을 빼고, 마지막 활동
--- 시각을 남은 답글로 되돌리며, 아직 나가지 않은 그 답글의 Push를 거둔다. 예전에 답글마다 알림 행이
+-- 지울 답글은 `p_removed_comment_id`로 넘긴다. 삭제가 반영되기 전에 불러도 그 답글을 빼고, 보이던 답글이면
+-- 마지막 활동 시각을 남은 답글로 되돌리며, 아직 나가지 않은 그 답글의 Push를 거둔다. 예전에 답글마다 알림 행이
 -- 있을 때는 행 삭제가 이 일을 했다. 읽음 상태는 되돌리지 않는다 -- 지운 답글 전에 읽었는지 알 수 없다.
 create or replace function private.sync_comment_reply_notification(
   p_parent_comment_id uuid,
@@ -1453,6 +1455,7 @@ as $$
 declare
   aggregate_key text := private.comment_reply_aggregate_key(p_parent_comment_id);
   target_notification_id uuid;
+  shown_comment_id uuid;
   latest_comment_id uuid;
   latest_created_at timestamptz;
   latest_identity public.notification_actor_identity;
@@ -1469,8 +1472,10 @@ begin
   -- 덮어쓰지 않는다.
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(aggregate_key, 0));
 
-  select event.notification_id into target_notification_id
+  select notification.id, notification.comment_id
+  into target_notification_id, shown_comment_id
   from private.notification_event_keys as event
+  join public.notifications as notification on notification.id = event.notification_id
   where event.event_key = aggregate_key;
   if target_notification_id is null then return; end if;
 
@@ -1500,7 +1505,9 @@ begin
   ), latest as (
     select replies.id, replies.created_at, replies.identity, replies.profile_id
     from replies
-    order by replies.id is not distinct from p_added_reply_id desc, replies.created_at desc, replies.id desc
+    -- 새 답글, 아니면 지금 보이는 답글을 그대로 둔다. 보이던 답글이 지워질 때만 created_at으로 고른다.
+    order by replies.id is not distinct from coalesce(p_added_reply_id, shown_comment_id) desc,
+      replies.created_at desc, replies.id desc
     limit 1
   )
   select latest.id, latest.created_at, latest.identity, latest.profile_id,
@@ -1515,7 +1522,11 @@ begin
     delete from private.notification_delivery_outbox as delivery
     where delivery.notification_id = target_notification_id
       and delivery.notification_event_key = 'comment:' || p_removed_comment_id::text
-      and delivery.status in ('pending', 'leased');
+      -- 이미 lease를 잡고 보내는 중인 행은 막을 수 없고, 남겨야 결과 기록이 맞는다.
+      and (
+        delivery.status = 'pending'
+        or (delivery.status = 'leased' and delivery.lease_expires_at <= now())
+      );
   end if;
 
   if latest_comment_id is null then
@@ -1531,7 +1542,7 @@ begin
     actor_avatar_path = case when latest_identity = 'identified' then latest_avatar_path end,
     actor_count = replier_count,
     last_activity_at = case
-      when p_removed_comment_id is null then notification.last_activity_at
+      when p_removed_comment_id is distinct from shown_comment_id then notification.last_activity_at
       else greatest(notification.created_at, least(notification.last_activity_at, latest_created_at))
     end
   where notification.id = target_notification_id;

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(24);
+select plan(25);
 
 -- 한 댓글에 달린 답글은 알림 한 행으로 모은다(기능 명세 §14.9). 인원은 서로 다른 작성자 수이고,
 -- 같은 사람의 실명·익명 답글은 다른 사람으로 센다. Push는 답글마다 따로 보낸다.
@@ -301,6 +301,20 @@ select ok(
     from pg_temp.reply_notification()
   ),
   'deleting every reply by one person removes them from the count'
+);
+
+-- 답글 집계 알림은 새 답글마다 보존 기간이 늘어나므로 끝난 Push는 알림과 따로 정리한다.
+update private.notification_delivery_outbox
+set status = 'sent', completed_at = now() - interval '31 days'
+where notification_id = (select id from pg_temp.reply_notification());
+select private.cleanup_expired_notifications();
+select ok(
+  exists (select 1 from pg_temp.reply_notification())
+    and not exists (
+      select 1 from private.notification_delivery_outbox
+      where notification_id = (select id from pg_temp.reply_notification())
+    ),
+  'finished pushes of a live aggregated notification are pruned after 30 days'
 );
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000005', true);
