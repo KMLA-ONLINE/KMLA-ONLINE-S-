@@ -79,6 +79,11 @@ function isTouchPrimaryViewport() {
   return window.matchMedia(TOUCH_PRIMARY_QUERY).matches;
 }
 
+// 플랫폼은 페이지가 열린 동안 바뀌지 않는다. 서버에서는 기본 화면으로 렌더한다.
+function subscribeToPlatform() {
+  return () => undefined;
+}
+
 /** 그룹·개인 게시물 상세가 공유하는 껍데기. 다른 것은 본문 영역뿐이다. */
 export function PostDetailDialog({
   title,
@@ -149,6 +154,11 @@ export function PostDetailDialog({
   );
   /** 바텀 시트로 그릴 것인가. 뷰포트만이 아니라 댓글만 보려는 의도(`?view=comments`)도 있어야 한다. */
   const commentSheet = commentsOnly && sheetViewport;
+  const ios = useSyncExternalStore(
+    subscribeToPlatform,
+    isIOS,
+    getServerTabletSheetViewport,
+  );
   const keyboardViewport = useKeyboardViewport(sheetViewport);
   const mobileDetailKeyboardOpen =
     !commentSheet && keyboardViewport.keyboardOpen;
@@ -182,23 +192,22 @@ export function PostDetailDialog({
 
   // 본문 영역이 액션 바에서 부르는 핸들러다. JSX 안에서 즉석 클로저로 만들면 render 중에
   // ref를 읽는 것으로 잡힌다.
-  const focusComposer = useCallback(() => {
+  const prepareComposerFocus = useCallback(() => {
     const element = composerRef.current;
-    if (!element || document.activeElement === element) return;
-    restoreComposerFocus.current?.();
-
-    const managedViewport = sheetViewport && window.visualViewport?.scale === 1;
-    if (!managedViewport || !isIOS()) {
-      element.focus({ preventScroll: managedViewport });
+    if (
+      !element ||
+      !ios ||
+      !sheetViewport ||
+      window.visualViewport?.scale !== 1 ||
+      restoreComposerFocus.current
+    )
       return;
-    }
 
     // iOS는 preventScroll을 줘도 키보드 resize 전에 입력창으로 화면을 밀 수 있다.
-    // 포커스를 주는 한 프레임만 그리기에서 빼면 그 이동 없이 키보드가 열린다.
-    // visibility/display는 포커스도 막으므로 쓰지 않는다. 팝업 위치는 viewport가 맡는다.
+    // 한 프레임만 투명하게 해 그 이동을 막는다. 직접 탭한 경우에도 focus capture에서
+    // 실행해 제목으로 연 상세와 댓글 시트가 같은 처리를 거친다.
     const opacity = element.style.opacity;
     element.style.opacity = "0";
-    element.focus({ preventScroll: true });
     const restore = () => {
       element.style.opacity = opacity;
       restoreComposerFocus.current = null;
@@ -208,13 +217,29 @@ export function PostDetailDialog({
       cancelAnimationFrame(frame);
       restore();
     };
-  }, [sheetViewport]);
+  }, [ios, sheetViewport]);
+
+  const focusComposer = useCallback(() => {
+    const element = composerRef.current;
+    if (!element || document.activeElement === element) return;
+    if (ios && sheetViewport && window.visualViewport?.scale === 1) {
+      prepareComposerFocus();
+      element.focus({ preventScroll: true });
+    } else {
+      // Android·데스크톱·확대 상태에서는 브라우저의 기본 포커스 이동을 유지한다.
+      element.focus();
+    }
+  }, [ios, sheetViewport, prepareComposerFocus]);
 
   const startReply = (comment: PostComment) => {
-    // 답글 대상 줄을 먼저 반영하고 같은 탭 안에서 포커스를 준다. 다음 프레임까지
-    // 미루면 iOS가 갱신 전 입력창 위치로 자동 스크롤을 시작할 수 있다.
-    flushSync(() => setReplyingTo(comment));
-    focusComposer();
+    if (ios) {
+      // iOS에서만 대상 줄을 먼저 반영하고 같은 탭 이벤트 안에서 키보드를 연다.
+      flushSync(() => setReplyingTo(comment));
+      focusComposer();
+    } else {
+      setReplyingTo(comment);
+      requestAnimationFrame(focusComposer);
+    }
   };
 
   const submitComment = async (
@@ -364,6 +389,10 @@ export function PostDetailDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         showCloseButton={false}
+        onFocusCapture={(event) => {
+          if (event.target.isSameNode(composerRef.current))
+            prepareComposerFocus();
+        }}
         className={cn(
           commentSheet ? COMMENT_SHEET_CLASS : DETAIL_DIALOG_CLASS,
           commentSheet &&
@@ -375,15 +404,24 @@ export function PostDetailDialog({
         style={
           sheetViewport
             ? ({
-                // 키보드가 뜨면 보이는 영역의 위쪽과 높이로 팝업을 잡는다.
-                // 아래 여백으로 보정하면 iOS의 포커스 이동과 겹쳐 입력창만 위에 남는다.
+                // iOS의 위쪽·높이 보정은 두 상세 모드에 함께 적용한다.
+                // Android는 기존 아래 여백 보정을 유지해 키보드 높이를 두 번 빼지 않는다.
                 top: keyboardViewport.keyboardOpen
-                  ? `${keyboardViewport.offsetTop}px`
+                  ? ios
+                    ? `${keyboardViewport.offsetTop}px`
+                    : mobileDetailKeyboardOpen
+                      ? "auto"
+                      : undefined
                   : undefined,
-                bottom: keyboardViewport.keyboardOpen ? "auto" : undefined,
-                height: keyboardViewport.keyboardOpen
-                  ? `${keyboardViewport.height}px`
+                bottom: keyboardViewport.keyboardOpen
+                  ? ios
+                    ? "auto"
+                    : `${keyboardViewport.bottomInset}px`
                   : undefined,
+                height:
+                  ios && keyboardViewport.keyboardOpen
+                    ? `${keyboardViewport.height}px`
+                    : undefined,
                 maxHeight:
                   keyboardViewport.height === null
                     ? undefined

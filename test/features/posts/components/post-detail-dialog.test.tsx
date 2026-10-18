@@ -187,6 +187,7 @@ describe("PostDetailDialog", () => {
   });
 
   it("keeps the mobile comment sheet inside the visual viewport", async () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("iPhone");
     stubPostDetailViewport({ sheet: true });
     stubVisualViewport(500, 100);
     renderRoute(Detail, {
@@ -205,6 +206,7 @@ describe("PostDetailDialog", () => {
   });
 
   it("keeps a mobile post detail composer inside the visual viewport", async () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("iPhone");
     stubPostDetailViewport({ sheet: true });
     stubVisualViewport(500, 100);
     renderRoute(Detail, {
@@ -228,6 +230,7 @@ describe("PostDetailDialog", () => {
    * 답글 대상이 보이는 것으로 계산되어 스크롤도 하지 않았다.
    */
   it("keeps a mobile post detail inside a visual viewport the keyboard pushed up", async () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("iPhone");
     stubPostDetailViewport({ sheet: true });
     stubVisualViewport(500, 300);
     renderRoute(Detail, {
@@ -248,6 +251,7 @@ describe("PostDetailDialog", () => {
   it.each(["", "?view=comments"])(
     "tracks keyboard panning and restores the dialog after dismissal (%s)",
     async (query) => {
+      vi.spyOn(navigator, "userAgent", "get").mockReturnValue("iPhone");
       stubPostDetailViewport({ sheet: true });
       stubVisualViewport(800);
       const { user } = renderRoute(() => <Detail withComment />, {
@@ -294,6 +298,7 @@ describe("PostDetailDialog", () => {
   );
 
   it("scrolls only enough to reveal a reply target after resizing", async () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("iPhone");
     stubPostDetailViewport({ sheet: true });
     stubVisualViewport(500);
     const { user } = renderRoute(() => <Detail withComment />, {
@@ -377,6 +382,7 @@ describe("PostDetailDialog", () => {
   });
 
   it("focuses a mobile reply without scrolling the page", async () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("iPhone");
     stubPostDetailViewport({ sheet: true });
     stubVisualViewport(800);
     const { user } = renderRoute(() => <Detail withComment />, {
@@ -460,8 +466,51 @@ describe("PostDetailDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "답글" }));
 
     expect(composer).toHaveFocus();
-    expect(focus).toHaveBeenCalledWith({ preventScroll: false });
+    expect(focus).toHaveBeenCalledWith();
   });
+
+  it.each(["", "?view=comments"])(
+    "guards a direct iPhone composer focus in both detail modes (%s)",
+    async (query) => {
+      vi.spyOn(navigator, "userAgent", "get").mockReturnValue("iPhone");
+      stubPostDetailViewport({ sheet: true });
+      stubVisualViewport(800);
+      renderRoute(Detail, {
+        path: "/posts/:postId",
+        initialEntries: [`/posts/post-id${query}`],
+      });
+      const composer = screen.getByRole("textbox", { name: "댓글 입력" });
+
+      fireEvent.focus(composer);
+
+      expect(composer).toHaveStyle({ opacity: "0" });
+      await waitFor(() => expect(composer).not.toHaveStyle({ opacity: "0" }));
+    },
+  );
+
+  it.each(["", "?view=comments"])(
+    "keeps Android keyboard positioning and native focus (%s)",
+    async (query) => {
+      vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Android");
+      stubPostDetailViewport({ sheet: true });
+      stubVisualViewport(500, 100);
+      const { user } = renderRoute(() => <Detail withComment />, {
+        path: "/posts/:postId",
+        initialEntries: [`/posts/post-id${query}`],
+      });
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toHaveStyle({ bottom: "200px", maxHeight: "500px" });
+      expect(dialog).not.toHaveStyle({ height: "500px", top: "100px" });
+      const composer = screen.getByRole("textbox", { name: "댓글 입력" });
+      const focus = vi.spyOn(composer, "focus");
+
+      await user.click(screen.getByRole("button", { name: "답글" }));
+
+      await waitFor(() => expect(composer).toHaveFocus());
+      expect(focus).toHaveBeenCalledWith();
+      expect(composer).not.toHaveStyle({ opacity: "0" });
+    },
+  );
 
   it("does not refocus the composer when cancelling a reply", async () => {
     const { user } = renderRoute(() => <Detail withComment />, {
