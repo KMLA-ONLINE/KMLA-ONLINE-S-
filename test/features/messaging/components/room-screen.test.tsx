@@ -861,14 +861,29 @@ describe("RoomScreen", () => {
       clientX: 20,
       clientY: 100,
     });
+    fireEvent.pointerMove(message, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 40,
+      clientY: 102,
+    });
+    expect(message).toHaveAttribute("data-swiping");
+    fireEvent.pointerMove(message, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 84,
+      clientY: 104,
+    });
+    expect(message).toHaveAttribute("data-reply-armed");
     fireEvent.pointerUp(message, {
       pointerId: 1,
       pointerType: "touch",
-      clientX: 72,
+      clientX: 84,
       clientY: 104,
     });
 
     expect(screen.getByText("박서현에게 답장")).toBeInTheDocument();
+    expect(message).not.toHaveAttribute("data-swiping");
   });
 
   it("모바일 롱프레스로 반응과 메시지 작업을 표시한다", async () => {
