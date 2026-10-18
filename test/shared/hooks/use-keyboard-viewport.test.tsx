@@ -76,6 +76,36 @@ describe("useKeyboardViewport", () => {
     });
   });
 
+  it("detects an installed iOS keyboard when innerHeight shrinks with it", () => {
+    const clientHeight = vi
+      .spyOn(document.documentElement, "clientHeight", "get")
+      .mockReturnValue(812);
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 443,
+    });
+    visualViewport.height = 443;
+    visualViewport.offsetTop = 369;
+    const { result } = renderHook(() => useKeyboardViewport(true, true));
+    expect(result.current).toEqual({
+      keyboardOpen: true,
+      bottomInset: 0,
+      offsetTop: 369,
+      height: 443,
+    });
+    act(() => {
+      Object.defineProperty(window, "innerHeight", {
+        configurable: true,
+        value: 812,
+      });
+      visualViewport.height = 812;
+      visualViewport.offsetTop = 0;
+      visualViewport.dispatchEvent(new Event("resize"));
+    });
+    expect(result.current.keyboardOpen).toBe(false);
+    clientHeight.mockRestore();
+  });
+
   it("accounts for a visual viewport panned by the browser", () => {
     const { result } = renderHook(() => useKeyboardViewport(true));
 

@@ -20,7 +20,10 @@ const DEFAULT_VIEWPORT: KeyboardViewport = {
 };
 
 /** 모바일 키보드가 떠 있을 때 보이는 영역(visual viewport)을 잰다. 댓글 시트와 대화방이 그 안에 화면을 가둔다. */
-export function useKeyboardViewport(enabled: boolean): KeyboardViewport {
+export function useKeyboardViewport(
+  enabled: boolean,
+  useDocumentHeight = false,
+): KeyboardViewport {
   const [viewport, setViewport] = useState(DEFAULT_VIEWPORT);
 
   useEffect(() => {
@@ -36,11 +39,16 @@ export function useKeyboardViewport(enabled: boolean): KeyboardViewport {
 
       // 가려진 아래쪽만 보면 안 된다. 안드로이드 Chrome은 키보드를 띄우며 화면을 키보드
       // 높이만큼 끌어올리므로(offsetTop) 가려진 아래쪽이 0이 된다.
+      // 설치된 iOS 앱은 innerHeight도 키보드에 맞춰 줄지만 문서 높이는 유지한다.
+      // 호출자가 선택한 경우에만 이 기준을 써서 Android의 기존 동작을 보존한다.
+      const referenceHeight = useDocumentHeight
+        ? Math.max(window.innerHeight, document.documentElement.clientHeight)
+        : window.innerHeight;
       const keyboardOpen =
-        window.innerHeight - visualViewport.height >= MIN_KEYBOARD_INSET;
+        referenceHeight - visualViewport.height >= MIN_KEYBOARD_INSET;
       const hiddenBottom = Math.max(
         0,
-        window.innerHeight - (visualViewport.offsetTop + visualViewport.height),
+        referenceHeight - (visualViewport.offsetTop + visualViewport.height),
       );
       const next = {
         keyboardOpen,
@@ -69,7 +77,7 @@ export function useKeyboardViewport(enabled: boolean): KeyboardViewport {
       visualViewport?.removeEventListener("scroll", measure);
       window.removeEventListener("resize", measure);
     };
-  }, [enabled]);
+  }, [enabled, useDocumentHeight]);
 
   return enabled ? viewport : DEFAULT_VIEWPORT;
 }

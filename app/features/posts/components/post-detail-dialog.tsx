@@ -159,14 +159,14 @@ export function PostDetailDialog({
     isIOS,
     getServerTabletSheetViewport,
   );
-  const keyboardViewport = useKeyboardViewport(sheetViewport);
+  const keyboardViewport = useKeyboardViewport(ios && sheetViewport, ios);
   const mobileDetailKeyboardOpen =
     !commentSheet && keyboardViewport.keyboardOpen;
 
   useEffect(() => {
-    if (!replyingTo || keyboardViewport.height === null) return;
-
-    const frame = requestAnimationFrame(() => {
+    if (!replyingTo || !listElement) return;
+    let frame = 0;
+    const revealTarget = () => {
       const container = scrollRef.current;
       const target = document.getElementById(
         commentDomId(replyingTo.comment_id),
@@ -180,10 +180,21 @@ export function PostDetailDialog({
       } else if (targetRect.bottom > containerRect.bottom) {
         container.scrollTop += targetRect.bottom - containerRect.bottom;
       }
-    });
-
-    return () => cancelAnimationFrame(frame);
+    };
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(revealTarget);
+    };
+    // Android는 브라우저가 목록을 줄인다. 화면 위치 보정과 별개로 목록 안의 답글 대상만 드러낸다.
+    const observer = new ResizeObserver(schedule);
+    observer.observe(listElement);
+    schedule();
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
   }, [
+    listElement,
     keyboardViewport.offsetTop,
     keyboardViewport.height,
     keyboardViewport.keyboardOpen,
@@ -404,24 +415,14 @@ export function PostDetailDialog({
         style={
           sheetViewport
             ? ({
-                // iOS의 위쪽·높이 보정은 두 상세 모드에 함께 적용한다.
-                // Android는 기존 아래 여백 보정을 유지해 키보드 높이를 두 번 빼지 않는다.
+                // iOS만 visual viewport를 보정한다. Android는 브라우저의 content resize를 쓴다.
                 top: keyboardViewport.keyboardOpen
-                  ? ios
-                    ? `${keyboardViewport.offsetTop}px`
-                    : mobileDetailKeyboardOpen
-                      ? "auto"
-                      : undefined
+                  ? `${keyboardViewport.offsetTop}px`
                   : undefined,
-                bottom: keyboardViewport.keyboardOpen
-                  ? ios
-                    ? "auto"
-                    : `${keyboardViewport.bottomInset}px`
+                bottom: keyboardViewport.keyboardOpen ? "auto" : undefined,
+                height: keyboardViewport.keyboardOpen
+                  ? `${keyboardViewport.height}px`
                   : undefined,
-                height:
-                  ios && keyboardViewport.keyboardOpen
-                    ? `${keyboardViewport.height}px`
-                    : undefined,
                 maxHeight:
                   keyboardViewport.height === null
                     ? undefined

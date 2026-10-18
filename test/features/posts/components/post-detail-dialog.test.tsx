@@ -42,6 +42,7 @@ function stubPostDetailViewport({
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   Object.defineProperty(window, "innerHeight", {
     configurable: true,
     value: originalInnerHeight,
@@ -297,38 +298,72 @@ describe("PostDetailDialog", () => {
     },
   );
 
-  it("scrolls only enough to reveal a reply target after resizing", async () => {
-    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("iPhone");
-    stubPostDetailViewport({ sheet: true });
-    stubVisualViewport(500);
-    const { user } = renderRoute(() => <Detail withComment />, {
-      path: "/posts/:postId",
-      initialEntries: ["/posts/post-id?view=comments"],
-    });
-    /* eslint-disable testing-library/no-node-access --
+  it.each(["iPhone", "Android"])(
+    "scrolls only the list to reveal a reply target (%s)",
+    async (platform) => {
+      vi.spyOn(navigator, "userAgent", "get").mockReturnValue(platform);
+      const resized = new Map<Element, () => void>();
+      vi.stubGlobal(
+        "ResizeObserver",
+        class {
+          private observed = new Set<Element>();
+          constructor(private callback: ResizeObserverCallback) {}
+          observe(target: Element) {
+            this.observed.add(target);
+            resized.set(target, () => this.callback([], this));
+          }
+          unobserve(target: Element) {
+            resized.delete(target);
+          }
+          disconnect() {
+            for (const target of this.observed) resized.delete(target);
+            this.observed.clear();
+          }
+        },
+      );
+      stubPostDetailViewport({ sheet: true });
+      stubVisualViewport(500);
+      const { user } = renderRoute(() => <Detail withComment />, {
+        path: "/posts/:postId",
+        initialEntries: ["/posts/post-id?view=comments"],
+      });
+      /* eslint-disable testing-library/no-node-access --
        The behavior under test is the scroll relationship between the rendered
        comment and the dialog's private overflow container. */
-    const target = document.getElementById("comment-target");
-    const container = target?.closest("section")?.parentElement;
-    /* eslint-enable testing-library/no-node-access */
-    expect(target).not.toBeNull();
-    expect(container).not.toBeNull();
-    if (!target || !container) return;
+      const target = document.getElementById("comment-target");
+      const container = target?.closest("section")?.parentElement;
+      /* eslint-enable testing-library/no-node-access */
+      expect(target).not.toBeNull();
+      expect(container).not.toBeNull();
+      if (!target || !container) return;
 
-    container.scrollTop = 100;
-    vi.spyOn(container, "getBoundingClientRect").mockReturnValue({
-      top: 0,
-      bottom: 300,
-    } as DOMRect);
-    vi.spyOn(target, "getBoundingClientRect").mockReturnValue({
-      top: 260,
-      bottom: 350,
-    } as DOMRect);
+      container.scrollTop = 100;
+      let listBottom = 300;
+      vi.spyOn(container, "getBoundingClientRect").mockImplementation(
+        () =>
+          ({
+            top: 0,
+            bottom: listBottom,
+          }) as DOMRect,
+      );
+      vi.spyOn(target, "getBoundingClientRect").mockImplementation(
+        () =>
+          ({
+            top: 360 - container.scrollTop,
+            bottom: 450 - container.scrollTop,
+          }) as DOMRect,
+      );
 
-    await user.click(screen.getByRole("button", { name: "답글" }));
+      await user.click(screen.getByRole("button", { name: "답글" }));
 
-    await waitFor(() => expect(container.scrollTop).toBe(150));
-  });
+      await waitFor(() => expect(container.scrollTop).toBe(150));
+      // Native Android keyboard resizing has no visual-viewport subscription in this component.
+      listBottom = 250;
+      act(() => resized.get(container)?.());
+      await waitFor(() => expect(container.scrollTop).toBe(200));
+      vi.unstubAllGlobals();
+    },
+  );
 
   /**
    * 머리글만 끌 수 있던 때에는, 댓글을 다 읽고 목록을 맨 위로 올린 사람이 시트를 닫으려면
@@ -489,7 +524,7 @@ describe("PostDetailDialog", () => {
   );
 
   it.each(["", "?view=comments"])(
-    "keeps Android keyboard positioning and native focus (%s)",
+    "leaves Android keyboard layout and focus to the browser (%s)",
     async (query) => {
       vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Android");
       stubPostDetailViewport({ sheet: true });
@@ -499,8 +534,10 @@ describe("PostDetailDialog", () => {
         initialEntries: [`/posts/post-id${query}`],
       });
       const dialog = screen.getByRole("dialog");
-      expect(dialog).toHaveStyle({ bottom: "200px", maxHeight: "500px" });
-      expect(dialog).not.toHaveStyle({ height: "500px", top: "100px" });
+      expect(dialog).not.toHaveStyle({ bottom: "200px" });
+      expect(dialog).not.toHaveStyle({ maxHeight: "500px" });
+      expect(dialog).not.toHaveStyle({ height: "500px" });
+      expect(dialog).not.toHaveStyle({ top: "100px" });
       const composer = screen.getByRole("textbox", { name: "댓글 입력" });
       const focus = vi.spyOn(composer, "focus");
 
