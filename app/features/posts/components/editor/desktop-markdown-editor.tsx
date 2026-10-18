@@ -29,7 +29,6 @@ import {
   strongSchema,
   textSchema,
   toggleEmphasisCommand,
-  toggleLinkCommand,
   toggleStrongCommand,
   wrapInHeadingCommand,
 } from "@milkdown/preset-commonmark";
@@ -137,6 +136,13 @@ const underlineSchema = $markSchema("underline", () => ({
   },
 }));
 
+// ProseMirror mark는 기본이 inclusive라 링크 끝에 이어 쓴 글자까지 링크가 된다. 링크는 대화창으로만
+// 걸므로 끝에서 자라지 않게 한다. 멘션도 link mark라 함께 끝이 닫힌다.
+const postLinkSchema = linkSchema.extendSchema((prev) => (ctx) => ({
+  ...prev(ctx),
+  inclusive: false,
+}));
+
 const toggleUnderlineCommand = $command(
   "ToggleUnderline",
   (ctx) => () => toggleMark(underlineSchema.type(ctx)),
@@ -158,9 +164,8 @@ const markdownSchema = [
   strongAttr,
   strongSchema,
   linkAttr,
-  linkSchema,
+  postLinkSchema,
   toggleEmphasisCommand,
-  toggleLinkCommand,
   toggleStrongCommand,
   wrapInHeadingCommand,
   strikethroughAttr,
@@ -381,7 +386,7 @@ function EditorSurface({
           // 뒤에 이어 쓸 때 링크 안으로 빨려 들어가지 않도록 멘션마다 mark 없는 공백을 함께 넣는다.
           const nodes = mentions.flatMap(({ label, ordinal }) => [
             state.schema.text(`@${sanitizeMentionLabel(label)}`, [
-              linkSchema.type(ctx).create({ href: `m:${ordinal}` }),
+              postLinkSchema.type(ctx).create({ href: `m:${ordinal}` }),
             ]),
             state.schema.text(" "),
           ]);
@@ -402,7 +407,7 @@ function EditorSurface({
     get()?.action((ctx) => {
       const { state } = ctx.get(editorViewCtx);
       const { from, to, $from } = state.selection;
-      const current: unknown = linkSchema.type(ctx).isInSet($from.marks())
+      const current: unknown = postLinkSchema.type(ctx).isInSet($from.marks())
         ?.attrs.href;
       setLinkDraft({
         from,
@@ -422,7 +427,7 @@ function EditorSurface({
     get()?.action((ctx) => {
       const view = ctx.get(editorViewCtx);
       const { state } = view;
-      const linkType = linkSchema.type(ctx);
+      const linkType = postLinkSchema.type(ctx);
       const mark = linkType.create({ href });
       const max = state.doc.content.size;
       const from = Math.min(draft.from, max);
