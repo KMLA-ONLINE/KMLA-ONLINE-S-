@@ -57,6 +57,9 @@
 목록 상단에 배치한다. 같은 사용자의 반응 변경·취소·재등록은 새 활동으로 처리하지 않는다. 최근 24시간
 badge, 목록 구분과 30일 보존은 `last_activity_at`을 기준으로 한다.
 
+답글 집계 알림도 새 답글마다 같은 방식으로 갱신한다. 표시 행위자와 `comment_id`는 가장 최근 답글을
+가리키고, `actor_count`는 활동 수가 아니라 서로 다른 작성자 수다.
+
 ### 3.2 계정 공통 설정
 
 `public.notification_preferences`는 다음 유형별 Web Push opt-out을 계정 공통으로 저장한다.
@@ -98,6 +101,13 @@ Web Push 전체 켜기·끄기는 기기별이다. 사용자가 끄거나 로그
 key와 대상별 aggregate key를 분리해 변경·취소·재등록은 막고 여러 행위자는 한 알림으로 집계한다.
 소유권 이전, 답글과 댓글, 멘션과 직접 활동도 하나의 의미 있는 알림으로 정규화한다.
 
+답글은 답글별 event key(`comment:<reply>`)와 부모 댓글별 aggregate key(`comment-replies:<parent>`)를
+쓴다. 같은 사람이 여러 번 답할 수 있으므로 반응처럼 행위자별 key로 인원을 세지 않고,
+`private.sync_comment_reply_notification`이 event key가 그 알림을 가리키는 살아 있는 답글에서 가장 최근
+답글과 서로 다른 작성자 수를 다시 계산한다. 작성자는 표시 신원과 프로필의 쌍으로 구분해 같은 사람의
+실명·익명 답글을 합치지 않고, 운영진 명의는 하나로 센다. 답글 삭제(`delete_post_comment`)도 같은
+함수로 남은 답글에 맞추고, 남은 답글이 없을 때만 알림을 지운다. 게시물에 바로 단 댓글은 집계하지 않는다.
+
 ### 3.6 전달 outbox
 
 `private.notification_delivery_outbox`와 delivery attempt는 채널, 발송 가능 시각, attempt, lease,
@@ -106,7 +116,12 @@ lease로 작업을 claim한다. 만료 lease를 포함한 claim 횟수가 hard l
 dead-letter 처리하여 나머지 작업의 claim을 막지 않는다.
 
 Push 발송 직전에 기기 상태, 최신 유형·그룹 설정과 현재 대상 접근 권한을 다시 확인한다. subscription이
-알림보다 나중에 활성화된 경우 과거 알림을 새 기기로 보내지 않는다.
+알림의 마지막 활동보다 나중에 활성화된 경우 과거 알림을 새 기기로 보내지 않는다. 집계 알림은 행이 먼저
+있고 활동이 뒤에 붙으므로 최초 생성 시각이 아니라 `last_activity_at`과 비교한다.
+
+알림 Push는 알림 행이 아니라 그 Push를 일으킨 활동의 event key(`notification_event_key`) 단위로 중복을
+막는다. 집계된 답글 알림은 한 행에서 답글마다 delivery를 만든다. 반응은 집계되어도 Push 허용 검사에서
+빠진다.
 가입 승인·거절 같은 직접 결과 알림은 현재 그룹 멤버십이 없어도 수신자에게 전달한다.
 
 outbox 행의 원본은 알림, 메시지, 이용 정지 중 정확히 하나다. 이용 정지(기능 명세 §14.12)와 수동 해제는

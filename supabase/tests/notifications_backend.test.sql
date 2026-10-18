@@ -273,7 +273,7 @@ insert into public.notifications (
   now(), now()
 );
 select is(
-  private.enqueue_notification_push('70000000-0000-0000-0000-000000000013'),
+  private.enqueue_notification_push('70000000-0000-0000-0000-000000000013', 'backend:gone-subscription'),
   0,
   'new notifications are not queued for a gone subscription'
 );
