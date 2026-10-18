@@ -189,7 +189,9 @@ export function MessageBubble({
           <div
             ref={textBoxRef}
             className={cn(
-              "w-full",
+              // 줄여 둔 폭이 남은 채 옆에 액션 레일이 생기는 식으로 쓸 수 있는 폭이 줄어도 버블 밖으로
+              // 넘치지 않게 막는다. 넘치면 대화 영역에 가로 스크롤이 생긴다.
+              "w-full max-w-full",
               isEmojiOnly
                 ? "px-1 py-0.5 text-5xl leading-none"
                 : "rounded-2xl px-3.5 py-2 text-[15px] [overflow-wrap:anywhere] break-keep whitespace-pre-wrap",
