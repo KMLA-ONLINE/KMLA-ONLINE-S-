@@ -4,11 +4,11 @@ import {
   ShieldCheckIcon,
   UserRoundIcon,
 } from "lucide-react";
-import { Link, useLocation } from "react-router";
+import { Link } from "react-router";
 import { useRef, useState } from "react";
 
 import { useAppShell } from "~/features/app-shell/context/app-shell-context";
-import { isTabReselectClick } from "~/features/app-shell/model/navigation";
+import { useHomeReselectClick } from "~/features/app-shell/hooks/use-home-reselect-click";
 import { LogoutDialog } from "~/features/auth/components/logout-button";
 import { GlobalSearchDropdown } from "~/features/search";
 import { UserAvatar } from "~/shared/components/user-avatar";
@@ -35,7 +35,7 @@ export function AppHeader({
   className?: string;
   onHomeReselect: () => void;
 }) {
-  const location = useLocation();
+  const onHomeClick = useHomeReselectClick(onHomeReselect);
   const { profile } = useAppShell();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const avatarRef = useRef<HTMLButtonElement>(null);
@@ -51,11 +51,7 @@ export function AppHeader({
       <div className="flex flex-1 basis-0 items-center">
         <Link
           to="/"
-          onClick={(event) => {
-            if (!isTabReselectClick(event, location, "/")) return;
-            event.preventDefault();
-            onHomeReselect();
-          }}
+          onClick={onHomeClick}
           className="text-sm font-semibold tracking-wide whitespace-nowrap hover:text-primary"
         >
           KMLA Online

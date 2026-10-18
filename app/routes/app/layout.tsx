@@ -128,9 +128,9 @@ export default function MainAppLayout() {
   };
   const { refreshing, refresh } = useShellRefresh(refreshCaches);
   // 데스크톱에는 당겨서 새로고침이 없다. 홈에서 홈을 다시 누르면 맨 위로 올리고 같은 새로고침을 한다.
+  // 이미 새로고침 중이면 스크롤도 건드리지 않는다. 비워지는 목록 위에서 미끄러지기가 겹쳐 튄다.
   const refreshHome = () => {
-    scrollToTop(scrollRef.current);
-    refresh();
+    if (refresh()) scrollToTop(scrollRef.current);
   };
 
   return (

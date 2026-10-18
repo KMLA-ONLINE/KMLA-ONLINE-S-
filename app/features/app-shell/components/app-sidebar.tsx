@@ -2,11 +2,11 @@ import { NavLink, useLocation } from "react-router";
 
 import { NavBadge } from "~/features/app-shell/components/nav-badge";
 import { useNavBadges } from "~/features/app-shell/context/app-shell-context";
+import { useHomeReselectClick } from "~/features/app-shell/hooks/use-home-reselect-click";
 import {
   isNavItemActive,
   navItems,
 } from "~/features/app-shell/model/nav-items";
-import { isTabReselectClick } from "~/features/app-shell/model/navigation";
 import { cn } from "~/shared/lib/utils";
 
 /**
@@ -26,6 +26,7 @@ export function AppSidebar({
 }) {
   const location = useLocation();
   const badges = useNavBadges();
+  const onHomeClick = useHomeReselectClick(onHomeReselect);
 
   return (
     <div className={cn("relative w-[var(--app-rail-w)] shrink-0", className)}>
@@ -52,15 +53,7 @@ export function AppSidebar({
                   to={item.to}
                   end={item.end}
                   prefetch="intent"
-                  onClick={(event) => {
-                    if (
-                      item.to !== "/" ||
-                      !isTabReselectClick(event, location, item.to)
-                    )
-                      return;
-                    event.preventDefault();
-                    onHomeReselect();
-                  }}
+                  onClick={item.to === "/" ? onHomeClick : undefined}
                   aria-label={
                     unread > 0
                       ? `${item.label} (안 읽음 ${unread}개)`

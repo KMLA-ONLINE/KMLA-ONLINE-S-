@@ -47,7 +47,7 @@ export function PullToRefresh({
   containerRef: RefObject<HTMLElement | null>;
   enabled: boolean;
   refreshing: boolean;
-  onRefresh: () => void;
+  onRefresh: () => unknown;
 }) {
   const [distance, setDistance] = useState(0);
   const gestureRef = useRef<GestureState>({ ...IDLE_GESTURE });

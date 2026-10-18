@@ -12,8 +12,9 @@ export function useShellRefresh(onRefresh: () => Promise<void>) {
   // state는 다음 렌더까지 옛 값이라, 같은 tick에 두 입구가 동시에 눌려도 막도록 ref로 판단한다.
   const runningRef = useRef(false);
 
-  const refresh = () => {
-    if (runningRef.current) return;
+  /** 시작했으면 `true`, 이미 진행 중이라 건너뛰었으면 `false`. */
+  const refresh = (): boolean => {
+    if (runningRef.current) return false;
     runningRef.current = true;
     setRefreshing(true);
     void Promise.allSettled([
@@ -25,6 +26,7 @@ export function useShellRefresh(onRefresh: () => Promise<void>) {
       runningRef.current = false;
       setRefreshing(false);
     });
+    return true;
   };
 
   return { refreshing, refresh };

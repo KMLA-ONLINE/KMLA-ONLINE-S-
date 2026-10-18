@@ -80,4 +80,30 @@ describe("desktop navigation", () => {
     expect(await screen.findByText("홈 화면")).toBeInTheDocument();
     expect(onHomeReselect).not.toHaveBeenCalled();
   });
+
+  it("lets home override a navigation that is still loading", async () => {
+    const onHomeReselect = vi.fn();
+    const { user } = renderRoute(
+      () => (
+        <AppShellProvider value={shell}>
+          <AppSidebar onHomeReselect={onHomeReselect} />
+        </AppShellProvider>
+      ),
+      {
+        path: "/",
+        routes: [
+          {
+            path: "/groups",
+            loader: () => new Promise(() => undefined),
+            Component: () => <p>그룹 화면</p>,
+          },
+        ],
+      },
+    );
+
+    await user.click(screen.getByRole("link", { name: "그룹" }));
+    await user.click(screen.getByRole("link", { name: "홈" }));
+
+    expect(onHomeReselect).not.toHaveBeenCalled();
+  });
 });

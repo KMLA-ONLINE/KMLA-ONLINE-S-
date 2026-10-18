@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { redirect } from "react-router";
 
 import { AppShellProvider, type ShellData } from "~/features/app-shell";
@@ -18,11 +18,15 @@ const shell = {
   },
 } satisfies ShellData;
 
-function renderHeader(path = "/", data: ShellData = shell) {
+function renderHeader(
+  path = "/",
+  data: ShellData = shell,
+  onHomeReselect: () => void = () => undefined,
+) {
   return renderRoute(
     () => (
       <AppShellProvider value={data}>
-        <AppHeader onHomeReselect={() => undefined} />
+        <AppHeader onHomeReselect={onHomeReselect} />
       </AppShellProvider>
     ),
     {
@@ -40,6 +44,33 @@ function renderHeader(path = "/", data: ShellData = shell) {
     },
   );
 }
+
+describe("AppHeader logo", () => {
+  it("refreshes instead of navigating when clicked on home", async () => {
+    const onHomeReselect = vi.fn();
+    const { user } = renderHeader("/", shell, onHomeReselect);
+
+    await user.click(screen.getByRole("link", { name: "KMLA Online" }));
+
+    expect(onHomeReselect).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns to the home feed from an overlay without refreshing", async () => {
+    const onHomeReselect = vi.fn();
+    const { user } = renderRoute(
+      () => (
+        <AppShellProvider value={shell}>
+          <AppHeader onHomeReselect={onHomeReselect} />
+        </AppShellProvider>
+      ),
+      { path: "/", initialEntries: ["/?post=1"] },
+    );
+
+    await user.click(screen.getByRole("link", { name: "KMLA Online" }));
+
+    expect(onHomeReselect).not.toHaveBeenCalled();
+  });
+});
 
 describe("AppHeader account menu", () => {
   it("leaves home school shortcuts to the page instead of the global header", () => {
