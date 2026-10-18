@@ -19,9 +19,9 @@ const SVG_ICON_LINK_SELECTOR = `${ICON_LINK_SELECTOR}[type="image/svg+xml"]`;
 /** 덮어쓰기 전 원래 아이콘 주소. 되돌릴 때 쓴다. */
 const ORIGINAL_HREF_ATTR = "data-tab-badge-original-href";
 
-/** 점의 크기와 위치는 아이콘 `viewBox` 대비 비율이다. 16px 탭에서 3px 남짓 보이는 크기다. */
-const DOT_RADIUS_RATIO = 0.22;
-const DOT_RING_RATIO = 0.05;
+/** 점의 크기는 아이콘 `viewBox` 대비 비율이다. 로고 크기가 바뀌지 않도록 오른쪽 위 모서리 안쪽에 붙인다. */
+const DOT_RADIUS_RATIO = 0.15;
+const DOT_RING_RATIO = 0.035;
 const DOT_COLOR = "#ef4444";
 const DOT_RING_COLOR = "#ffffff";
 
