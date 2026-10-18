@@ -439,6 +439,99 @@ where member.conversation_id = conversation.id
   and member.left_at is null
   and member.last_read_message_id = '00000000-0000-0000-0000-000000000000';
 
+-- 스토리. 쓰고 보는 건 재학생·교사뿐이라 위의 졸업생 60명으로는 안 된다. 재학생 16명을 따로 두고
+-- 1–3장씩 올려 홈 레일이 화면 폭을 넘치게 한다(데스크톱 넘김 버튼 확인). 홍길동의 스토리 둘에는
+-- 읽은 사람과 반응을 잔뜩 달아 읽은 사람 목록이 길게 스크롤된다.
+-- 스토리는 24시간 뒤 만료되므로 다시 넣을 때마다 게시 시각을 지금 기준으로 당겨 놓는다.
+insert into public.profiles (
+  pub_id, name, type, student_number, cohort, gender, academic_track, birthday, status, description
+)
+select
+  'fake-s' || lpad(n::text, 2, '0'),
+  (array['한','오','서','신','권','황','안','송'])[1 + n % 8]
+    || (array['다은','시윤','유진','준서','하린','태윤','소율','건우'])[1 + (n * 3) % 8],
+  'student',
+  '99' || lpad(n::text, 4, '0'),
+  28 + n % 3,
+  (array['male','female'])[1 + n % 2]::public.profile_gender,
+  (array['domestic','international'])[1 + (n % 4 = 0)::int]::public.profile_academic_track,
+  make_date(2008, 1 + n % 12, 1 + n % 28),
+  'accepted',
+  '가짜 데이터로 만든 재학생 프로필입니다.'
+from generate_series(1, 16) as n
+on conflict (lower(pub_id)) do nothing;
+
+create temporary table fake_story_writers on commit drop as
+select row_number() over (order by pub_id) as n, id
+from public.profiles
+where pub_id like 'fake-s%';
+
+-- id는 900000번대로 고정한다. 1–2는 홍길동, 그 뒤는 작성자 n의 k번째 장(900000 + n*10 + k).
+create temporary table fake_stories on commit drop as
+select
+  900000 + writer.n * 10 + k as id,
+  writer.id as profile_id,
+  -- 작성자마다 올린 시각을 달리해 레일 순서가 섞이게 한다.
+  now() - (writer.n * 17 + (3 - k) * 5) * interval '1 minute' as published_at,
+  (array['오늘 급식 맛있다','기숙사 점호 5분 전','도서관 자리 있음?','운동장 노을 미쳤다',
+         '시험 끝!!','동아리 공연 보러 와','비 온다 우산 챙겨','밤샘 과제 중'])[1 + (writer.n + k) % 8]
+    as content,
+  (array['blue','purple','pink','orange','green','dark'])[1 + (writer.n + k) % 6] as background
+from fake_story_writers as writer
+cross join generate_series(1, 3) as k
+where k <= 1 + writer.n % 3
+union all
+select
+  900000 + k,
+  (select id from fake_viewer),
+  now() - (40 - k * 20) * interval '1 minute',
+  (array['읽은 사람 목록 길게 보기','반응 많이 받은 스토리'])[k],
+  (array['purple','orange'])[k]
+from generate_series(1, 2) as k;
+
+insert into public.stories (
+  id, profile_id, status, content, background, audience, created_at, published_at, expires_at
+)
+select id, profile_id, 'ready', content, background, 'everyone',
+  published_at, published_at, published_at + interval '24 hours'
+from fake_stories
+on conflict (id) do update set
+  created_at = excluded.created_at,
+  published_at = excluded.published_at,
+  expires_at = excluded.expires_at;
+
+-- 홍길동의 첫 장은 76명 전원이, 둘째 장은 30명이 봤다.
+create temporary table fake_story_audience on commit drop as
+select row_number() over (order by pub_id) as n, id
+from public.profiles
+where pub_id like 'fake-p%' or pub_id like 'fake-s%';
+
+insert into public.story_views (story_id, profile_id, viewed_at)
+select story.id, audience.id,
+  least(story.published_at + audience.n * interval '15 seconds', now())
+from fake_stories as story
+join fake_story_audience as audience
+  on audience.n <= case story.id when 900001 then 1000 else 30 end
+where story.id in (900001, 900002)
+on conflict (story_id, profile_id) do update set viewed_at = excluded.viewed_at;
+
+-- 본 사람 셋 중 둘이 반응을 0–5개 보냈다. 한 사람이 여러 종류를 섞어 보낸 줄도 있다.
+insert into public.story_reactions (story_id, profile_id, reaction, created_at)
+select view.story_id, view.profile_id,
+  (array['like','love','haha','wow','sad','angry'])[1 + (audience.n + i * (1 + audience.n % 3)) % 6]
+    ::public.post_reaction,
+  view.viewed_at + i * interval '2 seconds'
+from public.story_views as view
+join fake_story_audience as audience on audience.id = view.profile_id
+cross join generate_series(1, 5) as i
+where view.story_id in (900001, 900002)
+  and audience.n % 3 <> 0
+  and i <= audience.n % 6
+  and not exists (
+    select 1 from public.story_reactions as existing
+    where existing.story_id = view.story_id and existing.profile_id = view.profile_id
+  );
+
 commit;
 
 select
@@ -452,4 +545,7 @@ select
   (select count(*) from public.conversations
     where id in (select md5('fake-direct-' || n)::uuid from generate_series(1, 30) as n)
       or id in (select md5('fake-group-chat-' || g)::uuid from generate_series(1, 3) as g))
-    as my_conversations;
+    as my_conversations,
+  (select count(*) from public.stories where id between 900000 and 999999 and expires_at > now())
+    as active_stories,
+  (select count(*) from public.story_views where story_id = 900001) as my_story_viewers;

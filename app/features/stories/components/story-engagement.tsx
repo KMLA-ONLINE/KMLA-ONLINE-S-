@@ -375,7 +375,9 @@ export function StoryViewersPanel({
 
     if (open) {
       panel.removeAttribute("aria-hidden");
-      closeRef.current?.focus();
+      // 패널은 아직 화면 밖에서 올라오는 중이다. 그대로 포커스하면 브라우저가 패널을 보이려고
+      // 조상을 스크롤한다.
+      closeRef.current?.focus({ preventScroll: true });
       return;
     }
 
@@ -384,7 +386,7 @@ export function StoryViewersPanel({
       const trigger = document.querySelector<HTMLElement>(
         `[aria-controls="${STORY_VIEWERS_PANEL_ID}"]`,
       );
-      if (trigger) trigger.focus();
+      if (trigger) trigger.focus({ preventScroll: true });
       else if (active instanceof HTMLElement) active.blur();
     }
     panel.setAttribute("aria-hidden", "true");
