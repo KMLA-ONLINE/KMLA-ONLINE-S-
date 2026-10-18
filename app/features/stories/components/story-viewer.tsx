@@ -472,7 +472,9 @@ export function StoryViewer({
     >
       <DialogContent
         showCloseButton={false}
-        className="inset-0 top-0 left-0 h-dvh max-w-none translate-x-0 translate-y-0 place-items-center gap-0 overflow-hidden rounded-none bg-black p-0 text-white ring-0 sm:max-w-none data-open:zoom-in-100 data-closed:zoom-out-100"
+        // `overflow-hidden`이 아니라 `overflow-clip`이다. hidden은 스크롤 컨테이너라서, 화면 밖에 깔린
+        // 읽은 사람 패널로 포커스가 가거나 그 안을 스크롤하면 뷰어 전체가 위로 밀려 아래에 검은 띠가 남는다.
+        className="inset-0 top-0 left-0 h-dvh max-w-none translate-x-0 translate-y-0 place-items-center gap-0 overflow-clip rounded-none bg-black p-0 text-white ring-0 sm:max-w-none data-open:zoom-in-100 data-closed:zoom-out-100"
       >
         {/* 데스크톱은 카드 양옆이 비어 있어 그 자리에 넘김 버튼을 둔다. 양 끝에서도 자리는 남겨
             카드가 가운데에서 움직이지 않게 한다. 모바일은 카드가 화면을 채우므로 탭만 쓴다. */}

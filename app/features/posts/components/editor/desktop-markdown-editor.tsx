@@ -29,7 +29,6 @@ import {
   strongSchema,
   textSchema,
   toggleEmphasisCommand,
-  toggleLinkCommand,
   toggleStrongCommand,
   wrapInHeadingCommand,
 } from "@milkdown/preset-commonmark";
@@ -42,7 +41,12 @@ import {
 import { Milkdown, MilkdownProvider, useEditor } from "@milkdown/react";
 import { toggleMark } from "@milkdown/prose/commands";
 import { redo, undo } from "@milkdown/prose/history";
-import type { Node as ProseNode } from "@milkdown/prose/model";
+import {
+  Fragment,
+  Slice,
+  type Mark,
+  type Node as ProseNode,
+} from "@milkdown/prose/model";
 import { Plugin, Selection } from "@milkdown/prose/state";
 import type { EditorView } from "@milkdown/prose/view";
 import {
@@ -97,6 +101,7 @@ import {
 import remarkCjkFriendly from "remark-cjk-friendly/bidi";
 import remarkCjkFriendlyStrikethrough from "remark-cjk-friendly-gfm-strikethrough/bidi";
 
+import { randomUUID } from "~/shared/lib/random-uuid";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 
@@ -137,6 +142,13 @@ const underlineSchema = $markSchema("underline", () => ({
   },
 }));
 
+// ProseMirror mark는 기본이 inclusive라 링크 끝에 이어 쓴 글자까지 링크가 된다. 링크는 대화창으로만
+// 걸므로 끝에서 자라지 않게 한다. 멘션도 link mark라 함께 끝이 닫힌다.
+const postLinkSchema = linkSchema.extendSchema((prev) => (ctx) => ({
+  ...prev(ctx),
+  inclusive: false,
+}));
+
 const toggleUnderlineCommand = $command(
   "ToggleUnderline",
   (ctx) => () => toggleMark(underlineSchema.type(ctx)),
@@ -158,9 +170,8 @@ const markdownSchema = [
   strongAttr,
   strongSchema,
   linkAttr,
-  linkSchema,
+  postLinkSchema,
   toggleEmphasisCommand,
-  toggleLinkCommand,
   toggleStrongCommand,
   wrapInHeadingCommand,
   strikethroughAttr,
@@ -294,6 +305,67 @@ const atomicMentions = $prose(
     }),
 );
 
+/** 조각 안 글자 노드의 mark를 바꾼다. `null`을 돌려주면 그 mark를 뺀다. */
+function mapTextMarks(
+  fragment: Fragment,
+  map: (mark: Mark) => Mark | null,
+): Fragment {
+  const children: ProseNode[] = [];
+  fragment.forEach((node) => {
+    if (node.isText) {
+      children.push(
+        node.mark(
+          node.marks.flatMap((mark) => {
+            const next = map(mark);
+            return next ? [next] : [];
+          }),
+        ),
+      );
+    } else children.push(node.copy(mapTextMarks(node.content, map)));
+  });
+  return Fragment.fromArray(children);
+}
+
+function isMentionMark(mark: Mark): boolean {
+  const href: unknown = mark.attrs.href;
+  return (
+    mark.type.name === "link" && typeof href === "string" && isMentionHref(href)
+  );
+}
+
+/**
+ * 멘션 토큰의 ordinal은 그 글의 멘션 표 안에서만 뜻이 있다. 다른 글에서 복사한 `m:1`을 그대로
+ * 받으면 이 글의 1번 대상, 곧 엉뚱한 사람을 부르거나 저장 때 조용히 평문이 된다. 복사할 때 편집기
+ * 표식을 link `title`에 실어 두고, 같은 편집기에서 온 멘션만 남기고 나머지는 평문 `@이름`으로 푼다.
+ */
+const pastedMentions = $prose(() => {
+  const source = `kmla-editor:${randomUUID()}`;
+  return new Plugin({
+    props: {
+      transformCopied: (slice) =>
+        new Slice(
+          mapTextMarks(slice.content, (mark) =>
+            isMentionMark(mark)
+              ? mark.type.create({ ...mark.attrs, title: source })
+              : mark,
+          ),
+          slice.openStart,
+          slice.openEnd,
+        ),
+      transformPasted: (slice) =>
+        new Slice(
+          mapTextMarks(slice.content, (mark) => {
+            if (!isMentionMark(mark)) return mark;
+            if (mark.attrs.title !== source) return null;
+            return mark.type.create({ ...mark.attrs, title: null });
+          }),
+          slice.openStart,
+          slice.openEnd,
+        ),
+    },
+  });
+});
+
 export default function DesktopMarkdownEditor({
   initialValue,
   onValueChange,
@@ -359,6 +431,7 @@ function EditorSurface({
         .use(history)
         .use(imeSafeShortcuts)
         .use(atomicMentions)
+        .use(pastedMentions)
         .use(listener),
     [],
   );
@@ -381,7 +454,7 @@ function EditorSurface({
           // 뒤에 이어 쓸 때 링크 안으로 빨려 들어가지 않도록 멘션마다 mark 없는 공백을 함께 넣는다.
           const nodes = mentions.flatMap(({ label, ordinal }) => [
             state.schema.text(`@${sanitizeMentionLabel(label)}`, [
-              linkSchema.type(ctx).create({ href: `m:${ordinal}` }),
+              postLinkSchema.type(ctx).create({ href: `m:${ordinal}` }),
             ]),
             state.schema.text(" "),
           ]);
@@ -402,7 +475,7 @@ function EditorSurface({
     get()?.action((ctx) => {
       const { state } = ctx.get(editorViewCtx);
       const { from, to, $from } = state.selection;
-      const current: unknown = linkSchema.type(ctx).isInSet($from.marks())
+      const current: unknown = postLinkSchema.type(ctx).isInSet($from.marks())
         ?.attrs.href;
       setLinkDraft({
         from,
@@ -422,7 +495,7 @@ function EditorSurface({
     get()?.action((ctx) => {
       const view = ctx.get(editorViewCtx);
       const { state } = view;
-      const linkType = linkSchema.type(ctx);
+      const linkType = postLinkSchema.type(ctx);
       const mark = linkType.create({ href });
       const max = state.doc.content.size;
       const from = Math.min(draft.from, max);

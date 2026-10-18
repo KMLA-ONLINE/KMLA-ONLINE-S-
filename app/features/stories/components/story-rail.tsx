@@ -1,5 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { ImageIcon, PlusIcon, XIcon } from "lucide-react";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ImageIcon,
+  PlusIcon,
+  XIcon,
+} from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -142,7 +148,7 @@ export function StoryRail({
     <>
       {groups.length > 0 || canWrite ? (
         <section className="border-b border-border bg-background pt-1 pb-2 md:border-0">
-          <div className="[scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden">
+          <StoryRailScroller>
             {/* 넓은 화면에서는 아래 피드 카드와 좌우 끝을 맞춘다. 피드 카드는 여백 없이 열을 꽉
                 채우므로 레일도 여백을 두지 않는다. */}
             <div className="flex w-max gap-1.5 px-2 md:px-0">
@@ -195,7 +201,7 @@ export function StoryRail({
                 />
               ))}
             </div>
-          </div>
+          </StoryRailScroller>
         </section>
       ) : null}
 
@@ -239,6 +245,106 @@ export function StoryRail({
         />
       ) : null}
     </>
+  );
+}
+
+/** 넘김 버튼 한 번에 움직이는 양. 보이던 카드 하나가 남아 어디서 이어지는지 알 수 있다. */
+const RAIL_PAGE_RATIO = 0.8;
+
+/**
+ * 레일의 가로 스크롤 칸. 데스크톱은 마우스 휠이 세로로만 돌아 카드가 넘치면 뒤쪽을 볼 길이
+ * 없으므로 넘친 쪽 끝에 넘김 버튼을 띄운다. 모바일은 손가락으로 밀면 되므로 띄우지 않는다.
+ */
+function StoryRailScroller({ children }: { children: React.ReactNode }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ start: false, end: false });
+
+  function measure() {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    // 소수점 폭 때문에 끝까지 가도 1px 남짓 모자랄 수 있다.
+    const start = scroller.scrollLeft > 1;
+    const end =
+      scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1;
+
+    setEdges((previous) =>
+      previous.start === start && previous.end === end
+        ? previous
+        : { start, end },
+    );
+  }
+
+  // 창 폭이 바뀌거나 카드가 늘고 줄어도 다시 잰다.
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(scroller);
+    if (scroller.firstElementChild) {
+      observer.observe(scroller.firstElementChild);
+    }
+    return () => observer.disconnect();
+  }, []);
+
+  function page(direction: -1 | 1) {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    const reduced = window.matchMedia?.(REDUCED_MOTION_QUERY).matches ?? false;
+
+    scroller.scrollBy({
+      left: direction * scroller.clientWidth * RAIL_PAGE_RATIO,
+      behavior: reduced ? "auto" : "smooth",
+    });
+  }
+
+  return (
+    <div className="relative">
+      <div
+        ref={scrollerRef}
+        onScroll={measure}
+        className="[scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden"
+      >
+        {children}
+      </div>
+      {edges.start ? (
+        <StoryRailPageButton side="start" onClick={() => page(-1)} />
+      ) : null}
+      {edges.end ? (
+        <StoryRailPageButton side="end" onClick={() => page(1)} />
+      ) : null}
+    </div>
+  );
+}
+
+function StoryRailPageButton({
+  side,
+  onClick,
+}: {
+  side: "start" | "end";
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      aria-label={side === "start" ? "이전 스토리 보기" : "다음 스토리 보기"}
+      onClick={onClick}
+      // 세로 가운데는 transform이 아니라 margin으로 맞춘다. Button이 누를 때 거는
+      // `active:translate-y-px`가 `-translate-y-1/2`를 덮어써 버튼이 반 칸 아래로 떨어진다.
+      className={cn(
+        "absolute inset-y-0 z-10 my-auto hidden rounded-full shadow-md md:inline-flex",
+        side === "start" ? "left-2" : "right-2",
+      )}
+    >
+      {side === "start" ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+    </Button>
   );
 }
 
