@@ -608,7 +608,14 @@ describe("public push service worker", () => {
   });
 
   it("ignores click data that was not produced by a validated push", async () => {
-    const worker = loadPushWorker();
+    const appClient = {
+      url: "https://kmla.example/home",
+      visibilityState: "visible",
+      focus: vi.fn(() => Promise.resolve()),
+      navigate: vi.fn(() => Promise.resolve()),
+      postMessage: vi.fn(),
+    };
+    const worker = loadPushWorker([appClient]);
 
     await worker.dispatch("notificationclick", {
       notification: {
@@ -617,7 +624,28 @@ describe("public push service worker", () => {
       },
     });
 
-    expect(worker.matchAll).not.toHaveBeenCalled();
+    // 뱃지를 다시 쓰라는 알림은 가도 이동은 하지 않는다.
+    expect(appClient.focus).not.toHaveBeenCalled();
+    expect(appClient.navigate).not.toHaveBeenCalled();
+    expect(appClient.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "navigate" }),
+      expect.anything(),
+    );
     expect(worker.openWindow).not.toHaveBeenCalled();
+  });
+
+  it("tells open windows after it overwrites the app icon badge", async () => {
+    const appClient = {
+      url: "https://kmla.example/home",
+      postMessage: vi.fn(),
+    };
+    const worker = loadPushWorker([appClient]);
+
+    await worker.dispatch("notificationclose", { notification: {} });
+
+    expect(worker.clearAppBadge).toHaveBeenCalledOnce();
+    expect(appClient.postMessage).toHaveBeenCalledWith({
+      type: "app-badge-overwritten",
+    });
   });
 });

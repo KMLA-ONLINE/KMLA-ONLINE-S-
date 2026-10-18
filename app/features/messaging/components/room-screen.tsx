@@ -982,56 +982,59 @@ function MessageThread({
     messageThread.scrollTop = messageThread.scrollHeight;
   }, [newestMessageId, messageThreadRef, followingNewMessagesRef]);
 
+  function markNewestMessageSeen() {
+    setSeen((previous) =>
+      previous.conversationId === conversation.id &&
+      previous.messageId === newestMessageId
+        ? previous
+        : { conversationId: conversation.id, messageId: newestMessageId },
+    );
+  }
+
   // 맨 아래를 보고 있는 동안에는 메시지가 늘지 않아도 맨 아래에 붙어 있는다. 반응이 붙거나 사진이
   // 늦게 그려지거나 키보드·답장 표시로 대화 영역이 줄면 높이만 바뀌어 아래가 가려진다.
+  // observer는 대화 영역이 그대로인 동안 하나만 둔다. 새 메시지마다 다시 만들면 재어 둔 높이가
+  // 새로 잡혀, 아직 전달되지 않은 높이 변화(iOS 키보드가 닫히는 중 등)를 놓친다.
+  const followThreadResize = useEffectEvent((messageThread: HTMLElement) => {
+    const heightChanged =
+      observedThreadHeight.current !== messageThread.clientHeight;
+    observedThreadHeight.current = messageThread.clientHeight;
+    if (ios && heightChanged && !followingNewMessagesRef.current) {
+      const distanceFromBottom =
+        messageThread.scrollHeight -
+        messageThread.clientHeight -
+        messageThread.scrollTop;
+      if (distanceFromBottom <= 1) {
+        followingNewMessagesRef.current = true;
+        setShowScrollToBottom(false);
+        markNewestMessageSeen();
+      }
+    }
+    if (followingNewMessagesRef.current) {
+      if (ios) {
+        const bottom = Math.max(
+          0,
+          messageThread.scrollHeight - messageThread.clientHeight,
+        );
+        if (bottom - messageThread.scrollTop > 1)
+          messageThread.scrollTop = bottom;
+      } else {
+        messageThread.scrollTop = messageThread.scrollHeight;
+      }
+    }
+  });
   useEffect(() => {
     const messageThread = messageThreadRef.current;
     const content = threadContentRef.current;
     if (!messageThread || !content) return;
     observedThreadHeight.current = messageThread.clientHeight;
-    const observer = new ResizeObserver(() => {
-      const heightChanged =
-        observedThreadHeight.current !== messageThread.clientHeight;
-      observedThreadHeight.current = messageThread.clientHeight;
-      if (ios && heightChanged && !followingNewMessagesRef.current) {
-        const distanceFromBottom =
-          messageThread.scrollHeight -
-          messageThread.clientHeight -
-          messageThread.scrollTop;
-        if (distanceFromBottom <= 1) {
-          followingNewMessagesRef.current = true;
-          setShowScrollToBottom(false);
-          setSeen((previous) =>
-            previous.conversationId === conversation.id &&
-            previous.messageId === newestMessageId
-              ? previous
-              : { conversationId: conversation.id, messageId: newestMessageId },
-          );
-        }
-      }
-      if (followingNewMessagesRef.current) {
-        if (ios) {
-          const bottom = Math.max(
-            0,
-            messageThread.scrollHeight - messageThread.clientHeight,
-          );
-          if (bottom - messageThread.scrollTop > 1)
-            messageThread.scrollTop = bottom;
-        } else {
-          messageThread.scrollTop = messageThread.scrollHeight;
-        }
-      }
-    });
+    const observer = new ResizeObserver(() =>
+      followThreadResize(messageThread),
+    );
     observer.observe(messageThread);
     observer.observe(content);
     return () => observer.disconnect();
-  }, [
-    conversation.id,
-    ios,
-    messageThreadRef,
-    followingNewMessagesRef,
-    newestMessageId,
-  ]);
+  }, [messageThreadRef]);
 
   function maybeLoadOlderMessages() {
     const messageThread = messageThreadRef.current;
@@ -1074,15 +1077,6 @@ function MessageThread({
   useEffect(() => {
     loadMoreIfStillNearTop();
   }, [oldestMessageId]);
-
-  function markNewestMessageSeen() {
-    setSeen((previous) =>
-      previous.conversationId === conversation.id &&
-      previous.messageId === newestMessageId
-        ? previous
-        : { conversationId: conversation.id, messageId: newestMessageId },
-    );
-  }
 
   function updateScrollToBottomVisibility() {
     const messageThread = messageThreadRef.current;

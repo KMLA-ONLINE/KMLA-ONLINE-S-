@@ -85,6 +85,9 @@ async function syncIcon(): Promise<void> {
 
   badgedIconHref ??= createBadgedIconHref().catch(() => null);
   const href = await badgedIconHref;
+  // 실패는 기억하지 않는다. 앱이 오프라인에서 돌아오는 순간처럼 한 번 실패했다고 페이지를 다시
+  // 불러올 때까지 점이 안 나오면 안 된다. 다음 0→N에서 다시 만든다.
+  if (!href) badgedIconHref = null;
 
   // 아이콘을 만드는 동안 모두 읽었으면 점을 찍지 않는다.
   if (href && currentCount > 0) replaceIcons(href);

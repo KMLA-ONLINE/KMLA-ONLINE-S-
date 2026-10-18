@@ -186,6 +186,9 @@ function isClickData(value) {
   );
 }
 
+/** `app/features/app-shell/components/unread-badge-sync.tsx`와 같은 값이어야 한다. */
+const APP_BADGE_OVERWRITTEN = "app-badge-overwritten";
+
 /**
  * 홈 화면 아이콘 위의 숫자(Badging API).
  *
@@ -217,6 +220,26 @@ async function syncAppBadge() {
     else await badging.clearAppBadge();
   } catch {
     // 지원하지 않거나 권한이 없는 환경.
+    return;
+  }
+  await notifyAppBadgeOverwritten();
+}
+
+/**
+ * 떠 있는 창에 방금 뱃지를 카드 수로 덮었다고 알린다. 앱(`UnreadBadgeSync`)은 메시지를 합친
+ * 서버 값을 들고 있지만 그 값이 바뀌지 않으면 다시 쓰지 않으므로, 알리지 않으면 카드를 쓸어 지우거나
+ * 알림 push가 올 때마다 메시지 수가 뱃지에서 빠진다.
+ */
+async function notifyAppBadgeOverwritten() {
+  try {
+    const windows = await self.clients.matchAll({
+      type: "window",
+      includeUncontrolled: true,
+    });
+    for (const client of windows)
+      client.postMessage({ type: APP_BADGE_OVERWRITTEN });
+  } catch {
+    // 창이 없거나 닫히는 중이면 다음 실행에서 앱이 다시 쓴다.
   }
 }
 
