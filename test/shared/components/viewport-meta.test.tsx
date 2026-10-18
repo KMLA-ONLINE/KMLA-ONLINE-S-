@@ -78,11 +78,6 @@ describe("initial viewport metadata", () => {
 
   it.each([
     [
-      "Android",
-      "Mozilla/5.0 (Linux; Android 15; Pixel 7) AppleWebKit/537.36 Chrome/135.0.0.0 Mobile Safari/537.36",
-      5,
-    ],
-    [
       "macOS",
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15",
       0,
@@ -98,6 +93,19 @@ describe("initial viewport metadata", () => {
     expect(
       page.querySelector('meta[name="viewport"]')?.getAttribute("content"),
     ).toBe("width=device-width, initial-scale=1");
+    expect(page.querySelectorAll('meta[name="viewport"]')).toHaveLength(1);
+  });
+
+  it("lets Android resize content with the keyboard without safe-area cover", () => {
+    const page = initialDocument(
+      "Mozilla/5.0 (Linux; Android 15; Pixel 7) Chrome/135.0.0.0 Mobile Safari/537.36",
+      5,
+    );
+    expect(
+      page.querySelector('meta[name="viewport"]')?.getAttribute("content"),
+    ).toBe(
+      "width=device-width, initial-scale=1, interactive-widget=resizes-content",
+    );
     expect(page.querySelectorAll('meta[name="viewport"]')).toHaveLength(1);
   });
 

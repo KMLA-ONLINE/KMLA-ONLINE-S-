@@ -159,6 +159,164 @@ function SwitchableRoomScreen({
 }
 
 describe("RoomScreen", () => {
+  it.each([
+    ["iPhone", true],
+    ["iPad", true],
+    ["Android", false],
+  ])(
+    "keeps composer safe-area padding keyboard-aware only on iOS (%s)",
+    async (platform, ios) => {
+      vi.spyOn(navigator, "userAgent", "get").mockReturnValue(platform);
+      const viewport = Object.assign(new EventTarget(), {
+        height: window.innerHeight,
+        offsetTop: 0,
+        scale: 1,
+      });
+      Object.defineProperty(window, "visualViewport", {
+        configurable: true,
+        value: viewport,
+      });
+      const conversation = await loadConversation("student-council");
+      renderRoute(() => <RoomScreen conversation={conversation!} />, {
+        path: "/messenger/student-council",
+      });
+      const composer = screen
+        .getByRole("textbox", { name: "메시지 입력" })
+        .closest("footer")!;
+      const safeAreaPadding = "pb-[calc(0.5rem+var(--app-safe-b))]";
+      expect(composer).toHaveClass(safeAreaPadding);
+
+      act(() => {
+        viewport.height = window.innerHeight - 300;
+        viewport.dispatchEvent(new Event("resize"));
+      });
+      if (ios) {
+        expect(composer).toHaveClass("pb-0");
+        expect(composer).not.toHaveClass(safeAreaPadding);
+      } else {
+        expect(composer).toHaveClass(safeAreaPadding);
+        expect(composer).not.toHaveClass("pb-0");
+      }
+
+      act(() => {
+        viewport.height = window.innerHeight;
+        viewport.dispatchEvent(new Event("resize"));
+      });
+      expect(composer).toHaveClass(safeAreaPadding);
+      expect(composer).not.toHaveClass("pb-0");
+    },
+  );
+
+  it.each(["iPhone", "Android"])(
+    "anchors the room header and composer to the keyboard viewport (%s)",
+    async (platform) => {
+      vi.spyOn(navigator, "userAgent", "get").mockReturnValue(platform);
+      const viewport = Object.assign(new EventTarget(), {
+        height: window.innerHeight,
+        offsetTop: 0,
+        scale: 1,
+      });
+      Object.defineProperty(window, "visualViewport", {
+        configurable: true,
+        value: viewport,
+      });
+      const conversation = await loadConversation("student-council");
+      renderRoute(() => <RoomScreen conversation={conversation!} />, {
+        path: "/messenger/student-council",
+      });
+      const room = screen.getByRole("region", {
+        name: "학생회 기획부 채팅",
+      }).parentElement!;
+      const header = screen.getByRole("heading", {
+        name: "학생회 기획부",
+        level: 1,
+      });
+      act(() => {
+        viewport.height = window.innerHeight - 300;
+        viewport.offsetTop = 100;
+        viewport.dispatchEvent(new Event("resize"));
+      });
+      expect(header).toBeVisible();
+      if (platform === "iPhone") {
+        expect(room).toHaveStyle({
+          "--room-keyboard-height": `${viewport.height}px`,
+        });
+        expect(room).toHaveClass("max-md:top-(--room-keyboard-top)");
+        expect(room).not.toHaveClass("max-md:bottom-(--room-keyboard-bottom)");
+        expect(room).toHaveStyle({ "--room-keyboard-top": "100px" });
+        act(() => {
+          viewport.offsetTop = 200;
+          viewport.dispatchEvent(new Event("scroll"));
+        });
+        expect(room).toHaveStyle({ "--room-keyboard-top": "200px" });
+      } else {
+        expect(room).not.toHaveClass("max-md:fixed");
+        expect(room).not.toHaveClass("max-md:bottom-(--room-keyboard-bottom)");
+        expect(room).not.toHaveClass("max-md:top-(--room-keyboard-top)");
+        expect(room).not.toHaveAttribute("style");
+      }
+      act(() => {
+        viewport.height = window.innerHeight;
+        viewport.offsetTop = 0;
+        viewport.dispatchEvent(new Event("resize"));
+      });
+      expect(room).not.toHaveClass("max-md:fixed");
+      expect(header).toBeVisible();
+    },
+  );
+
+  it.each(["iPhone", "Android"])(
+    "uses the document height only on iOS when the installed app resizes innerHeight (%s)",
+    async (platform) => {
+      vi.spyOn(navigator, "userAgent", "get").mockReturnValue(platform);
+      vi.spyOn(document.documentElement, "clientHeight", "get").mockReturnValue(
+        812,
+      );
+      const previousHeight = window.innerHeight;
+      const viewport = Object.assign(new EventTarget(), {
+        height: 443,
+        offsetTop: 369,
+        scale: 1,
+      });
+      Object.defineProperty(window, "visualViewport", {
+        configurable: true,
+        value: viewport,
+      });
+      Object.defineProperty(window, "innerHeight", {
+        configurable: true,
+        value: 443,
+      });
+      try {
+        const conversation = await loadConversation("student-council");
+        renderRoute(() => <RoomScreen conversation={conversation!} />, {
+          path: "/messenger/student-council",
+        });
+        const room = screen.getByRole("region", {
+          name: "학생회 기획부 채팅",
+        }).parentElement!;
+        const footer = screen
+          .getByRole("textbox", { name: "메시지 입력" })
+          .closest("footer")!;
+        if (platform === "iPhone") {
+          expect(room).toHaveClass("max-md:fixed");
+          expect(room).toHaveStyle({
+            "--room-keyboard-height": "443px",
+            "--room-keyboard-top": "369px",
+          });
+          expect(footer).toHaveClass("pb-0");
+        } else {
+          expect(room).not.toHaveClass("max-md:fixed");
+          expect(footer).toHaveClass("pb-[calc(0.5rem+var(--app-safe-b))]");
+        }
+      } finally {
+        Object.defineProperty(window, "innerHeight", {
+          configurable: true,
+          value: previousHeight,
+        });
+      }
+    },
+  );
+
   it("그룹 대화의 메시지와 대표 상태를 표시한다", async () => {
     const conversation = await loadConversation("student-council");
     expect(conversation).not.toBeNull();

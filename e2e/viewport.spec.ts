@@ -20,7 +20,8 @@ const cases = [
     userAgent:
       "Mozilla/5.0 (Linux; Android 15; Pixel 7) AppleWebKit/537.36 Chrome/135.0.0.0 Mobile Safari/537.36",
     maxTouchPoints: 5,
-    content: "width=device-width, initial-scale=1",
+    content:
+      "width=device-width, initial-scale=1, interactive-widget=resizes-content",
   },
   {
     name: "macOS",

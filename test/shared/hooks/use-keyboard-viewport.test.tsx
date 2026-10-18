@@ -51,6 +51,7 @@ describe("useKeyboardViewport", () => {
     expect(result.current).toEqual({
       keyboardOpen: true,
       bottomInset: 300,
+      offsetTop: 0,
       height: 500,
     });
   });
@@ -70,8 +71,39 @@ describe("useKeyboardViewport", () => {
     expect(result.current).toEqual({
       keyboardOpen: false,
       bottomInset: 0,
+      offsetTop: 0,
       height: 500,
     });
+  });
+
+  it("detects an installed iOS keyboard when innerHeight shrinks with it", () => {
+    const clientHeight = vi
+      .spyOn(document.documentElement, "clientHeight", "get")
+      .mockReturnValue(812);
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 443,
+    });
+    visualViewport.height = 443;
+    visualViewport.offsetTop = 369;
+    const { result } = renderHook(() => useKeyboardViewport(true, true));
+    expect(result.current).toEqual({
+      keyboardOpen: true,
+      bottomInset: 0,
+      offsetTop: 369,
+      height: 443,
+    });
+    act(() => {
+      Object.defineProperty(window, "innerHeight", {
+        configurable: true,
+        value: 812,
+      });
+      visualViewport.height = 812;
+      visualViewport.offsetTop = 0;
+      visualViewport.dispatchEvent(new Event("resize"));
+    });
+    expect(result.current.keyboardOpen).toBe(false);
+    clientHeight.mockRestore();
   });
 
   it("accounts for a visual viewport panned by the browser", () => {
@@ -86,6 +118,7 @@ describe("useKeyboardViewport", () => {
     expect(result.current).toEqual({
       keyboardOpen: true,
       bottomInset: 200,
+      offsetTop: 100,
       height: 500,
     });
   });
@@ -103,6 +136,7 @@ describe("useKeyboardViewport", () => {
     expect(result.current).toEqual({
       keyboardOpen: true,
       bottomInset: 0,
+      offsetTop: 300,
       height: 500,
     });
   });
@@ -114,6 +148,7 @@ describe("useKeyboardViewport", () => {
     expect(result.current).toEqual({
       keyboardOpen: false,
       bottomInset: 0,
+      offsetTop: 0,
       height: 760,
     });
 
@@ -124,6 +159,7 @@ describe("useKeyboardViewport", () => {
     expect(result.current).toEqual({
       keyboardOpen: false,
       bottomInset: 0,
+      offsetTop: 0,
       height: null,
     });
   });
@@ -136,6 +172,7 @@ describe("useKeyboardViewport", () => {
     expect(result.current).toEqual({
       keyboardOpen: false,
       bottomInset: 0,
+      offsetTop: 0,
       height: null,
     });
   });
