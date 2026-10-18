@@ -9,6 +9,7 @@ import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PullToRefresh } from "~/features/app-shell/components/pull-to-refresh";
+import { useShellRefresh } from "~/features/app-shell/hooks/use-shell-refresh";
 
 const TOUCH_ID = 1;
 
@@ -36,9 +37,15 @@ function Subject({
   onButtonClick?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const { refreshing, refresh } = useShellRefresh(onRefresh);
   return (
     <div ref={ref} data-testid="scroller">
-      <PullToRefresh containerRef={ref} enabled onRefresh={onRefresh} />
+      <PullToRefresh
+        containerRef={ref}
+        enabled
+        refreshing={refreshing}
+        onRefresh={refresh}
+      />
       <div>content</div>
       <button type="button" onClick={onButtonClick}>
         action
@@ -111,7 +118,12 @@ describe("PullToRefresh", () => {
       const ref = useRef<HTMLDivElement>(null);
       return (
         <div ref={ref} data-testid="scroller">
-          <PullToRefresh containerRef={ref} enabled onRefresh={onRefresh} />
+          <PullToRefresh
+            containerRef={ref}
+            enabled
+            refreshing={false}
+            onRefresh={onRefresh}
+          />
           <input aria-label="search" />
         </div>
       );

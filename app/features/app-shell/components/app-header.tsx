@@ -8,6 +8,7 @@ import { Link } from "react-router";
 import { useRef, useState } from "react";
 
 import { useAppShell } from "~/features/app-shell/context/app-shell-context";
+import { useHomeReselectClick } from "~/features/app-shell/hooks/use-home-reselect-click";
 import { LogoutDialog } from "~/features/auth/components/logout-button";
 import { GlobalSearchDropdown } from "~/features/search";
 import { UserAvatar } from "~/shared/components/user-avatar";
@@ -25,8 +26,16 @@ import { cn } from "~/shared/lib/utils";
 /**
  * 데스크톱 전역 헤더. 모바일은 셸이 숨기고 각 페이지가 `<PageHeader>`를 그린다.
  * `fixed`가 아니라 셸의 flex 흐름 안에 있어 콘텐츠 패딩 보정이 없고 safe-area 상단도 여기서만 처리한다.
+ * 로고는 사이드바의 홈과 같다. 홈에서 다시 누르면 이동하지 않고 `onHomeReselect`를 부른다.
  */
-export function AppHeader({ className }: { className?: string }) {
+export function AppHeader({
+  className,
+  onHomeReselect,
+}: {
+  className?: string;
+  onHomeReselect: () => void;
+}) {
+  const onHomeClick = useHomeReselectClick(onHomeReselect);
   const { profile } = useAppShell();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const avatarRef = useRef<HTMLButtonElement>(null);
@@ -42,6 +51,7 @@ export function AppHeader({ className }: { className?: string }) {
       <div className="flex flex-1 basis-0 items-center">
         <Link
           to="/"
+          onClick={onHomeClick}
           className="text-sm font-semibold tracking-wide whitespace-nowrap hover:text-primary"
         >
           KMLA Online

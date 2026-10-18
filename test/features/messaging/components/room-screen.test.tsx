@@ -94,6 +94,7 @@ vi.mock("@base-ui/react/context-menu", async (importOriginal) => {
 const originalVisualViewport = window.visualViewport;
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.useRealTimers();
   positionerSpy.mockClear();
   Object.defineProperty(window, "visualViewport", {
@@ -1356,6 +1357,170 @@ describe("RoomScreen", () => {
     await waitFor(() => expect(sendSpy).toHaveBeenCalledTimes(2));
     sendSpy.mockRestore();
     now.mockRestore();
+  });
+
+  it("iOS keeps the latest message visible when multiline composition shrinks the thread", async () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("iPhone");
+    const callbacks = new Map<Element, ResizeObserverCallback>();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(private callback: ResizeObserverCallback) {}
+        observe(element: Element) {
+          callbacks.set(element, this.callback);
+        }
+        unobserve(element: Element) {
+          callbacks.delete(element);
+        }
+        disconnect() {
+          callbacks.clear();
+        }
+      },
+    );
+    const conversation = await loadConversation("hyunwoo");
+    let queryClient!: QueryClient;
+    function GrabClient() {
+      const client = useQueryClient();
+      useEffect(() => {
+        queryClient = client;
+      }, [client]);
+      return null;
+    }
+    renderRoute(
+      () => (
+        <>
+          <GrabClient />
+          <RoomScreen conversation={conversation!} />
+        </>
+      ),
+      {
+        path: "/messenger/hyunwoo",
+      },
+    );
+    const thread = screen
+      .getByRole("region", { name: "이현우 채팅" })
+      .querySelector(".overflow-y-auto")!;
+    let height = 300;
+    let top = 700;
+    let scrollHeight = 1000;
+    const scrollWrites: number[] = [];
+    Object.defineProperties(thread, {
+      clientHeight: { configurable: true, get: () => height },
+      scrollHeight: { configurable: true, get: () => scrollHeight },
+      scrollTop: {
+        configurable: true,
+        get: () => top,
+        set: (value: number) => {
+          top = value;
+          scrollWrites.push(value);
+        },
+      },
+    });
+    const resize = () => callbacks.get(thread)!([], {} as ResizeObserver);
+    act(resize);
+    thread.scrollTop = 700;
+    fireEvent.scroll(thread);
+    // Safari can dispatch scroll before ResizeObserver when the composer grows.
+    height = 180;
+    fireEvent.scroll(thread);
+    act(resize);
+    expect(thread.scrollTop).toBe(820);
+    scrollWrites.length = 0;
+    fireEvent.change(screen.getByRole("textbox", { name: "메시지 입력" }), {
+      target: { value: "첫 줄" },
+    });
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
+    expect(scrollWrites).toEqual([]);
+    // Continued typing may scroll the thread after the resize has already settled.
+    fireEvent.change(screen.getByRole("textbox", { name: "메시지 입력" }), {
+      target: { value: "첫 줄\n두 번째 줄 타이핑" },
+    });
+    thread.scrollTop = 650;
+    fireEvent.scroll(thread);
+    await waitFor(() => expect(thread.scrollTop).toBe(820));
+    // Growing the draft must not pull a reader away from older messages.
+    thread.scrollTop = 100;
+    fireEvent.scroll(thread);
+    height = 156;
+    fireEvent.scroll(thread);
+    act(resize);
+    expect(thread.scrollTop).toBe(100);
+    // A small expansion must not pull someone reading older messages to bottom.
+    thread.scrollTop = 744;
+    fireEvent.scroll(thread);
+    height = 180;
+    act(resize);
+    expect(thread.scrollTop).toBe(744);
+    scrollHeight = 1100;
+    act(() => {
+      mergeServerMessages(queryClient, "hyunwoo", [
+        {
+          id: "while-reading",
+          senderId: "hyunwoo-user",
+          body: "unseen before keyboard closes",
+          sentAt: "2026-09-30T12:11:00+09:00",
+        },
+      ]);
+    });
+    await within(thread as HTMLElement).findByText(
+      "unseen before keyboard closes",
+    );
+    height = 300;
+    thread.scrollTop = 800;
+    fireEvent.scroll(thread);
+    act(resize);
+    thread.scrollTop = 100;
+    fireEvent.scroll(thread);
+    expect(
+      screen.queryByRole("button", { name: /^새 메시지:/ }),
+    ).not.toBeInTheDocument();
+    // Closing the keyboard can clamp the list to its bottom before resize delivery.
+    scrollHeight = 1000;
+    thread.scrollTop = 700;
+    fireEvent.scroll(thread);
+    act(resize);
+    scrollHeight = 1100;
+    act(() => {
+      mergeServerMessages(queryClient, "hyunwoo", [
+        {
+          id: "after-dismissal",
+          senderId: "hyunwoo-user",
+          body: "new reply",
+          sentAt: "2026-09-30T12:12:00+09:00",
+        },
+      ]);
+    });
+    await within(thread as HTMLElement).findByText("new reply");
+    expect(thread.scrollTop).toBe(1100);
+    fireEvent.change(screen.getByRole("textbox", { name: "메시지 입력" }), {
+      target: { value: "새 메시지를 보며 입력" },
+    });
+    scrollHeight = 1200;
+    act(() => {
+      mergeServerMessages(queryClient, "hyunwoo", [
+        {
+          id: "while-composing",
+          senderId: "hyunwoo-user",
+          body: "reply while typing",
+          sentAt: "2026-09-30T12:13:00+09:00",
+        },
+      ]);
+    });
+    await within(thread as HTMLElement).findByText("reply while typing");
+    thread.scrollTop = 1200;
+    fireEvent.scroll(thread);
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
+    thread.scrollTop = 100;
+    fireEvent.pointerDown(thread);
+    fireEvent.scroll(thread);
+    expect(
+      screen.queryByRole("button", { name: /^새 메시지:/ }),
+    ).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 
   it("맨 아래를 보고 있을 때 새 메시지가 오면 따라 내려가고, 위로 올려 보던 중이면 그대로 둔다", async () => {

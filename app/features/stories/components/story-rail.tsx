@@ -86,14 +86,19 @@ export function StoryRail({
   /** 재학생이면 작성 창에서 공개 범위를 좁힐 수 있다. */
   canNarrowAudience?: boolean;
 }) {
+  const { param, openComposer, openStory, showStory, close } = useStoryParam();
   // 레일은 쿼리 캐시를 구독한다. 로더가 채운 값을 그대로 읽고, 작성·삭제 뒤의 무효화와 당겨서
   // 새로고침이 다시 받은 값도 같은 경로로 들어온다.
   const { data } = useQuery({
     queryKey: storyKeys.active(),
     queryFn: listActiveStories,
     staleTime: STORY_STALE_TIME,
+    // 홈을 띄워 둔 채 다른 창·앱에 다녀오면 다시 읽는다. 전역 기본은 꺼져 있지만, 스토리는 24시간이면
+    // 사라지고 순서가 바뀌어도 읽던 위치를 잃지 않는다. `staleTime` 안의 복귀는 요청하지 않는다.
+    // 뷰어·작성 창이 열려 있으면 하지 않는다. 보던 스토리가 빠진 목록이 오면 "찾을 수 없음"으로 닫히고,
+    // 새 스토리가 오면 넘기던 순서가 바뀐다.
+    refetchOnWindowFocus: param.kind === "none",
   });
-  const { param, openComposer, openStory, showStory, close } = useStoryParam();
   // 방금 지운 스토리. 목록 갱신이 주소에서 `?story=`가 빠지기 전에 도착해도 "찾을 수 없음"으로
   // 오인하지 않게 한다.
   const [deletedIds, setDeletedIds] = useState<ReadonlySet<number>>(

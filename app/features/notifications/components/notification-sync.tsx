@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useEffectEvent, useRef } from "react";
 import { useLocation, useRevalidator, useRouteLoaderData } from "react-router";
 
@@ -8,13 +8,9 @@ import {
   refreshGroupAccess,
 } from "~/features/groups/data/cache";
 import type { GroupDetail } from "~/features/groups/model/types";
-import {
-  notificationBadgeQuery,
-  notificationKeys,
-} from "~/features/notifications/data/cache";
+import { notificationKeys } from "~/features/notifications/data/cache";
 import { subscribeToNotifications } from "~/features/notifications/data/subscriptions";
 import { resyncWebPushSubscription } from "~/features/notifications/data/push";
-import { setAppBadgeCount } from "~/shared/lib/app-badge";
 
 const GROUP_ROUTE =
   /^\/groups\/(?!(?:create|discover|member-page|report-page)(?:\/|$))([^/]+)(?:\/|$)/;
@@ -159,25 +155,9 @@ export function NotificationSync({ profileId }: { profileId: number }) {
     };
   }, []);
 
-  useAppBadgeSync();
   usePushSubscriptionResync(profileId);
 
   return null;
-}
-
-/**
- * 홈 화면 아이콘 숫자를 셸 뱃지와 같은 서버 값으로 맞춘다. 서비스 워커(`public/push-sw.js`)의 값은 근사치라 앱이 뜬 뒤엔 여기가 덮는다.
- * 게이트 로더가 채운 키(`staleTime` 1분)를 읽으므로 요청은 늘지 않는다.
- */
-function useAppBadgeSync(): void {
-  const { data: unreadCount } = useQuery(notificationBadgeQuery());
-
-  useEffect(() => {
-    // 아직 못 읽었으면 0으로 지우지 않는다. 로딩 중에 뱃지가 사라졌다 돌아오면 그게 더
-    // 눈에 띈다.
-    if (unreadCount === undefined) return;
-    setAppBadgeCount(unreadCount);
-  }, [unreadCount]);
 }
 
 /**

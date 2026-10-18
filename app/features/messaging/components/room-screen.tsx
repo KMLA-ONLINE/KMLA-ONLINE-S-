@@ -287,6 +287,37 @@ export function RoomScreen({
   // 둔다. 붙은 뒤에 재면 새 메시지 높이만큼 이미 맨 아래에서 멀어져 있다. 내가 보내면 어디를 보던
   // 맨 아래를 따라간다. 긴 메시지는 그린 뒤에도 줄바꿈과 작성창이 줄며 높이가 다시 바뀐다.
   const followingNewMessagesRef = useRef(true);
+  const composingAtBottomRef = useRef(false);
+  const compositionFrame = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (compositionFrame.current !== null)
+        cancelAnimationFrame(compositionFrame.current);
+    },
+    [],
+  );
+  function restoreComposerBottom() {
+    const thread = messageThreadRef.current;
+    if (!thread || !composingAtBottomRef.current) return;
+    const bottom = Math.max(0, thread.scrollHeight - thread.clientHeight);
+    if (bottom - thread.scrollTop > 1) thread.scrollTop = bottom;
+  }
+  function preserveCompositionPosition() {
+    if (!ios || !followingNewMessagesRef.current) return;
+    composingAtBottomRef.current = true;
+    if (compositionFrame.current !== null)
+      cancelAnimationFrame(compositionFrame.current);
+    // Safari reveals the caret after input/layout, including changes with no resize.
+    // Keep following through that native adjustment, without scrolling the document.
+    compositionFrame.current = requestAnimationFrame(() => {
+      restoreComposerBottom();
+      compositionFrame.current = requestAnimationFrame(() => {
+        restoreComposerBottom();
+        composingAtBottomRef.current = false;
+        compositionFrame.current = null;
+      });
+    });
+  }
   const pinnedMessage = pinnedMessages.at(-1);
   const pinnedMessageAuthor = pinnedMessage?.senderId
     ? (conversation.participants.find(({ id }) => id === pinnedMessage.senderId)
@@ -565,6 +596,8 @@ export function RoomScreen({
         ) : null}
 
         <MessageThread
+          ios={ios}
+          composingAtBottomRef={composingAtBottomRef}
           conversation={conversation}
           messages={messages}
           highlightedMessageId={highlightedMessageId}
@@ -645,6 +678,7 @@ export function RoomScreen({
           </div>
         ) : viewerActive ? (
           <ComposerShell
+            onDraftInput={preserveCompositionPosition}
             keyboardOpenOnIOS={ios && keyboardViewport.keyboardOpen}
             replyTarget={replyTarget ?? undefined}
             replyAuthor={replyAuthor}
@@ -774,6 +808,8 @@ export function RoomScreen({
 }
 
 function MessageThread({
+  composingAtBottomRef,
+  ios,
   conversation,
   messages,
   highlightedMessageId,
@@ -797,6 +833,8 @@ function MessageThread({
   onShowReactions,
   onDropFiles,
 }: {
+  composingAtBottomRef: RefObject<boolean>;
+  ios: boolean;
   conversation: Conversation;
   messages: ConversationMessage[];
   highlightedMessageId: string | null;
@@ -829,6 +867,7 @@ function MessageThread({
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const threadContentRef = useRef<HTMLDivElement>(null);
+  const observedThreadHeight = useRef<number | null>(null);
   const scrollingToBottom = useRef(false);
   const previousScrollTop = useRef(0);
   const contextPortalRef = useRef<HTMLDivElement>(null);
@@ -943,21 +982,59 @@ function MessageThread({
     messageThread.scrollTop = messageThread.scrollHeight;
   }, [newestMessageId, messageThreadRef, followingNewMessagesRef]);
 
+  function markNewestMessageSeen() {
+    setSeen((previous) =>
+      previous.conversationId === conversation.id &&
+      previous.messageId === newestMessageId
+        ? previous
+        : { conversationId: conversation.id, messageId: newestMessageId },
+    );
+  }
+
   // 맨 아래를 보고 있는 동안에는 메시지가 늘지 않아도 맨 아래에 붙어 있는다. 반응이 붙거나 사진이
   // 늦게 그려지거나 키보드·답장 표시로 대화 영역이 줄면 높이만 바뀌어 아래가 가려진다.
+  // observer는 대화 영역이 그대로인 동안 하나만 둔다. 새 메시지마다 다시 만들면 재어 둔 높이가
+  // 새로 잡혀, 아직 전달되지 않은 높이 변화(iOS 키보드가 닫히는 중 등)를 놓친다.
+  const followThreadResize = useEffectEvent((messageThread: HTMLElement) => {
+    const heightChanged =
+      observedThreadHeight.current !== messageThread.clientHeight;
+    observedThreadHeight.current = messageThread.clientHeight;
+    if (ios && heightChanged && !followingNewMessagesRef.current) {
+      const distanceFromBottom =
+        messageThread.scrollHeight -
+        messageThread.clientHeight -
+        messageThread.scrollTop;
+      if (distanceFromBottom <= 1) {
+        followingNewMessagesRef.current = true;
+        setShowScrollToBottom(false);
+        markNewestMessageSeen();
+      }
+    }
+    if (followingNewMessagesRef.current) {
+      if (ios) {
+        const bottom = Math.max(
+          0,
+          messageThread.scrollHeight - messageThread.clientHeight,
+        );
+        if (bottom - messageThread.scrollTop > 1)
+          messageThread.scrollTop = bottom;
+      } else {
+        messageThread.scrollTop = messageThread.scrollHeight;
+      }
+    }
+  });
   useEffect(() => {
     const messageThread = messageThreadRef.current;
     const content = threadContentRef.current;
     if (!messageThread || !content) return;
-    const observer = new ResizeObserver(() => {
-      if (followingNewMessagesRef.current) {
-        messageThread.scrollTop = messageThread.scrollHeight;
-      }
-    });
+    observedThreadHeight.current = messageThread.clientHeight;
+    const observer = new ResizeObserver(() =>
+      followThreadResize(messageThread),
+    );
     observer.observe(messageThread);
     observer.observe(content);
     return () => observer.disconnect();
-  }, [messageThreadRef, followingNewMessagesRef]);
+  }, [messageThreadRef]);
 
   function maybeLoadOlderMessages() {
     const messageThread = messageThreadRef.current;
@@ -1008,16 +1085,25 @@ function MessageThread({
       messageThread.scrollHeight -
       messageThread.clientHeight -
       messageThread.scrollTop;
+    // Safari may emit scroll before resize delivery when the multiline composer grows.
+    // Keep the previous follow state until the observer restores the bottom position,
+    // but still mark a message already visible at the bottom as seen.
+    if (
+      ios &&
+      (composingAtBottomRef.current ||
+        (observedThreadHeight.current !== null &&
+          observedThreadHeight.current !== messageThread.clientHeight))
+    ) {
+      if (distanceFromBottom <= 1) {
+        markNewestMessageSeen();
+      }
+      return;
+    }
     followingNewMessagesRef.current =
       distanceFromBottom <= FOLLOW_NEW_MESSAGES_THRESHOLD;
     if (followingNewMessagesRef.current) {
       // 맨 아래에서는 스크롤 이벤트마다 여기에 온다. 같은 값이면 이전 객체를 돌려줘 다시 그리지 않는다.
-      setSeen((previous) =>
-        previous.conversationId === conversation.id &&
-        previous.messageId === newestMessageId
-          ? previous
-          : { conversationId: conversation.id, messageId: newestMessageId },
-      );
+      markNewestMessageSeen();
     }
 
     if (scrollingToBottom.current) {
@@ -1086,6 +1172,9 @@ function MessageThread({
       <div
         ref={messageThreadRef}
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 md:px-5"
+        onPointerDown={() => {
+          composingAtBottomRef.current = false;
+        }}
         onScroll={() => {
           updateScrollToBottomVisibility();
           maybeLoadOlderMessages();
@@ -1596,6 +1685,7 @@ function toStagedAttachment(file: File): StagedAttachment {
 }
 
 function ComposerShell({
+  onDraftInput,
   keyboardOpenOnIOS,
   replyTarget,
   replyAuthor,
@@ -1612,6 +1702,7 @@ function ComposerShell({
   desktopDetailsOpen,
   draftKey,
 }: {
+  onDraftInput: () => void;
   keyboardOpenOnIOS: boolean;
   replyTarget?: ConversationMessage;
   replyAuthor: string | null;
@@ -1728,6 +1819,7 @@ function ComposerShell({
   }
 
   function changeDraft(value: string) {
+    onDraftInput();
     setDraft(value);
     setJustSent(false);
     if (normalizeMessageBody(value).trim() === "") {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { AppShellProvider, type ShellData } from "~/features/app-shell";
 import { AppSidebar } from "~/features/app-shell/components/app-sidebar";
@@ -24,7 +24,7 @@ describe("desktop navigation", () => {
       renderRoute(
         () => (
           <AppShellProvider value={shell}>
-            <AppSidebar />
+            <AppSidebar onHomeReselect={() => undefined} />
           </AppShellProvider>
         ),
         { path },
@@ -44,4 +44,66 @@ describe("desktop navigation", () => {
       );
     },
   );
+
+  it("refreshes instead of navigating when home is clicked on home", async () => {
+    const onHomeReselect = vi.fn();
+    const { user } = renderRoute(
+      () => (
+        <AppShellProvider value={shell}>
+          <AppSidebar onHomeReselect={onHomeReselect} />
+        </AppShellProvider>
+      ),
+      { path: "/" },
+    );
+
+    await user.click(screen.getByRole("link", { name: "홈" }));
+
+    expect(onHomeReselect).toHaveBeenCalledTimes(1);
+  });
+
+  it("navigates home without refreshing from another tab", async () => {
+    const onHomeReselect = vi.fn();
+    const { user } = renderRoute(
+      () => (
+        <AppShellProvider value={shell}>
+          <AppSidebar onHomeReselect={onHomeReselect} />
+        </AppShellProvider>
+      ),
+      {
+        path: "/menu",
+        routes: [{ path: "/", Component: () => <p>홈 화면</p> }],
+      },
+    );
+
+    await user.click(screen.getByRole("link", { name: "홈" }));
+
+    expect(await screen.findByText("홈 화면")).toBeInTheDocument();
+    expect(onHomeReselect).not.toHaveBeenCalled();
+  });
+
+  it("lets home override a navigation that is still loading", async () => {
+    const onHomeReselect = vi.fn();
+    const { user } = renderRoute(
+      () => (
+        <AppShellProvider value={shell}>
+          <AppSidebar onHomeReselect={onHomeReselect} />
+        </AppShellProvider>
+      ),
+      {
+        path: "/",
+        routes: [
+          {
+            path: "/groups",
+            loader: () => new Promise(() => undefined),
+            Component: () => <p>그룹 화면</p>,
+          },
+        ],
+      },
+    );
+
+    await user.click(screen.getByRole("link", { name: "그룹" }));
+    await user.click(screen.getByRole("link", { name: "홈" }));
+
+    expect(onHomeReselect).not.toHaveBeenCalled();
+  });
 });

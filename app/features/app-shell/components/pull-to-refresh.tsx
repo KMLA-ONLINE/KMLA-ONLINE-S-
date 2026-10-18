@@ -11,7 +11,6 @@ import { cn } from "~/shared/lib/utils";
 
 const TRIGGER_DISTANCE = 72;
 const MAX_DISTANCE = 96;
-const MINIMUM_REFRESH_INDICATOR_MS = 300;
 /**
  * 당기기를 끝낸 직후 이 시간 안에 오는 click만 삼킨다. 손가락을 끌고 떼면 대부분의 브라우저는
  * click을 보내지 않는다. 기한 없이 "다음 click 하나"를 삼키면 그 click은 사용자가 나중에 누른
@@ -35,17 +34,22 @@ const IDLE_GESTURE: GestureState = {
   touchId: null,
 };
 
+/**
+ * 당기는 제스처와 진행 표시를 그린다. 새로고침 실행과 진행 상태는 `useShellRefresh`가 소유한다 —
+ * 다른 입구(데스크톱 홈 재클릭)로 시작한 새로고침도 같은 표시를 띄운다.
+ */
 export function PullToRefresh({
   containerRef,
   enabled,
+  refreshing,
   onRefresh,
 }: {
   containerRef: RefObject<HTMLElement | null>;
   enabled: boolean;
-  onRefresh: () => Promise<void>;
+  refreshing: boolean;
+  onRefresh: () => unknown;
 }) {
   const [distance, setDistance] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
   const gestureRef = useRef<GestureState>({ ...IDLE_GESTURE });
   const distanceRef = useRef(0);
   const suppressClickUntilRef = useRef(0);
@@ -116,15 +120,7 @@ export function PullToRefresh({
 
       if (didDrag)
         suppressClickUntilRef.current = Date.now() + SUPPRESS_CLICK_MS;
-      if (!shouldRefresh) return;
-
-      setRefreshing(true);
-      void Promise.allSettled([
-        refreshEvent(),
-        new Promise((resolve) =>
-          window.setTimeout(resolve, MINIMUM_REFRESH_INDICATOR_MS),
-        ),
-      ]).then(() => setRefreshing(false));
+      if (shouldRefresh) refreshEvent();
     };
 
     const onTouchStart = (event: TouchEvent) => {

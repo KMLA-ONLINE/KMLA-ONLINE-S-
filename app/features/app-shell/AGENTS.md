@@ -11,6 +11,7 @@
 - 메신저 route는 `scroll: "route"`다. 셸은 `ScrollRegion`, 콘텐츠 폭, 당겨서 새로고침과 navigation skeleton 없이 `Outlet`을 셸 높이에 꽉 채운다. 모바일 하단 nav는 대화 목록에서 표시하고 대화방에서는 숨긴다.
 - 인증/승인 게이트는 `app/routes/app/gate.tsx` 한 곳에만 둔다. 이용 정지(§16.11)된 사람은 상태가 `accepted`라도 셸 데이터의 `suspended`로 걸러 `/suspended`로 보낸다. `suspended`는 게이트만 보며 셸 값(`ShellData`)에는 싣지 않는다.
 - 셸 loader(게이트)는 첫 진입에만 실행한다. 이후 셸 프로필은 `AppShellProvider`가 `shellProfileQuery`에서 읽으므로, 이름·아바타·역할을 바꾸는 action은 `refreshShellProfile()`을, 알림 뱃지를 바꾸는 action은 `notificationKeys.badge()` 무효화를 직접 부른다.
+- 셸 밖의 안 읽음 표시(홈 화면 아이콘 숫자, 브라우저 탭 제목·아이콘)는 `UnreadBadgeSync` 한 곳이 알림·메시지 수의 합으로 쓴다. 사이드바 뱃지와 같은 `useUnreadCounts()`를 읽으며, 다른 곳에서 `setAppBadgeCount`/`setTabBadgeCount`를 부르지 않는다(계정 변경 때 지우는 `user-scoped-storage`는 예외). 서비스 워커가 홈 화면 숫자를 알림 카드 수로 덮으면 창에 `app-badge-overwritten`을 보내고, `UnreadBadgeSync`가 받아 합계를 다시 쓴다.
 - 게이트 loader는 아바타를 서명하지 않는다. `avatar_url`은 `AppShellProvider`가 `shellAvatarQuery`로 나중에 채우므로 첫 페인트에는 `null`일 수 있다.
 - 모바일 전역 헤더는 없다. 각 page route가 `PageHeader`를 조립하며 이는 `handle.chrome` 설정과 무관하다.
 - 모바일 하단 nav와 데스크톱 사이드바는 홈·메시지·그룹·알림·메뉴 다섯 항목(`model/nav-items.ts`)을 공유하며 메뉴는 기존 `/menu` 경로와 도형(`Shapes`) 아이콘을 사용하며 `/settings*`·`/licenses`에서도 활성으로 표시한다. 데스크톱 사이드바의 아이콘 레일과 hover·키보드 포커스 확장 동작은 유지한다.
@@ -25,10 +26,11 @@
 - `ScrollRegion`의 `main`은 `relative`다. 빼면 위치 기준이 없는 absolute 자손(Base UI 폼 컨트롤의 숨은 input)이 스크롤을 따라오지 않고, 포커스 때 셸 전체가 밀려 올라간다.
 - 스크롤 위치 복원은 `ScrollRegion`이 한다. 새 화면은 맨 위, 뒤로·앞으로 가기는 그 기록 항목의 위치이고, `handle.chrome.rememberScroll`인 화면은 탭·링크로 다시 들어와도 마지막 위치로 돌아간다. 같은 경로 안의 이동과 게시물 상세 오버레이는 위치를 건드리지 않는다.
 - 이미 있는 탭을 하단 nav에서 다시 누르면 이동하지 않고 스크롤 영역을 맨 위로 올린다. 같은 경로로 다시 이동하면 loader가 돌아 새로고침이 된다.
+- 데스크톱에서 홈 첫 화면에 있을 때 사이드바의 홈이나 헤더 로고를 다시 누르면 이동하지 않고 맨 위로 올린 뒤 셸 새로고침을 실행한다. 데스크톱에는 당겨서 새로고침이 없어 피드 새 세션을 여는 유일한 입구다. 다른 탭의 사이드바 재클릭은 기존처럼 같은 경로로 다시 이동한다. 재클릭 판정은 `model/navigation.ts`의 `isTabReselectClick` 하나를 쓰고, 두 홈 링크는 `hooks/use-home-reselect-click.ts`를 공유한다. 다른 화면으로 가는 이동이 loading 중이면 홈 클릭을 가로채지 않는다 — 그 클릭은 진행 중인 이동을 덮어써 홈에 머무르려는 것이다.
 - 자동으로 숨는 모바일 하단 nav는 오버레이로 움직이며, 표시 상태가 바뀌어도 `ScrollRegion`의 크기와 스크롤 위치를 바꾸지 않는다.
 - 화면 이동 중에는 이전 화면을 유지하고 `NavigationProgress` 막대만 띄운다. 이동이 `layout.tsx`의 `NAVIGATION_SKELETON_DELAY_MS`를 넘길 때만 `Outlet`을 navigation skeleton으로 바꾼다.
 - 그룹·프로필 목록 위의 게시물 상세 route를 열고 닫거나, 같은 경로에서 URL 기반 이미지 뷰어·댓글 시트 UI를 여닫는 동안에는 현재 `Outlet`을 navigation skeleton으로 바꾸지 않는다. 부모 화면과 캐시는 이미 유지되고 있으며, 덮어 버리면 모달 이동이 전체 페이지 이동처럼 보인다.
-- 당겨서 새로고침은 typed `handle.chrome.pullToRefresh`로 route가 명시적으로 허용하며, 모바일과 태블릿의 터치 입력에서만 시작한다. 입력기·다이얼로그·중첩 스크롤 영역과 데스크톱 마우스·트랙패드에서는 시작하지 않는다.
+- 당겨서 새로고침은 typed `handle.chrome.pullToRefresh`로 route가 명시적으로 허용하며, 모바일과 태블릿의 터치 입력에서만 시작한다. 입력기·다이얼로그·중첩 스크롤 영역과 데스크톱 마우스·트랙패드에서는 시작하지 않는다. 새로고침 실행·진행 상태·중복 방지는 `hooks/use-shell-refresh.ts`가 소유하고, 당겨서 새로고침과 데스크톱 홈 재클릭이 같은 실행과 표시를 공유한다.
 - `AppShellProvider`는 `routes/app/gate.tsx`의 loader data를 받는다. 물리적 route ID에 의존하지 않는다.
 
 `model/types.ts`는 generated database type의 `get_my_profile` 반환형에서 셸에 필요한 필드를
