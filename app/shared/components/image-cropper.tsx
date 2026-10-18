@@ -28,6 +28,13 @@ const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.2;
 /** 방향키 한 번에 움직이는 거리(px). Shift를 누르면 4배. */
 const PAN_STEP = 16;
+/**
+ * 크롭 프레임이 차지할 수 있는 최대 높이. 대화상자 높이에서 머리글·확대 막대·여백을 뺀 값이다.
+ * 세로로 긴 프레임이 이보다 커지면 아래가 화면 밖으로 밀려, 보이는 자리와 실제로 잘리는 자리가
+ * 달라진다. 휴대폰에서는 대화상자가 화면 전체(`100svh`), 넓은 화면에서는 `90svh`다.
+ */
+const FRAME_MAX_HEIGHT_CLASS =
+  "[--frame-max-h:calc(100svh-10rem)] sm:[--frame-max-h:calc(90svh-10rem)]";
 
 const PAN_KEYS: Record<string, { x: number; y: number } | undefined> = {
   ArrowLeft: { x: -1, y: 0 },
@@ -51,6 +58,11 @@ interface ImageCropperProps {
   maxOutputEdge: number;
   /** 프레임을 원형으로 마스킹해 보여준다. 결과물은 여전히 사각형이다. */
   round?: boolean;
+  /**
+   * 주면 사진 전체가 프레임 안에 들어갈 때까지 축소할 수 있고, 프레임에서 사진이 덮지 않는 자리를
+   * 이 색으로 채워 저장한다. 주지 않으면 사진이 늘 프레임을 빈틈없이 덮는다.
+   */
+  letterboxColor?: string;
   title?: string;
   onCancel: () => void;
   onComplete: (cropped: File) => void;
@@ -71,6 +83,7 @@ export function ImageCropper({
   aspect,
   maxOutputEdge,
   round = false,
+  letterboxColor,
   title = "사진 편집",
   onCancel,
   onComplete,
@@ -141,6 +154,9 @@ export function ImageCropper({
         })
       : null;
 
+  // 축소 하한. 여백을 채울 색이 없으면 프레임을 덮는 배율(1) 아래로 내려가지 않는다.
+  const minZoom = letterboxColor && fit ? fit.containZoom : 1;
+
   // 미리보기와 저장이 공유하는 유일한 위치 값. state의 raw offset은 프레임이 줄어들면 한계를
   // 넘을 수 있으므로 직접 쓰지 않는다.
   const shownOffset = fit
@@ -151,7 +167,7 @@ export function ImageCropper({
     nextZoom: number,
     nextOffset: { x: number; y: number },
   ) => {
-    const z = Math.min(MAX_ZOOM, Math.max(1, nextZoom));
+    const z = Math.min(MAX_ZOOM, Math.max(minZoom, nextZoom));
     setZoom(z);
 
     if (!image || !frame) {
@@ -231,7 +247,12 @@ export function ImageCropper({
         offsetY: shownOffset.y,
       });
       onComplete(
-        await cropImage(file, rect, fitOutputSize(rect, maxOutputEdge, aspect)),
+        await cropImage(
+          file,
+          rect,
+          fitOutputSize(rect, maxOutputEdge, aspect),
+          letterboxColor,
+        ),
       );
     } catch (cause) {
       console.error(
@@ -288,7 +309,17 @@ export function ImageCropper({
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-          <div className="mx-auto w-full max-w-sm overflow-hidden rounded-lg bg-muted">
+          {/* 너비를 높이 상한에서 거꾸로 잡는다. 감싼 상자가 높이만 줄면 프레임 아래가 가려진 채
+              잘리고, 프레임이 다 보이지 않으면 사용자는 실제로 저장될 자리를 볼 수 없다. */}
+          <div
+            className={cn(
+              "mx-auto shrink-0 overflow-hidden rounded-lg bg-muted",
+              FRAME_MAX_HEIGHT_CLASS,
+            )}
+            style={{
+              width: `min(100%, 24rem, calc(var(--frame-max-h) * ${aspect}))`,
+            }}
+          >
             {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions --
                 2차원 조작 표면에 맞는 interactive role이 ARIA에 없다. `application`이어야 스크린 리더가
                 방향키를 가로채지 않는다. 포커스(`tabIndex`)·방향키 핸들러·`aria-label`/`aria-describedby`는 갖췄다. */}
@@ -300,7 +331,10 @@ export function ImageCropper({
               onPointerCancel={onPointerUp}
               onKeyDown={onKeyDown}
               tabIndex={busy || !ready ? -1 : 0}
-              style={{ aspectRatio: String(aspect) }}
+              style={{
+                aspectRatio: String(aspect),
+                backgroundColor: letterboxColor,
+              }}
               className="relative w-full touch-none overflow-hidden select-none focus-visible:ring-1 focus-visible:ring-ring/50 focus-visible:outline-none"
               role="application"
               aria-label="크롭 영역"
@@ -361,14 +395,14 @@ export function ImageCropper({
               variant="outline"
               size="icon-sm"
               onClick={() => applyTransform(zoom - ZOOM_STEP, shownOffset)}
-              disabled={busy || !ready || zoom <= 1}
+              disabled={busy || !ready || zoom <= minZoom}
               aria-label="축소"
             >
               <MinusIcon />
             </Button>
             <input
               type="range"
-              min={1}
+              min={minZoom}
               max={MAX_ZOOM}
               step={0.01}
               value={zoom}

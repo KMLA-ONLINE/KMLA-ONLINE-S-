@@ -60,6 +60,11 @@ const BACKGROUND_LABELS: Record<StoryBackground, string> = {
 
 /** 사진을 9:16으로 잘라 올릴 때 결과의 긴 변. 원본 정책(`screen`)과 같다. */
 const CROP_OUTPUT_EDGE = 2048;
+/**
+ * 사진을 축소해 맞췄을 때 남는 자리의 색. 뷰어와 작성 창 미리보기가 사진 뒤에 까는 검정과 같아야
+ * 자른 사진의 여백이 화면 바탕과 구분되지 않는다.
+ */
+const CROP_LETTERBOX_COLOR = "#000";
 
 const ELEMENT_LABELS: Record<StoryLayoutElement, string> = {
   text: "글",
@@ -446,6 +451,7 @@ export function StoryComposer({
             previewUrl={image.baseUrl}
             aspect={9 / 16}
             maxOutputEdge={CROP_OUTPUT_EDGE}
+            letterboxColor={CROP_LETTERBOX_COLOR}
             title="사진 맞추기"
             onCancel={() => setCropping(false)}
             onComplete={(cropped) => void applyCrop(cropped)}

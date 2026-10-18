@@ -130,6 +130,49 @@ describe("ImageCropper", () => {
     expect(img).toHaveStyle({ top });
   });
 
+  it("여백 색이 없으면 프레임을 덮는 배율 아래로 줄이지 않는다", () => {
+    render(<ImageCropper {...baseProps()} />);
+    loadPreview();
+
+    expect(screen.getByLabelText("배율")).toHaveAttribute("min", "1");
+    expect(screen.getByRole("button", { name: "축소" })).toBeDisabled();
+  });
+
+  it("여백 색을 주면 사진 전체가 보일 때까지 줄이고, 생긴 여백만큼 위아래로 움직인다", () => {
+    render(<ImageCropper {...baseProps()} letterboxColor="#000" />);
+    const img = loadPreview();
+
+    // 2000×1000을 정사각 프레임에 다 넣는 배율은 덮는 배율의 절반이다.
+    const slider = screen.getByLabelText("배율");
+    expect(slider).toHaveAttribute("min", "0.5");
+    fireEvent.change(slider, { target: { value: "0.5" } });
+    expect(img).toHaveStyle({ width: "200px", height: "100px", top: "50px" });
+
+    // 표시 높이 100px, 프레임 200px → 위아래로 ±50px.
+    const frame = screen.getByRole("application");
+    for (let i = 0; i < 2; i += 1) {
+      fireEvent.keyDown(frame, { key: "ArrowUp", shiftKey: true });
+    }
+    expect(img).toHaveStyle({ top: "0px" });
+  });
+
+  it("여백 색을 크롭에 넘긴다", async () => {
+    vi.mocked(cropImage).mockResolvedValue(
+      new File(["y"], "photo.png", { type: "image/png" }),
+    );
+    render(<ImageCropper {...baseProps()} letterboxColor="#000" />);
+    loadPreview();
+
+    await userEvent.click(screen.getByRole("button", { name: "적용" }));
+
+    expect(cropImage).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.any(Object),
+      expect.any(Object),
+      "#000",
+    );
+  });
+
   it("적용하면 잘린 파일을 넘긴다", async () => {
     const cropped = new File(["y"], "photo.png", { type: "image/png" });
     vi.mocked(cropImage).mockResolvedValue(cropped);
