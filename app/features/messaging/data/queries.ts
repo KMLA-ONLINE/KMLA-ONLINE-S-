@@ -27,6 +27,8 @@ interface ParticipantRow {
   id: number;
   pub_id: string;
   name: string;
+  profile_name?: string;
+  nickname?: string | null;
   avatar_path: string | null;
   active: boolean;
 }
@@ -279,6 +281,8 @@ async function toSummaries(
         id: String(participant.id),
         pubId: participant.pub_id,
         name: participant.name,
+        profileName: participant.profile_name,
+        nickname: participant.nickname,
         avatarUrl: participant.avatar_path
           ? (avatarUrls.get(participant.avatar_path) ?? null)
           : null,

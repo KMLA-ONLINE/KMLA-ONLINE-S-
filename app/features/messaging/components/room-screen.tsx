@@ -90,6 +90,7 @@ import { useIsSendEnter } from "~/shared/hooks/use-enter-to-send";
 import { useKeyboardViewport } from "~/shared/hooks/use-keyboard-viewport";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
 import { RenameConversationDialog } from "~/features/messaging/components/rename-conversation-dialog";
+import { ConversationNicknamesDialog } from "~/features/messaging/components/conversation-nicknames-dialog";
 import {
   activeParticipants,
   formatSystemMessage,
@@ -217,6 +218,7 @@ export function RoomScreen({
   const [memberDialog, setMemberDialog] = useState<
     | { kind: "invite" }
     | { kind: "rename" }
+    | { kind: "nicknames" }
     | { kind: "leave" }
     | { kind: "delete" }
     | null
@@ -775,6 +777,7 @@ export function RoomScreen({
           }}
           onInvite={() => setMemberDialog({ kind: "invite" })}
           onRename={() => setMemberDialog({ kind: "rename" })}
+          onNicknames={() => setMemberDialog({ kind: "nicknames" })}
           onLeave={() => setMemberDialog({ kind: "leave" })}
           onDeleteGroup={() => setMemberDialog({ kind: "delete" })}
           sharedCounts={sharedCounts}
@@ -813,6 +816,14 @@ export function RoomScreen({
             setMemberDialog(null);
           }}
         />
+        {memberDialog?.kind === "nicknames" ? (
+          <ConversationNicknamesDialog
+            participants={conversation.participants}
+            viewerId={conversation.viewerId}
+            onCancel={() => setMemberDialog(null)}
+            onSubmit={membership.setNickname}
+          />
+        ) : null}
         {memberDialog?.kind === "rename" ? (
           <RenameConversationDialog
             currentName={conversation.name}
@@ -857,6 +868,7 @@ export function RoomScreen({
         {reactionsTarget ? (
           <ReactionMembersDialog
             message={reactionsTarget}
+            participants={conversation.participants}
             onClose={roomOverlay.close}
           />
         ) : null}

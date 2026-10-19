@@ -61,6 +61,7 @@ export function ConversationDetails({
   onSearch,
   onInvite,
   onRename,
+  onNicknames,
   onLeave,
   onDeleteGroup,
   sharedCounts,
@@ -76,6 +77,7 @@ export function ConversationDetails({
   onSearch: () => void;
   onInvite: () => void;
   onRename: () => void;
+  onNicknames: () => void;
   onLeave: () => void;
   /** 소유주에게만 보인다. */
   onDeleteGroup: () => void;
@@ -208,6 +210,9 @@ export function ConversationDetails({
             value={String(pinnedCount)}
             onClick={onOpenPinnedMessages}
           />
+          {isViewerActive(conversation) ? (
+            <DetailRow icon={PencilIcon} label="별명" onClick={onNicknames} />
+          ) : null}
           {manageable ? (
             <DetailRow
               icon={PencilIcon}

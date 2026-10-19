@@ -70,6 +70,34 @@ beforeEach(() => {
 });
 
 describe("messaging queries", () => {
+  it("채팅 별명과 원래 프로필 이름을 함께 전달한다", async () => {
+    rpc.mockResolvedValue({
+      data: [
+        conversationRow({
+          name: "민준이",
+          participants: [
+            {
+              id: 2,
+              pub_id: "minjun",
+              name: "민준이",
+              profile_name: "김민준",
+              nickname: "민준이",
+              avatar_path: null,
+              active: true,
+            },
+          ],
+        }),
+      ],
+      error: null,
+    });
+
+    expect((await listConversations())[0]?.participants[0]).toMatchObject({
+      name: "민준이",
+      profileName: "김민준",
+      nickname: "민준이",
+    });
+  });
+
   it("한 개 더 받은 행으로 앞선 메시지가 남았는지 알고, 남았으면 가장 오래된 행이 커서다", async () => {
     rpc.mockResolvedValue({
       data: [

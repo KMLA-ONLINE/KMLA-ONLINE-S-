@@ -217,6 +217,20 @@ export async function renameConversation(
   if (error) throw error;
 }
 
+/** 모든 현재 멤버가 공유하는 채팅 별명. 빈 문자열로 원래 이름을 복원한다. */
+export async function setConversationNickname(
+  conversationId: string,
+  profileId: string,
+  nickname: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("set_conversation_nickname", {
+    p_conversation_id: conversationId,
+    p_profile_id: Number(profileId),
+    p_nickname: nickname,
+  });
+  if (error) throw error;
+}
+
 /** 대화 알림 단계를 정한다. 끄면 직접 다시 켤 때까지 이 대화의 Push를 보내지 않는다. */
 export async function setConversationNotificationLevel(
   conversationId: string,

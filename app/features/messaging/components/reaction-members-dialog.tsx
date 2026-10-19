@@ -2,7 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 
 import { messagingKeys } from "~/features/messaging/data/cache";
 import { listMessageReactors } from "~/features/messaging/data/queries";
-import type { ConversationMessage } from "~/features/messaging/model/types";
+import type {
+  ConversationMessage,
+  MessageParticipant,
+} from "~/features/messaging/model/types";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import {
@@ -17,9 +20,11 @@ import { Spinner } from "~/shared/ui/spinner";
 /** 메시지에 반응한 사람(기능 명세 §13.8). 열 때마다 서버에서 새로 읽는다. */
 export function ReactionMembersDialog({
   message,
+  participants,
   onClose,
 }: {
   message: ConversationMessage;
+  participants: MessageParticipant[];
   onClose: () => void;
 }) {
   const reactors = useQuery({
@@ -55,26 +60,27 @@ export function ReactionMembersDialog({
             </p>
           ) : (
             <ul aria-label="반응한 사람" className="flex flex-col gap-1">
-              {reactors.data.map((reactor) => (
-                <li
-                  key={reactor.id}
-                  className="flex items-center gap-3 rounded-lg px-2 py-2"
-                >
-                  <UserAvatar
-                    src={reactor.avatarUrl}
-                    name={reactor.name}
-                    size="lg"
-                  />
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                    {reactor.name}
-                  </span>
-                  <ReactionEmoji
-                    reaction={reactor.reaction}
-                    labelled
-                    className="size-5"
-                  />
-                </li>
-              ))}
+              {reactors.data.map((reactor) => {
+                const name =
+                  participants.find(({ id }) => id === reactor.id)?.name ??
+                  reactor.name;
+                return (
+                  <li
+                    key={reactor.id}
+                    className="flex items-center gap-3 rounded-lg px-2 py-2"
+                  >
+                    <UserAvatar src={reactor.avatarUrl} name={name} size="lg" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                      {name}
+                    </span>
+                    <ReactionEmoji
+                      reaction={reactor.reaction}
+                      labelled
+                      className="size-5"
+                    />
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
