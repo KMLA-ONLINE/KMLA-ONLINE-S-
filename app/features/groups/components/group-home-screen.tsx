@@ -69,6 +69,13 @@ export function GroupHomeScreen({
       className="mx-auto flex min-h-[calc(100dvh-var(--app-page-header-h)-var(--app-tabbar-h)-var(--app-safe-t)-var(--app-safe-b))] w-full flex-col gap-5 px-1 pb-5 md:min-h-0 md:px-0 md:py-0"
       onTouchStart={(event) => {
         touchStart.current = null;
+        const target = event.target;
+        // portal로 열린 고정 다이얼로그의 터치도 React 트리를 따라 올라오므로 실제 목록 영역만 받는다.
+        if (
+          !(target instanceof Element) ||
+          !event.currentTarget.contains(target)
+        )
+          return;
         if (
           event.touches.length !== 1 ||
           !window.matchMedia("(max-width: 767px)").matches

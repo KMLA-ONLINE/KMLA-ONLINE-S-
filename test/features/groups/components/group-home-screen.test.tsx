@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent } from "@testing-library/react";
 
 import { GroupHomeScreen } from "~/features/groups/components/group-home-screen";
+import type { GroupHomeItem } from "~/features/groups/model/types";
 import { renderRoute, screen } from "../../../router";
 
 function GroupHomeRoute() {
@@ -104,5 +105,63 @@ describe("GroupHomeScreen", () => {
       "aria-current",
       "page",
     );
+  });
+
+  it("keeps the pin dialog and selected tab when swiping inside the dialog", async () => {
+    window.sessionStorage.clear();
+    vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+      matches: query === "(max-width: 767px)",
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    const group: GroupHomeItem = {
+      id: "group-1",
+      group_id: "group-1",
+      slug: "test-group",
+      name: "테스트 그룹",
+      description: "설명",
+      kind: "official",
+      join_policy: "open",
+      identity_policy: "identified",
+      posting_policy: "members",
+      icon_path: null,
+      cover_path: null,
+      member_count: 12,
+      membership_state: "member",
+      member_role: null,
+      pinned_at: null,
+      new_post_count: 0,
+      section: "official",
+    };
+    const { user } = renderRoute(
+      () => (
+        <GroupHomeScreen groups={[group]} isTeacher={false} profileId={1} />
+      ),
+      { path: "/groups" },
+    );
+    const officialTab = screen.getByRole("button", { name: "공식" });
+    await user.pointer({
+      keys: "[TouchA>]",
+      target: screen.getByRole("link", { name: group.name }),
+    });
+    const dialog = await screen.findByRole("dialog");
+    await user.pointer({ keys: "[/TouchA]" });
+
+    fireEvent.touchStart(dialog, {
+      touches: [{ clientX: 250, clientY: 250 }],
+    });
+    fireEvent.touchEnd(dialog, {
+      changedTouches: [{ clientX: 90, clientY: 260 }],
+    });
+
+    expect(officialTab).toHaveAttribute("aria-current", "page");
+    expect(dialog).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "취소" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
