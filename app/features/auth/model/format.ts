@@ -9,6 +9,31 @@ export function isEmailNotConfirmedError(error: unknown): boolean {
   return readErrorCode(error) === "email_not_confirmed";
 }
 
+/**
+ * 호스팅 Auth가 메일을 받을 수 없다고 본 주소. 로컬 Auth가 받아 준 주소(예: example.com)도
+ * 배포 환경에서는 여기 걸릴 수 있다.
+ */
+export function isInvalidEmailAddressError(error: unknown): boolean {
+  return readErrorCode(error) === "email_address_invalid";
+}
+
+export const DUPLICATE_STUDENT_NUMBER_MESSAGE =
+  "이미 등록된 학번입니다. 학번을 확인하고, 맞다면 관리자에게 문의해 주세요.";
+
+/**
+ * 다른 프로필이 이미 쓰는 학번으로 제출했다. 클라이언트는 다른 사람의 학번을 볼 수 없어
+ * 미리 막지 못하고, `profiles_student_number_key`의 unique 위반으로만 알 수 있다.
+ */
+export function isDuplicateStudentNumberError(error: unknown): boolean {
+  return (
+    readErrorCode(error) === "23505" &&
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    String(error.message).includes("profiles_student_number_key")
+  );
+}
+
 /** Supabase auth 에러를 문구로 바꾼다. 출력이 화면이라 `data/`가 아닌 여기에 두고 client 대역 없이 테스트한다. */
 export function getAuthErrorMessage(error: unknown): string {
   const code = readErrorCode(error);
@@ -18,6 +43,9 @@ export function getAuthErrorMessage(error: unknown): string {
   }
   if (code === "email_not_confirmed") {
     return "이메일 인증이 끝나지 않은 계정이에요. 같은 이메일로 다시 가입하면 인증 코드를 새로 보내 드려요.";
+  }
+  if (code === "email_address_invalid") {
+    return "사용할 수 없는 이메일 주소입니다. 메일을 받을 수 있는 주소를 입력해 주세요.";
   }
   if (code === "user_already_exists" || code === "email_exists") {
     return "이미 가입된 이메일입니다.";

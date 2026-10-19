@@ -163,6 +163,79 @@ describe("auth routes", () => {
     expect(defaultButtons()[0]).toHaveAccessibleName("인증 코드 받기");
   });
 
+  // 서버가 거절한 이메일 오류는 다음 제출 전까지 남는다. 고치기 시작했는데도 남아 있으면
+  // 새 주소도 틀린 것처럼 보인다.
+  it("clears the email error once the email is edited", async () => {
+    const message =
+      "사용할 수 없는 이메일 주소입니다. 메일을 받을 수 있는 주소를 입력해 주세요.";
+    const { user } = renderRoute(SignupPage as ComponentType<any>, {
+      path: "/signup",
+      loader: () => ({ draft: null, contacts: Promise.resolve([]) }),
+      action: () => ({
+        step: "credentials",
+        email: "someone@invalid-domain.test",
+        password: "password123",
+        values: { ...draftValues, studentNumber: "" },
+        errors: { email: message },
+      }),
+    });
+
+    await user.type(
+      await screen.findByLabelText("이메일"),
+      "someone@invalid-domain.test",
+    );
+    await user.type(screen.getByLabelText("비밀번호"), "password123");
+    await user.type(screen.getByLabelText("비밀번호 확인"), "password123");
+    await user.click(screen.getByRole("button", { name: "다음" }));
+
+    const email = screen.getByLabelText("이메일");
+    expect(await screen.findByText(message)).toBeVisible();
+    expect(email).toHaveAttribute("aria-invalid", "true");
+
+    await user.type(email, "x");
+
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
+    expect(email).toHaveAttribute("aria-invalid", "false");
+  });
+
+  // 인증은 끝났지만 학번이 이미 쓰이고 있다. 다시 제출해도 같은 이유로 실패하므로
+  // "제출만 다시" 안내 대신 학번을 고칠 수 있는 /setup으로 보낸다.
+  it("points a taken student number to profile setup instead of resubmitting", async () => {
+    const message =
+      "이미 등록된 학번입니다. 학번을 확인하고, 맞다면 관리자에게 문의해 주세요.";
+    const { user } = renderRoute(SignupPage as ComponentType<any>, {
+      path: "/signup",
+      loader: () => ({
+        draft: { email: "student@kmla.hs.kr", values: draftValues },
+        contacts: Promise.resolve([]),
+      }),
+      action: () => ({
+        step: "verify",
+        email: "student@kmla.hs.kr",
+        password: "password123",
+        values: draftValues,
+        verified: true,
+        studentNumberTaken: true,
+        errors: { form: message },
+      }),
+    });
+
+    // 스텁 action은 코드를 읽지 않는다. input-otp는 입력 뒤 jsdom에 없는 elementFromPoint를 부른다.
+    await user.type(await screen.findByLabelText("비밀번호"), "password123");
+    await user.type(screen.getByLabelText("비밀번호 확인"), "password123");
+    await user.click(screen.getByRole("button", { name: "가입 신청 제출" }));
+
+    expect(await screen.findByText(message)).toBeVisible();
+    expect(screen.queryByText(/제출만 다시 눌러/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "가입 신청 제출" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "학번 수정하기" })).toHaveAttribute(
+      "href",
+      "/setup",
+    );
+  });
+
   it("keeps submission as the default button on the verification step", async () => {
     renderRoute(SignupPage as ComponentType<any>, {
       path: "/signup",

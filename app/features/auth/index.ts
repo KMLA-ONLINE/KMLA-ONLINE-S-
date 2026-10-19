@@ -23,8 +23,11 @@ export {
 } from "~/features/auth/data/queries";
 export { describeSuspensionEnd } from "~/features/auth/model/suspension";
 export {
+  DUPLICATE_STUDENT_NUMBER_MESSAGE,
   getAuthErrorMessage,
+  isDuplicateStudentNumberError,
   isEmailNotConfirmedError,
+  isInvalidEmailAddressError,
 } from "~/features/auth/model/format";
 export {
   clearSignupDraft,

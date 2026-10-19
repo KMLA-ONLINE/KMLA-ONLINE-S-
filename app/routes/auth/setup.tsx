@@ -2,10 +2,12 @@ import { data, Form, redirect, useNavigation } from "react-router";
 
 import {
   AuthCard,
+  DUPLICATE_STUDENT_NUMBER_MESSAGE,
   getAuthErrorMessage,
   getProfileDestination,
   getSignupDraft,
   hasErrors,
+  isDuplicateStudentNumberError,
   loadAuthState,
   ProfileFields,
   readProfileForm,
@@ -90,10 +92,10 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     throw redirect("/pending");
   } catch (error) {
     if (error instanceof Response) throw error;
-    return data(
-      { errors: { form: getAuthErrorMessage(error) }, values },
-      { status: 400 },
-    );
+    const errors: FieldErrors = isDuplicateStudentNumberError(error)
+      ? { studentNumber: DUPLICATE_STUDENT_NUMBER_MESSAGE }
+      : { form: getAuthErrorMessage(error) };
+    return data({ errors, values }, { status: 400 });
   }
 }
 
