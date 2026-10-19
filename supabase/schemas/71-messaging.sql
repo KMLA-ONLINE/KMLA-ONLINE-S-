@@ -362,10 +362,10 @@ revoke all on function private.decrypt_message_text(bytea, smallint, jsonb)
   from public;
 
 -- 멘션 토큰을 `@이름` 글자로 바꾼다(기술 설계 §8). 대화 목록 미리보기, 답장 원문, 검색, Push처럼 본문을
--- 글자로만 보여 주는 곳이 쓴다. 이름은 말풍선처럼 지금 프로필 이름이다 — 토큰에 적힌 이름을 쓰면 개명한
--- 사람을 검색에서 못 찾는다. 대상을 알 수 없으면 토큰의 이름을 쓴다. 토큰 문법은
+-- 글자로만 보여 주는 곳이 쓴다. 화면은 지금 대화 별명을 우선하며 Push는 원래 프로필 이름을 쓴다.
+-- 토큰에 적힌 이름을 쓰면 개명한 사람을 검색에서 못 찾는다. 대상을 알 수 없으면 토큰의 이름을 쓴다. 토큰 문법은
 -- `private.parse_mention_ordinals`와 같다. 자르기 전에 불러야 토큰이 반쪽 나지 않는다.
-create function private.message_plain_text(p_body text, p_mention_profile_ids bigint[])
+create function private.message_plain_text(p_body text, p_mention_profile_ids bigint[], p_conversation_id uuid)
 returns text
 language plpgsql
 stable
@@ -387,9 +387,11 @@ begin
     token := pg_catalog.regexp_match(rest, '\[@([^\]\n]*)\]\(m:([0-9]{1,2})\)');
     exit when token is null;
     token_text := '[@' || token[1] || '](m:' || token[2] || ')';
-    select profile.name
+    select coalesce(nickname.nickname, profile.name)
     into shown_name
     from public.profiles as profile
+    left join private.conversation_nicknames as nickname
+      on nickname.conversation_id = p_conversation_id and nickname.profile_id = profile.id
     where profile.id = p_mention_profile_ids[token[2]::integer]
       and profile.deleted_at is null;
     -- 처음 맞은 자리가 곧 같은 글자가 처음 나오는 자리다.
@@ -402,8 +404,20 @@ begin
 end;
 $$;
 
-revoke all on function private.message_plain_text(text, bigint[])
+revoke all on function private.message_plain_text(text, bigint[], uuid)
   from public;
+
+-- Push는 대화 별명 대신 원래 프로필 이름을 쓴다. 기존 두 인자 호출은 이 경로를 유지한다.
+create function private.message_plain_text(p_body text, p_mention_profile_ids bigint[])
+returns text
+language sql
+stable
+set search_path = ''
+as $$
+  select private.message_plain_text(p_body, p_mention_profile_ids, null::uuid);
+$$;
+
+revoke all on function private.message_plain_text(text, bigint[]) from public;
 
 -- 본문의 사람 멘션이 부르는 프로필(기능 명세 §13.22). n번째 원소가 `m:n` 토큰의 대상이다. 사람 번호는
 -- 1부터 빈틈없어야 하고, `p_mention_pub_ids`의 같은 자리가 그 사람의 공개 ID다. 대상을 본문에서 정하므로
@@ -554,7 +568,7 @@ begin
           private.decrypt_message_text(
             last_message.body_ciphertext, last_message.key_version, keys
           ),
-          last_message.mention_profile_ids
+          last_message.mention_profile_ids, conversation.id
         )
     end,
     last_message.sent_at,
@@ -733,7 +747,7 @@ as $$
         then left(
           private.message_plain_text(
             private.decrypt_message_text(original.body_ciphertext, original.key_version, p_keys),
-            original.mention_profile_ids
+            original.mention_profile_ids, p_conversation_id
           ),
           200
         )
@@ -2866,7 +2880,7 @@ begin
     -- 멘션은 화면에 보이는 `@이름`으로 찾는다. 토큰의 `m:1`이 검색어에 걸리지 않게 한다.
     plain := private.message_plain_text(
       private.decrypt_message_text(candidate.body_ciphertext, candidate.key_version, keys),
-      candidate.mention_profile_ids
+      candidate.mention_profile_ids, p_conversation_id
     );
     if strpos(lower(regexp_replace(plain, '[[:space:]]+', '', 'g')), normalized_query) > 0 then
       results := results || jsonb_build_array(jsonb_build_object(

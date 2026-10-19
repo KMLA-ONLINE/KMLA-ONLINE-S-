@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(13);
+select plan(17);
 
 create temp table nickname_test_ids as
 select
@@ -84,6 +84,37 @@ select is((select count(*) from private.notification_delivery_outbox),
   (select deliveries from nickname_before), 'nickname changes create no push deliveries');
 select is((select count(*) from private.messages),
   (select messages from nickname_before), 'nickname changes create no messages or unread activity');
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000100', true);
+set local role authenticated;
+select public.send_message(
+  (select id from nickname_test_chats where kind = 'group'),
+  'e0000000-0000-0000-0000-000000000901', '[@홍길동](m:1) 확인',
+  p_mention_pub_ids => array[(select pub_id from public.profiles where id = (select hong from nickname_test_ids))]
+);
+select is(
+  (select last_message_body from public.list_conversations((select id from nickname_test_chats where kind = 'group'))),
+  '@길동이 확인', 'conversation previews use the nickname shown in a mention'
+);
+select public.send_message(
+  (select id from nickname_test_chats where kind = 'group'),
+  'e0000000-0000-0000-0000-000000000902', '답장',
+  p_reply_to_id => 'e0000000-0000-0000-0000-000000000901'
+);
+select is(
+  (select reply_body from public.list_messages((select id from nickname_test_chats where kind = 'group'))
+    where id = 'e0000000-0000-0000-0000-000000000902'),
+  '@길동이 확인', 'reply previews use the nickname shown in a mention'
+);
+select is(
+  jsonb_array_length(public.search_messages((select id from nickname_test_chats where kind = 'group'), '@길동이') -> 'results'),
+  1, 'search finds the mention by the nickname displayed in the room'
+);
+reset role;
+select is(
+  (select body from private.message_push_content('e0000000-0000-0000-0000-000000000901', (select hong from nickname_test_ids), private.message_keys())),
+  '김민준: @홍길동 확인', 'Push keeps original profile names even when room mentions use nicknames'
+);
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000099', true);
 set local role authenticated;
