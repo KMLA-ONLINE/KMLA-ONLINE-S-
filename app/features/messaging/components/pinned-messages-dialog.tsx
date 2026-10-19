@@ -75,7 +75,7 @@ export function PinnedMessagesDialog({
 
         <div
           ref={messageViewportRef}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2 sm:px-6"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-2 sm:px-6"
         >
           {pinnedMessages.length ? (
             <div className="mx-auto flex max-w-3xl flex-col gap-0.5">
