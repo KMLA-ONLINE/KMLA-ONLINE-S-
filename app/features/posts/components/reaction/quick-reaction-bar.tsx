@@ -27,7 +27,7 @@ export function QuickReactionBar({
             <span
               aria-hidden="true"
               className={cn(
-                "pointer-events-none absolute bottom-full mb-1.5 rounded-full bg-foreground px-2 py-0.5 text-xs font-medium whitespace-nowrap text-background opacity-0 transition-opacity group-hover:opacity-100 group-has-focus-visible:opacity-100",
+                "pointer-events-none absolute bottom-full mb-1.5 rounded-full bg-foreground px-2 py-0.5 text-xs font-medium whitespace-nowrap text-background opacity-0 transition-opacity group-hover:opacity-100 [.group:has(:focus-visible)>&]:opacity-100",
                 // 줄은 여는 버튼의 왼쪽 끝에 붙는다. 첫 이름표까지 가운데에 두면 "좋아요 취소"가 줄 밖, 화면 밖으로 나간다.
                 index === 0 ? "left-0" : "left-1/2 -translate-x-1/2",
               )}

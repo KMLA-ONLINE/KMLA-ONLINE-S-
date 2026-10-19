@@ -18,7 +18,6 @@ import {
   messagingKeys,
   patchMessage,
   patchReplyPreviews,
-  REPLY_PREVIEW_LENGTH,
   removeMessage,
 } from "~/features/messaging/data/cache";
 import {
@@ -45,6 +44,11 @@ import {
   groupAttachmentsIntoMessages,
   screenAttachments,
 } from "~/features/messaging/model/attachments";
+import { toReplyPreviewBody } from "~/features/messaging/model/conversation-preview";
+import {
+  mentionProfileIdsOf,
+  mentionPubIdsOf,
+} from "~/features/messaging/model/message-mentions";
 import { applyMessageReaction } from "~/features/messaging/model/message-reactions";
 import { activeParticipants } from "~/features/messaging/model/system-message";
 import type {
@@ -82,6 +86,9 @@ export interface SendDraft {
   id?: string;
   body: string;
   replyTo?: MessageReplyPreview;
+  /** 본문 `m:n` 토큰이 부르는 사람의 공개 ID. n번 토큰이 `n - 1`번째다. */
+  mentionPubIds?: string[];
+  mentionsEveryone?: boolean;
 }
 
 /**
@@ -201,6 +208,11 @@ export function useConversationMessages(conversation: Conversation) {
           id: draft.id,
           body: draft.body,
           replyToMessageId: draft.replyTo?.id,
+          // 다시 보낼 때도 같은 대상을 보내도록 화면에 그린 참여자 ID에서 되찾는다.
+          mentionPubIds: mentionPubIdsOf(
+            draft.mentionProfileIds ?? [],
+            conversation.participants,
+          ),
         },
         draft,
       );
@@ -225,13 +237,24 @@ export function useConversationMessages(conversation: Conversation) {
     }
   };
 
-  const send = async ({ id, body, replyTo }: SendDraft) => {
+  const send = async ({
+    id,
+    body,
+    replyTo,
+    mentionPubIds = [],
+    mentionsEveryone = false,
+  }: SendDraft) => {
     const draft: ConversationMessage = {
       id: id ?? randomUUID(),
       senderId: conversation.viewerId,
       body,
       sentAt: new Date().toISOString(),
       replyTo,
+      mentionProfileIds: mentionProfileIdsOf(
+        mentionPubIds,
+        conversation.participants,
+      ),
+      mentionsEveryone,
       unreadMemberCount: activeParticipants(conversation).length - 1,
       pending: true,
     };
@@ -508,21 +531,45 @@ export function useConversationMessages(conversation: Conversation) {
   };
 
   /** 내 메시지를 고친다. 실패하면 되돌리고 false로 끝난다. 고치던 입력은 화면이 되살린다. */
-  const edit = async (target: ConversationMessage, body: string) => {
+  const edit = async (
+    target: ConversationMessage,
+    body: string,
+    mentionPubIds: string[] = [],
+    mentionsEveryone = false,
+  ) => {
     const message = current(target);
-    const previous = { body: message.body, editedAt: message.editedAt };
+    const previous = {
+      body: message.body,
+      editedAt: message.editedAt,
+      mentionProfileIds: message.mentionProfileIds,
+      mentionsEveryone: message.mentionsEveryone,
+    };
     const isLatest = beginRequest(message.id, "content");
-    const apply = (patch: Pick<ConversationMessage, "body" | "editedAt">) => {
+    const apply = (
+      patch: Pick<
+        ConversationMessage,
+        "body" | "editedAt" | "mentionProfileIds" | "mentionsEveryone"
+      >,
+    ) => {
       patchMessage(queryClient, conversationId, message.id, patch);
       patchReplyPreviews(queryClient, conversationId, message.id, {
-        body: patch.body.slice(0, REPLY_PREVIEW_LENGTH),
+        body: toReplyPreviewBody(patch.body),
       });
     };
-    apply({ body, editedAt: new Date().toISOString() });
+    const mentionProfileIds = mentionProfileIdsOf(
+      mentionPubIds,
+      conversation.participants,
+    );
+    apply({
+      body,
+      editedAt: new Date().toISOString(),
+      mentionProfileIds,
+      mentionsEveryone,
+    });
     const release = holdMessageWrite(message.id);
     try {
-      const saved = await editMessage(message.id, body);
-      if (isLatest()) apply(saved);
+      const saved = await editMessage(message.id, body, mentionPubIds);
+      if (isLatest()) apply({ ...saved, mentionProfileIds, mentionsEveryone });
       refreshList();
       return true;
     } catch {
@@ -572,7 +619,7 @@ export function useConversationMessages(conversation: Conversation) {
           if (!isLatest()) return;
           patchMessage(queryClient, conversationId, message.id, previous);
           patchReplyPreviews(queryClient, conversationId, message.id, {
-            body: message.body.slice(0, REPLY_PREVIEW_LENGTH),
+            body: toReplyPreviewBody(message.body),
             deleted: message.deleted,
           });
         },

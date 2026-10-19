@@ -28,6 +28,24 @@ const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.2;
 /** 방향키 한 번에 움직이는 거리(px). Shift를 누르면 4배. */
 const PAN_STEP = 16;
+/** 이 차이 안으로 들어온 배율은 프레임을 정확히 덮는 1로 맞춘다. 1 근처에 얇은 여백이 남지 않게 한다. */
+const COVER_SNAP = 0.02;
+/**
+ * 대화상자에서 크롭 프레임 말고 세로 자리를 차지하는 것들(머리글, 여백, 확대 막대, 오류 문구)의
+ * 높이. 프레임 높이 상한은 대화상자 높이(`--cropper-dialog-h`)에서 이 값을 뺀 것이다.
+ */
+const DIALOG_CHROME_HEIGHT = "11rem";
+/** 크롭 프레임과 확대 막대가 함께 쓰는 최대 너비. */
+const FRAME_MAX_WIDTH = "24rem";
+
+/**
+ * 1을 사이에 두고 넘어가는 배율 변화는 1에서 멈춘다. 축소 하한이 임의의 소수라, 버튼으로 일정하게
+ * 움직이면 프레임을 정확히 덮는 상태를 건너뛴다.
+ */
+function stepZoom(from: number, delta: number): number {
+  const next = from + delta;
+  return (from - 1) * (next - 1) < 0 ? 1 : next;
+}
 
 const PAN_KEYS: Record<string, { x: number; y: number } | undefined> = {
   ArrowLeft: { x: -1, y: 0 },
@@ -51,6 +69,11 @@ interface ImageCropperProps {
   maxOutputEdge: number;
   /** 프레임을 원형으로 마스킹해 보여준다. 결과물은 여전히 사각형이다. */
   round?: boolean;
+  /**
+   * 주면 사진 전체가 프레임 안에 들어갈 때까지 축소할 수 있고, 프레임에서 사진이 덮지 않는 자리를
+   * 이 색으로 채워 저장한다. 주지 않으면 사진이 늘 프레임을 빈틈없이 덮는다.
+   */
+  letterboxColor?: string;
   title?: string;
   onCancel: () => void;
   onComplete: (cropped: File) => void;
@@ -71,6 +94,7 @@ export function ImageCropper({
   aspect,
   maxOutputEdge,
   round = false,
+  letterboxColor,
   title = "사진 편집",
   onCancel,
   onComplete,
@@ -130,16 +154,24 @@ export function ImageCropper({
 
   const ready = image !== null && frame !== null;
 
-  const fit =
+  const fitAt = (z: number) =>
     image && frame
       ? coverFit({
           imageWidth: image.width,
           imageHeight: image.height,
           frameWidth: frame.width,
           frameHeight: frame.height,
-          zoom,
+          zoom: z,
         })
       : null;
+
+  // 축소 하한. 여백을 채울 색이 없으면 프레임을 덮는 배율(1) 아래로 내려가지 않는다.
+  const minZoom = letterboxColor ? (fitAt(1)?.containZoom ?? 1) : 1;
+
+  // 미리보기와 저장이 공유하는 배율. 프레임 크기가 바뀌면 하한도 조금 움직이므로, state의 raw
+  // zoom이 하한 아래로 남을 수 있다 — offset과 같은 이유로 직접 쓰지 않는다.
+  const shownZoom = Math.max(minZoom, zoom);
+  const fit = fitAt(shownZoom);
 
   // 미리보기와 저장이 공유하는 유일한 위치 값. state의 raw offset은 프레임이 줄어들면 한계를
   // 넘을 수 있으므로 직접 쓰지 않는다.
@@ -151,21 +183,17 @@ export function ImageCropper({
     nextZoom: number,
     nextOffset: { x: number; y: number },
   ) => {
-    const z = Math.min(MAX_ZOOM, Math.max(1, nextZoom));
+    const snapped = Math.abs(nextZoom - 1) < COVER_SNAP ? 1 : nextZoom;
+    const z = Math.min(MAX_ZOOM, Math.max(minZoom, snapped));
     setZoom(z);
 
-    if (!image || !frame) {
+    const nextFit = fitAt(z);
+    if (!nextFit) {
       setOffset(nextOffset);
       return;
     }
 
-    const { maxOffsetX, maxOffsetY } = coverFit({
-      imageWidth: image.width,
-      imageHeight: image.height,
-      frameWidth: frame.width,
-      frameHeight: frame.height,
-      zoom: z,
-    });
+    const { maxOffsetX, maxOffsetY } = nextFit;
 
     setOffset({
       x: clamp(nextOffset.x, maxOffsetX),
@@ -188,7 +216,7 @@ export function ImageCropper({
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     if (drag?.pointerId !== event.pointerId) return;
-    applyTransform(zoom, {
+    applyTransform(shownZoom, {
       x: drag.baseX + (event.clientX - drag.startX),
       y: drag.baseY + (event.clientY - drag.startY),
     });
@@ -209,7 +237,7 @@ export function ImageCropper({
 
     event.preventDefault();
     const step = event.shiftKey ? PAN_STEP * 4 : PAN_STEP;
-    applyTransform(zoom, {
+    applyTransform(shownZoom, {
       x: shownOffset.x + direction.x * step,
       y: shownOffset.y + direction.y * step,
     });
@@ -226,12 +254,17 @@ export function ImageCropper({
         imageHeight: image.height,
         frameWidth: frame.width,
         frameHeight: frame.height,
-        zoom,
+        zoom: shownZoom,
         offsetX: shownOffset.x,
         offsetY: shownOffset.y,
       });
       onComplete(
-        await cropImage(file, rect, fitOutputSize(rect, maxOutputEdge, aspect)),
+        await cropImage(
+          file,
+          rect,
+          fitOutputSize(rect, maxOutputEdge, aspect),
+          letterboxColor,
+        ),
       );
     } catch (cause) {
       console.error(
@@ -259,7 +292,7 @@ export function ImageCropper({
     <Dialog open onOpenChange={(open) => !open && !busy && onCancel()}>
       <DialogContent
         showCloseButton={false}
-        className="flex max-h-[90svh] flex-col gap-0 overflow-hidden p-0 max-sm:top-0 max-sm:left-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none sm:max-w-lg"
+        className="flex max-h-(--cropper-dialog-h) flex-col gap-0 overflow-hidden p-0 [--cropper-dialog-h:100svh] max-sm:top-0 max-sm:left-0 max-sm:h-(--cropper-dialog-h) max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none sm:max-w-lg sm:[--cropper-dialog-h:90svh]"
       >
         <DialogHeader className="flex-row items-center gap-2 border-b p-3 text-left">
           <Button
@@ -288,107 +321,128 @@ export function ImageCropper({
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-          <div className="mx-auto w-full max-w-sm overflow-hidden rounded-lg bg-muted">
-            {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions --
+          {/* 너비를 높이 상한에서 거꾸로 잡는다. 감싼 상자가 높이만 줄면 프레임 아래가 가려진 채
+              잘리고, 프레임이 다 보이지 않으면 사용자는 실제로 저장될 자리를 볼 수 없다. 확대 막대도
+              같은 너비를 써서 조작하는 프레임과 폭이 맞는다. */}
+          <div
+            className="mx-auto flex shrink-0 flex-col gap-4"
+            style={{
+              width: `min(100%, ${FRAME_MAX_WIDTH}, calc((var(--cropper-dialog-h) - ${DIALOG_CHROME_HEIGHT}) * ${aspect}))`,
+            }}
+          >
+            <div className="overflow-hidden rounded-lg bg-muted">
+              {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions --
                 2차원 조작 표면에 맞는 interactive role이 ARIA에 없다. `application`이어야 스크린 리더가
                 방향키를 가로채지 않는다. 포커스(`tabIndex`)·방향키 핸들러·`aria-label`/`aria-describedby`는 갖췄다. */}
-            <div
-              ref={setFrameElement}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-              onKeyDown={onKeyDown}
-              tabIndex={busy || !ready ? -1 : 0}
-              style={{ aspectRatio: String(aspect) }}
-              className="relative w-full touch-none overflow-hidden select-none focus-visible:ring-1 focus-visible:ring-ring/50 focus-visible:outline-none"
-              role="application"
-              aria-label="크롭 영역"
-              aria-describedby="image-cropper-help"
-            >
-              <img
-                src={previewUrl}
-                alt=""
-                draggable={false}
-                onLoad={(event) => {
-                  const { naturalWidth: width, naturalHeight: height } =
-                    event.currentTarget;
-                  if (width === 0 || height === 0) {
+              <div
+                ref={setFrameElement}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+                onKeyDown={onKeyDown}
+                tabIndex={busy || !ready ? -1 : 0}
+                style={{
+                  aspectRatio: String(aspect),
+                  backgroundColor: letterboxColor,
+                }}
+                className="relative w-full touch-none overflow-hidden select-none focus-visible:ring-1 focus-visible:ring-ring/50 focus-visible:outline-none"
+                role="application"
+                aria-label="크롭 영역"
+                aria-describedby="image-cropper-help"
+              >
+                <img
+                  src={previewUrl}
+                  alt=""
+                  draggable={false}
+                  onLoad={(event) => {
+                    const { naturalWidth: width, naturalHeight: height } =
+                      event.currentTarget;
+                    if (width === 0 || height === 0) {
+                      setError(true);
+                      return;
+                    }
+                    setImage({ width, height });
+                  }}
+                  onError={() => {
+                    console.error("[ImageCropper] 미리보기 로드 실패", {
+                      name: file.name,
+                      type: file.type,
+                      size: file.size,
+                    });
                     setError(true);
-                    return;
-                  }
-                  setImage({ width, height });
-                }}
-                onError={() => {
-                  console.error("[ImageCropper] 미리보기 로드 실패", {
-                    name: file.name,
-                    type: file.type,
-                    size: file.size,
-                  });
-                  setError(true);
-                }}
-                style={imageStyle}
-                className={cn(
-                  "pointer-events-none absolute max-w-none",
-                  imageStyle ? "visible" : "invisible",
-                )}
-              />
-
-              {!ready && !error ? (
-                <div className="absolute inset-0 grid place-items-center">
-                  <Spinner className="size-5" aria-label="이미지 불러오는 중" />
-                </div>
-              ) : null}
-
-              {round ? (
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-0 rounded-full"
-                  style={{ boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)" }}
+                  }}
+                  style={imageStyle}
+                  className={cn(
+                    "pointer-events-none absolute max-w-none",
+                    imageStyle ? "visible" : "invisible",
+                  )}
                 />
-              ) : null}
+
+                {!ready && !error ? (
+                  <div className="absolute inset-0 grid place-items-center">
+                    <Spinner
+                      className="size-5"
+                      aria-label="이미지 불러오는 중"
+                    />
+                  </div>
+                ) : null}
+
+                {round ? (
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 rounded-full"
+                    style={{ boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)" }}
+                  />
+                ) : null}
+              </div>
             </div>
-          </div>
 
-          <p id="image-cropper-help" className="sr-only">
-            드래그하거나 방향키로 이미지 위치를 조정합니다. Shift와 함께 누르면
-            더 크게 움직입니다.
-          </p>
+            <p id="image-cropper-help" className="sr-only">
+              드래그하거나 방향키로 이미지 위치를 조정합니다. Shift와 함께
+              누르면 더 크게 움직입니다.
+            </p>
 
-          <div className="mx-auto flex w-full max-w-sm items-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              onClick={() => applyTransform(zoom - ZOOM_STEP, shownOffset)}
-              disabled={busy || !ready || zoom <= 1}
-              aria-label="축소"
-            >
-              <MinusIcon />
-            </Button>
-            <input
-              type="range"
-              min={1}
-              max={MAX_ZOOM}
-              step={0.01}
-              value={zoom}
-              onChange={(event) =>
-                applyTransform(Number(event.target.value), shownOffset)
-              }
-              disabled={busy || !ready}
-              aria-label="배율"
-              className="h-1 flex-1 cursor-pointer accent-primary"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              onClick={() => applyTransform(zoom + ZOOM_STEP, shownOffset)}
-              disabled={busy || !ready || zoom >= MAX_ZOOM}
-              aria-label="확대"
-            >
-              <PlusIcon />
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                onClick={() =>
+                  applyTransform(stepZoom(shownZoom, -ZOOM_STEP), shownOffset)
+                }
+                disabled={busy || !ready || shownZoom <= minZoom}
+                aria-label="축소"
+              >
+                <MinusIcon />
+              </Button>
+              <input
+                type="range"
+                min={minZoom}
+                max={MAX_ZOOM}
+                // 하한이 임의의 소수라 고정 간격을 주면 1과 최대 배율이 눈금에서 벗어난다.
+                step="any"
+                value={shownZoom}
+                onChange={(event) =>
+                  applyTransform(Number(event.target.value), shownOffset)
+                }
+                disabled={busy || !ready}
+                aria-label="배율"
+                className="h-1 flex-1 cursor-pointer accent-primary"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                onClick={() =>
+                  applyTransform(stepZoom(shownZoom, ZOOM_STEP), shownOffset)
+                }
+                disabled={busy || !ready || shownZoom >= MAX_ZOOM}
+                aria-label="확대"
+              >
+                <PlusIcon />
+              </Button>
+            </div>
           </div>
 
           {error ? (

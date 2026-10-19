@@ -1,4 +1,5 @@
 import {
+  AtSignIcon,
   BellOffIcon,
   MessageSquareMoreIcon,
   PenLineIcon,
@@ -122,7 +123,7 @@ export function MessagingScreen({
           />
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain px-2 pb-2">
           {filteredConversations.length > 0 ? (
             <nav aria-label="채팅 목록" className="flex flex-col gap-0.5">
               {filteredConversations.map((conversation) => {
@@ -146,9 +147,15 @@ export function MessagingScreen({
                           <span className="min-w-0 truncate text-sm font-medium">
                             {conversation.name}
                           </span>
-                          {conversation.muted ? (
+                          {conversation.notificationLevel === "off" ? (
                             <BellOffIcon
                               aria-label="알림 꺼짐"
+                              className="size-3.5 shrink-0 text-muted-foreground"
+                            />
+                          ) : null}
+                          {conversation.notificationLevel === "mentions" ? (
+                            <AtSignIcon
+                              aria-label="멘션만 알림"
                               className="size-3.5 shrink-0 text-muted-foreground"
                             />
                           ) : null}

@@ -85,7 +85,7 @@ export function AppSidebar({
                       }
                     />
                   </span>
-                  <span className="overflow-hidden text-sm whitespace-nowrap opacity-0 transition-opacity duration-200 group-has-[:focus-visible]/sidebar:opacity-100 motion-reduce:transition-none [@media(hover:hover)]:group-hover/sidebar:opacity-100">
+                  <span className="overflow-hidden text-sm whitespace-nowrap opacity-0 transition-opacity duration-200 motion-reduce:transition-none [@media(hover:hover)]:group-hover/sidebar:opacity-100 [nav:has(:focus-visible)_&]:opacity-100">
                     {item.label}
                   </span>
                 </NavLink>

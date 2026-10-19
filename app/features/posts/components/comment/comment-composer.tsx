@@ -4,14 +4,7 @@ import {
   SendIcon,
   XIcon,
 } from "lucide-react";
-import {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type RefObject,
-} from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import {
   PostAnonymousAvatar,
@@ -24,15 +17,14 @@ import {
   useMentionDraft,
 } from "~/features/posts/hooks/use-mention-draft";
 import {
-  caretDeletionRange,
+  MENTION_HIGHLIGHT_INPUT_CLASS,
+  MentionHighlight,
+} from "~/features/posts/components/mention-highlight";
+import { useMentionTextarea } from "~/features/posts/hooks/use-mention-textarea";
+import {
   countMentionTargets,
-  expandDeletionOverMentions,
   fromMentionDisplay,
-  isMentionDeleteInput,
-  mentionDisplayRanges,
-  removedRange,
   mentionDisplayText,
-  sanitizeMentionDisplay,
   toMentionDisplay,
   validateMentionCount,
   type MentionDraftEntry,
@@ -64,8 +56,8 @@ import {
   DialogTitle,
 } from "~/shared/ui/dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useIsSendEnter } from "~/shared/hooks/use-enter-to-send";
 import { clipboardImageFiles } from "~/shared/lib/clipboard";
-import { isHandheld } from "~/shared/lib/install-platform";
 import { cn } from "~/shared/lib/utils";
 import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
 import { Button } from "~/shared/ui/button";
@@ -89,6 +81,9 @@ const COUNTER_THRESHOLD = COMMENT_MAX_LENGTH - 500;
 
 /** 입력 높이 상한(5줄 + 여백에 여유). 글자 크기나 `py-1.5`를 바꾸면 같이 본다. */
 const MAX_HEIGHT = 140;
+
+/** 댓글 입력창과 멘션 뒤판이 함께 쓰는 글자 크기와 여백. 어긋나면 뒤판의 글자가 캐럿과 떨어진다. */
+const COMMENT_INPUT_TEXT_CLASS = "px-4 py-1.5 text-base leading-6";
 
 function resize(element: HTMLTextAreaElement) {
   element.style.height = "0px";
@@ -173,14 +168,15 @@ export function CommentComposer({
     null,
   );
   const [pickerOpen, setPickerOpen] = useState(false);
-  // 한글 조합 중의 `Enter`는 글자를 확정하는 키다. 이걸 등록으로 처리하면 "안녕하세"까지만
-  // 쓴 댓글이 올라간다.
-  const composing = useRef(false);
+  const isSendEnter = useIsSendEnter();
   const fallbackRef = useRef<HTMLTextAreaElement>(null);
   const input = inputRef ?? fallbackRef;
-  const pendingCaret = useRef<number | null>(null);
-  // `beforeinput`이 브라우저에 맡긴 단어·줄 삭제. 바로 뒤의 `onChange`가 지운 자리를 본다.
-  const nativeDeletion = useRef(false);
+  const mentionInput = useMentionTextarea({
+    inputRef: input,
+    draft,
+    setDraft,
+    entries: mentionDraft.entries,
+  });
   const fileInput = useRef<HTMLInputElement>(null);
   const preparedImage = useRef<PreparedCommentImage | null>(null);
 
@@ -210,19 +206,6 @@ export function CommentComposer({
     if (element) resize(element);
   }, [draft, input]);
 
-  // React가 제어하는 값을 textarea에 반영한 직후 커서를 옮긴다. animation frame까지 미루면
-  // 그 사이 입력한 글자의 중간으로 이전 커서가 돌아갈 수 있다.
-  useLayoutEffect(() => {
-    const caret = pendingCaret.current;
-    if (caret === null) return;
-    pendingCaret.current = null;
-
-    const element = input.current;
-    if (!element) return;
-    element.focus();
-    element.setSelectionRange(caret, caret);
-  }, [draft, input]);
-
   const body = useMemo(
     () => fromMentionDisplay(draft, mentionDraft.entries),
     [draft, mentionDraft.entries],
@@ -231,93 +214,6 @@ export function CommentComposer({
   // 보내고 서버에서 거절당한다.
   const length = countCommentGraphemes(body);
 
-  /** 입력창의 값과 캐럿을 함께 바꾼다. React가 값을 다시 심으면 캐럿이 끝으로 튄다. */
-  const replaceDraft = (next: string, caret: number) => {
-    if (next === draft) {
-      const element = input.current;
-      element?.focus();
-      element?.setSelectionRange(caret, caret);
-      return;
-    }
-    pendingCaret.current = caret;
-    setDraft(next);
-  };
-
-  /** 짝 잃은 표시를 걷어낸다. 조합 중에는 부르지 않는다 — 한글 조합이 끊긴다. */
-  const repairDraft = (element: HTMLTextAreaElement) => {
-    const value = element.value;
-    const next = sanitizeMentionDisplay(value, mentionDraft.entries);
-    if (next === value) {
-      setDraft(value);
-      return;
-    }
-
-    const caret = element.selectionStart ?? value.length;
-    replaceDraft(next, Math.max(0, caret - (value.length - next.length)));
-  };
-
-  /** 멘션은 한 덩어리로 지운다(`expandDeletionOverMentions()`). 반쪽이 남으면 멘션이 아닌 채로 조용히 되살아난다. */
-  const deleteAtomically = (
-    element: HTMLTextAreaElement,
-    inputType: string,
-  ) => {
-    const { selectionStart: from, selectionEnd: to } = element;
-    // `textarea`는 `getTargetRanges()`가 늘 비어 있어 선택 영역으로 판단한다. 캐럿만 둔 단어·줄
-    // 삭제는 어디까지 지울지 알 수 없어 브라우저에 지우게 하고 `widenNativeDeletion()`이 넓힌다.
-    if (from === to && !inputType.startsWith("deleteContent")) {
-      nativeDeletion.current = true;
-      return false;
-    }
-    const range = expandDeletionOverMentions(
-      caretDeletionRange({ from, to }, inputType),
-      mentionDisplayRanges(draft, mentionDraft.entries),
-    );
-    if (!range) return false;
-    replaceDraft(
-      draft.slice(0, range.from) + draft.slice(range.to),
-      range.from,
-    );
-    return true;
-  };
-  // 커밋 직후 들어온 입력도 그 커밋의 초안을 보게 그리기 전에 바꿔 단다.
-  const deleteAtomicallyRef = useRef(deleteAtomically);
-  useLayoutEffect(() => {
-    deleteAtomicallyRef.current = deleteAtomically;
-  });
-
-  /** 브라우저가 지운 단어·줄이 멘션에 걸쳤으면 그 멘션까지 지운다. 넓혔으면 `true`. */
-  const widenNativeDeletion = (element: HTMLTextAreaElement) => {
-    if (!nativeDeletion.current) return false;
-    nativeDeletion.current = false;
-    const removed = removedRange(draft, element.value, element.selectionStart);
-    const range =
-      removed &&
-      expandDeletionOverMentions(
-        removed,
-        mentionDisplayRanges(draft, mentionDraft.entries),
-      );
-    if (!range) return false;
-    replaceDraft(
-      draft.slice(0, range.from) + draft.slice(range.to),
-      range.from,
-    );
-    return true;
-  };
-
-  // React의 `onBeforeInput`은 `inputType`이 없는 합성 이벤트라 DOM에 직접 단다.
-  useEffect(() => {
-    const element = input.current;
-    if (!element) return;
-    const onBeforeInput = (event: InputEvent) => {
-      nativeDeletion.current = false;
-      if (!isMentionDeleteInput(event.inputType)) return;
-      if (composing.current || event.isComposing) return;
-      if (deleteAtomicallyRef.current(element, event.inputType))
-        event.preventDefault();
-    };
-    element.addEventListener("beforeinput", onBeforeInput);
-    return () => element.removeEventListener("beforeinput", onBeforeInput);
-  }, [input]);
   const overLimit = length > COMMENT_MAX_LENGTH;
   const canSend =
     (draft.trim() !== "" || image !== null) &&
@@ -518,46 +414,62 @@ export function CommentComposer({
             </div>
           ) : null}
           <div className="flex items-end">
-            <textarea
-              ref={input}
-              rows={1}
-              value={draft}
-              aria-label="댓글 입력"
-              placeholder={placeholder}
-              className="min-h-9 min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent px-4 py-1.5 text-base leading-6 outline-none placeholder:text-muted-foreground"
-              onChange={(event) => {
-                // 이름이 깨진 자리의 보이지 않는 표시를 걷어낸다. 남겨 두면 원래 이름을 다시
-                // 쳤을 때 멘션이 되살아난다. 조합 중에는 미뤘다가 조합이 끝나면 정리한다.
-                if (composing.current) setDraft(event.target.value);
-                else if (!widenNativeDeletion(event.target))
-                  repairDraft(event.target);
-                if (localError) setLocalError(null);
-              }}
-              onPaste={(event) => {
-                const [pasted] = clipboardImageFiles(event.clipboardData);
-                if (!pasted) return;
-                event.preventDefault();
-                void selectImage(pasted);
-              }}
-              onCompositionStart={() => (composing.current = true)}
-              onCompositionEnd={(event) => {
-                composing.current = false;
-                repairDraft(event.currentTarget);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Escape" && onCancel) {
+            <div className="grid min-w-0 flex-1">
+              <MentionHighlight
+                text={draft}
+                ranges={mentionInput.mentionRanges}
+                inputRef={input}
+                // 높이 상한은 `MAX_HEIGHT`와 같다.
+                className={cn(COMMENT_INPUT_TEXT_CLASS, "max-h-35")}
+              />
+              <textarea
+                ref={input}
+                rows={1}
+                value={draft}
+                aria-label="댓글 입력"
+                placeholder={placeholder}
+                className={cn(
+                  "col-start-1 row-start-1 min-h-9 min-w-0 resize-none overflow-y-hidden bg-transparent outline-none placeholder:text-muted-foreground",
+                  COMMENT_INPUT_TEXT_CLASS,
+                  mentionInput.mentionRanges.length > 0 &&
+                    MENTION_HIGHLIGHT_INPUT_CLASS,
+                )}
+                onChange={(event) => {
+                  mentionInput.handleChange(event.target);
+                  if (localError) setLocalError(null);
+                }}
+                onPaste={(event) => {
+                  const [pasted] = clipboardImageFiles(event.clipboardData);
+                  if (!pasted) return;
                   event.preventDefault();
-                  onCancel();
-                  return;
+                  void selectImage(pasted);
+                }}
+                onCompositionStart={mentionInput.handleCompositionStart}
+                onCompositionEnd={(event) =>
+                  mentionInput.handleCompositionEnd(event.currentTarget)
                 }
-                if (event.key !== "Enter" || event.shiftKey) return;
-                // 폰·태블릿의 화면 키보드에는 Shift+Enter가 없다. Enter로 줄을 바꾸고 등록은 버튼이 맡는다(메신저와 같은 규칙).
-                if (isHandheld()) return;
-                if (composing.current || event.nativeEvent.isComposing) return;
-                event.preventDefault();
-                send();
-              }}
-            />
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && onCancel) {
+                    event.preventDefault();
+                    onCancel();
+                    return;
+                  }
+                  // 화면 키보드와 설정을 끈 기기의 Enter는 줄바꿈이다(메신저와 같은 규칙).
+                  if (!isSendEnter(event)) return;
+                  // 한글 조합 중의 `Enter`는 글자를 확정하는 키다. 등록하면 "안녕하세"까지만 올라간다.
+                  // Safari는 compositionend를 Enter keydown보다 먼저 보내 isComposing도 false다.
+                  // 그 keydown은 keyCode 229로 온다.
+                  if (
+                    mentionInput.composing.current ||
+                    event.nativeEvent.isComposing ||
+                    event.keyCode === 229
+                  )
+                    return;
+                  event.preventDefault();
+                  send();
+                }}
+              />
+            </div>
             <input
               ref={fileInput}
               type="file"
@@ -604,10 +516,7 @@ export function CommentComposer({
                     .join("");
                   const start = element?.selectionStart ?? draft.length;
                   const end = element?.selectionEnd ?? start;
-                  replaceDraft(
-                    draft.slice(0, start) + label + draft.slice(end),
-                    start + label.length,
-                  );
+                  mentionInput.replaceRange(start, end, label);
                 }}
               />
             ) : null}

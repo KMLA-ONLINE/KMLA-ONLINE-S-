@@ -37,7 +37,7 @@ export function ReactionMembersDialog({
             이 메시지에 반응한 사람
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-24 flex-1 overflow-y-auto overscroll-contain">
+        <div className="min-h-24 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain">
           {reactors.isPending ? (
             <div className="flex justify-center py-6">
               <Spinner />

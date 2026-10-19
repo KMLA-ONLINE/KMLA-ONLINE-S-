@@ -42,7 +42,7 @@ select ok(
 
 select ok(
   not has_function_privilege('anon', 'public.list_conversations(uuid)', 'EXECUTE')
-    and not has_function_privilege('anon', 'public.send_message(uuid, uuid, text, uuid, boolean)', 'EXECUTE')
+    and not has_function_privilege('anon', 'public.send_message(uuid, uuid, text, uuid, boolean, text[])', 'EXECUTE')
     and not has_function_privilege('authenticated', 'private.message_keys()', 'EXECUTE')
     and not has_function_privilege(
       'authenticated', 'private.decrypt_message_text(bytea, smallint, jsonb)', 'EXECUTE'

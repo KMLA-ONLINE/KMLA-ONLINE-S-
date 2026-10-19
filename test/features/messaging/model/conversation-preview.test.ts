@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   formatLastMessagePreview,
   formatReplyPreview,
+  REPLY_PREVIEW_LENGTH,
+  toReplyPreviewBody,
 } from "~/features/messaging/model/conversation-preview";
 import type { ConversationSummary } from "~/features/messaging/model/types";
 
@@ -26,7 +28,7 @@ function conversation(
       sentAt: "2026-08-28T15:12:00+09:00",
     },
     unreadCount: 0,
-    muted: false,
+    notificationLevel: "all",
     canDelete: false,
     ...overrides,
   };
@@ -50,6 +52,21 @@ describe("formatLastMessagePreview", () => {
     expect(
       formatLastMessagePreview(conversation({ type: "direct" }), ORIGIN),
     ).toBe("안녕");
+  });
+
+  it("멘션은 `@이름` 글자로 보여 준다", () => {
+    expect(
+      formatLastMessagePreview(
+        conversation({
+          lastMessage: {
+            senderId: "seo",
+            body: "[@나](m:1) 확인",
+            sentAt: "2026-08-28",
+          },
+        }),
+        ORIGIN,
+      ),
+    ).toBe("박서현: @나 확인");
   });
 
   it("메시지가 없는 대화는 빈 미리보기다", () => {
@@ -86,5 +103,14 @@ describe("formatReplyPreview", () => {
         ORIGIN,
       ),
     ).toBe("삭제된 메시지입니다");
+  });
+});
+
+describe("toReplyPreviewBody", () => {
+  it("멘션을 글자로 바꾼 뒤 잘라 토큰이 반쪽 나지 않는다", () => {
+    const body = `${"가".repeat(REPLY_PREVIEW_LENGTH - 3)}[@박서현](m:1)`;
+    expect(toReplyPreviewBody(body)).toBe(
+      `${"가".repeat(REPLY_PREVIEW_LENGTH - 3)}@박서`,
+    );
   });
 });

@@ -1,3 +1,5 @@
+import type { MentionDraftEntry } from "~/features/posts/model/mentions";
+
 /**
  * 대화방을 떠났다 돌아와도 쓰던 글과 쌓아 둔 첨부를 되살린다. 대화방은 방마다 다시 마운트되므로
  * 화면 state만으로는 다른 방에 다녀오거나 삭제 모드에 들어갔다 나오면 사라진다.
@@ -6,7 +8,9 @@
  * 키에 넣는다.
  */
 interface RoomDraft {
+  /** 입력창의 표시형 값. 멘션 대상은 `mentions`가 든다. */
   text: string;
+  mentions: MentionDraftEntry[];
   files: File[];
 }
 
@@ -22,7 +26,13 @@ export function readRoomDraft(key: string): RoomDraft | undefined {
 
 /** 바꾼 쪽만 덮는다. 글도 첨부도 비면 지운다. */
 export function updateRoomDraft(key: string, patch: Partial<RoomDraft>) {
-  const next = { text: "", files: [], ...drafts.get(key), ...patch };
+  const next = {
+    text: "",
+    mentions: [],
+    files: [],
+    ...drafts.get(key),
+    ...patch,
+  };
   if (next.text === "" && next.files.length === 0) drafts.delete(key);
   else drafts.set(key, next);
 }

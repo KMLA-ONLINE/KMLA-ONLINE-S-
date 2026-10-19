@@ -37,6 +37,7 @@ function messageRow(id: string, sentAt: string) {
     system_profile_ids: null,
     system_name: null,
     attachments: [],
+    mention_profile_ids: [],
   };
 }
 
@@ -57,6 +58,7 @@ function conversationRow(overrides: Record<string, unknown> = {}) {
     last_message_deleted: false,
     unread_count: 3,
     muted: false,
+    notification_level: "all",
     can_delete: true,
     last_message_attachment_kind: null,
     ...overrides,
@@ -99,6 +101,23 @@ describe("messaging queries", () => {
     });
   });
 
+  it("멘션 대상 프로필 ID를 참여자 ID 문자열로 바꾼다", async () => {
+    rpc.mockResolvedValue({
+      data: [
+        {
+          ...messageRow("a", "2026-08-28T06:00:00+00:00"),
+          body: "[@박서현](m:1) [@최민준](m:2) 확인",
+          mention_profile_ids: [3, 4],
+        },
+      ],
+      error: null,
+    });
+
+    const page = await listMessages("conversation", null);
+
+    expect(page.messages[0]?.mentionProfileIds).toEqual(["3", "4"]);
+  });
+
   it("uuid가 아닌 주소는 요청하지 않고 없는 대화로 본다", async () => {
     await expect(loadConversation("not-a-uuid")).resolves.toBeNull();
     expect(rpc).not.toHaveBeenCalled();
@@ -129,7 +148,7 @@ describe("messaging queries", () => {
           attachmentKind: null,
         },
         unreadCount: 3,
-        muted: false,
+        notificationLevel: "all",
         canDelete: true,
       },
     ]);

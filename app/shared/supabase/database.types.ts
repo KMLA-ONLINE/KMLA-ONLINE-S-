@@ -203,6 +203,7 @@ export type Database = {
           last_read_sent_at: string
           left_at: string | null
           left_by_self: boolean
+          mentions_only: boolean
           muted_until: string | null
           profile_id: number
         }
@@ -215,6 +216,7 @@ export type Database = {
           last_read_sent_at?: string
           left_at?: string | null
           left_by_self?: boolean
+          mentions_only?: boolean
           muted_until?: string | null
           profile_id: number
         }
@@ -226,6 +228,7 @@ export type Database = {
           last_read_sent_at?: string
           left_at?: string | null
           left_by_self?: boolean
+          mentions_only?: boolean
           muted_until?: string | null
           profile_id?: number
         }
@@ -2175,7 +2178,11 @@ export type Database = {
         Returns: undefined
       }
       edit_message: {
-        Args: { p_body: string; p_message_id: string }
+        Args: {
+          p_body: string
+          p_mention_pub_ids?: string[]
+          p_message_id: string
+        }
         Returns: string
       }
       finalize_comment_image: {
@@ -2610,6 +2617,7 @@ export type Database = {
           last_message_sent_at: string
           muted: boolean
           name: string
+          notification_level: Database["public"]["Enums"]["conversation_notification_level"]
           participants: Json
           type: Database["public"]["Enums"]["conversation_type"]
           unread_count: number
@@ -2778,6 +2786,8 @@ export type Database = {
           deleted: boolean
           edited_at: string
           id: string
+          mention_profile_ids: number[]
+          mentions_everyone: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           pinned: boolean
           reactions: Json
@@ -2825,6 +2835,8 @@ export type Database = {
           deleted: boolean
           edited_at: string
           id: string
+          mention_profile_ids: number[]
+          mentions_everyone: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           pinned: boolean
           reactions: Json
@@ -2881,6 +2893,8 @@ export type Database = {
           deleted: boolean
           edited_at: string
           id: string
+          mention_profile_ids: number[]
+          mentions_everyone: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           pinned: boolean
           reactions: Json
@@ -3405,6 +3419,7 @@ export type Database = {
           p_body: string
           p_conversation_id: string
           p_mark_read?: boolean
+          p_mention_pub_ids?: string[]
           p_message_id: string
           p_reply_to_id?: string
         }
@@ -3433,6 +3448,13 @@ export type Database = {
       }
       set_conversation_muted: {
         Args: { p_conversation_id: string; p_muted: boolean }
+        Returns: undefined
+      }
+      set_conversation_notification_level: {
+        Args: {
+          p_conversation_id: string
+          p_level: Database["public"]["Enums"]["conversation_notification_level"]
+        }
         Returns: undefined
       }
       set_group_post_pinned: {
@@ -3701,6 +3723,7 @@ export type Database = {
     Enums: {
       app_role: "member" | "admin"
       comment_image_status: "pending" | "finalized" | "ready" | "deleted"
+      conversation_notification_level: "all" | "mentions" | "off"
       conversation_type: "direct" | "group"
       group_identity_policy: "identified" | "optional_anonymous"
       group_join_policy: "open" | "request" | "invite_only"
@@ -3890,6 +3913,7 @@ export const Constants = {
     Enums: {
       app_role: ["member", "admin"],
       comment_image_status: ["pending", "finalized", "ready", "deleted"],
+      conversation_notification_level: ["all", "mentions", "off"],
       conversation_type: ["direct", "group"],
       group_identity_policy: ["identified", "optional_anonymous"],
       group_join_policy: ["open", "request", "invite_only"],

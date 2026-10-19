@@ -19,6 +19,7 @@ const domDependent = [
   "test/routes/signup-action.test.ts",
   "test/shared/lib/clipboard.test.ts",
   "test/shared/lib/document-preview.test.ts",
+  "test/shared/lib/enter-to-send.test.ts",
   "test/shared/lib/user-scoped-storage.test.ts",
 ];
 

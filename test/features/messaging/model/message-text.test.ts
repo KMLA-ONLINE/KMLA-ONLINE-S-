@@ -43,6 +43,18 @@ describe("message text", () => {
     ]);
   });
 
+  it("멘션 토큰을 가르고 멘션에 붙여 친 글자는 링크로 잇지 않는다", () => {
+    expect(
+      parseMessageText("[@박서현](m:1)https://example.com [@모든 사람](m:0)!"),
+    ).toEqual([
+      { type: "mention", ordinal: 1, label: "박서현" },
+      { type: "link", value: "https://example.com" },
+      { type: "text", value: " " },
+      { type: "mention", ordinal: 0, label: "모든 사람" },
+      { type: "text", value: "!" },
+    ]);
+  });
+
   it("URL 내부에서 짝이 맞는 괄호는 유지한다", () => {
     expect(parseMessageText("https://example.com/docs_(v1).")).toEqual([
       { type: "link", value: "https://example.com/docs_(v1)" },

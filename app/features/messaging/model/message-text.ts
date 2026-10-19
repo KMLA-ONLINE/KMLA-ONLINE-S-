@@ -1,8 +1,12 @@
+import { mentionTokenPattern } from "~/features/posts/model/mentions";
+
 export const MESSAGE_MAX_LENGTH = 5000;
 export const EMOJI_ONLY_MESSAGE_MAX_LENGTH = 5;
 
 export type MessageTextSegment =
-  { type: "text"; value: string } | { type: "link"; value: string };
+  | { type: "text"; value: string }
+  | { type: "link"; value: string }
+  | { type: "mention"; ordinal: number; label: string };
 
 const EMOJI_GRAPHEME_PATTERN =
   /^(?:\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3|(?:\p{Emoji_Presentation}\uFE0F?|\p{Extended_Pictographic}\uFE0F)\p{Emoji_Modifier}?(?:\u200D(?:\p{Emoji_Presentation}\uFE0F?|\p{Extended_Pictographic}\uFE0F)\p{Emoji_Modifier}?)*(?:[\u{E0020}-\u{E007E}]+\u{E007F})?)$/u;
@@ -51,7 +55,27 @@ export function normalizeMessageBody(value: string): string {
 const URL_PATTERN = /https?:\/\/[^\s]+/gi;
 const TRAILING_PUNCTUATION = /[.,!?;:'"]+$/;
 
+/**
+ * 화면에 그릴 조각. 멘션 토큰을 먼저 가르고 그 사이 글자에서만 URL을 찾는다 — 멘션 안이나 멘션에 붙여 친 글자가
+ * 링크로 이어지지 않는다.
+ */
 export function parseMessageText(value: string): MessageTextSegment[] {
+  const segments: MessageTextSegment[] = [];
+  let cursor = 0;
+  for (const match of value.matchAll(mentionTokenPattern())) {
+    segments.push(...parseLinks(value.slice(cursor, match.index)));
+    segments.push({
+      type: "mention",
+      ordinal: Number(match[2]),
+      label: match[1],
+    });
+    cursor = match.index + match[0].length;
+  }
+  segments.push(...parseLinks(value.slice(cursor)));
+  return segments;
+}
+
+function parseLinks(value: string): MessageTextSegment[] {
   const segments: MessageTextSegment[] = [];
   let cursor = 0;
 
