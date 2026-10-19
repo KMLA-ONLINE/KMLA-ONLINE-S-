@@ -226,7 +226,7 @@ export function SharePostDialog({
           />
         </form>
 
-        <div className="min-h-40 flex-1 overflow-y-auto overscroll-y-contain">
+        <div className="min-h-40 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain">
           {searchTerm !== "" ? (
             people.isPending ? (
               <Centered>
