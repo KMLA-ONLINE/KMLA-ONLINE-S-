@@ -34,6 +34,7 @@ describe("MessagingScreen", () => {
         unreadCount: 0,
         notificationLevel: "all" as const,
         canDelete: false,
+        hidden: false,
       },
     ];
     const { user } = renderRoute(() => (

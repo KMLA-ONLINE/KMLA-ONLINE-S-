@@ -14,6 +14,7 @@ import {
   seedConversationCache,
   type MessagePages,
 } from "~/features/messaging/data/cache";
+import { setConversationHidden } from "~/features/messaging/data/mutations";
 import {
   getConversationSummary,
   loadConversation,
@@ -114,6 +115,8 @@ const READ_COUNT_LIMIT = 100;
  * 대화방 loader. 다시 들어온 방은 남아 있는 cache로 기다리지 않고 열며, 닫혀 있던 동안의 변경은 방이
  * 열리면 `MessagingSync`가 따라잡는다. cache가 없으면 대화 정보, 최신 페이지, 고정 메시지를 읽어 cache를
  * 채운다. 내 대화가 아니면 `null`이다.
+ *
+ * 숨긴 대화는 목록에 없어 cache로 열리지 않는다. 직접 들어왔으면 목록에 다시 보인다(기능 명세 §13.23).
  */
 export async function openConversation(
   queryClient: QueryClient,
@@ -123,7 +126,22 @@ export async function openConversation(
   if (cached) return cached;
   const conversation = await loadConversation(conversationId);
   if (conversation) seedConversationCache(queryClient, conversation);
+  if (conversation?.hidden)
+    void showHiddenConversation(queryClient, conversationId);
   return conversation;
+}
+
+/** 다시 보이지 못해도 대화방은 그대로 쓴다. 대화는 다음 메시지가 오면 서버가 다시 보인다. */
+async function showHiddenConversation(
+  queryClient: QueryClient,
+  conversationId: string,
+): Promise<void> {
+  try {
+    await setConversationHidden(conversationId, false);
+  } catch {
+    return;
+  }
+  await invalidateConversationList(queryClient);
 }
 
 /**

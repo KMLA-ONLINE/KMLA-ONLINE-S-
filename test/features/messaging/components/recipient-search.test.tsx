@@ -29,6 +29,7 @@ it("게시물을 보낼 대화는 별명 대신 본명으로 구분한다", asyn
       unreadCount: 0,
       notificationLevel: "all",
       canDelete: false,
+      hidden: false,
     },
   ]);
   const { user } = renderRoute(() => (

@@ -305,6 +305,7 @@ async function toSummaries(
     unreadCount: row.unread_count,
     notificationLevel: row.notification_level,
     canDelete: row.can_delete,
+    hidden: row.hidden,
   }));
 }
 

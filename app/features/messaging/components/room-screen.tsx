@@ -152,7 +152,8 @@ import {
   DropdownMenuTrigger,
 } from "~/shared/ui/dropdown-menu";
 import { isAboveSeededParent } from "~/shared/lib/back-stack";
-import { isHandheld, isIOS } from "~/shared/lib/install-platform";
+import { hasDesktopPointer } from "~/shared/lib/desktop-pointer";
+import { isIOS } from "~/shared/lib/install-platform";
 import { cn } from "~/shared/lib/utils";
 
 export interface DesktopDetailsContext {
@@ -1879,7 +1880,7 @@ function ComposerShell({
   // 않는다. 되살린 초안이 있으면 그 끝에서 이어 쓴다.
   useEffect(() => {
     const textarea = textareaRef.current;
-    if (!textarea || isHandheld()) return;
+    if (!textarea || !hasDesktopPointer()) return;
     textarea.focus({ preventScroll: true });
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
   }, []);

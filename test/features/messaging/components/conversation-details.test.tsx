@@ -24,6 +24,7 @@ const conversation: Conversation = {
   unreadCount: 0,
   notificationLevel: "all",
   canDelete: false,
+  hidden: false,
   messages: [],
   olderCursor: null,
   pinnedMessages: [],

@@ -193,6 +193,7 @@ export type Database = {
       conversation_members: {
         Row: {
           conversation_id: string
+          hidden_at: string | null
           id: number
           joined_at: string
           last_read_message_id: string
@@ -205,6 +206,7 @@ export type Database = {
         }
         Insert: {
           conversation_id: string
+          hidden_at?: string | null
           id?: number
           joined_at?: string
           last_read_message_id?: string
@@ -217,6 +219,7 @@ export type Database = {
         }
         Update: {
           conversation_id?: string
+          hidden_at?: string | null
           id?: number
           joined_at?: string
           last_read_message_id?: string
@@ -2576,6 +2579,7 @@ export type Database = {
         Returns: {
           can_delete: boolean
           conversation_id: string
+          hidden: boolean
           last_message_attachment_kind: string
           last_message_body: string
           last_message_deleted: boolean
@@ -3418,6 +3422,10 @@ export type Database = {
           reaction_count: number
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
+      }
+      set_conversation_hidden: {
+        Args: { p_conversation_id: string; p_hidden: boolean }
+        Returns: undefined
       }
       set_conversation_muted: {
         Args: { p_conversation_id: string; p_muted: boolean }
