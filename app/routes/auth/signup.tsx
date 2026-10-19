@@ -1,4 +1,5 @@
 import { CheckIcon } from "lucide-react";
+import { useState } from "react";
 import {
   data,
   Form,
@@ -12,11 +13,14 @@ import {
   AuthCard,
   claimSignupPassword,
   clearSignupDraft,
+  DUPLICATE_STUDENT_NUMBER_MESSAGE,
   getAuthErrorMessage,
   getProfileDestination,
   getSignupDraft,
   hasActiveSession,
   hasErrors,
+  isDuplicateStudentNumberError,
+  isInvalidEmailAddressError,
   loadAuthState,
   OtpField,
   PasswordField,
@@ -88,6 +92,8 @@ interface SignupState {
   askPassword?: boolean;
   resent?: boolean;
   verified?: boolean;
+  /** 인증은 끝났지만 학번이 이미 쓰인다. 다시 제출해도 같으므로 학번을 고칠 `/setup`으로 안내한다. */
+  studentNumberTaken?: boolean;
   errors?: FieldErrors;
 }
 
@@ -205,13 +211,19 @@ async function submitVerifyStep(intent: string, formData: FormData) {
     throw redirect("/pending");
   } catch (error) {
     if (error instanceof Response) throw error;
+    const studentNumberTaken = isDuplicateStudentNumberError(error);
     return data(
       {
         ...base,
         // 서버가 거절한 비밀번호를 hidden으로 계속 보내면 빠져나올 수 없다.
         askPassword: askPassword || claiming,
         verified: await hasActiveSession(),
-        errors: { form: getAuthErrorMessage(error) },
+        studentNumberTaken,
+        errors: {
+          form: studentNumberTaken
+            ? DUPLICATE_STUDENT_NUMBER_MESSAGE
+            : getAuthErrorMessage(error),
+        },
       },
       { status: 400 },
     );
@@ -251,6 +263,19 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     try {
       await signUp(email, password);
     } catch (error) {
+      // 이메일 칸은 첫 단계에만 있다. 여기 머물면 고칠 곳이 없으므로 그 단계로 돌려보낸다.
+      if (isInvalidEmailAddressError(error)) {
+        return data(
+          {
+            step: "credentials" as const,
+            email,
+            password,
+            values,
+            errors: { email: getAuthErrorMessage(error) },
+          },
+          { status: 400 },
+        );
+      }
       return data(
         {
           step: "profile" as const,
@@ -396,6 +421,10 @@ export default function SignupPage({
   }
   const { step, email, password, values } = result;
   const errors = result.errors ?? {};
+  // 이메일 오류는 그 제출의 결과라, 사용자가 고치기 시작하면 내린다. 다음 제출의 결과는
+  // 새 객체이므로 같은 오류가 다시 나면 다시 보인다.
+  const [emailEditedFor, setEmailEditedFor] = useState<unknown>(null);
+  const emailError = emailEditedFor === actionData ? undefined : errors.email;
 
   const description =
     step === "credentials"
@@ -436,7 +465,7 @@ export default function SignupPage({
         {step === "credentials" ? (
           <>
             <FieldGroup>
-              <Field data-invalid={Boolean(errors.email)}>
+              <Field data-invalid={Boolean(emailError)}>
                 <FieldLabel htmlFor="signup-email">이메일</FieldLabel>
                 <Input
                   id="signup-email"
@@ -444,12 +473,13 @@ export default function SignupPage({
                   type="email"
                   autoComplete="email"
                   defaultValue={email}
-                  aria-invalid={Boolean(errors.email)}
+                  onChange={() => setEmailEditedFor(actionData)}
+                  aria-invalid={Boolean(emailError)}
                   placeholder="name@example.com"
                   disabled={pending}
                   required
                 />
-                <FieldError>{errors.email}</FieldError>
+                <FieldError>{emailError}</FieldError>
               </Field>
               <PasswordField
                 id="signup-password"
@@ -528,7 +558,7 @@ export default function SignupPage({
               </p>
             ) : null}
 
-            {result.verified ? (
+            {result.studentNumberTaken ? null : result.verified ? (
               <p role="status" className="text-sm text-primary">
                 이메일 인증은 끝났어요. 제출만 다시 눌러 주세요.
               </p>
@@ -578,16 +608,23 @@ export default function SignupPage({
               </FieldGroup>
             ) : null}
 
-            <Button
-              type="submit"
-              name="intent"
-              value="verify"
-              size="lg"
-              disabled={pending}
-            >
-              {pending ? <Spinner data-icon="inline-start" /> : null}
-              가입 신청 제출
-            </Button>
+            {result.studentNumberTaken ? (
+              // 세션은 이미 있고 초안도 남아 있어, /setup이 입력값을 그대로 채워 연다.
+              <Button size="lg" render={<Link to="/setup" />}>
+                학번 수정하기
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                name="intent"
+                value="verify"
+                size="lg"
+                disabled={pending}
+              >
+                {pending ? <Spinner data-icon="inline-start" /> : null}
+                가입 신청 제출
+              </Button>
+            )}
             <Button
               type="button"
               variant="link"

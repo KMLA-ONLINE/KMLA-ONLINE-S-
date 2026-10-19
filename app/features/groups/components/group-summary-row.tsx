@@ -22,9 +22,11 @@ import { Spinner } from "~/shared/ui/spinner";
 
 export function GroupSummaryRow({
   group,
+  newPostCount,
   profileId,
 }: {
   group: GroupHomeItem;
+  newPostCount: number;
   profileId: number;
 }) {
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
@@ -118,11 +120,11 @@ export function GroupSummaryRow({
               </>
             ) : null}
             <span>멤버 {group.member_count.toLocaleString("ko-KR")}명</span>
-            {group.new_post_count > 0 ? (
+            {newPostCount > 0 ? (
               <>
                 <span aria-hidden>·</span>
                 <span className="flex items-center gap-1">
-                  새 게시물 {group.new_post_count.toLocaleString("ko-KR")}개
+                  새 게시물 {newPostCount.toLocaleString("ko-KR")}개
                   <span
                     aria-hidden
                     className="size-1.5 shrink-0 rounded-full bg-primary"

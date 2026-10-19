@@ -38,8 +38,10 @@ export type GroupHomeItem = GroupSummary & {
   membership_state: GroupMembershipState;
   member_role: GroupMemberRole | null;
   pinned_at: string | null;
-  new_post_count: number;
 };
+
+/** 그룹 ID별 새 게시물 수(§7.19). 0인 그룹도 들어 있고, 가입하지 않은 그룹은 없다. */
+export type GroupNewPostCounts = Record<string, number>;
 
 export type DiscoverGroupItem = Omit<
   GroupDiscoverRow,

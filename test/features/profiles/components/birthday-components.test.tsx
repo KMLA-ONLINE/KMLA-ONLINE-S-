@@ -97,6 +97,48 @@ const birthdayCalendar = [
 ] satisfies BirthdayCalendarProfile[];
 
 describe("birthday components", () => {
+  it("opens at today's first birthday rather than the month heading", () => {
+    const scrollTo = vi.spyOn(HTMLElement.prototype, "scrollTo");
+    const rect = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: HTMLElement) {
+        const top =
+          this.firstElementChild?.getAttribute("href") ===
+          "/profile/year-end-25"
+            ? 300
+            : this.firstElementChild?.tagName === "H3"
+              ? 100
+              : 0;
+        return {
+          top,
+          bottom: top + 64,
+          left: 0,
+          right: 400,
+          width: 400,
+          height: 64,
+          x: 0,
+          y: top,
+          toJSON: () => ({}),
+        };
+      });
+
+    try {
+      renderRoute(() => (
+        <ScrollHost clientHeight={100}>
+          <BirthdayListScreen
+            birthdays={birthdayCalendar}
+            referenceDate="2026-12-31"
+          />
+        </ScrollHost>
+      ));
+
+      expect(scrollTo).toHaveBeenCalledWith({ top: 300 });
+    } finally {
+      rect.mockRestore();
+      scrollTo.mockRestore();
+    }
+  });
+
   it("makes the birthday title and content a link to the full list without a separate button", () => {
     renderRoute(() => <HomeBirthdaySummary birthdays={birthdays} />);
 

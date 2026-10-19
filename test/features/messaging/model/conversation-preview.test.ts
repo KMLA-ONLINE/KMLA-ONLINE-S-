@@ -30,6 +30,7 @@ function conversation(
     unreadCount: 0,
     notificationLevel: "all",
     canDelete: false,
+    hidden: false,
     ...overrides,
   };
 }

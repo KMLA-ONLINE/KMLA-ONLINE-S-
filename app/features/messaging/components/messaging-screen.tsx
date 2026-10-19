@@ -1,6 +1,8 @@
+import { ContextMenu } from "@base-ui/react/context-menu";
 import {
   AtSignIcon,
   BellOffIcon,
+  EyeOffIcon,
   MessageSquareMoreIcon,
   PenLineIcon,
   SearchIcon,
@@ -10,6 +12,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type ReactElement,
   type ReactNode,
 } from "react";
 import { Link, useNavigate } from "react-router";
@@ -17,11 +20,12 @@ import { Link, useNavigate } from "react-router";
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
 import { useStartConversation } from "~/features/messaging/hooks/use-conversation-membership";
+import { useHideConversation } from "~/features/messaging/hooks/use-hide-conversation";
 import { useRoomEntry } from "~/features/messaging/hooks/use-room-entry";
 import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
 import type { ConversationSummary } from "~/features/messaging/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
-import { isHandheld } from "~/shared/lib/install-platform";
+import { hasDesktopPointer } from "~/shared/lib/desktop-pointer";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
@@ -49,13 +53,14 @@ export function MessagingScreen({
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const roomEntry = useRoomEntry(hasRoom);
   const startConversation = useStartConversation(roomEntry);
+  const hideConversation = useHideConversation(selectedRoomId);
   const navigate = useNavigate();
   // 컴퓨터에서 메신저에 들어오면 빈 안내 대신 맨 위 대화를 연다. 그 대화에 읽지 않은 메시지가 있으면
   // 열지 않는다. 열면 읽음 위치가 갱신되어 보지 않은 메시지가 상대에게 읽음으로 보이고 내 안 읽음
   // 표시도 사라진다. 메신저 안에서 대화방을 나와 목록으로 온 것은 다시 열지 않도록 들어올 때 한 번만
   // 정한다. 고르는 동안에는 안내가 깜빡이지 않게 오른쪽을 비워 둔다.
   const [autoOpenRoomId, setAutoOpenRoomId] = useState(() => {
-    if (hasRoom || isHandheld()) return undefined;
+    if (hasRoom || !hasDesktopPointer()) return undefined;
     if (!window.matchMedia("(min-width: 48rem)").matches) return undefined;
     const top = conversations.at(0);
     return top?.unreadCount === 0 ? top.id : undefined;
@@ -129,68 +134,73 @@ export function MessagingScreen({
               {filteredConversations.map((conversation) => {
                 const selected = conversation.id === selectedRoomId;
                 return (
-                  <Link
+                  <ConversationContextMenu
                     key={conversation.id}
-                    to={`/messenger/${conversation.id}`}
-                    replace={roomEntry.replace}
-                    state={roomEntry.state}
-                    aria-current={selected ? "page" : undefined}
-                    className={cn(
-                      "flex min-w-0 items-center gap-3 rounded-xl px-2 py-2.5 transition-colors outline-none hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/50",
-                      selected && "bg-primary/10 hover:bg-primary/10",
-                    )}
-                  >
-                    <ConversationAvatar conversation={conversation} />
-                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        <span className="flex min-w-0 flex-1 items-center gap-1">
-                          <span className="min-w-0 truncate text-sm font-medium">
-                            {conversation.name}
+                    onHide={() => void hideConversation(conversation.id)}
+                    trigger={
+                      <Link
+                        to={`/messenger/${conversation.id}`}
+                        replace={roomEntry.replace}
+                        state={roomEntry.state}
+                        aria-current={selected ? "page" : undefined}
+                        className={cn(
+                          "flex min-w-0 items-center gap-3 rounded-xl px-2 py-2.5 transition-colors outline-none select-none hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/50 data-popup-open:bg-muted/70",
+                          selected && "bg-primary/10 hover:bg-primary/10",
+                        )}
+                      >
+                        <ConversationAvatar conversation={conversation} />
+                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="flex min-w-0 flex-1 items-center gap-1">
+                              <span className="min-w-0 truncate text-sm font-medium">
+                                {conversation.name}
+                              </span>
+                              {conversation.notificationLevel === "off" ? (
+                                <BellOffIcon
+                                  aria-label="알림 꺼짐"
+                                  className="size-3.5 shrink-0 text-muted-foreground"
+                                />
+                              ) : null}
+                              {conversation.notificationLevel === "mentions" ? (
+                                <AtSignIcon
+                                  aria-label="멘션만 알림"
+                                  className="size-3.5 shrink-0 text-muted-foreground"
+                                />
+                              ) : null}
+                            </span>
+                            {conversation.lastMessage ? (
+                              <RelativeTime
+                                value={conversation.lastMessage.sentAt}
+                                className="shrink-0 text-xs text-muted-foreground"
+                              />
+                            ) : null}
                           </span>
-                          {conversation.notificationLevel === "off" ? (
-                            <BellOffIcon
-                              aria-label="알림 꺼짐"
-                              className="size-3.5 shrink-0 text-muted-foreground"
-                            />
-                          ) : null}
-                          {conversation.notificationLevel === "mentions" ? (
-                            <AtSignIcon
-                              aria-label="멘션만 알림"
-                              className="size-3.5 shrink-0 text-muted-foreground"
-                            />
-                          ) : null}
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "min-w-0 flex-1 truncate text-sm text-muted-foreground",
+                                conversation.unreadCount > 0 &&
+                                  "font-medium text-foreground",
+                              )}
+                            >
+                              {formatLastMessagePreview(
+                                conversation,
+                                window.location.origin,
+                              )}
+                            </span>
+                            {conversation.unreadCount > 0 ? (
+                              <Badge
+                                className="min-w-5 px-1.5"
+                                aria-label={`읽지 않은 메시지 ${conversation.unreadCount}개`}
+                              >
+                                {conversation.unreadCount}
+                              </Badge>
+                            ) : null}
+                          </span>
                         </span>
-                        {conversation.lastMessage ? (
-                          <RelativeTime
-                            value={conversation.lastMessage.sentAt}
-                            className="shrink-0 text-xs text-muted-foreground"
-                          />
-                        ) : null}
-                      </span>
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        <span
-                          className={cn(
-                            "min-w-0 flex-1 truncate text-sm text-muted-foreground",
-                            conversation.unreadCount > 0 &&
-                              "font-medium text-foreground",
-                          )}
-                        >
-                          {formatLastMessagePreview(
-                            conversation,
-                            window.location.origin,
-                          )}
-                        </span>
-                        {conversation.unreadCount > 0 ? (
-                          <Badge
-                            className="min-w-5 px-1.5"
-                            aria-label={`읽지 않은 메시지 ${conversation.unreadCount}개`}
-                          >
-                            {conversation.unreadCount}
-                          </Badge>
-                        ) : null}
-                      </span>
-                    </span>
-                  </Link>
+                      </Link>
+                    }
+                  />
                 );
               })}
             </nav>
@@ -253,5 +263,33 @@ export function MessagingScreen({
         )}
       </div>
     </>
+  );
+}
+
+/** 대화 목록 한 줄의 메뉴. 컴퓨터에서는 우클릭, 폰·태블릿에서는 길게 눌러 연다(기능 명세 §13.23). */
+function ConversationContextMenu({
+  trigger,
+  onHide,
+}: {
+  trigger: ReactElement;
+  onHide: () => void;
+}) {
+  return (
+    <ContextMenu.Root>
+      <ContextMenu.Trigger render={trigger} />
+      <ContextMenu.Portal>
+        <ContextMenu.Positioner className="isolate z-50 outline-none">
+          <ContextMenu.Popup className="min-w-44 origin-(--transform-origin) rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-none">
+            <ContextMenu.Item
+              className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0"
+              onClick={onHide}
+            >
+              <EyeOffIcon aria-hidden />
+              목록에서 숨기기
+            </ContextMenu.Item>
+          </ContextMenu.Popup>
+        </ContextMenu.Positioner>
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
   );
 }
