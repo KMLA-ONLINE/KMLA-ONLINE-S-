@@ -12,11 +12,13 @@ import {
   AuthCard,
   claimSignupPassword,
   clearSignupDraft,
+  DUPLICATE_STUDENT_NUMBER_MESSAGE,
   getAuthErrorMessage,
   getProfileDestination,
   getSignupDraft,
   hasActiveSession,
   hasErrors,
+  isDuplicateStudentNumberError,
   loadAuthState,
   OtpField,
   PasswordField,
@@ -211,7 +213,11 @@ async function submitVerifyStep(intent: string, formData: FormData) {
         // 서버가 거절한 비밀번호를 hidden으로 계속 보내면 빠져나올 수 없다.
         askPassword: askPassword || claiming,
         verified: await hasActiveSession(),
-        errors: { form: getAuthErrorMessage(error) },
+        errors: {
+          form: isDuplicateStudentNumberError(error)
+            ? DUPLICATE_STUDENT_NUMBER_MESSAGE
+            : getAuthErrorMessage(error),
+        },
       },
       { status: 400 },
     );

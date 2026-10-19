@@ -9,6 +9,23 @@ export function isEmailNotConfirmedError(error: unknown): boolean {
   return readErrorCode(error) === "email_not_confirmed";
 }
 
+export const DUPLICATE_STUDENT_NUMBER_MESSAGE =
+  "이미 등록된 학번입니다. 학번을 확인하고, 맞다면 관리자에게 문의해 주세요.";
+
+/**
+ * 다른 프로필이 이미 쓰는 학번으로 제출했다. 클라이언트는 다른 사람의 학번을 볼 수 없어
+ * 미리 막지 못하고, `profiles_student_number_key`의 unique 위반으로만 알 수 있다.
+ */
+export function isDuplicateStudentNumberError(error: unknown): boolean {
+  return (
+    readErrorCode(error) === "23505" &&
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    String(error.message).includes("profiles_student_number_key")
+  );
+}
+
 /** Supabase auth 에러를 문구로 바꾼다. 출력이 화면이라 `data/`가 아닌 여기에 두고 client 대역 없이 테스트한다. */
 export function getAuthErrorMessage(error: unknown): string {
   const code = readErrorCode(error);

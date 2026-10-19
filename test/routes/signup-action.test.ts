@@ -116,6 +116,24 @@ describe("signup verification", () => {
     expect(claimSignupPassword).toHaveBeenCalledWith("new-password");
   });
 
+  // 인증 단계에는 학번 칸이 없으므로 폼 오류로 이유를 알린다.
+  it("explains a student number that is already registered", async () => {
+    submitProfile.mockRejectedValueOnce({
+      code: "23505",
+      message:
+        'duplicate key value violates unique constraint "profiles_student_number_key"',
+    });
+
+    const failed = (await verify({
+      otp: "123456",
+      password: "new-password",
+    })) as { data: { errors: Record<string, string> } };
+
+    expect(failed.data.errors.form).toBe(
+      "이미 등록된 학번입니다. 학번을 확인하고, 맞다면 관리자에게 문의해 주세요.",
+    );
+  });
+
   // 서버가 비밀번호를 거절했는데 hidden 값만 다시 보내면 빠져나올 수 없다.
   it("lets the user change a rejected password after verification succeeded", async () => {
     claimSignupPassword.mockRejectedValueOnce({ code: "weak_password" });
