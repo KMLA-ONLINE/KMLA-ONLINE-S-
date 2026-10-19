@@ -1000,6 +1000,29 @@ describe("RoomScreen", () => {
     setLevel.mockRestore();
   });
 
+  it("탈퇴한 상대와의 1:1 대화에는 입력창과 답장·수정을 내지 않는다", async () => {
+    const loaded = await loadConversation("hyunwoo");
+    const conversation = {
+      ...loaded!,
+      participants: loaded!.participants.map((participant) =>
+        participant.id === loaded!.viewerId
+          ? participant
+          : { ...participant, name: "탈퇴한 사용자", withdrawn: true },
+      ),
+    };
+    renderRoute(() => <RoomScreen conversation={conversation} />, {
+      path: "/messenger/hyunwoo",
+    });
+
+    expect(
+      screen.getByText("탈퇴한 사용자에게는 메시지를 보낼 수 없습니다."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(
+      screen.queryAllByRole("button", { name: "메시지에 답장" }),
+    ).toHaveLength(0);
+  });
+
   it("1:1 대화 정보에서는 알림을 끄고 다시 켜기만 한다", async () => {
     const setLevel = vi.spyOn(mutations, "setConversationNotificationLevel");
     const conversation = await loadConversation("hyunwoo");

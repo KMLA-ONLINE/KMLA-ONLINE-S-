@@ -58,6 +58,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `/menu/notices`                      | `app/routes/app/menu/notices.tsx`           | sticky/none/3xl/PTR            | L     | school-notices                                              | §17.10           | —                                                                                                       |
 | `/menu/notices/:postId`              | `app/routes/app/menu/notice-detail.tsx`     | sticky/none/3xl                | L     | school-notices                                              | §17.10           | —                                                                                                       |
 | `/settings/password`                 | `app/routes/app/menu/password.tsx`          | sticky/sticky/4xl              | A     | auth                                                        | §4.5             | `test/routes/password.test.tsx`                                                                         |
+| `/settings/withdraw`                 | `app/routes/app/menu/withdraw.tsx`          | sticky/sticky/4xl              | L A   | auth, app-shell                                             | §4.6             | `test/routes/app/menu/withdraw.test.tsx`                                                                |
 | `/settings`                          | `app/routes/app/menu/settings.tsx`          | sticky/sticky/4xl              | —     | app-shell, auth, support                                    | §15.3            | `test/routes/app/menu/settings.test.tsx`, `test/routes/app/settings-navigation.test.tsx`                |
 | `/settings/lab`                      | `app/routes/app/menu/settings-lab.tsx`      | sticky/sticky/4xl              | —     | posts                                                       | §15.4, §15.5     | `test/routes/app/menu/settings-lab.test.tsx`                                                            |
 | `/menu/timetable`                    | `app/routes/app/menu/timetable.tsx`         | sticky/none/5xl                | —     | timetable                                                   | §17.7            | —                                                                                                       |
@@ -105,7 +106,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | `admin`            | Approval review, admin roster, permission-based managers, admin contacts editor, storage cleanup status, school notice account              | §16                                                 |
 | `app-shell`        | Header, sidebar, tab bar, `PageHeader`, `ScrollRegion`, pull-to-refresh, shell data, `handle.chrome`, home sidebar preferences              | §3, §6.7, §15.3                                     |
-| `auth`             | Sign-up, login, OTP, password reset and change, profile setup, signup draft                                                                 | §4, §5                                              |
+| `auth`             | Sign-up, login, OTP, password reset and change, account withdrawal, profile setup, signup draft                                             | §4, §5                                              |
 | `feed`             | Home integrated feed, infinite feed session, feed cache surgery                                                                             | §6 and `docs/FEED_ALGORITHM.md`                     |
 | `groups`           | Group home, discover, detail, membership, roles, invites, group settings, group media                                                       | §7                                                  |
 | `meal`             | NEIS meal fetch and meal screens                                                                                                            | §17.4                                               |
@@ -273,6 +274,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `update_my_notification_preferences`          | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
 | `update_my_profile`                           | `profiles/data/mutations.ts`                                                    | `11-identity.sql`             |
 | `update_post_comment`                         | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
+| `withdraw_account`                            | `auth/data/mutations.ts`                                                        | `11-identity.sql`             |
 | `donation_cancel_claim`                       | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
 | `donation_claim_item`                         | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
 | `donation_create_round`                       | `donations/data/donations.ts`                                                   | `54-donations.sql`            |
@@ -292,17 +294,17 @@ browser reads or writes directly.
 
 <!-- tables:begin -->
 
-| Table                  | Accessed from                                                                         |
-| ---------------------- | ------------------------------------------------------------------------------------- |
-| `admin_contacts`       | `support/data/queries.ts`                                                             |
-| `gongang_schedule`     | `school-utilities/data/gongang-schedule.ts`                                           |
-| `group_categories`     | `posts/data/queries.ts`                                                               |
-| `group_join_requests`  | `groups/data/mutations.ts`, `groups/data/queries.ts`                                  |
-| `group_memberships`    | `groups/data/mutations.ts`, `groups/data/queries.ts`, `notifications/data/queries.ts` |
-| `groups`               | `groups/data/queries.ts`                                                              |
-| `profile_departments`  | `profiles/data/queries.ts`                                                            |
-| `profile_permissions`  | `school-utilities/data/gongang-schedule.ts`                                           |
-| `user_timetables`      | `timetable/data/timetable.ts`                                                         |
-| `utility_reservations` | `school-utilities/data/reservations.ts`                                               |
+| Table                  | Accessed from                                                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `admin_contacts`       | `support/data/queries.ts`                                                                                     |
+| `gongang_schedule`     | `school-utilities/data/gongang-schedule.ts`                                                                   |
+| `group_categories`     | `posts/data/queries.ts`                                                                                       |
+| `group_join_requests`  | `groups/data/mutations.ts`, `groups/data/queries.ts`                                                          |
+| `group_memberships`    | `auth/data/queries.ts`, `groups/data/mutations.ts`, `groups/data/queries.ts`, `notifications/data/queries.ts` |
+| `groups`               | `groups/data/queries.ts`                                                                                      |
+| `profile_departments`  | `profiles/data/queries.ts`                                                                                    |
+| `profile_permissions`  | `school-utilities/data/gongang-schedule.ts`                                                                   |
+| `user_timetables`      | `timetable/data/timetable.ts`                                                                                 |
+| `utility_reservations` | `school-utilities/data/reservations.ts`                                                                       |
 
 <!-- tables:end -->

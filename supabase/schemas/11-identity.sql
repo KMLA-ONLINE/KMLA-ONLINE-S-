@@ -200,7 +200,7 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     CONSTRAINT "profiles_pub_id_format" CHECK (("pub_id" ~ '^[a-z0-9](?:[a-z0-9-]{3,13}[a-z0-9])$'::"text")),
     CONSTRAINT "profiles_pub_id_not_reserved" CHECK (("lower"("pub_id") <> ALL (ARRAY['admin'::"text", 'administrator'::"text", 'teacher'::"text", 'staff'::"text", 'moderator'::"text", 'support'::"text", 'system'::"text", 'root'::"text", 'sibal'::"text"]))),
     CONSTRAINT "profiles_student_number_format" CHECK ((("student_number" IS NULL) OR ("student_number" ~ '^[0-9]{6}$'::"text"))),
-    CONSTRAINT "profiles_type_details" CHECK (((("type" = 'student'::"public"."profile_type") AND ("student_number" IS NOT NULL) AND ("birthday" IS NOT NULL) AND ("cohort" IS NOT NULL) AND ("gender" IS NOT NULL) AND ("academic_track" IS NOT NULL)) OR (("type" = 'alumni'::"public"."profile_type") AND ("cohort" IS NOT NULL) AND ("gender" IS NOT NULL) AND ("academic_track" IS NOT NULL) AND ("class_no" IS NULL) AND ("dorm_room" IS NULL)) OR (("type" = 'teacher'::"public"."profile_type") AND ("student_number" IS NULL) AND ("class_no" IS NULL) AND ("cohort" IS NULL) AND ("gender" IS NULL) AND ("academic_track" IS NULL) AND ("dorm_room" IS NULL))))
+    CONSTRAINT "profiles_type_details" CHECK ((("status" = 'withdrawn'::"public"."profile_status") OR (("type" = 'student'::"public"."profile_type") AND ("student_number" IS NOT NULL) AND ("birthday" IS NOT NULL) AND ("cohort" IS NOT NULL) AND ("gender" IS NOT NULL) AND ("academic_track" IS NOT NULL)) OR (("type" = 'alumni'::"public"."profile_type") AND ("cohort" IS NOT NULL) AND ("gender" IS NOT NULL) AND ("academic_track" IS NOT NULL) AND ("class_no" IS NULL) AND ("dorm_room" IS NULL)) OR (("type" = 'teacher'::"public"."profile_type") AND ("student_number" IS NULL) AND ("class_no" IS NULL) AND ("cohort" IS NULL) AND ("gender" IS NULL) AND ("academic_track" IS NULL) AND ("dorm_room" IS NULL))))
 );
 
 ALTER TABLE "public"."profiles" OWNER TO "postgres";
@@ -407,6 +407,184 @@ end;
 $$;
 
 ALTER FUNCTION "public"."remove_my_profile_media"("p_slot" "text") OWNER TO "postgres";
+
+-- 계정 탈퇴. 게시물·댓글·반응·메시지가 프로필을 CASCADE 없이 가리키고 "탈퇴한 사용자" 명의로
+-- 남아야 하므로 프로필 행은 지우지 않고 익명화해 묘비로 남긴다. 나머지 개인 정보와 Auth 계정은
+-- 한 트랜잭션에서 지운다(삭제 및 보존 정책 §5.3). Auth 계정 삭제에 `auth.users` 권한이 필요해
+-- definer다. 정지 중이어도 막지 않으며, 그룹 소유자와 앱 관리자는 먼저 넘기거나 강등돼야 한다.
+CREATE OR REPLACE FUNCTION "public"."withdraw_account"() RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_auth_user_id uuid := auth.uid();
+  caller public.profiles;
+  conversation_id uuid;
+  timeline_post_ids uuid[];
+begin
+  select profile.* into caller
+  from public.profiles as profile
+  where profile.auth_user_id = caller_auth_user_id
+    and caller_auth_user_id is not null
+    and profile.status = 'accepted'
+    and profile.deleted_at is null
+  for update;
+
+  if caller.id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+
+  perform private.require_recent_password_auth();
+
+  if caller.role = 'admin' then
+    raise exception 'app administrator role must be released before withdrawal'
+      using errcode = '22023';
+  end if;
+  if exists (
+    select 1
+    from public.group_memberships as membership
+    where membership.profile_id = caller.id
+      and membership.role = 'owner'
+  ) then
+    raise exception 'group ownership must be transferred before withdrawal'
+      using errcode = '22023';
+  end if;
+
+  -- 1:1 대화는 상대의 기록으로 남기되 내 참여 기간만 닫는다. 열어 두면 상대 메시지의 안 읽은
+  -- 수에 탈퇴자가 영원히 남는다. 새 메시지는 `send_message`가 거부한다.
+  update public.conversation_members as member
+  set left_at = clock_timestamp(),
+    left_by_self = true
+  from public.conversations as conversation
+  where conversation.id = member.conversation_id
+    and conversation.type = 'direct'
+    and member.profile_id = caller.id
+    and member.left_at is null;
+
+  -- 그룹 대화는 나가며 남은 멤버에게 나갔다는 표시를 남긴다.
+  for conversation_id in
+    select member.conversation_id
+    from public.conversation_members as member
+    join public.conversations as conversation on conversation.id = member.conversation_id
+    where member.profile_id = caller.id
+      and member.left_at is null
+      and conversation.type = 'group'
+    order by member.conversation_id
+  loop
+    perform private.lock_group_for_member(caller.id, conversation_id);
+    perform private.leave_group_conversation(caller.id, conversation_id);
+  end loop;
+
+  -- 타임라인 주인이 탈퇴하면 그 타임라인의 글은 아무도 읽을 수 없으므로 남의 글까지 함께 지운다.
+  select coalesce(array_agg(post.id), '{}') into timeline_post_ids
+  from public.posts as post
+  where post.timeline_profile_id = caller.id;
+  perform private.purge_posts(timeline_post_ids);
+
+  with deleted as (
+    delete from public.stories as story
+    where story.profile_id = caller.id
+    returning story.image_path, story.thumbnail_path
+  )
+  insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+  select 'story-media', path.object_path, 'story_media'
+  from deleted
+  cross join lateral (values (deleted.image_path), (deleted.thumbnail_path)) as path(object_path)
+  where path.object_path is not null
+  on conflict (bucket, object_path) do update
+    set dry_run = queue.dry_run and excluded.dry_run;
+
+  with deleted as (
+    delete from public.profile_media_objects as media
+    where media.profile_id = caller.id
+    returning media.object_path
+  )
+  insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+  select 'profile-media', deleted.object_path, 'profile_media'
+  from deleted
+  on conflict (bucket, object_path) do update
+    set dry_run = queue.dry_run and excluded.dry_run;
+
+  with deleted as (
+    delete from public.profile_media_activity_objects as activity
+    where activity.profile_id = caller.id
+    returning activity.object_path
+  )
+  insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+  select 'profile-media', deleted.object_path, 'profile_media_activity'
+  from deleted
+  on conflict (bucket, object_path) do update
+    set dry_run = queue.dry_run and excluded.dry_run;
+
+  delete from public.group_join_requests where profile_id = caller.id;
+  delete from private.group_invites where created_by = caller.id;
+  delete from public.user_timetables where profile_id = caller.id;
+  delete from public.notification_preferences where profile_id = caller.id;
+  delete from private.web_push_subscriptions where profile_id = caller.id;
+  delete from private.notification_delivery_outbox where recipient_profile_id = caller.id;
+  delete from public.notifications where recipient_profile_id = caller.id;
+  delete from public.profile_permissions where profile_id = caller.id;
+  delete from private.feed_sessions where profile_id = caller.id;
+  delete from public.story_views where profile_id = caller.id;
+  -- 지난 예약도 신청자 이름 사본을 들고 있다.
+  delete from public.utility_reservations where profile_id = caller.id;
+  delete from private.group_post_reports where reporter_profile_id = caller.id;
+  delete from private.profile_suspensions where profile_id = caller.id;
+  delete from private.group_anonymous_activity_restrictions where profile_id = caller.id;
+  -- 진행 중인 회차의 신청만 풀어 다른 사람이 신청할 수 있게 한다. 마감한 회차의 신청은 배부
+  -- 기록이므로 건드리지 않는다.
+  update public.donation_claims as claim
+  set cancelled_at = now()
+  from public.donation_items as item
+  join public.donation_rounds as round on round.id = item.round_id
+  where item.id = claim.item_id
+    and claim.profile_id = caller.id
+    and claim.cancelled_at is null
+    and now() >= round.opens_at
+    and now() < round.closes_at;
+
+  -- 다른 회원의 알림에 복사된 이름과 사진. 읽기 경로가 빈 이름을 "탈퇴한 사용자"로 그린다.
+  update public.notifications
+  set actor_display_name = null, actor_avatar_path = null
+  where actor_profile_id = caller.id;
+
+  -- 상태 전환 트리거가 공식 그룹 멤버십을 지우므로 나머지 그룹 멤버십을 그 뒤에 지운다.
+  update public.profiles
+  set status = 'withdrawn',
+    deleted_at = now(),
+    -- 사용자가 고른 공개 ID도 식별 정보다. 무작위 값으로 바꿔 묘비와 사람의 연결을 끊는다.
+    pub_id = private.generate_profile_pub_id(),
+    status_updated_at = now(),
+    status_updated_by = caller.id,
+    auth_user_id = null,
+    role = 'member',
+    name = '탈퇴한 사용자',
+    anonymous_username = null,
+    student_number = null,
+    class_no = null,
+    cohort = null,
+    gender = null,
+    academic_track = null,
+    phone_number = null,
+    avatar_path = null,
+    cover_path = null,
+    birthday = null,
+    description = null,
+    dorm_room = null,
+    contact_email = null,
+    department = null,
+    is_returning_student = false
+  where id = caller.id;
+
+  delete from public.group_memberships where profile_id = caller.id;
+
+  -- 세션과 identity는 FK CASCADE로 함께 지워진다. 이미 발급된 access token은 만료까지 남지만
+  -- 프로필에 이어지지 않아 모든 RLS·RPC 검사에서 거부된다.
+  delete from auth.users where id = caller_auth_user_id;
+end;
+$$;
+
+ALTER FUNCTION "public"."withdraw_account"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."prepare_profile_media"("p_slot" "public"."profile_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_activity_size_bytes" bigint DEFAULT NULL::bigint, "p_activity_width" integer DEFAULT NULL::integer, "p_activity_height" integer DEFAULT NULL::integer) RETURNS TABLE("media_id" "uuid", "object_path" "text", "activity_media_id" "uuid", "activity_object_path" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -977,6 +1155,9 @@ GRANT EXECUTE ON FUNCTION "public"."list_birthdays"("p_reference_date" "date", "
 
 REVOKE ALL ON FUNCTION "public"."remove_my_profile_media"("p_slot" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."remove_my_profile_media"("p_slot" "text") TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."withdraw_account"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."withdraw_account"() TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."prepare_profile_media"("p_slot" "public"."profile_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_activity_size_bytes" bigint, "p_activity_width" integer, "p_activity_height" integer) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION "public"."prepare_profile_media"("p_slot" "public"."profile_media_slot", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_activity_size_bytes" bigint, "p_activity_width" integer, "p_activity_height" integer) TO "authenticated";

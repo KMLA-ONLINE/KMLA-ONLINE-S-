@@ -521,6 +521,15 @@ begin
     return null;
   end if;
 
+  if exists (
+    select 1
+    from public.profiles as recipient
+    where recipient.id = p_recipient_profile_id
+      and recipient.deleted_at is not null
+  ) then
+    return null;
+  end if;
+
   if p_aggregate_key is not null then
     select event.notification_id into created_notification_id
     from private.notification_event_keys as event

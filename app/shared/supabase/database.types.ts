@@ -3727,6 +3727,7 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      withdraw_account: { Args: Record<PropertyKey, never>; Returns: undefined }
     }
     Enums: {
       app_role: "member" | "admin"

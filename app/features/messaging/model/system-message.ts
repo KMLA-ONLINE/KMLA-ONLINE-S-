@@ -44,3 +44,15 @@ export function isViewerActive(
     ({ id, active }) => id === conversation.viewerId && active,
   );
 }
+
+/** 1:1 대화 상대가 탈퇴했는지. 대화는 기록으로 남고 새 메시지는 서버가 거부한다. */
+export function isDirectCounterpartWithdrawn(
+  conversation: Pick<ConversationSummary, "type" | "participants" | "viewerId">,
+): boolean {
+  return (
+    conversation.type === "direct" &&
+    conversation.participants.some(
+      ({ id, withdrawn }) => id !== conversation.viewerId && withdrawn === true,
+    )
+  );
+}

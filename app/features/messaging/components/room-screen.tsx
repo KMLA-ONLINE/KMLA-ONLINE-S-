@@ -93,6 +93,7 @@ import { RenameConversationDialog } from "~/features/messaging/components/rename
 import {
   activeParticipants,
   formatSystemMessage,
+  isDirectCounterpartWithdrawn,
   isViewerActive,
 } from "~/features/messaging/model/system-message";
 import {
@@ -208,6 +209,7 @@ export function RoomScreen({
   // 이름과 멤버는 다른 멤버가 바꿀 수 있어 대화 목록의 최신 값을 쓴다.
   const conversation = useListedConversation(loadedConversation);
   const viewerActive = isViewerActive(conversation);
+  const counterpartWithdrawn = isDirectCounterpartWithdrawn(conversation);
   const participantById = new Map(
     conversation.participants.map((participant) => [
       participant.id,
@@ -703,7 +705,11 @@ export function RoomScreen({
               roomOverlay.open({ kind: "reactions", messageId: message.id })
             }
             onDropFiles={
-              viewerActive && !selection && !editTarget && !replyTarget
+              viewerActive &&
+              !counterpartWithdrawn &&
+              !selection &&
+              !editTarget &&
+              !replyTarget
                 ? stageFiles
                 : undefined
             }
@@ -730,6 +736,10 @@ export function RoomScreen({
                 삭제
               </Button>
             </div>
+          ) : counterpartWithdrawn ? (
+            <p className="shrink-0 px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))] text-center text-sm text-muted-foreground">
+              탈퇴한 사용자에게는 메시지를 보낼 수 없습니다.
+            </p>
           ) : viewerActive ? (
             <ComposerShell
               onDraftInput={preserveCompositionPosition}
@@ -948,6 +958,9 @@ function MessageThread({
   const olderLoadFailed = useRef(false);
   // 날짜 구분선과 묶음 경계는 메시지가 바뀔 때만 다시 센다. 키보드가 오르내리거나 오버레이가 열려
   // 이 영역이 다시 그려질 때마다 메시지 전체의 시각을 포매팅하지 않는다.
+  // 답장·수정은 입력창에서 이어지므로 입력창을 그리는 조건과 같아야 한다.
+  const canCompose =
+    isViewerActive(conversation) && !isDirectCounterpartWithdrawn(conversation);
   const layout = useMemo(() => layoutMessageThread(messages), [messages]);
   const oldestMessageId = messages[0]?.id;
   const newestMessage = messages.at(-1);
@@ -1274,7 +1287,11 @@ function MessageThread({
                     sender={sender}
                     replyTargetAuthor={replyTargetAuthor}
                     isOwn={message.senderId === conversation.viewerId}
-                    canEdit={canEditMessage(message, conversation.viewerId)}
+                    canEdit={
+                      canCompose &&
+                      canEditMessage(message, conversation.viewerId)
+                    }
+                    canReply={canCompose}
                     selection={
                       selection === null
                         ? undefined
@@ -1409,6 +1426,7 @@ const ThreadMessage = memo(function ThreadMessage({
   replyTargetAuthor,
   isOwn,
   canEdit,
+  canReply,
   selection,
   isGroup,
   startsGroup,
@@ -1424,6 +1442,8 @@ const ThreadMessage = memo(function ThreadMessage({
   isOwn: boolean;
   /** 15분 기한은 렌더 시점에 판정한다. 기한이 지나면 다음 렌더에서 메뉴가 빠지고, 서버가 최종 판정한다. */
   canEdit: boolean;
+  /** 답장과 수정은 입력창에서 이어지므로, 입력창이 없는 대화에서는 둘 다 내지 않는다. */
+  canReply: boolean;
   /**
    * 삭제 모드에서 이 메시지를 골랐는지. 삭제 모드가 아니면 `undefined`, 삭제 모드인데 고를 수 없는
    * 메시지(남의 메시지, 삭제된 메시지, 보내는 중이거나 보내지 못한 메시지)면 `null`이다.
@@ -1443,7 +1463,7 @@ const ThreadMessage = memo(function ThreadMessage({
   // 복사만 된다. 남는 작업이 없으면 메뉴를 열지 않는다.
   const actionable = !message.deleted && !message.pending && !message.failed;
   const contextActions = [
-    ...(actionable
+    ...(actionable && canReply
       ? [
           {
             label: "답장",
@@ -1517,7 +1537,9 @@ const ThreadMessage = memo(function ThreadMessage({
         onViewReply={
           replyTarget ? () => actions.viewMessage(replyTarget.id) : undefined
         }
-        onReply={actionable ? () => actions.reply(message) : undefined}
+        onReply={
+          actionable && canReply ? () => actions.reply(message) : undefined
+        }
         onSelectReaction={
           actionable
             ? (reaction) => actions.selectReaction(message, reaction)
@@ -1532,7 +1554,7 @@ const ThreadMessage = memo(function ThreadMessage({
             onSelectReaction={(reaction) =>
               actions.selectReaction(message, reaction)
             }
-            onReply={() => actions.reply(message)}
+            onReply={canReply ? () => actions.reply(message) : undefined}
             onTogglePinned={() => actions.togglePinned(message)}
             onEdit={canEdit ? () => actions.edit(message) : undefined}
             onDelete={
@@ -1603,7 +1625,8 @@ function MessageActions({
   message: ConversationMessage;
   isPinned: boolean;
   onSelectReaction: (reaction: PostReaction) => void;
-  onReply: () => void;
+  /** 입력창이 없는 대화(나간 대화, 탈퇴한 상대와의 1:1)에서는 없다. */
+  onReply?: () => void;
   onTogglePinned: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -1639,7 +1662,7 @@ function MessageActions({
       </Button>
     </div>
   );
-  const replyAction = (
+  const replyAction = onReply ? (
     <Button
       variant="ghost"
       size="icon-sm"
@@ -1649,7 +1672,7 @@ function MessageActions({
     >
       <ReplyIcon aria-hidden />
     </Button>
-  );
+  ) : null;
   const moreAction = (
     <DropdownMenu>
       <DropdownMenuTrigger

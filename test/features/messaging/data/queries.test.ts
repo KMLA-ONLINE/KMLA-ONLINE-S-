@@ -49,7 +49,14 @@ function conversationRow(overrides: Record<string, unknown> = {}) {
     viewer_id: 1,
     participants: [
       { id: 1, name: "홍길동", avatar_path: null, active: true },
-      { id: 2, name: "김민준", avatar_path: "avatars/2", active: false },
+      {
+        id: 2,
+        pub_id: null,
+        name: "김민준",
+        avatar_path: "avatars/2",
+        active: false,
+        withdrawn: true,
+      },
     ],
     last_message_id: "m",
     last_message_sender_id: 2,
@@ -133,12 +140,19 @@ describe("messaging queries", () => {
         name: "김민준",
         viewerId: "1",
         participants: [
-          { id: "1", name: "홍길동", avatarUrl: null, active: true },
+          {
+            id: "1",
+            name: "홍길동",
+            avatarUrl: null,
+            active: true,
+            withdrawn: false,
+          },
           {
             id: "2",
             name: "김민준",
             avatarUrl: "https://signed/avatars/2",
             active: false,
+            withdrawn: true,
           },
         ],
         lastMessage: {

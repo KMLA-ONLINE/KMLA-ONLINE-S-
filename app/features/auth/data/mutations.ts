@@ -146,3 +146,40 @@ export async function signOut(): Promise<void> {
   if (error) throw error;
   clearSignupDraft();
 }
+
+/**
+ * 현재 계정 이메일로 비밀번호 로그인을 다시 해 JWT의 최근 인증 시각을 새로 만든다. 서버의
+ * `private.require_recent_password_auth()`가 이 시각을 본다. 이메일을 인자로 받지 않는 게 요점이다.
+ */
+export async function reauthenticateWithPassword(
+  password: string,
+): Promise<void> {
+  const supabase = getSupabase();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!userData.user?.email) throw new Error("Current account has no email");
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email: userData.user.email,
+    password,
+  });
+  if (error) throw error;
+}
+
+/**
+ * 계정 탈퇴. 다시 인증한 뒤 탈퇴하고 이 기기의 세션을 정리한다. RPC가 커밋된 뒤에는 계정이 이미
+ * 없으므로 정리 실패를 탈퇴 실패로 알리지 않는다. 남은 세션은 서버가 거절하고 게이트가 비운다.
+ */
+export async function withdrawAccount(password: string): Promise<void> {
+  await reauthenticateWithPassword(password);
+
+  const supabase = getSupabase();
+  const { error } = await supabase.rpc("withdraw_account");
+  if (error) throw error;
+
+  try {
+    await signOut();
+  } catch {
+    await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+  }
+}

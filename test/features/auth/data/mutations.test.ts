@@ -4,12 +4,16 @@ const {
   disconnectWebPushForLogout,
   getSession,
   getSupabase,
+  getUser,
+  rpc,
   signInWithPassword,
   signOut,
   updateUser,
 } = vi.hoisted(() => ({
   disconnectWebPushForLogout: vi.fn(),
   getSession: vi.fn(),
+  getUser: vi.fn(),
+  rpc: vi.fn(),
   getSupabase: vi.fn(),
   signInWithPassword: vi.fn(),
   signOut: vi.fn(),
@@ -19,14 +23,24 @@ const {
 vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 vi.mock("~/features/notifications", () => ({ disconnectWebPushForLogout }));
 
-import { claimSignupPassword, signIn } from "~/features/auth/data/mutations";
+import {
+  claimSignupPassword,
+  signIn,
+  withdrawAccount,
+} from "~/features/auth/data/mutations";
 
 describe("auth mutations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getSupabase.mockReturnValue({
-      auth: { getSession, signInWithPassword, signOut, updateUser },
+      rpc,
+      auth: { getSession, getUser, signInWithPassword, signOut, updateUser },
     });
+    getUser.mockResolvedValue({
+      data: { user: { email: "student@kmla.hs.kr" } },
+      error: null,
+    });
+    rpc.mockResolvedValue({ data: null, error: null });
     getSession.mockResolvedValue({ data: { session: null }, error: null });
     disconnectWebPushForLogout.mockResolvedValue(undefined);
     signInWithPassword.mockResolvedValue({ error: null });
@@ -99,5 +113,34 @@ describe("auth mutations", () => {
     await expect(claimSignupPassword("password123")).rejects.toMatchObject({
       code: "weak_password",
     });
+  });
+
+  it("withdraws after re-entering the password of the current account", async () => {
+    await withdrawAccount("current-pass");
+
+    expect(signInWithPassword).toHaveBeenCalledWith({
+      email: "student@kmla.hs.kr",
+      password: "current-pass",
+    });
+    expect(rpc).toHaveBeenCalledWith("withdraw_account");
+    expect(signInWithPassword.mock.invocationCallOrder[0]).toBeLessThan(
+      rpc.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("does not call the server when the password is wrong", async () => {
+    const error = { code: "invalid_credentials" };
+    signInWithPassword.mockResolvedValueOnce({ error });
+
+    await expect(withdrawAccount("wrong-pass")).rejects.toBe(error);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("reports success once the server withdrew the account even if local cleanup fails", async () => {
+    signOut
+      .mockResolvedValueOnce({ error: new Error("user not found") })
+      .mockRejectedValueOnce(new Error("storage unavailable"));
+
+    await expect(withdrawAccount("current-pass")).resolves.toBeUndefined();
   });
 });
