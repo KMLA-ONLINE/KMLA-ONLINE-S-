@@ -6,6 +6,7 @@ import {
   type ShellData,
 } from "~/features/app-shell";
 import SettingsPage from "~/routes/app/menu/settings";
+import { ENTER_TO_SEND_STORAGE_KEY } from "~/shared/lib/enter-to-send";
 import { renderRoute, screen, within } from "../../../router";
 
 afterEach(() => window.localStorage.clear());
@@ -179,8 +180,6 @@ describe("settings route", () => {
     await user.click(toggle);
 
     expect(toggle).not.toBeChecked();
-    expect(window.localStorage.getItem("kmla-online:enter-to-send:v1")).toBe(
-      "off",
-    );
+    expect(window.localStorage.getItem(ENTER_TO_SEND_STORAGE_KEY)).toBe("off");
   });
 });

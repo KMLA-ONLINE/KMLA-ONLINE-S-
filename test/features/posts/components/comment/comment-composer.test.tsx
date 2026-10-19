@@ -1,6 +1,8 @@
 import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type * as InstallPlatformModule from "~/shared/lib/install-platform";
 
 const { prepareCommentImage, releasePostFile } = vi.hoisted(() => ({
   prepareCommentImage: vi.fn(),
@@ -36,6 +38,12 @@ const { mentionState, mentionCandidates } = vi.hoisted(() => ({
       avatar_path: null,
     },
   ],
+}));
+
+const handheld = vi.hoisted(() => ({ value: false }));
+vi.mock("~/shared/lib/install-platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof InstallPlatformModule>()),
+  isHandheld: () => handheld.value,
 }));
 
 vi.mock(
@@ -76,6 +84,7 @@ import { CommentComposer } from "~/features/posts/components/comment/comment-com
 import { COMMENT_MAX_LENGTH } from "~/features/posts/model/comment-text";
 import { mentionDisplayText } from "~/features/posts/model/mentions";
 import type { PostIdentity } from "~/features/posts/model/types";
+import { ENTER_TO_SEND_STORAGE_KEY } from "~/shared/lib/enter-to-send";
 import { renderRoute } from "../../../../router";
 
 type ComposerProps = Parameters<typeof CommentComposer>[0];
@@ -125,6 +134,48 @@ describe("CommentComposer", () => {
 
     await user.type(input, "{Enter}");
     expect(onSubmit).toHaveBeenCalledWith("첫 줄\n둘째 줄", undefined, []);
+  });
+
+  describe("Enter to send", () => {
+    afterEach(() => {
+      handheld.value = false;
+      window.localStorage.removeItem(ENTER_TO_SEND_STORAGE_KEY);
+    });
+
+    it("leaves Enter from a phone's on-screen keyboard to insert a newline", async () => {
+      handheld.value = true;
+      const { user, onSubmit, input } = renderComposer();
+
+      await user.type(input, "첫 줄");
+      // 화면 키보드는 실제 키 위치가 없어 `code`가 빈 문자열이다. 기본 동작(줄바꿈)을 막지 않아야 한다.
+      expect(fireEvent.keyDown(input, { key: "Enter", code: "" })).toBe(true);
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it("submits on Enter from a hardware keyboard attached to a tablet", async () => {
+      handheld.value = true;
+      const { user, onSubmit, input } = renderComposer();
+
+      await user.type(input, "첫 줄{Shift>}{Enter}{/Shift}둘째 줄{Enter}");
+      expect(onSubmit).toHaveBeenCalledWith("첫 줄\n둘째 줄", undefined, []);
+    });
+
+    it("inserts a newline on Enter when the setting is off", async () => {
+      window.localStorage.setItem(ENTER_TO_SEND_STORAGE_KEY, "off");
+      const { user, onSubmit, input } = renderComposer();
+
+      await user.type(input, "첫 줄{Enter}둘째 줄");
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(input).toHaveValue("첫 줄\n둘째 줄");
+    });
+  });
+
+  it("ignores the Safari Enter that follows compositionend with keyCode 229", async () => {
+    const { user, onSubmit, input } = renderComposer();
+
+    await user.type(input, "안녕");
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter", keyCode: 229 });
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it("ignores Enter while an IME composition is still open", async () => {

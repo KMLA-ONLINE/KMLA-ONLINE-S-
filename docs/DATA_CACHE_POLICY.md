@@ -148,6 +148,7 @@ Supabase 조회 캐시와 무효화 규칙을 정한다. 데이터와 권한의 
 | `kmla-online:posts-view:v1`                      | 기기 | 카드/목록 보기                               |
 | `kmla-online:experimental-features:v1`           | 기기 | 실험 기능 토글                               |
 | `kmla-online:home-sidebar:v1`                    | 기기 | 홈 우측 사이드바 전체·개별 항목 표시 선택    |
+| `kmla-online:enter-to-send:v1`                   | 기기 | Enter로 보내기를 끈 선택(`off`)              |
 | `kmla-online:pwa-install-preference`             | 기기 | 지우면 로그아웃마다 설치 안내가 다시 뜬다    |
 | `kmla-online:notification-prompt:v2:<profileId>` | 계정 | 키에 profileId가 있어 이미 격리되어 있다     |
 

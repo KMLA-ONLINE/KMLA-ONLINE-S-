@@ -38,6 +38,10 @@ describe("isSendEnter", () => {
 
     expect(isSendEnter(PHYSICAL_ENTER, true)).toBe(true);
     expect(isSendEnter(SOFT_ENTER, true)).toBe(false);
+    // 알 수 없는 값은 화면 키보드로 본다. 잘못 보내기보다 줄을 바꾸는 쪽이 낫다.
+    expect(isSendEnter({ ...SOFT_ENTER, code: "Unidentified" }, true)).toBe(
+      false,
+    );
   });
 
   it("설정을 끄면 어느 기기에서도 Enter로 보내지 않는다", () => {
@@ -56,5 +60,26 @@ describe("Enter로 보내기 설정", () => {
 
     writeEnterToSend(true);
     expect(readEnterToSend()).toBe(true);
+  });
+
+  it("저장소를 못 써도 이번 화면에서는 끈 선택을 지킨다", () => {
+    const storage = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new DOMException("blocked", "SecurityError");
+      });
+    const read = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw new DOMException("blocked", "SecurityError");
+      });
+    try {
+      writeEnterToSend(false);
+      expect(readEnterToSend()).toBe(false);
+    } finally {
+      storage.mockRestore();
+      read.mockRestore();
+      writeEnterToSend(true);
+    }
   });
 });
