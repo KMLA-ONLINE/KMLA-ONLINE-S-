@@ -19,6 +19,7 @@ import {
   hasActiveSession,
   hasErrors,
   isDuplicateStudentNumberError,
+  isInvalidEmailAddressError,
   loadAuthState,
   OtpField,
   PasswordField,
@@ -257,6 +258,19 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     try {
       await signUp(email, password);
     } catch (error) {
+      // 이메일 칸은 첫 단계에만 있다. 여기 머물면 고칠 곳이 없으므로 그 단계로 돌려보낸다.
+      if (isInvalidEmailAddressError(error)) {
+        return data(
+          {
+            step: "credentials" as const,
+            email,
+            password,
+            values,
+            errors: { email: getAuthErrorMessage(error) },
+          },
+          { status: 400 },
+        );
+      }
       return data(
         {
           step: "profile" as const,

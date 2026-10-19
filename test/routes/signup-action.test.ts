@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   claimSignupPassword,
   hasActiveSession,
+  signUp,
   submitProfile,
   verifySignupOtp,
 } = vi.hoisted(() => ({
   claimSignupPassword: vi.fn(),
   hasActiveSession: vi.fn(),
+  signUp: vi.fn(),
   submitProfile: vi.fn(),
   verifySignupOtp: vi.fn(),
 }));
@@ -15,6 +17,7 @@ const {
 vi.mock("~/features/auth/data/mutations", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   claimSignupPassword,
+  signUp,
   submitProfile,
   verifySignupOtp,
 }));
@@ -155,5 +158,54 @@ describe("signup verification", () => {
     );
     expect(verifySignupOtp).toHaveBeenCalledOnce();
     expect(claimSignupPassword).toHaveBeenLastCalledWith("better-password");
+  });
+});
+
+describe("signup profile step", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearSignupDraft();
+  });
+
+  // 호스팅 Auth는 메일을 받을 수 없는 주소를 계정 생성 때 거절한다. 이메일 칸은 첫 단계에
+  // 있으므로 그 단계로 돌려보내야 고칠 수 있고, 입력한 프로필은 남아 있어야 한다.
+  it("sends a rejected email back to the account step with the profile kept", async () => {
+    signUp.mockRejectedValueOnce({ code: "email_address_invalid" });
+    const body = new FormData();
+    body.set("intent", "profile");
+    body.set("email", "someone@invalid-domain.test");
+    body.set("password", "new-password");
+    body.set("name", "홍길동");
+    body.set("type", "student");
+    body.set("studentNumber", "260001");
+    body.set("cohort", "31");
+    body.set("gender", "female");
+    body.set("academicTrack", "domestic");
+    body.set("birthdayYear", "2009");
+    body.set("birthdayMonth", "03");
+    body.set("birthdayDay", "01");
+    const request = new Request("http://localhost/signup", {
+      method: "POST",
+      body,
+    });
+
+    const result = (await (
+      clientAction as (args: { request: Request }) => Promise<unknown>
+    )({ request })) as {
+      data: {
+        step: string;
+        email: string;
+        values: { studentNumber: string };
+        errors: Record<string, string>;
+      };
+    };
+
+    expect(result.data.step).toBe("credentials");
+    expect(result.data.email).toBe("someone@invalid-domain.test");
+    expect(result.data.values.studentNumber).toBe("260001");
+    expect(result.data.errors).toEqual({
+      email:
+        "사용할 수 없는 이메일 주소입니다. 메일을 받을 수 있는 주소를 입력해 주세요.",
+    });
   });
 });

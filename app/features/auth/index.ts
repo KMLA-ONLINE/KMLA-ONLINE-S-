@@ -27,6 +27,7 @@ export {
   getAuthErrorMessage,
   isDuplicateStudentNumberError,
   isEmailNotConfirmedError,
+  isInvalidEmailAddressError,
 } from "~/features/auth/model/format";
 export {
   clearSignupDraft,
