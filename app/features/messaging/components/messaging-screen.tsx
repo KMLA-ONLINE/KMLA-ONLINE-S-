@@ -1,5 +1,6 @@
 import {
   BellOffIcon,
+  LockIcon,
   MessageSquareMoreIcon,
   PenLineIcon,
   SearchIcon,
@@ -221,6 +222,11 @@ export function MessagingScreen({
             </Empty>
           )}
         </div>
+
+        <p className="flex shrink-0 items-center gap-1.5 border-t px-4 py-3 text-xs text-muted-foreground">
+          <LockIcon aria-hidden className="size-3.5 shrink-0" />
+          메시지는 암호화되어 저장됩니다.
+        </p>
       </div>
 
       <div
