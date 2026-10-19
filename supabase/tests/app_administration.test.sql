@@ -107,9 +107,10 @@ select is(
   '승인대기 학생',
   'pending applications are listed oldest first'
 );
+-- 시드의 승인 대기 두 건(pending-user, legacy-pending)과 위에서 만든 두 건이다.
 select is(
   (select total_count from public.admin_list_applications('pending', 1, 0)),
-  3::bigint,
+  4::bigint,
   'application list returns a screen-scoped total count'
 );
 select lives_ok(

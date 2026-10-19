@@ -1000,9 +1000,128 @@ where member.conversation_id = 'c0000000-0000-0000-0000-000000000001'
   and profile.auth_user_id = '10000000-0000-0000-0000-000000000001'
   and member.last_read_message_id = '00000000-0000-0000-0000-000000000000';
 
--- 시드 회원은 시행 중인 이용약관에 동의한 상태로 둔다. E2E가 기존 회원 동의 팝업에 막히지
--- 않게 하려는 것이며, 팝업을 보려면 해당 회원의 두 열을 null로 바꾼다.
+-- 약관 시행 전에 가입한 기존 회원(§4.7)을 재현하는 계정. 동의 기록이 없어 로그인하면 동의
+-- 팝업이 뜬다. 승인 회원은 앱 셸에서, 승인 대기 회원은 `/pending`에서 본다. 선택 정보를 비운
+-- 졸업생이라 공식 그룹 자동 가입이 생기지 않는다. 다시 실행하면 동의 기록을 지워 팝업을 되살린다.
+insert into auth.users (
+  instance_id,
+  id,
+  aud,
+  role,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  confirmation_token,
+  recovery_token,
+  email_change_token_new,
+  email_change,
+  phone,
+  phone_change,
+  phone_change_token,
+  email_change_token_current,
+  reauthentication_token,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  created_at,
+  updated_at
+)
+select
+  '00000000-0000-0000-0000-000000000000',
+  account.id,
+  'authenticated',
+  'authenticated',
+  account.email,
+  extensions.crypt('password123', extensions.gen_salt('bf')),
+  now(),
+  '',
+  '',
+  '',
+  '',
+  null,
+  '',
+  '',
+  '',
+  '',
+  '{"provider":"email","providers":["email"]}',
+  '{}',
+  now(),
+  now()
+from (
+  values
+    ('40000000-0000-0000-0000-000000000001'::uuid, 'legacy@kmla.hs.kr'),
+    ('40000000-0000-0000-0000-000000000002'::uuid, 'legacy-pending@kmla.hs.kr')
+) as account(id, email)
+on conflict (id) do update set
+  email = excluded.email,
+  encrypted_password = excluded.encrypted_password,
+  email_confirmed_at = excluded.email_confirmed_at,
+  updated_at = now();
+
+insert into auth.identities (
+  provider_id,
+  user_id,
+  identity_data,
+  provider,
+  last_sign_in_at,
+  created_at,
+  updated_at
+)
+select
+  account.id::text,
+  account.id,
+  jsonb_build_object(
+    'sub', account.id::text,
+    'email', account.email,
+    'email_verified', true
+  ),
+  'email',
+  now(),
+  now(),
+  now()
+from (
+  values
+    ('40000000-0000-0000-0000-000000000001'::uuid, 'legacy@kmla.hs.kr'),
+    ('40000000-0000-0000-0000-000000000002'::uuid, 'legacy-pending@kmla.hs.kr')
+) as account(id, email)
+on conflict (provider_id, provider) do update set
+  identity_data = excluded.identity_data,
+  updated_at = now();
+
+insert into public.profiles (auth_user_id, pub_id, name, type, cohort, status)
+values
+  (
+    '40000000-0000-0000-0000-000000000001',
+    'legacy-member',
+    '이전가입',
+    'alumni',
+    20,
+    'accepted'
+  ),
+  (
+    '40000000-0000-0000-0000-000000000002',
+    'legacy-pending',
+    '이전대기',
+    'alumni',
+    21,
+    'pending'
+  )
+on conflict (auth_user_id) do update set
+  name = excluded.name,
+  status = excluded.status,
+  terms_version = null,
+  terms_agreed_at = null,
+  updated_at = now();
+
+-- 나머지 시드 회원은 시행 중인 이용약관에 동의한 상태로 둔다. E2E가 기존 회원 동의 팝업에
+-- 막히지 않게 하려는 것이다. 팝업은 위의 두 계정으로 확인한다.
 update public.profiles
 set terms_version = private.current_terms_version(),
   terms_agreed_at = now()
-where terms_agreed_at is null;
+where terms_agreed_at is null
+  and (
+    auth_user_id is null
+    or auth_user_id not in (
+      '40000000-0000-0000-0000-000000000001',
+      '40000000-0000-0000-0000-000000000002'
+    )
+  );
