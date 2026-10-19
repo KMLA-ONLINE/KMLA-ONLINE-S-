@@ -11,6 +11,7 @@ import {
 import {
   COLORS,
   COLOR_DOTS,
+  COLOR_SHADES,
   SEMESTERS,
   createMeeting,
   getKoreaWeekday,
@@ -29,6 +30,7 @@ import {
   saveTimetable,
 } from "~/features/timetable/storage/timetable-storage";
 import { cn } from "~/shared/lib/utils";
+import { randomUUID } from "~/shared/lib/random-uuid";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -40,6 +42,11 @@ import {
 import { TextField } from "~/shared/ui/text-field";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 
+function colorPreset(color: number) {
+  const preset = COLOR_SHADES.findIndex((shades) => shades.includes(color));
+  return preset === -1 ? 0 : preset;
+}
+
 export function TimetableScreen() {
   const { profile } = useAppShell();
 
@@ -49,6 +56,8 @@ export function TimetableScreen() {
   const courses = timetable.semesters[activeSemester];
 
   const [draft, setDraft] = useState<CourseDraft | null>(null);
+  const [openColorPreset, setOpenColorPreset] = useState<number | null>(null);
+  const selectedColorPreset = draft ? colorPreset(draft.color) : null;
 
   const [overlap, setOverlap] = useState(false);
 
@@ -135,11 +144,13 @@ export function TimetableScreen() {
 
     persistTimetable(nextTimetable);
     setDraft(null);
+    setOpenColorPreset(null);
     setOverlap(false);
   };
 
   const openNew = (day: Weekday, period: number) => {
     setOverlap(false);
+    setOpenColorPreset(null);
 
     setDraft({
       name: "",
@@ -151,6 +162,7 @@ export function TimetableScreen() {
 
   const openExisting = (course: TimetableCourse) => {
     setOverlap(false);
+    setOpenColorPreset(colorPreset(course.color));
 
     setDraft({
       id: course.id,
@@ -230,7 +242,7 @@ export function TimetableScreen() {
     }
 
     const course: TimetableCourse = {
-      id: draft.id ?? crypto.randomUUID(),
+      id: draft.id ?? randomUUID(),
       name: draft.name.trim(),
       color: draft.color,
       room: draft.room.trim(),
@@ -292,6 +304,7 @@ export function TimetableScreen() {
         onOpenChange={(open) => {
           if (!open) {
             setDraft(null);
+            setOpenColorPreset(null);
           }
         }}
       >
@@ -333,27 +346,66 @@ export function TimetableScreen() {
                 />
               </div>
 
-              <div className="grid grid-cols-5 justify-items-center gap-3 px-1">
-                {COLOR_DOTS.map((color, colorPosition) => (
-                  <button
-                    key={color}
-                    type="button"
-                    aria-label={`색상 ${colorPosition + 1}`}
-                    aria-pressed={draft.color === colorPosition}
-                    onClick={() =>
-                      setDraft({
-                        ...draft,
-                        color: colorPosition,
-                      })
-                    }
-                    className={cn(
-                      "size-6 rounded-full transition-transform active:scale-90",
-                      color,
-                      draft.color === colorPosition &&
-                        "ring-2 ring-foreground/70 ring-offset-2 ring-offset-background",
-                    )}
-                  />
-                ))}
+              <div className="space-y-1">
+                <div className="grid grid-cols-5 justify-items-center gap-1 px-1">
+                  {COLOR_DOTS.map((color, colorPosition) => (
+                    <button
+                      key={color}
+                      type="button"
+                      aria-label={`색상 ${colorPosition + 1}`}
+                      aria-expanded={openColorPreset === colorPosition}
+                      aria-controls={
+                        openColorPreset === colorPosition
+                          ? "timetable-color-shades"
+                          : undefined
+                      }
+                      onClick={() => {
+                        setDraft({ ...draft, color: colorPosition });
+                        setOpenColorPreset(colorPosition);
+                      }}
+                      className="flex size-10 items-center justify-center rounded-full focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span
+                        className={cn(
+                          "size-7 rounded-full border border-foreground/10",
+                          selectedColorPreset === colorPosition
+                            ? (COLORS[draft.color] ?? color)
+                            : color,
+                          selectedColorPreset === colorPosition &&
+                            "ring-2 ring-foreground/70 ring-offset-2 ring-offset-background",
+                        )}
+                      />
+                    </button>
+                  ))}
+                </div>
+                {openColorPreset !== null ? (
+                  <div
+                    id="timetable-color-shades"
+                    role="group"
+                    aria-label={`색상 ${openColorPreset + 1} 밝기`}
+                    className="grid grid-cols-5 justify-items-center gap-1 px-1"
+                  >
+                    {COLOR_SHADES[openColorPreset].map((color, position) => (
+                      <button
+                        key={color}
+                        type="button"
+                        aria-label={`밝기 ${position + 1}`}
+                        aria-pressed={draft.color === color}
+                        onClick={() => setDraft({ ...draft, color })}
+                        className="flex size-10 items-center justify-center rounded-full focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <span
+                          className={cn(
+                            "size-7 rounded-full border border-foreground/10",
+                            COLORS[color],
+                            draft.color === color &&
+                              "ring-2 ring-foreground/70 ring-offset-2 ring-offset-background",
+                          )}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               <div className="space-y-2">

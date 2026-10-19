@@ -8,6 +8,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@utility overscroll-x-desktop-auto {
+  overscroll-behavior-x: none;
+
+  @media (hover: hover) and (pointer: fine) {
+    overscroll-behavior-x: auto;
+  }
+}
+
 /* 셸 치수 토큰.
  *
  * 헤더·탭바·사이드바 높이가 여러 파일에 하드코딩되면 헤더 하나 바꿀 때 여러 곳을 고쳐야 한다.

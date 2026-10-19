@@ -86,6 +86,7 @@ import {
   formatFileSize,
   screenAttachments,
 } from "~/features/messaging/model/attachments";
+import { useIsSendEnter } from "~/shared/hooks/use-enter-to-send";
 import { useKeyboardViewport } from "~/shared/hooks/use-keyboard-viewport";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
 import { RenameConversationDialog } from "~/features/messaging/components/rename-conversation-dialog";
@@ -1222,7 +1223,7 @@ function MessageThread({
       ) : null}
       <div
         ref={messageThreadRef}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 md:px-5"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain px-3 py-4 md:px-5"
         onPointerDown={() => {
           composingAtBottomRef.current = false;
         }}
@@ -1867,6 +1868,7 @@ function ComposerShell({
   }, []);
   const [attachmentActionsExpanded, setAttachmentActionsExpanded] =
     useState(false);
+  const isSendEnter = useIsSendEnter();
   const prepared = useMemo(
     () => prepareMessageMentions(normalizeMessageBody(draft), mentions),
     [draft, mentions],
@@ -2220,9 +2222,8 @@ function ComposerShell({
                   mentionSuggestions.move(event.key === "ArrowDown" ? 1 : -1);
                   return;
                 }
-                // 폰·태블릿의 `Enter`는 줄바꿈이라 고르지 않는다. 줄이 바뀌면 목록이 닫힌다.
-                const enter =
-                  event.key === "Enter" && !event.shiftKey && !isHandheld();
+                // 보내는 `Enter`만 고른다. 줄바꿈 `Enter`는 줄이 바뀌어 목록이 닫힌다.
+                const enter = isSendEnter(event);
                 // `@`만 치고 고른 것이 없으면 목록을 닫고 평소처럼 보낸다.
                 if (enter && !mentionSuggestions.enterSelects) {
                   mentionSuggestions.close();
@@ -2253,9 +2254,8 @@ function ComposerShell({
                 else onCancelReply();
                 return;
               }
-              if (event.key !== "Enter" || event.shiftKey) return;
-              // 폰·태블릿의 화면 키보드에는 Shift+Enter가 없다. Enter로 줄을 바꾸고 보내기는 버튼이 맡는다.
-              if (isHandheld()) return;
+              // 화면 키보드와 설정을 끈 기기의 Enter는 줄바꿈이다.
+              if (!isSendEnter(event)) return;
               // Safari는 compositionend를 Enter keydown보다 먼저 보내 isComposing도 false다.
               // 그 keydown은 keyCode 229로 온다.
               if (composingText) return;

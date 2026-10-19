@@ -52,8 +52,8 @@ import {
   DialogTitle,
 } from "~/shared/ui/dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useIsSendEnter } from "~/shared/hooks/use-enter-to-send";
 import { clipboardImageFiles } from "~/shared/lib/clipboard";
-import { isHandheld } from "~/shared/lib/install-platform";
 import { cn } from "~/shared/lib/utils";
 import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
 import { Button } from "~/shared/ui/button";
@@ -161,6 +161,7 @@ export function CommentComposer({
     null,
   );
   const [pickerOpen, setPickerOpen] = useState(false);
+  const isSendEnter = useIsSendEnter();
   const fallbackRef = useRef<HTMLTextAreaElement>(null);
   const input = inputRef ?? fallbackRef;
   const mentionInput = useMentionTextarea({
@@ -433,13 +434,15 @@ export function CommentComposer({
                   onCancel();
                   return;
                 }
-                if (event.key !== "Enter" || event.shiftKey) return;
-                // 폰·태블릿의 화면 키보드에는 Shift+Enter가 없다. Enter로 줄을 바꾸고 등록은 버튼이 맡는다(메신저와 같은 규칙).
-                if (isHandheld()) return;
+                // 화면 키보드와 설정을 끈 기기의 Enter는 줄바꿈이다(메신저와 같은 규칙).
+                if (!isSendEnter(event)) return;
                 // 한글 조합 중의 `Enter`는 글자를 확정하는 키다. 등록하면 "안녕하세"까지만 올라간다.
+                // Safari는 compositionend를 Enter keydown보다 먼저 보내 isComposing도 false다.
+                // 그 keydown은 keyCode 229로 온다.
                 if (
                   mentionInput.composing.current ||
-                  event.nativeEvent.isComposing
+                  event.nativeEvent.isComposing ||
+                  event.keyCode === 229
                 )
                   return;
                 event.preventDefault();

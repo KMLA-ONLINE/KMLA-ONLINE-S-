@@ -141,7 +141,7 @@ export function SharedMediaDialog({
             </Button>
           ))}
         </div>
-        <div className="min-h-32 flex-1 overflow-y-auto overscroll-contain">
+        <div className="min-h-32 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain">
           {pages.isPending ? (
             <div className="flex justify-center py-8">
               <Spinner />

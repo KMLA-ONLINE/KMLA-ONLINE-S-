@@ -112,7 +112,7 @@ export function ConversationDetails({
         <h2 className="text-xl font-semibold">채팅 정보</h2>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-[calc(1rem+var(--app-safe-b))]">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain px-3 pb-[calc(1rem+var(--app-safe-b))]">
         <section className="flex flex-col items-center gap-2 px-3 py-6 text-center">
           <ConversationAvatar conversation={conversation} size="lg" />
           <h2 className="mt-1 max-w-full truncate text-xl font-semibold">

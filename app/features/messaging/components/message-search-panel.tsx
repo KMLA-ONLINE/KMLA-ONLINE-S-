@@ -142,7 +142,7 @@ export function MessageSearchPanel({
         </div>
       </form>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain px-2 py-2">
         {state === null && !loading ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
             찾을 말을 입력하고 Enter를 누르세요.
