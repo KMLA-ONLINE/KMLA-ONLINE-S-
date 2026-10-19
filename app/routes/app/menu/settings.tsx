@@ -12,6 +12,7 @@ import { HomeSidebarSettings } from "~/features/app-shell/components/home-sideba
 import { LogoutButton } from "~/features/auth";
 import { AppVersionCard } from "~/features/support";
 import { ListLinkRow } from "~/shared/components/list-link-row";
+import { useEnterToSend } from "~/shared/hooks/use-enter-to-send";
 import { useExperimentalFeatures } from "~/shared/hooks/use-experimental-features";
 import {
   Field,
@@ -54,6 +55,7 @@ function SettingsSection({
 export default function SettingsPage() {
   const [experimentalFeaturesEnabled, setExperimentalFeaturesEnabled] =
     useExperimentalFeatures();
+  const [enterToSend, setEnterToSend] = useEnterToSend();
 
   return (
     <>
@@ -73,6 +75,20 @@ export default function SettingsPage() {
         <SettingsSection title="앱 설정">
           <ListLinkRow to="/settings/noti" label="알림 설정" icon={BellIcon} />
           <HomeSidebarSettings />
+          <Field orientation="horizontal" className="px-4 py-3">
+            <FieldContent>
+              <FieldTitle>Enter로 보내기 (추천)</FieldTitle>
+              <FieldDescription>
+                키보드의 Enter로 메시지와 댓글을 보냅니다. 화면 키보드에서는
+                줄바꿈입니다.
+              </FieldDescription>
+            </FieldContent>
+            <Switch
+              aria-label="Enter로 보내기"
+              checked={enterToSend}
+              onCheckedChange={setEnterToSend}
+            />
+          </Field>
           <Field orientation="horizontal" className="px-4 py-3">
             <FieldContent>
               <FieldTitle>실험실 기능 사용</FieldTitle>

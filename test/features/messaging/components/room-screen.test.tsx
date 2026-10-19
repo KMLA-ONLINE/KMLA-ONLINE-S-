@@ -14,6 +14,7 @@ import * as queries from "~/features/messaging/data/queries";
 import { clearRoomDrafts } from "~/features/messaging/hooks/room-drafts";
 import { loadConversation } from "~/features/messaging/data/queries";
 import type { Conversation } from "~/features/messaging/model/types";
+import { ENTER_TO_SEND_STORAGE_KEY } from "~/shared/lib/enter-to-send";
 import { renderRoute, screen, within } from "../../../router";
 import { resetFakeMessaging } from "../fake-api";
 
@@ -443,10 +444,55 @@ describe("RoomScreen", () => {
       );
       const input = screen.getByRole("textbox", { name: "메시지 입력" });
 
+      await user.type(input, "첫 줄");
+      // 화면 키보드는 실제 키 위치가 없어 `code`가 빈 문자열이다. user-event의 {Enter}는 물리 키다.
+      // 줄바꿈은 브라우저 기본 동작이라 jsdom에서는 일어나지 않는다. 막지 않았는지와 보내지 않았는지를 본다.
+      expect(fireEvent.keyDown(input, { key: "Enter", code: "" })).toBe(true);
+      expect(input).toHaveValue("첫 줄");
+    } finally {
+      handheld.value = false;
+    }
+  });
+
+  it("폰·태블릿에 물리 키보드를 연결하면 Enter로 보내고 Shift+Enter로 줄을 바꾼다", async () => {
+    handheld.value = true;
+    try {
+      const conversation = await loadConversation("student-council");
+      const { user } = renderRoute(
+        () => <RoomScreen conversation={conversation!} />,
+        { path: "/messenger/student-council" },
+      );
+      const input = screen.getByRole("textbox", { name: "메시지 입력" });
+
+      await user.type(input, "첫 줄{Shift>}{Enter}{/Shift}둘째 줄");
+      expect(input).toHaveValue("첫 줄\n둘째 줄");
+      await user.type(input, "{Enter}");
+
+      await waitFor(() =>
+        expect(
+          screen.getAllByRole("article", { name: "내 메시지" }).at(-1),
+        ).toHaveTextContent(/첫 줄\s*둘째 줄/),
+      );
+      expect(input).toHaveValue("");
+    } finally {
+      handheld.value = false;
+    }
+  });
+
+  it("Enter로 보내기를 끄면 데스크톱에서도 Enter가 줄을 바꾼다", async () => {
+    window.localStorage.setItem(ENTER_TO_SEND_STORAGE_KEY, "off");
+    try {
+      const conversation = await loadConversation("student-council");
+      const { user } = renderRoute(
+        () => <RoomScreen conversation={conversation!} />,
+        { path: "/messenger/student-council" },
+      );
+      const input = screen.getByRole("textbox", { name: "메시지 입력" });
+
       await user.type(input, "첫 줄{Enter}둘째 줄");
       expect(input).toHaveValue("첫 줄\n둘째 줄");
     } finally {
-      handheld.value = false;
+      window.localStorage.removeItem(ENTER_TO_SEND_STORAGE_KEY);
     }
   });
 
