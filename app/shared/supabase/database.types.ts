@@ -3450,6 +3450,14 @@ export type Database = {
         Args: { p_conversation_id: string; p_muted: boolean }
         Returns: undefined
       }
+      set_conversation_nickname: {
+        Args: {
+          p_conversation_id: string
+          p_nickname: string
+          p_profile_id: number
+        }
+        Returns: undefined
+      }
       set_conversation_notification_level: {
         Args: {
           p_conversation_id: string

@@ -27,6 +27,7 @@
   최대 100명은 멤버 추가 RPC가 대화 행을 잠근 뒤 강제한다.
 - `private.messages`: 대화, 발신자, `sent_at`, 답장 대상, 본문 암호문, 키 버전, 편집 시각, 삭제 시각,
   시스템 메시지 종류, 멘션 대상(§8). 클라이언트가 만든 UUID를 기본 키로 받아 재전송을 멱등으로 만든다.
+- `private.conversation_nicknames`: 대화·프로필별 공유 별명. 참여 기간과 분리해 재가입 때 유지하며 프로필 또는 대화 삭제 시 함께 삭제한다. 클라이언트 직접 접근은 막는다.
 - `private.message_attachments`: 메시지, 버킷, object path, MIME type, 크기, 이미지 치수, 파일 이름
   암호문과 키 버전. 상태는 다른 첨부와 같은 prepare-upload-finalize를 따른다(Storage 설계 §7).
 - `private.message_reactions`: 메시지와 프로필 기준 한 행. `private.message_pins`: 고정은 대화 전체의
@@ -56,6 +57,7 @@
 - 대화 생성, 그룹 이름 변경, 멤버 추가·나가기, 소유주의 그룹 삭제, 대화 알림 설정. 그룹 삭제는 지우기 전에
   현재 멤버에게 `conversation_deleted` 신호를 보내고, 첨부 object 경로를 정리 큐로 옮긴 뒤 대화를 지운다.
 - 대화 내 검색(§6).
+- `set_conversation_nickname`: 현재 멤버만 현재 멤버의 별명을 설정·해제한다. `list_conversations`의 참여자 JSON에 표시 이름, 원래 프로필 이름과 별명을 함께 반환한다. 변경 후 기존 `message_changed` 목록 갱신 신호를 현재 멤버에게 보내며 메시지와 알림 outbox를 만들지 않는다. 클라이언트는 해당 대화 한 줄을 다시 읽어 열린 방에도 반영한다.
 
 모든 RPC는 `search_path = ''`, 기본 `EXECUTE` 회수, `authenticated`에만 grant를 둔다. 길이, 편집 기한,
 삭제된 메시지에 대한 답장 금지, 그룹 인원 상한은 RPC와 제약조건이 강제한다.

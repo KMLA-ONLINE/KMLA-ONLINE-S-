@@ -78,6 +78,24 @@ create unique index conversation_members_active_key
 create index conversation_members_profile_idx
   on public.conversation_members (profile_id, conversation_id, joined_at desc);
 
+-- 별명은 참여 기간과 분리해 재가입 뒤에도 유지한다. 프로필과 Push의 이름은 바꾸지 않는다.
+create table private.conversation_nicknames (
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  profile_id bigint not null references public.profiles(id) on delete cascade,
+  nickname text not null,
+  primary key (conversation_id, profile_id),
+  constraint conversation_nicknames_name_check
+    check (nickname = btrim(nickname) and char_length(nickname) between 1 and 50)
+);
+
+create index conversation_nicknames_profile_idx
+  on private.conversation_nicknames (profile_id);
+
+alter table private.conversation_nicknames enable row level security;
+revoke all on table private.conversation_nicknames from public, anon, authenticated;
+create policy conversation_nicknames_deny_direct_access
+  on private.conversation_nicknames using (false) with check (false);
+
 -- `id`는 클라이언트가 만든 UUID다. 같은 값으로 다시 보내면 한 번만 저장한다.
 create table private.messages (
   id uuid primary key,
@@ -344,10 +362,10 @@ revoke all on function private.decrypt_message_text(bytea, smallint, jsonb)
   from public;
 
 -- 멘션 토큰을 `@이름` 글자로 바꾼다(기술 설계 §8). 대화 목록 미리보기, 답장 원문, 검색, Push처럼 본문을
--- 글자로만 보여 주는 곳이 쓴다. 이름은 말풍선처럼 지금 프로필 이름이다 — 토큰에 적힌 이름을 쓰면 개명한
--- 사람을 검색에서 못 찾는다. 대상을 알 수 없으면 토큰의 이름을 쓴다. 토큰 문법은
+-- 글자로만 보여 주는 곳이 쓴다. 화면은 지금 대화 별명을 우선하며 Push는 원래 프로필 이름을 쓴다.
+-- 토큰에 적힌 이름을 쓰면 개명한 사람을 검색에서 못 찾는다. 대상을 알 수 없으면 토큰의 이름을 쓴다. 토큰 문법은
 -- `private.parse_mention_ordinals`와 같다. 자르기 전에 불러야 토큰이 반쪽 나지 않는다.
-create function private.message_plain_text(p_body text, p_mention_profile_ids bigint[])
+create function private.message_plain_text(p_body text, p_mention_profile_ids bigint[], p_conversation_id uuid)
 returns text
 language plpgsql
 stable
@@ -369,9 +387,11 @@ begin
     token := pg_catalog.regexp_match(rest, '\[@([^\]\n]*)\]\(m:([0-9]{1,2})\)');
     exit when token is null;
     token_text := '[@' || token[1] || '](m:' || token[2] || ')';
-    select profile.name
+    select coalesce(nickname.nickname, profile.name)
     into shown_name
     from public.profiles as profile
+    left join private.conversation_nicknames as nickname
+      on nickname.conversation_id = p_conversation_id and nickname.profile_id = profile.id
     where profile.id = p_mention_profile_ids[token[2]::integer]
       and profile.deleted_at is null;
     -- 처음 맞은 자리가 곧 같은 글자가 처음 나오는 자리다.
@@ -384,8 +404,20 @@ begin
 end;
 $$;
 
-revoke all on function private.message_plain_text(text, bigint[])
+revoke all on function private.message_plain_text(text, bigint[], uuid)
   from public;
+
+-- Push는 대화 별명 대신 원래 프로필 이름을 쓴다. 기존 두 인자 호출은 이 경로를 유지한다.
+create function private.message_plain_text(p_body text, p_mention_profile_ids bigint[])
+returns text
+language sql
+stable
+set search_path = ''
+as $$
+  select private.message_plain_text(p_body, p_mention_profile_ids, null::uuid);
+$$;
+
+revoke all on function private.message_plain_text(text, bigint[]) from public;
 
 -- 본문의 사람 멘션이 부르는 프로필(기능 명세 §13.22). n번째 원소가 `m:n` 토큰의 대상이다. 사람 번호는
 -- 1부터 빈틈없어야 하고, `p_mention_pub_ids`의 같은 자리가 그 사람의 공개 ID다. 대상을 본문에서 정하므로
@@ -525,7 +557,7 @@ begin
   select
     conversation.id,
     conversation.type,
-    coalesce(conversation.name, counterpart.name),
+    coalesce(conversation.name, counterpart_nickname.nickname, counterpart.name),
     caller_profile_id,
     coalesce(members.list, '[]'::jsonb),
     last_message.id,
@@ -536,7 +568,7 @@ begin
           private.decrypt_message_text(
             last_message.body_ciphertext, last_message.key_version, keys
           ),
-          last_message.mention_profile_ids
+          last_message.mention_profile_ids, conversation.id
         )
     end,
     last_message.sent_at,
@@ -570,6 +602,9 @@ begin
         then conversation.direct_profile_high
       else conversation.direct_profile_low
     end
+  left join private.conversation_nicknames as counterpart_nickname
+    on counterpart_nickname.conversation_id = conversation.id
+    and counterpart_nickname.profile_id = counterpart.id
   left join lateral (
     -- 지금 멤버와 예전 멤버 모두. 나간 사람의 지난 메시지와 시스템 메시지에도 이름을 그려야 한다.
     -- 멤버 목록과 인원은 `active`인 사람만 센다.
@@ -577,7 +612,9 @@ begin
       jsonb_build_object(
         'id', profile.id,
         'pub_id', profile.pub_id,
-        'name', profile.name,
+        'name', coalesce(nickname.nickname, profile.name),
+        'profile_name', profile.name,
+        'nickname', nickname.nickname,
         'avatar_path', profile.avatar_path,
         'active', person.active
       )
@@ -593,6 +630,9 @@ begin
       group by member.profile_id
     ) as person
     join public.profiles as profile on profile.id = person.profile_id
+    left join private.conversation_nicknames as nickname
+      on nickname.conversation_id = conversation.id
+      and nickname.profile_id = person.profile_id
   ) as members on true
   left join lateral (
     select message.*
@@ -707,7 +747,7 @@ as $$
         then left(
           private.message_plain_text(
             private.decrypt_message_text(original.body_ciphertext, original.key_version, p_keys),
-            original.mention_profile_ids
+            original.mention_profile_ids, p_conversation_id
           ),
           200
         )
@@ -2644,6 +2684,72 @@ revoke all on function public.rename_conversation(uuid, text)
 grant execute on function public.rename_conversation(uuid, text)
   to authenticated;
 
+-- 현재 멤버가 이 대화 안에서만 공유하는 별명을 바꾼다. 메시지·알림·읽지 않은 수는 만들지 않는다.
+create function public.set_conversation_nickname(
+  p_conversation_id uuid,
+  p_profile_id bigint,
+  p_nickname text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  normalized_nickname text := nullif(btrim(coalesce(p_nickname, '')), '');
+  previous_nickname text;
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+  if char_length(normalized_nickname) > 50 then
+    raise exception 'nickname must be at most 50 characters' using errcode = '22023';
+  end if;
+
+  -- 초대·탈퇴와 같은 대화 잠금을 사용해 멤버 확인 뒤 나가 버리는 경합을 막는다.
+  perform 1 from public.conversations where id = p_conversation_id for update;
+  if not exists (
+    select 1 from public.conversation_members
+    where conversation_id = p_conversation_id
+      and profile_id = caller_profile_id and left_at is null
+  ) or not exists (
+    select 1 from public.conversation_members
+    where conversation_id = p_conversation_id
+      and profile_id = p_profile_id and left_at is null
+  ) then
+    raise exception 'current conversation members required' using errcode = '42501';
+  end if;
+
+  select nickname into previous_nickname
+  from private.conversation_nicknames
+  where conversation_id = p_conversation_id and profile_id = p_profile_id;
+  if previous_nickname is not distinct from normalized_nickname then return; end if;
+
+  if normalized_nickname is null then
+    delete from private.conversation_nicknames
+    where conversation_id = p_conversation_id and profile_id = p_profile_id;
+  else
+    insert into private.conversation_nicknames (conversation_id, profile_id, nickname)
+    values (p_conversation_id, p_profile_id, normalized_nickname)
+    on conflict (conversation_id, profile_id) do update set nickname = excluded.nickname;
+  end if;
+
+  -- 기존 목록 갱신 신호만 보낸다. Web Push는 실제 메시지의 outbox 경로만 사용한다.
+  perform realtime.send(
+    jsonb_build_object('conversation_id', p_conversation_id, 'kind', 'content'),
+    'message_changed', 'messaging:' || member.profile_id::text, true
+  )
+  from public.conversation_members as member
+  where member.conversation_id = p_conversation_id and member.left_at is null;
+end;
+$$;
+
+revoke all on function public.set_conversation_nickname(uuid, bigint, text)
+  from public, anon;
+grant execute on function public.set_conversation_nickname(uuid, bigint, text)
+  to authenticated;
+
 -- 메신저 탭 배지의 숫자. 내 대화들의 읽지 않은 메시지 수 합이다. 알림을 끈 대화도 센다(기능 명세
 -- §13.17). 일반 알림함 배지와 따로 센다. 대화 목록 전체를 읽지 않고 이 수만 센다.
 create function public.get_my_unread_message_count()
@@ -2774,7 +2880,7 @@ begin
     -- 멘션은 화면에 보이는 `@이름`으로 찾는다. 토큰의 `m:1`이 검색어에 걸리지 않게 한다.
     plain := private.message_plain_text(
       private.decrypt_message_text(candidate.body_ciphertext, candidate.key_version, keys),
-      candidate.mention_profile_ids
+      candidate.mention_profile_ids, p_conversation_id
     );
     if strpos(lower(regexp_replace(plain, '[[:space:]]+', '', 'g')), normalized_query) > 0 then
       results := results || jsonb_build_array(jsonb_build_object(

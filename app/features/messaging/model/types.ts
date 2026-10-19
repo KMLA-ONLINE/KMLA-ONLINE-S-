@@ -5,6 +5,10 @@ export interface MessageParticipant {
   /** 프로필 주소(`/profile/:pubId`). 모르면 프로필로 잇지 않는다. */
   pubId?: string;
   name: string;
+  /** 별명을 설정하기 전의 프로필 이름. 이전 서버 응답에는 없을 수 있다. */
+  profileName?: string;
+  /** 이 대화 안에서 모든 멤버가 공유하는 별명. 비어 있으면 프로필 이름을 쓴다. */
+  nickname?: string | null;
   avatarUrl: string | null;
   /** 지금 멤버인지. 나간 사람도 지난 메시지와 시스템 메시지의 이름을 그리려고 목록에 남는다. */
   active: boolean;

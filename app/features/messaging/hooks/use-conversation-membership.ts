@@ -15,6 +15,7 @@ import {
   leaveConversation,
   openDirectConversation,
   renameConversation,
+  setConversationNickname,
 } from "~/features/messaging/data/mutations";
 import { refreshConversationInList } from "~/features/messaging/data/sync";
 import type { RecipientSelection } from "~/features/messaging/components/recipient-picker-dialog";
@@ -104,6 +105,11 @@ export function useConversationMembership(conversationId: string) {
       run(
         () => renameConversation(conversationId, name),
         "그룹 이름을 바꾸지 못했습니다.",
+      ),
+    setNickname: (profileId: string, nickname: string) =>
+      run(
+        () => setConversationNickname(conversationId, profileId, nickname),
+        "별명을 바꾸지 못했습니다.",
       ),
   };
 }
