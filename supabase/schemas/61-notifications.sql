@@ -114,6 +114,11 @@ where post_id is not null;
 create index notifications_comment_idx
 on public.notifications (comment_id)
 where comment_id is not null;
+-- 탈퇴가 다른 회원 알림에 복사된 이름을 지울 때 쓴다. 탈퇴 트랜잭션이 프로필과 멤버십을 잠근 채라
+-- 전체 스캔으로 잠금이 길어지지 않게 한다.
+create index notifications_actor_idx
+on public.notifications (actor_profile_id)
+where actor_profile_id is not null;
 
 create table public.notification_preferences (
   profile_id bigint primary key references public.profiles(id) on delete cascade,

@@ -86,7 +86,7 @@ function isRecipientWithdrawn(error: unknown): boolean {
   return (
     typeof error === "object" &&
     error !== null &&
-    (error as { message?: unknown }).message === "recipient withdrawn"
+    (error as { hint?: unknown }).hint === "recipient_withdrawn"
   );
 }
 

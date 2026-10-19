@@ -1084,7 +1084,7 @@ begin
 
     if private.direct_counterpart_withdrawn(p_conversation_id, caller_profile_id) then
       raise exception 'recipient withdrawn'
-        using errcode = '42501';
+        using errcode = '55000', hint = 'recipient_withdrawn';
     end if;
 
     -- 이 메시지로 예고한 첨부의 object를 확인하고 확정한다. 첨부가 있으면 본문은 비어도 된다.
@@ -3045,8 +3045,10 @@ begin
       using errcode = '42501';
   end if;
   if private.direct_counterpart_withdrawn(p_conversation_id, caller_profile_id) then
+    -- 클라이언트가 이 거부만 골라 대화를 다시 읽으므로 hint로 구분한다. 권한 거부(42501)로 두면
+    -- 세션 거절과 섞인다.
     raise exception 'recipient withdrawn'
-      using errcode = '42501';
+      using errcode = '55000', hint = 'recipient_withdrawn';
   end if;
   if exists (select 1 from private.messages as message where message.id = p_message_id) then
     raise exception 'message already sent'

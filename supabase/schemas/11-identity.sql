@@ -206,13 +206,23 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
 ALTER TABLE "public"."profiles" OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."get_my_profile"() RETURNS SETOF "public"."profiles"
-    LANGUAGE "sql" STABLE SECURITY DEFINER
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
+begin
+  -- 다른 기기에서 탈퇴하면 이 기기의 access token은 만료까지 서명이 유효하다. 빈 결과를 돌려주면
+  -- 프로필 미작성과 구별되지 않으므로 세션 거절(42501)로 알려 클라이언트가 로그아웃하게 한다.
+  if not exists (select 1 from auth.users as account where account.id = (select auth.uid())) then
+    raise exception 'account not found'
+      using errcode = '42501';
+  end if;
+
+  return query
   select profile.*
   from public.profiles as profile
   where profile.auth_user_id = (select auth.uid())
     and profile.deleted_at is null;
+end;
 $$;
 
 ALTER FUNCTION "public"."get_my_profile"() OWNER TO "postgres";
@@ -444,8 +454,9 @@ begin
   for update;
 
   if caller.role = 'admin' then
+    -- 화면이 사유별 안내를 고르도록 hint로 구분한다.
     raise exception 'app administrator role must be released before withdrawal'
-      using errcode = '22023';
+      using errcode = '55000', hint = 'app_admin';
   end if;
   if exists (
     select 1
@@ -454,7 +465,7 @@ begin
       and membership.role = 'owner'
   ) then
     raise exception 'group ownership must be transferred before withdrawal'
-      using errcode = '22023';
+      using errcode = '55000', hint = 'group_owner';
   end if;
 
   -- 1:1 대화는 상대의 기록으로 남기되 내 참여 기간만 닫는다. 열어 두면 상대 메시지의 안 읽은
@@ -535,6 +546,8 @@ begin
   delete from public.story_views where profile_id = caller.id;
   -- 지난 예약도 신청자 이름 사본을 들고 있다.
   delete from public.utility_reservations where profile_id = caller.id;
+  -- 신고와 제재 기록은 묘비에 남겨도 재가입한 새 계정과 이을 수 없고(학번·Auth 연결을 지운다),
+  -- 개인정보처리방침 4항이 탈퇴 때 삭제를 약속한다.
   delete from private.group_post_reports where reporter_profile_id = caller.id;
   delete from private.profile_suspensions where profile_id = caller.id;
   delete from private.group_anonymous_activity_restrictions where profile_id = caller.id;

@@ -26,6 +26,20 @@ export function getWithdrawalBlockers({
   return blockers;
 }
 
+/** 사유별 안내. 키는 `withdraw_account`가 거부할 때 싣는 hint와 같다. */
+const BLOCKER_MESSAGES: Record<WithdrawalBlocker["kind"], string> = {
+  app_admin:
+    "앱 관리자는 탈퇴할 수 없습니다. 다른 앱 관리자에게 강등을 요청해 주세요.",
+  group_owner:
+    "소유한 그룹이 있어 탈퇴할 수 없습니다. 먼저 소유권을 넘겨 주세요.",
+};
+
+export function describeWithdrawalBlocker(
+  kind: WithdrawalBlocker["kind"],
+): string {
+  return BLOCKER_MESSAGES[kind];
+}
+
 /** 탈퇴 실패를 보여 줄 자리와 문구. 비밀번호 오류만 비밀번호 칸에 붙인다. */
 export function describeWithdrawalError(error: unknown): {
   field: "password" | "form";
@@ -34,23 +48,12 @@ export function describeWithdrawalError(error: unknown): {
   if (readErrorCode(error) === "invalid_credentials") {
     return { field: "password", message: "비밀번호가 올바르지 않습니다." };
   }
-  const message =
-    typeof error === "object" && error && "message" in error
-      ? String(error.message)
+  const hint =
+    typeof error === "object" && error && "hint" in error
+      ? String(error.hint)
       : "";
-  if (message === "group ownership must be transferred before withdrawal") {
-    return {
-      field: "form",
-      message:
-        "소유한 그룹이 있어 탈퇴할 수 없습니다. 먼저 소유권을 넘겨 주세요.",
-    };
-  }
-  if (message === "app administrator role must be released before withdrawal") {
-    return {
-      field: "form",
-      message:
-        "앱 관리자는 탈퇴할 수 없습니다. 다른 앱 관리자에게 강등을 요청해 주세요.",
-    };
+  if (hint === "app_admin" || hint === "group_owner") {
+    return { field: "form", message: BLOCKER_MESSAGES[hint] };
   }
   return {
     field: "form",

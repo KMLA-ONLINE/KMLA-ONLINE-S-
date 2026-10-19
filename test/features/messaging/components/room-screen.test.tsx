@@ -1027,8 +1027,9 @@ describe("RoomScreen", () => {
     const conversation = await loadConversation("hyunwoo");
     const summary = await queries.getConversationSummary("hyunwoo");
     vi.spyOn(mutations, "sendMessage").mockRejectedValueOnce({
-      code: "42501",
+      code: "55000",
       message: "recipient withdrawn",
+      hint: "recipient_withdrawn",
     });
     vi.spyOn(queries, "getConversationSummary").mockResolvedValue({
       ...summary!,

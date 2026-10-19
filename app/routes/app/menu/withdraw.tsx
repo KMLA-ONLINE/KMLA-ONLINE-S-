@@ -11,6 +11,7 @@ import {
 
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 import {
+  describeWithdrawalBlocker,
   describeWithdrawalError,
   getWithdrawalBlockers,
   hasErrors,
@@ -131,10 +132,7 @@ export default function WithdrawPage({
             </h2>
             {blockers.map((blocker) =>
               blocker.kind === "app_admin" ? (
-                <p key="app_admin">
-                  앱 관리자는 탈퇴할 수 없습니다. 다른 앱 관리자에게 강등을
-                  요청해 주세요.
-                </p>
+                <p key="app_admin">{describeWithdrawalBlocker("app_admin")}</p>
               ) : (
                 <div key="group_owner" className="flex flex-col gap-1.5">
                   <p>다음 그룹의 소유권을 다른 멤버에게 넘겨 주세요.</p>

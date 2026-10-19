@@ -65,8 +65,9 @@ describe("account withdrawal action", () => {
 
   it("shows a server-side refusal on the form", async () => {
     mocks.withdrawAccount.mockRejectedValueOnce({
-      code: "22023",
+      code: "55000",
       message: "group ownership must be transferred before withdrawal",
+      hint: "group_owner",
     });
 
     const result = await payload(

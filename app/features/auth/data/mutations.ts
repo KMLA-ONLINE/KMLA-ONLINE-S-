@@ -1,7 +1,10 @@
 import { getSupabase } from "~/shared/supabase/client";
 import { clearSignupDraft } from "~/features/auth/storage/pending-signup";
 import type { ProfileFormValues } from "~/features/auth/model/types";
-import { disconnectWebPushForLogout } from "~/features/notifications";
+import {
+  disconnectWebPushForLogout,
+  unsubscribeWebPushLocally,
+} from "~/features/notifications";
 
 function optionalNumber(value: string): number | undefined {
   return value ? Number(value) : undefined;
@@ -168,7 +171,8 @@ export async function reauthenticateWithPassword(
 
 /**
  * 계정 탈퇴. 다시 인증한 뒤 탈퇴하고 이 기기의 세션을 정리한다. RPC가 커밋된 뒤에는 계정이 이미
- * 없으므로 정리 실패를 탈퇴 실패로 알리지 않는다. 남은 세션은 서버가 거절하고 게이트가 비운다.
+ * 없어 서버를 부르는 `signOut()`은 실패할 뿐이므로 이 기기만 정리하고, 정리 실패를 탈퇴 실패로
+ * 알리지 않는다. 기기 알림 구독 행은 RPC가 지웠다. 남은 세션은 서버가 거절하고 게이트가 비운다.
  */
 export async function withdrawAccount(password: string): Promise<void> {
   await reauthenticateWithPassword(password);
@@ -177,9 +181,9 @@ export async function withdrawAccount(password: string): Promise<void> {
   const { error } = await supabase.rpc("withdraw_account");
   if (error) throw error;
 
-  try {
-    await signOut();
-  } catch {
-    await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
-  }
+  clearSignupDraft();
+  await Promise.allSettled([
+    unsubscribeWebPushLocally(),
+    supabase.auth.signOut({ scope: "local" }),
+  ]);
 }

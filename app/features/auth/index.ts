@@ -26,6 +26,7 @@ export {
 } from "~/features/auth/data/queries";
 export { describeSuspensionEnd } from "~/features/auth/model/suspension";
 export {
+  describeWithdrawalBlocker,
   describeWithdrawalError,
   getWithdrawalBlockers,
 } from "~/features/auth/model/withdrawal";

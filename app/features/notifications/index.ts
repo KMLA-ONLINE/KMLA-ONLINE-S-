@@ -22,6 +22,7 @@ export {
   disableWebPush,
   enableWebPush,
   getPushSupport,
+  unsubscribeWebPushLocally,
 } from "~/features/notifications/data/push";
 export { subscribeToNotifications } from "~/features/notifications/data/subscriptions";
 export {

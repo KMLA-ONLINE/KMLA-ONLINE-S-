@@ -2,9 +2,6 @@ import type { AdminContact } from "~/features/support";
 import type { Json } from "~/shared/supabase/database.types";
 import { getSupabase } from "~/shared/supabase/client";
 
-// 탈퇴도 같은 최근 비밀번호 인증을 요구하므로 auth가 소유하고 관리자 화면은 그대로 쓴다.
-export { reauthenticateWithPassword } from "~/features/auth/data/mutations";
-
 export async function reviewApplications(
   profileIds: number[],
   status: "accepted" | "blocked",

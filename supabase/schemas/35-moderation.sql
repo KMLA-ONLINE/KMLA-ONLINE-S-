@@ -501,6 +501,9 @@ ALTER TABLE ONLY "private"."group_post_reports"
 
 CREATE INDEX "group_post_reports_post_order_idx" ON "private"."group_post_reports" USING "btree" ("post_id", "created_at" DESC, "id" DESC);
 
+-- 유일 제약은 게시물이 앞이라 탈퇴의 신고자 기준 삭제에 쓰이지 않는다.
+CREATE INDEX "group_post_reports_reporter_idx" ON "private"."group_post_reports" USING "btree" ("reporter_profile_id");
+
 ALTER TABLE ONLY "private"."group_post_report_dismissals"
     ADD CONSTRAINT "group_post_report_dismissals_dismissed_by_profile_id_fkey" FOREIGN KEY ("dismissed_by_profile_id") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
 

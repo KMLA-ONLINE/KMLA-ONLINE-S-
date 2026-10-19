@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(49);
+select plan(50);
 
 -- 탈퇴할 승인 학생을 새로 만든다. 홍길동(…001)은 그 사람과 대화하고 알림을 받은 다른 회원이다.
 insert into auth.users (
@@ -84,7 +84,7 @@ select pg_temp.act_as_me(interval '0 minutes');
 set local role authenticated;
 select throws_ok(
   $$select public.withdraw_account()$$,
-  '22023', 'group ownership must be transferred before withdrawal',
+  '55000', 'group ownership must be transferred before withdrawal',
   'a group owner must transfer ownership first'
 );
 reset role;
@@ -99,7 +99,7 @@ update public.profiles set role = 'admin' where id = current_setting('test.me'):
 set local role authenticated;
 select throws_ok(
   $$select public.withdraw_account()$$,
-  '22023', 'app administrator role must be released before withdrawal',
+  '55000', 'app administrator role must be released before withdrawal',
   'an app administrator must be demoted first'
 );
 reset role;
@@ -324,7 +324,7 @@ select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-0000000
 set local role authenticated;
 select throws_ok(
   $$select * from public.send_message('f0000000-0000-0000-0000-000000000002', gen_random_uuid(), '안녕?')$$,
-  '42501', 'recipient withdrawn',
+  '55000', 'recipient withdrawn',
   'nobody can send a new direct message to a withdrawn account'
 );
 select throws_ok(
@@ -332,7 +332,7 @@ select throws_ok(
     'f0000000-0000-0000-0000-000000000002', gen_random_uuid(),
     '[{"kind":"file","mime_type":"application/pdf","file_name":"a.pdf","size_bytes":10}]'::jsonb
   )$$,
-  '42501', 'recipient withdrawn',
+  '55000', 'recipient withdrawn',
   'attachments cannot be prepared for a withdrawn counterpart either'
 );
 select lives_ok(
@@ -367,6 +367,11 @@ select throws_ok(
   $$select public.withdraw_account()$$,
   '42501', 'accepted profile required',
   'a withdrawn account cannot withdraw again'
+);
+select throws_ok(
+  $$select * from public.get_my_profile()$$,
+  '42501', 'account not found',
+  'a token left from a withdrawn account is rejected, not read as an unfinished profile'
 );
 reset role;
 

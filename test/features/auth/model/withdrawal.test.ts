@@ -41,8 +41,9 @@ describe("withdrawal error", () => {
   it("explains a group ownership that appeared after the screen loaded", () => {
     expect(
       describeWithdrawalError({
-        code: "22023",
+        code: "55000",
         message: "group ownership must be transferred before withdrawal",
+        hint: "group_owner",
       }),
     ).toEqual({
       field: "form",
@@ -54,8 +55,9 @@ describe("withdrawal error", () => {
   it("explains an app administrator role", () => {
     expect(
       describeWithdrawalError({
-        code: "22023",
+        code: "55000",
         message: "app administrator role must be released before withdrawal",
+        hint: "app_admin",
       }),
     ).toEqual({
       field: "form",

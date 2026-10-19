@@ -5,7 +5,8 @@ import type { AuthState, MySuspension } from "~/features/auth/model/types";
 import type { OwnedGroup } from "~/features/auth/model/withdrawal";
 
 /**
- * 서버가 세션을 거절했다는 오류 코드. `42501`은 인증 전용 RPC에 요청이 익명으로 나갔다는 뜻이다.
+ * 서버가 세션을 거절했다는 오류 코드. `42501`은 인증 전용 RPC에 요청이 익명으로 나갔거나,
+ * 다른 기기에서 탈퇴해 토큰의 계정이 없다는 뜻이다(`get_my_profile`).
  * `PGRST303`(시계 불일치)은 재로그인해도 같은 토큰이 거절돼 게이트와 로그인 화면을 무한히 오가므로 뺐다.
  */
 const REJECTED_SESSION_CODES = new Set(["PGRST301", "PGRST302", "42501"]);
@@ -60,25 +61,10 @@ export async function loadAuthState(): Promise<AuthState | null> {
     return null;
   }
 
-  const profile = profiles[0] ?? null;
-  if (!profile && (await isAccountGone())) {
-    await forgetSession();
-    return null;
-  }
-
-  return { email: session.user.email ?? "", profile };
-}
-
-/**
- * 프로필이 없을 때만 묻는다. 다른 기기에서 탈퇴하면 이 기기의 access token은 만료까지 서명이
- * 유효해 프로필 조회가 빈 결과로 끝나므로, 프로필 미작성과 가르려면 Auth에 계정이 있는지 봐야 한다.
- */
-async function isAccountGone(): Promise<boolean> {
-  const { error } = await getSupabase().auth.getUser();
-  return (
-    isAuthApiError(error) &&
-    (error.code === "user_not_found" || error.code === "session_not_found")
-  );
+  return {
+    email: session.user.email ?? "",
+    profile: profiles[0] ?? null,
+  };
 }
 
 /** 내 활성 이용 정지. 없으면 `null`. 정지 중에도 읽을 수 있는 RPC다. */
