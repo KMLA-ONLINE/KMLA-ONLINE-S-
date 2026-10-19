@@ -27,10 +27,11 @@ export function PostLeaveGuard({
   useBeforeUnload(
     useCallback(
       (event) => {
-        if (!dirty || saving) return;
+        // 나가기를 확인한 뒤 이동이 문서 새로고침으로 바뀌어도 다시 묻지 않는다.
+        if (!dirty || saving || blocker.state === "proceeding") return;
         event.preventDefault();
       },
-      [dirty, saving],
+      [dirty, saving, blocker.state],
     ),
   );
 

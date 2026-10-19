@@ -46,7 +46,6 @@ export function PwaPrompts() {
   const offline = useOffline();
   const { updateReady, applyingUpdate, updateAppliedElsewhere, applyUpdate } =
     useServiceWorker();
-  useDocumentNavigationAfterUpdate(updateAppliedElsewhere);
   const showServiceWorkerPrompt = !offline && updateReady;
   // 알림 권한 안내는 로그인한 셸이 띄운다(`NotificationPermissionPrompt`). 설치보다 앞선다.
   const notificationPromptActive = usePromptActive("notification");
@@ -63,6 +62,7 @@ export function PwaPrompts() {
 
   return (
     <>
+      {updateAppliedElsewhere && <DocumentNavigationAfterUpdate />}
       {offline && (
         <div role="status" className={BANNER_CLASS}>
           <WifiOffIcon
@@ -98,4 +98,10 @@ export function PwaPrompts() {
       />
     </>
   );
+}
+
+/** 다른 탭이 적용한 새 버전으로 다음 화면을 연다. 그 상황에서만 마운트해 평소에는 이동을 구독하지 않는다. */
+function DocumentNavigationAfterUpdate() {
+  useDocumentNavigationAfterUpdate();
+  return null;
 }

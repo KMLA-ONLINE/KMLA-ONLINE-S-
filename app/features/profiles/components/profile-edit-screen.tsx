@@ -605,9 +605,10 @@ function LeaveGuard({
   useBeforeUnload(
     useCallback(
       (event) => {
-        if (enabled) event.preventDefault();
+        // 나가기를 확인한 뒤 이동이 문서 새로고침으로 바뀌어도 다시 묻지 않는다.
+        if (enabled && blocker.state !== "proceeding") event.preventDefault();
       },
-      [enabled],
+      [enabled, blocker.state],
     ),
   );
 
