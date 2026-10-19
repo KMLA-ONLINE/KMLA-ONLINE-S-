@@ -40,7 +40,7 @@ import {
 } from "~/shared/ui/dropdown-menu";
 import { cn } from "~/shared/lib/utils";
 
-/** 알림 단계별 빠른 동작 아이콘, 그 아래 이름, 메뉴의 선택지 이름(기능 명세 §13.17). */
+/** 알림 단계별 빠른 동작 아이콘, 그 아래 이름, 메뉴의 선택지 이름. */
 const NOTIFICATION_LEVELS: Record<
   ConversationNotificationLevel,
   { icon: LucideIcon; label: string; option: string }

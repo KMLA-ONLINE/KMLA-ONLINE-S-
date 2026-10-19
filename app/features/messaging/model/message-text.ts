@@ -57,7 +57,7 @@ const TRAILING_PUNCTUATION = /[.,!?;:'"]+$/;
 
 /**
  * 화면에 그릴 조각. 멘션 토큰을 먼저 가르고 그 사이 글자에서만 URL을 찾는다 — 멘션 안이나 멘션에 붙여 친 글자가
- * 링크로 이어지지 않는다(기능 명세 §13.22).
+ * 링크로 이어지지 않는다.
  */
 export function parseMessageText(value: string): MessageTextSegment[] {
   const segments: MessageTextSegment[] = [];

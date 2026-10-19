@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(30);
+select plan(36);
 
 -- seed: 홍길동(…0001)과 김민준(…0100)의 1:1 대화 c…01, 둘과 박새벽·이한별의 그룹 대화 c…02.
 create temp table people as
@@ -39,9 +39,9 @@ as $$
 $$;
 
 select ok(
-  not has_function_privilege('authenticated', 'private.resolve_message_mentions(uuid, text, text[], bigint[])', 'EXECUTE')
+  not has_function_privilege('authenticated', 'private.resolve_message_mentions(uuid, text, text[], bigint[], timestamptz)', 'EXECUTE')
     and not has_function_privilege('authenticated', 'private.member_wants_message_push(public.conversation_members, private.messages)', 'EXECUTE')
-    and not has_function_privilege('authenticated', 'private.message_plain_text(text)', 'EXECUTE')
+    and not has_function_privilege('authenticated', 'private.message_plain_text(text, bigint[])', 'EXECUTE')
     and has_function_privilege('authenticated', 'public.set_conversation_notification_level(uuid, public.conversation_notification_level)', 'EXECUTE')
     and not has_function_privilege('anon', 'public.set_conversation_notification_level(uuid, public.conversation_notification_level)', 'EXECUTE'),
   'mention helpers stay private and only signed-in members set notification levels'
@@ -145,6 +145,16 @@ select results_eq(
     from private.messages where id = 'e0000000-0000-0000-0000-000000000506'$$,
   $$values (true, '{}'::bigint[])$$,
   'm:0 mentions everyone without naming anyone'
+);
+
+select is(
+  (
+    select mentions_everyone
+    from public.list_messages('c0000000-0000-0000-0000-000000000002')
+    where id = 'e0000000-0000-0000-0000-000000000506'
+  ),
+  true,
+  'the room learns that m:0 really mentions everyone'
 );
 
 -- 글자로만 보여 주는 곳
@@ -347,6 +357,36 @@ select is(
   'an edit adds only the newly mentioned member'
 );
 
+-- 단계를 모르는 이전 버전 화면은 공개 ID 없이 토큰을 그대로 둔 채 고친다.
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select lives_ok(
+  $$select public.edit_message(
+    'e0000000-0000-0000-0000-000000000511',
+    '[@이한별](m:1) [@김민준](m:2) 그냥 하는 말.'
+  )$$,
+  'an older client can still edit a message with mentions'
+);
+
+select throws_ok(
+  $$select public.edit_message(
+    'e0000000-0000-0000-0000-000000000511',
+    '[@김민준](m:1) [@김민준](m:2) 둘',
+    array[(select minjun_pub from people), (select minjun_pub from people)]
+  )$$,
+  '22023',
+  'a member can take only one mention ordinal',
+  'one person cannot take two ordinals'
+);
+reset role;
+
+select is(
+  (select mention_profile_ids from private.messages
+    where id = 'e0000000-0000-0000-0000-000000000511'),
+  array[(select hanbyeol from people), (select minjun from people)],
+  'an edit without public ids keeps who each ordinal named'
+);
+
 -- 이미 불린 사람은 나가도 남는다. 새로 부르는 사람만 지금 멤버여야 한다.
 update public.conversation_members
 set left_at = clock_timestamp()
@@ -376,6 +416,25 @@ select throws_ok(
   'every mention must name a current conversation member',
   'an edit cannot newly mention someone who left'
 );
+reset role;
+
+-- 메시지보다 나중에 들어온 사람은 그 메시지를 못 보므로 편집으로 부를 수 없다.
+insert into public.conversation_members (conversation_id, profile_id)
+select 'c0000000-0000-0000-0000-000000000002', id
+from public.profiles where pub_id = 'kim-admin';
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select throws_ok(
+  $$select public.edit_message(
+    'e0000000-0000-0000-0000-000000000511',
+    '[@관리자](m:1) 그냥 하는 말',
+    array['kim-admin']
+  )$$,
+  '22023',
+  'every mention must name a current conversation member',
+  'an edit cannot mention someone who joined after the message'
+);
 
 select public.edit_message('e0000000-0000-0000-0000-000000000511', '멘션 없이');
 reset role;
@@ -402,10 +461,26 @@ select results_eq(
 );
 
 select ok(
-  private.message_plain_text('[@홍](m:1)와 [@모든 사람](m:0), [링크](https://example.com)')
-    = '@홍와 @모든 사람, [링크](https://example.com)',
-  'only mention tokens become plain names'
+  private.message_plain_text(
+    '[@홍](m:1)와 [@모든 사람](m:0), [링크](https://example.com)', '{}'
+  ) = '@홍와 @모든 사람, [링크](https://example.com)',
+  'only mention tokens become plain names, keeping the token name without a target'
 );
+
+-- 개명하면 글자로 보여 주는 곳도 말풍선처럼 지금 이름을 따른다.
+update public.profiles set name = '박여명' where pub_id = 'saebyeok-24';
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select is(
+  (
+    public.search_messages('c0000000-0000-0000-0000-000000000002', '@박여명')
+      -> 'results' -> 0 ->> 'body'
+  ),
+  '@김민준 @박여명 확인 부탁',
+  'search finds and shows a renamed member by the current name'
+);
+reset role;
 
 select * from finish();
 

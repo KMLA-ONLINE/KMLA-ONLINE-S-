@@ -53,7 +53,10 @@ import {
   useConversationMembership,
   useListedConversation,
 } from "~/features/messaging/hooks/use-conversation-membership";
-import { MessageParticipantsProvider } from "~/features/messaging/components/message-mention";
+import {
+  MessageParticipantsProvider,
+  useMessageParticipants,
+} from "~/features/messaging/components/message-mention";
 import {
   MentionSuggestionList,
   mentionOptionId,
@@ -110,8 +113,9 @@ import {
 } from "~/features/messaging/model/message-text";
 import {
   addMessageMention,
-  mentionPubIdsOf,
+  isUnchangedEdit,
   messageMentionEntries,
+  messagePlainText,
   prepareMessageMentions,
   type MessageMentionSuggestion,
   type PreparedMessageMentions,
@@ -124,9 +128,8 @@ import { useMentionTextarea } from "~/features/posts/hooks/use-mention-textarea"
 import {
   fromMentionDisplay,
   mentionDisplayText,
-  mentionPlainText,
+  mentionCountReason,
   toMentionDisplay,
-  validateMentionCount,
   type MentionDraftEntry,
 } from "~/features/posts/model/mentions";
 import type { PostReaction } from "~/features/posts/model/types";
@@ -455,7 +458,11 @@ export function RoomScreen({
 
   // 보내지 못하면 메시지가 목록에 "보내지 못함"으로 남아 다시 보낼 수 있으므로 입력과 답장 대상은
   // 되살리지 않는다.
-  async function sendMessage({ body, mentionPubIds }: PreparedMessageMentions) {
+  async function sendMessage({
+    body,
+    mentionPubIds,
+    mentionsEveryone,
+  }: PreparedMessageMentions) {
     const target = replyTarget;
     const id = randomUUID();
     sentMessageId.current = id;
@@ -465,11 +472,12 @@ export function RoomScreen({
       id,
       body,
       mentionPubIds,
+      mentionsEveryone,
       replyTo: target
         ? {
             id: target.id,
             senderId: target.senderId,
-            body: mentionPlainText(target.body),
+            body: messagePlainText(target, participantById),
             deleted: target.deleted,
             attachmentKind: target.attachments?.[0]?.kind ?? null,
           }
@@ -481,28 +489,18 @@ export function RoomScreen({
   // 고친 내용은 먼저 그린다. 실패하면 hook이 메시지를 되돌리고, 여기서는 고치던 입력과 함께
   // 수정 모드를 되살린다. 그새 다른 수정을 시작했으면 두지 않는다.
   // 고치는 사이 15분이 지났으면 보내지 않고 이유를 알린다. 되살려도 계속 실패하므로 수정 모드를 끝낸다.
-  async function submitEdit({
-    body,
-    mentionPubIds,
-    entries,
-  }: PreparedMessageMentions) {
+  async function submitEdit(edited: PreparedMessageMentions) {
+    const { body, mentionPubIds, mentionsEveryone, entries } = edited;
     const target = editTarget?.message;
     if (!target) return;
     setEditTarget(null);
-    const unchanged =
-      body === target.body &&
-      mentionPubIds.join("\n") ===
-        mentionPubIdsOf(
-          target.mentionProfileIds ?? [],
-          conversation.participants,
-        ).join("\n");
-    if (unchanged) return;
+    if (isUnchangedEdit(target, edited, conversation.participants)) return;
     if (!canEditMessage(target, conversation.viewerId)) {
       toast.error(EDIT_EXPIRED_MESSAGE);
       return;
     }
-    const edited = await edit(target, body, mentionPubIds);
-    if (!edited && canEditMessage(target, conversation.viewerId)) {
+    const saved = await edit(target, body, mentionPubIds, mentionsEveryone);
+    if (!saved && canEditMessage(target, conversation.viewerId)) {
       setEditTarget(
         (current) =>
           current ?? { message: target, draft: body, mentions: entries },
@@ -619,7 +617,7 @@ export function RoomScreen({
                 </p>
                 <p className="truncate text-sm text-muted-foreground">
                   {formatReplyPreview(
-                    toReplyPreview(pinnedMessage),
+                    toReplyPreview(pinnedMessage, participantById),
                     window.location.origin,
                   )}
                 </p>
@@ -1311,7 +1309,7 @@ function MessageThread({
             </span>{" "}
             <span className="text-muted-foreground">
               {formatReplyPreview(
-                toReplyPreview(incomingMessage),
+                toReplyPreview(incomingMessage, participantById),
                 window.location.origin,
               )}
             </span>
@@ -1341,10 +1339,13 @@ function MessageThread({
   );
 }
 
-/** 불러온 메시지를 답장 인용과 같은 모양으로 줄인다. 첨부만 있는 메시지를 첨부 종류로 부르게 한다. */
-function toReplyPreview(message: ConversationMessage) {
+/** 불러온 메시지를 답장 인용과 같은 모양으로 줄인다. 첨부만 있는 메시지를 첨부 종류로 부르게 한다. 멘션은 지금 이름이다. */
+function toReplyPreview(
+  message: ConversationMessage,
+  participantById: ReadonlyMap<string, MessageParticipant>,
+) {
   return {
-    body: mentionPlainText(message.body),
+    body: messagePlainText(message, participantById),
     deleted: message.deleted,
     attachmentKind: message.attachments?.[0]?.kind ?? null,
   };
@@ -1429,6 +1430,7 @@ const ThreadMessage = memo(function ThreadMessage({
   actions: ThreadMessageActions;
 }) {
   const replyTarget = message.replyTo;
+  const participantById = useMessageParticipants();
   // 삭제된 메시지는 반응, 고정, 수정, 삭제를 받지 않는다. 전송 중인 메시지는 아직 서버에 없어
   // 복사만 된다. 남는 작업이 없으면 메뉴를 열지 않는다.
   const actionable = !message.deleted && !message.pending && !message.failed;
@@ -1449,7 +1451,7 @@ const ThreadMessage = memo(function ThreadMessage({
             label: "복사",
             icon: <CopyIcon aria-hidden />,
             onSelect: () =>
-              void copyMessageText(mentionPlainText(message.body)),
+              void copyMessageText(messagePlainText(message, participantById)),
           },
         ]),
     ...(actionable
@@ -1599,6 +1601,7 @@ function MessageActions({
   onDelete?: () => void;
 }) {
   const [reactionOpen, setReactionOpen] = useState(false);
+  const participantById = useMessageParticipants();
 
   const reactionAction = (
     <div className="relative flex shrink-0">
@@ -1664,7 +1667,7 @@ function MessageActions({
             <DropdownMenuItem
               className="cursor-pointer"
               onClick={() =>
-                void copyMessageText(mentionPlainText(message.body))
+                void copyMessageText(messagePlainText(message, participantById))
               }
             >
               <CopyIcon aria-hidden />
@@ -1790,7 +1793,7 @@ function ComposerShell({
   desktopDetailsOpen: boolean;
   /** 쓰던 글을 맡겨 둘 자리. 다른 방에 다녀오거나 삭제 모드를 마치고 돌아오면 되살린다. */
   draftKey: string;
-  /** 멘션 후보가 될 대화 참여자. 1:1 대화처럼 멘션이 없으면 `null`이다(기능 명세 §13.22). */
+  /** 멘션 후보가 될 대화 참여자. 1:1 대화처럼 멘션이 없으면 `null`이다. */
   mentionParticipants: MessageParticipant[] | null;
   viewerId: string;
 }) {
@@ -1876,10 +1879,7 @@ function ComposerShell({
   // 길이 상한은 저장되는 원문에 걸린다. 화면에 보이는 글자 수로 세면 토큰 길이만큼 넘겨 보낸다.
   const draftLength = countMessageGraphemes(prepared.body);
   const overLimit = draftLength > MESSAGE_MAX_LENGTH;
-  const mentionLimitReason = validateMentionCount(
-    prepared.body,
-    prepared.entries,
-  );
+  const mentionLimitReason = mentionCountReason(prepared.mentionPubIds.length);
   const cannotSend = overLimit || mentionLimitReason !== null;
   const attachmentActionsCollapsed = hasDraft && !attachmentActionsExpanded;
 
@@ -1898,6 +1898,7 @@ function ComposerShell({
     setDraft: changeDraft,
     entries: mentions,
   });
+  const participantById = useMessageParticipants();
   const mentionSuggestions = useMentionSuggestions({
     participants: mentionParticipants,
     viewerId,
@@ -1990,7 +1991,7 @@ function ComposerShell({
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-primary">메시지 수정</p>
             <p className="truncate text-xs text-muted-foreground">
-              {mentionPlainText(editTarget.message.body)}
+              {messagePlainText(editTarget.message, participantById)}
             </p>
           </div>
           <Button
@@ -2018,7 +2019,7 @@ function ComposerShell({
             </p>
             <p className="truncate text-xs text-muted-foreground">
               {formatReplyPreview(
-                toReplyPreview(replyTarget),
+                toReplyPreview(replyTarget, participantById),
                 window.location.origin,
               )}
             </p>
@@ -2179,15 +2180,18 @@ function ComposerShell({
                 draft,
                 element.value,
                 element.selectionStart,
+                mentionInput.composing.current,
               );
               mentionInput.handleChange(element);
             }}
-            onSelect={(event) =>
+            onSelect={(event) => {
+              // 조합 중에는 캐럿이 조합하던 글자를 따라 움직일 뿐이다. 조합이 끝나면 다시 본다.
+              if (mentionInput.composing.current) return;
               mentionSuggestions.onCaretMove(
                 event.currentTarget.value,
                 event.currentTarget.selectionStart,
-              )
-            }
+              );
+            }}
             onPaste={(event) => {
               if (!canStage) return;
               const images = clipboardImageFiles(event.clipboardData);
@@ -2196,9 +2200,15 @@ function ComposerShell({
               onStageFiles(images);
             }}
             onCompositionStart={mentionInput.handleCompositionStart}
-            onCompositionEnd={(event) =>
-              mentionInput.handleCompositionEnd(event.currentTarget)
-            }
+            onCompositionEnd={(event) => {
+              const element = event.currentTarget;
+              mentionInput.handleCompositionEnd(element);
+              // 조합 중에는 맞는 후보가 없어도 닫지 않았다. 확정한 글자로 다시 찾는다.
+              mentionSuggestions.onCaretMove(
+                element.value,
+                element.selectionStart,
+              );
+            }}
             onKeyDown={(event) => {
               const composingText =
                 mentionInput.composing.current ||
@@ -2211,10 +2221,12 @@ function ComposerShell({
                   return;
                 }
                 // 폰·태블릿의 `Enter`는 줄바꿈이라 고르지 않는다. 줄이 바뀌면 목록이 닫힌다.
-                if (
-                  event.key === "Tab" ||
-                  (event.key === "Enter" && !event.shiftKey && !isHandheld())
-                ) {
+                const enter =
+                  event.key === "Enter" && !event.shiftKey && !isHandheld();
+                // `@`만 치고 고른 것이 없으면 목록을 닫고 평소처럼 보낸다.
+                if (enter && !mentionSuggestions.enterSelects) {
+                  mentionSuggestions.close();
+                } else if (event.key === "Tab" || enter) {
                   event.preventDefault();
                   selectMention(
                     mentionSuggestions.suggestions[
@@ -2280,7 +2292,12 @@ function ComposerShell({
             }
             if (justSent) return;
             if (!claimSend()) return;
-            void onSend({ body: "👍", mentionPubIds: [], entries: [] });
+            void onSend({
+              body: "👍",
+              mentionPubIds: [],
+              mentionsEveryone: false,
+              entries: [],
+            });
             // 공백만 있던 입력은 좋아요와 함께 비운다.
             setDraft("");
             setMentions([]);

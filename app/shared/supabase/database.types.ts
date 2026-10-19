@@ -2787,6 +2787,7 @@ export type Database = {
           edited_at: string
           id: string
           mention_profile_ids: number[]
+          mentions_everyone: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           pinned: boolean
           reactions: Json
@@ -2835,6 +2836,7 @@ export type Database = {
           edited_at: string
           id: string
           mention_profile_ids: number[]
+          mentions_everyone: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           pinned: boolean
           reactions: Json
@@ -2892,6 +2894,7 @@ export type Database = {
           edited_at: string
           id: string
           mention_profile_ids: number[]
+          mentions_everyone: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           pinned: boolean
           reactions: Json

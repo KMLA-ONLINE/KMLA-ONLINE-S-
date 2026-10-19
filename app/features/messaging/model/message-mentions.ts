@@ -8,13 +8,15 @@ import {
   fromMentionDisplay,
   mentionTokenPattern,
   normalizeMentions,
+  stripDisplayMarks,
+  toMentionDisplay,
   type MentionDraftEntry,
   type MentionTarget,
 } from "~/features/posts/model/mentions";
 
 /**
- * 그룹 대화의 멘션(기능 명세 §13.22, 기술 설계 §8). 토큰 문법과 표시형 입력 규칙은 게시물·댓글과 같고
- * (`posts/model/mentions.ts`), 여기에는 대화 참여자를 대상으로 삼는 부분과 `@모든 사람`만 둔다.
+ * 그룹 대화의 멘션. 토큰 문법과 표시형 입력 규칙은 게시물·댓글과 같고(`posts/model/mentions.ts`), 여기에는
+ * 대화 참여자를 대상으로 삼는 부분과 `@모든 사람`만 둔다.
  */
 
 export const EVERYONE_MENTION_NAME = "모든 사람";
@@ -33,9 +35,20 @@ export interface MessageMentionSuggestion {
   target: MentionTarget | null;
 }
 
-/** 대소문자와 공백을 무시한 비교용 글자. */
+/** 혼자 친 자음(호환 자모)의 순서. 유니코드 첫소리 자모(U+1100~)와 같은 순서다. */
+const LONE_CONSONANTS = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+
+/**
+ * 대소문자와 공백을 무시한 비교용 글자. 한글은 자모로 풀어 조합 중인 글자(`기`, 혼자 친 `ㄱ`)로도 `김`을 찾게 한다. 혼자 친
+ * 자음은 이름을 풀어 쓴 첫소리와 다른 글자라 첫소리로 바꾼다.
+ */
 function searchKey(value: string): string {
-  return value.replace(/\s+/g, "").toLowerCase();
+  return Array.from(value.replace(/\s+/g, "").toLowerCase(), (char) => {
+    const index = LONE_CONSONANTS.indexOf(char);
+    return index === -1 ? char : String.fromCharCode(0x1100 + index);
+  })
+    .join("")
+    .normalize("NFD");
 }
 
 /**
@@ -131,10 +144,12 @@ export interface PreparedMessageMentions {
   body: string;
   /** n번째가 n번 토큰의 공개 ID다. */
   mentionPubIds: string[];
+  /** 본문이 `@모든 사람`을 부르는지. 서버도 본문에서 같은 값을 정한다. */
+  mentionsEveryone: boolean;
   entries: MentionDraftEntry[];
 }
 
-/** 입력창의 표시형 값을 제출할 원문으로 바꾼다(기술 설계 §8). */
+/** 입력창의 표시형 값을 제출할 원문으로 바꾼다. */
 export function prepareMessageMentions(
   text: string,
   entries: MentionDraftEntry[],
@@ -149,10 +164,12 @@ export function prepareMessageMentions(
     pubId,
     name: names.get(pubId) ?? "",
   }));
+  const everyone = mentionsEveryone(body);
   return {
     body,
     mentionPubIds: pubIds,
-    entries: mentionsEveryone(body) ? [...people, EVERYONE_ENTRY] : people,
+    mentionsEveryone: everyone,
+    entries: everyone ? [...people, EVERYONE_ENTRY] : people,
   };
 }
 
@@ -162,12 +179,18 @@ function mentionsEveryone(body: string): boolean {
   );
 }
 
+/** 보낸 메시지의 멘션 정보. */
+type MentionedMessage = Pick<
+  ConversationMessage,
+  "body" | "mentionProfileIds" | "mentionsEveryone"
+>;
+
 /**
- * 보낸 메시지의 멘션을 다시 초안으로 올린다(편집, 기능 명세 §13.10). 이름과 공개 ID는 지금 참여자 목록에서 찾고, 찾지 못한
- * 사람은 빼서 제출 때 평문이 되게 한다.
+ * 보낸 메시지의 멘션을 다시 초안으로 올린다(편집). 이름과 공개 ID는 지금 참여자 목록에서 찾고, 찾지 못한 사람은 빼서 제출 때
+ * 평문이 되게 한다.
  */
 export function messageMentionEntries(
-  message: Pick<ConversationMessage, "body" | "mentionProfileIds">,
+  message: MentionedMessage,
   participants: MessageParticipant[],
 ): MentionDraftEntry[] {
   const byId = new Map(
@@ -187,7 +210,32 @@ export function messageMentionEntries(
         : [];
     },
   );
-  return mentionsEveryone(message.body) ? [...people, EVERYONE_ENTRY] : people;
+  return message.mentionsEveryone ? [...people, EVERYONE_ENTRY] : people;
+}
+
+/**
+ * 고친 내용이 원래 메시지와 같은지. 토큰에 적힌 옛 이름이나 번호가 아니라 화면에 보이는 글자와 부르는 사람으로 비교한다 —
+ * 그대로 저장했는데 개명한 사람의 토큰 이름이 바뀌었다고 수정으로 남거나, 대상을 잃은 멘션이 조용히 지워지지 않게 한다.
+ */
+export function isUnchangedEdit(
+  message: MentionedMessage,
+  edited: PreparedMessageMentions,
+  participants: MessageParticipant[],
+): boolean {
+  const original = messageMentionEntries(message, participants);
+  const originalPubIds = original
+    .filter((entry) => entry.ordinal !== EVERYONE_MENTION_ORDINAL)
+    .sort((left, right) => left.ordinal - right.ordinal)
+    .map((entry) => entry.pubId);
+  return (
+    visibleText(message.body, original) ===
+      visibleText(edited.body, edited.entries) &&
+    originalPubIds.join("\n") === edited.mentionPubIds.join("\n")
+  );
+}
+
+function visibleText(body: string, entries: MentionDraftEntry[]): string {
+  return stripDisplayMarks(toMentionDisplay(body, entries));
 }
 
 /** 낙관적으로 그릴 메시지의 멘션 대상. 공개 ID를 참여자 ID로 바꾼다. */
@@ -220,18 +268,33 @@ export interface MessageMentionView {
   pubId?: string;
 }
 
-/** 본문 `m:n` 토큰의 대상. 이름은 지금 참여자 목록에서 찾는다. 대상을 알 수 없으면 `null`이고 평문으로 그린다. */
+/**
+ * 본문 `m:n` 토큰의 대상. 이름은 지금 참여자 목록에서 찾는다. 대상을 알 수 없으면 `null`이고 평문으로 그린다. `m:0`은 서버가
+ * `@모든 사람`이라고 확인한 메시지에서만 그렇게 그린다 — 이 기능 전에 같은 글자를 직접 쳐 둔 메시지가 있다.
+ */
 export function resolveMessageMention(
   ordinal: number,
-  mentionProfileIds: string[] | undefined,
+  message: Pick<ConversationMessage, "mentionProfileIds" | "mentionsEveryone">,
   participantById: ReadonlyMap<string, MessageParticipant>,
 ): MessageMentionView | null {
   if (ordinal === EVERYONE_MENTION_ORDINAL) {
-    return { name: EVERYONE_MENTION_NAME };
+    return message.mentionsEveryone ? { name: EVERYONE_MENTION_NAME } : null;
   }
-  const profileId = mentionProfileIds?.[ordinal - 1];
+  const profileId = message.mentionProfileIds?.[ordinal - 1];
   const participant = profileId ? participantById.get(profileId) : undefined;
   return participant
     ? { name: participant.name, pubId: participant.pubId }
     : null;
+}
+
+/** 멘션을 `@지금 이름` 글자로 바꾼 본문. 복사처럼 글자로만 옮기는 곳이 쓴다. 대상을 모르면 토큰의 이름을 쓴다. */
+export function messagePlainText(
+  message: MentionedMessage,
+  participantById: ReadonlyMap<string, MessageParticipant>,
+): string {
+  return message.body.replace(
+    mentionTokenPattern(),
+    (_token, label: string, ordinal: string) =>
+      `@${resolveMessageMention(Number(ordinal), message, participantById)?.name ?? label}`,
+  );
 }

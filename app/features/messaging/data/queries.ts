@@ -333,6 +333,7 @@ function toMessage(row: MessageRow): ConversationMessage {
     system: toSystemEvent(row),
     attachments: toAttachments(row.attachments),
     mentionProfileIds: row.mention_profile_ids.map(String),
+    mentionsEveryone: row.mentions_everyone,
   };
 }
 

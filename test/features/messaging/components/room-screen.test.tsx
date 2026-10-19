@@ -1888,6 +1888,44 @@ describe("RoomScreen 멘션", () => {
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 
+  it("한글을 조합하는 동안에는 맞는 후보가 잠깐 없어도 닫지 않고, 확정하면 다시 거른다", async () => {
+    const { user, input } = await renderGroupRoom();
+    // React가 바뀐 값을 알아채도록 prototype의 setter로 넣고 캐럿을 그 뒤에 둔다.
+    const composeTo = (value: string) => {
+      Reflect.set(HTMLTextAreaElement.prototype, "value", value, input);
+      input.setSelectionRange(value.length, value.length);
+      fireEvent.input(input);
+    };
+
+    await user.type(input, "@");
+    fireEvent.compositionStart(input);
+    composeTo("@ㅊ");
+    expect(optionNames()).toEqual(["최민준"]);
+    // `최`를 치는 도중의 `초`는 어떤 이름과도 맞지 않는다.
+    composeTo("@초");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    composeTo("@최");
+    expect(optionNames()).toEqual(["최민준"]);
+    fireEvent.compositionEnd(input);
+    expect(optionNames()).toEqual(["최민준"]);
+  });
+
+  it("@만 치고 아무것도 고르지 않았으면 Enter로 평소처럼 보낸다", async () => {
+    const sendSpy = vi.spyOn(mutations, "sendMessage");
+    const { user, input } = await renderGroupRoom();
+
+    await user.type(input, "연락은 abc@");
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    await user.keyboard("{Enter}");
+
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ body: "연락은 abc@", mentionPubIds: [] }),
+      expect.anything(),
+    );
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    sendSpy.mockRestore();
+  });
+
   it("1:1 대화에서는 @를 쳐도 후보를 띄우지 않는다", async () => {
     const conversation = await loadConversation("hyunwoo");
     const { user } = renderRoute(

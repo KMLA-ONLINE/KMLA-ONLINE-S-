@@ -29,7 +29,7 @@ export interface MessageAttachment {
   previewUrl?: string;
 }
 
-/** 멤버 추가·나가기·내보내기·이름 변경을 대화 안에 남긴 시스템 메시지(기능 명세 §13.17). */
+/** 멤버 추가·나가기·내보내기·이름 변경을 대화 안에 남긴 시스템 메시지*/
 export interface MessageSystemEvent {
   kind: "member_added" | "member_left" | "member_removed" | "renamed";
   /** 첫 번째가 한 사람(초대한 사람, 나간 사람, 내보낸 사람, 이름을 바꾼 사람), 나머지가 대상이다. */
@@ -67,8 +67,10 @@ export interface ConversationMessage {
   attachments?: MessageAttachment[];
   /** 시스템 메시지면 채운다. 본문은 비어 있고 화면 문구는 `formatSystemMessage`가 만든다. */
   system?: MessageSystemEvent;
-  /** 본문 `m:n` 토큰이 부르는 참여자 ID. n번 토큰이 `n - 1`번째다(기능 명세 §13.22). */
+  /** 본문 `m:n` 토큰이 부르는 참여자 ID. n번 토큰이 `n - 1`번째다. */
   mentionProfileIds?: string[];
+  /** 본문의 `m:0`이 `@모든 사람`인지. 서버가 본문에서 정한다. */
+  mentionsEveryone?: boolean;
   /** 서버에서 이 메시지의 무엇이든 마지막으로 바뀐 시각. 따라잡기의 기준으로만 쓴다. */
   changedAt?: string;
   /** 보내지 못한 내 메시지. 목록에 남겨 같은 ID로 다시 보내거나 지울 수 있게 한다. */
@@ -108,7 +110,7 @@ export interface MessagePreview {
   attachmentKind?: MessageAttachmentKind | null;
 }
 
-/** 대화 알림 단계(기능 명세 §13.17). `mentions`는 그룹 대화에만 있다. */
+/** 대화 알림 단계. `mentions`는 그룹 대화에만 있다. */
 export type ConversationNotificationLevel = "all" | "mentions" | "off";
 
 export interface ConversationSummary {

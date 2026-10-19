@@ -225,7 +225,7 @@ export function MessageBubble({
                 <MessageBody
                   body={messageBody}
                   isOwn={isOwn}
-                  mentionProfileIds={message.mentionProfileIds}
+                  message={message}
                 />
                 {editedMark}
               </span>
@@ -293,11 +293,11 @@ function EmojiOnlyMessageBody({ graphemes }: { graphemes: string[] }) {
 function MessageBody({
   body,
   isOwn,
-  mentionProfileIds,
+  message,
 }: {
   body: string;
   isOwn: boolean;
-  mentionProfileIds: string[] | undefined;
+  message: ConversationMessage;
 }) {
   return parseMessageText(body).map((segment, index) => {
     if (segment.type === "mention") {
@@ -306,7 +306,7 @@ function MessageBody({
           key={`mention-${index}`}
           ordinal={segment.ordinal}
           label={segment.label}
-          mentionProfileIds={mentionProfileIds}
+          message={message}
           onPrimary={isOwn}
         />
       );

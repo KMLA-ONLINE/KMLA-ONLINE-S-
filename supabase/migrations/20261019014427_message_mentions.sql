@@ -151,14 +151,43 @@ CREATE OR REPLACE FUNCTION private.message_delivery_allowed (
 $function$;
 
 CREATE OR REPLACE FUNCTION private.message_plain_text (
-  p_body text
+  p_body                text,
+  p_mention_profile_ids bigint[]
 )
   RETURNS text
-  LANGUAGE sql
-  IMMUTABLE
+  LANGUAGE plpgsql
+  STABLE
   SET search_path TO ''
   AS $function$
-  select pg_catalog.regexp_replace(p_body, '\[@([^\]\n]*)\]\(m:[0-9]{1,2}\)', '@\1', 'g');
+declare
+  rest text := p_body;
+  result text := '';
+  token text[];
+  token_text text;
+  shown_name text;
+begin
+  -- 멘션이 없는 대부분의 메시지는 정규식을 돌리지 않는다.
+  if p_body is null or strpos(p_body, '](m:') = 0 then
+    return p_body;
+  end if;
+
+  loop
+    token := pg_catalog.regexp_match(rest, '\[@([^\]\n]*)\]\(m:([0-9]{1,2})\)');
+    exit when token is null;
+    token_text := '[@' || token[1] || '](m:' || token[2] || ')';
+    select profile.name
+    into shown_name
+    from public.profiles as profile
+    where profile.id = p_mention_profile_ids[token[2]::integer]
+      and profile.deleted_at is null;
+    -- 처음 맞은 자리가 곧 같은 글자가 처음 나오는 자리다.
+    result := result || left(rest, strpos(rest, token_text) - 1)
+      || '@' || coalesce(shown_name, token[1]);
+    rest := substr(rest, strpos(rest, token_text) + char_length(token_text));
+  end loop;
+
+  return result || rest;
+end;
 $function$;
 
 CREATE OR REPLACE FUNCTION private.message_push_content (
@@ -194,7 +223,8 @@ CREATE OR REPLACE FUNCTION private.message_push_content (
         else coalesce(
           nullif(
             private.message_plain_text(
-              private.decrypt_message_text(message.body_ciphertext, message.key_version, p_keys)
+              private.decrypt_message_text(message.body_ciphertext, message.key_version, p_keys),
+              message.mention_profile_ids
             ),
             ''
           ),
@@ -251,7 +281,8 @@ CREATE OR REPLACE FUNCTION private.message_rows (
     system_profile_ids    bigint[],
     system_name           text,
     attachments           jsonb,
-    mention_profile_ids   bigint[]
+    mention_profile_ids   bigint[],
+    mentions_everyone     boolean
   )
   LANGUAGE sql
   STABLE
@@ -280,7 +311,8 @@ CREATE OR REPLACE FUNCTION private.message_rows (
       when original.id is not null and original.deleted_at is null
         then left(
           private.message_plain_text(
-            private.decrypt_message_text(original.body_ciphertext, original.key_version, p_keys)
+            private.decrypt_message_text(original.body_ciphertext, original.key_version, p_keys),
+            original.mention_profile_ids
           ),
           200
         )
@@ -317,7 +349,8 @@ CREATE OR REPLACE FUNCTION private.message_rows (
     message.system_profile_ids,
     message.system_name,
     coalesce(files.list, '[]'::jsonb),
-    message.mention_profile_ids
+    message.mention_profile_ids,
+    message.mentions_everyone
   from private.messages as message
   left join private.messages as original
     on original.id = message.reply_to_id
@@ -374,7 +407,8 @@ CREATE OR REPLACE FUNCTION private.resolve_message_mentions (
   p_conversation_id   uuid,
   p_body              text,
   p_mention_pub_ids   text[],
-  p_already_mentioned bigint[] DEFAULT '{}'::bigint[]
+  p_already_mentioned bigint[]                 DEFAULT '{}'::bigint[],
+  p_sent_at           timestamp with time zone DEFAULT NULL::timestamp WITH time zone
 )
   RETURNS bigint[]
   LANGUAGE plpgsql
@@ -425,10 +459,16 @@ begin
       where member.conversation_id = p_conversation_id
         and member.profile_id = profile.id
         and member.left_at is null
+        and (p_sent_at is null or member.joined_at <= p_sent_at)
     );
 
   if coalesce(cardinality(resolved), 0) <> person_count then
     raise exception 'every mention must name a current conversation member'
+      using errcode = '22023';
+  end if;
+  if (select count(distinct entry.profile_id) from unnest(resolved) as entry(profile_id))
+    <> person_count then
+    raise exception 'a member can take only one mention ordinal'
       using errcode = '22023';
   end if;
 
@@ -541,8 +581,22 @@ begin
       using errcode = '22023';
   end if;
 
+  -- 단계를 모르는 이전 버전 화면은 공개 ID를 보내지 않고 토큰을 그대로 둔 채 고친다. 그때는 같은 번호가
+  -- 같은 사람을 부르던 그대로 둔다.
   resolved_mentions := private.resolve_message_mentions(
-    target.conversation_id, normalized_body, p_mention_pub_ids, target.mention_profile_ids
+    target.conversation_id,
+    normalized_body,
+    coalesce(
+      p_mention_pub_ids,
+      array(
+        select profile.pub_id
+        from unnest(target.mention_profile_ids) with ordinality as entry(profile_id, ordinal)
+        left join public.profiles as profile on profile.id = entry.profile_id
+        order by entry.ordinal
+      )
+    ),
+    target.mention_profile_ids,
+    target.sent_at
   );
 
   select * into encrypted
@@ -633,9 +687,12 @@ begin
     last_message.sender_id,
     case
       when last_message.deleted_at is null and last_message.id is not null
-        then private.message_plain_text(private.decrypt_message_text(
-          last_message.body_ciphertext, last_message.key_version, keys
-        ))
+        then private.message_plain_text(
+          private.decrypt_message_text(
+            last_message.body_ciphertext, last_message.key_version, keys
+          ),
+          last_message.mention_profile_ids
+        )
     end,
     last_message.sent_at,
     last_message.deleted_at is not null,
@@ -759,7 +816,8 @@ CREATE OR REPLACE FUNCTION public.list_message_changes (
     system_profile_ids    bigint[],
     system_name           text,
     attachments           jsonb,
-    mention_profile_ids   bigint[]
+    mention_profile_ids   bigint[],
+    mentions_everyone     boolean
   )
   LANGUAGE plpgsql
   STABLE
@@ -839,7 +897,8 @@ CREATE OR REPLACE FUNCTION public.list_messages (
     system_profile_ids    bigint[],
     system_name           text,
     attachments           jsonb,
-    mention_profile_ids   bigint[]
+    mention_profile_ids   bigint[],
+    mentions_everyone     boolean
   )
   LANGUAGE plpgsql
   STABLE
@@ -919,7 +978,8 @@ CREATE OR REPLACE FUNCTION public.list_pinned_messages (
     system_profile_ids    bigint[],
     system_name           text,
     attachments           jsonb,
-    mention_profile_ids   bigint[]
+    mention_profile_ids   bigint[],
+    mentions_everyone     boolean
   )
   LANGUAGE plpgsql
   STABLE
@@ -1008,7 +1068,7 @@ begin
 
   for candidate in
     select message.id, message.sender_id, message.sent_at,
-      message.body_ciphertext, message.key_version
+      message.body_ciphertext, message.key_version, message.mention_profile_ids
     from private.messages as message
     where message.conversation_id = p_conversation_id
       and message.deleted_at is null
@@ -1032,9 +1092,10 @@ begin
     last_sent_at := candidate.sent_at;
     last_id := candidate.id;
     -- 멘션은 화면에 보이는 `@이름`으로 찾는다. 토큰의 `m:1`이 검색어에 걸리지 않게 한다.
-    plain := private.message_plain_text(private.decrypt_message_text(
-      candidate.body_ciphertext, candidate.key_version, keys
-    ));
+    plain := private.message_plain_text(
+      private.decrypt_message_text(candidate.body_ciphertext, candidate.key_version, keys),
+      candidate.mention_profile_ids
+    );
     if strpos(lower(regexp_replace(plain, '[[:space:]]+', '', 'g')), normalized_query) > 0 then
       results := results || jsonb_build_array(jsonb_build_object(
         'id', candidate.id,
@@ -1262,11 +1323,11 @@ REVOKE ALL ON FUNCTION "private"."enqueue_message_push"(private.messages, bigint
 
 REVOKE ALL ON FUNCTION "private"."member_wants_message_push"(public.conversation_members, private.messages) FROM PUBLIC;
 
-REVOKE ALL ON FUNCTION "private"."message_plain_text"(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION "private"."message_plain_text"(text, bigint[]) FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."message_rows"(bigint, uuid, uuid[], jsonb) FROM PUBLIC;
 
-REVOKE ALL ON FUNCTION "private"."resolve_message_mentions"(uuid, text, text[], bigint[]) FROM PUBLIC;
+REVOKE ALL ON FUNCTION "private"."resolve_message_mentions"(uuid, text, text[], bigint[], timestamp WITH time zone) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION "public"."edit_message"(uuid, text, text[]) TO "authenticated";
 

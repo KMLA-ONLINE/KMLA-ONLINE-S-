@@ -217,7 +217,7 @@ export async function renameConversation(
   if (error) throw error;
 }
 
-/** 대화 알림 단계를 정한다(기능 명세 §13.17). 끄면 직접 다시 켤 때까지 이 대화의 Push를 보내지 않는다. */
+/** 대화 알림 단계를 정한다. 끄면 직접 다시 켤 때까지 이 대화의 Push를 보내지 않는다. */
 export async function setConversationNotificationLevel(
   conversationId: string,
   level: ConversationNotificationLevel,

@@ -11,7 +11,7 @@ import {
 } from "~/features/posts/model/mentions";
 
 /**
- * 표시형 멘션(`@홍길동`)을 담는 `textarea`의 편집 규칙. 댓글과 메시지 입력창이 함께 쓴다(기능 명세 §8.14, §13.22).
+ * 표시형 멘션(`@홍길동`)을 담는 `textarea`의 편집 규칙. 댓글과 메시지 입력창이 함께 쓴다.
  * 값과 대상은 부르는 쪽이 들고, 여기서는 멘션을 한 덩어리로 지우고 짝 잃은 표시를 걷으며 그동안 캐럿을 지킨다.
  */
 export function useMentionTextarea({

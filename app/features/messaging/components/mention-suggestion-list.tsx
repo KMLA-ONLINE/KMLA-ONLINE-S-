@@ -11,7 +11,7 @@ export function mentionOptionId(listId: string, index: number) {
 }
 
 /**
- * 작성창 바로 위에 뜨는 멘션 후보(기능 명세 §13.22). 별도 창이 아니라서 입력 포커스와 화면 키보드가 그대로 남는다. 후보를 눌러도
+ * 작성창 바로 위에 뜨는 멘션 후보. 별도 창이 아니라서 입력 포커스와 화면 키보드가 그대로 남는다. 후보를 눌러도
  * 입력창이 포커스를 잃지 않도록 누르는 순간의 기본 동작을 막는다. 고르기와 닫기는 입력창이 맡는다.
  */
 export function MentionSuggestionList({

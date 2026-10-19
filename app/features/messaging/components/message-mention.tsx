@@ -2,7 +2,10 @@ import { createContext, use, useMemo, type ReactNode } from "react";
 import { Link } from "react-router";
 
 import { resolveMessageMention } from "~/features/messaging/model/message-mentions";
-import type { MessageParticipant } from "~/features/messaging/model/types";
+import type {
+  ConversationMessage,
+  MessageParticipant,
+} from "~/features/messaging/model/types";
 import { cn } from "~/shared/lib/utils";
 
 const ParticipantsContext = createContext<
@@ -28,25 +31,33 @@ export function MessageParticipantsProvider({
   return <ParticipantsContext value={byId}>{children}</ParticipantsContext>;
 }
 
+/** 대화방이 내려 준 참여자 표. 멘션을 지금 이름의 글자로 옮길 때 쓴다(`messagePlainText()`). */
+export function useMessageParticipants(): ReadonlyMap<
+  string,
+  MessageParticipant
+> {
+  return use(ParticipantsContext);
+}
+
 /**
- * 보낸 메시지의 멘션 한 자리(기능 명세 §13.22). 이름은 토큰이 아니라 지금 참여자 목록에서 오고, 대상을 모르면 토큰의 이름을
- * 평범한 글자로 그린다. 상대 메시지는 강조색, 내 메시지는 primary 버블 위라 버블 글자색으로 굵게만 그린다.
+ * 보낸 메시지의 멘션 한 자리. 이름은 토큰이 아니라 지금 참여자 목록에서 오고, 대상을 모르면 토큰의 이름을 평범한 글자로
+ * 그린다. 상대 메시지는 강조색, 내 메시지는 primary 버블 위라 버블 글자색으로 굵게만 그린다.
  */
 export function MessageMention({
   ordinal,
   label,
-  mentionProfileIds,
+  message,
   onPrimary,
 }: {
   ordinal: number;
   /** 토큰에 적힌 이름. 대상을 찾지 못했을 때만 쓴다. */
   label: string;
-  mentionProfileIds: string[] | undefined;
+  message: Pick<ConversationMessage, "mentionProfileIds" | "mentionsEveryone">;
   onPrimary: boolean;
 }) {
   const mention = resolveMessageMention(
     ordinal,
-    mentionProfileIds,
+    message,
     use(ParticipantsContext),
   );
   if (!mention) return <>@{label}</>;

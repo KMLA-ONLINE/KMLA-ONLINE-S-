@@ -7,12 +7,17 @@ import {
   mentionQueryAt,
   messageMentionEntries,
   messageMentionSuggestions,
+  messagePlainText,
+  isUnchangedEdit,
   prepareMessageMentions,
   resolveMessageMention,
   typedMentionTrigger,
 } from "~/features/messaging/model/message-mentions";
 import type { MessageParticipant } from "~/features/messaging/model/types";
-import { mentionDisplayText } from "~/features/posts/model/mentions";
+import {
+  mentionDisplayText,
+  toMentionDisplay,
+} from "~/features/posts/model/mentions";
 
 const participants: MessageParticipant[] = [
   { id: "1", pubId: "me", name: "김한결", avatarUrl: null, active: true },
@@ -37,6 +42,9 @@ describe("message mentions", () => {
     expect(names("민")).toEqual(["최민준"]);
     expect(names("모든사")).toEqual(["모든 사람"]);
     expect(names("없음")).toEqual([]);
+    // 한글은 조합 중인 글자로도 찾는다.
+    expect(names("ㅊ")).toEqual(["최민준"]);
+    expect(names("최미")).toEqual(["최민준"]);
   });
 
   it("캐럿 바로 앞에 친 @ 하나만 후보 목록을 연다", () => {
@@ -78,6 +86,7 @@ describe("message mentions", () => {
     expect(prepareMessageMentions(text, entries)).toEqual({
       body: "[@모든 사람](m:0) [@박서현](m:1) 확인",
       mentionPubIds: ["seo"],
+      mentionsEveryone: true,
       entries: [
         { ordinal: 1, pubId: "seo", name: "박서현" },
         { ordinal: 0, pubId: "", name: "모든 사람" },
@@ -91,6 +100,7 @@ describe("message mentions", () => {
         {
           body: "[@모든 사람](m:0) [@옛 이름](m:1) [@탈퇴](m:2)",
           mentionProfileIds: ["2", "9"],
+          mentionsEveryone: true,
         },
         participants,
       ),
@@ -110,11 +120,55 @@ describe("message mentions", () => {
 
   it("보낸 멘션은 지금 이름으로 그리고, 대상을 모르면 null이다", () => {
     const byId = new Map(participants.map((person) => [person.id, person]));
-    expect(resolveMessageMention(0, [], byId)).toEqual({ name: "모든 사람" });
-    expect(resolveMessageMention(1, ["4"], byId)).toEqual({
+    const message = { mentionProfileIds: ["4"], mentionsEveryone: true };
+    expect(resolveMessageMention(0, message, byId)).toEqual({
+      name: "모든 사람",
+    });
+    expect(resolveMessageMention(1, message, byId)).toEqual({
       name: "윤지우",
       pubId: "left",
     });
-    expect(resolveMessageMention(2, ["4"], byId)).toBeNull();
+    expect(resolveMessageMention(2, message, byId)).toBeNull();
+    // 이 기능 전에 같은 글자를 직접 쳐 둔 메시지는 대화 전체를 부르지 않는다.
+    expect(
+      resolveMessageMention(0, { mentionsEveryone: false }, byId),
+    ).toBeNull();
+  });
+
+  it("글자로 옮길 때도 멘션을 지금 이름으로 쓴다", () => {
+    const byId = new Map(participants.map((person) => [person.id, person]));
+    expect(
+      messagePlainText(
+        {
+          body: "[@옛 이름](m:1) [@모든 사람](m:0) [@탈퇴](m:2)",
+          mentionProfileIds: ["2", "9"],
+          mentionsEveryone: true,
+        },
+        byId,
+      ),
+    ).toBe("@박서현 @모든 사람 @탈퇴");
+  });
+
+  it("그대로 저장한 편집은 토큰의 옛 이름이나 사라진 대상과 관계없이 바뀌지 않은 것이다", () => {
+    const message = {
+      body: "[@옛 이름](m:1) [@탈퇴](m:2) 확인",
+      mentionProfileIds: ["9", "2"],
+      mentionsEveryone: false,
+    };
+    // 편집창에 올린 그대로를 다시 제출한 값.
+    const entries = messageMentionEntries(message, participants);
+    const resubmitted = prepareMessageMentions(
+      toMentionDisplay(message.body, entries),
+      entries,
+    );
+
+    expect(isUnchangedEdit(message, resubmitted, participants)).toBe(true);
+    expect(
+      isUnchangedEdit(
+        message,
+        prepareMessageMentions("@옛 이름 @박서현 확인!", entries),
+        participants,
+      ),
+    ).toBe(false);
   });
 });

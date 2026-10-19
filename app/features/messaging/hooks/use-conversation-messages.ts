@@ -88,6 +88,7 @@ export interface SendDraft {
   replyTo?: MessageReplyPreview;
   /** 본문 `m:n` 토큰이 부르는 사람의 공개 ID. n번 토큰이 `n - 1`번째다. */
   mentionPubIds?: string[];
+  mentionsEveryone?: boolean;
 }
 
 /**
@@ -236,7 +237,13 @@ export function useConversationMessages(conversation: Conversation) {
     }
   };
 
-  const send = async ({ id, body, replyTo, mentionPubIds = [] }: SendDraft) => {
+  const send = async ({
+    id,
+    body,
+    replyTo,
+    mentionPubIds = [],
+    mentionsEveryone = false,
+  }: SendDraft) => {
     const draft: ConversationMessage = {
       id: id ?? randomUUID(),
       senderId: conversation.viewerId,
@@ -247,6 +254,7 @@ export function useConversationMessages(conversation: Conversation) {
         mentionPubIds,
         conversation.participants,
       ),
+      mentionsEveryone,
       unreadMemberCount: activeParticipants(conversation).length - 1,
       pending: true,
     };
@@ -527,18 +535,20 @@ export function useConversationMessages(conversation: Conversation) {
     target: ConversationMessage,
     body: string,
     mentionPubIds: string[] = [],
+    mentionsEveryone = false,
   ) => {
     const message = current(target);
     const previous = {
       body: message.body,
       editedAt: message.editedAt,
       mentionProfileIds: message.mentionProfileIds,
+      mentionsEveryone: message.mentionsEveryone,
     };
     const isLatest = beginRequest(message.id, "content");
     const apply = (
       patch: Pick<
         ConversationMessage,
-        "body" | "editedAt" | "mentionProfileIds"
+        "body" | "editedAt" | "mentionProfileIds" | "mentionsEveryone"
       >,
     ) => {
       patchMessage(queryClient, conversationId, message.id, patch);
@@ -550,11 +560,16 @@ export function useConversationMessages(conversation: Conversation) {
       mentionPubIds,
       conversation.participants,
     );
-    apply({ body, editedAt: new Date().toISOString(), mentionProfileIds });
+    apply({
+      body,
+      editedAt: new Date().toISOString(),
+      mentionProfileIds,
+      mentionsEveryone,
+    });
     const release = holdMessageWrite(message.id);
     try {
       const saved = await editMessage(message.id, body, mentionPubIds);
-      if (isLatest()) apply({ ...saved, mentionProfileIds });
+      if (isLatest()) apply({ ...saved, mentionProfileIds, mentionsEveryone });
       refreshList();
       return true;
     } catch {

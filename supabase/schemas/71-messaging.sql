@@ -344,31 +344,63 @@ revoke all on function private.decrypt_message_text(bytea, smallint, jsonb)
   from public;
 
 -- 멘션 토큰을 `@이름` 글자로 바꾼다(기술 설계 §8). 대화 목록 미리보기, 답장 원문, 검색, Push처럼 본문을
--- 글자로만 보여 주는 곳이 쓴다. 토큰 문법은 `private.parse_mention_ordinals`와 같다. 자르기 전에 불러야
--- 토큰이 반쪽 나지 않는다.
-create function private.message_plain_text(p_body text)
+-- 글자로만 보여 주는 곳이 쓴다. 이름은 말풍선처럼 지금 프로필 이름이다 — 토큰에 적힌 이름을 쓰면 개명한
+-- 사람을 검색에서 못 찾는다. 대상을 알 수 없으면 토큰의 이름을 쓴다. 토큰 문법은
+-- `private.parse_mention_ordinals`와 같다. 자르기 전에 불러야 토큰이 반쪽 나지 않는다.
+create function private.message_plain_text(p_body text, p_mention_profile_ids bigint[])
 returns text
-language sql
-immutable
+language plpgsql
+stable
 set search_path = ''
 as $$
-  select pg_catalog.regexp_replace(p_body, '\[@([^\]\n]*)\]\(m:[0-9]{1,2}\)', '@\1', 'g');
+declare
+  rest text := p_body;
+  result text := '';
+  token text[];
+  token_text text;
+  shown_name text;
+begin
+  -- 멘션이 없는 대부분의 메시지는 정규식을 돌리지 않는다.
+  if p_body is null or strpos(p_body, '](m:') = 0 then
+    return p_body;
+  end if;
+
+  loop
+    token := pg_catalog.regexp_match(rest, '\[@([^\]\n]*)\]\(m:([0-9]{1,2})\)');
+    exit when token is null;
+    token_text := '[@' || token[1] || '](m:' || token[2] || ')';
+    select profile.name
+    into shown_name
+    from public.profiles as profile
+    where profile.id = p_mention_profile_ids[token[2]::integer]
+      and profile.deleted_at is null;
+    -- 처음 맞은 자리가 곧 같은 글자가 처음 나오는 자리다.
+    result := result || left(rest, strpos(rest, token_text) - 1)
+      || '@' || coalesce(shown_name, token[1]);
+    rest := substr(rest, strpos(rest, token_text) + char_length(token_text));
+  end loop;
+
+  return result || rest;
+end;
 $$;
 
-revoke all on function private.message_plain_text(text)
+revoke all on function private.message_plain_text(text, bigint[])
   from public;
 
 -- 본문의 사람 멘션이 부르는 프로필(기능 명세 §13.22). n번째 원소가 `m:n` 토큰의 대상이다. 사람 번호는
 -- 1부터 빈틈없어야 하고, `p_mention_pub_ids`의 같은 자리가 그 사람의 공개 ID다. 대상을 본문에서 정하므로
 -- 본문에 없는 사람에게 Push를 보내게 할 수 없다. 0번(`@모든 사람`)은 대상이 없어 여기서 세지 않는다.
 --
--- 새로 부르는 사람은 지금 멤버여야 한다. 편집 전부터 불려 있던 사람(`p_already_mentioned`)은 나갔어도
--- 통과시킨다. 다시 물으면 멘션된 멤버가 나간 뒤로 그 메시지의 오타 하나도 고칠 수 없다.
+-- 새로 부르는 사람은 지금 멤버여야 하고, 편집이면 그 메시지를 볼 수 있는 멤버(`p_sent_at` 전에 들어온
+-- 멤버)여야 한다. 나중에 들어온 사람을 부르면 Push는 발송 직전에 걸러지고 본인은 메시지를 못 본다. 편집
+-- 전부터 불려 있던 사람(`p_already_mentioned`)은 나갔어도 통과시킨다. 다시 물으면 멘션된 멤버가 나간
+-- 뒤로 그 메시지의 오타 하나도 고칠 수 없다. 한 사람은 한 번호만 쓴다.
 create function private.resolve_message_mentions(
   p_conversation_id uuid,
   p_body text,
   p_mention_pub_ids text[],
-  p_already_mentioned bigint[] default '{}'
+  p_already_mentioned bigint[] default '{}',
+  p_sent_at timestamptz default null
 )
 returns bigint[]
 language plpgsql
@@ -419,10 +451,16 @@ begin
       where member.conversation_id = p_conversation_id
         and member.profile_id = profile.id
         and member.left_at is null
+        and (p_sent_at is null or member.joined_at <= p_sent_at)
     );
 
   if coalesce(cardinality(resolved), 0) <> person_count then
     raise exception 'every mention must name a current conversation member'
+      using errcode = '22023';
+  end if;
+  if (select count(distinct entry.profile_id) from unnest(resolved) as entry(profile_id))
+    <> person_count then
+    raise exception 'a member can take only one mention ordinal'
       using errcode = '22023';
   end if;
 
@@ -430,8 +468,9 @@ begin
 end;
 $$;
 
-revoke all on function private.resolve_message_mentions(uuid, text, text[], bigint[])
-  from public;
+revoke all on function private.resolve_message_mentions(
+  uuid, text, text[], bigint[], timestamptz
+) from public;
 
 -- 내 대화 목록. `p_conversation_id`를 주면 그 대화 한 건만 돌려주며, 대화방이 대화 정보를 읽을 때
 -- 쓴다. 내보내진 대화는 참여 기간의 메시지를 계속 볼 수 있으므로 목록에 남고, 스스로 나간 대화는
@@ -493,9 +532,12 @@ begin
     last_message.sender_id,
     case
       when last_message.deleted_at is null and last_message.id is not null
-        then private.message_plain_text(private.decrypt_message_text(
-          last_message.body_ciphertext, last_message.key_version, keys
-        ))
+        then private.message_plain_text(
+          private.decrypt_message_text(
+            last_message.body_ciphertext, last_message.key_version, keys
+          ),
+          last_message.mention_profile_ids
+        )
     end,
     last_message.sent_at,
     last_message.deleted_at is not null,
@@ -633,7 +675,9 @@ returns table (
   -- `ready` 첨부를 순서대로. 파일 이름은 복호화해 준다.
   attachments jsonb,
   -- 본문 `m:n` 토큰의 대상. 화면이 대화 참여자 목록에서 지금 이름을 찾는다.
-  mention_profile_ids bigint[]
+  mention_profile_ids bigint[],
+  -- `m:0`이 정말 `@모든 사람`인지. 이 기능 전에 같은 글자를 직접 쳐 둔 메시지는 아니다.
+  mentions_everyone boolean
 )
 language sql
 stable
@@ -662,7 +706,8 @@ as $$
       when original.id is not null and original.deleted_at is null
         then left(
           private.message_plain_text(
-            private.decrypt_message_text(original.body_ciphertext, original.key_version, p_keys)
+            private.decrypt_message_text(original.body_ciphertext, original.key_version, p_keys),
+            original.mention_profile_ids
           ),
           200
         )
@@ -699,7 +744,8 @@ as $$
     message.system_profile_ids,
     message.system_name,
     coalesce(files.list, '[]'::jsonb),
-    message.mention_profile_ids
+    message.mention_profile_ids,
+    message.mentions_everyone
   from private.messages as message
   left join private.messages as original
     on original.id = message.reply_to_id
@@ -785,7 +831,8 @@ returns table (
   system_profile_ids bigint[],
   system_name text,
   attachments jsonb,
-  mention_profile_ids bigint[]
+  mention_profile_ids bigint[],
+  mentions_everyone boolean
 )
 language plpgsql
 stable
@@ -869,7 +916,8 @@ returns table (
   system_profile_ids bigint[],
   system_name text,
   attachments jsonb,
-  mention_profile_ids bigint[]
+  mention_profile_ids bigint[],
+  mentions_everyone boolean
 )
 language plpgsql
 stable
@@ -1326,8 +1374,22 @@ begin
       using errcode = '22023';
   end if;
 
+  -- 단계를 모르는 이전 버전 화면은 공개 ID를 보내지 않고 토큰을 그대로 둔 채 고친다. 그때는 같은 번호가
+  -- 같은 사람을 부르던 그대로 둔다.
   resolved_mentions := private.resolve_message_mentions(
-    target.conversation_id, normalized_body, p_mention_pub_ids, target.mention_profile_ids
+    target.conversation_id,
+    normalized_body,
+    coalesce(
+      p_mention_pub_ids,
+      array(
+        select profile.pub_id
+        from unnest(target.mention_profile_ids) with ordinality as entry(profile_id, ordinal)
+        left join public.profiles as profile on profile.id = entry.profile_id
+        order by entry.ordinal
+      )
+    ),
+    target.mention_profile_ids,
+    target.sent_at
   );
 
   select * into encrypted
@@ -1472,7 +1534,8 @@ returns table (
   system_profile_ids bigint[],
   system_name text,
   attachments jsonb,
-  mention_profile_ids bigint[]
+  mention_profile_ids bigint[],
+  mentions_everyone boolean
 )
 language plpgsql
 stable
@@ -1965,7 +2028,8 @@ as $$
         else coalesce(
           nullif(
             private.message_plain_text(
-              private.decrypt_message_text(message.body_ciphertext, message.key_version, p_keys)
+              private.decrypt_message_text(message.body_ciphertext, message.key_version, p_keys),
+              message.mention_profile_ids
             ),
             ''
           ),
@@ -2684,7 +2748,7 @@ begin
 
   for candidate in
     select message.id, message.sender_id, message.sent_at,
-      message.body_ciphertext, message.key_version
+      message.body_ciphertext, message.key_version, message.mention_profile_ids
     from private.messages as message
     where message.conversation_id = p_conversation_id
       and message.deleted_at is null
@@ -2708,9 +2772,10 @@ begin
     last_sent_at := candidate.sent_at;
     last_id := candidate.id;
     -- 멘션은 화면에 보이는 `@이름`으로 찾는다. 토큰의 `m:1`이 검색어에 걸리지 않게 한다.
-    plain := private.message_plain_text(private.decrypt_message_text(
-      candidate.body_ciphertext, candidate.key_version, keys
-    ));
+    plain := private.message_plain_text(
+      private.decrypt_message_text(candidate.body_ciphertext, candidate.key_version, keys),
+      candidate.mention_profile_ids
+    );
     if strpos(lower(regexp_replace(plain, '[[:space:]]+', '', 'g')), normalized_query) > 0 then
       results := results || jsonb_build_array(jsonb_build_object(
         'id', candidate.id,

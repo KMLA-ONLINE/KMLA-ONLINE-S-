@@ -7,7 +7,7 @@
 export const MENTION_LIMIT = 50;
 
 /**
- * 대화 전체를 부르는 멘션의 번호(메시지의 `@모든 사람`, 기능 명세 §13.22). 사람 번호(1~)와 겹치지 않고 대상 목록에 들지 않아,
+ * 대화 전체를 부르는 멘션의 번호(메시지의 `@모든 사람`). 사람 번호(1~)와 겹치지 않고 대상 목록에 들지 않아,
  * 제출 직전 번호를 다시 매길 때도 그대로 남는다. 게시물과 댓글은 쓰지 않는다 — 서버가 짝 없는 번호로 거절한다.
  */
 export const EVERYONE_MENTION_ORDINAL = 0;
@@ -168,7 +168,12 @@ export function validateMentionCount(
   body: string,
   entries: MentionDraftEntry[],
 ): string | null {
-  if (countMentionTargets(body, entries) <= MENTION_LIMIT) return null;
+  return mentionCountReason(countMentionTargets(body, entries));
+}
+
+/** 서로 다른 대상 수가 상한을 넘었으면 보여줄 이유. 대상 수를 이미 셌으면 이것을 바로 부른다. */
+export function mentionCountReason(targetCount: number): string | null {
+  if (targetCount <= MENTION_LIMIT) return null;
   return `멘션은 ${MENTION_LIMIT}명까지 할 수 있습니다.`;
 }
 
@@ -220,7 +225,8 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function stripDisplayMarks(text: string): string {
+/** 표시형에서 보이지 않는 표시를 걷어 화면에 보이는 글자만 남긴다. */
+export function stripDisplayMarks(text: string): string {
   return MENTION_DISPLAY_MARKS.reduce(
     (result, mark) => result.replaceAll(mark, ""),
     text,
