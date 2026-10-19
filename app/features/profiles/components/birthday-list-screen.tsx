@@ -478,7 +478,7 @@ export function BirthdayListScreen({
           <div
             ref={listRef}
             role="list"
-            className="relative overflow-hidden"
+            className="relative"
             style={
               isVirtualized
                 ? { height: `${totalRows * BIRTHDAY_ROW_HEIGHT}px` }
@@ -533,8 +533,8 @@ export function BirthdayListScreen({
                     data-testid="birthday-today-marker"
                     aria-hidden
                     className={cn(
-                      "pointer-events-none absolute inset-x-0 z-10 flex h-2 items-center",
-                      // 목록이 overflow-hidden이라 맨 앞·맨 끝에서는 경계에 걸치지 않고 행 안쪽에 긋는다.
+                      // 선 자체를 행 경계에 맞춘다. 더 큰 원은 목록 밖으로도 그려져야 잘리지 않는다.
+                      "pointer-events-none absolute inset-x-0 z-10 flex h-0.5 items-center",
                       item.index !== today.index
                         ? "bottom-0"
                         : item.index === 0
