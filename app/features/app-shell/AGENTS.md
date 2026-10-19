@@ -11,7 +11,7 @@
 - 메신저 route는 `scroll: "route"`다. 셸은 `ScrollRegion`, 콘텐츠 폭, 당겨서 새로고침과 navigation skeleton 없이 `Outlet`을 셸 높이에 꽉 채운다. 모바일 하단 nav는 대화 목록에서 표시하고 대화방에서는 숨긴다.
 - 인증/승인 게이트는 `app/routes/app/gate.tsx` 한 곳에만 둔다. 이용 정지(§16.11)된 사람은 상태가 `accepted`라도 셸 데이터의 `suspended`로 걸러 `/suspended`로 보낸다. `suspended`는 게이트만 보며 셸 값(`ShellData`)에는 싣지 않는다.
 - 셸 loader(게이트)는 첫 진입에만 실행한다. 이후 셸 프로필은 `AppShellProvider`가 `shellProfileQuery`에서 읽으므로, 이름·아바타·역할을 바꾸는 action은 `refreshShellProfile()`을, 알림 뱃지를 바꾸는 action은 `notificationKeys.badge()` 무효화를 직접 부른다.
-- 셸 밖의 안 읽음 표시(홈 화면 아이콘 숫자, 브라우저 탭 제목·아이콘)는 `UnreadBadgeSync` 한 곳이 알림·메시지 수의 합으로 쓴다. 사이드바 뱃지와 같은 `useUnreadCounts()`를 읽으며, 다른 곳에서 `setAppBadgeCount`/`setTabBadgeCount`를 부르지 않는다(계정 변경 때 지우는 `user-scoped-storage`는 예외). 서비스 워커가 홈 화면 숫자를 알림 카드 수로 덮으면 창에 `app-badge-overwritten`을 보내고, `UnreadBadgeSync`가 받아 합계를 다시 쓴다.
+- 셸 밖의 안 읽음 표시(홈 화면 아이콘 숫자, 브라우저 탭 제목·아이콘)는 `UnreadBadgeSync` 한 곳이 알림·메시지 수의 합으로 쓴다. 사이드바 뱃지와 같은 `useUnreadCounts()`를 읽으며, 다른 곳에서 `setAppBadgeCount`/`setTabBadgeCount`를 부르지 않는다(계정 변경 때 지우는 `user-scoped-storage`는 예외). 서비스 워커는 보이는 창이 없을 때만 홈 화면 숫자를 카드 수로 덮고, 덮으면 숨은 창에 `app-badge-overwritten`을 보내며, `UnreadBadgeSync`가 받아 합계를 다시 쓴다.
 - 게이트 loader는 아바타를 서명하지 않는다. `avatar_url`은 `AppShellProvider`가 `shellAvatarQuery`로 나중에 채우므로 첫 페인트에는 `null`일 수 있다.
 - 모바일 전역 헤더는 없다. 각 page route가 `PageHeader`를 조립하며 이는 `handle.chrome` 설정과 무관하다.
 - 모바일 하단 nav와 데스크톱 사이드바는 홈·메시지·그룹·알림·메뉴 다섯 항목(`model/nav-items.ts`)을 공유하며 메뉴는 기존 `/menu` 경로와 도형(`Shapes`) 아이콘을 사용하며 `/settings*`·`/licenses`에서도 활성으로 표시한다. 데스크톱 사이드바의 아이콘 레일과 hover·키보드 포커스 확장 동작은 유지한다.
