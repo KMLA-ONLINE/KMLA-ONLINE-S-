@@ -77,10 +77,12 @@ export default function SettingsPage() {
           <HomeSidebarSettings />
           <Field orientation="horizontal" className="px-4 py-3">
             <FieldContent>
-              <FieldTitle>Enter로 보내기</FieldTitle>
+              <FieldTitle>Enter로 보내기 (추천)</FieldTitle>
               <FieldDescription>
-                메시지와 댓글에 적용됩니다. 폰·태블릿은 키보드를 연결했을 때만
-                보내며, 줄바꿈은 Shift+Enter입니다.
+                메시지와 댓글을 키보드의 Enter로 보내고 Shift+Enter로 줄을
+                바꿉니다. 폰·태블릿의 화면 키보드에서는 켜 두어도 Enter가
+                줄바꿈입니다. 끄면 Enter는 항상 줄바꿈이고 보내기 버튼으로만
+                보냅니다.
               </FieldDescription>
             </FieldContent>
             <Switch
