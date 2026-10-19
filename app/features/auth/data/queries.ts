@@ -60,10 +60,25 @@ export async function loadAuthState(): Promise<AuthState | null> {
     return null;
   }
 
-  return {
-    email: session.user.email ?? "",
-    profile: profiles[0] ?? null,
-  };
+  const profile = profiles[0] ?? null;
+  if (!profile && (await isAccountGone())) {
+    await forgetSession();
+    return null;
+  }
+
+  return { email: session.user.email ?? "", profile };
+}
+
+/**
+ * 프로필이 없을 때만 묻는다. 다른 기기에서 탈퇴하면 이 기기의 access token은 만료까지 서명이
+ * 유효해 프로필 조회가 빈 결과로 끝나므로, 프로필 미작성과 가르려면 Auth에 계정이 있는지 봐야 한다.
+ */
+async function isAccountGone(): Promise<boolean> {
+  const { error } = await getSupabase().auth.getUser();
+  return (
+    isAuthApiError(error) &&
+    (error.code === "user_not_found" || error.code === "session_not_found")
+  );
 }
 
 /** 내 활성 이용 정지. 없으면 `null`. 정지 중에도 읽을 수 있는 RPC다. */

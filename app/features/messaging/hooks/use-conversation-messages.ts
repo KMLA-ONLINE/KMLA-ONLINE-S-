@@ -78,6 +78,18 @@ function isAlreadySent(error: unknown): boolean {
   );
 }
 
+/**
+ * 1:1 상대가 탈퇴해 서버가 전송을 거부했다. 탈퇴는 실시간 신호를 보내지 않으므로, 열려 있던 대화방은
+ * 이 거부로 처음 알게 된다. 대화를 다시 읽으면 입력창이 안내 문구로 바뀐다.
+ */
+function isRecipientWithdrawn(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { message?: unknown }).message === "recipient withdrawn"
+  );
+}
+
 /** 메시지로 이동할 때 이어 읽는 페이지 수 상한. 50개씩 100쪽, 메시지 5,000개 전까지 간다. */
 const MAX_JUMP_PAGES = 100;
 
@@ -223,13 +235,14 @@ export function useConversationMessages(conversation: Conversation) {
       });
       refreshList();
       return true;
-    } catch {
+    } catch (error) {
       if (findCachedMessage(queryClient, conversationId, draft.id)?.pending) {
         patchMessage(queryClient, conversationId, draft.id, {
           pending: false,
           failed: true,
         });
       }
+      if (isRecipientWithdrawn(error)) refreshList();
       // 실패는 말풍선의 "보내지 못했습니다"로 알린다. 토스트까지 띄우면 모바일에서 그 표시를 가린다.
       return false;
     } finally {
@@ -313,6 +326,7 @@ export function useConversationMessages(conversation: Conversation) {
           failed: true,
         });
       }
+      if (isRecipientWithdrawn(error)) refreshList();
       // 실패는 말풍선이 알린다. 크기 제한처럼 사용자가 고칠 수 있는 사유만 토스트로 덧붙인다.
       if (error instanceof Error && error.message.includes("MB")) {
         toast.error(error.message);

@@ -92,6 +92,7 @@ import { RecipientPickerDialog } from "~/features/messaging/components/recipient
 import { RenameConversationDialog } from "~/features/messaging/components/rename-conversation-dialog";
 import {
   activeParticipants,
+  canSendToConversation,
   formatSystemMessage,
   isDirectCounterpartWithdrawn,
   isViewerActive,
@@ -210,6 +211,8 @@ export function RoomScreen({
   const conversation = useListedConversation(loadedConversation);
   const viewerActive = isViewerActive(conversation);
   const counterpartWithdrawn = isDirectCounterpartWithdrawn(conversation);
+  // 입력창, 답장·수정, 파일 끌어 놓기가 모두 이 값을 따른다.
+  const canCompose = canSendToConversation(conversation);
   const participantById = new Map(
     conversation.participants.map((participant) => [
       participant.id,
@@ -645,6 +648,7 @@ export function RoomScreen({
           ) : null}
 
           <MessageThread
+            canCompose={canCompose}
             ios={ios}
             composingAtBottomRef={composingAtBottomRef}
             conversation={conversation}
@@ -705,11 +709,7 @@ export function RoomScreen({
               roomOverlay.open({ kind: "reactions", messageId: message.id })
             }
             onDropFiles={
-              viewerActive &&
-              !counterpartWithdrawn &&
-              !selection &&
-              !editTarget &&
-              !replyTarget
+              canCompose && !selection && !editTarget && !replyTarget
                 ? stageFiles
                 : undefined
             }
@@ -877,6 +877,7 @@ export function RoomScreen({
 }
 
 function MessageThread({
+  canCompose,
   composingAtBottomRef,
   ios,
   conversation,
@@ -910,6 +911,8 @@ function MessageThread({
   messageThreadRef: RefObject<HTMLDivElement | null>;
   /** 맨 아래를 따라가는 중인지. 보내는 쪽(`RoomScreen`)도 켠다. */
   followingNewMessagesRef: RefObject<boolean>;
+  /** 입력창이 있는 대화인지. 답장과 수정은 입력창에서 이어지므로 없으면 내지 않는다. */
+  canCompose: boolean;
   desktopDetailsOpen: boolean;
   hasOlderMessages: boolean;
   loadingOlderMessages: boolean;
@@ -958,9 +961,6 @@ function MessageThread({
   const olderLoadFailed = useRef(false);
   // 날짜 구분선과 묶음 경계는 메시지가 바뀔 때만 다시 센다. 키보드가 오르내리거나 오버레이가 열려
   // 이 영역이 다시 그려질 때마다 메시지 전체의 시각을 포매팅하지 않는다.
-  // 답장·수정은 입력창에서 이어지므로 입력창을 그리는 조건과 같아야 한다.
-  const canCompose =
-    isViewerActive(conversation) && !isDirectCounterpartWithdrawn(conversation);
   const layout = useMemo(() => layoutMessageThread(messages), [messages]);
   const oldestMessageId = messages[0]?.id;
   const newestMessage = messages.at(-1);

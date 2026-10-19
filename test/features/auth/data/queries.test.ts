@@ -1,9 +1,10 @@
 import { AuthApiError } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getSession, getSupabase, rpc, signOut } = vi.hoisted(() => ({
+const { getSession, getSupabase, getUser, rpc, signOut } = vi.hoisted(() => ({
   getSession: vi.fn(),
   getSupabase: vi.fn(),
+  getUser: vi.fn(),
   rpc: vi.fn(),
   signOut: vi.fn(),
 }));
@@ -17,7 +18,11 @@ const SESSION = { user: { email: "student@kmla.hs.kr" } };
 describe("auth queries", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getSupabase.mockReturnValue({ auth: { getSession, signOut }, rpc });
+    getSupabase.mockReturnValue({
+      auth: { getSession, getUser, signOut },
+      rpc,
+    });
+    getUser.mockResolvedValue({ data: { user: {} }, error: null });
     getSession.mockResolvedValue({ data: { session: SESSION }, error: null });
     rpc.mockResolvedValue({ data: [], error: null });
     signOut.mockResolvedValue({ error: null });
@@ -38,6 +43,38 @@ describe("auth queries", () => {
       expect(signOut).toHaveBeenCalledWith({ scope: "local" });
     },
   );
+
+  // 다른 기기에서 탈퇴하면 이 기기의 access token은 만료까지 서명이 유효하지만, 프로필이
+  // 끊겨 조회가 빈 결과로 끝난다. 그대로 두면 게이트가 프로필 작성 화면으로 보낸다.
+  it("signs out when the account was withdrawn on another device", async () => {
+    getUser.mockResolvedValue({
+      data: { user: null },
+      error: new AuthApiError(
+        "User from sub claim in JWT does not exist",
+        403,
+        "user_not_found",
+      ),
+    });
+
+    await expect(loadAuthState()).resolves.toBeNull();
+    expect(signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+
+  it("keeps a signed-up account without a profile on the setup path", async () => {
+    await expect(loadAuthState()).resolves.toEqual({
+      email: "student@kmla.hs.kr",
+      profile: null,
+    });
+    expect(getUser).toHaveBeenCalledOnce();
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it("does not ask Auth again when the profile exists", async () => {
+    rpc.mockResolvedValue({ data: [{ id: 1 }], error: null });
+
+    await loadAuthState();
+    expect(getUser).not.toHaveBeenCalled();
+  });
 
   // 시계가 어긋난 것이라 다시 로그인해도 새 토큰이 똑같이 거절된다. 여기서 로그아웃시키면
   // 게이트와 로그인 화면 사이를 무한히 오간다.

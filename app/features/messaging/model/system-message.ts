@@ -56,3 +56,12 @@ export function isDirectCounterpartWithdrawn(
     )
   );
 }
+
+/** 이 대화에 새 메시지를 보낼 수 있는지. 입력창, 답장·수정과 게시물 공유 대상이 이 조건을 따른다. */
+export function canSendToConversation(
+  conversation: Pick<ConversationSummary, "type" | "participants" | "viewerId">,
+): boolean {
+  return (
+    isViewerActive(conversation) && !isDirectCounterpartWithdrawn(conversation)
+  );
+}

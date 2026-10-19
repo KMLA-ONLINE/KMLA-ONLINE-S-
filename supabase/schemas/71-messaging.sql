@@ -1000,9 +1000,6 @@ $$;
 revoke all on function private.normalize_message_body(text)
   from public;
 
--- 메시지를 보낸다. `p_message_id`는 클라이언트 UUID이며, 같은 값으로 다시 부르면 저장하지 않고
--- 처음 저장한 행을 돌려준다. 본문 규칙은 `private.normalize_message_body`다. 보낸 사람의 읽음
--- 위치는 이 메시지로 옮긴다.
 -- 탈퇴한 상대와의 1:1 대화는 기록으로만 남는다. 전송과 첨부 준비가 함께 막는다.
 create function private.direct_counterpart_withdrawn(
   p_conversation_id uuid,
@@ -1028,6 +1025,9 @@ $$;
 revoke all on function private.direct_counterpart_withdrawn(uuid, bigint)
   from public;
 
+-- 메시지를 보낸다. `p_message_id`는 클라이언트 UUID이며, 같은 값으로 다시 부르면 저장하지 않고
+-- 처음 저장한 행을 돌려준다. 본문 규칙은 `private.normalize_message_body`다. 보낸 사람의 읽음
+-- 위치는 이 메시지로 옮긴다.
 create function public.send_message(
   p_conversation_id uuid,
   p_message_id uuid,
@@ -2579,9 +2579,8 @@ revoke all on function public.add_conversation_members(uuid, bigint[])
 grant execute on function public.add_conversation_members(uuid, bigint[])
   to authenticated;
 
--- 그룹 대화에서 나간다. 참여 기간의 메시지는 계속 볼 수 있고 이후 메시지는 볼 수 없다.
--- 그룹 대화에서 나간다. 호출자가 `lock_group_for_member`로 대화를 잠근 뒤 부른다. 직접 나가기와
--- 계정 탈퇴(`withdraw_account`)가 함께 쓴다.
+-- 그룹 대화에서 나가는 공통 처리. 호출자가 `lock_group_for_member`로 대화를 잠근 뒤 부른다. 직접
+-- 나가기와 계정 탈퇴(`withdraw_account`)가 함께 쓴다.
 create function private.leave_group_conversation(
   p_profile_id bigint,
   p_conversation_id uuid
@@ -2620,6 +2619,7 @@ $$;
 revoke all on function private.leave_group_conversation(bigint, uuid)
   from public;
 
+-- 그룹 대화에서 나간다. 참여 기간의 메시지는 계속 볼 수 있고 이후 메시지는 볼 수 없다.
 create function public.leave_conversation(p_conversation_id uuid)
 returns void
 language plpgsql

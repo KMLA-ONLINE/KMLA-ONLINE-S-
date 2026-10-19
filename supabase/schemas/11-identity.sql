@@ -436,6 +436,13 @@ begin
 
   perform private.require_recent_password_auth();
 
+  -- 소유권 이전(`transfer_group_ownership`)도 대상 멤버십을 잠근다. 검사 전에 먼저 잠가야, 동시에
+  -- 넘겨받은 소유자 행을 아래에서 지워 소유자 없는 그룹을 만드는 일이 없다.
+  perform 1
+  from public.group_memberships as membership
+  where membership.profile_id = caller.id
+  for update;
+
   if caller.role = 'admin' then
     raise exception 'app administrator role must be released before withdrawal'
       using errcode = '22023';
@@ -581,6 +588,10 @@ begin
   -- 세션과 identity는 FK CASCADE로 함께 지워진다. 이미 발급된 access token은 만료까지 남지만
   -- 프로필에 이어지지 않아 모든 RLS·RPC 검사에서 거부된다.
   delete from auth.users where id = caller_auth_user_id;
+
+  -- 위에서 큐에 넣은 미디어를 바로 지우도록 워커를 깨운다. `purge_posts`도 깨우지만 그때는 아직
+  -- 미디어가 큐에 없다. 실패해도 경로는 큐에 남아 백스톱이 받는다(삭제 및 보존 정책 §4.1).
+  perform private.invoke_storage_cleanup(p_quiet => true);
 end;
 $$;
 

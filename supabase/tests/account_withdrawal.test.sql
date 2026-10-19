@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(48);
+select plan(49);
 
 -- 탈퇴할 승인 학생을 새로 만든다. 홍길동(…001)은 그 사람과 대화하고 알림을 받은 다른 회원이다.
 insert into auth.users (
@@ -203,6 +203,9 @@ values
   (900001, current_setting('test.me')::bigint, now() - interval '1 hour'),
   (900002, current_setting('test.me')::bigint, now() - interval '2 days');
 
+-- 진행 중인 정리 실행이 없어야 탈퇴가 워커를 깨우는지 볼 수 있다.
+delete from private.storage_cleanup_runs;
+
 -- 탈퇴
 select pg_temp.act_as_me(interval '1 minute');
 set local role authenticated;
@@ -272,6 +275,10 @@ select set_eq(
     ('story-media', '10000000-0000-0000-0000-000000000201/b0000000-0000-0000-0000-000000000001'),
     ('story-media', '10000000-0000-0000-0000-000000000201/b0000000-0000-0000-0000-000000000002')$$,
   'profile and story objects are queued for storage cleanup'
+);
+select ok(
+  exists (select 1 from private.storage_cleanup_runs where started_at = now()),
+  'withdrawal wakes the storage cleanup worker after queueing profile and story media'
 );
 select results_eq(
   $$select actor_profile_id, actor_display_name, actor_avatar_path
