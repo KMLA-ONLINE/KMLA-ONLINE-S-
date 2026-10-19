@@ -107,8 +107,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      {/* 셸이 h-dvh라 body는 스크롤하지 않지만, iOS 고무줄 바운스는 overscroll-none으로 끊는다. */}
-      <body className="overscroll-none">
+      {/* 세로 바운스만 막는다. 가로 방향은 macOS Chrome의 이전/다음 페이지 제스처에 맡긴다. */}
+      <body className="overscroll-y-none">
         {/* app.css의 dark 변형이 `.dark` 클래스 기준이라 attribute는 class여야 한다. */}
         <ThemeProvider
           attribute="class"

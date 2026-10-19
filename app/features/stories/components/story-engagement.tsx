@@ -525,7 +525,7 @@ export function StoryViewersPanel({
       <div
         ref={listRef}
         onScroll={(event) => onScroll(event.currentTarget.scrollTop)}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-[max(1rem,env(safe-area-inset-bottom))]"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-2 pb-[max(1rem,env(safe-area-inset-bottom))]"
       >
         {failed && !viewers ? (
           <p className="px-2 text-sm text-muted-foreground">

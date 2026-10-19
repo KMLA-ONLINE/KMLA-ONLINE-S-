@@ -481,9 +481,9 @@ export function PostDetailDialog({
           ref={attachList}
           className={cn(
             "min-h-0 flex-1 overflow-y-auto",
-            // overscroll-contain: 맨 위에서 더 당길 때 브라우저의 고무줄과 새로고침
+            // overscroll-y-contain: 맨 위에서 더 당길 때 브라우저의 고무줄과 새로고침
             // 제스처가 손짓을 가져가지 않도록 이 영역에 가둔다.
-            commentSheet && "overscroll-contain",
+            commentSheet && "overscroll-y-contain",
           )}
         >
           {error ? (
