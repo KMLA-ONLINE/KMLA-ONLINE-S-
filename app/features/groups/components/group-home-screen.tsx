@@ -1,5 +1,5 @@
 import { ChevronRightIcon, CirclePlusIcon, SearchIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
 import { GroupSummaryRow } from "~/features/groups/components/group-summary-row";
@@ -35,6 +35,16 @@ export function GroupHomeScreen({
         : savedTab;
   const officialGroups = groups.filter((group) => group.section === "official");
   const myGroups = groups.filter((group) => group.section === "mine");
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+
+  const selectTab = (nextTab: GroupTab) => {
+    if (nextTab === tab) return;
+    setSavedTab(nextTab);
+    const next = new URLSearchParams(searchParams);
+    if (nextTab === "official") next.delete("tab");
+    else next.set("tab", nextTab);
+    setSearchParams(next, { preventScrollReset: true });
+  };
 
   useEffect(() => {
     sessionStorage.setItem(GROUP_HOME_TAB_STORAGE_KEY, tab);
@@ -55,7 +65,53 @@ export function GroupHomeScreen({
   }
 
   return (
-    <div className="mx-auto flex w-full flex-col gap-5 px-1 pb-5 md:px-0 md:py-0">
+    <div
+      className="mx-auto flex min-h-[calc(100dvh-var(--app-page-header-h)-var(--app-tabbar-h)-var(--app-safe-t)-var(--app-safe-b))] w-full flex-col gap-5 px-1 pb-5 md:min-h-0 md:px-0 md:py-0"
+      onTouchStart={(event) => {
+        touchStart.current = null;
+        const target = event.target;
+        // portal로 열린 고정 다이얼로그의 터치도 React 트리를 따라 올라오므로 실제 목록 영역만 받는다.
+        if (
+          !(target instanceof Element) ||
+          !event.currentTarget.contains(target)
+        )
+          return;
+        if (
+          event.touches.length !== 1 ||
+          !window.matchMedia("(max-width: 767px)").matches
+        )
+          return;
+        const touch = event.touches[0];
+        if (
+          !touch ||
+          touch.clientX < 24 ||
+          touch.clientX > window.innerWidth - 24
+        )
+          return;
+        touchStart.current = { x: touch.clientX, y: touch.clientY };
+      }}
+      onTouchEnd={(event) => {
+        const start = touchStart.current;
+        touchStart.current = null;
+        if (!start) return;
+        const touch = event.changedTouches[0];
+        if (!touch) return;
+        const horizontal = touch.clientX - start.x;
+        const vertical = touch.clientY - start.y;
+        if (
+          Math.abs(horizontal) < 60 ||
+          Math.abs(horizontal) < Math.abs(vertical) * 1.4
+        )
+          return;
+        const nextTab = horizontal < 0 ? "unofficial" : "official";
+        if (nextTab === tab) return;
+        event.preventDefault();
+        selectTab(nextTab);
+      }}
+      onTouchCancel={() => {
+        touchStart.current = null;
+      }}
+    >
       <ScreenHeader actionLabel={tab === "unofficial" ? "그룹 만들기" : null} />
 
       <nav
@@ -66,13 +122,7 @@ export function GroupHomeScreen({
           <button
             key={item}
             type="button"
-            onClick={() => {
-              setSavedTab(item);
-              const next = new URLSearchParams(searchParams);
-              if (item === "official") next.delete("tab");
-              else next.set("tab", item);
-              setSearchParams(next, { preventScrollReset: true });
-            }}
+            onClick={() => selectTab(item)}
             aria-current={tab === item ? "page" : undefined}
             className={cn(
               "-mb-px w-full border-b-2 px-4 py-3 text-center text-sm font-medium transition-colors md:w-auto md:py-2.5",

@@ -113,7 +113,7 @@ export function TimetableGrid({
               </span>
 
               {course.room ? (
-                <span className="mt-1 block truncate text-[9px] font-medium opacity-70">
+                <span className="mt-1 block truncate text-[9px] font-medium">
                   {course.room}
                 </span>
               ) : null}

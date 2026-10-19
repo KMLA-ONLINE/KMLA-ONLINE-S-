@@ -1,3 +1,5 @@
+import { randomUUID } from "~/shared/lib/random-uuid";
+
 export type Weekday = 0 | 1 | 2 | 3 | 4;
 
 export interface CourseMeeting {
@@ -59,7 +61,7 @@ export const PERIODS = [
 
 /**
  * 인덱스가 그대로 저장되므로 순서를 바꾸면 기존 수업 색도 바뀐다.
- * 배경은 `-400`, 글씨는 리터럴 `text-black`(칩 색은 테마를 따르지 않고, 흰 글씨는 amber 등에서 대비가 무너진다).
+ * 기존 0~9번 색은 `-400`과 검은 글씨를 유지한다. 추가 색은 밝기에 맞춰 글씨 대비를 정한다.
  * 갈색은 Tailwind 팔레트에 없고 `stone`은 회색과 구분이 안 돼 명도를 맞춘 값을 직접 쓴다.
  */
 export const COLORS = [
@@ -73,6 +75,46 @@ export const COLORS = [
   "bg-fuchsia-400 text-black",
   "bg-[#b5835a] text-black",
   "bg-gray-400 text-black",
+  "bg-rose-200 text-black",
+  "bg-rose-300 text-black",
+  "bg-rose-500 text-black",
+  "bg-rose-600 text-white",
+  "bg-orange-200 text-black",
+  "bg-orange-300 text-black",
+  "bg-orange-500 text-black",
+  "bg-orange-600 text-black",
+  "bg-amber-200 text-black",
+  "bg-amber-300 text-black",
+  "bg-amber-500 text-black",
+  "bg-amber-600 text-black",
+  "bg-emerald-200 text-black",
+  "bg-emerald-300 text-black",
+  "bg-emerald-500 text-black",
+  "bg-emerald-600 text-black",
+  "bg-cyan-200 text-black",
+  "bg-cyan-300 text-black",
+  "bg-cyan-500 text-black",
+  "bg-cyan-600 text-black",
+  "bg-blue-200 text-black",
+  "bg-blue-300 text-black",
+  "bg-blue-500 text-black",
+  "bg-blue-600 text-white",
+  "bg-violet-200 text-black",
+  "bg-violet-300 text-black",
+  "bg-violet-500 text-white",
+  "bg-violet-600 text-white",
+  "bg-fuchsia-200 text-black",
+  "bg-fuchsia-300 text-black",
+  "bg-fuchsia-500 text-black",
+  "bg-fuchsia-600 text-white",
+  "bg-[#e8cbb5] text-black",
+  "bg-[#d3a683] text-black",
+  "bg-[#966a48] text-white",
+  "bg-[#745137] text-white",
+  "bg-gray-200 text-black",
+  "bg-gray-300 text-black",
+  "bg-gray-500 text-white",
+  "bg-gray-600 text-white",
 ] as const;
 
 export const COLOR_DOTS = [
@@ -88,9 +130,18 @@ export const COLOR_DOTS = [
   "bg-gray-400",
 ] as const;
 
+// 기존 0~9번 색상은 저장된 시간표와 연결되어 있으므로 새 색상은 뒤에만 추가한다.
+export const COLOR_SHADES = COLOR_DOTS.map((_, preset) => [
+  10 + preset * 4,
+  11 + preset * 4,
+  preset,
+  12 + preset * 4,
+  13 + preset * 4,
+]);
+
 export function createMeeting(day: Weekday = 0, start = 1): CourseMeeting {
   return {
-    id: crypto.randomUUID(),
+    id: randomUUID(),
     day,
     start,
     end: start,

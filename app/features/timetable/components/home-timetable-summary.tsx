@@ -131,7 +131,7 @@ function AccountTimetableSummary({ profileId }: HomeTimetableSummaryProps) {
                           <span className="block font-semibold break-words">
                             {course.name}
                           </span>
-                          <span className="block text-[10px] break-words opacity-70">
+                          <span className="block text-[10px] break-words">
                             {course.room}
                           </span>
                         </>
