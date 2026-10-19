@@ -192,24 +192,30 @@ function birthdayListItems(birthdays: BirthdayCalendarProfile[]) {
  * 행이고, 그 행이 다른 달의 첫 생일이면 그 달 제목이다. 뒤로 아무도 없으면 행 개수다.
  */
 function todayPosition(items: BirthdayListItem[], referenceDate: string) {
+  const year = Number(referenceDate.slice(0, 4));
   const month = Number(referenceDate.slice(5, 7));
   const day = Number(referenceDate.slice(8, 10));
-  const todayRow = items.find(
-    (item) =>
-      item.kind === "birthday" &&
-      closestBirthdayGap(item.birthday, referenceDate) === 0,
-  );
-  if (todayRow) return { index: todayRow.index, hasBirthday: true };
+  // 이번 달 생일만 날짜를 비교한다. 평년의 2월 29일생은 행의 "오늘" 표시처럼 2월 28일로 본다.
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const dayThisMonth = (birthday: BirthdayCalendarProfile) =>
+    Math.min(birthday.birthday_day, lastDay);
 
   const next = items.find(
     (item) =>
       item.kind === "birthday" &&
       (item.birthday.birthday_month > month ||
         (item.birthday.birthday_month === month &&
-          item.birthday.birthday_day > day)),
+          dayThisMonth(item.birthday) >= day)),
   );
   if (next?.kind !== "birthday") {
     return { index: items.length, hasBirthday: false };
+  }
+
+  if (
+    next.birthday.birthday_month === month &&
+    dayThisMonth(next.birthday) === day
+  ) {
+    return { index: next.index, hasBirthday: true };
   }
 
   const previous = items[next.index - 1];
@@ -527,13 +533,17 @@ export function BirthdayListScreen({
                     data-testid="birthday-today-marker"
                     aria-hidden
                     className={cn(
-                      "pointer-events-none absolute inset-x-0 z-10 h-0.5 bg-primary",
-                      item.index === today.index
-                        ? "top-0 -translate-y-1/2"
-                        : "bottom-0 translate-y-1/2",
+                      "pointer-events-none absolute inset-x-0 z-10 flex h-2 items-center",
+                      // 목록이 overflow-hidden이라 맨 앞·맨 끝에서는 경계에 걸치지 않고 행 안쪽에 긋는다.
+                      item.index !== today.index
+                        ? "bottom-0"
+                        : item.index === 0
+                          ? "top-0"
+                          : "top-0 -translate-y-1/2",
                     )}
                   >
-                    <span className="absolute top-1/2 left-0 size-2 -translate-y-1/2 rounded-full bg-primary" />
+                    <span className="size-2 shrink-0 rounded-full bg-primary" />
+                    <span className="h-0.5 flex-1 bg-primary" />
                   </div>
                 ) : null}
               </div>
