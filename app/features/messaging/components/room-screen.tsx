@@ -172,8 +172,8 @@ const OLDER_MESSAGES_MIN_THRESHOLD = 400;
 /** 메시지·좋아요를 보내거나 반응을 바꾼 뒤 다음 전송까지 쉬는 시간. 도배를 막는 UI 제한이다. */
 const SEND_COOLDOWN_MS = 500;
 /**
- * 글이나 첨부를 보낸 뒤 이만큼은 빈 입력의 버튼을 좋아요로 바꾸지 않는다. 바로 바뀌면 전송 버튼을 한 번
- * 더 누른 손가락이 의도하지 않은 좋아요를 보낸다.
+ * 글이나 첨부를 보낸 뒤 이만큼은 빈 입력의 버튼을 눌러도 좋아요를 보내지 않는다. 버튼 모양은 바로 바뀌므로,
+ * 전송 버튼을 한 번 더 누른 손가락이 의도하지 않은 좋아요를 보내지 않게 막는다.
  */
 const LIKE_AFTER_SEND_MS = 1_000;
 /** 메시지 입력창과 멘션 뒤판이 함께 쓰는 글자 크기와 높이. 어긋나면 뒤판의 글자가 캐럿과 떨어진다. */
@@ -1813,7 +1813,7 @@ function ComposerShell({
   // 보낸 직후 잠시 전송을 받지 않는다. 버튼을 껐다 켜면 깜박이므로 누름만 버리고, 입력은 그대로
   // 두어 이어서 보낼 수 있다.
   const lastSentAt = useRef(0);
-  // 방금 글이나 첨부를 보냈는지. 그동안은 빈 입력이어도 버튼을 좋아요로 바꾸지 않는다.
+  // 방금 글이나 첨부를 보냈는지. 버튼 모양은 바로 좋아요로 바뀌지만 그동안의 누름은 좋아요를 보내지 않는다.
   const [justSent, setJustSent] = useState(false);
   useEffect(() => {
     if (!justSent) return;
@@ -2194,7 +2194,9 @@ function ComposerShell({
                   : undefined
               }
               className={cn(
-                "col-start-1 row-start-1 field-sizing-content min-h-6 min-w-0 resize-none overflow-y-auto bg-transparent text-foreground outline-none placeholder:text-muted-foreground",
+                // 너비를 고정해 `field-sizing-content`가 높이만 맞추게 한다. 너비까지 글에 맞추면 키를 칠
+                // 때마다 바깥 레이아웃을 다시 잡아, 대화와 목록이 함께 놓이는 데스크톱에서 입력이 늦게 보인다.
+                "col-start-1 row-start-1 field-sizing-content min-h-6 w-full min-w-0 resize-none overflow-y-auto bg-transparent text-foreground outline-none placeholder:text-muted-foreground",
                 MESSAGE_INPUT_TEXT_CLASS,
                 mentionInput.mentionRanges.length > 0 &&
                   MENTION_HIGHLIGHT_INPUT_CLASS,
@@ -2296,7 +2298,7 @@ function ComposerShell({
           aria-label={
             editTarget
               ? "수정한 메시지 저장"
-              : hasDraft || hasStaged || justSent
+              : hasDraft || hasStaged
                 ? "메시지 보내기"
                 : "좋아요 보내기"
           }
@@ -2327,7 +2329,7 @@ function ComposerShell({
             setMentions([]);
           }}
         >
-          {hasDraft || hasStaged || editTarget || justSent ? (
+          {hasDraft || hasStaged || editTarget ? (
             <SendIcon aria-hidden className="size-6" />
           ) : (
             <ThumbsUpIcon aria-hidden className="size-6" />
