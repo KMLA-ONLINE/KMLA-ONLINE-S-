@@ -5,6 +5,7 @@ import {
   ChevronLeftIcon,
   FileIcon,
   ImagesIcon,
+  LockIcon,
   LogOutIcon,
   Trash2Icon,
   PencilIcon,
@@ -212,6 +213,11 @@ export function ConversationDetails({
             </div>
           ) : null}
         </div>
+
+        <p className="flex items-center justify-center gap-1.5 px-3 pt-6 text-xs text-muted-foreground">
+          <LockIcon aria-hidden className="size-3.5 shrink-0" />
+          메시지는 암호화되어 저장됩니다.
+        </p>
       </div>
     </aside>
   );
