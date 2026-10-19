@@ -163,6 +163,41 @@ describe("auth routes", () => {
     expect(defaultButtons()[0]).toHaveAccessibleName("인증 코드 받기");
   });
 
+  // 서버가 거절한 이메일 오류는 다음 제출 전까지 남는다. 고치기 시작했는데도 남아 있으면
+  // 새 주소도 틀린 것처럼 보인다.
+  it("clears the email error once the email is edited", async () => {
+    const message =
+      "사용할 수 없는 이메일 주소입니다. 메일을 받을 수 있는 주소를 입력해 주세요.";
+    const { user } = renderRoute(SignupPage as ComponentType<any>, {
+      path: "/signup",
+      loader: () => ({ draft: null, contacts: Promise.resolve([]) }),
+      action: () => ({
+        step: "credentials",
+        email: "someone@invalid-domain.test",
+        password: "password123",
+        values: { ...draftValues, studentNumber: "" },
+        errors: { email: message },
+      }),
+    });
+
+    await user.type(
+      await screen.findByLabelText("이메일"),
+      "someone@invalid-domain.test",
+    );
+    await user.type(screen.getByLabelText("비밀번호"), "password123");
+    await user.type(screen.getByLabelText("비밀번호 확인"), "password123");
+    await user.click(screen.getByRole("button", { name: "다음" }));
+
+    const email = screen.getByLabelText("이메일");
+    expect(await screen.findByText(message)).toBeVisible();
+    expect(email).toHaveAttribute("aria-invalid", "true");
+
+    await user.type(email, "x");
+
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
+    expect(email).toHaveAttribute("aria-invalid", "false");
+  });
+
   it("keeps submission as the default button on the verification step", async () => {
     renderRoute(SignupPage as ComponentType<any>, {
       path: "/signup",

@@ -1,4 +1,5 @@
 import { CheckIcon } from "lucide-react";
+import { useState } from "react";
 import {
   data,
   Form,
@@ -416,6 +417,10 @@ export default function SignupPage({
   }
   const { step, email, password, values } = result;
   const errors = result.errors ?? {};
+  // 이메일 오류는 그 제출의 결과라, 사용자가 고치기 시작하면 내린다. 다음 제출의 결과는
+  // 새 객체이므로 같은 오류가 다시 나면 다시 보인다.
+  const [emailEditedFor, setEmailEditedFor] = useState<unknown>(null);
+  const emailError = emailEditedFor === actionData ? undefined : errors.email;
 
   const description =
     step === "credentials"
@@ -456,7 +461,7 @@ export default function SignupPage({
         {step === "credentials" ? (
           <>
             <FieldGroup>
-              <Field data-invalid={Boolean(errors.email)}>
+              <Field data-invalid={Boolean(emailError)}>
                 <FieldLabel htmlFor="signup-email">이메일</FieldLabel>
                 <Input
                   id="signup-email"
@@ -464,12 +469,13 @@ export default function SignupPage({
                   type="email"
                   autoComplete="email"
                   defaultValue={email}
-                  aria-invalid={Boolean(errors.email)}
+                  onChange={() => setEmailEditedFor(actionData)}
+                  aria-invalid={Boolean(emailError)}
                   placeholder="name@example.com"
                   disabled={pending}
                   required
                 />
-                <FieldError>{errors.email}</FieldError>
+                <FieldError>{emailError}</FieldError>
               </Field>
               <PasswordField
                 id="signup-password"
