@@ -8,7 +8,7 @@ import {
   getUnreadMessageCount,
   listConversations,
 } from "~/features/messaging/data/queries";
-
+import { toReplyPreviewBody } from "~/features/messaging/model/conversation-preview";
 import type {
   Conversation,
   ConversationMessage,
@@ -410,9 +410,6 @@ function acceptsServerRow(
   return Date.parse(row.changedAt) >= Date.parse(current.changedAt);
 }
 
-/** 답장 인용에 담는 원문 길이. 서버 `private.message_rows`의 `reply_body`와 같다. */
-export const REPLY_PREVIEW_LENGTH = 200;
-
 /**
  * 서버가 준 정본 행을 cache에 합친다. 불러온 메시지는 같은 ID로 덮고, 처음 보는 메시지는 불러온
  * 구간 안에 들면 그 페이지에 순서대로 넣는다. 불러온 가장 오래된 메시지보다 앞서면 아직 읽지 않은
@@ -434,9 +431,7 @@ export function mergeServerMessages(
       ...message,
       replyTo: {
         ...message.replyTo,
-        body: original.deleted
-          ? ""
-          : original.body.slice(0, REPLY_PREVIEW_LENGTH),
+        body: original.deleted ? "" : toReplyPreviewBody(original.body),
         deleted: original.deleted,
         attachmentKind: original.deleted
           ? null

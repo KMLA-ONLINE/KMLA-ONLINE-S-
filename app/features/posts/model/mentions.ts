@@ -6,6 +6,12 @@
 /** 기능 명세 §8.14. 게시물 또는 댓글 하나가 부를 수 있는 사람 수. */
 export const MENTION_LIMIT = 50;
 
+/**
+ * 대화 전체를 부르는 멘션의 번호(메시지의 `@모든 사람`). 사람 번호(1~)와 겹치지 않고 대상 목록에 들지 않아,
+ * 제출 직전 번호를 다시 매길 때도 그대로 남는다. 게시물과 댓글은 쓰지 않는다 — 서버가 짝 없는 번호로 거절한다.
+ */
+export const EVERYONE_MENTION_ORDINAL = 0;
+
 /** 읽기 RPC가 본문 옆에 실어 보내는 표현용 멘션. 탈퇴한 사용자는 이름과 공개 ID가 null이다. */
 export interface PostMention {
   ordinal: number;
@@ -43,6 +49,14 @@ export function buildMentionToken(name: string, ordinal: number): string {
   return `[@${sanitizeMentionLabel(name)}](m:${ordinal})`;
 }
 
+/** 토큰을 `@이름` 글자로 바꾼다. 복사나 한 줄 미리보기처럼 멘션을 글자로만 보여 주는 곳이 쓴다. */
+export function mentionPlainText(text: string): string {
+  return text.replace(
+    mentionTokenPattern(),
+    (_token, label: string) => `@${label}`,
+  );
+}
+
 /** Markdown 링크 주소가 멘션이면 그 ordinal, 아니면 null. */
 export function mentionOrdinalFromHref(href: string): number | null {
   const match = MENTION_HREF.exec(href);
@@ -61,11 +75,51 @@ export function mentionsByOrdinal(
   return new Map(mentions.map((mention) => [mention.ordinal, mention]));
 }
 
-/** 작성 중 편집기가 들고 있는 대상. ordinal 하나에 한 사람이다. */
+/** 작성 중 편집기가 들고 있는 대상. ordinal 하나에 한 사람이다. `EVERYONE_MENTION_ORDINAL`이면 사람이 아니라 `pubId`가 비어 있다. */
 export interface MentionDraftEntry {
   ordinal: number;
   pubId: string;
   name: string;
+}
+
+/** 멘션으로 부를 사람 한 명. */
+export interface MentionTarget {
+  pubId: string;
+  name: string;
+}
+
+/**
+ * 고른 사람들에게 줄 번호와 그 뒤의 초안. 고른 순서대로 돌려주며 자리가 모자라 번호를 못 받은 사람은 빠진다. 같은 사람은 쓰던 번호를 돌려준다.
+ * 번호는 원문의 토큰을 보고 고른다 — 표시형에는 토큰이 없어 언제나 1이 나온다. 한 번에 고른 사람들은 아직 본문에 없으므로 앞사람의 토큰을 이어 붙인 본문으로 다음 번호를 고른다.
+ * 본문에서 사라진 번호를 다시 쓸 때는 그 번호의 옛 항목을 버린다.
+ */
+export function assignMentionOrdinals(
+  entries: MentionDraftEntry[],
+  targets: MentionTarget[],
+  body: string,
+): { entries: MentionDraftEntry[]; assigned: MentionDraftEntry[] } {
+  let next = entries;
+  let pending = body;
+  const assigned: MentionDraftEntry[] = [];
+  for (const target of targets) {
+    const existing = next.find((entry) => entry.pubId === target.pubId);
+    const ordinal =
+      existing &&
+      existing.ordinal !== EVERYONE_MENTION_ORDINAL &&
+      existing.ordinal <= MENTION_LIMIT
+        ? existing.ordinal
+        : nextMentionOrdinal(pending);
+    if (ordinal === null) continue;
+    if (existing?.ordinal !== ordinal) {
+      next = [
+        ...next.filter((entry) => entry.ordinal !== ordinal),
+        { ordinal, pubId: target.pubId, name: target.name },
+      ];
+    }
+    pending += buildMentionToken(target.name, ordinal);
+    assigned.push({ ordinal, pubId: target.pubId, name: target.name });
+  }
+  return { entries: next, assigned };
 }
 
 /** 제출 직전 정규화. 본문에 남은 토큰만 등장 순서대로 1부터 다시 매긴다(서버는 ordinal을 1~50 첨자로 받는다). 같은 사람은 ordinal 하나를 쓴다. */
@@ -84,6 +138,8 @@ export function normalizeMentions(
       // 편집기가 모르는 토큰은 사용자가 직접 친 것이다. 부를 사람을 지어내지 않고 평범한
       // 글자로 남긴다 — 서버도 짝이 없는 ordinal은 거절한다.
       if (!entry) return `@${label}`;
+      if (entry.ordinal === EVERYONE_MENTION_ORDINAL)
+        return buildMentionToken(entry.name, EVERYONE_MENTION_ORDINAL);
 
       const existing = assigned.get(entry.pubId);
       if (existing !== undefined)
@@ -112,7 +168,12 @@ export function validateMentionCount(
   body: string,
   entries: MentionDraftEntry[],
 ): string | null {
-  if (countMentionTargets(body, entries) <= MENTION_LIMIT) return null;
+  return mentionCountReason(countMentionTargets(body, entries));
+}
+
+/** 서로 다른 대상 수가 상한을 넘었으면 보여줄 이유. 대상 수를 이미 셌으면 이것을 바로 부른다. */
+export function mentionCountReason(targetCount: number): string | null {
+  if (targetCount <= MENTION_LIMIT) return null;
   return `멘션은 ${MENTION_LIMIT}명까지 할 수 있습니다.`;
 }
 
@@ -150,7 +211,9 @@ export const MENTION_DISPLAY_MARK = MENTION_DISPLAY_MARKS[0];
  * 표시는 다섯 개뿐이라 5 차이 동명이인은 먼저 부른 쪽이 가져간다.
  */
 export function mentionDisplaySlot(ordinal: number): number {
-  return (ordinal - 1) % MENTION_DISPLAY_MARKS.length;
+  // `EVERYONE_MENTION_ORDINAL`(0)도 음수 없이 마지막 표시를 쓴다.
+  const count = MENTION_DISPLAY_MARKS.length;
+  return (((ordinal - 1) % count) + count) % count;
 }
 
 /** 입력창에 넣을 표시형 한 조각. 버튼이 이것을 넣고 `fromMentionDisplay()`가 이것만 되돌린다. */
@@ -162,7 +225,8 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function stripDisplayMarks(text: string): string {
+/** 표시형에서 보이지 않는 표시를 걷어 화면에 보이는 글자만 남긴다. */
+export function stripDisplayMarks(text: string): string {
   return MENTION_DISPLAY_MARKS.reduce(
     (result, mark) => result.replaceAll(mark, ""),
     text,
@@ -304,6 +368,11 @@ const MENTION_DELETE_INPUT =
  */
 export function isMentionDeleteInput(inputType: string): boolean {
   return MENTION_DELETE_INPUT.test(inputType);
+}
+
+/** 사람이 범위를 직접 고른 삭제(잘라내기·끌어 옮기기). 멘션에 걸쳐도 넓히지 않는다. */
+export function isPickedDeleteInput(inputType: string): boolean {
+  return inputType === "deleteByCut" || inputType === "deleteByDrag";
 }
 
 /** 브라우저가 범위를 알려 주지 않을 때의 지울 범위. 선택이 있으면 그 범위, 없으면 캐럿 앞뒤 한 글자다. */

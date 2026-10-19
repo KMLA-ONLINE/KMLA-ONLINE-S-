@@ -1,4 +1,5 @@
 import {
+  AtSignIcon,
   BellOffIcon,
   MessageSquareMoreIcon,
   PenLineIcon,
@@ -146,9 +147,15 @@ export function MessagingScreen({
                           <span className="min-w-0 truncate text-sm font-medium">
                             {conversation.name}
                           </span>
-                          {conversation.muted ? (
+                          {conversation.notificationLevel === "off" ? (
                             <BellOffIcon
                               aria-label="알림 꺼짐"
+                              className="size-3.5 shrink-0 text-muted-foreground"
+                            />
+                          ) : null}
+                          {conversation.notificationLevel === "mentions" ? (
+                            <AtSignIcon
+                              aria-label="멘션만 알림"
                               className="size-3.5 shrink-0 text-muted-foreground"
                             />
                           ) : null}

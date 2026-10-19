@@ -1,5 +1,8 @@
 import { toReactions } from "~/features/messaging/data/queries";
-import type { ConversationMessage } from "~/features/messaging/model/types";
+import type {
+  ConversationMessage,
+  ConversationNotificationLevel,
+} from "~/features/messaging/model/types";
 import type { PostReaction } from "~/features/posts/model/types";
 import { getSupabase } from "~/shared/supabase/client";
 
@@ -9,6 +12,8 @@ export interface SendMessageInput {
   id: string;
   body: string;
   replyToMessageId?: string;
+  /** 본문 `m:n` 토큰이 부르는 사람의 공개 ID. n번 토큰이 `n - 1`번째다. */
+  mentionPubIds?: string[];
 }
 
 /** 서버가 정한 전송 시각으로 초안을 확정한다. 본문 끝의 줄바꿈은 보내기 전에 화면이 이미 지운다. */
@@ -21,6 +26,7 @@ export async function sendMessage(
     p_message_id: input.id,
     p_body: input.body,
     p_reply_to_id: input.replyToMessageId,
+    p_mention_pub_ids: input.mentionPubIds,
   });
   if (error) throw error;
   const saved = data?.[0];
@@ -76,14 +82,16 @@ export async function setMessagePinned(
   return { pinned };
 }
 
-/** 보낸 지 15분 안의 내 메시지를 고친다. 서버가 정한 고친 시각을 돌려준다. */
+/** 보낸 지 15분 안의 내 메시지를 고친다. 서버가 정한 고친 시각을 돌려준다. 멘션 대상은 `sendMessage`와 같다. */
 export async function editMessage(
   messageId: string,
   body: string,
+  mentionPubIds: string[] = [],
 ): Promise<Pick<ConversationMessage, "body" | "editedAt">> {
   const { data, error } = await getSupabase().rpc("edit_message", {
     p_message_id: messageId,
     p_body: body,
+    p_mention_pub_ids: mentionPubIds,
   });
   if (error) throw error;
   return { body, editedAt: data };
@@ -209,15 +217,15 @@ export async function renameConversation(
   if (error) throw error;
 }
 
-/** 대화 알림을 끄거나 켠다. 끄면 직접 다시 켤 때까지 이 대화의 Push를 보내지 않는다. */
-export async function setConversationMuted(
+/** 대화 알림 단계를 정한다. 끄면 직접 다시 켤 때까지 이 대화의 Push를 보내지 않는다. */
+export async function setConversationNotificationLevel(
   conversationId: string,
-  muted: boolean,
+  level: ConversationNotificationLevel,
 ): Promise<void> {
-  const { error } = await getSupabase().rpc("set_conversation_muted", {
-    p_conversation_id: conversationId,
-    p_muted: muted,
-  });
+  const { error } = await getSupabase().rpc(
+    "set_conversation_notification_level",
+    { p_conversation_id: conversationId, p_level: level },
+  );
   if (error) throw error;
 }
 

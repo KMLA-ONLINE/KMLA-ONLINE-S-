@@ -37,7 +37,7 @@ export function useListedConversation(
             ...conversation,
             name: listed.name,
             participants: listed.participants,
-            muted: listed.muted,
+            notificationLevel: listed.notificationLevel,
             canDelete: listed.canDelete,
           }
         : conversation,
