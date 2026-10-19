@@ -10,6 +10,8 @@ import {
   groupKeys,
   GroupHomeScreen,
   type GroupHomeItem,
+  type GroupNewPostCounts,
+  groupNewPostCountsQuery,
   joinGroup,
   requestGroupJoin,
   setGroupPinned,
@@ -51,9 +53,24 @@ export async function clientLoader() {
   const queryClient = getQueryClient();
   const cached = queryClient.getQueryState<GroupHomeItem[]>(groupKeys.home());
 
-  if (cached?.data && !cached.isInvalidated) return { groups: cached.data };
+  // 새 게시물 수는 오래됐어도 먼저 그리고 화면의 `useQuery`가 곧바로 다시 읽는다. 아예 없으면 RPC
+  // 하나만 기다린다. 숫자 없이 그리면 행마다 뒤늦게 붙어 목록이 흔들린다.
+  const counts = queryClient.getQueryData<GroupNewPostCounts>(
+    groupKeys.newPostCounts(),
+  );
+  if (cached?.data && !cached.isInvalidated) {
+    return {
+      groups: cached.data,
+      newPostCounts:
+        counts ?? (await queryClient.query(groupNewPostCountsQuery())),
+    };
+  }
 
-  return { groups: await queryClient.query(groupHomeQuery()) };
+  const [groups, newPostCounts] = await Promise.all([
+    queryClient.query(groupHomeQuery()),
+    queryClient.query(groupNewPostCountsQuery()),
+  ]);
+  return { groups, newPostCounts };
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
@@ -116,6 +133,9 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
 export default function GroupListPage({ loaderData }: Route.ComponentProps) {
   const { profile } = useAppShell();
   const { data: groups = loaderData.groups } = useQuery(groupHomeQuery());
+  const { data: newPostCounts = loaderData.newPostCounts } = useQuery(
+    groupNewPostCountsQuery(),
+  );
 
   return (
     <>
@@ -135,6 +155,7 @@ export default function GroupListPage({ loaderData }: Route.ComponentProps) {
       />
       <GroupHomeScreen
         groups={groups}
+        newPostCounts={newPostCounts}
         isTeacher={profile.type === "teacher"}
         profileId={profile.id}
       />

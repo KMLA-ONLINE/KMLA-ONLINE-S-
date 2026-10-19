@@ -39,9 +39,14 @@ export async function joinGroup(
   if (error) throw error;
 }
 
-export async function markGroupPostsVisited(groupId: string): Promise<void> {
+/** `seenUntil`은 보여 준 목록에서 가장 늦은 발행 시각이다. 그보다 늦게 올라온 글은 새 글로 남는다. */
+export async function markGroupPostsVisited(
+  groupId: string,
+  seenUntil: string,
+): Promise<void> {
   const { error } = await getSupabase().rpc("mark_group_posts_visited", {
     p_group_id: groupId,
+    p_seen_until: seenUntil,
   });
   if (error) throw error;
 }

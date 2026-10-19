@@ -6,7 +6,14 @@ import type { GroupHomeItem } from "~/features/groups/model/types";
 import { renderRoute, screen } from "../../../router";
 
 function GroupHomeRoute() {
-  return <GroupHomeScreen groups={[]} isTeacher={false} profileId={1} />;
+  return (
+    <GroupHomeScreen
+      groups={[]}
+      newPostCounts={{}}
+      isTeacher={false}
+      profileId={1}
+    />
+  );
 }
 
 describe("GroupHomeScreen", () => {
@@ -135,12 +142,16 @@ describe("GroupHomeScreen", () => {
       membership_state: "member",
       member_role: null,
       pinned_at: null,
-      new_post_count: 0,
       section: "official",
     };
     const { user } = renderRoute(
       () => (
-        <GroupHomeScreen groups={[group]} isTeacher={false} profileId={1} />
+        <GroupHomeScreen
+          groups={[group]}
+          newPostCounts={{}}
+          isTeacher={false}
+          profileId={1}
+        />
       ),
       { path: "/groups" },
     );
