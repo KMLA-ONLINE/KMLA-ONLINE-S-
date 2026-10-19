@@ -79,10 +79,8 @@ export default function SettingsPage() {
             <FieldContent>
               <FieldTitle>Enter로 보내기 (추천)</FieldTitle>
               <FieldDescription>
-                메시지와 댓글을 키보드의 Enter로 보내고 Shift+Enter로 줄을
-                바꿉니다. 폰·태블릿의 화면 키보드에서는 켜 두어도 Enter가
-                줄바꿈입니다. 끄면 Enter는 항상 줄바꿈이고 보내기 버튼으로만
-                보냅니다.
+                키보드의 Enter로 메시지와 댓글을 보냅니다. 화면 키보드에서는
+                줄바꿈입니다.
               </FieldDescription>
             </FieldContent>
             <Switch
