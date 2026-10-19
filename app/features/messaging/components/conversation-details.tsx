@@ -19,6 +19,7 @@ import {
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
+import { conversationProfileName } from "~/features/messaging/model/conversation-preview";
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
 import {
   activeParticipants,
@@ -118,8 +119,15 @@ export function ConversationDetails({
         <section className="flex flex-col items-center gap-2 px-3 py-6 text-center">
           <ConversationAvatar conversation={conversation} size="lg" />
           <h2 className="mt-1 max-w-full truncate text-xl font-semibold">
-            {conversation.name}
+            {conversationProfileName(conversation)}
           </h2>
+          {counterpart?.nickname &&
+          counterpart.nickname !==
+            (counterpart.profileName ?? counterpart.name) ? (
+            <p className="max-w-full truncate text-sm text-muted-foreground">
+              {counterpart.nickname}
+            </p>
+          ) : null}
           <div className="mt-3 flex items-start justify-center gap-5">
             {conversation.type === "group" ? (
               <DetailQuickAction
@@ -133,7 +141,7 @@ export function ConversationDetails({
               <DetailQuickAction
                 icon={UserRoundIcon}
                 label="프로필"
-                actionLabel={`${conversation.name} 프로필`}
+                actionLabel={`${conversationProfileName(conversation)} 프로필`}
                 href={
                   counterpart?.pubId
                     ? `/profile/${counterpart.pubId}`
@@ -232,13 +240,16 @@ export function ConversationDetails({
                     <MemberProfileLink participant={participant}>
                       <UserAvatar
                         src={participant.avatarUrl}
-                        name={participant.name}
+                        name={participant.profileName ?? participant.name}
                         size="lg"
                       />
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                        {participant.id === conversation.viewerId
-                          ? `${participant.name} (나)`
-                          : participant.name}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">
+                          {participant.profileName ?? participant.name}
+                          {participant.id === conversation.viewerId
+                            ? " (나)"
+                            : ""}
+                        </span>
                       </span>
                     </MemberProfileLink>
                   </div>
@@ -306,7 +317,7 @@ function MemberProfileLink({
   return (
     <Link
       to={`/profile/${participant.pubId}`}
-      aria-label={`${participant.name} 프로필`}
+      aria-label={`${participant.profileName ?? participant.name} 프로필`}
       className={cn(
         className,
         "hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",

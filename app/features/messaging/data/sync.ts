@@ -22,7 +22,87 @@ import {
   listMessages,
   listPinnedMessages,
 } from "~/features/messaging/data/queries";
-import type { Conversation } from "~/features/messaging/model/types";
+import type {
+  Conversation,
+  ConversationMessage,
+  MessageCursor,
+} from "~/features/messaging/model/types";
+
+/** 별명 변경은 changed_at을 바꾸지 않는다. 이미 읽은 답장의 서버 인용만 새로 받아 덮는다. */
+export async function refreshCachedReplyPreviews(
+  queryClient: QueryClient,
+  conversationId: string,
+  signal: AbortSignal,
+): Promise<void> {
+  const data = queryClient.getQueryData<MessagePages>(
+    messagingKeys.messages(conversationId),
+  );
+  const pinned =
+    queryClient.getQueryData<ConversationMessage[]>(
+      messagingKeys.pinned(conversationId),
+    ) ?? [];
+  const cached = [...(data ? flattenMessagePages(data) : []), ...pinned];
+  const originals = new Map<string, Set<ConversationMessage["replyTo"]>>();
+  for (const message of cached) {
+    if (!message.replyTo || message.pending || message.failed) continue;
+    const previews = originals.get(message.id) ?? new Set();
+    previews.add(message.replyTo);
+    originals.set(message.id, previews);
+  }
+  if (!originals.size) return;
+  const refreshed = new Map<string, ConversationMessage["replyTo"]>();
+  const remaining = new Set(
+    (data ? flattenMessagePages(data) : [])
+      .filter((m) => originals.has(m.id))
+      .map((m) => m.id),
+  );
+  await Promise.all([
+    (async () => {
+      let cursor: MessageCursor | null = null;
+      while (remaining.size && !signal.aborted) {
+        const page = await listMessages(conversationId, cursor);
+        for (const message of page.messages) {
+          if (remaining.delete(message.id))
+            refreshed.set(message.id, message.replyTo);
+        }
+        if (!page.olderCursor) break;
+        cursor = page.olderCursor;
+      }
+    })(),
+    (async () => {
+      if (!pinned.some((m) => originals.has(m.id))) return;
+      for (const message of await listPinnedMessages(conversationId)) {
+        if (originals.has(message.id))
+          refreshed.set(message.id, message.replyTo);
+      }
+    })(),
+  ]);
+  if (signal.aborted) return;
+  const update = (messages: ConversationMessage[]) =>
+    messages.map((message) =>
+      refreshed.has(message.id) &&
+      originals.get(message.id)?.has(message.replyTo) &&
+      !isMessageWriteHeld(message.id)
+        ? { ...message, replyTo: refreshed.get(message.id) }
+        : message,
+    );
+  // 본문·반응·전송 중인 행과 페이지 경계는 유지한다. 요청 중 고쳐진 인용도 되돌리지 않는다.
+  queryClient.setQueryData<MessagePages>(
+    messagingKeys.messages(conversationId),
+    (current) =>
+      current && {
+        ...current,
+        pages: current.pages.map((page) => ({
+          ...page,
+          messages: update(page.messages),
+        })),
+      },
+  );
+  queryClient.setQueryData<ConversationMessage[]>(
+    messagingKeys.pinned(conversationId),
+    (current) => current && update(current),
+  );
+}
 
 /** 아무것도 불러오지 않은 방의 따라잡기 기준. 서버가 바뀐 시각 순서로 한도까지 준다. */
 const EMPTY_ROOM_SINCE = "1970-01-01T00:00:00Z";

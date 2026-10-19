@@ -162,6 +162,34 @@ function SwitchableRoomScreen({
 }
 
 describe("RoomScreen", () => {
+  it("1:1 채팅 헤더에는 설정된 별명을 표시한다", async () => {
+    const loaded = await loadConversation("hyunwoo");
+    const conversation = {
+      ...loaded!,
+      name: "현우",
+      participants: loaded!.participants.map((participant) =>
+        participant.id === "hyunwoo-user"
+          ? {
+              ...participant,
+              name: "현우",
+              profileName: "이현우",
+              nickname: "현우",
+            }
+          : participant,
+      ),
+    };
+    renderRoute(() => <RoomScreen conversation={conversation} />, {
+      path: "/messenger/hyunwoo",
+    });
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "현우" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { level: 1, name: "이현우" }),
+    ).not.toBeInTheDocument();
+  });
+
   it.each([
     ["iPhone", true],
     ["iPad", true],

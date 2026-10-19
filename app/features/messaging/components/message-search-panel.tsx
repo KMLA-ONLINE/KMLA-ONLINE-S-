@@ -167,7 +167,8 @@ export function MessageSearchPanel({
                   <span className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span className="min-w-0 truncate font-medium text-foreground">
                       {(result.senderId
-                        ? participants.get(result.senderId)?.name
+                        ? (participants.get(result.senderId)?.profileName ??
+                          participants.get(result.senderId)?.name)
                         : undefined) ?? "알 수 없는 사용자"}
                     </span>
                     <time dateTime={result.sentAt} className="shrink-0">

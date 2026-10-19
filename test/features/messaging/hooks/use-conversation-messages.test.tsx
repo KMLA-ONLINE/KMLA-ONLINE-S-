@@ -67,6 +67,64 @@ afterEach(() => {
 });
 
 describe("useConversationMessages", () => {
+  it("별명이 바뀌면 오래된 답장 인용을 갱신하고 전송 중 메시지는 유지한다", async () => {
+    const loaded = (await loadConversation("student-council"))!;
+    const reply = {
+      ...loaded.messages[0],
+      id: "old-reply",
+      replyTo: { id: "unloaded-original", senderId: "1", body: "@홍길동 확인" },
+    };
+    const pending = {
+      ...loaded.messages[0],
+      id: "pending",
+      pending: true,
+      body: "보내는 중",
+    };
+    const conversation = {
+      ...loaded,
+      messages: [reply, pending],
+      pinnedMessages: [reply],
+    };
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    vi.spyOn(queries, "listMessages").mockResolvedValue({
+      messages: [
+        { ...reply, replyTo: { ...reply.replyTo, body: "@길동이 확인" } },
+      ],
+      olderCursor: null,
+    });
+    vi.spyOn(queries, "listPinnedMessages").mockResolvedValue([
+      { ...reply, replyTo: { ...reply.replyTo, body: "@길동이 확인" } },
+    ]);
+    const { result, rerender } = renderHook(
+      ({ room }) => useConversationMessages(room),
+      { wrapper, initialProps: { room: conversation } },
+    );
+    rerender({
+      room: {
+        ...conversation,
+        participants: conversation.participants.map((p) => ({
+          ...p,
+          name: "길동이",
+        })),
+      },
+    });
+    await waitFor(() =>
+      expect(
+        result.current.messages.find((m) => m.id === "old-reply")?.replyTo
+          ?.body,
+      ).toBe("@길동이 확인"),
+    );
+    expect(result.current.pinnedMessages[0].replyTo?.body).toBe("@길동이 확인");
+    expect(
+      result.current.messages.find((m) => m.id === "pending"),
+    ).toMatchObject({ pending: true, body: "보내는 중" });
+  });
+
   it("가려진 탭에서는 읽음을 기록하지 않고 다시 보일 때 가장 최근 상대 메시지까지 기록한다", async () => {
     const visibility = vi
       .spyOn(document, "visibilityState", "get")

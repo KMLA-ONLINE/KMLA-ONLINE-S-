@@ -35,6 +35,26 @@ function conversation(
 }
 
 describe("formatLastMessagePreview", () => {
+  it("그룹 대화 목록 미리보기의 발신자는 설정된 별명으로 표시한다", () => {
+    expect(
+      formatLastMessagePreview(
+        conversation({
+          participants: [
+            {
+              id: "seo",
+              name: "서현이",
+              profileName: "박서현",
+              nickname: "서현이",
+              avatarUrl: null,
+              active: true,
+            },
+          ],
+        }),
+        ORIGIN,
+      ),
+    ).toBe("서현이: 안녕");
+  });
+
   it("내 메시지에는 `나:`를, 그룹에서 남이 보낸 메시지에는 발신자 이름을 붙인다", () => {
     expect(formatLastMessagePreview(conversation(), ORIGIN)).toBe(
       "박서현: 안녕",

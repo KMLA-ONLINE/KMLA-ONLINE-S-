@@ -12,6 +12,44 @@ afterEach(() => resetFakeMessaging());
 vi.mock("~/features/messaging/data/mutations", () => import("../fake-api"));
 
 describe("MessagingScreen", () => {
+  it("대화 목록에는 별명을 표시하고 본명과 별명으로 모두 찾는다", async () => {
+    const conversations = [
+      {
+        id: "friend",
+        type: "direct" as const,
+        name: "감자",
+        viewerId: "me",
+        participants: [
+          { id: "me", name: "나", avatarUrl: null, active: true },
+          {
+            id: "friend",
+            name: "감자",
+            profileName: "김민준",
+            nickname: "감자",
+            avatarUrl: null,
+            active: true,
+          },
+        ],
+        lastMessage: null,
+        unreadCount: 0,
+        notificationLevel: "all" as const,
+        canDelete: false,
+      },
+    ];
+    const { user } = renderRoute(() => (
+      <MessagingScreen conversations={conversations} hasRoom>
+        <div />
+      </MessagingScreen>
+    ));
+    expect(screen.getByText("감자", { exact: true })).toBeVisible();
+    const search = screen.getByRole("searchbox", { name: "채팅 검색" });
+    await user.type(search, "김민준");
+    expect(screen.getByRole("link", { name: /감자/ })).toBeVisible();
+    await user.clear(search);
+    await user.type(search, "감자");
+    expect(screen.getByRole("link", { name: /감자/ })).toBeVisible();
+  });
+
   it("keeps new-conversation actions without repeating instructions in the empty list", () => {
     renderRoute(() => (
       <MessagingScreen conversations={[]} hasRoom={false}>

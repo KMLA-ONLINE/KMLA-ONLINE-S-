@@ -11,8 +11,10 @@ export function formatSystemMessage(
   event: MessageSystemEvent,
   participants: Map<string, MessageParticipant>,
 ): string {
-  const nameOf = (id: string | undefined) =>
-    (id ? participants.get(id)?.name : undefined) ?? UNKNOWN_NAME;
+  const nameOf = (id: string | undefined) => {
+    const participant = id ? participants.get(id) : undefined;
+    return participant?.profileName ?? participant?.name ?? UNKNOWN_NAME;
+  };
   const [actorId, ...targetIds] = event.profileIds;
   const actor = nameOf(actorId);
   const targets = targetIds.map((id) => `${nameOf(id)}님`).join(", ");
@@ -26,6 +28,10 @@ export function formatSystemMessage(
       return `${actor}님이 ${targets}을 내보냈습니다.`;
     case "renamed":
       return `${actor}님이 채팅 이름을 ‘${event.name ?? ""}’(으)로 변경했습니다.`;
+    case "nickname_changed":
+      return event.name
+        ? `${event.actorName}님이 ${event.targetName}님의 별명을 ${event.name}으로 설정했습니다.`
+        : `${event.actorName}님이 ${event.targetName}님의 별명을 원래 이름으로 되돌렸습니다.`;
   }
 }
 

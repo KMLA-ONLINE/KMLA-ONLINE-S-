@@ -111,12 +111,12 @@ create table private.messages (
   -- 화면에 보이는 무엇이든 마지막으로 바뀐 시각. 수정, 삭제, 반응, 고정이 trigger로 갱신한다.
   -- 따라잡기 RPC가 이 시각으로 바뀐 메시지를 고른다(기술 설계 §5).
   changed_at timestamptz not null default clock_timestamp(),
-  -- 멤버 추가·나가기·내보내기·이름 변경을 대화 안에 남기는 시스템 메시지(기능 명세 §13.17). 본문이
-  -- 없고, 화면 문구는 클라이언트가 종류와 대상 프로필, 새 이름으로 만든다. 대화 참여자와 그룹 이름은
-  -- 암호화 대상이 아니다(기능 명세 §13.20).
+  -- 멤버 변동·이름 변경·별명 변경을 대화 안에 남기는 본문 없는 시스템 메시지.
   system_kind text,
   system_profile_ids bigint[],
   system_name text,
+  system_actor_name text,
+  system_target_name text,
   -- 멘션 대상(기능 명세 §13.22, 기술 설계 §8). n번째 원소가 본문의 `m:n` 토큰이 부르는 프로필이다.
   -- 대화 참여자와 같은 메타데이터라 암호화하지 않는다(기능 명세 §13.20).
   mention_profile_ids bigint[] not null default '{}',
@@ -137,12 +137,39 @@ create table private.messages (
     ),
   constraint messages_system_check
     check (
-      (system_kind is null and system_profile_ids is null and system_name is null)
+      (
+        system_kind is null
+        and system_profile_ids is null
+        and system_name is null
+        and system_actor_name is null
+        and system_target_name is null
+      )
       or (
-        system_kind in ('member_added', 'member_left', 'member_removed', 'renamed')
+        system_kind in (
+          'member_added', 'member_left', 'member_removed', 'renamed', 'nickname_changed'
+        )
         and sender_id is null
         and reply_to_id is null
-        and (system_kind = 'renamed') = (system_name is not null)
+        and (
+          (
+            system_kind = 'renamed'
+            and system_name is not null
+            and system_actor_name is null
+            and system_target_name is null
+          )
+          or (
+            system_kind = 'nickname_changed'
+            and cardinality(system_profile_ids) = 2
+            and system_actor_name is not null
+            and system_target_name is not null
+          )
+          or (
+            system_kind in ('member_added', 'member_left', 'member_removed')
+            and system_name is null
+            and system_actor_name is null
+            and system_target_name is null
+          )
+        )
       )
     ),
   constraint messages_mentions_check
@@ -712,6 +739,8 @@ returns table (
   system_kind text,
   system_profile_ids bigint[],
   system_name text,
+  system_actor_name text,
+  system_target_name text,
   -- `ready` 첨부를 순서대로. 파일 이름은 복호화해 준다.
   attachments jsonb,
   -- 본문 `m:n` 토큰의 대상. 화면이 대화 참여자 목록에서 지금 이름을 찾는다.
@@ -783,6 +812,8 @@ as $$
     message.system_kind,
     message.system_profile_ids,
     message.system_name,
+    message.system_actor_name,
+    message.system_target_name,
     coalesce(files.list, '[]'::jsonb),
     message.mention_profile_ids,
     message.mentions_everyone
@@ -870,6 +901,8 @@ returns table (
   system_kind text,
   system_profile_ids bigint[],
   system_name text,
+  system_actor_name text,
+  system_target_name text,
   attachments jsonb,
   mention_profile_ids bigint[],
   mentions_everyone boolean
@@ -955,6 +988,8 @@ returns table (
   system_kind text,
   system_profile_ids bigint[],
   system_name text,
+  system_actor_name text,
+  system_target_name text,
   attachments jsonb,
   mention_profile_ids bigint[],
   mentions_everyone boolean
@@ -1573,6 +1608,8 @@ returns table (
   system_kind text,
   system_profile_ids bigint[],
   system_name text,
+  system_actor_name text,
+  system_target_name text,
   attachments jsonb,
   mention_profile_ids bigint[],
   mentions_everyone boolean
@@ -2684,7 +2721,7 @@ revoke all on function public.rename_conversation(uuid, text)
 grant execute on function public.rename_conversation(uuid, text)
   to authenticated;
 
--- 현재 멤버가 이 대화 안에서만 공유하는 별명을 바꾼다. 메시지·알림·읽지 않은 수는 만들지 않는다.
+-- 현재 멤버가 이 대화 안에서만 공유하는 별명을 바꾸고, 실제 변경만 타임라인에 기록한다.
 create function public.set_conversation_nickname(
   p_conversation_id uuid,
   p_profile_id bigint,
@@ -2699,6 +2736,8 @@ declare
   caller_profile_id bigint := private.current_profile_id();
   normalized_nickname text := nullif(btrim(coalesce(p_nickname, '')), '');
   previous_nickname text;
+  actor_display_name text;
+  target_profile_name text;
 begin
   if caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -2721,6 +2760,15 @@ begin
     raise exception 'current conversation members required' using errcode = '42501';
   end if;
 
+  select coalesce(actor_nickname.nickname, actor.name), target.name
+  into actor_display_name, target_profile_name
+  from public.profiles as actor
+  join public.profiles as target on target.id = p_profile_id
+  left join private.conversation_nicknames as actor_nickname
+    on actor_nickname.conversation_id = p_conversation_id
+    and actor_nickname.profile_id = actor.id
+  where actor.id = caller_profile_id;
+
   select nickname into previous_nickname
   from private.conversation_nicknames
   where conversation_id = p_conversation_id and profile_id = p_profile_id;
@@ -2735,13 +2783,19 @@ begin
     on conflict (conversation_id, profile_id) do update set nickname = excluded.nickname;
   end if;
 
-  -- 기존 목록 갱신 신호만 보낸다. Web Push는 실제 메시지의 outbox 경로만 사용한다.
-  perform realtime.send(
-    jsonb_build_object('conversation_id', p_conversation_id, 'kind', 'content'),
-    'message_changed', 'messaging:' || member.profile_id::text, true
-  )
-  from public.conversation_members as member
-  where member.conversation_id = p_conversation_id and member.left_at is null;
+  insert into private.messages (
+    id, conversation_id, sent_at, system_kind, system_profile_ids, system_name,
+    system_actor_name, system_target_name
+  ) values (
+    gen_random_uuid(),
+    p_conversation_id,
+    clock_timestamp(),
+    'nickname_changed',
+    array[caller_profile_id, p_profile_id],
+    normalized_nickname,
+    actor_display_name,
+    target_profile_name
+  );
 end;
 $$;
 

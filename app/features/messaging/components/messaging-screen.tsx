@@ -18,7 +18,11 @@ import { ConversationAvatar } from "~/features/messaging/components/conversation
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
 import { useStartConversation } from "~/features/messaging/hooks/use-conversation-membership";
 import { useRoomEntry } from "~/features/messaging/hooks/use-room-entry";
-import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
+import {
+  conversationDisplayName,
+  conversationProfileName,
+  formatLastMessagePreview,
+} from "~/features/messaging/model/conversation-preview";
 import type { ConversationSummary } from "~/features/messaging/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { isHandheld } from "~/shared/lib/install-platform";
@@ -72,8 +76,11 @@ export function MessagingScreen({
   );
   const searchInput = useRef<HTMLInputElement>(null);
   const filteredConversations = deferredSearch
-    ? conversations.filter(({ name }) =>
-        name.toLocaleLowerCase("ko").includes(deferredSearch),
+    ? conversations.filter((conversation) =>
+        [
+          conversationDisplayName(conversation),
+          conversationProfileName(conversation),
+        ].some((name) => name.toLocaleLowerCase("ko").includes(deferredSearch)),
       )
     : conversations;
 
@@ -145,7 +152,7 @@ export function MessagingScreen({
                       <span className="flex min-w-0 items-center gap-1.5">
                         <span className="flex min-w-0 flex-1 items-center gap-1">
                           <span className="min-w-0 truncate text-sm font-medium">
-                            {conversation.name}
+                            {conversationDisplayName(conversation)}
                           </span>
                           {conversation.notificationLevel === "off" ? (
                             <BellOffIcon

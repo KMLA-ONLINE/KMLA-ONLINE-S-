@@ -33,7 +33,10 @@ import {
   listPinnedMessages,
 } from "~/features/messaging/data/queries";
 import { closeMessageNotifications } from "~/features/messaging/data/push-cards";
-import { refreshConversationInList } from "~/features/messaging/data/sync";
+import {
+  refreshCachedReplyPreviews,
+  refreshConversationInList,
+} from "~/features/messaging/data/sync";
 import {
   prepareAttachment,
   uploadAttachments,
@@ -102,6 +105,26 @@ export interface SendDraft {
 export function useConversationMessages(conversation: Conversation) {
   const queryClient = useQueryClient();
   const conversationId = conversation.id;
+  const participantNames = JSON.stringify(
+    conversation.participants.map(({ id, name }) => [id, name]),
+  );
+  useEffect(() => {
+    const controller = new AbortController();
+    // 내 저장, 다른 멤버의 Realtime, 재입장 모두 최신 참여자 이름에 맞춘다.
+    const refresh = () => {
+      void refreshCachedReplyPreviews(
+        queryClient,
+        conversationId,
+        controller.signal,
+      ).catch(() => undefined);
+    };
+    refresh();
+    window.addEventListener("online", refresh);
+    return () => {
+      controller.abort();
+      window.removeEventListener("online", refresh);
+    };
+  }, [conversationId, participantNames, queryClient]);
   // loader가 cache를 이미 채운 경우에는 쓰이지 않는다. cache가 비었을 때(테스트 등)의 시작값이다.
   const initialPages = useMemo(
     () => initialMessagePages(conversation),

@@ -9,6 +9,36 @@ import { mentionPlainText } from "~/features/posts/model/mentions";
 /** 답장 인용에 담는 원문 길이. 서버 `private.message_rows`의 `reply_body`와 같다. */
 export const REPLY_PREVIEW_LENGTH = 200;
 
+/** 대화 목록과 메시지 화면에서 부르는 이름. 1:1은 별명을 우선하고 그룹은 대화 이름을 유지한다. */
+export function conversationDisplayName(
+  conversation: Pick<
+    ConversationSummary,
+    "type" | "name" | "viewerId" | "participants"
+  >,
+): string {
+  if (conversation.type !== "direct") return conversation.name;
+  const other = conversation.participants.find(
+    ({ id }) => id !== conversation.viewerId,
+  );
+  return (
+    other?.nickname ?? other?.name ?? other?.profileName ?? conversation.name
+  );
+}
+
+/** 대화 밖에서 상대를 찾을 때는 별명 대신 프로필 이름을 쓴다. 그룹 이름은 그대로 둔다. */
+export function conversationProfileName(
+  conversation: Pick<
+    ConversationSummary,
+    "type" | "name" | "viewerId" | "participants"
+  >,
+): string {
+  if (conversation.type !== "direct") return conversation.name;
+  const other = conversation.participants.find(
+    ({ id }) => id !== conversation.viewerId,
+  );
+  return other?.profileName ?? other?.name ?? conversation.name;
+}
+
 /** 답장 인용에 담을 원문 앞부분. 서버처럼 멘션을 `@이름` 글자로 바꾼 뒤 자른다 — 먼저 자르면 토큰이 반쪽 난다. */
 export function toReplyPreviewBody(body: string): string {
   return mentionPlainText(body).slice(0, REPLY_PREVIEW_LENGTH);
@@ -36,7 +66,7 @@ export function formatLastMessagePreview(
   const sender = conversation.participants.find(
     ({ id }) => id === lastMessage.senderId,
   );
-  return sender ? `${sender.name}: ${body}` : body;
+  return sender ? `${sender.nickname ?? sender.name}: ${body}` : body;
 }
 
 /**

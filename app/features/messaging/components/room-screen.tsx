@@ -218,7 +218,6 @@ export function RoomScreen({
   const [memberDialog, setMemberDialog] = useState<
     | { kind: "invite" }
     | { kind: "rename" }
-    | { kind: "nicknames" }
     | { kind: "leave" }
     | { kind: "delete" }
     | null
@@ -777,7 +776,7 @@ export function RoomScreen({
           }}
           onInvite={() => setMemberDialog({ kind: "invite" })}
           onRename={() => setMemberDialog({ kind: "rename" })}
-          onNicknames={() => setMemberDialog({ kind: "nicknames" })}
+          onNicknames={() => roomOverlay.open({ kind: "nicknames" })}
           onLeave={() => setMemberDialog({ kind: "leave" })}
           onDeleteGroup={() => setMemberDialog({ kind: "delete" })}
           sharedCounts={sharedCounts}
@@ -816,11 +815,12 @@ export function RoomScreen({
             setMemberDialog(null);
           }}
         />
-        {memberDialog?.kind === "nicknames" ? (
+        {overlay?.kind === "nicknames" ? (
           <ConversationNicknamesDialog
             participants={conversation.participants}
             viewerId={conversation.viewerId}
-            onCancel={() => setMemberDialog(null)}
+            keyboardViewport={ios ? keyboardViewport : undefined}
+            onCancel={roomOverlay.close}
             onSubmit={membership.setNickname}
           />
         ) : null}
@@ -868,7 +868,6 @@ export function RoomScreen({
         {reactionsTarget ? (
           <ReactionMembersDialog
             message={reactionsTarget}
-            participants={conversation.participants}
             onClose={roomOverlay.close}
           />
         ) : null}

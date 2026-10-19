@@ -11,6 +11,7 @@ interface RoomOverlayLocationState {
 /** 대화방 위에 뜨는 화면. 반응한 사람 목록은 메시지 ID를 함께 둔다. */
 export type RoomOverlay =
   | { kind: "details" }
+  | { kind: "nicknames" }
   | { kind: "search" }
   | { kind: "pinned" }
   | { kind: "reactions"; messageId: string }
@@ -19,6 +20,7 @@ export type RoomOverlay =
 function parseOverlay(value: string | null): RoomOverlay | null {
   switch (value) {
     case "details":
+    case "nicknames":
     case "search":
     case "pinned":
       return { kind: value };

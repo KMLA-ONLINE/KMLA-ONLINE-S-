@@ -51,6 +51,58 @@ describe("formatSystemMessage", () => {
       ),
     ).toBe("알 수 없는 사용자님이 나갔습니다.");
   });
+
+  it("별명이 설정된 구성원의 이름은 시스템 메시지에 본명으로 쓴다", () => {
+    const nicknamedPeople = new Map<string, MessageParticipant>([
+      [
+        "a",
+        {
+          id: "a",
+          name: "길동이",
+          profileName: "홍길동",
+          avatarUrl: null,
+          active: true,
+        },
+      ],
+    ]);
+
+    expect(
+      formatSystemMessage(
+        { kind: "member_left", profileIds: ["a"], name: null },
+        nicknamedPeople,
+      ),
+    ).toBe("홍길동님이 나갔습니다.");
+  });
+
+  it("별명 변경과 해제 기록은 당시 이름을 사용한다", () => {
+    const nicknameChange = {
+      kind: "nickname_changed" as const,
+      profileIds: ["a", "b"] as [string, string],
+      name: "환경부/황보민",
+      actorName: "식품영양부/문영원",
+      targetName: "Min Hwangbo",
+    };
+
+    expect(formatSystemMessage(nicknameChange, people)).toBe(
+      "식품영양부/문영원님이 Min Hwangbo님의 별명을 환경부/황보민으로 설정했습니다.",
+    );
+    expect(formatSystemMessage({ ...nicknameChange, name: null }, people)).toBe(
+      "식품영양부/문영원님이 Min Hwangbo님의 별명을 원래 이름으로 되돌렸습니다.",
+    );
+    expect(
+      formatSystemMessage(
+        {
+          ...nicknameChange,
+          profileIds: ["a", "a"] as [string, string],
+          actorName: "별명 전 문영원",
+          targetName: "문영원",
+        },
+        people,
+      ),
+    ).toBe(
+      "별명 전 문영원님이 문영원님의 별명을 환경부/황보민으로 설정했습니다.",
+    );
+  });
 });
 
 describe("participants", () => {

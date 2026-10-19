@@ -273,6 +273,8 @@ export function MessageRow({
 
   // 부모가 렌더마다 새 콜백을 넘기므로 effect는 함수 대신 반응 막대 유무에만 의존한다.
   const hasReactionBar = Boolean(onSelectReaction);
+  const senderName = sender?.name ?? "알 수 없는 사용자";
+  const senderAccessibleName = isOwn ? "내" : (sender?.name ?? "상대방");
 
   function changeContextMenuOpen(open: boolean) {
     if (contextMenuOpenRef.current === open) return;
@@ -537,7 +539,7 @@ export function MessageRow({
     <article
       ref={rowRef}
       id={elementId}
-      aria-label={`${isOwn ? "내" : (sender?.name ?? "상대방")} 메시지`}
+      aria-label={`${senderAccessibleName} 메시지`}
       className={cn(
         "group/message relative flex w-full items-end gap-2 rounded-2xl transition-[transform,box-shadow] duration-200 ease-out motion-reduce:transition-none [@media(hover:none)]:select-none",
         // 가로 이동은 답장 스와이프가 받는다. 두 번 탭해 확대하는 것도 막아 더블탭 반응과 겹치지 않는다.
@@ -592,7 +594,7 @@ export function MessageRow({
       >
         {!isOwn && ((isGroup && startsGroup) || isPinned) ? (
           <span className="mb-1 ml-2 flex items-center gap-1 text-xs text-muted-foreground">
-            <span>{sender?.name ?? "알 수 없는 사용자"}</span>
+            <span>{senderName}</span>
             {isPinned && showPinnedLabel ? (
               <>
                 <span aria-hidden>·</span>

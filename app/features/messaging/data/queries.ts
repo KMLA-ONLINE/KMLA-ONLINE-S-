@@ -38,6 +38,7 @@ const SYSTEM_KINDS = new Set<MessageSystemEvent["kind"]>([
   "member_left",
   "member_removed",
   "renamed",
+  "nickname_changed",
 ]);
 
 const UUID_PATTERN =
@@ -371,9 +372,28 @@ export function toAttachments(value: unknown): MessageAttachment[] {
 function toSystemEvent(row: MessageRow): MessageSystemEvent | undefined {
   const kind = row.system_kind as MessageSystemEvent["kind"] | null;
   if (!kind || !SYSTEM_KINDS.has(kind)) return undefined;
+  const profileIds = (row.system_profile_ids ?? []).map(String);
+
+  if (kind === "nickname_changed") {
+    if (
+      profileIds.length !== 2 ||
+      !row.system_actor_name ||
+      !row.system_target_name
+    ) {
+      throw new Error("Nickname activity is missing its name snapshots");
+    }
+    return {
+      kind,
+      profileIds: [profileIds[0], profileIds[1]],
+      name: row.system_name,
+      actorName: row.system_actor_name,
+      targetName: row.system_target_name,
+    };
+  }
+
   return {
     kind,
-    profileIds: (row.system_profile_ids ?? []).map(String),
+    profileIds,
     name: row.system_name,
   };
 }

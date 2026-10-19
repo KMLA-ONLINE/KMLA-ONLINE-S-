@@ -33,14 +33,26 @@ export interface MessageAttachment {
   previewUrl?: string;
 }
 
-/** 멤버 추가·나가기·내보내기·이름 변경을 대화 안에 남긴 시스템 메시지*/
-export interface MessageSystemEvent {
-  kind: "member_added" | "member_left" | "member_removed" | "renamed";
-  /** 첫 번째가 한 사람(초대한 사람, 나간 사람, 내보낸 사람, 이름을 바꾼 사람), 나머지가 대상이다. */
-  profileIds: string[];
-  /** 바꾼 그룹 이름. `renamed`에만 있다. */
-  name: string | null;
-}
+/** 대화 안에 남기는 시스템 메시지. */
+export type MessageSystemEvent =
+  | {
+      kind: "member_added" | "member_left" | "member_removed" | "renamed";
+      /** 첫 번째가 행위자, 나머지는 대상이다. */
+      profileIds: string[];
+      /** 바꾼 그룹 이름. `renamed`에만 있다. */
+      name: string | null;
+    }
+  | {
+      kind: "nickname_changed";
+      /** 행위자와 별명 대상. */
+      profileIds: [string, string];
+      /** 설정한 별명. `null`이면 원래 이름으로 되돌렸다. */
+      name: string | null;
+      /** 별명 변경 시점의 표시 이름 스냅샷. */
+      actorName: string;
+      /** 별명 대상의 변경 시점 프로필 이름 스냅샷. */
+      targetName: string;
+    };
 
 export interface MessageReaction {
   reaction: PostReaction;

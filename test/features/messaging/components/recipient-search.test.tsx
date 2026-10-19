@@ -8,6 +8,42 @@ import { renderRoute, screen } from "../../../router";
 vi.mock("~/features/messaging/data/queries", () => import("../fake-api"));
 afterEach(() => vi.restoreAllMocks());
 
+it("게시물을 보낼 대화는 별명 대신 본명으로 구분한다", async () => {
+  vi.spyOn(queries, "listConversations").mockResolvedValue([
+    {
+      id: "friend",
+      type: "direct",
+      name: "감자",
+      viewerId: "me",
+      participants: [
+        {
+          id: "friend",
+          name: "감자",
+          profileName: "김민준",
+          nickname: "감자",
+          avatarUrl: null,
+          active: true,
+        },
+      ],
+      lastMessage: null,
+      unreadCount: 0,
+      notificationLevel: "all",
+      canDelete: false,
+    },
+  ]);
+  const { user } = renderRoute(() => (
+    <SharePostDialog
+      open
+      onOpenChange={vi.fn()}
+      path="/groups/test/posts/id"
+      title="게시물"
+    />
+  ));
+  expect(await screen.findByText("김민준", { exact: true })).toBeVisible();
+  await user.type(screen.getByRole("searchbox"), "김민준");
+  expect(screen.getByText("김민준", { exact: true })).toBeVisible();
+});
+
 describe.each([
   [
     "recipient picker",

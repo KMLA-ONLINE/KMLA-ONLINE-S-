@@ -24,7 +24,7 @@ export function ConversationAvatar({
     return (
       <UserAvatar
         src={other?.avatarUrl}
-        name={other?.name ?? conversation.name}
+        name={other?.profileName ?? other?.name ?? conversation.name}
         className={cn(size === "lg" ? "size-20" : "size-12", className)}
       />
     );
@@ -47,7 +47,7 @@ export function ConversationAvatar({
         <UserAvatar
           key={participant.id}
           src={participant.avatarUrl}
-          name={participant.name}
+          name={participant.profileName ?? participant.name}
           // 다른 멤버가 한 명이면 1:1 대화 아바타와 같은 크기로 꽉 채운다.
           className={cn(
             "absolute",

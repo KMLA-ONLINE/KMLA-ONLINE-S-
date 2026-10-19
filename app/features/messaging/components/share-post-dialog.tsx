@@ -9,6 +9,7 @@ import {
 import { useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
+import { conversationProfileName } from "~/features/messaging/model/conversation-preview";
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
 import {
   conversationListQuery,
@@ -155,7 +156,11 @@ export function SharePostDialog({
   // 입력 중에는 최근 대화를 이름으로 걸러 보여 준다. 사람 검색은 Enter로 한다.
   const filter = query.trim().toLowerCase();
   const recent = (conversations.data ?? []).filter(
-    ({ name }) => filter === "" || name.toLowerCase().includes(filter),
+    (conversation) =>
+      filter === "" ||
+      [conversation.name, conversationProfileName(conversation)].some((name) =>
+        name.toLowerCase().includes(filter),
+      ),
   );
   const isChosen = (key: string) => selected.some((item) => item.key === key);
   const full = selected.length >= SEND_TARGET_LIMIT;
@@ -285,7 +290,7 @@ export function SharePostDialog({
                     type: "conversation",
                     conversationId: conversation.id,
                   },
-                  name: conversation.name,
+                  name: conversationProfileName(conversation),
                 };
                 return (
                   <ChoiceRow
@@ -299,7 +304,7 @@ export function SharePostDialog({
                         className="size-10"
                       />
                     }
-                    name={conversation.name}
+                    name={conversationProfileName(conversation)}
                     description={
                       conversation.type === "group"
                         ? `그룹 · ${conversation.participants.filter(({ active }) => active).length}명`

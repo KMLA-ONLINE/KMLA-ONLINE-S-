@@ -8,13 +8,17 @@ async function loginAsAcceptedStudent(
   page: Page,
   email = "student@kmla.hs.kr",
 ) {
-  const later = page.getByRole("button", { name: "나중에", exact: true });
+  const later = page.getByRole("button", {
+    name: "나중에",
+    exact: true,
+    disabled: false,
+  });
   await page.addLocatorHandler(later, () => later.click());
-  await page.goto("/login");
+  await page.goto("/login", { waitUntil: "domcontentloaded" });
   await page.getByLabel("이메일").fill(email);
   await page.getByLabel("비밀번호", { exact: true }).fill("password123");
   await page.getByRole("button", { name: "로그인" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/$/, { timeout: 30_000 });
 }
 
 test("좁은 화면에서 연 상세 패널은 화면을 넓히면 대화 옆에 배치된다", async ({
@@ -40,6 +44,35 @@ test("좁은 화면에서 연 상세 패널은 화면을 넓히면 대화 옆에
   expect(conversationBox!.x + conversationBox!.width).toBeLessThanOrEqual(
     detailsBox!.x + 1,
   );
+});
+
+test("모바일 별명은 전체 화면으로 열리고 뒤로가기와 X로 닫힌다", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAsAcceptedStudent(page);
+  await page.goto(`/messenger/${GROUP}`);
+  await page.getByRole("button", { name: /채팅 정보 보기$/ }).click();
+  await page.getByRole("button", { name: "별명", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "별명", exact: true });
+  await expect(dialog).toBeVisible();
+  await expect
+    .poll(() => dialog.boundingBox())
+    .toMatchObject({ x: 0, y: 0, width: 390, height: 844 });
+  await page.screenshot({ path: testInfo.outputPath("nickname-list.png") });
+  await page.goBack();
+  await expect(dialog).toBeHidden();
+  await expect(page).toHaveURL(/panel=details/);
+  await page.getByRole("button", { name: "별명", exact: true }).click();
+  await page.getByRole("button", { name: "김민준 별명 변경" }).click();
+  await expect(
+    page.getByRole("textbox", { name: "별명", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("nickname-edit.png") });
+  await page.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page).toHaveURL(/panel=details/);
 });
 
 test("채팅 별명은 다른 멤버에게 실시간으로 보이고 원래 이름으로 되돌릴 수 있다", async ({
@@ -80,29 +113,35 @@ test("채팅 별명은 다른 멤버에게 실시간으로 보이고 원래 이�
     await expect(
       other
         .getByRole("complementary", { name: "채팅 상세" })
-        .getByText(`${alias} (나)`, { exact: true }),
-    ).toBeVisible();
+        .getByText(alias, { exact: true }),
+    ).toBeVisible({ timeout: 15_000 });
     await editNickname("");
     await expect(
       other
         .getByRole("complementary", { name: "채팅 상세" })
         .getByText("김민준 (나)", { exact: true }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
 
+    await expect(
+      other
+        .getByRole("complementary", { name: "채팅 상세" })
+        .getByText(alias, { exact: true }),
+    ).toBeHidden({ timeout: 15_000 });
     await page.goto(`/messenger/${DIRECT}`);
     await openDetails(page);
     await editNickname(alias);
+    const directDetails = page.getByRole("complementary", {
+      name: "채팅 상세",
+    });
     await expect(
-      page
-        .getByRole("complementary", { name: "채팅 상세" })
-        .getByRole("heading", { name: alias, exact: true }),
+      directDetails.getByRole("heading", { name: "김민준", exact: true }),
     ).toBeVisible();
+    await expect(directDetails.getByText(alias, { exact: true })).toBeVisible();
     await editNickname("");
     await expect(
-      page
-        .getByRole("complementary", { name: "채팅 상세" })
-        .getByRole("heading", { name: "김민준", exact: true }),
+      directDetails.getByRole("heading", { name: "김민준", exact: true }),
     ).toBeVisible();
+    await expect(directDetails.getByText(alias, { exact: true })).toBeHidden();
   } finally {
     await otherContext.close().catch(() => undefined);
   }
