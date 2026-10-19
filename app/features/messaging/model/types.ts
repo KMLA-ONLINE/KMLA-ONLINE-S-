@@ -125,6 +125,8 @@ export interface ConversationSummary {
   notificationLevel: ConversationNotificationLevel;
   /** 그룹을 지울 수 있는지. 소유주만 지운다. */
   canDelete: boolean;
+  /** 내 목록에서 숨겨 둔 대화인지. 대화 목록에는 오지 않고, 대화방을 열 때만 볼 수 있다. */
+  hidden: boolean;
 }
 
 /** 대화 상대 찾기 결과 한 사람. */

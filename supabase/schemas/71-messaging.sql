@@ -65,6 +65,8 @@ create table public.conversation_members (
   mentions_only boolean not null default false,
   -- 스스로 나간 기간인지. 내보내진 기간과 달리 대화 목록에서 감춘다(기능 명세 §13.16).
   left_by_self boolean not null default false,
+  -- 내 대화 목록에서 숨긴 시각(기능 명세 §13.23). 이보다 늦은 메시지가 오면 다시 보인다.
+  hidden_at timestamptz,
   constraint conversation_members_period_check
     check (left_at is null or left_at >= joined_at),
   constraint conversation_members_left_by_self_check
@@ -495,7 +497,9 @@ returns table (
   can_delete boolean,
   -- 마지막 메시지의 첫 첨부 종류. 본문 없이 첨부만 있는 메시지의 미리보기에 쓴다.
   last_message_attachment_kind text,
-  notification_level public.conversation_notification_level
+  notification_level public.conversation_notification_level,
+  -- 내 목록에서 숨겨 둔 대화인지. 숨긴 대화는 한 대화만 읽을 때만 돌려준다(기능 명세 §13.23).
+  hidden boolean
 )
 language plpgsql
 stable
@@ -558,7 +562,9 @@ begin
       when latest_period.muted_until > now() then 'off'
       when latest_period.mentions_only then 'mentions'
       else 'all'
-    end::public.conversation_notification_level
+    end::public.conversation_notification_level,
+    latest_period.hidden_at is not null
+      and coalesce(last_message.sent_at <= latest_period.hidden_at, true)
   from latest_period
   join public.conversations as conversation
     on conversation.id = latest_period.conversation_id
@@ -629,6 +635,10 @@ begin
           and (period.left_at is null or message.sent_at < period.left_at)
       )
   ) as unread on true
+  -- 숨긴 뒤로 메시지가 없으면 목록에서 뺀다. 숨긴 대화도 대화방은 열 수 있어야 한다.
+  where p_conversation_id is not null
+    or latest_period.hidden_at is null
+    or last_message.sent_at > latest_period.hidden_at
   order by last_message.sent_at desc nulls last, conversation.created_at desc, conversation.id;
 end;
 $$;
@@ -2155,6 +2165,50 @@ grant execute on function public.set_conversation_notification_level(
   uuid, public.conversation_notification_level
 ) to authenticated;
 
+-- 대화를 내 목록에서 숨기거나 다시 보인다(기능 명세 §13.23). 가장 최근 참여 기간에 적는다. 다시 참여하면
+-- 새 기간이 생기므로 숨김도 풀린다. 읽음 위치는 그대로 둔다.
+create function public.set_conversation_hidden(p_conversation_id uuid, p_hidden boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  if p_hidden is null then
+    raise exception 'hidden state required'
+      using errcode = '22023';
+  end if;
+
+  update public.conversation_members as member
+  set hidden_at = case when p_hidden then clock_timestamp() end
+  where member.id = (
+    select latest.id
+    from public.conversation_members as latest
+    where latest.conversation_id = p_conversation_id
+      and latest.profile_id = caller_profile_id
+    order by latest.joined_at desc
+    limit 1
+  );
+
+  if not found then
+    raise exception 'conversation member required'
+      using errcode = '42501';
+  end if;
+end;
+$$;
+
+revoke all on function public.set_conversation_hidden(uuid, boolean)
+  from public, anon;
+
+grant execute on function public.set_conversation_hidden(uuid, boolean)
+  to authenticated;
+
 -- 대화 생성과 멤버 관리(기능 명세 §13.1, §13.15, §13.16). 그룹 추가·내보내기 알림은 보내지 않고 대화
 -- 안의 시스템 메시지로만 남긴다.
 
@@ -2667,27 +2721,44 @@ begin
     from public.conversation_members as member
     where member.profile_id = caller_profile_id
     order by member.conversation_id, member.joined_at desc
+  ),
+  listed_period as (
+    -- 목록에 있는 대화만 센다. 스스로 나간 대화와, 숨긴 뒤로 사람이 보낸 메시지가 없는 대화는 목록에 없다
+    -- (`list_conversations`와 같은 조건). 숨긴 뒤 메시지가 와서 다시 보이면 그동안 읽지 않은 메시지까지
+    -- 센다. 대화마다 한 번만 판정한다.
+    select latest_period.*
+    from latest_period
+    where not latest_period.left_by_self
+      and (
+        latest_period.hidden_at is null
+        or exists (
+          select 1
+          from private.messages as later
+          where later.conversation_id = latest_period.conversation_id
+            and later.system_kind is null
+            and later.sent_at > latest_period.hidden_at
+            and (latest_period.left_at is null or later.sent_at < latest_period.left_at)
+        )
+      )
   )
   select count(*)::integer
   into total
-  from latest_period
-  -- 스스로 나간 대화는 목록에 없으므로 배지에도 세지 않는다.
+  from listed_period
   join private.messages as message
-    on message.conversation_id = latest_period.conversation_id
+    on message.conversation_id = listed_period.conversation_id
     and message.sender_id is distinct from caller_profile_id
     and message.deleted_at is null
     and message.system_kind is null
     and (message.sent_at, message.id)
-      > (latest_period.last_read_sent_at, latest_period.last_read_message_id)
-  where not latest_period.left_by_self
-    and exists (
-      select 1
-      from public.conversation_members as period
-      where period.conversation_id = latest_period.conversation_id
-        and period.profile_id = caller_profile_id
-        and message.sent_at >= period.joined_at
-        and (period.left_at is null or message.sent_at < period.left_at)
-    );
+      > (listed_period.last_read_sent_at, listed_period.last_read_message_id)
+  where exists (
+    select 1
+    from public.conversation_members as period
+    where period.conversation_id = listed_period.conversation_id
+      and period.profile_id = caller_profile_id
+      and message.sent_at >= period.joined_at
+      and (period.left_at is null or message.sent_at < period.left_at)
+  );
 
   return total;
 end;
