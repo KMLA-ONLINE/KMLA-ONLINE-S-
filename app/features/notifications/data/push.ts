@@ -352,18 +352,20 @@ export async function disableWebPush(): Promise<void> {
   await subscription.unsubscribe();
 }
 
+/** 로그아웃과 탈퇴가 정리할 이 브라우저의 구독. */
+async function getBrowserSubscription(): Promise<PushSubscription | null> {
+  if (!("serviceWorker" in navigator)) return null;
+  const registration = await navigator.serviceWorker.getRegistration("/");
+  return (await registration?.pushManager.getSubscription()) ?? null;
+}
+
 /** 이 브라우저의 구독만 끊는다. 탈퇴처럼 서버 행이 이미 지워져 RPC를 부를 수 없을 때 쓴다. */
 export async function unsubscribeWebPushLocally(): Promise<void> {
-  if (!("serviceWorker" in navigator)) return;
-  const registration = await navigator.serviceWorker.getRegistration("/");
-  const subscription = await registration?.pushManager.getSubscription();
-  await subscription?.unsubscribe();
+  await (await getBrowserSubscription())?.unsubscribe();
 }
 
 export async function disconnectWebPushForLogout(): Promise<void> {
-  if (!("serviceWorker" in navigator)) return;
-  const registration = await navigator.serviceWorker.getRegistration("/");
-  const subscription = await registration?.pushManager.getSubscription();
+  const subscription = await getBrowserSubscription();
   if (!subscription) return;
 
   try {

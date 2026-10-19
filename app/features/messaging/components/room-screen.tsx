@@ -1291,7 +1291,7 @@ function MessageThread({
                       canCompose &&
                       canEditMessage(message, conversation.viewerId)
                     }
-                    canReply={canCompose}
+                    canCompose={canCompose}
                     selection={
                       selection === null
                         ? undefined
@@ -1426,7 +1426,7 @@ const ThreadMessage = memo(function ThreadMessage({
   replyTargetAuthor,
   isOwn,
   canEdit,
-  canReply,
+  canCompose,
   selection,
   isGroup,
   startsGroup,
@@ -1442,8 +1442,11 @@ const ThreadMessage = memo(function ThreadMessage({
   isOwn: boolean;
   /** 15분 기한은 렌더 시점에 판정한다. 기한이 지나면 다음 렌더에서 메뉴가 빠지고, 서버가 최종 판정한다. */
   canEdit: boolean;
-  /** 답장과 수정은 입력창에서 이어지므로, 입력창이 없는 대화에서는 둘 다 내지 않는다. */
-  canReply: boolean;
+  /**
+   * 입력창이 있는 대화인지. 답장과 수정은 입력창에서 이어지고, 다시 보내기는 상대가 탈퇴한 대화처럼
+   * 입력창이 없으면 서버가 같은 이유로 거부하므로 셋 다 이 값을 따른다.
+   */
+  canCompose: boolean;
   /**
    * 삭제 모드에서 이 메시지를 골랐는지. 삭제 모드가 아니면 `undefined`, 삭제 모드인데 고를 수 없는
    * 메시지(남의 메시지, 삭제된 메시지, 보내는 중이거나 보내지 못한 메시지)면 `null`이다.
@@ -1463,7 +1466,7 @@ const ThreadMessage = memo(function ThreadMessage({
   // 복사만 된다. 남는 작업이 없으면 메뉴를 열지 않는다.
   const actionable = !message.deleted && !message.pending && !message.failed;
   const contextActions = [
-    ...(actionable && canReply
+    ...(actionable && canCompose
       ? [
           {
             label: "답장",
@@ -1538,7 +1541,7 @@ const ThreadMessage = memo(function ThreadMessage({
           replyTarget ? () => actions.viewMessage(replyTarget.id) : undefined
         }
         onReply={
-          actionable && canReply ? () => actions.reply(message) : undefined
+          actionable && canCompose ? () => actions.reply(message) : undefined
         }
         onSelectReaction={
           actionable
@@ -1554,7 +1557,7 @@ const ThreadMessage = memo(function ThreadMessage({
             onSelectReaction={(reaction) =>
               actions.selectReaction(message, reaction)
             }
-            onReply={canReply ? () => actions.reply(message) : undefined}
+            onReply={canCompose ? () => actions.reply(message) : undefined}
             onTogglePinned={() => actions.togglePinned(message)}
             onEdit={canEdit ? () => actions.edit(message) : undefined}
             onDelete={
@@ -1566,15 +1569,17 @@ const ThreadMessage = memo(function ThreadMessage({
       {message.failed ? (
         <div className="mt-0.5 mb-1 flex items-center justify-end gap-1 text-xs">
           <span className="text-destructive">보내지 못했습니다</span>
-          <Button
-            variant="ghost"
-            size="xs"
-            // 누를 자리를 위아래로 넓힌다. 옆 버튼과 겹치지 않게 좌우는 그대로 둔다.
-            className="relative after:absolute after:inset-x-0 after:-inset-y-2"
-            onClick={() => actions.retry(message)}
-          >
-            다시 보내기
-          </Button>
+          {canCompose ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              // 누를 자리를 위아래로 넓힌다. 옆 버튼과 겹치지 않게 좌우는 그대로 둔다.
+              className="relative after:absolute after:inset-x-0 after:-inset-y-2"
+              onClick={() => actions.retry(message)}
+            >
+              다시 보내기
+            </Button>
+          ) : null}
           <Button
             variant="ghost"
             size="xs"

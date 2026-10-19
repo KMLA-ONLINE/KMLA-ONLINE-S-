@@ -45,25 +45,31 @@ interface WithdrawErrors {
   form?: string;
 }
 
+/** 확인 대화상자를 열기 전과 `clientAction`이 같은 규칙으로 본다. */
+function validateWithdrawal(formData: FormData): WithdrawErrors {
+  return {
+    confirm: formData.get("confirm")
+      ? undefined
+      : "안내를 확인했다고 체크해 주세요.",
+    password: readFormText(formData, "password")
+      ? undefined
+      : "비밀번호를 입력해 주세요.",
+  };
+}
+
 export async function clientLoader() {
   return { ownedGroups: await listMyOwnedGroups() };
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
   const formData = await request.formData();
-  const password = readFormText(formData, "password");
-  const errors = {
-    confirm: formData.get("confirm")
-      ? undefined
-      : "안내를 확인했다고 체크해 주세요.",
-    password: password ? undefined : "비밀번호를 입력해 주세요.",
-  };
+  const errors = validateWithdrawal(formData);
   if (hasErrors(errors)) {
     return data({ errors }, { status: 400 });
   }
 
   try {
-    await withdrawAccount(password);
+    await withdrawAccount(readFormText(formData, "password"));
   } catch (error) {
     const { field, message } = describeWithdrawalError(error);
     const errors: WithdrawErrors =
@@ -84,8 +90,9 @@ export default function WithdrawPage({
   const formRef = useRef<HTMLFormElement>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [inputErrors, setInputErrors] = useState<WithdrawErrors | null>(null);
   const pending = navigation.state === "submitting";
-  const errors: WithdrawErrors = actionData?.errors ?? {};
+  const errors: WithdrawErrors = inputErrors ?? actionData?.errors ?? {};
   const blockers = getWithdrawalBlockers({
     role: profile.role,
     ownedGroups: loaderData.ownedGroups,
@@ -161,9 +168,13 @@ export default function WithdrawPage({
             method="post"
             className="flex flex-col gap-6"
             onSubmit={(event) => {
-              // Enter 제출도 확인 대화상자를 거치게 한다.
+              // Enter 제출도 확인 대화상자를 거치게 한다. 되돌릴 수 없다고 묻기 전에 입력부터 확인한다.
               event.preventDefault();
-              setConfirmOpen(true);
+              const next = validateWithdrawal(
+                new FormData(event.currentTarget),
+              );
+              setInputErrors(hasErrors(next) ? next : null);
+              if (!hasErrors(next)) setConfirmOpen(true);
             }}
           >
             <section className="rounded-xl border bg-card p-4">

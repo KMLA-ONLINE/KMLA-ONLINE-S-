@@ -1056,6 +1056,12 @@ describe("RoomScreen", () => {
     expect(
       screen.queryByRole("textbox", { name: "메시지 입력" }),
     ).not.toBeInTheDocument();
+    // 다시 보내도 같은 이유로 거부되므로 지우기만 남긴다.
+    expect(screen.getByText("보내지 못했습니다")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "다시 보내기" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "지우기" })).toBeInTheDocument();
   });
 
   it("1:1 대화 정보에서는 알림을 끄고 다시 켜기만 한다", async () => {
