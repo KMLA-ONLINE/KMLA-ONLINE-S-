@@ -188,16 +188,47 @@ function birthdayListItems(birthdays: BirthdayCalendarProfile[]) {
 }
 
 /**
- * 이번 달 제목. 이번 달에 생일이 없으면 다음으로 생일이 있는 달이다. 그런 달이 없거나 이미
- * 맨 앞이면 움직이지 않는다.
+ * 목록에서 오늘의 자리. 오늘 생일인 사람이 있으면 그 첫 행이다. 없으면 오늘 뒤로 처음 오는
+ * 행이고, 그 행이 다른 달의 첫 생일이면 그 달 제목이다. 뒤로 아무도 없으면 행 개수다.
  */
-function startMonthIndex(items: BirthdayListItem[], referenceDate: string) {
+function todayPosition(items: BirthdayListItem[], referenceDate: string) {
   const month = Number(referenceDate.slice(5, 7));
-  const index = items.find(
-    (item) => item.kind === "month" && item.month >= month,
-  )?.index;
+  const day = Number(referenceDate.slice(8, 10));
+  const todayRow = items.find(
+    (item) =>
+      item.kind === "birthday" &&
+      closestBirthdayGap(item.birthday, referenceDate) === 0,
+  );
+  if (todayRow) return { index: todayRow.index, hasBirthday: true };
 
-  return index === undefined || index === 0 ? null : index;
+  const next = items.find(
+    (item) =>
+      item.kind === "birthday" &&
+      (item.birthday.birthday_month > month ||
+        (item.birthday.birthday_month === month &&
+          item.birthday.birthday_day > day)),
+  );
+  if (next?.kind !== "birthday") {
+    return { index: items.length, hasBirthday: false };
+  }
+
+  const previous = items[next.index - 1];
+  const index =
+    previous?.kind === "month" && next.birthday.birthday_month !== month
+      ? previous.index
+      : next.index;
+
+  return { index, hasBirthday: false };
+}
+
+/**
+ * 첫 화면의 맨 위 행. 오늘 생일이면 그 행, 아니면 오늘 표시선 바로 위 행이라 선이 보인다.
+ * 이미 맨 앞이면 움직이지 않는다.
+ */
+function startRowIndex(position: { index: number; hasBirthday: boolean }) {
+  const index = position.hasBirthday ? position.index : position.index - 1;
+
+  return index <= 0 ? null : index;
 }
 
 function visibleRangeAround(index: number) {
@@ -271,10 +302,12 @@ export function BirthdayListScreen({
       ),
     [birthdays, selectedFilter],
   );
-  // 첫 화면은 이번 달에서 시작한다. 그 행이 처음부터 그려져 있어야 위치를 잴 수 있다.
-  const [startIndex] = useState(() =>
-    startMonthIndex(listItems, referenceDate),
+  const today = useMemo(
+    () => todayPosition(listItems, referenceDate),
+    [listItems, referenceDate],
   );
+  // 첫 화면은 오늘 자리에서 시작한다. 그 행이 처음부터 그려져 있어야 위치를 잴 수 있다.
+  const [startIndex] = useState(() => startRowIndex(today));
   const [visibleRange, setVisibleRange] = useState(() =>
     visibleRangeAround(startIndex ?? 0),
   );
@@ -457,7 +490,7 @@ export function BirthdayListScreen({
                 }
                 role={item.kind === "birthday" ? "listitem" : undefined}
                 className={cn(
-                  isVirtualized && "absolute inset-x-0",
+                  isVirtualized ? "absolute inset-x-0" : "relative",
                   // 모바일 PageHeader에 가리지 않게 첫 위치를 그만큼 내린다.
                   "scroll-mt-[calc(var(--app-page-header-h)+var(--app-safe-t))] md:scroll-mt-0",
                 )}
@@ -484,6 +517,25 @@ export function BirthdayListScreen({
                     referenceDate={referenceDate}
                   />
                 )}
+
+                {/* 오늘 생일인 사람이 없으면 오늘이 들어갈 행 경계에 선을 긋는다. */}
+                {!today.hasBirthday &&
+                (item.index === today.index ||
+                  (today.index === totalRows &&
+                    item.index === totalRows - 1)) ? (
+                  <div
+                    data-testid="birthday-today-marker"
+                    aria-hidden
+                    className={cn(
+                      "pointer-events-none absolute inset-x-0 z-10 h-0.5 bg-primary",
+                      item.index === today.index
+                        ? "top-0 -translate-y-1/2"
+                        : "bottom-0 translate-y-1/2",
+                    )}
+                  >
+                    <span className="absolute top-1/2 left-0 size-2 -translate-y-1/2 rounded-full bg-primary" />
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
