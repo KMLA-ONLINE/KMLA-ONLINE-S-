@@ -27,6 +27,7 @@ import {
   type SetStateAction,
   useEffect,
   useEffectEvent,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -52,7 +53,13 @@ import {
   useConversationMembership,
   useListedConversation,
 } from "~/features/messaging/hooks/use-conversation-membership";
-import { useConversationMute } from "~/features/messaging/hooks/use-conversation-mute";
+import { MessageParticipantsProvider } from "~/features/messaging/components/message-mention";
+import {
+  MentionSuggestionList,
+  mentionOptionId,
+} from "~/features/messaging/components/mention-suggestion-list";
+import { useMentionSuggestions } from "~/features/messaging/hooks/use-mention-suggestions";
+import { useConversationNotificationLevel } from "~/features/messaging/hooks/use-conversation-notification-level";
 import { useRoomOverlayParam } from "~/features/messaging/hooks/use-room-overlay-param";
 import type { RoomEntryState } from "~/features/messaging/hooks/use-room-entry";
 import {
@@ -102,9 +109,26 @@ import {
   normalizeMessageBody,
 } from "~/features/messaging/model/message-text";
 import {
+  addMessageMention,
+  mentionPubIdsOf,
+  messageMentionEntries,
+  prepareMessageMentions,
+  type MessageMentionSuggestion,
+  type PreparedMessageMentions,
+} from "~/features/messaging/model/message-mentions";
+import {
   QuickReactionBar,
   ReactionPickerSurface,
 } from "~/features/posts/components/reaction/quick-reaction-bar";
+import { useMentionTextarea } from "~/features/posts/hooks/use-mention-textarea";
+import {
+  fromMentionDisplay,
+  mentionDisplayText,
+  mentionPlainText,
+  toMentionDisplay,
+  validateMentionCount,
+  type MentionDraftEntry,
+} from "~/features/posts/model/mentions";
 import type { PostReaction } from "~/features/posts/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
@@ -253,7 +277,8 @@ export function RoomScreen({
     overlay?.kind === "reactions"
       ? messages.find(({ id }) => id === overlay.messageId)
       : undefined;
-  const { muted, toggleMuted } = useConversationMute(conversation);
+  const { notificationLevel, setNotificationLevel } =
+    useConversationNotificationLevel(conversation);
   const draftKey = roomDraftKey(conversation.viewerId, conversation.id);
   // 끌어 놓거나 붙여 넣은 첨부. 바로 보내지 않고 작성창 위에 두었다가 전송할 때 함께 보낸다.
   // 다른 방에 다녀와도 남도록 파일은 초안에 맡기고, 미리보기는 돌아올 때 다시 만든다.
@@ -430,7 +455,7 @@ export function RoomScreen({
 
   // 보내지 못하면 메시지가 목록에 "보내지 못함"으로 남아 다시 보낼 수 있으므로 입력과 답장 대상은
   // 되살리지 않는다.
-  async function sendMessage(body: string) {
+  async function sendMessage({ body, mentionPubIds }: PreparedMessageMentions) {
     const target = replyTarget;
     const id = randomUUID();
     sentMessageId.current = id;
@@ -439,11 +464,12 @@ export function RoomScreen({
     const sent = await send({
       id,
       body,
+      mentionPubIds,
       replyTo: target
         ? {
             id: target.id,
             senderId: target.senderId,
-            body: target.body,
+            body: mentionPlainText(target.body),
             deleted: target.deleted,
             attachmentKind: target.attachments?.[0]?.kind ?? null,
           }
@@ -455,355 +481,382 @@ export function RoomScreen({
   // 고친 내용은 먼저 그린다. 실패하면 hook이 메시지를 되돌리고, 여기서는 고치던 입력과 함께
   // 수정 모드를 되살린다. 그새 다른 수정을 시작했으면 두지 않는다.
   // 고치는 사이 15분이 지났으면 보내지 않고 이유를 알린다. 되살려도 계속 실패하므로 수정 모드를 끝낸다.
-  async function submitEdit(body: string) {
+  async function submitEdit({
+    body,
+    mentionPubIds,
+    entries,
+  }: PreparedMessageMentions) {
     const target = editTarget?.message;
     if (!target) return;
     setEditTarget(null);
-    if (body === target.body) return;
+    const unchanged =
+      body === target.body &&
+      mentionPubIds.join("\n") ===
+        mentionPubIdsOf(
+          target.mentionProfileIds ?? [],
+          conversation.participants,
+        ).join("\n");
+    if (unchanged) return;
     if (!canEditMessage(target, conversation.viewerId)) {
       toast.error(EDIT_EXPIRED_MESSAGE);
       return;
     }
-    const edited = await edit(target, body);
+    const edited = await edit(target, body, mentionPubIds);
     if (!edited && canEditMessage(target, conversation.viewerId)) {
-      setEditTarget((current) => current ?? { message: target, draft: body });
+      setEditTarget(
+        (current) =>
+          current ?? { message: target, draft: body, mentions: entries },
+      );
     }
   }
 
   return (
-    <div
-      className={cn(
-        "relative flex min-h-0 min-w-0 flex-1 overflow-hidden",
-        // iOS에서 아래 여백으로 보정하면 Safari의 화면 이동과 겹쳐 이름이 밀리고
-        // 입력창 아래에 빈 공간이 생긴다. 보이는 영역의 위쪽·높이로 대화방 전체를 잡는다.
-        keyboardViewport.keyboardOpen &&
-          "max-md:fixed max-md:inset-x-0 max-md:z-40 max-md:h-(--room-keyboard-height)",
-        keyboardViewport.keyboardOpen && "max-md:top-(--room-keyboard-top)",
-      )}
-      style={
-        keyboardViewport.keyboardOpen
-          ? ({
-              "--room-keyboard-height": `${keyboardViewport.height}px`,
-              "--room-keyboard-top": `${keyboardViewport.offsetTop}px`,
-            } as CSSProperties & Record<`--room-keyboard-${string}`, string>)
-          : undefined
-      }
-    >
-      <section
-        aria-label={`${conversation.name} 채팅`}
+    <MessageParticipantsProvider participants={conversation.participants}>
+      <div
         className={cn(
-          "min-h-0 min-w-0 flex-1 flex-col bg-background",
-          compactDetailsOpen ? "hidden xl:flex" : "flex",
+          "relative flex min-h-0 min-w-0 flex-1 overflow-hidden",
+          // iOS에서 아래 여백으로 보정하면 Safari의 화면 이동과 겹쳐 이름이 밀리고
+          // 입력창 아래에 빈 공간이 생긴다. 보이는 영역의 위쪽·높이로 대화방 전체를 잡는다.
+          keyboardViewport.keyboardOpen &&
+            "max-md:fixed max-md:inset-x-0 max-md:z-40 max-md:h-(--room-keyboard-height)",
+          keyboardViewport.keyboardOpen && "max-md:top-(--room-keyboard-top)",
         )}
+        style={
+          keyboardViewport.keyboardOpen
+            ? ({
+                "--room-keyboard-height": `${keyboardViewport.height}px`,
+                "--room-keyboard-top": `${keyboardViewport.offsetTop}px`,
+              } as CSSProperties & Record<`--room-keyboard-${string}`, string>)
+            : undefined
+        }
       >
-        <header className="z-10 flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 border-b bg-background px-2 pt-[var(--app-safe-t)] md:h-16 md:px-4 md:pt-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-full md:hidden"
-            aria-label="채팅 목록으로 돌아가기"
-            onClick={() => void backToList()}
-          >
-            <ChevronLeftIcon aria-hidden />
-          </Button>
-          {/* 이름을 누르면 대화 정보를 연다. 넓은 화면에서 접어 둔 정보 패널도 다시 편다. */}
-          <button
-            type="button"
-            aria-label={`${conversation.name} 채팅 정보 보기`}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
-            onClick={openDetails}
-          >
-            <ConversationAvatar
-              conversation={conversation}
-              className="size-10"
-            />
-            <h1 className="min-w-0 flex-1 truncate text-sm font-semibold md:text-base">
-              {conversation.name}
-            </h1>
-          </button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-full"
-            aria-label="채팅 검색"
-            onClick={() => roomOverlay.open({ kind: "search" })}
-          >
-            <SearchIcon aria-hidden />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-full xl:hidden"
-            aria-label="채팅 정보 열기"
-            onClick={() => roomOverlay.open({ kind: "details" })}
-          >
-            <InfoIcon aria-hidden />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="hidden rounded-full xl:inline-flex"
-            aria-label={
-              desktopDetailsOpen ? "채팅 정보 닫기" : "채팅 정보 열기"
-            }
-            aria-pressed={desktopDetailsOpen}
-            onClick={() => onDesktopDetailsOpenChange?.(!desktopDetailsOpen)}
-          >
-            <InfoIcon aria-hidden />
-          </Button>
-        </header>
-
-        {searchOpen ? (
-          <MessageSearchPanel
-            conversationId={conversation.id}
-            participants={participantById}
-            session={searchSession}
-            onSessionChange={setSearchSession}
-            onClose={roomOverlay.close}
-            onSelect={(result) => void viewMessage(result.id)}
-          />
-        ) : null}
-
-        {pinnedMessage ? (
-          <button
-            type="button"
-            aria-label="고정 메시지"
-            className="flex min-h-14 shrink-0 items-center gap-3 border-b bg-muted/40 px-4 py-2.5 text-left hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
-            onClick={() => roomOverlay.open({ kind: "pinned" })}
-          >
-            <PinIcon aria-hidden className="size-4 shrink-0 text-primary" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold">
-                {pinnedMessageAuthor ?? "알 수 없는 사용자"}
-              </p>
-              <p className="truncate text-sm text-muted-foreground">
-                {formatReplyPreview(
-                  toReplyPreview(pinnedMessage),
-                  window.location.origin,
-                )}
-              </p>
-            </div>
-            {/* 가장 최근 것만 보이므로 여럿이면 몇 개인지 알린다. 누르면 목록이 열린다. */}
-            {pinnedMessages.length > 1 ? (
-              <span
-                aria-hidden
-                className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
-              >
-                {pinnedMessages.length}
-              </span>
-            ) : null}
-          </button>
-        ) : null}
-
-        <MessageThread
-          ios={ios}
-          composingAtBottomRef={composingAtBottomRef}
-          conversation={conversation}
-          messages={messages}
-          highlightedMessageId={highlightedMessageId}
-          messageThreadRef={messageThreadRef}
-          followingNewMessagesRef={followingNewMessagesRef}
-          desktopDetailsOpen={desktopDetailsOpen}
-          hasOlderMessages={hasOlderMessages}
-          findingMessage={findingMessage}
-          loadingOlderMessages={loadingOlderMessages}
-          onLoadOlderMessages={loadOlderMessages}
-          onSelectReaction={(message, reaction) => {
-            const now = Date.now();
-            const last = reactedAt.current.get(message.id) ?? 0;
-            if (now - last < SEND_COOLDOWN_MS) return;
-            reactedAt.current.set(message.id, now);
-            void react(message, reaction);
-          }}
-          onReply={(message) => {
-            if (message.deleted) return;
-            setEditTarget(null);
-            setReplyTarget(message);
-          }}
-          onTogglePinned={togglePinned}
-          onEdit={(message) => {
-            setReplyTarget(null);
-            setEditTarget({ message, draft: message.body });
-          }}
-          // 삭제는 삭제 모드로 들어가 그 메시지를 고른 채로 시작한다. 더 고른 뒤 아래 삭제 버튼으로
-          // 한 번에 지운다(기능 명세 §13.11).
-          onDelete={(message) => {
-            setReplyTarget(null);
-            setEditTarget(null);
-            setSelection(new Set([message.id]));
-          }}
-          onViewMessage={(messageId) => void viewMessage(messageId)}
-          selection={selection}
-          onToggleSelection={(message) =>
-            setSelection((current) => {
-              if (!current) return current;
-              const next = new Set(current);
-              if (next.has(message.id)) next.delete(message.id);
-              else next.add(message.id);
-              return next;
-            })
-          }
-          onRetry={retry}
-          onDiscard={discard}
-          onShowReactions={(message) =>
-            roomOverlay.open({ kind: "reactions", messageId: message.id })
-          }
-          onDropFiles={
-            viewerActive && !selection && !editTarget && !replyTarget
-              ? stageFiles
-              : undefined
-          }
-        />
-        {selection ? (
-          <div className="flex shrink-0 items-center gap-2 border-t bg-background px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))]">
-            <p
-              className="min-w-0 flex-1 text-sm font-medium"
-              aria-live="polite"
+        <section
+          aria-label={`${conversation.name} 채팅`}
+          className={cn(
+            "min-h-0 min-w-0 flex-1 flex-col bg-background",
+            compactDetailsOpen ? "hidden xl:flex" : "flex",
+          )}
+        >
+          <header className="z-10 flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 border-b bg-background px-2 pt-[var(--app-safe-t)] md:h-16 md:px-4 md:pt-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full md:hidden"
+              aria-label="채팅 목록으로 돌아가기"
+              onClick={() => void backToList()}
             >
-              {selection.size}개 선택됨
-            </p>
-            <Button variant="outline" onClick={() => setSelection(null)}>
-              취소
+              <ChevronLeftIcon aria-hidden />
+            </Button>
+            {/* 이름을 누르면 대화 정보를 연다. 넓은 화면에서 접어 둔 정보 패널도 다시 편다. */}
+            <button
+              type="button"
+              aria-label={`${conversation.name} 채팅 정보 보기`}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+              onClick={openDetails}
+            >
+              <ConversationAvatar
+                conversation={conversation}
+                className="size-10"
+              />
+              <h1 className="min-w-0 flex-1 truncate text-sm font-semibold md:text-base">
+                {conversation.name}
+              </h1>
+            </button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              aria-label="채팅 검색"
+              onClick={() => roomOverlay.open({ kind: "search" })}
+            >
+              <SearchIcon aria-hidden />
             </Button>
             <Button
-              variant="destructive"
-              disabled={selection.size === 0}
-              onClick={() => {
-                removeMany(messages.filter(({ id }) => selection.has(id)));
-                setSelection(null);
-              }}
+              variant="ghost"
+              size="icon"
+              className="rounded-full xl:hidden"
+              aria-label="채팅 정보 열기"
+              onClick={() => roomOverlay.open({ kind: "details" })}
             >
-              삭제
+              <InfoIcon aria-hidden />
             </Button>
-          </div>
-        ) : viewerActive ? (
-          <ComposerShell
-            onDraftInput={preserveCompositionPosition}
-            keyboardOpenOnIOS={ios && keyboardViewport.keyboardOpen}
-            replyTarget={replyTarget ?? undefined}
-            replyAuthor={replyAuthor}
-            onCancelReply={() => setReplyTarget(null)}
-            editTarget={editTarget ?? undefined}
-            onCancelEdit={() => setEditTarget(null)}
-            onEdit={submitEdit}
-            onSend={sendMessage}
-            staged={staged}
-            onStageFiles={stageFiles}
-            onUnstage={unstage}
-            onSendStaged={sendStaged}
-            onSendFiles={(files) => {
-              setReplyTarget(null);
-              followingNewMessagesRef.current = true;
-              void sendFiles(files);
-            }}
-            desktopDetailsOpen={desktopDetailsOpen}
-            draftKey={draftKey}
-          />
-        ) : (
-          <p className="shrink-0 px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))] text-center text-sm text-muted-foreground">
-            이 채팅에서 나왔습니다. 참여한 동안의 메시지만 볼 수 있습니다.
-          </p>
-        )}
-      </section>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hidden rounded-full xl:inline-flex"
+              aria-label={
+                desktopDetailsOpen ? "채팅 정보 닫기" : "채팅 정보 열기"
+              }
+              aria-pressed={desktopDetailsOpen}
+              onClick={() => onDesktopDetailsOpenChange?.(!desktopDetailsOpen)}
+            >
+              <InfoIcon aria-hidden />
+            </Button>
+          </header>
 
-      <ConversationDetails
-        conversation={conversation}
-        onMobileBack={roomOverlay.close}
-        pinnedCount={pinnedMessages.length}
-        onOpenPinnedMessages={() => roomOverlay.open({ kind: "pinned" })}
-        muted={muted}
-        onToggleMuted={toggleMuted}
-        onSearch={() => {
-          roomOverlay.open({ kind: "search" }, { replace: true });
-        }}
-        onInvite={() => setMemberDialog({ kind: "invite" })}
-        onRename={() => setMemberDialog({ kind: "rename" })}
-        onLeave={() => setMemberDialog({ kind: "leave" })}
-        onDeleteGroup={() => setMemberDialog({ kind: "delete" })}
-        sharedCounts={sharedCounts}
-        onOpenSharedMedia={(tab) => roomOverlay.open({ kind: "shared", tab })}
-        className={cn(
-          compactDetailsOpen ? "flex xl:hidden" : "hidden",
-          compactDetailsOpen &&
-            "md:absolute md:inset-y-0 md:right-0 md:shadow-xl xl:static xl:shadow-none",
-          desktopDetailsOpen ? "xl:flex" : "xl:hidden",
-        )}
-      />
-      <PinnedMessagesDialog
-        open={pinnedDialogOpen}
-        messages={pinnedMessages}
-        participants={conversation.participants}
-        viewerId={conversation.viewerId}
-        isGroup={conversation.type === "group"}
-        onOpenChange={(open) => {
-          if (!open) roomOverlay.close();
-        }}
-        onViewMessage={(messageId) => void viewMessage(messageId)}
-        onUnpin={togglePinned}
-      />
-      <RecipientPickerDialog
-        open={memberDialog?.kind === "invite"}
-        mode="invite"
-        excludeIds={activeParticipants(conversation).map(({ id }) => id)}
-        onOpenChange={(open) => {
-          if (!open) setMemberDialog(null);
-        }}
-        onSubmit={async ({ recipients }) => {
-          const invited = await membership.invite(
-            recipients.map(({ id }) => id),
-          );
-          if (!invited) throw new Error("invite failed");
-          setMemberDialog(null);
-        }}
-      />
-      {memberDialog?.kind === "rename" ? (
-        <RenameConversationDialog
-          currentName={conversation.name}
-          onCancel={() => setMemberDialog(null)}
-          onSubmit={membership.rename}
+          {searchOpen ? (
+            <MessageSearchPanel
+              conversationId={conversation.id}
+              participants={participantById}
+              session={searchSession}
+              onSessionChange={setSearchSession}
+              onClose={roomOverlay.close}
+              onSelect={(result) => void viewMessage(result.id)}
+            />
+          ) : null}
+
+          {pinnedMessage ? (
+            <button
+              type="button"
+              aria-label="고정 메시지"
+              className="flex min-h-14 shrink-0 items-center gap-3 border-b bg-muted/40 px-4 py-2.5 text-left hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+              onClick={() => roomOverlay.open({ kind: "pinned" })}
+            >
+              <PinIcon aria-hidden className="size-4 shrink-0 text-primary" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold">
+                  {pinnedMessageAuthor ?? "알 수 없는 사용자"}
+                </p>
+                <p className="truncate text-sm text-muted-foreground">
+                  {formatReplyPreview(
+                    toReplyPreview(pinnedMessage),
+                    window.location.origin,
+                  )}
+                </p>
+              </div>
+              {/* 가장 최근 것만 보이므로 여럿이면 몇 개인지 알린다. 누르면 목록이 열린다. */}
+              {pinnedMessages.length > 1 ? (
+                <span
+                  aria-hidden
+                  className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                >
+                  {pinnedMessages.length}
+                </span>
+              ) : null}
+            </button>
+          ) : null}
+
+          <MessageThread
+            ios={ios}
+            composingAtBottomRef={composingAtBottomRef}
+            conversation={conversation}
+            messages={messages}
+            highlightedMessageId={highlightedMessageId}
+            messageThreadRef={messageThreadRef}
+            followingNewMessagesRef={followingNewMessagesRef}
+            desktopDetailsOpen={desktopDetailsOpen}
+            hasOlderMessages={hasOlderMessages}
+            findingMessage={findingMessage}
+            loadingOlderMessages={loadingOlderMessages}
+            onLoadOlderMessages={loadOlderMessages}
+            onSelectReaction={(message, reaction) => {
+              const now = Date.now();
+              const last = reactedAt.current.get(message.id) ?? 0;
+              if (now - last < SEND_COOLDOWN_MS) return;
+              reactedAt.current.set(message.id, now);
+              void react(message, reaction);
+            }}
+            onReply={(message) => {
+              if (message.deleted) return;
+              setEditTarget(null);
+              setReplyTarget(message);
+            }}
+            onTogglePinned={togglePinned}
+            onEdit={(message) => {
+              setReplyTarget(null);
+              setEditTarget({
+                message,
+                draft: message.body,
+                mentions: messageMentionEntries(
+                  message,
+                  conversation.participants,
+                ),
+              });
+            }}
+            // 삭제는 삭제 모드로 들어가 그 메시지를 고른 채로 시작한다. 더 고른 뒤 아래 삭제 버튼으로
+            // 한 번에 지운다(기능 명세 §13.11).
+            onDelete={(message) => {
+              setReplyTarget(null);
+              setEditTarget(null);
+              setSelection(new Set([message.id]));
+            }}
+            onViewMessage={(messageId) => void viewMessage(messageId)}
+            selection={selection}
+            onToggleSelection={(message) =>
+              setSelection((current) => {
+                if (!current) return current;
+                const next = new Set(current);
+                if (next.has(message.id)) next.delete(message.id);
+                else next.add(message.id);
+                return next;
+              })
+            }
+            onRetry={retry}
+            onDiscard={discard}
+            onShowReactions={(message) =>
+              roomOverlay.open({ kind: "reactions", messageId: message.id })
+            }
+            onDropFiles={
+              viewerActive && !selection && !editTarget && !replyTarget
+                ? stageFiles
+                : undefined
+            }
+          />
+          {selection ? (
+            <div className="flex shrink-0 items-center gap-2 border-t bg-background px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))]">
+              <p
+                className="min-w-0 flex-1 text-sm font-medium"
+                aria-live="polite"
+              >
+                {selection.size}개 선택됨
+              </p>
+              <Button variant="outline" onClick={() => setSelection(null)}>
+                취소
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={selection.size === 0}
+                onClick={() => {
+                  removeMany(messages.filter(({ id }) => selection.has(id)));
+                  setSelection(null);
+                }}
+              >
+                삭제
+              </Button>
+            </div>
+          ) : viewerActive ? (
+            <ComposerShell
+              onDraftInput={preserveCompositionPosition}
+              keyboardOpenOnIOS={ios && keyboardViewport.keyboardOpen}
+              replyTarget={replyTarget ?? undefined}
+              replyAuthor={replyAuthor}
+              onCancelReply={() => setReplyTarget(null)}
+              editTarget={editTarget ?? undefined}
+              onCancelEdit={() => setEditTarget(null)}
+              onEdit={submitEdit}
+              onSend={sendMessage}
+              staged={staged}
+              onStageFiles={stageFiles}
+              onUnstage={unstage}
+              onSendStaged={sendStaged}
+              onSendFiles={(files) => {
+                setReplyTarget(null);
+                followingNewMessagesRef.current = true;
+                void sendFiles(files);
+              }}
+              desktopDetailsOpen={desktopDetailsOpen}
+              draftKey={draftKey}
+              mentionParticipants={
+                conversation.type === "group" ? conversation.participants : null
+              }
+              viewerId={conversation.viewerId}
+            />
+          ) : (
+            <p className="shrink-0 px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))] text-center text-sm text-muted-foreground">
+              이 채팅에서 나왔습니다. 참여한 동안의 메시지만 볼 수 있습니다.
+            </p>
+          )}
+        </section>
+
+        <ConversationDetails
+          conversation={conversation}
+          onMobileBack={roomOverlay.close}
+          pinnedCount={pinnedMessages.length}
+          onOpenPinnedMessages={() => roomOverlay.open({ kind: "pinned" })}
+          notificationLevel={notificationLevel}
+          onNotificationLevelChange={setNotificationLevel}
+          onSearch={() => {
+            roomOverlay.open({ kind: "search" }, { replace: true });
+          }}
+          onInvite={() => setMemberDialog({ kind: "invite" })}
+          onRename={() => setMemberDialog({ kind: "rename" })}
+          onLeave={() => setMemberDialog({ kind: "leave" })}
+          onDeleteGroup={() => setMemberDialog({ kind: "delete" })}
+          sharedCounts={sharedCounts}
+          onOpenSharedMedia={(tab) => roomOverlay.open({ kind: "shared", tab })}
+          className={cn(
+            compactDetailsOpen ? "flex xl:hidden" : "hidden",
+            compactDetailsOpen &&
+              "md:absolute md:inset-y-0 md:right-0 md:shadow-xl xl:static xl:shadow-none",
+            desktopDetailsOpen ? "xl:flex" : "xl:hidden",
+          )}
         />
-      ) : null}
-      {memberDialog?.kind === "leave" ? (
-        <ConfirmDialog
-          title="그룹에서 나갈까요?"
-          description="나가면 채팅 목록에서 사라지고, 이후 메시지는 볼 수 없습니다."
-          confirmLabel="나가기"
-          destructive
-          onCancel={() => setMemberDialog(null)}
-          onConfirm={() => {
+        <PinnedMessagesDialog
+          open={pinnedDialogOpen}
+          messages={pinnedMessages}
+          participants={conversation.participants}
+          viewerId={conversation.viewerId}
+          isGroup={conversation.type === "group"}
+          onOpenChange={(open) => {
+            if (!open) roomOverlay.close();
+          }}
+          onViewMessage={(messageId) => void viewMessage(messageId)}
+          onUnpin={togglePinned}
+        />
+        <RecipientPickerDialog
+          open={memberDialog?.kind === "invite"}
+          mode="invite"
+          excludeIds={activeParticipants(conversation).map(({ id }) => id)}
+          onOpenChange={(open) => {
+            if (!open) setMemberDialog(null);
+          }}
+          onSubmit={async ({ recipients }) => {
+            const invited = await membership.invite(
+              recipients.map(({ id }) => id),
+            );
+            if (!invited) throw new Error("invite failed");
             setMemberDialog(null);
-            void membership.leave();
           }}
         />
-      ) : null}
-      {memberDialog?.kind === "delete" ? (
-        <ConfirmDialog
-          title="채팅방을 삭제할까요?"
-          description="모든 멤버의 목록에서 채팅방이 사라지고, 메시지와 사진·파일도 함께 지워집니다. 되돌릴 수 없습니다."
-          confirmLabel="삭제"
-          destructive
-          onCancel={() => setMemberDialog(null)}
-          onConfirm={() => {
-            setMemberDialog(null);
-            void membership.deleteGroup();
-          }}
-        />
-      ) : null}
-      {overlay?.kind === "shared" ? (
-        <SharedMediaDialog
-          conversationId={conversation.id}
-          initialTab={overlay.tab}
-          counts={sharedCounts}
-          onClose={roomOverlay.close}
-        />
-      ) : null}
-      {reactionsTarget ? (
-        <ReactionMembersDialog
-          message={reactionsTarget}
-          onClose={roomOverlay.close}
-        />
-      ) : null}
-    </div>
+        {memberDialog?.kind === "rename" ? (
+          <RenameConversationDialog
+            currentName={conversation.name}
+            onCancel={() => setMemberDialog(null)}
+            onSubmit={membership.rename}
+          />
+        ) : null}
+        {memberDialog?.kind === "leave" ? (
+          <ConfirmDialog
+            title="그룹에서 나갈까요?"
+            description="나가면 채팅 목록에서 사라지고, 이후 메시지는 볼 수 없습니다."
+            confirmLabel="나가기"
+            destructive
+            onCancel={() => setMemberDialog(null)}
+            onConfirm={() => {
+              setMemberDialog(null);
+              void membership.leave();
+            }}
+          />
+        ) : null}
+        {memberDialog?.kind === "delete" ? (
+          <ConfirmDialog
+            title="채팅방을 삭제할까요?"
+            description="모든 멤버의 목록에서 채팅방이 사라지고, 메시지와 사진·파일도 함께 지워집니다. 되돌릴 수 없습니다."
+            confirmLabel="삭제"
+            destructive
+            onCancel={() => setMemberDialog(null)}
+            onConfirm={() => {
+              setMemberDialog(null);
+              void membership.deleteGroup();
+            }}
+          />
+        ) : null}
+        {overlay?.kind === "shared" ? (
+          <SharedMediaDialog
+            conversationId={conversation.id}
+            initialTab={overlay.tab}
+            counts={sharedCounts}
+            onClose={roomOverlay.close}
+          />
+        ) : null}
+        {reactionsTarget ? (
+          <ReactionMembersDialog
+            message={reactionsTarget}
+            onClose={roomOverlay.close}
+          />
+        ) : null}
+      </div>
+    </MessageParticipantsProvider>
   );
 }
 
@@ -1291,7 +1344,7 @@ function MessageThread({
 /** 불러온 메시지를 답장 인용과 같은 모양으로 줄인다. 첨부만 있는 메시지를 첨부 종류로 부르게 한다. */
 function toReplyPreview(message: ConversationMessage) {
   return {
-    body: message.body,
+    body: mentionPlainText(message.body),
     deleted: message.deleted,
     attachmentKind: message.attachments?.[0]?.kind ?? null,
   };
@@ -1305,11 +1358,20 @@ function claimCooldown(lastAt: { current: number }): boolean {
   return true;
 }
 
-/** 고치는 중인 내 메시지와 작성창에 올릴 입력. 실패한 수정을 되살릴 때는 입력이 원문과 다르다. */
+/** 고치는 중인 내 메시지와 작성창에 올릴 원문과 멘션. 실패한 수정을 되살릴 때는 입력이 원문과 다르다. */
 interface EditTarget {
   message: ConversationMessage;
   draft: string;
+  mentions: MentionDraftEntry[];
 }
+
+/** 고치는 동안 맡겨 둔 원래 입력. */
+interface HeldDraft {
+  text: string;
+  mentions: MentionDraftEntry[];
+}
+
+const EMPTY_HELD_DRAFT: HeldDraft = { text: "", mentions: [] };
 
 interface ThreadMessageActions {
   selectReaction: (
@@ -1386,7 +1448,8 @@ const ThreadMessage = memo(function ThreadMessage({
           {
             label: "복사",
             icon: <CopyIcon aria-hidden />,
-            onSelect: () => void copyMessageText(message.body),
+            onSelect: () =>
+              void copyMessageText(mentionPlainText(message.body)),
           },
         ]),
     ...(actionable
@@ -1600,7 +1663,9 @@ function MessageActions({
           {message.body !== "" ? (
             <DropdownMenuItem
               className="cursor-pointer"
-              onClick={() => void copyMessageText(message.body)}
+              onClick={() =>
+                void copyMessageText(mentionPlainText(message.body))
+              }
             >
               <CopyIcon aria-hidden />
               복사
@@ -1701,6 +1766,8 @@ function ComposerShell({
   onSendFiles,
   desktopDetailsOpen,
   draftKey,
+  mentionParticipants,
+  viewerId,
 }: {
   onDraftInput: () => void;
   keyboardOpenOnIOS: boolean;
@@ -1710,9 +1777,9 @@ function ComposerShell({
   /** 고치는 중인 내 메시지. 작성창이 그 입력으로 바뀌고, 보내면 `onEdit`을 부른다. */
   editTarget?: EditTarget;
   onCancelEdit: () => void;
-  onEdit: (body: string) => Promise<void>;
+  onEdit: (message: PreparedMessageMentions) => Promise<void>;
   /** 보내지 못한 메시지는 목록에 남아 다시 보낼 수 있으므로 작성창은 입력을 되살리지 않는다. */
-  onSend: (body: string) => Promise<boolean>;
+  onSend: (message: PreparedMessageMentions) => Promise<boolean>;
   /** 끌어 놓거나 붙여 넣어 쌓아 둔 첨부. 전송하면 글 다음에 함께 보낸다. */
   staged: StagedAttachment[];
   onStageFiles: (files: File[]) => void;
@@ -1723,8 +1790,16 @@ function ComposerShell({
   desktopDetailsOpen: boolean;
   /** 쓰던 글을 맡겨 둘 자리. 다른 방에 다녀오거나 삭제 모드를 마치고 돌아오면 되살린다. */
   draftKey: string;
+  /** 멘션 후보가 될 대화 참여자. 1:1 대화처럼 멘션이 없으면 `null`이다(기능 명세 §13.22). */
+  mentionParticipants: MessageParticipant[] | null;
+  viewerId: string;
 }) {
+  // 입력창이 드는 값은 원문이 아니라 표시형(`@홍길동`)이고, 멘션 대상은 따로 든다. 원문은 제출과
+  // 검사에만 쓴다(`prepareMessageMentions()`).
   const [draft, setDraft] = useState(() => readRoomDraft(draftKey)?.text ?? "");
+  const [mentions, setMentions] = useState<MentionDraftEntry[]>(
+    () => readRoomDraft(draftKey)?.mentions ?? [],
+  );
   // 보낸 직후 잠시 전송을 받지 않는다. 버튼을 껐다 켜면 깜박이므로 누름만 버리고, 입력은 그대로
   // 두어 이어서 보낼 수 있다.
   const lastSentAt = useRef(0);
@@ -1750,27 +1825,30 @@ function ComposerShell({
   };
   // 고치기를 시작하면 쓰던 입력을 맡겨 두고 메시지 본문을 올린다. 끝나면 맡긴 입력을 되돌린다.
   const [editingId, setEditingId] = useState<string | undefined>();
-  const [heldDraft, setHeldDraft] = useState("");
+  const [held, setHeld] = useState<HeldDraft>(EMPTY_HELD_DRAFT);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const refocusAfterSend = useRef(false);
   if (editTarget?.message.id !== editingId) {
     setEditingId(editTarget?.message.id);
     if (editTarget) {
-      if (editingId === undefined) setHeldDraft(draft);
-      setDraft(editTarget.draft);
+      if (editingId === undefined) setHeld({ text: draft, mentions });
+      setDraft(toMentionDisplay(editTarget.draft, editTarget.mentions));
+      setMentions(editTarget.mentions);
     } else {
-      setDraft(heldDraft);
-      setHeldDraft("");
+      setDraft(held.text);
+      setMentions(held.mentions);
+      setHeld(EMPTY_HELD_DRAFT);
     }
   }
   useEffect(() => {
     if (editingId) textareaRef.current?.focus();
   }, [editingId]);
   // 고치는 중이면 맡겨 둔 원래 입력을 남긴다. 고치던 본문은 초안이 아니다.
-  const savedDraft = editTarget ? heldDraft : draft;
+  const savedText = editTarget ? held.text : draft;
+  const savedMentions = editTarget ? held.mentions : mentions;
   useEffect(() => {
-    updateRoomDraft(draftKey, { text: savedDraft });
-  }, [draftKey, savedDraft]);
+    updateRoomDraft(draftKey, { text: savedText, mentions: savedMentions });
+  }, [draftKey, savedText, savedMentions]);
   // 답장을 시작하면 바로 쓸 수 있게 입력창으로 간다.
   const replyingId = replyTarget?.id;
   useEffect(() => {
@@ -1786,37 +1864,24 @@ function ComposerShell({
   }, []);
   const [attachmentActionsExpanded, setAttachmentActionsExpanded] =
     useState(false);
-  const composing = useRef(false);
-  const normalizedDraft = normalizeMessageBody(draft);
-  const hasDraft = normalizedDraft.trim() !== "";
+  const prepared = useMemo(
+    () => prepareMessageMentions(normalizeMessageBody(draft), mentions),
+    [draft, mentions],
+  );
+  const hasDraft = prepared.body.trim() !== "";
   // 수정 중에는 첨부를 쌓지 않는다. 고칠 수 있는 메시지는 본문뿐이다. 답장에도 첨부하지 않는다
   // (기능 명세 §13.5). 쌓아 둔 첨부는 그동안 숨겨 두었다가 끝나면 다시 보인다.
   const canStage = !editTarget && !replyTarget;
   const hasStaged = canStage && staged.length > 0;
-  const draftLength = countMessageGraphemes(normalizedDraft);
+  // 길이 상한은 저장되는 원문에 걸린다. 화면에 보이는 글자 수로 세면 토큰 길이만큼 넘겨 보낸다.
+  const draftLength = countMessageGraphemes(prepared.body);
   const overLimit = draftLength > MESSAGE_MAX_LENGTH;
+  const mentionLimitReason = validateMentionCount(
+    prepared.body,
+    prepared.entries,
+  );
+  const cannotSend = overLimit || mentionLimitReason !== null;
   const attachmentActionsCollapsed = hasDraft && !attachmentActionsExpanded;
-
-  function sendDraft(): boolean {
-    if (overLimit) return false;
-    const body = normalizedDraft;
-    if (editTarget) {
-      if (!hasDraft) return false;
-      void onEdit(body);
-      return true;
-    }
-    if (!hasDraft && !hasStaged) return false;
-    if (!claimSend()) return false;
-    // 글을 먼저 보낸다. 첨부는 올리기가 끝나야 서버 시각이 정해지므로 어차피 글 뒤에 온다.
-    if (hasDraft) {
-      void onSend(body);
-      setDraft("");
-    }
-    if (hasStaged) onSendStaged();
-    setAttachmentActionsExpanded(false);
-    setJustSent(true);
-    return true;
-  }
 
   function changeDraft(value: string) {
     onDraftInput();
@@ -1825,6 +1890,75 @@ function ComposerShell({
     if (normalizeMessageBody(value).trim() === "") {
       setAttachmentActionsExpanded(false);
     }
+  }
+
+  const mentionInput = useMentionTextarea({
+    inputRef: textareaRef,
+    draft,
+    setDraft: changeDraft,
+    entries: mentions,
+  });
+  const mentionSuggestions = useMentionSuggestions({
+    participants: mentionParticipants,
+    viewerId,
+  });
+  const mentionListId = useId();
+  const mentionArea = useRef<HTMLDivElement>(null);
+  const closeMentionSuggestions = mentionSuggestions.close;
+  // 입력창이나 후보 밖을 누르면 닫는다. blur로 닫으면 iOS에서 후보를 누르는 순간 입력창이 포커스를
+  // 잃어 목록이 먼저 사라지고 누른 후보가 들어가지 않는다.
+  useEffect(() => {
+    if (!mentionSuggestions.open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!mentionArea.current?.contains(event.target as Node)) {
+        closeMentionSuggestions();
+      }
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [mentionSuggestions.open, closeMentionSuggestions]);
+
+  /** 고른 후보를 `@`와 이어 친 글자 자리에 넣는다. 뒤에 공백 하나를 붙여 바로 이어 쓰게 한다. */
+  function selectMention(suggestion: MessageMentionSuggestion) {
+    const element = textareaRef.current;
+    const trigger = mentionSuggestions.trigger;
+    mentionSuggestions.close();
+    if (!element || trigger === null) return;
+    // 번호는 원문의 토큰을 보고 고른다. 표시형에는 토큰이 없어 언제나 1이 나온다.
+    const added = addMessageMention(
+      mentions,
+      suggestion,
+      fromMentionDisplay(draft, mentions),
+    );
+    if (!added) return;
+    setMentions(added.entries);
+    mentionInput.replaceRange(
+      trigger,
+      element.selectionStart,
+      `${mentionDisplayText(added.entry.name, added.entry.ordinal)} `,
+    );
+  }
+
+  function sendDraft(): boolean {
+    if (cannotSend) return false;
+    mentionSuggestions.close();
+    if (editTarget) {
+      if (!hasDraft) return false;
+      void onEdit(prepared);
+      return true;
+    }
+    if (!hasDraft && !hasStaged) return false;
+    if (!claimSend()) return false;
+    // 글을 먼저 보낸다. 첨부는 올리기가 끝나야 서버 시각이 정해지므로 어차피 글 뒤에 온다.
+    if (hasDraft) {
+      void onSend(prepared);
+      setDraft("");
+      setMentions([]);
+    }
+    if (hasStaged) onSendStaged();
+    setAttachmentActionsExpanded(false);
+    setJustSent(true);
+    return true;
   }
 
   return (
@@ -1856,7 +1990,7 @@ function ComposerShell({
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-primary">메시지 수정</p>
             <p className="truncate text-xs text-muted-foreground">
-              {editTarget.message.body}
+              {mentionPlainText(editTarget.message.body)}
             </p>
           </div>
           <Button
@@ -1948,11 +2082,22 @@ function ComposerShell({
         </ul>
       ) : null}
       <div
+        ref={mentionArea}
         className={cn(
-          "mx-auto flex max-w-3xl items-end gap-1.5",
+          "relative mx-auto flex max-w-3xl items-end gap-1.5",
           !desktopDetailsOpen && "xl:max-w-none",
         )}
       >
+        {mentionSuggestions.open ? (
+          <MentionSuggestionList
+            id={mentionListId}
+            suggestions={mentionSuggestions.suggestions}
+            activeIndex={mentionSuggestions.activeIndex}
+            onActiveIndexChange={mentionSuggestions.setActiveIndex}
+            onSelect={selectMention}
+            className="absolute inset-x-0 bottom-full z-20 mb-2"
+          />
+        ) : null}
         <div
           aria-hidden={attachmentActionsCollapsed}
           className={cn(
@@ -2020,8 +2165,29 @@ function ComposerShell({
             value={draft}
             aria-label="메시지 입력"
             placeholder="메시지 입력"
+            aria-autocomplete={mentionParticipants ? "list" : undefined}
+            aria-controls={mentionSuggestions.open ? mentionListId : undefined}
+            aria-activedescendant={
+              mentionSuggestions.open
+                ? mentionOptionId(mentionListId, mentionSuggestions.activeIndex)
+                : undefined
+            }
             className="field-sizing-content max-h-32 min-h-6 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground md:text-[15px]"
-            onChange={(event) => changeDraft(event.currentTarget.value)}
+            onChange={(event) => {
+              const element = event.currentTarget;
+              mentionSuggestions.onTextChange(
+                draft,
+                element.value,
+                element.selectionStart,
+              );
+              mentionInput.handleChange(element);
+            }}
+            onSelect={(event) =>
+              mentionSuggestions.onCaretMove(
+                event.currentTarget.value,
+                event.currentTarget.selectionStart,
+              )
+            }
             onPaste={(event) => {
               if (!canStage) return;
               const images = clipboardImageFiles(event.clipboardData);
@@ -2029,13 +2195,41 @@ function ComposerShell({
               event.preventDefault();
               onStageFiles(images);
             }}
-            onCompositionStart={() => (composing.current = true)}
-            onCompositionEnd={() => (composing.current = false)}
+            onCompositionStart={mentionInput.handleCompositionStart}
+            onCompositionEnd={(event) =>
+              mentionInput.handleCompositionEnd(event.currentTarget)
+            }
             onKeyDown={(event) => {
               const composingText =
-                composing.current ||
+                mentionInput.composing.current ||
                 event.nativeEvent.isComposing ||
                 event.keyCode === 229;
+              if (mentionSuggestions.open && !composingText) {
+                if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                  event.preventDefault();
+                  mentionSuggestions.move(event.key === "ArrowDown" ? 1 : -1);
+                  return;
+                }
+                // 폰·태블릿의 `Enter`는 줄바꿈이라 고르지 않는다. 줄이 바뀌면 목록이 닫힌다.
+                if (
+                  event.key === "Tab" ||
+                  (event.key === "Enter" && !event.shiftKey && !isHandheld())
+                ) {
+                  event.preventDefault();
+                  selectMention(
+                    mentionSuggestions.suggestions[
+                      mentionSuggestions.activeIndex
+                    ],
+                  );
+                  return;
+                }
+                // 수정이나 답장보다 목록을 먼저 닫는다.
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  mentionSuggestions.close();
+                  return;
+                }
+              }
               // 조합 중 Esc는 IME가 조합을 취소하는 키다. 수정이나 답장을 취소하지 않는다.
               if (
                 event.key === "Escape" &&
@@ -2070,7 +2264,7 @@ function ComposerShell({
                 ? "메시지 보내기"
                 : "좋아요 보내기"
           }
-          disabled={overLimit || (editTarget !== undefined && !hasDraft)}
+          disabled={cannotSend || (editTarget !== undefined && !hasDraft)}
           // 보내도 키보드가 접히지 않게 한다. 누르는 순간 입력창이 포커스를 잃지 않도록 기본 동작을
           // 막고, 그래도 잃는 브라우저(iOS Safari)를 위해 입력 중이었으면 누른 뒤 다시 돌려준다.
           onPointerDown={() => {
@@ -2086,9 +2280,10 @@ function ComposerShell({
             }
             if (justSent) return;
             if (!claimSend()) return;
-            void onSend("👍");
+            void onSend({ body: "👍", mentionPubIds: [], entries: [] });
             // 공백만 있던 입력은 좋아요와 함께 비운다.
             setDraft("");
+            setMentions([]);
           }}
         >
           {hasDraft || hasStaged || editTarget || justSent ? (
@@ -2108,6 +2303,16 @@ function ComposerShell({
         >
           메시지는 {MESSAGE_MAX_LENGTH.toLocaleString("ko-KR")}자까지 쓸 수
           있습니다. ({draftLength.toLocaleString("ko-KR")})
+        </p>
+      ) : mentionLimitReason ? (
+        <p
+          role="alert"
+          className={cn(
+            "mx-auto mt-1 max-w-3xl px-3 text-xs text-destructive",
+            !desktopDetailsOpen && "xl:max-w-none",
+          )}
+        >
+          {mentionLimitReason}
         </p>
       ) : null}
     </footer>

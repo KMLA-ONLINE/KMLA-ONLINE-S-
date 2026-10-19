@@ -9,6 +9,10 @@
 
 create type public.conversation_type as enum ('direct', 'group');
 
+-- 대화 알림 단계(기능 명세 §13.17). 저장은 `muted_until`(끄기)과 `mentions_only`로 하고, 이 타입은 RPC가
+-- 주고받는 값이다. `mentions`는 그룹 대화에만 있다.
+create type public.conversation_notification_level as enum ('all', 'mentions', 'off');
+
 create table public.conversations (
   id uuid primary key default gen_random_uuid(),
   type public.conversation_type not null,
@@ -57,6 +61,8 @@ create table public.conversation_members (
   last_read_sent_at timestamptz not null default clock_timestamp(),
   last_read_message_id uuid not null default '00000000-0000-0000-0000-000000000000',
   muted_until timestamptz,
+  -- 그룹 대화에서 멘션된 메시지만 Push로 받을지(기능 명세 §13.17). 끄기(`muted_until`)가 앞선다.
+  mentions_only boolean not null default false,
   -- 스스로 나간 기간인지. 내보내진 기간과 달리 대화 목록에서 감춘다(기능 명세 §13.16).
   left_by_self boolean not null default false,
   constraint conversation_members_period_check
@@ -93,6 +99,11 @@ create table private.messages (
   system_kind text,
   system_profile_ids bigint[],
   system_name text,
+  -- 멘션 대상(기능 명세 §13.22, 기술 설계 §8). n번째 원소가 본문의 `m:n` 토큰이 부르는 프로필이다.
+  -- 대화 참여자와 같은 메타데이터라 암호화하지 않는다(기능 명세 §13.20).
+  mention_profile_ids bigint[] not null default '{}',
+  -- 본문에 `@모든 사람`(`m:0`)이 있는지. 발송 직전 확인이 본문을 복호화하지 않고 판정하려고 둔다.
+  mentions_everyone boolean not null default false,
   constraint messages_conversation_id_key unique (conversation_id, id),
   -- 답장 대상은 같은 대화의 메시지다. 원본은 삭제해도 행을 남기므로 지워지지 않는다.
   constraint messages_reply_to_fkey
@@ -115,6 +126,11 @@ create table private.messages (
         and reply_to_id is null
         and (system_kind = 'renamed') = (system_name is not null)
       )
+    ),
+  constraint messages_mentions_check
+    check (
+      (system_kind is null and deleted_at is null)
+      or (cardinality(mention_profile_ids) = 0 and not mentions_everyone)
     )
 );
 
@@ -327,6 +343,96 @@ $$;
 revoke all on function private.decrypt_message_text(bytea, smallint, jsonb)
   from public;
 
+-- 멘션 토큰을 `@이름` 글자로 바꾼다(기술 설계 §8). 대화 목록 미리보기, 답장 원문, 검색, Push처럼 본문을
+-- 글자로만 보여 주는 곳이 쓴다. 토큰 문법은 `private.parse_mention_ordinals`와 같다. 자르기 전에 불러야
+-- 토큰이 반쪽 나지 않는다.
+create function private.message_plain_text(p_body text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select pg_catalog.regexp_replace(p_body, '\[@([^\]\n]*)\]\(m:[0-9]{1,2}\)', '@\1', 'g');
+$$;
+
+revoke all on function private.message_plain_text(text)
+  from public;
+
+-- 본문의 사람 멘션이 부르는 프로필(기능 명세 §13.22). n번째 원소가 `m:n` 토큰의 대상이다. 사람 번호는
+-- 1부터 빈틈없어야 하고, `p_mention_pub_ids`의 같은 자리가 그 사람의 공개 ID다. 대상을 본문에서 정하므로
+-- 본문에 없는 사람에게 Push를 보내게 할 수 없다. 0번(`@모든 사람`)은 대상이 없어 여기서 세지 않는다.
+--
+-- 새로 부르는 사람은 지금 멤버여야 한다. 편집 전부터 불려 있던 사람(`p_already_mentioned`)은 나갔어도
+-- 통과시킨다. 다시 물으면 멘션된 멤버가 나간 뒤로 그 메시지의 오타 하나도 고칠 수 없다.
+create function private.resolve_message_mentions(
+  p_conversation_id uuid,
+  p_body text,
+  p_mention_pub_ids text[],
+  p_already_mentioned bigint[] default '{}'
+)
+returns bigint[]
+language plpgsql
+stable
+set search_path = ''
+as $$
+declare
+  ordinals smallint[] := private.parse_mention_ordinals(p_body);
+  person_count integer := cardinality(array_remove(ordinals, 0::smallint));
+  resolved bigint[];
+begin
+  if cardinality(ordinals) = 0 then
+    return '{}';
+  end if;
+  if not exists (
+    select 1
+    from public.conversations as conversation
+    where conversation.id = p_conversation_id
+      and conversation.type = 'group'
+  ) then
+    raise exception 'mentions are only available in group conversations'
+      using errcode = '22023';
+  end if;
+  if person_count = 0 then
+    return '{}';
+  end if;
+  if person_count > 50 then
+    raise exception 'a message can mention at most 50 members'
+      using errcode = '22023';
+  end if;
+  -- 번호는 중복 없이 오름차순이므로 마지막 번호가 사람 수와 같으면 1부터 빈틈없다.
+  if ordinals[cardinality(ordinals)] <> person_count then
+    raise exception 'mention ordinals must be consecutive'
+      using errcode = '22023';
+  end if;
+
+  select array_agg(profile.id order by entry.ordinal)
+  into resolved
+  from generate_series(1, person_count) as entry(ordinal)
+  join public.profiles as profile
+    on lower(profile.pub_id) = lower(btrim(coalesce(p_mention_pub_ids[entry.ordinal], '')))
+    and profile.status = 'accepted'
+    and profile.deleted_at is null
+  where profile.id = any(p_already_mentioned)
+    or exists (
+      select 1
+      from public.conversation_members as member
+      where member.conversation_id = p_conversation_id
+        and member.profile_id = profile.id
+        and member.left_at is null
+    );
+
+  if coalesce(cardinality(resolved), 0) <> person_count then
+    raise exception 'every mention must name a current conversation member'
+      using errcode = '22023';
+  end if;
+
+  return resolved;
+end;
+$$;
+
+revoke all on function private.resolve_message_mentions(uuid, text, text[], bigint[])
+  from public;
+
 -- 내 대화 목록. `p_conversation_id`를 주면 그 대화 한 건만 돌려주며, 대화방이 대화 정보를 읽을 때
 -- 쓴다. 내보내진 대화는 참여 기간의 메시지를 계속 볼 수 있으므로 목록에 남고, 스스로 나간 대화는
 -- 목록에서 감춘다. 한 건을 지정하면 나간 대화도 돌려준다(기능 명세 §13.16).
@@ -344,11 +450,13 @@ returns table (
   last_message_sent_at timestamptz,
   last_message_deleted boolean,
   unread_count integer,
+  -- 알림을 끈 대화인지. 단계를 모르는 이전 버전 화면이 읽는다. 새 화면은 `notification_level`을 쓴다.
   muted boolean,
   -- 그룹을 지울 수 있는지. 소유주만 지운다.
   can_delete boolean,
   -- 마지막 메시지의 첫 첨부 종류. 본문 없이 첨부만 있는 메시지의 미리보기에 쓴다.
-  last_message_attachment_kind text
+  last_message_attachment_kind text,
+  notification_level public.conversation_notification_level
 )
 language plpgsql
 stable
@@ -385,9 +493,9 @@ begin
     last_message.sender_id,
     case
       when last_message.deleted_at is null and last_message.id is not null
-        then private.decrypt_message_text(
+        then private.message_plain_text(private.decrypt_message_text(
           last_message.body_ciphertext, last_message.key_version, keys
-        )
+        ))
     end,
     last_message.sent_at,
     last_message.deleted_at is not null,
@@ -403,7 +511,12 @@ begin
         and attachment.status = 'ready'
       order by attachment.position
       limit 1
-    )
+    ),
+    case
+      when latest_period.muted_until > now() then 'off'
+      when latest_period.mentions_only then 'mentions'
+      else 'all'
+    end::public.conversation_notification_level
   from latest_period
   join public.conversations as conversation
     on conversation.id = latest_period.conversation_id
@@ -502,7 +615,7 @@ returns table (
   deleted boolean,
   reply_to_id uuid,
   reply_sender_id bigint,
-  -- 답장 원문의 앞부분. 원문이 삭제됐으면 비운다.
+  -- 답장 원문의 앞부분. 멘션은 `@이름` 글자로 바꾼다. 원문이 삭제됐으면 비운다.
   reply_body text,
   reply_deleted boolean,
   -- 답장 원문의 첫 첨부 종류. 본문 없이 첨부만 있는 원문의 인용에 쓴다.
@@ -518,7 +631,9 @@ returns table (
   system_profile_ids bigint[],
   system_name text,
   -- `ready` 첨부를 순서대로. 파일 이름은 복호화해 준다.
-  attachments jsonb
+  attachments jsonb,
+  -- 본문 `m:n` 토큰의 대상. 화면이 대화 참여자 목록에서 지금 이름을 찾는다.
+  mention_profile_ids bigint[]
 )
 language sql
 stable
@@ -546,7 +661,9 @@ as $$
     case
       when original.id is not null and original.deleted_at is null
         then left(
-          private.decrypt_message_text(original.body_ciphertext, original.key_version, p_keys),
+          private.message_plain_text(
+            private.decrypt_message_text(original.body_ciphertext, original.key_version, p_keys)
+          ),
           200
         )
       when original.id is not null then ''
@@ -581,7 +698,8 @@ as $$
     message.system_kind,
     message.system_profile_ids,
     message.system_name,
-    coalesce(files.list, '[]'::jsonb)
+    coalesce(files.list, '[]'::jsonb),
+    message.mention_profile_ids
   from private.messages as message
   left join private.messages as original
     on original.id = message.reply_to_id
@@ -666,7 +784,8 @@ returns table (
   system_kind text,
   system_profile_ids bigint[],
   system_name text,
-  attachments jsonb
+  attachments jsonb,
+  mention_profile_ids bigint[]
 )
 language plpgsql
 stable
@@ -749,7 +868,8 @@ returns table (
   system_kind text,
   system_profile_ids bigint[],
   system_name text,
-  attachments jsonb
+  attachments jsonb,
+  mention_profile_ids bigint[]
 )
 language plpgsql
 stable
@@ -830,7 +950,9 @@ create function public.send_message(
   p_reply_to_id uuid default null,
   -- 보낸 사람의 읽은 위치를 이 메시지로 옮길지. 대화방 안에서 보내면 앞의 메시지를 다 본 것이다.
   -- 방을 열지 않고 보내는 게시물 공유(기능 명세 §8.13)는 false로 보내 안 읽은 메시지를 남긴다.
-  p_mark_read boolean default true
+  p_mark_read boolean default true,
+  -- 본문 `m:n` 토큰이 부르는 사람의 공개 ID. n번째 자리가 n번 토큰이다(`private.resolve_message_mentions`).
+  p_mention_pub_ids text[] default null
 )
 returns table (id uuid, sent_at timestamptz)
 language plpgsql
@@ -841,6 +963,7 @@ declare
   caller_profile_id bigint := private.current_profile_id();
   normalized_body text;
   attachment_count integer;
+  resolved_mentions bigint[];
   encrypted record;
   saved private.messages;
 begin
@@ -911,13 +1034,18 @@ begin
         using errcode = '22023';
     end if;
 
+    resolved_mentions := private.resolve_message_mentions(
+      p_conversation_id, normalized_body, p_mention_pub_ids
+    );
+
     select * into encrypted
     from private.encrypt_message_text(normalized_body, private.message_keys());
 
     -- 전송 시각은 잠금과 키 읽기를 마친 지금이다. 트랜잭션 시작 시각(`now()`)을 쓰면 늦게 커밋된
     -- 메시지가 이미 읽은 위치보다 앞에 놓여 읽지 않은 수와 페이지 순서에서 빠질 수 있다.
     insert into private.messages (
-      id, conversation_id, sender_id, sent_at, reply_to_id, body_ciphertext, key_version
+      id, conversation_id, sender_id, sent_at, reply_to_id, body_ciphertext, key_version,
+      mention_profile_ids, mentions_everyone
     ) values (
       p_message_id,
       p_conversation_id,
@@ -925,7 +1053,9 @@ begin
       clock_timestamp(),
       p_reply_to_id,
       encrypted.ciphertext,
-      encrypted.key_version
+      encrypted.key_version,
+      resolved_mentions,
+      0 = any(private.parse_mention_ordinals(normalized_body))
     )
     on conflict on constraint messages_pkey do nothing
     returning * into saved;
@@ -961,10 +1091,10 @@ begin
 end;
 $$;
 
-revoke all on function public.send_message(uuid, uuid, text, uuid, boolean)
+revoke all on function public.send_message(uuid, uuid, text, uuid, boolean, text[])
   from public, anon;
 
-grant execute on function public.send_message(uuid, uuid, text, uuid, boolean)
+grant execute on function public.send_message(uuid, uuid, text, uuid, boolean, text[])
   to authenticated;
 
 -- 읽음 위치를 이 메시지로 옮긴다. 앞으로만 움직이며, 내 현재 참여 기간 밖의 메시지나 다른 대화의
@@ -1157,8 +1287,13 @@ grant execute on function public.set_message_pinned(uuid, boolean)
   to authenticated;
 
 -- 내 메시지를 보낸 지 15분 안에 고친다(기능 명세 §13.10). 지금 대화 멤버여야 한다. 고친 시각을
--- 돌려준다.
-create function public.edit_message(p_message_id uuid, p_body text)
+-- 돌려준다. 멘션은 본문과 함께 다시 정하고, 새로 불린 멤버에게만 Push를 예약한다(기능 명세 §13.17).
+create function public.edit_message(
+  p_message_id uuid,
+  p_body text,
+  -- `send_message`의 같은 인자와 같다.
+  p_mention_pub_ids text[] default null
+)
 returns timestamptz
 language plpgsql
 security definer
@@ -1168,6 +1303,9 @@ declare
   caller_profile_id bigint := private.current_profile_id();
   normalized_body text := private.normalize_message_body(p_body);
   target private.messages;
+  saved private.messages;
+  resolved_mentions bigint[];
+  newly_mentioned bigint[];
   encrypted record;
   edited timestamptz;
 begin
@@ -1188,23 +1326,45 @@ begin
       using errcode = '22023';
   end if;
 
+  resolved_mentions := private.resolve_message_mentions(
+    target.conversation_id, normalized_body, p_mention_pub_ids, target.mention_profile_ids
+  );
+
   select * into encrypted
   from private.encrypt_message_text(normalized_body, private.message_keys());
 
-  update private.messages
+  update private.messages as message
   set body_ciphertext = encrypted.ciphertext,
     key_version = encrypted.key_version,
-    edited_at = edited
-  where id = target.id;
+    edited_at = edited,
+    mention_profile_ids = resolved_mentions,
+    mentions_everyone = 0 = any(private.parse_mention_ordinals(normalized_body))
+  where message.id = target.id
+  returning message.* into saved;
+
+  -- 이미 불려 있던 사람에게는 다시 보내지 않는다. `@모든 사람`이 새로 생기면 모두가 새로 불린 것이다.
+  -- 같은 메시지와 구독의 delivery는 하나뿐이라 이미 예약된 구독은 건너뛴다.
+  if saved.mentions_everyone and not target.mentions_everyone then
+    perform private.enqueue_message_push(saved);
+  else
+    newly_mentioned := array(
+      select unnest(saved.mention_profile_ids)
+      except
+      select unnest(target.mention_profile_ids)
+    );
+    if cardinality(newly_mentioned) > 0 then
+      perform private.enqueue_message_push(saved, newly_mentioned);
+    end if;
+  end if;
 
   return edited;
 end;
 $$;
 
-revoke all on function public.edit_message(uuid, text)
+revoke all on function public.edit_message(uuid, text, text[])
   from public, anon;
 
-grant execute on function public.edit_message(uuid, text)
+grant execute on function public.edit_message(uuid, text, text[])
   to authenticated;
 
 -- 내 메시지를 지운다(기능 명세 §13.11). 행은 답장 인용이 가리키므로 남기고 본문, 반응, 고정을
@@ -1268,7 +1428,9 @@ begin
   update private.messages as message
   set deleted_at = clock_timestamp(),
     body_ciphertext = null,
-    key_version = null
+    key_version = null,
+    mention_profile_ids = '{}',
+    mentions_everyone = false
   where message.id = any(p_message_ids)
     and message.deleted_at is null;
 end;
@@ -1309,7 +1471,8 @@ returns table (
   system_kind text,
   system_profile_ids bigint[],
   system_name text,
-  attachments jsonb
+  attachments jsonb,
+  mention_profile_ids bigint[]
 )
 language plpgsql
 stable
@@ -1631,9 +1794,36 @@ create index notification_delivery_message_finished_idx
   on private.notification_delivery_outbox (subscription_id, status)
   where message_id is not null and status in ('sent', 'suppressed');
 
--- 새 메시지의 Push를 수신 멤버의 구독마다 예약한다. 보낸 사람과 대화 알림을 끈 멤버는 뺀다. 2초 뒤에
--- 보내 그 사이 대화방을 보고 있던 수신자의 읽음 위치가 갱신될 시간을 준다.
-create function private.enqueue_message_push(p_message private.messages)
+-- 이 멤버가 이 메시지의 Push를 받는지(기능 명세 §13.17). 끄기가 멘션보다 앞서고, `멘션만`이면 나를
+-- 부르거나 `@모든 사람`인 메시지만 받는다. 큐잉과 발송 직전 확인이 이 판정 하나를 쓴다.
+create function private.member_wants_message_push(
+  p_member public.conversation_members,
+  p_message private.messages
+)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select (p_member.muted_until is null or p_member.muted_until <= now())
+    and (
+      not p_member.mentions_only
+      or p_message.mentions_everyone
+      or p_member.profile_id = any(p_message.mention_profile_ids)
+    );
+$$;
+
+revoke all on function private.member_wants_message_push(
+  public.conversation_members, private.messages
+) from public;
+
+-- 새 메시지의 Push를 수신 멤버의 구독마다 예약한다. 보낸 사람과 Push를 받지 않는 멤버는 뺀다. 2초 뒤에
+-- 보내 그 사이 대화방을 보고 있던 수신자의 읽음 위치가 갱신될 시간을 준다. `p_profile_ids`를 주면 그
+-- 멤버만 예약한다. 편집으로 새로 멘션된 사람에게만 보낼 때 쓴다.
+create function private.enqueue_message_push(
+  p_message private.messages,
+  p_profile_ids bigint[] default null
+)
 returns void
 language plpgsql
 security definer
@@ -1657,7 +1847,8 @@ begin
   where member.conversation_id = p_message.conversation_id
     and member.left_at is null
     and member.profile_id is distinct from p_message.sender_id
-    and (member.muted_until is null or member.muted_until <= now())
+    and (p_profile_ids is null or member.profile_id = any(p_profile_ids))
+    and private.member_wants_message_push(member, p_message)
     and not private.profile_suspended(member.profile_id)
   on conflict do nothing;
 
@@ -1667,7 +1858,7 @@ begin
 end;
 $$;
 
-revoke all on function private.enqueue_message_push(private.messages)
+revoke all on function private.enqueue_message_push(private.messages, bigint[])
   from public;
 
 -- 발송 직전 확인(알림 기술 설계 §11.3). 수신자가 아직 볼 수 있는 멤버이고, 메시지가 남아 있고, 대화
@@ -1699,7 +1890,7 @@ as $$
       and message.sent_at >= member.joined_at
     where message.id = p_delivery.message_id
       and message.deleted_at is null
-      and (member.muted_until is null or member.muted_until <= now())
+      and private.member_wants_message_push(member, message)
       and (member.last_read_sent_at, member.last_read_message_id) < (message.sent_at, message.id)
       and (
         not exists (
@@ -1773,7 +1964,9 @@ as $$
         when coalesce(preference.message_preview_hidden, false) then '새 메시지가 있습니다.'
         else coalesce(
           nullif(
-            private.decrypt_message_text(message.body_ciphertext, message.key_version, p_keys),
+            private.message_plain_text(
+              private.decrypt_message_text(message.body_ciphertext, message.key_version, p_keys)
+            ),
             ''
           ),
           -- 첨부만 있으면 종류로 쓰고 파일 이름은 넣지 않는다(기능 명세 §13.17).
@@ -1805,8 +1998,8 @@ $$;
 revoke all on function private.message_push_content(uuid, bigint, jsonb)
   from public;
 
--- 대화 알림을 끄거나 켠다(기능 명세 §13.17). 지금은 직접 다시 켤 때까지만 끈다. 기간을 정하는 끄기는
--- 같은 `muted_until`에 시각을 넣으면 된다. 읽지 않은 수는 그대로 센다.
+-- 대화 알림을 끄거나 켠다(기능 명세 §13.17). 알림 단계를 모르는 이전 버전 화면을 위해 남겨 둔다. 새
+-- 화면은 `set_conversation_notification_level`을 쓴다. 켜도 `mentions_only`는 건드리지 않는다.
 create function public.set_conversation_muted(p_conversation_id uuid, p_muted boolean)
 returns void
 language plpgsql
@@ -1843,6 +2036,60 @@ revoke all on function public.set_conversation_muted(uuid, boolean)
 
 grant execute on function public.set_conversation_muted(uuid, boolean)
   to authenticated;
+
+-- 대화 알림 단계를 정한다(기능 명세 §13.17). 지금은 직접 다시 켤 때까지만 끈다. 기간을 정하는 끄기는
+-- 같은 `muted_until`에 시각을 넣으면 된다. 읽지 않은 수는 단계와 관계없이 그대로 센다.
+create function public.set_conversation_notification_level(
+  p_conversation_id uuid,
+  p_level public.conversation_notification_level
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  if p_level is null then
+    raise exception 'notification level required'
+      using errcode = '22023';
+  end if;
+  if p_level = 'mentions' and not exists (
+    select 1
+    from public.conversations as conversation
+    where conversation.id = p_conversation_id
+      and conversation.type = 'group'
+  ) then
+    raise exception 'mentions level requires a group conversation'
+      using errcode = '22023';
+  end if;
+
+  update public.conversation_members as member
+  set muted_until = case when p_level = 'off' then 'infinity'::timestamptz end,
+    mentions_only = p_level = 'mentions'
+  where member.conversation_id = p_conversation_id
+    and member.profile_id = caller_profile_id
+    and member.left_at is null;
+
+  if not found then
+    raise exception 'conversation member required'
+      using errcode = '42501';
+  end if;
+end;
+$$;
+
+revoke all on function public.set_conversation_notification_level(
+  uuid, public.conversation_notification_level
+) from public, anon;
+
+grant execute on function public.set_conversation_notification_level(
+  uuid, public.conversation_notification_level
+) to authenticated;
 
 -- 대화 생성과 멤버 관리(기능 명세 §13.1, §13.15, §13.16). 그룹 추가·내보내기 알림은 보내지 않고 대화
 -- 안의 시스템 메시지로만 남긴다.
@@ -2460,9 +2707,10 @@ begin
     scanned := scanned + 1;
     last_sent_at := candidate.sent_at;
     last_id := candidate.id;
-    plain := private.decrypt_message_text(
+    -- 멘션은 화면에 보이는 `@이름`으로 찾는다. 토큰의 `m:1`이 검색어에 걸리지 않게 한다.
+    plain := private.message_plain_text(private.decrypt_message_text(
       candidate.body_ciphertext, candidate.key_version, keys
-    );
+    ));
     if strpos(lower(regexp_replace(plain, '[[:space:]]+', '', 'g')), normalized_query) > 0 then
       results := results || jsonb_build_array(jsonb_build_object(
         'id', candidate.id,

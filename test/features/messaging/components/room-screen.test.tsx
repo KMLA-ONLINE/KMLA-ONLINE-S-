@@ -14,6 +14,7 @@ import * as queries from "~/features/messaging/data/queries";
 import { clearRoomDrafts } from "~/features/messaging/hooks/room-drafts";
 import { loadConversation } from "~/features/messaging/data/queries";
 import type { Conversation } from "~/features/messaging/model/types";
+import { mentionDisplayText } from "~/features/posts/model/mentions";
 import { renderRoute, screen, within } from "../../../router";
 import { resetFakeMessaging } from "../fake-api";
 
@@ -918,26 +919,61 @@ describe("RoomScreen", () => {
     expect(await screen.findByText("대화 목록")).toBeInTheDocument();
   });
 
-  it("대화 정보에서 대화 알림을 끄고 다시 켠다", async () => {
-    const setMuted = vi.spyOn(mutations, "setConversationMuted");
+  it("그룹 대화 정보에서 알림 단계를 고른다", async () => {
+    const setLevel = vi.spyOn(mutations, "setConversationNotificationLevel");
     const conversation = await loadConversation("student-council");
     const { user } = renderRoute(
       () => <RoomScreen conversation={conversation!} />,
       { path: "/messenger/student-council" },
     );
 
+    await user.click(
+      screen.getByRole("button", { name: "채팅 알림: 모든 메시지" }),
+    );
+    await user.click(
+      await screen.findByRole("menuitemradio", { name: "멘션만" }),
+    );
+    expect(setLevel).toHaveBeenLastCalledWith("student-council", "mentions");
+    expect(
+      await screen.findByRole("button", { name: "채팅 알림: 멘션만" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "채팅 알림: 멘션만" }));
+    await user.click(
+      await screen.findByRole("menuitemradio", { name: "끄기" }),
+    );
+    expect(setLevel).toHaveBeenLastCalledWith("student-council", "off");
+    expect(
+      await screen.findByRole("button", { name: "채팅 알림: 끄기" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "채팅 알림: 끄기" }));
+    await user.click(
+      await screen.findByRole("menuitemradio", { name: "모든 메시지" }),
+    );
+    expect(setLevel).toHaveBeenLastCalledWith("student-council", "all");
+    setLevel.mockRestore();
+  });
+
+  it("1:1 대화 정보에서는 알림을 끄고 다시 켜기만 한다", async () => {
+    const setLevel = vi.spyOn(mutations, "setConversationNotificationLevel");
+    const conversation = await loadConversation("hyunwoo");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/hyunwoo" },
+    );
+
     await user.click(screen.getByRole("button", { name: "채팅 알림 끄기" }));
     expect(
       screen.getByRole("button", { name: "채팅 알림 켜기" }),
     ).toHaveAttribute("aria-pressed", "true");
-    expect(setMuted).toHaveBeenLastCalledWith("student-council", true);
+    expect(setLevel).toHaveBeenLastCalledWith("hyunwoo", "off");
 
     await user.click(screen.getByRole("button", { name: "채팅 알림 켜기" }));
     expect(
       screen.getByRole("button", { name: "채팅 알림 끄기" }),
     ).toHaveAttribute("aria-pressed", "false");
-    expect(setMuted).toHaveBeenLastCalledWith("student-council", false);
-    setMuted.mockRestore();
+    expect(setLevel).toHaveBeenLastCalledWith("hyunwoo", "all");
+    setLevel.mockRestore();
   });
 
   it("답장을 전송하고 인용 원문으로 이동하며 삭제된 원문을 표시한다", async () => {
@@ -1753,5 +1789,113 @@ describe("RoomScreen", () => {
 
     await user.click(screen.getByRole("button", { name: "채팅으로 돌아가기" }));
     expect(conversationRegion).toHaveClass("flex");
+  });
+});
+
+describe("RoomScreen 멘션", () => {
+  async function renderGroupRoom() {
+    const conversation = await loadConversation("student-council");
+    const view = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+    const input = screen.getByRole<HTMLTextAreaElement>("textbox", {
+      name: "메시지 입력",
+    });
+    return { ...view, input };
+  }
+
+  function optionNames() {
+    return within(screen.getByRole("listbox", { name: "멘션할 사람" }))
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+  }
+
+  it("@를 치면 입력창 위에 후보를 띄우고, 이어 친 글자로 거르며, 고른 멘션을 보낸다", async () => {
+    const sendSpy = vi.spyOn(mutations, "sendMessage");
+    const { user, input } = await renderGroupRoom();
+
+    await user.type(input, "회의 @");
+    // 나는 후보에 없다. 맨 위는 대화 전체다.
+    expect(optionNames()).toEqual(["모든 사람", "박서현", "최민준", "윤지우"]);
+    expect(input).toHaveFocus();
+
+    await user.type(input, "서");
+    expect(optionNames()).toEqual(["박서현"]);
+    expect(input).toHaveAttribute(
+      "aria-activedescendant",
+      within(screen.getByRole("listbox")).getByRole("option").id,
+    );
+
+    // 목록이 열려 있는 동안의 Enter는 보내지 않고 고른다.
+    await user.keyboard("{Enter}");
+    expect(sendSpy).not.toHaveBeenCalled();
+    expect(input).toHaveValue(`회의 ${mentionDisplayText("박서현", 1)} `);
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+
+    await user.type(input, "봐 주세요{Enter}");
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: "회의 [@박서현](m:1) 봐 주세요",
+        mentionPubIds: ["seo-24"],
+      }),
+      expect.anything(),
+    );
+    expect(
+      await screen.findByRole("link", { name: "@박서현" }),
+    ).toHaveAttribute("href", "/profile/seo-24");
+    sendSpy.mockRestore();
+  });
+
+  it("@모든 사람을 고르면 한 글자만 지워도 멘션 전체를 지운다", async () => {
+    const { user, input } = await renderGroupRoom();
+
+    await user.type(input, "@");
+    await user.click(screen.getByRole("option", { name: "모든 사람" }));
+    const mention = mentionDisplayText("모든 사람", 0);
+    expect(input).toHaveValue(`${mention} `);
+    expect(input).toHaveFocus();
+
+    // 이름 가운데에 캐럿을 두고 한 글자만 지운다.
+    input.setSelectionRange(4, 4);
+    const deletion = new InputEvent("beforeinput", {
+      inputType: "deleteContentBackward",
+      bubbles: true,
+      cancelable: true,
+    });
+    fireEvent(input, deletion);
+    expect(deletion.defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(input).toHaveValue(" "));
+  });
+
+  it("공백을 치거나 Esc를 누르면 목록을 닫고 친 글자는 그대로 둔다", async () => {
+    const { user, input } = await renderGroupRoom();
+
+    await user.type(input, "@최");
+    expect(optionNames()).toEqual(["최민준"]);
+    await user.type(input, " ");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(input).toHaveValue("@최 ");
+
+    await user.type(input, "@");
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(input).toHaveValue("@최 @");
+
+    // 맞는 후보가 없어도 닫는다.
+    await user.type(input, "{Backspace}@없는사람");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("1:1 대화에서는 @를 쳐도 후보를 띄우지 않는다", async () => {
+    const conversation = await loadConversation("hyunwoo");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/hyunwoo" },
+    );
+
+    await user.type(screen.getByRole("textbox", { name: "메시지 입력" }), "@");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 });

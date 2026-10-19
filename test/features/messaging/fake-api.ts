@@ -8,6 +8,7 @@ import { applyMessageReaction } from "~/features/messaging/model/message-reactio
 import type {
   Conversation,
   ConversationMessage,
+  ConversationNotificationLevel,
   ConversationSummary,
   MessageCursor,
   MessagePage,
@@ -142,6 +143,7 @@ export interface SendMessageInput {
   id: string;
   body: string;
   replyToMessageId?: string;
+  mentionPubIds?: string[];
 }
 
 export function sendMessage(
@@ -179,6 +181,7 @@ export function setMessagePinned(
 export function editMessage(
   _messageId: string,
   body: string,
+  _mentionPubIds: string[] = [],
 ): Promise<Pick<ConversationMessage, "body" | "editedAt">> {
   return Promise.resolve({ body, editedAt: new Date().toISOString() });
 }
@@ -188,12 +191,12 @@ export function deleteMessages(_messageIds: string[]): Promise<void> {
 }
 
 /** 목록이 정본이므로 다시 읽었을 때 바뀐 값이 보이도록 목 데이터를 고친다. */
-export function setConversationMuted(
+export function setConversationNotificationLevel(
   conversationId: string,
-  muted: boolean,
+  level: ConversationNotificationLevel,
 ): Promise<void> {
   const conversation = findConversation(conversationId);
-  if (conversation) conversation.muted = muted;
+  if (conversation) conversation.notificationLevel = level;
   return Promise.resolve();
 }
 

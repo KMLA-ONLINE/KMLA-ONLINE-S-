@@ -2,6 +2,7 @@ import { BanIcon, ThumbsUpIcon } from "lucide-react";
 import { useRef, type Ref } from "react";
 
 import { MessageAttachments } from "~/features/messaging/components/message-attachments";
+import { MessageMention } from "~/features/messaging/components/message-mention";
 import { formatReplyPreview } from "~/features/messaging/model/conversation-preview";
 import {
   getEmojiOnlyMessageGraphemes,
@@ -221,7 +222,11 @@ export function MessageBubble({
               <EmojiOnlyMessageBody graphemes={emojiGraphemes} />
             ) : (
               <span ref={textRef}>
-                <MessageBody body={messageBody} isOwn={isOwn} />
+                <MessageBody
+                  body={messageBody}
+                  isOwn={isOwn}
+                  mentionProfileIds={message.mentionProfileIds}
+                />
                 {editedMark}
               </span>
             )}
@@ -285,23 +290,43 @@ function EmojiOnlyMessageBody({ graphemes }: { graphemes: string[] }) {
   return <>{graphemes.join("")}</>;
 }
 
-function MessageBody({ body, isOwn }: { body: string; isOwn: boolean }) {
-  return parseMessageText(body).map((segment, index) =>
-    segment.type === "link" ? (
-      <a
-        key={`${segment.value}-${index}`}
-        href={segment.value}
-        target="_blank"
-        rel="noreferrer"
-        className={cn(
-          "underline underline-offset-2",
-          isOwn ? "text-primary-foreground" : "text-primary",
-        )}
-      >
-        {segment.value}
-      </a>
-    ) : (
-      segment.value
-    ),
-  );
+function MessageBody({
+  body,
+  isOwn,
+  mentionProfileIds,
+}: {
+  body: string;
+  isOwn: boolean;
+  mentionProfileIds: string[] | undefined;
+}) {
+  return parseMessageText(body).map((segment, index) => {
+    if (segment.type === "mention") {
+      return (
+        <MessageMention
+          key={`mention-${index}`}
+          ordinal={segment.ordinal}
+          label={segment.label}
+          mentionProfileIds={mentionProfileIds}
+          onPrimary={isOwn}
+        />
+      );
+    }
+    if (segment.type === "link") {
+      return (
+        <a
+          key={`${segment.value}-${index}`}
+          href={segment.value}
+          target="_blank"
+          rel="noreferrer"
+          className={cn(
+            "underline underline-offset-2",
+            isOwn ? "text-primary-foreground" : "text-primary",
+          )}
+        >
+          {segment.value}
+        </a>
+      );
+    }
+    return segment.value;
+  });
 }

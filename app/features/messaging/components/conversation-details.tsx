@@ -1,4 +1,5 @@
 import {
+  AtSignIcon,
   BellIcon,
   BellOffIcon,
   ChevronDownIcon,
@@ -25,11 +26,29 @@ import {
 } from "~/features/messaging/model/system-message";
 import type {
   Conversation,
+  ConversationNotificationLevel,
   MessageParticipant,
 } from "~/features/messaging/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { Button } from "~/shared/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "~/shared/ui/dropdown-menu";
 import { cn } from "~/shared/lib/utils";
+
+/** 알림 단계별 빠른 동작 아이콘, 그 아래 이름, 메뉴의 선택지 이름(기능 명세 §13.17). */
+const NOTIFICATION_LEVELS: Record<
+  ConversationNotificationLevel,
+  { icon: LucideIcon; label: string; option: string }
+> = {
+  all: { icon: BellIcon, label: "알림", option: "모든 메시지" },
+  mentions: { icon: AtSignIcon, label: "멘션만", option: "멘션만" },
+  off: { icon: BellOffIcon, label: "알림 꺼짐", option: "끄기" },
+};
 
 export function ConversationDetails({
   conversation,
@@ -37,8 +56,8 @@ export function ConversationDetails({
   onMobileBack,
   pinnedCount,
   onOpenPinnedMessages,
-  muted,
-  onToggleMuted,
+  notificationLevel,
+  onNotificationLevelChange,
   onSearch,
   onInvite,
   onRename,
@@ -52,8 +71,8 @@ export function ConversationDetails({
   onMobileBack: () => void;
   pinnedCount: number;
   onOpenPinnedMessages: () => void;
-  muted: boolean;
-  onToggleMuted: () => void;
+  notificationLevel: ConversationNotificationLevel;
+  onNotificationLevelChange: (level: ConversationNotificationLevel) => void;
   onSearch: () => void;
   onInvite: () => void;
   onRename: () => void;
@@ -120,13 +139,57 @@ export function ConversationDetails({
                 }
               />
             ) : null}
-            <DetailQuickAction
-              icon={muted ? BellOffIcon : BellIcon}
-              label={muted ? "알림 꺼짐" : "알림"}
-              actionLabel={muted ? "채팅 알림 켜기" : "채팅 알림 끄기"}
-              pressed={muted}
-              onClick={onToggleMuted}
-            />
+            {conversation.type === "group" ? (
+              <DetailQuickAction
+                icon={NOTIFICATION_LEVELS[notificationLevel].icon}
+                label={NOTIFICATION_LEVELS[notificationLevel].label}
+                actionLabel={`채팅 알림: ${NOTIFICATION_LEVELS[notificationLevel].option}`}
+                menu={
+                  <DropdownMenuRadioGroup
+                    value={notificationLevel}
+                    onValueChange={(next: ConversationNotificationLevel) =>
+                      onNotificationLevelChange(next)
+                    }
+                  >
+                    {(
+                      Object.keys(
+                        NOTIFICATION_LEVELS,
+                      ) as ConversationNotificationLevel[]
+                    ).map((level) => {
+                      const { icon: Icon, option } = NOTIFICATION_LEVELS[level];
+                      return (
+                        // 하나를 고르면 할 일이 끝나므로 닫는다. 라디오 항목은 기본으로 열어 둔다.
+                        <DropdownMenuRadioItem
+                          key={level}
+                          value={level}
+                          closeOnClick
+                        >
+                          <Icon aria-hidden />
+                          {option}
+                        </DropdownMenuRadioItem>
+                      );
+                    })}
+                  </DropdownMenuRadioGroup>
+                }
+              />
+            ) : (
+              // 1:1 대화에는 멘션이 없어 켜고 끄기만 한다.
+              <DetailQuickAction
+                icon={NOTIFICATION_LEVELS[notificationLevel].icon}
+                label={NOTIFICATION_LEVELS[notificationLevel].label}
+                actionLabel={
+                  notificationLevel === "off"
+                    ? "채팅 알림 켜기"
+                    : "채팅 알림 끄기"
+                }
+                pressed={notificationLevel === "off"}
+                onClick={() =>
+                  onNotificationLevelChange(
+                    notificationLevel === "off" ? "all" : "off",
+                  )
+                }
+              />
+            )}
             <DetailQuickAction
               icon={SearchIcon}
               label="검색"
@@ -248,7 +311,7 @@ function MemberProfileLink({
   );
 }
 
-/** `onClick`과 `href`가 모두 없으면 아직 준비 중인 기능으로 비활성화한다. */
+/** `onClick`, `href`, `menu`가 모두 없으면 아직 준비 중인 기능으로 비활성화한다. `menu`를 주면 누를 때 그 메뉴를 연다. */
 function DetailQuickAction({
   icon: Icon,
   label,
@@ -256,6 +319,7 @@ function DetailQuickAction({
   pressed,
   onClick,
   href,
+  menu,
 }: {
   icon: LucideIcon;
   label: string;
@@ -263,22 +327,33 @@ function DetailQuickAction({
   pressed?: boolean;
   onClick?: () => void;
   href?: string;
+  menu?: ReactNode;
 }) {
-  const enabled = Boolean(onClick ?? href);
+  const enabled = Boolean(onClick ?? href ?? menu);
+  const button = (
+    <Button
+      variant="secondary"
+      size="icon"
+      className="rounded-full"
+      disabled={!enabled}
+      aria-label={enabled ? (actionLabel ?? label) : `${label} 기능 준비 중`}
+      aria-pressed={pressed}
+      onClick={onClick}
+      {...(href ? { nativeButton: false, render: <Link to={href} /> } : {})}
+    >
+      <Icon aria-hidden />
+    </Button>
+  );
   return (
     <div className="flex min-w-12 flex-col items-center gap-1.5">
-      <Button
-        variant="secondary"
-        size="icon"
-        className="rounded-full"
-        disabled={!enabled}
-        aria-label={enabled ? (actionLabel ?? label) : `${label} 기능 준비 중`}
-        aria-pressed={pressed}
-        onClick={onClick}
-        {...(href ? { nativeButton: false, render: <Link to={href} /> } : {})}
-      >
-        <Icon aria-hidden />
-      </Button>
+      {menu ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger render={button} />
+          <DropdownMenuContent align="center">{menu}</DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        button
+      )}
       <span className="text-xs text-muted-foreground">{label}</span>
     </div>
   );

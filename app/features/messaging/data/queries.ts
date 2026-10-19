@@ -298,7 +298,7 @@ async function toSummaries(
         }
       : null,
     unreadCount: row.unread_count,
-    muted: row.muted,
+    notificationLevel: row.notification_level,
     canDelete: row.can_delete,
   }));
 }
@@ -332,6 +332,7 @@ function toMessage(row: MessageRow): ConversationMessage {
     changedAt: row.changed_at,
     system: toSystemEvent(row),
     attachments: toAttachments(row.attachments),
+    mentionProfileIds: row.mention_profile_ids.map(String),
   };
 }
 

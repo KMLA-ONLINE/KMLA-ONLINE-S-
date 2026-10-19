@@ -1,7 +1,6 @@
 # 메시지 기술 설계
 
-> **상태**: 구현(`supabase/schemas/71-messaging.sql`). 기간을 정한 대화 알림 끄기와 그룹의 멘션 중심 알림은
-> 아직 없다.
+> **상태**: 구현(`supabase/schemas/71-messaging.sql`). 기간을 정한 대화 알림 끄기는 아직 없다.
 
 이 문서는 [메시지 기능 명세](functional-spec/messaging.md)를 구현하기 위한 데이터, 암호화, 동기화와 전달
 경계를 정의한다. 제품 동작은 기능 명세가 정본이다. 메시지 Push 전달은
@@ -23,11 +22,11 @@
 - `public.conversations`: 유형(`direct`·`group`), 그룹 이름, 생성자, 마지막 메시지 시각. 1:1 대화는 두
   프로필 쌍에 unique 제약을 두어 같은 두 사람 사이에 하나만 존재하게 한다.
 - `public.conversation_members`: 대화, 프로필, 참여 시각(`joined_at`), 나간 시각(`left_at`), 스스로 나갔는지
-  (`left_by_self`), 읽음 위치, 알림 끄기 만료 시각. 대화 목록과 탭 배지는 가장 최근 기간을 스스로 나간 대화를
+  (`left_by_self`), 읽음 위치, 알림 끄기 만료 시각, 멘션만 알릴지(`mentions_only`, §8). 대화 목록과 탭 배지는 가장 최근 기간을 스스로 나간 대화를
   빼고, 대화 ID를 지정한 한 건 조회는 그대로 돌려준다. 다시 참여하면 새 참여 기간 행을 만들어 이전 기간과 사이 기간을 구분한다. 그룹
   최대 100명은 멤버 추가 RPC가 대화 행을 잠근 뒤 강제한다.
 - `private.messages`: 대화, 발신자, `sent_at`, 답장 대상, 본문 암호문, 키 버전, 편집 시각, 삭제 시각,
-  시스템 메시지 종류. 클라이언트가 만든 UUID를 기본 키로 받아 재전송을 멱등으로 만든다.
+  시스템 메시지 종류, 멘션 대상(§8). 클라이언트가 만든 UUID를 기본 키로 받아 재전송을 멱등으로 만든다.
 - `private.message_attachments`: 메시지, 버킷, object path, MIME type, 크기, 이미지 치수, 파일 이름
   암호문과 키 버전. 상태는 다른 첨부와 같은 prepare-upload-finalize를 따른다(Storage 설계 §7).
 - `private.message_reactions`: 메시지와 프로필 기준 한 행. `private.message_pins`: 고정은 대화 전체의
@@ -147,3 +146,27 @@ trigger가 `realtime.send`로 현재 멤버마다 자기 private Broadcast topic
   제거, 암호문 열에 평문이 없음, 키 버전 전환, Broadcast topic 권한.
 - Vitest: 시각·날짜 구분·묶음 계산, 낙관적 전송과 실패 되돌림, 따라잡기 병합, 이전 페이지 스크롤 보존.
 - 수동: [알림 수동 인수 테스트](NOTIFICATION_MANUAL_TESTING.md)의 메시지 전용 절.
+
+## 8. 멘션
+
+기능 명세 §13.22와 §13.17을 구현한다.
+
+- 본문 토큰은 게시물·댓글과 같은 `[@이름](m:<번호>)`이다. 사람은 1번부터 빈틈없이 매기고, 0번은
+  `@모든 사람`이다. 토큰 안의 이름은 장식이고 대상은 본문 밖에 둔다. 공개 ID는 바뀌므로 본문에 넣지 않는다.
+- 대상은 `private.messages.mention_profile_ids`(배열의 n번째가 n번 토큰)와 `mentions_everyone`에 평문으로
+  둔다. 대화 참여자와 같은 메타데이터라 암호화하지 않는다(기능 명세 §13.20). 별도 테이블을 두지 않는 것은
+  메시지 한 행 안에서만 뜻이 있고, Push 판정이 메시지 행 하나만 보면 되기 때문이다.
+- 전송과 편집은 공개 ID 배열(`p_mention_pub_ids`)을 받고, 서버가 본문을 훑어 쓰인 번호만 해석한다
+  (`private.resolve_message_mentions`). 클라이언트가 준 목록을 그대로 믿으면 본문에 없는 사람에게 Push를
+  보내게 할 수 있다. 새로 부르는 사람은 지금 멤버여야 하고, 편집에서 이미 불려 있던 사람은 나갔어도 그대로
+  둔다. 1:1 대화의 토큰과 짝 없는 번호는 거절한다.
+- 읽기 RPC는 `mention_profile_ids`를 함께 돌려주고, 화면은 대화 참여자 목록에서 지금 이름을 찾는다. 나간
+  멤버도 참여자 목록에 남으므로 이름이 사라지지 않는다.
+- 대화 목록 미리보기, 답장 원문, 검색 결과, Push 본문은 서버가 토큰을 `@이름` 글자로 바꿔 준다
+  (`private.message_plain_text`). 잘라 낸 뒤에 바꾸면 토큰이 반쪽 나므로 바꾼 뒤에 자른다. 클라이언트가
+  낙관적으로 만드는 답장 인용과 미리보기도 같은 순서를 따른다.
+- 알림 단계는 기존 `muted_until`(끄기)에 `mentions_only`를 더한 세 단계다. `끄기`가 앞선다. 큐잉과 발송 직전
+  확인이 같은 판정(`private.member_wants_message_push`)을 쓴다. 기존 `set_conversation_muted`는 단계를
+  모르는 이전 버전 화면을 위해 남기고, 새 화면은 `set_conversation_notification_level`을 쓴다.
+- 편집으로 새로 불린 멤버에게만 다시 큐잉한다. 같은 메시지와 구독의 delivery는 unique라서, 이미 그 메시지
+  Push를 받았거나 대기 중인 멤버에게는 다시 가지 않는다. 발송 직전 확인의 읽음 조건도 그대로 적용된다.

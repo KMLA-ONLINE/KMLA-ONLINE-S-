@@ -4,6 +4,15 @@ import type {
   ConversationSummary,
   MessageAttachmentKind,
 } from "~/features/messaging/model/types";
+import { mentionPlainText } from "~/features/posts/model/mentions";
+
+/** 답장 인용에 담는 원문 길이. 서버 `private.message_rows`의 `reply_body`와 같다. */
+export const REPLY_PREVIEW_LENGTH = 200;
+
+/** 답장 인용에 담을 원문 앞부분. 서버처럼 멘션을 `@이름` 글자로 바꾼 뒤 자른다 — 먼저 자르면 토큰이 반쪽 난다. */
+export function toReplyPreviewBody(body: string): string {
+  return mentionPlainText(body).slice(0, REPLY_PREVIEW_LENGTH);
+}
 
 /**
  * 대화 목록의 마지막 메시지 한 줄. 내가 보낸 메시지에는 `나:`를, 그룹 대화에서 남이 보낸 메시지에는
@@ -55,8 +64,9 @@ function previewBody(
   origin: string,
 ): string {
   if (sharedPostOf(message, origin)) return "게시물";
+  // 서버가 준 미리보기는 이미 글자지만, 화면이 방금 만든 미리보기는 원문일 수 있다.
   return (
-    message.body ||
+    mentionPlainText(message.body) ||
     (message.attachmentKind ? attachmentKindLabel(message.attachmentKind) : "")
   );
 }

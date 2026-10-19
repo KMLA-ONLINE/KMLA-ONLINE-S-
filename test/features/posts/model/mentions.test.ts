@@ -6,8 +6,10 @@ import {
   extractPostPlainText,
 } from "~/features/posts/model/markdown";
 import {
+  EVERYONE_MENTION_ORDINAL,
   MENTION_DISPLAY_MARK,
   MENTION_LIMIT,
+  assignMentionOrdinals,
   buildMentionToken,
   caretDeletionRange,
   countMentionTargets,
@@ -17,6 +19,7 @@ import {
   mentionDisplaySlot,
   mentionDisplayText,
   mentionOrdinalFromHref,
+  mentionPlainText,
   mentionTokenPattern,
   normalizeMentions,
   parseMentions,
@@ -127,6 +130,20 @@ describe("normalizeMentions", () => {
 
     expect(result.body).toBe("[@박새벽](m:1) [@이한별](m:2)");
     expect(result.pubIds).toEqual(["saebyeok-24", "hanbyeol-25"]);
+  });
+
+  it("keeps the everyone mention at its fixed ordinal without a target", () => {
+    const everyone = {
+      ordinal: EVERYONE_MENTION_ORDINAL,
+      pubId: "",
+      name: "모든 사람",
+    };
+    const body = `${buildMentionToken("모든 사람", 0)} ${buildMentionToken("박새벽", 2)}`;
+    const result = normalizeMentions(body, [새벽, everyone]);
+
+    expect(result.body).toBe("[@모든 사람](m:0) [@박새벽](m:1)");
+    expect(result.pubIds).toEqual(["saebyeok-24"]);
+    expect(countMentionTargets(body, [새벽, everyone])).toBe(1);
   });
 
   it("unwraps a token the editor never issued", () => {
@@ -471,5 +488,47 @@ describe("deleting a mention as one piece", () => {
     expect(
       expandDeletionOverMentions({ from: 1, to: 2 }, [mention]),
     ).toBeNull();
+  });
+});
+
+describe("assignMentionOrdinals", () => {
+  it("gives each new person the next free ordinal in the body and reuses a known one", () => {
+    const first = assignMentionOrdinals(
+      [],
+      [{ pubId: "hanbyeol-25", name: "이한별" }],
+      buildMentionToken("박새벽", 1),
+    );
+    expect(first.assigned).toEqual([
+      { ordinal: 2, pubId: "hanbyeol-25", name: "이한별" },
+    ]);
+
+    const again = assignMentionOrdinals(
+      first.entries,
+      [{ pubId: "hanbyeol-25", name: "이한별" }],
+      "",
+    );
+    expect(again.assigned).toEqual(first.assigned);
+    expect(again.entries).toBe(first.entries);
+  });
+});
+
+describe("mentionPlainText", () => {
+  it("turns tokens into plain names and leaves other links alone", () => {
+    expect(
+      mentionPlainText(
+        "[@박새벽](m:1)와 [@모든 사람](m:0), [자료](https://a.b)",
+      ),
+    ).toBe("@박새벽와 @모든 사람, [자료](https://a.b)");
+  });
+
+  it("gives the everyone mention a display mark of its own", () => {
+    expect(mentionDisplaySlot(EVERYONE_MENTION_ORDINAL)).toBeGreaterThanOrEqual(
+      0,
+    );
+    expect(
+      fromMentionDisplay(mentionDisplayText("모든 사람", 0), [
+        { ordinal: 0, pubId: "", name: "모든 사람" },
+      ]),
+    ).toBe("[@모든 사람](m:0)");
   });
 });

@@ -342,7 +342,7 @@ describe("openConversation", () => {
     participants: [],
     lastMessage: null,
     unreadCount: 0,
-    muted: false,
+    notificationLevel: "all",
     canDelete: false,
   } satisfies ConversationSummary;
 
@@ -409,7 +409,7 @@ describe("refreshConversationInList", () => {
       participants: [],
       lastMessage: null,
       unreadCount,
-      muted: false,
+      notificationLevel: "all",
       canDelete: false,
     };
   }

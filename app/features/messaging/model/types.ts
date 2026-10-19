@@ -67,6 +67,8 @@ export interface ConversationMessage {
   attachments?: MessageAttachment[];
   /** 시스템 메시지면 채운다. 본문은 비어 있고 화면 문구는 `formatSystemMessage`가 만든다. */
   system?: MessageSystemEvent;
+  /** 본문 `m:n` 토큰이 부르는 참여자 ID. n번 토큰이 `n - 1`번째다(기능 명세 §13.22). */
+  mentionProfileIds?: string[];
   /** 서버에서 이 메시지의 무엇이든 마지막으로 바뀐 시각. 따라잡기의 기준으로만 쓴다. */
   changedAt?: string;
   /** 보내지 못한 내 메시지. 목록에 남겨 같은 ID로 다시 보내거나 지울 수 있게 한다. */
@@ -78,7 +80,7 @@ export interface ConversationMessage {
 export interface MessageReplyPreview {
   id: string;
   senderId: string | null;
-  /** 원문이 삭제됐으면 서버가 비워 준다. */
+  /** 원문의 앞부분. 멘션은 `@이름` 글자다. 원문이 삭제됐으면 서버가 비워 준다. */
   body: string;
   deleted?: boolean;
   /** 원문의 첫 첨부 종류. 본문 없이 첨부만 있는 원문을 "사진"처럼 부를 때 쓴다. */
@@ -99,11 +101,15 @@ export interface MessagePage {
 
 export interface MessagePreview {
   senderId: string | null;
+  /** 멘션은 `@이름` 글자다. */
   body: string;
   sentAt: string;
   /** 첫 첨부의 종류. 본문 없이 첨부만 있는 메시지를 "사진"처럼 부를 때 쓴다. */
   attachmentKind?: MessageAttachmentKind | null;
 }
+
+/** 대화 알림 단계(기능 명세 §13.17). `mentions`는 그룹 대화에만 있다. */
+export type ConversationNotificationLevel = "all" | "mentions" | "off";
 
 export interface ConversationSummary {
   id: string;
@@ -114,7 +120,7 @@ export interface ConversationSummary {
   participants: MessageParticipant[];
   lastMessage: MessagePreview | null;
   unreadCount: number;
-  muted: boolean;
+  notificationLevel: ConversationNotificationLevel;
   /** 그룹을 지울 수 있는지. 소유주만 지운다. */
   canDelete: boolean;
 }
