@@ -229,6 +229,18 @@ export async function setConversationNotificationLevel(
   if (error) throw error;
 }
 
+/** 대화를 내 목록에서 숨기거나 다시 보인다. 숨겨도 그 뒤에 메시지가 오면 서버가 다시 보인다. */
+export async function setConversationHidden(
+  conversationId: string,
+  hidden: boolean,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("set_conversation_hidden", {
+    p_conversation_id: conversationId,
+    p_hidden: hidden,
+  });
+  if (error) throw error;
+}
+
 /** 내 메시지를 지운다. 하나라도 내 메시지가 아니면 아무것도 지우지 않는다. */
 export async function deleteMessages(messageIds: string[]): Promise<void> {
   const { error } = await getSupabase().rpc("delete_messages", {

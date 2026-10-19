@@ -70,6 +70,8 @@ export function replaceConversationSummary(
     (list) => {
       if (!list?.some(({ id }) => id === summary.id)) return list;
       replaced = true;
+      // 서버 목록이 숨긴 대화를 빼듯 cache에서도 뺀다.
+      if (summary.hidden) return list.filter(({ id }) => id !== summary.id);
       return list
         .map((item) => (item.id === summary.id ? summary : item))
         .sort(compareConversationOrder);
