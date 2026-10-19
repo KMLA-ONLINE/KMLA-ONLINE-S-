@@ -130,11 +130,15 @@ describe("signup verification", () => {
     const failed = (await verify({
       otp: "123456",
       password: "new-password",
-    })) as { data: { errors: Record<string, string> } };
+    })) as {
+      data: { errors: Record<string, string>; studentNumberTaken?: boolean };
+    };
 
     expect(failed.data.errors.form).toBe(
       "이미 등록된 학번입니다. 학번을 확인하고, 맞다면 관리자에게 문의해 주세요.",
     );
+    // 다시 제출해도 같은 학번이면 또 실패한다. 화면은 재제출 대신 학번을 고칠 곳을 안내한다.
+    expect(failed.data).toMatchObject({ studentNumberTaken: true });
   });
 
   // 서버가 비밀번호를 거절했는데 hidden 값만 다시 보내면 빠져나올 수 없다.

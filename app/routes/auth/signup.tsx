@@ -92,6 +92,8 @@ interface SignupState {
   askPassword?: boolean;
   resent?: boolean;
   verified?: boolean;
+  /** 인증은 끝났지만 학번이 이미 쓰인다. 다시 제출해도 같으므로 학번을 고칠 `/setup`으로 안내한다. */
+  studentNumberTaken?: boolean;
   errors?: FieldErrors;
 }
 
@@ -209,14 +211,16 @@ async function submitVerifyStep(intent: string, formData: FormData) {
     throw redirect("/pending");
   } catch (error) {
     if (error instanceof Response) throw error;
+    const studentNumberTaken = isDuplicateStudentNumberError(error);
     return data(
       {
         ...base,
         // 서버가 거절한 비밀번호를 hidden으로 계속 보내면 빠져나올 수 없다.
         askPassword: askPassword || claiming,
         verified: await hasActiveSession(),
+        studentNumberTaken,
         errors: {
-          form: isDuplicateStudentNumberError(error)
+          form: studentNumberTaken
             ? DUPLICATE_STUDENT_NUMBER_MESSAGE
             : getAuthErrorMessage(error),
         },
@@ -554,7 +558,7 @@ export default function SignupPage({
               </p>
             ) : null}
 
-            {result.verified ? (
+            {result.studentNumberTaken ? null : result.verified ? (
               <p role="status" className="text-sm text-primary">
                 이메일 인증은 끝났어요. 제출만 다시 눌러 주세요.
               </p>
@@ -604,16 +608,23 @@ export default function SignupPage({
               </FieldGroup>
             ) : null}
 
-            <Button
-              type="submit"
-              name="intent"
-              value="verify"
-              size="lg"
-              disabled={pending}
-            >
-              {pending ? <Spinner data-icon="inline-start" /> : null}
-              가입 신청 제출
-            </Button>
+            {result.studentNumberTaken ? (
+              // 세션은 이미 있고 초안도 남아 있어, /setup이 입력값을 그대로 채워 연다.
+              <Button size="lg" render={<Link to="/setup" />}>
+                학번 수정하기
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                name="intent"
+                value="verify"
+                size="lg"
+                disabled={pending}
+              >
+                {pending ? <Spinner data-icon="inline-start" /> : null}
+                가입 신청 제출
+              </Button>
+            )}
             <Button
               type="button"
               variant="link"
