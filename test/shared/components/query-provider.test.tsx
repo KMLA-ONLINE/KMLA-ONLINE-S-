@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
 import { createRoutesStub, Outlet, redirect, useSubmit } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -48,6 +48,7 @@ describe("QueryProvider", () => {
   it("does not remount the signed-in screen while the logout redirect is still loading", async () => {
     const logoutRequest = deferred<void>();
     const loginLoader = deferred<null>();
+    const loadLogin = vi.fn(() => loginLoader.promise);
     let homeMounts = 0;
 
     // 화면이 마운트될 때마다 셸 쿼리처럼 요청을 띄운다고 보고 마운트 횟수를 센다.
@@ -89,7 +90,7 @@ describe("QueryProvider", () => {
           },
           {
             path: "/login",
-            loader: () => loginLoader.promise,
+            loader: loadLogin,
             Component: () => <h1>로그인 화면</h1>,
           },
         ],
@@ -99,16 +100,23 @@ describe("QueryProvider", () => {
 
     const logout = await screen.findByRole("button", { name: "로그아웃" });
     expect(homeMounts).toBe(1);
-    act(() => logout.click());
+    // auth 응답을 풀기 전에 라우터의 submitting transition과 effect를 반영한다.
+    await act(async () => {
+      logout.click();
+      await Promise.resolve();
+    });
     await act(async () => {
       logoutRequest.resolve();
       await logoutRequest.promise;
     });
 
-    // 저장소 정리는 끝났지만 `/login` loader는 아직 돌고 있다.
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
+    // 고정 시간 대신 저장소 정리와 redirect 시작을 기다린다. loader는 계속 보류한다.
+    await waitFor(() => {
+      expect(
+        window.localStorage.getItem("kmla-online:storage-owner:v1"),
+      ).toBeNull();
     });
+    await waitFor(() => expect(loadLogin).toHaveBeenCalledOnce());
     expect(homeMounts).toBe(1);
     expect(
       screen.queryByRole("button", { name: "로그아웃" }),
