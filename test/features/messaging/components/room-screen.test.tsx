@@ -1398,17 +1398,11 @@ describe("RoomScreen", () => {
       ).toHaveTextContent(/첫 줄\s*둘째 줄/),
     );
     expect(messageThread.scrollTop).toBe(500);
-    // 보낸 직후에는 버튼이 좋아요로 바뀌지 않는다. 한 번 더 누른 손가락이 좋아요를 보내지 않게 한다.
-    expect(likeButton).toHaveAccessibleName("메시지 보내기");
+    // 보낸 직후에도 버튼은 바로 좋아요가 되지만, 한 번 더 누른 손가락이 좋아요를 보내지는 않는다.
+    expect(likeButton).toHaveAccessibleName("좋아요 보내기");
     await user.click(likeButton);
     expect(screen.queryByLabelText("좋아요")).not.toBeInTheDocument();
-    expect(
-      await screen.findByRole(
-        "button",
-        { name: "좋아요 보내기" },
-        { timeout: 2_000 },
-      ),
-    ).toBeEnabled();
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
     await user.click(likeButton);
     expect(await screen.findByLabelText("좋아요")).toBeInTheDocument();
 
