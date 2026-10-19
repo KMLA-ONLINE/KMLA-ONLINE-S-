@@ -178,7 +178,7 @@ export function RecipientPickerDialog({
           />
         </form>
 
-        <div className="min-h-32 flex-1 overflow-y-auto overscroll-y-contain">
+        <div className="min-h-32 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain">
           {searchTerm === "" ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               이름을 입력하고 Enter를 눌러 찾아보세요.

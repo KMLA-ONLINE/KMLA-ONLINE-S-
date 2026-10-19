@@ -475,7 +475,7 @@ function Filmstrip({
       <div
         ref={scrollerRef}
         data-testid="image-viewer-filmstrip"
-        className="pointer-events-auto scrollbar-none overflow-x-auto overscroll-x-contain"
+        className="pointer-events-auto scrollbar-none overflow-x-auto overscroll-x-desktop-auto"
       >
         <div className="mx-auto flex w-max gap-2 px-3 pt-6 pb-[calc(0.75rem+var(--app-safe-b))]">
           {images.map((image, index) => {

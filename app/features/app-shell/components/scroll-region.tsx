@@ -48,12 +48,12 @@ export function ScrollRegion({
     <ScrollContainerContext value={ref}>
       <main
         ref={ref}
-        // 세로 끝에서 당기는 동작만 가둔다. 가로 방향은 브라우저의 뒤로 가기 제스처에 넘긴다.
+        // 세로 끝에서 당기는 동작은 가둔다. 가로 방향은 터치에서 가두고 데스크톱 포인터에서는 브라우저에 넘긴다.
         // overflow-x-hidden 명시 필수: 세로만 지정하면 가로 `visible`이 `auto`로 계산돼 1px만 삐져나가도 페이지가 옆으로 끌린다.
         // relative: 위치 기준이 없는 absolute 자손(Base UI 체크박스의 숨은 input 등)이 이 영역 밖을 기준으로 잡히면 스크롤을
         // 따라오지 않고, 포커스를 받을 때 브라우저가 그걸 보이려고 셸의 overflow-hidden 컨테이너를 밀어 올린다.
         className={cn(
-          "relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain md:[scrollbar-gutter:stable_both-edges]",
+          "relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain md:[scrollbar-gutter:stable_both-edges]",
           className,
         )}
       >
