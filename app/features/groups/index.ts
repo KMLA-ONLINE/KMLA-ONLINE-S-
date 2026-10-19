@@ -9,6 +9,9 @@ export {
   GROUP_STALE_TIME,
   groupHomeQuery,
   groupKeys,
+  groupNewPostCountsQuery,
+  markGroupPostsSeen,
+  refreshStaleGroupPosts,
   isGroupAccessQuery,
 } from "~/features/groups/data/cache";
 export {
@@ -20,7 +23,6 @@ export {
   issueGroupInvite,
   joinGroup,
   leaveGroup,
-  markGroupPostsVisited,
   rejectGroupJoinRequest,
   requestGroupJoin,
   revokeGroupInvite,
@@ -64,4 +66,5 @@ export type {
   GroupMemberRole,
   GroupMember,
   GroupMemberCursor,
+  GroupNewPostCounts,
 } from "~/features/groups/model/types";

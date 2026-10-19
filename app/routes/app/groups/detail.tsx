@@ -12,7 +12,6 @@ import {
   GROUP_STALE_TIME,
   GroupDetailMobileHeader,
   GroupDetailScreen,
-  type GroupHomeItem,
   type GroupInviteProfileType,
   issueGroupInvite,
   isGroupAccessQuery,
@@ -21,7 +20,8 @@ import {
   listGroupJoinRequests,
   listGroupMembers,
   loadGroupDetail,
-  markGroupPostsVisited,
+  markGroupPostsSeen,
+  refreshStaleGroupPosts,
   requestGroupJoin,
   rejectGroupJoinRequest,
   revokeGroupInvite,
@@ -90,6 +90,13 @@ export async function clientLoader({
       }),
     staleTime: GROUP_CONTENT_STALE_TIME,
   });
+  // 미리 받기와 아래 `fetchQuery` 중 먼저 오는 쪽에서 한 번만 확인한다.
+  let checkedPosts = false;
+  const refreshPostsOnce = (groupId: string) => {
+    if (checkedPosts) return;
+    checkedPosts = true;
+    refreshStaleGroupPosts(queryClient, groupId);
+  };
   const group = await queryClient.fetchQuery({
     queryKey: groupKeys.detail(params.slug),
     // 목록과 카테고리는 그룹 ID만 있으면 된다. 아이콘·커버 서명을 기다리지 않고 함께 띄운다.
@@ -98,7 +105,10 @@ export async function clientLoader({
       loadGroupDetail(params.slug, {
         onFound: ({ group_id, membership_state }) => {
           if (membership_state !== "member") return;
-          if (postsTab) void queryClient.prefetchQuery(postsQuery(group_id));
+          if (postsTab) {
+            refreshPostsOnce(group_id);
+            void queryClient.prefetchQuery(postsQuery(group_id));
+          }
           if (postsTab || settingsTab)
             void queryClient.prefetchQuery(categoriesQuery(group_id));
         },
@@ -126,6 +136,7 @@ export async function clientLoader({
     postsTab || settingsTab
       ? queryClient.fetchQuery(categoriesQuery(group.group_id))
       : Promise.resolve([]);
+  if (postsTab) refreshPostsOnce(group.group_id);
   const postsRequest = postsTab
     ? queryClient.fetchQuery(postsQuery(group.group_id))
     : Promise.resolve({ posts: [], nextCursor: null });
@@ -185,24 +196,8 @@ export async function clientLoader({
   const posts = loadedPosts ?? deferredPosts;
 
   // A post detail is a child route, so only the group's exact posts tab advances §7.19.
-  if (postsTab && isGroupPage) {
-    // 그룹 홈에는 활성 observer가 없어 무효화가 화면을 다시 그리지 않는다. 배지를 먼저 0으로
-    // 낮춰야 RPC보다 먼저 목록으로 돌아와도 옛 숫자가 남지 않는다(§7.19).
-    queryClient.setQueryData(
-      groupKeys.home(),
-      (groups: GroupHomeItem[] | undefined) =>
-        groups?.map((item) =>
-          item.group_id === group.group_id
-            ? { ...item, new_post_count: 0 }
-            : item,
-        ),
-    );
-    // 실패했을 때만 다음 진입이 서버 값을 다시 읽게 한다. 위에서 낮춘 0이 거짓말이 되고,
-    // 무효화하지 않으면 2분 동안 안 읽은 글이 읽은 것으로 보인다. 성공하면 캐시가 이미 서버와
-    // 같으므로 무효화하지 않는다 — 그러면 그룹을 볼 때마다 목록으로 돌아오는 길이 네 요청에 묶인다.
-    void markGroupPostsVisited(group.group_id).catch(() =>
-      queryClient.invalidateQueries({ queryKey: groupKeys.home() }),
-    );
+  if (postsTab && isGroupPage && loadedPosts) {
+    markGroupPostsSeen(queryClient, group.group_id, loadedPosts.posts);
   }
   return {
     group,

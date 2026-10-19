@@ -3093,7 +3093,7 @@ export type Database = {
         Returns: boolean
       }
       mark_group_posts_visited: {
-        Args: { p_group_id: string }
+        Args: { p_group_id: string; p_seen_until?: string }
         Returns: undefined
       }
       mark_my_notification_read: {

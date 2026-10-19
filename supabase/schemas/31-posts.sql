@@ -32,8 +32,15 @@ $$;
 REVOKE ALL ON FUNCTION public.get_my_group_new_post_counts() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_my_group_new_post_counts() TO authenticated;
 
--- Server-owned time prevents clients from backdating or moving the watermark into the future.
-CREATE OR REPLACE FUNCTION public.mark_group_posts_visited(p_group_id uuid)
+-- The watermark is the newest post the list actually showed, not the call time: a list drawn from
+-- cache would otherwise mark posts published since then as seen. Server time caps it, so a client
+-- cannot move it into the future, and `greatest` keeps it from moving back.
+-- Null keeps the call time for clients that predate the argument; the service worker keeps them
+-- running until the user accepts the update.
+CREATE OR REPLACE FUNCTION public.mark_group_posts_visited(
+  p_group_id uuid,
+  p_seen_until timestamptz DEFAULT NULL
+)
 RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = ''
@@ -46,7 +53,10 @@ begin
   end if;
 
   update public.group_memberships
-  set posts_visited_at = greatest(posts_visited_at, statement_timestamp())
+  set posts_visited_at = greatest(
+    posts_visited_at,
+    least(coalesce(p_seen_until, statement_timestamp()), statement_timestamp())
+  )
   where group_id = p_group_id and profile_id = caller_id;
   if not found then
     raise exception 'group membership required' using errcode = '42501';
@@ -54,8 +64,8 @@ begin
 end;
 $$;
 
-REVOKE ALL ON FUNCTION public.mark_group_posts_visited(uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.mark_group_posts_visited(uuid) TO authenticated;
+REVOKE ALL ON FUNCTION public.mark_group_posts_visited(uuid, timestamptz) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.mark_group_posts_visited(uuid, timestamptz) TO authenticated;
 
 
 CREATE TYPE "public"."post_attachment_status" AS ENUM (
