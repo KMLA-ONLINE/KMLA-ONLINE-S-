@@ -1,6 +1,7 @@
 import { WifiOffIcon } from "lucide-react";
 
 import { InstallPrompt } from "~/shared/components/install-prompt";
+import { useDocumentNavigationAfterUpdate } from "~/shared/hooks/use-document-navigation-after-update";
 import { useInAppEscape } from "~/shared/hooks/use-in-app-escape";
 import { useOffline } from "~/shared/hooks/use-offline";
 import { useServiceWorker } from "~/shared/hooks/use-service-worker";
@@ -34,7 +35,8 @@ const BANNER_CLASS =
  * 채워지지 않는지 하나다.
  *
  * 화면을 그리지 않는 청크 복구도 여기서 켠다. 배포와 서비스 워커가 얽힌 같은 문제를
- * 다루는 데다, 루트에 단 한 번만 마운트되는 컴포넌트가 여기이기 때문이다. 인앱 브라우저에서
+ * 다루는 데다, 루트에 단 한 번만 마운트되는 컴포넌트가 여기이기 때문이다. 다른 탭이 적용한
+ * 새 버전으로 다음 화면을 여는 문서 이동도 같은 이유로 여기서 켠다. 인앱 브라우저에서
  * 앱으로 넘기는 것도 같은 이유로 여기서 한다.
  */
 export function PwaPrompts() {
@@ -44,6 +46,7 @@ export function PwaPrompts() {
   const offline = useOffline();
   const { updateReady, applyingUpdate, updateAppliedElsewhere, applyUpdate } =
     useServiceWorker();
+  useDocumentNavigationAfterUpdate(updateAppliedElsewhere);
   const showServiceWorkerPrompt = !offline && updateReady;
   // 알림 권한 안내는 로그인한 셸이 띄운다(`NotificationPermissionPrompt`). 설치보다 앞선다.
   const notificationPromptActive = usePromptActive("notification");

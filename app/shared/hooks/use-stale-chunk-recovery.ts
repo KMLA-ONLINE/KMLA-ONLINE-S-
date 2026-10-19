@@ -31,7 +31,8 @@ function writeReloadMark(at: number): void {
  * 워커의 precache가 옛 해시를 그대로 갖고 있어서 배포가 나가도 열린 탭이 멀쩡하지만, 다른
  * 탭이 업데이트를 적용해 컨트롤러가 새 워커로 넘어가면 이 탭이 쓰던 청크는 precache에서
  * 지워진다. Vercel도 이전 배포의 `/assets`를 프로덕션 주소로 더는 주지 않으므로, 그 뒤
- * 첫 화면 이동에서 지연 import가 실패한다.
+ * 첫 화면 이동에서 지연 import가 실패한다. 다른 화면으로 가는 이동은
+ * `useDocumentNavigationAfterUpdate`가 먼저 문서 이동으로 바꾸므로, 여기는 그 앞을 지나친 실패를 받는 안전망이다.
  *
  * 새로고침하면 서비스 워커가 갖고 있는 온전한 한 벌(옛 워커면 옛 index.html, 새 워커면 새
  * index.html)을 다시 받아 오므로 어느 쪽이든 복구된다. `ErrorBoundary`도 결국 같은 곳에
