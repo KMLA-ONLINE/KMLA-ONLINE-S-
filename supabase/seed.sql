@@ -999,3 +999,10 @@ where member.conversation_id = 'c0000000-0000-0000-0000-000000000001'
   and member.profile_id = profile.id
   and profile.auth_user_id = '10000000-0000-0000-0000-000000000001'
   and member.last_read_message_id = '00000000-0000-0000-0000-000000000000';
+
+-- 시드 회원은 시행 중인 이용약관에 동의한 상태로 둔다. E2E가 기존 회원 동의 팝업에 막히지
+-- 않게 하려는 것이며, 팝업을 보려면 해당 회원의 두 열을 null로 바꾼다.
+update public.profiles
+set terms_version = private.current_terms_version(),
+  terms_agreed_at = now()
+where terms_agreed_at is null;

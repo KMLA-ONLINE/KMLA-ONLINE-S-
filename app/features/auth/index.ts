@@ -1,9 +1,15 @@
 export { AuthCard } from "~/features/auth/components/auth-card";
+export { LegalDocument } from "~/features/auth/components/legal-document";
+export { LegalLinks } from "~/features/auth/components/legal-links";
 export { LogoutButton } from "~/features/auth/components/logout-button";
 export { OtpField } from "~/features/auth/components/otp-field";
 export { PasswordField } from "~/features/auth/components/password-field";
+export { PrivacyNotice } from "~/features/auth/components/privacy-notice";
 export { ProfileFields } from "~/features/auth/components/profile-fields";
+export { TermsAgreementDialog } from "~/features/auth/components/terms-agreement-dialog";
+export { TermsAgreementField } from "~/features/auth/components/terms-agreement-field";
 export {
+  agreeToTerms,
   claimSignupPassword,
   resendSignupOtp,
   sendPasswordChangeOtp,
@@ -22,6 +28,11 @@ export {
   loadMySuspension,
 } from "~/features/auth/data/queries";
 export { describeSuspensionEnd } from "~/features/auth/model/suspension";
+export {
+  needsTermsAgreement,
+  readTermsAgreement,
+  TERMS_VERSION,
+} from "~/features/auth/model/terms";
 export {
   DUPLICATE_STUDENT_NUMBER_MESSAGE,
   getAuthErrorMessage,

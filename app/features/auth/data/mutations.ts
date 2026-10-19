@@ -116,7 +116,11 @@ export async function updatePassword(
   if (error) throw error;
 }
 
-export async function submitProfile(values: ProfileFormValues): Promise<void> {
+/** `termsVersion`은 이용약관에 동의한 판이다. 시행 중인 판이 아니면 서버가 제출을 거부한다. */
+export async function submitProfile(
+  values: ProfileFormValues,
+  termsVersion: string,
+): Promise<void> {
   const { error } = await getSupabase().rpc("submit_my_profile", {
     p_name: values.name,
     p_type: values.type as "student" | "alumni" | "teacher",
@@ -129,6 +133,7 @@ export async function submitProfile(values: ProfileFormValues): Promise<void> {
     p_phone_number: values.phoneNumber || undefined,
     p_birthday: values.birthday || undefined,
     p_dorm_room: optionalNumber(values.dormRoom),
+    p_terms_version: termsVersion,
   });
 
   if (error) throw error;
@@ -145,4 +150,13 @@ export async function signOut(): Promise<void> {
 
   if (error) throw error;
   clearSignupDraft();
+}
+
+/** 시행 전에 가입한 회원의 이용약관 동의. 이미 동의했으면 처음 기록을 그대로 둔다. */
+export async function agreeToTerms(termsVersion: string): Promise<void> {
+  const { error } = await getSupabase().rpc("agree_to_terms", {
+    p_version: termsVersion,
+  });
+
+  if (error) throw error;
 }

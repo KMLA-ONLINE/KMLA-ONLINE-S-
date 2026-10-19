@@ -103,6 +103,7 @@ async function fetchShellProfile(): Promise<Omit<
     type: profile.type,
     status: profile.status,
     avatar_path: profile.avatar_path,
+    terms_agreed_at: profile.terms_agreed_at,
   };
 
   return { email, profile: shellProfile };

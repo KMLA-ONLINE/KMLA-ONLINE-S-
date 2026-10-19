@@ -105,10 +105,6 @@ export function validateProfileEdit(
     errors.birthday = "생일 형식을 확인해 주세요.";
   }
 
-  if (type === "student" && !values.birthday) {
-    errors.birthday = "재학생은 생일을 입력해야 합니다.";
-  }
-
   const phone = values.phoneNumber.trim();
   if (phone) {
     const digits = phone.replace(/\D/g, "");
@@ -128,10 +124,6 @@ export function validateProfileEdit(
   }
 
   if (type === "student" || type === "alumni") {
-    if (!values.gender) errors.gender = "성별을 선택해 주세요.";
-    if (!values.academicTrack) {
-      errors.academicTrack = "계열을 선택해 주세요.";
-    }
     if (
       !validOptionalInteger(values.cohort, 1, 100) ||
       values.cohort === null

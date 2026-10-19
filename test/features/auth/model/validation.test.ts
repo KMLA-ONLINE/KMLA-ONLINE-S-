@@ -48,16 +48,45 @@ describe("auth validation", () => {
     expect(validateProfileForm(STUDENT)).toEqual({});
   });
 
-  it("requires student academic fields", () => {
+  it("requires a student's number and cohort", () => {
     const errors = validateProfileForm({
       ...STUDENT,
       studentNumber: "24A001",
-      academicTrack: "",
+      cohort: "",
     });
 
     expect(errors.studentNumber).toMatch(/숫자 6자리/);
-    expect(errors.academicTrack).toBeDefined();
+    expect(errors.cohort).toBeDefined();
     expect(hasErrors(errors)).toBe(true);
+  });
+
+  // 개인정보 처리방침상 생년월일·성별·계열·전화번호는 선택 정보다.
+  it("lets a student leave the optional fields empty", () => {
+    expect(
+      validateProfileForm({
+        ...STUDENT,
+        birthday: "",
+        gender: "",
+        academicTrack: "",
+        phoneNumber: "",
+      }),
+    ).toEqual({});
+  });
+
+  it("asks an alumnus only for name and cohort", () => {
+    expect(
+      validateProfileForm({
+        ...STUDENT,
+        type: "alumni",
+        studentNumber: "",
+        classNo: "",
+        birthday: "",
+        gender: "",
+        academicTrack: "",
+        phoneNumber: "",
+        dormRoom: "",
+      }),
+    ).toEqual({});
   });
 
   it("does not require academic fields for teachers", () => {

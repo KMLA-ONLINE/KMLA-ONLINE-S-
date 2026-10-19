@@ -194,7 +194,7 @@ select throws_ok(
       '차단 학생', 'student'::public.profile_type, '260002', null::smallint,
       31::smallint, 'male'::public.profile_gender,
       'international'::public.profile_academic_track, null::text,
-      '2009-03-01'::date, null::smallint
+      '2009-03-01'::date, null::smallint, '2026-10-20'::date
     )$$,
   '55000', 'profile cannot be submitted in its current state',
   'a blocked user cannot resubmit'
@@ -225,7 +225,7 @@ select lives_ok(
       '차단 해제 학생', 'student'::public.profile_type, '260002', null::smallint,
       31::smallint, 'male'::public.profile_gender,
       'international'::public.profile_academic_track, null::text,
-      '2009-03-01'::date, null::smallint
+      '2009-03-01'::date, null::smallint, '2026-10-20'::date
     )$$,
   'an unblocked user can edit and resubmit'
 );

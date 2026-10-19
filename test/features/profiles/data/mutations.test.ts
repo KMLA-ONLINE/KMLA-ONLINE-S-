@@ -33,3 +33,20 @@ describe("profile public ID errors", () => {
     },
   );
 });
+
+describe("profile optional fields", () => {
+  // 생년월일·성별·계열은 선택 정보라 프로필 편집에서 지울 수 있어야 한다.
+  it.each(["student", "alumni"] as const)(
+    "lets type %s clear birthday, gender and academic track",
+    (type) => {
+      const formData = new FormData();
+      formData.set("pubId", "hong-gildong");
+      formData.set("name", "홍길동");
+      formData.set("cohort", "29");
+
+      expect(validateProfileEdit(readProfileEditForm(formData), type)).toEqual(
+        {},
+      );
+    },
+  );
+});

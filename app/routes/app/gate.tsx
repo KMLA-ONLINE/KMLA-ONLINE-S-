@@ -5,9 +5,11 @@ import {
   appShellKeys,
   loadShellData,
   type ShellData,
+  refreshShellProfile,
   UnreadBadgeSync,
 } from "~/features/app-shell";
 import type { Route } from "./+types/gate";
+import { needsTermsAgreement, TermsAgreementDialog } from "~/features/auth";
 import { MessagingSync } from "~/features/messaging";
 import { notificationBadgeQuery } from "~/features/notifications";
 import { NotificationPermissionPrompt } from "~/features/notifications/components/notification-permission-prompt";
@@ -111,6 +113,11 @@ export default function Shell({ loaderData }: Route.ComponentProps) {
       <NotificationPermissionPrompt profileId={loaderData.profile.id} />
       <MessagingSync profileId={loaderData.profile.id} />
       <UnreadBadgeSync />
+      {/* 약관 시행 전에 가입한 회원만 본다. 동의하면 셸 프로필을 다시 읽어 동의 기록을 맞춘다. */}
+      <TermsAgreementDialog
+        open={needsTermsAgreement(loaderData.profile)}
+        onAgreed={refreshShellProfile}
+      />
     </AppShellProvider>
   );
 }

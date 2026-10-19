@@ -32,7 +32,8 @@ export type FieldErrors = Partial<
     | "email"
     | "password"
     | "passwordConfirm"
-    | "otp",
+    | "otp"
+    | "terms",
     string
   >
 >;

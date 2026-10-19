@@ -98,16 +98,11 @@ export function validateProfileForm(values: ProfileFormValues): FieldErrors {
 
   if (values.type === "student") {
     if (!values.studentNumber) errors.studentNumber = "학번을 입력해 주세요.";
-    if (!values.birthday) errors.birthday = "생년월일을 입력해 주세요.";
     if (!values.cohort) errors.cohort = "기수를 입력해 주세요.";
-    if (!values.gender) errors.gender = "성별을 선택해 주세요.";
-    if (!values.academicTrack) errors.academicTrack = "계열을 선택해 주세요.";
   }
 
   if (values.type === "alumni") {
     if (!values.cohort) errors.cohort = "기수를 입력해 주세요.";
-    if (!values.gender) errors.gender = "성별을 선택해 주세요.";
-    if (!values.academicTrack) errors.academicTrack = "계열을 선택해 주세요.";
   }
 
   return Object.fromEntries(

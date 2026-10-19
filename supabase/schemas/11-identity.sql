@@ -188,6 +188,8 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "contact_email" "text",
     "department" "text",
     "is_returning_student" boolean DEFAULT false NOT NULL,
+    "terms_version" "date",
+    "terms_agreed_at" timestamp with time zone,
     CONSTRAINT "profiles_anonymous_username_length" CHECK ((("anonymous_username" IS NULL) OR (("char_length"("anonymous_username") >= 1) AND ("char_length"("anonymous_username") <= 50)))),
     CONSTRAINT "profiles_class_no_range" CHECK ((("class_no" IS NULL) OR (("class_no" >= 1) AND ("class_no" <= 10)))),
     CONSTRAINT "profiles_cohort_range" CHECK ((("cohort" IS NULL) OR (("cohort" >= 1) AND ("cohort" <= 100)))),
@@ -200,7 +202,8 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     CONSTRAINT "profiles_pub_id_format" CHECK (("pub_id" ~ '^[a-z0-9](?:[a-z0-9-]{3,13}[a-z0-9])$'::"text")),
     CONSTRAINT "profiles_pub_id_not_reserved" CHECK (("lower"("pub_id") <> ALL (ARRAY['admin'::"text", 'administrator'::"text", 'teacher'::"text", 'staff'::"text", 'moderator'::"text", 'support'::"text", 'system'::"text", 'root'::"text", 'sibal'::"text"]))),
     CONSTRAINT "profiles_student_number_format" CHECK ((("student_number" IS NULL) OR ("student_number" ~ '^[0-9]{6}$'::"text"))),
-    CONSTRAINT "profiles_type_details" CHECK (((("type" = 'student'::"public"."profile_type") AND ("student_number" IS NOT NULL) AND ("birthday" IS NOT NULL) AND ("cohort" IS NOT NULL) AND ("gender" IS NOT NULL) AND ("academic_track" IS NOT NULL)) OR (("type" = 'alumni'::"public"."profile_type") AND ("cohort" IS NOT NULL) AND ("gender" IS NOT NULL) AND ("academic_track" IS NOT NULL) AND ("class_no" IS NULL) AND ("dorm_room" IS NULL)) OR (("type" = 'teacher'::"public"."profile_type") AND ("student_number" IS NULL) AND ("class_no" IS NULL) AND ("cohort" IS NULL) AND ("gender" IS NULL) AND ("academic_track" IS NULL) AND ("dorm_room" IS NULL))))
+    CONSTRAINT "profiles_terms_agreement" CHECK ((("terms_version" IS NULL) = ("terms_agreed_at" IS NULL))),
+    CONSTRAINT "profiles_type_details" CHECK (((("type" = 'student'::"public"."profile_type") AND ("student_number" IS NOT NULL) AND ("cohort" IS NOT NULL)) OR (("type" = 'alumni'::"public"."profile_type") AND ("cohort" IS NOT NULL) AND ("class_no" IS NULL) AND ("dorm_room" IS NULL)) OR (("type" = 'teacher'::"public"."profile_type") AND ("student_number" IS NULL) AND ("class_no" IS NULL) AND ("cohort" IS NULL) AND ("gender" IS NULL) AND ("academic_track" IS NULL) AND ("dorm_room" IS NULL))))
 );
 
 ALTER TABLE "public"."profiles" OWNER TO "postgres";
@@ -623,7 +626,42 @@ $$;
 
 ALTER FUNCTION "public"."finalize_profile_media"("p_media_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."submit_my_profile"("p_name" "text", "p_type" "public"."profile_type", "p_student_number" "text" DEFAULT NULL::"text", "p_class_no" smallint DEFAULT NULL::smallint, "p_cohort" smallint DEFAULT NULL::smallint, "p_gender" "public"."profile_gender" DEFAULT NULL::"public"."profile_gender", "p_academic_track" "public"."profile_academic_track" DEFAULT NULL::"public"."profile_academic_track", "p_phone_number" "text" DEFAULT NULL::"text", "p_birthday" "date" DEFAULT NULL::"date", "p_dorm_room" smallint DEFAULT NULL::smallint) RETURNS "public"."profiles"
+CREATE OR REPLACE FUNCTION "private"."current_terms_version"() RETURNS "date"
+    LANGUAGE "sql" IMMUTABLE
+    SET "search_path" TO ''
+    AS $$
+  -- 시행 중인 이용약관의 시행일. 약관을 개정하면 docs/legal/terms_of_service.md의 시행일과
+  -- 앱의 TERMS_VERSION을 함께 올린다.
+  select date '2026-10-20';
+$$;
+
+ALTER FUNCTION "private"."current_terms_version"() OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."agree_to_terms"("p_version" "date") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if auth.uid() is null then
+    raise exception 'authentication required' using errcode = '42501';
+  end if;
+
+  if p_version is distinct from private.current_terms_version() then
+    raise exception 'current terms agreement required' using errcode = '22023';
+  end if;
+
+  -- 시행 전에 가입한 회원이 처음 동의하는 경로다. 이미 동의했으면 처음 기록을 그대로 둔다.
+  update public.profiles
+  set terms_version = p_version, terms_agreed_at = now()
+  where auth_user_id = (select auth.uid())
+    and deleted_at is null
+    and terms_agreed_at is null;
+end;
+$$;
+
+ALTER FUNCTION "public"."agree_to_terms"("p_version" "date") OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."submit_my_profile"("p_name" "text", "p_type" "public"."profile_type", "p_student_number" "text" DEFAULT NULL::"text", "p_class_no" smallint DEFAULT NULL::smallint, "p_cohort" smallint DEFAULT NULL::smallint, "p_gender" "public"."profile_gender" DEFAULT NULL::"public"."profile_gender", "p_academic_track" "public"."profile_academic_track" DEFAULT NULL::"public"."profile_academic_track", "p_phone_number" "text" DEFAULT NULL::"text", "p_birthday" "date" DEFAULT NULL::"date", "p_dorm_room" smallint DEFAULT NULL::smallint, "p_terms_version" "date" DEFAULT NULL::"date") RETURNS "public"."profiles"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -645,6 +683,11 @@ begin
     raise exception 'email confirmation required' using errcode = '42501';
   end if;
 
+  -- 가입 신청은 이용약관 계약을 맺는 시점이라, 화면에서 본 판이 시행 중인 판과 같아야 한다.
+  if p_terms_version is distinct from private.current_terms_version() then
+    raise exception 'current terms agreement required' using errcode = '22023';
+  end if;
+
   select profile.*
   into existing_profile
   from public.profiles as profile
@@ -659,12 +702,14 @@ begin
   if existing_profile.id is null then
     insert into public.profiles (
       auth_user_id, name, type, student_number, class_no, cohort, gender,
-      academic_track, phone_number, birthday, dorm_room
+      academic_track, phone_number, birthday, dorm_room, terms_version,
+      terms_agreed_at
     )
     values (
       caller_id, btrim(p_name), p_type, nullif(btrim(p_student_number), ''),
       p_class_no, p_cohort, p_gender, p_academic_track,
-      nullif(btrim(p_phone_number), ''), p_birthday, p_dorm_room
+      nullif(btrim(p_phone_number), ''), p_birthday, p_dorm_room,
+      p_terms_version, now()
     )
     returning * into submitted_profile;
   else
@@ -680,6 +725,8 @@ begin
       phone_number = nullif(btrim(p_phone_number), ''),
       birthday = p_birthday,
       dorm_room = p_dorm_room,
+      terms_version = p_terms_version,
+      terms_agreed_at = now(),
       status = 'pending',
       submitted_at = now(),
       status_updated_at = now(),
@@ -693,7 +740,7 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "public"."submit_my_profile"("p_name" "text", "p_type" "public"."profile_type", "p_student_number" "text", "p_class_no" smallint, "p_cohort" smallint, "p_gender" "public"."profile_gender", "p_academic_track" "public"."profile_academic_track", "p_phone_number" "text", "p_birthday" "date", "p_dorm_room" smallint) OWNER TO "postgres";
+ALTER FUNCTION "public"."submit_my_profile"("p_name" "text", "p_type" "public"."profile_type", "p_student_number" "text", "p_class_no" smallint, "p_cohort" smallint, "p_gender" "public"."profile_gender", "p_academic_track" "public"."profile_academic_track", "p_phone_number" "text", "p_birthday" "date", "p_dorm_room" smallint, "p_terms_version" "date") OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."update_my_profile"("p_name" "text", "p_description" "text" DEFAULT NULL::"text", "p_birthday" "date" DEFAULT NULL::"date", "p_phone_number" "text" DEFAULT NULL::"text", "p_contact_email" "text" DEFAULT NULL::"text", "p_gender" "public"."profile_gender" DEFAULT NULL::"public"."profile_gender", "p_cohort" smallint DEFAULT NULL::smallint, "p_academic_track" "public"."profile_academic_track" DEFAULT NULL::"public"."profile_academic_track", "p_department" "text" DEFAULT NULL::"text", "p_class_no" smallint DEFAULT NULL::smallint, "p_dorm_room" smallint DEFAULT NULL::smallint, "p_allow_timeline_posts" boolean DEFAULT true, "p_is_returning_student" boolean DEFAULT false, "p_pub_id" "text" DEFAULT NULL::"text") RETURNS "public"."profiles"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -746,18 +793,9 @@ begin
       using errcode = '22001';
   end if;
 
-  if current_profile.type in ('student', 'alumni')
-    and (
-      p_gender is null
-      or p_cohort is null
-      or p_academic_track is null
-    ) then
+  -- 생년월일·성별·계열은 선택 정보라 비울 수 있다. 기수만 학적 필수로 남는다.
+  if current_profile.type in ('student', 'alumni') and p_cohort is null then
     raise exception 'academic profile fields are required'
-      using errcode = '22023';
-  end if;
-
-  if current_profile.type = 'student' and p_birthday is null then
-    raise exception 'student birthday is required'
       using errcode = '22023';
   end if;
 
@@ -984,8 +1022,13 @@ GRANT EXECUTE ON FUNCTION "public"."prepare_profile_media"("p_slot" "public"."pr
 REVOKE ALL ON FUNCTION "public"."finalize_profile_media"("p_media_id" "uuid") FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION "public"."finalize_profile_media"("p_media_id" "uuid") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."submit_my_profile"("p_name" "text", "p_type" "public"."profile_type", "p_student_number" "text", "p_class_no" smallint, "p_cohort" smallint, "p_gender" "public"."profile_gender", "p_academic_track" "public"."profile_academic_track", "p_phone_number" "text", "p_birthday" "date", "p_dorm_room" smallint) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."submit_my_profile"("p_name" "text", "p_type" "public"."profile_type", "p_student_number" "text", "p_class_no" smallint, "p_cohort" smallint, "p_gender" "public"."profile_gender", "p_academic_track" "public"."profile_academic_track", "p_phone_number" "text", "p_birthday" "date", "p_dorm_room" smallint) TO "authenticated";
+REVOKE ALL ON FUNCTION "private"."current_terms_version"() FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "public"."agree_to_terms"("p_version" "date") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."agree_to_terms"("p_version" "date") TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."submit_my_profile"("p_name" "text", "p_type" "public"."profile_type", "p_student_number" "text", "p_class_no" smallint, "p_cohort" smallint, "p_gender" "public"."profile_gender", "p_academic_track" "public"."profile_academic_track", "p_phone_number" "text", "p_birthday" "date", "p_dorm_room" smallint, "p_terms_version" "date") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."submit_my_profile"("p_name" "text", "p_type" "public"."profile_type", "p_student_number" "text", "p_class_no" smallint, "p_cohort" smallint, "p_gender" "public"."profile_gender", "p_academic_track" "public"."profile_academic_track", "p_phone_number" "text", "p_birthday" "date", "p_dorm_room" smallint, "p_terms_version" "date") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."update_my_profile"("p_name" "text", "p_description" "text", "p_birthday" "date", "p_phone_number" "text", "p_contact_email" "text", "p_gender" "public"."profile_gender", "p_cohort" smallint, "p_academic_track" "public"."profile_academic_track", "p_department" "text", "p_class_no" smallint, "p_dorm_room" smallint, "p_allow_timeline_posts" boolean, "p_is_returning_student" boolean, "p_pub_id" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."update_my_profile"("p_name" "text", "p_description" "text", "p_birthday" "date", "p_phone_number" "text", "p_contact_email" "text", "p_gender" "public"."profile_gender", "p_cohort" smallint, "p_academic_track" "public"."profile_academic_track", "p_department" "text", "p_class_no" smallint, "p_dorm_room" smallint, "p_allow_timeline_posts" boolean, "p_is_returning_student" boolean, "p_pub_id" "text") TO "authenticated";

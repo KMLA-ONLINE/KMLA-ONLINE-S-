@@ -4,6 +4,8 @@ import {
   FileTextIcon,
   FlaskConicalIcon,
   KeyRoundIcon,
+  ScrollTextIcon,
+  ShieldCheckIcon,
 } from "lucide-react";
 import { useId, type ReactNode } from "react";
 
@@ -116,6 +118,16 @@ export default function SettingsPage() {
             to="/support"
             label="도움말"
             icon={CircleQuestionMarkIcon}
+          />
+          <ListLinkRow
+            to="/terms-of-service"
+            label="이용약관"
+            icon={ScrollTextIcon}
+          />
+          <ListLinkRow
+            to="/privacy-policy"
+            label="개인정보 처리방침"
+            icon={ShieldCheckIcon}
           />
           <ListLinkRow
             to="/licenses"
