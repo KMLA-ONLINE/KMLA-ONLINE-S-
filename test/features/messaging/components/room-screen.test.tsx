@@ -1914,6 +1914,47 @@ describe("RoomScreen 멘션", () => {
     await vi.waitFor(() => expect(input).toHaveValue(" "));
   });
 
+  it("조합 중이거나 지우기로 오지 않은 삭제도 멘션에 닿으면 멘션 전체를 지운다", async () => {
+    const { user, input } = await renderGroupRoom();
+
+    await user.type(input, "@서");
+    await user.keyboard("{Enter}");
+    const mention = mentionDisplayText("박서현", 1);
+    expect(input).toHaveValue(`${mention} `);
+
+    // 모바일 키보드와 한글 IME는 Backspace를 조합 글자 바꾸기로 보내 `beforeinput`에서 막지 못한다.
+    // 브라우저가 이름의 끝 글자를 지운 뒤에 넓힌다.
+    fireEvent.compositionStart(input);
+    const caret = mention.length - 1;
+    fireEvent.input(input, {
+      target: {
+        value: `${mention.slice(0, -1)} `,
+        selectionStart: caret,
+        selectionEnd: caret,
+      },
+    });
+    await vi.waitFor(() => expect(input).toHaveValue(" "));
+  });
+
+  it("고른 멘션만 입력창에서 색을 입히고, 손으로 친 같은 글자는 그대로 둔다", async () => {
+    const { user, input } = await renderGroupRoom();
+    // 입력창과 같은 칸에 겹친 뒤판.
+    const highlighted = () =>
+      Array.from(
+        input.parentElement!.querySelectorAll(".text-primary"),
+        (node) => node.textContent?.replace(/[\u2060-\u2064]/g, ""),
+      );
+
+    await user.type(input, "@박서현 ");
+    expect(highlighted()).toEqual([]);
+    expect(input).not.toHaveClass("text-transparent");
+
+    await user.type(input, "@최");
+    await user.keyboard("{Enter}");
+    expect(highlighted()).toEqual(["@최민준"]);
+    expect(input).toHaveClass("text-transparent");
+  });
+
   it("공백을 치거나 Esc를 누르면 목록을 닫고 친 글자는 그대로 둔다", async () => {
     const { user, input } = await renderGroupRoom();
 

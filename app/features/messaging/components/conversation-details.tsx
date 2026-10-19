@@ -163,6 +163,7 @@ export function ConversationDetails({
                           key={level}
                           value={level}
                           closeOnClick
+                          className="whitespace-nowrap"
                         >
                           <Icon aria-hidden />
                           {option}
@@ -349,7 +350,10 @@ function DetailQuickAction({
       {menu ? (
         <DropdownMenu>
           <DropdownMenuTrigger render={button} />
-          <DropdownMenuContent align="center">{menu}</DropdownMenuContent>
+          {/* 버튼 폭을 따르면 선택지 이름이 줄바꿈된다. 내용 폭에 맞춘다. */}
+          <DropdownMenuContent align="center" className="w-auto">
+            {menu}
+          </DropdownMenuContent>
         </DropdownMenu>
       ) : (
         button

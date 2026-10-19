@@ -16,6 +16,7 @@ import {
   expandDeletionOverMentions,
   fromMentionDisplay,
   isMentionDeleteInput,
+  isPickedDeleteInput,
   mentionDisplaySlot,
   mentionDisplayText,
   mentionOrdinalFromHref,
@@ -433,6 +434,15 @@ describe("deleting a mention as one piece", () => {
     ["insertText", false],
   ])("treats %s as a deletion to widen: %s", (inputType, expected) => {
     expect(isMentionDeleteInput(inputType)).toBe(expected);
+  });
+
+  it.each([
+    ["deleteByCut", true],
+    ["deleteByDrag", true],
+    ["deleteContentBackward", false],
+    ["insertCompositionText", false],
+  ])("treats %s as a range the person picked: %s", (inputType, expected) => {
+    expect(isPickedDeleteInput(inputType)).toBe(expected);
   });
 
   it("finds the span a native deletion removed, ending at the caret", () => {

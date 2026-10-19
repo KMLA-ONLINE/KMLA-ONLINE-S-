@@ -370,6 +370,11 @@ export function isMentionDeleteInput(inputType: string): boolean {
   return MENTION_DELETE_INPUT.test(inputType);
 }
 
+/** 사람이 범위를 직접 고른 삭제(잘라내기·끌어 옮기기). 멘션에 걸쳐도 넓히지 않는다. */
+export function isPickedDeleteInput(inputType: string): boolean {
+  return inputType === "deleteByCut" || inputType === "deleteByDrag";
+}
+
 /** 브라우저가 범위를 알려 주지 않을 때의 지울 범위. 선택이 있으면 그 범위, 없으면 캐럿 앞뒤 한 글자다. */
 export function caretDeletionRange(
   selection: DeletionRange,

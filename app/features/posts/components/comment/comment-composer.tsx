@@ -16,6 +16,10 @@ import {
   remainingMentions,
   useMentionDraft,
 } from "~/features/posts/hooks/use-mention-draft";
+import {
+  MENTION_HIGHLIGHT_INPUT_CLASS,
+  MentionHighlight,
+} from "~/features/posts/components/mention-highlight";
 import { useMentionTextarea } from "~/features/posts/hooks/use-mention-textarea";
 import {
   countMentionTargets,
@@ -77,6 +81,9 @@ const COUNTER_THRESHOLD = COMMENT_MAX_LENGTH - 500;
 
 /** 입력 높이 상한(5줄 + 여백에 여유). 글자 크기나 `py-1.5`를 바꾸면 같이 본다. */
 const MAX_HEIGHT = 140;
+
+/** 댓글 입력창과 멘션 뒤판이 함께 쓰는 글자 크기와 여백. 어긋나면 뒤판의 글자가 캐럿과 떨어진다. */
+const COMMENT_INPUT_TEXT_CLASS = "px-4 py-1.5 text-base leading-6";
 
 function resize(element: HTMLTextAreaElement) {
   element.style.height = "0px";
@@ -407,48 +414,62 @@ export function CommentComposer({
             </div>
           ) : null}
           <div className="flex items-end">
-            <textarea
-              ref={input}
-              rows={1}
-              value={draft}
-              aria-label="댓글 입력"
-              placeholder={placeholder}
-              className="min-h-9 min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent px-4 py-1.5 text-base leading-6 outline-none placeholder:text-muted-foreground"
-              onChange={(event) => {
-                mentionInput.handleChange(event.target);
-                if (localError) setLocalError(null);
-              }}
-              onPaste={(event) => {
-                const [pasted] = clipboardImageFiles(event.clipboardData);
-                if (!pasted) return;
-                event.preventDefault();
-                void selectImage(pasted);
-              }}
-              onCompositionStart={mentionInput.handleCompositionStart}
-              onCompositionEnd={(event) =>
-                mentionInput.handleCompositionEnd(event.currentTarget)
-              }
-              onKeyDown={(event) => {
-                if (event.key === "Escape" && onCancel) {
+            <div className="grid min-w-0 flex-1">
+              <MentionHighlight
+                text={draft}
+                ranges={mentionInput.mentionRanges}
+                inputRef={input}
+                // 높이 상한은 `MAX_HEIGHT`와 같다.
+                className={cn(COMMENT_INPUT_TEXT_CLASS, "max-h-35")}
+              />
+              <textarea
+                ref={input}
+                rows={1}
+                value={draft}
+                aria-label="댓글 입력"
+                placeholder={placeholder}
+                className={cn(
+                  "col-start-1 row-start-1 min-h-9 min-w-0 resize-none overflow-y-hidden bg-transparent outline-none placeholder:text-muted-foreground",
+                  COMMENT_INPUT_TEXT_CLASS,
+                  mentionInput.mentionRanges.length > 0 &&
+                    MENTION_HIGHLIGHT_INPUT_CLASS,
+                )}
+                onChange={(event) => {
+                  mentionInput.handleChange(event.target);
+                  if (localError) setLocalError(null);
+                }}
+                onPaste={(event) => {
+                  const [pasted] = clipboardImageFiles(event.clipboardData);
+                  if (!pasted) return;
                   event.preventDefault();
-                  onCancel();
-                  return;
+                  void selectImage(pasted);
+                }}
+                onCompositionStart={mentionInput.handleCompositionStart}
+                onCompositionEnd={(event) =>
+                  mentionInput.handleCompositionEnd(event.currentTarget)
                 }
-                // 화면 키보드와 설정을 끈 기기의 Enter는 줄바꿈이다(메신저와 같은 규칙).
-                if (!isSendEnter(event)) return;
-                // 한글 조합 중의 `Enter`는 글자를 확정하는 키다. 등록하면 "안녕하세"까지만 올라간다.
-                // Safari는 compositionend를 Enter keydown보다 먼저 보내 isComposing도 false다.
-                // 그 keydown은 keyCode 229로 온다.
-                if (
-                  mentionInput.composing.current ||
-                  event.nativeEvent.isComposing ||
-                  event.keyCode === 229
-                )
-                  return;
-                event.preventDefault();
-                send();
-              }}
-            />
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && onCancel) {
+                    event.preventDefault();
+                    onCancel();
+                    return;
+                  }
+                  // 화면 키보드와 설정을 끈 기기의 Enter는 줄바꿈이다(메신저와 같은 규칙).
+                  if (!isSendEnter(event)) return;
+                  // 한글 조합 중의 `Enter`는 글자를 확정하는 키다. 등록하면 "안녕하세"까지만 올라간다.
+                  // Safari는 compositionend를 Enter keydown보다 먼저 보내 isComposing도 false다.
+                  // 그 keydown은 keyCode 229로 온다.
+                  if (
+                    mentionInput.composing.current ||
+                    event.nativeEvent.isComposing ||
+                    event.keyCode === 229
+                  )
+                    return;
+                  event.preventDefault();
+                  send();
+                }}
+              />
+            </div>
             <input
               ref={fileInput}
               type="file"
