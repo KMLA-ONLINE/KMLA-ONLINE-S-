@@ -64,8 +64,9 @@ import {
   DialogTitle,
 } from "~/shared/ui/dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useEnterToSend } from "~/shared/hooks/use-enter-to-send";
 import { clipboardImageFiles } from "~/shared/lib/clipboard";
-import { isHandheld } from "~/shared/lib/install-platform";
+import { isSendEnter } from "~/shared/lib/enter-to-send";
 import { cn } from "~/shared/lib/utils";
 import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
 import { Button } from "~/shared/ui/button";
@@ -176,6 +177,7 @@ export function CommentComposer({
   // 한글 조합 중의 `Enter`는 글자를 확정하는 키다. 이걸 등록으로 처리하면 "안녕하세"까지만
   // 쓴 댓글이 올라간다.
   const composing = useRef(false);
+  const [enterToSend] = useEnterToSend();
   const fallbackRef = useRef<HTMLTextAreaElement>(null);
   const input = inputRef ?? fallbackRef;
   const pendingCaret = useRef<number | null>(null);
@@ -550,9 +552,8 @@ export function CommentComposer({
                   onCancel();
                   return;
                 }
-                if (event.key !== "Enter" || event.shiftKey) return;
                 // 폰·태블릿의 화면 키보드에는 Shift+Enter가 없다. Enter로 줄을 바꾸고 등록은 버튼이 맡는다(메신저와 같은 규칙).
-                if (isHandheld()) return;
+                if (!isSendEnter(event, enterToSend)) return;
                 if (composing.current || event.nativeEvent.isComposing) return;
                 event.preventDefault();
                 send();

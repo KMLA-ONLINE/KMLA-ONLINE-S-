@@ -170,4 +170,17 @@ describe("settings route", () => {
       "/settings/lab",
     );
   });
+
+  it("turns Enter-to-send on by default and remembers turning it off", async () => {
+    const { user } = renderSettings();
+    const toggle = screen.getByRole("switch", { name: "Enter로 보내기" });
+    expect(toggle).toBeChecked();
+
+    await user.click(toggle);
+
+    expect(toggle).not.toBeChecked();
+    expect(window.localStorage.getItem("kmla-online:enter-to-send:v1")).toBe(
+      "off",
+    );
+  });
 });

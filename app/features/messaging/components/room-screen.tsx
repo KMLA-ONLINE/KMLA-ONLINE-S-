@@ -76,6 +76,7 @@ import {
   formatFileSize,
   screenAttachments,
 } from "~/features/messaging/model/attachments";
+import { useEnterToSend } from "~/shared/hooks/use-enter-to-send";
 import { useKeyboardViewport } from "~/shared/hooks/use-keyboard-viewport";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
 import { RenameConversationDialog } from "~/features/messaging/components/rename-conversation-dialog";
@@ -119,6 +120,7 @@ import {
   DropdownMenuTrigger,
 } from "~/shared/ui/dropdown-menu";
 import { isAboveSeededParent } from "~/shared/lib/back-stack";
+import { isSendEnter } from "~/shared/lib/enter-to-send";
 import { isHandheld, isIOS } from "~/shared/lib/install-platform";
 import { cn } from "~/shared/lib/utils";
 
@@ -1787,6 +1789,7 @@ function ComposerShell({
   const [attachmentActionsExpanded, setAttachmentActionsExpanded] =
     useState(false);
   const composing = useRef(false);
+  const [enterToSend] = useEnterToSend();
   const normalizedDraft = normalizeMessageBody(draft);
   const hasDraft = normalizedDraft.trim() !== "";
   // 수정 중에는 첨부를 쌓지 않는다. 고칠 수 있는 메시지는 본문뿐이다. 답장에도 첨부하지 않는다
@@ -2047,9 +2050,8 @@ function ComposerShell({
                 else onCancelReply();
                 return;
               }
-              if (event.key !== "Enter" || event.shiftKey) return;
               // 폰·태블릿의 화면 키보드에는 Shift+Enter가 없다. Enter로 줄을 바꾸고 보내기는 버튼이 맡는다.
-              if (isHandheld()) return;
+              if (!isSendEnter(event, enterToSend)) return;
               // Safari는 compositionend를 Enter keydown보다 먼저 보내 isComposing도 false다.
               // 그 keydown은 keyCode 229로 온다.
               if (composingText) return;
