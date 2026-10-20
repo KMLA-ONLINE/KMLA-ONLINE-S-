@@ -1735,9 +1735,11 @@ export type Database = {
           cohort: number
           gender: Database["public"]["Enums"]["profile_gender"]
           is_returning_student: boolean
+          last_rejection_reason: string
           name: string
           profile_id: number
           profile_type: Database["public"]["Enums"]["profile_type"]
+          rejection_count: number
           student_number: string
           submitted_at: string
           total_count: number
@@ -1775,6 +1777,14 @@ export type Database = {
           profile_type: Database["public"]["Enums"]["profile_type"]
           pub_id: string
           suspension_expires_at: string
+        }[]
+      }
+      admin_reject_application: {
+        Args: { p_profile_id: number; p_reason: string }
+        Returns: {
+          profile_id: number
+          status: Database["public"]["Enums"]["profile_status"]
+          status_updated_at: string
         }[]
       }
       admin_replace_contacts: { Args: { p_contacts: Json }; Returns: undefined }
@@ -2392,6 +2402,13 @@ export type Database = {
           reaction_count: number
           title: string
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
+        }[]
+      }
+      get_my_application_rejection: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          reason: string
+          rejected_at: string
         }[]
       }
       get_my_group_anonymous_activity_restriction: {
@@ -3788,6 +3805,7 @@ export type Database = {
         | "anonymous_activity_restricted"
         | "application_submitted"
         | "account_approved"
+        | "account_rejected"
         | "account_blocked"
         | "account_unblocked"
         | "app_admin_granted"
@@ -3994,6 +4012,7 @@ export const Constants = {
         "anonymous_activity_restricted",
         "application_submitted",
         "account_approved",
+        "account_rejected",
         "account_blocked",
         "account_unblocked",
         "app_admin_granted",

@@ -18,6 +18,7 @@ export {
 } from "~/features/admin/data/queries";
 export {
   liftSuspension,
+  rejectApplication,
   replaceAdminContacts,
   reviewApplications,
   setAppAdmin,

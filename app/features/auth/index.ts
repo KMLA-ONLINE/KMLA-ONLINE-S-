@@ -28,6 +28,7 @@ export {
   hasActiveSession,
   listMyOwnedGroups,
   loadAuthState,
+  loadMyApplicationRejection,
   loadMySuspension,
 } from "~/features/auth/data/queries";
 export { describeSuspensionEnd } from "~/features/auth/model/suspension";
@@ -71,6 +72,7 @@ export type {
   AuthProfile,
   AuthState,
   FieldErrors,
+  MyApplicationRejection,
   MySuspension,
   ProfileFormValues,
 } from "~/features/auth/model/types";

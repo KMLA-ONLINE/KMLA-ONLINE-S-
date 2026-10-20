@@ -1,7 +1,11 @@
 import { isAuthApiError, type Session } from "@supabase/supabase-js";
 
 import { getSupabase } from "~/shared/supabase/client";
-import type { AuthState, MySuspension } from "~/features/auth/model/types";
+import type {
+  AuthState,
+  MyApplicationRejection,
+  MySuspension,
+} from "~/features/auth/model/types";
 import type { OwnedGroup } from "~/features/auth/model/withdrawal";
 
 /**
@@ -70,6 +74,15 @@ export async function loadAuthState(): Promise<AuthState | null> {
 /** 내 활성 이용 정지. 없으면 `null`. 정지 중에도 읽을 수 있는 RPC다. */
 export async function loadMySuspension(): Promise<MySuspension | null> {
   const { data, error } = await getSupabase().rpc("get_my_suspension");
+  if (error) throw error;
+  return data[0] ?? null;
+}
+
+/** 미작성으로 돌아온 내 신청의 가장 최근 반려. 반려된 적이 없거나 다시 제출했으면 `null`. */
+export async function loadMyApplicationRejection(): Promise<MyApplicationRejection | null> {
+  const { data, error } = await getSupabase().rpc(
+    "get_my_application_rejection",
+  );
   if (error) throw error;
   return data[0] ?? null;
 }

@@ -6,6 +6,9 @@ export type AuthProfile =
 export type MySuspension =
   Database["public"]["Functions"]["get_my_suspension"]["Returns"][number];
 
+export type MyApplicationRejection =
+  Database["public"]["Functions"]["get_my_application_rejection"]["Returns"][number];
+
 export interface AuthState {
   email: string;
   profile: AuthProfile | null;

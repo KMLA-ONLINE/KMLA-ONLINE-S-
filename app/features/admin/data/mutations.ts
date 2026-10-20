@@ -13,6 +13,17 @@ export async function reviewApplications(
   if (error) throw error;
 }
 
+export async function rejectApplication(
+  profileId: number,
+  reason: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("admin_reject_application", {
+    p_profile_id: profileId,
+    p_reason: reason,
+  });
+  if (error) throw error;
+}
+
 export async function unblockApplication(profileId: number): Promise<void> {
   const { error } = await getSupabase().rpc("admin_unblock_application", {
     p_profile_id: profileId,

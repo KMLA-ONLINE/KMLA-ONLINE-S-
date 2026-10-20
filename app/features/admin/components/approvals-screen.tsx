@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useFetcher, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
+import { RejectionDialog } from "~/features/admin/components/rejection-dialog";
 import {
   formatApplicationField,
   formatProfileType,
@@ -38,6 +39,8 @@ export function ApprovalsScreen({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [selectedPage, setSelectedPage] = useState(pendingPage);
   const [action, setAction] = useState<PendingAction | null>(null);
+  const [rejecting, setRejecting] = useState<AdminApplication | null>(null);
+  const closeRejection = useCallback(() => setRejecting(null), []);
   const submitted = useRef<PendingAction | null>(null);
   const busy = fetcher.state !== "idle";
   const total = pending[0]?.total_count ?? 0;
@@ -170,9 +173,19 @@ export function ApprovalsScreen({
                         >
                           승인
                         </Button>
+                        {/* 대부분은 오입력이라 반려가 기본이고, 차단은 외부인·악용 의심에만 쓴다. */}
                         <Button
                           size="sm"
-                          variant="destructive"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => setRejecting(application)}
+                        >
+                          반려
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive"
                           disabled={busy}
                           onClick={() =>
                             setAction({
@@ -292,6 +305,11 @@ export function ApprovalsScreen({
           onConfirm={submitAction}
         />
       ) : null}
+      <RejectionDialog
+        key={rejecting?.profile_id ?? "closed"}
+        application={rejecting}
+        onOpenChange={closeRejection}
+      />
     </div>
   );
 }
@@ -372,6 +390,12 @@ function ApplicationRow({
         <p className="text-xs text-muted-foreground">
           신청 {formatDateTime(application.submitted_at)}
         </p>
+        {application.rejection_count > 0 ? (
+          <p className="text-xs text-muted-foreground">
+            이전 반려 {application.rejection_count}회 ·{" "}
+            {application.last_rejection_reason}
+          </p>
+        ) : null}
       </div>
       <div className="flex shrink-0 gap-2">{actions}</div>
     </li>

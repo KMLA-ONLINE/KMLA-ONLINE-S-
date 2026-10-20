@@ -10,6 +10,7 @@ import {
   getAdminErrorMessage,
   isAdminAccessError,
   listApplications,
+  rejectApplication,
   reviewApplications,
   unblockApplication,
 } from "~/features/admin";
@@ -61,6 +62,9 @@ export async function clientAction({ request }: ClientActionFunctionArgs) {
       if (status !== "accepted" && status !== "blocked")
         return data({ error: "지원하지 않는 처리입니다." }, { status: 400 });
       await reviewApplications(ids, status);
+    } else if (intent === "reject" && ids.length === 1) {
+      const reason = form.get("reason");
+      await rejectApplication(ids[0], typeof reason === "string" ? reason : "");
     } else if (intent === "unblock" && ids.length === 1)
       await unblockApplication(ids[0]);
     else return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });

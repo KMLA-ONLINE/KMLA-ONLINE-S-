@@ -45,6 +45,56 @@ ALTER TABLE "private"."profile_suspensions" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "profile_suspensions_deny_client_access" ON "private"."profile_suspensions" USING (false) WITH CHECK (false);
 
+-- 가입 반려(§16.2). 반려는 계정 상태가 아니라 신청을 `draft`로 되돌리는 처리라 사유는 여기에만 남는다.
+-- 처리한 관리자는 신청자에게 보이지 않아야 하므로 클라이언트 권한 없이 RPC로만 읽는다.
+CREATE TABLE IF NOT EXISTS "private"."application_rejections" (
+    "id" bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+    "profile_id" bigint NOT NULL,
+    "reason" "text" NOT NULL,
+    "rejected_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "rejected_by_profile_id" bigint,
+    CONSTRAINT "application_rejections_reason" CHECK ((("reason" = "btrim"("reason")) AND ("char_length"("reason") >= 5) AND ("char_length"("reason") <= 300)))
+);
+
+ALTER TABLE "private"."application_rejections" OWNER TO "postgres";
+
+ALTER TABLE ONLY "private"."application_rejections"
+    ADD CONSTRAINT "application_rejections_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "private"."application_rejections"
+    ADD CONSTRAINT "application_rejections_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "private"."application_rejections"
+    ADD CONSTRAINT "application_rejections_rejected_by_fkey" FOREIGN KEY ("rejected_by_profile_id") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
+
+CREATE INDEX "application_rejections_profile_idx" ON "private"."application_rejections" USING "btree" ("profile_id", "rejected_at" DESC);
+
+CREATE INDEX "application_rejections_rejected_by_idx" ON "private"."application_rejections" USING "btree" ("rejected_by_profile_id") WHERE ("rejected_by_profile_id" IS NOT NULL);
+
+ALTER TABLE "private"."application_rejections" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "application_rejections_deny_client_access" ON "private"."application_rejections" USING (false) WITH CHECK (false);
+
+-- 신청자가 학교 프로필 설정에서 볼 가장 최근 반려. 다시 제출해 `draft`를 벗어나면 보이지 않는다.
+CREATE OR REPLACE FUNCTION "public"."get_my_application_rejection"() RETURNS TABLE("reason" "text", "rejected_at" timestamp with time zone)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select rejection.reason, rejection.rejected_at
+  from public.profiles as profile
+  join private.application_rejections as rejection on rejection.profile_id = profile.id
+  where profile.auth_user_id = (select auth.uid())
+    and profile.status = 'draft'
+    and profile.deleted_at is null
+  order by rejection.rejected_at desc, rejection.id desc
+  limit 1;
+$$;
+
+ALTER FUNCTION "public"."get_my_application_rejection"() OWNER TO "postgres";
+
+REVOKE ALL ON FUNCTION "public"."get_my_application_rejection"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_my_application_rejection"() TO "authenticated";
+
 CREATE OR REPLACE FUNCTION "private"."profile_suspended"("p_profile_id" bigint) RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
