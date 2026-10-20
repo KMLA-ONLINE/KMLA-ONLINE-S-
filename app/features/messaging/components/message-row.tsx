@@ -585,6 +585,14 @@ export function MessageRow({
         className={cn(
           "flex min-w-0 flex-col",
           "max-w-[78%]",
+          // 마우스 환경의 액션 레일은 흐름 밖에서 버블 안쪽 옆에 뜬다. 행이 좁아 78% 옆에 레일(버튼 3개와
+          // 간격, 상대 메시지는 아바타 자리까지)이 들어갈 자리가 없을 때만 열을 줄여, 레일이 대화 영역
+          // 밖으로 넘쳐 잘리거나 가로 스크롤을 만들지 않게 한다. 레일이 잠깐 없는 전송 중 메시지도 같은
+          // 폭을 써야 전송이 끝날 때 줄바꿈이 바뀌지 않는다.
+          actionRail != null &&
+            (isOwn
+              ? "[@media(hover:hover)]:max-w-[min(78%,calc(100%-6.375rem))]"
+              : "[@media(hover:hover)]:max-w-[min(78%,calc(100%-8.625rem))]"),
           REPLY_SWIPE_SHIFT,
           isOwn ? "items-end" : "items-start",
           contextOpenedByTouch && "self-start",
@@ -609,11 +617,20 @@ export function MessageRow({
         {/* 탭으로 시각을 보는 것은 손가락 전용 지름길이다. 마우스는 시간 카드로 본다. */}
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
         <div
-          className={cn("flex w-full min-w-0 items-center gap-1.5")}
+          className={cn("relative flex w-full min-w-0 items-center gap-1.5")}
           onPointerDown={startTap}
           onClick={handleTap}
         >
-          {isOwn ? actionRail : null}
+          {actionRail != null ? (
+            <div
+              className={cn(
+                "absolute inset-y-0 flex items-center",
+                isOwn ? "right-full mr-1.5" : "left-full ml-1.5",
+              )}
+            >
+              {actionRail}
+            </div>
+          ) : null}
           {isOwn ? unreadCount : null}
           <MessageTimeCard
             message={message}
@@ -641,7 +658,6 @@ export function MessageRow({
             />
           </MessageTimeCard>
           {!isOwn ? unreadCount : null}
-          {!isOwn ? actionRail : null}
         </div>
       </div>
       {onReply && !message.deleted ? (

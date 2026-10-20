@@ -217,7 +217,7 @@ export function MessageBubble({
           <div
             ref={textBoxRef}
             className={cn(
-              // 줄여 둔 폭이 남은 채 옆에 액션 레일이 생기는 식으로 쓸 수 있는 폭이 줄어도 버블 밖으로
+              // 줄여 둔 폭이 남은 채 창이 좁아지는 식으로 쓸 수 있는 폭이 줄어도 버블 밖으로
               // 넘치지 않게 막는다. 넘치면 대화 영역에 가로 스크롤이 생긴다.
               "w-full max-w-full",
               hasAttachments && "mt-0.5",
