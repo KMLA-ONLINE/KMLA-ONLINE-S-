@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDownIcon } from "lucide-react";
 import { Link, useFetcher, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
@@ -15,6 +16,12 @@ import type {
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { Button } from "~/shared/ui/button";
 import { Checkbox } from "~/shared/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/shared/ui/dropdown-menu";
 
 type PendingAction =
   | { kind: "review"; ids: number[]; status: "accepted" | "blocked" }
@@ -22,6 +29,7 @@ type PendingAction =
 
 type Tab = "pending" | "blocked";
 
+// 반려는 되돌릴 수 있는 처리라 차단(빨강)과 구분되는 경고색을 쓴다. 프로젝트에 경고 토큰이 없어 다른 경고 표시처럼 amber를 쓴다.
 export function ApprovalsScreen({
   pending,
   blocked,
@@ -173,30 +181,48 @@ export function ApprovalsScreen({
                         >
                           승인
                         </Button>
-                        {/* 대부분은 오입력이라 반려가 기본이고, 차단은 외부인·악용 의심에만 쓴다. */}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={busy}
-                          onClick={() => setRejecting(application)}
-                        >
-                          반려
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-destructive"
-                          disabled={busy}
-                          onClick={() =>
-                            setAction({
-                              kind: "review",
-                              ids: [application.profile_id],
-                              status: "blocked",
-                            })
-                          }
-                        >
-                          차단
-                        </Button>
+                        {/* 대부분은 오입력이라 반려가 기본 동작이고, 차단은 외부인·악용 의심에만 쓰므로 메뉴에 둔다. */}
+                        {/* 버튼은 투명 테두리 안쪽에만 배경을 칠한다. 반려 쪽 테두리를 없애고 메뉴 쪽 테두리만 색을 칠해 바탕이 비치지 않는 구분선 하나를 둔다. */}
+                        <div className="flex">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="rounded-r-none border-r-0"
+                            disabled={busy}
+                            onClick={() => setRejecting(application)}
+                          >
+                            반려
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              disabled={busy}
+                              render={
+                                <Button
+                                  size="icon-sm"
+                                  variant="destructive"
+                                  className="rounded-l-none border-l-destructive/20"
+                                  aria-label={`${application.name} 신청 다른 처리`}
+                                />
+                              }
+                            >
+                              <ChevronDownIcon />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={() =>
+                                  setAction({
+                                    kind: "review",
+                                    ids: [application.profile_id],
+                                    status: "blocked",
+                                  })
+                                }
+                              >
+                                차단
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </>
                     }
                   />

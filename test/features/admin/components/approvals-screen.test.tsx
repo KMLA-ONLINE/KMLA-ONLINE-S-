@@ -108,11 +108,17 @@ describe("ApprovalsScreen", () => {
     );
   });
 
-  it("asks for confirmation before blocking", async () => {
+  it("tucks blocking into the rejection menu and confirms it", async () => {
     const user = userEvent.setup();
     renderScreen();
 
-    await user.click(screen.getAllByRole("button", { name: "차단" })[0]);
+    expect(
+      screen.queryByRole("button", { name: "차단" }),
+    ).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "홍길동 신청 다른 처리" }),
+    );
+    await user.click(await screen.findByRole("menuitem", { name: "차단" }));
     expect(screen.getByRole("dialog", { name: "가입 차단" })).toBeVisible();
   });
 });
