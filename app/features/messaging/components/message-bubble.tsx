@@ -86,8 +86,9 @@ export function MessageBubble({
         className={cn(
           // 인용은 원문 길이만큼 버블을 넓히되 14rem을 넘기지 않는다. 버블이 본문이나 사진으로 더 넓으면
           // `min-w-full`로 버블 폭을 채운다. 최소 폭이 최대 폭보다 앞서고, 백분율 최소 폭은 버블 폭
-          // 계산에 들지 않으므로 인용은 언제나 버블 폭과 같다.
-          "mb-1.5 block w-fit max-w-56 min-w-full border-l-2 pl-2 text-left text-xs leading-4",
+          // 계산에 들지 않으므로 인용은 언제나 버블 폭과 같다. 줄임표 줄은 줄바꿈하지 않아 `w-fit`이
+          // 원문 전체 길이를 최소 폭으로 삼으므로, 최대 폭에도 버블 폭을 넣어야 좁은 버블 밖으로 넘치지 않는다.
+          "mb-1.5 block w-fit max-w-[min(14rem,100%)] min-w-full border-l-2 pl-2 text-left text-xs leading-4",
           onPrimary
             ? "border-primary-foreground/50 text-primary-foreground/85 hover:bg-primary-foreground/10"
             : "border-primary text-muted-foreground hover:bg-background/60",
