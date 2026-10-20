@@ -1,16 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getSupabase, rpc, getUser, signInWithPassword } = vi.hoisted(() => ({
+const { getSupabase, rpc } = vi.hoisted(() => ({
   getSupabase: vi.fn(),
   rpc: vi.fn(),
-  getUser: vi.fn(),
-  signInWithPassword: vi.fn(),
 }));
 
 vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 
 import {
-  reauthenticateWithPassword,
+  rejectApplication,
   reviewApplications,
 } from "~/features/admin/data/mutations";
 import {
@@ -23,7 +21,6 @@ describe("admin data", () => {
     vi.clearAllMocks();
     getSupabase.mockReturnValue({
       rpc,
-      auth: { getUser, signInWithPassword },
     });
     rpc.mockResolvedValue({ data: [], error: null });
   });
@@ -54,27 +51,12 @@ describe("admin data", () => {
     });
   });
 
-  it("reauthenticates the current account without accepting a caller email", async () => {
-    getUser.mockResolvedValue({
-      data: { user: { email: "admin@example.com" } },
-      error: null,
+  it("rejects one application with the reason the admin wrote", async () => {
+    await rejectApplication(11, "기수와 학번이 맞지 않습니다.");
+
+    expect(rpc).toHaveBeenCalledWith("admin_reject_application", {
+      p_profile_id: 11,
+      p_reason: "기수와 학번이 맞지 않습니다.",
     });
-    signInWithPassword.mockResolvedValue({ error: null });
-
-    await reauthenticateWithPassword("current-password");
-
-    expect(getUser).toHaveBeenCalledOnce();
-    expect(signInWithPassword).toHaveBeenCalledWith({
-      email: "admin@example.com",
-      password: "current-password",
-    });
-  });
-
-  it("does not attempt password sign-in when the current user lookup fails", async () => {
-    const error = new Error("expired session");
-    getUser.mockResolvedValue({ data: { user: null }, error });
-
-    await expect(reauthenticateWithPassword("password")).rejects.toBe(error);
-    expect(signInWithPassword).not.toHaveBeenCalled();
   });
 });

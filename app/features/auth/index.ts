@@ -1,9 +1,15 @@
 export { AuthCard } from "~/features/auth/components/auth-card";
+export { LegalDocument } from "~/features/auth/components/legal-document";
+export { LegalLinks } from "~/features/auth/components/legal-links";
 export { LogoutButton } from "~/features/auth/components/logout-button";
 export { OtpField } from "~/features/auth/components/otp-field";
 export { PasswordField } from "~/features/auth/components/password-field";
+export { PrivacyNotice } from "~/features/auth/components/privacy-notice";
 export { ProfileFields } from "~/features/auth/components/profile-fields";
+export { TermsAgreementDialog } from "~/features/auth/components/terms-agreement-dialog";
+export { TermsAgreementField } from "~/features/auth/components/terms-agreement-field";
 export {
+  agreeToTerms,
   claimSignupPassword,
   resendSignupOtp,
   sendPasswordChangeOtp,
@@ -14,14 +20,28 @@ export {
   submitProfile,
   updatePassword,
   verifyPasswordResetOtp,
+  reauthenticateWithPassword,
   verifySignupOtp,
+  withdrawAccount,
 } from "~/features/auth/data/mutations";
 export {
   hasActiveSession,
+  listMyOwnedGroups,
   loadAuthState,
+  loadMyApplicationRejection,
   loadMySuspension,
 } from "~/features/auth/data/queries";
 export { describeSuspensionEnd } from "~/features/auth/model/suspension";
+export {
+  needsTermsAgreement,
+  readTermsAgreement,
+  TERMS_VERSION,
+} from "~/features/auth/model/terms";
+export {
+  describeWithdrawalBlocker,
+  describeWithdrawalError,
+  getWithdrawalBlockers,
+} from "~/features/auth/model/withdrawal";
 export {
   DUPLICATE_STUDENT_NUMBER_MESSAGE,
   getAuthErrorMessage,
@@ -52,7 +72,12 @@ export type {
   AuthProfile,
   AuthState,
   FieldErrors,
+  MyApplicationRejection,
   MySuspension,
   ProfileFormValues,
 } from "~/features/auth/model/types";
+export type {
+  OwnedGroup,
+  WithdrawalBlocker,
+} from "~/features/auth/model/withdrawal";
 export type { SignupDraft } from "~/features/auth/storage/pending-signup";

@@ -13,6 +13,17 @@ export async function reviewApplications(
   if (error) throw error;
 }
 
+export async function rejectApplication(
+  profileId: number,
+  reason: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("admin_reject_application", {
+    p_profile_id: profileId,
+    p_reason: reason,
+  });
+  if (error) throw error;
+}
+
 export async function unblockApplication(profileId: number): Promise<void> {
   const { error } = await getSupabase().rpc("admin_unblock_application", {
     p_profile_id: profileId,
@@ -60,21 +71,6 @@ export async function suspendProfile(
 export async function liftSuspension(profileId: number): Promise<void> {
   const { error } = await getSupabase().rpc("admin_lift_suspension", {
     p_profile_id: profileId,
-  });
-  if (error) throw error;
-}
-
-export async function reauthenticateWithPassword(
-  password: string,
-): Promise<void> {
-  const supabase = getSupabase();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError) throw userError;
-  if (!userData.user?.email) throw new Error("Current account has no email");
-
-  const { error } = await supabase.auth.signInWithPassword({
-    email: userData.user.email,
-    password,
   });
   if (error) throw error;
 }

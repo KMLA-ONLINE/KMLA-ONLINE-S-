@@ -10,6 +10,7 @@ describe("settings URLs", () => {
       ["/settings/noti", "routes/app/notification-settings.tsx"],
       ["/settings/lab", "routes/app/menu/settings-lab.tsx"],
       ["/settings/password", "routes/app/menu/password.tsx"],
+      ["/settings/withdraw", "routes/app/menu/withdraw.tsx"],
       ["/support", "routes/app/support.tsx"],
       ["/licenses", "routes/app/menu/licenses.tsx"],
     ]) {

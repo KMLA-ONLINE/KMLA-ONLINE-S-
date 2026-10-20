@@ -1,4 +1,4 @@
-function readErrorCode(error: unknown): string {
+export function readErrorCode(error: unknown): string {
   return typeof error === "object" && error && "code" in error
     ? String(error.code)
     : "";
@@ -35,8 +35,26 @@ export function isDuplicateStudentNumberError(error: unknown): boolean {
 }
 
 /** Supabase auth 에러를 문구로 바꾼다. 출력이 화면이라 `data/`가 아닌 여기에 두고 client 대역 없이 테스트한다. */
+/**
+ * 프로필 제출이나 동의 기록에 보낸 이용약관 판이 DB가 시행 중으로 아는 판과 다르다. 화면이 옛
+ * 빌드라 다시 시도해도 같은 판을 보내므로 새로고침해야 풀린다.
+ */
+function isOutdatedTermsError(error: unknown): boolean {
+  return (
+    readErrorCode(error) === "22023" &&
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    String(error.message).includes("current terms agreement required")
+  );
+}
+
 export function getAuthErrorMessage(error: unknown): string {
   const code = readErrorCode(error);
+
+  if (isOutdatedTermsError(error)) {
+    return "앱이 새 버전으로 바뀌었어요. 새로고침한 뒤 다시 시도해 주세요.";
+  }
 
   if (code === "invalid_credentials") {
     return "이메일 또는 비밀번호가 올바르지 않습니다.";

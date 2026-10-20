@@ -47,6 +47,7 @@ export function PwaPrompts() {
   const showServiceWorkerPrompt = !offline && updateReady;
   // 알림 권한 안내는 로그인한 셸이 띄운다(`NotificationPermissionPrompt`). 설치보다 앞선다.
   const notificationPromptActive = usePromptActive("notification");
+  const termsPromptActive = usePromptActive("terms");
 
   useEffect(() => {
     setPromptActive("offline", offline);
@@ -91,7 +92,12 @@ export function PwaPrompts() {
         </div>
       )}
       <InstallPrompt
-        blocked={offline || showServiceWorkerPrompt || notificationPromptActive}
+        blocked={
+          offline ||
+          showServiceWorkerPrompt ||
+          termsPromptActive ||
+          notificationPromptActive
+        }
       />
     </>
   );

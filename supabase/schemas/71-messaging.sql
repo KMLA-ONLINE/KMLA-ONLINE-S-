@@ -483,7 +483,8 @@ returns table (
   type public.conversation_type,
   name text,
   viewer_id bigint,
-  -- 지금과 예전 멤버의 `{id, pub_id, name, avatar_path, active}`. 지금 멤버가 앞이고 참여 순서다.
+  -- 지금과 예전 멤버의 `{id, pub_id, name, avatar_path, active, withdrawn}`. 지금 멤버가 앞이고
+  -- 참여 순서다. 탈퇴한 사람은 `pub_id`가 null이다.
   participants jsonb,
   last_message_id uuid,
   last_message_sender_id bigint,
@@ -582,10 +583,11 @@ begin
     select jsonb_agg(
       jsonb_build_object(
         'id', profile.id,
-        'pub_id', profile.pub_id,
+        'pub_id', case when profile.deleted_at is null then profile.pub_id end,
         'name', profile.name,
         'avatar_path', profile.avatar_path,
-        'active', person.active
+        'active', person.active,
+        'withdrawn', profile.deleted_at is not null
       )
       order by person.active desc, person.first_joined_at, profile.id
     ) as list
@@ -998,6 +1000,31 @@ $$;
 revoke all on function private.normalize_message_body(text)
   from public;
 
+-- 탈퇴한 상대와의 1:1 대화는 기록으로만 남는다. 전송과 첨부 준비가 함께 막는다.
+create function private.direct_counterpart_withdrawn(
+  p_conversation_id uuid,
+  p_caller_profile_id bigint
+)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.conversations as conversation
+    join public.profiles as partner
+      on partner.id in (conversation.direct_profile_low, conversation.direct_profile_high)
+      and partner.id <> p_caller_profile_id
+    where conversation.id = p_conversation_id
+      and conversation.type = 'direct'
+      and partner.deleted_at is not null
+  );
+$$;
+
+revoke all on function private.direct_counterpart_withdrawn(uuid, bigint)
+  from public;
+
 -- 메시지를 보낸다. `p_message_id`는 클라이언트 UUID이며, 같은 값으로 다시 부르면 저장하지 않고
 -- 처음 저장한 행을 돌려준다. 본문 규칙은 `private.normalize_message_body`다. 보낸 사람의 읽음
 -- 위치는 이 메시지로 옮긴다.
@@ -1053,6 +1080,11 @@ begin
     if not found then
       raise exception 'conversation member required'
         using errcode = '42501';
+    end if;
+
+    if private.direct_counterpart_withdrawn(p_conversation_id, caller_profile_id) then
+      raise exception 'recipient withdrawn'
+        using errcode = '55000', hint = 'recipient_withdrawn';
     end if;
 
     -- 이 메시지로 예고한 첨부의 object를 확인하고 확정한다. 첨부가 있으면 본문은 비어도 된다.
@@ -2547,6 +2579,46 @@ revoke all on function public.add_conversation_members(uuid, bigint[])
 grant execute on function public.add_conversation_members(uuid, bigint[])
   to authenticated;
 
+-- 그룹 대화에서 나가는 공통 처리. 호출자가 `lock_group_for_member`로 대화를 잠근 뒤 부른다. 직접
+-- 나가기와 계정 탈퇴(`withdraw_account`)가 함께 쓴다.
+create function private.leave_group_conversation(
+  p_profile_id bigint,
+  p_conversation_id uuid
+)
+returns void
+language plpgsql
+set search_path = ''
+as $$
+begin
+  update public.conversation_members as member
+  set left_at = clock_timestamp(),
+    left_by_self = true
+  where member.conversation_id = p_conversation_id
+    and member.profile_id = p_profile_id
+    and member.left_at is null;
+
+  -- 소유주가 나가면 가장 먼저 들어온 남은 멤버가 소유주가 된다. 아무도 없으면 비운다.
+  update public.conversations as conversation
+  set created_by = (
+    select member.profile_id
+    from public.conversation_members as member
+    where member.conversation_id = p_conversation_id
+      and member.left_at is null
+    order by member.joined_at, member.id
+    limit 1
+  )
+  where conversation.id = p_conversation_id
+    and conversation.created_by = p_profile_id;
+
+  perform private.insert_system_message(
+    p_conversation_id, 'member_left', array[p_profile_id]
+  );
+end;
+$$;
+
+revoke all on function private.leave_group_conversation(bigint, uuid)
+  from public;
+
 -- 그룹 대화에서 나간다. 참여 기간의 메시지는 계속 볼 수 있고 이후 메시지는 볼 수 없다.
 create function public.leave_conversation(p_conversation_id uuid)
 returns void
@@ -2556,39 +2628,14 @@ set search_path = ''
 as $$
 declare
   caller_profile_id bigint := private.current_profile_id();
-  target public.conversations;
 begin
   if caller_profile_id is null then
     raise exception 'accepted profile required'
       using errcode = '42501';
   end if;
 
-  target := private.lock_group_for_member(caller_profile_id, p_conversation_id);
-
-  update public.conversation_members as member
-  set left_at = clock_timestamp(),
-    left_by_self = true
-  where member.conversation_id = p_conversation_id
-    and member.profile_id = caller_profile_id
-    and member.left_at is null;
-
-  -- 소유주가 나가면 가장 먼저 들어온 남은 멤버가 소유주가 된다. 아무도 없으면 비운다.
-  if target.created_by = caller_profile_id then
-    update public.conversations as conversation
-    set created_by = (
-      select member.profile_id
-      from public.conversation_members as member
-      where member.conversation_id = p_conversation_id
-        and member.left_at is null
-      order by member.joined_at, member.id
-      limit 1
-    )
-    where conversation.id = p_conversation_id;
-  end if;
-
-  perform private.insert_system_message(
-    p_conversation_id, 'member_left', array[caller_profile_id]
-  );
+  perform private.lock_group_for_member(caller_profile_id, p_conversation_id);
+  perform private.leave_group_conversation(caller_profile_id, p_conversation_id);
 end;
 $$;
 
@@ -2996,6 +3043,12 @@ begin
   ) then
     raise exception 'conversation member required'
       using errcode = '42501';
+  end if;
+  if private.direct_counterpart_withdrawn(p_conversation_id, caller_profile_id) then
+    -- 클라이언트가 이 거부만 골라 대화를 다시 읽으므로 hint로 구분한다. 권한 거부(42501)로 두면
+    -- 세션 거절과 섞인다.
+    raise exception 'recipient withdrawn'
+      using errcode = '55000', hint = 'recipient_withdrawn';
   end if;
   if exists (select 1 from private.messages as message where message.id = p_message_id) then
     raise exception 'message already sent'

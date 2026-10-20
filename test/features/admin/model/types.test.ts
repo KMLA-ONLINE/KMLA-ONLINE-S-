@@ -25,6 +25,15 @@ describe("admin model", () => {
     expect(isAdminAccessError(forbidden)).toBe(true);
   });
 
+  it("tells the admin when another admin already handled the application", () => {
+    expect(
+      getAdminErrorMessage({
+        code: "55000",
+        message: "pending application not found",
+      }),
+    ).toBe("이미 처리된 신청입니다. 목록을 새로고침해 주세요.");
+  });
+
   it("gives the final-admin invariant a useful message", () => {
     expect(
       getAdminErrorMessage({

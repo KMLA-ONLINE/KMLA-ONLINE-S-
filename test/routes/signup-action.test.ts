@@ -26,7 +26,11 @@ vi.mock("~/features/auth/data/queries", async (importOriginal) => ({
   hasActiveSession,
 }));
 
-import { clearSignupDraft, saveSignupDraft } from "~/features/auth";
+import {
+  clearSignupDraft,
+  saveSignupDraft,
+  TERMS_VERSION,
+} from "~/features/auth";
 import { clientAction } from "~/routes/auth/signup";
 
 const email = "student@kmla.hs.kr";
@@ -66,7 +70,7 @@ describe("signup verification", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearSignupDraft();
-    saveSignupDraft({ email, values });
+    saveSignupDraft({ email, values, termsVersion: TERMS_VERSION });
     hasActiveSession.mockResolvedValue(false);
     verifySignupOtp.mockResolvedValue(undefined);
     claimSignupPassword.mockResolvedValue(undefined);
@@ -88,6 +92,15 @@ describe("signup verification", () => {
     expect(claimSignupPassword.mock.invocationCallOrder[0]).toBeLessThan(
       submitProfile.mock.invocationCallOrder[0],
     );
+  });
+
+  it("submits the profile together with the terms version agreed earlier", async () => {
+    await expectRedirect(
+      verify({ otp: "123456", password: "new-password" }),
+      "/pending",
+    );
+
+    expect(submitProfile).toHaveBeenCalledWith(values, TERMS_VERSION);
   });
 
   // 다시 로드돼 비밀번호를 잃으면 저장을 건너뛸 게 아니라 다시 받아야 한다. 건너뛰면
@@ -141,6 +154,39 @@ describe("signup verification", () => {
     expect(failed.data).toMatchObject({ studentNumberTaken: true });
   });
 
+  // 초안을 저장한 뒤 앱이 새 약관 판으로 업데이트됐다. 옛 판을 그대로 보내면 서버가 매번 거절하므로,
+  // 코드를 쓰기 전에 약관 단계로 돌려 이번 판에 다시 동의받는다.
+  it("asks for agreement again when the draft agreed to older terms", async () => {
+    saveSignupDraft({ email, values, termsVersion: "2026-01-01" });
+
+    const result = (await verify({
+      otp: "123456",
+      password: "new-password",
+    })) as {
+      data: {
+        step: string;
+        email: string;
+        password: string;
+        values: typeof values;
+        termsAgreed?: boolean;
+        errors: Record<string, string>;
+      };
+    };
+
+    expect(result.data).toMatchObject({
+      step: "terms",
+      email,
+      password: "new-password",
+      values,
+    });
+    expect(result.data.termsAgreed).toBeFalsy();
+    expect(result.data.errors.terms).toBe(
+      "이용약관이 바뀌었어요. 다시 확인하고 동의해 주세요.",
+    );
+    expect(verifySignupOtp).not.toHaveBeenCalled();
+    expect(submitProfile).not.toHaveBeenCalled();
+  });
+
   // 서버가 비밀번호를 거절했는데 hidden 값만 다시 보내면 빠져나올 수 없다.
   it("lets the user change a rejected password after verification succeeded", async () => {
     claimSignupPassword.mockRejectedValueOnce({ code: "weak_password" });
@@ -188,6 +234,7 @@ describe("signup profile step", () => {
     body.set("birthdayYear", "2009");
     body.set("birthdayMonth", "03");
     body.set("birthdayDay", "01");
+    body.set("terms", TERMS_VERSION);
     const request = new Request("http://localhost/signup", {
       method: "POST",
       body,
@@ -211,5 +258,70 @@ describe("signup profile step", () => {
       email:
         "사용할 수 없는 이메일 주소입니다. 메일을 받을 수 있는 주소를 입력해 주세요.",
     });
+  });
+});
+
+function submitStep(intent: string, fields: Record<string, string> = {}) {
+  const body = new FormData();
+  body.set("intent", intent);
+  body.set("email", email);
+  body.set("password", "new-password");
+  body.set("passwordConfirm", "new-password");
+  for (const [key, value] of Object.entries(values)) body.set(key, value);
+  for (const [key, value] of Object.entries(fields)) body.set(key, value);
+  const request = new Request("http://localhost/signup", {
+    method: "POST",
+    body,
+  });
+  return (
+    clientAction as unknown as (args: { request: Request }) => Promise<{
+      data: {
+        step: string;
+        termsAgreed?: boolean;
+        errors?: Record<string, string>;
+      };
+    }>
+  )({ request });
+}
+
+describe("signup terms step", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearSignupDraft();
+    signUp.mockResolvedValue(undefined);
+  });
+
+  // 서버가 학교 프로필을 받기 전에 약관과 개인정보 안내가 끝나야 한다.
+  it("shows the terms right after the account step", async () => {
+    const result = await submitStep("credentials");
+    expect(result.data.step).toBe("terms");
+  });
+
+  it("keeps the user on the terms step until the terms are agreed", async () => {
+    const result = await submitStep("terms");
+    expect(result.data.step).toBe("terms");
+    expect(result.data.errors?.terms).toBeTruthy();
+  });
+
+  it("opens the profile step once the terms are agreed", async () => {
+    const result = await submitStep("terms", { terms: TERMS_VERSION });
+    expect(result.data).toMatchObject({ step: "profile", termsAgreed: true });
+  });
+
+  it("does not create the account for a profile submitted without agreement", async () => {
+    const result = await submitStep("profile");
+    expect(result.data.step).toBe("terms");
+    expect(signUp).not.toHaveBeenCalled();
+  });
+
+  it("keeps the agreement while going back from the profile to the terms", async () => {
+    const back = await submitStep("back", {
+      step: "profile",
+      terms: TERMS_VERSION,
+    });
+    expect(back.data).toMatchObject({ step: "terms", termsAgreed: true });
+
+    const first = await submitStep("back", { step: "terms" });
+    expect(first.data.step).toBe("credentials");
   });
 });

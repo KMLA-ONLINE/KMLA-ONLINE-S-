@@ -1,10 +1,16 @@
 import { isAuthApiError, type Session } from "@supabase/supabase-js";
 
 import { getSupabase } from "~/shared/supabase/client";
-import type { AuthState, MySuspension } from "~/features/auth/model/types";
+import type {
+  AuthState,
+  MyApplicationRejection,
+  MySuspension,
+} from "~/features/auth/model/types";
+import type { OwnedGroup } from "~/features/auth/model/withdrawal";
 
 /**
- * 서버가 세션을 거절했다는 오류 코드. `42501`은 인증 전용 RPC에 요청이 익명으로 나갔다는 뜻이다.
+ * 서버가 세션을 거절했다는 오류 코드. `42501`은 인증 전용 RPC에 요청이 익명으로 나갔거나,
+ * 다른 기기에서 탈퇴해 토큰의 계정이 없다는 뜻이다(`get_my_profile`).
  * `PGRST303`(시계 불일치)은 재로그인해도 같은 토큰이 거절돼 게이트와 로그인 화면을 무한히 오가므로 뺐다.
  */
 const REJECTED_SESSION_CODES = new Set(["PGRST301", "PGRST302", "42501"]);
@@ -72,6 +78,15 @@ export async function loadMySuspension(): Promise<MySuspension | null> {
   return data[0] ?? null;
 }
 
+/** 미작성으로 돌아온 내 신청의 가장 최근 반려. 반려된 적이 없거나 다시 제출했으면 `null`. */
+export async function loadMyApplicationRejection(): Promise<MyApplicationRejection | null> {
+  const { data, error } = await getSupabase().rpc(
+    "get_my_application_rejection",
+  );
+  if (error) throw error;
+  return data[0] ?? null;
+}
+
 /**
  * 세션 유무만 확인한다. 게이트와 자식 clientLoader는 병렬로 돌아, 인증이 필요한 로더는
  * 익명 요청(401)이 나가기 전에 이걸로 먼저 걸러야 한다. `getSession()`은 저장소에서 읽으므로 왕복이 늘지 않는다.
@@ -83,4 +98,14 @@ export async function hasActiveSession(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** 탈퇴 전에 소유권을 넘겨야 하는 그룹. 멤버십 select 정책이 내 행만 돌려준다. */
+export async function listMyOwnedGroups(): Promise<OwnedGroup[]> {
+  const { data, error } = await getSupabase()
+    .from("group_memberships")
+    .select("groups!inner(id, slug, name)")
+    .eq("role", "owner");
+  if (error) throw error;
+  return data.map(({ groups }) => groups);
 }

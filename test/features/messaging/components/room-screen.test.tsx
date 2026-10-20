@@ -1000,6 +1000,70 @@ describe("RoomScreen", () => {
     setLevel.mockRestore();
   });
 
+  it("탈퇴한 상대와의 1:1 대화에는 입력창과 답장·수정을 내지 않는다", async () => {
+    const loaded = await loadConversation("hyunwoo");
+    const conversation = {
+      ...loaded!,
+      participants: loaded!.participants.map((participant) =>
+        participant.id === loaded!.viewerId
+          ? participant
+          : { ...participant, name: "탈퇴한 사용자", withdrawn: true },
+      ),
+    };
+    renderRoute(() => <RoomScreen conversation={conversation} />, {
+      path: "/messenger/hyunwoo",
+    });
+
+    expect(
+      screen.getByText("탈퇴한 사용자에게는 메시지를 보낼 수 없습니다."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(
+      screen.queryAllByRole("button", { name: "메시지에 답장" }),
+    ).toHaveLength(0);
+  });
+
+  it("열어 둔 1:1 대화의 상대가 탈퇴해 전송이 거부되면 대화를 다시 읽어 입력창을 내린다", async () => {
+    const conversation = await loadConversation("hyunwoo");
+    const summary = await queries.getConversationSummary("hyunwoo");
+    vi.spyOn(mutations, "sendMessage").mockRejectedValueOnce({
+      code: "55000",
+      message: "recipient withdrawn",
+      hint: "recipient_withdrawn",
+    });
+    vi.spyOn(queries, "getConversationSummary").mockResolvedValue({
+      ...summary!,
+      name: "탈퇴한 사용자",
+      participants: summary!.participants.map((participant) =>
+        participant.id === summary!.viewerId
+          ? participant
+          : { ...participant, name: "탈퇴한 사용자", withdrawn: true },
+      ),
+    });
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/hyunwoo" },
+    );
+
+    await user.type(
+      screen.getByRole("textbox", { name: "메시지 입력" }),
+      "안녕{Enter}",
+    );
+
+    expect(
+      await screen.findByText("탈퇴한 사용자에게는 메시지를 보낼 수 없습니다."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "메시지 입력" }),
+    ).not.toBeInTheDocument();
+    // 다시 보내도 같은 이유로 거부되므로 지우기만 남긴다.
+    expect(screen.getByText("보내지 못했습니다")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "다시 보내기" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "지우기" })).toBeInTheDocument();
+  });
+
   it("1:1 대화 정보에서는 알림을 끄고 다시 켜기만 한다", async () => {
     const setLevel = vi.spyOn(mutations, "setConversationNotificationLevel");
     const conversation = await loadConversation("hyunwoo");

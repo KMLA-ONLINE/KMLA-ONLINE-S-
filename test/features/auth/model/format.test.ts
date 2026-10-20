@@ -24,6 +24,22 @@ describe("auth error format", () => {
     );
   });
 
+  // DB가 새 판을 요구하는데 화면이 옛 판을 보냈다. 다시 시도해도 같은 판이 가므로 새로고침을 안내한다.
+  it("asks to reload when the server requires newer terms", () => {
+    expect(
+      getAuthErrorMessage({
+        code: "22023",
+        message: "current terms agreement required",
+      }),
+    ).toBe("앱이 새 버전으로 바뀌었어요. 새로고침한 뒤 다시 시도해 주세요.");
+    expect(
+      getAuthErrorMessage({
+        code: "22023",
+        message: "academic profile fields are required",
+      }),
+    ).toBe("요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+  });
+
   it("falls back to a generic message for unknown failures", () => {
     expect(getAuthErrorMessage(new Error("boom"))).toBe(
       "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.",

@@ -16,6 +16,8 @@ export default [
   route("logout", "routes/auth/logout.tsx"),
   route("noti/open/:notificationId", "routes/notification-open.tsx"),
   route("dokkaebi", "routes/dokkaebi.tsx"),
+  route("terms-of-service", "routes/legal/terms-of-service.tsx"),
+  route("privacy-policy", "routes/legal/privacy-policy.tsx"),
   layout("routes/app/gate.tsx", [
     layout("routes/app/layout.tsx", [
       index("routes/app/home.tsx"),
@@ -35,6 +37,7 @@ export default [
       route("menu/notices", "routes/app/menu/notices.tsx"),
       route("menu/notices/:postId", "routes/app/menu/notice-detail.tsx"),
       route("settings/password", "routes/app/menu/password.tsx"),
+      route("settings/withdraw", "routes/app/menu/withdraw.tsx"),
       route("settings", "routes/app/menu/settings.tsx"),
       route("settings/lab", "routes/app/menu/settings-lab.tsx"),
       route("menu/timetable", "routes/app/menu/timetable.tsx"),

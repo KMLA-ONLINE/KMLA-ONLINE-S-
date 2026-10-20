@@ -19,7 +19,8 @@ import { TextField } from "~/shared/ui/text-field";
 
 /**
  * 가입 프로필 단계와 `/setup` 재제출이 공유한다.
- * 유형별 분기를 한 곳에 둬야 필수 항목 규칙이 어긋나지 않는다.
+ * 유형별 분기를 한 곳에 둬야 필수 항목 규칙이 어긋나지 않는다. 선택 정보는 개인정보
+ * 처리방침 2항과 같아야 하며 라벨에 "(선택)"을 붙인다.
  */
 export function ProfileFields({
   values,
@@ -113,7 +114,7 @@ export function ProfileFields({
               <FieldError>{errors.cohort}</FieldError>
             </Field>
             <Field data-invalid={Boolean(errors.academicTrack)}>
-              <FieldLabel htmlFor="academic-track">계열</FieldLabel>
+              <FieldLabel htmlFor="academic-track">계열 (선택)</FieldLabel>
               <NativeSelect
                 id="academic-track"
                 name="academicTrack"
@@ -121,9 +122,8 @@ export function ProfileFields({
                 defaultValue={values.academicTrack}
                 aria-invalid={Boolean(errors.academicTrack)}
                 disabled={disabled}
-                required
               >
-                <NativeSelectOption value="">선택해 주세요</NativeSelectOption>
+                <NativeSelectOption value="">선택 안 함</NativeSelectOption>
                 <NativeSelectOption value="domestic">국내반</NativeSelectOption>
                 <NativeSelectOption value="international">
                   국제반
@@ -132,7 +132,7 @@ export function ProfileFields({
               <FieldError>{errors.academicTrack}</FieldError>
             </Field>
             <Field data-invalid={Boolean(errors.gender)}>
-              <FieldLabel htmlFor="gender">성별</FieldLabel>
+              <FieldLabel htmlFor="gender">성별 (선택)</FieldLabel>
               <NativeSelect
                 id="gender"
                 name="gender"
@@ -140,25 +140,21 @@ export function ProfileFields({
                 defaultValue={values.gender}
                 aria-invalid={Boolean(errors.gender)}
                 disabled={disabled}
-                required
               >
-                <NativeSelectOption value="">선택해 주세요</NativeSelectOption>
+                <NativeSelectOption value="">선택 안 함</NativeSelectOption>
                 <NativeSelectOption value="male">남성</NativeSelectOption>
                 <NativeSelectOption value="female">여성</NativeSelectOption>
               </NativeSelect>
               <FieldError>{errors.gender}</FieldError>
             </Field>
             <Field data-invalid={Boolean(errors.birthday)}>
-              <FieldLabel htmlFor="birthday">
-                생년월일 {isAlumni ? "(선택)" : ""}
-              </FieldLabel>
+              <FieldLabel htmlFor="birthday">생년월일 (선택)</FieldLabel>
               <DateSelect
                 id="birthday"
                 name="birthday"
                 defaultValue={values.birthday}
                 aria-invalid={Boolean(errors.birthday)}
                 disabled={disabled}
-                required={isStudent}
               />
               <FieldError>{errors.birthday}</FieldError>
             </Field>
@@ -171,7 +167,7 @@ export function ProfileFields({
           <FieldLegend>연락처</FieldLegend>
           <FieldGroup>
             <Field data-invalid={Boolean(errors.phoneNumber)}>
-              <FieldLabel htmlFor="phone-number">전화번호 (추천)</FieldLabel>
+              <FieldLabel htmlFor="phone-number">전화번호 (선택)</FieldLabel>
               <Input
                 id="phone-number"
                 name="phoneNumber"

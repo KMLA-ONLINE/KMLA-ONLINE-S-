@@ -5,10 +5,10 @@ import {
   isAdminAccessError,
   liftSuspension,
   listRoster,
-  reauthenticateWithPassword,
   RosterScreen,
   suspendProfile,
 } from "~/features/admin";
+import { reauthenticateWithPassword } from "~/features/auth";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
 
 export const handle = defineAppChrome({
