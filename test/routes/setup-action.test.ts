@@ -7,6 +7,7 @@ vi.mock("~/features/auth/data/mutations", async (importOriginal) => ({
   submitProfile,
 }));
 
+import { TERMS_VERSION } from "~/features/auth";
 import { clientAction } from "~/routes/auth/setup";
 
 const values = {
@@ -22,7 +23,7 @@ const values = {
   type: "student",
 };
 
-function submit(fields: Record<string, string> = { terms: "2026-10-20" }) {
+function submit(fields: Record<string, string> = { terms: TERMS_VERSION }) {
   const body = new FormData();
   for (const [key, value] of Object.entries(values)) body.set(key, value);
   for (const [key, value] of Object.entries(fields)) body.set(key, value);
@@ -77,7 +78,7 @@ describe("profile setup submission", () => {
     expect((response as Response).headers.get("Location")).toBe("/pending");
     expect(submitProfile).toHaveBeenCalledWith(
       expect.objectContaining({ name: "홍길동" }),
-      "2026-10-20",
+      TERMS_VERSION,
     );
   });
 });

@@ -16,7 +16,7 @@ ALTER TABLE "public"."profiles"
 CREATE OR REPLACE FUNCTION private.current_terms_version()
   RETURNS date
   LANGUAGE sql
-  IMMUTABLE
+  STABLE
   SET search_path TO ''
   AS $function$
   -- 시행 중인 이용약관의 시행일. 약관을 개정하면 docs/legal/terms_of_service.md의 시행일과

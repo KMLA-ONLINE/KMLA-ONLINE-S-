@@ -26,12 +26,13 @@ KMLA Online을 개발·검증·운영하는 사람과 에이전트를 위한 문
 - [삭제 및 보존](DELETION_POLICY.md): DB 행 수명·보존 기간·정리 작업
 - [알림 및 Web Push](NOTIFICATION_TECHNICAL_DESIGN.md): 데이터·outbox·worker·클라이언트 동기화
 - [메시지](MESSAGING_TECHNICAL_DESIGN.md): 데이터·서버 측 암호화·Realtime·검색 (일부 구현)
+- [법률 문서 운영](LEGAL_DOCUMENTS.md): 문서와 화면 연결·개인정보 고지 근거·약관 판과 개정 절차
 
 법률 문서는 `legal/`에 둔다. 앱의 `/terms-of-service`, `/privacy-policy` 화면이 원문을 그대로 그리므로 시행 중인 판만 둔다.
 
 - [이용약관](legal/terms_of_service.md): 운영자와 회원 사이의 이용 계약. 시행일이 약관 판이다
 - [개인정보 처리방침](legal/privacy_policy.md): 처리 항목·근거·보유 기간·위탁·권리 행사
-- [개인정보 안내 문구](legal/privacy_notice.md): 가입 약관 단계와 기존 회원 동의 안내의 화면 문구
+- [개인정보 안내 문구](legal/privacy_notice.md): 가입 약관 단계와 기존 회원 안내에 보여 주는 고지 문구
 
 메시지는 일부만 제공한다. 메시지 명세와 관련 기술 설계의 미구현 표시는 현재 제공 기능과
 도입 시 규칙을 구분한다. 상세한 미래 설계가 존재한다고 구현된 기능인 것은 아니다.

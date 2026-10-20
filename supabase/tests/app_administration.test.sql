@@ -3,6 +3,10 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(42);
 
+-- 시행 중인 약관 판. 날짜를 적어 두면 개정 때마다 테스트도 고쳐야 한다. 함수는 private라
+-- authenticated가 부를 수 없으므로 여기서 읽어 둔다.
+select set_config('test.terms_version', private.current_terms_version()::text, true);
+
 select is(
   (select array_agg(enumlabel order by enumsortorder) from pg_enum
    where enumtypid = 'public.profile_status'::regtype),
@@ -195,7 +199,7 @@ select throws_ok(
       '차단 학생', 'student'::public.profile_type, '260002', null::smallint,
       31::smallint, 'male'::public.profile_gender,
       'international'::public.profile_academic_track, null::text,
-      '2009-03-01'::date, null::smallint, '2026-10-20'::date
+      '2009-03-01'::date, null::smallint, current_setting('test.terms_version')::date
     )$$,
   '55000', 'profile cannot be submitted in its current state',
   'a blocked user cannot resubmit'
@@ -226,7 +230,7 @@ select lives_ok(
       '차단 해제 학생', 'student'::public.profile_type, '260002', null::smallint,
       31::smallint, 'male'::public.profile_gender,
       'international'::public.profile_academic_track, null::text,
-      '2009-03-01'::date, null::smallint, '2026-10-20'::date
+      '2009-03-01'::date, null::smallint, current_setting('test.terms_version')::date
     )$$,
   'an unblocked user can edit and resubmit'
 );

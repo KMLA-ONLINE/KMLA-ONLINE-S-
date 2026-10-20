@@ -1,7 +1,11 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(17);
+
+-- 시행 중인 약관 판. 날짜를 적어 두면 개정 때마다 테스트도 고쳐야 한다. 함수는 private라
+-- authenticated가 부를 수 없으므로 여기서 읽어 둔다.
+select set_config('test.terms_version', private.current_terms_version()::text, true);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -46,7 +50,7 @@ select throws_ok(
 select throws_ok(
   $$select public.submit_my_profile(
       p_name => '옛 약관', p_type => 'student', p_student_number => '269001',
-      p_cohort => 32::smallint, p_terms_version => '2026-10-19'::date
+      p_cohort => 32::smallint, p_terms_version => (current_setting('test.terms_version')::date - 1)
     )$$,
   '22023', 'current terms agreement required',
   'a profile cannot be submitted with a stale terms version'
@@ -54,13 +58,13 @@ select throws_ok(
 select lives_ok(
   $$select public.submit_my_profile(
       p_name => '선택 정보 없음', p_type => 'student', p_student_number => '269001',
-      p_cohort => 32::smallint, p_terms_version => '2026-10-20'::date
+      p_cohort => 32::smallint, p_terms_version => current_setting('test.terms_version')::date
     )$$,
   'a student can submit without birthday, gender, academic track or phone'
 );
 select is(
   (select terms_version from public.get_my_profile()),
-  '2026-10-20'::date,
+  current_setting('test.terms_version')::date,
   'profile submission records the agreed terms version'
 );
 select ok(
@@ -74,7 +78,7 @@ set local role authenticated;
 select lives_ok(
   $$select public.submit_my_profile(
       p_name => '졸업생 선택 없음', p_type => 'alumni', p_cohort => 20::smallint,
-      p_terms_version => '2026-10-20'::date
+      p_terms_version => current_setting('test.terms_version')::date
     )$$,
   'an alumnus can submit without student number, gender or academic track'
 );
@@ -88,17 +92,17 @@ select is(
   'an existing member starts without a terms agreement'
 );
 select throws_ok(
-  $$select public.agree_to_terms('2026-10-19'::date)$$,
+  $$select public.agree_to_terms((current_setting('test.terms_version')::date - 1))$$,
   '22023', 'current terms agreement required',
   'an existing member cannot agree to a stale terms version'
 );
 select lives_ok(
-  $$select public.agree_to_terms('2026-10-20'::date)$$,
+  $$select public.agree_to_terms(current_setting('test.terms_version')::date)$$,
   'an existing member can agree to the current terms'
 );
 select is(
   (select terms_version from public.get_my_profile()),
-  '2026-10-20'::date,
+  current_setting('test.terms_version')::date,
   'agreeing records the current terms version'
 );
 select set_config(
@@ -107,7 +111,7 @@ select set_config(
   true
 );
 select lives_ok(
-  $$select public.agree_to_terms('2026-10-20'::date)$$,
+  $$select public.agree_to_terms(current_setting('test.terms_version')::date)$$,
   'agreeing again is harmless'
 );
 select is(
@@ -130,6 +134,13 @@ select ok(
     from public.get_my_profile()
   ),
   'cleared optional fields are removed from the profile'
+);
+
+-- 시행 판은 약관을 개정할 때 함수를 바꿔 올린다. IMMUTABLE이면 식 인덱스나 생성 열에 값이 굳을 수 있다.
+select is(
+  (select provolatile from pg_proc where oid = 'private.current_terms_version()'::regprocedure),
+  's'::"char",
+  'current terms version is stable, not immutable'
 );
 
 select * from finish();

@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Form, Link } from "react-router";
 
 import { TermsAgreementField } from "~/features/auth/components/terms-agreement-field";
 import { agreeToTerms } from "~/features/auth/data/mutations";
 import { getAuthErrorMessage } from "~/features/auth/model/format";
-import { TERMS_VERSION } from "~/features/auth/model/terms";
+import {
+  formatTermsDate,
+  TERMS_FIRST_EFFECTIVE_DATE,
+  TERMS_VERSION,
+} from "~/features/auth/model/terms";
+import { setPromptActive } from "~/shared/lib/prompt-coordinator";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -25,6 +30,8 @@ import { Spinner } from "~/shared/ui/spinner";
  * 셸에서는 이 팝업 없이 모든 조회가 실패한다.
  *
  * 동의가 기록되면 바로 닫고, 프로필을 다시 읽는 일은 `onAgreed`를 넘긴 화면이 맡는다.
+ *
+ * 문구는 `docs/legal/privacy_notice.md` 2항이 소유하며 테스트가 같은 문장인지 확인한다.
  */
 export function TermsAgreementDialog({
   open,
@@ -37,6 +44,13 @@ export function TermsAgreementDialog({
   const [pending, setPending] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string>();
+  const visible = open && !agreed;
+
+  // 셸의 알림 권한·홈 화면 추가 안내가 이 창을 보고 물러난다.
+  useEffect(() => {
+    setPromptActive("terms", visible);
+    return () => setPromptActive("terms", false);
+  }, [visible]);
 
   async function agree() {
     setPending(true);
@@ -53,17 +67,17 @@ export function TermsAgreementDialog({
   }
 
   return (
-    <Dialog open={open && !agreed} disablePointerDismissal>
+    <Dialog open={visible} disablePointerDismissal>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>
             이용약관과 개인정보 처리방침이 시행되었습니다
           </DialogTitle>
           <DialogDescription className="leading-relaxed">
-            2026년 10월 20일부터 KMLA Online 이용약관과 개인정보 처리방침이
-            시행되었습니다. 생년월일, 성별, 계열은 선택 정보로 바뀌었으며, 이미
-            입력한 정보는 지금처럼 프로필에 표시됩니다. 원하지 않으면 프로필
-            편집에서 지울 수 있습니다.
+            {formatTermsDate(TERMS_FIRST_EFFECTIVE_DATE)}부터 KMLA Online
+            이용약관과 개인정보 처리방침이 시행되었습니다. 생년월일, 성별,
+            계열은 선택 정보로 바뀌었으며, 이미 입력한 정보는 지금처럼 프로필에
+            표시됩니다. 원하지 않으면 프로필 편집에서 지울 수 있습니다.
           </DialogDescription>
         </DialogHeader>
 

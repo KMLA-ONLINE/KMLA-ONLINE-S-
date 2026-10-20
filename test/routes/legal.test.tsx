@@ -1,6 +1,7 @@
 import { matchRoutes, type RouteObject } from "react-router";
 import { describe, expect, it } from "vitest";
 
+import { formatTermsDate, TERMS_VERSION } from "~/features/auth/model/terms";
 import routes from "~/routes";
 import PrivacyPolicyPage from "~/routes/legal/privacy-policy";
 import TermsOfServicePage from "~/routes/legal/terms-of-service";
@@ -29,7 +30,9 @@ describe("legal documents", () => {
         name: "KMLA Online 이용약관",
       }),
     ).toBeVisible();
-    expect(screen.getByText("시행일: 2026년 10월 20일")).toBeVisible();
+    expect(
+      screen.getByText(`시행일: ${formatTermsDate(TERMS_VERSION)}`),
+    ).toBeVisible();
   });
 
   it("links the privacy policy's contents to its sections", async () => {

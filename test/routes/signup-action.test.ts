@@ -26,7 +26,11 @@ vi.mock("~/features/auth/data/queries", async (importOriginal) => ({
   hasActiveSession,
 }));
 
-import { clearSignupDraft, saveSignupDraft } from "~/features/auth";
+import {
+  clearSignupDraft,
+  saveSignupDraft,
+  TERMS_VERSION,
+} from "~/features/auth";
 import { clientAction } from "~/routes/auth/signup";
 
 const email = "student@kmla.hs.kr";
@@ -66,7 +70,7 @@ describe("signup verification", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearSignupDraft();
-    saveSignupDraft({ email, values, termsVersion: "2026-10-20" });
+    saveSignupDraft({ email, values, termsVersion: TERMS_VERSION });
     hasActiveSession.mockResolvedValue(false);
     verifySignupOtp.mockResolvedValue(undefined);
     claimSignupPassword.mockResolvedValue(undefined);
@@ -96,7 +100,7 @@ describe("signup verification", () => {
       "/pending",
     );
 
-    expect(submitProfile).toHaveBeenCalledWith(values, "2026-10-20");
+    expect(submitProfile).toHaveBeenCalledWith(values, TERMS_VERSION);
   });
 
   // 다시 로드돼 비밀번호를 잃으면 저장을 건너뛸 게 아니라 다시 받아야 한다. 건너뛰면
@@ -150,6 +154,39 @@ describe("signup verification", () => {
     expect(failed.data).toMatchObject({ studentNumberTaken: true });
   });
 
+  // 초안을 저장한 뒤 앱이 새 약관 판으로 업데이트됐다. 옛 판을 그대로 보내면 서버가 매번 거절하므로,
+  // 코드를 쓰기 전에 약관 단계로 돌려 이번 판에 다시 동의받는다.
+  it("asks for agreement again when the draft agreed to older terms", async () => {
+    saveSignupDraft({ email, values, termsVersion: "2026-01-01" });
+
+    const result = (await verify({
+      otp: "123456",
+      password: "new-password",
+    })) as {
+      data: {
+        step: string;
+        email: string;
+        password: string;
+        values: typeof values;
+        termsAgreed?: boolean;
+        errors: Record<string, string>;
+      };
+    };
+
+    expect(result.data).toMatchObject({
+      step: "terms",
+      email,
+      password: "new-password",
+      values,
+    });
+    expect(result.data.termsAgreed).toBeFalsy();
+    expect(result.data.errors.terms).toBe(
+      "이용약관이 바뀌었어요. 다시 확인하고 동의해 주세요.",
+    );
+    expect(verifySignupOtp).not.toHaveBeenCalled();
+    expect(submitProfile).not.toHaveBeenCalled();
+  });
+
   // 서버가 비밀번호를 거절했는데 hidden 값만 다시 보내면 빠져나올 수 없다.
   it("lets the user change a rejected password after verification succeeded", async () => {
     claimSignupPassword.mockRejectedValueOnce({ code: "weak_password" });
@@ -197,7 +234,7 @@ describe("signup profile step", () => {
     body.set("birthdayYear", "2009");
     body.set("birthdayMonth", "03");
     body.set("birthdayDay", "01");
-    body.set("terms", "2026-10-20");
+    body.set("terms", TERMS_VERSION);
     const request = new Request("http://localhost/signup", {
       method: "POST",
       body,
@@ -267,7 +304,7 @@ describe("signup terms step", () => {
   });
 
   it("opens the profile step once the terms are agreed", async () => {
-    const result = await submitStep("terms", { terms: "2026-10-20" });
+    const result = await submitStep("terms", { terms: TERMS_VERSION });
     expect(result.data).toMatchObject({ step: "profile", termsAgreed: true });
   });
 
@@ -280,7 +317,7 @@ describe("signup terms step", () => {
   it("keeps the agreement while going back from the profile to the terms", async () => {
     const back = await submitStep("back", {
       step: "profile",
-      terms: "2026-10-20",
+      terms: TERMS_VERSION,
     });
     expect(back.data).toMatchObject({ step: "terms", termsAgreed: true });
 

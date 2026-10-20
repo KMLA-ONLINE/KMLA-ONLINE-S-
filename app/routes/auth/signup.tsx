@@ -213,6 +213,23 @@ async function submitVerifyStep(intent: string, formData: FormData) {
     );
   }
 
+  // 초안을 남긴 뒤 앱이 새 약관 판으로 업데이트됐다. 옛 판은 서버가 매번 거절하므로 코드를 쓰기 전에
+  // 약관 단계로 돌려 다시 동의받는다. 인증을 마친 뒤의 새로고침은 로더가 `/setup`으로 보내 거기서 받는다.
+  if (!verified && draft.termsVersion !== TERMS_VERSION) {
+    return data(
+      {
+        step: "terms" as const,
+        email: draft.email,
+        password,
+        values: draft.values,
+        errors: {
+          terms: "이용약관이 바뀌었어요. 다시 확인하고 동의해 주세요.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
   let claiming = false;
   try {
     if (!verified) await verifySignupOtp(draft.email, otp);

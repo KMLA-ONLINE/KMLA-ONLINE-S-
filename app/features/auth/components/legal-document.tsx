@@ -1,5 +1,5 @@
 import { ArrowLeftIcon } from "lucide-react";
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import type { ComponentPropsWithoutRef, MouseEvent, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import { useNavigate } from "react-router";
 import remarkCjkFriendly from "remark-cjk-friendly/bidi";
@@ -49,6 +49,40 @@ function headingId(children: ReactNode): string {
     .replace(/\s/g, "-");
 }
 
+type LinkProps = ComponentPropsWithoutRef<"a"> & { node?: unknown };
+
+/**
+ * 문서 안 링크(`#...`)는 브라우저에 맡기지 않고 라우터로 바꾼다. 브라우저가 직접 옮기면 라우터 순번이
+ * 없는 기록이 하나 쌓여서, 돌아가기가 새 탭으로 연 것으로 보고 홈으로 간다.
+ */
+function MarkdownLink({ node: _node, href, children, ...props }: LinkProps) {
+  const navigate = useNavigate();
+  // 메일 링크는 메일 앱이 받으므로 새 탭을 열 필요가 없다.
+  const external = Boolean(href && /^https?:/i.test(href));
+
+  function jumpToSection(event: MouseEvent<HTMLAnchorElement>) {
+    if (!href?.startsWith("#")) return;
+    event.preventDefault();
+    void navigate({ hash: href }, { replace: true, preventScrollReset: true });
+    document
+      .getElementById(decodeURIComponent(href.slice(1)))
+      ?.scrollIntoView();
+  }
+
+  return (
+    <a
+      {...props}
+      href={href}
+      target={external ? "_blank" : undefined}
+      rel={external ? "noreferrer" : undefined}
+      onClick={jumpToSection}
+      className="text-primary underline underline-offset-2"
+    >
+      {children}
+    </a>
+  );
+}
+
 type HeadingProps = ComponentPropsWithoutRef<"h2"> & { node?: unknown };
 
 const components = {
@@ -75,25 +109,7 @@ const components = {
       {children}
     </h3>
   ),
-  a: ({
-    node: _node,
-    href,
-    children,
-    ...props
-  }: ComponentPropsWithoutRef<"a"> & { node?: unknown }) => {
-    const external = Boolean(href && /^[a-z]+:/i.test(href));
-    return (
-      <a
-        {...props}
-        href={href}
-        target={external ? "_blank" : undefined}
-        rel={external ? "noreferrer" : undefined}
-        className="text-primary underline underline-offset-2"
-      >
-        {children}
-      </a>
-    );
-  },
+  a: MarkdownLink,
   ul: ({
     node: _node,
     ...props

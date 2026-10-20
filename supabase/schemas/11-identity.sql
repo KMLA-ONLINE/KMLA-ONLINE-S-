@@ -829,7 +829,7 @@ $$;
 ALTER FUNCTION "public"."finalize_profile_media"("p_media_id" "uuid") OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "private"."current_terms_version"() RETURNS "date"
-    LANGUAGE "sql" IMMUTABLE
+    LANGUAGE "sql" STABLE
     SET "search_path" TO ''
     AS $$
   -- 시행 중인 이용약관의 시행일. 약관을 개정하면 docs/legal/terms_of_service.md의 시행일과
