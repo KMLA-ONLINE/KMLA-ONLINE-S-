@@ -5,7 +5,7 @@ import type {
   ProfileGender,
   ProfileType,
 } from "~/features/profiles/model/types";
-import { readDateField } from "~/shared/lib/date-field";
+import { isCompleteDate, readDateField } from "~/shared/lib/date-field";
 import { getSupabase } from "~/shared/supabase/client";
 
 /** `profiles_pub_id_format`와 같은 형식이다. 앞뒤는 영숫자, 전체 5~15자 (§12.1). */
@@ -101,8 +101,8 @@ export function validateProfileEdit(
     errors.description = "소개는 최대 500자까지 입력할 수 있습니다.";
   }
 
-  if (values.birthday && !/^\d{4}-\d{2}-\d{2}$/.test(values.birthday)) {
-    errors.birthday = "생일 형식을 확인해 주세요.";
+  if (values.birthday && !isCompleteDate(values.birthday)) {
+    errors.birthday = "생일을 모두 선택하거나 모두 비워 주세요.";
   }
 
   const phone = values.phoneNumber.trim();

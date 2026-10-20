@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   hasErrors,
+  readProfileForm,
   validateEmail,
   validateOtpCode,
   validatePassword,
@@ -71,6 +72,20 @@ describe("auth validation", () => {
         phoneNumber: "",
       }),
     ).toEqual({});
+  });
+
+  // 선택 정보라도 고르다 만 생년월일을 빈 값으로 저장하면 사용자는 지워진 줄 모른다.
+  it("rejects a birthday with only some parts chosen", () => {
+    const formData = new FormData();
+    formData.set("name", STUDENT.name);
+    formData.set("type", "student");
+    formData.set("studentNumber", STUDENT.studentNumber);
+    formData.set("cohort", STUDENT.cohort);
+    formData.set("birthdayYear", "2007");
+
+    expect(validateProfileForm(readProfileForm(formData)).birthday).toBe(
+      "생년월일을 모두 선택하거나 모두 비워 주세요.",
+    );
   });
 
   it("asks an alumnus only for name and cohort", () => {

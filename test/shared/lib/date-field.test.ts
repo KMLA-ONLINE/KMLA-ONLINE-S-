@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   daysInMonth,
+  isCompleteDate,
   joinDateParts,
   readDateField,
   splitDateValue,
@@ -27,9 +28,27 @@ describe("date field", () => {
     );
   });
 
-  it("treats a partial or malformed value as empty", () => {
-    expect(splitDateValue("2009-03")).toEqual({ year: "", month: "", day: "" });
-    expect(joinDateParts({ year: "2009", month: "03", day: "" })).toBe("");
+  it("treats a malformed value as empty", () => {
+    expect(splitDateValue("2009/03/01")).toEqual({
+      year: "",
+      month: "",
+      day: "",
+    });
+    expect(joinDateParts({ year: "", month: "", day: "" })).toBe("");
+  });
+
+  // 고르다 만 날짜를 빈 값으로 바꾸면 받는 쪽이 "입력 안 함"과 구분하지 못한다.
+  it("keeps a partly chosen date incomplete instead of empty", () => {
+    const partial = joinDateParts({ year: "2009", month: "3", day: "" });
+
+    expect(partial).not.toBe("");
+    expect(isCompleteDate(partial)).toBe(false);
+    expect(splitDateValue(partial)).toEqual({
+      year: "2009",
+      month: "03",
+      day: "",
+    });
+    expect(isCompleteDate("2009-03-01")).toBe(true);
   });
 
   it("counts the days of a month, leap years included", () => {
@@ -49,6 +68,6 @@ describe("date field", () => {
       ),
     ).toBe("2009-03-01");
 
-    expect(readDateField(form({ birthdayYear: "2009" }), "birthday")).toBe("");
+    expect(readDateField(form({}), "birthday")).toBe("");
   });
 });

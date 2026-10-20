@@ -13,23 +13,31 @@ export interface DateParts {
 }
 
 const EMPTY_PARTS: DateParts = { year: "", month: "", day: "" };
-const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** 고르다 만 날짜는 빈 칸을 남긴 `2009-03-` 꼴이다. 빈 값과 구분돼야 검증이 잡아낸다. */
+const DATE_PARTS = /^(\d{4})?-(\d{2})?-(\d{2})?$/;
 
 export function dateFieldNames(name: string) {
   return { year: `${name}Year`, month: `${name}Month`, day: `${name}Day` };
 }
 
 export function splitDateValue(value: string): DateParts {
-  const match = ISO_DATE.exec(value.trim());
+  const match = DATE_PARTS.exec(value.trim());
   if (!match) return EMPTY_PARTS;
 
-  return { year: match[1], month: match[2], day: match[3] };
+  return { year: match[1] ?? "", month: match[2] ?? "", day: match[3] ?? "" };
 }
 
 export function joinDateParts({ year, month, day }: DateParts): string {
-  if (!year || !month || !day) return "";
+  if (!year && !month && !day) return "";
 
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  const pad = (part: string) => (part ? part.padStart(2, "0") : "");
+  return `${year}-${pad(month)}-${pad(day)}`;
+}
+
+/** 세 칸을 모두 고른 날짜인지. 빈 값은 호출하는 쪽이 따로 허용한다. */
+export function isCompleteDate(value: string): boolean {
+  return ISO_DATE.test(value);
 }
 
 /** 월을 아직 고르지 않았다면 31일까지 열어 둔다. 뒤늦게 사라지는 선택지가 없어야 한다. */

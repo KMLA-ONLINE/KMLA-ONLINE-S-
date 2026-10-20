@@ -2,7 +2,7 @@ import type {
   FieldErrors,
   ProfileFormValues,
 } from "~/features/auth/model/types";
-import { readDateField } from "~/shared/lib/date-field";
+import { isCompleteDate, readDateField } from "~/shared/lib/date-field";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+?[0-9 -]{8,20}$/;
@@ -86,6 +86,10 @@ export function validateProfileForm(values: ProfileFormValues): FieldErrors {
     !STUDENT_NUMBER_PATTERN.test(values.studentNumber)
   ) {
     errors.studentNumber = "학번은 숫자 6자리여야 합니다.";
+  }
+
+  if (values.birthday && !isCompleteDate(values.birthday)) {
+    errors.birthday = "생년월일을 모두 선택하거나 모두 비워 주세요.";
   }
 
   if (values.phoneNumber && !PHONE_PATTERN.test(values.phoneNumber)) {

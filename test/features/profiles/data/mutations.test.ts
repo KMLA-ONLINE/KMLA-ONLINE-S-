@@ -49,4 +49,18 @@ describe("profile optional fields", () => {
       );
     },
   );
+
+  // 저장된 생일의 한 칸만 비워도 생일 전체가 조용히 지워지면 안 된다.
+  it("rejects a birthday with only some parts chosen", () => {
+    const formData = new FormData();
+    formData.set("pubId", "hong-gildong");
+    formData.set("name", "홍길동");
+    formData.set("cohort", "29");
+    formData.set("birthdayYear", "2007");
+    formData.set("birthdayMonth", "03");
+
+    expect(
+      validateProfileEdit(readProfileEditForm(formData), "student").birthday,
+    ).toBe("생일을 모두 선택하거나 모두 비워 주세요.");
+  });
 });
