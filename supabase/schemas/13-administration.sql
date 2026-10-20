@@ -94,7 +94,7 @@ $$;
 
 ALTER FUNCTION "public"."admin_list_accepted_users"("p_query" "text", "p_limit" integer, "p_offset" integer, "p_managers_only" boolean) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."admin_list_applications"("p_status" "public"."profile_status", "p_limit" integer DEFAULT 50, "p_offset" integer DEFAULT 0) RETURNS TABLE("profile_id" bigint, "name" "text", "profile_type" "public"."profile_type", "is_returning_student" boolean, "submitted_at" timestamp with time zone, "cohort" smallint, "student_number" "text", "gender" "public"."profile_gender", "birthday" "date", "total_count" bigint)
+CREATE OR REPLACE FUNCTION "public"."admin_list_applications"("p_status" "public"."profile_status", "p_limit" integer DEFAULT 50, "p_offset" integer DEFAULT 0) RETURNS TABLE("profile_id" bigint, "name" "text", "profile_type" "public"."profile_type", "is_returning_student" boolean, "submitted_at" timestamp with time zone, "cohort" smallint, "student_number" "text", "gender" "public"."profile_gender", "birthday" "date", "rejection_count" bigint, "last_rejection_reason" "text", "total_count" bigint)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -112,8 +112,18 @@ begin
   select
     profile.id, profile.name, profile.type, profile.is_returning_student,
     profile.submitted_at, profile.cohort, profile.student_number,
-    profile.gender, profile.birthday, count(*) over ()
+    profile.gender, profile.birthday,
+    coalesce(rejection.rejection_count, 0), rejection.last_reason,
+    count(*) over ()
   from public.profiles as profile
+  left join lateral (
+    select
+      count(*) as rejection_count,
+      (array_agg(record.reason order by record.rejected_at desc, record.id desc))[1] as last_reason
+    from private.application_rejections as record
+    where record.profile_id = profile.id
+    having count(*) > 0
+  ) as rejection on true
   where profile.status = p_status
     and profile.deleted_at is null
   order by
@@ -222,6 +232,13 @@ begin
     raise exception 'all applications must be pending' using errcode = '55000';
   end if;
 
+  -- 반려 기록은 신청자가 고쳐 내고 관리자가 판단하는 데만 쓴다. 승인하면 쓸 일이 없으므로 지운다.
+  -- 차단하면 판단 근거로 남긴다.
+  if p_status = 'accepted' then
+    delete from private.application_rejections as record
+    where record.profile_id = any(p_profile_ids);
+  end if;
+
   return query
   update public.profiles as profile
   set
@@ -234,6 +251,45 @@ end;
 $$;
 
 ALTER FUNCTION "public"."admin_review_applications"("p_profile_ids" bigint[], "p_status" "public"."profile_status") OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."admin_reject_application"("p_profile_id" bigint, "p_reason" "text") RETURNS TABLE("profile_id" bigint, "status" "public"."profile_status", "status_updated_at" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_profile_id bigint := private.require_app_admin();
+  trimmed_reason text := btrim(coalesce(p_reason, ''));
+begin
+  if char_length(trimmed_reason) not between 5 and 300 then
+    raise exception 'reason must be 5 to 300 characters' using errcode = '22023';
+  end if;
+
+  perform 1
+  from public.profiles as profile
+  where profile.id = p_profile_id
+    and profile.status = 'pending'
+    and profile.deleted_at is null
+  for update;
+  if not found then
+    raise exception 'pending application not found' using errcode = '55000';
+  end if;
+
+  -- 상태 전환 알림 트리거가 이 기록을 읽어 반려 이메일 본문을 만들므로 먼저 남긴다.
+  insert into private.application_rejections (profile_id, reason, rejected_by_profile_id)
+  values (p_profile_id, trimmed_reason, caller_profile_id);
+
+  return query
+  update public.profiles as profile
+  set
+    status = 'draft',
+    status_updated_at = now(),
+    status_updated_by = caller_profile_id
+  where profile.id = p_profile_id
+  returning profile.id, profile.status, profile.status_updated_at;
+end;
+$$;
+
+ALTER FUNCTION "public"."admin_reject_application"("p_profile_id" bigint, "p_reason" "text") OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."admin_set_app_admin"("p_profile_id" bigint, "p_enabled" boolean) RETURNS TABLE("profile_id" bigint, "is_app_admin" boolean)
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -465,6 +521,9 @@ GRANT ALL ON FUNCTION "public"."admin_set_app_admin"("p_profile_id" bigint, "p_e
 
 REVOKE ALL ON FUNCTION "public"."admin_set_gongang_manager"("p_profile_id" bigint, "p_enabled" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."admin_set_gongang_manager"("p_profile_id" bigint, "p_enabled" boolean) TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."admin_reject_application"("p_profile_id" bigint, "p_reason" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."admin_reject_application"("p_profile_id" bigint, "p_reason" "text") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."admin_unblock_application"("p_profile_id" bigint) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."admin_unblock_application"("p_profile_id" bigint) TO "authenticated";

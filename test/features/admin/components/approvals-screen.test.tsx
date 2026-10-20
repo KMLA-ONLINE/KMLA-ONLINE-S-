@@ -15,12 +15,16 @@ const application: AdminApplication = {
   profile_type: "student",
   student_number: "260001",
   submitted_at: "2026-08-20T00:00:00.000Z",
+  rejection_count: 0,
+  last_rejection_reason: null,
   total_count: 2,
 };
 const second: AdminApplication = {
   ...application,
   name: "김철수",
   profile_id: 2,
+  rejection_count: 2,
+  last_rejection_reason: "기수와 학번이 맞지 않습니다.",
 };
 
 function renderScreen(blocked: AdminApplication[] = []) {
@@ -76,5 +80,45 @@ describe("ApprovalsScreen", () => {
     await user.click(screen.getByRole("tab", { name: /차단/ }));
     expect(screen.getByText("차단된 사람")).toBeVisible();
     expect(screen.getByRole("button", { name: "차단 해제" })).toBeVisible();
+  });
+
+  it("shows earlier rejections only on resubmitted applications", () => {
+    renderScreen();
+
+    expect(
+      screen.getByText("이전 반려 2회 · 기수와 학번이 맞지 않습니다."),
+    ).toBeVisible();
+    expect(screen.getAllByText(/이전 반려/)).toHaveLength(1);
+  });
+
+  it("fills the rejection reason from a template the admin can still edit", async () => {
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.click(screen.getAllByRole("button", { name: "반려" })[0]);
+    const reason = screen.getByRole("textbox", { name: "사유" });
+    expect(reason).toHaveValue("");
+
+    await user.click(screen.getByRole("button", { name: "기수·학번" }));
+    expect(reason).toHaveValue("기수와 학번이 맞지 않습니다. 확인해 주세요.");
+
+    await user.type(reason, " 32기가 맞나요?");
+    expect(reason).toHaveValue(
+      "기수와 학번이 맞지 않습니다. 확인해 주세요. 32기가 맞나요?",
+    );
+  });
+
+  it("tucks blocking into the rejection menu and confirms it", async () => {
+    const user = userEvent.setup();
+    renderScreen();
+
+    expect(
+      screen.queryByRole("button", { name: "차단" }),
+    ).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "홍길동 신청 다른 처리" }),
+    );
+    await user.click(await screen.findByRole("menuitem", { name: "차단" }));
+    expect(screen.getByRole("dialog", { name: "가입 차단" })).toBeVisible();
   });
 });

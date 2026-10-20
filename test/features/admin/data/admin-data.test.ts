@@ -7,7 +7,10 @@ const { getSupabase, rpc } = vi.hoisted(() => ({
 
 vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
 
-import { reviewApplications } from "~/features/admin/data/mutations";
+import {
+  rejectApplication,
+  reviewApplications,
+} from "~/features/admin/data/mutations";
 import {
   listAcceptedUsers,
   listApplications,
@@ -45,6 +48,15 @@ describe("admin data", () => {
     expect(rpc).toHaveBeenCalledWith("admin_review_applications", {
       p_profile_ids: [11, 12],
       p_status: "blocked",
+    });
+  });
+
+  it("rejects one application with the reason the admin wrote", async () => {
+    await rejectApplication(11, "기수와 학번이 맞지 않습니다.");
+
+    expect(rpc).toHaveBeenCalledWith("admin_reject_application", {
+      p_profile_id: 11,
+      p_reason: "기수와 학번이 맞지 않습니다.",
     });
   });
 });

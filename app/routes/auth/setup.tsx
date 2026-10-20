@@ -10,6 +10,7 @@ import {
   hasErrors,
   isDuplicateStudentNumberError,
   loadAuthState,
+  loadMyApplicationRejection,
   ProfileFields,
   LegalLinks,
   readProfileForm,
@@ -32,8 +33,8 @@ import type { Route } from "./+types/setup";
  * 로그인 상태에서만 열리는 프로필 화면이다. 이메일 인증은 `/signup`의 마지막 단계가
  * 책임지므로 여기에는 인증 코드 입력란이 없다.
  *
- * 여기로 오는 길은 둘이다. 차단이 풀려 `미작성`으로 돌아온 사용자의 재제출, 그리고 가입
- * 마법사에서 코드 확인까지는 통과했지만 프로필 제출만 실패해 세션만 남은 경우다.
+ * 여기로 오는 길은 셋이다. 반려되거나 차단이 풀려 `미작성`으로 돌아온 사용자의 재제출, 그리고
+ * 가입 마법사에서 코드 확인까지는 통과했지만 프로필 제출만 실패해 세션만 남은 경우다.
  *
  * 프로필 제출은 이용약관 동의와 함께 가므로 여기서도 동의를 받는다.
  */
@@ -73,7 +74,12 @@ function initialValues(state: AuthState): ProfileFormValues {
 }
 
 export async function clientLoader() {
-  const state = await loadAuthState();
+  // 반려 안내는 부가 정보라 조회가 실패해도 양식은 연다. 세션이 없으면 RPC가 거부되지만 그때는
+  // 어차피 `/signup`으로 보낸다.
+  const [state, loadedRejection] = await Promise.all([
+    loadAuthState(),
+    loadMyApplicationRejection().catch(() => null),
+  ]);
   if (!state) throw redirect("/signup");
 
   if (state.profile && state.profile.status !== "draft") {
@@ -82,7 +88,10 @@ export async function clientLoader() {
     throw redirect(destination);
   }
 
-  return { ...state, values: initialValues(state) };
+  // 반려는 프로필 행이 있어야 생긴다.
+  const rejection = state.profile ? loadedRejection : null;
+
+  return { ...state, rejection, values: initialValues(state) };
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
@@ -133,6 +142,22 @@ export default function SetupPage({
       footer={<LegalLinks />}
     >
       <Form method="post" className="flex flex-col gap-8">
+        {loaderData.rejection ? (
+          <section
+            aria-labelledby="setup-rejection-title"
+            className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm"
+          >
+            <h2 id="setup-rejection-title" className="font-medium">
+              가입 신청이 반려되었습니다
+            </h2>
+            <p className="mt-1 break-words whitespace-pre-wrap">
+              {loaderData.rejection.reason}
+            </p>
+            <p className="mt-2 text-muted-foreground">
+              아래 정보를 고쳐 다시 제출해 주세요.
+            </p>
+          </section>
+        ) : null}
         {errors.form ? <FieldError>{errors.form}</FieldError> : null}
 
         <ProfileFields values={values} errors={errors} disabled={pending} />
