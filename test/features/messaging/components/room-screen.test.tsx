@@ -341,7 +341,9 @@ describe("RoomScreen", () => {
     expect(
       within(pinnedBanner).queryByText("고정된 메시지"),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("2026년 8월 28일 금요일")).toBeInTheDocument();
+    expect(
+      screen.getByText("2026년 8월 28일 금요일 오후 3:08"),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "https://www.kmlaonline.net" }),
     ).toHaveAttribute("href", "https://www.kmlaonline.net");

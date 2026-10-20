@@ -26,25 +26,20 @@ function connects(
 }
 
 describe("layoutMessageThread", () => {
-  it("동일 작성자와 동일 표시 시각의 인접 메시지만 연결한다", () => {
+  it("한 대화 흐름 안에서 같은 작성자가 이어 보낸 메시지를 연결한다", () => {
     const previous = message({ id: "previous" });
 
     expect(connects(previous, message({ id: "next" }))).toBe(true);
+    // 표시 시각(분)이 달라도 같은 흐름이면 잇는다.
     expect(
       connects(
         previous,
-        message({ id: "next", sentAt: "2026-08-28T15:12:59+09:00" }),
+        message({ id: "next", sentAt: "2026-08-28T16:12:04+09:00" }),
       ),
     ).toBe(true);
     expect(connects(previous, message({ id: "next", senderId: "other" }))).toBe(
       false,
     );
-    expect(
-      connects(
-        previous,
-        message({ id: "next", sentAt: "2026-08-28T15:13:00+09:00" }),
-      ),
-    ).toBe(false);
     // 탈퇴로 지워진 발신자끼리는 같은 사람인지 모른다.
     expect(
       connects(
@@ -52,6 +47,45 @@ describe("layoutMessageThread", () => {
         message({ id: "next", senderId: null }),
       ),
     ).toBe(false);
+  });
+
+  it("앞 항목과 1시간 이상 벌어지면 새 대화 흐름을 열고 연결을 끊는다", () => {
+    const layout = layoutMessageThread([
+      message({ id: "a", sentAt: "2026-08-28T15:00:00+09:00" }),
+      message({ id: "b", sentAt: "2026-08-28T15:59:59+09:00" }),
+      message({ id: "c", sentAt: "2026-08-28T16:59:59+09:00" }),
+    ]);
+
+    expect(layout.map(({ startsSession }) => startsSession)).toEqual([
+      true,
+      false,
+      true,
+    ]);
+    expect(
+      layout.map(({ startsGroup, endsGroup }) => [startsGroup, endsGroup]),
+    ).toEqual([
+      [true, false],
+      [false, true],
+      [true, true],
+    ]);
+  });
+
+  it("시스템 메시지도 대화 흐름을 잇는다", () => {
+    const layout = layoutMessageThread([
+      message({ id: "a", sentAt: "2026-08-28T15:00:00+09:00" }),
+      message({
+        id: "s",
+        sentAt: "2026-08-28T15:50:00+09:00",
+        system: { kind: "member_left", profileIds: ["a"], name: null },
+      }),
+      message({ id: "b", sentAt: "2026-08-28T16:40:00+09:00" }),
+    ]);
+
+    expect(layout.map(({ startsSession }) => startsSession)).toEqual([
+      true,
+      false,
+      false,
+    ]);
   });
 
   it("날짜, 시스템 및 고정된 메시지에서 연결을 끊는다", () => {
@@ -100,14 +134,14 @@ describe("layoutMessageThread", () => {
     ).toBe(true);
   });
 
-  it("첫 메시지와 한국 날짜가 바뀌는 메시지에서 날짜 구분선을 연다", () => {
+  it("첫 메시지와 한국 날짜가 바뀌는 메시지에서 간격이 짧아도 새 대화 흐름을 연다", () => {
     const layout = layoutMessageThread([
       message({ id: "a", sentAt: "2026-08-28T23:59:30+09:00" }),
       message({ id: "b", sentAt: "2026-08-28T23:59:50+09:00" }),
       message({ id: "c", sentAt: "2026-08-29T00:01:00+09:00" }),
     ]);
 
-    expect(layout.map(({ startsDay }) => startsDay)).toEqual([
+    expect(layout.map(({ startsSession }) => startsSession)).toEqual([
       true,
       false,
       true,

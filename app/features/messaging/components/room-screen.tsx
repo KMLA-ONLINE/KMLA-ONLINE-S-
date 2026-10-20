@@ -103,7 +103,7 @@ import {
 } from "~/features/messaging/model/message-edit";
 import { formatReplyPreview } from "~/features/messaging/model/conversation-preview";
 import { layoutMessageThread } from "~/features/messaging/model/message-grouping";
-import { formatMessageDay } from "~/features/messaging/model/message-time";
+import { formatMessageSessionStart } from "~/features/messaging/model/message-time";
 import type {
   Conversation,
   ConversationMessage,
@@ -959,7 +959,7 @@ function MessageThread({
   // 읽기가 실패한 뒤에는 맨 위 근처에서 스크롤할 때마다 다시 부르지 않는다. 사용자가 그 구간을
   // 벗어났다가 다시 올라오면 한 번 더 시도한다.
   const olderLoadFailed = useRef(false);
-  // 날짜 구분선과 묶음 경계는 메시지가 바뀔 때만 다시 센다. 키보드가 오르내리거나 오버레이가 열려
+  // 대화 흐름 구분선과 묶음 경계는 메시지가 바뀔 때만 다시 센다. 키보드가 오르내리거나 오버레이가 열려
   // 이 영역이 다시 그려질 때마다 메시지 전체의 시각을 포매팅하지 않는다.
   const layout = useMemo(() => layoutMessageThread(messages), [messages]);
   const oldestMessageId = messages[0]?.id;
@@ -1270,10 +1270,10 @@ function MessageThread({
 
             return (
               <div key={message.id}>
-                {slot?.startsDay ? (
+                {slot?.startsSession ? (
                   <div className="my-4 flex items-center justify-center">
                     <span className="text-xs text-muted-foreground">
-                      {formatMessageDay(message.sentAt)}
+                      {formatMessageSessionStart(message.sentAt)}
                     </span>
                   </div>
                 ) : null}

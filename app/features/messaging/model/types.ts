@@ -46,7 +46,7 @@ export interface MessageReaction {
 }
 
 /**
- * 서버가 주는 메시지 한 건. 시각은 ISO 문자열이고, "오후 3:12"나 날짜 구분선 같은 화면 문구는
+ * 서버가 주는 메시지 한 건. 시각은 ISO 문자열이고, "오후 3:12"나 대화 흐름 구분선 같은 화면 문구는
  * `model/message-time.ts`가 만든다.
  */
 export interface ConversationMessage {

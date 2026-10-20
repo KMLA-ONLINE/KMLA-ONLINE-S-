@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatMessageDay,
+  formatMessageSessionStart,
   formatMessageTime,
   startsMessageDay,
 } from "~/features/messaging/model/message-time";
@@ -33,5 +34,18 @@ describe("message time", () => {
     expect(
       startsMessageDay(lateNight, { sentAt: "2026-08-29T00:01:00+09:00" }),
     ).toBe(true);
+  });
+
+  it("대화 흐름 구분선은 날짜 뒤에 흐름이 시작된 시각을 붙인다", () => {
+    const now = Date.parse("2026-08-29T20:00:00+09:00");
+    expect(formatMessageSessionStart("2026-08-29T15:12:00+09:00", now)).toBe(
+      "오늘 오후 3:12",
+    );
+    expect(formatMessageSessionStart("2026-08-28T09:05:00+09:00", now)).toBe(
+      "어제 오전 9:05",
+    );
+    expect(formatMessageSessionStart("2026-08-27T15:12:00+09:00", now)).toBe(
+      "2026년 8월 27일 목요일 오후 3:12",
+    );
   });
 });
