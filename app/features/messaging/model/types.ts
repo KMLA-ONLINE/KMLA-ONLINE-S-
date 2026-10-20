@@ -12,6 +12,8 @@ export interface MessageParticipant {
   avatarUrl: string | null;
   /** 지금 멤버인지. 나간 사람도 지난 메시지와 시스템 메시지의 이름을 그리려고 목록에 남는다. */
   active: boolean;
+  /** 계정을 탈퇴했는지. 이름은 서버가 `탈퇴한 사용자`로 내려 준다. */
+  withdrawn?: boolean;
 }
 
 /** 메시지 첨부 종류. 동영상은 지원하지 않는다(기능 명세 §13.5). */

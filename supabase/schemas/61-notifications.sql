@@ -34,6 +34,7 @@ create type public.notification_kind as enum (
   'anonymous_activity_restricted',
   'application_submitted',
   'account_approved',
+  'account_rejected',
   'account_blocked',
   'account_unblocked',
   'app_admin_granted',
@@ -114,6 +115,11 @@ where post_id is not null;
 create index notifications_comment_idx
 on public.notifications (comment_id)
 where comment_id is not null;
+-- 탈퇴가 다른 회원 알림에 복사된 이름을 지울 때 쓴다. 탈퇴 트랜잭션이 프로필과 멤버십을 잠근 채라
+-- 전체 스캔으로 잠금이 길어지지 않게 한다.
+create index notifications_actor_idx
+on public.notifications (actor_profile_id)
+where actor_profile_id is not null;
 
 create table public.notification_preferences (
   profile_id bigint primary key references public.profiles(id) on delete cascade,
@@ -338,7 +344,7 @@ as $$
           notification.category = 'moderation'
           or notification.kind in (
             'group_deleted', 'group_join_rejected',
-            'account_approved', 'account_blocked', 'account_unblocked'
+            'account_approved', 'account_rejected', 'account_blocked', 'account_unblocked'
           )
           or (
             notification.post_id is not null
@@ -518,6 +524,15 @@ begin
   -- 정지 기간에 생긴 알림은 만들지 않고 해제 뒤에도 보내지 않는다(§14.12). event key는 남겨, 멘션을
   -- 고쳐 다시 넣는 것처럼 같은 사건이 해제 뒤 다시 들어와도 새 알림이 되지 않게 한다.
   if private.profile_suspended(p_recipient_profile_id) then
+    return null;
+  end if;
+
+  if exists (
+    select 1
+    from public.profiles as recipient
+    where recipient.id = p_recipient_profile_id
+      and recipient.deleted_at is not null
+  ) then
     return null;
   end if;
 
@@ -1109,8 +1124,14 @@ begin
       when 'comment_replied' then '내 댓글에 새 답글이 등록되었습니다.'
       when 'group_posted' then '그룹에 새 게시물이 등록되었습니다.'
       when 'account_approved' then '가입이 승인되었습니다.'
+      -- 반려 사유는 본인 메일함에만 보낸다. Push는 잠금 화면에 보일 수 있다.
+      when 'account_rejected' then case
+        when claimed.channel = 'email' and rejection_content.reason is not null
+          then '사유: ' || rejection_content.reason || chr(10) || chr(10)
+        else ''
+      end || '학교 프로필 설정에서 정보를 고쳐 다시 제출해 주세요.'
       when 'account_blocked' then '가입이 차단되었습니다.'
-      when 'account_unblocked' then '차단이 해제되었습니다.'
+      when 'account_unblocked' then '학교 프로필 설정에서 정보를 확인하고 다시 제출해 주세요.'
       when 'anonymous_activity_restricted' then '그룹 익명 활동이 제한되었습니다.'
       when 'post_mentioned' then '게시물에서 회원님을 멘션했습니다.'
       when 'comment_mentioned' then '댓글에서 회원님을 멘션했습니다.'
@@ -1151,7 +1172,18 @@ begin
       end as body
     from private.profile_suspensions as suspension
     where suspension.id = claimed.suspension_id
-  ) as suspension_content on true;
+  ) as suspension_content on true
+  -- 반려 기록은 알림과 같은 트랜잭션에서 남으므로 알림 시각 이전의 가장 최근 기록이 그 반려다.
+  -- 발송 전에 승인돼 기록이 지워졌으면 사유 없이 보낸다.
+  left join lateral (
+    select record.reason
+    from private.application_rejections as record
+    where notification.kind = 'account_rejected'
+      and record.profile_id = notification.recipient_profile_id
+      and record.rejected_at <= notification.created_at
+    order by record.rejected_at desc, record.id desc
+    limit 1
+  ) as rejection_content on true;
 end;
 $$;
 alter function public.claim_notification_deliveries(integer, integer) owner to postgres;
@@ -1963,15 +1995,18 @@ declare
 begin
   if actor_profile_id is null then return new; end if;
   if old.status is distinct from new.status and new.status in ('accepted', 'blocked', 'draft') then
-    event_kind := case new.status
-      when 'accepted' then 'account_approved'
-      when 'blocked' then 'account_blocked'
+    -- `draft`로 돌아가는 길은 반려(승인 대기에서)와 차단 해제(차단에서) 두 가지다.
+    event_kind := case
+      when new.status = 'accepted' then 'account_approved'
+      when new.status = 'blocked' then 'account_blocked'
+      when old.status = 'pending' then 'account_rejected'
       else 'account_unblocked'
     end;
     event_importance := 'high';
-    event_title := case new.status
-      when 'accepted' then '가입이 승인되었습니다.'
-      when 'blocked' then '가입이 차단되었습니다.'
+    event_title := case event_kind
+      when 'account_approved' then '가입이 승인되었습니다.'
+      when 'account_blocked' then '가입이 차단되었습니다.'
+      when 'account_rejected' then '가입 신청이 반려되었습니다.'
       else '차단이 해제되었습니다.'
     end;
     notification_id := private.emit_notification(

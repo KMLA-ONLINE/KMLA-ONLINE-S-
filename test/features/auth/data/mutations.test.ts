@@ -4,31 +4,55 @@ const {
   disconnectWebPushForLogout,
   getSession,
   getSupabase,
+  getUser,
+  rpc,
   signInWithPassword,
   signOut,
+  unsubscribeWebPushLocally,
   updateUser,
 } = vi.hoisted(() => ({
   disconnectWebPushForLogout: vi.fn(),
   getSession: vi.fn(),
+  getUser: vi.fn(),
+  rpc: vi.fn(),
   getSupabase: vi.fn(),
   signInWithPassword: vi.fn(),
   signOut: vi.fn(),
+  unsubscribeWebPushLocally: vi.fn(),
   updateUser: vi.fn(),
 }));
 
 vi.mock("~/shared/supabase/client", () => ({ getSupabase }));
-vi.mock("~/features/notifications", () => ({ disconnectWebPushForLogout }));
+vi.mock("~/features/notifications", () => ({
+  disconnectWebPushForLogout,
+  unsubscribeWebPushLocally,
+}));
+vi.mock("~/features/auth/storage/pending-signup", () => ({
+  clearSignupDraft: vi.fn(),
+}));
 
-import { claimSignupPassword, signIn } from "~/features/auth/data/mutations";
+import {
+  claimSignupPassword,
+  reauthenticateWithPassword,
+  signIn,
+  withdrawAccount,
+} from "~/features/auth/data/mutations";
 
 describe("auth mutations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getSupabase.mockReturnValue({
-      auth: { getSession, signInWithPassword, signOut, updateUser },
+      rpc,
+      auth: { getSession, getUser, signInWithPassword, signOut, updateUser },
     });
+    getUser.mockResolvedValue({
+      data: { user: { email: "student@kmla.hs.kr" } },
+      error: null,
+    });
+    rpc.mockResolvedValue({ data: null, error: null });
     getSession.mockResolvedValue({ data: { session: null }, error: null });
     disconnectWebPushForLogout.mockResolvedValue(undefined);
+    unsubscribeWebPushLocally.mockResolvedValue(undefined);
     signInWithPassword.mockResolvedValue({ error: null });
     signOut.mockResolvedValue({ error: null });
   });
@@ -99,5 +123,60 @@ describe("auth mutations", () => {
     await expect(claimSignupPassword("password123")).rejects.toMatchObject({
       code: "weak_password",
     });
+  });
+
+  it("reauthenticates the current account without accepting a caller email", async () => {
+    await reauthenticateWithPassword("current-password");
+
+    expect(getUser).toHaveBeenCalledOnce();
+    expect(signInWithPassword).toHaveBeenCalledWith({
+      email: "student@kmla.hs.kr",
+      password: "current-password",
+    });
+  });
+
+  it("does not attempt password sign-in when the current user lookup fails", async () => {
+    const error = new Error("expired session");
+    getUser.mockResolvedValue({ data: { user: null }, error });
+
+    await expect(reauthenticateWithPassword("password")).rejects.toBe(error);
+    expect(signInWithPassword).not.toHaveBeenCalled();
+  });
+
+  it("withdraws after re-entering the password of the current account", async () => {
+    await withdrawAccount("current-pass");
+
+    expect(signInWithPassword).toHaveBeenCalledWith({
+      email: "student@kmla.hs.kr",
+      password: "current-pass",
+    });
+    expect(rpc).toHaveBeenCalledWith("withdraw_account");
+    expect(signInWithPassword.mock.invocationCallOrder[0]).toBeLessThan(
+      rpc.mock.invocationCallOrder[0],
+    );
+  });
+
+  // 계정이 지워진 뒤라 구독 해제 RPC와 `/logout`은 실패할 뿐이다.
+  it("cleans up only this device after the account is gone", async () => {
+    await withdrawAccount("current-pass");
+
+    expect(disconnectWebPushForLogout).not.toHaveBeenCalled();
+    expect(unsubscribeWebPushLocally).toHaveBeenCalledOnce();
+    expect(signOut).toHaveBeenCalledExactlyOnceWith({ scope: "local" });
+  });
+
+  it("does not call the server when the password is wrong", async () => {
+    const error = { code: "invalid_credentials" };
+    signInWithPassword.mockResolvedValueOnce({ error });
+
+    await expect(withdrawAccount("wrong-pass")).rejects.toBe(error);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("reports success once the server withdrew the account even if local cleanup fails", async () => {
+    unsubscribeWebPushLocally.mockRejectedValueOnce(new Error("blocked"));
+    signOut.mockRejectedValueOnce(new Error("storage unavailable"));
+
+    await expect(withdrawAccount("current-pass")).resolves.toBeUndefined();
   });
 });

@@ -133,7 +133,7 @@ export function GroupPostReportCard({
                 onClick={onDelete}
               >
                 <Trash2Icon data-icon="inline-start" />
-                삭제
+                게시물 삭제
               </Button>
             </>
           ) : null}

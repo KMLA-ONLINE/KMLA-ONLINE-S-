@@ -16,6 +16,7 @@ it("게시물을 보낼 대화는 별명 대신 본명으로 구분한다", asyn
       name: "감자",
       viewerId: "me",
       participants: [
+        { id: "me", name: "나", avatarUrl: null, active: true },
         {
           id: "friend",
           name: "감자",
@@ -83,5 +84,39 @@ describe.each([
     expect(
       screen.queryByText("일치하는 사람이 없습니다."),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("post sharing targets", () => {
+  it("leaves out direct conversations whose counterpart withdrew", async () => {
+    const conversations = await queries.listConversations();
+    vi.spyOn(queries, "listConversations").mockResolvedValueOnce(
+      conversations.map((conversation) =>
+        conversation.id === "hyunwoo"
+          ? {
+              ...conversation,
+              name: "탈퇴한 사용자",
+              participants: conversation.participants.map((participant) =>
+                participant.id === conversation.viewerId
+                  ? participant
+                  : { ...participant, withdrawn: true },
+              ),
+            }
+          : conversation,
+      ),
+    );
+    renderRoute(() => (
+      <SharePostDialog
+        open
+        onOpenChange={vi.fn()}
+        path="/groups/test/posts/post-id"
+        title="테스트 게시물"
+      />
+    ));
+
+    const recent = await screen.findByRole("list", { name: "최근 채팅" });
+    expect(recent).toHaveTextContent("학생회 기획부");
+    expect(recent).not.toHaveTextContent("탈퇴한 사용자");
+    expect(recent).not.toHaveTextContent("이현우");
   });
 });

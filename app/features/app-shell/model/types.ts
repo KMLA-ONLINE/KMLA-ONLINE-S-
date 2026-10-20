@@ -14,6 +14,7 @@ export interface ShellProfileRow {
   type: MyProfileRow["type"];
   status: MyProfileRow["status"];
   avatar_path: MyProfileRow["avatar_path"];
+  terms_agreed_at: MyProfileRow["terms_agreed_at"];
 }
 
 /**

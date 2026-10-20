@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ loadGroupHome: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  loadGroupHome: vi.fn(),
+  loadGroupNewPostCounts: vi.fn(),
+}));
 
 vi.mock("~/features/groups/data/queries", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   loadGroupHome: mocks.loadGroupHome,
+  loadGroupNewPostCounts: mocks.loadGroupNewPostCounts,
 }));
 
 import { groupKeys } from "~/features/groups";
@@ -21,10 +25,14 @@ describe("group home loader", () => {
     vi.clearAllMocks();
     resetQueryClientForTests();
     mocks.loadGroupHome.mockResolvedValue(fresh);
+    mocks.loadGroupNewPostCounts.mockResolvedValue({ fresh: 2 });
   });
 
   it("loads the list when there is no cache", async () => {
-    await expect(clientLoader()).resolves.toEqual({ groups: fresh });
+    await expect(clientLoader()).resolves.toEqual({
+      groups: fresh,
+      newPostCounts: { fresh: 2 },
+    });
   });
 
   // 오래된 캐시는 먼저 그리고, 다시 읽기는 화면의 observer가 맡는다.
@@ -32,7 +40,29 @@ describe("group home loader", () => {
     const cached = [{ group_id: "cached" }];
     getQueryClient().setQueryData(groupKeys.home(), cached, { updatedAt: 0 });
 
-    await expect(clientLoader()).resolves.toEqual({ groups: cached });
+    getQueryClient().setQueryData(
+      groupKeys.newPostCounts(),
+      { cached: 1 },
+      { updatedAt: 0 },
+    );
+
+    await expect(clientLoader()).resolves.toEqual({
+      groups: cached,
+      newPostCounts: { cached: 1 },
+    });
+    expect(mocks.loadGroupHome).not.toHaveBeenCalled();
+    expect(mocks.loadGroupNewPostCounts).not.toHaveBeenCalled();
+  });
+
+  // 숫자 없이 그리면 행마다 뒤늦게 붙는다. 목록은 캐시로 그리되 새 게시물 수 RPC 하나만 기다린다.
+  it("waits only for missing counts beside a cached list", async () => {
+    const cached = [{ group_id: "cached" }];
+    getQueryClient().setQueryData(groupKeys.home(), cached, { updatedAt: 0 });
+
+    await expect(clientLoader()).resolves.toEqual({
+      groups: cached,
+      newPostCounts: { fresh: 2 },
+    });
     expect(mocks.loadGroupHome).not.toHaveBeenCalled();
   });
 
@@ -45,7 +75,10 @@ describe("group home loader", () => {
       refetchType: "none",
     });
 
-    await expect(clientLoader()).resolves.toEqual({ groups: fresh });
+    await expect(clientLoader()).resolves.toEqual({
+      groups: fresh,
+      newPostCounts: { fresh: 2 },
+    });
   });
 });
 

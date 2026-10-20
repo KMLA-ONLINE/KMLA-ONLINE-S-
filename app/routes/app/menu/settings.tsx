@@ -4,6 +4,9 @@ import {
   FileTextIcon,
   FlaskConicalIcon,
   KeyRoundIcon,
+  ScrollTextIcon,
+  ShieldCheckIcon,
+  UserXIcon,
 } from "lucide-react";
 import { useId, type ReactNode } from "react";
 
@@ -70,6 +73,11 @@ export default function SettingsPage() {
             label="비밀번호 변경"
             icon={KeyRoundIcon}
           />
+          <ListLinkRow
+            to="/settings/withdraw"
+            label="계정 탈퇴"
+            icon={UserXIcon}
+          />
         </SettingsSection>
 
         <SettingsSection title="앱 설정">
@@ -116,6 +124,16 @@ export default function SettingsPage() {
             to="/support"
             label="도움말"
             icon={CircleQuestionMarkIcon}
+          />
+          <ListLinkRow
+            to="/terms-of-service"
+            label="이용약관"
+            icon={ScrollTextIcon}
+          />
+          <ListLinkRow
+            to="/privacy-policy"
+            label="개인정보 처리방침"
+            icon={ShieldCheckIcon}
           />
           <ListLinkRow
             to="/licenses"

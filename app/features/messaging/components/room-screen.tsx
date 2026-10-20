@@ -93,7 +93,9 @@ import { RenameConversationDialog } from "~/features/messaging/components/rename
 import { ConversationNicknamesDialog } from "~/features/messaging/components/conversation-nicknames-dialog";
 import {
   activeParticipants,
+  canSendToConversation,
   formatSystemMessage,
+  isDirectCounterpartWithdrawn,
   isViewerActive,
 } from "~/features/messaging/model/system-message";
 import {
@@ -209,6 +211,9 @@ export function RoomScreen({
   // 이름과 멤버는 다른 멤버가 바꿀 수 있어 대화 목록의 최신 값을 쓴다.
   const conversation = useListedConversation(loadedConversation);
   const viewerActive = isViewerActive(conversation);
+  const counterpartWithdrawn = isDirectCounterpartWithdrawn(conversation);
+  // 입력창, 답장·수정, 파일 끌어 놓기가 모두 이 값을 따른다.
+  const canCompose = canSendToConversation(conversation);
   const participantById = new Map(
     conversation.participants.map((participant) => [
       participant.id,
@@ -644,6 +649,7 @@ export function RoomScreen({
           ) : null}
 
           <MessageThread
+            canCompose={canCompose}
             ios={ios}
             composingAtBottomRef={composingAtBottomRef}
             conversation={conversation}
@@ -704,7 +710,7 @@ export function RoomScreen({
               roomOverlay.open({ kind: "reactions", messageId: message.id })
             }
             onDropFiles={
-              viewerActive && !selection && !editTarget && !replyTarget
+              canCompose && !selection && !editTarget && !replyTarget
                 ? stageFiles
                 : undefined
             }
@@ -731,6 +737,10 @@ export function RoomScreen({
                 삭제
               </Button>
             </div>
+          ) : counterpartWithdrawn ? (
+            <p className="shrink-0 px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))] text-center text-sm text-muted-foreground">
+              탈퇴한 사용자에게는 메시지를 보낼 수 없습니다.
+            </p>
           ) : viewerActive ? (
             <ComposerShell
               onDraftInput={preserveCompositionPosition}
@@ -878,6 +888,7 @@ export function RoomScreen({
 }
 
 function MessageThread({
+  canCompose,
   composingAtBottomRef,
   ios,
   conversation,
@@ -911,6 +922,8 @@ function MessageThread({
   messageThreadRef: RefObject<HTMLDivElement | null>;
   /** 맨 아래를 따라가는 중인지. 보내는 쪽(`RoomScreen`)도 켠다. */
   followingNewMessagesRef: RefObject<boolean>;
+  /** 입력창이 있는 대화인지. 답장과 수정은 입력창에서 이어지므로 없으면 내지 않는다. */
+  canCompose: boolean;
   desktopDetailsOpen: boolean;
   hasOlderMessages: boolean;
   loadingOlderMessages: boolean;
@@ -1285,7 +1298,11 @@ function MessageThread({
                     sender={sender}
                     replyTargetAuthor={replyTargetAuthor}
                     isOwn={message.senderId === conversation.viewerId}
-                    canEdit={canEditMessage(message, conversation.viewerId)}
+                    canEdit={
+                      canCompose &&
+                      canEditMessage(message, conversation.viewerId)
+                    }
+                    canCompose={canCompose}
                     selection={
                       selection === null
                         ? undefined
@@ -1420,6 +1437,7 @@ const ThreadMessage = memo(function ThreadMessage({
   replyTargetAuthor,
   isOwn,
   canEdit,
+  canCompose,
   selection,
   isGroup,
   startsGroup,
@@ -1435,6 +1453,11 @@ const ThreadMessage = memo(function ThreadMessage({
   isOwn: boolean;
   /** 15분 기한은 렌더 시점에 판정한다. 기한이 지나면 다음 렌더에서 메뉴가 빠지고, 서버가 최종 판정한다. */
   canEdit: boolean;
+  /**
+   * 입력창이 있는 대화인지. 답장과 수정은 입력창에서 이어지고, 다시 보내기는 상대가 탈퇴한 대화처럼
+   * 입력창이 없으면 서버가 같은 이유로 거부하므로 셋 다 이 값을 따른다.
+   */
+  canCompose: boolean;
   /**
    * 삭제 모드에서 이 메시지를 골랐는지. 삭제 모드가 아니면 `undefined`, 삭제 모드인데 고를 수 없는
    * 메시지(남의 메시지, 삭제된 메시지, 보내는 중이거나 보내지 못한 메시지)면 `null`이다.
@@ -1454,7 +1477,7 @@ const ThreadMessage = memo(function ThreadMessage({
   // 복사만 된다. 남는 작업이 없으면 메뉴를 열지 않는다.
   const actionable = !message.deleted && !message.pending && !message.failed;
   const contextActions = [
-    ...(actionable
+    ...(actionable && canCompose
       ? [
           {
             label: "답장",
@@ -1528,7 +1551,9 @@ const ThreadMessage = memo(function ThreadMessage({
         onViewReply={
           replyTarget ? () => actions.viewMessage(replyTarget.id) : undefined
         }
-        onReply={actionable ? () => actions.reply(message) : undefined}
+        onReply={
+          actionable && canCompose ? () => actions.reply(message) : undefined
+        }
         onSelectReaction={
           actionable
             ? (reaction) => actions.selectReaction(message, reaction)
@@ -1543,7 +1568,7 @@ const ThreadMessage = memo(function ThreadMessage({
             onSelectReaction={(reaction) =>
               actions.selectReaction(message, reaction)
             }
-            onReply={() => actions.reply(message)}
+            onReply={canCompose ? () => actions.reply(message) : undefined}
             onTogglePinned={() => actions.togglePinned(message)}
             onEdit={canEdit ? () => actions.edit(message) : undefined}
             onDelete={
@@ -1555,15 +1580,17 @@ const ThreadMessage = memo(function ThreadMessage({
       {message.failed ? (
         <div className="mt-0.5 mb-1 flex items-center justify-end gap-1 text-xs">
           <span className="text-destructive">보내지 못했습니다</span>
-          <Button
-            variant="ghost"
-            size="xs"
-            // 누를 자리를 위아래로 넓힌다. 옆 버튼과 겹치지 않게 좌우는 그대로 둔다.
-            className="relative after:absolute after:inset-x-0 after:-inset-y-2"
-            onClick={() => actions.retry(message)}
-          >
-            다시 보내기
-          </Button>
+          {canCompose ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              // 누를 자리를 위아래로 넓힌다. 옆 버튼과 겹치지 않게 좌우는 그대로 둔다.
+              className="relative after:absolute after:inset-x-0 after:-inset-y-2"
+              onClick={() => actions.retry(message)}
+            >
+              다시 보내기
+            </Button>
+          ) : null}
           <Button
             variant="ghost"
             size="xs"
@@ -1614,7 +1641,8 @@ function MessageActions({
   message: ConversationMessage;
   isPinned: boolean;
   onSelectReaction: (reaction: PostReaction) => void;
-  onReply: () => void;
+  /** 입력창이 없는 대화(나간 대화, 탈퇴한 상대와의 1:1)에서는 없다. */
+  onReply?: () => void;
   onTogglePinned: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -1650,7 +1678,7 @@ function MessageActions({
       </Button>
     </div>
   );
-  const replyAction = (
+  const replyAction = onReply ? (
     <Button
       variant="ghost"
       size="icon-sm"
@@ -1660,7 +1688,7 @@ function MessageActions({
     >
       <ReplyIcon aria-hidden />
     </Button>
-  );
+  ) : null;
   const moreAction = (
     <DropdownMenu>
       <DropdownMenuTrigger

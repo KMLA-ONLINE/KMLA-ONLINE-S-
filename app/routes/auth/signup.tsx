@@ -23,15 +23,20 @@ import {
   isInvalidEmailAddressError,
   loadAuthState,
   OtpField,
+  LegalLinks,
   PasswordField,
+  PrivacyNotice,
   ProfileFields,
   readFormText,
   readProfileForm,
+  readTermsAgreement,
   resendSignupOtp,
   saveSignupDraft,
   signOut,
   signUp,
   submitProfile,
+  TERMS_VERSION,
+  TermsAgreementField,
   validateEmail,
   validateOtpCode,
   validatePassword,
@@ -56,11 +61,15 @@ import {
   FieldLabel,
 } from "~/shared/ui/field";
 import { Input } from "~/shared/ui/input";
+import { Separator } from "~/shared/ui/separator";
 import { Spinner } from "~/shared/ui/spinner";
 import type { Route } from "./+types/signup";
 
 /**
- * 가입은 계정 → 프로필 → 이메일 인증 세 단계다.
+ * 가입은 계정 → 약관 → 프로필 → 이메일 인증 네 단계다.
+ *
+ * 약관 단계는 학교 프로필을 받기 전에 이용약관 동의와 개인정보 처리 안내를 끝낸다. 동의 여부는
+ * 다른 값처럼 폼에 실어 나르고, 인증 단계로 넘어갈 때 동의한 판을 초안에 남긴다.
  *
  * 계정 생성(`signUp`)이 곧 코드 발송이라, 그 호출을 마지막 단계 바로 앞까지 미룬다. 첫
  * 화면에서 계정을 만들어 두면 사용자가 프로필을 다 쓰고 코드를 입력할 때쯤 코드가 이미
@@ -77,6 +86,7 @@ import type { Route } from "./+types/signup";
  */
 const STEPS = [
   { id: "credentials", label: "계정" },
+  { id: "terms", label: "약관" },
   { id: "profile", label: "프로필" },
   { id: "verify", label: "이메일 인증" },
 ] as const;
@@ -88,6 +98,8 @@ interface SignupState {
   email: string;
   password: string;
   values: ProfileFormValues;
+  /** 약관 단계에서 이용약관에 동의했는지. 인증 단계는 초안의 동의 기록을 쓴다. */
+  termsAgreed?: boolean;
   /** 인증 단계에서 비밀번호를 입력란으로 받을지. 아니면 앞 단계 값을 hidden으로 넘긴다. */
   askPassword?: boolean;
   resent?: boolean;
@@ -201,13 +213,30 @@ async function submitVerifyStep(intent: string, formData: FormData) {
     );
   }
 
+  // 초안을 남긴 뒤 앱이 새 약관 판으로 업데이트됐다. 옛 판은 서버가 매번 거절하므로 코드를 쓰기 전에
+  // 약관 단계로 돌려 다시 동의받는다. 인증을 마친 뒤의 새로고침은 로더가 `/setup`으로 보내 거기서 받는다.
+  if (!verified && draft.termsVersion !== TERMS_VERSION) {
+    return data(
+      {
+        step: "terms" as const,
+        email: draft.email,
+        password,
+        values: draft.values,
+        errors: {
+          terms: "이용약관이 바뀌었어요. 다시 확인하고 동의해 주세요.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
   let claiming = false;
   try {
     if (!verified) await verifySignupOtp(draft.email, otp);
     claiming = true;
     await claimSignupPassword(password);
     claiming = false;
-    await submitProfile(draft.values);
+    await submitProfile(draft.values, draft.termsVersion);
     throw redirect("/pending");
   } catch (error) {
     if (error instanceof Response) throw error;
@@ -246,16 +275,38 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   const email = readFormText(formData, "email");
   const password = readFormText(formData, "password");
   const values = readProfileForm(formData);
+  const termsAgreed = readTermsAgreement(formData);
+  const fields = { email, password, values, termsAgreed };
 
   if (intent === "back") {
-    return data({ step: "credentials" as const, email, password, values });
+    const from = readFormText(formData, "step");
+    return data({
+      step: from === "profile" ? ("terms" as const) : ("credentials" as const),
+      ...fields,
+    });
+  }
+
+  // 프로필 제출도 동의를 다시 본다. 약관 단계를 건너뛴 제출로 계정이 만들어지면 안 된다.
+  if ((intent === "terms" || intent === "profile") && !termsAgreed) {
+    return data(
+      {
+        step: "terms" as const,
+        ...fields,
+        errors: { terms: "이용약관에 동의해야 가입할 수 있어요." },
+      },
+      { status: 400 },
+    );
+  }
+
+  if (intent === "terms") {
+    return data({ step: "profile" as const, ...fields });
   }
 
   if (intent === "profile") {
     const errors = validateProfileForm(values);
     if (hasErrors(errors)) {
       return data(
-        { step: "profile" as const, email, password, values, errors },
+        { step: "profile" as const, ...fields, errors },
         { status: 400 },
       );
     }
@@ -268,9 +319,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
         return data(
           {
             step: "credentials" as const,
-            email,
-            password,
-            values,
+            ...fields,
             errors: { email: getAuthErrorMessage(error) },
           },
           { status: 400 },
@@ -279,17 +328,15 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
       return data(
         {
           step: "profile" as const,
-          email,
-          password,
-          values,
+          ...fields,
           errors: { form: getAuthErrorMessage(error) },
         },
         { status: 400 },
       );
     }
 
-    saveSignupDraft({ email, values });
-    return data({ step: "verify" as const, email, password, values });
+    saveSignupDraft({ email, values, termsVersion: TERMS_VERSION });
+    return data({ step: "verify" as const, ...fields });
   }
 
   const errors: FieldErrors = {
@@ -303,12 +350,12 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
 
   if (hasErrors(errors)) {
     return data(
-      { step: "credentials" as const, email, password, values, errors },
+      { step: "credentials" as const, ...fields, errors },
       { status: 400 },
     );
   }
 
-  return data({ step: "profile" as const, email, password, values });
+  return data({ step: "terms" as const, ...fields });
 }
 
 function initialState(draft: SignupDraft | null): SignupState {
@@ -319,6 +366,7 @@ function initialState(draft: SignupDraft | null): SignupState {
     email: draft.email,
     password: "",
     values: draft.values,
+    termsAgreed: true,
     askPassword: true,
   };
 }
@@ -348,12 +396,13 @@ function StepIndicator({ current }: { current: SignupStep }) {
             >
               {done ? <CheckIcon className="size-3.5" /> : index + 1}
             </span>
+            {/* 네 단계 라벨이 320px 폭에 다 들어가지 않아, 아주 좁은 화면에서는 현재 단계만 보인다. */}
             <span
               className={cn(
                 "text-xs whitespace-nowrap",
                 active
                   ? "font-medium text-foreground"
-                  : "text-muted-foreground",
+                  : "text-muted-foreground max-[359px]:sr-only",
               )}
             >
               {step.label}
@@ -388,6 +437,7 @@ function HiddenProfileValues({ values }: { values: ProfileFormValues }) {
 
 const TITLES: Record<SignupStep, string> = {
   credentials: "KMLA Online 시작하기",
+  terms: "약관 및 개인정보 안내",
   profile: "학교 구성원 정보",
   verify: "이메일 인증",
 };
@@ -429,26 +479,42 @@ export default function SignupPage({
   const description =
     step === "credentials"
       ? "계정을 만든 뒤 정보를 확인받으면 바로 시작할 수 있어요."
-      : step === "profile"
-        ? "확인에 필요한 정보입니다. 승인 전에는 기능이 제한됩니다."
-        : `${email}로 보낸 숫자 6자리를 입력해 주세요.`;
+      : step === "terms"
+        ? "학교 프로필을 입력하기 전에 확인해 주세요."
+        : step === "profile"
+          ? "확인에 필요한 정보입니다. 승인 전에는 기능이 제한됩니다."
+          : `${email}로 보낸 숫자 6자리를 입력해 주세요.`;
+  // 결과가 바뀌면(다른 단계에서 돌아오면) 그 결과의 동의 여부로 다시 시작한다.
+  const [termsCheckedFor, setTermsCheckedFor] = useState<{
+    result: unknown;
+    checked: boolean;
+  } | null>(null);
+  const termsChecked =
+    termsCheckedFor && termsCheckedFor.result === actionData
+      ? termsCheckedFor.checked
+      : Boolean(result.termsAgreed);
 
   return (
     <AuthCard
       title={TITLES[step]}
       description={description}
-      wide={step === "profile"}
+      wide={step === "profile" || step === "terms"}
       footer={
         step === "credentials" ? (
-          <p>
-            이미 계정이 있나요?{" "}
-            <Link
-              to="/login"
-              className="font-medium text-primary hover:underline"
-            >
-              로그인
-            </Link>
-          </p>
+          <div className="flex flex-col gap-3">
+            <p>
+              이미 계정이 있나요?{" "}
+              <Link
+                to="/login"
+                className="font-medium text-primary hover:underline"
+              >
+                로그인
+              </Link>
+            </p>
+            <LegalLinks />
+          </div>
+        ) : step === "terms" || step === "profile" ? (
+          <LegalLinks />
         ) : step === "verify" ? (
           <DeferredAdminContactList
             contacts={loaderData.contacts}
@@ -461,6 +527,10 @@ export default function SignupPage({
 
       <Form method="post" className="flex flex-col gap-6">
         {errors.form ? <FieldError>{errors.form}</FieldError> : null}
+        {/* 약관 단계 밖에서는 동의 여부를 hidden으로 실어 날라, 앞뒤로 오가도 다시 묻지 않는다. */}
+        {step !== "terms" && result.termsAgreed ? (
+          <input type="hidden" name="terms" value={TERMS_VERSION} />
+        ) : null}
 
         {step === "credentials" ? (
           <>
@@ -514,8 +584,58 @@ export default function SignupPage({
           </>
         ) : null}
 
+        {step === "terms" ? (
+          <>
+            <input type="hidden" name="step" value="terms" />
+            <input type="hidden" name="email" value={email} />
+            <input type="hidden" name="password" value={password} />
+            <HiddenProfileValues values={values} />
+            <section
+              aria-labelledby="terms-title"
+              className="flex flex-col gap-3"
+            >
+              <h2 id="terms-title" className="text-base font-semibold">
+                이용약관
+              </h2>
+              <TermsAgreementField
+                id="signup-terms"
+                checked={termsChecked}
+                onCheckedChange={(checked) =>
+                  setTermsCheckedFor({ result: actionData, checked })
+                }
+                error={termsChecked ? undefined : errors.terms}
+                disabled={pending}
+              />
+            </section>
+            <Separator />
+            <PrivacyNotice />
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={(event) => submitIntent(event, "back")}
+                disabled={pending}
+              >
+                이전
+              </Button>
+              <Button
+                type="submit"
+                name="intent"
+                value="terms"
+                size="lg"
+                className="flex-1"
+                disabled={!termsChecked || pending}
+              >
+                다음
+              </Button>
+            </div>
+          </>
+        ) : null}
+
         {step === "profile" ? (
           <>
+            <input type="hidden" name="step" value="profile" />
             <input type="hidden" name="email" value={email} />
             <input type="hidden" name="password" value={password} />
             <ProfileFields values={values} errors={errors} disabled={pending} />

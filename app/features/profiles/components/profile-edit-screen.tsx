@@ -205,14 +205,11 @@ export function ProfileEditScreen({
             </Field>
 
             <Field data-invalid={Boolean(errors.birthday)}>
-              <FieldLabel htmlFor="profile-birthday">
-                {isStudent ? <RequiredLabel>생일</RequiredLabel> : "생일"}
-              </FieldLabel>
+              <FieldLabel htmlFor="profile-birthday">생일</FieldLabel>
               <DateSelect
                 id="profile-birthday"
                 name="birthday"
                 defaultValue={values.birthday}
-                required={isStudent}
                 aria-invalid={Boolean(errors.birthday)}
               />
               <FieldError>{errors.birthday}</FieldError>
@@ -223,17 +220,15 @@ export function ProfileEditScreen({
             <Section title="학적">
               <div className="grid grid-cols-2 gap-4">
                 <Field data-invalid={Boolean(errors.gender)}>
-                  <FieldLabel htmlFor="profile-gender">
-                    <RequiredLabel>성별</RequiredLabel>
-                  </FieldLabel>
+                  <FieldLabel htmlFor="profile-gender">성별</FieldLabel>
                   <NativeSelect
                     id="profile-gender"
                     name="gender"
                     defaultValue={values.gender ?? ""}
-                    required
                     aria-invalid={Boolean(errors.gender)}
                     className="w-full"
                   >
+                    <NativeSelectOption value="">선택 안 함</NativeSelectOption>
                     <NativeSelectOption value="male">남성</NativeSelectOption>
                     <NativeSelectOption value="female">여성</NativeSelectOption>
                   </NativeSelect>
@@ -241,17 +236,15 @@ export function ProfileEditScreen({
                 </Field>
 
                 <Field data-invalid={Boolean(errors.academicTrack)}>
-                  <FieldLabel htmlFor="profile-track">
-                    <RequiredLabel>계열</RequiredLabel>
-                  </FieldLabel>
+                  <FieldLabel htmlFor="profile-track">계열</FieldLabel>
                   <NativeSelect
                     id="profile-track"
                     name="academicTrack"
                     defaultValue={values.academicTrack ?? ""}
-                    required
                     aria-invalid={Boolean(errors.academicTrack)}
                     className="w-full"
                   >
+                    <NativeSelectOption value="">선택 안 함</NativeSelectOption>
                     <NativeSelectOption value="domestic">
                       국내반
                     </NativeSelectOption>

@@ -148,8 +148,8 @@ describe("public push service worker", () => {
       },
     });
     expect(worker.notifications).toHaveLength(1);
-    // 메시지 카드는 알림함 뱃지에 세지 않는다.
-    expect(worker.setAppBadge).not.toHaveBeenCalled();
+    // 메시지 카드는 대화마다 하나로 센다.
+    expect(worker.setAppBadge).toHaveBeenLastCalledWith(1);
   });
 
   it("shows a repeated message delivery again quietly and rejects a message push with extra fields", async () => {
@@ -624,7 +624,6 @@ describe("public push service worker", () => {
       },
     });
 
-    // 뱃지를 다시 쓰라는 알림은 가도 이동은 하지 않는다.
     expect(appClient.focus).not.toHaveBeenCalled();
     expect(appClient.navigate).not.toHaveBeenCalled();
     expect(appClient.postMessage).not.toHaveBeenCalledWith(
@@ -634,9 +633,60 @@ describe("public push service worker", () => {
     expect(worker.openWindow).not.toHaveBeenCalled();
   });
 
-  it("tells open windows after it overwrites the app icon badge", async () => {
+  it("counts message cards once per conversation alongside notification cards", async () => {
+    const worker = loadPushWorker();
+    await worker.dispatch("push", { data: { json: () => validPayload } });
+    await worker.dispatch("push", {
+      data: {
+        json: () => ({
+          ...validPayload,
+          notificationId: "028f3f14-9b9a-7c1d-a1b2-0123456789ab",
+          deliveryId: "028f3f15-40c7-7d25-b2c3-abcdef012345",
+        }),
+      },
+    });
+    await worker.dispatch("push", { data: { json: () => messagePayload } });
+    await worker.dispatch("push", {
+      data: {
+        json: () => ({
+          ...messagePayload,
+          messageId: "018f3f1a-40c7-7d25-b2c3-abcdef012345",
+          deliveryId: "018f3f1b-40c7-7d25-b2c3-abcdef012345",
+        }),
+      },
+    });
+    expect(worker.setAppBadge).toHaveBeenLastCalledWith(3);
+
+    const messageCard = worker.notifications.findIndex((item) =>
+      item.tag.startsWith("message:"),
+    );
+    const [closed] = worker.notifications.splice(messageCard, 1);
+    await worker.dispatch("notificationclose", {
+      notification: { data: closed?.data },
+    });
+    expect(worker.setAppBadge).toHaveBeenLastCalledWith(2);
+  });
+
+  it("leaves the app icon badge to a visible app window", async () => {
     const appClient = {
       url: "https://kmla.example/home",
+      visibilityState: "visible",
+      postMessage: vi.fn(),
+    };
+    const worker = loadPushWorker([appClient]);
+
+    await worker.dispatch("push", { data: { json: () => messagePayload } });
+    await worker.dispatch("push", { data: { json: () => validPayload } });
+
+    expect(worker.showNotification).toHaveBeenCalledTimes(2);
+    expect(worker.setAppBadge).not.toHaveBeenCalled();
+    expect(appClient.postMessage).not.toHaveBeenCalled();
+  });
+
+  it("tells hidden windows after it overwrites the app icon badge", async () => {
+    const appClient = {
+      url: "https://kmla.example/home",
+      visibilityState: "hidden",
       postMessage: vi.fn(),
     };
     const worker = loadPushWorker([appClient]);

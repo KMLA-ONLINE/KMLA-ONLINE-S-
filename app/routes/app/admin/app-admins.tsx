@@ -13,9 +13,9 @@ import {
   isRecentAdminAuthError,
   listAdminMembers,
   normalizeAdminSearch,
-  reauthenticateWithPassword,
   setAppAdmin,
 } from "~/features/admin";
+import { reauthenticateWithPassword } from "~/features/auth";
 import {
   defineAppChrome,
   isShellProfile,

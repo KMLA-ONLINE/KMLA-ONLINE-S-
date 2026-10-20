@@ -3,6 +3,10 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(42);
 
+-- 시행 중인 약관 판. 날짜를 적어 두면 개정 때마다 테스트도 고쳐야 한다. 함수는 private라
+-- authenticated가 부를 수 없으므로 여기서 읽어 둔다.
+select set_config('test.terms_version', private.current_terms_version()::text, true);
+
 select is(
   (select array_agg(enumlabel order by enumsortorder) from pg_enum
    where enumtypid = 'public.profile_status'::regtype),
@@ -31,8 +35,8 @@ select results_eq(
     where namespace.nspname = 'public'
       and procedure.proname like 'admin_%'
       and has_function_privilege('authenticated', procedure.oid, 'EXECUTE')$$,
-  array[15],
-  'authenticated clients can execute all fifteen admin RPCs'
+  array[16],
+  'authenticated clients can execute all sixteen admin RPCs'
 );
 select results_eq(
   $$select count(*)::integer
@@ -107,9 +111,10 @@ select is(
   '승인대기 학생',
   'pending applications are listed oldest first'
 );
+-- 시드의 승인 대기 두 건(pending-user, legacy-pending)과 위에서 만든 두 건이다.
 select is(
   (select total_count from public.admin_list_applications('pending', 1, 0)),
-  3::bigint,
+  4::bigint,
   'application list returns a screen-scoped total count'
 );
 select lives_ok(
@@ -194,7 +199,7 @@ select throws_ok(
       '차단 학생', 'student'::public.profile_type, '260002', null::smallint,
       31::smallint, 'male'::public.profile_gender,
       'international'::public.profile_academic_track, null::text,
-      '2009-03-01'::date, null::smallint
+      '2009-03-01'::date, null::smallint, current_setting('test.terms_version')::date
     )$$,
   '55000', 'profile cannot be submitted in its current state',
   'a blocked user cannot resubmit'
@@ -225,7 +230,7 @@ select lives_ok(
       '차단 해제 학생', 'student'::public.profile_type, '260002', null::smallint,
       31::smallint, 'male'::public.profile_gender,
       'international'::public.profile_academic_track, null::text,
-      '2009-03-01'::date, null::smallint
+      '2009-03-01'::date, null::smallint, current_setting('test.terms_version')::date
     )$$,
   'an unblocked user can edit and resubmit'
 );

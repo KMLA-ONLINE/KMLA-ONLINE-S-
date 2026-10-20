@@ -5,7 +5,9 @@ import {
   AuthCard,
   getProfileDestination,
   loadAuthState,
+  needsTermsAgreement,
   signOut,
+  TermsAgreementDialog,
 } from "~/features/auth";
 import {
   DeferredAdminContactList,
@@ -68,6 +70,11 @@ export default function PendingPage({ loaderData }: Route.ComponentProps) {
           prompt="승인이 너무 오래 걸리나요?"
         />
       </div>
+      {/* 약관 시행 전에 신청해 승인을 기다리는 사람도 동의를 받는다. */}
+      <TermsAgreementDialog
+        open={needsTermsAgreement(profile)}
+        onAgreed={() => revalidator.revalidate()}
+      />
     </AuthCard>
   );
 }

@@ -34,6 +34,7 @@ import {
 } from "~/shared/ui/dialog";
 import { Input } from "~/shared/ui/input";
 import { Spinner } from "~/shared/ui/spinner";
+import { canSendToConversation } from "~/features/messaging/model/system-message";
 
 /** 운영체제 공유 시트를 여는 기기. 폰·태블릿은 다른 앱으로 바로 이어지고, 데스크톱은 링크 복사가 더 빠르다. */
 const NATIVE_SHARE_QUERY = "(hover: none) and (pointer: coarse)";
@@ -157,10 +158,11 @@ export function SharePostDialog({
   const filter = query.trim().toLowerCase();
   const recent = (conversations.data ?? []).filter(
     (conversation) =>
-      filter === "" ||
-      [conversation.name, conversationProfileName(conversation)].some((name) =>
-        name.toLowerCase().includes(filter),
-      ),
+      canSendToConversation(conversation) &&
+      (filter === "" ||
+        [conversation.name, conversationProfileName(conversation)].some(
+          (name) => name.toLowerCase().includes(filter),
+        )),
   );
   const isChosen = (key: string) => selected.some((item) => item.key === key);
   const full = selected.length >= SEND_TARGET_LIMIT;

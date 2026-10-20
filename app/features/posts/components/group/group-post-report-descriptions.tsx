@@ -25,9 +25,12 @@ export function GroupPostReportDescriptions({
 
   const [open, setOpen] = useState(false);
 
-  const [pages, setPages] = useState<GroupPostReportDescriptionPage[]>([]);
+  const [pages, setPages] = useState<
+    { cursorKey: string; page: GroupPostReportDescriptionPage }[]
+  >([]);
 
   const processed = useRef(fetcher.data);
+  const requestedCursorKey = useRef("initial");
 
   useEffect(() => {
     if (!fetcher.data || processed.current === fetcher.data) {
@@ -36,10 +39,22 @@ export function GroupPostReportDescriptions({
 
     processed.current = fetcher.data;
 
-    setPages((current) => [...current, fetcher.data!]);
+    const cursorKey = requestedCursorKey.current;
+    setPages((current) => {
+      const existingIndex = current.findIndex(
+        (entry) => entry.cursorKey === cursorKey,
+      );
+      if (existingIndex === -1) {
+        return [...current, { cursorKey, page: fetcher.data! }];
+      }
+
+      return current.map((entry, index) =>
+        index === existingIndex ? { cursorKey, page: fetcher.data! } : entry,
+      );
+    });
   }, [fetcher.data]);
 
-  const nextCursor = pages.at(-1)?.nextCursor ?? null;
+  const nextCursor = pages.at(-1)?.page.nextCursor ?? null;
 
   const load = (cursor?: GroupPostReportDescriptionCursor | null) => {
     if (fetcher.state !== "idle") {
@@ -57,6 +72,9 @@ export function GroupPostReportDescriptions({
       next.set("beforeReportId", String(cursor.reportId));
     }
 
+    requestedCursorKey.current = cursor
+      ? `${cursor.createdAt}:${cursor.reportId}`
+      : "initial";
     void fetcher.load(`/groups/report-page?${next}`);
   };
 
@@ -70,7 +88,7 @@ export function GroupPostReportDescriptions({
     }
   };
 
-  const descriptions = pages.flatMap((page) => page.descriptions);
+  const descriptions = pages.flatMap(({ page }) => page.descriptions);
 
   // 토글과 펼친 목록을 형제로 내보낸다. 부모(신고 카드 footer)가 `flex flex-wrap`이므로
   // 목록은 `order-last basis-full`로 다른 액션 아래 한 줄을 통째로 차지한다.

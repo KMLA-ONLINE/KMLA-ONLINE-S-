@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   reviewApplications: vi.fn(),
+  rejectApplication: vi.fn(),
   setAppAdmin: vi.fn(),
   reauthenticateWithPassword: vi.fn(),
   suspendProfile: vi.fn(),
@@ -23,12 +24,16 @@ vi.mock("~/features/admin", () => ({
   listApplications: vi.fn(),
   listRoster: vi.fn(),
   liftSuspension: mocks.liftSuspension,
-  reauthenticateWithPassword: mocks.reauthenticateWithPassword,
   RosterScreen: () => null,
   suspendProfile: mocks.suspendProfile,
   reviewApplications: mocks.reviewApplications,
+  rejectApplication: mocks.rejectApplication,
   setAppAdmin: mocks.setAppAdmin,
   unblockApplication: vi.fn(),
+}));
+
+vi.mock("~/features/auth", () => ({
+  reauthenticateWithPassword: mocks.reauthenticateWithPassword,
 }));
 
 vi.mock("~/features/app-shell", async (importOriginal) => ({
@@ -166,5 +171,39 @@ describe("admin route actions", () => {
     } as never);
     expect(mocks.reauthenticateWithPassword).toHaveBeenCalledWith("pw");
     expect(mocks.liftSuspension).toHaveBeenCalledWith(12);
+  });
+
+  it("rejects exactly one application with its reason", async () => {
+    await expect(
+      approvalsAction({
+        request: postRequest({
+          intent: "reject",
+          profileId: "12",
+          reason: "기수와 학번이 맞지 않습니다.",
+        }),
+      } as never),
+    ).resolves.toMatchObject({ data: { ok: true } });
+    expect(mocks.rejectApplication).toHaveBeenCalledWith(
+      12,
+      "기수와 학번이 맞지 않습니다.",
+    );
+  });
+
+  it("does not reject several applications at once", async () => {
+    const form = new FormData();
+    form.set("intent", "reject");
+    form.append("profileId", "12");
+    form.append("profileId", "13");
+    form.set("reason", "기수와 학번이 맞지 않습니다.");
+
+    await expect(
+      approvalsAction({
+        request: new Request("http://localhost/admin", {
+          method: "POST",
+          body: form,
+        }),
+      } as never),
+    ).resolves.toMatchObject({ init: { status: 400 } });
+    expect(mocks.rejectApplication).not.toHaveBeenCalled();
   });
 });

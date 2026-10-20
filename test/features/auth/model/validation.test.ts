@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   hasErrors,
+  readProfileForm,
   validateEmail,
   validateOtpCode,
   validatePassword,
@@ -48,16 +49,59 @@ describe("auth validation", () => {
     expect(validateProfileForm(STUDENT)).toEqual({});
   });
 
-  it("requires student academic fields", () => {
+  it("requires a student's number and cohort", () => {
     const errors = validateProfileForm({
       ...STUDENT,
       studentNumber: "24A001",
-      academicTrack: "",
+      cohort: "",
     });
 
     expect(errors.studentNumber).toMatch(/숫자 6자리/);
-    expect(errors.academicTrack).toBeDefined();
+    expect(errors.cohort).toBeDefined();
     expect(hasErrors(errors)).toBe(true);
+  });
+
+  // 개인정보 처리방침상 생년월일·성별·계열·전화번호는 선택 정보다.
+  it("lets a student leave the optional fields empty", () => {
+    expect(
+      validateProfileForm({
+        ...STUDENT,
+        birthday: "",
+        gender: "",
+        academicTrack: "",
+        phoneNumber: "",
+      }),
+    ).toEqual({});
+  });
+
+  // 선택 정보라도 고르다 만 생년월일을 빈 값으로 저장하면 사용자는 지워진 줄 모른다.
+  it("rejects a birthday with only some parts chosen", () => {
+    const formData = new FormData();
+    formData.set("name", STUDENT.name);
+    formData.set("type", "student");
+    formData.set("studentNumber", STUDENT.studentNumber);
+    formData.set("cohort", STUDENT.cohort);
+    formData.set("birthdayYear", "2007");
+
+    expect(validateProfileForm(readProfileForm(formData)).birthday).toBe(
+      "생년월일을 모두 선택하거나 모두 비워 주세요.",
+    );
+  });
+
+  it("asks an alumnus only for name and cohort", () => {
+    expect(
+      validateProfileForm({
+        ...STUDENT,
+        type: "alumni",
+        studentNumber: "",
+        classNo: "",
+        birthday: "",
+        gender: "",
+        academicTrack: "",
+        phoneNumber: "",
+        dormRoom: "",
+      }),
+    ).toEqual({});
   });
 
   it("does not require academic fields for teachers", () => {

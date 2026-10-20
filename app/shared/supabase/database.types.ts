@@ -1363,6 +1363,8 @@ export type Database = {
           status_updated_by: number | null
           student_number: string | null
           submitted_at: string
+          terms_agreed_at: string | null
+          terms_version: string | null
           type: Database["public"]["Enums"]["profile_type"]
           updated_at: string
         }
@@ -1397,6 +1399,8 @@ export type Database = {
           status_updated_by?: number | null
           student_number?: string | null
           submitted_at?: string
+          terms_agreed_at?: string | null
+          terms_version?: string | null
           type: Database["public"]["Enums"]["profile_type"]
           updated_at?: string
         }
@@ -1431,6 +1435,8 @@ export type Database = {
           status_updated_by?: number | null
           student_number?: string | null
           submitted_at?: string
+          terms_agreed_at?: string | null
+          terms_version?: string | null
           type?: Database["public"]["Enums"]["profile_type"]
           updated_at?: string
         }
@@ -1696,9 +1702,11 @@ export type Database = {
           cohort: number
           gender: Database["public"]["Enums"]["profile_gender"]
           is_returning_student: boolean
+          last_rejection_reason: string
           name: string
           profile_id: number
           profile_type: Database["public"]["Enums"]["profile_type"]
+          rejection_count: number
           student_number: string
           submitted_at: string
           total_count: number
@@ -1736,6 +1744,14 @@ export type Database = {
           profile_type: Database["public"]["Enums"]["profile_type"]
           pub_id: string
           suspension_expires_at: string
+        }[]
+      }
+      admin_reject_application: {
+        Args: { p_profile_id: number; p_reason: string }
+        Returns: {
+          profile_id: number
+          status: Database["public"]["Enums"]["profile_status"]
+          status_updated_at: string
         }[]
       }
       admin_replace_contacts: { Args: { p_contacts: Json }; Returns: undefined }
@@ -1824,6 +1840,7 @@ export type Database = {
           status_updated_at: string
         }[]
       }
+      agree_to_terms: { Args: { p_version: string }; Returns: undefined }
       approve_group_join_request: {
         Args: { p_group_id: string; p_request_id: string }
         Returns: undefined
@@ -2240,6 +2257,8 @@ export type Database = {
           status_updated_by: number | null
           student_number: string | null
           submitted_at: string
+          terms_agreed_at: string | null
+          terms_version: string | null
           type: Database["public"]["Enums"]["profile_type"]
           updated_at: string
         }
@@ -2352,6 +2371,13 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      get_my_application_rejection: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          reason: string
+          rejected_at: string
+        }[]
+      }
       get_my_group_anonymous_activity_restriction: {
         Args: { p_group_id: string }
         Returns: {
@@ -2410,6 +2436,8 @@ export type Database = {
           status_updated_by: number | null
           student_number: string | null
           submitted_at: string
+          terms_agreed_at: string | null
+          terms_version: string | null
           type: Database["public"]["Enums"]["profile_type"]
           updated_at: string
         }[]
@@ -3066,7 +3094,7 @@ export type Database = {
         Returns: boolean
       }
       mark_group_posts_visited: {
-        Args: { p_group_id: string }
+        Args: { p_group_id: string; p_seen_until?: string }
         Returns: undefined
       }
       mark_my_notification_read: {
@@ -3279,6 +3307,8 @@ export type Database = {
           status_updated_by: number | null
           student_number: string | null
           submitted_at: string
+          terms_agreed_at: string | null
+          terms_version: string | null
           type: Database["public"]["Enums"]["profile_type"]
           updated_at: string
         }
@@ -3499,6 +3529,7 @@ export type Database = {
           p_name: string
           p_phone_number?: string
           p_student_number?: string
+          p_terms_version?: string
           p_type: Database["public"]["Enums"]["profile_type"]
         }
         Returns: {
@@ -3532,6 +3563,8 @@ export type Database = {
           status_updated_by: number | null
           student_number: string | null
           submitted_at: string
+          terms_agreed_at: string | null
+          terms_version: string | null
           type: Database["public"]["Enums"]["profile_type"]
           updated_at: string
         }
@@ -3660,6 +3693,8 @@ export type Database = {
           status_updated_by: number | null
           student_number: string | null
           submitted_at: string
+          terms_agreed_at: string | null
+          terms_version: string | null
           type: Database["public"]["Enums"]["profile_type"]
           updated_at: string
         }
@@ -3708,6 +3743,7 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      withdraw_account: { Args: Record<PropertyKey, never>; Returns: undefined }
     }
     Enums: {
       app_role: "member" | "admin"
@@ -3750,6 +3786,7 @@ export type Database = {
         | "anonymous_activity_restricted"
         | "application_submitted"
         | "account_approved"
+        | "account_rejected"
         | "account_blocked"
         | "account_unblocked"
         | "app_admin_granted"
@@ -3956,6 +3993,7 @@ export const Constants = {
         "anonymous_activity_restricted",
         "application_submitted",
         "account_approved",
+        "account_rejected",
         "account_blocked",
         "account_unblocked",
         "app_admin_granted",

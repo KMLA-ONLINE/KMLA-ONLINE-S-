@@ -2,8 +2,15 @@ import type { Database } from "~/shared/supabase/database.types";
 
 type Functions = Database["public"]["Functions"];
 
-export type AdminApplication =
+type RawAdminApplication =
   Functions["admin_list_applications"]["Returns"][number];
+/** 반려된 적이 없으면 직전 반려 사유가 비어 있다. 생성 타입은 `returns table` 컬럼을 non-null로 적는다. */
+export type AdminApplication = Omit<
+  RawAdminApplication,
+  "last_rejection_reason"
+> & {
+  last_rejection_reason: RawAdminApplication["last_rejection_reason"] | null;
+};
 export type AcceptedUser =
   Functions["admin_list_accepted_users"]["Returns"][number];
 export type AdminMember = Functions["admin_list_members"]["Returns"][number];
@@ -100,6 +107,12 @@ export function getAdminErrorMessage(error: unknown): string {
   }
   if (message.includes("profile is not suspended")) {
     return "정지 중인 사용자가 아닙니다.";
+  }
+  if (
+    message.includes("pending application not found") ||
+    message.includes("all applications must be pending")
+  ) {
+    return "이미 처리된 신청입니다. 목록을 새로고침해 주세요.";
   }
   if (message.includes("reason must be 5 to 300 characters")) {
     return "사유를 5~300자로 입력해 주세요.";

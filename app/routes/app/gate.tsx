@@ -5,9 +5,12 @@ import {
   appShellKeys,
   loadShellData,
   type ShellData,
+  refreshShellProfile,
   UnreadBadgeSync,
+  useAppShell,
 } from "~/features/app-shell";
 import type { Route } from "./+types/gate";
+import { needsTermsAgreement, TermsAgreementDialog } from "~/features/auth";
 import { MessagingSync } from "~/features/messaging";
 import { notificationBadgeQuery } from "~/features/notifications";
 import { NotificationPermissionPrompt } from "~/features/notifications/components/notification-permission-prompt";
@@ -103,6 +106,20 @@ export function shouldRevalidate() {
   return false;
 }
 
+/**
+ * 약관 시행 전에 가입한 회원만 본다. 게이트 loader 값은 첫 진입 뒤로 그대로라, 동의 여부는 동의 뒤
+ * `refreshShellProfile()`이 갱신하는 셸 프로필에서 읽는다.
+ */
+function ShellTermsAgreement() {
+  const { profile } = useAppShell();
+  return (
+    <TermsAgreementDialog
+      open={needsTermsAgreement(profile)}
+      onAgreed={refreshShellProfile}
+    />
+  );
+}
+
 export default function Shell({ loaderData }: Route.ComponentProps) {
   return (
     <AppShellProvider value={loaderData}>
@@ -111,6 +128,7 @@ export default function Shell({ loaderData }: Route.ComponentProps) {
       <NotificationPermissionPrompt profileId={loaderData.profile.id} />
       <MessagingSync profileId={loaderData.profile.id} />
       <UnreadBadgeSync />
+      <ShellTermsAgreement />
     </AppShellProvider>
   );
 }

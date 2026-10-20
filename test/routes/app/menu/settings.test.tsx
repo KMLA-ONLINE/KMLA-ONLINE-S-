@@ -35,6 +35,7 @@ function renderSettings(role: ProfileRole = "member") {
       type: "student",
       status: "accepted",
       avatar_path: null,
+      terms_agreed_at: "2026-10-20T00:00:00+00:00",
     },
   } satisfies ShellData;
   return renderRoute(

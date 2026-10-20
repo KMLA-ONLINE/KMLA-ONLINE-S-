@@ -41,7 +41,8 @@ CREATE OR REPLACE FUNCTION "private"."can_access_feed_post"("p_post_id" "uuid", 
                 private.feed_profile_cohorts(p_profile_id)
                   && private.feed_profile_cohorts(post.timeline_profile_id)
               )
-              and viewer.gender = timeline.gender
+              -- 성별은 선택 정보다. 어느 한쪽이 비워 두었으면 기수만으로 판정한다.
+              and (viewer.gender is null or timeline.gender is null or viewer.gender = timeline.gender)
             )
           )
           and (
@@ -50,7 +51,7 @@ CREATE OR REPLACE FUNCTION "private"."can_access_feed_post"("p_post_id" "uuid", 
             or timeline.type = 'teacher'
             or (
               viewer.cohort = timeline.cohort
-              and viewer.gender = timeline.gender
+              and (viewer.gender is null or timeline.gender is null or viewer.gender = timeline.gender)
             )
           )
         )
@@ -308,7 +309,7 @@ begin
             author.profile_id = post.timeline_profile_id
             or (
               (viewer_cohorts && timeline_cohorts.cohorts)
-              and viewer.gender = timeline.gender
+              and (viewer.gender is null or timeline.gender is null or viewer.gender = timeline.gender)
             )
           )
           and (
@@ -317,7 +318,7 @@ begin
             or timeline.type = 'teacher'
             or (
               viewer.cohort = timeline.cohort
-              and viewer.gender = timeline.gender
+              and (viewer.gender is null or timeline.gender is null or viewer.gender = timeline.gender)
             )
           )
         )

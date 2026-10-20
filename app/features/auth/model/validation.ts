@@ -2,7 +2,7 @@ import type {
   FieldErrors,
   ProfileFormValues,
 } from "~/features/auth/model/types";
-import { readDateField } from "~/shared/lib/date-field";
+import { isCompleteDate, readDateField } from "~/shared/lib/date-field";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+?[0-9 -]{8,20}$/;
@@ -88,6 +88,10 @@ export function validateProfileForm(values: ProfileFormValues): FieldErrors {
     errors.studentNumber = "학번은 숫자 6자리여야 합니다.";
   }
 
+  if (values.birthday && !isCompleteDate(values.birthday)) {
+    errors.birthday = "생년월일을 모두 선택하거나 모두 비워 주세요.";
+  }
+
   if (values.phoneNumber && !PHONE_PATTERN.test(values.phoneNumber)) {
     errors.phoneNumber = "전화번호 형식을 확인해 주세요.";
   }
@@ -98,16 +102,11 @@ export function validateProfileForm(values: ProfileFormValues): FieldErrors {
 
   if (values.type === "student") {
     if (!values.studentNumber) errors.studentNumber = "학번을 입력해 주세요.";
-    if (!values.birthday) errors.birthday = "생년월일을 입력해 주세요.";
     if (!values.cohort) errors.cohort = "기수를 입력해 주세요.";
-    if (!values.gender) errors.gender = "성별을 선택해 주세요.";
-    if (!values.academicTrack) errors.academicTrack = "계열을 선택해 주세요.";
   }
 
   if (values.type === "alumni") {
     if (!values.cohort) errors.cohort = "기수를 입력해 주세요.";
-    if (!values.gender) errors.gender = "성별을 선택해 주세요.";
-    if (!values.academicTrack) errors.academicTrack = "계열을 선택해 주세요.";
   }
 
   return Object.fromEntries(

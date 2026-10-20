@@ -7,6 +7,7 @@ vi.mock("~/features/auth/data/mutations", async (importOriginal) => ({
   submitProfile,
 }));
 
+import { TERMS_VERSION } from "~/features/auth";
 import { clientAction } from "~/routes/auth/setup";
 
 const values = {
@@ -22,9 +23,10 @@ const values = {
   type: "student",
 };
 
-function submit() {
+function submit(fields: Record<string, string> = { terms: TERMS_VERSION }) {
   const body = new FormData();
   for (const [key, value] of Object.entries(values)) body.set(key, value);
+  for (const [key, value] of Object.entries(fields)) body.set(key, value);
   const request = new Request("http://localhost/setup", {
     method: "POST",
     body,
@@ -56,5 +58,27 @@ describe("profile setup submission", () => {
       studentNumber:
         "이미 등록된 학번입니다. 학번을 확인하고, 맞다면 관리자에게 문의해 주세요.",
     });
+  });
+
+  // 차단이 풀려 다시 제출하는 사람도 가입 신청이므로 약관에 동의해야 한다.
+  it("does not submit without agreeing to the terms", async () => {
+    const result = (await submit({})) as {
+      data: { errors: Record<string, string> };
+    };
+
+    expect(result.data.errors.terms).toBeTruthy();
+    expect(submitProfile).not.toHaveBeenCalled();
+  });
+
+  it("submits the profile with the agreed terms version", async () => {
+    submitProfile.mockResolvedValueOnce(undefined);
+
+    const response = await submit().catch((error: unknown) => error);
+
+    expect((response as Response).headers.get("Location")).toBe("/pending");
+    expect(submitProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "홍길동" }),
+      TERMS_VERSION,
+    );
   });
 });

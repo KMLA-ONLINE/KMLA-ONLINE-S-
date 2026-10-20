@@ -5,11 +5,14 @@ import type { ProfileFormValues } from "~/features/auth/model/types";
  * 비밀번호는 담지 않는다. 다시 로드돼 돌아오면 가입 화면이 인증 단계에서 비밀번호를 다시 받는다.
  * 메일 앱을 다녀오며 리로드돼도 인증 단계로 복귀시키는 게 목적이다.
  */
-const SIGNUP_DRAFT_KEY = "kmla-online:pending-signup:v2";
+// v3부터 약관 동의를 담는다. 동의 없이 저장된 이전 초안은 읽지 않고 처음부터 다시 받는다.
+const SIGNUP_DRAFT_KEY = "kmla-online:pending-signup:v3";
 
 export interface SignupDraft {
   email: string;
   values: ProfileFormValues;
+  /** 약관 단계에서 동의한 판. 프로필 제출 때 그대로 보낸다. */
+  termsVersion: string;
 }
 
 export function getSignupDraft(): SignupDraft | null {
@@ -18,7 +21,7 @@ export function getSignupDraft(): SignupDraft | null {
 
   try {
     const parsed = JSON.parse(stored) as SignupDraft;
-    if (!parsed?.email || !parsed.values) return null;
+    if (!parsed?.email || !parsed.values || !parsed.termsVersion) return null;
     return parsed;
   } catch {
     return null;

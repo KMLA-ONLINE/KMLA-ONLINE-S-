@@ -3,7 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
 import { GroupSummaryRow } from "~/features/groups/components/group-summary-row";
-import type { GroupHomeItem } from "~/features/groups/model/types";
+import type {
+  GroupHomeItem,
+  GroupNewPostCounts,
+} from "~/features/groups/model/types";
 import { Button } from "~/shared/ui/button";
 import { cn } from "~/shared/lib/utils";
 
@@ -12,10 +15,12 @@ const GROUP_HOME_TAB_STORAGE_KEY = "kmla-online:group-home-tab";
 
 export function GroupHomeScreen({
   groups,
+  newPostCounts,
   isTeacher,
   profileId,
 }: {
   groups: GroupHomeItem[];
+  newPostCounts: GroupNewPostCounts;
   isTeacher: boolean;
   profileId: number;
 }) {
@@ -57,6 +62,7 @@ export function GroupHomeScreen({
         <GroupRows
           title="내 그룹"
           groups={myGroups}
+          newPostCounts={newPostCounts}
           profileId={profileId}
           emptyText="아직 내 그룹이 없습니다."
         />
@@ -139,6 +145,7 @@ export function GroupHomeScreen({
       {tab === "official" ? (
         <GroupRows
           groups={officialGroups}
+          newPostCounts={newPostCounts}
           profileId={profileId}
           emptyText="표시할 공식 그룹이 없습니다."
         />
@@ -147,6 +154,7 @@ export function GroupHomeScreen({
           <GroupRows
             title="내 그룹"
             groups={myGroups}
+            newPostCounts={newPostCounts}
             profileId={profileId}
             emptyText="아직 참여 중인 비공식 그룹이 없습니다."
           />
@@ -200,11 +208,13 @@ function DiscoverEntry() {
 function GroupRows({
   title,
   groups,
+  newPostCounts,
   profileId,
   emptyText,
 }: {
   title?: string;
   groups: GroupHomeItem[];
+  newPostCounts: GroupNewPostCounts;
   profileId: number;
   emptyText: string;
 }) {
@@ -224,6 +234,7 @@ function GroupRows({
             <GroupSummaryRow
               key={group.group_id}
               group={group}
+              newPostCount={newPostCounts[group.group_id] ?? 0}
               profileId={profileId}
             />
           ))}

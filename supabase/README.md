@@ -36,6 +36,10 @@ Files run in lexicographic order. Add new files with a number that follows their
 
 Never edit a deployed migration.
 
+## Terms agreement accounts
+
+`seed.sql` adds two alumni accounts without a terms agreement, to reproduce members who joined before the terms took effect (spec §4.7): `legacy@kmla.hs.kr` (accepted, sees the dialog in the app shell) and `legacy-pending@kmla.hs.kr` (pending, sees it on `/pending`), both with password `password123`. Every other seed profile is marked as agreed so E2E is not blocked by the dialog. Agreeing records the agreement; `npm run db:reset` clears it again.
+
 ## Bulk fake data
 
 `npm run db:fake` loads `dev/fake-data.sql` into the local database only, for checking loading states, pagination, and long lists. It adds 60 people, 12 groups, about 500 posts, a post with 190 comments and 60 reactions, 220 notifications, and 33 conversations (one 1:1 with 400 messages for older-page loading, a 61-member group, a muted group, with unread messages, replies, reactions and pins), all addressed to the seed account `student@kmla.hs.kr` / `password123`. Rerunning it adds nothing new. `npm run db:reset` removes it. It is kept out of `seed.sql` because pgTAP asserts exact row sets from the seed: run `npm run db:reset` before `npm run test:db`.

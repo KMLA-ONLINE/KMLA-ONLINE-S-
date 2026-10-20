@@ -82,33 +82,39 @@ function dumpFailures(results) {
   }
 }
 
-const startedAt = Date.now();
+async function main() {
+  const startedAt = Date.now();
 
-console.error("▶ typegen");
-const typegen = await run({ name: "typegen", script: "typegen" });
-if (!typegen.ok) {
-  dumpFailures([typegen]);
-  console.error("\ntypegen이 실패해 나머지는 돌리지 않았습니다.");
-  process.exit(1);
-}
-
-console.error(`▶ ${PARALLEL.map((task) => task.name).join(", ")}`);
-const results = await Promise.all(PARALLEL.map(run));
-
-if (!staticOnly) {
-  if (results.every((result) => result.ok)) {
-    console.error(`▶ ${TEST.name}`);
-    results.push(await run(TEST));
-  } else {
-    console.error("▶ 정적 검사가 실패해 vitest는 돌리지 않았습니다.");
+  console.error("▶ typegen");
+  const typegen = await run({ name: "typegen", script: "typegen" });
+  if (!typegen.ok) {
+    dumpFailures([typegen]);
+    console.error("\ntypegen이 실패해 나머지는 돌리지 않았습니다.");
+    return 1;
   }
+
+  console.error(`▶ ${PARALLEL.map((task) => task.name).join(", ")}`);
+  const results = await Promise.all(PARALLEL.map(run));
+
+  if (!staticOnly) {
+    if (results.every((result) => result.ok)) {
+      console.error(`▶ ${TEST.name}`);
+      results.push(await run(TEST));
+    } else {
+      console.error("▶ 정적 검사가 실패해 vitest는 돌리지 않았습니다.");
+    }
+  }
+
+  dumpFailures(results);
+
+  const failed = results.filter((result) => !result.ok);
+  console.error(
+    `\n  ${failed.length === 0 ? "통과" : `실패 ${failed.length}건: ${failed.map((result) => result.name).join(", ")}`} · 전체 ${seconds(Date.now() - startedAt)}`,
+  );
+  return failed.length === 0 ? 0 : 1;
 }
 
-dumpFailures(results);
-
-const failed = results.filter((result) => !result.ok);
-console.error(
-  `\n  ${failed.length === 0 ? "통과" : `실패 ${failed.length}건: ${failed.map((result) => result.name).join(", ")}`} · 전체 ${seconds(Date.now() - startedAt)}`,
-);
-
-process.exit(failed.length === 0 ? 0 : 1);
+// `process.exit()`를 부르지 않는다. CI의 stderr는 파이프라 Node가 비동기로 쓰고, 즉시 종료하면
+// 파이프 버퍼(64KiB)에 들어가지 못한 실패 출력의 뒷부분(vitest의 실패 상세와 요약)을 버린다.
+// 종료 코드만 정해 두면 Node가 남은 출력을 다 쓴 뒤에 끝난다.
+process.exitCode = await main();
