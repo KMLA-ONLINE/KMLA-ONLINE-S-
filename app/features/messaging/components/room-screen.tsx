@@ -1918,6 +1918,9 @@ function ComposerShell({
   const overLimit = draftLength > MESSAGE_MAX_LENGTH;
   const mentionLimitReason = mentionCountReason(prepared.mentionPubIds.length);
   const cannotSend = overLimit || mentionLimitReason !== null;
+  const limitReason = overLimit
+    ? `메시지는 ${MESSAGE_MAX_LENGTH.toLocaleString("ko-KR")}자까지 쓸 수 있습니다. (${draftLength.toLocaleString("ko-KR")}/${MESSAGE_MAX_LENGTH.toLocaleString("ko-KR")})`
+    : mentionLimitReason;
   const attachmentActionsCollapsed = hasDraft && !attachmentActionsExpanded;
 
   function changeDraft(value: string) {
@@ -2196,127 +2199,137 @@ function ComposerShell({
             <ChevronRightIcon aria-hidden className="size-5" />
           </Button>
         ) : null}
-        <div className="flex min-h-10 min-w-0 flex-1 items-end gap-2 rounded-3xl bg-muted py-2 pr-3 pl-4">
-          <div className="grid min-w-0 flex-1">
-            <MentionHighlight
-              text={draft}
-              ranges={mentionInput.mentionRanges}
-              inputRef={textareaRef}
-              className={MESSAGE_INPUT_TEXT_CLASS}
-            />
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              value={draft}
-              aria-label="메시지 입력"
-              placeholder="메시지 입력"
-              aria-autocomplete={mentionParticipants ? "list" : undefined}
-              aria-controls={
-                mentionSuggestions.open ? mentionListId : undefined
-              }
-              aria-activedescendant={
-                mentionSuggestions.open
-                  ? mentionOptionId(
-                      mentionListId,
-                      mentionSuggestions.activeIndex,
-                    )
-                  : undefined
-              }
-              className={cn(
-                // 너비를 고정해 `field-sizing-content`가 높이만 맞추게 한다. 너비까지 글에 맞추면 키를 칠
-                // 때마다 바깥 레이아웃을 다시 잡아, 대화와 목록이 함께 놓이는 데스크톱에서 입력이 늦게 보인다.
-                "col-start-1 row-start-1 field-sizing-content min-h-6 w-full min-w-0 resize-none overflow-y-auto bg-transparent text-foreground outline-none placeholder:text-muted-foreground",
-                MESSAGE_INPUT_TEXT_CLASS,
-                mentionInput.mentionRanges.length > 0 &&
-                  MENTION_HIGHLIGHT_INPUT_CLASS,
-              )}
-              onChange={(event) => {
-                const element = event.currentTarget;
-                mentionSuggestions.onTextChange(
-                  draft,
-                  element.value,
-                  element.selectionStart,
-                  mentionInput.composing.current,
-                );
-                mentionInput.handleChange(element);
-              }}
-              onSelect={(event) => {
-                // 조합 중에는 캐럿이 조합하던 글자를 따라 움직일 뿐이다. 조합이 끝나면 다시 본다.
-                if (mentionInput.composing.current) return;
-                mentionSuggestions.onCaretMove(
-                  event.currentTarget.value,
-                  event.currentTarget.selectionStart,
-                );
-              }}
-              onPaste={(event) => {
-                if (!canStage) return;
-                const images = clipboardImageFiles(event.clipboardData);
-                if (images.length === 0) return;
-                event.preventDefault();
-                onStageFiles(images);
-              }}
-              onCompositionStart={mentionInput.handleCompositionStart}
-              onCompositionEnd={(event) => {
-                const element = event.currentTarget;
-                mentionInput.handleCompositionEnd(element);
-                // 조합 중에는 맞는 후보가 없어도 닫지 않았다. 확정한 글자로 다시 찾는다.
-                mentionSuggestions.onCaretMove(
-                  element.value,
-                  element.selectionStart,
-                );
-              }}
-              onKeyDown={(event) => {
-                const composingText =
-                  mentionInput.composing.current ||
-                  event.nativeEvent.isComposing ||
-                  event.keyCode === 229;
-                if (mentionSuggestions.open && !composingText) {
-                  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-                    event.preventDefault();
-                    mentionSuggestions.move(event.key === "ArrowDown" ? 1 : -1);
-                    return;
-                  }
-                  // 보내는 `Enter`만 고른다. 줄바꿈 `Enter`는 줄이 바뀌어 목록이 닫힌다.
-                  const enter = isSendEnter(event);
-                  // `@`만 치고 고른 것이 없으면 목록을 닫고 평소처럼 보낸다.
-                  if (enter && !mentionSuggestions.enterSelects) {
-                    mentionSuggestions.close();
-                  } else if (event.key === "Tab" || enter) {
-                    event.preventDefault();
-                    selectMention(
-                      mentionSuggestions.suggestions[
-                        mentionSuggestions.activeIndex
-                      ],
-                    );
-                    return;
-                  }
-                  // 수정이나 답장보다 목록을 먼저 닫는다.
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    mentionSuggestions.close();
-                    return;
-                  }
+        {/* 경고는 입력창 바로 위에 두고, 둥근 입력창 안 글자 시작선(pl-4)에 맞춘다. 첨부 버튼이 접혀도 함께 움직인다. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          {limitReason ? (
+            <p role="alert" className="pl-4 text-xs text-destructive">
+              {limitReason}
+            </p>
+          ) : null}
+          <div className="flex min-h-10 min-w-0 flex-1 items-end gap-2 rounded-3xl bg-muted py-2 pr-3 pl-4">
+            <div className="grid min-w-0 flex-1">
+              <MentionHighlight
+                text={draft}
+                ranges={mentionInput.mentionRanges}
+                inputRef={textareaRef}
+                className={MESSAGE_INPUT_TEXT_CLASS}
+              />
+              <textarea
+                ref={textareaRef}
+                rows={1}
+                value={draft}
+                aria-label="메시지 입력"
+                placeholder="메시지 입력"
+                aria-autocomplete={mentionParticipants ? "list" : undefined}
+                aria-controls={
+                  mentionSuggestions.open ? mentionListId : undefined
                 }
-                // 조합 중 Esc는 IME가 조합을 취소하는 키다. 수정이나 답장을 취소하지 않는다.
-                if (
-                  event.key === "Escape" &&
-                  (editTarget ?? replyTarget) &&
-                  !composingText
-                ) {
+                aria-activedescendant={
+                  mentionSuggestions.open
+                    ? mentionOptionId(
+                        mentionListId,
+                        mentionSuggestions.activeIndex,
+                      )
+                    : undefined
+                }
+                className={cn(
+                  // 너비를 고정해 `field-sizing-content`가 높이만 맞추게 한다. 너비까지 글에 맞추면 키를 칠
+                  // 때마다 바깥 레이아웃을 다시 잡아, 대화와 목록이 함께 놓이는 데스크톱에서 입력이 늦게 보인다.
+                  "col-start-1 row-start-1 field-sizing-content min-h-6 w-full min-w-0 resize-none overflow-y-auto bg-transparent text-foreground outline-none placeholder:text-muted-foreground",
+                  MESSAGE_INPUT_TEXT_CLASS,
+                  mentionInput.mentionRanges.length > 0 &&
+                    MENTION_HIGHLIGHT_INPUT_CLASS,
+                )}
+                onChange={(event) => {
+                  const element = event.currentTarget;
+                  mentionSuggestions.onTextChange(
+                    draft,
+                    element.value,
+                    element.selectionStart,
+                    mentionInput.composing.current,
+                  );
+                  mentionInput.handleChange(element);
+                }}
+                onSelect={(event) => {
+                  // 조합 중에는 캐럿이 조합하던 글자를 따라 움직일 뿐이다. 조합이 끝나면 다시 본다.
+                  if (mentionInput.composing.current) return;
+                  mentionSuggestions.onCaretMove(
+                    event.currentTarget.value,
+                    event.currentTarget.selectionStart,
+                  );
+                }}
+                onPaste={(event) => {
+                  if (!canStage) return;
+                  const images = clipboardImageFiles(event.clipboardData);
+                  if (images.length === 0) return;
                   event.preventDefault();
-                  if (editTarget) onCancelEdit();
-                  else onCancelReply();
-                  return;
-                }
-                // 화면 키보드와 설정을 끈 기기의 Enter는 줄바꿈이다.
-                if (!isSendEnter(event)) return;
-                // Safari는 compositionend를 Enter keydown보다 먼저 보내 isComposing도 false다.
-                // 그 keydown은 keyCode 229로 온다.
-                if (composingText) return;
-                event.preventDefault();
-                sendDraft();
-              }}
-            />
+                  onStageFiles(images);
+                }}
+                onCompositionStart={mentionInput.handleCompositionStart}
+                onCompositionEnd={(event) => {
+                  const element = event.currentTarget;
+                  mentionInput.handleCompositionEnd(element);
+                  // 조합 중에는 맞는 후보가 없어도 닫지 않았다. 확정한 글자로 다시 찾는다.
+                  mentionSuggestions.onCaretMove(
+                    element.value,
+                    element.selectionStart,
+                  );
+                }}
+                onKeyDown={(event) => {
+                  const composingText =
+                    mentionInput.composing.current ||
+                    event.nativeEvent.isComposing ||
+                    event.keyCode === 229;
+                  if (mentionSuggestions.open && !composingText) {
+                    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                      event.preventDefault();
+                      mentionSuggestions.move(
+                        event.key === "ArrowDown" ? 1 : -1,
+                      );
+                      return;
+                    }
+                    // 보내는 `Enter`만 고른다. 줄바꿈 `Enter`는 줄이 바뀌어 목록이 닫힌다.
+                    const enter = isSendEnter(event);
+                    // `@`만 치고 고른 것이 없으면 목록을 닫고 평소처럼 보낸다.
+                    if (enter && !mentionSuggestions.enterSelects) {
+                      mentionSuggestions.close();
+                    } else if (event.key === "Tab" || enter) {
+                      event.preventDefault();
+                      selectMention(
+                        mentionSuggestions.suggestions[
+                          mentionSuggestions.activeIndex
+                        ],
+                      );
+                      return;
+                    }
+                    // 수정이나 답장보다 목록을 먼저 닫는다.
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      mentionSuggestions.close();
+                      return;
+                    }
+                  }
+                  // 조합 중 Esc는 IME가 조합을 취소하는 키다. 수정이나 답장을 취소하지 않는다.
+                  if (
+                    event.key === "Escape" &&
+                    (editTarget ?? replyTarget) &&
+                    !composingText
+                  ) {
+                    event.preventDefault();
+                    if (editTarget) onCancelEdit();
+                    else onCancelReply();
+                    return;
+                  }
+                  // 화면 키보드와 설정을 끈 기기의 Enter는 줄바꿈이다.
+                  if (!isSendEnter(event)) return;
+                  // Safari는 compositionend를 Enter keydown보다 먼저 보내 isComposing도 false다.
+                  // 그 keydown은 keyCode 229로 온다.
+                  if (composingText) return;
+                  event.preventDefault();
+                  sendDraft();
+                }}
+              />
+            </div>
           </div>
         </div>
         <Button
@@ -2365,28 +2378,6 @@ function ComposerShell({
           )}
         </Button>
       </div>
-      {overLimit ? (
-        <p
-          role="alert"
-          className={cn(
-            "mx-auto mt-1 max-w-3xl px-3 text-xs text-destructive",
-            !desktopDetailsOpen && "xl:max-w-none",
-          )}
-        >
-          메시지는 {MESSAGE_MAX_LENGTH.toLocaleString("ko-KR")}자까지 쓸 수
-          있습니다. ({draftLength.toLocaleString("ko-KR")})
-        </p>
-      ) : mentionLimitReason ? (
-        <p
-          role="alert"
-          className={cn(
-            "mx-auto mt-1 max-w-3xl px-3 text-xs text-destructive",
-            !desktopDetailsOpen && "xl:max-w-none",
-          )}
-        >
-          {mentionLimitReason}
-        </p>
-      ) : null}
     </footer>
   );
 }
