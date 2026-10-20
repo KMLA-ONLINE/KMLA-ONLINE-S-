@@ -7,6 +7,7 @@ const { listPostPreviews } = vi.hoisted(() => ({
 vi.mock("~/features/posts/data/queries", () => ({ listPostPreviews }));
 
 import { MessageBubble } from "~/features/messaging/components/message-bubble";
+import { formatMessageTime } from "~/features/messaging/model/message-time";
 import type { ConversationMessage } from "~/features/messaging/model/types";
 import { renderRoute, screen } from "../../../router";
 
@@ -181,5 +182,52 @@ describe("MessageBubble group corners", () => {
     const card = await screen.findByRole("link", { name: /공연 안내/ });
     expect(card).toHaveClass("rounded-tl-md");
     expect(card).not.toHaveClass("rounded-bl-md");
+  });
+});
+
+describe("MessageBubble timestamp", () => {
+  const photo = {
+    id: "p1",
+    kind: "image" as const,
+    mimeType: "image/webp",
+    sizeBytes: 10,
+    width: 10,
+    height: 10,
+    fileName: "p1.webp",
+    objectPath: "c/p1",
+    thumbnailPath: null,
+  };
+  const file = {
+    id: "f1",
+    kind: "file" as const,
+    mimeType: "application/pdf",
+    sizeBytes: 10,
+    width: null,
+    height: null,
+    fileName: "notes.pdf",
+    objectPath: "c/f1",
+    thumbnailPath: null,
+  };
+
+  it.each([
+    ["photo", photo],
+    ["file", file],
+  ])("shows the sent time under an attachment-only %s", (_, attachment) => {
+    const sentAt = "2026-10-15T06:00:00.000Z";
+    renderRoute(() => (
+      <MessageBubble
+        message={sharedMessage({ body: "", sentAt, attachments: [attachment] })}
+        isOwn
+        showTimestamp
+      />
+    ));
+
+    expect(
+      screen.getByText(formatMessageTime(sentAt), { selector: "time" }),
+    ).toHaveAttribute("dateTime", sentAt);
+    // 버블 없이 대화 배경 위에 놓이므로 primary 버블용 밝은 글자색을 쓰지 않는다.
+    expect(
+      screen.getByText(formatMessageTime(sentAt), { selector: "time" }),
+    ).toHaveClass("text-muted-foreground");
   });
 });

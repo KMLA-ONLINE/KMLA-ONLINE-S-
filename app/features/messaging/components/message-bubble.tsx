@@ -70,8 +70,8 @@ export function MessageBubble({
       message.body !== "" ||
       attachments.length === 0);
   const showEdited = Boolean(message.editedAt) && !message.deleted;
-  // 내 메시지의 primary 버블 위에서만 밝은 글자색을 쓴다.
-  const onPrimary = isOwn && !isEmojiOnly && !message.deleted && !sharedPost;
+  // 내 메시지의 primary 버블 위에서만 밝은 글자색을 쓴다. 첨부만 있는 메시지는 글 버블이 없다.
+  const onPrimary = isOwn && hasText && !isEmojiOnly && !message.deleted;
   const replyQuote =
     replyTarget && onViewReply ? (
       <button
@@ -253,6 +253,10 @@ export function MessageBubble({
             {isEmojiOnly ? editedMark : null}
             {timestamp}
           </div>
+        ) : null}
+        {/* 글 버블과 게시물 카드가 없으면 시각을 넣을 자리가 없으므로 첨부 아래에 따로 둔다. */}
+        {!hasText && !sharedPost && timestamp ? (
+          <div className="mt-1">{timestamp}</div>
         ) : null}
       </div>
       {hasReactions ? (
