@@ -1,6 +1,7 @@
 import { BanIcon, ThumbsUpIcon } from "lucide-react";
 import { useRef, type Ref } from "react";
 
+import { groupCornerClass } from "~/features/messaging/components/group-corners";
 import { MessageAttachments } from "~/features/messaging/components/message-attachments";
 import { MessageMention } from "~/features/messaging/components/message-mention";
 import { formatReplyPreview } from "~/features/messaging/model/conversation-preview";
@@ -125,6 +126,15 @@ export function MessageBubble({
     contentKey: `${messageBody}|${showEdited}`,
     minContentRem: replyQuote ? 14 : 0,
   });
+  // 첨부, 게시물 카드(위 답장 인용 띠 포함), 글 버블이 차례로 쌓인 조각이다. 조각끼리, 그리고 묶음의
+  // 앞뒤 메시지와 맞닿는 쪽의 모서리를 덜 둥글게 해 하나로 잇는다.
+  const hasAttachments = attachments.length > 0;
+  const quoteStripJoin = { above: !startsGroup || hasAttachments, below: true };
+  const cardJoin = {
+    above: !startsGroup || hasAttachments || Boolean(replyQuote),
+    below: !endsGroup,
+  };
+  const textJoin = { above: !startsGroup || hasAttachments, below: !endsGroup };
   const reactionCount = [...reactions.values()].reduce(
     (total, count) => total + count,
     0,
@@ -159,24 +169,36 @@ export function MessageBubble({
             "ring-1 ring-primary ring-offset-1 ring-offset-background",
         )}
       >
-        {attachments.length > 0 ? (
+        {hasAttachments ? (
           <MessageAttachments
             attachments={attachments}
             isOwn={isOwn}
             pending={message.pending}
+            join={{
+              above: !startsGroup,
+              // 배경 없는 이모지 글은 맞닿을 버블이 아니다.
+              below:
+                !endsGroup || (hasText && !isEmojiOnly) || Boolean(sharedPost),
+            }}
           />
         ) : null}
         {sharedPost ? (
           <>
             {/* 답장 인용은 카드 위 옅은 띠에 둔다. 카드 안에 넣으면 카드 전체가 링크라 누를 곳이 겹친다. */}
             {replyQuote ? (
-              <div className="mb-1 w-fit max-w-full rounded-2xl bg-muted px-3.5 pt-2 pb-0.5">
+              <div
+                className={cn(
+                  "mb-0.5 w-fit max-w-full rounded-2xl bg-muted px-3.5 pt-2 pb-0.5",
+                  groupCornerClass(isOwn, quoteStripJoin),
+                )}
+              >
                 {replyQuote}
               </div>
             ) : null}
             <PostPreviewCard
               postId={sharedPost.postId}
               path={sharedPost.path}
+              className={groupCornerClass(isOwn, cardJoin)}
             />
             {editedMark || timestamp ? (
               <div className={cn("mt-1", isOwn ? "text-right" : "text-left")}>
@@ -193,6 +215,7 @@ export function MessageBubble({
               // 줄여 둔 폭이 남은 채 옆에 액션 레일이 생기는 식으로 쓸 수 있는 폭이 줄어도 버블 밖으로
               // 넘치지 않게 막는다. 넘치면 대화 영역에 가로 스크롤이 생긴다.
               "w-full max-w-full",
+              hasAttachments && "mt-0.5",
               isEmojiOnly
                 ? "px-1 py-0.5 text-5xl leading-none"
                 : "rounded-2xl px-3.5 py-2 text-[15px] [overflow-wrap:anywhere] break-keep whitespace-pre-wrap",
@@ -205,10 +228,7 @@ export function MessageBubble({
                   : isOwn
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-foreground"),
-              !isEmojiOnly && !startsGroup && isOwn && "rounded-tr-md",
-              !isEmojiOnly && !startsGroup && !isOwn && "rounded-tl-md",
-              !isEmojiOnly && !endsGroup && isOwn && "rounded-br-md",
-              !isEmojiOnly && !endsGroup && !isOwn && "rounded-bl-md",
+              !isEmojiOnly && groupCornerClass(isOwn, textJoin),
             )}
           >
             {replyQuote}

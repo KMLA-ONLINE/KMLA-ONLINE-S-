@@ -110,3 +110,76 @@ describe("MessageBubble shared post", () => {
     expect(listPostPreviews).not.toHaveBeenCalled();
   });
 });
+
+describe("MessageBubble group corners", () => {
+  const photo = {
+    id: "p1",
+    kind: "image" as const,
+    mimeType: "image/webp",
+    sizeBytes: 10,
+    width: 10,
+    height: 10,
+    fileName: "p1.webp",
+    objectPath: "c/p1",
+    thumbnailPath: null,
+  };
+  const file = {
+    id: "f1",
+    kind: "file" as const,
+    mimeType: "application/pdf",
+    sizeBytes: 10,
+    width: null,
+    height: null,
+    fileName: "notes.pdf",
+    objectPath: "c/f1",
+    thumbnailPath: null,
+  };
+  const photoGrid = () =>
+    screen.getByRole("button", { name: "사진 크게 보기: p1.webp" })
+      .parentElement;
+  const fileCard = () =>
+    screen.getByText("notes.pdf").closest("div.rounded-2xl, a.rounded-2xl");
+
+  it("joins photos and files to the messages around them in a group", () => {
+    renderRoute(() => (
+      <MessageBubble
+        message={sharedMessage({ body: "", attachments: [photo, file] })}
+        isOwn
+        startsGroup={false}
+        endsGroup={false}
+      />
+    ));
+
+    expect(photoGrid()).toHaveClass("rounded-tr-md", "rounded-br-md");
+    expect(fileCard()).toHaveClass("rounded-tr-md", "rounded-br-md");
+  });
+
+  it("joins a photo to its caption inside one message", () => {
+    renderRoute(() => (
+      <MessageBubble
+        message={sharedMessage({ body: "사진 설명", attachments: [photo] })}
+        isOwn
+      />
+    ));
+
+    expect(photoGrid()).toHaveClass("rounded-br-md");
+    expect(photoGrid()).not.toHaveClass("rounded-tr-md");
+    const caption = screen.getByText("사진 설명").closest("div");
+    expect(caption).toHaveClass("rounded-tr-md");
+    expect(caption).not.toHaveClass("rounded-br-md");
+  });
+
+  it("joins a shared post card on the sender side", async () => {
+    renderRoute(() => (
+      <MessageBubble
+        message={sharedMessage({ senderId: "you" })}
+        isOwn={false}
+        startsGroup={false}
+      />
+    ));
+
+    const card = await screen.findByRole("link", { name: /공연 안내/ });
+    expect(card).toHaveClass("rounded-tl-md");
+    expect(card).not.toHaveClass("rounded-bl-md");
+  });
+});
