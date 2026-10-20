@@ -11,6 +11,7 @@ import { useState } from "react";
 
 import {
   AuthCard,
+  LegalLinks,
   getAuthErrorMessage,
   getProfileDestination,
   hasErrors,
@@ -159,6 +160,9 @@ export default function LoginPage({
               />
             </div>
           ) : null}
+          <div className="mt-3">
+            <LegalLinks />
+          </div>
         </div>
       }
     >

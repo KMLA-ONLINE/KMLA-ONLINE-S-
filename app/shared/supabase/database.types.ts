@@ -1390,6 +1390,8 @@ export type Database = {
           status_updated_by: number | null
           student_number: string | null
           submitted_at: string
+          terms_agreed_at: string | null
+          terms_version: string | null
           type: Database["public"]["Enums"]["profile_type"]
           updated_at: string
         }
@@ -1425,6 +1427,8 @@ export type Database = {
           status_updated_by?: number | null
           student_number?: string | null
           submitted_at?: string
+          terms_agreed_at?: string | null
+          terms_version?: string | null
           type: Database["public"]["Enums"]["profile_type"]
           updated_at?: string
         }
@@ -1459,6 +1463,8 @@ export type Database = {
           status_updated_by?: number | null
           student_number?: string | null
           submitted_at?: string
+          terms_agreed_at?: string | null
+          terms_version?: string | null
           type?: Database["public"]["Enums"]["profile_type"]
           updated_at?: string
         }
@@ -1857,6 +1863,7 @@ export type Database = {
           status_updated_at: string
         }[]
       }
+      agree_to_terms: { Args: { p_version: string }; Returns: undefined }
       approve_group_join_request: {
         Args: { p_group_id: string; p_request_id: string }
         Returns: undefined
@@ -2273,6 +2280,8 @@ export type Database = {
           status_updated_by: number | null
           student_number: string | null
           submitted_at: string
+          terms_agreed_at: string | null
+          terms_version: string | null
           type: Database["public"]["Enums"]["profile_type"]
           updated_at: string
         }
@@ -2443,6 +2452,8 @@ export type Database = {
           status_updated_by: number | null
           student_number: string | null
           submitted_at: string
+          terms_agreed_at: string | null
+          terms_version: string | null
           type: Database["public"]["Enums"]["profile_type"]
           updated_at: string
         }[]
@@ -3306,6 +3317,8 @@ export type Database = {
           status_updated_by: number | null
           student_number: string | null
           submitted_at: string
+          terms_agreed_at: string | null
+          terms_version: string | null
           type: Database["public"]["Enums"]["profile_type"]
           updated_at: string
         }
@@ -3518,6 +3531,7 @@ export type Database = {
           p_name: string
           p_phone_number?: string
           p_student_number?: string
+          p_terms_version?: string
           p_type: Database["public"]["Enums"]["profile_type"]
         }
         Returns: {
@@ -3551,6 +3565,8 @@ export type Database = {
           status_updated_by: number | null
           student_number: string | null
           submitted_at: string
+          terms_agreed_at: string | null
+          terms_version: string | null
           type: Database["public"]["Enums"]["profile_type"]
           updated_at: string
         }
@@ -3679,6 +3695,8 @@ export type Database = {
           status_updated_by: number | null
           student_number: string | null
           submitted_at: string
+          terms_agreed_at: string | null
+          terms_version: string | null
           type: Database["public"]["Enums"]["profile_type"]
           updated_at: string
         }

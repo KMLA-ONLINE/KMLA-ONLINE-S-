@@ -151,6 +151,15 @@ describe("auth routes", () => {
     await user.type(screen.getByLabelText("비밀번호 확인"), "password123");
     await user.click(screen.getByRole("button", { name: "다음" }));
 
+    // 학교 프로필을 받기 전에 약관에 동의하고 개인정보 안내를 본다.
+    expect(
+      await screen.findByRole("heading", { name: "개인정보 처리 안내" }),
+    ).toBeVisible();
+    const next = screen.getByRole("button", { name: "다음" });
+    expect(next).toBeDisabled();
+    await user.click(screen.getByRole("checkbox", { name: /이용약관/ }));
+    await user.click(next);
+
     // 프로필 단계에서는 아직 계정도 코드도 만들어지지 않는다.
     expect(await screen.findByLabelText("이름")).toBeVisible();
     expect(

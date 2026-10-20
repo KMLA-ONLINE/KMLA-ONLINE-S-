@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(59);
+select plan(62);
 
 select ok(
   has_function_privilege('authenticated', 'public.list_feed_posts(uuid)', 'execute'),
@@ -121,6 +121,11 @@ values
     '00000000-0000-0000-0000-000000000000',
     '10000000-0000-0000-0000-000000000073', 'authenticated', 'authenticated',
     'returning29@kmla.hs.kr', '', now(), '', '', '', '', '', '', '', '', '{}', '{}', now(), now()
+  ),
+  (
+    '00000000-0000-0000-0000-000000000000',
+    '10000000-0000-0000-0000-000000000074', 'authenticated', 'authenticated',
+    'nogender29@kmla.hs.kr', '', now(), '', '', '', '', '', '', '', '', '{}', '{}', now(), now()
   );
 
 insert into public.profiles (
@@ -147,6 +152,10 @@ values
   (
     null, 'feed-alumni-29m', '29기 남성 졸업생',
     'alumni', null, 29, 'male', 'domestic', null, 'accepted', false
+  ),
+  (
+    '10000000-0000-0000-0000-000000000074', 'feed-alumni-29n', '29기 성별 미입력 졸업생',
+    'alumni', null, 29, null, null, null, 'accepted', false
   );
 
 create temporary table feed_session_test_ids (name text primary key, id uuid not null);
@@ -481,7 +490,8 @@ with media_spec (name, profile_pub_id, activity_kind) as (
     ('same-cohort-cover', 'returning-29', 'cover_changed'::public.profile_media_activity_kind),
     ('different-gender-avatar', 'feed-alumni-29', 'avatar_changed'::public.profile_media_activity_kind),
     ('different-cohort-avatar', 'feed-alumni-25', 'avatar_changed'::public.profile_media_activity_kind),
-    ('teacher-avatar', 'jung-teacher', 'avatar_changed'::public.profile_media_activity_kind)
+    ('teacher-avatar', 'jung-teacher', 'avatar_changed'::public.profile_media_activity_kind),
+    ('no-gender-avatar', 'feed-alumni-29n', 'avatar_changed'::public.profile_media_activity_kind)
 ), created as (
   insert into public.posts (
     id, kind, body, timeline_profile_id, author_identity, display_author_profile_id,
@@ -543,6 +553,13 @@ select ok(
   'an overlapping cohort of a different gender does not see 생탐'
 );
 select ok(
+  private.can_access_feed_post(
+    (select id from public.posts where body = 'cross timeline candidate'),
+    (select id from public.profiles where pub_id = 'feed-alumni-29n')
+  ),
+  'a viewer without a gender sees 생탐 on cohort overlap alone'
+);
+select ok(
   not private.can_access_feed_post(
     (select id from public.posts where body = 'cross timeline candidate'),
     (select id from public.profiles where pub_id = 'feed-alumni-25')
@@ -572,6 +589,21 @@ select ok(
       where auth_user_id = '10000000-0000-0000-0000-000000000001')
   ),
   'a viewer does not see a profile media activity from a different gender'
+);
+select ok(
+  private.can_access_feed_post(
+    (select id from profile_media_feed_posts where name = 'same-cohort-avatar'),
+    (select id from public.profiles where pub_id = 'feed-alumni-29n')
+  ),
+  'a same-cohort viewer without a gender sees a profile media activity'
+);
+select ok(
+  private.can_access_feed_post(
+    (select id from profile_media_feed_posts where name = 'no-gender-avatar'),
+    (select id from public.profiles
+      where auth_user_id = '10000000-0000-0000-0000-000000000001')
+  ),
+  'a same-cohort viewer sees the profile media activity of someone without a gender'
 );
 select ok(
   not private.can_access_feed_post(

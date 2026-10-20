@@ -16,6 +16,8 @@ export default [
   route("logout", "routes/auth/logout.tsx"),
   route("noti/open/:notificationId", "routes/notification-open.tsx"),
   route("dokkaebi", "routes/dokkaebi.tsx"),
+  route("terms-of-service", "routes/legal/terms-of-service.tsx"),
+  route("privacy-policy", "routes/legal/privacy-policy.tsx"),
   layout("routes/app/gate.tsx", [
     layout("routes/app/layout.tsx", [
       index("routes/app/home.tsx"),

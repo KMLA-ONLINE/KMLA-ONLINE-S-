@@ -16,7 +16,7 @@
   ],
   "headers": [
     {
-      "source": "/((?!login$|.*\\.(?:ico|svg|png)$).+)",
+      "source": "/((?!login$|terms-of-service$|privacy-policy$|.*\\.(?:ico|svg|png)$).+)",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
     },
     {

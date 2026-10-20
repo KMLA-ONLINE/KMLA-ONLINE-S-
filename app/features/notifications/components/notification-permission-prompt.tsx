@@ -41,10 +41,12 @@ export function NotificationPermissionPrompt({
   const [eligible, setEligible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [pending, setPending] = useState(false);
-  // 연결 끊김·새 버전 안내가 떠 있는 동안 미룬다(기능 명세 §3.7). 설치 안내는 이 창을 보고 물러난다.
+  // 연결 끊김·새 버전·약관 동의 안내가 떠 있는 동안 미룬다(기능 명세 §3.7). 설치 안내는 이 창을 보고 물러난다.
   const offline = usePromptActive("offline");
   const updating = usePromptActive("service-worker");
-  const visible = eligible && !dismissed && !offline && !updating;
+  const agreeingToTerms = usePromptActive("terms");
+  const visible =
+    eligible && !dismissed && !offline && !updating && !agreeingToTerms;
 
   useEffect(() => {
     if (hasHandledNotificationPrompt(profileId)) return;
