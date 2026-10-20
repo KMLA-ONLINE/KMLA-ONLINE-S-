@@ -279,7 +279,7 @@ ALTER TABLE "public"."profiles"
   ADD CONSTRAINT "profiles_terms_agreement" CHECK (((terms_version IS NULL) = (terms_agreed_at IS NULL)));
 
 ALTER TABLE "public"."profiles"
-  ADD CONSTRAINT "profiles_type_details" CHECK ((((type = 'student'::public.profile_type) AND (student_number IS NOT NULL) AND (cohort IS
+  ADD CONSTRAINT "profiles_type_details" CHECK (((status = 'withdrawn'::public.profile_status) OR ((type = 'student'::public.profile_type) AND (student_number IS NOT NULL) AND (cohort IS
     NOT NULL)) OR ((type = 'alumni'::public.profile_type) AND (cohort IS
     NOT NULL) AND (class_no IS NULL) AND (dorm_room IS NULL)) OR
     ((type = 'teacher'::public.profile_type) AND (student_number IS NULL) AND (class_no IS NULL) AND (cohort IS NULL) AND (gender IS NULL) AND (academic_track IS NULL) AND

@@ -23,12 +23,15 @@ vi.mock("~/features/admin", () => ({
   listApplications: vi.fn(),
   listRoster: vi.fn(),
   liftSuspension: mocks.liftSuspension,
-  reauthenticateWithPassword: mocks.reauthenticateWithPassword,
   RosterScreen: () => null,
   suspendProfile: mocks.suspendProfile,
   reviewApplications: mocks.reviewApplications,
   setAppAdmin: mocks.setAppAdmin,
   unblockApplication: vi.fn(),
+}));
+
+vi.mock("~/features/auth", () => ({
+  reauthenticateWithPassword: mocks.reauthenticateWithPassword,
 }));
 
 vi.mock("~/features/app-shell", async (importOriginal) => ({

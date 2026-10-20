@@ -114,6 +114,11 @@ where post_id is not null;
 create index notifications_comment_idx
 on public.notifications (comment_id)
 where comment_id is not null;
+-- 탈퇴가 다른 회원 알림에 복사된 이름을 지울 때 쓴다. 탈퇴 트랜잭션이 프로필과 멤버십을 잠근 채라
+-- 전체 스캔으로 잠금이 길어지지 않게 한다.
+create index notifications_actor_idx
+on public.notifications (actor_profile_id)
+where actor_profile_id is not null;
 
 create table public.notification_preferences (
   profile_id bigint primary key references public.profiles(id) on delete cascade,
@@ -518,6 +523,15 @@ begin
   -- 정지 기간에 생긴 알림은 만들지 않고 해제 뒤에도 보내지 않는다(§14.12). event key는 남겨, 멘션을
   -- 고쳐 다시 넣는 것처럼 같은 사건이 해제 뒤 다시 들어와도 새 알림이 되지 않게 한다.
   if private.profile_suspended(p_recipient_profile_id) then
+    return null;
+  end if;
+
+  if exists (
+    select 1
+    from public.profiles as recipient
+    where recipient.id = p_recipient_profile_id
+      and recipient.deleted_at is not null
+  ) then
     return null;
   end if;
 

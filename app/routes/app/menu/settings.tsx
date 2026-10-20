@@ -6,6 +6,7 @@ import {
   KeyRoundIcon,
   ScrollTextIcon,
   ShieldCheckIcon,
+  UserXIcon,
 } from "lucide-react";
 import { useId, type ReactNode } from "react";
 
@@ -71,6 +72,11 @@ export default function SettingsPage() {
             to="/settings/password"
             label="비밀번호 변경"
             icon={KeyRoundIcon}
+          />
+          <ListLinkRow
+            to="/settings/withdraw"
+            label="계정 탈퇴"
+            icon={UserXIcon}
           />
         </SettingsSection>
 

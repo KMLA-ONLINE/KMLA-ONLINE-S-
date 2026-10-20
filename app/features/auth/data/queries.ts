@@ -2,9 +2,11 @@ import { isAuthApiError, type Session } from "@supabase/supabase-js";
 
 import { getSupabase } from "~/shared/supabase/client";
 import type { AuthState, MySuspension } from "~/features/auth/model/types";
+import type { OwnedGroup } from "~/features/auth/model/withdrawal";
 
 /**
- * 서버가 세션을 거절했다는 오류 코드. `42501`은 인증 전용 RPC에 요청이 익명으로 나갔다는 뜻이다.
+ * 서버가 세션을 거절했다는 오류 코드. `42501`은 인증 전용 RPC에 요청이 익명으로 나갔거나,
+ * 다른 기기에서 탈퇴해 토큰의 계정이 없다는 뜻이다(`get_my_profile`).
  * `PGRST303`(시계 불일치)은 재로그인해도 같은 토큰이 거절돼 게이트와 로그인 화면을 무한히 오가므로 뺐다.
  */
 const REJECTED_SESSION_CODES = new Set(["PGRST301", "PGRST302", "42501"]);
@@ -83,4 +85,14 @@ export async function hasActiveSession(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** 탈퇴 전에 소유권을 넘겨야 하는 그룹. 멤버십 select 정책이 내 행만 돌려준다. */
+export async function listMyOwnedGroups(): Promise<OwnedGroup[]> {
+  const { data, error } = await getSupabase()
+    .from("group_memberships")
+    .select("groups!inner(id, slug, name)")
+    .eq("role", "owner");
+  if (error) throw error;
+  return data.map(({ groups }) => groups);
 }

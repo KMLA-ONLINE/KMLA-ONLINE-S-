@@ -17,7 +17,10 @@ const SESSION = { user: { email: "student@kmla.hs.kr" } };
 describe("auth queries", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getSupabase.mockReturnValue({ auth: { getSession, signOut }, rpc });
+    getSupabase.mockReturnValue({
+      auth: { getSession, signOut },
+      rpc,
+    });
     getSession.mockResolvedValue({ data: { session: SESSION }, error: null });
     rpc.mockResolvedValue({ data: [], error: null });
     signOut.mockResolvedValue({ error: null });
@@ -29,6 +32,8 @@ describe("auth queries", () => {
     ["PGRST301", "JWT expired"],
     ["PGRST302", "anonymous access disabled"],
     ["42501", "permission denied for function get_my_profile"],
+    // 다른 기기에서 탈퇴해 토큰의 계정이 없다. 그대로 두면 게이트가 프로필 작성 화면으로 보낸다.
+    ["42501", "account not found"],
   ])(
     "signs out and reports no session when the server rejects %s",
     async (code, message) => {
@@ -38,6 +43,14 @@ describe("auth queries", () => {
       expect(signOut).toHaveBeenCalledWith({ scope: "local" });
     },
   );
+
+  it("keeps a signed-up account without a profile on the setup path", async () => {
+    await expect(loadAuthState()).resolves.toEqual({
+      email: "student@kmla.hs.kr",
+      profile: null,
+    });
+    expect(signOut).not.toHaveBeenCalled();
+  });
 
   // 시계가 어긋난 것이라 다시 로그인해도 새 토큰이 똑같이 거절된다. 여기서 로그아웃시키면
   // 게이트와 로그인 화면 사이를 무한히 오간다.

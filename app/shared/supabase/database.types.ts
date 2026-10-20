@@ -3104,7 +3104,7 @@ export type Database = {
         Returns: boolean
       }
       mark_group_posts_visited: {
-        Args: { p_group_id: string }
+        Args: { p_group_id: string; p_seen_until?: string }
         Returns: undefined
       }
       mark_my_notification_read: {
@@ -3745,6 +3745,7 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      withdraw_account: { Args: Record<PropertyKey, never>; Returns: undefined }
     }
     Enums: {
       app_role: "member" | "admin"

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   activeParticipants,
   formatSystemMessage,
+  isDirectCounterpartWithdrawn,
   isViewerActive,
 } from "~/features/messaging/model/system-message";
 import type { MessageParticipant } from "~/features/messaging/model/types";
@@ -63,5 +64,43 @@ describe("participants", () => {
     ]);
     expect(isViewerActive(conversation)).toBe(false);
     expect(isViewerActive({ ...conversation, viewerId: "a" })).toBe(true);
+  });
+});
+
+describe("isDirectCounterpartWithdrawn", () => {
+  const me = { id: "a", name: "홍길동", avatarUrl: null, active: true };
+  const gone = {
+    id: "b",
+    name: "탈퇴한 사용자",
+    avatarUrl: null,
+    active: true,
+    withdrawn: true,
+  };
+
+  it("1:1 대화 상대가 탈퇴했으면 참이다", () => {
+    expect(
+      isDirectCounterpartWithdrawn({
+        type: "direct",
+        viewerId: "a",
+        participants: [me, gone],
+      }),
+    ).toBe(true);
+  });
+
+  it("상대가 남아 있거나 그룹 대화면 거짓이다", () => {
+    expect(
+      isDirectCounterpartWithdrawn({
+        type: "direct",
+        viewerId: "a",
+        participants: [me, { ...gone, withdrawn: false }],
+      }),
+    ).toBe(false);
+    expect(
+      isDirectCounterpartWithdrawn({
+        type: "group",
+        viewerId: "a",
+        participants: [me, gone],
+      }),
+    ).toBe(false);
   });
 });

@@ -119,7 +119,7 @@ function isMessageClickData(value) {
 /**
  * 같은 대화의 새 메시지는 대화별 카드 하나를 교체하고 다시 알린다. 대화방이 화면에 열려 있어도
  * 카드를 생략하지 않는다. `userVisibleOnly` 구독에서 생략하면 iOS가 구독을 끊을 수 있어 억제는 서버의
- * 발송 직전 확인만 맡는다. 메시지 카드는 알림함 뱃지에 세지 않는다(메시지 unread는 따로 센다).
+ * 발송 직전 확인만 맡는다. 홈 화면 숫자에는 대화마다 카드 하나로 센다(`syncAppBadge`).
  */
 async function showMessagePush(payload) {
   const tag = `message:${payload.conversationId}`;
@@ -194,8 +194,12 @@ const APP_BADGE_OVERWRITTEN = "app-badge-overwritten";
  *
  * 앱이 떠 있을 때의 정답은 서버가 세는 안 읽은 수이고 그쪽은 앱이
  * (`app/shared/lib/app-badge.ts`) 쓴다. 여기서 세는 건 앱이 떠 있지 않은 동안 도착해 아직
- * 화면에 남아 있는 알림 카드의 합이다 — 그 시간대에는 이쪽이 유일하게 아는 값이고, 앱이
- * 다시 열리면 게이트 로더가 곧바로 서버 값으로 덮는다.
+ * 화면에 남아 있는 카드의 합이다 — 그 시간대에는 이쪽이 유일하게 아는 값이고, 앱이
+ * 다시 열리면 게이트 로더가 곧바로 서버 값으로 덮는다. 앱 값이 알림과 메시지의 합이므로 메시지
+ * 카드도 센다. 메시지 카드는 대화마다 하나로 교체되고 몇 통이 쌓였는지 싣지 않아 1로 센다.
+ *
+ * 보이는 창이 있으면 그 앱이 정답을 들고 있으므로 덮지 않는다. 덮었다가 되돌리면 메시지가 올
+ * 때마다 숫자가 깜빡이고, 되돌리라는 메시지를 못 받은 창에서는 틀린 값이 남는다.
  *
  * 지원하지 않는 환경(데스크톱 Firefox 등)이 정상 경로에 있으므로 실패는 삼킨다. 뱃지는
  * 부가 정보라 이것 때문에 push 표시가 밀리면 안 된다.
@@ -204,6 +208,9 @@ async function syncAppBadge() {
   const badging = self.navigator;
   if (!badging || typeof badging.setAppBadge !== "function") return;
 
+  const windows = await listWindows();
+  if (windows.some((client) => client.visibilityState === "visible")) return;
+
   try {
     const shown = await self.registration.getNotifications();
     const total = shown.reduce(
@@ -211,7 +218,8 @@ async function syncAppBadge() {
         sum +
         (isClickData(notification.data)
           ? notification.data.count
-          : isInboxCardData(notification.data)
+          : isInboxCardData(notification.data) ||
+              isMessageClickData(notification.data)
             ? 1
             : 0),
       0,
@@ -222,24 +230,32 @@ async function syncAppBadge() {
     // 지원하지 않거나 권한이 없는 환경.
     return;
   }
-  await notifyAppBadgeOverwritten();
+  notifyAppBadgeOverwritten(windows);
 }
 
-/**
- * 떠 있는 창에 방금 뱃지를 카드 수로 덮었다고 알린다. 앱(`UnreadBadgeSync`)은 메시지를 합친
- * 서버 값을 들고 있지만 그 값이 바뀌지 않으면 다시 쓰지 않으므로, 알리지 않으면 카드를 쓸어 지우거나
- * 알림 push가 올 때마다 메시지 수가 뱃지에서 빠진다.
- */
-async function notifyAppBadgeOverwritten() {
+async function listWindows() {
   try {
-    const windows = await self.clients.matchAll({
+    return await self.clients.matchAll({
       type: "window",
       includeUncontrolled: true,
     });
-    for (const client of windows)
-      client.postMessage({ type: APP_BADGE_OVERWRITTEN });
   } catch {
-    // 창이 없거나 닫히는 중이면 다음 실행에서 앱이 다시 쓴다.
+    return [];
+  }
+}
+
+/**
+ * 숨은 창에 방금 뱃지를 카드 수로 덮었다고 알린다. 앱(`UnreadBadgeSync`)은 메시지를 합친
+ * 서버 값을 들고 있지만 그 값이 바뀌지 않으면 다시 쓰지 않으므로, 알리지 않으면 카드를 쓸어 지우거나
+ * push가 올 때마다 뱃지가 카드 수로 남는다.
+ */
+function notifyAppBadgeOverwritten(windows) {
+  for (const client of windows) {
+    try {
+      client.postMessage({ type: APP_BADGE_OVERWRITTEN });
+    } catch {
+      // 닫히는 중인 창이면 다음 실행에서 앱이 다시 쓴다.
+    }
   }
 }
 
@@ -253,6 +269,7 @@ async function showPush(data) {
 
   if (isMessagePushPayload(payload)) {
     await showMessagePush(payload);
+    await syncAppBadge();
     return;
   }
 

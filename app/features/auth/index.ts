@@ -20,10 +20,13 @@ export {
   submitProfile,
   updatePassword,
   verifyPasswordResetOtp,
+  reauthenticateWithPassword,
   verifySignupOtp,
+  withdrawAccount,
 } from "~/features/auth/data/mutations";
 export {
   hasActiveSession,
+  listMyOwnedGroups,
   loadAuthState,
   loadMySuspension,
 } from "~/features/auth/data/queries";
@@ -33,6 +36,11 @@ export {
   readTermsAgreement,
   TERMS_VERSION,
 } from "~/features/auth/model/terms";
+export {
+  describeWithdrawalBlocker,
+  describeWithdrawalError,
+  getWithdrawalBlockers,
+} from "~/features/auth/model/withdrawal";
 export {
   DUPLICATE_STUDENT_NUMBER_MESSAGE,
   getAuthErrorMessage,
@@ -66,4 +74,8 @@ export type {
   MySuspension,
   ProfileFormValues,
 } from "~/features/auth/model/types";
+export type {
+  OwnedGroup,
+  WithdrawalBlocker,
+} from "~/features/auth/model/withdrawal";
 export type { SignupDraft } from "~/features/auth/storage/pending-signup";

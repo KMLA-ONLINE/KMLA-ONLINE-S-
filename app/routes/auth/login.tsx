@@ -4,6 +4,7 @@ import {
   Link,
   replace,
   useNavigation,
+  useSearchParams,
   type ShouldRevalidateFunctionArgs,
 } from "react-router";
 import { useState } from "react";
@@ -82,6 +83,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     if (!state) throw new Error("Missing session after sign-in");
 
     const destination = getProfileDestination(state.profile, next);
+    // 탈퇴는 Auth 계정까지 지우므로 정상 경로로는 오지 않는다. 운영자가 상태만 바꾼 계정을 막는 방어선이다.
     if (destination === "/login") {
       await signOut();
       return data(
@@ -108,6 +110,7 @@ export default function LoginPage({
   actionData,
 }: Route.ComponentProps) {
   const navigation = useNavigation();
+  const [searchParams] = useSearchParams();
   const pending = navigation.state === "submitting";
   const result = actionData as
     | {
@@ -165,6 +168,11 @@ export default function LoginPage({
     >
       <Form method="post" className="flex flex-col gap-6">
         <FieldGroup>
+          {!result && searchParams.get("withdrawn") === "1" ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.
+            </p>
+          ) : null}
           {errors.form ? <FieldError>{errors.form}</FieldError> : null}
           {result?.unconfirmed ? (
             <Link

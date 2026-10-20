@@ -10,13 +10,19 @@ const mutations = vi.hoisted(() => ({
   loadGroupDetail: vi.fn(),
   listGroupCategories: vi.fn(),
   listGroupPosts: vi.fn(),
-  markGroupPostsVisited: vi.fn(),
   leaveGroup: vi.fn(),
 }));
+const visits = vi.hoisted(() => ({ markGroupPostsVisited: vi.fn() }));
 
 vi.mock("~/features/groups", async (importOriginal) => ({
   ...(await importOriginal()),
   ...mutations,
+}));
+
+// 방문 기록은 groups의 캐시 helper가 부른다. 공개 API가 아니라 모듈을 바꾼다.
+vi.mock("~/features/groups/data/mutations", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...visits,
 }));
 
 vi.mock("~/features/posts", async (importOriginal) => ({
@@ -187,13 +193,22 @@ describe("group detail management action", () => {
   });
 });
 
+const shownPage = {
+  posts: [
+    { published_at: "2026-10-19T08:00:00+00:00" },
+    { published_at: "2026-10-19T09:00:00.123456+00:00" },
+    { published_at: "2026-10-19T09:00:00.12+00:00" },
+  ],
+  nextCursor: null,
+};
+
 describe("group detail loader", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getQueryClient().clear();
     mutations.loadGroupDetail.mockResolvedValue(group);
     mutations.listGroupCategories.mockResolvedValue([]);
-    mutations.markGroupPostsVisited.mockResolvedValue(undefined);
+    visits.markGroupPostsVisited.mockResolvedValue(undefined);
   });
 
   // 목록은 그룹 ID만 있으면 된다. 아이콘·커버 서명 왕복이 끝나기를 기다리면 그만큼 늦게 출발한다.
@@ -277,69 +292,131 @@ describe("group detail loader", () => {
   });
 
   it("marks posts visited only when the group post list itself loads", async () => {
-    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    mutations.listGroupPosts.mockResolvedValue(shownPage);
 
     await load("/groups/test/posts/post-id");
-    expect(mutations.markGroupPostsVisited).not.toHaveBeenCalled();
+    expect(visits.markGroupPostsVisited).not.toHaveBeenCalled();
 
     await load("/groups/test");
-    expect(mutations.markGroupPostsVisited).toHaveBeenCalledWith("group-id");
+    expect(visits.markGroupPostsVisited).toHaveBeenCalledWith(
+      "group-id",
+      "2026-10-19T09:00:00.123456+00:00",
+    );
   });
 
-  it("clears this group's home badge without waiting for the visit RPC", async () => {
+  it("leaves the watermark alone for an empty post list", async () => {
     mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
-    // 끝나지 않는 RPC — 배지는 응답을 기다리지 않고 내려가야 한다.
-    mutations.markGroupPostsVisited.mockReturnValue(
+
+    await load("/groups/test");
+
+    expect(visits.markGroupPostsVisited).not.toHaveBeenCalled();
+  });
+
+  it("clears this group's count without waiting for the visit RPC", async () => {
+    mutations.listGroupPosts.mockResolvedValue(shownPage);
+    // 끝나지 않는 RPC — 숫자는 응답을 기다리지 않고 내려가야 한다.
+    visits.markGroupPostsVisited.mockReturnValue(
       new Promise<void>(() => undefined),
     );
     const queryClient = getQueryClient();
-    queryClient.setQueryData(groupKeys.home(), [
-      { group_id: "group-id", new_post_count: 3 },
-      { group_id: "other-id", new_post_count: 5 },
-    ]);
+    queryClient.setQueryData(groupKeys.newPostCounts(), {
+      "group-id": 3,
+      "other-id": 5,
+    });
 
     await load("/groups/test");
 
-    expect(queryClient.getQueryData(groupKeys.home())).toEqual([
-      { group_id: "group-id", new_post_count: 0 },
-      { group_id: "other-id", new_post_count: 5 },
-    ]);
+    expect(queryClient.getQueryData(groupKeys.newPostCounts())).toEqual({
+      "group-id": 0,
+      "other-id": 5,
+    });
   });
 
-  // 성공하면 캐시가 이미 서버와 같다. 무효화하면 그룹에서 목록으로 돌아올 때마다 네 요청을 다시 기다린다.
-  it("keeps the home cache fresh when the visit RPC succeeds", async () => {
-    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+  // 보여 준 글보다 늦게 올라온 글은 남는다. 서버 값으로 바로잡는다.
+  it.each([
+    ["succeeds", () => Promise.resolve()],
+    ["fails", () => Promise.reject(new Error("offline"))],
+  ])("re-reads the counts when the visit RPC %s", async (_, visit) => {
+    mutations.listGroupPosts.mockResolvedValue(shownPage);
+    visits.markGroupPostsVisited.mockImplementation(visit);
     const queryClient = getQueryClient();
-    queryClient.setQueryData(groupKeys.home(), [
-      { group_id: "group-id", new_post_count: 3 },
-    ]);
+    queryClient.setQueryData(groupKeys.newPostCounts(), { "group-id": 3 });
 
     await load("/groups/test");
     await vi.waitFor(() =>
-      expect(mutations.markGroupPostsVisited).toHaveBeenCalled(),
-    );
-    // 방문 저장의 후속 처리가 끝날 틈을 준다.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(queryClient.getQueryState(groupKeys.home())?.isInvalidated).toBe(
-      false,
+      expect(
+        queryClient.getQueryState(groupKeys.newPostCounts())?.isInvalidated,
+      ).toBe(true),
     );
   });
 
-  it("re-reads the home counts when the visit RPC fails", async () => {
-    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
-    mutations.markGroupPostsVisited.mockRejectedValue(new Error("offline"));
+  it("keeps a cached post list the counts have caught up with", async () => {
+    mutations.listGroupPosts.mockResolvedValue(shownPage);
+    await load("/groups/test");
+    getQueryClient().setQueryData(groupKeys.newPostCounts(), {
+      "group-id": 0,
+    });
+    mutations.listGroupPosts.mockClear();
+
+    await load("/groups/test");
+
+    expect(mutations.listGroupPosts).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["has new posts", { "group-id": 2 }, 0],
+    ["has no counts", undefined, 0],
+    ["has counts read before the list", { "group-id": 0 }, -1],
+  ])(
+    "refetches a cached post list when the group %s",
+    async (_, counts, countsAge) => {
+      mutations.listGroupPosts.mockResolvedValue(shownPage);
+      const queryClient = getQueryClient();
+      await load("/groups/test");
+      const listedAt =
+        queryClient.getQueryState(groupKeys.posts("group-id", null, null))
+          ?.dataUpdatedAt ?? 0;
+      queryClient.removeQueries({ queryKey: groupKeys.newPostCounts() });
+      if (counts) {
+        queryClient.setQueryData(groupKeys.newPostCounts(), counts, {
+          updatedAt: listedAt + (countsAge < 0 ? -1 : 1),
+        });
+      }
+      mutations.listGroupPosts.mockClear();
+
+      await load("/groups/test");
+
+      expect(mutations.listGroupPosts).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  // 반응·고정 뒤의 재검증은 같은 목록을 다시 그린다. 기준이 그대로면 RPC도 새 글 수 무효화도 없다.
+  it("does not re-send an unchanged watermark", async () => {
+    mutations.listGroupPosts.mockResolvedValue(shownPage);
     const queryClient = getQueryClient();
-    queryClient.setQueryData(groupKeys.home(), [
-      { group_id: "group-id", new_post_count: 3 },
-    ]);
+    queryClient.setQueryData(groupKeys.newPostCounts(), { "group-id": 0 });
+
+    await load("/groups/test");
+    await load("/groups/test");
+
+    expect(visits.markGroupPostsVisited).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-sends the watermark after a failed visit", async () => {
+    mutations.listGroupPosts.mockResolvedValue(shownPage);
+    visits.markGroupPostsVisited.mockRejectedValueOnce(new Error("offline"));
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(groupKeys.newPostCounts(), { "group-id": 0 });
 
     await load("/groups/test");
     await vi.waitFor(() =>
-      expect(queryClient.getQueryState(groupKeys.home())?.isInvalidated).toBe(
-        true,
-      ),
+      expect(
+        queryClient.getQueryData(groupKeys.postsSeenUntil("group-id")),
+      ).toBeUndefined(),
     );
+    await load("/groups/test");
+
+    expect(visits.markGroupPostsVisited).toHaveBeenCalledTimes(2);
   });
 
   it("does not block optional-anonymous group content on a restriction lookup", async () => {

@@ -37,6 +37,7 @@ export default [
       route("menu/notices", "routes/app/menu/notices.tsx"),
       route("menu/notices/:postId", "routes/app/menu/notice-detail.tsx"),
       route("settings/password", "routes/app/menu/password.tsx"),
+      route("settings/withdraw", "routes/app/menu/withdraw.tsx"),
       route("settings", "routes/app/menu/settings.tsx"),
       route("settings/lab", "routes/app/menu/settings-lab.tsx"),
       route("menu/timetable", "routes/app/menu/timetable.tsx"),

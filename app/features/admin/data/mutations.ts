@@ -64,21 +64,6 @@ export async function liftSuspension(profileId: number): Promise<void> {
   if (error) throw error;
 }
 
-export async function reauthenticateWithPassword(
-  password: string,
-): Promise<void> {
-  const supabase = getSupabase();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError) throw userError;
-  if (!userData.user?.email) throw new Error("Current account has no email");
-
-  const { error } = await supabase.auth.signInWithPassword({
-    email: userData.user.email,
-    password,
-  });
-  if (error) throw error;
-}
-
 export async function replaceAdminContacts(
   contacts: AdminContact[],
 ): Promise<void> {
