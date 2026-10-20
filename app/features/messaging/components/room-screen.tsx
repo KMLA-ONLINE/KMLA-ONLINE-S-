@@ -657,7 +657,6 @@ export function RoomScreen({
             highlightedMessageId={highlightedMessageId}
             messageThreadRef={messageThreadRef}
             followingNewMessagesRef={followingNewMessagesRef}
-            desktopDetailsOpen={desktopDetailsOpen}
             hasOlderMessages={hasOlderMessages}
             findingMessage={findingMessage}
             loadingOlderMessages={loadingOlderMessages}
@@ -761,7 +760,6 @@ export function RoomScreen({
                 followingNewMessagesRef.current = true;
                 void sendFiles(files);
               }}
-              desktopDetailsOpen={desktopDetailsOpen}
               draftKey={draftKey}
               mentionParticipants={
                 conversation.type === "group" ? conversation.participants : null
@@ -886,7 +884,6 @@ function MessageThread({
   highlightedMessageId,
   messageThreadRef,
   followingNewMessagesRef,
-  desktopDetailsOpen,
   hasOlderMessages,
   loadingOlderMessages,
   findingMessage,
@@ -914,7 +911,6 @@ function MessageThread({
   followingNewMessagesRef: RefObject<boolean>;
   /** 입력창이 있는 대화인지. 답장과 수정은 입력창에서 이어지므로 없으면 내지 않는다. */
   canCompose: boolean;
-  desktopDetailsOpen: boolean;
   hasOlderMessages: boolean;
   loadingOlderMessages: boolean;
   /** 답장 인용, 고정 메시지, 검색 결과의 원래 메시지를 찾아 앞선 페이지를 읽는 중인지. */
@@ -1255,10 +1251,7 @@ function MessageThread({
       >
         <div
           ref={threadContentRef}
-          className={cn(
-            "mx-auto flex min-h-full max-w-3xl flex-col justify-start gap-0.5",
-            !desktopDetailsOpen && "xl:max-w-none",
-          )}
+          className="flex min-h-full flex-col justify-start gap-0.5"
         >
           {messages.map((message, index) => {
             const slot = layout[index];
@@ -1804,7 +1797,6 @@ function ComposerShell({
   onUnstage,
   onSendStaged,
   onSendFiles,
-  desktopDetailsOpen,
   draftKey,
   mentionParticipants,
   viewerId,
@@ -1827,7 +1819,6 @@ function ComposerShell({
   onSendStaged: () => void;
   /** 고른 파일을 보낸다. 답장이나 수정 중에는 첨부할 수 없다(기능 명세 §13.5). */
   onSendFiles: (files: File[]) => void;
-  desktopDetailsOpen: boolean;
   /** 쓰던 글을 맡겨 둘 자리. 다른 방에 다녀오거나 삭제 모드를 마치고 돌아오면 되살린다. */
   draftKey: string;
   /** 멘션 후보가 될 대화 참여자. 1:1 대화처럼 멘션이 없으면 `null`이다. */
@@ -2028,12 +2019,7 @@ function ComposerShell({
       }}
     >
       {editTarget ? (
-        <div
-          className={cn(
-            "mx-auto mb-2 flex max-w-3xl items-center gap-2 border-l-2 border-primary px-3 py-1",
-            !desktopDetailsOpen && "xl:max-w-none",
-          )}
-        >
+        <div className="mb-2 flex items-center gap-2 border-l-2 border-primary px-3 py-1">
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-primary">메시지 수정</p>
             <p className="truncate text-xs text-muted-foreground">
@@ -2053,12 +2039,7 @@ function ComposerShell({
         </div>
       ) : null}
       {replyTarget ? (
-        <div
-          className={cn(
-            "mx-auto mb-2 flex max-w-3xl items-center gap-2 border-l-2 border-primary px-3 py-1",
-            !desktopDetailsOpen && "xl:max-w-none",
-          )}
-        >
+        <div className="mb-2 flex items-center gap-2 border-l-2 border-primary px-3 py-1">
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-primary">
               {replyAuthor ?? "알 수 없는 사용자"}에게 답장
@@ -2084,11 +2065,8 @@ function ComposerShell({
       {hasStaged ? (
         <ul
           aria-label="보낼 첨부"
-          className={cn(
-            // 작성창과 구분되도록 옅은 판 위에 늘어놓는다. 위쪽 여백은 빼기 버튼이 잘리지 않을 자리다.
-            "mx-auto mb-2 flex max-w-3xl gap-2 overflow-x-auto rounded-2xl bg-muted/70 px-2.5 pt-3 pb-2.5",
-            !desktopDetailsOpen && "xl:max-w-none",
-          )}
+          // 작성창과 구분되도록 옅은 판 위에 늘어놓는다. 위쪽 여백은 빼기 버튼이 잘리지 않을 자리다.
+          className="mb-2 flex gap-2 overflow-x-auto rounded-2xl bg-muted/70 px-2.5 pt-3 pb-2.5"
         >
           {staged.map((item) => (
             <li key={item.id} className="relative shrink-0">
@@ -2128,13 +2106,7 @@ function ComposerShell({
           ))}
         </ul>
       ) : null}
-      <div
-        ref={mentionArea}
-        className={cn(
-          "relative mx-auto flex max-w-3xl items-end gap-1.5",
-          !desktopDetailsOpen && "xl:max-w-none",
-        )}
-      >
+      <div ref={mentionArea} className="relative flex items-end gap-1.5">
         {mentionSuggestions.open ? (
           <MentionSuggestionList
             id={mentionListId}
