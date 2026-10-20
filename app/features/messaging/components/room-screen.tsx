@@ -1859,6 +1859,12 @@ function ComposerShell({
   const [held, setHeld] = useState<HeldDraft>(EMPTY_HELD_DRAFT);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const refocusAfterSend = useRef(false);
+  // 첨부 버튼은 입력을 고치면 접혀 입력창에 자리를 내준다. 비워도 저절로 펴지 않아 지우고 다시 쓰는
+  // 동안 입력창 폭이 출렁이지 않게 한다. 직접 편 뒤에도 입력이 바뀌면 다시 접는다. "auto"는 아직
+  // 입력을 고치지 않은 상태로, 되살린 초안이나 수정 본문처럼 글이 있을 때만 접는다.
+  const [attachmentActionsMode, setAttachmentActionsMode] = useState<
+    "auto" | "collapsed" | "expanded"
+  >("auto");
   if (editTarget?.message.id !== editingId) {
     setEditingId(editTarget?.message.id);
     if (editTarget) {
@@ -1869,6 +1875,8 @@ function ComposerShell({
       setDraft(held.text);
       setMentions(held.mentions);
       setHeld(EMPTY_HELD_DRAFT);
+      // 고치던 본문을 친 것은 되돌린 입력을 고친 것이 아니다. 저장이든 취소든 처음 상태로 둔다.
+      setAttachmentActionsMode("auto");
     }
   }
   useEffect(() => {
@@ -1893,12 +1901,6 @@ function ComposerShell({
     textarea.focus({ preventScroll: true });
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
   }, []);
-  // 첨부 버튼은 입력을 고치면 접혀 입력창에 자리를 내준다. 비워도 저절로 펴지 않아 지우고 다시 쓰는
-  // 동안 입력창 폭이 출렁이지 않게 한다. 직접 편 뒤에도 입력이 바뀌면 다시 접는다. "auto"는 아직
-  // 입력을 고치지 않은 상태로, 되살린 초안이나 수정 본문처럼 글이 있을 때만 접는다.
-  const [attachmentActionsMode, setAttachmentActionsMode] = useState<
-    "auto" | "collapsed" | "expanded"
-  >("auto");
   const isSendEnter = useIsSendEnter();
   const prepared = useMemo(
     () => prepareMessageMentions(normalizeMessageBody(draft), mentions),

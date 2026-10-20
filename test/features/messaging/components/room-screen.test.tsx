@@ -583,6 +583,45 @@ describe("RoomScreen", () => {
     now.mockRestore();
   });
 
+  it("수정을 저장하거나 취소하면 되돌린 입력이 비어 있을 때 첨부 버튼을 다시 편다", async () => {
+    // 이 파일은 spy를 일괄 복원하지 않으므로 테스트 끝에서 직접 되돌린다.
+    const now = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(Date.parse("2026-08-28T15:32:00+09:00"));
+    const conversation = await loadConversation("student-council");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+    const ownMessage = () => document.getElementById("message-m6")!;
+    const input = screen.getByRole("textbox", { name: "메시지 입력" });
+    const expandButton = () =>
+      screen.queryByRole("button", { name: "첨부 메뉴 펼치기" });
+    const startEdit = async () => {
+      await user.click(
+        within(ownMessage()).getByRole("button", { name: "메시지 기타 작업" }),
+      );
+      await user.click(await screen.findByRole("menuitem", { name: "수정" }));
+    };
+
+    await startEdit();
+    await user.type(input, "!");
+    expect(expandButton()).toBeInTheDocument();
+    await user.keyboard("{Enter}");
+    expect(await within(ownMessage()).findByText("수정됨")).toBeInTheDocument();
+    expect(input).toHaveValue("");
+    expect(expandButton()).not.toBeInTheDocument();
+
+    await startEdit();
+    await user.type(input, "?");
+    expect(expandButton()).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByText("메시지 수정")).not.toBeInTheDocument();
+    expect(input).toHaveValue("");
+    expect(expandButton()).not.toBeInTheDocument();
+    now.mockRestore();
+  });
+
   it("고치는 사이 15분이 지나면 보내지 않고 이유를 알리며 수정 모드를 끝낸다", async () => {
     // 이 파일은 spy를 일괄 복원하지 않으므로 테스트 끝에서 직접 되돌린다.
     const now = vi
