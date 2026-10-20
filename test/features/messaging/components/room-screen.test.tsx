@@ -497,6 +497,26 @@ describe("RoomScreen", () => {
     }
   });
 
+  it("메시지는 10,000자까지 보낼 수 있고, 넘으면 경고하고 보내지 않는다", async () => {
+    const conversation = await loadConversation("hyunwoo");
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/hyunwoo",
+    });
+    const input = screen.getByRole("textbox", { name: "메시지 입력" });
+
+    fireEvent.change(input, { target: { value: "가".repeat(10_000) } });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "메시지 보내기" })).toBeEnabled();
+
+    fireEvent.change(input, { target: { value: "가".repeat(10_001) } });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "메시지는 10,000자까지 쓸 수 있습니다. (10,001/10,000)",
+    );
+    expect(
+      screen.getByRole("button", { name: "메시지 보내기" }),
+    ).toBeDisabled();
+  });
+
   it("내 메시지를 15분 안에 고친다", async () => {
     // 목 메시지는 고정된 시각에 보냈으므로 그 직후로 시계를 맞춘다.
     // 이 파일은 spy를 일괄 복원하지 않으므로 테스트 끝에서 직접 되돌린다.
