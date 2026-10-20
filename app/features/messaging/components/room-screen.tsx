@@ -544,7 +544,8 @@ export function RoomScreen({
         <section
           aria-label={`${conversation.name} 채팅`}
           className={cn(
-            "min-h-0 min-w-0 flex-1 flex-col bg-background",
+            // 검색 패널이 우측 대화 정보 패널까지 덮지 않도록 채팅 영역을 기준으로 잡는다.
+            "relative min-h-0 min-w-0 flex-1 flex-col bg-background",
             compactDetailsOpen ? "hidden xl:flex" : "flex",
           )}
         >
