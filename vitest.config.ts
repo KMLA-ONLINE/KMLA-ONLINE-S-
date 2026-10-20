@@ -37,6 +37,9 @@ export default defineConfig({
     testTimeout: 10_000,
     css: false,
     pool: "vmThreads",
+    // 통과한 테스트가 일부러 낸 오류 로그가 전체 출력의 대부분이라, 실패 상세가 그 뒤에
+    // 묻힌다. 실패한 테스트의 로그만 남긴다.
+    silent: "passed-only",
 
     projects: [
       {

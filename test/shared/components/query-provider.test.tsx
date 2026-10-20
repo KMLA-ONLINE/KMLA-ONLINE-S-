@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import { createRoutesStub, Outlet, redirect, useSubmit } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -52,9 +52,11 @@ describe("QueryProvider", () => {
     let homeMounts = 0;
 
     // 화면이 마운트될 때마다 셸 쿼리처럼 요청을 띄운다고 보고 마운트 횟수를 센다.
+    // 첫 마운트는 act 밖의 저장소 동기화 뒤에 커밋되어 passive effect가 `findByRole`보다
+    // 늦게 돌 수 있으므로, DOM과 같은 커밋에서 도는 layout effect로 센다.
     function Home() {
       const submit = useSubmit();
-      useEffect(() => {
+      useLayoutEffect(() => {
         homeMounts += 1;
       }, []);
       return (
