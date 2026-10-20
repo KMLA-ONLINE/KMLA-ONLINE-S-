@@ -617,6 +617,7 @@ export function MessageRow({
           {isOwn ? unreadCount : null}
           <MessageTimeCard
             message={message}
+            isOwn={isOwn}
             showTimeCard={!timeVisible}
             overlay={
               heartBurst ? (
@@ -788,11 +789,13 @@ function HeartBurst({ onDone }: { onDone: () => void }) {
 
 function MessageTimeCard({
   message,
+  isOwn,
   showTimeCard,
   overlay,
   children,
 }: {
   message: ConversationMessage;
+  isOwn: boolean;
   showTimeCard: boolean;
   /** 버블 위에 겹쳐 그릴 것. 버블 뒤에 두어 버블이 다시 마운트되지 않게 한다. */
   overlay?: ReactNode;
@@ -829,7 +832,11 @@ function MessageTimeCard({
         {children}
         {overlay}
       </TooltipTrigger>
-      <TooltipContent>{formatMessageTime(message.sentAt)}</TooltipContent>
+      {/* 버블 바깥쪽(상대는 왼쪽, 나는 오른쪽)에 띄운다. 안쪽에는 작업 버튼이 뜬다. 자리가 없으면
+          Base UI가 반대쪽으로 뒤집는다. */}
+      <TooltipContent side={isOwn ? "right" : "left"}>
+        {formatMessageTime(message.sentAt)}
+      </TooltipContent>
     </Tooltip>
   );
 }
