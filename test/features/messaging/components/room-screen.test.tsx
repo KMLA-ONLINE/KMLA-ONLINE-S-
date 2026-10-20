@@ -519,6 +519,41 @@ describe("RoomScreen", () => {
     ).toBeDisabled();
   });
 
+  it("첨부 버튼은 입력이 바뀌면 접히고, 입력을 비워도 저절로 펴지지 않는다", async () => {
+    const conversation = await loadConversation("hyunwoo");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/hyunwoo" },
+    );
+    const input = screen.getByRole("textbox", { name: "메시지 입력" });
+    const expandButton = () =>
+      screen.queryByRole("button", { name: "첨부 메뉴 펼치기" });
+
+    expect(expandButton()).not.toBeInTheDocument();
+
+    await user.type(input, "안녕");
+    expect(expandButton()).toBeInTheDocument();
+
+    await user.clear(input);
+    expect(expandButton()).toBeInTheDocument();
+
+    await user.click(expandButton()!);
+    expect(expandButton()).not.toBeInTheDocument();
+
+    // 직접 편 뒤에도 입력이 바뀌면 다시 접는다.
+    await user.type(input, "다시");
+    expect(expandButton()).toBeInTheDocument();
+
+    await user.click(expandButton()!);
+    await user.clear(input);
+    expect(expandButton()).toBeInTheDocument();
+
+    // 보내고 나면 새 입력이므로 처음처럼 펴 둔다.
+    await user.type(input, "보낼 글{Enter}");
+    expect(input).toHaveValue("");
+    expect(expandButton()).not.toBeInTheDocument();
+  });
+
   it("내 메시지를 15분 안에 고친다", async () => {
     // 목 메시지는 고정된 시각에 보냈으므로 그 직후로 시계를 맞춘다.
     // 이 파일은 spy를 일괄 복원하지 않으므로 테스트 끝에서 직접 되돌린다.

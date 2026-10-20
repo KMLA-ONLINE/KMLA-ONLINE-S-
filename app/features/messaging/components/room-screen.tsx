@@ -1901,8 +1901,12 @@ function ComposerShell({
     textarea.focus({ preventScroll: true });
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
   }, []);
-  const [attachmentActionsExpanded, setAttachmentActionsExpanded] =
-    useState(false);
+  // 첨부 버튼은 입력을 고치면 접혀 입력창에 자리를 내준다. 비워도 저절로 펴지 않아 지우고 다시 쓰는
+  // 동안 입력창 폭이 출렁이지 않게 한다. 직접 편 뒤에도 입력이 바뀌면 다시 접는다. "auto"는 아직
+  // 입력을 고치지 않은 상태로, 되살린 초안이나 수정 본문처럼 글이 있을 때만 접는다.
+  const [attachmentActionsMode, setAttachmentActionsMode] = useState<
+    "auto" | "collapsed" | "expanded"
+  >("auto");
   const isSendEnter = useIsSendEnter();
   const prepared = useMemo(
     () => prepareMessageMentions(normalizeMessageBody(draft), mentions),
@@ -1921,15 +1925,16 @@ function ComposerShell({
   const limitReason = overLimit
     ? `메시지는 ${MESSAGE_MAX_LENGTH.toLocaleString("ko-KR")}자까지 쓸 수 있습니다. (${draftLength.toLocaleString("ko-KR")}/${MESSAGE_MAX_LENGTH.toLocaleString("ko-KR")})`
     : mentionLimitReason;
-  const attachmentActionsCollapsed = hasDraft && !attachmentActionsExpanded;
+  const attachmentActionsCollapsed =
+    attachmentActionsMode === "auto"
+      ? hasDraft
+      : attachmentActionsMode === "collapsed";
 
   function changeDraft(value: string) {
     onDraftInput();
+    if (value !== draft) setAttachmentActionsMode("collapsed");
     setDraft(value);
     setJustSent(false);
-    if (normalizeMessageBody(value).trim() === "") {
-      setAttachmentActionsExpanded(false);
-    }
   }
 
   const mentionInput = useMentionTextarea({
@@ -1997,7 +2002,7 @@ function ComposerShell({
       setMentions([]);
     }
     if (hasStaged) onSendStaged();
-    setAttachmentActionsExpanded(false);
+    setAttachmentActionsMode("auto");
     setJustSent(true);
     return true;
   }
@@ -2194,7 +2199,7 @@ function ComposerShell({
             size="icon"
             className="mb-0.5 shrink-0 rounded-full"
             aria-label="첨부 메뉴 펼치기"
-            onClick={() => setAttachmentActionsExpanded(true)}
+            onClick={() => setAttachmentActionsMode("expanded")}
           >
             <ChevronRightIcon aria-hidden className="size-5" />
           </Button>
@@ -2369,6 +2374,7 @@ function ComposerShell({
             // 공백만 있던 입력은 좋아요와 함께 비운다.
             setDraft("");
             setMentions([]);
+            setAttachmentActionsMode("auto");
           }}
         >
           {hasDraft || hasStaged || editTarget ? (
