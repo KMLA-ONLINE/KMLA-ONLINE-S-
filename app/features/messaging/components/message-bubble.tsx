@@ -72,15 +72,22 @@ export function MessageBubble({
   const showEdited = Boolean(message.editedAt) && !message.deleted;
   // 내 메시지의 primary 버블 위에서만 밝은 글자색을 쓴다. 첨부만 있는 메시지는 글 버블이 없다.
   const onPrimary = isOwn && hasText && !isEmojiOnly && !message.deleted;
+  const quoteRef = useRef<HTMLButtonElement>(null);
+  const replyQuoteText =
+    replyTarget && onViewReply
+      ? formatReplyPreview(replyTarget, window.location.origin)
+      : null;
   const replyQuote =
     replyTarget && onViewReply ? (
       <button
+        ref={quoteRef}
         type="button"
         aria-label={`${replyTargetAuthor ?? "알 수 없는 사용자"}의 원문 메시지 보기`}
         className={cn(
-          // 원문이 길어도 짧은 답장의 버블을 14rem 넘게 넓히지 않는다. 버블이 본문이나 사진으로
-          // 그보다 넓으면 `min-w-full`로 버블 폭을 채운다(백분율 최소 폭은 버블 폭 계산에 들지 않는다).
-          "mb-1.5 block w-56 max-w-full min-w-full border-l-2 pl-2 text-left text-xs leading-4",
+          // 인용은 원문 길이만큼 버블을 넓히되 14rem을 넘기지 않는다. 버블이 본문이나 사진으로 더 넓으면
+          // `min-w-full`로 버블 폭을 채운다. 최소 폭이 최대 폭보다 앞서고, 백분율 최소 폭은 버블 폭
+          // 계산에 들지 않으므로 인용은 언제나 버블 폭과 같다.
+          "mb-1.5 block w-fit max-w-56 min-w-full border-l-2 pl-2 text-left text-xs leading-4",
           onPrimary
             ? "border-primary-foreground/50 text-primary-foreground/85 hover:bg-primary-foreground/10"
             : "border-primary text-muted-foreground hover:bg-background/60",
@@ -90,9 +97,7 @@ export function MessageBubble({
         <span className="block truncate font-semibold">
           {replyTargetAuthor ?? "알 수 없는 사용자"}
         </span>
-        <span className="block truncate">
-          {formatReplyPreview(replyTarget, window.location.origin)}
-        </span>
+        <span className="block truncate">{replyQuoteText}</span>
       </button>
     ) : null;
   const editedMark = showEdited ? (
@@ -119,12 +124,12 @@ export function MessageBubble({
   const textBoxRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
   // 여러 줄 글 버블은 가장 긴 줄에 폭을 맞춘다. 첨부가 있으면 글 버블이 첨부 폭을 채우므로 줄이지 않는다.
-  // 답장 인용이 바라는 14rem(`w-56`)보다는 줄이지 않는다.
+  // 답장 인용이 차지하는 폭보다는 줄이지 않는다.
   useShrinkWrap(textBoxRef, textRef, {
     enabled:
       hasText && !isEmojiOnly && !message.deleted && attachments.length === 0,
-    contentKey: `${messageBody}|${showEdited}`,
-    minContentRem: replyQuote ? 14 : 0,
+    contentKey: `${messageBody}|${showEdited}|${replyTargetAuthor}|${replyQuoteText}`,
+    minContentRef: quoteRef,
   });
   // 첨부, 게시물 카드(위 답장 인용 띠 포함), 글 버블이 차례로 쌓인 조각이다. 조각끼리, 그리고 묶음의
   // 앞뒤 메시지와 맞닿는 쪽의 모서리를 덜 둥글게 해 하나로 잇는다.
