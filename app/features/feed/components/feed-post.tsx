@@ -1,5 +1,7 @@
 import {
   ChevronRightIcon,
+  EyeIcon,
+  EyeOffIcon,
   HeartIcon,
   MessageSquareIcon,
   PinIcon,
@@ -76,12 +78,18 @@ function AuthorAvatar({ post }: { post: FeedPost }) {
 function AuthorName({
   post,
   compact = false,
+  preserveName = false,
 }: {
   post: FeedPost;
   compact?: boolean;
+  preserveName?: boolean;
 }) {
   const name = post.author_name ?? post.author_label;
-  const className = cn("truncate font-semibold", !compact && "text-sm");
+  const className = cn(
+    "font-semibold",
+    preserveName ? "shrink-0 whitespace-nowrap" : "truncate",
+    !compact && "text-sm",
+  );
 
   if (post.author_identity === "anonymous" || !post.author_pub_id) {
     return <span className={className}>{name}</span>;
@@ -131,7 +139,37 @@ function FeedPostMenu({ post }: { post: FeedPost }) {
   );
 }
 
-function FeedPostHeader({ post }: { post: FeedPost }) {
+function ProfileActivityEye({
+  hidden,
+  onToggle,
+}: {
+  hidden: boolean;
+  onToggle: () => void;
+}) {
+  const Icon = hidden ? EyeOffIcon : EyeIcon;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={hidden ? "가림 해제" : "24시간 가리기"}
+      title={hidden ? "가림 해제" : "24시간 가리기"}
+      className={cn(
+        "inline-flex size-11 shrink-0 touch-manipulation items-center justify-center rounded-full transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-primary",
+        hidden ? "text-destructive" : "text-foreground",
+      )}
+    >
+      <Icon className="size-4" aria-hidden="true" />
+    </button>
+  );
+}
+
+function FeedPostHeader({
+  post,
+  onToggleHidden,
+}: {
+  post: FeedPost;
+  onToggleHidden?: () => void;
+}) {
   const ownTimeline =
     post.kind === "profile" && post.author_pub_id === post.timeline_pub_id;
   const activityLabel =
@@ -162,7 +200,7 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
               </Link>
             </>
           ) : (
-            <AuthorName post={post} />
+            <AuthorName post={post} preserveName={Boolean(activityLabel)} />
           )}
           {activityLabel ? (
             <span className="truncate text-sm text-muted-foreground">
@@ -206,6 +244,11 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
           <RelativeTime value={post.published_at} />
         </div>
       </div>
+      {activityLabel && !post.is_author && onToggleHidden ? (
+        <div className="shrink-0 [&>button]:size-8">
+          <ProfileActivityEye hidden={false} onToggle={onToggleHidden} />
+        </div>
+      ) : null}
       <FeedPostMenu post={post} />
     </header>
   );
@@ -214,14 +257,40 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
 export function FeedPostCard({
   post,
   mediaPending = false,
+  hidden = false,
+  onToggleHidden,
 }: {
   post: FeedPost;
   mediaPending?: boolean;
+  hidden?: boolean;
+  onToggleHidden?: () => void;
 }) {
   const path = feedPostPath(post);
   const overlayPath = feedPostOverlayPath(post);
   const { images, files } = splitPostAttachments(post.attachments);
   const isMediaActivity = post.kind === "profile" && post.activity_kind;
+
+  if (isMediaActivity && !post.is_author && hidden) {
+    return (
+      <article className="flex min-h-16 items-center gap-2 border-b-2 border-foreground/20 bg-card px-4 py-3 md:rounded-xl md:border md:border-border">
+        <p className="min-w-0 flex-1 text-sm leading-5 break-words">
+          <span className="font-semibold">
+            {post.author_name ?? post.author_label}
+          </span>
+          <span className="text-muted-foreground">
+            님이{" "}
+            {post.activity_kind === "avatar_changed"
+              ? "프로필 사진을"
+              : "프로필 커버를"}{" "}
+            바꾸었습니다.
+          </span>
+        </p>
+        {onToggleHidden ? (
+          <ProfileActivityEye hidden onToggle={onToggleHidden} />
+        ) : null}
+      </article>
+    );
+  }
 
   return (
     // 홈 피드는 서명을 뒤에서 채운다. 서명 중인 카드의 빈 미디어는 실패가 아니라 로딩으로 그린다.
@@ -233,7 +302,12 @@ export function FeedPostCard({
             고정된 게시물
           </div>
         ) : null}
-        <FeedPostHeader post={post} />
+        <FeedPostHeader
+          post={post}
+          onToggleHidden={
+            isMediaActivity && !post.is_author ? onToggleHidden : undefined
+          }
+        />
         {isMediaActivity ? (
           <ProfileMediaActivity post={post} />
         ) : (
@@ -290,10 +364,14 @@ export function FeedPostRow({
   post,
   isVisited,
   onVisit,
+  hidden = false,
+  onToggleHidden,
 }: {
   post: FeedPost;
   isVisited: boolean;
   onVisit: () => void;
+  hidden?: boolean;
+  onToggleHidden?: () => void;
 }) {
   const engagement = usePostEngagement(post.post_id, post);
   const path = feedPostOverlayPath(post);
@@ -308,50 +386,81 @@ export function FeedPostRow({
           : "프로필 커버를 바꾸었습니다."
         : extractPostPlainText(post.body);
 
-  return (
-    <Link
-      to={path}
-      preventScrollReset
-      onClick={onVisit}
-      className={cn(
-        "flex w-full flex-col gap-1 px-3 py-2.5 text-left transition-colors hover:bg-muted/60",
-        isVisited && "bg-muted/45 hover:bg-muted/60",
-      )}
-    >
-      <div className="flex items-center gap-2">
-        {post.kind === "group" && post.is_pinned ? (
-          <PinIcon
-            className="size-4 shrink-0 -rotate-45 fill-current text-muted-foreground"
-            aria-label="고정됨"
-          />
+  if (
+    hidden &&
+    !post.is_author &&
+    post.kind === "profile" &&
+    post.activity_kind
+  ) {
+    return (
+      <div className="flex min-h-14 items-center gap-2 px-3 py-2.5">
+        <p className="min-w-0 flex-1 text-sm break-words">
+          <span className="font-semibold">{author}</span>
+          <span className="text-muted-foreground">님이 {text}</span>
+        </p>
+        {onToggleHidden ? (
+          <ProfileActivityEye hidden onToggle={onToggleHidden} />
         ) : null}
-        <p className="line-clamp-1 text-sm font-medium sm:text-base">{text}</p>
       </div>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="truncate">{author}</span>
-        <ChevronRightIcon className="size-3 shrink-0" aria-hidden="true" />
-        <span className="truncate">{target}</span>
-        <span aria-hidden="true">·</span>
-        <RelativeTime value={post.published_at} />
-        <span className="ml-auto flex shrink-0 items-center gap-3">
-          <span className="flex items-center gap-1">
-            {engagement.top_reactions.length ? (
-              engagement.top_reactions.map((reaction) => (
-                <ReactionEmoji key={reaction} reaction={reaction} />
-              ))
-            ) : (
-              <HeartIcon className="size-3.5" aria-hidden="true" />
-            )}
-            <span className="sr-only">반응</span>
-            {engagement.reaction_count}
+    );
+  }
+
+  return (
+    <div className="flex items-start">
+      <Link
+        to={path}
+        preventScrollReset
+        onClick={onVisit}
+        className={cn(
+          "flex min-w-0 flex-1 flex-col gap-1 px-3 py-2.5 text-left transition-colors hover:bg-muted/60",
+          isVisited && "bg-muted/45 hover:bg-muted/60",
+        )}
+      >
+        <div className="flex items-center gap-2">
+          {post.kind === "group" && post.is_pinned ? (
+            <PinIcon
+              className="size-4 shrink-0 -rotate-45 fill-current text-muted-foreground"
+              aria-label="고정됨"
+            />
+          ) : null}
+          <p className="line-clamp-1 text-sm font-medium sm:text-base">
+            {text}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="truncate">{author}</span>
+          <ChevronRightIcon className="size-3 shrink-0" aria-hidden="true" />
+          <span className="truncate">{target}</span>
+          <span aria-hidden="true">·</span>
+          <RelativeTime value={post.published_at} />
+          <span className="ml-auto flex shrink-0 items-center gap-3">
+            <span className="flex items-center gap-1">
+              {engagement.top_reactions.length ? (
+                engagement.top_reactions.map((reaction) => (
+                  <ReactionEmoji key={reaction} reaction={reaction} />
+                ))
+              ) : (
+                <HeartIcon className="size-3.5" aria-hidden="true" />
+              )}
+              <span className="sr-only">반응</span>
+              {engagement.reaction_count}
+            </span>
+            <span className="flex items-center gap-1">
+              <MessageSquareIcon className="size-3.5" aria-hidden="true" />
+              <span className="sr-only">댓글</span>
+              {engagement.comment_count}
+            </span>
           </span>
-          <span className="flex items-center gap-1">
-            <MessageSquareIcon className="size-3.5" aria-hidden="true" />
-            <span className="sr-only">댓글</span>
-            {engagement.comment_count}
-          </span>
-        </span>
-      </div>
-    </Link>
+        </div>
+      </Link>
+      {post.kind === "profile" &&
+      !post.is_author &&
+      post.activity_kind &&
+      onToggleHidden ? (
+        <div className="pt-2 pr-2">
+          <ProfileActivityEye hidden={false} onToggle={onToggleHidden} />
+        </div>
+      ) : null}
+    </div>
   );
 }

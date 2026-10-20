@@ -13,6 +13,7 @@ import {
   FeedPostCard,
   FeedPostRow,
 } from "~/features/feed/components/feed-post";
+import { useHiddenProfileActivities } from "~/features/feed/hooks/use-hidden-profile-activities";
 import {
   feedPageMediaQueries,
   feedQuery,
@@ -59,6 +60,12 @@ export function FeedScreen() {
   const [searchParams] = useSearchParams();
   const [viewMode] = usePostViewMode();
   const { visited, markVisited } = useVisitedPosts();
+  const {
+    entries: hiddenActivities,
+    hide,
+    unhide,
+  } = useHiddenProfileActivities();
+  const hiddenIds = new Set(hiddenActivities.map((entry) => entry.postId));
   const closeDetail = useModalClose("/");
   const activePostId = searchParams.get("post");
   const activeKind = searchParams.get("kind");
@@ -235,6 +242,15 @@ export function FeedScreen() {
             <FeedPostCard
               key={post.post_id}
               post={post}
+              hidden={hiddenIds.has(post.post_id)}
+              onToggleHidden={
+                post.kind === "profile" && !post.is_author && post.activity_kind
+                  ? () =>
+                      hiddenIds.has(post.post_id)
+                        ? unhide(post.post_id)
+                        : hide(post.post_id)
+                  : undefined
+              }
               mediaPending={
                 pendingPostIds.has(post.post_id) && hasMissingMedia(post)
               }
@@ -247,6 +263,17 @@ export function FeedScreen() {
             <li key={post.post_id}>
               <FeedPostRow
                 post={post}
+                hidden={hiddenIds.has(post.post_id)}
+                onToggleHidden={
+                  post.kind === "profile" &&
+                  !post.is_author &&
+                  post.activity_kind
+                    ? () =>
+                        hiddenIds.has(post.post_id)
+                          ? unhide(post.post_id)
+                          : hide(post.post_id)
+                    : undefined
+                }
                 isVisited={visited.has(post.post_id)}
                 onVisit={() => markVisited(post.post_id)}
               />

@@ -5,7 +5,10 @@ import {
   FeedPostCard,
   FeedPostRow,
 } from "~/features/feed/components/feed-post";
-import type { GroupFeedPost } from "~/features/feed/model/types";
+import type {
+  GroupFeedPost,
+  ProfileFeedPost,
+} from "~/features/feed/model/types";
 import { groupPost } from "../../posts/group-post-fixture";
 import { renderRoute } from "../../../router";
 
@@ -32,9 +35,66 @@ function pinnedFeedPost(): GroupFeedPost {
   };
 }
 
+function profileActivity(): ProfileFeedPost {
+  return {
+    ...pinnedFeedPost(),
+    kind: "profile",
+    post_id: "11111111-1111-4111-8111-111111111111",
+    group_id: null,
+    group_name: null,
+    group_slug: null,
+    category_name: null,
+    title: null,
+    is_pinned: false,
+    timeline_name: "김서민",
+    timeline_pub_id: "seomin-30",
+    activity_kind: "avatar_changed",
+    activity_media_path: "activity/avatar.webp",
+    activity_media_url: "https://example.test/avatar.webp",
+    visibility: "public",
+    author_name: "김서민",
+    author_pub_id: "seomin-30",
+  };
+}
+
 afterEach(() => vi.restoreAllMocks());
 
 describe("FeedPostCard", () => {
+  it("keeps the caller's profile activity visible without a hide control, even with an old hidden preference", () => {
+    const post = { ...profileActivity(), is_author: true };
+    renderRoute(() => (
+      <FeedPostCard post={post} hidden onToggleHidden={vi.fn()} />
+    ));
+    expect(
+      screen.queryByRole("button", { name: "24시간 가리기" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "가림 해제" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("profile-media-activity")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "게시물 옵션" }),
+    ).toBeInTheDocument();
+  });
+
+  it("folds only profile media activity content and keeps its divider", () => {
+    const post = profileActivity();
+    const onToggleHidden = vi.fn();
+    renderRoute(() => (
+      <FeedPostCard post={post} hidden onToggleHidden={onToggleHidden} />
+    ));
+
+    expect(screen.getByText(/김서민/)).toBeInTheDocument();
+    expect(screen.getByText(/프로필 사진을 바꾸었습니다/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "가림 해제" })).toHaveClass(
+      "text-destructive",
+    );
+    expect(
+      screen.queryByRole("link", { name: "댓글 0개" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("article")).toHaveClass("border-b-2");
+  });
+
   it("shows the body and reserves image space while signing is pending", () => {
     const post = pinnedFeedPost();
     post.body = "서명을 기다리지 않는 본문";
@@ -120,6 +180,25 @@ describe("FeedPostCard menu", () => {
 });
 
 describe("FeedPostRow", () => {
+  it("does not fold the caller's own profile activity or show a hide control", () => {
+    renderRoute(() => (
+      <FeedPostRow
+        post={{ ...profileActivity(), is_author: true }}
+        hidden
+        onToggleHidden={vi.fn()}
+        isVisited={false}
+        onVisit={vi.fn()}
+      />
+    ));
+    expect(
+      screen.queryByRole("button", { name: "24시간 가리기" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "가림 해제" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link")).toBeInTheDocument();
+  });
+
   it("dims a visited row and reports the visit", async () => {
     const onVisit = vi.fn();
     const { user } = renderRoute(() => (
