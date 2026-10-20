@@ -615,9 +615,13 @@ export function MessageRow({
           </span>
         ) : null}
         {/* 탭으로 시각을 보는 것은 손가락 전용 지름길이다. 마우스는 시간 카드로 본다. */}
+        {/* 레일은 이 줄의 바깥 끝에 붙는다. 줄이 열을 채우면 열을 넓힌 이름 줄(`이름 · 고정됨`)만큼
+            레일이 버블에서 떨어지므로, 줄은 버블과 읽음 수만큼만 차지한다. */}
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
         <div
-          className={cn("relative flex w-full min-w-0 items-center gap-1.5")}
+          className={cn(
+            "relative flex w-fit max-w-full min-w-0 items-center gap-1.5",
+          )}
           onPointerDown={startTap}
           onClick={handleTap}
         >
