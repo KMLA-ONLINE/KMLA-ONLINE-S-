@@ -20,7 +20,7 @@ export const TIMETABLE_STORAGE_KEY = "kmla-online:timetable:v1";
 /** 열어본 게시물 id. 목록에서 "이미 읽음"을 흐리게 그리는 데 쓴다. */
 export const VISITED_POSTS_STORAGE_KEY = "kmla-online:visited-posts:v1";
 
-/** 홈 피드에서 직접 접은 프로필 변경 글의 ID와 24시간 만료 시각. */
+/** 홈 피드에서 직접 접은 프로필 변경 글의 ID. 최근에 가린 순서로 상한까지만 남긴다. */
 export const HIDDEN_PROFILE_ACTIVITIES_STORAGE_KEY =
   "kmla-online:hidden-profile-activities:v1";
 

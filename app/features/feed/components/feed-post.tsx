@@ -1,15 +1,14 @@
 import {
   ChevronRightIcon,
-  EyeIcon,
-  EyeOffIcon,
   HeartIcon,
   MessageSquareIcon,
   PinIcon,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Link, useFetcher } from "react-router";
 import { toast } from "sonner";
 
+import { canHideProfileActivity } from "~/features/feed/model/hidden-profile-activities";
 import type { FeedPost, GroupFeedPost } from "~/features/feed/model/types";
 import { PostActionBar } from "~/features/posts/components/post-action-bar";
 import { PostMenu } from "~/features/posts/components/post-menu";
@@ -35,6 +34,7 @@ import {
 import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
+import { Button } from "~/shared/ui/button";
 
 function feedPostPath(post: FeedPost): string {
   return post.kind === "group"
@@ -85,9 +85,10 @@ function AuthorName({
   preserveName?: boolean;
 }) {
   const name = post.author_name ?? post.author_label;
+  // 활동 문구보다 이름을 먼저 지키되, 아주 긴 이름은 헤더를 넘지 않게 자른다.
   const className = cn(
-    "font-semibold",
-    preserveName ? "shrink-0 whitespace-nowrap" : "truncate",
+    "truncate font-semibold",
+    preserveName && "max-w-[60%] shrink-0",
     !compact && "text-sm",
   );
 
@@ -110,8 +111,15 @@ function AuthorName({
  * 따지면 피드 쿼리가 무거워지므로, 이미 있는 `is_author`로 작성자 몫(수정·삭제)만 연다.
  * 운영진의 삭제·고정과 신고는 상세의 메뉴에서 한다. 작성자의 권한은 그룹·개인 모두 `is_author`와
  * 같고, 프로필 사진·커버 활동 게시물만 수정할 수 없다(`get_*_post`의 `can_edit`).
+ * 남의 프로필 변경 활동에는 이 기기에서만 접는 "가리기"만 연다.
  */
-function FeedPostMenu({ post }: { post: FeedPost }) {
+function FeedPostMenu({
+  post,
+  onHide,
+}: {
+  post: FeedPost;
+  onHide?: () => void;
+}) {
   const fetcher = useFetcher<{ error?: string }>();
   const path = feedPostPath(post);
   const result = fetcher.state === "idle" ? fetcher.data : undefined;
@@ -121,7 +129,16 @@ function FeedPostMenu({ post }: { post: FeedPost }) {
     if (result?.error) toast.error(result.error);
   }, [result]);
 
-  if (!post.is_author) return null;
+  if (!post.is_author) {
+    return onHide ? (
+      <PostMenu
+        editTo={`${path}/edit`}
+        canEdit={false}
+        canDelete={false}
+        onHide={onHide}
+      />
+    ) : null;
+  }
 
   return (
     <PostMenu
@@ -139,45 +156,85 @@ function FeedPostMenu({ post }: { post: FeedPost }) {
   );
 }
 
-function ProfileActivityEye({
-  hidden,
-  onToggle,
+function profileActivityText(post: FeedPost): string | null {
+  if (post.kind !== "profile" || !post.activity_kind) return null;
+  return post.activity_kind === "avatar_changed"
+    ? "프로필 사진을 바꾸었습니다."
+    : "프로필 커버를 바꾸었습니다.";
+}
+
+/**
+ * 가리기·다시 보기는 카드를 통째로 바꿔 누른 컨트롤이 사라진다. 직접 누른 경우에만
+ * 반대쪽 컨트롤(다시 보기 ↔ ⋯ 메뉴)로 포커스를 옮겨 키보드 위치를 잃지 않게 한다.
+ */
+function useHideToggleFocus<T extends HTMLElement>(
+  hidden: boolean,
+  onToggleHidden: (() => void) | undefined,
+) {
+  const ref = useRef<T>(null);
+  const pending = useRef(false);
+
+  useEffect(() => {
+    if (!pending.current) return;
+    pending.current = false;
+    ref.current
+      ?.querySelector<HTMLElement>(
+        hidden ? "[data-hide-toggle]" : "[data-slot=dropdown-menu-trigger]",
+      )
+      ?.focus();
+  }, [hidden]);
+
+  const toggle = onToggleHidden
+    ? () => {
+        pending.current = true;
+        onToggleHidden();
+      }
+    : undefined;
+  return { ref, toggle };
+}
+
+function HiddenProfileActivity({
+  post,
+  onShow,
 }: {
-  hidden: boolean;
-  onToggle: () => void;
+  post: FeedPost;
+  onShow?: () => void;
 }) {
-  const Icon = hidden ? EyeOffIcon : EyeIcon;
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-label={hidden ? "가림 해제" : "24시간 가리기"}
-      title={hidden ? "가림 해제" : "24시간 가리기"}
-      className={cn(
-        "inline-flex size-11 shrink-0 touch-manipulation items-center justify-center rounded-full transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-primary",
-        hidden ? "text-destructive" : "text-foreground",
-      )}
-    >
-      <Icon className="size-4" aria-hidden="true" />
-    </button>
+    <>
+      <p className="min-w-0 flex-1 text-sm leading-5 break-words">
+        <span className="font-semibold">
+          {post.author_name ?? post.author_label}
+        </span>
+        <span className="text-muted-foreground">
+          님이 {profileActivityText(post)}
+        </span>
+      </p>
+      {onShow ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="shrink-0 text-muted-foreground"
+          data-hide-toggle
+          onClick={onShow}
+        >
+          다시 보기
+        </Button>
+      ) : null}
+    </>
   );
 }
 
 function FeedPostHeader({
   post,
-  onToggleHidden,
+  onHide,
 }: {
   post: FeedPost;
-  onToggleHidden?: () => void;
+  onHide?: () => void;
 }) {
   const ownTimeline =
     post.kind === "profile" && post.author_pub_id === post.timeline_pub_id;
-  const activityLabel =
-    post.kind === "profile" && post.activity_kind
-      ? post.activity_kind === "avatar_changed"
-        ? "프로필 사진을 바꾸었습니다."
-        : "프로필 커버를 바꾸었습니다."
-      : null;
+  const activityLabel = profileActivityText(post);
 
   return (
     <header
@@ -244,12 +301,7 @@ function FeedPostHeader({
           <RelativeTime value={post.published_at} />
         </div>
       </div>
-      {activityLabel && !post.is_author && onToggleHidden ? (
-        <div className="shrink-0 [&>button]:size-8">
-          <ProfileActivityEye hidden={false} onToggle={onToggleHidden} />
-        </div>
-      ) : null}
-      <FeedPostMenu post={post} />
+      <FeedPostMenu post={post} onHide={onHide} />
     </header>
   );
 }
@@ -269,25 +321,19 @@ export function FeedPostCard({
   const overlayPath = feedPostOverlayPath(post);
   const { images, files } = splitPostAttachments(post.attachments);
   const isMediaActivity = post.kind === "profile" && post.activity_kind;
+  const canHide = canHideProfileActivity(post);
+  const { ref, toggle } = useHideToggleFocus<HTMLElement>(
+    hidden,
+    canHide ? onToggleHidden : undefined,
+  );
 
-  if (isMediaActivity && !post.is_author && hidden) {
+  if (canHide && hidden) {
     return (
-      <article className="flex min-h-16 items-center gap-2 border-b-2 border-foreground/20 bg-card px-4 py-3 md:rounded-xl md:border md:border-border">
-        <p className="min-w-0 flex-1 text-sm leading-5 break-words">
-          <span className="font-semibold">
-            {post.author_name ?? post.author_label}
-          </span>
-          <span className="text-muted-foreground">
-            님이{" "}
-            {post.activity_kind === "avatar_changed"
-              ? "프로필 사진을"
-              : "프로필 커버를"}{" "}
-            바꾸었습니다.
-          </span>
-        </p>
-        {onToggleHidden ? (
-          <ProfileActivityEye hidden onToggle={onToggleHidden} />
-        ) : null}
+      <article
+        ref={ref}
+        className="flex min-h-16 items-center gap-2 border-b-2 border-foreground/20 bg-card px-4 py-3 md:rounded-xl md:border md:border-border"
+      >
+        <HiddenProfileActivity post={post} onShow={toggle} />
       </article>
     );
   }
@@ -295,19 +341,17 @@ export function FeedPostCard({
   return (
     // 홈 피드는 서명을 뒤에서 채운다. 서명 중인 카드의 빈 미디어는 실패가 아니라 로딩으로 그린다.
     <MediaPendingContext value={mediaPending}>
-      <article className="overflow-hidden border-b-2 border-foreground/20 bg-card shadow-none md:rounded-xl md:border md:border-border md:shadow-sm">
+      <article
+        ref={ref}
+        className="overflow-hidden border-b-2 border-foreground/20 bg-card shadow-none md:rounded-xl md:border md:border-border md:shadow-sm"
+      >
         {post.kind === "group" && post.is_pinned ? (
           <div className="flex items-center gap-1.5 px-4 pt-3 text-xs font-semibold text-muted-foreground">
             <PinIcon className="size-3.5 -rotate-45 fill-current" />
             고정된 게시물
           </div>
         ) : null}
-        <FeedPostHeader
-          post={post}
-          onToggleHidden={
-            isMediaActivity && !post.is_author ? onToggleHidden : undefined
-          }
-        />
+        <FeedPostHeader post={post} onHide={toggle} />
         {isMediaActivity ? (
           <ProfileMediaActivity post={post} />
         ) : (
@@ -380,41 +424,35 @@ export function FeedPostRow({
   const text =
     post.kind === "group"
       ? groupListTitle(post)
-      : post.activity_kind
-        ? post.activity_kind === "avatar_changed"
-          ? "프로필 사진을 바꾸었습니다."
-          : "프로필 커버를 바꾸었습니다."
-        : extractPostPlainText(post.body);
+      : (profileActivityText(post) ?? extractPostPlainText(post.body));
+  const canHide = canHideProfileActivity(post);
+  const { ref, toggle } = useHideToggleFocus<HTMLDivElement>(
+    hidden,
+    canHide ? onToggleHidden : undefined,
+  );
 
-  if (
-    hidden &&
-    !post.is_author &&
-    post.kind === "profile" &&
-    post.activity_kind
-  ) {
+  if (canHide && hidden) {
     return (
-      <div className="flex min-h-14 items-center gap-2 px-3 py-2.5">
-        <p className="min-w-0 flex-1 text-sm break-words">
-          <span className="font-semibold">{author}</span>
-          <span className="text-muted-foreground">님이 {text}</span>
-        </p>
-        {onToggleHidden ? (
-          <ProfileActivityEye hidden onToggle={onToggleHidden} />
-        ) : null}
+      <div ref={ref} className="flex min-h-14 items-center gap-2 px-3 py-2.5">
+        <HiddenProfileActivity post={post} onShow={toggle} />
       </div>
     );
   }
 
   return (
-    <div className="flex items-start">
+    <div
+      ref={ref}
+      data-testid="feed-post-row"
+      className={cn(
+        "flex items-start transition-colors hover:bg-muted/60",
+        isVisited && "bg-muted/45",
+      )}
+    >
       <Link
         to={path}
         preventScrollReset
         onClick={onVisit}
-        className={cn(
-          "flex min-w-0 flex-1 flex-col gap-1 px-3 py-2.5 text-left transition-colors hover:bg-muted/60",
-          isVisited && "bg-muted/45 hover:bg-muted/60",
-        )}
+        className="flex min-w-0 flex-1 flex-col gap-1 px-3 py-2.5 text-left"
       >
         <div className="flex items-center gap-2">
           {post.kind === "group" && post.is_pinned ? (
@@ -453,12 +491,9 @@ export function FeedPostRow({
           </span>
         </div>
       </Link>
-      {post.kind === "profile" &&
-      !post.is_author &&
-      post.activity_kind &&
-      onToggleHidden ? (
-        <div className="pt-2 pr-2">
-          <ProfileActivityEye hidden={false} onToggle={onToggleHidden} />
+      {toggle ? (
+        <div className="shrink-0 pt-2 pr-2">
+          <FeedPostMenu post={post} onHide={toggle} />
         </div>
       ) : null}
     </div>

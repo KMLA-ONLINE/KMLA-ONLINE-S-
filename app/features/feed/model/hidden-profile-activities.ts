@@ -1,66 +1,49 @@
-export interface HiddenProfileActivity {
-  postId: string;
-  hiddenUntil: number;
+import type { FeedPost } from "~/features/feed/model/types";
+
+/** 기기에 남기는 가린 게시물 ID 수. 넘치면 가장 오래전에 가린 것부터 다시 보인다. */
+export const HIDDEN_PROFILE_ACTIVITY_LIMIT = 200;
+
+const POST_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** 다른 사람의 프로필 사진·커버 변경 활동만 가릴 수 있다. */
+export function canHideProfileActivity(post: FeedPost): boolean {
+  return post.kind === "profile" && !post.is_author && !!post.activity_kind;
 }
 
-export const PROFILE_ACTIVITY_HIDE_MS = 24 * 60 * 60 * 1000;
-
-/** Only IDs and expiration times are stored on the device; post content stays in memory. */
-export function activeHiddenProfileActivities(
-  entries: readonly HiddenProfileActivity[],
-  now = Date.now(),
-): HiddenProfileActivity[] {
+/** Only post IDs are stored on the device, most recently hidden first. */
+function normalize(ids: readonly unknown[]): string[] {
   const seen = new Set<string>();
-  return entries
-    .filter(
-      (entry) =>
-        typeof entry?.postId === "string" &&
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          entry.postId,
-        ) &&
-        Number.isFinite(entry.hiddenUntil) &&
-        entry.hiddenUntil > now,
-    )
-    .sort((a, b) => b.hiddenUntil - a.hiddenUntil)
-    .filter((entry) => {
-      if (seen.has(entry.postId)) return false;
-      seen.add(entry.postId);
-      return true;
-    });
+  const result: string[] = [];
+  for (const id of ids) {
+    if (typeof id !== "string" || !POST_ID.test(id) || seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+    if (result.length === HIDDEN_PROFILE_ACTIVITY_LIMIT) break;
+  }
+  return result;
 }
 
-export function parseHiddenProfileActivities(
-  raw: string | null,
-  now = Date.now(),
-): HiddenProfileActivity[] {
+export function parseHiddenProfileActivities(raw: string | null): string[] {
   if (!raw) return [];
   try {
     const value: unknown = JSON.parse(raw);
-    return Array.isArray(value)
-      ? activeHiddenProfileActivities(value, now)
-      : [];
+    return Array.isArray(value) ? normalize(value) : [];
   } catch {
     return [];
   }
 }
 
 export function hideProfileActivity(
-  entries: readonly HiddenProfileActivity[],
+  ids: readonly string[],
   postId: string,
-  now = Date.now(),
-): HiddenProfileActivity[] {
-  return activeHiddenProfileActivities(
-    [
-      { postId, hiddenUntil: now + PROFILE_ACTIVITY_HIDE_MS },
-      ...entries.filter((entry) => entry.postId !== postId),
-    ],
-    now,
-  );
+): string[] {
+  return normalize([postId, ...ids]);
 }
 
 export function unhideProfileActivity(
-  entries: readonly HiddenProfileActivity[],
+  ids: readonly string[],
   postId: string,
-): HiddenProfileActivity[] {
-  return entries.filter((entry) => entry.postId !== postId);
+): string[] {
+  return ids.filter((id) => id !== postId);
 }

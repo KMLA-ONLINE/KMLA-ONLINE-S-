@@ -1,4 +1,5 @@
 import { screen, within } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -60,39 +61,68 @@ function profileActivity(): ProfileFeedPost {
 afterEach(() => vi.restoreAllMocks());
 
 describe("FeedPostCard", () => {
-  it("keeps the caller's profile activity visible without a hide control, even with an old hidden preference", () => {
+  it("keeps the caller's profile activity visible without a hide control, even with an old hidden preference", async () => {
     const post = { ...profileActivity(), is_author: true };
-    renderRoute(() => (
+    const { user } = renderRoute(() => (
       <FeedPostCard post={post} hidden onToggleHidden={vi.fn()} />
     ));
     expect(
-      screen.queryByRole("button", { name: "24시간 가리기" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "가림 해제" }),
+      screen.queryByRole("button", { name: "다시 보기" }),
     ).not.toBeInTheDocument();
     expect(screen.getByTestId("profile-media-activity")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "게시물 옵션" }));
     expect(
-      screen.getByRole("button", { name: "게시물 옵션" }),
+      await screen.findByRole("menuitem", { name: "삭제" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "가리기" }),
+    ).not.toBeInTheDocument();
   });
 
   it("folds only profile media activity content and keeps its divider", () => {
     const post = profileActivity();
-    const onToggleHidden = vi.fn();
     renderRoute(() => (
-      <FeedPostCard post={post} hidden onToggleHidden={onToggleHidden} />
+      <FeedPostCard post={post} hidden onToggleHidden={vi.fn()} />
     ));
 
     expect(screen.getByText(/김서민/)).toBeInTheDocument();
     expect(screen.getByText(/프로필 사진을 바꾸었습니다/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "가림 해제" })).toHaveClass(
-      "text-destructive",
-    );
+    expect(
+      screen.getByRole("button", { name: "다시 보기" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "댓글 0개" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("article")).toHaveClass("border-b-2");
+  });
+
+  it("hides someone else's activity from the post menu and moves focus between the controls", async () => {
+    const post = profileActivity();
+    function Harness() {
+      const [hidden, setHidden] = useState(false);
+      return (
+        <FeedPostCard
+          post={post}
+          hidden={hidden}
+          onToggleHidden={() => setHidden((value) => !value)}
+        />
+      );
+    }
+    const { user } = renderRoute(() => <Harness />);
+
+    await user.click(screen.getByRole("button", { name: "게시물 옵션" }));
+    await user.click(await screen.findByRole("menuitem", { name: "가리기" }));
+
+    const show = await screen.findByRole("button", { name: "다시 보기" });
+    expect(show).toHaveFocus();
+    expect(
+      screen.queryByTestId("profile-media-activity"),
+    ).not.toBeInTheDocument();
+
+    await user.click(show);
+    expect(screen.getByTestId("profile-media-activity")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "게시물 옵션" })).toHaveFocus();
   });
 
   it("shows the body and reserves image space while signing is pending", () => {
@@ -191,10 +221,10 @@ describe("FeedPostRow", () => {
       />
     ));
     expect(
-      screen.queryByRole("button", { name: "24시간 가리기" }),
+      screen.queryByRole("button", { name: "다시 보기" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "가림 해제" }),
+      screen.queryByRole("button", { name: "게시물 옵션" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("link")).toBeInTheDocument();
   });
@@ -206,7 +236,7 @@ describe("FeedPostRow", () => {
     ));
 
     const link = screen.getByRole("link");
-    expect(link).toHaveClass("bg-muted/45");
+    expect(screen.getByTestId("feed-post-row")).toHaveClass("bg-muted/45");
 
     await user.click(link);
     expect(onVisit).toHaveBeenCalledOnce();

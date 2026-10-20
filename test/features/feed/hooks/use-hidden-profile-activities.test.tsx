@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { useHiddenProfileActivities } from "~/features/feed/hooks/use-hidden-profile-activities";
 import { HIDDEN_PROFILE_ACTIVITIES_STORAGE_KEY } from "~/shared/lib/user-scoped-storage";
@@ -7,17 +7,12 @@ import { HIDDEN_PROFILE_ACTIVITIES_STORAGE_KEY } from "~/shared/lib/user-scoped-
 const POST_ID = "11111111-1111-4111-8111-111111111111";
 
 describe("hidden profile activity preferences", () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-10-21T00:00:00Z"));
-  });
-  afterEach(() => vi.useRealTimers());
+  beforeEach(() => window.localStorage.clear());
 
   it("does not reuse the previous account's preferences when the feed was unmounted during account cleanup", () => {
     const { result, unmount } = renderHook(() => useHiddenProfileActivities());
-    act(() => result.current.hide(POST_ID));
-    expect(result.current.entries).toHaveLength(1);
+    act(() => result.current.toggle(POST_ID));
+    expect(result.current.hiddenIds.has(POST_ID)).toBe(true);
     unmount();
 
     window.localStorage.removeItem(HIDDEN_PROFILE_ACTIVITIES_STORAGE_KEY);
@@ -31,16 +26,18 @@ describe("hidden profile activity preferences", () => {
     const { result: nextResult } = renderHook(() =>
       useHiddenProfileActivities(),
     );
-    expect(nextResult.current.entries).toEqual([]);
+    expect(nextResult.current.hiddenIds.size).toBe(0);
   });
 
-  it("shows a hidden activity again after 24 hours while the feed stays open", () => {
+  it("toggles an activity hidden and shown again, and remembers it on the device", () => {
     const { result } = renderHook(() => useHiddenProfileActivities());
-    act(() => result.current.hide(POST_ID));
-    expect(result.current.entries).toHaveLength(1);
-    act(() => {
-      vi.advanceTimersByTime(24 * 60 * 60 * 1000);
-    });
-    expect(result.current.entries).toEqual([]);
+    act(() => result.current.toggle(POST_ID));
+    expect(result.current.hiddenIds.has(POST_ID)).toBe(true);
+    expect(
+      window.localStorage.getItem(HIDDEN_PROFILE_ACTIVITIES_STORAGE_KEY),
+    ).toBe(JSON.stringify([POST_ID]));
+
+    act(() => result.current.toggle(POST_ID));
+    expect(result.current.hiddenIds.has(POST_ID)).toBe(false);
   });
 });

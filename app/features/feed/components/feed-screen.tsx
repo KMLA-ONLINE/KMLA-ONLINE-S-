@@ -60,12 +60,7 @@ export function FeedScreen() {
   const [searchParams] = useSearchParams();
   const [viewMode] = usePostViewMode();
   const { visited, markVisited } = useVisitedPosts();
-  const {
-    entries: hiddenActivities,
-    hide,
-    unhide,
-  } = useHiddenProfileActivities();
-  const hiddenIds = new Set(hiddenActivities.map((entry) => entry.postId));
+  const { hiddenIds, toggle: toggleHidden } = useHiddenProfileActivities();
   const closeDetail = useModalClose("/");
   const activePostId = searchParams.get("post");
   const activeKind = searchParams.get("kind");
@@ -243,14 +238,7 @@ export function FeedScreen() {
               key={post.post_id}
               post={post}
               hidden={hiddenIds.has(post.post_id)}
-              onToggleHidden={
-                post.kind === "profile" && !post.is_author && post.activity_kind
-                  ? () =>
-                      hiddenIds.has(post.post_id)
-                        ? unhide(post.post_id)
-                        : hide(post.post_id)
-                  : undefined
-              }
+              onToggleHidden={() => toggleHidden(post.post_id)}
               mediaPending={
                 pendingPostIds.has(post.post_id) && hasMissingMedia(post)
               }
@@ -264,16 +252,7 @@ export function FeedScreen() {
               <FeedPostRow
                 post={post}
                 hidden={hiddenIds.has(post.post_id)}
-                onToggleHidden={
-                  post.kind === "profile" &&
-                  !post.is_author &&
-                  post.activity_kind
-                    ? () =>
-                        hiddenIds.has(post.post_id)
-                          ? unhide(post.post_id)
-                          : hide(post.post_id)
-                    : undefined
-                }
+                onToggleHidden={() => toggleHidden(post.post_id)}
                 isVisited={visited.has(post.post_id)}
                 onVisit={() => markVisited(post.post_id)}
               />

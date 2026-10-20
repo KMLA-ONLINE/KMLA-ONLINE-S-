@@ -4,7 +4,7 @@ test.use({ viewport: { width: 360, height: 800 } });
 
 for (const isAuthor of [true, false]) {
   for (const kind of ["avatar_changed", "cover_changed"] as const) {
-    test(`${isAuthor ? "본인" : "다른 사람"} 프로필 활동 ${kind}: 기존 헤더 높이와 아이콘 위치를 유지한다`, async ({
+    test(`${isAuthor ? "본인" : "다른 사람"} 프로필 활동 ${kind}: 기존 헤더 높이와 메뉴 위치를 유지한다`, async ({
       page,
     }) => {
       await page.addInitScript(() => {
@@ -69,19 +69,14 @@ for (const isAuthor of [true, false]) {
         },
       );
       await expect(
-        page.getByRole("button", { name: "24시간 가리기" }),
-      ).toHaveCount(isAuthor ? 0 : 1);
-      await expect(
         page.getByRole("button", { name: "게시물 옵션" }),
-      ).toHaveCount(isAuthor ? 1 : 0);
+      ).toHaveCount(1);
       for (const width of [360, 393]) {
         await page.setViewportSize({ width, height: 800 });
         const headerBox = (await header.boundingBox())!;
         expect(headerBox.height).toBe(64);
         const control = (await page
-          .getByRole("button", {
-            name: isAuthor ? "게시물 옵션" : "24시간 가리기",
-          })
+          .getByRole("button", { name: "게시물 옵션" })
           .boundingBox())!;
         expect(control.y - headerBox.y).toBe(12);
         expect(control.width).toBe(32);
