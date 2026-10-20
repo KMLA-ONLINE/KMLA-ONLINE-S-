@@ -1,7 +1,5 @@
 SET local check_function_bodies = off;
 
-DROP FUNCTION "public"."admin_list_applications"(public.profile_status, integer, integer);
-
 CREATE TABLE "private"."application_rejections" (
   "id"                     bigint                   GENERATED ALWAYS AS IDENTITY NOT NULL,
   "profile_id"             bigint                   NOT NULL,

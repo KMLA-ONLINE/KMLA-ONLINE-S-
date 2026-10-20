@@ -26,7 +26,7 @@ const REASON_TEMPLATES = [
 ] as const;
 
 /**
- * 가입 반려(§16.2). 한 명씩 사유를 받아 승인 화면 route action으로 보낸다. 대상이 바뀌면 호출자가
+ * 가입 반려. 한 명씩 사유를 받아 승인 화면 route action으로 보낸다. 대상이 바뀌면 호출자가
  * `key`로 다시 마운트해 입력과 이전 결과를 비운다.
  */
 export function RejectionDialog({

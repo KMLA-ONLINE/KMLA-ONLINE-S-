@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(23);
 
 -- 신청자는 직접 로그인해 반려 사유를 읽어야 하므로 Auth 사용자와 승인 대기 프로필을 새로 만든다.
 -- 김관리(…098)가 앱 관리자고, 홍길동(…001)은 관리자가 아닌 승인 회원이다.
@@ -232,6 +232,41 @@ select ok(
   (select bool_and(body like '%다시 제출%') from unblock_delivery),
   'the unblock email tells the applicant to fix and resubmit the profile'
 );
+
+-- 반려 뒤 차단됐다가 풀린 사람에게는 차단 전 반려 안내를 다시 보이지 않는다.
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+)
+values (
+  '00000000-0000-0000-0000-000000000000', '21000000-0000-0000-0000-000000000003',
+  'authenticated', 'authenticated', 'rejected-then-blocked@kmla.hs.kr', '', now(),
+  '{"provider":"email","providers":["email"]}', '{}', now(), now()
+);
+insert into public.profiles (
+  auth_user_id, name, type, student_number, cohort, status, submitted_at, status_updated_at
+)
+values (
+  '21000000-0000-0000-0000-000000000003', '반려 후 차단', 'student', '269104', 32,
+  'blocked', now(), now()
+);
+-- 반려는 차단보다 먼저 있었다.
+insert into private.application_rejections (profile_id, reason, rejected_at)
+select id, '기수를 확인해 주세요.', now() - interval '1 day'
+from public.profiles where auth_user_id = '21000000-0000-0000-0000-000000000003';
+select set_config('test.rejected_blocked_id', (
+  select id::text from public.profiles
+  where auth_user_id = '21000000-0000-0000-0000-000000000003'
+), true);
+set local role authenticated;
+select pg_temp.act_as('10000000-0000-0000-0000-000000000098');
+select public.admin_unblock_application(current_setting('test.rejected_blocked_id')::bigint);
+select pg_temp.act_as('21000000-0000-0000-0000-000000000003');
+select is_empty(
+  $$select * from public.get_my_application_rejection()$$,
+  'an unblocked applicant does not see a rejection from before the block'
+);
+reset role;
 
 select * from finish();
 rollback;

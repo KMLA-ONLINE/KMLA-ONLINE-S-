@@ -45,7 +45,7 @@ ALTER TABLE "private"."profile_suspensions" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "profile_suspensions_deny_client_access" ON "private"."profile_suspensions" USING (false) WITH CHECK (false);
 
--- 가입 반려(§16.2). 반려는 계정 상태가 아니라 신청을 `draft`로 되돌리는 처리라 사유는 여기에만 남는다.
+-- 가입 반려. 반려는 계정 상태가 아니라 신청을 `draft`로 되돌리는 처리라 사유는 여기에만 남는다.
 -- 처리한 관리자는 신청자에게 보이지 않아야 하므로 클라이언트 권한 없이 RPC로만 읽는다.
 CREATE TABLE IF NOT EXISTS "private"."application_rejections" (
     "id" bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -76,6 +76,8 @@ ALTER TABLE "private"."application_rejections" ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "application_rejections_deny_client_access" ON "private"."application_rejections" USING (false) WITH CHECK (false);
 
 -- 신청자가 학교 프로필 설정에서 볼 가장 최근 반려. 다시 제출해 `draft`를 벗어나면 보이지 않는다.
+-- 차단은 반려 기록을 남기므로, 반려 뒤 차단됐다가 풀린 `draft`에게 옛 사유를 보이지 않도록 마지막
+-- 상태 전환이 그 반려였을 때만 돌려준다. 반려는 같은 트랜잭션에서 두 시각을 함께 남긴다.
 CREATE OR REPLACE FUNCTION "public"."get_my_application_rejection"() RETURNS TABLE("reason" "text", "rejected_at" timestamp with time zone)
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
@@ -86,6 +88,7 @@ CREATE OR REPLACE FUNCTION "public"."get_my_application_rejection"() RETURNS TAB
   where profile.auth_user_id = (select auth.uid())
     and profile.status = 'draft'
     and profile.deleted_at is null
+    and rejection.rejected_at >= profile.status_updated_at
   order by rejection.rejected_at desc, rejection.id desc
   limit 1;
 $$;

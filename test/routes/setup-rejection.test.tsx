@@ -77,15 +77,42 @@ describe("rejected application on profile setup", () => {
     });
   });
 
-  // 가입 마법사에서 프로필 제출만 실패한 사람은 프로필 행이 없어 반려될 수 없다.
-  it("does not look for a rejection before any profile exists", async () => {
+  // 반려 조회는 인증 상태와 병렬로 나가지만, 프로필 행이 없으면 반려될 수 없으므로 결과를 버린다.
+  it("has no rejection before any profile exists", async () => {
     mocks.loadAuthState.mockResolvedValue({
       email: "student@kmla.hs.kr",
       profile: null,
     });
+    mocks.loadMyApplicationRejection.mockResolvedValue(null);
 
     await expect(clientLoader()).resolves.toMatchObject({ rejection: null });
-    expect(mocks.loadMyApplicationRejection).not.toHaveBeenCalled();
+  });
+
+  // 반려 안내는 부가 정보다. 조회가 실패해도 다시 제출할 양식은 열려야 한다.
+  it("still opens the form when the rejection cannot be loaded", async () => {
+    mocks.loadAuthState.mockResolvedValue({
+      email: "student@kmla.hs.kr",
+      profile,
+    });
+    mocks.loadMyApplicationRejection.mockRejectedValue(new Error("network"));
+
+    await expect(clientLoader()).resolves.toMatchObject({
+      rejection: null,
+      values: { name: "홍길동" },
+    });
+  });
+
+  it("asks for the rejection without waiting for the auth state", async () => {
+    let resolveAuth: ((value: unknown) => void) | undefined;
+    mocks.loadAuthState.mockReturnValue(
+      new Promise((resolve) => (resolveAuth = resolve)),
+    );
+    mocks.loadMyApplicationRejection.mockResolvedValue(null);
+
+    const loading = clientLoader();
+    expect(mocks.loadMyApplicationRejection).toHaveBeenCalled();
+    resolveAuth?.({ email: "student@kmla.hs.kr", profile });
+    await loading;
   });
 
   it("shows the rejection reason above the form", () => {

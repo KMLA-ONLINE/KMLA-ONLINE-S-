@@ -1,5 +1,8 @@
 SET local check_function_bodies = off;
 
+-- 반환 컬럼이 늘어 다시 만든다. CREATE와 같은 migration에 두어 중간에 실패해도 승인 화면 함수가 사라지지 않게 한다.
+DROP FUNCTION "public"."admin_list_applications"(public.profile_status, integer, integer);
+
 CREATE OR REPLACE FUNCTION private.notification_delivery_allowed (
   p_delivery private.notification_delivery_outbox
 )
@@ -476,6 +479,7 @@ CREATE OR REPLACE FUNCTION public.get_my_application_rejection()
   where profile.auth_user_id = (select auth.uid())
     and profile.status = 'draft'
     and profile.deleted_at is null
+    and rejection.rejected_at >= profile.status_updated_at
   order by rejection.rejected_at desc, rejection.id desc
   limit 1;
 $function$;

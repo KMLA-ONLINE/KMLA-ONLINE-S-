@@ -74,7 +74,12 @@ function initialValues(state: AuthState): ProfileFormValues {
 }
 
 export async function clientLoader() {
-  const state = await loadAuthState();
+  // 반려 안내는 부가 정보라 조회가 실패해도 양식은 연다. 세션이 없으면 RPC가 거부되지만 그때는
+  // 어차피 `/signup`으로 보낸다.
+  const [state, loadedRejection] = await Promise.all([
+    loadAuthState(),
+    loadMyApplicationRejection().catch(() => null),
+  ]);
   if (!state) throw redirect("/signup");
 
   if (state.profile && state.profile.status !== "draft") {
@@ -83,8 +88,8 @@ export async function clientLoader() {
     throw redirect(destination);
   }
 
-  // 반려 사유는 프로필 행이 있어야 생기므로 행이 없으면 묻지 않는다.
-  const rejection = state.profile ? await loadMyApplicationRejection() : null;
+  // 반려는 프로필 행이 있어야 생긴다.
+  const rejection = state.profile ? loadedRejection : null;
 
   return { ...state, rejection, values: initialValues(state) };
 }

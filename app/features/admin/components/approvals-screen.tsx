@@ -391,7 +391,7 @@ function ApplicationRow({
           신청 {formatDateTime(application.submitted_at)}
         </p>
         {application.rejection_count > 0 ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs break-words text-muted-foreground">
             이전 반려 {application.rejection_count}회 ·{" "}
             {application.last_rejection_reason}
           </p>
