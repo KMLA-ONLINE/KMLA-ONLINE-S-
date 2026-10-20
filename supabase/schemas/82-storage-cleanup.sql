@@ -78,9 +78,8 @@ on private.storage_cleanup_runs using (false) with check (false);
 -- 여기에 참조를 더하지 않으면 그 버킷의 파일이 전부 삭제 후보가 된다. 새 버킷은 반드시 같은
 -- 변경에서 이 뷰와 pgTAP 테스트에 함께 들어간다.
 create or replace view private.referenced_storage_objects as
--- 소프트 삭제된 프로필도 참조로 친다. 탈퇴는 아직 구현되어 있지 않아 `profiles.deleted_at`을
--- 세우는 경로가 없고, 여기에서 상태로 거르면 되돌릴 수 있는 상태의 사용자 이미지를 지울 위험만
--- 생긴다. 탈퇴를 구현할 때 그 RPC가 자기 미디어를 직접 큐에 넣어야 한다 (STORAGE_BUCKETS §4.1).
+-- 상태로 거르지 않는다. 계정 탈퇴(`withdraw_account`)는 이미지 슬롯을 비우고 자기 미디어를 직접
+-- 큐에 넣으므로, 탈퇴 프로필이 여기 남기는 참조는 없다 (STORAGE_BUCKETS §4.1).
 select 'profile-media'::text as bucket, profile.avatar_path as object_path
 from public.profiles as profile
 where profile.avatar_path is not null

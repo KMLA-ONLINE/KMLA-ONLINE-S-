@@ -1,4 +1,4 @@
-function readErrorCode(error: unknown): string {
+export function readErrorCode(error: unknown): string {
   return typeof error === "object" && error && "code" in error
     ? String(error.code)
     : "";
