@@ -234,7 +234,7 @@ export function RoomScreen({
   const location = useLocation();
   const navigate = useNavigate();
   const overlay = roomOverlay.overlay;
-  const compactDetailsOpen = overlay?.kind === "details";
+  const compactDetailsOpen = roomOverlay.detailsShown;
   const searchOpen = overlay?.kind === "search";
   const pinnedDialogOpen = overlay?.kind === "pinned";
   const [findingMessage, setFindingMessage] = useState(false);

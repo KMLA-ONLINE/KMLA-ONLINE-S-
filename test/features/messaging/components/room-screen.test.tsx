@@ -1951,6 +1951,31 @@ describe("RoomScreen", () => {
     await user.click(screen.getByRole("button", { name: "채팅으로 돌아가기" }));
     expect(conversationRegion).toHaveClass("flex");
   });
+
+  it("좁은 화면의 상세 화면에서 연 목록은 상세 화면 위에 뜨고, 닫으면 상세 화면이 남는다", async () => {
+    const conversation = await loadConversation("hyunwoo");
+    expect(conversation).not.toBeNull();
+
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/hyunwoo" },
+    );
+
+    const conversationRegion = screen.getByRole("region", {
+      name: "이현우 채팅",
+    });
+    await user.click(
+      screen.getAllByRole("button", { name: "채팅 정보 열기" })[0],
+    );
+    await user.click(screen.getByRole("button", { name: /고정된 메시지/ }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    // 목록이 페이드인하는 동안 대화가 비쳐 보이지 않도록 상세 화면을 그대로 깔아 둔다.
+    expect(conversationRegion).toHaveClass("hidden", "xl:flex");
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(conversationRegion).toHaveClass("hidden", "xl:flex");
+  });
 });
 
 describe("RoomScreen 멘션", () => {
