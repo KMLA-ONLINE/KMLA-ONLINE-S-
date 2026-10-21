@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  HIDDEN_PROFILE_ACTIVITIES_STORAGE_KEY,
   RECENT_SEARCH_STORAGE_KEY,
   syncUserScopedStorage,
   TIMETABLE_STORAGE_KEY,
@@ -20,6 +21,10 @@ async function seedSignedInUser(userId: string): Promise<void> {
   await syncUserScopedStorage(userId);
   window.localStorage.setItem(TIMETABLE_STORAGE_KEY, '{"activeSemester":"1"}');
   window.localStorage.setItem(VISITED_POSTS_STORAGE_KEY, '["post-1"]');
+  window.localStorage.setItem(
+    HIDDEN_PROFILE_ACTIVITIES_STORAGE_KEY,
+    '[{"postId":"post-1","hiddenUntil":123}]',
+  );
   window.localStorage.setItem(RECENT_SEARCH_STORAGE_KEY, '[{"id":"person-1"}]');
   for (const key of DEVICE_PREFERENCE_KEYS) {
     window.localStorage.setItem(key, "kept");
@@ -55,6 +60,9 @@ describe("user scoped storage", () => {
 
     expect(window.localStorage.getItem(TIMETABLE_STORAGE_KEY)).toBeNull();
     expect(window.localStorage.getItem(VISITED_POSTS_STORAGE_KEY)).toBeNull();
+    expect(
+      window.localStorage.getItem(HIDDEN_PROFILE_ACTIVITIES_STORAGE_KEY),
+    ).toBeNull();
     expect(window.localStorage.getItem(RECENT_SEARCH_STORAGE_KEY)).toBeNull();
     for (const key of DEVICE_PREFERENCE_KEYS) {
       expect(window.localStorage.getItem(key)).toBe("kept");
@@ -69,6 +77,9 @@ describe("user scoped storage", () => {
 
     expect(window.localStorage.getItem(RECENT_SEARCH_STORAGE_KEY)).toBeNull();
     expect(window.localStorage.getItem(VISITED_POSTS_STORAGE_KEY)).toBeNull();
+    expect(
+      window.localStorage.getItem(HIDDEN_PROFILE_ACTIVITIES_STORAGE_KEY),
+    ).toBeNull();
   });
 
   /** 지운 값을 캐시해 둔 같은 탭의 store가 다시 읽을 수 있어야 한다. */
@@ -84,6 +95,7 @@ describe("user scoped storage", () => {
     expect(cleared).toEqual([
       TIMETABLE_STORAGE_KEY,
       VISITED_POSTS_STORAGE_KEY,
+      HIDDEN_PROFILE_ACTIVITIES_STORAGE_KEY,
       RECENT_SEARCH_STORAGE_KEY,
     ]);
   });

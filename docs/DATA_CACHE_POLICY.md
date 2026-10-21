@@ -151,6 +151,7 @@ Supabase 조회 캐시와 무효화 규칙을 정한다. 데이터와 권한의 
 | ------------------------------------------------ | ---- | -------------------------------------------- |
 | `kmla-online:timetable:v1`                       | 계정 | 진짜 저장소는 DB이고 이 값은 첫 페인트용이다 |
 | `kmla-online:visited-posts:v1`                   | 계정 | 열어 본 게시물 id                            |
+| `kmla-online:hidden-profile-activities:v1`       | 계정 | 이 기기에서 접은 프로필 활동 ID(최근 200개)  |
 | `kmla-online:search-recent:v1`                   | 계정 | 검색한 사람·그룹 이름                        |
 | `kmla-online:storage-owner:v1`                   | 계정 | 위 값들의 현재 주인                          |
 | `kmla-online-storage-media` (Cache Storage)      | 계정 | Storage 이미지 본문                          |

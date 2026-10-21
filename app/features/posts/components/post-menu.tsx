@@ -32,6 +32,7 @@ export function PostMenu({
   reportPostId,
   onPin,
   onDelete,
+  onHide,
   canModerateAnonymous = false,
   anonymousAuthorRestricted = false,
   anonymousAuthorRestrictionExpiresAt = null,
@@ -47,7 +48,10 @@ export function PostMenu({
   canReport?: boolean;
   reportPostId?: string;
   onPin?: () => void;
-  onDelete: () => void;
+  /** `canDelete`일 때만 부른다. */
+  onDelete?: () => void;
+  /** 이 기기에서만 접는 "가리기". 피드의 프로필 변경 활동만 넘긴다. */
+  onHide?: () => void;
   canModerateAnonymous?: boolean;
   anonymousAuthorRestricted?: boolean;
   anonymousAuthorRestrictionExpiresAt?: string | null;
@@ -70,7 +74,8 @@ export function PostMenu({
     !canPin &&
     !canDelete &&
     !(canReport && reportPostId && !reported) &&
-    !canRestrict
+    !canRestrict &&
+    !onHide
   ) {
     return null;
   }
@@ -95,6 +100,9 @@ export function PostMenu({
             <DropdownMenuItem render={<Link to={editTo} state={editState} />}>
               수정
             </DropdownMenuItem>
+          ) : null}
+          {onHide ? (
+            <DropdownMenuItem onClick={onHide}>가리기</DropdownMenuItem>
           ) : null}
           {canPin ? (
             <DropdownMenuItem onClick={onPin}>
@@ -168,7 +176,7 @@ export function PostMenu({
               variant="destructive"
               onClick={() => {
                 setConfirmingDelete(false);
-                onDelete();
+                onDelete?.();
               }}
             >
               삭제
