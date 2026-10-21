@@ -525,7 +525,8 @@ export function RoomScreen({
     <MessageParticipantsProvider participants={conversation.participants}>
       <div
         className={cn(
-          "relative flex min-h-0 min-w-0 flex-1 overflow-hidden",
+          // 입력창 포커스가 대화방째 스크롤해 머리를 밀어 올리지 않게 스크롤 컨테이너로 만들지 않는다.
+          "relative flex min-h-0 min-w-0 flex-1 overflow-clip",
           // iOS에서 아래 여백으로 보정하면 Safari의 화면 이동과 겹쳐 이름이 밀리고
           // 입력창 아래에 빈 공간이 생긴다. 보이는 영역의 위쪽·높이로 대화방 전체를 잡는다.
           keyboardViewport.keyboardOpen &&
@@ -949,6 +950,8 @@ function MessageThread({
   // 앞선 페이지를 위에 붙이면 scrollHeight만 늘고 scrollTop은 그대로라 보던 메시지가 아래로
   // 밀린다. 붙이기 전 바닥에서의 거리와 그때의 맨 위 메시지를 기억했다가, 맨 위가 실제로 바뀐
   // 렌더에서만 같은 거리로 되돌린다. 읽기가 실패하거나 빈 페이지가 오면 버린다.
+  // 거리는 읽는 동안 스크롤할 때마다 새로 잰다. 요청할 때 잰 값으로 되돌리면 응답을 기다리는 동안
+  // (모바일의 관성 스크롤 등) 더 올라간 만큼 화면이 아래로 튄다.
   const olderAnchor = useRef<{
     distanceFromBottom: number;
     oldestMessageId: string | undefined;
@@ -1244,7 +1247,12 @@ function MessageThread({
         onPointerDown={() => {
           composingAtBottomRef.current = false;
         }}
-        onScroll={() => {
+        onScroll={(event) => {
+          const anchor = olderAnchor.current;
+          if (anchor) {
+            const thread = event.currentTarget;
+            anchor.distanceFromBottom = thread.scrollHeight - thread.scrollTop;
+          }
           updateScrollToBottomVisibility();
           maybeLoadOlderMessages();
         }}
@@ -1753,8 +1761,8 @@ function MessageActions({
 
 /**
  * 메시지를 대화 영역 가운데로 옮긴다. `scrollIntoView`는 스크롤 조상을 전부 밀어, 원문이 맨 위나 맨 아래
- * 근처라 대화 영역만으로 가운데에 못 오면 `overflow-hidden`인 대화방과 앱 셸까지 밀어 버린다. 그러면
- * 화면 전체가 밀리고 아래에 빈 영역이 생기므로 대화 영역 안에서만 움직인다.
+ * 근처라 대화 영역만으로 가운데에 못 오면 대화방과 앱 셸까지 밀어 버린다. 그러면 화면 전체가 밀리고
+ * 아래에 빈 영역이 생기므로 대화 영역 안에서만 움직인다.
  */
 function centerInThread(messageThread: HTMLElement, target: HTMLElement) {
   const threadRect = messageThread.getBoundingClientRect();

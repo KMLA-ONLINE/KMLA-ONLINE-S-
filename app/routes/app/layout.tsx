@@ -18,6 +18,7 @@ import {
   resolveAppChrome,
   ScrollRegion,
 } from "~/features/app-shell";
+import { useKeyboardShellFrame } from "~/features/app-shell/hooks/use-keyboard-shell-frame";
 import { useShellRefresh } from "~/features/app-shell/hooks/use-shell-refresh";
 import {
   isPostOverlayNavigation,
@@ -54,6 +55,7 @@ export default function MainAppLayout() {
   // 알림을 누르면 떠 있는 창을 다시 불러오지 않고 앱 안에서 옮겨 간다.
   useServiceWorkerNavigation();
   const routeOwnsScroll = chrome.scroll === "route";
+  const keyboardFrame = useKeyboardShellFrame(routeOwnsScroll);
   const scrollRef = useRef<HTMLElement>(null);
   const hidden = useHideOnScroll({
     containerRef: scrollRef,
@@ -136,7 +138,14 @@ export default function MainAppLayout() {
   return (
     <div
       data-slot="app-shell"
-      className="fixed inset-0 flex flex-col overflow-hidden bg-background"
+      className={cn(
+        "fixed inset-0 flex flex-col bg-background",
+        // 메신저 입력창에 포커스가 가면 브라우저가 가려진 입력창을 보이려고 `overflow-hidden`인 조상까지
+        // 스크롤해 셸이 통째로 밀린다. `clip`은 스크롤 컨테이너가 아니라 밀리지 않는다.
+        routeOwnsScroll ? "overflow-clip" : "overflow-hidden",
+        keyboardFrame.className,
+      )}
+      style={keyboardFrame.style}
     >
       {/* 본문 열이 아니라 셸 맨 위에 둔다. 본문 열에 두면 데스크톱에서 헤더 아래, 사이드바 오른쪽부터
           그려지고, 스크롤로 숨는 헤더를 따라 위아래로 움직인다. */}
@@ -164,7 +173,7 @@ export default function MainAppLayout() {
 
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {routeOwnsScroll ? (
-            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+            <div className="flex min-h-0 min-w-0 flex-1 overflow-clip">
               <Outlet />
             </div>
           ) : (

@@ -9,6 +9,7 @@
 - 앱 route는 typed `handle.chrome`으로 전역 헤더, 모바일 하단 nav와 스크롤 소유(`scroll`)를 설정한다.
 - 일반 앱의 데스크톱 콘텐츠 폭도 `handle.chrome.contentWidth`가 소유한다. 기본은 `model/chrome.ts`의 `DEFAULT_APP_CHROME.contentWidth`(`4xl`)이고, 목록이나 폼처럼 다른 폭이 필요한 route만 명시적으로 override한다.
 - 메신저 route는 `scroll: "route"`다. 셸은 `ScrollRegion`, 콘텐츠 폭, 당겨서 새로고침과 navigation skeleton 없이 `Outlet`을 셸 높이에 꽉 채운다. 모바일 하단 nav는 대화 목록에서 표시하고 대화방에서는 숨긴다.
+- `scroll: "route"`일 때 셸과 `Outlet` 감싸개는 `overflow-clip`이다. `overflow-hidden`은 스크롤 컨테이너라 입력창 포커스 때 브라우저가 셸째 밀어 올린다. 키보드가 layout을 줄이지 않는 브라우저(iOS, 일부 Android)에서는 md 이상에서 셸을 visual viewport에 맞춘다(`hooks/use-keyboard-shell-frame.ts`). 좁은 화면은 `RoomScreen`이 대화방을 직접 맞춘다.
 - 인증/승인 게이트는 `app/routes/app/gate.tsx` 한 곳에만 둔다. 이용 정지(§16.11)된 사람은 상태가 `accepted`라도 셸 데이터의 `suspended`로 걸러 `/suspended`로 보낸다. `suspended`는 게이트만 보며 셸 값(`ShellData`)에는 싣지 않는다.
 - 약관 시행 전에 가입해 동의 기록이 없는 회원(§4.7)에게는 게이트가 auth의 `TermsAgreementDialog`를 띄운다. 그래서 셸 프로필에 `terms_agreed_at`이 있고, 팝업은 게이트 loader 값이 아니라 `useAppShell()`의 셸 프로필을 보며, 동의 뒤 갱신은 `refreshShellProfile()`이다. 팝업은 화면만 막고 RLS는 막지 않는다.
 - 셸 loader(게이트)는 첫 진입에만 실행한다. 이후 셸 프로필은 `AppShellProvider`가 `shellProfileQuery`에서 읽으므로, 이름·아바타·역할을 바꾸는 action은 `refreshShellProfile()`을, 알림 뱃지를 바꾸는 action은 `notificationKeys.badge()` 무효화를 직접 부른다.
