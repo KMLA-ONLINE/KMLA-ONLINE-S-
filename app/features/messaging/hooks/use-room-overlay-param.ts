@@ -6,6 +6,11 @@ const PARAM = "panel";
 /** 우리가 쌓은 오버레이 entry 수. 뒤로가기로 닫을 수 있는지와 몇 칸을 되돌릴지의 근거다. */
 interface RoomOverlayLocationState {
   roomOverlayDepth?: number;
+  /**
+   * 대화 정보에서 연 오버레이인지. `?panel=`에는 맨 위 하나만 있으므로, 이 표시가 있으면 좁은
+   * 화면이 대화 정보를 그 아래에 계속 깔아 둔다. 없으면 위 화면이 페이드인하는 동안 대화가 비친다.
+   */
+  roomOverlayAboveDetails?: boolean;
 }
 
 /** 대화방 위에 뜨는 화면. 반응한 사람 목록은 메시지 ID를 함께 둔다. */
@@ -60,8 +65,11 @@ export function useRoomOverlayParam() {
   const navigate = useNavigate();
   const locationState = location.state as RoomOverlayLocationState | null;
   const depth = locationState?.roomOverlayDepth ?? 0;
+  const aboveDetails = locationState?.roomOverlayAboveDetails ?? false;
   const overlay = parseOverlay(searchParams.get(PARAM));
   const hasOverlay = overlay !== null;
+  const detailsOpen = overlay?.kind === "details";
+  const detailsShown = detailsOpen || (hasOverlay && aboveDetails);
 
   /**
    * 오버레이를 연다. `replace`면 지금 오버레이를 그 자리에서 바꾼다. 대화 정보에서 검색을 열 때처럼
@@ -79,10 +87,21 @@ export function useRoomOverlayParam() {
         state: {
           ...locationState,
           roomOverlayDepth: stays ? depth : depth + 1,
+          // 자리를 바꾸면 바뀐 화면의 아래도 그대로다. 대화 정보를 바꾼 검색 아래에는 대화가 있다.
+          // 대화 정보 위에 연 화면에서 또 열면 그 아래에도 대화 정보가 깔려 있다.
+          roomOverlayAboveDetails: stays ? aboveDetails : detailsShown,
         } satisfies RoomOverlayLocationState,
       });
     },
-    [depth, hasOverlay, locationState, searchParams, setSearchParams],
+    [
+      aboveDetails,
+      depth,
+      detailsShown,
+      hasOverlay,
+      locationState,
+      searchParams,
+      setSearchParams,
+    ],
   );
 
   // 주소를 들고 곧장 들어왔으면 pop할 entry가 없으므로 param만 지운다. 그 밖에는 뒤로 가야 브라우저
@@ -109,5 +128,13 @@ export function useRoomOverlayParam() {
   /** 쌓인 오버레이를 모두 닫는다. 원래 메시지로 이동할 때 쓴다. 닫힌 뒤에 끝난다. */
   const closeAll = useCallback(() => closeLevels(depth), [closeLevels, depth]);
 
-  return { overlay, depth, open, close, closeAll };
+  return {
+    overlay,
+    depth,
+    /** 좁은 화면에서 대화 정보가 보여야 하는지. 대화 정보 자체이거나 그 위에 연 화면일 때다. */
+    detailsShown,
+    open,
+    close,
+    closeAll,
+  };
 }

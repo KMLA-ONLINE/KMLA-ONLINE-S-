@@ -1,5 +1,5 @@
 // 학교 날짜 helper(`shared/lib/korea-date.ts`)와 같은 기준이다. 기기 시간대를 따르면 같은 대화의
-// 날짜 구분선과 묶음 경계가 기기마다 달라진다.
+// 대화 흐름 구분선과 묶음 경계가 기기마다 달라진다.
 const TIME_ZONE = "Asia/Seoul";
 
 // 포매터 생성이 포매팅보다 훨씬 비싸서 메시지마다 만들지 않는다.
@@ -27,12 +27,20 @@ export function formatMessageTime(sentAt: string): string {
   return timeFormatter.format(new Date(sentAt));
 }
 
-/** 날짜 구분선의 "2026년 8월 28일 금요일". 한국 날짜로 오늘과 어제는 `오늘`, `어제`로 줄인다. */
+/** 날짜 표시 "2026년 8월 28일 금요일". 한국 날짜로 오늘과 어제는 `오늘`, `어제`로 줄인다. */
 export function formatMessageDay(sentAt: string, now = Date.now()): string {
   const day = dayKeyFormatter.format(new Date(sentAt));
   if (day === dayKeyFormatter.format(now)) return "오늘";
   if (day === dayKeyFormatter.format(now - DAY_MS)) return "어제";
   return dayFormatter.format(new Date(sentAt));
+}
+
+/** 대화 흐름 구분선의 "오늘 오후 3:12". 날짜는 `formatMessageDay`와 같이 줄인다. */
+export function formatMessageSessionStart(
+  sentAt: string,
+  now = Date.now(),
+): string {
+  return `${formatMessageDay(sentAt, now)} ${formatMessageTime(sentAt)}`;
 }
 
 // 한국은 일광 절약 시간이 없어 하루가 늘 24시간이다.
@@ -47,7 +55,7 @@ export function isSameMessageDay(a: string, b: string): boolean {
   return messageDayKey(a) === messageDayKey(b);
 }
 
-/** 이 메시지 위에 날짜 구분선을 그려야 하는지. */
+/** 고정 메시지 목록에서 이 메시지 위에 날짜 구분선을 그려야 하는지. */
 export function startsMessageDay(
   previous: { sentAt: string } | undefined,
   message: { sentAt: string },
