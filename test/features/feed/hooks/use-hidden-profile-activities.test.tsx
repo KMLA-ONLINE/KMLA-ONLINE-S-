@@ -11,7 +11,7 @@ describe("hidden profile activity preferences", () => {
 
   it("does not reuse the previous account's preferences when the feed was unmounted during account cleanup", () => {
     const { result, unmount } = renderHook(() => useHiddenProfileActivities());
-    act(() => result.current.toggle(POST_ID));
+    act(() => result.current.hide(POST_ID));
     expect(result.current.hiddenIds.has(POST_ID)).toBe(true);
     unmount();
 
@@ -29,15 +29,15 @@ describe("hidden profile activity preferences", () => {
     expect(nextResult.current.hiddenIds.size).toBe(0);
   });
 
-  it("toggles an activity hidden and shown again, and remembers it on the device", () => {
+  it("hides an activity, remembers it on the device, and undoes it", () => {
     const { result } = renderHook(() => useHiddenProfileActivities());
-    act(() => result.current.toggle(POST_ID));
+    act(() => result.current.hide(POST_ID));
     expect(result.current.hiddenIds.has(POST_ID)).toBe(true);
     expect(
       window.localStorage.getItem(HIDDEN_PROFILE_ACTIVITIES_STORAGE_KEY),
     ).toBe(JSON.stringify([POST_ID]));
 
-    act(() => result.current.toggle(POST_ID));
+    act(() => result.current.unhide(POST_ID));
     expect(result.current.hiddenIds.has(POST_ID)).toBe(false);
   });
 });

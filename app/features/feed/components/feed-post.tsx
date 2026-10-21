@@ -4,7 +4,7 @@ import {
   MessageSquareIcon,
   PinIcon,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { Link, useFetcher } from "react-router";
 import { toast } from "sonner";
 
@@ -34,7 +34,6 @@ import {
 import { RelativeTime } from "~/shared/components/relative-time";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
-import { Button } from "~/shared/ui/button";
 
 function feedPostPath(post: FeedPost): string {
   return post.kind === "group"
@@ -163,68 +162,6 @@ function profileActivityText(post: FeedPost): string | null {
     : "프로필 커버를 바꾸었습니다.";
 }
 
-/**
- * 가리기·다시 보기는 카드를 통째로 바꿔 누른 컨트롤이 사라진다. 직접 누른 경우에만
- * 반대쪽 컨트롤(다시 보기 ↔ ⋯ 메뉴)로 포커스를 옮겨 키보드 위치를 잃지 않게 한다.
- */
-function useHideToggleFocus<T extends HTMLElement>(
-  hidden: boolean,
-  onToggleHidden: (() => void) | undefined,
-) {
-  const ref = useRef<T>(null);
-  const pending = useRef(false);
-
-  useEffect(() => {
-    if (!pending.current) return;
-    pending.current = false;
-    ref.current
-      ?.querySelector<HTMLElement>(
-        hidden ? "[data-hide-toggle]" : "[data-slot=dropdown-menu-trigger]",
-      )
-      ?.focus();
-  }, [hidden]);
-
-  const toggle = onToggleHidden
-    ? () => {
-        pending.current = true;
-        onToggleHidden();
-      }
-    : undefined;
-  return { ref, toggle };
-}
-
-function HiddenProfileActivity({
-  post,
-  onShow,
-}: {
-  post: FeedPost;
-  onShow?: () => void;
-}) {
-  return (
-    <>
-      <p className="min-w-0 flex-1 text-sm leading-5 break-words">
-        <span className="font-semibold">
-          {post.author_name ?? post.author_label}
-        </span>
-        <span className="text-muted-foreground">
-          님이 {profileActivityText(post)}
-        </span>
-      </p>
-      {onShow ? (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="shrink-0 text-muted-foreground"
-          data-hide-toggle
-          onClick={onShow}
-        >
-          다시 보기
-        </Button>
-      ) : null}
-    </>
-  );
-}
-
 function FeedPostHeader({
   post,
   onHide,
@@ -309,40 +246,21 @@ function FeedPostHeader({
 export function FeedPostCard({
   post,
   mediaPending = false,
-  hidden = false,
-  onToggleHidden,
+  onHide,
 }: {
   post: FeedPost;
   mediaPending?: boolean;
-  hidden?: boolean;
-  onToggleHidden?: () => void;
+  onHide?: () => void;
 }) {
   const path = feedPostPath(post);
   const overlayPath = feedPostOverlayPath(post);
   const { images, files } = splitPostAttachments(post.attachments);
   const isMediaActivity = post.kind === "profile" && post.activity_kind;
-  const canHide = canHideProfileActivity(post);
-  const { ref, toggle } = useHideToggleFocus<HTMLElement>(
-    hidden,
-    canHide ? onToggleHidden : undefined,
-  );
-
-  if (canHide && hidden) {
-    return (
-      <article
-        ref={ref}
-        className="flex min-h-16 items-center gap-2 border-b-2 border-foreground/20 bg-card px-4 py-3 md:rounded-xl md:border md:border-border"
-      >
-        <HiddenProfileActivity post={post} onShow={toggle} />
-      </article>
-    );
-  }
-
   return (
     // 홈 피드는 서명을 뒤에서 채운다. 서명 중인 카드의 빈 미디어는 실패가 아니라 로딩으로 그린다.
     <MediaPendingContext value={mediaPending}>
       <article
-        ref={ref}
+        data-feed-post-id={post.post_id}
         className="overflow-hidden border-b-2 border-foreground/20 bg-card shadow-none md:rounded-xl md:border md:border-border md:shadow-sm"
       >
         {post.kind === "group" && post.is_pinned ? (
@@ -351,7 +269,10 @@ export function FeedPostCard({
             고정된 게시물
           </div>
         ) : null}
-        <FeedPostHeader post={post} onHide={toggle} />
+        <FeedPostHeader
+          post={post}
+          onHide={canHideProfileActivity(post) ? onHide : undefined}
+        />
         {isMediaActivity ? (
           <ProfileMediaActivity post={post} />
         ) : (
@@ -408,14 +329,12 @@ export function FeedPostRow({
   post,
   isVisited,
   onVisit,
-  hidden = false,
-  onToggleHidden,
+  onHide,
 }: {
   post: FeedPost;
   isVisited: boolean;
   onVisit: () => void;
-  hidden?: boolean;
-  onToggleHidden?: () => void;
+  onHide?: () => void;
 }) {
   const engagement = usePostEngagement(post.post_id, post);
   const path = feedPostOverlayPath(post);
@@ -425,23 +344,10 @@ export function FeedPostRow({
     post.kind === "group"
       ? groupListTitle(post)
       : (profileActivityText(post) ?? extractPostPlainText(post.body));
-  const canHide = canHideProfileActivity(post);
-  const { ref, toggle } = useHideToggleFocus<HTMLDivElement>(
-    hidden,
-    canHide ? onToggleHidden : undefined,
-  );
-
-  if (canHide && hidden) {
-    return (
-      <div ref={ref} className="flex min-h-14 items-center gap-2 px-3 py-2.5">
-        <HiddenProfileActivity post={post} onShow={toggle} />
-      </div>
-    );
-  }
+  const hide = canHideProfileActivity(post) ? onHide : undefined;
 
   return (
     <div
-      ref={ref}
       data-testid="feed-post-row"
       className={cn(
         "flex items-start transition-colors hover:bg-muted/60",
@@ -491,9 +397,9 @@ export function FeedPostRow({
           </span>
         </div>
       </Link>
-      {toggle ? (
+      {hide ? (
         <div className="shrink-0 pt-2 pr-2">
-          <FeedPostMenu post={post} onHide={toggle} />
+          <FeedPostMenu post={post} onHide={hide} />
         </div>
       ) : null}
     </div>

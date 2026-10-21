@@ -24,6 +24,16 @@ function normalize(ids: readonly unknown[]): string[] {
   return result;
 }
 
+/** 홈 피드에 그릴 게시물. 가린 목록에 남은 본인 활동은 가리지 않는다. */
+export function visibleFeedPosts<T extends FeedPost>(
+  posts: readonly T[],
+  hiddenIds: ReadonlySet<string>,
+): T[] {
+  return posts.filter(
+    (post) => !(canHideProfileActivity(post) && hiddenIds.has(post.post_id)),
+  );
+}
+
 export function parseHiddenProfileActivities(raw: string | null): string[] {
   if (!raw) return [];
   try {

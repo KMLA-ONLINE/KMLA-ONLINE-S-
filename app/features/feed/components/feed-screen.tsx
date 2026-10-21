@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher, useSearchParams } from "react-router";
+import { toast } from "sonner";
 
 import { useAppShell } from "~/features/app-shell";
 import {
@@ -14,6 +15,7 @@ import {
   FeedPostRow,
 } from "~/features/feed/components/feed-post";
 import { useHiddenProfileActivities } from "~/features/feed/hooks/use-hidden-profile-activities";
+import { visibleFeedPosts } from "~/features/feed/model/hidden-profile-activities";
 import {
   feedPageMediaQueries,
   feedQuery,
@@ -60,7 +62,8 @@ export function FeedScreen() {
   const [searchParams] = useSearchParams();
   const [viewMode] = usePostViewMode();
   const { visited, markVisited } = useVisitedPosts();
-  const { hiddenIds, toggle: toggleHidden } = useHiddenProfileActivities();
+  const { hiddenIds, hide, unhide } = useHiddenProfileActivities();
+  const listRef = useRef<HTMLElement>(null);
   const closeDetail = useModalClose("/");
   const activePostId = searchParams.get("post");
   const activeKind = searchParams.get("kind");
@@ -224,21 +227,41 @@ export function FeedScreen() {
     error && /expired|not found/i.test(error.message),
   );
 
+  const visiblePosts = visibleFeedPosts(posts, hiddenIds);
+
+  // 가린 카드는 누른 ⋯ 메뉴와 함께 사라진다. 키보드 위치를 잃지 않게 이웃 카드로 포커스를 옮기고,
+  // 메뉴를 잘못 눌렀을 때를 위해 실행 취소를 토스트로 남긴다.
+  function hidePost(postId: string) {
+    const items = Array.from(
+      listRef.current?.querySelectorAll<HTMLElement>("[data-feed-post-id]") ??
+        [],
+    );
+    const index = items.findIndex((item) => item.dataset.feedPostId === postId);
+    const neighbor =
+      index === -1 ? undefined : (items[index + 1] ?? items[index - 1]);
+    hide(postId);
+    requestAnimationFrame(() =>
+      neighbor?.querySelector<HTMLElement>("a[href], button")?.focus(),
+    );
+    toast("게시물을 가렸습니다.", {
+      action: { label: "실행 취소", onClick: () => unhide(postId) },
+    });
+  }
+
   // `resetQueries`가 활성 observer를 곧바로 다시 읽으므로 별도 refetch가 필요 없다.
   async function refresh() {
     await resetFeed(queryClient);
   }
 
   return (
-    <section className="flex min-w-0 flex-col">
+    <section ref={listRef} className="flex min-w-0 flex-col">
       {viewMode === "card" ? (
         <div className="flex flex-col md:gap-3">
-          {posts.map((post) => (
+          {visiblePosts.map((post) => (
             <FeedPostCard
               key={post.post_id}
               post={post}
-              hidden={hiddenIds.has(post.post_id)}
-              onToggleHidden={() => toggleHidden(post.post_id)}
+              onHide={() => hidePost(post.post_id)}
               mediaPending={
                 pendingPostIds.has(post.post_id) && hasMissingMedia(post)
               }
@@ -247,12 +270,11 @@ export function FeedScreen() {
         </div>
       ) : (
         <ul className="flex flex-col divide-y divide-border/70 bg-card md:rounded-xl md:border">
-          {posts.map((post) => (
-            <li key={post.post_id}>
+          {visiblePosts.map((post) => (
+            <li key={post.post_id} data-feed-post-id={post.post_id}>
               <FeedPostRow
                 post={post}
-                hidden={hiddenIds.has(post.post_id)}
-                onToggleHidden={() => toggleHidden(post.post_id)}
+                onHide={() => hidePost(post.post_id)}
                 isVisited={visited.has(post.post_id)}
                 onVisit={() => markVisited(post.post_id)}
               />
@@ -261,7 +283,7 @@ export function FeedScreen() {
         </ul>
       )}
 
-      {posts.length === 0 && !loadError ? (
+      {visiblePosts.length === 0 && !loadError ? (
         <p className="px-4 py-12 text-center text-sm text-muted-foreground">
           아직 게시물이 없습니다.
         </p>

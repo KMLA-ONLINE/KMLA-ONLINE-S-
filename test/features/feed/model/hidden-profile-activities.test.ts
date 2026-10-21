@@ -5,7 +5,9 @@ import {
   hideProfileActivity,
   parseHiddenProfileActivities,
   unhideProfileActivity,
+  visibleFeedPosts,
 } from "~/features/feed/model/hidden-profile-activities";
+import type { FeedPost } from "~/features/feed/model/types";
 
 const POST_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -44,5 +46,27 @@ describe("hidden profile activities", () => {
     ).toEqual([POST_ID]);
     expect(parseHiddenProfileActivities("broken")).toEqual([]);
     expect(parseHiddenProfileActivities('{"a":1}')).toEqual([]);
+  });
+
+  it("removes only someone else's hidden profile activity from the feed", () => {
+    const others = {
+      post_id: POST_ID,
+      kind: "profile",
+      is_author: false,
+      activity_kind: "avatar_changed",
+    } as FeedPost;
+    const mine = { ...others, post_id: postId(1), is_author: true } as FeedPost;
+    const regular = {
+      ...others,
+      post_id: postId(2),
+      activity_kind: null,
+    } as FeedPost;
+
+    expect(
+      visibleFeedPosts(
+        [others, mine, regular],
+        new Set([POST_ID, postId(1), postId(2)]),
+      ),
+    ).toEqual([mine, regular]);
   });
 });

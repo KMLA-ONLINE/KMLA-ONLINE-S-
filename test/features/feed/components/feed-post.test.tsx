@@ -1,5 +1,4 @@
 import { screen, within } from "@testing-library/react";
-import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -61,15 +60,11 @@ function profileActivity(): ProfileFeedPost {
 afterEach(() => vi.restoreAllMocks());
 
 describe("FeedPostCard", () => {
-  it("keeps the caller's profile activity visible without a hide control, even with an old hidden preference", async () => {
+  it("offers no hide action on the caller's own profile activity", async () => {
     const post = { ...profileActivity(), is_author: true };
     const { user } = renderRoute(() => (
-      <FeedPostCard post={post} hidden onToggleHidden={vi.fn()} />
+      <FeedPostCard post={post} onHide={vi.fn()} />
     ));
-    expect(
-      screen.queryByRole("button", { name: "다시 보기" }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByTestId("profile-media-activity")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "게시물 옵션" }));
     expect(
@@ -80,49 +75,16 @@ describe("FeedPostCard", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("folds only profile media activity content and keeps its divider", () => {
-    const post = profileActivity();
-    renderRoute(() => (
-      <FeedPostCard post={post} hidden onToggleHidden={vi.fn()} />
+  it("hides someone else's profile activity from the post menu", async () => {
+    const onHide = vi.fn();
+    const { user } = renderRoute(() => (
+      <FeedPostCard post={profileActivity()} onHide={onHide} />
     ));
-
-    expect(screen.getByText(/김서민/)).toBeInTheDocument();
-    expect(screen.getByText(/프로필 사진을 바꾸었습니다/)).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "다시 보기" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: "댓글 0개" }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole("article")).toHaveClass("border-b-2");
-  });
-
-  it("hides someone else's activity from the post menu and moves focus between the controls", async () => {
-    const post = profileActivity();
-    function Harness() {
-      const [hidden, setHidden] = useState(false);
-      return (
-        <FeedPostCard
-          post={post}
-          hidden={hidden}
-          onToggleHidden={() => setHidden((value) => !value)}
-        />
-      );
-    }
-    const { user } = renderRoute(() => <Harness />);
 
     await user.click(screen.getByRole("button", { name: "게시물 옵션" }));
     await user.click(await screen.findByRole("menuitem", { name: "가리기" }));
 
-    const show = await screen.findByRole("button", { name: "다시 보기" });
-    expect(show).toHaveFocus();
-    expect(
-      screen.queryByTestId("profile-media-activity"),
-    ).not.toBeInTheDocument();
-
-    await user.click(show);
-    expect(screen.getByTestId("profile-media-activity")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "게시물 옵션" })).toHaveFocus();
+    expect(onHide).toHaveBeenCalledOnce();
   });
 
   it("shows the body and reserves image space while signing is pending", () => {
@@ -210,19 +172,15 @@ describe("FeedPostCard menu", () => {
 });
 
 describe("FeedPostRow", () => {
-  it("does not fold the caller's own profile activity or show a hide control", () => {
+  it("shows no hide control on the caller's own profile activity", () => {
     renderRoute(() => (
       <FeedPostRow
         post={{ ...profileActivity(), is_author: true }}
-        hidden
-        onToggleHidden={vi.fn()}
+        onHide={vi.fn()}
         isVisited={false}
         onVisit={vi.fn()}
       />
     ));
-    expect(
-      screen.queryByRole("button", { name: "다시 보기" }),
-    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "게시물 옵션" }),
     ).not.toBeInTheDocument();

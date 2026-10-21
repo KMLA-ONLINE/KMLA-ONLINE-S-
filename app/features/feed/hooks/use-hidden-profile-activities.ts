@@ -62,14 +62,12 @@ export function useHiddenProfileActivities() {
   const ids = useSyncExternalStore(subscribe, getSnapshot, () => EMPTY);
   const hiddenIds = useMemo(() => new Set(ids), [ids]);
 
-  const toggle = useCallback((postId: string) => {
-    const current = getSnapshot();
-    update(
-      current.includes(postId)
-        ? unhideProfileActivity(current, postId)
-        : hideProfileActivity(current, postId),
-    );
+  const hide = useCallback((postId: string) => {
+    update(hideProfileActivity(getSnapshot(), postId));
+  }, []);
+  const unhide = useCallback((postId: string) => {
+    update(unhideProfileActivity(getSnapshot(), postId));
   }, []);
 
-  return { hiddenIds, toggle };
+  return { hiddenIds, hide, unhide };
 }
