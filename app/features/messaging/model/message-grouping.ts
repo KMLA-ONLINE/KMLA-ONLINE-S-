@@ -4,6 +4,12 @@ import type { ConversationMessage } from "~/features/messaging/model/types";
 /** 앞 항목과 이만큼 벌어지면 새 대화 흐름이다(기능 명세 §13.3). */
 export const MESSAGE_SESSION_GAP_MS = 60 * 60_000;
 
+/**
+ * 같은 작성자라도 앞 메시지와 이만큼 벌어지면 묶음을 끊는다(기능 명세 §13.3). 시각은 묶음 끝에만
+ * 보이므로, 간격 없이 이으면 한참 전 메시지가 마지막 시각을 달고 보인다.
+ */
+export const MESSAGE_GROUP_GAP_MS = 5 * 60_000;
+
 /** 대화 영역에서 메시지 한 건의 자리. 대화 흐름의 시작과 묶음의 처음·끝이다(기능 명세 §13.3). */
 export interface MessageThreadSlot {
   /** 이 메시지 위에 대화 흐름 구분선을 그린다. */
@@ -22,18 +28,20 @@ export function layoutMessageThread(
 ): MessageThreadSlot[] {
   const days = messages.map(({ sentAt }) => messageDayKey(sentAt));
   const times = messages.map(({ sentAt }) => Date.parse(sentAt));
-  // 시스템 메시지도 흐름을 잇는다. 간격만 보지 않고 한국 날짜가 바뀌어도 새 흐름으로 연다.
-  const startsSession = messages.map(
-    (_, index) =>
-      index === 0 ||
-      days[index - 1] !== days[index] ||
-      (times[index] ?? 0) - (times[index - 1] ?? 0) >= MESSAGE_SESSION_GAP_MS,
-  );
+  // 시스템 메시지도 흐름을 잇는다. 간격만 보지 않고 한국 날짜가 바뀌어도 새 흐름으로 연다. 시각을
+  // 읽지 못하면 앞 메시지와 이어 붙이지 않는다.
+  const startsSession = messages.map((_, index) => {
+    if (index === 0 || days[index - 1] !== days[index]) return true;
+    const gap = (times[index] ?? NaN) - (times[index - 1] ?? NaN);
+    return !(gap < MESSAGE_SESSION_GAP_MS);
+  });
   const connects = (index: number) => {
     const previous = messages[index - 1];
     const next = messages[index];
     if (!previous || !next || startsSession[index]) return false;
+    const gap = (times[index] ?? NaN) - (times[index - 1] ?? NaN);
     return (
+      gap < MESSAGE_GROUP_GAP_MS &&
       !previous.system &&
       !next.system &&
       previous.senderId !== null &&

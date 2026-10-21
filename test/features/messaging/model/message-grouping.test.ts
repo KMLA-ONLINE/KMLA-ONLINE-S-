@@ -30,11 +30,11 @@ describe("layoutMessageThread", () => {
     const previous = message({ id: "previous" });
 
     expect(connects(previous, message({ id: "next" }))).toBe(true);
-    // 표시 시각(분)이 달라도 같은 흐름이면 잇는다.
+    // 표시 시각(분)이 달라도 5분 안이면 잇는다.
     expect(
       connects(
         previous,
-        message({ id: "next", sentAt: "2026-08-28T16:12:04+09:00" }),
+        message({ id: "next", sentAt: "2026-08-28T15:17:04+09:00" }),
       ),
     ).toBe(true);
     expect(connects(previous, message({ id: "next", senderId: "other" }))).toBe(
@@ -49,11 +49,35 @@ describe("layoutMessageThread", () => {
     ).toBe(false);
   });
 
+  it("같은 대화 흐름이라도 앞 메시지와 5분 이상 벌어지면 묶음을 끊는다", () => {
+    const layout = layoutMessageThread([
+      message({ id: "a", sentAt: "2026-08-28T15:00:00+09:00" }),
+      message({ id: "b", sentAt: "2026-08-28T15:04:59+09:00" }),
+      message({ id: "c", sentAt: "2026-08-28T15:09:59+09:00" }),
+      message({ id: "d", sentAt: "2026-08-28T15:14:00+09:00" }),
+    ]);
+
+    expect(layout.map(({ startsSession }) => startsSession)).toEqual([
+      true,
+      false,
+      false,
+      false,
+    ]);
+    expect(
+      layout.map(({ startsGroup, endsGroup }) => [startsGroup, endsGroup]),
+    ).toEqual([
+      [true, false],
+      [false, true],
+      [true, false],
+      [false, true],
+    ]);
+  });
+
   it("앞 항목과 1시간 이상 벌어지면 새 대화 흐름을 열고 연결을 끊는다", () => {
     const layout = layoutMessageThread([
       message({ id: "a", sentAt: "2026-08-28T15:00:00+09:00" }),
-      message({ id: "b", sentAt: "2026-08-28T15:59:59+09:00" }),
-      message({ id: "c", sentAt: "2026-08-28T16:59:59+09:00" }),
+      message({ id: "b", sentAt: "2026-08-28T15:04:00+09:00" }),
+      message({ id: "c", sentAt: "2026-08-28T16:04:00+09:00" }),
     ]);
 
     expect(layout.map(({ startsSession }) => startsSession)).toEqual([
