@@ -53,10 +53,7 @@ import {
   useConversationMembership,
   useListedConversation,
 } from "~/features/messaging/hooks/use-conversation-membership";
-import {
-  MessageParticipantsProvider,
-  useMessageParticipants,
-} from "~/features/messaging/components/message-mention";
+import { MessageParticipantsProvider } from "~/features/messaging/components/message-mention";
 import {
   MentionSuggestionList,
   mentionOptionId,
@@ -90,6 +87,7 @@ import { useIsSendEnter } from "~/shared/hooks/use-enter-to-send";
 import { useKeyboardViewport } from "~/shared/hooks/use-keyboard-viewport";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
 import { RenameConversationDialog } from "~/features/messaging/components/rename-conversation-dialog";
+import { NicknameDialog } from "~/features/messaging/components/nickname-dialog";
 import {
   activeParticipants,
   canSendToConversation,
@@ -223,6 +221,7 @@ export function RoomScreen({
   const [memberDialog, setMemberDialog] = useState<
     | { kind: "invite" }
     | { kind: "rename" }
+    | { kind: "nicknames" }
     | { kind: "leave" }
     | { kind: "delete" }
     | null
@@ -490,7 +489,7 @@ export function RoomScreen({
         ? {
             id: target.id,
             senderId: target.senderId,
-            body: messagePlainText(target, participantById),
+            body: messagePlainText(target),
             deleted: target.deleted,
             attachmentKind: target.attachments?.[0]?.kind ?? null,
           }
@@ -632,7 +631,7 @@ export function RoomScreen({
                 </p>
                 <p className="truncate text-sm text-muted-foreground">
                   {formatReplyPreview(
-                    toReplyPreview(pinnedMessage, participantById),
+                    toReplyPreview(pinnedMessage),
                     window.location.origin,
                   )}
                 </p>
@@ -786,6 +785,7 @@ export function RoomScreen({
           }}
           onInvite={() => setMemberDialog({ kind: "invite" })}
           onRename={() => setMemberDialog({ kind: "rename" })}
+          onNicknames={() => setMemberDialog({ kind: "nicknames" })}
           onLeave={() => setMemberDialog({ kind: "leave" })}
           onDeleteGroup={() => setMemberDialog({ kind: "delete" })}
           sharedCounts={sharedCounts}
@@ -829,6 +829,14 @@ export function RoomScreen({
             currentName={conversation.name}
             onCancel={() => setMemberDialog(null)}
             onSubmit={membership.rename}
+          />
+        ) : null}
+        {memberDialog?.kind === "nicknames" ? (
+          <NicknameDialog
+            members={activeParticipants(conversation)}
+            viewerId={conversation.viewerId}
+            onClose={() => setMemberDialog(null)}
+            onSubmit={membership.setNickname}
           />
         ) : null}
         {memberDialog?.kind === "leave" ? (
@@ -1336,7 +1344,7 @@ function MessageThread({
             </span>{" "}
             <span className="text-muted-foreground">
               {formatReplyPreview(
-                toReplyPreview(incomingMessage, participantById),
+                toReplyPreview(incomingMessage),
                 window.location.origin,
               )}
             </span>
@@ -1367,12 +1375,9 @@ function MessageThread({
 }
 
 /** 불러온 메시지를 답장 인용과 같은 모양으로 줄인다. 첨부만 있는 메시지를 첨부 종류로 부르게 한다. 멘션은 지금 이름이다. */
-function toReplyPreview(
-  message: ConversationMessage,
-  participantById: ReadonlyMap<string, MessageParticipant>,
-) {
+function toReplyPreview(message: ConversationMessage) {
   return {
-    body: messagePlainText(message, participantById),
+    body: messagePlainText(message),
     deleted: message.deleted,
     attachmentKind: message.attachments?.[0]?.kind ?? null,
   };
@@ -1463,7 +1468,6 @@ const ThreadMessage = memo(function ThreadMessage({
   actions: ThreadMessageActions;
 }) {
   const replyTarget = message.replyTo;
-  const participantById = useMessageParticipants();
   // 삭제된 메시지는 반응, 고정, 수정, 삭제를 받지 않는다. 전송 중인 메시지는 아직 서버에 없어
   // 복사만 된다. 남는 작업이 없으면 메뉴를 열지 않는다.
   const actionable = !message.deleted && !message.pending && !message.failed;
@@ -1483,8 +1487,7 @@ const ThreadMessage = memo(function ThreadMessage({
           {
             label: "복사",
             icon: <CopyIcon aria-hidden />,
-            onSelect: () =>
-              void copyMessageText(messagePlainText(message, participantById)),
+            onSelect: () => void copyMessageText(messagePlainText(message)),
           },
         ]),
     ...(actionable
@@ -1639,7 +1642,6 @@ function MessageActions({
   onDelete?: () => void;
 }) {
   const [reactionOpen, setReactionOpen] = useState(false);
-  const participantById = useMessageParticipants();
 
   const reactionAction = (
     <div className="relative flex shrink-0">
@@ -1704,9 +1706,7 @@ function MessageActions({
           {message.body !== "" ? (
             <DropdownMenuItem
               className="cursor-pointer"
-              onClick={() =>
-                void copyMessageText(messagePlainText(message, participantById))
-              }
+              onClick={() => void copyMessageText(messagePlainText(message))}
             >
               <CopyIcon aria-hidden />
               복사
@@ -1946,7 +1946,6 @@ function ComposerShell({
     setDraft: changeDraft,
     entries: mentions,
   });
-  const participantById = useMessageParticipants();
   const mentionSuggestions = useMentionSuggestions({
     participants: mentionParticipants,
     viewerId,
@@ -2034,7 +2033,7 @@ function ComposerShell({
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-primary">메시지 수정</p>
             <p className="truncate text-xs text-muted-foreground">
-              {messagePlainText(editTarget.message, participantById)}
+              {messagePlainText(editTarget.message)}
             </p>
           </div>
           <Button
@@ -2057,7 +2056,7 @@ function ComposerShell({
             </p>
             <p className="truncate text-xs text-muted-foreground">
               {formatReplyPreview(
-                toReplyPreview(replyTarget, participantById),
+                toReplyPreview(replyTarget),
                 window.location.origin,
               )}
             </p>

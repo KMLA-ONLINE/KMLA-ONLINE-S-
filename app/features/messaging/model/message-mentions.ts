@@ -6,8 +6,10 @@ import {
   EVERYONE_MENTION_ORDINAL,
   assignMentionOrdinals,
   fromMentionDisplay,
+  mentionPlainText,
   mentionTokenPattern,
   normalizeMentions,
+  sanitizeMentionLabel,
   stripDisplayMarks,
   toMentionDisplay,
   type MentionDraftEntry,
@@ -53,7 +55,7 @@ function searchKey(value: string): string {
 
 /**
  * `@` 뒤에 친 글자로 거른 후보. 맨 위는 `@모든 사람`, 그 아래는 참여자 목록 순서다. 나와 나간 멤버, 공개 ID를 모르는 사람은
- * 부를 수 없어 뺀다.
+ * 부를 수 없어 뺀다. 별명이 있으면 별명으로 보이고, 별명과 프로필 이름 어느 쪽으로도 찾는다(기능 명세 §13.22).
  */
 export function messageMentionSuggestions(
   participants: MessageParticipant[],
@@ -67,21 +69,38 @@ export function messageMentionSuggestions(
     avatarUrl: null,
     target: null,
   };
-  const people = participants.flatMap(
-    (participant): MessageMentionSuggestion[] =>
-      participant.active && participant.id !== viewerId && participant.pubId
-        ? [
-            {
+  const people = participants.flatMap((participant) =>
+    participant.active && participant.id !== viewerId && participant.pubId
+      ? [
+          {
+            suggestion: {
               key: participant.id,
               name: participant.name,
               avatarUrl: participant.avatarUrl,
-              target: { pubId: participant.pubId, name: participant.name },
-            },
-          ]
-        : [],
+              target: {
+                pubId: participant.pubId,
+                // 토큰 글자는 문법을 깨는 글자(`_`, `*` 등)를 빼고 적힌다. 그것만으로 된 별명이면 빈 멘션이 남으므로
+                // 프로필 이름으로 부른다.
+                name: sanitizeMentionLabel(participant.name)
+                  ? participant.name
+                  : (participant.profileName ?? participant.name),
+              },
+            } satisfies MessageMentionSuggestion,
+            searchNames: [
+              participant.name,
+              participant.profileName ?? participant.name,
+            ],
+          },
+        ]
+      : [],
   );
-  return [everyone, ...people].filter((suggestion) =>
-    searchKey(suggestion.name).includes(key),
+  return [
+    { suggestion: everyone, searchNames: [everyone.name] },
+    ...people,
+  ].flatMap(({ suggestion, searchNames }) =>
+    searchNames.some((name) => searchKey(name).includes(key))
+      ? [suggestion]
+      : [],
   );
 }
 
@@ -186,8 +205,8 @@ type MentionedMessage = Pick<
 >;
 
 /**
- * 보낸 메시지의 멘션을 다시 초안으로 올린다(편집). 이름과 공개 ID는 지금 참여자 목록에서 찾고, 찾지 못한 사람은 빼서 제출 때
- * 평문이 되게 한다.
+ * 보낸 메시지의 멘션을 다시 초안으로 올린다(편집). 이름은 토큰의 글자 그대로 두고(기능 명세 §13.22), 공개 ID는 지금 참여자
+ * 목록에서 찾는다. 찾지 못한 사람은 빼서 제출 때 평문이 되게 한다.
  */
 export function messageMentionEntries(
   message: MentionedMessage,
@@ -196,15 +215,22 @@ export function messageMentionEntries(
   const byId = new Map(
     participants.map((participant) => [participant.id, participant]),
   );
+  const labels = new Map(
+    Array.from(
+      message.body.matchAll(mentionTokenPattern()),
+      (match) => [Number(match[2]), match[1] ?? ""] as const,
+    ),
+  );
   const people = (message.mentionProfileIds ?? []).flatMap(
     (profileId, index): MentionDraftEntry[] => {
       const participant = byId.get(profileId);
+      const ordinal = index + 1;
       return participant?.pubId
         ? [
             {
-              ordinal: index + 1,
+              ordinal,
               pubId: participant.pubId,
-              name: participant.name,
+              name: (labels.get(ordinal) ?? "") || participant.name,
             },
           ]
         : [];
@@ -214,8 +240,8 @@ export function messageMentionEntries(
 }
 
 /**
- * 고친 내용이 원래 메시지와 같은지. 토큰에 적힌 옛 이름이나 번호가 아니라 화면에 보이는 글자와 부르는 사람으로 비교한다 —
- * 그대로 저장했는데 개명한 사람의 토큰 이름이 바뀌었다고 수정으로 남거나, 대상을 잃은 멘션이 조용히 지워지지 않게 한다.
+ * 고친 내용이 원래 메시지와 같은지. 토큰 번호가 아니라 화면에 보이는 글자와 부르는 사람으로 비교한다 — 그대로 저장했는데
+ * 번호가 다시 매겨졌다고 수정으로 남거나, 대상을 잃은 멘션이 조용히 지워지지 않게 한다.
  */
 export function isUnchangedEdit(
   message: MentionedMessage,
@@ -269,11 +295,13 @@ export interface MessageMentionView {
 }
 
 /**
- * 본문 `m:n` 토큰의 대상. 이름은 지금 참여자 목록에서 찾는다. 대상을 알 수 없으면 `null`이고 평문으로 그린다. `m:0`은 서버가
- * `@모든 사람`이라고 확인한 메시지에서만 그렇게 그린다 — 이 기능 전에 같은 글자를 직접 쳐 둔 메시지가 있다.
+ * 본문 `m:n` 토큰의 대상. 이름은 토큰에 적힌, 보낼 때 보이던 글자다 — 뒤에 별명이나 프로필 이름이 바뀌어도 그대로다(기능
+ * 명세 §13.22). 대상을 알 수 없으면 `null`이고 평문으로 그린다. `m:0`은 서버가 `@모든 사람`이라고 확인한 메시지에서만 그렇게
+ * 그린다 — 이 기능 전에 같은 글자를 직접 쳐 둔 메시지가 있다.
  */
 export function resolveMessageMention(
   ordinal: number,
+  label: string,
   message: Pick<ConversationMessage, "mentionProfileIds" | "mentionsEveryone">,
   participantById: ReadonlyMap<string, MessageParticipant>,
 ): MessageMentionView | null {
@@ -282,19 +310,15 @@ export function resolveMessageMention(
   }
   const profileId = message.mentionProfileIds?.[ordinal - 1];
   const participant = profileId ? participantById.get(profileId) : undefined;
+  // 문법을 깨는 글자만으로 된 이름을 부르면 토큰 글자가 빈다. 링크만 남은 `@`가 되지 않게 지금 이름을 쓴다.
   return participant
-    ? { name: participant.name, pubId: participant.pubId }
+    ? { name: label || participant.name, pubId: participant.pubId }
     : null;
 }
 
-/** 멘션을 `@지금 이름` 글자로 바꾼 본문. 복사처럼 글자로만 옮기는 곳이 쓴다. 대상을 모르면 토큰의 이름을 쓴다. */
+/** 멘션을 토큰 글자 그대로의 `@이름`으로 바꾼 본문. 복사처럼 글자로만 옮기는 곳이 쓴다. */
 export function messagePlainText(
-  message: MentionedMessage,
-  participantById: ReadonlyMap<string, MessageParticipant>,
+  message: Pick<ConversationMessage, "body">,
 ): string {
-  return message.body.replace(
-    mentionTokenPattern(),
-    (_token, label: string, ordinal: string) =>
-      `@${resolveMessageMention(Number(ordinal), message, participantById)?.name ?? label}`,
-  );
+  return mentionPlainText(message.body);
 }

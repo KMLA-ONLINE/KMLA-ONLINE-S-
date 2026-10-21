@@ -17,6 +17,43 @@ const people = new Map<string, MessageParticipant>(
 );
 
 describe("formatSystemMessage", () => {
+  it("별명 변경은 별명이 아니라 프로필 이름으로 쓴다", () => {
+    const nicknamed = new Map(people);
+    nicknamed.set("b", {
+      id: "b",
+      name: "준이",
+      profileName: "김민준",
+      nickname: "준이",
+      avatarUrl: null,
+      active: true,
+    });
+    expect(
+      formatSystemMessage(
+        { kind: "nickname_set", profileIds: ["a", "b"], name: "준이" },
+        nicknamed,
+      ),
+    ).toBe("홍길동님이 김민준님의 별명을 ‘준이’(으)로 정했습니다.");
+    expect(
+      formatSystemMessage(
+        { kind: "nickname_set", profileIds: ["b", "b"], name: "민준이형" },
+        nicknamed,
+      ),
+    ).toBe("김민준님이 자신의 별명을 ‘민준이형’(으)로 정했습니다.");
+    expect(
+      formatSystemMessage(
+        { kind: "nickname_cleared", profileIds: ["a", "b"], name: null },
+        nicknamed,
+      ),
+    ).toBe("홍길동님이 김민준님의 별명을 지웠습니다.");
+    // 다른 시스템 메시지는 이 대화에서 보이는 이름을 쓴다.
+    expect(
+      formatSystemMessage(
+        { kind: "member_left", profileIds: ["b"], name: null },
+        nicknamed,
+      ),
+    ).toBe("준이님이 나갔습니다.");
+  });
+
   it("초대, 나가기, 내보내기, 이름 변경을 문장으로 만든다", () => {
     expect(
       formatSystemMessage(

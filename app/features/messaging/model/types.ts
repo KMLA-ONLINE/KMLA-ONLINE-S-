@@ -4,7 +4,12 @@ export interface MessageParticipant {
   id: string;
   /** 프로필 주소(`/profile/:pubId`). 모르면 프로필로 잇지 않는다. */
   pubId?: string;
+  /** 이 대화에서 보이는 이름. 별명이 있으면 별명이고, 없으면 프로필 이름이다(기능 명세 §13.25). */
   name: string;
+  /** 별명과 관계없는 프로필 이름. 멤버 목록의 둘째 줄과 별명 시스템 메시지가 쓴다. 없으면 `name`과 같다. */
+  profileName?: string;
+  /** 이 대화의 별명. 없으면 비어 있다. */
+  nickname?: string | null;
   avatarUrl: string | null;
   /** 지금 멤버인지. 나간 사람도 지난 메시지와 시스템 메시지의 이름을 그리려고 목록에 남는다. */
   active: boolean;
@@ -31,12 +36,21 @@ export interface MessageAttachment {
   previewUrl?: string;
 }
 
-/** 멤버 추가·나가기·내보내기·이름 변경을 대화 안에 남긴 시스템 메시지*/
+/** 멤버 추가·나가기·내보내기·이름 변경·별명 변경을 대화 안에 남긴 시스템 메시지*/
 export interface MessageSystemEvent {
-  kind: "member_added" | "member_left" | "member_removed" | "renamed";
-  /** 첫 번째가 한 사람(초대한 사람, 나간 사람, 내보낸 사람, 이름을 바꾼 사람), 나머지가 대상이다. */
+  kind:
+    | "member_added"
+    | "member_left"
+    | "member_removed"
+    | "renamed"
+    | "nickname_set"
+    | "nickname_cleared";
+  /**
+   * 첫 번째가 한 사람(초대한 사람, 나간 사람, 내보낸 사람, 이름이나 별명을 바꾼 사람), 나머지가 대상이다. 별명은 자기 것을
+   * 바꿔도 대상이 따로 한 번 더 온다.
+   */
   profileIds: string[];
-  /** 바꾼 그룹 이름. `renamed`에만 있다. */
+  /** 바꾼 그룹 이름이나 새 별명. `renamed`와 `nickname_set`에만 있다. */
   name: string | null;
 }
 
