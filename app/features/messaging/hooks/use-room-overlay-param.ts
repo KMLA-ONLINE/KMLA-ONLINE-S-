@@ -69,6 +69,7 @@ export function useRoomOverlayParam() {
   const overlay = parseOverlay(searchParams.get(PARAM));
   const hasOverlay = overlay !== null;
   const detailsOpen = overlay?.kind === "details";
+  const detailsShown = detailsOpen || (hasOverlay && aboveDetails);
 
   /**
    * 오버레이를 연다. `replace`면 지금 오버레이를 그 자리에서 바꾼다. 대화 정보에서 검색을 열 때처럼
@@ -87,14 +88,15 @@ export function useRoomOverlayParam() {
           ...locationState,
           roomOverlayDepth: stays ? depth : depth + 1,
           // 자리를 바꾸면 바뀐 화면의 아래도 그대로다. 대화 정보를 바꾼 검색 아래에는 대화가 있다.
-          roomOverlayAboveDetails: stays ? aboveDetails : detailsOpen,
+          // 대화 정보 위에 연 화면에서 또 열면 그 아래에도 대화 정보가 깔려 있다.
+          roomOverlayAboveDetails: stays ? aboveDetails : detailsShown,
         } satisfies RoomOverlayLocationState,
       });
     },
     [
       aboveDetails,
       depth,
-      detailsOpen,
+      detailsShown,
       hasOverlay,
       locationState,
       searchParams,
@@ -130,7 +132,7 @@ export function useRoomOverlayParam() {
     overlay,
     depth,
     /** 좁은 화면에서 대화 정보가 보여야 하는지. 대화 정보 자체이거나 그 위에 연 화면일 때다. */
-    detailsShown: detailsOpen || (hasOverlay && aboveDetails),
+    detailsShown,
     open,
     close,
     closeAll,

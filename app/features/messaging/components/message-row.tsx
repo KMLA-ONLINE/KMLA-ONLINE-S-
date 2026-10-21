@@ -852,9 +852,13 @@ function MessageTimeCard({
         {children}
         {overlay}
       </TooltipTrigger>
-      {/* 버블 바깥쪽(상대는 왼쪽, 나는 오른쪽)에 띄운다. 안쪽에는 작업 버튼이 뜬다. 자리가 없으면
-          Base UI가 반대쪽으로 뒤집는다. */}
-      <TooltipContent side={isOwn ? "right" : "left"}>
+      {/* 안쪽에는 작업 버튼과 읽음 수가 뜨므로 피한다. 상대 메시지는 바깥쪽(왼쪽)에 띄운다. 내 메시지의
+          바깥쪽은 대화 영역 끝이라 자리가 없고, 그러면 Base UI가 안쪽으로 뒤집어 작업 버튼을 덮는다.
+          그래서 위에 띄우고 바깥 끝에 맞춘다. */}
+      <TooltipContent
+        side={isOwn ? "top" : "left"}
+        align={isOwn ? "end" : "center"}
+      >
         {formatMessageTime(message.sentAt)}
       </TooltipContent>
     </Tooltip>

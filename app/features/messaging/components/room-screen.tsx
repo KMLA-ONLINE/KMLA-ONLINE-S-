@@ -1867,6 +1867,9 @@ function ComposerShell({
   >("auto");
   if (editTarget?.message.id !== editingId) {
     setEditingId(editTarget?.message.id);
+    // 고칠 본문을 넣거나 맡겨 둔 입력을 되돌리는 것은 입력을 고친 것이 아니다. 시작이든 끝이든 처음
+    // 상태로 두어, 펴 둔 첨부 버튼이 수정 중에도 남거나 끝난 뒤 접힌 채로 남지 않게 한다.
+    setAttachmentActionsMode("auto");
     if (editTarget) {
       if (editingId === undefined) setHeld({ text: draft, mentions });
       setDraft(toMentionDisplay(editTarget.draft, editTarget.mentions));
@@ -1875,8 +1878,6 @@ function ComposerShell({
       setDraft(held.text);
       setMentions(held.mentions);
       setHeld(EMPTY_HELD_DRAFT);
-      // 고치던 본문을 친 것은 되돌린 입력을 고친 것이 아니다. 저장이든 취소든 처음 상태로 둔다.
-      setAttachmentActionsMode("auto");
     }
   }
   useEffect(() => {
