@@ -66,9 +66,6 @@ export function NicknameDialog({
           <>
             <DialogHeader>
               <DialogTitle>별명</DialogTitle>
-              <DialogDescription>
-                별명은 이 채팅에서만 보이고, 모든 멤버에게 같게 보입니다.
-              </DialogDescription>
             </DialogHeader>
             <ul className="-mx-2 flex max-h-[60dvh] flex-col gap-1 overflow-y-auto">
               {ordered.map((member) => {
