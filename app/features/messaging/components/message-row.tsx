@@ -854,11 +854,8 @@ function MessageTimeCard({
       </TooltipTrigger>
       {/* 안쪽에는 작업 버튼과 읽음 수가 뜨므로 피한다. 상대 메시지는 바깥쪽(왼쪽)에 띄운다. 내 메시지의
           바깥쪽은 대화 영역 끝이라 자리가 없고, 그러면 Base UI가 안쪽으로 뒤집어 작업 버튼을 덮는다.
-          그래서 위에 띄우고 바깥 끝에 맞춘다. */}
-      <TooltipContent
-        side={isOwn ? "top" : "left"}
-        align={isOwn ? "end" : "center"}
-      >
+          그래서 버블 위 가운데에 띄운다. */}
+      <TooltipContent side={isOwn ? "top" : "left"} align="center">
         {formatMessageTime(message.sentAt)}
       </TooltipContent>
     </Tooltip>
