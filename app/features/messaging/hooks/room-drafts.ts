@@ -37,6 +37,18 @@ export function updateRoomDraft(key: string, patch: Partial<RoomDraft>) {
   else drafts.set(key, next);
 }
 
+/**
+ * 쓰던 글 뒤에 줄을 바꿔 덧붙인다. 다른 앱에서 공유받은 글이 그 방에 쓰던 초안을 덮지 않게 한다
+ * (기능 명세 §13.24). 멘션은 순번으로 이어지므로 뒤에 붙이는 글은 멘션을 흐트러뜨리지 않는다. 쓰던 글
+ * 끝의 줄바꿈은 걷어 사이가 늘 한 줄이 되게 한다.
+ */
+export function appendRoomDraftText(key: string, text: string) {
+  const current = (drafts.get(key)?.text ?? "").trimEnd();
+  updateRoomDraft(key, {
+    text: current === "" ? text : `${current}\n${text}`,
+  });
+}
+
 /** 테스트가 서로의 초안을 물려받지 않게 비운다. */
 export function clearRoomDrafts() {
   drafts.clear();
