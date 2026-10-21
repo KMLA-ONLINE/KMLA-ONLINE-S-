@@ -7,6 +7,7 @@ const { listPostPreviews } = vi.hoisted(() => ({
 vi.mock("~/features/posts/data/queries", () => ({ listPostPreviews }));
 
 import { MessageBubble } from "~/features/messaging/components/message-bubble";
+import { formatMessageTime } from "~/features/messaging/model/message-time";
 import type { ConversationMessage } from "~/features/messaging/model/types";
 import { renderRoute, screen } from "../../../router";
 
@@ -108,5 +109,125 @@ describe("MessageBubble shared post", () => {
       screen.getByRole("link", { name: `${window.location.origin}${PATH}` }),
     ).toBeInTheDocument();
     expect(listPostPreviews).not.toHaveBeenCalled();
+  });
+});
+
+describe("MessageBubble group corners", () => {
+  const photo = {
+    id: "p1",
+    kind: "image" as const,
+    mimeType: "image/webp",
+    sizeBytes: 10,
+    width: 10,
+    height: 10,
+    fileName: "p1.webp",
+    objectPath: "c/p1",
+    thumbnailPath: null,
+  };
+  const file = {
+    id: "f1",
+    kind: "file" as const,
+    mimeType: "application/pdf",
+    sizeBytes: 10,
+    width: null,
+    height: null,
+    fileName: "notes.pdf",
+    objectPath: "c/f1",
+    thumbnailPath: null,
+  };
+  const photoGrid = () =>
+    screen.getByRole("button", { name: "사진 크게 보기: p1.webp" })
+      .parentElement;
+  const fileCard = () =>
+    screen.getByText("notes.pdf").closest("div.rounded-2xl, a.rounded-2xl");
+
+  it("joins photos and files to the messages around them in a group", () => {
+    renderRoute(() => (
+      <MessageBubble
+        message={sharedMessage({ body: "", attachments: [photo, file] })}
+        isOwn
+        startsGroup={false}
+        endsGroup={false}
+      />
+    ));
+
+    expect(photoGrid()).toHaveClass("rounded-tr-md", "rounded-br-md");
+    expect(fileCard()).toHaveClass("rounded-tr-md", "rounded-br-md");
+  });
+
+  it("joins a photo to its caption inside one message", () => {
+    renderRoute(() => (
+      <MessageBubble
+        message={sharedMessage({ body: "사진 설명", attachments: [photo] })}
+        isOwn
+      />
+    ));
+
+    expect(photoGrid()).toHaveClass("rounded-br-md");
+    expect(photoGrid()).not.toHaveClass("rounded-tr-md");
+    const caption = screen.getByText("사진 설명").closest("div");
+    expect(caption).toHaveClass("rounded-tr-md");
+    expect(caption).not.toHaveClass("rounded-br-md");
+  });
+
+  it("joins a shared post card on the sender side", async () => {
+    renderRoute(() => (
+      <MessageBubble
+        message={sharedMessage({ senderId: "you" })}
+        isOwn={false}
+        startsGroup={false}
+      />
+    ));
+
+    const card = await screen.findByRole("link", { name: /공연 안내/ });
+    expect(card).toHaveClass("rounded-tl-md");
+    expect(card).not.toHaveClass("rounded-bl-md");
+  });
+});
+
+describe("MessageBubble timestamp", () => {
+  const photo = {
+    id: "p1",
+    kind: "image" as const,
+    mimeType: "image/webp",
+    sizeBytes: 10,
+    width: 10,
+    height: 10,
+    fileName: "p1.webp",
+    objectPath: "c/p1",
+    thumbnailPath: null,
+  };
+  const file = {
+    id: "f1",
+    kind: "file" as const,
+    mimeType: "application/pdf",
+    sizeBytes: 10,
+    width: null,
+    height: null,
+    fileName: "notes.pdf",
+    objectPath: "c/f1",
+    thumbnailPath: null,
+  };
+
+  it.each([
+    ["photo", photo],
+    ["file", file],
+  ])("shows the sent time under an attachment-only %s", (_, attachment) => {
+    const sentAt = "2026-10-15T06:00:00.000Z";
+    renderRoute(() => (
+      <MessageBubble
+        message={sharedMessage({ body: "", sentAt, attachments: [attachment] })}
+        isOwn
+        showTimestamp
+      />
+    ));
+
+    expect(
+      screen.getByText(formatMessageTime(sentAt), { selector: "time" }),
+    ).toHaveAttribute("dateTime", sentAt);
+    // 버블 없이 대화 배경 위에 놓이므로 primary 버블용 밝은 글자색을 쓰지 않는다.
+    expect(
+      screen.getByText(formatMessageTime(sentAt), { selector: "time" }),
+    ).toHaveClass("text-muted-foreground");
   });
 });

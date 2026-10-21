@@ -5,8 +5,11 @@ interface Options {
   enabled: boolean;
   /** 줄이 바뀔 수 있는 내용이 바뀌면 다시 잰다. 본문처럼 원시값을 넘긴다. */
   contentKey: string;
-  /** 상자 안의 다른 내용이 바라는 최소 내용 폭(rem). 상자가 그보다 좁으면 상자 폭을 따른다. */
-  minContentRem?: number;
+  /**
+   * 상자 내용 폭을 채우는(`min-width: 100%`) 다른 내용. 최소 폭을 뗐을 때 이 요소가 차지하는 폭보다
+   * 상자를 줄이지 않는다. 이 요소의 내용이 바뀌면 `contentKey`에도 넣는다.
+   */
+  minContentRef?: RefObject<HTMLElement | null>;
 }
 
 /**
@@ -22,7 +25,7 @@ interface Options {
 export function useShrinkWrap(
   boxRef: RefObject<HTMLElement | null>,
   textRef: RefObject<HTMLElement | null>,
-  { enabled, contentKey, minContentRem = 0 }: Options,
+  { enabled, contentKey, minContentRef }: Options,
 ) {
   useLayoutEffect(() => {
     const box = boxRef.current;
@@ -44,9 +47,7 @@ export function useShrinkWrap(
         parseFloat(style.paddingLeft);
       let lineRight = contentLeft;
       for (const line of lines) lineRight = Math.max(lineRight, line.right);
-      const minContent =
-        minContentRem *
-        parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const minContent = fitWidth(minContentRef?.current);
       const contentWidth = Math.max(lineRight - contentLeft, minContent);
       // 소수점 폭을 내림하면 마지막 단어가 다시 다음 줄로 넘어가므로 올림한다.
       const width = Math.ceil(
@@ -70,5 +71,15 @@ export function useShrinkWrap(
       observer.disconnect();
       box.style.width = "";
     };
-  }, [boxRef, textRef, enabled, contentKey, minContentRem]);
+  }, [boxRef, textRef, enabled, contentKey, minContentRef]);
+}
+
+/** 상자 폭을 따라 늘어나는 요소가 최소 폭 없이 차지하는 폭이다. 요소가 없으면 0이다. */
+function fitWidth(element: HTMLElement | null | undefined) {
+  if (!element) return 0;
+  const minWidth = element.style.minWidth;
+  element.style.minWidth = "0";
+  const width = element.getBoundingClientRect().width;
+  element.style.minWidth = minWidth;
+  return width;
 }

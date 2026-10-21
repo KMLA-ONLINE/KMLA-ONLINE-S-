@@ -977,8 +977,8 @@ revoke all on function public.list_pinned_messages(uuid)
 grant execute on function public.list_pinned_messages(uuid)
   to authenticated;
 
--- 끝의 연속 줄바꿈을 지우고(기능 명세 §13.4) 길이를 검사한다. 본문 상한은 grapheme 5,000자이지만
--- Postgres는 grapheme을 세지 못하므로, 클라이언트가 그 상한을 지키고 서버는 code point 20,000개로
+-- 끝의 연속 줄바꿈을 지우고(기능 명세 §13.4) 길이를 검사한다. 본문 상한은 grapheme 10,000자이지만
+-- Postgres는 grapheme을 세지 못하므로, 클라이언트가 그 상한을 지키고 서버는 code point 40,000개로
 -- 막는다. 전송과 편집이 같은 규칙을 쓴다.
 create function private.normalize_message_body(p_body text)
 returns text
@@ -989,8 +989,8 @@ as $$
 declare
   normalized text := pg_catalog.regexp_replace(coalesce(p_body, ''), '[\r\n]+$', '');
 begin
-  if normalized !~ '[^[:space:]]' or char_length(normalized) > 20000 then
-    raise exception 'body must be 1 to 20000 characters'
+  if normalized !~ '[^[:space:]]' or char_length(normalized) > 40000 then
+    raise exception 'body must be 1 to 40000 characters'
       using errcode = '22023';
   end if;
   return normalized;
@@ -1099,8 +1099,8 @@ begin
       normalized_body := pg_catalog.regexp_replace(coalesce(p_body, ''), '[\r\n]+$', '');
       if normalized_body !~ '[^[:space:]]' then
         normalized_body := '';
-      elsif char_length(normalized_body) > 20000 then
-        raise exception 'body must be at most 20000 characters'
+      elsif char_length(normalized_body) > 40000 then
+        raise exception 'body must be at most 40000 characters'
           using errcode = '22023';
       end if;
     else

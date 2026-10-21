@@ -205,7 +205,7 @@ export function GroupPostReportsPanel({
         <ConfirmDialog
           title="게시물을 삭제할까요?"
           description="게시물과 신고 기록이 함께 제거됩니다."
-          confirmLabel="삭제"
+          confirmLabel="게시물 삭제"
           destructive
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => {

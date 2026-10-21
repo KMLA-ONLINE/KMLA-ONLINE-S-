@@ -82,6 +82,30 @@ describe("GroupPostReportsPanel", () => {
     });
   });
 
+  it("makes clear that deleting removes the post", async () => {
+    const action = vi.fn(async ({ request }: { request: Request }) => {
+      const formData = await request.formData();
+      return { intent: formData.get("intent") };
+    });
+    const { user } = renderPanel(buildReport(), { action });
+
+    await user.click(screen.getByRole("button", { name: "게시물 삭제" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "게시물을 삭제할까요?" }),
+    ).toBeVisible();
+    expect(action).not.toHaveBeenCalled();
+
+    await user.click(
+      within(dialog).getByRole("button", { name: "게시물 삭제" }),
+    );
+    await waitFor(() => expect(action).toHaveBeenCalledOnce());
+    await expect(action.mock.results[0].value).resolves.toEqual({
+      intent: "delete-post",
+    });
+  });
+
   it("keeps moderation actions out of a managers view", () => {
     renderPanel(buildReport(), { canModerate: false });
 
@@ -89,7 +113,7 @@ describe("GroupPostReportsPanel", () => {
       screen.queryByRole("button", { name: "무시" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "삭제" }),
+      screen.queryByRole("button", { name: "게시물 삭제" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "게시물 보기" })).toBeVisible();
   });

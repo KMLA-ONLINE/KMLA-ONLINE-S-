@@ -8,6 +8,7 @@ import { useEffect } from "react";
 import { Link, useFetcher } from "react-router";
 import { toast } from "sonner";
 
+import { canHideProfileActivity } from "~/features/feed/model/hidden-profile-activities";
 import type { FeedPost, GroupFeedPost } from "~/features/feed/model/types";
 import { PostActionBar } from "~/features/posts/components/post-action-bar";
 import { PostMenu } from "~/features/posts/components/post-menu";
@@ -76,12 +77,19 @@ function AuthorAvatar({ post }: { post: FeedPost }) {
 function AuthorName({
   post,
   compact = false,
+  preserveName = false,
 }: {
   post: FeedPost;
   compact?: boolean;
+  preserveName?: boolean;
 }) {
   const name = post.author_name ?? post.author_label;
-  const className = cn("truncate font-semibold", !compact && "text-sm");
+  // 활동 문구보다 이름을 먼저 지키되, 아주 긴 이름은 헤더를 넘지 않게 자른다.
+  const className = cn(
+    "truncate font-semibold",
+    preserveName && "max-w-[60%] shrink-0",
+    !compact && "text-sm",
+  );
 
   if (post.author_identity === "anonymous" || !post.author_pub_id) {
     return <span className={className}>{name}</span>;
@@ -102,8 +110,15 @@ function AuthorName({
  * 따지면 피드 쿼리가 무거워지므로, 이미 있는 `is_author`로 작성자 몫(수정·삭제)만 연다.
  * 운영진의 삭제·고정과 신고는 상세의 메뉴에서 한다. 작성자의 권한은 그룹·개인 모두 `is_author`와
  * 같고, 프로필 사진·커버 활동 게시물만 수정할 수 없다(`get_*_post`의 `can_edit`).
+ * 남의 프로필 변경 활동에는 이 기기에서만 접는 "가리기"만 연다.
  */
-function FeedPostMenu({ post }: { post: FeedPost }) {
+function FeedPostMenu({
+  post,
+  onHide,
+}: {
+  post: FeedPost;
+  onHide?: () => void;
+}) {
   const fetcher = useFetcher<{ error?: string }>();
   const path = feedPostPath(post);
   const result = fetcher.state === "idle" ? fetcher.data : undefined;
@@ -113,7 +128,16 @@ function FeedPostMenu({ post }: { post: FeedPost }) {
     if (result?.error) toast.error(result.error);
   }, [result]);
 
-  if (!post.is_author) return null;
+  if (!post.is_author) {
+    return onHide ? (
+      <PostMenu
+        editTo={`${path}/edit`}
+        canEdit={false}
+        canDelete={false}
+        onHide={onHide}
+      />
+    ) : null;
+  }
 
   return (
     <PostMenu
@@ -131,15 +155,23 @@ function FeedPostMenu({ post }: { post: FeedPost }) {
   );
 }
 
-function FeedPostHeader({ post }: { post: FeedPost }) {
+function profileActivityText(post: FeedPost): string | null {
+  if (post.kind !== "profile" || !post.activity_kind) return null;
+  return post.activity_kind === "avatar_changed"
+    ? "프로필 사진을 바꾸었습니다."
+    : "프로필 커버를 바꾸었습니다.";
+}
+
+function FeedPostHeader({
+  post,
+  onHide,
+}: {
+  post: FeedPost;
+  onHide?: () => void;
+}) {
   const ownTimeline =
     post.kind === "profile" && post.author_pub_id === post.timeline_pub_id;
-  const activityLabel =
-    post.kind === "profile" && post.activity_kind
-      ? post.activity_kind === "avatar_changed"
-        ? "프로필 사진을 바꾸었습니다."
-        : "프로필 커버를 바꾸었습니다."
-      : null;
+  const activityLabel = profileActivityText(post);
 
   return (
     <header
@@ -162,7 +194,7 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
               </Link>
             </>
           ) : (
-            <AuthorName post={post} />
+            <AuthorName post={post} preserveName={Boolean(activityLabel)} />
           )}
           {activityLabel ? (
             <span className="truncate text-sm text-muted-foreground">
@@ -206,7 +238,7 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
           <RelativeTime value={post.published_at} />
         </div>
       </div>
-      <FeedPostMenu post={post} />
+      <FeedPostMenu post={post} onHide={onHide} />
     </header>
   );
 }
@@ -214,26 +246,33 @@ function FeedPostHeader({ post }: { post: FeedPost }) {
 export function FeedPostCard({
   post,
   mediaPending = false,
+  onHide,
 }: {
   post: FeedPost;
   mediaPending?: boolean;
+  onHide?: () => void;
 }) {
   const path = feedPostPath(post);
   const overlayPath = feedPostOverlayPath(post);
   const { images, files } = splitPostAttachments(post.attachments);
   const isMediaActivity = post.kind === "profile" && post.activity_kind;
-
   return (
     // 홈 피드는 서명을 뒤에서 채운다. 서명 중인 카드의 빈 미디어는 실패가 아니라 로딩으로 그린다.
     <MediaPendingContext value={mediaPending}>
-      <article className="overflow-hidden border-b-2 border-foreground/20 bg-card shadow-none md:rounded-xl md:border md:border-border md:shadow-sm">
+      <article
+        data-feed-post-id={post.post_id}
+        className="overflow-hidden border-b-2 border-foreground/20 bg-card shadow-none md:rounded-xl md:border md:border-border md:shadow-sm"
+      >
         {post.kind === "group" && post.is_pinned ? (
           <div className="flex items-center gap-1.5 px-4 pt-3 text-xs font-semibold text-muted-foreground">
             <PinIcon className="size-3.5 -rotate-45 fill-current" />
             고정된 게시물
           </div>
         ) : null}
-        <FeedPostHeader post={post} />
+        <FeedPostHeader
+          post={post}
+          onHide={canHideProfileActivity(post) ? onHide : undefined}
+        />
         {isMediaActivity ? (
           <ProfileMediaActivity post={post} />
         ) : (
@@ -290,10 +329,12 @@ export function FeedPostRow({
   post,
   isVisited,
   onVisit,
+  onHide,
 }: {
   post: FeedPost;
   isVisited: boolean;
   onVisit: () => void;
+  onHide?: () => void;
 }) {
   const engagement = usePostEngagement(post.post_id, post);
   const path = feedPostOverlayPath(post);
@@ -302,56 +343,65 @@ export function FeedPostRow({
   const text =
     post.kind === "group"
       ? groupListTitle(post)
-      : post.activity_kind
-        ? post.activity_kind === "avatar_changed"
-          ? "프로필 사진을 바꾸었습니다."
-          : "프로필 커버를 바꾸었습니다."
-        : extractPostPlainText(post.body);
+      : (profileActivityText(post) ?? extractPostPlainText(post.body));
+  const hide = canHideProfileActivity(post) ? onHide : undefined;
 
   return (
-    <Link
-      to={path}
-      preventScrollReset
-      onClick={onVisit}
+    <div
+      data-testid="feed-post-row"
       className={cn(
-        "flex w-full flex-col gap-1 px-3 py-2.5 text-left transition-colors hover:bg-muted/60",
-        isVisited && "bg-muted/45 hover:bg-muted/60",
+        "flex items-start transition-colors hover:bg-muted/60",
+        isVisited && "bg-muted/45",
       )}
     >
-      <div className="flex items-center gap-2">
-        {post.kind === "group" && post.is_pinned ? (
-          <PinIcon
-            className="size-4 shrink-0 -rotate-45 fill-current text-muted-foreground"
-            aria-label="고정됨"
-          />
-        ) : null}
-        <p className="line-clamp-1 text-sm font-medium sm:text-base">{text}</p>
-      </div>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="truncate">{author}</span>
-        <ChevronRightIcon className="size-3 shrink-0" aria-hidden="true" />
-        <span className="truncate">{target}</span>
-        <span aria-hidden="true">·</span>
-        <RelativeTime value={post.published_at} />
-        <span className="ml-auto flex shrink-0 items-center gap-3">
-          <span className="flex items-center gap-1">
-            {engagement.top_reactions.length ? (
-              engagement.top_reactions.map((reaction) => (
-                <ReactionEmoji key={reaction} reaction={reaction} />
-              ))
-            ) : (
-              <HeartIcon className="size-3.5" aria-hidden="true" />
-            )}
-            <span className="sr-only">반응</span>
-            {engagement.reaction_count}
+      <Link
+        to={path}
+        preventScrollReset
+        onClick={onVisit}
+        className="flex min-w-0 flex-1 flex-col gap-1 px-3 py-2.5 text-left"
+      >
+        <div className="flex items-center gap-2">
+          {post.kind === "group" && post.is_pinned ? (
+            <PinIcon
+              className="size-4 shrink-0 -rotate-45 fill-current text-muted-foreground"
+              aria-label="고정됨"
+            />
+          ) : null}
+          <p className="line-clamp-1 text-sm font-medium sm:text-base">
+            {text}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="truncate">{author}</span>
+          <ChevronRightIcon className="size-3 shrink-0" aria-hidden="true" />
+          <span className="truncate">{target}</span>
+          <span aria-hidden="true">·</span>
+          <RelativeTime value={post.published_at} />
+          <span className="ml-auto flex shrink-0 items-center gap-3">
+            <span className="flex items-center gap-1">
+              {engagement.top_reactions.length ? (
+                engagement.top_reactions.map((reaction) => (
+                  <ReactionEmoji key={reaction} reaction={reaction} />
+                ))
+              ) : (
+                <HeartIcon className="size-3.5" aria-hidden="true" />
+              )}
+              <span className="sr-only">반응</span>
+              {engagement.reaction_count}
+            </span>
+            <span className="flex items-center gap-1">
+              <MessageSquareIcon className="size-3.5" aria-hidden="true" />
+              <span className="sr-only">댓글</span>
+              {engagement.comment_count}
+            </span>
           </span>
-          <span className="flex items-center gap-1">
-            <MessageSquareIcon className="size-3.5" aria-hidden="true" />
-            <span className="sr-only">댓글</span>
-            {engagement.comment_count}
-          </span>
-        </span>
-      </div>
-    </Link>
+        </div>
+      </Link>
+      {hide ? (
+        <div className="shrink-0 pt-2 pr-2">
+          <FeedPostMenu post={post} onHide={hide} />
+        </div>
+      ) : null}
+    </div>
   );
 }

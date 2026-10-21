@@ -1,6 +1,7 @@
 import { BanIcon, ThumbsUpIcon } from "lucide-react";
 import { useRef, type Ref } from "react";
 
+import { groupCornerClass } from "~/features/messaging/components/group-corners";
 import { MessageAttachments } from "~/features/messaging/components/message-attachments";
 import { MessageMention } from "~/features/messaging/components/message-mention";
 import { formatReplyPreview } from "~/features/messaging/model/conversation-preview";
@@ -69,17 +70,25 @@ export function MessageBubble({
       message.body !== "" ||
       attachments.length === 0);
   const showEdited = Boolean(message.editedAt) && !message.deleted;
-  // 내 메시지의 primary 버블 위에서만 밝은 글자색을 쓴다.
-  const onPrimary = isOwn && !isEmojiOnly && !message.deleted && !sharedPost;
+  // 내 메시지의 primary 버블 위에서만 밝은 글자색을 쓴다. 첨부만 있는 메시지는 글 버블이 없다.
+  const onPrimary = isOwn && hasText && !isEmojiOnly && !message.deleted;
+  const quoteRef = useRef<HTMLButtonElement>(null);
+  const replyQuoteText =
+    replyTarget && onViewReply
+      ? formatReplyPreview(replyTarget, window.location.origin)
+      : null;
   const replyQuote =
     replyTarget && onViewReply ? (
       <button
+        ref={quoteRef}
         type="button"
         aria-label={`${replyTargetAuthor ?? "알 수 없는 사용자"}의 원문 메시지 보기`}
         className={cn(
-          // 원문이 길어도 짧은 답장의 버블을 14rem 넘게 넓히지 않는다. 버블이 본문이나 사진으로
-          // 그보다 넓으면 `min-w-full`로 버블 폭을 채운다(백분율 최소 폭은 버블 폭 계산에 들지 않는다).
-          "mb-1.5 block w-56 max-w-full min-w-full border-l-2 pl-2 text-left text-xs leading-4",
+          // 인용은 원문 길이만큼 버블을 넓히되 14rem을 넘기지 않는다. 버블이 본문이나 사진으로 더 넓으면
+          // `min-w-full`로 버블 폭을 채운다. 최소 폭이 최대 폭보다 앞서고, 백분율 최소 폭은 버블 폭
+          // 계산에 들지 않으므로 인용은 언제나 버블 폭과 같다. 줄임표 줄은 줄바꿈하지 않아 `w-fit`이
+          // 원문 전체 길이를 최소 폭으로 삼으므로, 최대 폭에도 버블 폭을 넣어야 좁은 버블 밖으로 넘치지 않는다.
+          "mb-1.5 block w-fit max-w-[min(14rem,100%)] min-w-full border-l-2 pl-2 text-left text-xs leading-4",
           onPrimary
             ? "border-primary-foreground/50 text-primary-foreground/85 hover:bg-primary-foreground/10"
             : "border-primary text-muted-foreground hover:bg-background/60",
@@ -89,9 +98,7 @@ export function MessageBubble({
         <span className="block truncate font-semibold">
           {replyTargetAuthor ?? "알 수 없는 사용자"}
         </span>
-        <span className="block truncate">
-          {formatReplyPreview(replyTarget, window.location.origin)}
-        </span>
+        <span className="block truncate">{replyQuoteText}</span>
       </button>
     ) : null;
   const editedMark = showEdited ? (
@@ -118,13 +125,22 @@ export function MessageBubble({
   const textBoxRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
   // 여러 줄 글 버블은 가장 긴 줄에 폭을 맞춘다. 첨부가 있으면 글 버블이 첨부 폭을 채우므로 줄이지 않는다.
-  // 답장 인용이 바라는 14rem(`w-56`)보다는 줄이지 않는다.
+  // 답장 인용이 차지하는 폭보다는 줄이지 않는다.
   useShrinkWrap(textBoxRef, textRef, {
     enabled:
       hasText && !isEmojiOnly && !message.deleted && attachments.length === 0,
-    contentKey: `${messageBody}|${showEdited}`,
-    minContentRem: replyQuote ? 14 : 0,
+    contentKey: `${messageBody}|${showEdited}|${replyTargetAuthor}|${replyQuoteText}`,
+    minContentRef: quoteRef,
   });
+  // 첨부, 게시물 카드(위 답장 인용 띠 포함), 글 버블이 차례로 쌓인 조각이다. 조각끼리, 그리고 묶음의
+  // 앞뒤 메시지와 맞닿는 쪽의 모서리를 덜 둥글게 해 하나로 잇는다.
+  const hasAttachments = attachments.length > 0;
+  const quoteStripJoin = { above: !startsGroup || hasAttachments, below: true };
+  const cardJoin = {
+    above: !startsGroup || hasAttachments || Boolean(replyQuote),
+    below: !endsGroup,
+  };
+  const textJoin = { above: !startsGroup || hasAttachments, below: !endsGroup };
   const reactionCount = [...reactions.values()].reduce(
     (total, count) => total + count,
     0,
@@ -159,24 +175,36 @@ export function MessageBubble({
             "ring-1 ring-primary ring-offset-1 ring-offset-background",
         )}
       >
-        {attachments.length > 0 ? (
+        {hasAttachments ? (
           <MessageAttachments
             attachments={attachments}
             isOwn={isOwn}
             pending={message.pending}
+            join={{
+              above: !startsGroup,
+              // 배경 없는 이모지 글은 맞닿을 버블이 아니다.
+              below:
+                !endsGroup || (hasText && !isEmojiOnly) || Boolean(sharedPost),
+            }}
           />
         ) : null}
         {sharedPost ? (
           <>
             {/* 답장 인용은 카드 위 옅은 띠에 둔다. 카드 안에 넣으면 카드 전체가 링크라 누를 곳이 겹친다. */}
             {replyQuote ? (
-              <div className="mb-1 w-fit max-w-full rounded-2xl bg-muted px-3.5 pt-2 pb-0.5">
+              <div
+                className={cn(
+                  "mb-0.5 w-fit max-w-full rounded-2xl bg-muted px-3.5 pt-2 pb-0.5",
+                  groupCornerClass(isOwn, quoteStripJoin),
+                )}
+              >
                 {replyQuote}
               </div>
             ) : null}
             <PostPreviewCard
               postId={sharedPost.postId}
               path={sharedPost.path}
+              className={groupCornerClass(isOwn, cardJoin)}
             />
             {editedMark || timestamp ? (
               <div className={cn("mt-1", isOwn ? "text-right" : "text-left")}>
@@ -190,9 +218,10 @@ export function MessageBubble({
           <div
             ref={textBoxRef}
             className={cn(
-              // 줄여 둔 폭이 남은 채 옆에 액션 레일이 생기는 식으로 쓸 수 있는 폭이 줄어도 버블 밖으로
+              // 줄여 둔 폭이 남은 채 창이 좁아지는 식으로 쓸 수 있는 폭이 줄어도 버블 밖으로
               // 넘치지 않게 막는다. 넘치면 대화 영역에 가로 스크롤이 생긴다.
               "w-full max-w-full",
+              hasAttachments && "mt-0.5",
               isEmojiOnly
                 ? "px-1 py-0.5 text-5xl leading-none"
                 : "rounded-2xl px-3.5 py-2 text-[15px] [overflow-wrap:anywhere] break-keep whitespace-pre-wrap",
@@ -205,10 +234,7 @@ export function MessageBubble({
                   : isOwn
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-foreground"),
-              !isEmojiOnly && !startsGroup && isOwn && "rounded-tr-md",
-              !isEmojiOnly && !startsGroup && !isOwn && "rounded-tl-md",
-              !isEmojiOnly && !endsGroup && isOwn && "rounded-br-md",
-              !isEmojiOnly && !endsGroup && !isOwn && "rounded-bl-md",
+              !isEmojiOnly && groupCornerClass(isOwn, textJoin),
             )}
           >
             {replyQuote}
@@ -233,6 +259,10 @@ export function MessageBubble({
             {isEmojiOnly ? editedMark : null}
             {timestamp}
           </div>
+        ) : null}
+        {/* 글 버블과 게시물 카드가 없으면 시각을 넣을 자리가 없으므로 첨부 아래에 따로 둔다. */}
+        {!hasText && !sharedPost && timestamp ? (
+          <div className="mt-1">{timestamp}</div>
         ) : null}
       </div>
       {hasReactions ? (

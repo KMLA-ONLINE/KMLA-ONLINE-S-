@@ -14,6 +14,10 @@ import {
   toDownloadUrl,
 } from "~/features/messaging/data/files";
 import { messagingKeys } from "~/features/messaging/data/cache";
+import {
+  groupCornerClass,
+  type GroupJoin,
+} from "~/features/messaging/components/group-corners";
 import { formatFileSize } from "~/features/messaging/model/attachments";
 import type { MessageAttachment } from "~/features/messaging/model/types";
 import {
@@ -59,19 +63,31 @@ export function MessageAttachments({
   attachments,
   isOwn,
   pending = false,
+  join = { above: false, below: false },
 }: {
   attachments: MessageAttachment[];
   isOwn: boolean;
   pending?: boolean;
+  /** 첨부 묶음 전체가 위·아래 조각과 맞닿는지. 첨부끼리는 늘 맞닿는다. */
+  join?: GroupJoin;
 }) {
   const { data: urls, isError: urlsFailed } = useAttachmentUrls(attachments);
   const media = attachments.filter(({ kind }) => kind === "image");
   const others = attachments.filter(({ kind }) => kind !== "image");
+  // 사진 격자가 첫 조각이고, 그 밖의 첨부가 하나씩 뒤따른다.
+  const pieceCount = (media.length > 0 ? 1 : 0) + others.length;
+  const cornerOf = (piece: number) =>
+    groupCornerClass(isOwn, {
+      above: piece > 0 || join.above,
+      below: piece < pieceCount - 1 || join.below,
+    });
+  const firstOther = media.length > 0 ? 1 : 0;
 
   return (
     <div
       className={cn(
-        "flex w-full min-w-0 flex-col gap-1",
+        // 묶음 안 메시지 사이와 같은 간격으로 조각을 띄운다.
+        "flex w-full min-w-0 flex-col gap-0.5",
         isOwn ? "items-end" : "items-start",
         pending && "opacity-60",
       )}
@@ -83,14 +99,16 @@ export function MessageAttachments({
           urls={urls}
           urlsFailed={urlsFailed}
           pending={pending}
+          cornerClassName={cornerOf(0)}
         />
       ) : null}
-      {others.map((attachment) =>
+      {others.map((attachment, index) =>
         attachment.kind === "audio" ? (
           <AudioAttachment
             key={attachment.id}
             attachment={attachment}
             pending={pending}
+            cornerClassName={cornerOf(firstOther + index)}
           />
         ) : (
           <FileAttachment
@@ -98,6 +116,7 @@ export function MessageAttachments({
             attachment={attachment}
             url={urls?.get(attachment.objectPath)}
             pending={pending}
+            cornerClassName={cornerOf(firstOther + index)}
           />
         ),
       )}
@@ -110,11 +129,13 @@ function MediaGrid({
   urls,
   urlsFailed,
   pending,
+  cornerClassName,
 }: {
   media: MessageAttachment[];
   urls: Map<string, string> | undefined;
   urlsFailed: boolean;
   pending: boolean;
+  cornerClassName: string;
 }) {
   const images = useMemo<ViewerImage[]>(
     () =>
@@ -156,6 +177,7 @@ function MediaGrid({
         style={{ width: gridWidth }}
         className={cn(
           "grid max-w-full gap-0.5 overflow-hidden rounded-2xl",
+          cornerClassName,
           single
             ? "grid-cols-1"
             : visible.length === 2 || visible.length === 4
@@ -332,19 +354,27 @@ function usePlayableUrl(
 function AudioAttachment({
   attachment,
   pending,
+  cornerClassName,
 }: {
   attachment: MessageAttachment;
   pending: boolean;
+  cornerClassName: string;
 }) {
   const [attempt, setAttempt] = useState(0);
   const state = usePlayableUrl(attachment, attempt, !pending);
 
   if (state.status === "ready") {
-    return <AudioPlayer src={state.url} fileName={attachment.fileName} />;
+    return (
+      <AudioPlayer
+        src={state.url}
+        fileName={attachment.fileName}
+        cornerClassName={cornerClassName}
+      />
+    );
   }
 
   return (
-    <div className={AUDIO_CARD_CLASS_NAME}>
+    <div className={cn(AUDIO_CARD_CLASS_NAME, cornerClassName)}>
       <MusicIcon
         aria-hidden
         className="size-5 shrink-0 text-muted-foreground"
@@ -384,7 +414,15 @@ const AUDIO_CARD_CLASS_NAME =
  * 불러온 오디오를 재생 전 카드와 같은 모양으로 재생한다. 브라우저 기본 재생기로 바꿔 끼우면 누르는 순간
  * 카드 모양이 달라진다. 재생 버튼은 재생 전과 같은 오른쪽 자리에 둔다.
  */
-function AudioPlayer({ src, fileName }: { src: string; fileName: string }) {
+function AudioPlayer({
+  src,
+  fileName,
+  cornerClassName,
+}: {
+  src: string;
+  fileName: string;
+  cornerClassName: string;
+}) {
   const audio = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -393,7 +431,7 @@ function AudioPlayer({ src, fileName }: { src: string; fileName: string }) {
   const knownDuration = Number.isFinite(duration) && duration > 0;
 
   return (
-    <div className={AUDIO_CARD_CLASS_NAME}>
+    <div className={cn(AUDIO_CARD_CLASS_NAME, cornerClassName)}>
       <MusicIcon
         aria-hidden
         className="size-5 shrink-0 text-muted-foreground"
@@ -472,10 +510,12 @@ function FileAttachment({
   attachment,
   url,
   pending,
+  cornerClassName,
 }: {
   attachment: MessageAttachment;
   url: string | undefined;
   pending: boolean;
+  cornerClassName: string;
 }) {
   const download = useManagedDownload();
   const status = managedDownloadLabel(download.state);
@@ -493,8 +533,10 @@ function FileAttachment({
       {pending ? <Spinner /> : <DownloadStatus state={download.state} />}
     </>
   );
-  const className =
-    "flex w-64 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2.5 text-left";
+  const className = cn(
+    "flex w-64 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2.5 text-left",
+    cornerClassName,
+  );
 
   return url ? (
     <a

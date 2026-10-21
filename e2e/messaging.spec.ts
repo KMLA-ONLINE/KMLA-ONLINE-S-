@@ -58,3 +58,28 @@ test("접은 대화 상세 패널은 다른 대화로 이동해도 닫힌 상태
     page.getByRole("complementary", { name: "채팅 상세" }),
   ).toBeHidden();
 });
+
+test("채팅 목록 옆 좁은 대화 영역에서도 답장 인용은 버블 안에 들어간다", async ({
+  page,
+}) => {
+  // 목록이 접히기 직전 폭이라 마우스 환경에서 메시지 버블이 가장 좁다.
+  await page.setViewportSize({ width: 768, height: 900 });
+  await loginAsAcceptedStudent(page);
+  await page.goto(`/messenger/${DIRECT}`);
+
+  const quotes = page.getByRole("button", { name: /원문 메시지 보기$/ });
+  await expect(quotes.first()).toBeVisible();
+
+  for (const quote of await quotes.all()) {
+    const overflow = await quote.evaluate((element) => {
+      const bubble = element.parentElement!.getBoundingClientRect();
+      const box = element.getBoundingClientRect();
+      return {
+        left: bubble.left - box.left,
+        right: box.right - bubble.right,
+      };
+    });
+    expect(overflow.left).toBeLessThanOrEqual(0.5);
+    expect(overflow.right).toBeLessThanOrEqual(0.5);
+  }
+});

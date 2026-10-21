@@ -5,7 +5,10 @@ import {
   FeedPostCard,
   FeedPostRow,
 } from "~/features/feed/components/feed-post";
-import type { GroupFeedPost } from "~/features/feed/model/types";
+import type {
+  GroupFeedPost,
+  ProfileFeedPost,
+} from "~/features/feed/model/types";
 import { groupPost } from "../../posts/group-post-fixture";
 import { renderRoute } from "../../../router";
 
@@ -32,9 +35,58 @@ function pinnedFeedPost(): GroupFeedPost {
   };
 }
 
+function profileActivity(): ProfileFeedPost {
+  return {
+    ...pinnedFeedPost(),
+    kind: "profile",
+    post_id: "11111111-1111-4111-8111-111111111111",
+    group_id: null,
+    group_name: null,
+    group_slug: null,
+    category_name: null,
+    title: null,
+    is_pinned: false,
+    timeline_name: "김서민",
+    timeline_pub_id: "seomin-30",
+    activity_kind: "avatar_changed",
+    activity_media_path: "activity/avatar.webp",
+    activity_media_url: "https://example.test/avatar.webp",
+    visibility: "public",
+    author_name: "김서민",
+    author_pub_id: "seomin-30",
+  };
+}
+
 afterEach(() => vi.restoreAllMocks());
 
 describe("FeedPostCard", () => {
+  it("offers no hide action on the caller's own profile activity", async () => {
+    const post = { ...profileActivity(), is_author: true };
+    const { user } = renderRoute(() => (
+      <FeedPostCard post={post} onHide={vi.fn()} />
+    ));
+
+    await user.click(screen.getByRole("button", { name: "게시물 옵션" }));
+    expect(
+      await screen.findByRole("menuitem", { name: "삭제" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "가리기" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides someone else's profile activity from the post menu", async () => {
+    const onHide = vi.fn();
+    const { user } = renderRoute(() => (
+      <FeedPostCard post={profileActivity()} onHide={onHide} />
+    ));
+
+    await user.click(screen.getByRole("button", { name: "게시물 옵션" }));
+    await user.click(await screen.findByRole("menuitem", { name: "가리기" }));
+
+    expect(onHide).toHaveBeenCalledOnce();
+  });
+
   it("shows the body and reserves image space while signing is pending", () => {
     const post = pinnedFeedPost();
     post.body = "서명을 기다리지 않는 본문";
@@ -120,6 +172,21 @@ describe("FeedPostCard menu", () => {
 });
 
 describe("FeedPostRow", () => {
+  it("shows no hide control on the caller's own profile activity", () => {
+    renderRoute(() => (
+      <FeedPostRow
+        post={{ ...profileActivity(), is_author: true }}
+        onHide={vi.fn()}
+        isVisited={false}
+        onVisit={vi.fn()}
+      />
+    ));
+    expect(
+      screen.queryByRole("button", { name: "게시물 옵션" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link")).toBeInTheDocument();
+  });
+
   it("dims a visited row and reports the visit", async () => {
     const onVisit = vi.fn();
     const { user } = renderRoute(() => (
@@ -127,7 +194,7 @@ describe("FeedPostRow", () => {
     ));
 
     const link = screen.getByRole("link");
-    expect(link).toHaveClass("bg-muted/45");
+    expect(screen.getByTestId("feed-post-row")).toHaveClass("bg-muted/45");
 
     await user.click(link);
     expect(onVisit).toHaveBeenCalledOnce();

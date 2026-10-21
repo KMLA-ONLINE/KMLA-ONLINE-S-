@@ -1,6 +1,6 @@
 import { mentionTokenPattern } from "~/features/posts/model/mentions";
 
-export const MESSAGE_MAX_LENGTH = 5000;
+export const MESSAGE_MAX_LENGTH = 10_000;
 export const EMOJI_ONLY_MESSAGE_MAX_LENGTH = 5;
 
 export type MessageTextSegment =

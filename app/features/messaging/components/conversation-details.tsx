@@ -118,6 +118,10 @@ export function ConversationDetails({
           <h2 className="mt-1 max-w-full truncate text-xl font-semibold">
             {conversation.name}
           </h2>
+          <p className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+            <LockIcon aria-hidden className="size-3.5 shrink-0" />
+            메시지 암호화됨
+          </p>
           <div className="mt-3 flex items-start justify-center gap-5">
             {conversation.type === "group" ? (
               <DetailQuickAction
@@ -277,11 +281,6 @@ export function ConversationDetails({
             </div>
           ) : null}
         </div>
-
-        <p className="flex items-center justify-center gap-1.5 px-3 pt-6 text-xs text-muted-foreground">
-          <LockIcon aria-hidden className="size-3.5 shrink-0" />
-          메시지는 암호화되어 저장됩니다.
-        </p>
       </div>
     </aside>
   );
@@ -405,8 +404,10 @@ function DetailRow({
       disabled={!onClick}
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm hover:bg-muted/70 disabled:opacity-100",
-        destructive && "text-destructive",
+        "flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm disabled:opacity-100",
+        destructive
+          ? "text-destructive hover:bg-destructive/10 dark:hover:bg-destructive/20"
+          : "hover:bg-muted/70",
       )}
     >
       <Icon aria-hidden className="size-5 shrink-0" />

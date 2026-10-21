@@ -341,7 +341,9 @@ describe("RoomScreen", () => {
     expect(
       within(pinnedBanner).queryByText("고정된 메시지"),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("2026년 8월 28일 금요일")).toBeInTheDocument();
+    expect(
+      screen.getByText("2026년 8월 28일 금요일 오후 3:08"),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "https://www.kmlaonline.net" }),
     ).toHaveAttribute("href", "https://www.kmlaonline.net");
@@ -497,6 +499,61 @@ describe("RoomScreen", () => {
     }
   });
 
+  it("메시지는 10,000자까지 보낼 수 있고, 넘으면 경고하고 보내지 않는다", async () => {
+    const conversation = await loadConversation("hyunwoo");
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/hyunwoo",
+    });
+    const input = screen.getByRole("textbox", { name: "메시지 입력" });
+
+    fireEvent.change(input, { target: { value: "가".repeat(10_000) } });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "메시지 보내기" })).toBeEnabled();
+
+    fireEvent.change(input, { target: { value: "가".repeat(10_001) } });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "메시지는 10,000자까지 쓸 수 있습니다. (10,001/10,000)",
+    );
+    expect(
+      screen.getByRole("button", { name: "메시지 보내기" }),
+    ).toBeDisabled();
+  });
+
+  it("첨부 버튼은 입력이 바뀌면 접히고, 입력을 비워도 저절로 펴지지 않는다", async () => {
+    const conversation = await loadConversation("hyunwoo");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/hyunwoo" },
+    );
+    const input = screen.getByRole("textbox", { name: "메시지 입력" });
+    const expandButton = () =>
+      screen.queryByRole("button", { name: "첨부 메뉴 펼치기" });
+
+    expect(expandButton()).not.toBeInTheDocument();
+
+    await user.type(input, "안녕");
+    expect(expandButton()).toBeInTheDocument();
+
+    await user.clear(input);
+    expect(expandButton()).toBeInTheDocument();
+
+    await user.click(expandButton()!);
+    expect(expandButton()).not.toBeInTheDocument();
+
+    // 직접 편 뒤에도 입력이 바뀌면 다시 접는다.
+    await user.type(input, "다시");
+    expect(expandButton()).toBeInTheDocument();
+
+    await user.click(expandButton()!);
+    await user.clear(input);
+    expect(expandButton()).toBeInTheDocument();
+
+    // 보내고 나면 새 입력이므로 처음처럼 펴 둔다.
+    await user.type(input, "보낼 글{Enter}");
+    expect(input).toHaveValue("");
+    expect(expandButton()).not.toBeInTheDocument();
+  });
+
   it("내 메시지를 15분 안에 고친다", async () => {
     // 목 메시지는 고정된 시각에 보냈으므로 그 직후로 시계를 맞춘다.
     // 이 파일은 spy를 일괄 복원하지 않으므로 테스트 끝에서 직접 되돌린다.
@@ -523,6 +580,45 @@ describe("RoomScreen", () => {
     expect(await within(ownMessage()).findByText("수정됨")).toBeInTheDocument();
     expect(screen.queryByText("메시지 수정")).not.toBeInTheDocument();
     expect(input).toHaveValue("");
+    now.mockRestore();
+  });
+
+  it("수정을 저장하거나 취소하면 되돌린 입력이 비어 있을 때 첨부 버튼을 다시 편다", async () => {
+    // 이 파일은 spy를 일괄 복원하지 않으므로 테스트 끝에서 직접 되돌린다.
+    const now = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(Date.parse("2026-08-28T15:32:00+09:00"));
+    const conversation = await loadConversation("student-council");
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/student-council" },
+    );
+    const ownMessage = () => document.getElementById("message-m6")!;
+    const input = screen.getByRole("textbox", { name: "메시지 입력" });
+    const expandButton = () =>
+      screen.queryByRole("button", { name: "첨부 메뉴 펼치기" });
+    const startEdit = async () => {
+      await user.click(
+        within(ownMessage()).getByRole("button", { name: "메시지 기타 작업" }),
+      );
+      await user.click(await screen.findByRole("menuitem", { name: "수정" }));
+    };
+
+    await startEdit();
+    await user.type(input, "!");
+    expect(expandButton()).toBeInTheDocument();
+    await user.keyboard("{Enter}");
+    expect(await within(ownMessage()).findByText("수정됨")).toBeInTheDocument();
+    expect(input).toHaveValue("");
+    expect(expandButton()).not.toBeInTheDocument();
+
+    await startEdit();
+    await user.type(input, "?");
+    expect(expandButton()).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByText("메시지 수정")).not.toBeInTheDocument();
+    expect(input).toHaveValue("");
+    expect(expandButton()).not.toBeInTheDocument();
     now.mockRestore();
   });
 
@@ -1893,6 +1989,31 @@ describe("RoomScreen", () => {
 
     await user.click(screen.getByRole("button", { name: "채팅으로 돌아가기" }));
     expect(conversationRegion).toHaveClass("flex");
+  });
+
+  it("좁은 화면의 상세 화면에서 연 목록은 상세 화면 위에 뜨고, 닫으면 상세 화면이 남는다", async () => {
+    const conversation = await loadConversation("hyunwoo");
+    expect(conversation).not.toBeNull();
+
+    const { user } = renderRoute(
+      () => <RoomScreen conversation={conversation!} />,
+      { path: "/messenger/hyunwoo" },
+    );
+
+    const conversationRegion = screen.getByRole("region", {
+      name: "이현우 채팅",
+    });
+    await user.click(
+      screen.getAllByRole("button", { name: "채팅 정보 열기" })[0],
+    );
+    await user.click(screen.getByRole("button", { name: /고정된 메시지/ }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    // 목록이 페이드인하는 동안 대화가 비쳐 보이지 않도록 상세 화면을 그대로 깔아 둔다.
+    expect(conversationRegion).toHaveClass("hidden", "xl:flex");
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(conversationRegion).toHaveClass("hidden", "xl:flex");
   });
 });
 
