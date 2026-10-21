@@ -1,14 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  CheckIcon,
-  LinkIcon,
-  SearchIcon,
-  ShareIcon,
-  XIcon,
-} from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { LinkIcon, SearchIcon, ShareIcon, XIcon } from "lucide-react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
+import {
+  Centered,
+  ChoiceRow,
+} from "~/features/messaging/components/choice-row";
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
 import {
   conversationListQuery,
@@ -22,7 +20,6 @@ import {
 } from "~/features/messaging/data/mutations";
 import { searchMessageRecipients } from "~/features/messaging/data/queries";
 import { UserAvatar } from "~/shared/components/user-avatar";
-import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -349,71 +346,5 @@ export function SharePostDialog({
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function ChoiceRow({
-  chosen,
-  disabled,
-  onToggle,
-  avatar,
-  name,
-  description,
-}: {
-  chosen: boolean;
-  disabled: boolean;
-  onToggle: () => void;
-  avatar: ReactNode;
-  name: string;
-  description?: string;
-}) {
-  return (
-    <li>
-      <button
-        type="button"
-        aria-pressed={chosen}
-        disabled={disabled}
-        className={cn(
-          "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50 disabled:hover:bg-transparent",
-          chosen && "bg-primary/10 hover:bg-primary/10",
-        )}
-        onClick={onToggle}
-      >
-        {avatar}
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{name}</span>
-          {description ? (
-            <span className="block truncate text-xs text-muted-foreground">
-              {description}
-            </span>
-          ) : null}
-        </span>
-        {chosen ? (
-          <CheckIcon aria-hidden className="size-4 shrink-0 text-primary" />
-        ) : null}
-      </button>
-    </li>
-  );
-}
-
-function Centered({
-  children,
-  className,
-  role,
-}: {
-  children: ReactNode;
-  className?: string;
-  role?: "alert";
-}) {
-  return (
-    <div
-      role={role}
-      className={cn(
-        "flex justify-center py-8 text-center text-sm text-muted-foreground",
-        className,
-      )}
-    >
-      {children}
-    </div>
   );
 }

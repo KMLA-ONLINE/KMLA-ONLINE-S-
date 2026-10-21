@@ -4,8 +4,10 @@ export {
   RoomScreen,
   type DesktopDetailsContext,
 } from "~/features/messaging/components/room-screen";
+export { ShareTargetScreen } from "~/features/messaging/components/share-target-screen";
 export { conversationListQuery } from "~/features/messaging/data/cache";
 export { openConversation } from "~/features/messaging/data/sync";
+export { composeSharedText } from "~/features/messaging/model/shared-text";
 export type {
   Conversation,
   ConversationMessage,
