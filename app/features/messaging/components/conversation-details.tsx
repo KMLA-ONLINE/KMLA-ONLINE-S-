@@ -12,6 +12,7 @@ import {
   PencilIcon,
   PinIcon,
   SearchIcon,
+  TagIcon,
   UserRoundIcon,
   UserPlusIcon,
   type LucideIcon,
@@ -20,6 +21,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
+import { MemberNames } from "~/features/messaging/components/nickname-dialog";
 import {
   activeParticipants,
   isViewerActive,
@@ -61,6 +63,7 @@ export function ConversationDetails({
   onSearch,
   onInvite,
   onRename,
+  onNicknames,
   onLeave,
   onDeleteGroup,
   sharedCounts,
@@ -76,6 +79,7 @@ export function ConversationDetails({
   onSearch: () => void;
   onInvite: () => void;
   onRename: () => void;
+  onNicknames: () => void;
   onLeave: () => void;
   /** 소유주에게만 보인다. */
   onDeleteGroup: () => void;
@@ -219,6 +223,9 @@ export function ConversationDetails({
               onClick={onRename}
             />
           ) : null}
+          {manageable ? (
+            <DetailRow icon={TagIcon} label="별명" onClick={onNicknames} />
+          ) : null}
 
           {conversation.type === "group" ? (
             <DetailSection title={`채팅 멤버 ${members.length}명`}>
@@ -231,14 +238,13 @@ export function ConversationDetails({
                     <MemberProfileLink participant={participant}>
                       <UserAvatar
                         src={participant.avatarUrl}
-                        name={participant.name}
+                        name={participant.profileName ?? participant.name}
                         size="lg"
                       />
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                        {participant.id === conversation.viewerId
-                          ? `${participant.name} (나)`
-                          : participant.name}
-                      </span>
+                      <MemberNames
+                        member={participant}
+                        isViewer={participant.id === conversation.viewerId}
+                      />
                     </MemberProfileLink>
                   </div>
                 ))}
@@ -300,7 +306,7 @@ function MemberProfileLink({
   return (
     <Link
       to={`/profile/${participant.pubId}`}
-      aria-label={`${participant.name} 프로필`}
+      aria-label={`${participant.profileName ?? participant.name} 프로필`}
       className={cn(
         className,
         "hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",

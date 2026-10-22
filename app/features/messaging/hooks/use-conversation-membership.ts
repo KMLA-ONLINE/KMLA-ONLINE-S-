@@ -15,6 +15,7 @@ import {
   leaveConversation,
   openDirectConversation,
   renameConversation,
+  setConversationNickname,
 } from "~/features/messaging/data/mutations";
 import { refreshConversationInList } from "~/features/messaging/data/sync";
 import type { RecipientSelection } from "~/features/messaging/components/recipient-picker-dialog";
@@ -46,8 +47,8 @@ export function useListedConversation(
 }
 
 /**
- * 그룹 멤버 관리(기능 명세 §13.15, §13.16). 바꾼 뒤 대화 목록의 그 대화를 다시 읽어 멤버와 이름을
- * 맞춘다. 실패하면 알리고 false로 끝난다.
+ * 그룹 멤버 관리(기능 명세 §13.15, §13.16, §13.25). 바꾼 뒤 대화 목록의 그 대화를 다시 읽어 멤버와 이름,
+ * 별명을 맞춘다. 실패하면 알리고 false로 끝난다.
  */
 export function useConversationMembership(conversationId: string) {
   const queryClient = useQueryClient();
@@ -104,6 +105,11 @@ export function useConversationMembership(conversationId: string) {
       run(
         () => renameConversation(conversationId, name),
         "그룹 이름을 바꾸지 못했습니다.",
+      ),
+    setNickname: (profileId: string, nickname: string) =>
+      run(
+        () => setConversationNickname(conversationId, profileId, nickname),
+        "별명을 바꾸지 못했습니다.",
       ),
   };
 }

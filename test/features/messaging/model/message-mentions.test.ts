@@ -47,6 +47,38 @@ describe("message mentions", () => {
     expect(names("최미")).toEqual(["최민준"]);
   });
 
+  it("별명이 있는 후보는 별명으로 보이고, 별명과 프로필 이름 어느 쪽으로도 찾는다", () => {
+    const nicknamed: MessageParticipant[] = participants.map((person) =>
+      person.id === "3"
+        ? { ...person, name: "준이", profileName: "최민준", nickname: "준이" }
+        : person,
+    );
+    const names = (query: string) =>
+      messageMentionSuggestions(nicknamed, "1", query).map(({ name }) => name);
+    expect(names("준이")).toEqual(["준이"]);
+    expect(names("최민")).toEqual(["준이"]);
+  });
+
+  it("멘션에 적을 수 없는 글자로만 된 별명은 프로필 이름으로 부른다", () => {
+    const nicknamed: MessageParticipant[] = participants.map((person) =>
+      person.id === "3"
+        ? { ...person, name: "__", profileName: "최민준", nickname: "__" }
+        : person,
+    );
+    const [, , minjun] = messageMentionSuggestions(nicknamed, "1", "");
+    expect(minjun).toMatchObject({
+      name: "__",
+      target: { pubId: "min", name: "최민준" },
+    });
+  });
+
+  it("토큰 글자가 비었으면 지금 이름으로 그린다", () => {
+    const byId = new Map(participants.map((person) => [person.id, person]));
+    expect(
+      resolveMessageMention(1, "", { mentionProfileIds: ["2"] }, byId),
+    ).toEqual({ name: "박서현", pubId: "seo" });
+  });
+
   it("캐럿 바로 앞에 친 @ 하나만 후보 목록을 연다", () => {
     expect(typedMentionTrigger("회의 ", "회의 @", 4)).toBe(3);
     // 글 가운데에서 쳐도 연다.
@@ -94,7 +126,7 @@ describe("message mentions", () => {
     });
   });
 
-  it("고칠 메시지의 멘션을 지금 참여자 목록으로 초안에 올린다", () => {
+  it("고칠 메시지의 멘션을 토큰 글자 그대로 초안에 올리고, 대상을 모르면 뺀다", () => {
     expect(
       messageMentionEntries(
         {
@@ -105,7 +137,7 @@ describe("message mentions", () => {
         participants,
       ),
     ).toEqual([
-      { ordinal: 1, pubId: "seo", name: "박서현" },
+      { ordinal: 1, pubId: "seo", name: "옛 이름" },
       { ordinal: 0, pubId: "", name: "모든 사람" },
     ]);
   });
@@ -118,35 +150,29 @@ describe("message mentions", () => {
     expect(mentionPubIdsOf(["2", "3"], participants)).toEqual(["seo", "min"]);
   });
 
-  it("보낸 멘션은 지금 이름으로 그리고, 대상을 모르면 null이다", () => {
+  it("보낸 멘션은 보낼 때의 토큰 글자로 그리고, 대상을 모르면 null이다", () => {
     const byId = new Map(participants.map((person) => [person.id, person]));
     const message = { mentionProfileIds: ["4"], mentionsEveryone: true };
-    expect(resolveMessageMention(0, message, byId)).toEqual({
+    expect(resolveMessageMention(0, "모든 사람", message, byId)).toEqual({
       name: "모든 사람",
     });
-    expect(resolveMessageMention(1, message, byId)).toEqual({
-      name: "윤지우",
+    expect(resolveMessageMention(1, "옛 별명", message, byId)).toEqual({
+      name: "옛 별명",
       pubId: "left",
     });
-    expect(resolveMessageMention(2, message, byId)).toBeNull();
+    expect(resolveMessageMention(2, "누구", message, byId)).toBeNull();
     // 이 기능 전에 같은 글자를 직접 쳐 둔 메시지는 대화 전체를 부르지 않는다.
     expect(
-      resolveMessageMention(0, { mentionsEveryone: false }, byId),
+      resolveMessageMention(0, "모든 사람", { mentionsEveryone: false }, byId),
     ).toBeNull();
   });
 
-  it("글자로 옮길 때도 멘션을 지금 이름으로 쓴다", () => {
-    const byId = new Map(participants.map((person) => [person.id, person]));
+  it("글자로 옮길 때도 멘션을 토큰 글자 그대로 쓴다", () => {
     expect(
-      messagePlainText(
-        {
-          body: "[@옛 이름](m:1) [@모든 사람](m:0) [@탈퇴](m:2)",
-          mentionProfileIds: ["2", "9"],
-          mentionsEveryone: true,
-        },
-        byId,
-      ),
-    ).toBe("@박서현 @모든 사람 @탈퇴");
+      messagePlainText({
+        body: "[@옛 이름](m:1) [@모든 사람](m:0) [@탈퇴](m:2)",
+      }),
+    ).toBe("@옛 이름 @모든 사람 @탈퇴");
   });
 
   it("그대로 저장한 편집은 토큰의 옛 이름이나 사라진 대상과 관계없이 바뀌지 않은 것이다", () => {

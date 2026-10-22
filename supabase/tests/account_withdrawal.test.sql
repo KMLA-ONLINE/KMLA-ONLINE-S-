@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(50);
+select plan(51);
 
 -- 탈퇴할 승인 학생을 새로 만든다. 홍길동(…001)은 그 사람과 대화하고 알림을 받은 다른 회원이다.
 insert into auth.users (
@@ -186,6 +186,10 @@ values
   ('f0000000-0000-0000-0000-000000000001', current_setting('test.hong')::bigint),
   ('f0000000-0000-0000-0000-000000000002', current_setting('test.me')::bigint),
   ('f0000000-0000-0000-0000-000000000002', current_setting('test.hong')::bigint);
+insert into private.conversation_nicknames (conversation_id, profile_id, nickname)
+values
+  ('f0000000-0000-0000-0000-000000000001', current_setting('test.me')::bigint, '떠날 사람'),
+  ('f0000000-0000-0000-0000-000000000001', current_setting('test.hong')::bigint, '남을 사람');
 
 -- 진행 중인 회차와 이미 마감한 회차의 기부물품 신청
 insert into public.donation_rounds (id, title, opens_at, closes_at)
@@ -311,6 +315,12 @@ select is(
   'other members see that the account left'
 );
 select results_eq(
+  $$select profile_id from private.conversation_nicknames
+    where conversation_id = 'f0000000-0000-0000-0000-000000000001'$$,
+  $$values (current_setting('test.hong')::bigint)$$,
+  'withdrawal removes only the nicknames given to the account'
+);
+select results_eq(
   $$select profile_id, left_at is null from public.conversation_members
     where conversation_id = 'f0000000-0000-0000-0000-000000000002' order by profile_id$$,
   $$select profile.id, profile.id = current_setting('test.hong')::bigint
@@ -346,7 +356,7 @@ select is(
    where (participant ->> 'id')::bigint = current_setting('test.me')::bigint),
   jsonb_build_object(
     'id', current_setting('test.me')::bigint, 'pub_id', null,
-    'name', '탈퇴한 사용자', 'withdrawn', true
+    'name', '탈퇴한 사용자', 'nickname', null, 'withdrawn', true
   ),
   'the direct conversation shows the counterpart as withdrawn without a profile link'
 );

@@ -217,6 +217,20 @@ export async function renameConversation(
   if (error) throw error;
 }
 
+/** 그룹 대화 멤버의 별명을 정한다. 빈 값이면 지운다(기능 명세 §13.25). */
+export async function setConversationNickname(
+  conversationId: string,
+  profileId: string,
+  nickname: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("set_conversation_nickname", {
+    p_conversation_id: conversationId,
+    p_profile_id: Number(profileId),
+    p_nickname: nickname,
+  });
+  if (error) throw error;
+}
+
 /** 대화 알림 단계를 정한다. 끄면 직접 다시 켤 때까지 이 대화의 Push를 보내지 않는다. */
 export async function setConversationNotificationLevel(
   conversationId: string,

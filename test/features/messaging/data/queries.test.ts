@@ -143,6 +143,8 @@ describe("messaging queries", () => {
           {
             id: "1",
             name: "홍길동",
+            profileName: "홍길동",
+            nickname: null,
             avatarUrl: null,
             active: true,
             withdrawn: false,
@@ -150,6 +152,8 @@ describe("messaging queries", () => {
           {
             id: "2",
             name: "김민준",
+            profileName: "김민준",
+            nickname: null,
             avatarUrl: "https://signed/avatars/2",
             active: false,
             withdrawn: true,
@@ -166,6 +170,34 @@ describe("messaging queries", () => {
         canDelete: true,
       },
     ]);
+  });
+
+  it("별명이 있으면 보이는 이름으로 쓰고 프로필 이름은 따로 둔다", async () => {
+    rpc.mockResolvedValue({
+      data: [
+        conversationRow({
+          type: "group",
+          participants: [
+            {
+              id: 1,
+              pub_id: "hong",
+              name: "홍길동",
+              nickname: "길동이",
+              avatar_path: null,
+              active: true,
+            },
+          ],
+        }),
+      ],
+      error: null,
+    });
+
+    const [conversation] = await listConversations();
+    expect(conversation?.participants[0]).toMatchObject({
+      name: "길동이",
+      profileName: "홍길동",
+      nickname: "길동이",
+    });
   });
 
   it("삭제된 마지막 메시지는 삭제 문구로, 메시지가 없는 대화는 미리보기 없이 준다", async () => {
