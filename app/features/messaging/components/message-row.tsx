@@ -31,6 +31,8 @@ export interface MessageContextAction {
   label: string;
   icon: ReactNode;
   onSelect: () => void;
+  /** 되돌릴 수 없는 작업(삭제)은 빨간 글씨로 구분한다. */
+  destructive?: boolean;
 }
 
 interface ContextMenuLayout {
@@ -742,7 +744,12 @@ export function MessageRow({
                   {contextActions.map((action) => (
                     <ContextMenu.Item
                       key={action.label}
-                      className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground [&_svg]:size-5 [&_svg]:shrink-0"
+                      className={cn(
+                        "flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm outline-hidden select-none [&_svg]:size-5 [&_svg]:shrink-0",
+                        action.destructive
+                          ? "text-destructive data-highlighted:bg-destructive/10 dark:data-highlighted:bg-destructive/20"
+                          : "data-highlighted:bg-accent data-highlighted:text-accent-foreground",
+                      )}
                       onClick={action.onSelect}
                     >
                       {action.icon}

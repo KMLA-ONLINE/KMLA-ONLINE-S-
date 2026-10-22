@@ -4,6 +4,7 @@ import {
   CopyIcon,
   EllipsisIcon,
   FileIcon,
+  ForwardIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ImageIcon,
@@ -86,6 +87,7 @@ import {
 import { useIsSendEnter } from "~/shared/hooks/use-enter-to-send";
 import { useKeyboardViewport } from "~/shared/hooks/use-keyboard-viewport";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
+import { ForwardMessageDialog } from "~/features/messaging/components/forward-message-dialog";
 import { RenameConversationDialog } from "~/features/messaging/components/rename-conversation-dialog";
 import { NicknameDialog } from "~/features/messaging/components/nickname-dialog";
 import {
@@ -226,6 +228,13 @@ export function RoomScreen({
     | { kind: "delete" }
     | null
   >(null);
+  // 전달할 메시지. 닫는 동안에도 들고 있어야 시트가 빈 채로 사라지지 않는다. `session`은 열 때마다
+  // 올려 같은 메시지를 다시 전달해도 고른 내용이 처음으로 돌아가게 한다.
+  const [forward, setForward] = useState<{
+    open: boolean;
+    message: ConversationMessage | null;
+    session: number;
+  }>({ open: false, message: null, session: 0 });
   // 대화 정보, 검색, 고정 메시지, 반응한 사람, 공유된 미디어는 뒤로가기로 닫히도록 URL에 둔다.
   const roomOverlay = useRoomOverlayParam();
   const ios = useSyncExternalStore(subscribeToPlatform, isIOS, () => false);
@@ -674,6 +683,13 @@ export function RoomScreen({
               setReplyTarget(message);
             }}
             onTogglePinned={togglePinned}
+            onForward={(message) =>
+              setForward((current) => ({
+                open: true,
+                message,
+                session: current.session + 1,
+              }))
+            }
             onEdit={(message) => {
               setReplyTarget(null);
               setEditTarget({
@@ -809,6 +825,14 @@ export function RoomScreen({
           onViewMessage={(messageId) => void viewMessage(messageId)}
           onUnpin={togglePinned}
         />
+        <ForwardMessageDialog
+          key={forward.session}
+          open={forward.open}
+          onOpenChange={(open) =>
+            setForward((current) => ({ ...current, open }))
+          }
+          message={forward.message}
+        />
         <RecipientPickerDialog
           open={memberDialog?.kind === "invite"}
           mode="invite"
@@ -900,6 +924,7 @@ function MessageThread({
   onSelectReaction,
   onReply,
   onTogglePinned,
+  onForward,
   onEdit,
   onDelete,
   onViewMessage,
@@ -931,6 +956,7 @@ function MessageThread({
   ) => void;
   onReply: (message: ConversationMessage) => void;
   onTogglePinned: (message: ConversationMessage) => void;
+  onForward: (message: ConversationMessage) => void;
   onEdit: (message: ConversationMessage) => void;
   onDelete: (message: ConversationMessage) => void;
   onViewMessage: (messageId: string) => void;
@@ -1001,6 +1027,7 @@ function MessageThread({
     onSelectReaction,
     onReply,
     onTogglePinned,
+    onForward,
     onEdit,
     onDelete,
     onViewMessage,
@@ -1014,6 +1041,7 @@ function MessageThread({
       onSelectReaction,
       onReply,
       onTogglePinned,
+      onForward,
       onEdit,
       onDelete,
       onViewMessage,
@@ -1029,6 +1057,7 @@ function MessageThread({
         latestHandlers.current.onSelectReaction(message, reaction),
       reply: (message) => latestHandlers.current.onReply(message),
       togglePinned: (message) => latestHandlers.current.onTogglePinned(message),
+      forward: (message) => latestHandlers.current.onForward(message),
       edit: (message) => latestHandlers.current.onEdit(message),
       delete: (message) => latestHandlers.current.onDelete(message),
       viewMessage: (messageId) =>
@@ -1413,6 +1442,7 @@ interface ThreadMessageActions {
   ) => void;
   reply: (message: ConversationMessage) => void;
   togglePinned: (message: ConversationMessage) => void;
+  forward: (message: ConversationMessage) => void;
   edit: (message: ConversationMessage) => void;
   delete: (message: ConversationMessage) => void;
   viewMessage: (messageId: string) => void;
@@ -1490,6 +1520,17 @@ const ThreadMessage = memo(function ThreadMessage({
             onSelect: () => void copyMessageText(messagePlainText(message)),
           },
         ]),
+    // 전달은 글과 첨부를 다른 대화에 새 메시지로 보낸다. 첨부는 서버의 원본을 복사하므로 서버에 있는
+    // 메시지만 전달한다.
+    ...(actionable && hasForwardableContent(message)
+      ? [
+          {
+            label: "전달",
+            icon: <ForwardIcon aria-hidden />,
+            onSelect: () => actions.forward(message),
+          },
+        ]
+      : []),
     ...(actionable
       ? [
           {
@@ -1514,6 +1555,7 @@ const ThreadMessage = memo(function ThreadMessage({
             label: "삭제",
             icon: <Trash2Icon aria-hidden />,
             onSelect: () => actions.delete(message),
+            destructive: true,
           },
         ]
       : []),
@@ -1531,7 +1573,10 @@ const ThreadMessage = memo(function ThreadMessage({
         sender={sender}
         isOwn={isOwn}
         isGroup={isGroup}
-        unreadParticipantCount={message.unreadMemberCount ?? 0}
+        // 삭제된 메시지는 읽었는지 알 필요가 없다. 자리는 남겨 삭제되는 순간 버블 폭이 바뀌지 않게 한다.
+        unreadParticipantCount={
+          message.deleted ? 0 : (message.unreadMemberCount ?? 0)
+        }
         startsGroup={startsGroup}
         endsGroup={endsGroup}
         isPinned={message.pinned ?? false}
@@ -1564,6 +1609,7 @@ const ThreadMessage = memo(function ThreadMessage({
             }
             onReply={canCompose ? () => actions.reply(message) : undefined}
             onTogglePinned={() => actions.togglePinned(message)}
+            onForward={() => actions.forward(message)}
             onEdit={canEdit ? () => actions.edit(message) : undefined}
             onDelete={
               isOwn && actionable ? () => actions.delete(message) : undefined
@@ -1628,6 +1674,7 @@ function MessageActions({
   onSelectReaction,
   onReply,
   onTogglePinned,
+  onForward,
   onEdit,
   onDelete,
 }: {
@@ -1638,6 +1685,7 @@ function MessageActions({
   /** 입력창이 없는 대화(나간 대화, 탈퇴한 상대와의 1:1)에서는 없다. */
   onReply?: () => void;
   onTogglePinned: () => void;
+  onForward: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
@@ -1712,6 +1760,12 @@ function MessageActions({
               복사
             </DropdownMenuItem>
           ) : null}
+          {hasForwardableContent(message) ? (
+            <DropdownMenuItem className="cursor-pointer" onClick={onForward}>
+              <ForwardIcon aria-hidden />
+              전달
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem className="cursor-pointer" onClick={onTogglePinned}>
             <PinIcon aria-hidden />
             {isPinned ? "고정 해제" : "고정"}
@@ -1756,6 +1810,14 @@ function MessageActions({
         </>
       )}
     </MessageActionRail>
+  );
+}
+
+/** 전달할 글이나 첨부가 있는지. 삭제된 메시지는 둘 다 없다. */
+function hasForwardableContent(message: ConversationMessage) {
+  return (
+    !message.deleted &&
+    (message.body !== "" || (message.attachments?.length ?? 0) > 0)
   );
 }
 

@@ -153,9 +153,10 @@ export function useConversationMessages(conversation: Conversation) {
 
   // 화면에 나온 가장 최근 상대 메시지까지 읽은 것으로 기록한다. 마지막 메시지가 아니라 마지막 "상대"
   // 메시지를 본다. 내 메시지가 뒤에 있어도 그 앞의 상대 메시지는 읽은 것이고, 서버는 읽음 위치를
-  // 앞으로만 옮기므로 이미 지난 메시지면 아무 일도 없다. 이 위치가 메시지 Push 억제의 근거이므로
-  // 탭이 실제로 보일 때만 기록하고, 가려진 탭이면 다시 보일 때 기록한다. 실패하면 사용자에게 알리지
-  // 않고 다음에 보일 때 다시 시도한다.
+  // 앞으로만 옮기므로 이미 지난 메시지면 아무 일도 없다. 이 위치가 계정의 모든 기기에서 메시지 Push를
+  // 억제하는 근거이므로 창이 보이고 포커스도 있을 때만 기록한다. 보이기만 하면 다른 창 뒤나 보조
+  // 모니터에 열어 둔 PC가 메시지를 읽은 것으로 만들어 폰의 알림까지 막는다. 그렇지 않으면 다시 보이거나
+  // 포커스를 얻을 때 기록한다. 실패하면 사용자에게 알리지 않고 다음에 다시 시도한다.
   const unreadLatestId = latestIncomingMessageId(
     messages,
     conversation.viewerId,
@@ -164,7 +165,13 @@ export function useConversationMessages(conversation: Conversation) {
     if (!unreadLatestId) return;
     let pending = true;
     const mark = () => {
-      if (!pending || document.visibilityState !== "visible") return;
+      if (
+        !pending ||
+        document.visibilityState !== "visible" ||
+        !document.hasFocus()
+      ) {
+        return;
+      }
       pending = false;
       // 가장 최근 상대 메시지까지 읽었으니 이 대화의 읽지 않은 수는 0이다. 목록을 먼저 그린다.
       const cleared = markConversationListRead(queryClient, conversationId);
@@ -186,7 +193,11 @@ export function useConversationMessages(conversation: Conversation) {
     };
     mark();
     document.addEventListener("visibilitychange", mark);
-    return () => document.removeEventListener("visibilitychange", mark);
+    window.addEventListener("focus", mark);
+    return () => {
+      document.removeEventListener("visibilitychange", mark);
+      window.removeEventListener("focus", mark);
+    };
   }, [conversationId, unreadLatestId, queryClient]);
 
   /**

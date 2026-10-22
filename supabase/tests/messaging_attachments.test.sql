@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(20);
+select plan(22);
 
 -- seed: 홍길동(…0001)과 김민준(…0100)의 1:1 대화 c…01, 그룹 c…02에는 이한별이 2026-08-21에 참여했다.
 insert into auth.users (
@@ -177,6 +177,25 @@ select is(
   2::bigint,
   'the shared media list returns the conversation attachments'
 );
+
+-- 메시지 전달은 Storage 복사로 원본을 읽는다(기능 명세 §13.26). 복사 말고 다른 작업으로 넓어지지 않는다.
+select set_config('storage.operation', 'storage.object.copy', true);
+select is(
+  (select count(*) from storage.objects
+    where bucket_id = 'message-attachments'
+      and name = (select object_path from prepared where position = 1)),
+  1::bigint,
+  'members can copy a sent attachment to forward it'
+);
+select set_config('storage.operation', 'storage.object.list', true);
+select is(
+  (select count(*) from storage.objects
+    where bucket_id = 'message-attachments'
+      and name = (select object_path from prepared where position = 1)),
+  0::bigint,
+  'other storage operations still cannot read the attachment'
+);
+select set_config('storage.operation', '', true);
 
 reset role;
 
