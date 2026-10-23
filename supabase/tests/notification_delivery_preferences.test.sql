@@ -185,8 +185,14 @@ select private.emit_notification(
 set local role service_role;
 create temp table active_preference_claim as
 select * from public.claim_notification_deliveries(10, 60);
+reset role;
+create temp table leased_notification as
+select id from public.notifications where title = 'lease 중 설정 변경';
+grant select on leased_notification to service_role;
+set local role service_role;
 select is(
-  (select count(*) from active_preference_claim where title = 'lease 중 설정 변경'),
+  (select count(*) from active_preference_claim
+   where notification_id in (select id from leased_notification)),
   1::bigint,
   'an allowed delivery can be leased before the preference changes'
 );
@@ -211,7 +217,8 @@ select is(
 reset role;
 select is(
   (select status from private.notification_delivery_outbox where id = (
-    select delivery_id from active_preference_claim where title = 'lease 중 설정 변경'
+    select delivery_id from active_preference_claim
+    where notification_id in (select id from leased_notification)
   )),
   'leased'::private.notification_delivery_status,
   'the original worker keeps its lease until the final authorization check'

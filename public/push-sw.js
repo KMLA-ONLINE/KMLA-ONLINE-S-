@@ -52,11 +52,13 @@ function hasExactKeys(value, expected) {
   );
 }
 
-function isBoundedText(value, maxLength) {
+// 서버는 제목과 본문을 code point 기준으로 자른다(`left(..., 240)`). `String.length`는 UTF-16 단위라
+// 이모지가 많은 본문이 한도를 넘은 것으로 보인다.
+function isBoundedCodePoints(value, maxLength) {
   return (
     typeof value === "string" &&
     value.trim().length > 0 &&
-    value.length <= maxLength
+    [...value].length <= maxLength
   );
 }
 
@@ -72,10 +74,10 @@ function isPushPayload(value) {
     ID_PATTERN.test(value.groupingKey) &&
     IMPORTANCES.includes(value.importance) &&
     CATEGORIES.includes(value.category) &&
-    // 서버 제목 한도(`notifications_title_length`)와 같다. 더 좁으면 긴 게시물 제목을 담은
-    // 운영 조치 알림이 검증에서 떨어진다.
-    isBoundedText(value.title, 160) &&
-    isBoundedText(value.body, 240) &&
+    // 서버 한도(`private.notification_push_content`)와 같고, 서버처럼 code point로 센다. 이름과
+    // 게시물 제목에 이모지가 들어가면 UTF-16 길이는 한도를 넘을 수 있다.
+    isBoundedCodePoints(value.title, 160) &&
+    isBoundedCodePoints(value.body, 240) &&
     value.tag === expectedTag
   );
 }
@@ -84,16 +86,6 @@ function isPushPayload(value) {
  * 메시지 Push(알림 기술 설계 §11.4). 대화 ID만 믿고, 누르면 그 ID로 대화방 주소를 직접 만든다.
  * 대화방 loader가 접근 권한을 다시 확인한다.
  */
-// 서버는 메시지 본문을 code point 기준으로 자른다(`left(..., 240)`). `String.length`는 UTF-16 단위라
-// 이모지가 많은 본문이 한도를 넘은 것으로 보인다.
-function isBoundedCodePoints(value, maxLength) {
-  return (
-    typeof value === "string" &&
-    value.trim().length > 0 &&
-    [...value].length <= maxLength
-  );
-}
-
 function isMessagePushPayload(value) {
   return (
     isRecord(value) &&
@@ -295,9 +287,9 @@ async function showPush(data) {
   await self.registration.showNotification(
     grouped ? `${CATEGORY_TITLES[payload.category]} ${count}개` : payload.title,
     {
-      body: grouped
-        ? `${payload.title} 외 ${count - 1}개의 알림이 있습니다.`
-        : payload.body,
+      // 제목은 누가·어디서, 본문은 무슨 일이다(기능 명세 §14.13). 묶음 카드는 가장 최근 알림을 한 줄로
+      // 보인다. 새 그룹 게시물 본문이 `작성자: 제목`이라 구분자로 쌍점을 쓰지 않는다.
+      body: grouped ? `${payload.title} — ${payload.body}` : payload.body,
       icon: "/pwa-192x192.png",
       // Android 상태바는 컬러 아이콘이 아니라 알파 채널만 읽어 단색으로 칠한 실루엣을
       // 쓴다. 주지 않으면 브라우저 기본 도형이 대신 뜬다 — 잠금 화면에서 이 앱의

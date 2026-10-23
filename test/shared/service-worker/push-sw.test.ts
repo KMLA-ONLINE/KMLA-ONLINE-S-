@@ -248,7 +248,7 @@ describe("public push service worker", () => {
     expect(worker.showNotification).toHaveBeenLastCalledWith(
       "콘텐츠 알림 2개",
       expect.objectContaining({
-        body: "또 다른 알림 외 1개의 알림이 있습니다.",
+        body: "또 다른 알림 — 확인할 새 알림이 있습니다.",
         renotify: true,
         data: expect.objectContaining({ count: 2 }),
       }),
@@ -279,7 +279,7 @@ describe("public push service worker", () => {
     expect(worker.showNotification).toHaveBeenLastCalledWith(
       "콘텐츠 알림 2개",
       expect.objectContaining({
-        body: "또 다른 알림 외 1개의 알림이 있습니다.",
+        body: "또 다른 알림 — 확인할 새 알림이 있습니다.",
         data: expect.objectContaining({ count: 2 }),
       }),
     );
@@ -403,6 +403,21 @@ describe("public push service worker", () => {
   it("accepts a title as long as the server allows", async () => {
     const worker = loadPushWorker();
     const title = "가".repeat(160);
+
+    await worker.dispatch("push", {
+      data: { json: () => ({ ...validPayload, title }) },
+    });
+
+    expect(worker.showNotification).toHaveBeenCalledWith(
+      title,
+      expect.objectContaining({ tag: validPayload.tag }),
+    );
+  });
+
+  it("counts notification title length in code points like the server", async () => {
+    const worker = loadPushWorker();
+    // 이모지 160개는 code point로 160자, UTF-16으로는 320자다.
+    const title = "😀".repeat(160);
 
     await worker.dispatch("push", {
       data: { json: () => ({ ...validPayload, title }) },

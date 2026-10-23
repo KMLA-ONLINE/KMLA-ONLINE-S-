@@ -157,7 +157,12 @@ outbox 행의 원본은 알림, 메시지, 이용 정지 중 정확히 하나다
 같은 함수는 댓글·답글 알림에 `comment_excerpt`(댓글 본문 앞 200자)를, 반응 알림에 `reaction`(표시된
 반응자의 현재 반응 종류)을 함께 반환한다. 두 값 모두 알림 행에 복사하지 않고 조회 시점에 조인하므로
 댓글 수정·삭제와 반응 변경·제거가 그대로 반영된다. 본문은 `private.can_read_post`가 참이고 댓글이
-삭제 표시되지 않았을 때만 싣는다. Push 제목과 본문은 여전히 `title`과 kind별 고정 문구만 쓴다.
+삭제 표시되지 않았을 때만 싣는다.
+
+알림 Push의 제목과 본문은 `title`을 그대로 쓰지 않는다. `claim_notification_deliveries`가 Web Push
+delivery마다 `private.notification_push_content`를 불러 행위자 표시 이름, 그룹 이름, 게시물 제목을 발송
+시점에 조인해 만든다(기능 명세 §14.13). 댓글 본문은 싣지 않는다. 이메일 delivery는 `title`과 kind별
+고정 문구를 그대로 쓴다. payload 형식은 바뀌지 않으므로 서비스 워커와 전달 worker는 문자열만 받는다.
 
 ## 5. 보안
 
@@ -207,12 +212,13 @@ Production 앱 이벤트 이메일은 Resend를 사용한다. 로컬은 Supabase
 기존 Workbox `generateSW`의 app shell·업데이트 정책을 유지하고 `importScripts`로 Push handler를 추가한다.
 handler는 `push`와 `notificationclick`을 처리한다. 높음 중요도는 notification ID tag를, 낮음·보통은
 카테고리 tag를 사용한다. 동일 delivery ID는 기존 카드의 집계 수를 다시 늘리지 않는다. payload 검증의
-제목 한도는 서버의 `notifications_title_length`(160자)와 같다. 검증에 실패한 Push는 버리지 않고 내용
+제목·본문 한도는 서버의 `private.notification_push_content`(160자·240자)와 같고, 서버처럼 code point로 센다. 검증에 실패한 Push는 버리지 않고 내용
 없는 "새 알림" 카드를 띄우며, 이 카드는 알림함만 연다. 같은 tag로 덮어쓰되 다시 알리고, 홈 화면 배지에 1로 센다. `userVisibleOnly` 구독에서 카드를 띄우지 않으면
 브라우저 기본 카드가 뜨거나 알림이 흔적 없이 사라진다.
 
 카테고리 tag는 같은 브라우저에서 계정을 바꿔도 카드가 섞이지 않도록 opaque subscription ID로 범위를
-나눈다. 기존 알림은 `getNotifications()`로 읽어 최신 알림과 누적 개수로 교체하고, 동시에 도착한 Push는
+나눈다. 기존 알림은 `getNotifications()`로 읽어 최신 알림과 누적 개수로 교체하고(제목 `카테고리 알림 N개`, 본문
+`최신 제목 — 최신 본문`), 동시에 도착한 Push는
 worker 안에서 직렬화한다. 처리한 delivery ID를 카드 data에 보관해 순서가 뒤섞인 재전달도 중복 집계하지
 않는다. 한 건인 카드는 notification resolver를 열고, 둘 이상인 카드는 일반 알림함을 연다. 보통 중요도
 교체는 `renotify`하고 낮음 중요도 교체는 조용히 갱신한다. 표준 Web Notifications API에는 네이티브 앱의
