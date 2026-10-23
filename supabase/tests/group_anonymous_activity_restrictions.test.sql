@@ -428,12 +428,16 @@ select is(
 
 set local role service_role;
 create temp table restriction_delivery as
-select * from public.claim_notification_deliveries(20, 60)
-where title = '그룹 익명 활동이 제한되었습니다.';
-select is(
-  (select min(title) from restriction_delivery),
-  '그룹 익명 활동이 제한되었습니다.',
-  'Web Push receives only the generic restriction title'
+select * from public.claim_notification_deliveries(20, 60);
+reset role;
+delete from restriction_delivery where notification_id not in (
+  select id from public.notifications where kind = 'anonymous_activity_restricted'
+);
+set local role service_role;
+select ok(
+  (select bool_and(title = '운영 조치' and body like '% 그룹에서 익명 활동이 제한되었습니다.')
+   from restriction_delivery),
+  'Web Push names the group and only the fact of the restriction'
 );
 select ok(
   (select bool_and(body not like '%만료 뒤 새로 적용한 사유%') from restriction_delivery),

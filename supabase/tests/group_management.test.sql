@@ -393,7 +393,7 @@ select is(
   (
     select count(*)
     from public.claim_notification_deliveries(200, 60)
-    where title = '그룹 가입 요청이 거절되었습니다.'
+    where body = '가입 요청이 거절되었습니다.'
   ),
   1::bigint,
   'rejection Push remains deliverable when the requester is not a group member'

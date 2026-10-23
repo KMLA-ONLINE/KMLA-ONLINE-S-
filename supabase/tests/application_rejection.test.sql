@@ -114,9 +114,11 @@ select results_eq(
 
 set local role service_role;
 create temp table rejection_delivery as
-select * from public.claim_notification_deliveries(200, 60)
-where title = '가입 신청이 반려되었습니다.';
+select * from public.claim_notification_deliveries(200, 60);
 reset role;
+delete from rejection_delivery where notification_id not in (
+  select id from public.notifications where kind = 'account_rejected'
+);
 select results_eq(
   $$select channel::text from rejection_delivery order by channel::text$$,
   $$values ('email'), ('web_push')$$,
