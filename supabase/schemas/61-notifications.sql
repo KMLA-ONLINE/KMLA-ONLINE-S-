@@ -1030,6 +1030,93 @@ end;
 $$;
 alter function public.resolve_my_notification_destination(uuid) owner to postgres;
 
+-- 알림 Push 카드의 제목과 본문(기능 명세 §14.13). 알림함의 `title`은 이름·그룹 줄 아래에 놓이는 문장이라
+-- 카드에 그대로 쓰면 누가·어디서가 빠진다. 제목에 행위자나 그룹을, 본문에 일어난 일을 둔다. 이름과
+-- 제목은 발송 시점 값이다. 댓글 내용, 반려·제한 사유는 잠금 화면에 싣지 않는다.
+create or replace function private.notification_push_content(p_notification_id uuid)
+returns table (title text, body text)
+language sql
+stable
+set search_path = ''
+as $$
+  with source as (
+    select notification.*,
+      target_group.name as group_name,
+      case
+        when char_length(btrim(target_post.title)) > 40
+          then '“' || left(btrim(target_post.title), 39) || '…”'
+        else '“' || btrim(target_post.title) || '”'
+      end as post_title,
+      coalesce(notification.actor_display_name, '탈퇴한 사용자')
+        || case
+          when notification.actor_count > 1
+            then ' 외 ' || (notification.actor_count - 1)::text || '명'
+          else ''
+        end as actor,
+      membership.role as member_role
+    from public.notifications as notification
+    left join public.groups as target_group on target_group.id = notification.group_id
+    left join public.posts as target_post on target_post.id = notification.post_id
+    left join public.group_memberships as membership
+      on membership.group_id = notification.group_id
+      and membership.profile_id = notification.recipient_profile_id
+    where notification.id = p_notification_id
+  ), content as (
+    select
+      case
+        when source.kind in (
+          'post_commented', 'comment_replied', 'post_mentioned', 'comment_mentioned'
+        ) then source.actor || coalesce(' · ' || source.group_name, '')
+        when source.kind in ('timeline_posted', 'timeline_post_deleted') then source.actor
+        when source.kind in ('post_moderated', 'comment_moderated', 'anonymous_activity_restricted')
+          then '운영 조치'
+        when source.kind = 'gongang_preempted' then '공강 예약'
+        when source.group_name is not null then source.group_name
+        else 'KMLA Online'
+      end as title,
+      case source.kind
+        when 'post_commented' then
+          coalesce(source.post_title || '에 ', '내 게시물에 ') || '댓글을 남겼습니다.'
+        when 'comment_replied' then
+          coalesce(source.post_title || '에서 ', '') || '내 댓글에 답글을 남겼습니다.'
+        when 'post_mentioned' then
+          coalesce(source.post_title || '에서 ', '게시물에서 ') || '회원님을 멘션했습니다.'
+        when 'comment_mentioned' then
+          coalesce(source.post_title || '의 댓글에서 ', '댓글에서 ') || '회원님을 멘션했습니다.'
+        when 'timeline_posted' then '내 타임라인에 게시물을 남겼습니다.'
+        when 'timeline_post_deleted' then '타임라인에 남긴 내 게시물을 삭제했습니다.'
+        -- 새 그룹 게시물 알림의 `title`은 게시물 제목이다. 메시지 그룹 카드처럼 작성자를 앞에 둔다.
+        when 'group_posted' then source.actor || ': ' || source.title
+        when 'group_join_requested' then source.actor || '님이 가입을 요청했습니다.'
+        when 'group_join_approved' then '가입 요청이 승인되었습니다.'
+        when 'group_join_rejected' then '가입 요청이 거절되었습니다.'
+        -- 알림에 바뀐 역할을 남기지 않으므로 지금 역할을 쓴다. 그사이 다시 바뀌었으면 최신 역할이다.
+        when 'group_role_changed' then case source.member_role
+          when 'owner' then '내 역할이 소유자로 변경되었습니다.'
+          when 'admin' then '내 역할이 관리자로 변경되었습니다.'
+          when 'manager' then '내 역할이 매니저로 변경되었습니다.'
+          when 'member' then '내 역할이 멤버로 변경되었습니다.'
+          else '내 그룹 역할이 변경되었습니다.'
+        end
+        when 'official_group_joined' then '공식 그룹에 자동으로 가입되었습니다.'
+        when 'anonymous_activity_restricted' then
+          coalesce(source.group_name || ' 그룹에서 ', '그룹에서 ') || '익명 활동이 제한되었습니다.'
+        when 'account_approved' then '가입이 승인되었습니다. 이제 KMLA Online을 이용할 수 있습니다.'
+        -- 반려 사유는 본인 메일함에만 보낸다(기능 명세 §14.6).
+        when 'account_rejected' then
+          '가입 신청이 반려되었습니다. 학교 프로필 설정에서 정보를 고쳐 다시 제출해 주세요.'
+        when 'account_unblocked' then
+          '차단이 해제되었습니다. 학교 프로필 설정에서 정보를 확인하고 다시 제출해 주세요.'
+        else source.title
+      end as body
+    from source
+  )
+  -- 서비스 워커 검증 한도(제목 160자, 본문 240자)와 같다. 둘 다 code point로 센다.
+  select left(content.title, 160), left(content.body, 240)
+  from content;
+$$;
+alter function private.notification_push_content(uuid) owner to postgres;
+
 create or replace function public.claim_notification_deliveries(
   p_limit integer default 50,
   p_lease_seconds integer default 120
@@ -1115,26 +1202,23 @@ begin
     claimed.message_id, message_content.conversation_id,
     notification.importance, notification.category,
     subscription.id,
-    coalesce(message_content.title, suspension_content.title, notification.title),
+    coalesce(
+      message_content.title, suspension_content.title, push_content.title, notification.title
+    ),
     case
       when claimed.message_id is not null then message_content.body
       when claimed.suspension_id is not null then suspension_content.body
+      when claimed.channel = 'web_push' then push_content.body
+      -- 메일은 계정 상태 알림에만 쓴다. 제목은 알림함 문장 그대로다.
       else case notification.kind
-      when 'post_commented' then '내 게시물에 새 댓글이 등록되었습니다.'
-      when 'comment_replied' then '내 댓글에 새 답글이 등록되었습니다.'
-      when 'group_posted' then '그룹에 새 게시물이 등록되었습니다.'
       when 'account_approved' then '가입이 승인되었습니다.'
-      -- 반려 사유는 본인 메일함에만 보낸다. Push는 잠금 화면에 보일 수 있다.
       when 'account_rejected' then case
-        when claimed.channel = 'email' and rejection_content.reason is not null
+        when rejection_content.reason is not null
           then '사유: ' || rejection_content.reason || chr(10) || chr(10)
         else ''
       end || '학교 프로필 설정에서 정보를 고쳐 다시 제출해 주세요.'
       when 'account_blocked' then '가입이 차단되었습니다.'
       when 'account_unblocked' then '학교 프로필 설정에서 정보를 확인하고 다시 제출해 주세요.'
-      when 'anonymous_activity_restricted' then '그룹 익명 활동이 제한되었습니다.'
-      when 'post_mentioned' then '게시물에서 회원님을 멘션했습니다.'
-      when 'comment_mentioned' then '댓글에서 회원님을 멘션했습니다.'
       else '새 알림이 있습니다.'
       end
     end,
@@ -1156,6 +1240,8 @@ begin
   left join lateral private.message_push_content(
     claimed.message_id, claimed.recipient_profile_id, keys.value
   ) as message_content on true
+  left join lateral private.notification_push_content(notification.id) as push_content
+    on claimed.channel = 'web_push'
   left join lateral (
     select
       case claimed.suspension_event
@@ -2203,6 +2289,7 @@ revoke all on function public.get_my_web_push_status(text) from public;
 grant execute on function public.get_my_web_push_status(text) to authenticated;
 revoke all on function public.resolve_my_notification_destination(uuid) from public;
 grant execute on function public.resolve_my_notification_destination(uuid) to authenticated;
+revoke all on function private.notification_push_content(uuid) from public;
 revoke all on function public.claim_notification_deliveries(integer, integer) from public;
 grant execute on function public.claim_notification_deliveries(integer, integer) to service_role;
 revoke all on function public.prepare_notification_delivery(uuid, uuid) from public;
