@@ -114,7 +114,7 @@
     "@types/react-dom": "^19.3.0",
     "@vite-pwa/assets-generator": "^2.0.0",
     "@vitest/coverage-v8": "^4.1.12",
-    "eslint": "^9.39.5",
+    "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-jest-dom": "^5.10.1",
     "eslint-plugin-jsx-a11y": "^6.10.2",
