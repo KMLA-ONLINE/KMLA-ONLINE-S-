@@ -6,7 +6,7 @@ import { cn } from "~/shared/lib/utils";
  * 담당자가 바뀌면 이 배열을 직접 고쳐 배포한다. 비어 있으면 줄을 숨긴다.
  */
 const UTILITY_MANAGERS: Record<UtilityMode, readonly string[]> = {
-  gongang: [],
+  gongang: ["30기 최진명"],
   karaoke: [],
 };
 
