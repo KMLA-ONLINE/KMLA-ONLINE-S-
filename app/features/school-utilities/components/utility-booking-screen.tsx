@@ -22,6 +22,7 @@ import {
   reservationCreateErrorMessage,
 } from "../model/reservation-error";
 import { GongangBookingScreen } from "./gongang-booking-screen";
+import { UtilityManagers } from "./utility-managers";
 import { UtilityModeTabs } from "./utility-mode-tabs";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
@@ -465,6 +466,7 @@ function KaraokeBookingScreen() {
       </h1>
 
       <UtilityModeTabs mode="karaoke" />
+      <UtilityManagers mode="karaoke" className="mt-4" />
 
       <p className="mt-4 px-1 text-xs font-medium text-muted-foreground tabular-nums">
         {rangeDateFormatter.format(calendarDate(weekStart))} –{" "}
