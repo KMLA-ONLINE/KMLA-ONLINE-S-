@@ -33,6 +33,7 @@ import {
   GongangSelectionForm,
 } from "./gongang-selection-form";
 import { GongangWeekStrip } from "./gongang-week-strip";
+import { UtilityManagers } from "./utility-managers";
 import { UtilityModeTabs } from "./utility-mode-tabs";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
@@ -150,6 +151,7 @@ export function GongangBookingScreen() {
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 px-3 pb-6 sm:px-4 md:px-0">
       <UtilityModeTabs mode="gongang" />
+      <UtilityManagers mode="gongang" />
       {canManage && (
         <div className="flex justify-end">
           <Button
