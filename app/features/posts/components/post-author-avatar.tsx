@@ -43,7 +43,7 @@ export function PostAnonymousAvatar({
 }) {
   return (
     <Avatar size={size} className={className}>
-      <AvatarFallback className="bg-primary/80 text-primary-foreground">
+      <AvatarFallback className="bg-action/80 text-action-foreground">
         <VenetianMaskIcon
           className={ANONYMOUS_ICON_SIZE[size]}
           aria-hidden="true"
@@ -63,7 +63,7 @@ export function PostStaffAvatar({
 }) {
   return (
     <Avatar size={size} className={className}>
-      <AvatarFallback className="bg-primary text-primary-foreground">
+      <AvatarFallback className="bg-action text-action-foreground">
         <ShieldCheckIcon
           className={ANONYMOUS_ICON_SIZE[size]}
           aria-hidden="true"

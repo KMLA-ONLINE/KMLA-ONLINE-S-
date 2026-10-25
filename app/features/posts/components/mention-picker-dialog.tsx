@@ -205,7 +205,7 @@ export function MentionPickerDialog({
                         className={cn(
                           "ml-auto flex size-5 shrink-0 items-center justify-center rounded-full border",
                           isSelected &&
-                            "border-primary bg-primary text-primary-foreground",
+                            "border-action bg-action text-action-foreground",
                         )}
                       >
                         {isSelected ? <CheckIcon className="size-3.5" /> : null}

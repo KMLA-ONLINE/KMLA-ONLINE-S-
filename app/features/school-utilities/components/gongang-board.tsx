@@ -60,7 +60,7 @@ export function GongangBoard({
         className={cn(
           "flex min-h-14 w-full touch-manipulation flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50 sm:text-sm",
           checked
-            ? "bg-primary text-primary-foreground"
+            ? "bg-action text-action-foreground"
             : entry?.state === "mine"
               ? "bg-primary/10 text-primary"
               : entry
@@ -88,7 +88,7 @@ export function GongangBoard({
                 className={cn(
                   "line-clamp-2 w-full text-[10px] leading-snug break-words sm:text-xs",
                   checked
-                    ? "text-primary-foreground/80"
+                    ? "text-action-foreground/80"
                     : "text-muted-foreground",
                 )}
               >

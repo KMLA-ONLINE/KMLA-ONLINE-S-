@@ -389,7 +389,7 @@ function StepIndicator({ current }: { current: SignupStep }) {
             <span
               className={cn(
                 "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium",
-                active && "bg-primary text-primary-foreground",
+                active && "bg-action text-action-foreground",
                 done && "bg-primary/15 text-primary",
                 !active && !done && "bg-muted text-muted-foreground",
               )}

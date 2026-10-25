@@ -184,11 +184,14 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-action: var(--action);
+  --color-action-foreground: var(--action-foreground);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-profile-cover: var(--profile-cover);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
   --radius-sm: calc(var(--radius) * 0.6);
@@ -216,11 +219,14 @@
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
+  --profile-cover: #f3f4f7;
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
   --primary: oklch(0.546 0.245 262.881);
   --primary-foreground: oklch(0.97 0.014 254.604);
+  --action: var(--primary);
+  --action-foreground: var(--primary-foreground);
   --secondary: oklch(0.967 0.001 286.375);
   --secondary-foreground: oklch(0.21 0.006 285.885);
   --muted: oklch(0.97 0 0);
@@ -231,6 +237,7 @@
   --destructive-foreground: oklch(0.99 0.01 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
+  --scrollbar-thumb: oklch(0.708 0 0);
   --ring: oklch(0.546 0.245 262.881);
   --chart-1: oklch(0.809 0.105 251.813);
   --chart-2: oklch(0.623 0.214 259.815);
@@ -249,38 +256,45 @@
 }
 
 .dark {
-  --background: oklch(0.22 0.006 264);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.265 0.008 264);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.3 0.01 264);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.623 0.214 259.815);
-  --primary-foreground: oklch(0.21 0.05 264);
-  --secondary: oklch(0.304 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.299 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.299 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.58 0.22 25);
-  --destructive-foreground: oklch(0.99 0.01 25);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.623 0.214 259.815);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
-  --sidebar: oklch(0.215 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.623 0.214 259.815);
-  --sidebar-primary-foreground: oklch(0.21 0.05 264);
-  --sidebar-accent: oklch(0.299 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.623 0.214 259.815);
+  /* Facebook-style charcoal stack: page, raised card, then filled controls, each a visible step apart. */
+  --background: #18191a;
+  --foreground: #e4e6eb;
+  --card: #242526;
+  --profile-cover: var(--muted);
+  --card-foreground: var(--foreground);
+  --popover: #2b2c2e;
+  --popover-foreground: var(--foreground);
+  /* No single blue reads well both as text on charcoal and under white text, so links and fills split.
+     Fills use Facebook's brand blue, which still clears 4.5:1 under white text. */
+  --primary: #66abff;
+  --primary-foreground: #0b1d36;
+  --action: #0866ff;
+  --action-foreground: #ffffff;
+  --secondary: #3a3b3c;
+  --secondary-foreground: var(--foreground);
+  --muted: #3a3b3c;
+  --muted-foreground: #b0b3b8;
+  --accent: #3a3b3c;
+  --accent-foreground: var(--foreground);
+  --destructive: #ff6b81;
+  --destructive-foreground: #3a0d16;
+  --border: #3e4042;
+  --input: #4e4f51;
+  --scrollbar-thumb: #5c5e61;
+  --ring: var(--primary);
+  --chart-1: #a8ccff;
+  --chart-2: #66abff;
+  --chart-3: #3d8ef0;
+  --chart-4: #0866ff;
+  --chart-5: #1857b0;
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: #263951;
+  --sidebar-primary-foreground: #8cbcff;
+  --sidebar-accent: var(--muted);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
 @layer base {
@@ -309,7 +323,7 @@
      transparent (background-clip keeps the 2px inset) so the same neutral thumb
      reads correctly in both light and dark. */
   * {
-    scrollbar-color: oklch(0.708 0 0) transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
   }
 
   *::-webkit-scrollbar {
@@ -322,7 +336,7 @@
   }
 
   *::-webkit-scrollbar-thumb {
-    background: oklch(0.708 0 0);
+    background: var(--scrollbar-thumb);
     border: 2px solid transparent;
     border-radius: 9999px;
     background-clip: padding-box;

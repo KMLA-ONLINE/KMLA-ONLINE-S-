@@ -57,7 +57,7 @@ function Chip({
       className={cn(
         "h-8 shrink-0 rounded-full border px-3 text-sm whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
         active
-          ? "border-primary bg-primary text-primary-foreground"
+          ? "border-action bg-action text-action-foreground"
           : "bg-background text-muted-foreground hover:bg-muted",
       )}
     >

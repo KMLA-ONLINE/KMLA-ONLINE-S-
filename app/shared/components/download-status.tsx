@@ -39,7 +39,7 @@ export function DownloadStatus({
       return (
         <span
           aria-hidden
-          className="shrink-0 rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
+          className="shrink-0 rounded-full bg-action px-2.5 py-1 text-xs font-medium text-action-foreground"
         >
           저장
         </span>

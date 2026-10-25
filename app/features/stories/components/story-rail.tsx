@@ -186,7 +186,7 @@ export function StoryRail({
                   </span>
 
                   <span className="relative flex h-11 shrink-0 items-end justify-center pb-2 text-xs font-semibold">
-                    <span className="absolute top-0 left-1/2 flex size-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground ring-4 ring-card">
+                    <span className="absolute top-0 left-1/2 flex size-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-action text-action-foreground ring-4 ring-card">
                       <PlusIcon className="size-4" aria-hidden />
                     </span>
                     스토리 만들기
@@ -561,7 +561,7 @@ function StoryRailCard({
 
       <span className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60" />
 
-      <span className="absolute top-2 left-2 rounded-full bg-primary p-[2px]">
+      <span className="absolute top-2 left-2 rounded-full bg-action p-[2px]">
         <UserAvatar src={story.avatarUrl} name={name} className="size-8" />
       </span>
 

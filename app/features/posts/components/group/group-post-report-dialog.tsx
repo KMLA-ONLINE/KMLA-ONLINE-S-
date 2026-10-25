@@ -117,7 +117,7 @@ export function GroupPostReportDialog({
                   className={cn(
                     "flex size-5 shrink-0 items-center justify-center rounded-full border",
                     selected
-                      ? "border-primary bg-primary text-primary-foreground"
+                      ? "border-action bg-action text-action-foreground"
                       : "border-muted-foreground/35",
                   )}
                 >
