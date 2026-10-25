@@ -28,6 +28,8 @@ interface ParticipantRow {
   /** 탈퇴한 사람은 프로필로 잇지 않도록 null이다. */
   pub_id: string | null;
   name: string;
+  /** 이 대화의 별명. 탈퇴한 사람은 null이다. */
+  nickname?: string | null;
   avatar_path: string | null;
   active: boolean;
   withdrawn?: boolean;
@@ -38,6 +40,8 @@ const SYSTEM_KINDS = new Set<MessageSystemEvent["kind"]>([
   "member_left",
   "member_removed",
   "renamed",
+  "nickname_set",
+  "nickname_cleared",
 ]);
 
 const UUID_PATTERN =
@@ -280,7 +284,9 @@ async function toSummaries(
       (participant): MessageParticipant => ({
         id: String(participant.id),
         pubId: participant.pub_id ?? undefined,
-        name: participant.name,
+        name: participant.nickname ?? participant.name,
+        profileName: participant.name,
+        nickname: participant.nickname ?? null,
         avatarUrl: participant.avatar_path
           ? (avatarUrls.get(participant.avatar_path) ?? null)
           : null,

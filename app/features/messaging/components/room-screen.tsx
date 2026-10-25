@@ -4,6 +4,7 @@ import {
   CopyIcon,
   EllipsisIcon,
   FileIcon,
+  ForwardIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ImageIcon,
@@ -53,10 +54,7 @@ import {
   useConversationMembership,
   useListedConversation,
 } from "~/features/messaging/hooks/use-conversation-membership";
-import {
-  MessageParticipantsProvider,
-  useMessageParticipants,
-} from "~/features/messaging/components/message-mention";
+import { MessageParticipantsProvider } from "~/features/messaging/components/message-mention";
 import {
   MentionSuggestionList,
   mentionOptionId,
@@ -89,7 +87,9 @@ import {
 import { useIsSendEnter } from "~/shared/hooks/use-enter-to-send";
 import { useKeyboardViewport } from "~/shared/hooks/use-keyboard-viewport";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
+import { ForwardMessageDialog } from "~/features/messaging/components/forward-message-dialog";
 import { RenameConversationDialog } from "~/features/messaging/components/rename-conversation-dialog";
+import { NicknameDialog } from "~/features/messaging/components/nickname-dialog";
 import {
   activeParticipants,
   canSendToConversation,
@@ -223,10 +223,18 @@ export function RoomScreen({
   const [memberDialog, setMemberDialog] = useState<
     | { kind: "invite" }
     | { kind: "rename" }
+    | { kind: "nicknames" }
     | { kind: "leave" }
     | { kind: "delete" }
     | null
   >(null);
+  // 전달할 메시지. 닫는 동안에도 들고 있어야 시트가 빈 채로 사라지지 않는다. `session`은 열 때마다
+  // 올려 같은 메시지를 다시 전달해도 고른 내용이 처음으로 돌아가게 한다.
+  const [forward, setForward] = useState<{
+    open: boolean;
+    message: ConversationMessage | null;
+    session: number;
+  }>({ open: false, message: null, session: 0 });
   // 대화 정보, 검색, 고정 메시지, 반응한 사람, 공유된 미디어는 뒤로가기로 닫히도록 URL에 둔다.
   const roomOverlay = useRoomOverlayParam();
   const ios = useSyncExternalStore(subscribeToPlatform, isIOS, () => false);
@@ -490,7 +498,7 @@ export function RoomScreen({
         ? {
             id: target.id,
             senderId: target.senderId,
-            body: messagePlainText(target, participantById),
+            body: messagePlainText(target),
             deleted: target.deleted,
             attachmentKind: target.attachments?.[0]?.kind ?? null,
           }
@@ -525,7 +533,8 @@ export function RoomScreen({
     <MessageParticipantsProvider participants={conversation.participants}>
       <div
         className={cn(
-          "relative flex min-h-0 min-w-0 flex-1 overflow-hidden",
+          // 입력창 포커스가 대화방째 스크롤해 머리를 밀어 올리지 않게 스크롤 컨테이너로 만들지 않는다.
+          "relative flex min-h-0 min-w-0 flex-1 overflow-clip",
           // iOS에서 아래 여백으로 보정하면 Safari의 화면 이동과 겹쳐 이름이 밀리고
           // 입력창 아래에 빈 공간이 생긴다. 보이는 영역의 위쪽·높이로 대화방 전체를 잡는다.
           keyboardViewport.keyboardOpen &&
@@ -631,7 +640,7 @@ export function RoomScreen({
                 </p>
                 <p className="truncate text-sm text-muted-foreground">
                   {formatReplyPreview(
-                    toReplyPreview(pinnedMessage, participantById),
+                    toReplyPreview(pinnedMessage),
                     window.location.origin,
                   )}
                 </p>
@@ -674,6 +683,13 @@ export function RoomScreen({
               setReplyTarget(message);
             }}
             onTogglePinned={togglePinned}
+            onForward={(message) =>
+              setForward((current) => ({
+                open: true,
+                message,
+                session: current.session + 1,
+              }))
+            }
             onEdit={(message) => {
               setReplyTarget(null);
               setEditTarget({
@@ -785,6 +801,7 @@ export function RoomScreen({
           }}
           onInvite={() => setMemberDialog({ kind: "invite" })}
           onRename={() => setMemberDialog({ kind: "rename" })}
+          onNicknames={() => setMemberDialog({ kind: "nicknames" })}
           onLeave={() => setMemberDialog({ kind: "leave" })}
           onDeleteGroup={() => setMemberDialog({ kind: "delete" })}
           sharedCounts={sharedCounts}
@@ -808,6 +825,14 @@ export function RoomScreen({
           onViewMessage={(messageId) => void viewMessage(messageId)}
           onUnpin={togglePinned}
         />
+        <ForwardMessageDialog
+          key={forward.session}
+          open={forward.open}
+          onOpenChange={(open) =>
+            setForward((current) => ({ ...current, open }))
+          }
+          message={forward.message}
+        />
         <RecipientPickerDialog
           open={memberDialog?.kind === "invite"}
           mode="invite"
@@ -828,6 +853,14 @@ export function RoomScreen({
             currentName={conversation.name}
             onCancel={() => setMemberDialog(null)}
             onSubmit={membership.rename}
+          />
+        ) : null}
+        {memberDialog?.kind === "nicknames" ? (
+          <NicknameDialog
+            members={activeParticipants(conversation)}
+            viewerId={conversation.viewerId}
+            onClose={() => setMemberDialog(null)}
+            onSubmit={membership.setNickname}
           />
         ) : null}
         {memberDialog?.kind === "leave" ? (
@@ -891,6 +924,7 @@ function MessageThread({
   onSelectReaction,
   onReply,
   onTogglePinned,
+  onForward,
   onEdit,
   onDelete,
   onViewMessage,
@@ -922,6 +956,7 @@ function MessageThread({
   ) => void;
   onReply: (message: ConversationMessage) => void;
   onTogglePinned: (message: ConversationMessage) => void;
+  onForward: (message: ConversationMessage) => void;
   onEdit: (message: ConversationMessage) => void;
   onDelete: (message: ConversationMessage) => void;
   onViewMessage: (messageId: string) => void;
@@ -949,6 +984,8 @@ function MessageThread({
   // 앞선 페이지를 위에 붙이면 scrollHeight만 늘고 scrollTop은 그대로라 보던 메시지가 아래로
   // 밀린다. 붙이기 전 바닥에서의 거리와 그때의 맨 위 메시지를 기억했다가, 맨 위가 실제로 바뀐
   // 렌더에서만 같은 거리로 되돌린다. 읽기가 실패하거나 빈 페이지가 오면 버린다.
+  // 거리는 읽는 동안 스크롤할 때마다 새로 잰다. 요청할 때 잰 값으로 되돌리면 응답을 기다리는 동안
+  // (모바일의 관성 스크롤 등) 더 올라간 만큼 화면이 아래로 튄다.
   const olderAnchor = useRef<{
     distanceFromBottom: number;
     oldestMessageId: string | undefined;
@@ -990,6 +1027,7 @@ function MessageThread({
     onSelectReaction,
     onReply,
     onTogglePinned,
+    onForward,
     onEdit,
     onDelete,
     onViewMessage,
@@ -1003,6 +1041,7 @@ function MessageThread({
       onSelectReaction,
       onReply,
       onTogglePinned,
+      onForward,
       onEdit,
       onDelete,
       onViewMessage,
@@ -1018,6 +1057,7 @@ function MessageThread({
         latestHandlers.current.onSelectReaction(message, reaction),
       reply: (message) => latestHandlers.current.onReply(message),
       togglePinned: (message) => latestHandlers.current.onTogglePinned(message),
+      forward: (message) => latestHandlers.current.onForward(message),
       edit: (message) => latestHandlers.current.onEdit(message),
       delete: (message) => latestHandlers.current.onDelete(message),
       viewMessage: (messageId) =>
@@ -1244,7 +1284,12 @@ function MessageThread({
         onPointerDown={() => {
           composingAtBottomRef.current = false;
         }}
-        onScroll={() => {
+        onScroll={(event) => {
+          const anchor = olderAnchor.current;
+          if (anchor) {
+            const thread = event.currentTarget;
+            anchor.distanceFromBottom = thread.scrollHeight - thread.scrollTop;
+          }
           updateScrollToBottomVisibility();
           maybeLoadOlderMessages();
         }}
@@ -1328,7 +1373,7 @@ function MessageThread({
             </span>{" "}
             <span className="text-muted-foreground">
               {formatReplyPreview(
-                toReplyPreview(incomingMessage, participantById),
+                toReplyPreview(incomingMessage),
                 window.location.origin,
               )}
             </span>
@@ -1359,12 +1404,9 @@ function MessageThread({
 }
 
 /** 불러온 메시지를 답장 인용과 같은 모양으로 줄인다. 첨부만 있는 메시지를 첨부 종류로 부르게 한다. 멘션은 지금 이름이다. */
-function toReplyPreview(
-  message: ConversationMessage,
-  participantById: ReadonlyMap<string, MessageParticipant>,
-) {
+function toReplyPreview(message: ConversationMessage) {
   return {
-    body: messagePlainText(message, participantById),
+    body: messagePlainText(message),
     deleted: message.deleted,
     attachmentKind: message.attachments?.[0]?.kind ?? null,
   };
@@ -1400,6 +1442,7 @@ interface ThreadMessageActions {
   ) => void;
   reply: (message: ConversationMessage) => void;
   togglePinned: (message: ConversationMessage) => void;
+  forward: (message: ConversationMessage) => void;
   edit: (message: ConversationMessage) => void;
   delete: (message: ConversationMessage) => void;
   viewMessage: (messageId: string) => void;
@@ -1455,7 +1498,6 @@ const ThreadMessage = memo(function ThreadMessage({
   actions: ThreadMessageActions;
 }) {
   const replyTarget = message.replyTo;
-  const participantById = useMessageParticipants();
   // 삭제된 메시지는 반응, 고정, 수정, 삭제를 받지 않는다. 전송 중인 메시지는 아직 서버에 없어
   // 복사만 된다. 남는 작업이 없으면 메뉴를 열지 않는다.
   const actionable = !message.deleted && !message.pending && !message.failed;
@@ -1475,10 +1517,20 @@ const ThreadMessage = memo(function ThreadMessage({
           {
             label: "복사",
             icon: <CopyIcon aria-hidden />,
-            onSelect: () =>
-              void copyMessageText(messagePlainText(message, participantById)),
+            onSelect: () => void copyMessageText(messagePlainText(message)),
           },
         ]),
+    // 전달은 글과 첨부를 다른 대화에 새 메시지로 보낸다. 첨부는 서버의 원본을 복사하므로 서버에 있는
+    // 메시지만 전달한다.
+    ...(actionable && hasForwardableContent(message)
+      ? [
+          {
+            label: "전달",
+            icon: <ForwardIcon aria-hidden />,
+            onSelect: () => actions.forward(message),
+          },
+        ]
+      : []),
     ...(actionable
       ? [
           {
@@ -1503,6 +1555,7 @@ const ThreadMessage = memo(function ThreadMessage({
             label: "삭제",
             icon: <Trash2Icon aria-hidden />,
             onSelect: () => actions.delete(message),
+            destructive: true,
           },
         ]
       : []),
@@ -1520,7 +1573,10 @@ const ThreadMessage = memo(function ThreadMessage({
         sender={sender}
         isOwn={isOwn}
         isGroup={isGroup}
-        unreadParticipantCount={message.unreadMemberCount ?? 0}
+        // 삭제된 메시지는 읽었는지 알 필요가 없다. 자리는 남겨 삭제되는 순간 버블 폭이 바뀌지 않게 한다.
+        unreadParticipantCount={
+          message.deleted ? 0 : (message.unreadMemberCount ?? 0)
+        }
         startsGroup={startsGroup}
         endsGroup={endsGroup}
         isPinned={message.pinned ?? false}
@@ -1553,6 +1609,7 @@ const ThreadMessage = memo(function ThreadMessage({
             }
             onReply={canCompose ? () => actions.reply(message) : undefined}
             onTogglePinned={() => actions.togglePinned(message)}
+            onForward={() => actions.forward(message)}
             onEdit={canEdit ? () => actions.edit(message) : undefined}
             onDelete={
               isOwn && actionable ? () => actions.delete(message) : undefined
@@ -1617,6 +1674,7 @@ function MessageActions({
   onSelectReaction,
   onReply,
   onTogglePinned,
+  onForward,
   onEdit,
   onDelete,
 }: {
@@ -1627,11 +1685,11 @@ function MessageActions({
   /** 입력창이 없는 대화(나간 대화, 탈퇴한 상대와의 1:1)에서는 없다. */
   onReply?: () => void;
   onTogglePinned: () => void;
+  onForward: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
   const [reactionOpen, setReactionOpen] = useState(false);
-  const participantById = useMessageParticipants();
 
   const reactionAction = (
     <div className="relative flex shrink-0">
@@ -1696,12 +1754,16 @@ function MessageActions({
           {message.body !== "" ? (
             <DropdownMenuItem
               className="cursor-pointer"
-              onClick={() =>
-                void copyMessageText(messagePlainText(message, participantById))
-              }
+              onClick={() => void copyMessageText(messagePlainText(message))}
             >
               <CopyIcon aria-hidden />
               복사
+            </DropdownMenuItem>
+          ) : null}
+          {hasForwardableContent(message) ? (
+            <DropdownMenuItem className="cursor-pointer" onClick={onForward}>
+              <ForwardIcon aria-hidden />
+              전달
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuItem className="cursor-pointer" onClick={onTogglePinned}>
@@ -1751,10 +1813,18 @@ function MessageActions({
   );
 }
 
+/** 전달할 글이나 첨부가 있는지. 삭제된 메시지는 둘 다 없다. */
+function hasForwardableContent(message: ConversationMessage) {
+  return (
+    !message.deleted &&
+    (message.body !== "" || (message.attachments?.length ?? 0) > 0)
+  );
+}
+
 /**
  * 메시지를 대화 영역 가운데로 옮긴다. `scrollIntoView`는 스크롤 조상을 전부 밀어, 원문이 맨 위나 맨 아래
- * 근처라 대화 영역만으로 가운데에 못 오면 `overflow-hidden`인 대화방과 앱 셸까지 밀어 버린다. 그러면
- * 화면 전체가 밀리고 아래에 빈 영역이 생기므로 대화 영역 안에서만 움직인다.
+ * 근처라 대화 영역만으로 가운데에 못 오면 대화방과 앱 셸까지 밀어 버린다. 그러면 화면 전체가 밀리고
+ * 아래에 빈 영역이 생기므로 대화 영역 안에서만 움직인다.
  */
 function centerInThread(messageThread: HTMLElement, target: HTMLElement) {
   const threadRect = messageThread.getBoundingClientRect();
@@ -1938,7 +2008,6 @@ function ComposerShell({
     setDraft: changeDraft,
     entries: mentions,
   });
-  const participantById = useMessageParticipants();
   const mentionSuggestions = useMentionSuggestions({
     participants: mentionParticipants,
     viewerId,
@@ -2026,7 +2095,7 @@ function ComposerShell({
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-primary">메시지 수정</p>
             <p className="truncate text-xs text-muted-foreground">
-              {messagePlainText(editTarget.message, participantById)}
+              {messagePlainText(editTarget.message)}
             </p>
           </div>
           <Button
@@ -2049,7 +2118,7 @@ function ComposerShell({
             </p>
             <p className="truncate text-xs text-muted-foreground">
               {formatReplyPreview(
-                toReplyPreview(replyTarget, participantById),
+                toReplyPreview(replyTarget),
                 window.location.origin,
               )}
             </p>

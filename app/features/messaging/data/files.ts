@@ -146,6 +146,55 @@ export async function uploadAttachments(
   });
 }
 
+/**
+ * 이미 보낸 첨부를 다른 대화의 새 메시지 첨부로 예고하고 Storage 안에서 복사한다. 파일이 기기를
+ * 거치지 않는다. 복사본은 원본과 따로 남아 원본 메시지를 지워도 그대로다. 메시지는 이어서 같은 ID로
+ * 보내 서버가 확정한다. 그 ID의 메시지가 이미 저장됐으면(응답만 잃은 다시 보내기) 복사하지 않고
+ * `false`를 돌려준다.
+ *
+ * 사진 30장을 여러 대화에 보내면 요청이 수백 개라 한 번에 하나씩 복사한다. 전달은 기다려도 되는
+ * 작업이고, 한꺼번에 보내면 모바일 연결이 막혀 일부가 실패한다.
+ */
+export async function copyAttachments(
+  conversationId: string,
+  messageId: string,
+  attachments: readonly MessageAttachment[],
+): Promise<boolean> {
+  const { data, error } = await getSupabase().rpc(
+    "prepare_message_attachments",
+    {
+      p_conversation_id: conversationId,
+      p_message_id: messageId,
+      p_files: attachments.map((attachment) => ({
+        kind: attachment.kind,
+        mime_type: attachment.mimeType,
+        size_bytes: attachment.sizeBytes,
+        width: attachment.width,
+        height: attachment.height,
+        file_name: attachment.fileName,
+      })),
+    },
+  );
+  if (error?.code === "23505") return false;
+  if (error) throw error;
+  const targets = data ?? [];
+  if (targets.length !== attachments.length) {
+    throw new Error("Attachment copy was not prepared");
+  }
+
+  for (const [index, target] of targets.entries()) {
+    const source = attachments[index];
+    await copyWithRetry(source.objectPath, target.object_path);
+    // 축소본이 없으면 대화방이 원본을 그린다. 서버가 축소본 경로를 비우므로 전송은 막지 않는다.
+    if (source.thumbnailPath && target.thumbnail_path) {
+      await copyWithRetry(source.thumbnailPath, target.thumbnail_path).catch(
+        () => undefined,
+      );
+    }
+  }
+  return true;
+}
+
 /** 첫 시도를 포함해 올려 보는 횟수. */
 const UPLOAD_ATTEMPTS = 3;
 const UPLOAD_RETRY_DELAY_MS = 800;
@@ -171,6 +220,19 @@ async function uploadWithRetry(
         setTimeout(resolve, UPLOAD_RETRY_DELAY_MS * attempt),
       );
     }
+  }
+}
+
+/** `uploadWithRetry`와 같은 규칙으로 Storage 안에서 복사한다. */
+async function copyWithRetry(from: string, to: string): Promise<void> {
+  const bucket = getSupabase().storage.from(BUCKET);
+  for (let attempt = 1; ; attempt += 1) {
+    const { error } = await bucket.copy(from, to);
+    if (!error || (attempt > 1 && isAlreadyUploaded(error))) return;
+    if (attempt >= UPLOAD_ATTEMPTS) throw error;
+    await new Promise((resolve) =>
+      setTimeout(resolve, UPLOAD_RETRY_DELAY_MS * attempt),
+    );
   }
 }
 

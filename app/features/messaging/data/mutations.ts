@@ -1,7 +1,9 @@
+import { copyAttachments } from "~/features/messaging/data/files";
 import { toReactions } from "~/features/messaging/data/queries";
 import type {
   ConversationMessage,
   ConversationNotificationLevel,
+  MessageAttachment,
 } from "~/features/messaging/model/types";
 import type { PostReaction } from "~/features/posts/model/types";
 import { getSupabase } from "~/shared/supabase/client";
@@ -123,11 +125,14 @@ export type SendTarget =
  *
  * `messageIds`는 대화별 메시지 ID를 다시 시도 사이에 기억한다. 저장은 됐는데 응답만 끊긴 대화에 같은
  * ID로 다시 보내면 서버가 한 번만 저장한다. 새 ID를 만들면 같은 링크가 두 번 간다.
+ *
+ * `attachments`가 있으면 대화마다 Storage 안에서 복사해 함께 보낸다.
  */
 export async function sendToConversations(
   targets: readonly SendTarget[],
   body: string,
   messageIds = new Map<string, string>(),
+  attachments: readonly MessageAttachment[] = [],
 ): Promise<{ sent: number; failed: number }> {
   if (targets.length > SEND_TARGET_LIMIT) {
     throw new Error(`Too many targets: ${targets.length}`);
@@ -146,21 +151,37 @@ export async function sendToConversations(
     else failed += 1;
   }
 
-  const sent = await Promise.allSettled(
-    [...conversationIds].map(async (conversationId) => {
-      const messageId = messageIds.get(conversationId) ?? crypto.randomUUID();
-      messageIds.set(conversationId, messageId);
-      const { data, error } = await getSupabase().rpc("send_message", {
-        p_conversation_id: conversationId,
-        p_message_id: messageId,
-        p_body: body,
-        // 방을 열지 않고 보낸다. 읽은 위치를 옮기면 그 방에 와 있던 안 읽은 메시지가 읽음이 된다.
-        p_mark_read: false,
-      });
-      if (error) throw error;
-      if (!data?.[0]) throw new Error("Message was not saved");
-    }),
-  );
+  const deliver = async (conversationId: string) => {
+    const messageId = messageIds.get(conversationId) ?? crypto.randomUUID();
+    messageIds.set(conversationId, messageId);
+    if (attachments.length > 0) {
+      await copyAttachments(conversationId, messageId, attachments);
+    }
+    const { data, error } = await getSupabase().rpc("send_message", {
+      p_conversation_id: conversationId,
+      p_message_id: messageId,
+      p_body: body,
+      // 방을 열지 않고 보낸다. 읽은 위치를 옮기면 그 방에 와 있던 안 읽은 메시지가 읽음이 된다.
+      p_mark_read: false,
+    });
+    if (error) throw error;
+    if (!data?.[0]) throw new Error("Message was not saved");
+  };
+
+  // 첨부는 대화마다 복사 요청이 여러 개라 대화를 하나씩 차례로 보낸다(`copyAttachments`).
+  const sent: PromiseSettledResult<void>[] = [];
+  if (attachments.length > 0) {
+    for (const conversationId of conversationIds) {
+      sent.push(
+        await deliver(conversationId).then(
+          (value) => ({ status: "fulfilled", value }) as const,
+          (reason: unknown) => ({ status: "rejected", reason }) as const,
+        ),
+      );
+    }
+  } else {
+    sent.push(...(await Promise.allSettled([...conversationIds].map(deliver))));
+  }
   const sentCount = sent.filter(({ status }) => status === "fulfilled").length;
   return { sent: sentCount, failed: failed + sent.length - sentCount };
 }
@@ -213,6 +234,20 @@ export async function renameConversation(
   const { error } = await getSupabase().rpc("rename_conversation", {
     p_conversation_id: conversationId,
     p_name: name,
+  });
+  if (error) throw error;
+}
+
+/** 그룹 대화 멤버의 별명을 정한다. 빈 값이면 지운다(기능 명세 §13.25). */
+export async function setConversationNickname(
+  conversationId: string,
+  profileId: string,
+  nickname: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("set_conversation_nickname", {
+    p_conversation_id: conversationId,
+    p_profile_id: Number(profileId),
+    p_nickname: nickname,
   });
   if (error) throw error;
 }

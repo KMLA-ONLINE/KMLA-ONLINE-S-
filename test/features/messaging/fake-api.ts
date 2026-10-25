@@ -225,6 +225,15 @@ export function openDirectConversation(_profileId: string): Promise<string> {
   return Promise.resolve("hyunwoo");
 }
 
+export const SEND_TARGET_LIMIT = 10;
+
+export function sendToConversations(
+  targets: readonly unknown[],
+  _body: string,
+): Promise<{ sent: number; failed: number }> {
+  return Promise.resolve({ sent: targets.length, failed: 0 });
+}
+
 export function createGroupConversation(
   _name: string,
   _profileIds: string[],

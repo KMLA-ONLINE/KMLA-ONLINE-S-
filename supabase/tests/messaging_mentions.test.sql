@@ -41,7 +41,7 @@ $$;
 select ok(
   not has_function_privilege('authenticated', 'private.resolve_message_mentions(uuid, text, text[], bigint[], timestamptz)', 'EXECUTE')
     and not has_function_privilege('authenticated', 'private.member_wants_message_push(public.conversation_members, private.messages)', 'EXECUTE')
-    and not has_function_privilege('authenticated', 'private.message_plain_text(text, bigint[])', 'EXECUTE')
+    and not has_function_privilege('authenticated', 'private.message_plain_text(text)', 'EXECUTE')
     and has_function_privilege('authenticated', 'public.set_conversation_notification_level(uuid, public.conversation_notification_level)', 'EXECUTE')
     and not has_function_privilege('anon', 'public.set_conversation_notification_level(uuid, public.conversation_notification_level)', 'EXECUTE'),
   'mention helpers stay private and only signed-in members set notification levels'
@@ -462,23 +462,27 @@ select results_eq(
 
 select ok(
   private.message_plain_text(
-    '[@홍](m:1)와 [@모든 사람](m:0), [링크](https://example.com)', '{}'
+    '[@홍](m:1)와 [@모든 사람](m:0), [링크](https://example.com)'
   ) = '@홍와 @모든 사람, [링크](https://example.com)',
-  'only mention tokens become plain names, keeping the token name without a target'
+  'only mention tokens become plain names, keeping the token name'
 );
 
--- 개명하면 글자로 보여 주는 곳도 말풍선처럼 지금 이름을 따른다.
+-- 개명해도 멘션은 보낼 때 보이던 이름 그대로다(기능 명세 §13.22).
 update public.profiles set name = '박여명' where pub_id = 'saebyeok-24';
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
 select is(
   (
-    public.search_messages('c0000000-0000-0000-0000-000000000002', '@박여명')
-      -> 'results' -> 0 ->> 'body'
-  ),
-  '@김민준 @박여명 확인 부탁',
-  'search finds and shows a renamed member by the current name'
+    select array_agg(result ->> 'body')
+    from jsonb_array_elements(
+      public.search_messages('c0000000-0000-0000-0000-000000000002', '@박새벽') -> 'results'
+    ) as result
+    where result ->> 'body' like '%확인 부탁'
+  )
+    || (public.search_messages('c0000000-0000-0000-0000-000000000002', '@박여명') -> 'results')::text,
+  array['@김민준 @박새벽 확인 부탁', '[]'],
+  'a renamed member keeps the name the mention was sent with, in search too'
 );
 reset role;
 

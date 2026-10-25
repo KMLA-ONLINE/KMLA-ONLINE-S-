@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as mutations from "~/features/messaging/data/mutations";
 import * as queries from "~/features/messaging/data/queries";
@@ -62,6 +62,11 @@ async function renderMessages() {
   return renderHook(() => useConversationMessages(conversation), { wrapper });
 }
 
+// jsdom 문서는 포커스가 없다고 답한다. 읽음 기록은 포커스가 있는 창에서만 하므로 기본은 포커스가 있는 창이다.
+beforeEach(() => {
+  vi.spyOn(document, "hasFocus").mockReturnValue(true);
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -79,6 +84,24 @@ describe("useConversationMessages", () => {
     visibility.mockReturnValue("visible");
     act(() => {
       document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    await waitFor(() =>
+      expect(markRead).toHaveBeenCalledWith("student-council", "m9"),
+    );
+    expect(markRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("보이지만 포커스가 없는 창에서는 읽음을 기록하지 않고 포커스를 얻을 때 기록한다", async () => {
+    const focus = vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    const markRead = vi.spyOn(mutations, "markConversationRead");
+    await renderMessages();
+
+    expect(markRead).not.toHaveBeenCalled();
+
+    focus.mockReturnValue(true);
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
     });
 
     await waitFor(() =>

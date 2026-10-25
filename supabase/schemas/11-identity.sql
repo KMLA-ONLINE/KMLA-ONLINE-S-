@@ -495,6 +495,9 @@ begin
     perform private.lock_group_for_member(caller.id, conversation_id);
     perform private.leave_group_conversation(caller.id, conversation_id);
   end loop;
+  -- 남이 붙여 준 별명도 지운다. 탈퇴한 사람은 이름 대신 탈퇴 표시를 그리므로 남길 까닭이 없다.
+  delete from private.conversation_nicknames as nickname
+  where nickname.profile_id = caller.id;
 
   -- 타임라인 주인이 탈퇴하면 그 타임라인의 글은 아무도 읽을 수 없으므로 남의 글까지 함께 지운다.
   select coalesce(array_agg(post.id), '{}') into timeline_post_ids
