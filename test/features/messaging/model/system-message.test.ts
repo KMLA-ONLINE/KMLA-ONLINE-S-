@@ -89,6 +89,65 @@ describe("formatSystemMessage", () => {
       ),
     ).toBe("알 수 없는 사용자님이 나갔습니다.");
   });
+
+  it("writes English sentences when the locale is en", () => {
+    expect(
+      formatSystemMessage(
+        { kind: "member_added", profileIds: ["a", "b", "c"], name: null },
+        people,
+        "en",
+      ),
+    ).toBe("홍길동 invited 김민준, 박새벽.");
+    expect(
+      formatSystemMessage(
+        { kind: "member_left", profileIds: ["b"], name: null },
+        people,
+        "en",
+      ),
+    ).toBe("김민준 left.");
+    expect(
+      formatSystemMessage(
+        { kind: "member_removed", profileIds: ["a", "c"], name: null },
+        people,
+        "en",
+      ),
+    ).toBe("홍길동 removed 박새벽.");
+    expect(
+      formatSystemMessage(
+        { kind: "renamed", profileIds: ["a"], name: "축제 기획" },
+        people,
+        "en",
+      ),
+    ).toBe("홍길동 changed the chat name to “축제 기획”.");
+    expect(
+      formatSystemMessage(
+        { kind: "nickname_set", profileIds: ["a", "b"], name: "준이" },
+        people,
+        "en",
+      ),
+    ).toBe("홍길동 set 김민준’s nickname to “준이”.");
+    expect(
+      formatSystemMessage(
+        { kind: "nickname_set", profileIds: ["b", "b"], name: "준이" },
+        people,
+        "en",
+      ),
+    ).toBe("김민준 set their own nickname to “준이”.");
+    expect(
+      formatSystemMessage(
+        { kind: "nickname_cleared", profileIds: ["a", "b"], name: null },
+        people,
+        "en",
+      ),
+    ).toBe("홍길동 cleared 김민준’s nickname.");
+    expect(
+      formatSystemMessage(
+        { kind: "member_left", profileIds: ["gone"], name: null },
+        people,
+        "en",
+      ),
+    ).toBe("Unknown user left.");
+  });
 });
 
 describe("participants", () => {

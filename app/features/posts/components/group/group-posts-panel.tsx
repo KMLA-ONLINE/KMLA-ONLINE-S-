@@ -22,6 +22,7 @@ import type {
   PostAttachment,
 } from "~/features/posts/model/types";
 import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { PostListSkeleton } from "~/features/posts/components/post-card-skeleton";
 import { Spinner } from "~/shared/ui/spinner";
@@ -41,6 +42,7 @@ export function GroupPostsPanel({
 }) {
   const mutationFetcher = useFetcher<{ error?: string }>();
   const [viewMode] = usePostViewMode();
+  const t = useT();
   const [page, setPage] = useState(initialPage);
   const { posts, nextCursor: cursor } = page;
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -135,7 +137,7 @@ export function GroupPostsPanel({
       setPage(page);
     } catch {
       if (currentRequest !== requestId.current) return;
-      setError("게시물을 불러오지 못했습니다.");
+      setError(t("게시물을 불러오지 못했습니다."));
     } finally {
       if (currentRequest === requestId.current) setLoading(false);
     }
@@ -175,7 +177,7 @@ export function GroupPostsPanel({
       });
     } catch {
       if (currentRequest !== requestId.current) return;
-      setError("이전 게시물을 불러오지 못했습니다.");
+      setError(t("이전 게시물을 불러오지 못했습니다."));
     } finally {
       if (currentRequest === requestId.current) setLoading(false);
     }
@@ -203,7 +205,7 @@ export function GroupPostsPanel({
     );
 
   return (
-    <section aria-label="그룹 게시물" className="flex flex-col gap-3">
+    <section aria-label={t("그룹 게시물")} className="flex flex-col gap-3">
       {categories.length > 0 ? (
         <GroupCategoryChips
           categories={categories}
@@ -241,7 +243,7 @@ export function GroupPostsPanel({
       {cursor && error ? (
         <div className="flex justify-center py-2">
           <Button variant="outline" onClick={() => void loadMore()}>
-            다시 시도
+            {t("다시 시도")}
           </Button>
         </div>
       ) : null}
@@ -251,7 +253,7 @@ export function GroupPostsPanel({
           role="status"
           className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground"
         >
-          <Spinner aria-hidden /> 이전 게시물을 불러오는 중입니다.
+          <Spinner aria-hidden /> {t("이전 게시물을 불러오는 중입니다.")}
         </div>
       ) : null}
       <div ref={sentinelRef} className="h-px" aria-hidden="true" />

@@ -1,4 +1,5 @@
 import { readErrorCode } from "~/features/auth/model/format";
+import { getCurrentLocale, translate, type Locale } from "~/shared/i18n";
 import type { Database } from "~/shared/supabase/database.types";
 
 export interface OwnedGroup {
@@ -36,27 +37,40 @@ const BLOCKER_MESSAGES: Record<WithdrawalBlocker["kind"], string> = {
 
 export function describeWithdrawalBlocker(
   kind: WithdrawalBlocker["kind"],
+  locale: Locale = getCurrentLocale(),
 ): string {
-  return BLOCKER_MESSAGES[kind];
+  return translate(locale, BLOCKER_MESSAGES[kind]);
 }
 
 /** 탈퇴 실패를 보여 줄 자리와 문구. 비밀번호 오류만 비밀번호 칸에 붙인다. */
-export function describeWithdrawalError(error: unknown): {
+export function describeWithdrawalError(
+  error: unknown,
+  locale: Locale = getCurrentLocale(),
+): {
   field: "password" | "form";
   message: string;
 } {
   if (readErrorCode(error) === "invalid_credentials") {
-    return { field: "password", message: "비밀번호가 올바르지 않습니다." };
+    return {
+      field: "password",
+      message: translate(locale, "비밀번호가 올바르지 않습니다."),
+    };
   }
   const hint =
     typeof error === "object" && error && "hint" in error
       ? String(error.hint)
       : "";
   if (hint === "app_admin" || hint === "group_owner") {
-    return { field: "form", message: BLOCKER_MESSAGES[hint] };
+    return {
+      field: "form",
+      message: translate(locale, BLOCKER_MESSAGES[hint]),
+    };
   }
   return {
     field: "form",
-    message: "탈퇴하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    message: translate(
+      locale,
+      "탈퇴하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    ),
   };
 }

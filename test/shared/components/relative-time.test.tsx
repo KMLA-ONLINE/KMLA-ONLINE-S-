@@ -58,3 +58,23 @@ describe("RelativeTime", () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+describe("RelativeTime in English", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    window.localStorage.clear();
+  });
+
+  it("formats both the relative and absolute time in English", () => {
+    render(<RelativeTime value={new Date(NOW - 3 * 60_000).toISOString()} />);
+
+    expect(screen.getByText("3 min ago")).toBeInTheDocument();
+    expect(screen.getByText(/August 9, 2026/)).toHaveClass("sr-only");
+  });
+});

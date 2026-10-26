@@ -8,6 +8,7 @@ import {
 import { flushSync } from "react-dom";
 
 import { useScrollContainer } from "~/shared/lib/scroll-container";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 /** 접힌 본문 최대 높이(24px × 3줄, `.post-typography` 줄 높이에 묶임). 본문이 여러 블록이라 `line-clamp`를 쓰지 않는다. */
@@ -84,6 +85,7 @@ export function PostBodyClamp({
   testId?: string;
   children: ReactNode;
 }) {
+  const t = useT();
   const [state, setState] = useState(
     () =>
       (postId ? clampMemory.get(postId) : undefined) ?? {
@@ -189,7 +191,7 @@ export function PostBodyClamp({
           onClick={toggle}
           className="mt-0.5 text-sm font-medium text-muted-foreground hover:underline pointer-fine:font-semibold pointer-fine:text-foreground"
         >
-          {expanded ? "접기" : "더 보기"}
+          {expanded ? t("접기") : t("더 보기")}
         </button>
       ) : null}
     </>

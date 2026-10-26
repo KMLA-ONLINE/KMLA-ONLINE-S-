@@ -15,6 +15,7 @@ import {
   unblockApplication,
 } from "~/features/admin";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { getCurrentLocale, translate, useT } from "~/shared/i18n";
 import { birthdayKeys } from "~/features/profiles";
 import { getQueryClient } from "~/shared/lib/query-client";
 
@@ -55,19 +56,34 @@ export async function clientAction({ request }: ClientActionFunctionArgs) {
     ids.length > 200 ||
     ids.some((id) => !Number.isSafeInteger(id))
   )
-    return data({ error: "1명에서 200명까지 선택해 주세요." }, { status: 400 });
+    return data(
+      {
+        error: translate(
+          getCurrentLocale(),
+          "1명에서 200명까지 선택해 주세요.",
+        ),
+      },
+      { status: 400 },
+    );
   try {
     if (intent === "review") {
       const status = form.get("status");
       if (status !== "accepted" && status !== "blocked")
-        return data({ error: "지원하지 않는 처리입니다." }, { status: 400 });
+        return data(
+          { error: translate(getCurrentLocale(), "지원하지 않는 처리입니다.") },
+          { status: 400 },
+        );
       await reviewApplications(ids, status);
     } else if (intent === "reject" && ids.length === 1) {
       const reason = form.get("reason");
       await rejectApplication(ids[0], typeof reason === "string" ? reason : "");
     } else if (intent === "unblock" && ids.length === 1)
       await unblockApplication(ids[0]);
-    else return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
+    else
+      return data(
+        { error: translate(getCurrentLocale(), "지원하지 않는 요청입니다.") },
+        { status: 400 },
+      );
     await getQueryClient().invalidateQueries({ queryKey: birthdayKeys.all });
     return data({ ok: true });
   } catch (error) {
@@ -82,10 +98,11 @@ export default function AdminApprovalsPage({
   loaderData: Awaited<ReturnType<typeof clientLoader>>;
 }) {
   const { profile } = useAppShell();
+  const t = useT();
   if (profile.role !== "admin") return null;
   return (
     <>
-      <PageHeader title="가입 승인" back="/admin" />
+      <PageHeader title={t("가입 승인")} back="/admin" />
       <ApprovalsScreen {...loaderData} />
     </>
   );

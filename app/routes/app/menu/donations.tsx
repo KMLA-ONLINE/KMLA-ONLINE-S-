@@ -1,6 +1,7 @@
 import { defineAppChrome, PageHeader } from "~/features/app-shell";
 
 import { DonationsScreen } from "~/features/donations";
+import { useT } from "~/shared/i18n";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -9,9 +10,11 @@ export const handle = defineAppChrome({
 });
 
 export default function DonationsPage() {
+  const t = useT();
+
   return (
     <>
-      <PageHeader title="기부물품" back="/menu" />
+      <PageHeader title={t("기부물품")} back="/menu" />
       <DonationsScreen />
     </>
   );

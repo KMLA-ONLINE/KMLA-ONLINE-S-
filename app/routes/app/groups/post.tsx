@@ -22,6 +22,12 @@ import {
   invalidateGroupPostOrder,
 } from "~/routes/app/groups/post-cache";
 import { getQueryClient } from "~/shared/lib/query-client";
+import { getCurrentLocale, translate } from "~/shared/i18n";
+
+/** clientLoader/clientAction은 React 밖이라 현재 언어를 직접 읽는다. */
+function msg(source: string): string {
+  return translate(getCurrentLocale(), source);
+}
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -37,7 +43,8 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
     getGroupPost(params.postId),
     listPostComments(params.postId),
   ]);
-  if (!post) throw new Response("게시물을 찾을 수 없습니다.", { status: 404 });
+  if (!post)
+    throw new Response(msg("게시물을 찾을 수 없습니다."), { status: 404 });
   return { post, comments };
 }
 
@@ -54,7 +61,7 @@ export async function clientAction({
         groupKeys.detail(params.slug),
       ) ?? (await loadGroupDetail(params.slug));
     if (!group) {
-      return data({ error: "그룹을 찾을 수 없습니다." }, { status: 404 });
+      return data({ error: msg("그룹을 찾을 수 없습니다.") }, { status: 404 });
     }
     if (formData.get("intent") === "delete") {
       await deleteGroupPost(params.postId);
@@ -73,7 +80,7 @@ export async function clientAction({
       await invalidateGroupPostOrder(group.group_id);
       return data({ ok: true });
     }
-    return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
+    return data({ error: msg("지원하지 않는 요청입니다.") }, { status: 400 });
   } catch (error) {
     if (error instanceof Response) throw error;
     return data({ error: getPostErrorMessage(error) }, { status: 400 });
@@ -94,7 +101,7 @@ export default function GroupPostPage({ loaderData }: Route.ComponentProps) {
     parent?.group.membership_state !== "member" ||
     loaderData.post.group_id !== parent.group.group_id
   ) {
-    throw new Response("게시물을 볼 권한이 없습니다.", { status: 403 });
+    throw new Response(msg("게시물을 볼 권한이 없습니다."), { status: 403 });
   }
   const anonymousUnavailable =
     restrictionQuery.isPending ||

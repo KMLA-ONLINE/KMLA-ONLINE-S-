@@ -1,4 +1,5 @@
 import { useClientNow } from "~/shared/hooks/use-client-now";
+import { useLocale } from "~/shared/i18n";
 import { formatAbsoluteTime, formatRelativeTime } from "~/shared/lib/time";
 
 /**
@@ -22,9 +23,10 @@ export function RelativeTime({
   className?: string;
 }) {
   const now = useClientNow();
+  const locale = useLocale();
 
-  const relative = formatRelativeTime(value, now);
-  const absolute = formatAbsoluteTime(value);
+  const relative = formatRelativeTime(value, now, locale);
+  const absolute = formatAbsoluteTime(value, locale);
   if (relative === null || absolute === null) return null;
 
   return (

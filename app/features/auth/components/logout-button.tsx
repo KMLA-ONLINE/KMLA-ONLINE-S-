@@ -2,6 +2,7 @@ import { LogOutIcon } from "lucide-react";
 import { useState, type RefObject } from "react";
 import { useNavigation, useSubmit } from "react-router";
 
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -18,6 +19,7 @@ import { Spinner } from "~/shared/ui/spinner";
  */
 export function LogoutButton() {
   const [open, setOpen] = useState(false);
+  const t = useT();
 
   return (
     <>
@@ -28,7 +30,7 @@ export function LogoutButton() {
         onClick={() => setOpen(true)}
       >
         <LogOutIcon aria-hidden />
-        로그아웃
+        {t("로그아웃")}
       </Button>
 
       <LogoutDialog open={open} onOpenChange={setOpen} />
@@ -48,6 +50,7 @@ export function LogoutDialog({
 }) {
   const submit = useSubmit();
   const navigation = useNavigation();
+  const t = useT();
   const pending =
     navigation.state !== "idle" && navigation.formAction === "/logout";
 
@@ -67,7 +70,7 @@ export function LogoutDialog({
         finalFocus={finalFocus}
       >
         <DialogHeader>
-          <DialogTitle>로그아웃하시겠습니까?</DialogTitle>
+          <DialogTitle>{t("로그아웃하시겠습니까?")}</DialogTitle>
         </DialogHeader>
 
         <DialogFooter>
@@ -77,7 +80,7 @@ export function LogoutDialog({
             disabled={pending}
             onClick={() => onOpenChange(false)}
           >
-            취소
+            {t("취소")}
           </Button>
 
           <Button
@@ -93,7 +96,7 @@ export function LogoutDialog({
             }}
           >
             {pending ? <Spinner data-icon="inline-start" /> : null}
-            로그아웃
+            {t("로그아웃")}
           </Button>
         </DialogFooter>
       </DialogContent>

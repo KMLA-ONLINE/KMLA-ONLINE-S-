@@ -1,3 +1,4 @@
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
@@ -24,15 +25,16 @@ function PendingRegion({
   className?: string;
   children: React.ReactNode;
 }) {
+  const t = useT();
   return (
     <section
       aria-busy="true"
-      aria-label={`${label} 불러오는 중`}
+      aria-label={t("{label} 불러오는 중", { label })}
       className={className}
     >
       {children}
       <span className="sr-only" aria-live="polite">
-        {label} 불러오는 중입니다.
+        {t("{label} 불러오는 중입니다.", { label })}
       </span>
     </section>
   );

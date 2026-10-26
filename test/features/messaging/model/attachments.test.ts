@@ -86,6 +86,34 @@ describe("message attachments", () => {
     ).toEqual(["30MB를 넘는 파일은 보낼 수 없습니다: big.pdf"]);
   });
 
+  it("writes the screening notices in English when asked", () => {
+    const sized = (name: string, type: string, size: number) => {
+      const made = file(name, type);
+      Object.defineProperty(made, "size", { value: size });
+      return made;
+    };
+    const big = 30 * 1024 * 1024 + 1;
+
+    expect(
+      screenAttachments(
+        [
+          sized("big.pdf", "application/pdf", big),
+          sized("big.jpg", "image/jpeg", big),
+          sized("empty.txt", "text/plain", 0),
+          file("clip.mp4", "video/mp4"),
+        ],
+        [],
+        "en",
+      ).notices,
+    ).toEqual([
+      "Videos and GIFs can’t be sent.",
+      "Files over 30MB can’t be sent (2 files).",
+      "Empty files can’t be sent: empty.txt",
+    ]);
+    expect(attachmentKindLabel("image", "en")).toBe("Photo");
+    expect(attachmentKindLabel("audio", "en")).toBe("File");
+  });
+
   it("동영상과 GIF는 MIME type이나 확장자로 보내지 않는다", () => {
     expect(isBlockedAttachment(file("v.mp4", "video/mp4"))).toBe(true);
     expect(isBlockedAttachment(file("x.gif", "image/gif"))).toBe(true);

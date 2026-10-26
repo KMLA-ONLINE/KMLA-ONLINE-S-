@@ -9,6 +9,7 @@ import { Link, useFetcher } from "react-router";
 
 import { GroupAvatar } from "~/features/groups/components/group-avatar";
 import type { GroupHomeItem } from "~/features/groups/model/types";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -29,6 +30,7 @@ export function GroupSummaryRow({
   newPostCount: number;
   profileId: number;
 }) {
+  const t = useT();
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const pending = fetcher.state !== "idle";
   const isMember = group.membership_state === "member";
@@ -116,15 +118,15 @@ export function GroupSummaryRow({
                   aria-hidden
                   className="size-3 -rotate-45 text-primary md:hidden"
                 />
-                <span className="sr-only md:hidden">고정됨</span>
+                <span className="sr-only md:hidden">{t("고정됨")}</span>
               </>
             ) : null}
-            <span>멤버 {group.member_count.toLocaleString("ko-KR")}명</span>
+            <span>{t("멤버 {count}명", { count: group.member_count })}</span>
             {newPostCount > 0 ? (
               <>
                 <span aria-hidden>·</span>
                 <span className="flex items-center gap-1">
-                  새 게시물 {newPostCount.toLocaleString("ko-KR")}개
+                  {t("새 게시물 {count}개", { count: newPostCount })}
                   <span
                     aria-hidden
                     className="size-1.5 shrink-0 rounded-full bg-primary"
@@ -153,7 +155,7 @@ export function GroupSummaryRow({
               type="submit"
               variant="ghost"
               size="icon"
-              aria-label={group.pinned_at ? "고정 해제" : "그룹 고정"}
+              aria-label={group.pinned_at ? t("고정 해제") : t("그룹 고정")}
               aria-pressed={Boolean(group.pinned_at)}
               disabled={pending}
               className={`${group.pinned_at ? "text-primary" : "text-muted-foreground"} sr-only min-h-9 min-w-9 focus:not-sr-only md:not-sr-only`}
@@ -175,8 +177,8 @@ export function GroupSummaryRow({
               <DialogTitle>{group.name}</DialogTitle>
               <DialogDescription>
                 {group.pinned_at
-                  ? "이 그룹의 고정을 해제할까요?"
-                  : "이 그룹을 내 그룹 목록 상단에 고정할까요?"}
+                  ? t("이 그룹의 고정을 해제할까요?")
+                  : t("이 그룹을 내 그룹 목록 상단에 고정할까요?")}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -185,7 +187,7 @@ export function GroupSummaryRow({
                 variant="outline"
                 onClick={() => setPinDialogOpen(false)}
               >
-                취소
+                {t("취소")}
               </Button>
               <fetcher.Form method="post">
                 <PinFields
@@ -200,7 +202,7 @@ export function GroupSummaryRow({
                   onClick={() => setPinDialogOpen(false)}
                 >
                   {pending ? <Spinner data-icon="inline-start" /> : null}
-                  {group.pinned_at ? "고정 해제" : "고정"}
+                  {group.pinned_at ? t("고정 해제") : t("고정")}
                 </Button>
               </fetcher.Form>
             </DialogFooter>

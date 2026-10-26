@@ -30,6 +30,7 @@ import type {
   ReactionSummary,
   AnonymousActivityRestriction,
 } from "~/features/posts/model/types";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { isIOS } from "~/shared/lib/install-platform";
 import { Button } from "~/shared/ui/button";
@@ -140,6 +141,7 @@ export function PostDetailDialog({
   const [dragOffset, setDragOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef<{ pointerId: number; y: number } | null>(null);
+  const t = useT();
   const [searchParams] = useSearchParams();
   const commentsOnly = searchParams.get("view") === "comments";
   const sheetViewport = useSyncExternalStore(
@@ -286,7 +288,7 @@ export function PostDetailDialog({
   };
 
   const replyTarget = replyingTo
-    ? replyingTo.author_name || replyingTo.author_label || "익명"
+    ? replyingTo.author_name || replyingTo.author_label || t("익명")
     : undefined;
 
   const startSheetDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -455,7 +457,7 @@ export function PostDetailDialog({
             <DialogTitle className="text-base font-semibold">
               {commentSheet ? (
                 <>
-                  <span className="min-[1025px]:hidden">댓글</span>
+                  <span className="min-[1025px]:hidden">{t("댓글")}</span>
                   <span className="max-[1025px]:hidden">{title}</span>
                 </>
               ) : (
@@ -463,12 +465,12 @@ export function PostDetailDialog({
               )}
             </DialogTitle>
             <DialogDescription className="sr-only">
-              게시물 상세와 댓글
+              {t("게시물 상세와 댓글")}
             </DialogDescription>
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label="닫기"
+              aria-label={t("닫기")}
               onClick={onClose}
               className="absolute inset-y-0 right-3 my-auto text-muted-foreground"
             >

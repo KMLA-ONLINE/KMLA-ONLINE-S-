@@ -3,6 +3,7 @@ import { Link } from "react-router";
 
 import type { SchoolNotice } from "~/features/school-notices/data/school-notices";
 import { RelativeTime } from "~/shared/components/relative-time";
+import { useLocale, useT } from "~/shared/i18n";
 import {
   Empty,
   EmptyDescription,
@@ -20,10 +21,12 @@ export function SchoolNoticesScreen({
 }: {
   notices: SchoolNotice[] | null;
 }) {
+  const t = useT();
+  const locale = useLocale();
   if (notices === null) {
     return (
       <p className="px-4 py-6 text-sm text-muted-foreground">
-        학교 공지를 불러오지 못했습니다.
+        {t("학교 공지를 불러오지 못했습니다.")}
       </p>
     );
   }
@@ -35,9 +38,9 @@ export function SchoolNoticesScreen({
           <EmptyMedia variant="icon">
             <MegaphoneIcon />
           </EmptyMedia>
-          <EmptyTitle>아직 가져온 공지가 없습니다</EmptyTitle>
+          <EmptyTitle>{t("아직 가져온 공지가 없습니다")}</EmptyTitle>
           <EmptyDescription>
-            학교 공지는 30분마다 새로 가져옵니다.
+            {t("학교 공지는 30분마다 새로 가져옵니다.")}
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -50,9 +53,16 @@ export function SchoolNoticesScreen({
     <div className="py-4">
       <div className="space-y-1 px-4 pb-3 text-sm text-muted-foreground">
         {syncedAt ? (
-          <p>
-            <RelativeTime value={syncedAt} /> 업데이트
-          </p>
+          // 상대 시간이 요소라 한 문장으로 못 묶는다. 한국어는 시간이 앞, 영어는 뒤에 온다.
+          locale === "en" ? (
+            <p>
+              Updated <RelativeTime value={syncedAt} />
+            </p>
+          ) : (
+            <p>
+              <RelativeTime value={syncedAt} /> 업데이트
+            </p>
+          )
         ) : null}
       </div>
       <ul className="divide-y border-y md:rounded-xl md:border-x">
@@ -72,7 +82,7 @@ export function SchoolNoticesScreen({
                   {notice.has_attachment ? (
                     <PaperclipIcon
                       className="size-3.5"
-                      aria-label="첨부 있음"
+                      aria-label={t("첨부 있음")}
                     />
                   ) : null}
                 </span>

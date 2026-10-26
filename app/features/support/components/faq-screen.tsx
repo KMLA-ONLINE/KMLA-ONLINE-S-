@@ -2,7 +2,9 @@ import { ChevronDownIcon, LifeBuoyIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
+import { useT } from "~/shared/i18n";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "~/shared/ui/empty";
+import { renderFaqAnswer } from "../model/faq-markup";
 import type { FaqSection, SupportContact } from "../model/types";
 
 interface FaqScreenProps {
@@ -14,9 +16,10 @@ interface FaqScreenProps {
 
 /** 아코디언은 state 대신 `<details>`에 맡겨 키보드 조작과 페이지 내 찾기(닫힌 답변 포함)를 공짜로 얻는다. */
 export function FaqScreen({ sections, contacts, note }: FaqScreenProps) {
+  const t = useT();
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
-      <h1 className="hidden text-2xl font-semibold md:block">도움말</h1>
+      <h1 className="hidden text-2xl font-semibold md:block">{t("도움말")}</h1>
 
       {sections.length === 0 ? (
         <Empty className="border">
@@ -24,7 +27,7 @@ export function FaqScreen({ sections, contacts, note }: FaqScreenProps) {
             <EmptyMedia variant="icon">
               <LifeBuoyIcon aria-hidden />
             </EmptyMedia>
-            <EmptyTitle>등록된 도움말이 없습니다</EmptyTitle>
+            <EmptyTitle>{t("등록된 도움말이 없습니다")}</EmptyTitle>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -38,14 +41,14 @@ export function FaqScreen({ sections, contacts, note }: FaqScreenProps) {
               id={`faq-${section.id}`}
               className="px-1 text-xs font-semibold tracking-wide text-muted-foreground"
             >
-              {section.title}
+              {t(section.title)}
             </h2>
 
             <div className="divide-y overflow-hidden rounded-xl border bg-card">
               {section.items.map((item) => (
                 <details key={item.question} className="group">
                   <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 text-sm font-medium transition-colors hover:bg-muted/60 [&::-webkit-details-marker]:hidden">
-                    <span className="min-w-0 flex-1">{item.question}</span>
+                    <span className="min-w-0 flex-1">{t(item.question)}</span>
 
                     <ChevronDownIcon
                       className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
@@ -55,7 +58,9 @@ export function FaqScreen({ sections, contacts, note }: FaqScreenProps) {
 
                   {/* 링크 스타일은 여기서 줘서 콘텐츠 파일이 className을 들고 다니지 않게 한다. */}
                   <div className="px-4 pb-4 text-sm leading-relaxed text-muted-foreground [&_a]:text-foreground [&_a]:underline [&_a]:underline-offset-2 [&_b]:font-medium [&_b]:text-foreground">
-                    {item.answer}
+                    {typeof item.answer === "string"
+                      ? renderFaqAnswer(t(item.answer))
+                      : item.answer}
                   </div>
                 </details>
               ))}
@@ -67,13 +72,13 @@ export function FaqScreen({ sections, contacts, note }: FaqScreenProps) {
       {note || contacts.length > 0 ? (
         <section className="flex flex-col gap-1.5">
           <h2 className="px-1 text-xs font-semibold tracking-wide text-muted-foreground">
-            문의
+            {t("문의")}
           </h2>
 
           <div className="divide-y overflow-hidden rounded-xl border bg-card">
             {note ? (
               <p className="px-4 py-3 text-sm leading-relaxed text-muted-foreground">
-                {note}
+                {typeof note === "string" ? t(note) : note}
               </p>
             ) : null}
 
@@ -91,12 +96,13 @@ const ROW_CLASS =
   "flex flex-col gap-0.5 px-4 py-3 transition-colors hover:bg-muted/60";
 
 function ContactRow({ contact }: { contact: SupportContact }) {
+  const t = useT();
   const body = (
     <>
-      <span className="text-sm font-medium">{contact.label}</span>
+      <span className="text-sm font-medium">{t(contact.label)}</span>
       {contact.description ? (
         <span className="text-xs text-muted-foreground">
-          {contact.description}
+          {t(contact.description)}
         </span>
       ) : null}
     </>

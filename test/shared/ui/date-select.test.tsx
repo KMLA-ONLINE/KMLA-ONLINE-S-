@@ -1,5 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { getKoreaYear } from "~/shared/lib/date-field";
 import { DateSelect } from "~/shared/ui/date-select";
@@ -39,5 +39,22 @@ describe("DateSelect", () => {
     expect(year).toHaveValue("");
     expect(month).toHaveValue("");
     expect(day).toHaveValue("");
+  });
+});
+
+describe("DateSelect in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("labels the parts in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    render(<DateSelect name="birthday" defaultValue="2009-03-01" />);
+
+    expect(screen.getByRole("combobox", { name: "Month" })).toHaveValue("03");
+    expect(screen.getByRole("combobox", { name: "Day" })).toHaveValue("01");
+    const { year } = fields();
+    expect(within(year).getAllByRole("option")[0]).toHaveTextContent("Year");
+    expect(
+      within(year).getByRole("option", { name: "2009" }),
+    ).toBeInTheDocument();
   });
 });

@@ -20,6 +20,7 @@ import type {
   MessageCursor,
   MessageParticipant,
 } from "~/features/messaging/model/types";
+import { useLocale, useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
 import { Spinner } from "~/shared/ui/spinner";
@@ -61,6 +62,8 @@ export function MessageSearchPanel({
   onClose: () => void;
   onSelect: (result: MessageSearchResult) => void;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const { query, state } = session;
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -117,7 +120,7 @@ export function MessageSearchPanel({
           variant="ghost"
           size="icon"
           className="rounded-full"
-          aria-label="검색 닫기"
+          aria-label={t("검색 닫기")}
           onClick={onClose}
         >
           <ChevronLeftIcon aria-hidden />
@@ -135,8 +138,8 @@ export function MessageSearchPanel({
               const value = event.currentTarget.value;
               onSessionChange((current) => ({ ...current, query: value }));
             }}
-            placeholder="채팅에서 찾기"
-            aria-label="채팅에서 찾기"
+            placeholder={t("채팅에서 찾기")}
+            aria-label={t("채팅에서 찾기")}
             className="rounded-full border-0 bg-muted pl-9"
           />
         </div>
@@ -145,18 +148,18 @@ export function MessageSearchPanel({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain px-2 py-2">
         {state === null && !loading ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
-            찾을 말을 입력하고 Enter를 누르세요.
+            {t("찾을 말을 입력하고 Enter를 누르세요.")}
           </p>
         ) : null}
         {state?.results.length === 0 && !loading && !failed ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
             {state.nextCursor
-              ? "최근 메시지에서는 찾지 못했습니다."
-              : "찾는 메시지가 없습니다."}
+              ? t("최근 메시지에서는 찾지 못했습니다.")
+              : t("찾는 메시지가 없습니다.")}
           </p>
         ) : null}
         {state && state.results.length > 0 ? (
-          <ul aria-label="검색 결과" className="flex flex-col gap-0.5">
+          <ul aria-label={t("검색 결과")} className="flex flex-col gap-0.5">
             {state.results.map((result) => (
               <li key={result.id}>
                 <button
@@ -168,11 +171,11 @@ export function MessageSearchPanel({
                     <span className="min-w-0 truncate font-medium text-foreground">
                       {(result.senderId
                         ? participants.get(result.senderId)?.name
-                        : undefined) ?? "알 수 없는 사용자"}
+                        : undefined) ?? t("알 수 없는 사용자")}
                     </span>
                     <time dateTime={result.sentAt} className="shrink-0">
-                      {formatMessageDay(result.sentAt)}{" "}
-                      {formatMessageTime(result.sentAt)}
+                      {formatMessageDay(result.sentAt, undefined, locale)}{" "}
+                      {formatMessageTime(result.sentAt, locale)}
                     </time>
                   </span>
                   <ResultExcerpt body={result.body} term={state.query} />
@@ -183,7 +186,7 @@ export function MessageSearchPanel({
         ) : null}
         {failed ? (
           <p role="alert" className="py-6 text-center text-sm text-destructive">
-            찾지 못했습니다. 잠시 후 다시 시도해 주세요.
+            {t("찾지 못했습니다. 잠시 후 다시 시도해 주세요.")}
           </p>
         ) : null}
         {loading ? (
@@ -197,7 +200,7 @@ export function MessageSearchPanel({
               size="sm"
               onClick={() => void run(state.query, state.nextCursor)}
             >
-              이전 메시지에서 더 찾기
+              {t("이전 메시지에서 더 찾기")}
             </Button>
           </div>
         ) : null}

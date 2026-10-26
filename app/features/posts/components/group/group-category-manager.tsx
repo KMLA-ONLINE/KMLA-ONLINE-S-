@@ -4,6 +4,7 @@ import { useFetcher } from "react-router";
 
 import type { GroupCategory } from "~/features/posts/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { TextField } from "~/shared/ui/text-field";
 
@@ -14,6 +15,7 @@ export function GroupCategoryManager({
   groupId: string;
   categories: GroupCategory[];
 }) {
+  const t = useT();
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const [newCategoryName, setNewCategoryName] = useState("");
   const submittedCreate = useRef(false);
@@ -53,7 +55,9 @@ export function GroupCategoryManager({
   return (
     <section className="overflow-hidden rounded-none border-y bg-card shadow-xs ring-foreground/10 md:rounded-xl md:border md:ring-1">
       <header className="border-b px-4 py-4 sm:px-6 sm:py-5">
-        <h2 className="font-heading text-base font-medium">게시물 카테고리</h2>
+        <h2 className="font-heading text-base font-medium">
+          {t("게시물 카테고리")}
+        </h2>
       </header>
       <fetcher.Form
         method="post"
@@ -61,9 +65,9 @@ export function GroupCategoryManager({
         onSubmit={(event) =>
           holdSubmit(
             event,
-            "카테고리 생성",
-            "입력한 이름으로 카테고리를 생성할까요?",
-            "생성",
+            t("카테고리 생성"),
+            t("입력한 이름으로 카테고리를 생성할까요?"),
+            t("생성"),
           )
         }
       >
@@ -75,18 +79,18 @@ export function GroupCategoryManager({
           onChange={(event) => setNewCategoryName(event.target.value)}
           maxLength={30}
           required
-          aria-label="새 카테고리 이름"
-          placeholder="새 카테고리 이름…"
+          aria-label={t("새 카테고리 이름")}
+          placeholder={t("새 카테고리 이름…")}
           autoComplete="off"
         />
         <Button type="submit" disabled={pending}>
-          <PlusIcon /> 추가
+          <PlusIcon /> {t("추가")}
         </Button>
       </fetcher.Form>
       <div className="mt-4 px-4 pb-4 sm:px-6 sm:pb-5">
         {categories.length === 0 ? (
           <p className="rounded-lg px-4 py-8 text-center text-sm text-muted-foreground">
-            아직 카테고리가 없습니다.
+            {t("아직 카테고리가 없습니다.")}
           </p>
         ) : null}
         {categories.map((category, index) => (
@@ -100,9 +104,11 @@ export function GroupCategoryManager({
               if (submitter.value === "rename-category") {
                 holdSubmit(
                   event,
-                  "카테고리 저장",
-                  `‘${category.name}’ 카테고리의 변경 사항을 저장할까요?`,
-                  "저장",
+                  t("카테고리 저장"),
+                  t("‘{name}’ 카테고리의 변경 사항을 저장할까요?", {
+                    name: category.name,
+                  }),
+                  t("저장"),
                 );
                 return;
               }
@@ -112,9 +118,12 @@ export function GroupCategoryManager({
                 data.set(submitter.name, submitter.value);
                 setPendingChange({
                   data,
-                  title: "카테고리 삭제",
-                  description: `‘${category.name}’ 카테고리를 삭제할까요? 기존 게시물은 미분류로 남습니다.`,
-                  confirmLabel: "삭제",
+                  title: t("카테고리 삭제"),
+                  description: t(
+                    "‘{name}’ 카테고리를 삭제할까요? 기존 게시물은 미분류로 남습니다.",
+                    { name: category.name },
+                  ),
+                  confirmLabel: t("삭제"),
                   destructive: true,
                 });
               }
@@ -128,7 +137,7 @@ export function GroupCategoryManager({
               defaultValue={category.name}
               maxLength={30}
               required
-              aria-label={`${category.name} 이름`}
+              aria-label={t("{name} 이름", { name: category.name })}
               className="col-span-full sm:col-span-1"
             />
             <Button
@@ -139,7 +148,7 @@ export function GroupCategoryManager({
               value="rename-category"
               disabled={pending}
             >
-              저장
+              {t("저장")}
             </Button>
             <Button
               type="submit"
@@ -147,7 +156,7 @@ export function GroupCategoryManager({
               variant="ghost"
               name="intent"
               value="move-category-up"
-              aria-label={`${category.name} 위로`}
+              aria-label={t("{name} 위로", { name: category.name })}
               disabled={pending || index === 0}
             >
               <ArrowUpIcon />
@@ -158,7 +167,7 @@ export function GroupCategoryManager({
               variant="ghost"
               name="intent"
               value="move-category-down"
-              aria-label={`${category.name} 아래로`}
+              aria-label={t("{name} 아래로", { name: category.name })}
               disabled={pending || index === categories.length - 1}
             >
               <ArrowDownIcon />
@@ -167,7 +176,7 @@ export function GroupCategoryManager({
               type="submit"
               size="icon-sm"
               variant="destructive"
-              aria-label={`${category.name} 삭제`}
+              aria-label={t("{name} 삭제", { name: category.name })}
               name="intent"
               value="delete-category"
               disabled={pending}

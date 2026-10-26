@@ -563,3 +563,19 @@ describe("PostDetailDialog", () => {
     expect(composer).not.toHaveFocus();
   });
 });
+
+describe("PostDetailDialog in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("labels the header controls in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    stubPostDetailViewport({ sheet: false });
+    renderRoute(Detail, {
+      path: "/posts/:postId",
+      initialEntries: ["/posts/post-id"],
+    });
+
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+    expect(screen.getByText("Post details and comments")).toBeInTheDocument();
+  });
+});

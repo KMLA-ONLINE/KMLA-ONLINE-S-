@@ -1,3 +1,4 @@
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 /**
@@ -5,11 +6,12 @@ import { cn } from "~/shared/lib/utils";
  * 글자가 없으므로 뜻은 접근성 이름이 진다.
  */
 export function StaffMark({ className }: { className?: string }) {
+  const t = useT();
   return (
     <svg
       viewBox="0 0 24 24"
       role="img"
-      aria-label="운영진 명의"
+      aria-label={t("운영진 명의")}
       className={cn("size-4 shrink-0", className)}
     >
       <circle cx="12" cy="12" r="11" className="fill-primary" />

@@ -12,6 +12,7 @@ import { compressImage, getImageDimensions } from "~/shared/lib/image/compress";
 import { getSupabase } from "~/shared/supabase/client";
 import { createSignedUrls } from "~/shared/supabase/signed-urls";
 import { uploadStorageObject } from "~/shared/supabase/upload";
+import { getCurrentLocale, translate } from "~/shared/i18n";
 
 const BUCKET = "message-attachments";
 
@@ -35,7 +36,11 @@ export async function prepareAttachment(
   const kind = classifyAttachment(source);
   if (kind === "image") {
     if (source.size > MAX_INPUT_FILE_BYTES) {
-      throw new Error(`사진은 30MB 이하여야 합니다: ${source.name}`);
+      throw new Error(
+        translate(getCurrentLocale(), "사진은 30MB 이하여야 합니다: {name}", {
+          name: source.name,
+        }),
+      );
     }
     // 채팅 사진은 휴대폰 화면 한 장 크기(2048px)면 충분하다. 글 첨부의 `photo`(3072px)보다 작아
     // 원본도 대개 1MiB 아래로 내려와 Service Worker 미디어 캐시에 들어간다.
@@ -47,10 +52,18 @@ export async function prepareAttachment(
     return { kind, file, thumbnail, fileName: file.name, width, height };
   }
   if (source.size > MESSAGE_FILE_MAX_BYTES) {
-    throw new Error(`파일은 30MB 이하여야 합니다: ${source.name}`);
+    throw new Error(
+      translate(getCurrentLocale(), "파일은 30MB 이하여야 합니다: {name}", {
+        name: source.name,
+      }),
+    );
   }
   if (source.size === 0) {
-    throw new Error(`빈 파일은 보낼 수 없습니다: ${source.name}`);
+    throw new Error(
+      translate(getCurrentLocale(), "빈 파일은 보낼 수 없습니다: {name}", {
+        name: source.name,
+      }),
+    );
   }
   return {
     kind,

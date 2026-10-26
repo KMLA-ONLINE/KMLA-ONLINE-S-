@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { createRoutesStub } from "react-router";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ErrorPage } from "~/shared/components/error-page";
 
@@ -34,5 +34,17 @@ describe("ErrorPage", () => {
 
     expect(screen.getByText("ERROR")).toBeInTheDocument();
     expect(onRetry).not.toHaveBeenCalled();
+  });
+});
+
+describe("ErrorPage in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("offers the actions in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderErrorPage({ status: 404, onRetry: vi.fn() });
+
+    expect(screen.getByRole("button", { name: "Back to home" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
   });
 });

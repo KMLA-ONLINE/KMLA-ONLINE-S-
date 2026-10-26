@@ -34,6 +34,7 @@ import {
   validateProfilePostForm,
 } from "~/features/posts/model/validation";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
+import { useT } from "~/shared/i18n";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 
 /** 개인 게시물 작성·수정 화면. 공개 범위는 자기 타임라인에서만 고른다 — 남의 타임라인 글은 언제나 전체 공개다. */
@@ -63,6 +64,7 @@ export function ProfilePostEditor({
     body: post?.body ?? "",
     visibility: post?.visibility ?? "public",
   };
+  const t = useT();
   const [formErrors, setFormErrors] = useState<ProfilePostFormErrors>({});
   const bodyRef = useRef(initial.body);
   const [draftBody, setDraftBody] = useState(initial.body);
@@ -157,7 +159,7 @@ export function ProfilePostEditor({
         form:
           error instanceof Error
             ? error.message
-            : "게시물을 저장하지 못했습니다. 다시 시도해 주세요.",
+            : t("게시물을 저장하지 못했습니다. 다시 시도해 주세요."),
       });
       setSaving(false);
       setProgress(null);
@@ -170,7 +172,7 @@ export function ProfilePostEditor({
     if (preparingCount > 0) {
       setFormErrors((current) => ({
         ...current,
-        form: "첨부 파일을 준비 중입니다.",
+        form: t("첨부 파일을 준비 중입니다."),
       }));
       return;
     }
@@ -192,7 +194,7 @@ export function ProfilePostEditor({
     <>
       <PostEditorLayout
         mode={mode}
-        subtitle={`${timelineName}님의 타임라인`}
+        subtitle={t("{name}님의 타임라인", { name: timelineName })}
         saving={saving}
         preparingCount={preparingCount}
         progress={progress}
@@ -217,16 +219,20 @@ export function ProfilePostEditor({
             <NativeSelect
               name="visibility"
               defaultValue={initial.visibility}
-              aria-label="공개 범위"
+              aria-label={t("공개 범위")}
               className="w-full sm:w-56"
             >
-              <NativeSelectOption value="public">전체 공개</NativeSelectOption>
-              <NativeSelectOption value="private">비공개</NativeSelectOption>
+              <NativeSelectOption value="public">
+                {t("전체 공개")}
+              </NativeSelectOption>
+              <NativeSelectOption value="private">
+                {t("비공개")}
+              </NativeSelectOption>
             </NativeSelect>
           </PostFormField>
         ) : (
           <p className="text-sm text-muted-foreground">
-            다른 사용자의 타임라인에 남기는 게시물은 전체 공개됩니다.
+            {t("다른 사용자의 타임라인에 남기는 게시물은 전체 공개됩니다.")}
           </p>
         )}
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import userEvent from "@testing-library/user-event";
 
 import { ApprovalsScreen } from "~/features/admin/components/approvals-screen";
@@ -120,5 +120,51 @@ describe("ApprovalsScreen", () => {
     );
     await user.click(await screen.findByRole("menuitem", { name: "차단" }));
     expect(screen.getByRole("dialog", { name: "가입 차단" })).toBeVisible();
+  });
+});
+
+describe("ApprovalsScreen in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("shows tabs, bulk actions and row details in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const user = userEvent.setup();
+    renderScreen();
+
+    expect(screen.getByRole("tab", { name: /Pending approval/ })).toBeVisible();
+    expect(screen.getByRole("tab", { name: /Block/ })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "Select all" })).toBeVisible();
+    expect(screen.getByText("Up to 200 at a time")).toBeVisible();
+    expect(
+      screen.getAllByText(
+        "Current student · Cohort 31 · Student ID 260001 · Female · Birthday 2009-04-01",
+      )[0],
+    ).toBeVisible();
+    expect(screen.getAllByRole("button", { name: "Approve" })[0]).toBeVisible();
+    expect(screen.getAllByRole("button", { name: "Return" })[0]).toBeVisible();
+
+    await user.click(screen.getByRole("checkbox", { name: "홍길동 select" }));
+    expect(screen.getByText("1 selected")).toBeVisible();
+    await user.click(
+      screen.getAllByRole("button", { name: "Approve" }).at(-1)!,
+    );
+    expect(
+      await screen.findByRole("dialog", { name: "Sign-up approval" }),
+    ).toBeVisible();
+    expect(screen.getByText("Approve 1 sign-up?")).toBeVisible();
+  });
+
+  it("shows the empty state in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => (
+      <ApprovalsScreen
+        pending={[]}
+        blocked={[]}
+        pendingPage={1}
+        blockedPage={1}
+      />
+    ));
+
+    expect(screen.getByText("No pending applications.")).toBeVisible();
   });
 });

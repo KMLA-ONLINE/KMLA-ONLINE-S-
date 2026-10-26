@@ -106,7 +106,9 @@ export default function WithdrawPage({
       <PageHeader title={t("계정 탈퇴")} back="/settings" />
 
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
-        <h1 className="hidden text-2xl font-semibold md:block">{t("계정 탈퇴")}</h1>
+        <h1 className="hidden text-2xl font-semibold md:block">
+          {t("계정 탈퇴")}
+        </h1>
 
         <section className="flex flex-col gap-3 rounded-xl border bg-card p-4 text-sm">
           <p className="font-medium">{t("탈퇴하면 되돌릴 수 없습니다.")}</p>

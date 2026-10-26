@@ -22,6 +22,7 @@ import {
 } from "~/features/messaging/hooks/room-drafts";
 import { canSendToConversation } from "~/features/messaging/model/system-message";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
 import { Spinner } from "~/shared/ui/spinner";
@@ -42,6 +43,7 @@ export function ShareTargetScreen({
   text: string;
   viewerId: string;
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
@@ -71,7 +73,7 @@ export function ShareTargetScreen({
       // 뒤로가기가 이 화면으로 돌아오면 같은 글을 한 번 더 넣게 된다.
       await navigate(`/messenger/${conversationId}`, { replace: true });
     } catch {
-      toast.error("채팅을 열지 못했습니다.");
+      toast.error(t("채팅을 열지 못했습니다."));
       setOpening(null);
     }
   }
@@ -79,9 +81,9 @@ export function ShareTargetScreen({
   if (text === "") {
     return (
       <Centered className="flex-col items-center gap-3 py-16">
-        <p>공유받은 내용이 없습니다.</p>
+        <p>{t("공유받은 내용이 없습니다.")}</p>
         <Button variant="outline" size="sm" render={<Link to="/messenger" />}>
-          메신저로 가기
+          {t("메신저로 가기")}
         </Button>
       </Centered>
     );
@@ -97,7 +99,7 @@ export function ShareTargetScreen({
   return (
     <div className="flex flex-col gap-4 px-4 py-4">
       <section
-        aria-label="보낼 내용"
+        aria-label={t("보낼 내용")}
         className="rounded-lg border bg-muted/40 p-3"
       >
         <p className="line-clamp-4 text-sm break-words whitespace-pre-wrap">
@@ -125,8 +127,8 @@ export function ShareTargetScreen({
             setQuery(event.currentTarget.value);
             if (event.currentTarget.value.trim() === "") setSearchTerm("");
           }}
-          placeholder="채팅 또는 사람 찾기"
-          aria-label="채팅 또는 사람 찾기"
+          placeholder={t("채팅 또는 사람 찾기")}
+          aria-label={t("채팅 또는 사람 찾기")}
           className="rounded-full pl-9"
         />
       </form>
@@ -138,12 +140,12 @@ export function ShareTargetScreen({
           </Centered>
         ) : people.isError ? (
           <Centered role="alert" className="text-destructive">
-            검색 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
+            {t("검색 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")}
           </Centered>
         ) : people.data.length === 0 ? (
-          <Centered>일치하는 사람이 없습니다.</Centered>
+          <Centered>{t("일치하는 사람이 없습니다.")}</Centered>
         ) : (
-          <ul aria-label="찾은 사람" className="flex flex-col gap-0.5">
+          <ul aria-label={t("찾은 사람")} className="flex flex-col gap-0.5">
             {people.data.map((person) => {
               const key = `person:${person.id}`;
               return (
@@ -175,16 +177,16 @@ export function ShareTargetScreen({
         </Centered>
       ) : conversations.isError ? (
         <Centered role="alert" className="text-destructive">
-          채팅 목록을 불러오지 못했습니다. 이름으로 사람을 찾아보세요.
+          {t("채팅 목록을 불러오지 못했습니다. 이름으로 사람을 찾아보세요.")}
         </Centered>
       ) : recent.length === 0 ? (
         <Centered>
           {filter === ""
-            ? "최근 채팅이 없습니다. 이름으로 사람을 찾아보세요."
-            : "Enter를 눌러 사람을 찾아보세요."}
+            ? t("최근 채팅이 없습니다. 이름으로 사람을 찾아보세요.")
+            : t("Enter를 눌러 사람을 찾아보세요.")}
         </Centered>
       ) : (
-        <ul aria-label="최근 채팅" className="flex flex-col gap-0.5">
+        <ul aria-label={t("최근 채팅")} className="flex flex-col gap-0.5">
           {recent.map((conversation) => {
             const key = `conversation:${conversation.id}`;
             return (
@@ -208,7 +210,11 @@ export function ShareTargetScreen({
                 name={conversation.name}
                 description={
                   conversation.type === "group"
-                    ? `그룹 · ${conversation.participants.filter(({ active }) => active).length}명`
+                    ? t("그룹 · {count}명", {
+                        count: conversation.participants.filter(
+                          ({ active }) => active,
+                        ).length,
+                      })
                     : undefined
                 }
               />

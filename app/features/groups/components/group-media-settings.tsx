@@ -24,15 +24,17 @@ import {
 } from "~/shared/lib/image/compress";
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 import { getQueryClient } from "~/shared/lib/query-client";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Spinner } from "~/shared/ui/spinner";
 
 export function GroupMediaSettings({ group }: { group: GroupDetail }) {
+  const t = useT();
   return (
     <Card className="rounded-none border-x-0 md:rounded-xl md:border">
       <CardHeader className="border-b">
-        <CardTitle>그룹 프로필</CardTitle>
+        <CardTitle>{t("그룹 프로필")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="overflow-hidden rounded-xl border bg-card">
@@ -40,7 +42,7 @@ export function GroupMediaSettings({ group }: { group: GroupDetail }) {
             {group.cover_path ? (
               <img
                 src={group.cover_path}
-                alt="현재 그룹 커버"
+                alt={t("현재 그룹 커버")}
                 crossOrigin="anonymous"
                 width={1200}
                 height={300}
@@ -64,7 +66,7 @@ export function GroupMediaSettings({ group }: { group: GroupDetail }) {
             <div className="min-w-0 flex-1 pb-2">
               <p className="truncate font-semibold">{group.name}</p>
               <p className="text-xs text-muted-foreground">
-                멤버 {group.member_count.toLocaleString("ko-KR")}명
+                {t("멤버 {count}명", { count: group.member_count })}
               </p>
             </div>
           </div>
@@ -86,6 +88,7 @@ function MediaField({
   group: GroupDetail;
   slot: GroupMediaSlot;
 }) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const revalidator = useRevalidator();
   const [pending, setPending] = useState(false);
@@ -93,6 +96,7 @@ function MediaField({
   const [removeOpen, setRemoveOpen] = useState(false);
   const isIcon = slot === "icon";
   const currentPath = isIcon ? group.icon_path : group.cover_path;
+  const slotLabel = isIcon ? t("그룹 아이콘") : t("커버 이미지");
 
   const upload = async (cropped: File) => {
     setPending(true);
@@ -107,7 +111,7 @@ function MediaField({
       });
       await revalidator.revalidate();
     } catch {
-      setError("이미지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      setError(t("이미지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요."));
     } finally {
       setPending(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -119,7 +123,7 @@ function MediaField({
     if (!file) return;
     if (!isSupportedImageInput(file) || file.size > MAX_INPUT_FILE_BYTES) {
       setError(
-        "JPEG, PNG, WebP, HEIC, HEIF 이미지를 30MB 이하로 선택해 주세요.",
+        t("JPEG, PNG, WebP, HEIC, HEIF 이미지를 30MB 이하로 선택해 주세요."),
       );
       return;
     }
@@ -130,7 +134,7 @@ function MediaField({
       setError(
         cause instanceof Error
           ? cause.message
-          : "이미지를 처리하지 못했습니다.",
+          : t("이미지를 처리하지 못했습니다."),
       );
     }
   };
@@ -146,7 +150,7 @@ function MediaField({
       });
       await revalidator.revalidate();
     } catch {
-      setError("이미지를 제거하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      setError(t("이미지를 제거하지 못했습니다. 잠시 후 다시 시도해 주세요."));
     } finally {
       setPending(false);
     }
@@ -155,11 +159,11 @@ function MediaField({
   return (
     <section className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1">
-        <h3 className="text-sm font-medium">
-          {isIcon ? "그룹 아이콘" : "커버 이미지"}
-        </h3>
+        <h3 className="text-sm font-medium">{slotLabel}</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          {isIcon ? "정사각형 · 최대 512px" : "4:1 가로형 · 긴 변 최대 2400px"}
+          {isIcon
+            ? t("정사각형 · 최대 512px")
+            : t("4:1 가로형 · 긴 변 최대 2400px")}
         </p>
       </div>
       <div className="flex shrink-0 flex-wrap gap-2">
@@ -169,13 +173,17 @@ function MediaField({
           accept={IMAGE_INPUT_ACCEPT}
           className="sr-only"
           onChange={(event) => void selectFile(event.target.files?.[0])}
-          aria-label={`${isIcon ? "그룹 아이콘" : "커버 이미지"} 파일 선택`}
+          aria-label={t("{slot} 파일 선택", { slot: slotLabel })}
         />
         <Button
           type="button"
           size="sm"
           variant="outline"
-          aria-label={`${isIcon ? "그룹 아이콘" : "커버 이미지"} ${currentPath ? "변경" : "등록"}`}
+          aria-label={
+            currentPath
+              ? t("{slot} 변경", { slot: slotLabel })
+              : t("{slot} 등록", { slot: slotLabel })
+          }
           disabled={pending}
           onClick={() => inputRef.current?.click()}
         >
@@ -184,18 +192,18 @@ function MediaField({
           ) : (
             <UploadIcon aria-hidden="true" />
           )}
-          {currentPath ? "변경" : "등록"}
+          {currentPath ? t("변경") : t("등록")}
         </Button>
         {currentPath ? (
           <Button
             type="button"
             size="sm"
             variant="ghost"
-            aria-label={`${isIcon ? "그룹 아이콘" : "커버 이미지"} 제거`}
+            aria-label={t("{slot} 제거", { slot: slotLabel })}
             disabled={pending}
             onClick={() => setRemoveOpen(true)}
           >
-            <Trash2Icon aria-hidden="true" /> 제거
+            <Trash2Icon aria-hidden="true" /> {t("제거")}
           </Button>
         ) : null}
       </div>
@@ -210,18 +218,18 @@ function MediaField({
           aspect={isIcon ? 1 : 4}
           maxOutputEdge={isIcon ? 512 : 2400}
           round={false}
-          title={isIcon ? "그룹 아이콘 편집" : "그룹 커버 편집"}
+          title={isIcon ? t("그룹 아이콘 편집") : t("그룹 커버 편집")}
         />
       ) : null}
       {removeOpen ? (
         <ConfirmDialog
-          title={`${isIcon ? "그룹 아이콘" : "커버 이미지"} 삭제`}
+          title={t("{slot} 삭제", { slot: slotLabel })}
           description={
             isIcon
-              ? "현재 그룹 아이콘을 삭제할까요?"
-              : "현재 커버 이미지를 삭제할까요?"
+              ? t("현재 그룹 아이콘을 삭제할까요?")
+              : t("현재 커버 이미지를 삭제할까요?")
           }
-          confirmLabel="삭제"
+          confirmLabel={t("삭제")}
           destructive
           pending={pending}
           onCancel={() => setRemoveOpen(false)}

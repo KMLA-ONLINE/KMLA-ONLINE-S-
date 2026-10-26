@@ -1,3 +1,5 @@
+import { translate, type Locale } from "~/shared/i18n";
+
 import { calendarWeekday } from "./korea-date";
 
 export const GONGANG_FLOORS = [
@@ -40,10 +42,15 @@ export function parseGongangKey(key: string) {
   return { slot, location };
 }
 /** Unknown ids fall back to the raw id so a stale key never renders "undefined". */
-export function gongangCellLabel(date: string, slot: string, location: string) {
+export function gongangCellLabel(
+  date: string,
+  slot: string,
+  location: string,
+  locale: Locale = "ko",
+) {
   const floor = GONGANG_FLOORS.find((item) => item.id === location);
   const time = gongangSlots(date).find((item) => item.id === slot);
-  return `${floor?.label ?? location} ${time?.label ?? slot}`;
+  return `${translate(locale, floor?.label ?? location)} ${translate(locale, time?.label ?? slot)}`;
 }
 /**
  * Weekday gongang is rarely needed for more than one period, so a weekday tap

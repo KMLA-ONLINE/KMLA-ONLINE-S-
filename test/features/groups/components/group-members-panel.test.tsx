@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { useLocation } from "react-router";
 
 import { GroupMembersPanel } from "~/features/groups/components/group-members-panel";
@@ -209,5 +209,51 @@ describe("GroupMembersPanel", () => {
     expect(
       screen.queryByRole("button", { name: /역할 관리/ }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("GroupMembersPanel in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the roster in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => (
+      <GroupMembersPanel
+        groupId="group-1"
+        viewerRole="owner"
+        initialPage={{
+          members: [member, { ...member, membership_id: "m-2", role: "owner" }],
+          nextCursor: null,
+        }}
+        memberCount={2}
+        joinRequests={[
+          {
+            request_id: "request-1",
+            requested_at: "2026-01-02T00:00:00Z",
+            cohort: 31,
+            is_returning_student: false,
+            pub_id: "joiner-public-id",
+            name: "김가입",
+            avatar_path: null,
+            avatar_url: null,
+          },
+        ]}
+      />
+    ));
+
+    expect(screen.getByText("2 members")).toBeVisible();
+    expect(
+      screen.getByPlaceholderText("Search by name or cohort"),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Search members" }),
+    ).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Staff" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Members" })).toBeVisible();
+    expect(screen.getByText("Owner")).toBeVisible();
+    expect(screen.getByText("Join requests 1")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Decline" })).toBeVisible();
+    expect(screen.getByText(/Requested /)).toBeVisible();
   });
 });

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { useT } from "~/shared/i18n";
 import {
   Card,
   CardContent,
@@ -24,6 +25,8 @@ export function AuthCard({
   footer?: ReactNode;
   wide?: boolean;
 }) {
+  const t = useT();
+
   return (
     <main className="min-h-dvh bg-muted/40 p-4">
       <div className="mx-auto grid min-h-[calc(100dvh-2rem)] max-w-5xl overflow-hidden rounded-3xl bg-background shadow-sm ring-1 ring-foreground/10 sm:min-h-[calc(100dvh-3rem)] md:grid-cols-[0.9fr_1.1fr]">
@@ -39,7 +42,7 @@ export function AuthCard({
               KMLA Online
             </p>
             <p className="mt-4 text-sm leading-6 text-action-foreground/90">
-              민족사관고등학교 커뮤니티
+              {t("민족사관고등학교 커뮤니티")}
             </p>
           </div>
           <p className="relative text-xs text-action-foreground/90">

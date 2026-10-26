@@ -279,3 +279,41 @@ describe("isPostDraftDirty", () => {
     }
   });
 });
+
+describe("validation messages in English", () => {
+  it("returns English reasons", () => {
+    const video = new File(["video"], "clip.mp4");
+    expect(validateSelectedFiles([video], 0, "en")).toBe(
+      "Videos can't be attached: clip.mp4",
+    );
+    expect(
+      validatePostForm(
+        {
+          title: "",
+          body: "",
+          categoryId: "",
+          authorIdentity: "identified",
+          mentions: [],
+        },
+        0,
+        undefined,
+        undefined,
+        "en",
+      ),
+    ).toEqual({
+      title: "Enter a title.",
+      body: "Add a body or an attachment.",
+    });
+    expect(
+      validateProfilePostForm(
+        { body: "", visibility: "public" },
+        0,
+        true,
+        "en",
+      ),
+    ).toEqual({ body: "Add a body or an attachment." });
+    expect(getPostErrorMessage({ code: "P0002" }, "en")).toBe(
+      "Post not found.",
+    );
+  });
+});

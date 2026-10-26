@@ -23,6 +23,7 @@ import type {
 import { invalidatePostPreview } from "~/features/posts/data/cache";
 import { uploadPostAttachment } from "~/features/posts/data/files";
 import { hydratePostComments } from "~/features/posts/data/queries";
+import { getCurrentLocale, translate } from "~/shared/i18n";
 import { getSupabase } from "~/shared/supabase/client";
 
 export async function createGroupCategory(
@@ -89,7 +90,10 @@ export async function restrictGroupAnonymousActivity(
   );
   if (error) throw error;
   const restriction = data?.[0];
-  if (!restriction) throw new Error("익명 활동을 차단하지 못했습니다.");
+  if (!restriction)
+    throw new Error(
+      translate(getCurrentLocale(), "익명 활동을 차단하지 못했습니다."),
+    );
   return restriction;
 }
 
@@ -459,7 +463,7 @@ async function runPostFileUpload(
         error:
           error instanceof Error
             ? error.message
-            : "파일을 업로드하지 못했습니다.",
+            : translate(getCurrentLocale(), "파일을 업로드하지 못했습니다."),
       });
     }
     throw error;
@@ -560,7 +564,7 @@ export async function preuploadGroupPostFiles(
           error:
             error instanceof Error
               ? error.message
-              : "업로드를 시작하지 못했습니다.",
+              : translate(getCurrentLocale(), "업로드를 시작하지 못했습니다."),
         });
     });
     throw error;
@@ -592,7 +596,7 @@ export async function preuploadProfilePostFiles(
           error:
             error instanceof Error
               ? error.message
-              : "업로드를 시작하지 못했습니다.",
+              : translate(getCurrentLocale(), "업로드를 시작하지 못했습니다."),
         });
     });
     throw error;
@@ -928,7 +932,10 @@ export async function createPostComment(
   });
   if (error) throw error;
   const row = data?.[0];
-  if (!row) throw new Error("댓글을 저장하지 못했습니다.");
+  if (!row)
+    throw new Error(
+      translate(getCurrentLocale(), "댓글을 저장하지 못했습니다."),
+    );
   // 정본 count는 댓글 행이 아니라 게시물의 것이다. 행에 섞인 채로 두면 목록 캐시가
   // 댓글 필드로 오해한다. 여기서 떼어 내고 나머지만 댓글로 수화한다.
   const { post_comment_count: commentCount, ...comment } = row;
@@ -962,7 +969,10 @@ export async function updatePostComment(
   });
   if (error) throw error;
   const comment = data?.[0];
-  if (!comment) throw new Error("댓글을 수정하지 못했습니다.");
+  if (!comment)
+    throw new Error(
+      translate(getCurrentLocale(), "댓글을 수정하지 못했습니다."),
+    );
   return hydrateCommittedComment(withMentions(comment));
 }
 
@@ -973,7 +983,9 @@ export async function deletePostComment(commentId: string): Promise<number> {
   });
   if (error) throw error;
   if (typeof data !== "number") {
-    throw new Error("댓글을 삭제하지 못했습니다.");
+    throw new Error(
+      translate(getCurrentLocale(), "댓글을 삭제하지 못했습니다."),
+    );
   }
   return data;
 }
@@ -1025,6 +1037,9 @@ export async function clearCommentReaction(
 
 function readSummary(rows: ReactionSummary[] | null): ReactionSummary {
   const summary = rows?.[0];
-  if (!summary) throw new Error("반응을 저장하지 못했습니다.");
+  if (!summary)
+    throw new Error(
+      translate(getCurrentLocale(), "반응을 저장하지 못했습니다."),
+    );
   return summary;
 }

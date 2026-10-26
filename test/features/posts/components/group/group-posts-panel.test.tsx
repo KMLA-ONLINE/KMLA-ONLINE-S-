@@ -1,6 +1,6 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { hydrateGroupPostMedia, infiniteScroll, listGroupPosts } = vi.hoisted(
   () => ({
@@ -349,5 +349,26 @@ describe("GroupPostsPanel", () => {
     expect(
       await screen.findByRole("img", { name: "유지된 카드 작성자" }),
     ).toHaveAttribute("src", "https://example.com/avatar.png");
+  });
+});
+
+describe("GroupPostsPanel in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the empty feed in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => (
+      <GroupPostsPanel
+        groupId="group-id"
+        slug="group"
+        categories={categories}
+        initialPage={{ posts: [], nextCursor: null }}
+      />
+    ));
+
+    expect(
+      screen.getByRole("region", { name: "Group posts" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "All" })).toBeInTheDocument();
   });
 });

@@ -11,6 +11,7 @@ import type {
   PostReaction,
   ReactionSummary,
 } from "~/features/posts/model/types";
+import { useT } from "~/shared/i18n";
 
 /**
  * 댓글 반응. 롱프레스 없이 누르면 언제나 종류 줄이 뜬다 — 작은 아이콘에서 짧게/길게 구분이 어렵다.
@@ -26,6 +27,7 @@ export function CommentReactionButton({
   onSelect: (reaction: PostReaction) => void;
   onClear: () => void;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const mine = summary.my_reaction;
 
@@ -49,7 +51,11 @@ export function CommentReactionButton({
 
       <button
         type="button"
-        aria-label={mine ? `${reactionLabel(mine)} 반응 바꾸기` : "반응 남기기"}
+        aria-label={
+          mine
+            ? t("{reaction} 반응 바꾸기", { reaction: t(reactionLabel(mine)) })
+            : t("반응 남기기")
+        }
         aria-expanded={open}
         className="flex items-center hover:text-foreground"
         onClick={() => setOpen(true)}
@@ -72,13 +78,14 @@ export function CommentReactionSummary({
   summary: ReactionSummary;
   onOpen: () => void;
 }) {
+  const t = useT();
   const top = summary.top_reactions[0];
   if (summary.reaction_count === 0 || !top) return null;
 
   return (
     <button
       type="button"
-      aria-label={`반응 ${summary.reaction_count}개 보기`}
+      aria-label={t("반응 {count}개 보기", { count: summary.reaction_count })}
       className="ml-auto flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 tabular-nums transition-colors hover:bg-muted hover:text-foreground"
       onClick={onOpen}
     >

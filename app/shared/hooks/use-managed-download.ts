@@ -9,6 +9,7 @@ import {
   usesManagedDownload,
   type DownloadTarget,
 } from "~/shared/lib/file-download";
+import { translate, type Locale } from "~/shared/i18n";
 import { isIOS } from "~/shared/lib/install-platform";
 
 export type ManagedDownloadState =
@@ -147,30 +148,36 @@ export function useManagedDownload({
 /** 낭독기에 쓰는 상태 문구. 처음 상태는 `null`이다. */
 export function managedDownloadLabel(
   state: ManagedDownloadState,
+  locale: Locale = "ko",
 ): string | null {
+  const t = (source: string, params?: Record<string, number>) =>
+    translate(locale, source, params);
   switch (state.status) {
     case "idle":
       return null;
     case "loading":
       return state.progress === null
-        ? "받는 중"
-        : `받는 중 ${Math.round(state.progress * 100)}%`;
+        ? t("받는 중")
+        : t("받는 중 {percent}%", {
+            percent: Math.round(state.progress * 100),
+          });
     case "ready":
-      return "다 받음, 눌러서 저장";
+      return t("다 받음, 눌러서 저장");
     case "saved":
       return state.location === "downloads"
-        ? "다운로드 폴더에 저장됨"
-        : "저장함";
+        ? t("다운로드 폴더에 저장됨")
+        : t("저장함");
     case "failed":
-      return "받지 못함, 눌러서 다시 받기";
+      return t("받지 못함, 눌러서 다시 받기");
   }
 }
 
 /** 파일 이름 아래에 남기는 저장 위치. 다운로드 폴더에 저장했을 때만 있다. */
 export function managedDownloadNote(
   state: ManagedDownloadState,
+  locale: Locale = "ko",
 ): string | null {
   return state.status === "saved" && state.location === "downloads"
-    ? "다운로드 폴더에 저장됨"
+    ? translate(locale, "다운로드 폴더에 저장됨")
     : null;
 }

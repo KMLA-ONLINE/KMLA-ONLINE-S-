@@ -7,6 +7,7 @@ import type {
   GroupHomeItem,
   GroupNewPostCounts,
 } from "~/features/groups/model/types";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { cn } from "~/shared/lib/utils";
 
@@ -24,6 +25,7 @@ export function GroupHomeScreen({
   isTeacher: boolean;
   profileId: number;
 }) {
+  const t = useT();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const [savedTab, setSavedTab] = useState<GroupTab>(() =>
@@ -58,13 +60,13 @@ export function GroupHomeScreen({
   if (isTeacher) {
     return (
       <div className="mx-auto flex w-full flex-col gap-6 px-4 pb-5 md:px-0 md:py-0">
-        <ScreenHeader actionLabel="비공식 그룹 만들기" />
+        <ScreenHeader actionLabel={t("비공식 그룹 만들기")} />
         <GroupRows
-          title="내 그룹"
+          title={t("내 그룹")}
           groups={myGroups}
           newPostCounts={newPostCounts}
           profileId={profileId}
-          emptyText="아직 내 그룹이 없습니다."
+          emptyText={t("아직 내 그룹이 없습니다.")}
         />
       </div>
     );
@@ -118,11 +120,13 @@ export function GroupHomeScreen({
         touchStart.current = null;
       }}
     >
-      <ScreenHeader actionLabel={tab === "unofficial" ? "그룹 만들기" : null} />
+      <ScreenHeader
+        actionLabel={tab === "unofficial" ? t("그룹 만들기") : null}
+      />
 
       <nav
         className="grid grid-cols-2 border-b md:flex md:items-center md:gap-1"
-        aria-label="그룹 종류"
+        aria-label={t("그룹 종류")}
       >
         {(["official", "unofficial"] as const).map((item) => (
           <button
@@ -137,7 +141,7 @@ export function GroupHomeScreen({
                 : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
-            {item === "official" ? "공식" : "비공식"}
+            {item === "official" ? t("공식") : t("비공식")}
           </button>
         ))}
       </nav>
@@ -147,16 +151,16 @@ export function GroupHomeScreen({
           groups={officialGroups}
           newPostCounts={newPostCounts}
           profileId={profileId}
-          emptyText="표시할 공식 그룹이 없습니다."
+          emptyText={t("표시할 공식 그룹이 없습니다.")}
         />
       ) : (
         <div className="flex flex-col gap-4">
           <GroupRows
-            title="내 그룹"
+            title={t("내 그룹")}
             groups={myGroups}
             newPostCounts={newPostCounts}
             profileId={profileId}
-            emptyText="아직 참여 중인 비공식 그룹이 없습니다."
+            emptyText={t("아직 참여 중인 비공식 그룹이 없습니다.")}
           />
           <DiscoverEntry />
         </div>
@@ -166,9 +170,10 @@ export function GroupHomeScreen({
 }
 
 function ScreenHeader({ actionLabel }: { actionLabel: string | null }) {
+  const t = useT();
   return (
     <header className="hidden items-center justify-between gap-3 md:flex">
-      <h1 className="text-2xl font-semibold">그룹</h1>
+      <h1 className="text-2xl font-semibold">{t("그룹")}</h1>
       {actionLabel ? (
         <Button
           size="sm"
@@ -184,6 +189,7 @@ function ScreenHeader({ actionLabel }: { actionLabel: string | null }) {
 }
 
 function DiscoverEntry() {
+  const t = useT();
   return (
     <Link
       to="/groups/discover"
@@ -194,7 +200,7 @@ function DiscoverEntry() {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold">
-          비공식 그룹 찾아보기
+          {t("비공식 그룹 찾아보기")}
         </span>
       </span>
       <ChevronRightIcon
@@ -218,8 +224,12 @@ function GroupRows({
   profileId: number;
   emptyText: string;
 }) {
+  const t = useT();
   return (
-    <section className="flex flex-col gap-3" aria-label={title ?? "공식 그룹"}>
+    <section
+      className="flex flex-col gap-3"
+      aria-label={title ?? t("공식 그룹")}
+    >
       {title ? (
         <h2 className="pl-2 text-sm font-semibold md:pl-0">
           {title}{" "}

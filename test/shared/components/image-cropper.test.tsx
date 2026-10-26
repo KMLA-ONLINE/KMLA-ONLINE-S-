@@ -1,6 +1,6 @@
 ﻿import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageCropper } from "~/shared/components/image-cropper";
 import { cropImage } from "~/shared/lib/image/crop";
@@ -266,5 +266,21 @@ describe("ImageCropper", () => {
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "적용" })).toBeEnabled();
+  });
+});
+
+describe("ImageCropper in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("labels the dialog and controls in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    render(<ImageCropper {...baseProps()} />);
+
+    expect(screen.getByRole("heading", { name: "Edit photo" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("application", { name: "Crop area" }),
+    ).toBeInTheDocument();
   });
 });

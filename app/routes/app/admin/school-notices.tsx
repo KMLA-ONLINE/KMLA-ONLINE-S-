@@ -9,6 +9,7 @@ import {
   syncSchoolNotices,
 } from "~/features/admin";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { useT } from "~/shared/i18n";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -52,10 +53,11 @@ export default function SchoolNoticeAccountPage({
   loaderData: Awaited<ReturnType<typeof clientLoader>>;
 }) {
   const { profile } = useAppShell();
+  const t = useT();
   if (profile.role !== "admin") return null;
   return (
     <>
-      <PageHeader title="학교 공지 계정" back="/admin" />
+      <PageHeader title={t("학교 공지 계정")} back="/admin" />
       <SchoolNoticeAccountScreen {...loaderData} />
     </>
   );

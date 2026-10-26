@@ -6,6 +6,7 @@ import type {
   GroupKind,
   GroupPostingPolicy,
 } from "~/features/groups/model/types";
+import { translate, type Locale } from "~/shared/i18n";
 
 const GROUP_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{2,13}[a-z0-9]$/;
 const RESERVED_GROUP_SLUGS = new Set(["create", "discover"]);
@@ -42,36 +43,41 @@ export function readCreateGroupForm(formData: FormData): CreateGroupValues {
 
 export function validateCreateGroup(
   values: CreateGroupValues,
+  locale: Locale = "ko",
 ): CreateGroupErrors {
   const errors: CreateGroupErrors = {};
+  const t = (source: string) => translate(locale, source);
 
-  if (!GROUP_KINDS.has(values.kind)) errors.kind = "그룹 종류를 선택해 주세요.";
+  if (!GROUP_KINDS.has(values.kind))
+    errors.kind = t("그룹 종류를 선택해 주세요.");
   if (values.name.length < 1 || values.name.length > 50) {
-    errors.name = "그룹 이름은 1자 이상 50자 이하로 입력해 주세요.";
+    errors.name = t("그룹 이름은 1자 이상 50자 이하로 입력해 주세요.");
   }
   if (values.description.length > 2000) {
-    errors.description = "그룹 설명은 2,000자 이하로 입력해 주세요.";
+    errors.description = t("그룹 설명은 2,000자 이하로 입력해 주세요.");
   }
   if (!JOIN_POLICIES.has(values.joinPolicy)) {
-    errors.joinPolicy = "가입 방식을 선택해 주세요.";
+    errors.joinPolicy = t("가입 방식을 선택해 주세요.");
   } else if (values.kind === "official" && values.joinPolicy !== "open") {
-    errors.joinPolicy = "공식 그룹은 공개 그룹입니다.";
+    errors.joinPolicy = t("공식 그룹은 공개 그룹입니다.");
   }
   if (!IDENTITY_POLICIES.has(values.identityPolicy)) {
-    errors.identityPolicy = "실명·익명 설정을 선택해 주세요.";
+    errors.identityPolicy = t("실명·익명 설정을 선택해 주세요.");
   }
   if (!POSTING_POLICIES.has(values.postingPolicy)) {
-    errors.postingPolicy = "글쓰기 정책을 선택해 주세요.";
+    errors.postingPolicy = t("글쓰기 정책을 선택해 주세요.");
   }
 
   if (values.joinPolicy !== "open" && values.slug) {
-    errors.slug = "비공개 그룹의 주소는 안전한 임의 주소로 생성됩니다.";
+    errors.slug = t("비공개 그룹의 주소는 안전한 임의 주소로 생성됩니다.");
   } else if (
     values.slug &&
     (!GROUP_SLUG_PATTERN.test(values.slug) ||
       RESERVED_GROUP_SLUGS.has(values.slug))
   ) {
-    errors.slug = "주소는 영문 소문자, 숫자, 하이픈으로 된 4~15자여야 합니다.";
+    errors.slug = t(
+      "주소는 영문 소문자, 숫자, 하이픈으로 된 4~15자여야 합니다.",
+    );
   }
 
   return errors;

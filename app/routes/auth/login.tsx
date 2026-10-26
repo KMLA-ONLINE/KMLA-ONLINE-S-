@@ -28,6 +28,7 @@ import {
   DeferredAdminContactList,
   listAdminContacts,
 } from "~/features/support";
+import { getCurrentLocale, translate, useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "~/shared/ui/field";
 import { Input } from "~/shared/ui/input";
@@ -66,11 +67,12 @@ export function shouldRevalidate({
 export async function clientAction({ request }: Route.ClientActionArgs) {
   const next = new URL(request.url).searchParams.get("next");
   const formData = await request.formData();
+  const locale = getCurrentLocale();
   const email = readFormText(formData, "email");
   const password = readFormText(formData, "password");
   const errors = {
-    email: validateEmail(email),
-    password: validatePassword(password),
+    email: validateEmail(email, locale),
+    password: validatePassword(password, locale),
   };
 
   if (hasErrors(errors)) {
@@ -87,7 +89,12 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     if (destination === "/login") {
       await signOut();
       return data(
-        { errors: { form: "탈퇴한 계정은 로그인할 수 없습니다." }, email },
+        {
+          errors: {
+            form: translate(locale, "탈퇴한 계정은 로그인할 수 없습니다."),
+          },
+          email,
+        },
         { status: 403 },
       );
     }
@@ -96,7 +103,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     if (error instanceof Response) throw error;
     return data(
       {
-        errors: { form: getAuthErrorMessage(error) },
+        errors: { form: getAuthErrorMessage(error, locale) },
         email,
         unconfirmed: isEmailNotConfirmedError(error),
       },
@@ -109,6 +116,7 @@ export default function LoginPage({
   loaderData,
   actionData,
 }: Route.ComponentProps) {
+  const t = useT();
   const navigation = useNavigation();
   const [searchParams] = useSearchParams();
   const pending = navigation.state === "submitting";
@@ -130,33 +138,33 @@ export default function LoginPage({
 
   return (
     <AuthCard
-      title="다시 만나서 반가워요"
-      description="로그인해 소식과 이야기를 이어가세요."
+      title={t("다시 만나서 반가워요")}
+      description={t("로그인해 소식과 이야기를 이어가세요.")}
       footer={
         <div className="flex w-full flex-col items-center gap-1">
           <p>
-            아직 계정이 없나요?{" "}
+            {t("아직 계정이 없나요?")}{" "}
             <Link
               to="/signup"
               className="font-medium text-primary hover:underline"
             >
-              회원가입
+              {t("회원가입")}
             </Link>
           </p>
           <p>
-            비밀번호가 기억나지 않나요?{" "}
+            {t("비밀번호가 기억나지 않나요?")}{" "}
             <Link
               to="/forgot-password"
               className="font-medium text-primary hover:underline"
             >
-              비밀번호 찾기
+              {t("비밀번호 찾기")}
             </Link>
           </p>
           {loaderData && errors.form ? (
             <div className="mt-4 w-full">
               <DeferredAdminContactList
                 contacts={loaderData.contacts}
-                prompt="계속 로그인이 안 되나요?"
+                prompt={t("계속 로그인이 안 되나요?")}
               />
             </div>
           ) : null}
@@ -170,7 +178,7 @@ export default function LoginPage({
         <FieldGroup>
           {!result && searchParams.get("withdrawn") === "1" ? (
             <p role="status" className="text-sm text-muted-foreground">
-              탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.
+              {t("탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.")}
             </p>
           ) : null}
           {errors.form ? <FieldError>{errors.form}</FieldError> : null}
@@ -179,11 +187,11 @@ export default function LoginPage({
               to="/signup"
               className="w-fit text-sm font-medium text-primary hover:underline"
             >
-              회원가입에서 인증 이어가기
+              {t("회원가입에서 인증 이어가기")}
             </Link>
           ) : null}
           <Field data-invalid={Boolean(errors.email)}>
-            <FieldLabel htmlFor="login-email">이메일</FieldLabel>
+            <FieldLabel htmlFor="login-email">{t("이메일")}</FieldLabel>
             <Input
               id="login-email"
               name="email"
@@ -209,7 +217,7 @@ export default function LoginPage({
         </FieldGroup>
         <Button type="submit" size="lg" disabled={pending}>
           {pending ? <Spinner data-icon="inline-start" /> : null}
-          로그인
+          {t("로그인")}
         </Button>
       </Form>
     </AuthCard>

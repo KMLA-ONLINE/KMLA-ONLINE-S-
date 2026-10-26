@@ -1,1 +1,200 @@
-export const school: Record<string, string> = {};
+export const school: Record<string, string> = {
+  // 메뉴 화면 제목
+  급식: "Meals",
+  시간표: "Timetable",
+  "공강 · 노래방": "Free periods · Karaoke",
+  생일: "Birthdays",
+  "학교 공지": "School notices",
+  공강: "Free period",
+  노래방: "Karaoke",
+
+  // 급식
+  아침: "Breakfast",
+  점심: "Lunch",
+  저녁: "Dinner",
+  조식: "Breakfast",
+  중식: "Lunch",
+  석식: "Dinner",
+  "급식 불러오는 중": "Loading meals…",
+  "알레르기 유발 식품": "Allergens",
+  "알레르기 표시": "Show allergens",
+  "알레르기: {names}": "Allergens: {names}",
+  "불러오지 못했습니다": "Couldn’t load",
+  "식단 없음": "No menu",
+  "급식 보기": "View meals",
+  "급식을 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.":
+    "Couldn't load meals. Please check again later.",
+  "{meal} 메뉴": "{meal} menu",
+  "현재 시간대에 등록된 식단이 없습니다.": "No menu for this time of day.",
+  난류: "eggs",
+  우유: "milk",
+  메밀: "buckwheat",
+  땅콩: "peanuts",
+  대두: "soy",
+  밀: "wheat",
+  고등어: "mackerel",
+  게: "crab",
+  새우: "shrimp",
+  돼지고기: "pork",
+  복숭아: "peach",
+  토마토: "tomato",
+  아황산류: "sulfites",
+  호두: "walnuts",
+  닭고기: "chicken",
+  쇠고기: "beef",
+  오징어: "squid",
+  조개류: "shellfish",
+  잣: "pine nuts",
+
+  // 시간표
+  학기: "Semester",
+  "1학년 1학기": "Year 1, Semester 1",
+  "1학년 2학기": "Year 1, Semester 2",
+  "2학년 1학기": "Year 2, Semester 1",
+  "2학년 2학기": "Year 2, Semester 2",
+  "3학년 1학기": "Year 3, Semester 1",
+  "3학년 2학기": "Year 3, Semester 2",
+  "수업 수정": "Edit class",
+  "수업 추가": "Add class",
+  과목명: "Subject",
+  장소: "Room",
+  "색상 {number}": "Color {number}",
+  "색상 {number} 밝기": "Color {number} shades",
+  "밝기 {number}": "Shade {number}",
+  "시간 추가": "Add time",
+  "시간이 겹치는 수업이 있습니다.": "Another class overlaps this time.",
+  "수업 삭제": "Delete class",
+  저장: "Save",
+  "{weekday} {period} 수업 추가": "Add a class on {weekday}, {period}",
+  "{name} 수정": "Edit {name}",
+  "시간 삭제": "Remove time",
+  "시작 교시": "Start period",
+  "종료 교시": "End period",
+  "시간표 보기": "View timetable",
+  "시간표를 불러오지 못했습니다.": "Couldn't load the timetable.",
+  "기기에 저장된 시간표를 표시합니다.":
+    "Showing the timetable saved on this device.",
+  "잠시 후 다시 확인해 주세요.": "Please check again later.",
+  "주말에는 시간표가 없습니다": "No timetable on weekends",
+  "오늘의 시간표": "Today's timetable",
+
+  // 공강 · 노래방
+  "공강 및 노래방": "Free period and karaoke",
+  공강관리자: "Free period manager",
+  노래방관리자: "Karaoke manager",
+  "지하 1층": "B1",
+  "2층": "2F",
+  "4층": "4F",
+  "10층": "10F",
+  "1자습": "Study 1",
+  혼정끝: "After honjeong",
+  "2자습": "Study 2",
+  "내 예약": "My reservation",
+  선예약: "Prebooked",
+  "{cell} 선택": "Select {cell}",
+  "매주 반복": "Repeats weekly",
+  "주말 공강 예약": "Weekend free period reservations",
+  "층 선택": "Choose floor",
+  "공강 예약": "Free period reservations",
+  시간: "Time",
+  "선택한 칸": "Selected cells",
+  "{count}칸 선택": "{count} {count|cell|cells} selected",
+  "모두 해제": "Clear all",
+  "{label} 선택 해제": "Deselect {label}",
+  "사용 목적": "Purpose",
+  "다시 시도": "Try again",
+  "선예약 관리": "Manage prebookings",
+  "예약을 불러오지 못했습니다. 다시 시도해 주세요.":
+    "Couldn't load reservations. Please try again.",
+  "예약 불러오는 중": "Loading reservations…",
+  "지난 날짜입니다.": "This date has passed.",
+  "다른 예약이 등록되어 다음 시간대의 선택을 해제했습니다: {cells}.":
+    "Someone else reserved these cells, so they were deselected: {cells}.",
+  "나머지 시간대는 예약할 수 있습니다.": "The rest can still be reserved.",
+  "{count}건 신청 완료": "{count} {count|reservation|reservations} submitted",
+  "예약을 취소했습니다.": "Reservation cancelled.",
+  "{count}건 예약": "Reserve {count}",
+  "예약 취소": "Cancel reservation",
+  "이 날짜부터 매주 반복 예약을 종료합니다.":
+    "Ends the weekly reservation from this date.",
+  "선택한 예약을 취소합니다.": "Cancels the selected reservation.",
+  "{name} 장기 예약 종료": "Ends {name}'s long-term reservation",
+  "선예약을 저장했습니다.": "Prebookings saved.",
+  "접근 권한이 없습니다.": "You do not have access.",
+  "공강으로 돌아가기": "Back to free period",
+  "다음 주 선예약": "Next week's prebookings",
+  "선예약을 불러오지 못했습니다. 다시 시도해 주세요.":
+    "Couldn't load prebookings. Please try again.",
+  "표시된 칸의 장기 예약은 이 날짜부터 종료됩니다.":
+    "Long-term reservations in the marked cells end from this date.",
+  "{count}건 선예약": "Prebook {count}",
+  "장기 예약 종료": "End long-term reservation",
+  "선예약 취소": "Cancel prebooking",
+  "이 날짜부터 해당 장기 예약이 종료되며 자동으로 복구되지 않습니다.":
+    "Those long-term reservations end from this date and are not restored automatically.",
+  "선택한 날짜부터 선예약을 해제합니다. 과거 기록은 유지됩니다.":
+    "Removes the prebooking from the selected date. Past records are kept.",
+  "종료하고 선예약": "End and prebook",
+  "이 날짜부터 종료": "End from this date",
+  "선택 해제": "Clear selection",
+  "선예약으로 대체": "Replace with prebooking",
+  "선예약으로 대체하면 이 날짜부터 학생의 장기 예약이 끝납니다.":
+    "Replacing it with a prebooking ends the student's long-term reservation from this date.",
+  "단발 예약이 있는 칸은 선예약할 수 없습니다.":
+    "Cells with a one-time reservation can't be prebooked.",
+  "이용자 명단": "Who's using it",
+  취소: "Cancel",
+  "예약 중…": "Reserving…",
+  예약: "Reserve",
+  "{name} 프로필": "{name}'s profile",
+  "{cohort}기": "Cohort {cohort}",
+  "{label} 예약 취소": "Cancel {label} reservation",
+  "예약 마감": "Closed",
+
+  // 예약 오류
+  "인터넷 연결을 확인한 뒤 다시 시도해 주세요.":
+    "Check your internet connection and try again.",
+  "공강 관리자가 미리 예약한 일정입니다.":
+    "A free period manager has prebooked this slot.",
+  "같은 요일·시간에 이미 등록된 예약이 있어 장기 예약을 할 수 없습니다.":
+    "A reservation already exists at this weekday and time, so it can't be made long-term.",
+  "다른 사용자가 먼저 예약했습니다.": "Someone else reserved it first.",
+  "오늘부터 이번 주 일요일까지만 예약할 수 있습니다.":
+    "You can only reserve from today through this Sunday.",
+  "예약할 권한이 없습니다.": "You don't have permission to reserve.",
+  "입력한 내용을 다시 확인해 주세요.": "Please check what you entered.",
+  "예약하지 못했습니다. 잠시 후 다시 시도해 주세요.":
+    "Couldn't reserve. Please try again later.",
+  "이미 취소됐거나 본인의 예약이 아닙니다.":
+    "It was already cancelled or isn't your reservation.",
+  "취소할 권한이 없습니다.": "You don't have permission to cancel.",
+  "지난 예약은 취소할 수 없습니다.": "Past reservations can't be cancelled.",
+  "장기 예약은 오늘 이후 날짜부터만 종료할 수 있습니다.":
+    "Long-term reservations can only be ended from today onward.",
+  "취소하지 못했습니다. 잠시 후 다시 시도해 주세요.":
+    "Couldn't cancel. Please try again later.",
+  "선예약을 관리할 권한이 없습니다.":
+    "You don't have permission to manage prebookings.",
+  "다음 주 일정만 선예약할 수 있습니다. 주가 바뀌었다면 화면을 새로고침해 주세요.":
+    "Only next week can be prebooked. If the week has changed, refresh the screen.",
+  "다른 반복 선예약과 겹칩니다. 기존 선예약을 먼저 종료해 주세요.":
+    "This overlaps another repeating prebooking. End that one first.",
+  "학생의 단발 예약이 있는 칸은 선예약할 수 없습니다.":
+    "Cells with a student's one-time reservation can't be prebooked.",
+  "저장하지 못했습니다. 잠시 후 다시 시도해 주세요.":
+    "Couldn't save. Please try again later.",
+
+  // 학교 공지
+  "본문이 없습니다.": "No content.",
+  "첨부 파일": "Attachments",
+  "첨부 파일을 받으려면 학교 사이트에 로그인해야 합니다.":
+    "Log in to the school site to download attachments.",
+  "(새 탭)": "(new tab)",
+  "학교 사이트에서 보기": "View on school site",
+  "학교 공지를 불러오지 못했습니다.": "Couldn't load school notices.",
+  "아직 가져온 공지가 없습니다": "No notices yet",
+  "학교 공지는 30분마다 새로 가져옵니다.":
+    "School notices are fetched every 30 minutes.",
+  "첨부 있음": "Has attachment",
+  "공지를 찾을 수 없습니다.": "Notice not found.",
+};

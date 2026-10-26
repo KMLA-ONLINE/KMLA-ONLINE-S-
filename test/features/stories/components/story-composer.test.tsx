@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { StoryComposer } from "~/features/stories/components/story-composer";
 import { fireEvent, renderRoute, screen } from "../../../router";
@@ -172,6 +172,40 @@ describe("StoryComposer", () => {
       expect.objectContaining({
         layout: { text: { x: 0.5, y: 0.48, scale: 1 } },
       }),
+    );
+  });
+});
+
+describe("StoryComposer in English", () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("translates the controls and the failure message", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    data.createTextStory.mockRejectedValueOnce(new Error("offline"));
+    const { user } = renderRoute(() => (
+      <StoryComposer canNarrowAudience onDone={vi.fn()} />
+    ));
+
+    expect(
+      screen.getByRole("radiogroup", { name: "Story type" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Photo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose photo" })).toBeVisible();
+    await user.click(screen.getByRole("radio", { name: "Text" }));
+    expect(
+      screen.getByRole("radiogroup", { name: "Background" }),
+    ).toBeVisible();
+    expect(screen.getByRole("radio", { name: "Blue" })).toBeInTheDocument();
+    expect(screen.getByText("Students and teachers")).toBeVisible();
+    await user.click(screen.getByRole("radio", { name: "Students only" }));
+    expect(screen.getByText("Hidden from teachers")).toBeVisible();
+    await user.type(screen.getByRole("textbox", { name: "Text" }), "hello");
+    await user.click(screen.getByRole("button", { name: "Share" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't post the story. Try again.",
     );
   });
 });

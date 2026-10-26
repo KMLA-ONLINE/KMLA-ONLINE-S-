@@ -31,6 +31,7 @@ import type {
   PostFileUploadState,
   PreparedPostFile,
 } from "~/features/posts/model/types";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
 import { Button } from "~/shared/ui/button";
@@ -74,6 +75,7 @@ export function PostAttachmentEditor({
   onMove: (index: number, direction: -1 | 1) => void;
   onRetry: (key: string) => void;
 }) {
+  const t = useT();
   const photoInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const sensors = useSensors(
@@ -105,7 +107,7 @@ export function PostAttachmentEditor({
         "mt-6 shrink-0 overflow-hidden rounded-2xl border bg-card",
         isDragging && "border-primary ring-4 ring-primary/10",
       )}
-      aria-label="첨부 파일"
+      aria-label={t("첨부 파일")}
     >
       <div
         className={cn(
@@ -115,12 +117,12 @@ export function PostAttachmentEditor({
       >
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-medium sm:text-base">첨부</h2>
+            <h2 className="text-sm font-medium sm:text-base">{t("첨부")}</h2>
             <span className="text-xs text-muted-foreground tabular-nums">
               {order.length} / {POST_ATTACHMENT_LIMIT}
             </span>
             <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-              동영상 미지원
+              {t("동영상 미지원")}
             </span>
           </div>
           {preparingCount > 0 ? (
@@ -128,7 +130,7 @@ export function PostAttachmentEditor({
               className="mt-0.5 text-xs text-muted-foreground"
               aria-live="polite"
             >
-              파일 최적화 중 {preparingCount}개
+              {t("파일 최적화 중 {count}개", { count: preparingCount })}
             </p>
           ) : order.length > 0 ? (
             <p
@@ -144,25 +146,25 @@ export function PostAttachmentEditor({
             type="button"
             variant="outline"
             size="icon-sm"
-            aria-label="사진 추가"
+            aria-label={t("사진 추가")}
             className="sm:w-auto sm:gap-1 sm:px-2.5"
             disabled={disabled || atLimit}
             onClick={() => photoInput.current?.click()}
           >
             <ImagePlusIcon />
-            <span className="hidden sm:inline">사진 추가</span>
+            <span className="hidden sm:inline">{t("사진 추가")}</span>
           </Button>
           <Button
             type="button"
             variant="outline"
             size="icon-sm"
-            aria-label="파일 추가"
+            aria-label={t("파일 추가")}
             className="sm:w-auto sm:gap-1 sm:px-2.5"
             disabled={disabled || atLimit}
             onClick={() => fileInput.current?.click()}
           >
             <PaperclipIcon />
-            <span className="hidden sm:inline">파일 추가</span>
+            <span className="hidden sm:inline">{t("파일 추가")}</span>
           </Button>
         </div>
         <input
@@ -170,7 +172,7 @@ export function PostAttachmentEditor({
           className="sr-only"
           type="file"
           name="postPhotos"
-          aria-label="사진 선택"
+          aria-label={t("사진 선택")}
           accept={IMAGE_INPUT_ACCEPT}
           multiple
           onChange={(event) => {
@@ -183,7 +185,7 @@ export function PostAttachmentEditor({
           className="sr-only"
           type="file"
           name="postFiles"
-          aria-label="파일 선택"
+          aria-label={t("파일 선택")}
           multiple
           onChange={(event) => {
             void onSelect(event.target.files, "file");
@@ -260,10 +262,10 @@ export function PostAttachmentEditor({
             <UploadCloudIcon aria-hidden="true" />
           </span>
           <span className="text-sm font-medium">
-            사진이나 파일을 끌어 놓으세요
+            {t("사진이나 파일을 끌어 놓으세요")}
           </span>
           <span className="text-xs text-muted-foreground">
-            동영상 제외 · 파일당 최대 30MB
+            {t("동영상 제외 · 파일당 최대 30MB")}
           </span>
         </button>
       )}
@@ -307,8 +309,9 @@ function AttachmentEditorItem({
     transition,
     isDragging,
   } = useSortable({ id, disabled });
+  const t = useT();
   const status = state?.status;
-  const label = isImage ? `사진 ${index + 1}` : name;
+  const label = isImage ? t("사진 {number}", { number: index + 1 }) : name;
 
   return (
     <div
@@ -326,7 +329,7 @@ function AttachmentEditorItem({
         variant="ghost"
         size="icon-sm"
         disabled={disabled}
-        aria-label={`${label} 순서 변경`}
+        aria-label={t("{name} 순서 변경", { name: label })}
         className="shrink-0 cursor-grab touch-none active:cursor-grabbing"
         {...attributes}
         {...listeners}
@@ -355,20 +358,22 @@ function AttachmentEditorItem({
         )}
         <p className="text-xs text-muted-foreground">
           {status === "queued"
-            ? "업로드 대기 중"
+            ? t("업로드 대기 중")
             : status === "uploading"
-              ? `업로드 중 ${Math.round((state?.progress ?? 0) * 100)}%`
+              ? t("업로드 중 {percent}%", {
+                  percent: Math.round((state?.progress ?? 0) * 100),
+                })
               : status === "error"
-                ? (state?.error ?? "업로드 실패")
+                ? (state?.error ?? t("업로드 실패"))
                 : status === "ready"
-                  ? "업로드 완료"
+                  ? t("업로드 완료")
                   : formatFileSize(size)}
         </p>
         {status === "uploading" ? (
           <progress
             value={state?.progress ?? 0}
             max={1}
-            aria-label={`${label} 업로드 진행률`}
+            aria-label={t("{name} 업로드 진행률", { name: label })}
             className="mt-1 h-1 w-full accent-primary"
           />
         ) : null}
@@ -378,7 +383,7 @@ function AttachmentEditorItem({
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label={`${label} 업로드 다시 시도`}
+          aria-label={t("{name} 업로드 다시 시도", { name: label })}
           onClick={onRetry}
         >
           <RefreshCwIcon />
@@ -392,7 +397,7 @@ function AttachmentEditorItem({
               variant="ghost"
               size="icon-sm"
               disabled={disabled}
-              aria-label={`${label} 첨부 메뉴`}
+              aria-label={t("{name} 첨부 메뉴", { name: label })}
             />
           }
         >
@@ -401,16 +406,16 @@ function AttachmentEditorItem({
         <DropdownMenuContent align="end">
           <DropdownMenuGroup>
             <DropdownMenuItem disabled={index === 0} onClick={() => onMove(-1)}>
-              앞으로 이동
+              {t("앞으로 이동")}
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={index === count - 1}
               onClick={() => onMove(1)}
             >
-              뒤로 이동
+              {t("뒤로 이동")}
             </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" onClick={onRemove}>
-              <Trash2Icon /> 제거
+              <Trash2Icon /> {t("제거")}
             </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>

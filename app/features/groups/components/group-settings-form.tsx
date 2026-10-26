@@ -1,4 +1,5 @@
 import type { GroupDetail } from "~/features/groups/model/types";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 
@@ -58,14 +59,15 @@ export function FormActions({
   pending: boolean;
   cancel: () => void;
 }) {
+  const t = useT();
   return (
     <div className="flex justify-end gap-2 pt-1">
       <Button type="button" variant="ghost" disabled={pending} onClick={cancel}>
-        취소
+        {t("취소")}
       </Button>
       <Button type="submit" disabled={pending}>
         {pending ? <Spinner data-icon="inline-start" /> : null}
-        저장
+        {t("저장")}
       </Button>
     </div>
   );
@@ -76,13 +78,14 @@ export function ActionStatus({
 }: {
   data: { error?: string; ok?: boolean } | undefined;
 }) {
+  const t = useT();
   return data?.error ? (
     <p role="alert" className="mt-3 text-sm text-destructive">
       {data.error}
     </p>
   ) : data?.ok ? (
     <p role="status" className="mt-3 text-sm text-muted-foreground">
-      변경 사항을 저장했습니다.
+      {t("변경 사항을 저장했습니다.")}
     </p>
   ) : null;
 }

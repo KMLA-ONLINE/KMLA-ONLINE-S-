@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { invalidateConversationList } from "~/features/messaging/data/cache";
 import { openDirectConversation } from "~/features/messaging/data/mutations";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 
@@ -20,6 +21,7 @@ export function SendMessageButton({
   profileId: number;
   className?: string;
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [opening, setOpening] = useState(false);
@@ -31,7 +33,7 @@ export function SendMessageButton({
       void invalidateConversationList(queryClient);
       await navigate(`/messenger/${conversationId}`);
     } catch {
-      toast.error("채팅을 열지 못했습니다.");
+      toast.error(t("채팅을 열지 못했습니다."));
       setOpening(false);
     }
   }
@@ -46,7 +48,7 @@ export function SendMessageButton({
       onClick={() => void open()}
     >
       {opening ? <Spinner data-icon="inline-start" /> : <MessageCircleIcon />}
-      메시지 보내기
+      {t("메시지 보내기")}
     </Button>
   );
 }

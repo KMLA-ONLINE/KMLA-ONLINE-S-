@@ -1,6 +1,7 @@
 import { useSearchParams } from "react-router";
 
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { useT } from "~/shared/i18n";
 import { composeSharedText, ShareTargetScreen } from "~/features/messaging";
 
 export const handle = defineAppChrome({
@@ -15,6 +16,7 @@ export const handle = defineAppChrome({
  * `next`로 넘겨 로그인 뒤 이 화면으로 돌아온다.
  */
 export default function ShareTargetPage() {
+  const t = useT();
   const [searchParams] = useSearchParams();
   const { profile } = useAppShell();
   const text = composeSharedText({
@@ -25,7 +27,10 @@ export default function ShareTargetPage() {
 
   return (
     <>
-      <PageHeader title="메시지로 보내기" back={{ fallback: "/messenger" }} />
+      <PageHeader
+        title={t("메시지로 보내기")}
+        back={{ fallback: "/messenger" }}
+      />
       <ShareTargetScreen text={text} viewerId={String(profile.id)} />
     </>
   );

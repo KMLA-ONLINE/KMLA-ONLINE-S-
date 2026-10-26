@@ -384,3 +384,57 @@ describe("ProfileDetail", () => {
     expect(screen.getByRole("button", { name: "접기" })).toBeVisible();
   });
 });
+
+describe("ProfileDetail in English", () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("translates the summary, headings and owner actions", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => (
+      <ProfileDetail
+        profile={{
+          id: 25,
+          pub_id: "hanbyeol-25",
+          name: "이한별",
+          type: "alumni",
+          role: "admin",
+          cohort: 25,
+          academic_track: "international",
+          avatar_path: null,
+          avatar_url: null,
+          cover_path: null,
+          cover_url: null,
+          description: null,
+          birthday: "2004-08-26",
+          class_no: 3,
+          dorm_room: null,
+          department: null,
+          gender: "female",
+          phone_number: null,
+          contact_email: "hanbyeol@example.com",
+          student_number: null,
+          allow_timeline_posts: true,
+          is_returning_student: false,
+        }}
+        isOwnProfile
+        viewerName="이한별"
+        viewerAvatarUrl={null}
+        posts={{ posts: [], nextCursor: null }}
+      />
+    ));
+
+    expect(screen.getByText("Cohort 25 · International")).toBeVisible();
+    expect(screen.getByText("Admin")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Edit profile" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Info" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Posts" })).toBeVisible();
+    expect(screen.getByRole("group", { name: "Contact" })).toBeInTheDocument();
+    expect(screen.getByText("Class 3")).toBeInTheDocument();
+    expect(screen.getByText("August 26, 2004")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show Email" }),
+    ).toBeInTheDocument();
+  });
+});

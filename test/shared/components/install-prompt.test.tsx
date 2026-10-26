@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { InstallPrompt } from "~/shared/components/install-prompt";
 import type { InstallPromptState } from "~/shared/hooks/use-install-prompt";
@@ -184,5 +184,32 @@ describe("InstallPrompt", () => {
     );
 
     expect(neverShow).toHaveBeenCalledOnce();
+  });
+});
+
+describe("InstallPrompt in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("shows the install copy and buttons in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderWith({ mode: "install" });
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Add KMLA Online to your home screen",
+      }),
+    ).toBeVisible();
+    expect(await enabledButton("Install")).toBeVisible();
+    expect(await enabledButton("Later")).toBeVisible();
+  });
+
+  it("lists the iOS steps in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderWith({ mode: "ios-browser" });
+
+    expect(screen.getByText("Tap the browser's Share button.")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Installed" }),
+    ).toBeInTheDocument();
   });
 });

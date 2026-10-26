@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("~/features/search/hooks/use-recent-search-entries", () => ({
   useRecentSearchEntries: vi.fn(),
@@ -12,6 +12,8 @@ import { DirectorySearchPanel } from "~/features/search/components/directory-sea
 import { useRecentSearchEntries } from "~/features/search/hooks/use-recent-search-entries";
 import { addRecentSearchEntry } from "~/features/search/model/recent-searches";
 import { renderRoute, screen } from "../../../router";
+
+afterEach(() => window.localStorage.clear());
 
 describe("DirectorySearchPanel", () => {
   it("shows recent entries when the query is empty", () => {
@@ -138,5 +140,89 @@ describe("DirectorySearchPanel", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "검색 결과를 불러오지 못했습니다.",
     );
+  });
+  describe("in English", () => {
+    it("shows the hint, headings and empty state in English", () => {
+      window.localStorage.setItem("kmla-online:language:v1", "en");
+      vi.mocked(useRecentSearchEntries).mockReturnValue([]);
+      const { unmount } = renderRoute(() => (
+        <DirectorySearchPanel
+          query=""
+          loading={false}
+          result={null}
+          error={null}
+          onNavigate={vi.fn()}
+        />
+      ));
+      expect(
+        screen.getByText("Search for people or groups by name."),
+      ).toBeInTheDocument();
+      unmount();
+
+      vi.mocked(useRecentSearchEntries).mockReturnValue([
+        {
+          kind: "profile",
+          id: "p1",
+          name: "김민준",
+          avatarPath: null,
+          avatarUrl: null,
+        },
+      ]);
+      const { unmount: unmountRecent } = renderRoute(() => (
+        <DirectorySearchPanel
+          query=""
+          loading={false}
+          result={null}
+          error={null}
+          onNavigate={vi.fn()}
+        />
+      ));
+      expect(screen.getByText("Recent")).toBeInTheDocument();
+      unmountRecent();
+
+      vi.mocked(useRecentSearchEntries).mockReturnValue([]);
+      const { unmount: unmountResults } = renderRoute(() => (
+        <DirectorySearchPanel
+          query="김민"
+          loading={false}
+          result={{
+            people: [
+              {
+                kind: "profile",
+                id: "p1",
+                name: "김민준",
+                avatarPath: null,
+                avatarUrl: null,
+              },
+            ],
+            groups: [
+              {
+                kind: "group",
+                id: "g1",
+                name: "김민 스터디",
+                avatarPath: null,
+                avatarUrl: null,
+              },
+            ],
+          }}
+          error={null}
+          onNavigate={vi.fn()}
+        />
+      ));
+      expect(screen.getByText("People")).toBeInTheDocument();
+      expect(screen.getByText("Groups")).toBeInTheDocument();
+      unmountResults();
+
+      renderRoute(() => (
+        <DirectorySearchPanel
+          query="없음"
+          loading={false}
+          result={{ people: [], groups: [] }}
+          error={null}
+          onNavigate={vi.fn()}
+        />
+      ));
+      expect(screen.getByText("No results for “없음”.")).toBeInTheDocument();
+    });
   });
 });

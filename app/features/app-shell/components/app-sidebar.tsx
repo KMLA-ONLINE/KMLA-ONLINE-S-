@@ -7,6 +7,7 @@ import {
   isNavItemActive,
   navItems,
 } from "~/features/app-shell/model/nav-items";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 /**
@@ -24,6 +25,7 @@ export function AppSidebar({
   className?: string;
   onHomeReselect: () => void;
 }) {
+  const t = useT();
   const location = useLocation();
   const badges = useNavBadges();
   const onHomeClick = useHomeReselectClick(onHomeReselect);
@@ -31,7 +33,7 @@ export function AppSidebar({
   return (
     <div className={cn("relative w-[var(--app-rail-w)] shrink-0", className)}>
       <nav
-        aria-label="주요 메뉴"
+        aria-label={t("주요 메뉴")}
         className={cn(
           "group/sidebar absolute inset-y-0 left-0 z-30 flex w-[var(--app-rail-w)] flex-col overflow-hidden border-r border-transparent bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out",
           // `:focus-within`이 아니라 `:has(:focus-visible)`인 이유: 링크를 클릭하면 DOM
@@ -56,7 +58,10 @@ export function AppSidebar({
                   onClick={item.to === "/" ? onHomeClick : undefined}
                   aria-label={
                     unread > 0
-                      ? `${item.label} (안 읽음 ${unread}개)`
+                      ? t("{label} (안 읽음 {count}개)", {
+                          label: t(item.label),
+                          count: unread,
+                        })
                       : undefined
                   }
                   className={cn(
@@ -86,7 +91,7 @@ export function AppSidebar({
                     />
                   </span>
                   <span className="overflow-hidden text-sm whitespace-nowrap opacity-0 transition-opacity duration-200 motion-reduce:transition-none [@media(hover:hover)]:group-hover/sidebar:opacity-100 [nav:has(:focus-visible)_&]:opacity-100">
-                    {item.label}
+                    {t(item.label)}
                   </span>
                 </NavLink>
               </li>

@@ -7,6 +7,7 @@ import { GroupDiscoverCard } from "~/features/groups/components/group-discover-c
 import { hasMinimumGroupSearchLength } from "~/features/groups/model/format";
 import type { GroupDiscoveryPage } from "~/features/groups/model/types";
 import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Checkbox } from "~/shared/ui/checkbox";
 import { Field, FieldLabel } from "~/shared/ui/field";
@@ -41,6 +42,7 @@ export function GroupDiscoverScreen({
   focusSearch: boolean;
   onSearchOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const [input, setInput] = useState(query);
   const [composing, setComposing] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -127,9 +129,9 @@ export function GroupDiscoverScreen({
           className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeftIcon aria-hidden className="size-4" />
-          그룹
+          {t("그룹")}
         </Link>
-        <h1 className="text-2xl font-semibold">비공식 그룹 찾기</h1>
+        <h1 className="text-2xl font-semibold">{t("비공식 그룹 찾기")}</h1>
       </div>
 
       <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:gap-x-3">
@@ -156,8 +158,8 @@ export function GroupDiscoverScreen({
                   if (event.key === "Escape") closeSearch();
                 }}
                 className="rounded-full pr-10 md:rounded-md [&::-webkit-search-cancel-button]:appearance-none"
-                placeholder="그룹 이름을 입력…"
-                aria-label="그룹 이름"
+                placeholder={t("그룹 이름을 입력…")}
+                aria-label={t("그룹 이름")}
                 autoComplete="off"
                 type="search"
               />
@@ -166,7 +168,7 @@ export function GroupDiscoverScreen({
                 variant="ghost"
                 size="icon-sm"
                 className="absolute top-1/2 right-1 -translate-y-1/2"
-                aria-label="그룹 검색"
+                aria-label={t("그룹 검색")}
                 disabled={!canSearch || composing}
               >
                 <SearchIcon aria-hidden />
@@ -179,7 +181,7 @@ export function GroupDiscoverScreen({
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label="검색 닫기"
+              aria-label={t("검색 닫기")}
               onClick={closeSearch}
             >
               <XIcon />
@@ -191,7 +193,7 @@ export function GroupDiscoverScreen({
             variant="outline"
             size="icon-sm"
             className="hidden md:inline-flex"
-            aria-label="그룹 검색"
+            aria-label={t("그룹 검색")}
             onClick={openSearch}
           >
             <SearchIcon />
@@ -209,7 +211,7 @@ export function GroupDiscoverScreen({
           {includeJoined ? (
             <CheckIcon aria-hidden data-icon="inline-start" />
           ) : null}
-          {includeJoined ? "가입한 그룹 포함 중" : "가입한 그룹 포함"}
+          {includeJoined ? t("가입한 그룹 포함 중") : t("가입한 그룹 포함")}
         </Button>
 
         <Field
@@ -225,7 +227,7 @@ export function GroupDiscoverScreen({
             htmlFor="include-joined"
             className="font-normal text-muted-foreground"
           >
-            가입한 그룹도 표시
+            {t("가입한 그룹도 표시")}
           </FieldLabel>
         </Field>
       </div>
@@ -255,10 +257,10 @@ export function GroupDiscoverScreen({
         <div className="flex flex-col items-center gap-2 rounded-xl border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
           <p>
             {query
-              ? `“${query}”와 맞는 그룹이 없습니다.`
-              : "가입할 수 있는 공개 그룹이 없습니다."}
+              ? t("“{query}”와 맞는 그룹이 없습니다.", { query })
+              : t("가입할 수 있는 공개 그룹이 없습니다.")}
           </p>
-          {query ? <p>검색어를 바꿔 다시 찾아보세요.</p> : null}
+          {query ? <p>{t("검색어를 바꿔 다시 찾아보세요.")}</p> : null}
         </div>
       )}
 
@@ -268,7 +270,7 @@ export function GroupDiscoverScreen({
           className="flex h-12 items-center justify-center"
           aria-live="polite"
         >
-          {pending ? <Spinner aria-label="그룹 더 불러오는 중" /> : null}
+          {pending ? <Spinner aria-label={t("그룹 더 불러오는 중")} /> : null}
         </div>
       ) : null}
     </div>

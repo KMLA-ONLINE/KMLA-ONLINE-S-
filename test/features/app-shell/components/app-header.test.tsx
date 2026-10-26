@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { redirect } from "react-router";
 
 import { AppShellProvider, type ShellData } from "~/features/app-shell";
@@ -165,5 +165,21 @@ describe("AppHeader account menu", () => {
     for (const name of ["홈페이지", "인트라넷", "리로스쿨"]) {
       expect(screen.queryByRole("menuitem", { name })).not.toBeInTheDocument();
     }
+  });
+});
+
+describe("AppHeader in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("labels the account menu and its entries in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const { user } = renderHeader();
+
+    await user.click(screen.getByRole("button", { name: "Account menu" }));
+
+    const menu = within(await screen.findByRole("menu"));
+    expect(menu.getByRole("menuitem", { name: "My profile" })).toBeVisible();
+    expect(menu.getByRole("menuitem", { name: "Settings" })).toBeVisible();
+    expect(menu.getByRole("menuitem", { name: "Log out" })).toBeVisible();
   });
 });

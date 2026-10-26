@@ -7,6 +7,7 @@ import {
 } from "~/features/messaging/model/nickname";
 import type { MessageParticipant } from "~/features/messaging/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -36,6 +37,7 @@ export function NicknameDialog({
   /** 빈 값이면 지운다. 성공하면 true. 실패하면 입력을 그대로 두고 다시 시도하게 한다. */
   onSubmit: (profileId: string, nickname: string) => Promise<boolean>;
 }) {
+  const t = useT();
   const [editingId, setEditingId] = useState<string | null>(null);
   const ordered = [
     ...members.filter(({ id }) => id === viewerId),
@@ -65,7 +67,7 @@ export function NicknameDialog({
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>별명</DialogTitle>
+              <DialogTitle>{t("별명")}</DialogTitle>
             </DialogHeader>
             <ul className="-mx-2 flex max-h-[60dvh] flex-col gap-1 overflow-y-auto">
               {ordered.map((member) => {
@@ -104,12 +106,13 @@ export function MemberNames({
   member: MessageParticipant;
   isViewer: boolean;
 }) {
+  const t = useT();
   const profileName = member.profileName ?? member.name;
   const primary = member.nickname ?? profileName;
   return (
     <span className="flex min-w-0 flex-1 flex-col">
       <span className="truncate text-sm font-medium">
-        {isViewer ? `${primary} (나)` : primary}
+        {isViewer ? t("{name} (나)", { name: primary }) : primary}
       </span>
       {member.nickname ? (
         <span className="truncate text-xs text-muted-foreground">
@@ -131,6 +134,7 @@ function NicknameForm({
   onBack: () => void;
   onSubmit: (nickname: string) => Promise<boolean>;
 }) {
+  const t = useT();
   const current = member.nickname ?? "";
   const profileName = member.profileName ?? member.name;
   const [nickname, setNickname] = useState(current);
@@ -159,17 +163,19 @@ function NicknameForm({
             variant="ghost"
             size="icon-sm"
             className="-ml-2 rounded-full"
-            aria-label="별명 목록으로 돌아가기"
+            aria-label={t("별명 목록으로 돌아가기")}
             onClick={onBack}
           >
             <ChevronLeftIcon aria-hidden />
           </Button>
           <DialogTitle className="min-w-0 truncate">
-            {isViewer ? "내 별명" : `${profileName}님의 별명`}
+            {isViewer
+              ? t("내 별명")
+              : t("{name}님의 별명", { name: profileName })}
           </DialogTitle>
         </div>
         <DialogDescription>
-          비워 두고 저장하면 별명을 지웁니다.
+          {t("비워 두고 저장하면 별명을 지웁니다.")}
         </DialogDescription>
       </DialogHeader>
       <form
@@ -191,13 +197,15 @@ function NicknameForm({
             event.preventDefault();
             if (!problem) void save(trimmed);
           }}
-          aria-label="별명"
+          aria-label={t("별명")}
         />
         {problem ? (
           <p id="nickname-error" className="mt-2 text-xs text-destructive">
             {problem === "too_long"
-              ? `별명은 ${NICKNAME_MAX_LENGTH}자 이하로 입력하세요.`
-              : "보이지 않는 글자는 별명에 쓸 수 없습니다."}
+              ? t("별명은 {count}자 이하로 입력하세요.", {
+                  count: NICKNAME_MAX_LENGTH,
+                })
+              : t("보이지 않는 글자는 별명에 쓸 수 없습니다.")}
           </p>
         ) : null}
         <DialogFooter className="mt-4">
@@ -209,12 +217,12 @@ function NicknameForm({
               disabled={saving}
               onClick={() => void save("")}
             >
-              별명 지우기
+              {t("별명 지우기")}
             </Button>
           ) : null}
           <Button type="submit" disabled={Boolean(problem) || saving}>
             {saving ? <Spinner data-icon="inline-start" /> : null}
-            저장
+            {t("저장")}
           </Button>
         </DialogFooter>
       </form>

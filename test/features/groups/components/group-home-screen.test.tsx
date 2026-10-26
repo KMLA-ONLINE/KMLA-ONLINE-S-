@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent } from "@testing-library/react";
 
 import { GroupHomeScreen } from "~/features/groups/components/group-home-screen";
@@ -174,5 +174,32 @@ describe("GroupHomeScreen", () => {
     expect(dialog).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "취소" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
+describe("GroupHomeScreen in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders tabs, heading and empty states in English", async () => {
+    window.sessionStorage.clear();
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const { user } = renderRoute(GroupHomeRoute, {
+      path: "/groups",
+      initialEntries: ["/groups"],
+    });
+
+    expect(screen.getByRole("heading", { name: "Groups" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "Group type" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("No official groups to show.")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Unofficial" }));
+
+    expect(screen.getByRole("heading", { name: /My groups/ })).toBeVisible();
+    expect(
+      screen.getByText("You haven't joined any unofficial groups yet."),
+    ).toBeVisible();
+    expect(screen.getByText("Find unofficial groups")).toBeVisible();
   });
 });

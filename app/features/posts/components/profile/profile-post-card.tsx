@@ -14,6 +14,7 @@ import {
   profilePostPath,
 } from "~/features/posts/model/profile-post";
 import type { ProfilePost } from "~/features/posts/model/types";
+import { useT } from "~/shared/i18n";
 
 /** 프로필 타임라인의 게시물 카드. 머리 줄만 그룹 카드와 다르다(기능 명세 §8.1). */
 export function ProfilePostCard({
@@ -23,6 +24,7 @@ export function ProfilePostCard({
   post: ProfilePost;
   onDelete: () => void;
 }) {
+  const t = useT();
   const { images, files } = splitPostAttachments(post.attachments);
   const postPath = profilePostPath(post);
 
@@ -69,7 +71,9 @@ export function ProfilePostCard({
           my_reaction: post.my_reaction,
         }}
         sharePath={postPath}
-        shareTitle={`${profilePostAuthorName(post)}님의 게시물`}
+        shareTitle={t("{name}님의 게시물", {
+          name: profilePostAuthorName(post),
+        })}
         commentCount={post.comment_count}
         commentTo={`${postPath}?view=comments`}
         className="mt-1"

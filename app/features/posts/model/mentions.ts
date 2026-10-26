@@ -3,6 +3,8 @@
  * (`pub_id`는 바뀔 수 있어 박지 않는다, 기능 명세 §12.2). 토큰이 CommonMark 링크인 것은 Milkdown이 커스텀 노드 없이 그려 주기 때문이다.
  */
 
+import { translate, type Locale } from "~/shared/i18n";
+
 /** 기능 명세 §8.14. 게시물 또는 댓글 하나가 부를 수 있는 사람 수. */
 export const MENTION_LIMIT = 50;
 
@@ -167,14 +169,20 @@ export function countMentionTargets(
 export function validateMentionCount(
   body: string,
   entries: MentionDraftEntry[],
+  locale: Locale = "ko",
 ): string | null {
-  return mentionCountReason(countMentionTargets(body, entries));
+  return mentionCountReason(countMentionTargets(body, entries), locale);
 }
 
 /** 서로 다른 대상 수가 상한을 넘었으면 보여줄 이유. 대상 수를 이미 셌으면 이것을 바로 부른다. */
-export function mentionCountReason(targetCount: number): string | null {
+export function mentionCountReason(
+  targetCount: number,
+  locale: Locale = "ko",
+): string | null {
   if (targetCount <= MENTION_LIMIT) return null;
-  return `멘션은 ${MENTION_LIMIT}명까지 할 수 있습니다.`;
+  return translate(locale, "멘션은 {count}명까지 할 수 있습니다.", {
+    count: MENTION_LIMIT,
+  });
 }
 
 /** 수정할 때 편집기가 이어받을 초안. 읽기 RPC의 `mentions`가 ordinal 표이며, 탈퇴한 사용자는 초안에서 빼 제출 때 평문이 된다. */

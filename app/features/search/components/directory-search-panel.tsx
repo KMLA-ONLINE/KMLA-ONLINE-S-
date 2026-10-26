@@ -8,6 +8,7 @@ import type {
   DirectorySearchResult,
 } from "~/features/search/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { ListRowSkeleton } from "~/shared/ui/skeleton";
 
 export function DirectorySearchPanel({
@@ -25,6 +26,7 @@ export function DirectorySearchPanel({
    * dialog는 페이지 이동만으로 자연히 unmount되므로 넘길 필요가 없다. */
   onNavigate?: () => void;
 }) {
+  const t = useT();
   const recentActive = query === "";
   const recentEntries = useRecentSearchEntries(recentActive);
 
@@ -42,14 +44,14 @@ export function DirectorySearchPanel({
     if (recentEntries.length === 0) {
       return (
         <p className="p-6 text-center text-sm text-muted-foreground">
-          사람이나 그룹 이름으로 검색해 보세요.
+          {t("사람이나 그룹 이름으로 검색해 보세요.")}
         </p>
       );
     }
     return (
       <div className="flex flex-col gap-1 p-2">
         <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
-          최근 항목
+          {t("최근 항목")}
         </p>
         {recentEntries.map((entry) => (
           <Link
@@ -81,7 +83,7 @@ export function DirectorySearchPanel({
   if (loading) {
     return (
       <ListRowSkeleton
-        label="검색 결과를"
+        label={t("검색 결과를")}
         avatar="sm"
         rows={3}
         className="p-2"
@@ -103,7 +105,7 @@ export function DirectorySearchPanel({
   if (result.people.length === 0 && result.groups.length === 0) {
     return (
       <p className="p-6 text-center text-sm text-muted-foreground">
-        &ldquo;{query}&rdquo;에 대한 검색 결과가 없습니다.
+        {t("“{query}”에 대한 검색 결과가 없습니다.", { query })}
       </p>
     );
   }
@@ -113,7 +115,7 @@ export function DirectorySearchPanel({
       {result.people.length > 0 ? (
         <section className="flex flex-col gap-1">
           <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
-            사람
+            {t("사람")}
           </p>
           {result.people.map((person) => (
             <Link
@@ -131,7 +133,7 @@ export function DirectorySearchPanel({
       {result.groups.length > 0 ? (
         <section className="flex flex-col gap-1">
           <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
-            그룹
+            {t("그룹")}
           </p>
           {result.groups.map((group) => (
             <Link

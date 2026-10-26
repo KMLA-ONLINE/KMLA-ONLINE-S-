@@ -7,9 +7,11 @@ import {
 import type { CommentImage as CommentImageModel } from "~/features/posts/model/types";
 import type { ViewerImage } from "~/shared/components/image-viewer";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
+import { useT } from "~/shared/i18n";
 
 export function CommentImage({ image }: { image: CommentImageModel }) {
   const downloadName = imageDownloadName(image.image_id);
+  const t = useT();
   const viewerImages = useMemo<ViewerImage[]>(
     () =>
       image.signedUrl
@@ -36,21 +38,21 @@ export function CommentImage({ image }: { image: CommentImageModel }) {
     <button
       type="button"
       disabled={!image.signedUrl}
-      aria-label="댓글 이미지 크게 보기"
+      aria-label={t("댓글 이미지 크게 보기")}
       className="mt-1 block max-w-full overflow-hidden rounded-xl bg-muted focus:ring-0 focus:outline-none focus-visible:ring-0"
       onClick={() => viewer.open(image.image_id)}
     >
       {image.signedUrl ? (
         <img
           src={image.signedUrl}
-          alt="댓글 이미지"
+          alt={t("댓글 이미지")}
           crossOrigin="anonymous"
           loading="lazy"
           className="max-h-80 max-w-full object-contain"
         />
       ) : (
         <span className="block px-3 py-8 text-xs text-muted-foreground">
-          이미지를 불러오지 못했습니다
+          {t("이미지를 불러오지 못했습니다")}
         </span>
       )}
     </button>

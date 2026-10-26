@@ -36,6 +36,7 @@ import {
   type AnonymousActivityRestriction,
 } from "~/features/posts";
 import { Deferred } from "~/shared/components/deferred";
+import { useLocale, useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { useDelayedPending } from "~/shared/hooks/use-delayed-pending";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
@@ -88,6 +89,8 @@ export function GroupDetailScreen({
   reportPage?: GroupPostReportSummaryPage;
   anonymousActivityRestriction?: AnonymousActivityRestriction | null;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigation = useNavigation();
@@ -147,7 +150,7 @@ export function GroupDetailScreen({
 
       <nav
         className="mx-2 mt-1 hidden items-center gap-1 border-b md:flex"
-        aria-label="그룹 메뉴"
+        aria-label={t("그룹 메뉴")}
       >
         {visibleTabs.map((item) => (
           <button
@@ -162,7 +165,7 @@ export function GroupDetailScreen({
                 : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
-            {item.label}
+            {t(item.label)}
           </button>
         ))}
       </nav>
@@ -198,8 +201,8 @@ export function GroupDetailScreen({
                   content === null ? (
                     <EmptyTabCard
                       icon={<MessageSquareTextIcon aria-hidden />}
-                      title="게시물"
-                      description="게시물 목록을 불러오지 못했습니다."
+                      title={t("게시물")}
+                      description={t("게시물 목록을 불러오지 못했습니다.")}
                     />
                   ) : (
                     <KeyedGroupPostsPanel
@@ -224,8 +227,8 @@ export function GroupDetailScreen({
             ) : (
               <EmptyTabCard
                 icon={<UsersIcon aria-hidden />}
-                title={`멤버 ${group.member_count.toLocaleString("ko-KR")}`}
-                description="멤버 목록을 불러오는 중입니다."
+                title={t("멤버 {count}", { count: group.member_count })}
+                description={t("멤버 목록을 불러오는 중입니다.")}
               />
             )
           ) : tab === "settings" ? (
@@ -245,31 +248,31 @@ export function GroupDetailScreen({
           ) : (
             <EmptyTabCard
               icon={<FlagIcon aria-hidden />}
-              title="신고"
-              description="신고 목록을 불러오는 중입니다."
+              title={t("신고")}
+              description={t("신고 목록을 불러오는 중입니다.")}
             />
           )}
         </div>
 
         <aside className="hidden lg:order-2 lg:block">
           <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 lg:sticky lg:top-4">
-            <h2 className="text-sm font-semibold">그룹 정보</h2>
+            <h2 className="text-sm font-semibold">{t("그룹 정보")}</h2>
             <p className="text-sm leading-6 text-muted-foreground">
               {group.description}
             </p>
             <InfoRow icon={<LandmarkIcon />}>
-              {group.kind === "official" ? "공식 그룹" : "비공식 그룹"}
+              {group.kind === "official" ? t("공식 그룹") : t("비공식 그룹")}
             </InfoRow>
             <InfoRow icon={<VisibilityIcon />}>
-              {isPrivate ? "비공개" : "공개"} ·{" "}
-              {getGroupJoinPolicyLabel(group.join_policy)}
+              {isPrivate ? t("비공개") : t("공개")} ·{" "}
+              {getGroupJoinPolicyLabel(group.join_policy, locale)}
             </InfoRow>
             <InfoRow icon={<UsersIcon />}>
-              멤버 {group.member_count.toLocaleString("ko-KR")}명
+              {t("멤버 {count}명", { count: group.member_count })}
             </InfoRow>
             <InfoRow icon={<MessageSquareTextIcon />}>
-              {getGroupIdentityPolicyLabel(group.identity_policy)} ·{" "}
-              {getGroupPostingPolicyLabel(group.posting_policy)}
+              {getGroupIdentityPolicyLabel(group.identity_policy, locale)} ·{" "}
+              {getGroupPostingPolicyLabel(group.posting_policy, locale)}
             </InfoRow>
           </div>
         </aside>
@@ -298,11 +301,15 @@ function KeyedGroupPostsPanel(props: GroupPostsPanelProps) {
 }
 
 function GroupTabSkeleton({ tab }: { tab: GroupTab }) {
+  const t = useT();
   const rows = tab === "members" ? 6 : tab === "posts" ? 3 : 4;
   const label = GROUP_TABS.find((item) => item.id === tab)?.label ?? "그룹";
 
   return (
-    <PendingRegion label={`${label} 탭을`} className="space-y-3 px-4 md:px-0">
+    <PendingRegion
+      label={t("{label} 탭을", { label: t(label) })}
+      className="space-y-3 px-4 md:px-0"
+    >
       {Array.from({ length: rows }, (_, index) => (
         <div key={index} className="space-y-3 rounded-xl border bg-card p-4">
           <Skeleton className="h-4 w-2/5" />

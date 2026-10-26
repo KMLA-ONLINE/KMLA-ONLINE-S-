@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 
 /**
  * 게시물 스택의 첫 카드처럼 보이는 글쓰기 진입점. 카드와 같은 프레이밍을 써 별개 버튼처럼 보이지 않게 한다.
@@ -10,7 +11,7 @@ export function PostWriteRow({
   to,
   viewerName,
   viewerAvatarUrl,
-  label = "글쓰기…",
+  label,
 }: {
   to: string;
   /** 지금 로그인한 사용자. 남의 타임라인에서도 글을 쓰는 사람은 나다. */
@@ -18,6 +19,7 @@ export function PostWriteRow({
   viewerAvatarUrl: string | null;
   label?: string;
 }) {
+  const t = useT();
   return (
     <Link
       to={to}
@@ -31,7 +33,7 @@ export function PostWriteRow({
         />
       </span>
       <span className="flex-1 rounded-full bg-muted px-4 py-2 text-sm text-muted-foreground transition-[filter] group-hover:brightness-95">
-        {label}
+        {label ?? t("글쓰기…")}
       </span>
     </Link>
   );

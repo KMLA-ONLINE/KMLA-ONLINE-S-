@@ -1,4 +1,5 @@
 import { randomUUID } from "~/shared/lib/random-uuid";
+import type { Locale } from "~/shared/i18n";
 
 export type Weekday = 0 | 1 | 2 | 3 | 4;
 
@@ -47,6 +48,33 @@ export const SEMESTERS = [
 const DEFAULT_SEMESTER: SemesterKey = "1-1";
 
 export const DAYS = ["월", "화", "수", "목", "금"] as const;
+
+const WEEKDAY_LABELS: Record<
+  Locale,
+  { short: readonly string[]; long: readonly string[] }
+> = {
+  ko: {
+    short: DAYS,
+    long: ["월요일", "화요일", "수요일", "목요일", "금요일"],
+  },
+  en: {
+    short: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+    long: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+  },
+};
+
+/** 요일 이름. `DAYS`는 저장 인덱스이자 한국어 짧은 이름이라 그대로 두고, 화면은 이걸 쓴다. */
+export function weekdayLabel(
+  day: Weekday,
+  locale: Locale = "ko",
+  length: "short" | "long" = "short",
+) {
+  return WEEKDAY_LABELS[locale][length][day];
+}
+
+export function periodLabel(period: number, locale: Locale = "ko") {
+  return locale === "en" ? `Period ${period}` : `${period}교시`;
+}
 
 export const PERIODS = [
   { period: 1, start: "08:30" },

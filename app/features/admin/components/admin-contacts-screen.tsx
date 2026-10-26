@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useFetcher } from "react-router";
 
 import { ADMIN_CONTACT_LIMIT, type AdminContact } from "~/features/support";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Card,
@@ -36,6 +37,7 @@ export function AdminContactsScreen({
 }: {
   contacts: AdminContact[];
 }) {
+  const t = useT();
   const fetcher = useFetcher<AdminContactsActionResult>();
   const [rows, setRows] = useState(() => contacts.map(toRow));
   const [dirty, setDirty] = useState(false);
@@ -70,11 +72,11 @@ export function AdminContactsScreen({
     <div className="space-y-6 px-0 py-4 md:px-4">
       <Card className="rounded-none md:rounded-xl">
         <CardHeader>
-          <CardTitle>관리자 연락처</CardTitle>
+          <CardTitle>{t("관리자 연락처")}</CardTitle>
           <CardDescription>
-            로그인에 실패했을 때, 회원가입 인증 단계, 승인 대기, 가입 차단
-            화면에서 볼 수 있습니다. 로그인하지 않은 사람도 볼 수 있으니 개인
-            연락처 대신 공용 메일이나 오픈채팅 링크를 넣어 주세요.
+            {t(
+              "로그인에 실패했을 때, 회원가입 인증 단계, 승인 대기, 가입 차단 화면에서 볼 수 있습니다. 로그인하지 않은 사람도 볼 수 있으니 개인 연락처 대신 공용 메일이나 오픈채팅 링크를 넣어 주세요.",
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -88,7 +90,7 @@ export function AdminContactsScreen({
                   <div className="grid gap-3 sm:grid-cols-[8rem_1fr]">
                     <Field>
                       <FieldLabel htmlFor={`contact-kind-${row.key}`}>
-                        종류
+                        {t("종류")}
                       </FieldLabel>
                       <NativeSelect
                         id={`contact-kind-${row.key}`}
@@ -100,21 +102,21 @@ export function AdminContactsScreen({
                         }
                       >
                         <NativeSelectOption value="link">
-                          링크
+                          {t("링크")}
                         </NativeSelectOption>
                         <NativeSelectOption value="email">
-                          이메일
+                          {t("이메일")}
                         </NativeSelectOption>
                       </NativeSelect>
                     </Field>
                     <Field>
                       <FieldLabel htmlFor={`contact-label-${row.key}`}>
-                        이름
+                        {t("이름")}
                       </FieldLabel>
                       <TextField
                         id={`contact-label-${row.key}`}
                         value={row.label}
-                        placeholder="예: 학생회 오픈채팅"
+                        placeholder={t("예: 학생회 오픈채팅")}
                         onChange={(event) =>
                           patch(row.key, { label: event.target.value })
                         }
@@ -123,7 +125,7 @@ export function AdminContactsScreen({
                   </div>
                   <Field data-invalid={Boolean(rowErrors[index])}>
                     <FieldLabel htmlFor={`contact-value-${row.key}`}>
-                      {row.kind === "email" ? "이메일 주소" : "링크 주소"}
+                      {row.kind === "email" ? t("이메일 주소") : t("링크 주소")}
                     </FieldLabel>
                     <Input
                       id={`contact-value-${row.key}`}
@@ -146,7 +148,7 @@ export function AdminContactsScreen({
                       type="button"
                       size="icon-sm"
                       variant="ghost"
-                      aria-label={`${index + 1}번 연락처 위로`}
+                      aria-label={t("{n}번 연락처 위로", { n: index + 1 })}
                       disabled={index === 0}
                       onClick={() => move(index, -1)}
                     >
@@ -156,7 +158,7 @@ export function AdminContactsScreen({
                       type="button"
                       size="icon-sm"
                       variant="ghost"
-                      aria-label={`${index + 1}번 연락처 아래로`}
+                      aria-label={t("{n}번 연락처 아래로", { n: index + 1 })}
                       disabled={index === rows.length - 1}
                       onClick={() => move(index, 1)}
                     >
@@ -166,7 +168,7 @@ export function AdminContactsScreen({
                       type="button"
                       size="icon-sm"
                       variant="ghost"
-                      aria-label={`${index + 1}번 연락처 삭제`}
+                      aria-label={t("{n}번 연락처 삭제", { n: index + 1 })}
                       onClick={() =>
                         update(rows.filter((item) => item.key !== row.key))
                       }
@@ -179,8 +181,9 @@ export function AdminContactsScreen({
             </ol>
           ) : (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              등록된 연락처가 없습니다. 연락처가 없으면 문의 영역이 표시되지
-              않습니다.
+              {t(
+                "등록된 연락처가 없습니다. 연락처가 없으면 문의 영역이 표시되지 않습니다.",
+              )}
             </p>
           )}
           <Button
@@ -193,7 +196,10 @@ export function AdminContactsScreen({
             }
           >
             <PlusIcon data-icon="inline-start" />
-            연락처 추가 ({rows.length}/{ADMIN_CONTACT_LIMIT})
+            {t("연락처 추가 ({count}/{limit})", {
+              count: rows.length,
+              limit: ADMIN_CONTACT_LIMIT,
+            })}
           </Button>
         </CardContent>
       </Card>
@@ -205,12 +211,12 @@ export function AdminContactsScreen({
         ) : null}
         {result?.ok ? (
           <p role="status" className="text-sm text-muted-foreground">
-            저장했습니다.
+            {t("저장했습니다.")}
           </p>
         ) : null}
         <Button type="button" disabled={busy} onClick={save}>
           {busy ? <Spinner data-icon="inline-start" /> : null}
-          저장
+          {t("저장")}
         </Button>
       </div>
     </div>

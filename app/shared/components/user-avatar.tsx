@@ -1,3 +1,4 @@
+import { useT } from "~/shared/i18n";
 import { Avatar, AvatarFallback, AvatarImage } from "~/shared/ui/avatar";
 
 /**
@@ -36,7 +37,8 @@ export function UserAvatar({
   size = "default",
   className,
 }: UserAvatarProps) {
-  const alt = name ? `${name} 프로필 사진` : "프로필 사진";
+  const t = useT();
+  const alt = name ? t("{name} 프로필 사진", { name }) : t("프로필 사진");
 
   return (
     <Avatar size={size} className={className}>

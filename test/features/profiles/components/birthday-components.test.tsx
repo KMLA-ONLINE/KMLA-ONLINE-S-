@@ -1,6 +1,6 @@
 import { screen, within } from "@testing-library/react";
 import { useRef, type ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   BirthdayListScreen,
@@ -276,5 +276,51 @@ describe("birthday components", () => {
     ));
 
     expect(screen.getByText("등록된 생일이 없습니다.")).toBeVisible();
+  });
+});
+
+describe("birthday components in English", () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("translates the list heading, filters, dates and today marker", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => (
+      <BirthdayListScreen
+        birthdays={birthdayCalendar}
+        referenceDate="2026-12-31"
+      />
+    ));
+
+    expect(
+      screen.getByRole("heading", { name: "Birthdays" }),
+    ).toBeInTheDocument();
+    const filters = screen.getByRole("group", { name: "Cohort filter" });
+    expect(within(filters).getByRole("button", { name: "All" })).toBeVisible();
+    expect(
+      within(filters).getByRole("button", { name: "Cohort 28" }),
+    ).toBeVisible();
+    expect(
+      within(filters).getByRole("button", { name: "Teacher" }),
+    ).toBeVisible();
+    expect(screen.getByRole("heading", { name: "December" })).toBeVisible();
+    expect(screen.getByText("December 31")).toBeVisible();
+    expect(screen.getByText("Today")).toBeVisible();
+    expect(screen.getByText("Tomorrow")).toBeVisible();
+  });
+
+  it("translates the empty states and the home summary", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => (
+      <>
+        <BirthdayListScreen birthdays={[]} referenceDate="2026-08-26" />
+        <HomeBirthdaySummary birthdays={[]} />
+      </>
+    ));
+
+    expect(screen.getByText("No birthdays have been added yet.")).toBeVisible();
+    expect(screen.getByRole("link", { name: "View birthdays" })).toBeVisible();
+    expect(screen.getByText("No birthdays today")).toBeVisible();
   });
 });

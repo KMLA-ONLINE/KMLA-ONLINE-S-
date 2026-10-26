@@ -32,6 +32,7 @@ import type {
   PushSupport,
 } from "~/features/notifications/model/types";
 import { Deferred } from "~/shared/components/deferred";
+import { useT, type Translate } from "~/shared/i18n";
 import { Badge } from "~/shared/ui/badge";
 import { PendingRegion, Skeleton } from "~/shared/ui/skeleton";
 import { Spinner } from "~/shared/ui/spinner";
@@ -98,61 +99,64 @@ interface SettingsActionResult {
 function describePush(
   support: PushSupport | null,
   pending: boolean,
+  t: Translate,
 ): { label: string; tone: PushTone; message: string } {
   if (support === null) {
     return {
-      label: "확인 실패",
+      label: t("확인 실패"),
       tone: "off",
-      message:
+      message: t(
         "이 기기의 알림 상태를 확인하지 못했습니다. 잠시 후 다시 열어 주세요.",
+      ),
     };
   }
   if (pending) {
     return {
-      label: "변경 중",
+      label: t("변경 중"),
       tone: "off",
-      message: "기기 알림 설정을 변경하고 있습니다.",
+      message: t("기기 알림 설정을 변경하고 있습니다."),
     };
   }
 
   switch (support.state) {
     case "ios-browser":
       return {
-        label: "설치 필요",
+        label: t("설치 필요"),
         tone: "off",
-        message:
+        message: t(
           "iPhone과 iPad에서는 홈 화면에 설치한 앱에서 알림을 켤 수 있습니다.",
+        ),
       };
     case "unconfigured":
       return {
-        label: "사용 불가",
+        label: t("사용 불가"),
         tone: "off",
-        message: "현재 기기 알림을 사용할 수 없습니다.",
+        message: t("현재 기기 알림을 사용할 수 없습니다."),
       };
     case "unsupported":
       return {
-        label: "사용 불가",
+        label: t("사용 불가"),
         tone: "off",
-        message: "이 브라우저에서는 기기 알림을 사용할 수 없습니다.",
+        message: t("이 브라우저에서는 기기 알림을 사용할 수 없습니다."),
       };
     default:
       if (support.permission === "denied") {
         return {
-          label: "차단됨",
+          label: t("차단됨"),
           tone: "blocked",
-          message: "이 기기에서 알림이 차단되어 있습니다.",
+          message: t("이 기기에서 알림이 차단되어 있습니다."),
         };
       }
       return support.subscribed
         ? {
-            label: "켜짐",
+            label: t("켜짐"),
             tone: "on",
-            message: "이 기기에서 새 소식을 받을 수 있습니다.",
+            message: t("이 기기에서 새 소식을 받을 수 있습니다."),
           }
         : {
-            label: "꺼짐",
+            label: t("꺼짐"),
             tone: "off",
-            message: "중요한 새 소식을 앱을 열지 않아도 받을 수 있습니다.",
+            message: t("중요한 새 소식을 앱을 열지 않아도 받을 수 있습니다."),
           };
   }
 }
@@ -164,10 +168,11 @@ function describePush(
 function summarizeDelivery(
   pushEnabled: boolean,
   preferences: NotificationPreferences,
+  t: Translate,
 ): { headline: string; detail?: string } {
   if (!pushEnabled) {
     return {
-      headline: "이 기기로 오는 기기 알림이 없습니다.",
+      headline: t("이 기기로 오는 기기 알림이 없습니다."),
     };
   }
 
@@ -175,21 +180,23 @@ function summarizeDelivery(
 
   if (enabled.length === 0) {
     return {
-      headline: "이 기기로 운영 조치 기기 알림만 받습니다.",
-      detail: "그 밖의 알림은 앱 알림함에서 확인합니다.",
+      headline: t("이 기기로 운영 조치 기기 알림만 받습니다."),
+      detail: t("그 밖의 알림은 앱 알림함에서 확인합니다."),
     };
   }
 
   if (enabled.length === PREFERENCE_ROWS.length) {
     return {
-      headline: "이 기기로 받는 알림 — 모든 유형",
-      detail: "반응(좋아요 등)은 기기 알림 없이 앱 알림함에만 표시됩니다.",
+      headline: t("이 기기로 받는 알림 — 모든 유형"),
+      detail: t("반응(좋아요 등)은 기기 알림 없이 앱 알림함에만 표시됩니다."),
     };
   }
 
   return {
-    headline: `이 기기로 받는 알림 — ${enabled.map(([, , title]) => title).join(", ")}`,
-    detail: "그 밖의 알림은 앱 알림함에서만 확인합니다.",
+    headline: t("이 기기로 받는 알림 — {types}", {
+      types: enabled.map(([, , title]) => t(title)).join(", "),
+    }),
+    detail: t("그 밖의 알림은 앱 알림함에서만 확인합니다."),
   };
 }
 
@@ -289,9 +296,10 @@ function GroupPreferenceRow({
 
 /** 서버 RPC까지 거치는 기기 상태 확인을 기다리는 동안 Push 카드 자리를 잡아 둔다. */
 function PushCardSkeleton() {
+  const t = useT();
   return (
     <PendingRegion
-      label="이 기기의 알림 상태를"
+      label={t("이 기기의 알림 상태를")}
       className="overflow-hidden rounded-xl border bg-card"
     >
       <div className="flex items-start gap-3 p-4">
@@ -323,6 +331,7 @@ function PushCard({
   setPushPending: (pending: boolean) => void;
   disabled: boolean;
 }) {
+  const t = useT();
   const [pushState, setPushState] = useState({
     source: initialPushSupport,
     value: initialPushSupport,
@@ -352,13 +361,13 @@ function PushCard({
         setPushState({ source: initialPushSupport, value: next });
         // 권한 창을 닫기만 하면 스위치가 그대로라 탭이 씹힌 것처럼 보인다.
         if (next.state === "available" && next.permission === "default") {
-          toast("알림 권한이 허용되지 않았습니다. 다시 눌러 허용해 주세요.");
+          toast(t("알림 권한이 허용되지 않았습니다. 다시 눌러 허용해 주세요."));
         }
       }
     } catch (error) {
       console.error("Failed to update Web Push subscription", error);
       toast.error(
-        "알림 설정을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        t("알림 설정을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요."),
       );
       setPushState({
         source: initialPushSupport,
@@ -385,8 +394,8 @@ function PushCard({
     return watchNotificationPermission(() => void recheckPush());
   }, [pushBlocked]);
 
-  const push = describePush(pushSupport, pushPending);
-  const summary = summarizeDelivery(pushEnabled, preferences);
+  const push = describePush(pushSupport, pushPending, t);
+  const summary = summarizeDelivery(pushEnabled, preferences, t);
 
   return (
     <section className="overflow-hidden rounded-xl border bg-card">
@@ -406,7 +415,7 @@ function PushCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-semibold">이 기기의 알림</h2>
+            <h2 className="font-semibold">{t("이 기기의 알림")}</h2>
             <Badge
               variant={
                 push.tone === "on"
@@ -428,10 +437,10 @@ function PushCard({
         pushSupport.permission !== "denied" ? (
           <div className="flex min-w-8 items-center justify-end gap-2">
             {pushPending ? (
-              <Spinner aria-label="기기 알림 설정 변경 중" />
+              <Spinner aria-label={t("기기 알림 설정 변경 중")} />
             ) : null}
             <Switch
-              aria-label="이 기기의 알림"
+              aria-label={t("이 기기의 알림")}
               checked={pushEnabled}
               disabled={disabled}
               onCheckedChange={() => void togglePush()}
@@ -447,9 +456,9 @@ function PushCard({
 
       {pushBlocked ? (
         <div className="border-t bg-muted/30 px-4 py-3 text-sm">
-          <p>{PERMISSION_HELP[getPermissionHelpPlatform()]}</p>
+          <p>{t(PERMISSION_HELP[getPermissionHelpPlatform()])}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            허용한 뒤 이 화면으로 돌아오면 자동으로 다시 확인합니다.
+            {t("허용한 뒤 이 화면으로 돌아오면 자동으로 다시 확인합니다.")}
           </p>
         </div>
       ) : null}
@@ -457,8 +466,9 @@ function PushCard({
       {pushSupport?.state === "ios-browser" ? (
         <div className="flex gap-2 border-t bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           <SmartphoneIcon className="mt-0.5 size-4 shrink-0" />
-          Safari 공유 메뉴에서 ‘홈 화면에 추가’를 선택한 뒤 설치된 앱을 열어
-          주세요.
+          {t(
+            "Safari 공유 메뉴에서 ‘홈 화면에 추가’를 선택한 뒤 설치된 앱을 열어 주세요.",
+          )}
         </div>
       ) : null}
     </section>
@@ -473,6 +483,7 @@ function MessagePreviewSection({
   initialHidden: boolean;
   disabled: boolean;
 }) {
+  const t = useT();
   const fetcher = useFetcher<SettingsActionResult>();
   const hidden = fetcher.formData
     ? fetcher.formData.get("hidden") === "true"
@@ -480,22 +491,27 @@ function MessagePreviewSection({
 
   return (
     <SettingsSection
-      title="메시지"
-      footnote="잠금 화면에서만 내용을 가리려면 기기 설정의 알림 미리보기를 사용해 주세요."
+      title={t("메시지")}
+      footnote={t(
+        "잠금 화면에서만 내용을 가리려면 기기 설정의 알림 미리보기를 사용해 주세요.",
+      )}
     >
       <div className="flex items-center gap-3 px-4 py-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
           <EyeOffIcon className="size-4.5" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">알림에 메시지 내용 가리기</p>
+          <p className="text-sm font-medium">
+            {t("알림에 메시지 내용 가리기")}
+          </p>
           <p className="text-xs text-muted-foreground">
-            켜면 새 메시지 기기 알림에 내용 대신 새 메시지가 있다는 안내만
-            보입니다. 계정의 모든 기기에 적용됩니다.
+            {t(
+              "켜면 새 메시지 기기 알림에 내용 대신 새 메시지가 있다는 안내만 보입니다. 계정의 모든 기기에 적용됩니다.",
+            )}
           </p>
         </div>
         <Switch
-          aria-label="알림에 메시지 내용 가리기"
+          aria-label={t("알림에 메시지 내용 가리기")}
           checked={hidden}
           disabled={disabled}
           onCheckedChange={(checked) =>
@@ -525,6 +541,7 @@ export function NotificationSettings({
   pushSupport: PushSupport | null | Promise<PushSupport | null>;
   groupPreferences: GroupNotificationPreference[];
 }) {
+  const t = useT();
   const [pushPending, setPushPending] = useState(false);
   const fetcher = useFetcher<SettingsActionResult>();
   const activeFetchers = useFetchers();
@@ -584,9 +601,11 @@ export function NotificationSettings({
 
   return (
     <>
-      <PageHeader title="알림 설정" back="/settings" />
+      <PageHeader title={t("알림 설정")} back="/settings" />
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
-        <h1 className="hidden text-2xl font-semibold md:block">알림 설정</h1>
+        <h1 className="hidden text-2xl font-semibold md:block">
+          {t("알림 설정")}
+        </h1>
 
         <Deferred value={pushSupport} fallback={<PushCardSkeleton />}>
           {(support) => (
@@ -600,23 +619,25 @@ export function NotificationSettings({
           )}
         </Deferred>
 
-        <SettingsSection title="종류별 기기 알림">
+        <SettingsSection title={t("종류별 기기 알림")}>
           {PREFERENCE_ROWS.map(([key, Icon, title, description]) => (
             <div key={key} className="flex items-center gap-3 px-4 py-3">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                 <Icon className="size-4.5" aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{title}</p>
-                <p className="text-xs text-muted-foreground">{description}</p>
+                <p className="text-sm font-medium">{t(title)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t(description)}
+                </p>
                 {!preferences[key] ? (
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    앱 알림함에서는 계속 확인할 수 있습니다.
+                    {t("앱 알림함에서는 계속 확인할 수 있습니다.")}
                   </p>
                 ) : null}
               </div>
               <Switch
-                aria-label={title}
+                aria-label={t(title)}
                 checked={preferences[key]}
                 disabled={settingsPending}
                 onCheckedChange={(checked) =>
@@ -638,9 +659,11 @@ export function NotificationSettings({
         />
 
         <SettingsSection
-          title="그룹별 알림"
-          description="기본값을 바꾼 그룹만 보입니다. 그룹 화면의 ⋯ 메뉴에서 그룹마다 바꿀 수 있습니다."
-          footnote="앱 알림함과 기기 알림을 각각 설정할 수 있습니다."
+          title={t("그룹별 알림")}
+          description={t(
+            "기본값을 바꾼 그룹만 보입니다. 그룹 화면의 ⋯ 메뉴에서 그룹마다 바꿀 수 있습니다.",
+          )}
+          footnote={t("앱 알림함과 기기 알림을 각각 설정할 수 있습니다.")}
         >
           {adjustedGroups.length > 0 ? (
             adjustedGroups.map((preference) => (
@@ -652,7 +675,7 @@ export function NotificationSettings({
             ))
           ) : (
             <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-              모든 그룹이 기본 설정입니다.
+              {t("모든 그룹이 기본 설정입니다.")}
             </p>
           )}
         </SettingsSection>

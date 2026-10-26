@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { MentionPickerDialog } from "~/features/posts/components/mention-picker-dialog";
 import type { MentionCandidate } from "~/features/posts/model/mentions";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";
 
@@ -25,6 +26,7 @@ export function MentionButton({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const t = useT();
 
   return (
     <>
@@ -35,7 +37,7 @@ export function MentionButton({
               type="button"
               size="icon-sm"
               variant="ghost"
-              aria-label="멘션"
+              aria-label={t("멘션")}
               disabled={disabled}
               className={className}
               onClick={() => setOpen(true)}
@@ -44,7 +46,7 @@ export function MentionButton({
             </Button>
           }
         />
-        <TooltipContent>멘션</TooltipContent>
+        <TooltipContent>{t("멘션")}</TooltipContent>
       </Tooltip>
       {/* 열려 있을 때만 마운트해 지난 검색어를 지운다. */}
       {open ? (

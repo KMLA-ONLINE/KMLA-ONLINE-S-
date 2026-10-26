@@ -1,6 +1,6 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GroupNotificationDialog } from "~/features/notifications/components/group-notification-dialog";
 import type { GroupNotificationPreference } from "~/features/notifications/model/types";
@@ -97,5 +97,42 @@ describe("GroupNotificationDialog", () => {
         screen.getByRole("switch", { name: "테스트 그룹 관련 활동 기기 알림" }),
       ).not.toBeChecked(),
     );
+  });
+
+  describe("in English", () => {
+    beforeEach(() => {
+      window.localStorage.setItem("kmla-online:language:v1", "en");
+    });
+    afterEach(() => {
+      window.localStorage.clear();
+    });
+
+    it("renders the dialog in English", async () => {
+      mocks.getMyGroupNotificationPreference.mockResolvedValueOnce(preference);
+
+      renderRoute(Harness);
+
+      expect(
+        await screen.findByRole("switch", {
+          name: "테스트 그룹 related activity device notifications",
+        }),
+      ).toBeChecked();
+      expect(
+        screen.getByRole("heading", { name: "Notification settings" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Choose which activity in 테스트 그룹 sends you notifications.",
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("combobox", {
+          name: "테스트 그룹 notification level",
+        }),
+      ).toHaveTextContent("All");
+      expect(
+        screen.getByText("Close", { selector: "button" }),
+      ).toBeInTheDocument();
+    });
   });
 });

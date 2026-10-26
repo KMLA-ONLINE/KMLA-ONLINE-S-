@@ -4,9 +4,12 @@ import {
   DAYS,
   PERIODS,
   getAvailableEndPeriods,
+  periodLabel,
+  weekdayLabel,
   type CourseMeeting,
   type Weekday,
 } from "~/features/timetable/model/timetable";
+import { useLocale, useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
@@ -25,6 +28,8 @@ export function CourseMeetingFields({
   onChange,
   onRemove,
 }: CourseMeetingFieldsProps) {
+  const t = useT();
+  const locale = useLocale();
   return (
     <div className="rounded-2xl bg-muted/45 p-2.5">
       <div className="flex items-center gap-2">
@@ -46,7 +51,7 @@ export function CourseMeetingFields({
                   : "text-muted-foreground",
               )}
             >
-              {day}
+              {weekdayLabel(dayPosition as Weekday, locale)}
             </button>
           ))}
         </div>
@@ -56,7 +61,7 @@ export function CourseMeetingFields({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="시간 삭제"
+            aria-label={t("시간 삭제")}
             onClick={onRemove}
           >
             <Trash2Icon />
@@ -66,7 +71,7 @@ export function CourseMeetingFields({
 
       <div className="mt-2 grid grid-cols-2 gap-2">
         <NativeSelect
-          aria-label="시작 교시"
+          aria-label={t("시작 교시")}
           value={meeting.start}
           className="w-full"
           onChange={(event) => {
@@ -85,14 +90,13 @@ export function CourseMeetingFields({
         >
           {PERIODS.map((period) => (
             <NativeSelectOption key={period.period} value={period.period}>
-              {period.period}
-              교시
+              {periodLabel(period.period, locale)}
             </NativeSelectOption>
           ))}
         </NativeSelect>
 
         <NativeSelect
-          aria-label="종료 교시"
+          aria-label={t("종료 교시")}
           value={meeting.end}
           className="w-full"
           onChange={(event) =>
@@ -103,8 +107,7 @@ export function CourseMeetingFields({
         >
           {getAvailableEndPeriods(meeting.start).map((period) => (
             <NativeSelectOption key={period.period} value={period.period}>
-              {period.period}
-              교시
+              {periodLabel(period.period, locale)}
             </NativeSelectOption>
           ))}
         </NativeSelect>

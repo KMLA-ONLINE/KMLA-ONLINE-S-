@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import type { ActionFunction } from "react-router";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GroupPostReportsPanel } from "~/features/posts/components/group/group-post-reports-panel";
 import type { GroupPostReportSummary } from "~/features/posts/data/group-reports";
@@ -123,5 +123,20 @@ describe("GroupPostReportsPanel", () => {
 
     expect(screen.getByText("신고 1")).toBeVisible();
     expect(screen.getByText("이전 5건 무시됨")).toBeVisible();
+  });
+});
+
+describe("GroupPostReportsPanel in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the report row in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderPanel(buildReport({ report_count: 1, dismissed_count: 5 }));
+
+    expect(screen.getByText("Reports 1")).toBeVisible();
+    expect(screen.getByText("5 earlier dismissed")).toBeVisible();
+    expect(screen.getByRole("link", { name: "View post" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Dismiss" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Delete post" })).toBeVisible();
   });
 });

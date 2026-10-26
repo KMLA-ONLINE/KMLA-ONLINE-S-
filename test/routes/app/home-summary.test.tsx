@@ -264,3 +264,17 @@ describe("home school-life summaries", () => {
     expect(screen.getByRole("link", { name: "급식 보기" })).toBeVisible();
   });
 });
+
+describe("home header in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("labels the header actions in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderHome(Promise.resolve([]), Promise.resolve(null));
+
+    expect(
+      await screen.findByRole("button", { name: "Search" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Meals" })).toBeInTheDocument();
+  });
+});

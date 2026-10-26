@@ -5,6 +5,7 @@ import type {
   MessageAttachmentKind,
 } from "~/features/messaging/model/types";
 import { mentionPlainText } from "~/features/posts/model/mentions";
+import { translate, type Locale } from "~/shared/i18n";
 
 /** 답장 인용에 담는 원문 길이. 서버 `private.message_rows`의 `reply_body`와 같다. */
 export const REPLY_PREVIEW_LENGTH = 200;
@@ -24,12 +25,13 @@ export function formatLastMessagePreview(
     "type" | "participants" | "viewerId" | "lastMessage"
   >,
   origin: string,
+  locale: Locale = "ko",
 ): string {
   const { lastMessage } = conversation;
   if (!lastMessage) return "";
-  const body = previewBody(lastMessage, origin);
+  const body = previewBody(lastMessage, origin, locale);
   if (lastMessage.senderId && lastMessage.senderId === conversation.viewerId) {
-    return `나: ${body}`;
+    return translate(locale, "나: {body}", { body });
   }
   if (conversation.type !== "group" || !lastMessage.senderId) return body;
 
@@ -50,9 +52,10 @@ export function formatReplyPreview(
     attachmentKind?: MessageAttachmentKind | null;
   },
   origin: string,
+  locale: Locale = "ko",
 ): string {
-  if (original.deleted) return "삭제된 메시지입니다";
-  return previewBody(original, origin);
+  if (original.deleted) return translate(locale, "삭제된 메시지입니다");
+  return previewBody(original, origin, locale);
 }
 
 /**
@@ -62,11 +65,14 @@ export function formatReplyPreview(
 function previewBody(
   message: { body: string; attachmentKind?: MessageAttachmentKind | null },
   origin: string,
+  locale: Locale,
 ): string {
-  if (sharedPostOf(message, origin)) return "게시물";
+  if (sharedPostOf(message, origin)) return translate(locale, "게시물");
   // 서버가 준 미리보기는 이미 글자지만, 화면이 방금 만든 미리보기는 원문일 수 있다.
   return (
     mentionPlainText(message.body) ||
-    (message.attachmentKind ? attachmentKindLabel(message.attachmentKind) : "")
+    (message.attachmentKind
+      ? attachmentKindLabel(message.attachmentKind, locale)
+      : "")
   );
 }

@@ -5,6 +5,7 @@ import type {
   ProfileGender,
   ProfileType,
 } from "~/features/profiles/model/types";
+import { translate, type Locale } from "~/shared/i18n";
 import { isCompleteDate, readDateField } from "~/shared/lib/date-field";
 import { getSupabase } from "~/shared/supabase/client";
 
@@ -83,26 +84,28 @@ function validOptionalInteger(
 export function validateProfileEdit(
   values: ProfileEditValues,
   type: ProfileType,
+  locale: Locale = "ko",
 ): ProfileEditErrors {
   const errors: ProfileEditErrors = {};
   const name = values.name.trim();
+  const t = (source: string) => translate(locale, source);
 
   if (!PUB_ID_PATTERN.test(values.pubId)) {
-    errors.pubId = "영문 소문자·숫자·하이픈으로 5~15자를 입력해 주세요.";
+    errors.pubId = t("영문 소문자·숫자·하이픈으로 5~15자를 입력해 주세요.");
   } else if (RESERVED_PUB_IDS.has(values.pubId)) {
-    errors.pubId = "사용할 수 없는 ID입니다.";
+    errors.pubId = t("사용할 수 없는 ID입니다.");
   }
 
   if (name.length < 1 || name.length > 50) {
-    errors.name = "이름은 1자 이상 50자 이하로 입력해 주세요.";
+    errors.name = t("이름은 1자 이상 50자 이하로 입력해 주세요.");
   }
 
   if (values.description.length > 500) {
-    errors.description = "소개는 최대 500자까지 입력할 수 있습니다.";
+    errors.description = t("소개는 최대 500자까지 입력할 수 있습니다.");
   }
 
   if (values.birthday && !isCompleteDate(values.birthday)) {
-    errors.birthday = "생일을 모두 선택하거나 모두 비워 주세요.";
+    errors.birthday = t("생일을 모두 선택하거나 모두 비워 주세요.");
   }
 
   const phone = values.phoneNumber.trim();
@@ -113,14 +116,15 @@ export function validateProfileEdit(
       digits.length < 8 ||
       digits.length > 15
     ) {
-      errors.phoneNumber =
-        "전화번호를 올바른 형식으로 입력해 주세요. (예: 010-1234-5678)";
+      errors.phoneNumber = t(
+        "전화번호를 올바른 형식으로 입력해 주세요. (예: 010-1234-5678)",
+      );
     }
   }
 
   const email = values.contactEmail.trim();
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    errors.contactEmail = "이메일 형식을 확인해 주세요.";
+    errors.contactEmail = t("이메일 형식을 확인해 주세요.");
   }
 
   if (type === "student" || type === "alumni") {
@@ -128,19 +132,19 @@ export function validateProfileEdit(
       !validOptionalInteger(values.cohort, 1, 100) ||
       values.cohort === null
     ) {
-      errors.cohort = "기수는 1~100 사이의 숫자로 입력해 주세요.";
+      errors.cohort = t("기수는 1~100 사이의 숫자로 입력해 주세요.");
     }
   }
 
   if (type === "student") {
     if (values.department.trim().length > 100) {
-      errors.department = "부서는 최대 100자까지 입력할 수 있습니다.";
+      errors.department = t("부서는 최대 100자까지 입력할 수 있습니다.");
     }
     if (!validOptionalInteger(values.classNo, 1, 10)) {
-      errors.classNo = "반은 1~10 사이의 숫자로 입력해 주세요.";
+      errors.classNo = t("반은 1~10 사이의 숫자로 입력해 주세요.");
     }
     if (!validOptionalInteger(values.dormRoom, 101, 1008)) {
-      errors.dormRoom = "기숙사 방은 101~1008 사이의 숫자로 입력해 주세요.";
+      errors.dormRoom = t("기숙사 방은 101~1008 사이의 숫자로 입력해 주세요.");
     }
   }
 
@@ -153,22 +157,28 @@ function optional(value: string): string | undefined {
 }
 
 /** 저장 실패를 폼 오류로 옮긴다. 공개 ID 중복은 서버만 알아, 상단 문구 대신 필드 오류로 돌려 고칠 곳을 남긴다. */
-export function readProfileEditFailure(error: unknown): ProfileEditErrors {
+export function readProfileEditFailure(
+  error: unknown,
+  locale: Locale = "ko",
+): ProfileEditErrors {
   const candidate = (error ?? {}) as { code?: string; message?: string };
+  const t = (source: string) => translate(locale, source);
 
   if (candidate.code === "23505") {
-    return { pubId: "이미 사용 중인 ID입니다." };
+    return { pubId: t("이미 사용 중인 ID입니다.") };
   }
 
   if (
     candidate.code === "23514" &&
     candidate.message?.includes("profiles_pub_id")
   ) {
-    return { pubId: "사용할 수 없는 ID입니다. 다른 ID를 입력해 주세요." };
+    return { pubId: t("사용할 수 없는 ID입니다. 다른 ID를 입력해 주세요.") };
   }
 
   return {
-    form: "프로필을 저장하지 못했습니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.",
+    form: t(
+      "프로필을 저장하지 못했습니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.",
+    ),
   };
 }
 

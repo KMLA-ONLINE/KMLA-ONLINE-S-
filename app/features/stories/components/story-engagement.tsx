@@ -21,6 +21,7 @@ import {
 } from "~/features/stories/data/queries";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 
@@ -62,6 +63,7 @@ export function StoryReactionBar({
   storyId: number;
   onActiveChange: (active: boolean) => void;
 }) {
+  const t = useT();
   const [floating, setFloating] = useState<
     { key: number; reaction: PostReaction; left: number }[]
   >([]);
@@ -107,8 +109,8 @@ export function StoryReactionBar({
     sendStoryReaction(storyId, reaction).catch((error: unknown) => {
       toast.error(
         isStoryLimitError(error)
-          ? "이 스토리에 보낼 수 있는 반응을 모두 보냈습니다."
-          : "반응을 보내지 못했습니다.",
+          ? t("이 스토리에 보낼 수 있는 반응을 모두 보냈습니다.")
+          : t("반응을 보내지 못했습니다."),
       );
     });
 
@@ -141,7 +143,7 @@ export function StoryReactionBar({
         <button
           key={type.key}
           type="button"
-          aria-label={`${type.label} 보내기`}
+          aria-label={t("{label} 보내기", { label: t(type.label) })}
           onClick={() => send(type.key, index)}
           className="pointer-events-auto flex size-11 items-center justify-center rounded-full text-[1.75rem] transition-transform outline-none focus-visible:ring-2 focus-visible:ring-white active:scale-125"
         >
@@ -297,12 +299,17 @@ export function StoryViewersTrigger({
   open: boolean;
   onOpen: () => void;
 }) {
+  const t = useT();
   const count = viewers?.length;
 
   return (
     <button
       type="button"
-      aria-label={count === undefined ? "읽은 사람" : `읽은 사람 ${count}명`}
+      aria-label={
+        count === undefined
+          ? t("읽은 사람")
+          : t("읽은 사람 {count}명", { count })
+      }
       aria-controls={STORY_VIEWERS_PANEL_ID}
       aria-expanded={open}
       onClick={onOpen}
@@ -324,7 +331,7 @@ export function StoryViewersTrigger({
         <EyeIcon className="size-5" aria-hidden />
       )}
       <span aria-hidden>
-        {count === undefined ? "읽은 사람" : `${count}명`}
+        {count === undefined ? t("읽은 사람") : t("{count}명", { count })}
       </span>
     </button>
   );
@@ -356,6 +363,7 @@ export function StoryViewersPanel({
   onScroll: (scrollTop: number) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const panelRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -476,7 +484,7 @@ export function StoryViewersPanel({
     <section
       ref={panelRef}
       id={STORY_VIEWERS_PANEL_ID}
-      aria-label="읽은 사람"
+      aria-label={t("읽은 사람")}
       inert={!open}
       className={cn(
         "absolute inset-x-0 bottom-0 z-30 mx-auto flex h-[62dvh] max-w-md flex-col rounded-t-2xl bg-background text-foreground shadow-2xl transition-transform duration-300 ease-out motion-reduce:transition-none",
@@ -508,14 +516,16 @@ export function StoryViewersPanel({
       >
         <span className="absolute top-2 left-1/2 h-1 w-10 -translate-x-1/2 rounded-full bg-muted-foreground/40" />
         <h2 className="mt-3 flex-1 text-base font-semibold">
-          읽은 사람{viewers ? ` ${viewers.length}명` : ""}
+          {viewers
+            ? t("읽은 사람 {count}명", { count: viewers.length })
+            : t("읽은 사람")}
         </h2>
         <Button
           ref={closeRef}
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label="읽은 사람 닫기"
+          aria-label={t("읽은 사람 닫기")}
           className="mt-3"
           onClick={onClose}
         >
@@ -529,11 +539,11 @@ export function StoryViewersPanel({
       >
         {failed && !viewers ? (
           <p className="px-2 text-sm text-muted-foreground">
-            읽은 사람을 불러오지 못했습니다.
+            {t("읽은 사람을 불러오지 못했습니다.")}
           </p>
         ) : viewers?.length === 0 ? (
           <p className="px-2 text-sm text-muted-foreground">
-            아직 본 사람이 없습니다.
+            {t("아직 본 사람이 없습니다.")}
           </p>
         ) : (
           <ul>
@@ -548,6 +558,7 @@ export function StoryViewersPanel({
 }
 
 function StoryViewerRow({ viewer }: { viewer: StoryViewerEntry }) {
+  const t = useT();
   const summaryId = useId();
   const tally = REACTION_TYPES.map((type) => ({
     ...type,
@@ -577,7 +588,7 @@ function StoryViewerRow({ viewer }: { viewer: StoryViewerEntry }) {
       {tally.length > 0 ? (
         <span className="flex shrink-0 items-center gap-2 text-base tabular-nums">
           <span id={summaryId} className="sr-only">
-            {tally.map((type) => `${type.label} ${type.count}`).join(", ")}
+            {tally.map((type) => `${t(type.label)} ${type.count}`).join(", ")}
           </span>
           {tally.map((type) => (
             <span

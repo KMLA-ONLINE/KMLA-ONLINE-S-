@@ -1,7 +1,7 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useActionData, useNavigationType, useParams } from "react-router";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   ProfileEditScreen,
@@ -224,5 +224,35 @@ describe("ProfileEditScreen", () => {
     expect(screen.getByText(String(actionData.errors?.pubId))).toBeVisible();
     // 거절당해 돌아온 값은 사용자가 고친 값이라 바로 다시 저장할 수 있다.
     expect(screen.getAllByRole("button", { name: "저장" })[0]).toBeEnabled();
+  });
+});
+
+describe("ProfileEditScreen in English", () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("labels the form, sections and actions in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderScreen();
+
+    expect(
+      screen.getAllByRole("heading", { name: "Edit profile" }),
+    ).not.toHaveLength(0);
+    expect(screen.getAllByRole("button", { name: "Save" })).not.toHaveLength(0);
+    expect(screen.getByRole("link", { name: "Cancel" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Contact" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Class")).toBeInTheDocument();
+    expect(screen.getByLabelText("Phone")).toBeInTheDocument();
+    expect(
+      screen.getByRole("switch", { name: "Returning student" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Lowercase letters, numbers and hyphens, 5–15 characters.",
+      ),
+    ).toBeInTheDocument();
   });
 });

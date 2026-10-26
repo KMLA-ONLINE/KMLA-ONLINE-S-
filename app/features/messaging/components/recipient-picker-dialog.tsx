@@ -6,6 +6,7 @@ import { messagingKeys } from "~/features/messaging/data/cache";
 import { searchMessageRecipients } from "~/features/messaging/data/queries";
 import type { MessageRecipient } from "~/features/messaging/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
@@ -47,6 +48,7 @@ export function RecipientPickerDialog({
   /** 실패하면 거부한다. 다이얼로그는 고른 사람을 그대로 두고 다시 시도하게 한다. */
   onSubmit: (selection: RecipientSelection) => Promise<void>;
 }) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selected, setSelected] = useState<MessageRecipient[]>([]);
@@ -97,7 +99,11 @@ export function RecipientPickerDialog({
   }
 
   const submitLabel =
-    mode === "invite" ? "초대" : makesGroup ? "그룹 만들기" : "채팅 시작";
+    mode === "invite"
+      ? t("초대")
+      : makesGroup
+        ? t("그룹 만들기")
+        : t("채팅 시작");
 
   return (
     <Dialog
@@ -110,29 +116,33 @@ export function RecipientPickerDialog({
       <DialogContent className="flex max-h-[min(36rem,90dvh)] flex-col gap-3 sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {mode === "invite" ? "멤버 초대" : "새 채팅"}
+            {mode === "invite" ? t("멤버 초대") : t("새 채팅")}
           </DialogTitle>
           <DialogDescription>
             {/* 고른 만큼 무엇이 만들어질지 바로 알린다. 한 명이면 1:1, 여럿이면 그룹이다. */}
             {mode === "invite"
-              ? "그룹에 초대할 사람을 고르세요."
+              ? t("그룹에 초대할 사람을 고르세요.")
               : selected.length === 0
-                ? "채팅할 사람을 찾아 고르세요."
+                ? t("채팅할 사람을 찾아 고르세요.")
                 : selected.length === 1
-                  ? `${selected[0].name}님과 1:1 채팅을 시작합니다.`
-                  : `${selected.length}명과 그룹 채팅을 만듭니다.`}
+                  ? t("{name}님과 1:1 채팅을 시작합니다.", {
+                      name: selected[0].name,
+                    })
+                  : t("{count}명과 그룹 채팅을 만듭니다.", {
+                      count: selected.length,
+                    })}
           </DialogDescription>
         </DialogHeader>
 
         {selected.length > 0 ? (
-          <ul aria-label="고른 사람" className="flex flex-wrap gap-1.5">
+          <ul aria-label={t("고른 사람")} className="flex flex-wrap gap-1.5">
             {selected.map((recipient) => (
               <li key={recipient.id}>
                 <Button
                   variant="secondary"
                   size="sm"
                   className="h-7 rounded-full pr-1.5"
-                  aria-label={`${recipient.name} 선택 해제`}
+                  aria-label={t("{name} 선택 해제", { name: recipient.name })}
                   onClick={() => toggle(recipient)}
                 >
                   {recipient.name}
@@ -149,8 +159,8 @@ export function RecipientPickerDialog({
             maxLength={GROUP_NAME_MAX_LENGTH}
             enterKeyHint="done"
             onChange={(event) => setGroupName(event.currentTarget.value)}
-            placeholder="그룹 이름"
-            aria-label="그룹 이름"
+            placeholder={t("그룹 이름")}
+            aria-label={t("그룹 이름")}
           />
         ) : null}
 
@@ -172,8 +182,8 @@ export function RecipientPickerDialog({
             value={query}
             enterKeyHint="search"
             onChange={(event) => setQuery(event.currentTarget.value)}
-            placeholder="이름으로 찾기"
-            aria-label="이름으로 찾기"
+            placeholder={t("이름으로 찾기")}
+            aria-label={t("이름으로 찾기")}
             className="rounded-full pl-9"
           />
         </form>
@@ -181,7 +191,7 @@ export function RecipientPickerDialog({
         <div className="min-h-32 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain">
           {searchTerm === "" ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              이름을 입력하고 Enter를 눌러 찾아보세요.
+              {t("이름을 입력하고 Enter를 눌러 찾아보세요.")}
             </p>
           ) : results.isPending ? (
             <div className="flex justify-center py-8">
@@ -192,14 +202,16 @@ export function RecipientPickerDialog({
               role="alert"
               className="py-8 text-center text-sm text-destructive"
             >
-              검색 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
+              {t(
+                "검색 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+              )}
             </p>
           ) : results.data.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              일치하는 사람이 없습니다.
+              {t("일치하는 사람이 없습니다.")}
             </p>
           ) : (
-            <ul aria-label="찾은 사람" className="flex flex-col gap-0.5">
+            <ul aria-label={t("찾은 사람")} className="flex flex-col gap-0.5">
               {results.data.map((recipient) => {
                 const member = excludeIds.includes(recipient.id);
                 const chosen = selected.some(({ id }) => id === recipient.id);
@@ -225,7 +237,9 @@ export function RecipientPickerDialog({
                           {recipient.name}
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">
-                          {member ? "이미 멤버입니다" : recipient.description}
+                          {member
+                            ? t("이미 멤버입니다")
+                            : recipient.description}
                         </span>
                       </span>
                       {chosen ? (

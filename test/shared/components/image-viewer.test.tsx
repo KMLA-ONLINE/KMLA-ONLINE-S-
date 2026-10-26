@@ -714,3 +714,20 @@ describe("ImageViewer", () => {
     });
   });
 });
+
+describe("ImageViewer in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("labels the controls in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderViewer("a", makeImages(), { downloadAll: true });
+
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Next image" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Download" }),
+    ).toBeInTheDocument();
+  });
+});

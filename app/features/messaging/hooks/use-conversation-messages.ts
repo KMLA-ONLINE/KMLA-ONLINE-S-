@@ -60,6 +60,7 @@ import type {
   MessageReplyPreview,
 } from "~/features/messaging/model/types";
 import type { PostReaction } from "~/features/posts/model/types";
+import { useLocale, useT } from "~/shared/i18n";
 
 /** 앞선 페이지 읽기 결과. `empty`면 붙인 메시지가 없다. */
 export type OlderMessagesResult = "loaded" | "empty" | "failed";
@@ -112,6 +113,8 @@ export interface SendDraft {
  * 요청만 결과를 반영한다. 먼저 보낸 요청의 응답이나 되돌림이 나중 선택을 덮지 않게 하기 위해서다.
  */
 export function useConversationMessages(conversation: Conversation) {
+  const t = useT();
+  const locale = useLocale();
   const queryClient = useQueryClient();
   const conversationId = conversation.id;
   // loader가 cache를 이미 채운 경우에는 쓰이지 않는다. cache가 비었을 때(테스트 등)의 시작값이다.
@@ -384,8 +387,10 @@ export function useConversationMessages(conversation: Conversation) {
     const [onlyFailed] = failed;
     toast.error(
       failed.length === 1 && onlyFailed !== undefined
-        ? `사진 한 장은 보내지 못했습니다: ${files[onlyFailed]?.name ?? ""}`
-        : `사진 ${failed.length}장은 보내지 못했습니다.`,
+        ? t("사진 한 장은 보내지 못했습니다: {name}", {
+            name: files[onlyFailed]?.name ?? "",
+          })
+        : t("사진 {count}장은 보내지 못했습니다.", { count: failed.length }),
     );
     return { prepared, shown: kept };
   };
@@ -416,7 +421,7 @@ export function useConversationMessages(conversation: Conversation) {
    * 기기 안의 미리보기로 먼저 그린다.
    */
   const sendFiles = async (selected: File[]) => {
-    const { files, notices } = screenAttachments(selected);
+    const { files, notices } = screenAttachments(selected, [], locale);
     for (const notice of notices) toast.error(notice);
     let allSent = files.length === selected.length;
     for (const group of groupAttachmentsIntoMessages(files)) {
@@ -503,7 +508,7 @@ export function useConversationMessages(conversation: Conversation) {
     } catch {
       if (!isLatest()) return;
       patchMessage(queryClient, conversationId, message.id, previous);
-      toast.error("반응을 남기지 못했습니다.");
+      toast.error(t("반응을 남기지 못했습니다."));
     } finally {
       release();
     }
@@ -525,7 +530,7 @@ export function useConversationMessages(conversation: Conversation) {
         pinned: message.pinned,
       });
       toast.error(
-        pinned ? "고정하지 못했습니다." : "고정을 해제하지 못했습니다.",
+        pinned ? t("고정하지 못했습니다.") : t("고정을 해제하지 못했습니다."),
       );
     } finally {
       release();
@@ -599,7 +604,7 @@ export function useConversationMessages(conversation: Conversation) {
       return true;
     } catch {
       if (isLatest()) apply(previous);
-      toast.error("메시지를 수정하지 못했습니다.");
+      toast.error(t("메시지를 수정하지 못했습니다."));
       return false;
     } finally {
       release();
@@ -655,7 +660,7 @@ export function useConversationMessages(conversation: Conversation) {
       refreshList();
     } catch {
       for (const { rollback } of undo) rollback();
-      toast.error("메시지를 삭제하지 못했습니다.");
+      toast.error(t("메시지를 삭제하지 못했습니다."));
     } finally {
       for (const { release } of undo) release();
     }

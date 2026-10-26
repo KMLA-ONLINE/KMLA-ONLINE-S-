@@ -1,6 +1,6 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useNavigate, useSearchParams } from "react-router";
 
 import { GroupPostSearchDialog } from "~/features/posts/components/group/group-post-search-dialog";
@@ -260,5 +260,24 @@ describe("GroupPostSearchDialog", () => {
       await screen.findByRole("searchbox", { name: "게시물 검색어" }),
     ).toHaveValue("");
     expect(searchGroupPosts).not.toHaveBeenCalled();
+  });
+});
+
+describe("GroupPostSearchDialog in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the search dialog in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderSearch();
+
+    expect(
+      screen.getByRole("searchbox", { name: "Post search query" }),
+    ).toHaveAttribute("placeholder", "Search title, content, author");
+    expect(
+      screen.getByRole("button", { name: "Close search" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Search by title, content, or author name"),
+    ).toBeInTheDocument();
   });
 });

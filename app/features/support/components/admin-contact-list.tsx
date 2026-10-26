@@ -5,6 +5,7 @@ import {
   adminContactHref,
   type AdminContact,
 } from "~/features/support/model/admin-contacts";
+import { useT } from "~/shared/i18n";
 
 /**
  * 막힌 사람만 찾아 누르도록 눈에 띄지 않게 둔다. 문구는 화면의 상황을 묻는 질문이라, 해당하지
@@ -18,11 +19,12 @@ export function AdminContactList({
   prompt: string;
 }) {
   const [open, setOpen] = useState(false);
+  const t = useT();
   if (!contacts.length) return null;
   return (
     <div className="w-full text-center text-xs text-muted-foreground">
       {open ? (
-        <ul aria-label="관리자 연락처" className="flex flex-col gap-1">
+        <ul aria-label={t("관리자 연락처")} className="flex flex-col gap-1">
           {contacts.map((contact, index) => (
             // 같은 주소를 두 번 등록하는 것을 막지 않으므로 순서가 유일한 키다.
             <li key={index} className="break-all">

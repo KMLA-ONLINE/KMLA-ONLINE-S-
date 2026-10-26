@@ -1,3 +1,4 @@
+import { translate, type Locale } from "~/shared/i18n";
 import { isNetworkError } from "~/shared/lib/network-error";
 
 const NETWORK_MESSAGE = "인터넷 연결을 확인한 뒤 다시 시도해 주세요.";
@@ -19,7 +20,12 @@ function readError(error: unknown): { code: unknown; text: string } {
 export function reservationCreateErrorMessage(
   error: unknown,
   recurring: boolean,
+  locale: Locale = "ko",
 ): string {
+  return translate(locale, createErrorSource(error, recurring));
+}
+
+function createErrorSource(error: unknown, recurring: boolean): string {
   if (isNetworkError(error)) return NETWORK_MESSAGE;
 
   const { code, text } = readError(error);
@@ -47,7 +53,14 @@ export function reservationCreateErrorMessage(
  * 42501과 22023이 각각 두 경우를 함께 쓰므로 문구로 가른다. 남의 예약과 이미 지워진
  * 예약은 함수가 일부러 구분하지 않는다.
  */
-export function reservationCancelErrorMessage(error: unknown): string {
+export function reservationCancelErrorMessage(
+  error: unknown,
+  locale: Locale = "ko",
+): string {
+  return translate(locale, cancelErrorSource(error));
+}
+
+function cancelErrorSource(error: unknown): string {
   if (isNetworkError(error)) return NETWORK_MESSAGE;
 
   const { code, text } = readError(error);
@@ -74,7 +87,14 @@ export function reservationCancelErrorMessage(error: unknown): string {
  * 선예약 저장 실패를 옮긴다. `save_gongang_schedule`과 `prepare_gongang_schedule` trigger가
  * 던지는 값이다. 23505는 겹친 상대가 다른 선예약인지 학생 예약인지 문구로 가른다.
  */
-export function gongangScheduleSaveErrorMessage(error: unknown): string {
+export function gongangScheduleSaveErrorMessage(
+  error: unknown,
+  locale: Locale = "ko",
+): string {
+  return translate(locale, scheduleSaveErrorSource(error));
+}
+
+function scheduleSaveErrorSource(error: unknown): string {
   if (isNetworkError(error)) return NETWORK_MESSAGE;
 
   const { code, text } = readError(error);

@@ -32,6 +32,7 @@ import type {
   MessageParticipant,
 } from "~/features/messaging/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   DropdownMenu,
@@ -87,6 +88,7 @@ export function ConversationDetails({
   sharedCounts: { media: number; files: number } | undefined;
   onOpenSharedMedia: (tab: "media" | "files") => void;
 }) {
+  const t = useT();
   const members = activeParticipants(conversation);
   // 나갔거나 내보내진 그룹에서는 지난 메시지만 보이고 멤버 관리는 할 수 없다.
   const manageable =
@@ -97,7 +99,7 @@ export function ConversationDetails({
       : undefined;
   return (
     <aside
-      aria-label="채팅 상세"
+      aria-label={t("채팅 상세")}
       className={cn(
         "min-h-0 w-full flex-col border-l bg-background xl:w-80 xl:shrink-0",
         className,
@@ -108,12 +110,12 @@ export function ConversationDetails({
           variant="ghost"
           size="icon"
           className="-ml-1 rounded-full"
-          aria-label="채팅으로 돌아가기"
+          aria-label={t("채팅으로 돌아가기")}
           onClick={onMobileBack}
         >
           <ChevronLeftIcon aria-hidden />
         </Button>
-        <h2 className="text-xl font-semibold">채팅 정보</h2>
+        <h2 className="text-xl font-semibold">{t("채팅 정보")}</h2>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain px-3 pb-[calc(1rem+var(--app-safe-b))]">
@@ -124,22 +126,22 @@ export function ConversationDetails({
           </h2>
           <p className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
             <LockIcon aria-hidden className="size-3.5 shrink-0" />
-            메시지 암호화됨
+            {t("메시지 암호화됨")}
           </p>
           <div className="mt-3 flex items-start justify-center gap-5">
             {conversation.type === "group" ? (
               <DetailQuickAction
                 icon={UserPlusIcon}
-                label="초대"
-                actionLabel="멤버 초대"
+                label={t("초대")}
+                actionLabel={t("멤버 초대")}
                 onClick={manageable ? onInvite : undefined}
               />
             ) : null}
             {conversation.type === "direct" ? (
               <DetailQuickAction
                 icon={UserRoundIcon}
-                label="프로필"
-                actionLabel={`${conversation.name} 프로필`}
+                label={t("프로필")}
+                actionLabel={t("{name} 프로필", { name: conversation.name })}
                 href={
                   counterpart?.pubId
                     ? `/profile/${counterpart.pubId}`
@@ -150,8 +152,10 @@ export function ConversationDetails({
             {conversation.type === "group" ? (
               <DetailQuickAction
                 icon={NOTIFICATION_LEVELS[notificationLevel].icon}
-                label={NOTIFICATION_LEVELS[notificationLevel].label}
-                actionLabel={`채팅 알림: ${NOTIFICATION_LEVELS[notificationLevel].option}`}
+                label={t(NOTIFICATION_LEVELS[notificationLevel].label)}
+                actionLabel={t("채팅 알림: {option}", {
+                  option: t(NOTIFICATION_LEVELS[notificationLevel].option),
+                })}
                 menu={
                   <DropdownMenuRadioGroup
                     value={notificationLevel}
@@ -174,7 +178,7 @@ export function ConversationDetails({
                           className="whitespace-nowrap"
                         >
                           <Icon aria-hidden />
-                          {option}
+                          {t(option)}
                         </DropdownMenuRadioItem>
                       );
                     })}
@@ -185,11 +189,11 @@ export function ConversationDetails({
               // 1:1 대화에는 멘션이 없어 켜고 끄기만 한다.
               <DetailQuickAction
                 icon={NOTIFICATION_LEVELS[notificationLevel].icon}
-                label={NOTIFICATION_LEVELS[notificationLevel].label}
+                label={t(NOTIFICATION_LEVELS[notificationLevel].label)}
                 actionLabel={
                   notificationLevel === "off"
-                    ? "채팅 알림 켜기"
-                    : "채팅 알림 끄기"
+                    ? t("채팅 알림 켜기")
+                    : t("채팅 알림 끄기")
                 }
                 pressed={notificationLevel === "off"}
                 onClick={() =>
@@ -201,8 +205,8 @@ export function ConversationDetails({
             )}
             <DetailQuickAction
               icon={SearchIcon}
-              label="검색"
-              actionLabel="채팅에서 찾기"
+              label={t("검색")}
+              actionLabel={t("채팅에서 찾기")}
               onClick={onSearch}
             />
           </div>
@@ -212,23 +216,25 @@ export function ConversationDetails({
           {/* 패널 제목이 이미 `채팅 정보`라 이 묶음에는 제목을 달지 않는다. */}
           <DetailRow
             icon={PinIcon}
-            label="고정된 메시지"
+            label={t("고정된 메시지")}
             value={String(pinnedCount)}
             onClick={onOpenPinnedMessages}
           />
           {manageable ? (
             <DetailRow
               icon={PencilIcon}
-              label="그룹 이름 변경"
+              label={t("그룹 이름 변경")}
               onClick={onRename}
             />
           ) : null}
           {manageable ? (
-            <DetailRow icon={TagIcon} label="별명" onClick={onNicknames} />
+            <DetailRow icon={TagIcon} label={t("별명")} onClick={onNicknames} />
           ) : null}
 
           {conversation.type === "group" ? (
-            <DetailSection title={`채팅 멤버 ${members.length}명`}>
+            <DetailSection
+              title={t("채팅 멤버 {count}명", { count: members.length })}
+            >
               <div className="flex flex-col gap-1 px-2 pb-2">
                 {members.map((participant) => (
                   <div
@@ -252,16 +258,16 @@ export function ConversationDetails({
             </DetailSection>
           ) : null}
 
-          <DetailSection title="공유된 미디어" defaultOpen>
+          <DetailSection title={t("공유된 미디어")} defaultOpen>
             <DetailRow
               icon={ImagesIcon}
-              label="사진"
+              label={t("사진")}
               value={sharedCounts ? String(sharedCounts.media) : undefined}
               onClick={() => onOpenSharedMedia("media")}
             />
             <DetailRow
               icon={FileIcon}
-              label="파일"
+              label={t("파일")}
               value={sharedCounts ? String(sharedCounts.files) : undefined}
               onClick={() => onOpenSharedMedia("files")}
             />
@@ -272,14 +278,14 @@ export function ConversationDetails({
             <div className="mt-2 flex flex-col gap-1 border-t pt-3">
               <DetailRow
                 icon={LogOutIcon}
-                label="그룹 나가기"
+                label={t("그룹 나가기")}
                 destructive
                 onClick={onLeave}
               />
               {conversation.canDelete ? (
                 <DetailRow
                   icon={Trash2Icon}
-                  label="채팅방 삭제"
+                  label={t("채팅방 삭제")}
                   destructive
                   onClick={onDeleteGroup}
                 />
@@ -300,13 +306,16 @@ function MemberProfileLink({
   participant: MessageParticipant;
   children: ReactNode;
 }) {
+  const t = useT();
   const className =
     "flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2";
   if (!participant.pubId) return <div className={className}>{children}</div>;
   return (
     <Link
       to={`/profile/${participant.pubId}`}
-      aria-label={`${participant.profileName ?? participant.name} 프로필`}
+      aria-label={t("{name} 프로필", {
+        name: participant.profileName ?? participant.name,
+      })}
       className={cn(
         className,
         "hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
@@ -335,6 +344,7 @@ function DetailQuickAction({
   href?: string;
   menu?: ReactNode;
 }) {
+  const t = useT();
   const enabled = Boolean(onClick ?? href ?? menu);
   const button = (
     <Button
@@ -342,7 +352,9 @@ function DetailQuickAction({
       size="icon"
       className="rounded-full"
       disabled={!enabled}
-      aria-label={enabled ? (actionLabel ?? label) : `${label} 기능 준비 중`}
+      aria-label={
+        enabled ? (actionLabel ?? label) : t("{label} 기능 준비 중", { label })
+      }
       aria-pressed={pressed}
       onClick={onClick}
       {...(href ? { nativeButton: false, render: <Link to={href} /> } : {})}

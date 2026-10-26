@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { useLocale, useT, type Locale } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Spinner } from "~/shared/ui/spinner";
 import { Switch } from "~/shared/ui/switch";
@@ -19,17 +20,22 @@ const MEALS = [
   { api: "석식", label: "저녁" },
 ] as const;
 
-const weekdayFormatter = new Intl.DateTimeFormat("ko-KR", {
-  weekday: "short",
-  timeZone: "UTC",
-});
-
-const fullDateFormatter = new Intl.DateTimeFormat("ko-KR", {
-  month: "long",
-  day: "numeric",
-  weekday: "long",
-  timeZone: "UTC",
-});
+/** 날짜 줄의 요일·날짜 이름. 날짜는 UTC 자정으로 만들어 그대로 읽는다. */
+function mealDateFormats(locale: Locale = "ko") {
+  const tag = locale === "en" ? "en-US" : "ko-KR";
+  return {
+    weekday: new Intl.DateTimeFormat(tag, {
+      weekday: "short",
+      timeZone: "UTC",
+    }),
+    fullDate: new Intl.DateTimeFormat(tag, {
+      month: "long",
+      day: "numeric",
+      weekday: "long",
+      timeZone: "UTC",
+    }),
+  };
+}
 
 function toDate(date: string) {
   return new Date(
@@ -46,9 +52,10 @@ function dayNumber(date: string) {
 }
 
 function MealLoading() {
+  const t = useT();
   return (
     <div className="flex justify-center py-16" aria-live="polite">
-      <Spinner aria-label="급식 불러오는 중" />
+      <Spinner aria-label={t("급식 불러오는 중")} />
     </div>
   );
 }
@@ -67,6 +74,7 @@ function allergenName(code: string) {
 
 /** 이 끼니에 나온 번호만 오름차순으로 풀이한다. */
 function AllergenLegend({ items }: { items: MealMenu["items"] }) {
+  const t = useT();
   const codes = [...new Set(items.flatMap((item) => item.allergens))].sort(
     (a, b) => Number(a) - Number(b),
   );
@@ -75,12 +83,12 @@ function AllergenLegend({ items }: { items: MealMenu["items"] }) {
 
   return (
     <ul
-      aria-label="알레르기 유발 식품"
+      aria-label={t("알레르기 유발 식품")}
       className="mt-4 flex flex-wrap gap-x-3 gap-y-1 px-1 text-xs text-muted-foreground md:px-0"
     >
       {codes.map((code) => (
         <li key={code}>
-          <span className="tabular-nums">{code}</span> {allergenName(code)}
+          <span className="tabular-nums">{code}</span> {t(allergenName(code))}
         </li>
       ))}
     </ul>
@@ -99,6 +107,12 @@ export function MealScreen({
   initialDate,
   initialDay,
 }: MealScreenProps) {
+  const t = useT();
+  const locale = useLocale();
+  const { weekday: weekdayFormatter, fullDate: fullDateFormatter } = useMemo(
+    () => mealDateFormats(locale),
+    [locale],
+  );
   const [selectedDate, setSelectedDate] = useState(initialDate);
 
   const [selectedMeal, setSelectedMeal] = useState(getDefaultMeal);
@@ -203,7 +217,7 @@ export function MealScreen({
                   : "border-transparent text-muted-foreground hover:text-foreground",
               )}
             >
-              {meal.label}
+              {t(meal.label)}
             </button>
           );
         })}
@@ -211,10 +225,10 @@ export function MealScreen({
 
       <div className="mt-2 flex justify-end">
         <div className="flex min-h-9 items-center gap-2 px-1 text-xs text-muted-foreground md:px-0">
-          <span aria-hidden="true">알레르기 표시</span>
+          <span aria-hidden="true">{t("알레르기 표시")}</span>
           <Switch
             size="sm"
-            aria-label="알레르기 표시"
+            aria-label={t("알레르기 표시")}
             checked={showAllergens}
             onCheckedChange={setShowAllergens}
           />
@@ -225,7 +239,7 @@ export function MealScreen({
         {loadingDate === selectedDate ? (
           <MealLoading />
         ) : selectedDay?.unavailable ? (
-          <MealNotice>불러오지 못했습니다</MealNotice>
+          <MealNotice>{t("불러오지 못했습니다")}</MealNotice>
         ) : activeMeal ? (
           <>
             <ul className="md:rounded-2xl md:border md:bg-card md:py-2">
@@ -244,8 +258,12 @@ export function MealScreen({
                         {item.allergens.join("·")}
                       </span>
                       <span className="sr-only">
-                        , 알레르기:{" "}
-                        {item.allergens.map(allergenName).join(", ")}
+                        ,{" "}
+                        {t("알레르기: {names}", {
+                          names: item.allergens
+                            .map((code) => t(allergenName(code)))
+                            .join(", "),
+                        })}
                       </span>
                     </>
                   )}
@@ -255,7 +273,7 @@ export function MealScreen({
             {showAllergens && <AllergenLegend items={activeMeal.items} />}
           </>
         ) : selectedDay ? (
-          <MealNotice>식단 없음</MealNotice>
+          <MealNotice>{t("식단 없음")}</MealNotice>
         ) : (
           <MealLoading />
         )}

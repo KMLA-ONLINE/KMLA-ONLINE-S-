@@ -14,6 +14,7 @@ import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
 import { Spinner } from "~/shared/ui/spinner";
 import { TextField } from "~/shared/ui/text-field";
+import { useT } from "~/shared/i18n";
 
 export interface RoundFieldValues {
   title: string;
@@ -33,12 +34,13 @@ export function RoundFields({
   onChange,
   titlePlaceholder,
 }: RoundFieldsProps) {
+  const t = useT();
   const id = useId();
 
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       <label className="space-y-1 text-sm" htmlFor={`${id}-title`}>
-        <span>회차 이름</span>
+        <span>{t("회차 이름")}</span>
         <TextField
           id={`${id}-title`}
           value={values.title}
@@ -51,7 +53,7 @@ export function RoundFields({
       </label>
 
       <label className="space-y-1 text-sm" htmlFor={`${id}-opens`}>
-        <span>신청 시작 (한국 시간)</span>
+        <span>{t("신청 시작 (한국 시간)")}</span>
         <Input
           id={`${id}-opens`}
           type="datetime-local"
@@ -63,7 +65,7 @@ export function RoundFields({
       </label>
 
       <label className="space-y-1 text-sm" htmlFor={`${id}-closes`}>
-        <span>신청 종료 (한국 시간)</span>
+        <span>{t("신청 종료 (한국 시간)")}</span>
         <Input
           id={`${id}-closes`}
           type="datetime-local"
@@ -99,6 +101,7 @@ interface Props {
 
 /** Inline editor for a round's title and Seoul-time period. */
 export function DonationRoundManagement({ round, onSaved, onClose }: Props) {
+  const t = useT();
   const [values, setValues] = useState<RoundFieldValues>({
     title: round.title,
     opensAt: toSeoulInput(round.opens_at),
@@ -123,10 +126,12 @@ export function DonationRoundManagement({ round, onSaved, onClose }: Props) {
       );
 
       await onSaved();
-      toast.success("회차를 수정했습니다.");
+      toast.success(t("회차를 수정했습니다."));
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "수정 중 오류가 발생했습니다.");
+      setError(
+        e instanceof Error ? e.message : t("수정 중 오류가 발생했습니다."),
+      );
     } finally {
       setBusy(false);
       setPending(null);
@@ -139,7 +144,7 @@ export function DonationRoundManagement({ round, onSaved, onClose }: Props) {
     setError("");
 
     if (!next) {
-      setError("회차 이름과 신청 기간을 확인해 주세요.");
+      setError(t("회차 이름과 신청 기간을 확인해 주세요."));
       return;
     }
 
@@ -168,19 +173,21 @@ export function DonationRoundManagement({ round, onSaved, onClose }: Props) {
 
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onClose}>
-          닫기
+          {t("닫기")}
         </Button>
         <Button type="button" disabled={busy} onClick={save}>
           {busy ? <Spinner data-icon="inline-start" /> : null}
-          저장
+          {t("저장")}
         </Button>
       </div>
 
       {pending && (
         <ConfirmDialog
-          title="신청 기간 변경"
-          description="이미 시작된 회차입니다. 기간을 바꾸면 학생 신청이 바로 열리거나 닫힐 수 있습니다."
-          confirmLabel="변경"
+          title={t("신청 기간 변경")}
+          description={t(
+            "이미 시작된 회차입니다. 기간을 바꾸면 학생 신청이 바로 열리거나 닫힐 수 있습니다.",
+          )}
+          confirmLabel={t("변경")}
           pending={busy}
           onCancel={() => setPending(null)}
           onConfirm={() => void submit(pending)}

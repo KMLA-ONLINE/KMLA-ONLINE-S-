@@ -3,6 +3,7 @@ import type {
   PreparedPostFile,
 } from "~/features/posts/model/types";
 import { validateSelectedFiles } from "~/features/posts/model/validation";
+import { getCurrentLocale, translate } from "~/shared/i18n";
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 import {
   compressImage,
@@ -77,9 +78,18 @@ export async function prepareCommentImage(
   source: File,
 ): Promise<PreparedCommentImage> {
   if (!isSupportedImageInput(source))
-    throw new Error("JPEG, PNG, WebP, HEIC, HEIF 사진만 선택할 수 있습니다.");
+    throw new Error(
+      translate(
+        getCurrentLocale(),
+        "JPEG, PNG, WebP, HEIC, HEIF 사진만 선택할 수 있습니다.",
+      ),
+    );
   if (source.size > MAX_INPUT_FILE_BYTES)
-    throw new Error(`이미지는 30MB 이하여야 합니다: ${source.name}`);
+    throw new Error(
+      translate(getCurrentLocale(), "이미지는 30MB 이하여야 합니다: {name}", {
+        name: source.name,
+      }),
+    );
 
   const file = await compressImage(source, "photo");
   const [width, height] = await getImageDimensions(file);
@@ -138,10 +148,20 @@ export async function preparePostFiles(
           const isImage = isSupportedImageInput(source);
           if (selection === "image" && !isImage)
             throw new Error(
-              `JPEG, PNG, WebP, HEIC, HEIF 사진만 선택할 수 있습니다: ${source.name}`,
+              translate(
+                getCurrentLocale(),
+                "JPEG, PNG, WebP, HEIC, HEIF 사진만 선택할 수 있습니다: {name}",
+                { name: source.name },
+              ),
             );
           if (source.type.startsWith("image/") && !isImage)
-            throw new Error(`지원하지 않는 이미지 형식입니다: ${source.name}`);
+            throw new Error(
+              translate(
+                getCurrentLocale(),
+                "지원하지 않는 이미지 형식입니다: {name}",
+                { name: source.name },
+              ),
+            );
 
           const file = isImage
             ? await compressImage(source, "photo", controller.signal)
@@ -173,7 +193,9 @@ export async function preparePostFiles(
           const itemError =
             cause instanceof Error
               ? cause
-              : new Error("파일을 준비하지 못했습니다.");
+              : new Error(
+                  translate(getCurrentLocale(), "파일을 준비하지 못했습니다."),
+                );
           errors.push(itemError);
           options.onError?.(itemError, keys[index]);
           return undefined;

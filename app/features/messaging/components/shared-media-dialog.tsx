@@ -26,6 +26,7 @@ import {
 } from "~/shared/hooks/use-managed-download";
 import { previewDocumentOnClick } from "~/shared/lib/document-preview";
 import { cn } from "~/shared/lib/utils";
+import { useLocale, useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -52,6 +53,7 @@ export function SharedMediaDialog({
   counts: { media: number; files: number } | undefined;
   onClose: () => void;
 }) {
+  const t = useT();
   const [tab, setTab] = useState(initialTab);
   const media = tab === "media";
   const pages = useInfiniteQuery({
@@ -107,25 +109,25 @@ export function SharedMediaDialog({
         className="flex max-h-[min(40rem,90dvh)] flex-col max-sm:top-0 max-sm:left-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:gap-4 max-sm:rounded-none max-sm:px-4 max-sm:pt-[calc(1rem+var(--app-safe-t))] max-sm:pb-[calc(1rem+var(--app-safe-b))] max-sm:ring-0 sm:max-w-lg"
       >
         <DialogHeader className="flex-row items-center justify-between gap-2">
-          <DialogTitle>공유된 미디어</DialogTitle>
+          <DialogTitle>{t("공유된 미디어")}</DialogTitle>
           <DialogDescription className="sr-only">
-            이 채팅에서 주고받은 사진과 파일
+            {t("이 채팅에서 주고받은 사진과 파일")}
           </DialogDescription>
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="닫기"
+            aria-label={t("닫기")}
             className="-my-1 shrink-0 rounded-full text-muted-foreground"
             onClick={onClose}
           >
             <XIcon aria-hidden />
           </Button>
         </DialogHeader>
-        <div role="tablist" aria-label="첨부 종류" className="flex gap-1">
+        <div role="tablist" aria-label={t("첨부 종류")} className="flex gap-1">
           {(
             [
-              ["media", "사진", counts?.media],
-              ["files", "파일", counts?.files],
+              ["media", t("사진"), counts?.media],
+              ["files", t("파일"), counts?.files],
             ] as const
           ).map(([value, label, count]) => (
             <Button
@@ -151,16 +153,16 @@ export function SharedMediaDialog({
               role="alert"
               className="py-8 text-center text-sm text-destructive"
             >
-              불러오지 못했습니다.
+              {t("불러오지 못했습니다.")}
             </p>
           ) : items.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               {media
-                ? "주고받은 사진이 없습니다."
-                : "주고받은 파일이 없습니다."}
+                ? t("주고받은 사진이 없습니다.")
+                : t("주고받은 파일이 없습니다.")}
             </p>
           ) : media ? (
-            <ul aria-label="사진" className="grid grid-cols-3 gap-0.5">
+            <ul aria-label={t("사진")} className="grid grid-cols-3 gap-0.5">
               {items.map((item) => (
                 <li key={item.id}>
                   <MediaTile
@@ -172,7 +174,7 @@ export function SharedMediaDialog({
               ))}
             </ul>
           ) : (
-            <ul aria-label="파일" className="flex flex-col gap-1">
+            <ul aria-label={t("파일")} className="flex flex-col gap-1">
               {items.map((item) => (
                 <li key={item.id}>
                   <FileRow item={item} url={urls?.get(item.objectPath)} />
@@ -191,7 +193,7 @@ export function SharedMediaDialog({
                 {pages.isFetchingNextPage ? (
                   <Spinner data-icon="inline-start" />
                 ) : null}
-                더 불러오기
+                {t("더 불러오기")}
               </Button>
             </div>
           ) : null}
@@ -210,10 +212,14 @@ function MediaTile({
   url: string | undefined;
   onSelect: () => void;
 }) {
+  const t = useT();
+  const locale = useLocale();
   return (
     <button
       type="button"
-      aria-label={`${formatMessageDay(item.sentAt)} 사진 크게 보기`}
+      aria-label={t("{day} 사진 크게 보기", {
+        day: formatMessageDay(item.sentAt, undefined, locale),
+      })}
       className="relative block aspect-square w-full overflow-hidden bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
       onClick={onSelect}
     >
@@ -238,6 +244,8 @@ function FileRow({
   item: SharedAttachment;
   url: string | undefined;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const download = useManagedDownload();
   const status = managedDownloadLabel(download.state);
   const extension = item.fileName.includes(".")
@@ -256,7 +264,7 @@ function FileRow({
         if (previewed) return;
         download.handleClick(event, [{ url, fileName: item.fileName }]);
       }}
-      aria-label={`${status ?? "내려받기"}: ${item.fileName}`}
+      aria-label={`${status ?? t("내려받기")}: ${item.fileName}`}
       aria-busy={download.state.status === "loading" || undefined}
       aria-disabled={!url}
       className={cn(
@@ -271,7 +279,7 @@ function FileRow({
           {[
             extension,
             formatFileSize(item.sizeBytes),
-            formatMessageDay(item.sentAt),
+            formatMessageDay(item.sentAt, undefined, locale),
           ]
             .filter(Boolean)
             .join(" · ")}

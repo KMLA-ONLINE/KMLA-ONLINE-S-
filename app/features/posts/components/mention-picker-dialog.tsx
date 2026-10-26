@@ -8,6 +8,7 @@ import {
 } from "~/features/posts/model/mentions";
 import { formatCohort } from "~/features/profiles";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT, type Translate } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -26,8 +27,8 @@ const PICKER_DIALOG_CLASS =
   "flex h-[70svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-md [&_[data-slot=dialog-close]]:top-2";
 
 /** 기수가 없는 선생님은 화면에서도 `선생님`으로 부른다. 검색도 그 말로 걸린다. */
-function candidateLabel(candidate: MentionCandidate): string {
-  if (candidate.profile_type === "teacher") return "선생님";
+function candidateLabel(candidate: MentionCandidate, t: Translate): string {
+  if (candidate.profile_type === "teacher") return t("선생님");
   return formatCohort(candidate.cohort, candidate.is_returning_student) ?? "";
 }
 
@@ -57,6 +58,7 @@ export function MentionPickerDialog({
   /** 이미 본문에 남아 있어 상한에서도 다시 고를 수 있는 대상. */
   activeTargetPubIds: string[];
 }) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
   const [result, setResult] = useState<CandidateResult | null>(null);
@@ -79,14 +81,14 @@ export function MentionPickerDialog({
           setResult({
             query: submitted,
             candidates: [],
-            error: "멤버를 불러오지 못했습니다.",
+            error: t("멤버를 불러오지 못했습니다."),
           });
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [groupId, submitted]);
+  }, [groupId, submitted, t]);
 
   // 한글 조합이 끝난 뒤 제출한다(기능 명세 §8.9와 같은 규칙).
   const submit = (event: FormEvent) => {
@@ -116,17 +118,19 @@ export function MentionPickerDialog({
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className={PICKER_DIALOG_CLASS}>
         <DialogHeader className="border-b p-4">
-          <DialogTitle>멘션할 멤버</DialogTitle>
+          <DialogTitle>{t("멘션할 멤버")}</DialogTitle>
           {full ? (
             <DialogDescription>
-              한 게시물에 최대 {MENTION_LIMIT}명까지 부를 수 있습니다.
+              {t("한 게시물에 최대 {count}명까지 부를 수 있습니다.", {
+                count: MENTION_LIMIT,
+              })}
             </DialogDescription>
           ) : null}
         </DialogHeader>
 
         {selected.size > 0 ? (
           <ul
-            aria-label="고른 멤버"
+            aria-label={t("고른 멤버")}
             className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto border-b p-3"
           >
             {[...selected.values()].map((candidate) => (
@@ -135,7 +139,7 @@ export function MentionPickerDialog({
                   type="button"
                   size="sm"
                   variant="secondary"
-                  aria-label={`${candidate.name} 선택 해제`}
+                  aria-label={t("{name} 선택 해제", { name: candidate.name })}
                   className="gap-1 rounded-full"
                   onClick={() => toggle(candidate)}
                 >
@@ -152,8 +156,8 @@ export function MentionPickerDialog({
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="이름 또는 기수"
-            aria-label="멤버 검색"
+            placeholder={t("이름 또는 기수")}
+            aria-label={t("멤버 검색")}
           />
         </form>
 
@@ -166,13 +170,13 @@ export function MentionPickerDialog({
           ) : null}
           {!loading && !result?.error && candidates.length === 0 ? (
             <p className="p-4 text-sm text-muted-foreground">
-              찾는 멤버가 없습니다.
+              {t("찾는 멤버가 없습니다.")}
             </p>
           ) : null}
           {loading ? null : (
             <ul>
               {candidates.map((candidate) => {
-                const label = candidateLabel(candidate);
+                const label = candidateLabel(candidate, t);
                 const isSelected = selected.has(candidate.pub_id);
                 return (
                   <li key={candidate.pub_id}>
@@ -224,7 +228,9 @@ export function MentionPickerDialog({
             disabled={selected.size === 0}
             onClick={() => onSelect([...selected.values()])}
           >
-            {selected.size > 0 ? `${selected.size}명 멘션` : "멘션"}
+            {selected.size > 0
+              ? t("{count}명 멘션", { count: selected.size })
+              : t("멘션")}
           </Button>
         </DialogFooter>
       </DialogContent>

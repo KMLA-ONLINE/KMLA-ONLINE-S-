@@ -4,6 +4,7 @@ import {
   managedDownloadNote,
   type ManagedDownloadState,
 } from "~/shared/hooks/use-managed-download";
+import { useLocale, useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Spinner } from "~/shared/ui/spinner";
 
@@ -18,6 +19,7 @@ export function DownloadStatus({
   state: ManagedDownloadState;
   className?: string;
 }) {
+  const t = useT();
   const iconClass = cn("size-4 shrink-0 text-muted-foreground", className);
 
   switch (state.status) {
@@ -41,7 +43,7 @@ export function DownloadStatus({
           aria-hidden
           className="shrink-0 rounded-full bg-action px-2.5 py-1 text-xs font-medium text-action-foreground"
         >
-          저장
+          {t("저장")}
         </span>
       );
     case "saved":
@@ -55,7 +57,7 @@ export function DownloadStatus({
           className="flex shrink-0 items-center gap-1 text-xs text-destructive"
         >
           <RotateCwIcon className="size-3.5" />
-          다시 받기
+          {t("다시 받기")}
         </span>
       );
   }
@@ -63,7 +65,7 @@ export function DownloadStatus({
 
 /** 파일 이름 아래 줄에 남기는 저장 위치. 알림 대신 그 자리에 둔다(`ManagedDownloadState`의 `saved`). */
 export function DownloadNote({ state }: { state: ManagedDownloadState }) {
-  const note = managedDownloadNote(state);
+  const note = managedDownloadNote(state, useLocale());
   return note ? (
     <span aria-hidden className="block text-xs text-primary">
       {note}

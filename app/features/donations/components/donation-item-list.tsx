@@ -6,6 +6,7 @@ import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
 import { Spinner } from "~/shared/ui/spinner";
+import { useT, type Translate } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 export const CLAIM_LIMIT = 50;
@@ -33,11 +34,11 @@ interface Props {
   onCancel?: (item: DonationItem) => void;
 }
 
-function formatClaimant(claimant: Claimant | undefined) {
+function formatClaimant(claimant: Claimant | undefined, t: Translate) {
   if (!claimant?.name) return null;
   return claimant.cohort === null
     ? claimant.name
-    : `${claimant.cohort}기 ${claimant.name}`;
+    : t("{cohort}기 {name}", { cohort: claimant.cohort, name: claimant.name });
 }
 
 function Chip({
@@ -78,6 +79,7 @@ export function DonationItemList({
   onClaim,
   onCancel,
 }: Props) {
+  const t = useT();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [category, setCategory] = useState<string | null>(null);
@@ -167,7 +169,7 @@ export function DonationItemList({
   const limitReached = mineCount >= CLAIM_LIMIT;
 
   function renderAction(item: DonationItem) {
-    const claimant = formatClaimant(claimants?.get(item.id));
+    const claimant = formatClaimant(claimants?.get(item.id), t);
 
     // A former applicant keeps the cancel button even after losing access.
     if (item.is_mine) {
@@ -177,11 +179,11 @@ export function DonationItemList({
           size="sm"
           variant="outline"
           disabled={!isOpen || busyItem !== null}
-          aria-label={`${item.name} 신청 취소`}
+          aria-label={t("{name} 신청 취소", { name: item.name })}
           onClick={() => onCancel?.(item)}
         >
           {busyItem === item.id ? <Spinner data-icon="inline-start" /> : null}
-          취소
+          {t("취소")}
         </Button>
       );
     }
@@ -194,7 +196,7 @@ export function DonationItemList({
             !isAdmin && "text-muted-foreground",
           )}
         >
-          {claimant ?? (isAdmin ? "신청됨" : "신청 마감")}
+          {claimant ?? (isAdmin ? t("신청됨") : t("신청 마감"))}
         </span>
       );
     }
@@ -205,24 +207,24 @@ export function DonationItemList({
           type="button"
           size="sm"
           disabled={busyItem !== null || limitReached}
-          aria-label={`${item.name} 신청`}
+          aria-label={t("{name} 신청", { name: item.name })}
           onClick={() => onClaim?.(item)}
         >
           {busyItem === item.id ? <Spinner data-icon="inline-start" /> : null}
-          신청
+          {t("신청")}
         </Button>
       );
     }
 
     return (
       <span className="text-sm text-muted-foreground">
-        {isAdmin ? "미신청" : "신청 가능"}
+        {isAdmin ? t("미신청") : t("신청 가능")}
       </span>
     );
   }
 
   return (
-    <section className="space-y-3" aria-label="물품 목록">
+    <section className="space-y-3" aria-label={t("물품 목록")}>
       <div className="relative">
         <SearchIcon
           aria-hidden
@@ -230,8 +232,8 @@ export function DonationItemList({
         />
         <Input
           type="search"
-          aria-label="물품 검색"
-          placeholder="물품명이나 색상·사이즈로 검색"
+          aria-label={t("물품 검색")}
+          placeholder={t("물품명이나 색상·사이즈로 검색")}
           className="pl-9"
           value={search}
           onChange={(e) => {
@@ -243,7 +245,7 @@ export function DonationItemList({
 
       <div
         role="group"
-        aria-label="신청 상태"
+        aria-label={t("신청 상태")}
         className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0"
       >
         {statusChips.map((chip) => (
@@ -252,7 +254,7 @@ export function DonationItemList({
             active={status === chip.value}
             onClick={() => changeFilter(() => setStatus(chip.value))}
           >
-            {chip.label} {chip.count}
+            {t(chip.label)} {chip.count}
           </Chip>
         ))}
       </div>
@@ -260,14 +262,14 @@ export function DonationItemList({
       {categories.length > 1 && (
         <div
           role="group"
-          aria-label="물품 분류"
+          aria-label={t("물품 분류")}
           className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0"
         >
           <Chip
             active={category === null}
             onClick={() => changeFilter(() => setCategory(null))}
           >
-            모든 분류
+            {t("모든 분류")}
           </Chip>
           {categories.map((name) => (
             <Chip
@@ -283,21 +285,23 @@ export function DonationItemList({
 
       {canApply && limitReached && (
         <p className="rounded-lg bg-muted px-3 py-2 text-sm">
-          한 회차에 최대 {CLAIM_LIMIT}개까지 신청할 수 있습니다. 다른 물품을
-          신청하려면 기존 신청을 취소해 주세요.
+          {t(
+            "한 회차에 최대 {limit}개까지 신청할 수 있습니다. 다른 물품을 신청하려면 기존 신청을 취소해 주세요.",
+            { limit: CLAIM_LIMIT },
+          )}
         </p>
       )}
 
       {loading ? (
         <p className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
           <Spinner />
-          물품을 불러오는 중입니다.
+          {t("물품을 불러오는 중입니다.")}
         </p>
       ) : filtered.length === 0 ? (
         <p className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
           {items.length === 0
-            ? "등록된 물품이 없습니다."
-            : "조건에 맞는 물품이 없습니다."}
+            ? t("등록된 물품이 없습니다.")
+            : t("조건에 맞는 물품이 없습니다.")}
         </p>
       ) : (
         <ul className="divide-y overflow-hidden rounded-xl border bg-card">
@@ -312,7 +316,7 @@ export function DonationItemList({
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                   {item.category}
-                  {item.is_mine && <Badge>내 신청</Badge>}
+                  {item.is_mine && <Badge>{t("내 신청")}</Badge>}
                 </p>
                 <p className="mt-0.5 text-sm font-medium break-words">
                   {item.name}
@@ -324,7 +328,7 @@ export function DonationItemList({
                 )}
                 {isAdmin && item.donor_name && (
                   <p className="mt-0.5 text-xs break-words text-muted-foreground">
-                    기증자 {item.donor_name}
+                    {t("기증자 {name}", { name: item.donor_name })}
                   </p>
                 )}
               </div>

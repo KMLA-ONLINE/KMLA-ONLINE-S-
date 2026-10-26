@@ -2203,3 +2203,79 @@ describe("RoomScreen 멘션", () => {
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 });
+
+describe("RoomScreen in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("shows the room chrome, composer, details and system messages in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const conversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+    conversation!.messages.at(-1)!.pinned = true;
+    const pinnedConversation = syncPinned(conversation!);
+
+    const { user } = renderRoute(
+      () => <ControlledRoomScreen conversation={pinnedConversation} />,
+      { path: "/messenger/student-council" },
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Back to chat list" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Message" })).toHaveAttribute(
+      "placeholder",
+      "Message",
+    );
+    expect(
+      screen.getByRole("button", { name: "Send a like" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Pinned message")).toBeInTheDocument();
+    expect(screen.getByLabelText("2 unread")).toHaveTextContent("2");
+    expect(screen.getAllByText("Pinned")).not.toHaveLength(0);
+    expect(
+      screen.getByText("Friday, August 28, 2026 3:08 PM"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Chat info", level: 2 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("4 members")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Invite members" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Leave group" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Leave group" }));
+    expect(
+      await screen.findByRole("heading", { name: "Leave this group?" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+  });
+
+  it("writes system messages in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const conversation = await loadConversation("student-council");
+    expect(conversation).not.toBeNull();
+    conversation!.messages.push({
+      id: "sys-en",
+      senderId: conversation!.viewerId,
+      body: "",
+      sentAt: "2026-08-28T06:20:00.000Z",
+      unreadMemberCount: 0,
+      system: {
+        kind: "member_left",
+        profileIds: [conversation!.participants[1].id],
+        name: null,
+      },
+    });
+
+    renderRoute(() => <RoomScreen conversation={conversation!} />, {
+      path: "/messenger/student-council",
+    });
+
+    expect(
+      screen.getByText(`${conversation!.participants[1].name} left.`),
+    ).toBeInTheDocument();
+  });
+});

@@ -82,3 +82,12 @@ describe("parseCommentText", () => {
     ]);
   });
 });
+
+describe("validateCommentBody in English", () => {
+  it("returns English reasons", () => {
+    expect(validateCommentBody("   ", false, "en")).toBe("Enter a comment.");
+    expect(
+      validateCommentBody("가".repeat(COMMENT_MAX_LENGTH + 1), false, "en"),
+    ).toBe("Comments can be up to 5,000 characters.");
+  });
+});

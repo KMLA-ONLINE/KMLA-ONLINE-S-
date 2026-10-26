@@ -1,5 +1,6 @@
 import type { GroupPostReportReason } from "~/features/posts/model/group-report";
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
+import { getCurrentLocale, translate } from "~/shared/i18n";
 import { getSupabase } from "~/shared/supabase/client";
 import type { Database } from "~/shared/supabase/database.types";
 
@@ -162,17 +163,20 @@ export function getGroupPostReportErrorMessage(error: unknown): string {
     const message = String(error.message);
 
     if (code === "23505" || message.includes("already reported")) {
-      return "이미 신고한 게시물입니다.";
+      return translate(getCurrentLocale(), "이미 신고한 게시물입니다.");
     }
 
     if (message.includes("cannot report own post")) {
-      return "자신의 게시물은 신고할 수 없습니다.";
+      return translate(
+        getCurrentLocale(),
+        "자신의 게시물은 신고할 수 없습니다.",
+      );
     }
 
     if (code === "42501") {
-      return "이 게시물을 신고할 수 없습니다.";
+      return translate(getCurrentLocale(), "이 게시물을 신고할 수 없습니다.");
     }
   }
 
-  return "신고를 처리하지 못했습니다.";
+  return translate(getCurrentLocale(), "신고를 처리하지 못했습니다.");
 }

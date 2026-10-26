@@ -8,6 +8,7 @@ import { postAuthorName } from "~/features/posts/model/identity";
 import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import type { GroupPost } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 
@@ -23,6 +24,7 @@ export function GroupPostRow({
   isVisited: boolean;
   onVisit: () => void;
 }) {
+  const t = useT();
   const engagement = usePostEngagement(post.post_id, post);
 
   return (
@@ -39,7 +41,7 @@ export function GroupPostRow({
         {post.is_pinned ? (
           <PinIcon
             className="size-4 shrink-0 -rotate-45 fill-current text-muted-foreground"
-            aria-label="고정됨"
+            aria-label={t("고정됨")}
           />
         ) : null}
         {post.category_name ? (
@@ -60,7 +62,7 @@ export function GroupPostRow({
         {post.author_identity === "staff" ? <StaffMark /> : null}
         {post.is_author && post.author_identity === "anonymous" ? (
           <Badge variant="secondary" className="shrink-0">
-            나
+            {t("나")}
           </Badge>
         ) : null}
         <span aria-hidden="true">·</span>
@@ -79,12 +81,12 @@ export function GroupPostRow({
             ) : (
               <HeartIcon className="size-3.5" aria-hidden="true" />
             )}
-            <span className="sr-only">반응</span>
+            <span className="sr-only">{t("반응")}</span>
             {engagement.reaction_count}
           </span>
           <span className="flex items-center gap-1">
             <MessageSquareIcon className="size-3.5" aria-hidden="true" />
-            <span className="sr-only">댓글</span>
+            <span className="sr-only">{t("댓글")}</span>
             {engagement.comment_count}
           </span>
         </span>

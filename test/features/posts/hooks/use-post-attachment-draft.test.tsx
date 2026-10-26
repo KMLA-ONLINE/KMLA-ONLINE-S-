@@ -6,7 +6,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { preparePostFiles } from "~/features/posts/model/attachment-preparation";
 import type * as PostAttachmentModule from "~/features/posts/model/attachment-preparation";
@@ -191,5 +191,27 @@ describe("usePostAttachmentDraft", () => {
       expect(innerPaste).toHaveBeenCalledTimes(3);
       expect(prepare).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("usePostAttachmentDraft in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("explains an excluded video in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const { result } = renderHook(() =>
+      usePostAttachmentDraft({
+        initialAttachments: [],
+        disabled: false,
+        preupload: vi.fn().mockResolvedValue(undefined),
+      }),
+    );
+    const video = new File(["video"], "clip.mp4", { type: "video/mp4" });
+
+    await act(() => result.current.addFiles(asFileList([video]), "mixed"));
+
+    expect(result.current.preparationError).toBe(
+      "Videos can't be attached, so it was left out: clip.mp4",
+    );
   });
 });

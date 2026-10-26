@@ -85,6 +85,7 @@ import {
   screenAttachments,
 } from "~/features/messaging/model/attachments";
 import { useIsSendEnter } from "~/shared/hooks/use-enter-to-send";
+import { useLocale, useT } from "~/shared/i18n";
 import { useKeyboardViewport } from "~/shared/hooks/use-keyboard-viewport";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
 import { ForwardMessageDialog } from "~/features/messaging/components/forward-message-dialog";
@@ -207,6 +208,8 @@ export function RoomScreen({
   desktopDetailsOpen?: boolean;
   onDesktopDetailsOpenChange?: (open: boolean) => void;
 }) {
+  const t = useT();
+  const locale = useLocale();
   // 이름과 멤버는 다른 멤버가 바꿀 수 있어 대화 목록의 최신 값을 쓴다.
   const conversation = useListedConversation(loadedConversation);
   const viewerActive = isViewerActive(conversation);
@@ -370,11 +373,11 @@ export function RoomScreen({
   const pinnedMessage = pinnedMessages.at(-1);
   const pinnedMessageAuthor = pinnedMessage?.senderId
     ? (conversation.participants.find(({ id }) => id === pinnedMessage.senderId)
-        ?.name ?? "알 수 없는 사용자")
+        ?.name ?? t("알 수 없는 사용자"))
     : null;
   const replyAuthor = replyTarget?.senderId
     ? (conversation.participants.find(({ id }) => id === replyTarget.senderId)
-        ?.name ?? "알 수 없는 사용자")
+        ?.name ?? t("알 수 없는 사용자"))
     : null;
 
   useEffect(() => {
@@ -435,7 +438,7 @@ export function RoomScreen({
       setFindingMessage(false),
     );
     if (!found) {
-      toast.error("메시지를 찾을 수 없습니다.");
+      toast.error(t("메시지를 찾을 수 없습니다."));
       return;
     }
     setHighlightedMessageId(messageId);
@@ -453,6 +456,7 @@ export function RoomScreen({
     const { files, notices } = screenAttachments(
       selected,
       staged.map(({ file }) => file),
+      locale,
     );
     for (const notice of notices) toast.error(notice);
     if (files.length === 0) return;
@@ -517,7 +521,7 @@ export function RoomScreen({
     setEditTarget(null);
     if (isUnchangedEdit(target, edited, conversation.participants)) return;
     if (!canEditMessage(target, conversation.viewerId)) {
-      toast.error(EDIT_EXPIRED_MESSAGE);
+      toast.error(t(EDIT_EXPIRED_MESSAGE));
       return;
     }
     const saved = await edit(target, body, mentionPubIds, mentionsEveryone);
@@ -551,7 +555,7 @@ export function RoomScreen({
         }
       >
         <section
-          aria-label={`${conversation.name} 채팅`}
+          aria-label={t("{name} 채팅", { name: conversation.name })}
           className={cn(
             // 검색 패널이 우측 대화 정보 패널까지 덮지 않도록 채팅 영역을 기준으로 잡는다.
             "relative min-h-0 min-w-0 flex-1 flex-col bg-background",
@@ -563,7 +567,7 @@ export function RoomScreen({
               variant="ghost"
               size="icon"
               className="rounded-full md:hidden"
-              aria-label="채팅 목록으로 돌아가기"
+              aria-label={t("채팅 목록으로 돌아가기")}
               onClick={() => void backToList()}
             >
               <ChevronLeftIcon aria-hidden />
@@ -571,7 +575,9 @@ export function RoomScreen({
             {/* 이름을 누르면 대화 정보를 연다. 넓은 화면에서 접어 둔 정보 패널도 다시 편다. */}
             <button
               type="button"
-              aria-label={`${conversation.name} 채팅 정보 보기`}
+              aria-label={t("{name} 채팅 정보 보기", {
+                name: conversation.name,
+              })}
               className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
               onClick={openDetails}
             >
@@ -587,7 +593,7 @@ export function RoomScreen({
               variant="ghost"
               size="icon"
               className="rounded-full"
-              aria-label="채팅 검색"
+              aria-label={t("채팅 검색")}
               onClick={() => roomOverlay.open({ kind: "search" })}
             >
               <SearchIcon aria-hidden />
@@ -596,7 +602,7 @@ export function RoomScreen({
               variant="ghost"
               size="icon"
               className="rounded-full xl:hidden"
-              aria-label="채팅 정보 열기"
+              aria-label={t("채팅 정보 열기")}
               onClick={() => roomOverlay.open({ kind: "details" })}
             >
               <InfoIcon aria-hidden />
@@ -606,7 +612,7 @@ export function RoomScreen({
               size="icon"
               className="hidden rounded-full xl:inline-flex"
               aria-label={
-                desktopDetailsOpen ? "채팅 정보 닫기" : "채팅 정보 열기"
+                desktopDetailsOpen ? t("채팅 정보 닫기") : t("채팅 정보 열기")
               }
               aria-pressed={desktopDetailsOpen}
               onClick={() => onDesktopDetailsOpenChange?.(!desktopDetailsOpen)}
@@ -629,19 +635,20 @@ export function RoomScreen({
           {pinnedMessage ? (
             <button
               type="button"
-              aria-label="고정 메시지"
+              aria-label={t("고정 메시지")}
               className="flex min-h-14 shrink-0 items-center gap-3 border-b bg-muted/40 px-4 py-2.5 text-left hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
               onClick={() => roomOverlay.open({ kind: "pinned" })}
             >
               <PinIcon aria-hidden className="size-4 shrink-0 text-primary" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold">
-                  {pinnedMessageAuthor ?? "알 수 없는 사용자"}
+                  {pinnedMessageAuthor ?? t("알 수 없는 사용자")}
                 </p>
                 <p className="truncate text-sm text-muted-foreground">
                   {formatReplyPreview(
                     toReplyPreview(pinnedMessage),
                     window.location.origin,
+                    locale,
                   )}
                 </p>
               </div>
@@ -736,10 +743,10 @@ export function RoomScreen({
                 className="min-w-0 flex-1 text-sm font-medium"
                 aria-live="polite"
               >
-                {selection.size}개 선택됨
+                {t("{count}개 선택됨", { count: selection.size })}
               </p>
               <Button variant="outline" onClick={() => setSelection(null)}>
-                취소
+                {t("취소")}
               </Button>
               <Button
                 variant="destructive"
@@ -749,12 +756,12 @@ export function RoomScreen({
                   setSelection(null);
                 }}
               >
-                삭제
+                {t("삭제")}
               </Button>
             </div>
           ) : counterpartWithdrawn ? (
             <p className="shrink-0 px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))] text-center text-sm text-muted-foreground">
-              탈퇴한 사용자에게는 메시지를 보낼 수 없습니다.
+              {t("탈퇴한 사용자에게는 메시지를 보낼 수 없습니다.")}
             </p>
           ) : viewerActive ? (
             <ComposerShell
@@ -784,7 +791,9 @@ export function RoomScreen({
             />
           ) : (
             <p className="shrink-0 px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))] text-center text-sm text-muted-foreground">
-              이 채팅에서 나왔습니다. 참여한 동안의 메시지만 볼 수 있습니다.
+              {t(
+                "이 채팅에서 나왔습니다. 참여한 동안의 메시지만 볼 수 있습니다.",
+              )}
             </p>
           )}
         </section>
@@ -865,9 +874,11 @@ export function RoomScreen({
         ) : null}
         {memberDialog?.kind === "leave" ? (
           <ConfirmDialog
-            title="그룹에서 나갈까요?"
-            description="나가면 채팅 목록에서 사라지고, 이후 메시지는 볼 수 없습니다."
-            confirmLabel="나가기"
+            title={t("그룹에서 나갈까요?")}
+            description={t(
+              "나가면 채팅 목록에서 사라지고, 이후 메시지는 볼 수 없습니다.",
+            )}
+            confirmLabel={t("나가기")}
             destructive
             onCancel={() => setMemberDialog(null)}
             onConfirm={() => {
@@ -878,9 +889,11 @@ export function RoomScreen({
         ) : null}
         {memberDialog?.kind === "delete" ? (
           <ConfirmDialog
-            title="채팅방을 삭제할까요?"
-            description="모든 멤버의 목록에서 채팅방이 사라지고, 메시지와 사진·파일도 함께 지워집니다. 되돌릴 수 없습니다."
-            confirmLabel="삭제"
+            title={t("채팅방을 삭제할까요?")}
+            description={t(
+              "모든 멤버의 목록에서 채팅방이 사라지고, 메시지와 사진·파일도 함께 지워집니다. 되돌릴 수 없습니다.",
+            )}
+            confirmLabel={t("삭제")}
             destructive
             onCancel={() => setMemberDialog(null)}
             onConfirm={() => {
@@ -968,6 +981,8 @@ function MessageThread({
   /** 데스크톱에서 대화 영역에 끌어 놓은 파일을 보낸다. 보낼 수 없는 상태면 없다. */
   onDropFiles?: (files: File[]) => void;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const threadContentRef = useRef<HTMLDivElement>(null);
@@ -1270,12 +1285,14 @@ function MessageThread({
           className="pointer-events-none absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur"
         >
           <Spinner />
-          {findingMessage ? "메시지를 찾는 중" : "이전 메시지를 불러오는 중"}
+          {findingMessage
+            ? t("메시지를 찾는 중")
+            : t("이전 메시지를 불러오는 중")}
         </div>
       ) : null}
       {draggingFiles ? (
         <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary bg-background/80 text-sm font-medium text-primary">
-          여기에 놓으면 첨부합니다
+          {t("여기에 놓으면 첨부합니다")}
         </div>
       ) : null}
       <div
@@ -1312,13 +1329,21 @@ function MessageThread({
                 {slot?.startsSession ? (
                   <div className="my-4 flex items-center justify-center">
                     <span className="text-xs text-muted-foreground">
-                      {formatMessageSessionStart(message.sentAt)}
+                      {formatMessageSessionStart(
+                        message.sentAt,
+                        undefined,
+                        locale,
+                      )}
                     </span>
                   </div>
                 ) : null}
                 {message.system ? (
                   <p className="mx-auto my-3 w-fit max-w-[85%] rounded-xl bg-muted/60 px-3 py-1 text-center text-xs text-muted-foreground">
-                    {formatSystemMessage(message.system, participantById)}
+                    {formatSystemMessage(
+                      message.system,
+                      participantById,
+                      locale,
+                    )}
                   </p>
                 ) : (
                   <ThreadMessage
@@ -1358,7 +1383,9 @@ function MessageThread({
       {incomingMessage ? (
         <button
           type="button"
-          aria-label={`새 메시지: ${incomingSender?.name ?? "알 수 없는 사용자"}, 맨 아래로 이동`}
+          aria-label={t("새 메시지: {name}, 맨 아래로 이동", {
+            name: incomingSender?.name ?? t("알 수 없는 사용자"),
+          })}
           className="absolute bottom-3 left-1/2 z-10 flex w-max max-w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 py-1.5 pr-3 pl-1.5 text-left text-sm shadow-md backdrop-blur focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
           onClick={scrollToBottom}
         >
@@ -1369,12 +1396,13 @@ function MessageThread({
           />
           <span className="min-w-0 truncate">
             <span className="font-semibold">
-              {incomingSender?.name ?? "알 수 없는 사용자"}
+              {incomingSender?.name ?? t("알 수 없는 사용자")}
             </span>{" "}
             <span className="text-muted-foreground">
               {formatReplyPreview(
                 toReplyPreview(incomingMessage),
                 window.location.origin,
+                locale,
               )}
             </span>
           </span>
@@ -1388,7 +1416,7 @@ function MessageThread({
           variant="secondary"
           size="icon"
           className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border-border bg-background/95 shadow-md backdrop-blur"
-          aria-label="맨 아래로 이동"
+          aria-label={t("맨 아래로 이동")}
           onClick={scrollToBottom}
         >
           <ChevronDownIcon aria-hidden className="size-5" />
@@ -1497,6 +1525,7 @@ const ThreadMessage = memo(function ThreadMessage({
   contextPortalRef: RefObject<HTMLDivElement | null>;
   actions: ThreadMessageActions;
 }) {
+  const t = useT();
   const replyTarget = message.replyTo;
   // 삭제된 메시지는 반응, 고정, 수정, 삭제를 받지 않는다. 전송 중인 메시지는 아직 서버에 없어
   // 복사만 된다. 남는 작업이 없으면 메뉴를 열지 않는다.
@@ -1505,7 +1534,7 @@ const ThreadMessage = memo(function ThreadMessage({
     ...(actionable && canCompose
       ? [
           {
-            label: "답장",
+            label: t("답장"),
             icon: <ReplyIcon aria-hidden />,
             onSelect: () => actions.reply(message),
           },
@@ -1515,7 +1544,7 @@ const ThreadMessage = memo(function ThreadMessage({
       ? []
       : [
           {
-            label: "복사",
+            label: t("복사"),
             icon: <CopyIcon aria-hidden />,
             onSelect: () => void copyMessageText(messagePlainText(message)),
           },
@@ -1525,7 +1554,7 @@ const ThreadMessage = memo(function ThreadMessage({
     ...(actionable && hasForwardableContent(message)
       ? [
           {
-            label: "전달",
+            label: t("전달"),
             icon: <ForwardIcon aria-hidden />,
             onSelect: () => actions.forward(message),
           },
@@ -1534,7 +1563,7 @@ const ThreadMessage = memo(function ThreadMessage({
     ...(actionable
       ? [
           {
-            label: message.pinned ? "고정 해제" : "고정",
+            label: message.pinned ? t("고정 해제") : t("고정"),
             icon: <PinIcon aria-hidden />,
             onSelect: () => actions.togglePinned(message),
           },
@@ -1543,7 +1572,7 @@ const ThreadMessage = memo(function ThreadMessage({
     ...(canEdit
       ? [
           {
-            label: "수정",
+            label: t("수정"),
             icon: <PencilIcon aria-hidden />,
             onSelect: () => actions.edit(message),
           },
@@ -1552,7 +1581,7 @@ const ThreadMessage = memo(function ThreadMessage({
     ...(isOwn && actionable
       ? [
           {
-            label: "삭제",
+            label: t("삭제"),
             icon: <Trash2Icon aria-hidden />,
             onSelect: () => actions.delete(message),
             destructive: true,
@@ -1619,7 +1648,7 @@ const ThreadMessage = memo(function ThreadMessage({
       />
       {message.failed ? (
         <div className="mt-0.5 mb-1 flex items-center justify-end gap-1 text-xs">
-          <span className="text-destructive">보내지 못했습니다</span>
+          <span className="text-destructive">{t("보내지 못했습니다")}</span>
           {canCompose ? (
             <Button
               variant="ghost"
@@ -1628,7 +1657,7 @@ const ThreadMessage = memo(function ThreadMessage({
               className="relative after:absolute after:inset-x-0 after:-inset-y-2"
               onClick={() => actions.retry(message)}
             >
-              다시 보내기
+              {t("다시 보내기")}
             </Button>
           ) : null}
           <Button
@@ -1637,7 +1666,7 @@ const ThreadMessage = memo(function ThreadMessage({
             className="relative text-muted-foreground after:absolute after:inset-x-0 after:-inset-y-2"
             onClick={() => actions.discard(message)}
           >
-            지우기
+            {t("지우기")}
           </Button>
         </div>
       ) : null}
@@ -1645,7 +1674,7 @@ const ThreadMessage = memo(function ThreadMessage({
         // 삭제 모드에서는 행 전체가 고르기 버튼이다. 메뉴와 길게 누르기는 막는다.
         <button
           type="button"
-          aria-label={selection ? "메시지 선택 해제" : "메시지 선택"}
+          aria-label={selection ? t("메시지 선택 해제") : t("메시지 선택")}
           aria-pressed={selection}
           className="absolute inset-0 z-10 flex items-center rounded-lg pl-1 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
           onClick={() => actions.toggleSelection(message)}
@@ -1689,6 +1718,7 @@ function MessageActions({
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
+  const t = useT();
   const [reactionOpen, setReactionOpen] = useState(false);
 
   const reactionAction = (
@@ -1711,7 +1741,7 @@ function MessageActions({
         variant="ghost"
         size="icon-sm"
         className="rounded-full text-muted-foreground"
-        aria-label="메시지에 반응"
+        aria-label={t("메시지에 반응")}
         aria-expanded={reactionOpen}
         onClick={() => setReactionOpen((open) => !open)}
       >
@@ -1724,7 +1754,7 @@ function MessageActions({
       variant="ghost"
       size="icon-sm"
       className="rounded-full text-muted-foreground"
-      aria-label="메시지에 답장"
+      aria-label={t("메시지에 답장")}
       onClick={onReply}
     >
       <ReplyIcon aria-hidden />
@@ -1738,7 +1768,7 @@ function MessageActions({
             variant="ghost"
             size="icon-sm"
             className="rounded-full text-muted-foreground"
-            aria-label="메시지 기타 작업"
+            aria-label={t("메시지 기타 작업")}
           />
         }
       >
@@ -1757,23 +1787,23 @@ function MessageActions({
               onClick={() => void copyMessageText(messagePlainText(message))}
             >
               <CopyIcon aria-hidden />
-              복사
+              {t("복사")}
             </DropdownMenuItem>
           ) : null}
           {hasForwardableContent(message) ? (
             <DropdownMenuItem className="cursor-pointer" onClick={onForward}>
               <ForwardIcon aria-hidden />
-              전달
+              {t("전달")}
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuItem className="cursor-pointer" onClick={onTogglePinned}>
             <PinIcon aria-hidden />
-            {isPinned ? "고정 해제" : "고정"}
+            {isPinned ? t("고정 해제") : t("고정")}
           </DropdownMenuItem>
           {onEdit ? (
             <DropdownMenuItem className="cursor-pointer" onClick={onEdit}>
               <PencilIcon aria-hidden />
-              수정
+              {t("수정")}
             </DropdownMenuItem>
           ) : null}
           {onDelete ? (
@@ -1783,7 +1813,7 @@ function MessageActions({
               onClick={onDelete}
             >
               <Trash2Icon aria-hidden />
-              삭제
+              {t("삭제")}
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuGroup>
@@ -1895,6 +1925,8 @@ function ComposerShell({
   mentionParticipants: MessageParticipant[] | null;
   viewerId: string;
 }) {
+  const t = useT();
+  const locale = useLocale();
   // 입력창이 드는 값은 원문이 아니라 표시형(`@홍길동`)이고, 멘션 대상은 따로 든다. 원문은 제출과
   // 검사에만 쓴다(`prepareMessageMentions()`).
   const [draft, setDraft] = useState(() => readRoomDraft(draftKey)?.text ?? "");
@@ -1988,8 +2020,13 @@ function ComposerShell({
   const mentionLimitReason = mentionCountReason(prepared.mentionPubIds.length);
   const cannotSend = overLimit || mentionLimitReason !== null;
   const limitReason = overLimit
-    ? `메시지는 ${MESSAGE_MAX_LENGTH.toLocaleString("ko-KR")}자까지 쓸 수 있습니다. (${draftLength.toLocaleString("ko-KR")}/${MESSAGE_MAX_LENGTH.toLocaleString("ko-KR")})`
-    : mentionLimitReason;
+    ? t("메시지는 {max}자까지 쓸 수 있습니다. ({length}/{max})", {
+        max: MESSAGE_MAX_LENGTH.toLocaleString("ko-KR"),
+        length: draftLength.toLocaleString("ko-KR"),
+      })
+    : mentionLimitReason === null
+      ? null
+      : t(mentionLimitReason);
   const attachmentActionsCollapsed =
     attachmentActionsMode === "auto"
       ? hasDraft
@@ -2093,7 +2130,9 @@ function ComposerShell({
       {editTarget ? (
         <div className="mb-2 flex items-center gap-2 border-l-2 border-primary px-3 py-1">
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-primary">메시지 수정</p>
+            <p className="text-xs font-semibold text-primary">
+              {t("메시지 수정")}
+            </p>
             <p className="truncate text-xs text-muted-foreground">
               {messagePlainText(editTarget.message)}
             </p>
@@ -2103,7 +2142,7 @@ function ComposerShell({
             size="icon-xs"
             // 보이는 크기는 작게 두고 누를 자리만 44px로 넓힌다.
             className="relative rounded-full after:absolute after:-inset-2.5"
-            aria-label="수정 취소"
+            aria-label={t("수정 취소")}
             onClick={onCancelEdit}
           >
             <XIcon aria-hidden />
@@ -2114,12 +2153,15 @@ function ComposerShell({
         <div className="mb-2 flex items-center gap-2 border-l-2 border-primary px-3 py-1">
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-primary">
-              {replyAuthor ?? "알 수 없는 사용자"}에게 답장
+              {t("{name}에게 답장", {
+                name: replyAuthor ?? t("알 수 없는 사용자"),
+              })}
             </p>
             <p className="truncate text-xs text-muted-foreground">
               {formatReplyPreview(
                 toReplyPreview(replyTarget),
                 window.location.origin,
+                locale,
               )}
             </p>
           </div>
@@ -2127,7 +2169,7 @@ function ComposerShell({
             variant="ghost"
             size="icon-xs"
             className="relative rounded-full after:absolute after:-inset-2.5"
-            aria-label="답장 취소"
+            aria-label={t("답장 취소")}
             onClick={onCancelReply}
           >
             <XIcon aria-hidden />
@@ -2136,7 +2178,7 @@ function ComposerShell({
       ) : null}
       {hasStaged ? (
         <ul
-          aria-label="보낼 첨부"
+          aria-label={t("보낼 첨부")}
           // 작성창과 구분되도록 옅은 판 위에 늘어놓는다. 위쪽 여백은 빼기 버튼이 잘리지 않을 자리다.
           className="mb-2 flex gap-2 overflow-x-auto rounded-2xl bg-muted/70 px-2.5 pt-3 pb-2.5"
         >
@@ -2168,7 +2210,7 @@ function ComposerShell({
                 type="button"
                 size="icon-xs"
                 variant="secondary"
-                aria-label={`첨부 빼기: ${item.file.name}`}
+                aria-label={t("첨부 빼기: {name}", { name: item.file.name })}
                 className="absolute -top-1.5 -right-1.5 rounded-full shadow-sm after:absolute after:-inset-2.5"
                 onClick={() => onUnstage(item.id)}
               >
@@ -2221,7 +2263,7 @@ function ComposerShell({
             variant="ghost"
             size="icon"
             className="mb-0.5 rounded-full"
-            aria-label="파일 보내기"
+            aria-label={t("파일 보내기")}
             disabled={attachDisabled}
             onClick={() => fileInput.current?.click()}
           >
@@ -2231,7 +2273,7 @@ function ComposerShell({
             variant="ghost"
             size="icon"
             className="mb-0.5 rounded-full"
-            aria-label="사진 보내기"
+            aria-label={t("사진 보내기")}
             disabled={attachDisabled}
             onClick={() => mediaInput.current?.click()}
           >
@@ -2243,7 +2285,7 @@ function ComposerShell({
             variant="ghost"
             size="icon"
             className="mb-0.5 shrink-0 rounded-full"
-            aria-label="첨부 메뉴 펼치기"
+            aria-label={t("첨부 메뉴 펼치기")}
             onClick={() => setAttachmentActionsMode("expanded")}
           >
             <ChevronRightIcon aria-hidden className="size-5" />
@@ -2268,8 +2310,8 @@ function ComposerShell({
                 ref={textareaRef}
                 rows={1}
                 value={draft}
-                aria-label="메시지 입력"
-                placeholder="메시지 입력"
+                aria-label={t("메시지 입력")}
+                placeholder={t("메시지 입력")}
                 aria-autocomplete={mentionParticipants ? "list" : undefined}
                 aria-controls={
                   mentionSuggestions.open ? mentionListId : undefined
@@ -2389,10 +2431,10 @@ function ComposerShell({
           className="shrink-0 rounded-full text-primary"
           aria-label={
             editTarget
-              ? "수정한 메시지 저장"
+              ? t("수정한 메시지 저장")
               : hasDraft || hasStaged
-                ? "메시지 보내기"
-                : "좋아요 보내기"
+                ? t("메시지 보내기")
+                : t("좋아요 보내기")
           }
           disabled={cannotSend || (editTarget !== undefined && !hasDraft)}
           // 보내도 키보드가 접히지 않게 한다. 누르는 순간 입력창이 포커스를 잃지 않도록 기본 동작을

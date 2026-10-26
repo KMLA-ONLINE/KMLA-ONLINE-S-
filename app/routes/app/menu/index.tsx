@@ -20,6 +20,7 @@ import {
 } from "~/features/app-shell";
 import { schoolLinks } from "~/features/app-shell/model/school-links";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { buttonVariants } from "~/shared/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";
@@ -79,35 +80,36 @@ const tileClassName =
 
 export default function MenuPage() {
   const { profile } = useAppShell();
+  const t = useT();
 
   return (
     <>
       <PageHeader
-        title="메뉴"
+        title={t("메뉴")}
         actions={
           <div className="flex items-center gap-1">
             {profile.role === "admin" ? (
               <Tooltip>
                 <TooltipTrigger
                   render={<Link to="/admin" />}
-                  aria-label="관리자 페이지"
+                  aria-label={t("관리자 페이지")}
                   className={buttonVariants({ variant: "ghost", size: "icon" })}
                 >
                   <ShieldCheckIcon aria-hidden />
                 </TooltipTrigger>
-                <TooltipContent>관리자 페이지</TooltipContent>
+                <TooltipContent>{t("관리자 페이지")}</TooltipContent>
               </Tooltip>
             ) : null}
             <Link
               to="/settings"
-              aria-label="설정"
+              aria-label={t("설정")}
               className={buttonVariants({ variant: "ghost", size: "icon" })}
             >
               <SettingsIcon aria-hidden />
             </Link>
             <Link
               to="/profile"
-              aria-label="내 프로필"
+              aria-label={t("내 프로필")}
               className={buttonVariants({ variant: "ghost", size: "icon" })}
             >
               <UserAvatar
@@ -121,7 +123,7 @@ export default function MenuPage() {
       />
 
       <div className="flex w-full flex-col gap-6 p-4 md:gap-8 md:p-0">
-        <h1 className="hidden text-2xl font-semibold md:block">메뉴</h1>
+        <h1 className="hidden text-2xl font-semibold md:block">{t("메뉴")}</h1>
 
         <section
           className="flex flex-col gap-3"
@@ -131,10 +133,10 @@ export default function MenuPage() {
             id="school-tools-title"
             className="text-sm font-semibold text-muted-foreground"
           >
-            학교 기능
+            {t("학교 기능")}
           </h2>
           <nav
-            aria-label="학교생활 기능"
+            aria-label={t("학교생활 기능")}
             className="grid grid-cols-2 gap-3 md:grid-cols-4"
           >
             {shortcuts
@@ -155,7 +157,7 @@ export default function MenuPage() {
 
                   {/* `break-keep`이 없으면 두 줄 라벨이 어절 가운데서 잘린다. */}
                   <span className="text-center text-sm leading-tight font-medium break-keep">
-                    {label}
+                    {t(label)}
                   </span>
                 </Link>
               ))}
@@ -170,10 +172,10 @@ export default function MenuPage() {
             id="school-sites-title"
             className="text-sm font-semibold text-muted-foreground"
           >
-            학교 사이트
+            {t("학교 사이트")}
           </h2>
           <nav
-            aria-label="학교 사이트"
+            aria-label={t("학교 사이트")}
             className="grid grid-cols-2 gap-3 md:grid-cols-3"
           >
             {schoolLinks.map(({ href, label, icon: Icon }) => (
@@ -182,7 +184,7 @@ export default function MenuPage() {
                 href={href}
                 target="_blank"
                 rel="noreferrer"
-                aria-label={`${label} (새 탭)`}
+                aria-label={t("{label} (새 탭)", { label: t(label) })}
                 className={cn(
                   tileClassName,
                   "flex min-h-14 min-w-0 items-center gap-3 px-3 py-3",
@@ -193,7 +195,7 @@ export default function MenuPage() {
                   aria-hidden
                 />
                 <span className="min-w-0 flex-1 text-sm font-medium break-keep">
-                  {label}
+                  {t(label)}
                 </span>
                 <ExternalLinkIcon
                   className="size-4 shrink-0 text-muted-foreground"

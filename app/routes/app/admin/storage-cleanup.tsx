@@ -6,6 +6,7 @@ import {
   StorageCleanupScreen,
 } from "~/features/admin";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { useT } from "~/shared/i18n";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -29,10 +30,11 @@ export default function StorageCleanupPage({
   loaderData: Awaited<ReturnType<typeof clientLoader>>;
 }) {
   const { profile } = useAppShell();
+  const t = useT();
   if (profile.role !== "admin") return null;
   return (
     <>
-      <PageHeader title="파일 정리" back="/admin" />
+      <PageHeader title={t("파일 정리")} back="/admin" />
       <StorageCleanupScreen {...loaderData} />
     </>
   );

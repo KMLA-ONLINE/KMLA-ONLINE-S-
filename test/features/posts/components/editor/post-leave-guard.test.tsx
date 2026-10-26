@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import { useRef } from "react";
 import { Link } from "react-router";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PostLeaveGuard } from "~/features/posts/components/editor/post-leave-guard";
 import { renderRoute } from "../../../../router";
@@ -92,5 +92,28 @@ describe("PostLeaveGuard", () => {
     await user.click(await screen.findByRole("button", { name: "나가기" }));
 
     expect(await screen.findByText("떠난 화면")).toBeInTheDocument();
+  });
+});
+
+describe("PostLeaveGuard in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("asks before leaving in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const { user } = renderEditor({
+      dirty: true,
+      discard: vi.fn().mockResolvedValue(undefined),
+    });
+
+    await user.click(screen.getByRole("link", { name: "나가기 링크" }));
+
+    expect(await screen.findByText("Post in progress")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "You have unsaved text or attachments. Leave without saving?",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Leave" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 });

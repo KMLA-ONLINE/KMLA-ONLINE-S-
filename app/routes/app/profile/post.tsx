@@ -12,6 +12,7 @@ import {
 } from "~/features/posts";
 import type { Route } from "./+types/post";
 import { invalidateDeletedProfilePost } from "~/routes/app/profile/post-cache";
+import { getCurrentLocale, translate } from "~/shared/i18n";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -46,7 +47,10 @@ export async function clientAction({
 }: Route.ClientActionArgs) {
   const formData = await request.formData();
   if (formData.get("intent") !== "delete") {
-    return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
+    return data(
+      { error: translate(getCurrentLocale(), "지원하지 않는 요청입니다.") },
+      { status: 400 },
+    );
   }
   try {
     await deleteProfilePost(params.postId);

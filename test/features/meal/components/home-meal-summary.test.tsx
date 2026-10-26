@@ -107,3 +107,46 @@ describe("HomeMealSummary", () => {
     },
   );
 });
+
+describe("HomeMealSummary in English", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    window.localStorage.clear();
+  });
+
+  it("translates the link, the meal name and the empty state", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-26T12:00:00+09:00"));
+    const { unmount } = renderRoute(() => (
+      <HomeMealSummary
+        day={{
+          date: "20260826",
+          unavailable: false,
+          meals: [
+            {
+              code: "2",
+              label: "중식",
+              items: [{ name: "쌀밥", allergens: [] }],
+              servings: "",
+              calories: "",
+              origin: [],
+              nutrition: [],
+            },
+          ],
+        }}
+      />
+    ));
+
+    expect(screen.getByRole("link", { name: "View meals" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Lunch" })).toBeVisible();
+    expect(screen.getByRole("list", { name: "Lunch menu" })).toBeVisible();
+    expect(screen.getByText("쌀밥")).toBeVisible();
+    unmount();
+
+    renderRoute(() => <HomeMealSummary day={null} />);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Couldn't load meals. Please check again later.",
+    );
+  });
+});

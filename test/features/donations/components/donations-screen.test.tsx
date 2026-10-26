@@ -72,6 +72,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  window.localStorage.clear();
 });
 
 describe("DonationsScreen for students", () => {
@@ -308,5 +309,123 @@ describe("DonationsScreen for administrators", () => {
       includeClaimants: false,
     });
     expect(screen.queryByText("물품 엑셀 등록")).not.toBeInTheDocument();
+  });
+});
+
+describe("DonationsScreen in English", () => {
+  beforeEach(() => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+  });
+
+  it("shows the closed message in English", async () => {
+    data.loadDonationRounds.mockResolvedValue([
+      { ...openRound, is_open: false },
+    ]);
+    render(<DonationsScreen />);
+
+    expect(await screen.findByText("Applications are closed")).toBeVisible();
+  });
+
+  it("translates the student screen, filters and item actions", async () => {
+    data.loadDonationItems.mockResolvedValue([
+      item({ id: 1, name: "수학 교재", is_claimed: true, is_mine: true }),
+      item({ id: 2, name: "영어 교재" }),
+      item({
+        id: 3,
+        name: "하복",
+        is_claimed: true,
+        claimant_name: "홍길동",
+        claimant_cohort: 29,
+      }),
+    ]);
+    const user = userEvent.setup();
+    render(<DonationsScreen />);
+
+    expect(
+      await screen.findByRole("button", { name: "Apply for 영어 교재" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Donations" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Cohort 29 홍길동")).toBeInTheDocument();
+    expect(
+      screen.getByText(/My applications/, { selector: "p" }),
+    ).toHaveTextContent("My applications 1/50");
+    expect(
+      screen.getByRole("button", { name: "Cancel application for 수학 교재" }),
+    ).toHaveTextContent("Cancel");
+    expect(
+      screen.getByRole("group", { name: "Application status" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("searchbox", { name: "Search items" }),
+    ).toHaveAttribute("placeholder", "Search by item name, color or size");
+    expect(
+      screen.getByText(/^Until .* · first come, first served$/),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Available 1" }));
+    await user.type(
+      screen.getByRole("searchbox", { name: "Search items" }),
+      "zzz",
+    );
+    expect(screen.getByText("No items match the filters.")).toBeVisible();
+  });
+
+  it("asks before cancelling in English", async () => {
+    data.loadDonationItems.mockResolvedValue([
+      item({ id: 4, is_claimed: true, is_mine: true }),
+    ]);
+    const user = userEvent.setup();
+    render(<DonationsScreen />);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Cancel application for 수학 교재",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "Cancel application" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(
+        "This cancels your application for 수학 교재. Another student can apply right away.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("translates the admin panel", async () => {
+    viewer.role = "admin";
+    data.loadDonationItems.mockResolvedValue([]);
+    const user = userEvent.setup();
+    render(<DonationsScreen />);
+
+    expect(
+      await screen.findByRole("button", { name: "New round" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Round")).toBeInTheDocument();
+    expect(screen.getByText("2026년 2학기 · Open")).toBeInTheDocument();
+    expect(screen.getByText("Applications open")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Upload item spreadsheet" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Download results (Excel)" }),
+    ).toBeDisabled();
+    expect(screen.getByText(/0 items · 0 applications/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "New round" }));
+    expect(screen.getByText("Round name")).toBeInTheDocument();
+    expect(
+      screen.getByText("Applications open (Korea time)"),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Create round" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Check the round name and the opening and closing times.",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
   });
 });

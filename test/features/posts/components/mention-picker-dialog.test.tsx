@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { searchGroupMentionCandidates } = vi.hoisted(() => ({
   searchGroupMentionCandidates: vi.fn(),
@@ -129,5 +129,35 @@ describe("MentionPickerDialog", () => {
     expect(
       screen.getByRole("button", { name: /^새 대상/, pressed: true }),
     ).toBeEnabled();
+  });
+});
+
+describe("MentionPickerDialog in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("labels the picker in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const user = userEvent.setup();
+    render(
+      <MentionPickerDialog
+        groupId="group-id"
+        remaining={5}
+        activeTargetPubIds={[]}
+        onOpenChange={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Members to mention" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("searchbox", { name: "Search members" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mention" })).toBeDisabled();
+    await user.click(await screen.findByRole("button", { name: /^새 대상/ }));
+    expect(
+      screen.getByRole("button", { name: "Mention 1 person" }),
+    ).toBeInTheDocument();
   });
 });

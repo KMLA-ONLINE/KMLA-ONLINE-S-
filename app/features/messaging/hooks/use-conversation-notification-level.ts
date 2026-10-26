@@ -12,6 +12,7 @@ import type {
   Conversation,
   ConversationNotificationLevel,
 } from "~/features/messaging/model/types";
+import { useT } from "~/shared/i18n";
 
 const FAILURE_MESSAGE: Record<ConversationNotificationLevel, string> = {
   all: "채팅 알림을 켜지 못했습니다.",
@@ -25,6 +26,7 @@ const FAILURE_MESSAGE: Record<ConversationNotificationLevel, string> = {
  * 연달아 바꾸면 마지막 요청만 결과를 반영한다.
  */
 export function useConversationNotificationLevel(conversation: Conversation) {
+  const t = useT();
   const queryClient = useQueryClient();
   const { data: conversations } = useQuery(conversationListQuery());
   const listed = conversations?.find(({ id }) => id === conversation.id);
@@ -44,7 +46,7 @@ export function useConversationNotificationLevel(conversation: Conversation) {
       }).catch(() => invalidateConversationList(queryClient));
     } catch {
       if (request === latestRequest.current) {
-        toast.error(FAILURE_MESSAGE[next]);
+        toast.error(t(FAILURE_MESSAGE[next]));
       }
     } finally {
       if (request === latestRequest.current) setRequested(null);

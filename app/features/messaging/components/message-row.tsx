@@ -15,6 +15,7 @@ import {
 
 import { MessageBubble } from "~/features/messaging/components/message-bubble";
 import { formatMessageTime } from "~/features/messaging/model/message-time";
+import { useLocale, useT } from "~/shared/i18n";
 import type {
   ConversationMessage,
   MessageParticipant,
@@ -115,6 +116,7 @@ export function MessageRow({
   contextViewportRef?: RefObject<HTMLElement | null>;
   contextPortalRef?: RefObject<HTMLElement | null>;
 }) {
+  const t = useT();
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [contextOpenedByTouch, setContextOpenedByTouch] = useState(false);
   const [contextMenuReady, setContextMenuReady] = useState(false);
@@ -522,7 +524,9 @@ export function MessageRow({
     showUnreadCount && (isOwn || isGroup) ? (
       <span
         aria-label={
-          hasUnreadCount ? `${unreadParticipantCount}명 안 읽음` : undefined
+          hasUnreadCount
+            ? t("{count}명 안 읽음", { count: unreadParticipantCount })
+            : undefined
         }
         aria-hidden={hasUnreadCount ? undefined : true}
         className={cn(
@@ -539,7 +543,9 @@ export function MessageRow({
     <article
       ref={rowRef}
       id={elementId}
-      aria-label={`${isOwn ? "내" : (sender?.name ?? "상대방")} 메시지`}
+      aria-label={t("{name} 메시지", {
+        name: isOwn ? t("내") : (sender?.name ?? t("상대방")),
+      })}
       className={cn(
         "group/message relative flex w-full items-end gap-2 rounded-2xl transition-[transform,box-shadow] duration-200 ease-out motion-reduce:transition-none [@media(hover:none)]:select-none",
         // 가로 이동은 답장 스와이프가 받는다. 두 번 탭해 확대하는 것도 막아 더블탭 반응과 겹치지 않는다.
@@ -602,18 +608,18 @@ export function MessageRow({
       >
         {!isOwn && ((isGroup && startsGroup) || isPinned) ? (
           <span className="mb-1 ml-2 flex items-center gap-1 text-xs text-muted-foreground">
-            <span>{sender?.name ?? "알 수 없는 사용자"}</span>
+            <span>{sender?.name ?? t("알 수 없는 사용자")}</span>
             {isPinned && showPinnedLabel ? (
               <>
                 <span aria-hidden>·</span>
-                <span>고정됨</span>
+                <span>{t("고정됨")}</span>
               </>
             ) : null}
           </span>
         ) : null}
         {isOwn && isPinned && showPinnedLabel ? (
           <span className="mr-2 mb-1 text-xs text-muted-foreground">
-            고정됨
+            {t("고정됨")}
           </span>
         ) : null}
         {/* 탭으로 시각을 보는 것은 손가락 전용 지름길이다. 마우스는 시간 카드로 본다. */}
@@ -774,6 +780,7 @@ function SenderAvatar({
   sender?: MessageParticipant;
   className: string;
 }) {
+  const t = useT();
   const avatar = (
     <UserAvatar
       src={sender?.avatarUrl}
@@ -786,7 +793,7 @@ function SenderAvatar({
   return (
     <Link
       to={`/profile/${sender.pubId}`}
-      aria-label={`${sender.name} 프로필`}
+      aria-label={t("{name} 프로필", { name: sender.name })}
       className={cn(
         "shrink-0 rounded-full focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
         className,
@@ -828,6 +835,7 @@ function MessageTimeCard({
   overlay?: ReactNode;
   children: ReactElement;
 }) {
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   // 손가락으로 누를 때는 길게 누르기가 버블 안에 시각을 보이므로 카드를 띄우지 않는다. `hover: none`
   // 미디어 쿼리로 가리면 터치스크린이 달린 노트북에서 터치패드로 눌러도 카드가 숨으므로, 기기가 아니라
@@ -864,7 +872,7 @@ function MessageTimeCard({
           뜨고, 버튼은 행 전체 호버로 뜬다. 버튼을 누르려고 커서를 버블 밖으로 옮기면 카드가 닫히므로
           버튼 사용을 막지 않는다. */}
       <TooltipContent side={isOwn ? "right" : "left"}>
-        {formatMessageTime(message.sentAt)}
+        {formatMessageTime(message.sentAt, locale)}
       </TooltipContent>
     </Tooltip>
   );

@@ -36,6 +36,7 @@ import {
   type StoryPlacement,
 } from "~/features/stories/model/story";
 import { ImageCropper } from "~/shared/components/image-cropper";
+import { useT } from "~/shared/i18n";
 import {
   compressImage,
   getImageDimensions,
@@ -115,6 +116,7 @@ export function StoryComposer({
    */
   onPendingChange?: (pending: boolean) => void;
 }) {
+  const t = useT();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<Mode>("photo");
   const [image, setImage] = useState<PreparedImage | null>(null);
@@ -222,7 +224,7 @@ export function StoryComposer({
       setError(
         cause instanceof Error
           ? cause.message
-          : "이미지를 처리하지 못했습니다.",
+          : t("이미지를 처리하지 못했습니다."),
       );
     } finally {
       setProcessing(false);
@@ -251,7 +253,7 @@ export function StoryComposer({
       setError(
         cause instanceof Error
           ? cause.message
-          : "이미지를 처리하지 못했습니다.",
+          : t("이미지를 처리하지 못했습니다."),
       );
     } finally {
       setProcessing(false);
@@ -296,8 +298,8 @@ export function StoryComposer({
     } catch (cause) {
       setError(
         isStoryLimitError(cause)
-          ? "24시간 동안 스토리는 20개까지 올릴 수 있습니다."
-          : "스토리를 올리지 못했습니다. 다시 시도해 주세요.",
+          ? t("24시간 동안 스토리는 20개까지 올릴 수 있습니다.")
+          : t("스토리를 올리지 못했습니다. 다시 시도해 주세요."),
       );
       setPending(false);
       onPendingChange?.(false);
@@ -357,7 +359,7 @@ export function StoryComposer({
               className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ImageIcon className="size-8" aria-hidden />
-              {processing ? "사진 처리 중" : "사진 선택"}
+              {processing ? t("사진 처리 중") : t("사진 선택")}
             </button>
           ) : null}
 
@@ -398,8 +400,12 @@ export function StoryComposer({
               htmlFor="story-element-scale"
               className="flex items-center justify-between text-xs text-muted-foreground"
             >
-              <span>{ELEMENT_LABELS[activeElement]} 크기</span>
-              <span>끌어서 옮기기</span>
+              <span>
+                {t("{element} 크기", {
+                  element: t(ELEMENT_LABELS[activeElement]),
+                })}
+              </span>
+              <span>{t("끌어서 옮기기")}</span>
             </label>
             <input
               id="story-element-scale"
@@ -415,7 +421,9 @@ export function StoryComposer({
                 })
               }
               disabled={pending}
-              aria-label={`${ELEMENT_LABELS[activeElement]} 크기`}
+              aria-label={t("{element} 크기", {
+                element: t(ELEMENT_LABELS[activeElement]),
+              })}
               className="h-1 w-full cursor-pointer accent-primary"
             />
           </div>
@@ -430,7 +438,7 @@ export function StoryComposer({
               onClick={() => setCropping(true)}
             >
               <CropIcon data-icon="inline-start" />
-              사진 맞추기
+              {t("사진 맞추기")}
             </Button>
             <Button
               type="button"
@@ -438,7 +446,7 @@ export function StoryComposer({
               disabled={processing || pending}
               onClick={() => fileInputRef.current?.click()}
             >
-              {processing ? "사진 처리 중" : "다른 사진"}
+              {processing ? t("사진 처리 중") : t("다른 사진")}
             </Button>
           </div>
         ) : null}
@@ -452,7 +460,7 @@ export function StoryComposer({
             aspect={9 / 16}
             maxOutputEdge={CROP_OUTPUT_EDGE}
             letterboxColor={CROP_LETTERBOX_COLOR}
-            title="사진 맞추기"
+            title={t("사진 맞추기")}
             onCancel={() => setCropping(false)}
             onComplete={(cropped) => void applyCrop(cropped)}
           />
@@ -462,7 +470,7 @@ export function StoryComposer({
       <div className="contents md:flex md:min-w-0 md:flex-1 md:flex-col md:gap-5">
         <div
           role="radiogroup"
-          aria-label="스토리 종류"
+          aria-label={t("스토리 종류")}
           className="-order-1 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 md:order-none"
         >
           {(
@@ -484,7 +492,7 @@ export function StoryComposer({
               )}
             >
               <Icon className="size-4" aria-hidden />
-              {label}
+              {t(label)}
             </button>
           ))}
         </div>
@@ -503,7 +511,7 @@ export function StoryComposer({
         {mode === "text" ? (
           <div
             role="radiogroup"
-            aria-label="배경"
+            aria-label={t("배경")}
             className="flex justify-center gap-2"
           >
             {STORY_BACKGROUND_KEYS.map((key) => (
@@ -512,7 +520,7 @@ export function StoryComposer({
                 type="button"
                 role="radio"
                 aria-checked={background === key}
-                aria-label={BACKGROUND_LABELS[key]}
+                aria-label={t(BACKGROUND_LABELS[key])}
                 disabled={pending}
                 onClick={() => setBackground(key)}
                 className={cn(
@@ -532,7 +540,7 @@ export function StoryComposer({
         <div className="flex min-w-0 flex-col gap-2">
           <div className="flex items-end justify-between gap-4">
             <label htmlFor="story-content" className="text-sm font-medium">
-              글
+              {t("글")}
             </label>
             <span className="text-xs text-muted-foreground">
               {normalizedContent.length}/{STORY_CONTENT_MAX_LENGTH}
@@ -544,7 +552,7 @@ export function StoryComposer({
             onChange={(event) => setContent(event.currentTarget.value)}
             maxLength={STORY_CONTENT_MAX_LENGTH}
             rows={3}
-            placeholder="무슨 일이 있었나요?"
+            placeholder={t("무슨 일이 있었나요?")}
             disabled={pending}
             className="[field-sizing:fixed] min-h-20 max-w-full min-w-0 resize-none"
           />
@@ -552,7 +560,7 @@ export function StoryComposer({
 
         <div className="flex min-w-0 flex-col gap-2">
           <label htmlFor="story-link" className="text-sm font-medium">
-            링크 (선택)
+            {t("링크 (선택)")}
           </label>
           <Input
             id="story-link"
@@ -566,7 +574,7 @@ export function StoryComposer({
           />
           {normalizedLink === undefined ? (
             <p className="text-xs text-destructive">
-              http 또는 https 주소를 입력하세요.
+              {t("http 또는 https 주소를 입력하세요.")}
             </p>
           ) : null}
         </div>
@@ -574,7 +582,7 @@ export function StoryComposer({
         {canNarrowAudience ? (
           <div className="flex min-w-0 flex-col gap-2">
             <span id="story-audience" className="text-sm font-medium">
-              공개 범위
+              {t("공개 범위")}
             </span>
             <div
               role="radiogroup"
@@ -596,15 +604,15 @@ export function StoryComposer({
                       : "hover:bg-accent",
                   )}
                 >
-                  {item.label}
+                  {t(item.label)}
                 </button>
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              {
+              {t(
                 STORY_AUDIENCES.find((item) => item.key === audience)
-                  ?.description
-              }
+                  ?.description ?? "",
+              )}
             </p>
           </div>
         ) : null}
@@ -616,7 +624,7 @@ export function StoryComposer({
         ) : null}
 
         <Button type="submit" disabled={!ready || pending}>
-          {pending ? "올리는 중" : "공유"}
+          {pending ? t("올리는 중") : t("공유")}
         </Button>
       </div>
     </form>

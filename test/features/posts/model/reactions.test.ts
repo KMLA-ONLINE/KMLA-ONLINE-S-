@@ -5,6 +5,7 @@ import {
   DEFAULT_REACTION,
   REACTION_TYPES,
   reactionAssetPath,
+  reactionLabel,
 } from "~/features/posts/model/reactions";
 import type { ReactionSummary } from "~/features/posts/model/types";
 
@@ -61,5 +62,13 @@ describe("applyReactionLocally", () => {
     expect(applyReactionLocally(summary(), "angry").top_reactions).toEqual([
       "like",
     ]);
+  });
+});
+
+describe("reactionLabel", () => {
+  it("names a reaction in Korean by default and in English on request", () => {
+    expect(reactionLabel("like")).toBe("좋아요");
+    expect(reactionLabel("like", "en")).toBe("Like");
+    expect(reactionLabel("haha", "en")).toBe("Haha");
   });
 });

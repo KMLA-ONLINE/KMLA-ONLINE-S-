@@ -1,4 +1,5 @@
 import { defineAppChrome, PageHeader } from "~/features/app-shell";
+import { useT } from "~/shared/i18n";
 import { UtilityBookingScreen } from "~/features/school-utilities";
 
 export const handle = defineAppChrome({
@@ -8,9 +9,10 @@ export const handle = defineAppChrome({
 });
 
 export default function GongangPage() {
+  const t = useT();
   return (
     <>
-      <PageHeader title="공강 · 노래방" back="/menu" />
+      <PageHeader title={t("공강 · 노래방")} back="/menu" />
       <UtilityBookingScreen mode="gongang" />
     </>
   );

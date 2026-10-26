@@ -1,4 +1,5 @@
 import { defineAppChrome, PageHeader } from "~/features/app-shell";
+import { useT } from "~/shared/i18n";
 import {
   listSchoolNotices,
   SchoolNoticesScreen,
@@ -25,9 +26,10 @@ export async function clientLoader() {
 export default function SchoolNoticesPage({
   loaderData,
 }: Route.ComponentProps) {
+  const t = useT();
   return (
     <>
-      <PageHeader title="학교 공지" back="/menu" />
+      <PageHeader title={t("학교 공지")} back="/menu" />
       <SchoolNoticesScreen notices={loaderData.notices} />
     </>
   );

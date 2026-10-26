@@ -13,6 +13,12 @@ import {
   invalidateSavedGroupPost,
   useGroupEditorCategories,
 } from "~/routes/app/groups/post-cache";
+import { getCurrentLocale, translate } from "~/shared/i18n";
+
+/** clientLoader/clientAction은 React 밖이라 현재 언어를 직접 읽는다. */
+function msg(source: string): string {
+  return translate(getCurrentLocale(), source);
+}
 
 export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
 
@@ -47,12 +53,14 @@ export default function NewGroupPostPage() {
     enabled: parent?.group.identity_policy === "optional_anonymous",
   });
   if (!parent) {
-    throw new Response("그룹을 찾을 수 없습니다.", { status: 404 });
+    throw new Response(msg("그룹을 찾을 수 없습니다."), { status: 404 });
   }
 
   const { group } = parent;
   if (!canCreate(group))
-    throw new Response("게시물을 작성할 권한이 없습니다.", { status: 403 });
+    throw new Response(msg("게시물을 작성할 권한이 없습니다."), {
+      status: 403,
+    });
 
   const anonymousUnavailable =
     restrictionQuery.isPending ||

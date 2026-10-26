@@ -23,6 +23,7 @@ import {
   refreshShellProfile,
   useAppShell,
 } from "~/features/app-shell";
+import { getCurrentLocale, translate, useT } from "~/shared/i18n";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -60,18 +61,30 @@ export async function clientAction({ request }: ClientActionFunctionArgs) {
       const password = form.get("password");
       if (typeof password !== "string" || !password)
         return data(
-          { error: "현재 비밀번호를 입력해 주세요." },
+          {
+            error: translate(
+              getCurrentLocale(),
+              "현재 비밀번호를 입력해 주세요.",
+            ),
+          },
           { status: 400 },
         );
       await reauthenticateWithPassword(password);
     } else if (form.get("intent") === "set-admin") {
       const profileId = Number(form.get("profileId"));
       if (!Number.isSafeInteger(profileId))
-        return data({ error: "잘못된 대상입니다." }, { status: 400 });
+        return data(
+          { error: translate(getCurrentLocale(), "잘못된 대상입니다.") },
+          { status: 400 },
+        );
       await setAppAdmin(profileId, form.get("enabled") === "true");
       // 자기 자신의 역할을 바꿨을 때만 셸이 낡는다.
       if (isShellProfile(profileId)) await refreshShellProfile();
-    } else return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
+    } else
+      return data(
+        { error: translate(getCurrentLocale(), "지원하지 않는 요청입니다.") },
+        { status: 400 },
+      );
     return data({ ok: true });
   } catch (error) {
     if (isRecentAdminAuthError(error)) throw redirect("/admin/app-admins");
@@ -86,10 +99,11 @@ export default function AppAdminsPage({
   loaderData: Awaited<ReturnType<typeof clientLoader>>;
 }) {
   const { profile } = useAppShell();
+  const t = useT();
   if (profile.role !== "admin") return null;
   return (
     <>
-      <PageHeader title="앱 관리자" back="/admin" />
+      <PageHeader title={t("앱 관리자")} back="/admin" />
       {loaderData.needsReauthentication ? (
         <AdminReauthentication />
       ) : (

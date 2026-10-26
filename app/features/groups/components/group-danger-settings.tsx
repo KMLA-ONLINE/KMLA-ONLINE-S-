@@ -3,6 +3,7 @@ import { useFetcher } from "react-router";
 
 import { GroupConfirmDialog } from "~/features/groups/components/group-confirm-dialog";
 import type { GroupDetail } from "~/features/groups/model/types";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Field, FieldLabel } from "~/shared/ui/field";
@@ -24,6 +25,7 @@ export function DangerSettings({
   group: GroupDetail;
   canDeleteOfficial: boolean;
 }) {
+  const t = useT();
   const fetcher = useFetcher<{ error?: string }>();
   const [open, setOpen] = useState(false);
   const [officialConfirmOpen, setOfficialConfirmOpen] = useState(false);
@@ -55,11 +57,13 @@ export function DangerSettings({
   return (
     <Card className="rounded-none border-x-0 border-destructive/40 md:rounded-xl md:border">
       <CardHeader className="border-b border-destructive/40">
-        <CardTitle className="text-destructive">그룹 삭제</CardTitle>
+        <CardTitle className="text-destructive">{t("그룹 삭제")}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
-          게시물, 댓글, 첨부 파일과 멤버가 모두 사라집니다. 되돌릴 수 없습니다.
+          {t(
+            "게시물, 댓글, 첨부 파일과 멤버가 모두 사라집니다. 되돌릴 수 없습니다.",
+          )}
         </p>
         <Button
           type="button"
@@ -68,7 +72,7 @@ export function DangerSettings({
           disabled={pending}
           onClick={() => setOpen(true)}
         >
-          그룹 삭제
+          {t("그룹 삭제")}
         </Button>
       </CardContent>
 
@@ -82,12 +86,15 @@ export function DangerSettings({
         open={open}
         onOpenChange={(next) => (next ? setOpen(true) : close())}
         title={group.name}
-        description={`멤버 ${group.member_count}명과 및 그룹의 모든 정보가 사라집니다. 되돌릴 수 없습니다.`}
+        description={t(
+          "멤버 {count}명과 및 그룹의 모든 정보가 사라집니다. 되돌릴 수 없습니다.",
+          { count: group.member_count },
+        )}
         details={
           <Field>
             <FieldLabel htmlFor="group-deletion-phrase">
-              계속하려면 <code className="font-mono">{phrase}</code>를
-              입력하세요
+              {t("계속하려면")} <code className="font-mono">{phrase}</code>
+              {t("를 입력하세요")}
             </FieldLabel>
             <TextField
               id="group-deletion-phrase"
@@ -98,7 +105,7 @@ export function DangerSettings({
             />
           </Field>
         }
-        confirmLabel="영구 삭제"
+        confirmLabel={t("영구 삭제")}
         confirmVariant="destructive"
         confirmDisabled={typed.trim() !== phrase}
         pending={pending}
@@ -115,9 +122,9 @@ export function DangerSettings({
           setOfficialConfirmOpen(next);
           if (!next) close();
         }}
-        title={`‘${group.name}’ 공식 그룹을 삭제할까요?`}
-        description="이 작업은 되돌릴 수 없습니다."
-        confirmLabel="공식 그룹 삭제"
+        title={t("‘{name}’ 공식 그룹을 삭제할까요?", { name: group.name })}
+        description={t("이 작업은 되돌릴 수 없습니다.")}
+        confirmLabel={t("공식 그룹 삭제")}
         confirmVariant="destructive"
         pending={pending}
         onConfirm={submitDeletion}

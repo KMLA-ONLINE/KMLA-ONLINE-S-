@@ -7,9 +7,11 @@ import {
   PERIODS,
   emptyTimetable,
   getKoreaWeekday,
+  periodLabel,
   timetableFromStored,
 } from "~/features/timetable/model/timetable";
 import { loadCachedTimetable } from "~/features/timetable/storage/timetable-storage";
+import { useLocale, useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { PendingRegion, Skeleton } from "~/shared/ui/skeleton";
 
@@ -23,6 +25,8 @@ export function HomeTimetableSummary({ profileId }: HomeTimetableSummaryProps) {
 }
 
 function AccountTimetableSummary({ profileId }: HomeTimetableSummaryProps) {
+  const t = useT();
+  const locale = useLocale();
   const [timetable, setTimetable] = useState(loadCachedTimetable);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -58,21 +62,21 @@ function AccountTimetableSummary({ profileId }: HomeTimetableSummaryProps) {
   return (
     <Link
       to="/menu/timetable"
-      aria-label="시간표 보기"
+      aria-label={t("시간표 보기")}
       className="block min-w-0 overflow-hidden rounded-md p-2 transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
     >
       <div>
         {failed && today !== null ? (
           <p role="alert" className="mb-3 text-sm text-muted-foreground">
-            시간표를 불러오지 못했습니다.
+            {t("시간표를 불러오지 못했습니다.")}{" "}
             {timetable
-              ? " 기기에 저장된 시간표를 표시합니다."
-              : " 잠시 후 다시 확인해 주세요."}
+              ? t("기기에 저장된 시간표를 표시합니다.")
+              : t("잠시 후 다시 확인해 주세요.")}
           </p>
         ) : null}
         {today === null ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            주말에는 시간표가 없습니다
+            {t("주말에는 시간표가 없습니다")}
           </p>
         ) : !timetable && loading ? (
           <PendingRegion label="시간표를">
@@ -96,7 +100,7 @@ function AccountTimetableSummary({ profileId }: HomeTimetableSummaryProps) {
           </PendingRegion>
         ) : timetable ? (
           <table
-            aria-label="오늘의 시간표"
+            aria-label={t("오늘의 시간표")}
             className="w-full table-fixed border-collapse text-xs"
           >
             <tbody>
@@ -115,7 +119,9 @@ function AccountTimetableSummary({ profileId }: HomeTimetableSummaryProps) {
                       scope="row"
                       className="w-14 border-r pr-2 text-center font-normal"
                     >
-                      <span className="block font-semibold">{period}교시</span>
+                      <span className="block font-semibold">
+                        {periodLabel(period, locale)}
+                      </span>
                       <span className="text-[10px] text-muted-foreground tabular-nums">
                         {start}
                       </span>

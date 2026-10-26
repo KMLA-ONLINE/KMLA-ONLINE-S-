@@ -29,11 +29,14 @@ import {
   GongangSelectionForm,
 } from "./gongang-selection-form";
 import { GongangWeekStrip } from "./gongang-week-strip";
+import { useLocale, useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 
 export function GongangScheduleManager() {
+  const t = useT();
+  const locale = useLocale();
   const { profile } = useAppShell();
   const today = useKoreaToday();
   const week = addCalendarDays(startOfKoreaWeek(today), 7);
@@ -74,7 +77,13 @@ export function GongangScheduleManager() {
     };
   }, [profile.id, profile.role, permissionAttempt]);
 
-  const entries = gongangEntries(date, reservations, schedules, profile.id);
+  const entries = gongangEntries(
+    date,
+    reservations,
+    schedules,
+    profile.id,
+    locale,
+  );
   const conflicts = reservations.filter(
     (row) =>
       row.recurring &&
@@ -85,7 +94,7 @@ export function GongangScheduleManager() {
   const warnings = new Map(
     conflicts.map((row) => [
       gongangKey(row.slot, row.location ?? ""),
-      `${row.applicantName} 장기 예약 종료`,
+      t("{name} 장기 예약 종료", { name: row.applicantName }),
     ]),
   );
   const inspectedKey = inspected
@@ -116,9 +125,9 @@ export function GongangScheduleManager() {
       setDetail("");
       setRecurring(false);
       setInspected(null);
-      toast.success("선예약을 저장했습니다.");
+      toast.success(t("선예약을 저장했습니다."));
     } catch (e) {
-      setError(gongangScheduleSaveErrorMessage(e));
+      setError(gongangScheduleSaveErrorMessage(e, locale));
     } finally {
       setBusy(false);
       setPending(null);
@@ -142,21 +151,21 @@ export function GongangScheduleManager() {
   if (allowed === false)
     return (
       <div className="p-4">
-        <p>접근 권한이 없습니다.</p>
+        <p>{t("접근 권한이 없습니다.")}</p>
         <Link to="/menu/gongang" className="text-primary">
-          공강으로 돌아가기
+          {t("공강으로 돌아가기")}
         </Link>
       </div>
     );
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 px-3 pb-6 sm:px-4 md:px-0">
       <div className="flex min-h-12 items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold">다음 주 선예약</h1>
+        <h1 className="text-lg font-semibold">{t("다음 주 선예약")}</h1>
         <Link
           to="/menu/gongang"
           className="inline-flex min-h-11 items-center text-sm text-primary"
         >
-          공강으로 돌아가기
+          {t("공강으로 돌아가기")}
         </Link>
       </div>
       <GongangWeekStrip
@@ -172,7 +181,7 @@ export function GongangScheduleManager() {
       />
       {(loadFailed || permissionFailed) && (
         <GongangLoadError
-          message="선예약을 불러오지 못했습니다. 다시 시도해 주세요."
+          message={t("선예약을 불러오지 못했습니다. 다시 시도해 주세요.")}
           onRetry={() => {
             if (!permissionFailed) return refresh();
             setPermissionFailed(false);
@@ -182,7 +191,7 @@ export function GongangScheduleManager() {
       )}
       {(loading || allowed === null) && !permissionFailed && (
         <div className="flex justify-center py-16">
-          <Spinner aria-label="예약 불러오는 중" />
+          <Spinner aria-label={t("예약 불러오는 중")} />
         </div>
       )}
       <div hidden={loading || allowed !== true}>
@@ -214,14 +223,14 @@ export function GongangScheduleManager() {
           notice={
             conflicts.length > 0 && (
               <p className="text-xs text-destructive">
-                표시된 칸의 장기 예약은 이 날짜부터 종료됩니다.
+                {t("표시된 칸의 장기 예약은 이 날짜부터 종료됩니다.")}
               </p>
             )
           }
           detail={detail}
           recurring={recurring}
           busy={busy}
-          submitLabel={`${selected.length}건 선예약`}
+          submitLabel={t("{count}건 선예약", { count: selected.length })}
           onRemove={(key) =>
             changeSelection((values) => values.filter((value) => value !== key))
           }
@@ -235,8 +244,8 @@ export function GongangScheduleManager() {
         <ConfirmDialog
           title={
             pending.some((entry) => entry.reserved)
-              ? "장기 예약 종료"
-              : "선예약 취소"
+              ? t("장기 예약 종료")
+              : t("선예약 취소")
           }
           description={
             pending.some((entry) => entry.reserved) ? (
@@ -244,20 +253,22 @@ export function GongangScheduleManager() {
                 {conflicts
                   .map(
                     (row) =>
-                      `${row.applicantName} · ${gongangCellLabel(date, row.slot, row.location ?? "")}`,
+                      `${row.applicantName} · ${gongangCellLabel(date, row.slot, row.location ?? "", locale)}`,
                   )
                   .join(", ")}
-                <br />이 날짜부터 해당 장기 예약이 종료되며 자동으로 복구되지
-                않습니다.
+                <br />
+                {t(
+                  "이 날짜부터 해당 장기 예약이 종료되며 자동으로 복구되지 않습니다.",
+                )}
               </>
             ) : (
-              "선택한 날짜부터 선예약을 해제합니다. 과거 기록은 유지됩니다."
+              t("선택한 날짜부터 선예약을 해제합니다. 과거 기록은 유지됩니다.")
             )
           }
           confirmLabel={
             pending.some((entry) => entry.reserved)
-              ? "종료하고 선예약"
-              : "선예약 취소"
+              ? t("종료하고 선예약")
+              : t("선예약 취소")
           }
           destructive
           pending={busy}
@@ -302,7 +313,7 @@ export function GongangScheduleManager() {
                   ]);
                 }}
               >
-                {inspected.recurring ? "이 날짜부터 종료" : "선예약 취소"}
+                {inspected.recurring ? t("이 날짜부터 종료") : t("선예약 취소")}
               </Button>
             ) : (
               inspected.recurring && (
@@ -316,8 +327,8 @@ export function GongangScheduleManager() {
                   }}
                 >
                   {selected.includes(inspectedKey)
-                    ? "선택 해제"
-                    : "선예약으로 대체"}
+                    ? t("선택 해제")
+                    : t("선예약으로 대체")}
                 </Button>
               )
             )
@@ -326,8 +337,10 @@ export function GongangScheduleManager() {
           {inspected.state !== "manager" && (
             <p className="text-sm text-muted-foreground">
               {inspected.recurring
-                ? "선예약으로 대체하면 이 날짜부터 학생의 장기 예약이 끝납니다."
-                : "단발 예약이 있는 칸은 선예약할 수 없습니다."}
+                ? t(
+                    "선예약으로 대체하면 이 날짜부터 학생의 장기 예약이 끝납니다.",
+                  )
+                : t("단발 예약이 있는 칸은 선예약할 수 없습니다.")}
             </p>
           )}
         </GongangEntryDialog>

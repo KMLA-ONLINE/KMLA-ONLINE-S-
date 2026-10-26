@@ -1,5 +1,6 @@
 import { isSafePostLink } from "~/features/posts/model/markdown";
 import { mentionTokenPattern } from "~/features/posts/model/mentions";
+import { translate, type Locale } from "~/shared/i18n";
 
 /** 기능 명세 §9.1. 게시물 본문과 달리 댓글은 Markdown이 아니라 Unicode 평문이다. */
 export const COMMENT_MAX_LENGTH = 5000;
@@ -43,11 +44,15 @@ export function countCommentGraphemes(value: string): number {
 export function validateCommentBody(
   value: string,
   hasImage = false,
+  locale: Locale = "ko",
 ): string | null {
   const normalized = normalizeCommentBody(value);
-  if (!normalized && !hasImage) return "댓글 내용을 입력해 주세요.";
+  if (!normalized && !hasImage)
+    return translate(locale, "댓글 내용을 입력해 주세요.");
   if (countCommentGraphemes(normalized) > COMMENT_MAX_LENGTH)
-    return `댓글은 ${COMMENT_MAX_LENGTH.toLocaleString("ko-KR")}자까지 쓸 수 있습니다.`;
+    return translate(locale, "댓글은 {max}자까지 쓸 수 있습니다.", {
+      max: COMMENT_MAX_LENGTH.toLocaleString("ko-KR"),
+    });
   return null;
 }
 

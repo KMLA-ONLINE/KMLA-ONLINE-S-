@@ -10,6 +10,7 @@ import type {
   AdminMember,
 } from "~/features/admin/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import { useT } from "~/shared/i18n";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
@@ -17,23 +18,25 @@ import { Input } from "~/shared/ui/input";
 import { Label } from "~/shared/ui/label";
 
 export function AdminReauthentication() {
+  const t = useT();
   const fetcher = useFetcher<AdminActionResult>();
   const busy = fetcher.state !== "idle";
   return (
     <div className="mx-auto max-w-md px-4 py-10">
       <Card>
         <CardHeader>
-          <CardTitle>비밀번호 확인</CardTitle>
+          <CardTitle>{t("비밀번호 확인")}</CardTitle>
           <p className="text-sm text-muted-foreground">
-            관리자 명단은 민감한 정보입니다. 현재 계정의 비밀번호를 다시 입력해
-            주세요.
+            {t(
+              "관리자 명단은 민감한 정보입니다. 현재 계정의 비밀번호를 다시 입력해 주세요.",
+            )}
           </p>
         </CardHeader>
         <CardContent>
           <fetcher.Form method="post" className="space-y-4">
             <input type="hidden" name="intent" value="reauthenticate" />
             <div className="space-y-2">
-              <Label htmlFor="admin-password">현재 비밀번호</Label>
+              <Label htmlFor="admin-password">{t("현재 비밀번호")}</Label>
               <Input
                 id="admin-password"
                 name="password"
@@ -48,7 +51,7 @@ export function AdminReauthentication() {
               </p>
             ) : null}
             <Button type="submit" className="w-full" disabled={busy}>
-              {busy ? "확인 중..." : "확인"}
+              {busy ? t("확인 중...") : t("확인")}
             </Button>
           </fetcher.Form>
         </CardContent>
@@ -66,6 +69,7 @@ export function AppAdminsScreen({
   candidates: AdminMember[];
   query: string;
 }) {
+  const t = useT();
   const fetcher = useFetcher<AdminActionResult>();
   const [target, setTarget] = useState<AdminMember | null>(null);
   const busy = fetcher.state !== "idle";
@@ -85,7 +89,9 @@ export function AppAdminsScreen({
     <div className="space-y-6 px-0 py-4 md:px-4">
       <Card className="rounded-none md:rounded-xl">
         <CardHeader>
-          <CardTitle>앱 관리자 {roster.length}명</CardTitle>
+          <CardTitle>
+            {t("앱 관리자 {count}명", { count: roster.length })}
+          </CardTitle>
         </CardHeader>
         <CardContent className="px-0">
           <ul>
@@ -93,14 +99,14 @@ export function AppAdminsScreen({
               <AdminPersonRow
                 key={person.profile_id}
                 person={person}
-                status={<Badge variant="secondary">앱 관리자</Badge>}
+                status={<Badge variant="secondary">{t("앱 관리자")}</Badge>}
                 action={
                   <Button
                     size="sm"
                     variant="destructive"
                     onClick={() => setTarget(person)}
                   >
-                    권한 해제
+                    {t("권한 해제")}
                   </Button>
                 }
               />
@@ -110,8 +116,8 @@ export function AppAdminsScreen({
       </Card>
       <Card className="rounded-none md:rounded-xl">
         <CardHeader>
-          <CardTitle>관리자 후보 검색</CardTitle>
-          <AdminSearch query={query} label="앱 관리자 후보 검색" />
+          <CardTitle>{t("관리자 후보 검색")}</CardTitle>
+          <AdminSearch query={query} label={t("앱 관리자 후보 검색")} />
         </CardHeader>
         <CardContent className="px-0">
           <ul>
@@ -121,7 +127,7 @@ export function AppAdminsScreen({
                 person={person}
                 status={
                   person.is_app_admin ? (
-                    <Badge variant="secondary">관리자</Badge>
+                    <Badge variant="secondary">{t("관리자")}</Badge>
                   ) : null
                 }
                 action={
@@ -131,7 +137,7 @@ export function AppAdminsScreen({
                     disabled={person.is_app_admin}
                     onClick={() => setTarget(person)}
                   >
-                    관리자 임명
+                    {t("관리자 임명")}
                   </Button>
                 }
               />
@@ -139,12 +145,12 @@ export function AppAdminsScreen({
           </ul>
           {query && !candidates.length ? (
             <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-              검색 결과가 없습니다.
+              {t("검색 결과가 없습니다.")}
             </p>
           ) : null}
           {!query ? (
             <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-              두 글자 이상 입력해 검색하세요.
+              {t("두 글자 이상 입력해 검색하세요.")}
             </p>
           ) : null}
         </CardContent>
@@ -157,10 +163,17 @@ export function AppAdminsScreen({
       {target ? (
         <ConfirmDialog
           title={
-            target.is_app_admin ? "앱 관리자 강등 확인" : "앱 관리자 임명 확인"
+            target.is_app_admin
+              ? t("앱 관리자 강등 확인")
+              : t("앱 관리자 임명 확인")
           }
-          description={`${target.name}(@${target.pub_id})님의 역할을 ${target.is_app_admin ? "일반 사용자로 강등" : "앱 관리자로 임명"}합니다. 대상과 역할 변경이 맞는지 확인해 주세요.`}
-          confirmLabel={target.is_app_admin ? "강등" : "임명"}
+          description={t(
+            target.is_app_admin
+              ? "{name}(@{pubId})님의 역할을 일반 사용자로 강등합니다. 대상과 역할 변경이 맞는지 확인해 주세요."
+              : "{name}(@{pubId})님의 역할을 앱 관리자로 임명합니다. 대상과 역할 변경이 맞는지 확인해 주세요.",
+            { name: target.name, pubId: target.pub_id },
+          )}
+          confirmLabel={target.is_app_admin ? t("강등") : t("임명")}
           destructive={target.is_app_admin}
           pending={busy}
           onCancel={() => setTarget(null)}

@@ -6,6 +6,7 @@ import { profilePostAuthorName } from "~/features/posts/model/profile-post";
 import type { ProfilePost } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 
@@ -19,6 +20,7 @@ export function ProfilePostHeader({
   align?: "start" | "center";
   menu?: ReactNode;
 }) {
+  const t = useT();
   const authorName = profilePostAuthorName(post);
   const onOwnTimeline = post.author_pub_id === post.timeline_pub_id;
 
@@ -32,7 +34,7 @@ export function ProfilePostHeader({
       {post.author_pub_id ? (
         <Link
           to={`/profile/${post.author_pub_id}`}
-          aria-label={`${authorName} 프로필`}
+          aria-label={t("{name} 프로필", { name: authorName })}
         >
           <UserAvatar
             src={post.author_avatar_url}
@@ -49,11 +51,9 @@ export function ProfilePostHeader({
           <div className="flex min-w-0 items-center text-sm text-muted-foreground">
             <ProfileNameLink pubId={post.author_pub_id} name={authorName} />
             <span className="truncate">
-              님이{" "}
               {post.activity_kind === "avatar_changed"
-                ? "프로필 사진을"
-                : "프로필 커버를"}{" "}
-              바꾸었습니다.
+                ? t("님이 프로필 사진을 바꾸었습니다.")
+                : t("님이 프로필 커버를 바꾸었습니다.")}
             </span>
           </div>
         ) : (
@@ -68,14 +68,14 @@ export function ProfilePostHeader({
                 <ProfileNameLink
                   pubId={post.timeline_pub_id}
                   name={post.timeline_name}
-                  label={`${post.timeline_name}님의 타임라인`}
+                  label={t("{name}님의 타임라인", { name: post.timeline_name })}
                 />
               </>
             )}
             {post.visibility === "private" ? (
               <Badge variant="secondary" className="shrink-0 gap-1">
                 <LockIcon className="size-3" aria-hidden="true" />
-                비공개
+                {t("비공개")}
               </Badge>
             ) : null}
           </div>

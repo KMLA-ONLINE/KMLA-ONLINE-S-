@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AppShellProvider,
@@ -38,6 +38,8 @@ function renderMenu(
     },
   );
 }
+
+afterEach(() => window.localStorage.clear());
 
 describe("menu route", () => {
   it("keeps the desktop school-life entry on the menu screen", () => {
@@ -148,5 +150,41 @@ describe("menu route", () => {
     expect(
       screen.queryByRole("link", { name: "바로가기" }),
     ).not.toBeInTheDocument();
+  });
+  it("shows the menu in English when the language is English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderMenu("admin");
+
+    expect(screen.getAllByRole("heading", { name: "Menu" })).toHaveLength(2);
+    expect(
+      screen.getByRole("heading", { name: "School features" }),
+    ).toBeVisible();
+    expect(screen.getByRole("heading", { name: "School sites" })).toBeVisible();
+    const tools = within(
+      screen.getByRole("navigation", { name: "School features" }),
+    );
+    expect(tools.getByRole("link", { name: "Meals" })).toHaveAttribute(
+      "href",
+      "/menu/meal",
+    );
+    expect(tools.getByRole("link", { name: "Birthdays" })).toHaveAttribute(
+      "href",
+      "/menu/birthdays",
+    );
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+      "href",
+      "/settings",
+    );
+    expect(screen.getByRole("link", { name: "My profile" })).toHaveAttribute(
+      "href",
+      "/profile",
+    );
+    expect(screen.getByRole("link", { name: "Admin page" })).toHaveAttribute(
+      "href",
+      "/admin",
+    );
+    expect(
+      screen.getByRole("link", { name: "Homepage (new tab)" }),
+    ).toBeInTheDocument();
   });
 });

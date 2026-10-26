@@ -114,3 +114,56 @@ describe("MessagingScreen", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("MessagingScreen in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("shows the list, search and empty state in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => (
+      <MessagingScreen conversations={[]} hasRoom={false}>
+        <div />
+      </MessagingScreen>
+    ));
+
+    expect(
+      screen.getByRole("heading", { name: "Messages", level: 1 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "New chat" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("searchbox", { name: "Search chats" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("No chats yet")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Start a new chat" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Pick a chat")).toBeInTheDocument();
+  });
+
+  it("labels unread counts and the recipient picker in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const conversations = await listConversations();
+    const { user } = renderRoute(() => (
+      <MessagingScreen conversations={conversations} hasRoom={false}>
+        <div />
+      </MessagingScreen>
+    ));
+
+    expect(screen.getByLabelText("3 unread messages")).toBeInTheDocument();
+    expect(screen.getByLabelText("1 unread message")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "New chat" }));
+    const dialog = await screen.findByRole("dialog", { name: "New chat" });
+    expect(dialog).toHaveAccessibleDescription(
+      "Find and pick someone to chat with.",
+    );
+    expect(
+      within(dialog).getByRole("searchbox", { name: "Search by name" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Start chat" }),
+    ).toBeDisabled();
+  });
+});

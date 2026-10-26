@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { useSearchParams } from "react-router";
 
 import { GroupDetailMobileHeader } from "~/features/groups/components/group-detail-mobile-header";
@@ -42,5 +42,22 @@ describe("GroupDetailMobileHeader", () => {
     expect(
       screen.queryByRole("button", { name: "게시물 검색" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("GroupDetailMobileHeader in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("labels its buttons in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => <HeaderRoute canSearch />, {
+      path: "/groups/:slug",
+      initialEntries: ["/groups/test-group"],
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Back to groups" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Search posts" })).toBeVisible();
   });
 });

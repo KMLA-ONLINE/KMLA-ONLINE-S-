@@ -1,17 +1,28 @@
 import type { RoundPhase } from "~/features/donations/model/round-time";
+import { useT, type Locale } from "~/shared/i18n";
 import { Badge } from "~/shared/ui/badge";
 
-const formatter = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "Asia/Seoul",
-  month: "short",
-  day: "numeric",
-  weekday: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-});
+const formatters: Record<Locale, Intl.DateTimeFormat> = {
+  ko: new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "short",
+    day: "numeric",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }),
+  en: new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    month: "short",
+    day: "numeric",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }),
+};
 
-export function formatDonationDate(value: string) {
-  return formatter.format(new Date(value));
+export function formatDonationDate(value: string, locale: Locale = "ko") {
+  return formatters[locale].format(new Date(value));
 }
 
 const PHASES: Record<
@@ -24,6 +35,7 @@ const PHASES: Record<
 };
 
 export function RoundPhaseBadge({ phase }: { phase: RoundPhase }) {
+  const t = useT();
   const { label, variant } = PHASES[phase];
-  return <Badge variant={variant}>{label}</Badge>;
+  return <Badge variant={variant}>{t(label)}</Badge>;
 }

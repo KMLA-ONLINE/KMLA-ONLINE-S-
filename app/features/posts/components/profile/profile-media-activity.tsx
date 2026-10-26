@@ -8,6 +8,7 @@ import {
 import type { ProfilePost } from "~/features/posts/model/types";
 import type { ViewerImage } from "~/shared/components/image-viewer";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 type ProfileMediaActivityPost = Pick<
@@ -22,6 +23,7 @@ export function ProfileMediaActivity({
   post: ProfileMediaActivityPost;
   className?: string;
 }) {
+  const t = useT();
   const unavailableLabel = useUnavailableMediaLabel("image");
   const imageId = `profile-activity-${post.post_id}`;
   const downloadName = imageDownloadName(post.post_id);
@@ -48,14 +50,17 @@ export function ProfileMediaActivity({
   if (!post.activity_kind) return null;
 
   const isAvatar = post.activity_kind === "avatar_changed";
-  const label = isAvatar ? "프로필 사진" : "프로필 커버";
-  const imageName = `${profileName(post)}님이 변경한 ${label}`;
+  const label = isAvatar ? t("프로필 사진") : t("프로필 커버");
+  const imageName = t("{name}님이 변경한 {label}", {
+    name: post.author_name ?? t("사용자"),
+    label,
+  });
 
   return post.activity_media_url ? (
     <button
       type="button"
       data-testid="profile-media-activity"
-      aria-label={`${label} 크게 보기`}
+      aria-label={t("{label} 크게 보기", { label })}
       onClick={() => viewer.open(imageId)}
       className={cn(
         "flex w-full items-center justify-center overflow-hidden border-y border-border/60 bg-muted focus:ring-0 focus:outline-none",
@@ -85,8 +90,4 @@ export function ProfileMediaActivity({
       </p>
     </div>
   );
-}
-
-function profileName(post: ProfileMediaActivityPost): string {
-  return post.author_name ?? "사용자";
 }

@@ -2,6 +2,7 @@ import { XIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { gongangCellLabel, parseGongangKey } from "../model/gongang-slots";
+import { useLocale, useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
@@ -44,9 +45,11 @@ export function GongangSelectionForm({
   onRecurringChange,
   onSubmit,
 }: Props) {
+  const t = useT();
+  const locale = useLocale();
   return (
     <form
-      aria-label="선택한 칸"
+      aria-label={t("선택한 칸")}
       className="sticky bottom-0 z-10 space-y-3 rounded-xl border bg-background p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] shadow-sm"
       onSubmit={(event) => {
         event.preventDefault();
@@ -55,7 +58,7 @@ export function GongangSelectionForm({
     >
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium" aria-live="polite">
-          {selected.length}칸 선택
+          {t("{count}칸 선택", { count: selected.length })}
         </p>
         <Button
           type="button"
@@ -64,20 +67,20 @@ export function GongangSelectionForm({
           disabled={busy}
           onClick={onClear}
         >
-          모두 해제
+          {t("모두 해제")}
         </Button>
       </div>
       <ul className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">
         {selected.map((key) => {
           const { slot, location } = parseGongangKey(key);
-          const label = gongangCellLabel(date, slot, location);
+          const label = gongangCellLabel(date, slot, location, locale);
           const warning = warnings?.get(key);
           return (
             <li key={key}>
               <button
                 type="button"
                 disabled={busy}
-                aria-label={`${label} 선택 해제`}
+                aria-label={t("{label} 선택 해제", { label })}
                 onClick={() => onRemove(key)}
                 className={cn(
                   "inline-flex min-h-8 touch-manipulation items-center gap-1 rounded-full px-2.5 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
@@ -96,8 +99,8 @@ export function GongangSelectionForm({
       </ul>
       {notice}
       <TextField
-        aria-label="사용 목적"
-        placeholder="사용 목적"
+        aria-label={t("사용 목적")}
+        placeholder={t("사용 목적")}
         name="purpose"
         autoComplete="off"
         maxLength={200}
@@ -113,7 +116,7 @@ export function GongangSelectionForm({
             disabled={busy}
             onChange={(event) => onRecurringChange(event.target.checked)}
           />
-          매주 반복
+          {t("매주 반복")}
         </label>
         <Button type="submit" disabled={busy || !detail.trim()}>
           {busy && <Spinner />}
@@ -131,6 +134,7 @@ export function GongangLoadError({
   message: string;
   onRetry: () => void;
 }) {
+  const t = useT();
   return (
     <div
       role="alert"
@@ -138,7 +142,7 @@ export function GongangLoadError({
     >
       <p>{message}</p>
       <Button variant="outline" size="sm" onClick={onRetry}>
-        다시 시도
+        {t("다시 시도")}
       </Button>
     </div>
   );

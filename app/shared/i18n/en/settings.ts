@@ -4,8 +4,8 @@ export const settings: Record<string, string> = {
   "관리자 페이지": "Admin page",
   설정: "Settings",
   "내 프로필": "My profile",
-  "학교 기능": "School tools",
-  "학교생활 기능": "School tools",
+  "학교 기능": "School features",
+  "학교생활 기능": "School features",
   "학교 사이트": "School sites",
   "{label} (새 탭)": "{label} (new tab)",
   급식: "Meals",
@@ -45,7 +45,7 @@ export const settings: Record<string, string> = {
   "확인하지 못했습니다. 인터넷 연결을 확인해 주세요.":
     "Could not check. Please check your internet connection.",
   "새 버전이 적용됐습니다. 새로고침하면 사용할 수 있습니다.":
-    "The new version has been applied. Refresh to use it.",
+    "A new version has been applied. Refresh to use it.",
   "새 버전이 준비됐습니다.": "A new version is ready.",
   "이 환경에서는 업데이트를 확인할 수 없습니다.":
     "This environment cannot check for updates.",
@@ -106,14 +106,4 @@ export const settings: Record<string, string> = {
   "등록된 도움말이 없습니다": "No help articles yet",
   문의: "Contact",
   "관리자 연락처": "Admin contacts",
-
-  // 알림 설정 저장 오류
-  "그룹 알림 설정이 올바르지 않습니다.":
-    "Group notification settings are invalid.",
-  "그룹 알림 설정을 저장하지 못했습니다.":
-    "Could not save group notification settings.",
-  "메시지 알림 설정을 저장하지 못했습니다.":
-    "Could not save message notification settings.",
-  "지원하지 않는 요청입니다.": "Unsupported request.",
-  "알림 설정을 저장하지 못했습니다.": "Could not save notification settings.",
 };

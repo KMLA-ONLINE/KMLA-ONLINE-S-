@@ -98,3 +98,38 @@ describe("MealScreen allergens", () => {
     expect(screen.queryByRole("list", LEGEND)).not.toBeInTheDocument();
   });
 });
+
+describe("MealScreen in English", () => {
+  it("translates tabs, the allergen toggle, the week strip and the empty state", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderMeal({ ...dayWith([]), meals: [] });
+
+    expect(screen.getByRole("button", { name: "Breakfast" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Lunch" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Dinner" })).toBeVisible();
+    expect(
+      screen.getByRole("switch", { name: "Show allergens" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Wednesday, August 26" }),
+    ).toHaveTextContent("Wed");
+    expect(screen.getByText("No menu")).toBeVisible();
+  });
+
+  it("names allergens in English while keeping the dish names as served", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderMeal(STEW_DAY);
+    await userEvent.click(
+      screen.getByRole("switch", { name: "Show allergens" }),
+    );
+
+    expect(dish("돈육김치찌개")).toHaveTextContent(
+      "Allergens: soy, shrimp, pork",
+    );
+    expect(
+      within(screen.getByRole("list", { name: "Allergens" }))
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["2 milk", "5 soy", "9 shrimp", "10 pork"]);
+  });
+});

@@ -21,6 +21,7 @@ import {
 import { searchMessageRecipients } from "~/features/messaging/data/queries";
 import type { MessageAttachment } from "~/features/messaging/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -81,6 +82,7 @@ export function SendToChatsDialog({
   /** 보내기 버튼 아래에 둘 다른 작업. `close`는 시트를 비우고 닫는다. */
   footer?: (close: () => void) => ReactNode;
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -137,14 +139,14 @@ export function SendToChatsDialog({
       );
       void invalidateConversationList(queryClient);
       if (failed === 0) {
-        toast.success(`${subject}를 보냈습니다.`);
+        toast.success(t("{subject}를 보냈습니다.", { subject }));
         close();
       } else if (sent > 0) {
-        toast.error(`${failed}곳에 보내지 못했습니다.`);
+        toast.error(t("{count}곳에 보내지 못했습니다.", { count: failed }));
         close();
       } else {
         // 아무 데도 가지 않았으면 고른 대상을 두고 다시 시도하게 한다.
-        toast.error(`${subject}를 보내지 못했습니다.`);
+        toast.error(t("{subject}를 보내지 못했습니다.", { subject }));
       }
     } finally {
       setSending(false);
@@ -171,23 +173,23 @@ export function SendToChatsDialog({
     >
       <DialogContent className={SHEET_CLASS}>
         <DialogHeader>
-          <DialogTitle>보내기</DialogTitle>
+          <DialogTitle>{t("보내기")}</DialogTitle>
           <DialogDescription className="sr-only">
-            {subject}를 보낼 채팅이나 사람을 고르세요.
+            {t("{subject}를 보낼 채팅이나 사람을 고르세요.", { subject })}
           </DialogDescription>
         </DialogHeader>
 
         {options}
 
         {selected.length > 0 ? (
-          <ul aria-label="고른 대상" className="flex flex-wrap gap-1.5">
+          <ul aria-label={t("고른 대상")} className="flex flex-wrap gap-1.5">
             {selected.map((choice) => (
               <li key={choice.key}>
                 <Button
                   variant="secondary"
                   size="sm"
                   className="h-7 rounded-full pr-1.5"
-                  aria-label={`${choice.name} 선택 해제`}
+                  aria-label={t("{name} 선택 해제", { name: choice.name })}
                   onClick={() => toggle(choice)}
                 >
                   {choice.name}
@@ -199,7 +201,9 @@ export function SendToChatsDialog({
         ) : null}
         {full ? (
           <p role="status" className="text-xs text-muted-foreground">
-            한 번에 {SEND_TARGET_LIMIT}곳까지 보낼 수 있습니다.
+            {t("한 번에 {count}곳까지 보낼 수 있습니다.", {
+              count: SEND_TARGET_LIMIT,
+            })}
           </p>
         ) : null}
 
@@ -223,8 +227,8 @@ export function SendToChatsDialog({
               setQuery(event.currentTarget.value);
               if (event.currentTarget.value.trim() === "") setSearchTerm("");
             }}
-            placeholder="채팅 또는 사람 찾기"
-            aria-label="채팅 또는 사람 찾기"
+            placeholder={t("채팅 또는 사람 찾기")}
+            aria-label={t("채팅 또는 사람 찾기")}
             className="rounded-full pl-9"
           />
         </form>
@@ -237,12 +241,14 @@ export function SendToChatsDialog({
               </Centered>
             ) : people.isError ? (
               <Centered role="alert" className="text-destructive">
-                검색 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
+                {t(
+                  "검색 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+                )}
               </Centered>
             ) : people.data.length === 0 ? (
-              <Centered>일치하는 사람이 없습니다.</Centered>
+              <Centered>{t("일치하는 사람이 없습니다.")}</Centered>
             ) : (
-              <ul aria-label="찾은 사람" className="flex flex-col gap-0.5">
+              <ul aria-label={t("찾은 사람")} className="flex flex-col gap-0.5">
                 {people.data.map((person) => {
                   const choice: Choice = {
                     key: `person:${person.id}`,
@@ -276,11 +282,11 @@ export function SendToChatsDialog({
           ) : recent.length === 0 ? (
             <Centered>
               {filter === ""
-                ? "최근 채팅이 없습니다. 이름으로 사람을 찾아보세요."
-                : "Enter를 눌러 사람을 찾아보세요."}
+                ? t("최근 채팅이 없습니다. 이름으로 사람을 찾아보세요.")
+                : t("Enter를 눌러 사람을 찾아보세요.")}
             </Centered>
           ) : (
-            <ul aria-label="최근 채팅" className="flex flex-col gap-0.5">
+            <ul aria-label={t("최근 채팅")} className="flex flex-col gap-0.5">
               {recent.map((conversation) => {
                 const choice: Choice = {
                   key: `conversation:${conversation.id}`,
@@ -305,7 +311,11 @@ export function SendToChatsDialog({
                     name={conversation.name}
                     description={
                       conversation.type === "group"
-                        ? `그룹 · ${conversation.participants.filter(({ active }) => active).length}명`
+                        ? t("그룹 · {count}명", {
+                            count: conversation.participants.filter(
+                              ({ active }) => active,
+                            ).length,
+                          })
                         : undefined
                     }
                   />
@@ -322,7 +332,9 @@ export function SendToChatsDialog({
           onClick={() => void send()}
         >
           {sending ? <Spinner data-icon="inline-start" /> : null}
-          {selected.length > 1 ? `${selected.length}곳에 보내기` : "보내기"}
+          {selected.length > 1
+            ? t("{count}곳에 보내기", { count: selected.length })
+            : t("보내기")}
         </Button>
 
         {footer ? (

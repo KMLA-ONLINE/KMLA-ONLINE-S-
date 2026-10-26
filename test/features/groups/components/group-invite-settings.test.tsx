@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { InviteSettings } from "~/features/groups/components/group-invite-settings";
 import type { GroupDetail, GroupInvite } from "~/features/groups/model/types";
@@ -125,5 +125,27 @@ describe("InviteSettings", () => {
     expect(
       screen.queryByRole("button", { name: "초대 링크 만들기" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("InviteSettings in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the invite card in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => <InviteSettings group={group} invite={invite} />);
+
+    expect(screen.getByText("Invite link")).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "Valid for" })).toBeVisible();
+    expect(
+      screen.getByRole("checkbox", { name: "Current student" }),
+    ).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Alumni" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Teacher" })).not.toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "Create new link" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Revoke link" })).toBeVisible();
+    expect(screen.getByText(/Expires /)).toBeVisible();
   });
 });

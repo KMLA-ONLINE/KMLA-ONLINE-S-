@@ -173,6 +173,20 @@ describe("donation workbook validation", () => {
       parseDonationWorkbook(new File(["bad"], "items.csv")),
     ).rejects.toThrow(".xlsx 파일만 업로드할 수 있습니다.");
   });
+
+  it("reports in English while keeping the Korean template column names", async () => {
+    const result = await parseDonationWorkbook(
+      await workbookFile([["물품명"], ["하복"]], "uniform_male"),
+      "en",
+    );
+    expect(result.errors).toEqual([
+      "uniform_male row 1: required column ‘색상’ is missing.",
+      "uniform_male row 1: required column ‘기증자’ is missing.",
+    ]);
+    await expect(
+      parseDonationWorkbook(new File(["bad"], "items.csv"), "en"),
+    ).rejects.toThrow("Only .xlsx files can be uploaded.");
+  });
 });
 
 describe("donation result download", () => {

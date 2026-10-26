@@ -95,6 +95,12 @@ describe("roster", () => {
     expect(rosterGroups(members, "teacher")).toEqual([]);
   });
 
+  it("labels cohorts in English when asked", () => {
+    expect(
+      rosterGroups(members, "student", "en").map((group) => group.label),
+    ).toEqual(["Cohort 30", "Cohort 29"]);
+  });
+
   it("filters by type, group and search text", () => {
     const names = (filter: Partial<RosterFilter>) =>
       filterRoster(members, { ...all, ...filter }).map((row) => row.name);

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GroupCategoryManager } from "~/features/posts/components/group/group-category-manager";
 import { renderRoute, screen, waitFor, within } from "../../../../router";
@@ -100,5 +100,27 @@ describe("GroupCategoryManager", () => {
     );
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
+describe("GroupCategoryManager in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the form and row controls in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderManager();
+
+    expect(
+      screen.getByRole("heading", { name: "Post categories" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("New category name")).toHaveAttribute(
+      "placeholder",
+      "New category name…",
+    );
+    expect(screen.getByRole("button", { name: "Add" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "공지 up" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "공지 delete" }),
+    ).toBeInTheDocument();
   });
 });

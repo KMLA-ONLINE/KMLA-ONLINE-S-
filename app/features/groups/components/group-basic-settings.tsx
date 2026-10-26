@@ -8,6 +8,7 @@ import {
 } from "~/features/groups/components/group-settings-form";
 import type { GroupDetail } from "~/features/groups/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Field, FieldLabel } from "~/shared/ui/field";
@@ -15,6 +16,7 @@ import { TextField } from "~/shared/ui/text-field";
 import { Textarea } from "~/shared/ui/textarea";
 
 export function BasicInfoCard({ group }: { group: GroupDetail }) {
+  const t = useT();
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const [editing, setEditing] = useState(false);
   const [pendingForm, setPendingForm] = useState<FormData | null>(null);
@@ -32,18 +34,18 @@ export function BasicInfoCard({ group }: { group: GroupDetail }) {
       <CardHeader className="border-b">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <CardTitle>기본 정보</CardTitle>
+            <CardTitle>{t("기본 정보")}</CardTitle>
           </div>
           {!editing ? (
             <Button
               type="button"
               size="sm"
               variant="outline"
-              aria-label="기본 정보 편집"
+              aria-label={t("기본 정보 편집")}
               disabled={pending}
               onClick={() => setEditing(true)}
             >
-              편집
+              {t("편집")}
             </Button>
           ) : null}
         </div>
@@ -60,7 +62,7 @@ export function BasicInfoCard({ group }: { group: GroupDetail }) {
           >
             <SettingsHidden group={group} omit="basic" />
             <Field>
-              <FieldLabel htmlFor="group-name">그룹 이름</FieldLabel>
+              <FieldLabel htmlFor="group-name">{t("그룹 이름")}</FieldLabel>
               <TextField
                 id="group-name"
                 name="name"
@@ -72,9 +74,11 @@ export function BasicInfoCard({ group }: { group: GroupDetail }) {
             </Field>
             <Field>
               <div className="flex items-center justify-between gap-3">
-                <FieldLabel htmlFor="group-description">그룹 설명</FieldLabel>
+                <FieldLabel htmlFor="group-description">
+                  {t("그룹 설명")}
+                </FieldLabel>
                 <span className="text-xs text-muted-foreground">
-                  최대 2,000자
+                  {t("최대 2,000자")}
                 </span>
               </div>
               <Textarea
@@ -92,16 +96,16 @@ export function BasicInfoCard({ group }: { group: GroupDetail }) {
           <div className="grid gap-4 sm:grid-cols-[9rem_minmax(0,1fr)]">
             <div>
               <p className="text-xs font-medium tracking-wide text-muted-foreground">
-                그룹 이름
+                {t("그룹 이름")}
               </p>
               <p className="mt-1 font-medium break-words">{group.name}</p>
             </div>
             <div>
               <p className="text-xs font-medium tracking-wide text-muted-foreground">
-                소개
+                {t("소개")}
               </p>
               <p className="mt-1 text-sm leading-6 whitespace-pre-wrap text-foreground/80">
-                {group.description || "아직 그룹 설명이 없습니다."}
+                {group.description || t("아직 그룹 설명이 없습니다.")}
               </p>
             </div>
           </div>
@@ -110,9 +114,9 @@ export function BasicInfoCard({ group }: { group: GroupDetail }) {
       </CardContent>
       {pendingForm ? (
         <ConfirmDialog
-          title="기본 정보 저장"
-          description="변경한 기본 정보를 저장할까요?"
-          confirmLabel="저장"
+          title={t("기본 정보 저장")}
+          description={t("변경한 기본 정보를 저장할까요?")}
+          confirmLabel={t("저장")}
           pending={pending}
           onCancel={() => setPendingForm(null)}
           onConfirm={() => {

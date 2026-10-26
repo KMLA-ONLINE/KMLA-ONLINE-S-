@@ -8,6 +8,7 @@ import {
   getGroupPostingPolicyLabel,
 } from "~/features/groups/model/format";
 import type { GroupInvitePreview } from "~/features/groups/model/types";
+import { useLocale, useT, type Locale } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Spinner } from "~/shared/ui/spinner";
@@ -21,6 +22,8 @@ export function GroupInviteScreen({
 }: {
   preview: GroupInvitePreview | null;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const fetcher = useFetcher<{ error?: string }>();
   const pending = fetcher.state !== "idle";
 
@@ -32,10 +35,11 @@ export function GroupInviteScreen({
             <LinkIcon aria-hidden="true" className="size-5" />
           </div>
           <div className="flex flex-col gap-1">
-            <p className="font-medium">사용할 수 없는 초대 링크입니다</p>
+            <p className="font-medium">{t("사용할 수 없는 초대 링크입니다")}</p>
             <p className="text-sm leading-6 text-muted-foreground">
-              만료되었거나 더 이상 사용할 수 없는 링크입니다. 초대한 사람에게 새
-              링크를 요청해 주세요.
+              {t(
+                "만료되었거나 더 이상 사용할 수 없는 링크입니다. 초대한 사람에게 새 링크를 요청해 주세요.",
+              )}
             </p>
           </div>
           <Button
@@ -43,7 +47,7 @@ export function GroupInviteScreen({
             nativeButton={false}
             render={<Link to="/groups" />}
           >
-            그룹 목록으로
+            {t("그룹 목록으로")}
           </Button>
         </CardContent>
       </Card>
@@ -58,11 +62,14 @@ export function GroupInviteScreen({
             <LockIcon aria-hidden="true" className="size-5" />
           </div>
           <div className="flex flex-col gap-1">
-            <p className="font-medium">가입할 수 없는 초대 링크입니다</p>
+            <p className="font-medium">{t("가입할 수 없는 초대 링크입니다")}</p>
             <p className="text-sm leading-6 text-muted-foreground">
-              이 링크는{" "}
-              {formatAllowedProfileTypes(preview.allowed_profile_types)}만
-              가입할 수 있습니다.
+              {t("이 링크는 {types}만 가입할 수 있습니다.", {
+                types: formatAllowedProfileTypes(
+                  preview.allowed_profile_types,
+                  locale,
+                ),
+              })}
             </p>
           </div>
           <Button
@@ -70,7 +77,7 @@ export function GroupInviteScreen({
             nativeButton={false}
             render={<Link to="/groups" />}
           >
-            그룹 목록으로
+            {t("그룹 목록으로")}
           </Button>
         </CardContent>
       </Card>
@@ -84,42 +91,42 @@ export function GroupInviteScreen({
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <p className="text-sm leading-6 text-muted-foreground">
-          {preview.description || "아직 그룹 설명이 없습니다."}
+          {preview.description || t("아직 그룹 설명이 없습니다.")}
         </p>
 
         <dl className="flex flex-col gap-2 rounded-lg bg-muted/60 px-3 py-2.5 text-sm">
-          <InfoRow icon={<UsersIcon />} label="멤버">
-            {preview.member_count.toLocaleString("ko-KR")}명
+          <InfoRow icon={<UsersIcon />} label={t("멤버")}>
+            {t("{count}명", { count: preview.member_count })}
           </InfoRow>
-          <InfoRow icon={<LockIcon />} label="가입 방식">
-            {getGroupJoinPolicyLabel(preview.join_policy)}
+          <InfoRow icon={<LockIcon />} label={t("가입 방식")}>
+            {getGroupJoinPolicyLabel(preview.join_policy, locale)}
           </InfoRow>
-          <InfoRow icon={<LinkIcon />} label="활동 방식">
-            {getGroupIdentityPolicyLabel(preview.identity_policy)} ·{" "}
-            {getGroupPostingPolicyLabel(preview.posting_policy)}
+          <InfoRow icon={<LinkIcon />} label={t("활동 방식")}>
+            {getGroupIdentityPolicyLabel(preview.identity_policy, locale)} ·{" "}
+            {getGroupPostingPolicyLabel(preview.posting_policy, locale)}
           </InfoRow>
         </dl>
 
         {preview.already_member ? (
           <>
             <p className="text-sm text-muted-foreground">
-              이미 이 그룹의 멤버입니다.
+              {t("이미 이 그룹의 멤버입니다.")}
             </p>
             <Button
               nativeButton={false}
               render={<Link to={`/groups/${preview.slug}`} />}
             >
-              그룹 열기
+              {t("그룹 열기")}
             </Button>
           </>
         ) : (
           <fetcher.Form method="post" className="flex flex-col gap-2">
             <Button type="submit" disabled={pending}>
               {pending ? <Spinner data-icon="inline-start" /> : null}
-              가입하기
+              {t("가입하기")}
             </Button>
             <p className="text-center text-xs text-muted-foreground">
-              가입하면 이 그룹의 게시물과 멤버 목록을 볼 수 있습니다.
+              {t("가입하면 이 그룹의 게시물과 멤버 목록을 볼 수 있습니다.")}
             </p>
           </fetcher.Form>
         )}
@@ -136,8 +143,11 @@ export function GroupInviteScreen({
 
 function formatAllowedProfileTypes(
   types: GroupInvitePreview["allowed_profile_types"],
+  locale: Locale,
 ): string {
-  return types.map(getGroupInviteProfileTypeLabel).join("·");
+  return types
+    .map((type) => getGroupInviteProfileTypeLabel(type, locale))
+    .join("·");
 }
 
 function InfoRow({

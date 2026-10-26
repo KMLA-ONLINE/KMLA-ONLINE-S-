@@ -95,4 +95,25 @@ describe("NotificationPermissionPrompt", () => {
     await waitFor(() => expect(mocks.getPushSupport).toHaveBeenCalledOnce());
     expect(screen.queryByText("알림을 켜시겠어요?")).not.toBeInTheDocument();
   });
+
+  describe("in English", () => {
+    beforeEach(() => {
+      window.localStorage.setItem("kmla-online:language:v1", "en");
+    });
+    afterEach(() => {
+      window.localStorage.clear();
+    });
+
+    it("renders the prompt in English", async () => {
+      renderRoute(() => <NotificationPermissionPrompt profileId={42} />);
+
+      expect(
+        await screen.findByText("Turn on notifications?"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Turn on notifications" }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Later" })).toBeInTheDocument();
+    });
+  });
 });

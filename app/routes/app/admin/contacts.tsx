@@ -7,6 +7,7 @@ import {
   replaceAdminContacts,
 } from "~/features/admin";
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { getCurrentLocale, translate, useT } from "~/shared/i18n";
 import { listAdminContacts, parseAdminContacts } from "~/features/support";
 
 export const handle = defineAppChrome({
@@ -27,7 +28,10 @@ export async function clientAction({ request }: ClientActionFunctionArgs) {
   if (!parsed.ok)
     return data(
       "errors" in parsed
-        ? { error: "입력을 확인해 주세요.", rowErrors: parsed.errors }
+        ? {
+            error: translate(getCurrentLocale(), "입력을 확인해 주세요."),
+            rowErrors: parsed.errors,
+          }
         : { error: parsed.form },
       { status: 400 },
     );
@@ -46,10 +50,11 @@ export default function AdminContactsPage({
   loaderData: Awaited<ReturnType<typeof clientLoader>>;
 }) {
   const { profile } = useAppShell();
+  const t = useT();
   if (profile.role !== "admin") return null;
   return (
     <>
-      <PageHeader title="관리자 연락처" back="/admin" />
+      <PageHeader title={t("관리자 연락처")} back="/admin" />
       <AdminContactsScreen contacts={loaderData.contacts} />
     </>
   );

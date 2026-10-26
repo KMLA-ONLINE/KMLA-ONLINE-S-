@@ -289,7 +289,9 @@ export function GroupNotificationDialog({
               onChange={save}
             />
             <p className="text-xs text-muted-foreground">
-              {t("가입 승인과 역할 변경, 운영 조치는 이 설정과 관계없이 전달됩니다.")}
+              {t(
+                "가입 승인과 역할 변경, 운영 조치는 이 설정과 관계없이 전달됩니다.",
+              )}
             </p>
           </>
         ) : (

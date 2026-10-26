@@ -16,6 +16,7 @@ import {
   listPostComments,
 } from "~/features/posts/data/queries";
 import { getCommentErrorMessage } from "~/features/posts/model/format";
+import { getCurrentLocale } from "~/shared/i18n";
 import { applyReactionLocally } from "~/features/posts/model/reactions";
 import type {
   PostComment,
@@ -91,7 +92,7 @@ export function usePostComments(
     try {
       return await action();
     } catch (cause) {
-      setError(getCommentErrorMessage(cause));
+      setError(getCommentErrorMessage(cause, getCurrentLocale()));
       return undefined;
     } finally {
       setPending(false);
@@ -126,7 +127,7 @@ export function usePostComments(
       setComments((current) => mergeComments(current, page.comments));
       setNextCursor(page.nextCursor);
     } catch (cause) {
-      setError(getCommentErrorMessage(cause));
+      setError(getCommentErrorMessage(cause, getCurrentLocale()));
     } finally {
       setLoading(false);
     }
@@ -258,7 +259,7 @@ export function usePostComments(
         );
       } catch (cause) {
         merge(comment);
-        setError(getCommentErrorMessage(cause));
+        setError(getCommentErrorMessage(cause, getCurrentLocale()));
       }
     })();
   };

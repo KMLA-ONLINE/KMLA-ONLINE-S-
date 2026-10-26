@@ -1,3 +1,4 @@
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Loader2Icon } from "lucide-react";
 
@@ -6,6 +7,7 @@ import { Loader2Icon } from "lucide-react";
  * 버튼 글자·`aria-busy`가 알리므로 낭독기에 "불러오는 중"을 한 번 더 읽히지 않는다.
  */
 function Spinner({ className, ...props }: React.ComponentProps<"svg">) {
+  const t = useT();
   const decorative =
     props["aria-hidden"] === true ||
     props["aria-hidden"] === "true" ||
@@ -16,7 +18,7 @@ function Spinner({ className, ...props }: React.ComponentProps<"svg">) {
       data-slot="spinner"
       {...(decorative
         ? { "aria-hidden": true }
-        : { role: "status", "aria-label": "불러오는 중" })}
+        : { role: "status", "aria-label": t("불러오는 중") })}
       className={cn("size-4 animate-spin", className)}
       {...props}
     />

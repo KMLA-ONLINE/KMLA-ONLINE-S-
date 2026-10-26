@@ -35,11 +35,14 @@ import {
 import { GongangWeekStrip } from "./gongang-week-strip";
 import { UtilityManagers } from "./utility-managers";
 import { UtilityModeTabs } from "./utility-mode-tabs";
+import { useLocale, useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 
 export function GongangBookingScreen() {
+  const t = useT();
+  const locale = useLocale();
   const { profile } = useAppShell();
   const today = useKoreaToday();
   const week = startOfKoreaWeek(today);
@@ -79,7 +82,13 @@ export function GongangBookingScreen() {
   }, [profile.id, profile.role]);
 
   const past = date < today;
-  const entries = gongangEntries(date, reservations, schedules, profile.id);
+  const entries = gongangEntries(
+    date,
+    reservations,
+    schedules,
+    profile.id,
+    locale,
+  );
   const occupied = new Set(
     entries.map((entry) => gongangKey(entry.slot, entry.location)),
   );
@@ -121,9 +130,9 @@ export function GongangBookingScreen() {
       setSelected([]);
       setDetail("");
       setRecurring(false);
-      toast.success(`${selection.length}건 신청 완료`);
+      toast.success(t("{count}건 신청 완료", { count: selection.length }));
     } catch (e) {
-      setError(reservationCreateErrorMessage(e, recurring));
+      setError(reservationCreateErrorMessage(e, recurring, locale));
     } finally {
       setBusy(false);
       refresh();
@@ -137,9 +146,9 @@ export function GongangBookingScreen() {
         cancelTarget.id,
         cancelTarget.recurring ? date : undefined,
       );
-      toast.success("예약을 취소했습니다.");
+      toast.success(t("예약을 취소했습니다."));
     } catch (e) {
-      setError(reservationCancelErrorMessage(e));
+      setError(reservationCancelErrorMessage(e, locale));
     } finally {
       setCancelTarget(null);
       setInspected(null);
@@ -159,7 +168,7 @@ export function GongangBookingScreen() {
             variant="outline"
             size="sm"
           >
-            선예약 관리
+            {t("선예약 관리")}
           </Button>
         </div>
       )}
@@ -176,13 +185,13 @@ export function GongangBookingScreen() {
       />
       {loadFailed && (
         <GongangLoadError
-          message="예약을 불러오지 못했습니다. 다시 시도해 주세요."
+          message={t("예약을 불러오지 못했습니다. 다시 시도해 주세요.")}
           onRetry={refresh}
         />
       )}
       {loading && (
         <div className="flex justify-center py-16">
-          <Spinner aria-label="예약 불러오는 중" />
+          <Spinner aria-label={t("예약 불러오는 중")} />
         </div>
       )}
       <div hidden={loading}>
@@ -205,7 +214,7 @@ export function GongangBookingScreen() {
       </div>
       {past && (
         <p className="text-center text-xs text-muted-foreground">
-          지난 날짜입니다.
+          {t("지난 날짜입니다.")}
         </p>
       )}
       {error && (
@@ -215,14 +224,19 @@ export function GongangBookingScreen() {
       )}
       {taken.length > 0 && (
         <p role="status" className="text-sm text-destructive">
-          다른 예약이 등록되어 다음 시간대의 선택을 해제했습니다:{" "}
-          {taken
-            .map((key) => {
-              const { slot, location } = parseGongangKey(key);
-              return gongangCellLabel(date, slot, location);
-            })
-            .join(", ")}
-          .{selection.length > 0 && " 나머지 시간대는 예약할 수 있습니다."}
+          {t(
+            "다른 예약이 등록되어 다음 시간대의 선택을 해제했습니다: {cells}.",
+            {
+              cells: taken
+                .map((key) => {
+                  const { slot, location } = parseGongangKey(key);
+                  return gongangCellLabel(date, slot, location, locale);
+                })
+                .join(", "),
+            },
+          )}
+          {selection.length > 0 &&
+            ` ${t("나머지 시간대는 예약할 수 있습니다.")}`}
         </p>
       )}
       {selection.length > 0 && !past && (
@@ -232,7 +246,7 @@ export function GongangBookingScreen() {
           detail={detail}
           recurring={recurring}
           busy={busy}
-          submitLabel={`${selection.length}건 예약`}
+          submitLabel={t("{count}건 예약", { count: selection.length })}
           onRemove={(key) =>
             changeSelection((values) => values.filter((value) => value !== key))
           }
@@ -267,7 +281,7 @@ export function GongangBookingScreen() {
                 variant="destructive"
                 onClick={() => setCancelTarget(inspectedReservation)}
               >
-                예약 취소
+                {t("예약 취소")}
               </Button>
             )
           }
@@ -275,13 +289,13 @@ export function GongangBookingScreen() {
       )}
       {cancelTarget && (
         <ConfirmDialog
-          title="예약 취소"
+          title={t("예약 취소")}
           description={
             cancelTarget.recurring
-              ? "이 날짜부터 매주 반복 예약을 종료합니다."
-              : "선택한 예약을 취소합니다."
+              ? t("이 날짜부터 매주 반복 예약을 종료합니다.")
+              : t("선택한 예약을 취소합니다.")
           }
-          confirmLabel="예약 취소"
+          confirmLabel={t("예약 취소")}
           destructive
           pending={busy}
           onCancel={() => setCancelTarget(null)}

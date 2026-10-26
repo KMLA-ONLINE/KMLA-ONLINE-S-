@@ -17,3 +17,9 @@ describe("formatAppBuild", () => {
     expect(formatAppBuild(null)).toBe("알 수 없음");
   });
 });
+
+describe("formatAppBuild in English", () => {
+  it("names an unknown build in English", () => {
+    expect(formatAppBuild(null, "en")).toBe("Unknown");
+  });
+});

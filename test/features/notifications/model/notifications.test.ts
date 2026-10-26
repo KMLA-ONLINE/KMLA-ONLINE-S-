@@ -210,6 +210,21 @@ describe("notification message", () => {
     ).toBe("댓글에 반응을 남겼습니다.");
   });
 
+  it("builds the reaction sentence in English when asked", () => {
+    expect(
+      getNotificationMessage(
+        { ...base, kind: "post_reacted", reaction: null },
+        "en",
+      ),
+    ).toBe("Reacted to your post.");
+    expect(
+      getNotificationMessage(
+        { ...base, kind: "comment_reacted", reaction: "love" },
+        "en",
+      ),
+    ).toBe("Reacted ‘하트’ to your comment.");
+  });
+
   it("keeps the stored title for other kinds", () => {
     expect(
       getNotificationMessage({

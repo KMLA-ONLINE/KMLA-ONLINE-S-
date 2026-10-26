@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { NavigationSkeleton } from "~/features/app-shell/components/navigation-skeleton";
 
@@ -14,4 +14,17 @@ describe("NavigationSkeleton", () => {
       ).toHaveAttribute("aria-busy", "true");
     },
   );
+});
+
+describe("NavigationSkeleton in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("announces the pending screen in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    render(<NavigationSkeleton pathname="/" />);
+
+    expect(
+      screen.getByRole("region", { name: "Loading the screen" }),
+    ).toHaveAttribute("aria-busy", "true");
+  });
 });

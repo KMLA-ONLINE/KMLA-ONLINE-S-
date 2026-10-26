@@ -13,6 +13,7 @@ import {
   DeferredAdminContactList,
   listAdminContacts,
 } from "~/features/support";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 import type { Route } from "./+types/pending";
@@ -29,14 +30,17 @@ export async function clientLoader() {
 }
 
 export default function PendingPage({ loaderData }: Route.ComponentProps) {
+  const t = useT();
   const revalidator = useRevalidator();
   const checking = revalidator.state === "loading";
   const profile = loaderData.profile!;
 
   return (
     <AuthCard
-      title="가입 신청을 확인하고 있어요"
-      description={`${profile.name}님의 정보를 관리자가 검토 중입니다.`}
+      title={t("가입 신청을 확인하고 있어요")}
+      description={t("{name}님의 정보를 관리자가 검토 중입니다.", {
+        name: profile.name,
+      })}
     >
       <div className="flex flex-col gap-6">
         <div className="flex flex-col items-center gap-3 rounded-2xl bg-muted p-6 text-center">
@@ -44,7 +48,7 @@ export default function PendingPage({ loaderData }: Route.ComponentProps) {
             <Clock3Icon className="size-6" />
           </div>
           <div>
-            <p className="font-medium">승인 대기 중</p>
+            <p className="font-medium">{t("승인 대기 중")}</p>
           </div>
         </div>
         <Button
@@ -58,16 +62,16 @@ export default function PendingPage({ loaderData }: Route.ComponentProps) {
           ) : (
             <RefreshCwIcon data-icon="inline-start" />
           )}
-          승인 상태 확인
+          {t("승인 상태 확인")}
         </Button>
         <Form method="post" action="/logout">
           <Button type="submit" variant="ghost" className="w-full">
-            다른 계정으로 로그인
+            {t("다른 계정으로 로그인")}
           </Button>
         </Form>
         <DeferredAdminContactList
           contacts={loaderData.contacts}
-          prompt="승인이 너무 오래 걸리나요?"
+          prompt={t("승인이 너무 오래 걸리나요?")}
         />
       </div>
       {/* 약관 시행 전에 신청해 승인을 기다리는 사람도 동의를 받는다. */}

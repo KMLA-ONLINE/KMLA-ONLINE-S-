@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { type createRoutesStub, data } from "react-router";
 
 import { GroupSettings } from "~/features/groups/components/group-settings";
@@ -330,5 +330,28 @@ describe("GroupSettings", () => {
     expect(
       await screen.findByRole("button", { name: "게시물 작성 변경" }),
     ).toBeVisible();
+  });
+});
+
+describe("GroupSettings in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the settings cards in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderSettings();
+
+    expect(
+      screen.getByRole("heading", { name: "Group settings" }),
+    ).toBeVisible();
+    expect(screen.getByText("Owner")).toBeVisible();
+    expect(screen.getByText("Group profile")).toBeVisible();
+    expect(screen.getByText("Basic info")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Edit basic info" }),
+    ).toBeVisible();
+    expect(screen.getByText("Policies")).toBeVisible();
+    expect(screen.getByText("Private · Approval required")).toBeVisible();
+    expect(screen.getByText("Invite link")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Delete group" })).toBeVisible();
   });
 });

@@ -8,6 +8,7 @@ import type {
 // 배럴은 화면 컴포넌트와 Markdown 파서를 끌고 온다. 의존성 없는 두 모듈만 가져온다.
 import { mentionTokenPattern } from "~/features/posts/model/mentions";
 import { reactionLabel } from "~/features/posts/model/reactions";
+import { translate, type Locale } from "~/shared/i18n";
 
 export const NOTIFICATION_PAGE_SIZE = 20;
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
@@ -78,6 +79,7 @@ export function getNotificationMessage(
     NotificationItem,
     "kind" | "title" | "comment_excerpt" | "reaction"
   >,
+  locale: Locale = "ko",
 ): string {
   switch (item.kind) {
     case "post_commented":
@@ -92,10 +94,16 @@ export function getNotificationMessage(
     }
     case "post_reacted":
     case "comment_reacted": {
-      const target = item.kind === "post_reacted" ? "게시물" : "댓글";
+      const target = translate(
+        locale,
+        item.kind === "post_reacted" ? "게시물" : "댓글",
+      );
       return item.reaction
-        ? `${target}에 ‘${reactionLabel(item.reaction)}’ 반응을 남겼습니다.`
-        : `${target}에 반응을 남겼습니다.`;
+        ? translate(locale, "{target}에 ‘{reaction}’ 반응을 남겼습니다.", {
+            target,
+            reaction: translate(locale, reactionLabel(item.reaction)),
+          })
+        : translate(locale, "{target}에 반응을 남겼습니다.", { target });
     }
     default:
       return item.title;

@@ -60,3 +60,38 @@ describe("TimetableScreen colors", () => {
     );
   });
 });
+
+describe("TimetableScreen in English", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    timetableData.loadTimetableRecord.mockResolvedValue(null);
+    timetableData.saveTimetableRecord.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => localStorage.clear());
+
+  it("translates the semester picker, the grid and the course dialog", async () => {
+    localStorage.setItem("kmla-online:language:v1", "en");
+    const { user } = renderRoute(TimetableScreen, { path: "/menu/timetable" });
+
+    expect(
+      screen.getByRole("combobox", { name: "Semester" }),
+    ).toHaveTextContent("Year 1, Semester 1");
+    expect(screen.getByText("Mon")).toBeVisible();
+    await user.click(
+      screen.getByRole("button", { name: "Add a class on Monday, Period 1" }),
+    );
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "Add class" }),
+    ).toBeVisible();
+    expect(
+      within(dialog).getByRole("textbox", { name: "Subject" }),
+    ).toBeVisible();
+    expect(within(dialog).getByRole("textbox", { name: "Room" })).toBeVisible();
+    expect(
+      within(dialog).getByRole("combobox", { name: "Start period" }),
+    ).toHaveTextContent("Period 1");
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+});

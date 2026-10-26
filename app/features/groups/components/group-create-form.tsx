@@ -15,6 +15,7 @@ import type {
   GroupJoinPolicy,
   GroupKind,
 } from "~/features/groups/model/types";
+import { useLocale, useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent } from "~/shared/ui/card";
@@ -57,6 +58,8 @@ export function GroupCreateForm({
   errors?: CreateGroupErrors;
   pending: boolean;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const onBackClick = useBackLinkClick("/groups");
   const [kind, setKind] = useState<GroupKind>(values.kind);
   const [joinPolicy, setJoinPolicy] = useState<GroupJoinPolicy>(
@@ -121,9 +124,9 @@ export function GroupCreateForm({
           className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeftIcon aria-hidden className="size-4" />
-          그룹
+          {t("그룹")}
         </Link>
-        <h1 className="text-2xl font-semibold">그룹 만들기</h1>
+        <h1 className="text-2xl font-semibold">{t("그룹 만들기")}</h1>
       </div>
 
       {/* 만든 뒤 뒤로가기로 이 화면이 다시 열리지 않게 새 그룹이 이 자리를 차지한다. */}
@@ -137,9 +140,9 @@ export function GroupCreateForm({
         {canCreateOfficial ? (
           <SectionCard>
             <FieldSet>
-              <FieldLegend>종류</FieldLegend>
+              <FieldLegend>{t("종류")}</FieldLegend>
               <Field data-invalid={Boolean(errors.kind)}>
-                <FieldLabel htmlFor="group-kind">그룹 종류</FieldLabel>
+                <FieldLabel htmlFor="group-kind">{t("그룹 종류")}</FieldLabel>
                 <NativeSelect
                   id="group-kind"
                   name="kind"
@@ -151,14 +154,14 @@ export function GroupCreateForm({
                   aria-invalid={Boolean(errors.kind)}
                 >
                   <NativeSelectOption value="unofficial">
-                    비공식 그룹
+                    {t("비공식 그룹")}
                   </NativeSelectOption>
                   <NativeSelectOption value="official">
-                    공식 그룹
+                    {t("공식 그룹")}
                   </NativeSelectOption>
                 </NativeSelect>
                 <FieldDescription>
-                  공식 그룹은 승인된 재학생이 자동으로 가입합니다.
+                  {t("공식 그룹은 승인된 재학생이 자동으로 가입합니다.")}
                 </FieldDescription>
                 <FieldError>{errors.kind}</FieldError>
               </Field>
@@ -170,10 +173,10 @@ export function GroupCreateForm({
 
         <SectionCard>
           <FieldSet>
-            <FieldLegend>기본 정보</FieldLegend>
+            <FieldLegend>{t("기본 정보")}</FieldLegend>
             <FieldGroup>
               <Field data-invalid={Boolean(errors.name)}>
-                <FieldLabel htmlFor="group-name">그룹 이름</FieldLabel>
+                <FieldLabel htmlFor="group-name">{t("그룹 이름")}</FieldLabel>
                 <TextField
                   id="group-name"
                   name="name"
@@ -182,14 +185,16 @@ export function GroupCreateForm({
                   required
                   disabled={pending}
                   aria-invalid={Boolean(errors.name)}
-                  placeholder="예: 30기 사진 동아리"
+                  placeholder={t("예: 30기 사진 동아리")}
                   autoComplete="off"
                 />
                 <FieldError>{errors.name}</FieldError>
               </Field>
 
               <Field data-invalid={Boolean(errors.description)}>
-                <FieldLabel htmlFor="group-description">그룹 설명</FieldLabel>
+                <FieldLabel htmlFor="group-description">
+                  {t("그룹 설명")}
+                </FieldLabel>
                 <Textarea
                   id="group-description"
                   name="description"
@@ -198,7 +203,7 @@ export function GroupCreateForm({
                   rows={4}
                   disabled={pending}
                   aria-invalid={Boolean(errors.description)}
-                  placeholder="이 그룹이 무엇을 하는 곳인지 적어주세요."
+                  placeholder={t("이 그룹이 무엇을 하는 곳인지 적어주세요.")}
                   autoComplete="off"
                 />
                 <FieldError>{errors.description}</FieldError>
@@ -209,10 +214,10 @@ export function GroupCreateForm({
 
         <SectionCard>
           <FieldSet>
-            <FieldLegend>참여 방식</FieldLegend>
+            <FieldLegend>{t("참여 방식")}</FieldLegend>
             <FieldGroup>
               <Field data-invalid={Boolean(errors.joinPolicy)}>
-                <FieldLabel htmlFor="join-policy">가입 방식</FieldLabel>
+                <FieldLabel htmlFor="join-policy">{t("가입 방식")}</FieldLabel>
                 <NativeSelect
                   id="join-policy"
                   name="joinPolicy"
@@ -226,14 +231,16 @@ export function GroupCreateForm({
                   {kind === "official" ? null : (
                     <>
                       <NativeSelectOption value="invite_only">
-                        비공개 · 초대 전용
+                        {t("비공개 · 초대 전용")}
                       </NativeSelectOption>
                       <NativeSelectOption value="request">
-                        비공개 · 승인 가입
+                        {t("비공개 · 승인 가입")}
                       </NativeSelectOption>
                     </>
                   )}
-                  <NativeSelectOption value="open">공개</NativeSelectOption>
+                  <NativeSelectOption value="open">
+                    {t("공개")}
+                  </NativeSelectOption>
                 </NativeSelect>
                 <FieldError>{errors.joinPolicy}</FieldError>
               </Field>
@@ -255,7 +262,7 @@ export function GroupCreateForm({
                         slugOpen && "rotate-90",
                       )}
                     />
-                    그룹 주소 직접 정하기 (선택)
+                    {t("그룹 주소 직접 정하기 (선택)")}
                   </button>
 
                   {slugOpen ? (
@@ -264,7 +271,9 @@ export function GroupCreateForm({
                       aria-labelledby="group-slug-toggle"
                       data-invalid={Boolean(errors.slug)}
                     >
-                      <FieldLabel htmlFor="group-slug">그룹 주소</FieldLabel>
+                      <FieldLabel htmlFor="group-slug">
+                        {t("그룹 주소")}
+                      </FieldLabel>
                       <div className="flex items-center gap-1">
                         <span className="shrink-0 text-sm text-muted-foreground">
                           /groups/
@@ -285,8 +294,9 @@ export function GroupCreateForm({
                         />
                       </div>
                       <FieldDescription>
-                        비워 두면 임의 주소를 만듭니다. 영문 소문자, 숫자,
-                        하이픈으로 4~15자입니다.
+                        {t(
+                          "비워 두면 임의 주소를 만듭니다. 영문 소문자, 숫자, 하이픈으로 4~15자입니다.",
+                        )}
                       </FieldDescription>
                       <FieldError>{errors.slug}</FieldError>
                     </Field>
@@ -294,7 +304,7 @@ export function GroupCreateForm({
                 </div>
               ) : (
                 <p className="rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
-                  비공개 그룹은 임의 주소를 사용합니다.
+                  {t("비공개 그룹은 임의 주소를 사용합니다.")}
                 </p>
               )}
             </FieldGroup>
@@ -303,11 +313,11 @@ export function GroupCreateForm({
 
         <SectionCard>
           <FieldSet>
-            <FieldLegend>활동 정책</FieldLegend>
+            <FieldLegend>{t("활동 정책")}</FieldLegend>
             <FieldGroup className="grid gap-5 sm:grid-cols-2">
               <Field data-invalid={Boolean(errors.identityPolicy)}>
                 <FieldLabel htmlFor="identity-policy">
-                  실명·익명 설정
+                  {t("실명·익명 설정")}
                 </FieldLabel>
                 <NativeSelect
                   id="identity-policy"
@@ -317,10 +327,10 @@ export function GroupCreateForm({
                   aria-invalid={Boolean(errors.identityPolicy)}
                 >
                   <NativeSelectOption value="identified">
-                    실명만
+                    {t("실명만")}
                   </NativeSelectOption>
                   <NativeSelectOption value="optional_anonymous">
-                    작성할 때 선택
+                    {t("작성할 때 선택")}
                   </NativeSelectOption>
                 </NativeSelect>
                 <FieldError>{errors.identityPolicy}</FieldError>
@@ -339,10 +349,10 @@ export function GroupCreateForm({
                 />
                 <FieldContent>
                   <FieldLabel htmlFor="staff-only-posting">
-                    운영진만 게시 가능
+                    {t("운영진만 게시 가능")}
                   </FieldLabel>
                   <FieldDescription>
-                    소유자·관리자·매니저만 게시물을 작성할 수 있습니다.
+                    {t("소유자·관리자·매니저만 게시물을 작성할 수 있습니다.")}
                   </FieldDescription>
                 </FieldContent>
                 <FieldError>{errors.postingPolicy}</FieldError>
@@ -362,11 +372,12 @@ export function GroupCreateForm({
                 />
                 <FieldContent>
                   <FieldLabel htmlFor="hide-staff-roles">
-                    일반 멤버에게 운영진 역할 숨기기
+                    {t("일반 멤버에게 운영진 역할 숨기기")}
                   </FieldLabel>
                   <FieldDescription>
-                    소유자와 관리자를 제외한 멤버 목록에서는 운영진도 일반
-                    멤버처럼 표시합니다.
+                    {t(
+                      "소유자와 관리자를 제외한 멤버 목록에서는 운영진도 일반 멤버처럼 표시합니다.",
+                    )}
                   </FieldDescription>
                 </FieldContent>
                 <FieldError>{errors.hideStaffRoles}</FieldError>
@@ -384,11 +395,11 @@ export function GroupCreateForm({
               nativeButton={false}
               render={<Link to="/groups" />}
             >
-              취소
+              {t("취소")}
             </Button>
             <Button type="submit" disabled={pending}>
               {pending ? <Spinner data-icon="inline-start" /> : null}
-              그룹 만들기
+              {t("그룹 만들기")}
             </Button>
           </div>
         </div>
@@ -397,33 +408,39 @@ export function GroupCreateForm({
       <GroupConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title={`'${confirmName}' 그룹을 만들까요?`}
+        title={t("'{name}' 그룹을 만들까요?", { name: confirmName })}
         description={
           customSlugAllowed
-            ? "그룹 주소는 후에 수정할 수 없습니다. 공개 그룹은 만든 뒤 비공개로 변경할 수 없습니다."
+            ? t(
+                "그룹 주소는 후에 수정할 수 없습니다. 공개 그룹은 만든 뒤 비공개로 변경할 수 없습니다.",
+              )
             : null
         }
         details={
           <dl className="flex flex-col gap-1 text-sm">
             {canCreateOfficial ? (
-              <SummaryRow label="종류">{getGroupKindLabel(kind)}</SummaryRow>
+              <SummaryRow label={t("종류")}>
+                {getGroupKindLabel(kind, locale)}
+              </SummaryRow>
             ) : null}
-            <SummaryRow label="가입 방식">
-              {isPrivateJoinPolicy(joinPolicy) ? "비공개" : "공개"} ·{" "}
-              {getGroupJoinPolicyLabel(joinPolicy)}
+            <SummaryRow label={t("가입 방식")}>
+              {isPrivateJoinPolicy(joinPolicy) ? t("비공개") : t("공개")} ·{" "}
+              {getGroupJoinPolicyLabel(joinPolicy, locale)}
             </SummaryRow>
           </dl>
         }
-        confirmLabel="만들기"
+        confirmLabel={t("만들기")}
         pending={pending}
         onConfirm={confirmCreate}
       />
       <GroupConfirmDialog
         open={officialConfirmOpen}
         onOpenChange={setOfficialConfirmOpen}
-        title={`'${confirmName}' 공식 그룹을 만들까요?`}
-        description="승인된 모든 재학생이 자동으로 가입합니다. 공식 그룹은 앱 관리자만 삭제할 수 있습니다."
-        confirmLabel="공식 그룹 만들기"
+        title={t("'{name}' 공식 그룹을 만들까요?", { name: confirmName })}
+        description={t(
+          "승인된 모든 재학생이 자동으로 가입합니다. 공식 그룹은 앱 관리자만 삭제할 수 있습니다.",
+        )}
+        confirmLabel={t("공식 그룹 만들기")}
         pending={pending}
         onConfirm={() => {
           setOfficialConfirmOpen(false);

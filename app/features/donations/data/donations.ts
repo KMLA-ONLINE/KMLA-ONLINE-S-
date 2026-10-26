@@ -1,3 +1,4 @@
+import { getCurrentLocale, translate } from "~/shared/i18n";
 import { getSupabase } from "~/shared/supabase/client";
 import type {
   DonationExportRecord,
@@ -25,45 +26,57 @@ export interface DonationItem {
 }
 
 function handleError(error: { code?: string; message: string }): never {
+  const locale = getCurrentLocale();
   if (error.code === "23505") {
-    throw new Error("이미 다른 학생이 신청한 물품입니다.");
+    throw new Error(translate(locale, "이미 다른 학생이 신청한 물품입니다."));
   }
 
   if (error.message.includes("only students can apply")) {
-    throw new Error("기부물품은 재학생만 신청할 수 있습니다.");
+    throw new Error(
+      translate(locale, "기부물품은 재학생만 신청할 수 있습니다."),
+    );
   }
 
   if (error.code === "42501") {
-    throw new Error("접근 권한이 없습니다.");
+    throw new Error(translate(locale, "접근 권한이 없습니다."));
   }
 
   if (
     error.message.includes("applications are closed") ||
     error.message.includes("period closed")
   ) {
-    throw new Error("신청 기간이 아닙니다.");
+    throw new Error(translate(locale, "신청 기간이 아닙니다."));
   }
 
   if (error.message.includes("application limit reached")) {
-    throw new Error("한 회차에 최대 50개까지 신청할 수 있습니다.");
+    throw new Error(
+      translate(locale, "한 회차에 최대 50개까지 신청할 수 있습니다."),
+    );
   }
 
   if (error.message.includes("donation rounds cannot overlap")) {
-    throw new Error("다른 회차와 신청 기간이 겹칩니다.");
+    throw new Error(translate(locale, "다른 회차와 신청 기간이 겹칩니다."));
   }
 
   if (error.message.includes("items already imported")) {
     throw new Error(
-      "이미 물품이 등록된 회차입니다. 새 회차에 업로드해 주세요.",
+      translate(
+        locale,
+        "이미 물품이 등록된 회차입니다. 새 회차에 업로드해 주세요.",
+      ),
     );
   }
 
   if (error.message.includes("round not found or closed")) {
-    throw new Error("신청이 종료된 회차에는 업로드할 수 없습니다.");
+    throw new Error(
+      translate(locale, "신청이 종료된 회차에는 업로드할 수 없습니다."),
+    );
   }
 
   if (error.message.includes("invalid donation round")) {
-    throw new Error("회차 이름과 신청 기간을 확인해 주세요.");
+    throw new Error(
+      translate(locale, "회차 이름과 신청 기간을 확인해 주세요."),
+    );
   }
 
   throw new Error(error.message);

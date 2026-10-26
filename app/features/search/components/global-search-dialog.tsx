@@ -15,6 +15,7 @@ import {
 } from "~/features/search/model/format";
 import type { DirectorySearchResult } from "~/features/search/model/types";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
+import { getCurrentLocale, translate, useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -73,6 +74,7 @@ function SearchPanel({
   const [query, setQuery] = useState(submittedQuery);
   const [composing, setComposing] = useState(false);
   const [settled, setSettled] = useState<SettledSearch | null>(null);
+  const t = useT();
 
   useEffect(() => {
     if (!submittedQuery) return;
@@ -87,7 +89,10 @@ function SearchPanel({
           setSettled({
             query: submittedQuery,
             result: { people: [], groups: [] },
-            error: "검색 결과를 불러오지 못했습니다.",
+            error: translate(
+              getCurrentLocale(),
+              "검색 결과를 불러오지 못했습니다.",
+            ),
           });
       }
     })();
@@ -114,7 +119,7 @@ function SearchPanel({
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="검색 닫기"
+          aria-label={t("검색 닫기")}
           onClick={onClose}
         >
           <XIcon />
@@ -132,16 +137,16 @@ function SearchPanel({
                 setComposing(false);
               }}
               autoComplete="off"
-              placeholder="사람 · 그룹 검색"
-              aria-label="사람 · 그룹 검색어"
+              placeholder={t("사람 · 그룹 검색")}
+              aria-label={t("사람 · 그룹 검색어")}
               className="h-9 rounded-full border-0 bg-muted pl-9 shadow-none [&::-webkit-search-cancel-button]:appearance-none"
               type="search"
             />
           </div>
         </form>
-        <DialogTitle className="sr-only">전역 검색</DialogTitle>
+        <DialogTitle className="sr-only">{t("전역 검색")}</DialogTitle>
         <DialogDescription className="sr-only">
-          사람과 그룹을 이름으로 검색합니다.
+          {t("사람과 그룹을 이름으로 검색합니다.")}
         </DialogDescription>
       </DialogHeader>
 

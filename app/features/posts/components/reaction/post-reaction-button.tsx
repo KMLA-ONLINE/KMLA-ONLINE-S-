@@ -15,6 +15,7 @@ import type {
   PostReaction,
   ReactionSummary,
 } from "~/features/posts/model/types";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 /** 이 시간을 넘겨 누르고 있으면 종류 선택으로 본다. 짧은 탭과 겹치지 않을 만큼만 준다. */
@@ -39,6 +40,7 @@ export function PostReactionButton({
   className?: string;
 }) {
   // hover로 연 줄은 마우스가 떠나면 닫히고, 누르거나 꾹 눌러 연 줄은 바깥을 눌러야 닫힌다.
+  const t = useT();
   const [open, setOpen] = useState<"hover" | "press" | null>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const hoverTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -108,7 +110,13 @@ export function PostReactionButton({
       <button
         type="button"
         // 짧게 누르면 무엇이 붙는지 이름에 담는다. 화면에는 아이콘과 숫자뿐이다.
-        aria-label={`${reactionLabel(mine ?? DEFAULT_REACTION)} ${mine ? "취소" : "남기기"}`}
+        aria-label={
+          mine
+            ? t("{reaction} 취소", { reaction: t(reactionLabel(mine)) })
+            : t("{reaction} 남기기", {
+                reaction: t(reactionLabel(DEFAULT_REACTION)),
+              })
+        }
         aria-pressed={mine !== null}
         className={cn(
           "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors select-none [-webkit-touch-callout:none] hover:bg-muted",

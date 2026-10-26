@@ -10,6 +10,7 @@ import {
   type GroupPostReportReason,
 } from "~/features/posts/model/group-report";
 import { RelativeTime } from "~/shared/components/relative-time";
+import { useT } from "~/shared/i18n";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
@@ -30,6 +31,7 @@ export function GroupPostReportCard({
   onDismiss: () => void;
   onDelete: () => void;
 }) {
+  const t = useT();
   const authorName = report.author_name ?? report.author_label;
   const postTo = groupPostPath(slug, report.post_id);
 
@@ -38,7 +40,7 @@ export function GroupPostReportCard({
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/60 px-3 py-2 md:px-4">
         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive tabular-nums">
           <FlagIcon className="size-3" aria-hidden="true" />
-          신고 {report.report_count}
+          {t("신고 {count}", { count: report.report_count })}
         </span>
 
         <ReasonCounts report={report} />
@@ -46,7 +48,7 @@ export function GroupPostReportCard({
         <div className="ml-auto flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
           {report.dismissed_count > 0 ? (
             <span className="tabular-nums">
-              이전 {report.dismissed_count}건 무시됨
+              {t("이전 {count}건 무시됨", { count: report.dismissed_count })}
             </span>
           ) : null}
 
@@ -109,7 +111,7 @@ export function GroupPostReportCard({
             className="text-muted-foreground"
             render={<Link to={postTo} state={FROM_GROUP} />}
           >
-            게시물 보기
+            {t("게시물 보기")}
           </Button>
 
           {canModerate ? (
@@ -122,7 +124,7 @@ export function GroupPostReportCard({
                 onClick={onDismiss}
               >
                 <EyeOffIcon data-icon="inline-start" />
-                무시
+                {t("무시")}
               </Button>
 
               <Button
@@ -133,7 +135,7 @@ export function GroupPostReportCard({
                 onClick={onDelete}
               >
                 <Trash2Icon data-icon="inline-start" />
-                게시물 삭제
+                {t("게시물 삭제")}
               </Button>
             </>
           ) : null}
@@ -144,6 +146,7 @@ export function GroupPostReportCard({
 }
 
 function ReasonCounts({ report }: { report: GroupPostReportSummary }) {
+  const t = useT();
   const counts: Record<GroupPostReportReason, number> = {
     abuse: report.abuse_count,
     sexual: report.sexual_count,
@@ -166,7 +169,7 @@ function ReasonCounts({ report }: { report: GroupPostReportSummary }) {
             variant="outline"
             className="h-5 px-1.5 text-[11px] font-normal text-muted-foreground tabular-nums"
           >
-            {option.label} {count}
+            {t(option.label)} {count}
           </Badge>
         );
       })}

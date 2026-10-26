@@ -53,6 +53,7 @@ import {
   validatePostForm,
 } from "~/features/posts/model/validation";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
@@ -93,6 +94,7 @@ export function GroupPostEditor({
     authorIdentity: post?.author_identity ?? identities[0],
     mentions: [],
   };
+  const t = useT();
   const [formErrors, setFormErrors] = useState<PostFormErrors>({});
   // 수정 화면은 상세 RPC 가 돌려준 `mentions`가 곧 본문 토큰의 번호표다. 새 글은 빈 표에서
   // 시작한다.
@@ -207,7 +209,7 @@ export function GroupPostEditor({
     if (preparingCount > 0) {
       setFormErrors((current) => ({
         ...current,
-        form: "첨부 파일을 준비 중입니다.",
+        form: t("첨부 파일을 준비 중입니다."),
       }));
       return;
     }
@@ -263,8 +265,9 @@ export function GroupPostEditor({
               ) {
                 setFormErrors((current) => ({
                   ...current,
-                  authorIdentity:
+                  authorIdentity: t(
                     "멘션을 모두 지운 뒤 익명으로 전환할 수 있습니다.",
+                  ),
                 }));
                 return;
               }
@@ -296,10 +299,10 @@ export function GroupPostEditor({
               <NativeSelect
                 name="categoryId"
                 defaultValue={initial.categoryId}
-                aria-label="카테고리"
+                aria-label={t("카테고리")}
                 className="w-full"
               >
-                <NativeSelectOption value="">미분류</NativeSelectOption>
+                <NativeSelectOption value="">{t("미분류")}</NativeSelectOption>
                 {categories.map((category) => (
                   <NativeSelectOption key={category.id} value={category.id}>
                     {category.name}
@@ -312,16 +315,16 @@ export function GroupPostEditor({
                 <NativeSelect
                   name="authorIdentity"
                   value={draftIdentity}
-                  aria-label="작성 신원"
+                  aria-label={t("작성 신원")}
                   className="w-full"
                 >
                   {identities.map((identity) => (
                     <NativeSelectOption key={identity} value={identity}>
                       {identity === "identified"
-                        ? "실명"
+                        ? t("실명")
                         : identity === "anonymous"
-                          ? "익명"
-                          : "운영진"}
+                          ? t("익명")
+                          : t("운영진")}
                     </NativeSelectOption>
                   ))}
                 </NativeSelect>
@@ -341,8 +344,8 @@ export function GroupPostEditor({
               defaultValue={initial.title}
               maxLength={100}
               required
-              aria-label="제목"
-              placeholder="제목"
+              aria-label={t("제목")}
+              placeholder={t("제목")}
               className="h-9 rounded-md text-base font-medium"
             />
           </PostFormField>
@@ -382,7 +385,9 @@ export function GroupPostEditor({
                     );
                   }}
                 />
-                <span className="text-xs text-muted-foreground">멘션</span>
+                <span className="text-xs text-muted-foreground">
+                  {t("멘션")}
+                </span>
               </div>
             )}
           </PostFormField>
@@ -412,15 +417,17 @@ export function GroupPostEditor({
         <ConfirmDialog
           title={
             pendingIdentity.authorIdentity === "staff"
-              ? "운영진 명의로 작성"
-              : "익명으로 작성"
+              ? t("운영진 명의로 작성")
+              : t("익명으로 작성")
           }
           description={
             pendingIdentity.authorIdentity === "staff"
-              ? "이 게시물은 그룹 운영진 명의로 표시됩니다. 게시할까요?"
-              : "이 게시물은 작성자의 이름을 표시하지 않습니다. 익명으로 게시할까요?"
+              ? t("이 게시물은 그룹 운영진 명의로 표시됩니다. 게시할까요?")
+              : t(
+                  "이 게시물은 작성자의 이름을 표시하지 않습니다. 익명으로 게시할까요?",
+                )
           }
-          confirmLabel="게시"
+          confirmLabel={t("게시")}
           pending={saving}
           onCancel={() => setPendingIdentity(null)}
           onConfirm={() => {

@@ -6,6 +6,7 @@ import {
   FieldGroup,
   FieldLabel,
 } from "~/shared/ui/field";
+import { useT } from "~/shared/i18n";
 import { Switch } from "~/shared/ui/switch";
 import { useHomeSidebarPreferences } from "../hooks/use-home-sidebar-preferences";
 import { useWideHome } from "../hooks/use-wide-home";
@@ -20,6 +21,7 @@ export function HomeSidebarSettings() {
   const wide = useWideHome();
   const [preferences, update] = useHomeSidebarPreferences();
   const id = useId();
+  const t = useT();
 
   if (!wide) return null;
 
@@ -27,9 +29,9 @@ export function HomeSidebarSettings() {
     <FieldGroup className="gap-0">
       <Field orientation="horizontal" className="px-4 py-3">
         <FieldContent>
-          <FieldLabel htmlFor={id}>홈 우측 사이드바</FieldLabel>
+          <FieldLabel htmlFor={id}>{t("홈 우측 사이드바")}</FieldLabel>
           <FieldDescription>
-            이 브라우저의 데스크톱 홈에 적용됩니다.
+            {t("이 브라우저의 데스크톱 홈에 적용됩니다.")}
           </FieldDescription>
         </FieldContent>
         <Switch
@@ -45,7 +47,7 @@ export function HomeSidebarSettings() {
               orientation="horizontal"
               className="py-3 pr-4 pl-8"
             >
-              <FieldLabel htmlFor={`${id}-${key}`}>{label}</FieldLabel>
+              <FieldLabel htmlFor={`${id}-${key}`}>{t(label)}</FieldLabel>
               <Switch
                 id={`${id}-${key}`}
                 checked={preferences[key]}

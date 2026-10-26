@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 
+import { useT } from "~/shared/i18n";
 import { Field, FieldError, FieldLabel } from "~/shared/ui/field";
 import {
   InputOTP,
@@ -25,11 +26,12 @@ export function OtpField({
   error?: string;
   disabled?: boolean;
 }) {
+  const t = useT();
   const invalid = Boolean(error);
 
   return (
     <Field data-invalid={invalid}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <FieldLabel htmlFor={id}>{t(label)}</FieldLabel>
       <InputOTP
         id={id}
         name="otp"

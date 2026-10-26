@@ -4,6 +4,7 @@ import { GroupAvatar } from "~/features/groups/components/group-avatar";
 import { GroupDetailActions } from "~/features/groups/components/group-detail-actions";
 import { isPrivateJoinPolicy } from "~/features/groups/model/format";
 import type { GroupDetail } from "~/features/groups/model/types";
+import { useT } from "~/shared/i18n";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";
 
 export function GroupDetailHero({
@@ -25,6 +26,7 @@ export function GroupDetailHero({
   onSelectSettings: () => void;
   onSelectReports: () => void;
 }) {
+  const t = useT();
   const isMember = group.membership_state === "member";
   const isPrivate = isPrivateJoinPolicy(group.join_policy);
   const VisibilityIcon = isPrivate ? LockIcon : Globe2Icon;
@@ -71,30 +73,30 @@ export function GroupDetailHero({
                   render={
                     <span
                       role="img"
-                      aria-label="공식 그룹"
+                      aria-label={t("공식 그룹")}
                       className="inline-flex shrink-0 cursor-default"
                     />
                   }
                 >
                   <BadgeCheckIcon aria-hidden className="size-6 text-primary" />
                 </TooltipTrigger>
-                <TooltipContent>공식 그룹입니다</TooltipContent>
+                <TooltipContent>{t("공식 그룹입니다")}</TooltipContent>
               </Tooltip>
             ) : null}
           </div>
           <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
             <VisibilityIcon aria-hidden className="size-3.5 shrink-0" />
-            {isPrivate ? "비공개 그룹" : "공개 그룹"} ·{" "}
+            {isPrivate ? t("비공개 그룹") : t("공개 그룹")} ·{" "}
             {isMember ? (
               <button
                 type="button"
                 className="hover:underline md:cursor-default md:hover:no-underline"
                 onClick={onSelectMembers}
               >
-                멤버 {group.member_count.toLocaleString("ko-KR")}명
+                {t("멤버 {count}명", { count: group.member_count })}
               </button>
             ) : (
-              `멤버 ${group.member_count.toLocaleString("ko-KR")}명`
+              t("멤버 {count}명", { count: group.member_count })
             )}
           </p>
         </div>

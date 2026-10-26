@@ -8,6 +8,7 @@ import {
   type StoryLayoutElement,
   type StoryPlacement,
 } from "~/features/stories/model/story";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 /** 방향키 한 번에 옮기는 거리(캔버스 비율). Shift를 누르면 5배. */
@@ -174,10 +175,13 @@ export const STORY_HANDLE_HELP_ID = "story-placed-handle-help";
 
 /** 손잡이의 사용법. 손잡이 이름은 글이나 링크 그 자체로 두고 이 설명을 덧붙인다. */
 export function StoryPlacedHandleHelp() {
+  const t = useT();
+
   return (
     <p id={STORY_HANDLE_HELP_ID} className="sr-only">
-      끌어서 옮기고 두 손가락으로 크기를 바꿉니다. 키보드로는 방향키로 옮기고 +,
-      - 키로 크기를 바꿉니다.
+      {t(
+        "끌어서 옮기고 두 손가락으로 크기를 바꿉니다. 키보드로는 방향키로 옮기고 +, - 키로 크기를 바꿉니다.",
+      )}
     </p>
   );
 }

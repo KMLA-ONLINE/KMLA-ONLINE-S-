@@ -94,6 +94,32 @@ describe("formatLastMessagePreview", () => {
 });
 
 describe("formatReplyPreview", () => {
+  it("writes the viewer prefix, deleted notice and attachment names in English", () => {
+    const mine = {
+      lastMessage: { senderId: "me", body: "응", sentAt: "2026-08-28" },
+    };
+    expect(formatLastMessagePreview(conversation(mine), ORIGIN, "en")).toBe(
+      "Me: 응",
+    );
+    expect(
+      formatLastMessagePreview(
+        conversation({
+          lastMessage: {
+            senderId: "seo",
+            body: "",
+            sentAt: "2026-08-28",
+            attachmentKind: "image",
+          },
+        }),
+        ORIGIN,
+        "en",
+      ),
+    ).toBe("박서현: Photo");
+    expect(formatReplyPreview({ body: "x", deleted: true }, ORIGIN, "en")).toBe(
+      "This message was deleted",
+    );
+  });
+
   it("삭제된 원문은 게시물 링크여도 삭제 안내로 부른다", () => {
     expect(
       formatReplyPreview(

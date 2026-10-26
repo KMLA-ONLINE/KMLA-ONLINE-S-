@@ -24,6 +24,7 @@ import {
   type FieldErrors,
   type ProfileFormValues,
 } from "~/features/auth";
+import { getCurrentLocale, translate, useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { FieldError } from "~/shared/ui/field";
 import { Spinner } from "~/shared/ui/spinner";
@@ -96,12 +97,13 @@ export async function clientLoader() {
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
   const formData = await request.formData();
+  const locale = getCurrentLocale();
   const values = readProfileForm(formData);
   const errors: FieldErrors = {
-    ...validateProfileForm(values),
+    ...validateProfileForm(values, locale),
     terms: readTermsAgreement(formData)
       ? undefined
-      : "이용약관에 동의해야 제출할 수 있어요.",
+      : translate(locale, "이용약관에 동의해야 제출할 수 있어요."),
   };
 
   if (hasErrors(errors)) {
@@ -114,8 +116,8 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   } catch (error) {
     if (error instanceof Response) throw error;
     const errors: FieldErrors = isDuplicateStudentNumberError(error)
-      ? { studentNumber: DUPLICATE_STUDENT_NUMBER_MESSAGE }
-      : { form: getAuthErrorMessage(error) };
+      ? { studentNumber: translate(locale, DUPLICATE_STUDENT_NUMBER_MESSAGE) }
+      : { form: getAuthErrorMessage(error, locale) };
     return data({ errors, values }, { status: 400 });
   }
 }
@@ -124,6 +126,7 @@ export default function SetupPage({
   loaderData,
   actionData,
 }: Route.ComponentProps) {
+  const t = useT();
   const navigation = useNavigation();
   const pending = navigation.state === "submitting";
   const values = actionData?.values ?? loaderData.values;
@@ -132,11 +135,13 @@ export default function SetupPage({
 
   return (
     <AuthCard
-      title={loaderData.profile ? "가입 정보 재제출" : "프로필 설정"}
+      title={loaderData.profile ? t("가입 정보 재제출") : t("프로필 설정")}
       description={
         loaderData.profile
-          ? "입력한 정보를 확인하고 필요한 내용을 수정한 뒤 다시 제출해 주세요."
-          : "확인에 필요한 정보입니다. 승인 전에는 기능이 제한됩니다."
+          ? t(
+              "입력한 정보를 확인하고 필요한 내용을 수정한 뒤 다시 제출해 주세요.",
+            )
+          : t("확인에 필요한 정보입니다. 승인 전에는 기능이 제한됩니다.")
       }
       wide
       footer={<LegalLinks />}
@@ -148,13 +153,13 @@ export default function SetupPage({
             className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm"
           >
             <h2 id="setup-rejection-title" className="font-medium">
-              가입 신청이 반려되었습니다
+              {t("가입 신청이 반려되었습니다")}
             </h2>
             <p className="mt-1 break-words whitespace-pre-wrap">
               {loaderData.rejection.reason}
             </p>
             <p className="mt-2 text-muted-foreground">
-              아래 정보를 고쳐 다시 제출해 주세요.
+              {t("아래 정보를 고쳐 다시 제출해 주세요.")}
             </p>
           </section>
         ) : null}
@@ -172,7 +177,7 @@ export default function SetupPage({
 
         <Button type="submit" size="lg" disabled={!termsChecked || pending}>
           {pending ? <Spinner data-icon="inline-start" /> : null}
-          가입 신청 제출
+          {t("가입 신청 제출")}
         </Button>
       </Form>
     </AuthCard>

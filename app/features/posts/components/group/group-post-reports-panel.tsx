@@ -7,6 +7,7 @@ import type {
   GroupPostReportSummaryPage,
 } from "~/features/posts/data/group-reports";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import { useT } from "~/shared/i18n";
 import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
 import { cn } from "~/shared/lib/utils";
 import { Spinner } from "~/shared/ui/spinner";
@@ -22,6 +23,7 @@ export function GroupPostReportsPanel({
   initialPage: GroupPostReportSummaryPage;
   canModerate: boolean;
 }) {
+  const t = useT();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const sort = searchParams.get("reportSort") === "recent" ? "recent" : "count";
@@ -128,7 +130,7 @@ export function GroupPostReportsPanel({
                 : "text-muted-foreground",
             )}
           >
-            신고 수
+            {t("신고 수")}
           </button>
 
           <button
@@ -141,7 +143,7 @@ export function GroupPostReportsPanel({
                 : "text-muted-foreground",
             )}
           >
-            최근
+            {t("최근")}
           </button>
         </div>
       </div>
@@ -154,7 +156,7 @@ export function GroupPostReportsPanel({
 
       {reports.length === 0 ? (
         <div className="bg-card px-4 py-12 text-center text-sm text-muted-foreground md:rounded-md">
-          신고된 게시물이 없습니다.
+          {t("신고된 게시물이 없습니다.")}
         </div>
       ) : (
         reports.map((report) => (
@@ -176,15 +178,17 @@ export function GroupPostReportsPanel({
         aria-live="polite"
       >
         {pageFetcher.state !== "idle" ? (
-          <Spinner aria-label="신고 불러오는 중" />
+          <Spinner aria-label={t("신고 불러오는 중")} />
         ) : null}
       </div>
 
       {dismissTarget ? (
         <ConfirmDialog
-          title="신고를 무시할까요?"
-          description="이 게시물은 신고 탭에서 사라집니다. 새로운 신고가 들어오면 다시 나타납니다."
-          confirmLabel="무시"
+          title={t("신고를 무시할까요?")}
+          description={t(
+            "이 게시물은 신고 탭에서 사라집니다. 새로운 신고가 들어오면 다시 나타납니다.",
+          )}
+          confirmLabel={t("무시")}
           onCancel={() => setDismissTarget(null)}
           onConfirm={() => {
             void moderationFetcher.submit(
@@ -203,9 +207,9 @@ export function GroupPostReportsPanel({
 
       {deleteTarget ? (
         <ConfirmDialog
-          title="게시물을 삭제할까요?"
-          description="게시물과 신고 기록이 함께 제거됩니다."
-          confirmLabel="게시물 삭제"
+          title={t("게시물을 삭제할까요?")}
+          description={t("게시물과 신고 기록이 함께 제거됩니다.")}
+          confirmLabel={t("게시물 삭제")}
           destructive
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => {

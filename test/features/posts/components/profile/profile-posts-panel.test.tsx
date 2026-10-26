@@ -1,6 +1,6 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { infiniteScroll, listProfilePosts } = vi.hoisted(() => ({
   infiniteScroll: { loadMore: null as (() => void) | null },
@@ -294,5 +294,24 @@ describe("ProfilePostsPanel", () => {
     );
     expect(screen.getByText("newest")).toBeVisible();
     expect(screen.getByRole("button", { name: "다시 시도" })).toBeVisible();
+  });
+});
+
+describe("ProfilePostsPanel in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the empty states in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderPanel({ canWrite: false });
+
+    expect(
+      screen.getByRole("region", { name: "Timeline posts" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("No posts yet")).toBeVisible();
+    expect(
+      screen.getByText(
+        "This user does not accept posts from others on their timeline.",
+      ),
+    ).toBeVisible();
   });
 });

@@ -3,6 +3,7 @@ import type {
   MessageParticipant,
   MessageSystemEvent,
 } from "~/features/messaging/model/types";
+import { translate, type Locale } from "~/shared/i18n";
 
 const UNKNOWN_NAME = "알 수 없는 사용자";
 
@@ -13,7 +14,10 @@ const UNKNOWN_NAME = "알 수 없는 사용자";
 export function formatSystemMessage(
   event: MessageSystemEvent,
   participants: ReadonlyMap<string, MessageParticipant>,
+  locale: Locale = "ko",
 ): string {
+  const t = (source: string, params?: Record<string, string>) =>
+    translate(locale, source, params);
   const byProfileName =
     event.kind === "nickname_set" || event.kind === "nickname_cleared";
   const nameOf = (id: string | undefined) => {
@@ -21,28 +25,41 @@ export function formatSystemMessage(
     return (
       (byProfileName
         ? (participant?.profileName ?? participant?.name)
-        : participant?.name) ?? UNKNOWN_NAME
+        : participant?.name) ?? t(UNKNOWN_NAME)
     );
   };
   const [actorId, ...targetIds] = event.profileIds;
   const actor = nameOf(actorId);
-  const targets = targetIds.map((id) => `${nameOf(id)}님`).join(", ");
-  const nicknameOwner =
-    targetIds[0] === actorId ? "자신" : `${nameOf(targetIds[0])}님`;
+  // 호칭(님)은 한국어에만 있어서 이름마다 따로 번역한다.
+  const targets = targetIds
+    .map((id) => t("{name}님", { name: nameOf(id) }))
+    .join(", ");
+  const owner =
+    targetIds[0] === actorId
+      ? t("자신의")
+      : t("{name}님의", { name: nameOf(targetIds[0]) });
+  const name = event.name ?? "";
 
   switch (event.kind) {
     case "member_added":
-      return `${actor}님이 ${targets}을 초대했습니다.`;
+      return t("{actor}님이 {targets}을 초대했습니다.", { actor, targets });
     case "member_left":
-      return `${actor}님이 나갔습니다.`;
+      return t("{actor}님이 나갔습니다.", { actor });
     case "member_removed":
-      return `${actor}님이 ${targets}을 내보냈습니다.`;
+      return t("{actor}님이 {targets}을 내보냈습니다.", { actor, targets });
     case "renamed":
-      return `${actor}님이 채팅 이름을 ‘${event.name ?? ""}’(으)로 변경했습니다.`;
+      return t("{actor}님이 채팅 이름을 ‘{name}’(으)로 변경했습니다.", {
+        actor,
+        name,
+      });
     case "nickname_set":
-      return `${actor}님이 ${nicknameOwner}의 별명을 ‘${event.name ?? ""}’(으)로 정했습니다.`;
+      return t("{actor}님이 {owner} 별명을 ‘{name}’(으)로 정했습니다.", {
+        actor,
+        owner,
+        name,
+      });
     case "nickname_cleared":
-      return `${actor}님이 ${nicknameOwner}의 별명을 지웠습니다.`;
+      return t("{actor}님이 {owner} 별명을 지웠습니다.", { actor, owner });
   }
 }
 

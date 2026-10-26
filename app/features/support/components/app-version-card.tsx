@@ -5,6 +5,7 @@ import {
   useAppUpdate,
   type UpdateCheckResult,
 } from "~/shared/hooks/use-service-worker";
+import { useT } from "~/shared/i18n";
 import { appBuild, formatAppBuild } from "~/shared/lib/app-build";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -35,6 +36,7 @@ export function AppVersionCard({
   } = useAppUpdate();
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<UpdateCheckResult | null>(null);
+  const t = useT();
 
   const check = async () => {
     if (!checkForUpdate || checking) return;
@@ -49,17 +51,17 @@ export function AppVersionCard({
 
   const message = updateReady
     ? updateAppliedElsewhere
-      ? "새 버전이 적용됐습니다. 새로고침하면 사용할 수 있습니다."
-      : "새 버전이 준비됐습니다."
+      ? t("새 버전이 적용됐습니다. 새로고침하면 사용할 수 있습니다.")
+      : t("새 버전이 준비됐습니다.")
     : !checkForUpdate
-      ? "이 환경에서는 업데이트를 확인할 수 없습니다."
+      ? t("이 환경에서는 업데이트를 확인할 수 없습니다.")
       : result
-        ? CHECK_MESSAGE[result]
+        ? t(CHECK_MESSAGE[result])
         : null;
 
   return (
     <section
-      aria-label="앱 버전"
+      aria-label={t("앱 버전")}
       className={cn(
         "flex items-center gap-3 px-4 py-3",
         appearance === "card" && "rounded-xl border bg-card",
@@ -73,7 +75,7 @@ export function AppVersionCard({
       ) : null}
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">
-          앱 버전{" "}
+          {t("앱 버전")}{" "}
           <span className="font-normal text-muted-foreground tabular-nums">
             {formatAppBuild(appBuild)}
           </span>
@@ -88,7 +90,7 @@ export function AppVersionCard({
       {updateReady ? (
         <Button size="sm" onClick={applyUpdate} disabled={applyingUpdate}>
           {applyingUpdate ? <Spinner aria-hidden /> : null}
-          {applyingUpdate ? "적용 중" : "새로고침"}
+          {applyingUpdate ? t("적용 중") : t("새로고침")}
         </Button>
       ) : checkForUpdate ? (
         <Button
@@ -98,7 +100,7 @@ export function AppVersionCard({
           disabled={checking}
         >
           {checking ? <Spinner aria-hidden /> : null}
-          {checking ? "확인 중" : "지금 확인"}
+          {checking ? t("확인 중") : t("지금 확인")}
         </Button>
       ) : null}
     </section>

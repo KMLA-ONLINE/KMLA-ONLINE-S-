@@ -13,6 +13,7 @@ import {
 } from "~/features/groups";
 import type { Route } from "./+types/create";
 import { getQueryClient } from "~/shared/lib/query-client";
+import { getCurrentLocale, useT } from "~/shared/i18n";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -22,7 +23,7 @@ export const handle = defineAppChrome({
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
   const values = readCreateGroupForm(await request.formData());
-  const errors = validateCreateGroup(values);
+  const errors = validateCreateGroup(values, getCurrentLocale());
 
   if (hasGroupFormErrors(errors)) {
     return data({ errors, values }, { status: 400 });
@@ -40,7 +41,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     return data(
       {
         errors: {
-          form: getGroupErrorMessage(error),
+          form: getGroupErrorMessage(error, getCurrentLocale()),
         } satisfies CreateGroupErrors,
         values,
       },
@@ -50,6 +51,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
 }
 
 export default function GroupCreatePage({ actionData }: Route.ComponentProps) {
+  const t = useT();
   const navigation = useNavigation();
   const { profile } = useAppShell();
   const canCreateOfficial =
@@ -58,7 +60,7 @@ export default function GroupCreatePage({ actionData }: Route.ComponentProps) {
   return (
     <>
       <PageHeader
-        title="그룹 만들기"
+        title={t("그룹 만들기")}
         back={{ fallback: "/groups" }}
         hideOnScroll={false}
       />

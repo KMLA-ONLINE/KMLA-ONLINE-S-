@@ -7,6 +7,7 @@ import { StaffMark } from "~/features/posts/components/staff-mark";
 import { postPreviewQuery } from "~/features/posts/data/cache";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Skeleton } from "~/shared/ui/skeleton";
@@ -31,6 +32,7 @@ export function PostPreviewCard({
   path: string;
   className?: string;
 }) {
+  const t = useT();
   const query = useQuery(postPreviewQuery(postId));
   const preview = query.data;
   const excerpt = useMemo(
@@ -39,17 +41,19 @@ export function PostPreviewCard({
         ? ""
         : preview.activityKind
           ? // 프로필 사진·커버 변경 활동은 본문이 비어 있다. 피드와 같은 문구로 대신한다.
-            preview.activityKind === "avatar_changed"
-            ? "프로필 사진을 바꾸었습니다."
-            : "프로필 커버를 바꾸었습니다."
+            t(
+              preview.activityKind === "avatar_changed"
+                ? "프로필 사진을 바꾸었습니다."
+                : "프로필 커버를 바꾸었습니다.",
+            )
           : extractPostPlainText(preview.body).trim(),
-    [preview],
+    [preview, t],
   );
 
   if (query.isPending) {
     return (
       <div
-        aria-label="게시물 불러오는 중"
+        aria-label={t("게시물 불러오는 중")}
         className={cn(CARD_CLASS, "p-3", className)}
       >
         <Skeleton className="h-4 w-1/2" />
@@ -68,7 +72,9 @@ export function PostPreviewCard({
           className,
         )}
       >
-        <span className="min-w-0 flex-1">게시물을 불러오지 못했습니다</span>
+        <span className="min-w-0 flex-1">
+          {t("게시물을 불러오지 못했습니다")}
+        </span>
         <Button
           type="button"
           variant="ghost"
@@ -77,7 +83,7 @@ export function PostPreviewCard({
           onClick={() => void query.refetch()}
         >
           <RotateCwIcon data-icon="inline-start" />
-          다시 시도
+          {t("다시 시도")}
         </Button>
       </div>
     );
@@ -92,14 +98,14 @@ export function PostPreviewCard({
           className,
         )}
       >
-        <EyeOffIcon aria-hidden className="size-4 shrink-0" />볼 수 없는
-        게시물입니다
+        <EyeOffIcon aria-hidden className="size-4 shrink-0" />
+        {t("볼 수 없는 게시물입니다")}
       </div>
     );
   }
 
   // 운영진 글은 다른 게시물 화면처럼 실제 이름에 운영진 표시를 붙인다.
-  const author = preview.authorName ?? preview.authorLabel ?? UNKNOWN_AUTHOR;
+  const author = preview.authorName ?? preview.authorLabel ?? t(UNKNOWN_AUTHOR);
   return (
     <Link
       to={path}

@@ -6,6 +6,7 @@ import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import { formatCohort } from "~/features/profiles/model/format";
 import type { BirthdayCalendarProfile } from "~/features/profiles/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { translate, useLocale, useT, type Locale } from "~/shared/i18n";
 import { useScrollContainer } from "~/shared/lib/scroll-container";
 import { cn } from "~/shared/lib/utils";
 
@@ -13,27 +14,33 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const BIRTHDAY_ROW_HEIGHT = 64;
 const BIRTHDAY_OVERSCAN = 12;
 
-const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
-  month: "long",
-  day: "numeric",
-  timeZone: "UTC",
-});
+const INTL_LOCALES: Record<Locale, string> = { ko: "ko-KR", en: "en-US" };
 
-const monthFormatter = new Intl.DateTimeFormat("ko-KR", {
-  month: "long",
-  timeZone: "UTC",
-});
+function dateFormatter(locale: Locale) {
+  return new Intl.DateTimeFormat(INTL_LOCALES[locale], {
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function monthFormatter(locale: Locale) {
+  return new Intl.DateTimeFormat(INTL_LOCALES[locale], {
+    month: "long",
+    timeZone: "UTC",
+  });
+}
 
 function toUtcTime(value: string) {
   return Date.parse(`${value}T00:00:00Z`);
 }
 
-function formatBirthdayDate(value: string) {
-  return dateFormatter.format(new Date(toUtcTime(value)));
+function formatBirthdayDate(value: string, locale: Locale) {
+  return dateFormatter(locale).format(new Date(toUtcTime(value)));
 }
 
-function formatBirthdayMonth(value: string) {
-  return monthFormatter.format(new Date(toUtcTime(value)));
+function formatBirthdayMonth(value: string, locale: Locale) {
+  return monthFormatter(locale).format(new Date(toUtcTime(value)));
 }
 
 /** 오늘을 0으로 둔 날짜 차이. 양쪽 다 자정 UTC라 타임존·서머타임이 끼어들지 않는다. */
@@ -41,11 +48,13 @@ function dayGap(value: string, referenceDate: string) {
   return Math.round((toUtcTime(value) - toUtcTime(referenceDate)) / DAY_MS);
 }
 
-function formatDayGap(gap: number) {
-  if (gap === 1) return "내일";
-  if (gap === -1) return "어제";
+function formatDayGap(gap: number, locale: Locale) {
+  if (gap === 1) return translate(locale, "내일");
+  if (gap === -1) return translate(locale, "어제");
 
-  return gap > 0 ? `${gap}일 뒤` : `${-gap}일 전`;
+  return gap > 0
+    ? translate(locale, "{gap}일 뒤", { gap })
+    : translate(locale, "{gap}일 전", { gap: -gap });
 }
 
 function toBirthdayDate(birthday: BirthdayCalendarProfile, yearOffset: number) {
@@ -107,9 +116,15 @@ function BirthdayRow({
   avatarUrl,
   referenceDate,
 }: BirthdayEntry & { avatarUrl: string | null; referenceDate: string }) {
+  const t = useT();
+  const locale = useLocale();
   const gap = closestBirthdayGap(birthday, referenceDate);
   const isToday = gap === 0;
-  const cohort = formatCohort(birthday.cohort, birthday.is_returning_student);
+  const cohort = formatCohort(
+    birthday.cohort,
+    birthday.is_returning_student,
+    locale,
+  );
 
   return (
     <Link
@@ -136,17 +151,17 @@ function BirthdayRow({
             isToday ? "font-medium" : "text-muted-foreground",
           )}
         >
-          {formatBirthdayDate(birthdayDate)}
+          {formatBirthdayDate(birthdayDate, locale)}
         </time>
 
         {isToday ? (
           <span className="flex items-center gap-1 text-xs font-medium text-primary">
             <CakeIcon className="size-3" aria-hidden />
-            오늘
+            {t("오늘")}
           </span>
         ) : (
           <span className="text-xs text-muted-foreground tabular-nums">
-            {formatDayGap(gap)}
+            {formatDayGap(gap, locale)}
           </span>
         )}
       </div>
@@ -244,7 +259,10 @@ function visibleRangeAround(index: number) {
   };
 }
 
-function birthdayFilterOptions(birthdays: BirthdayCalendarProfile[]) {
+function birthdayFilterOptions(
+  birthdays: BirthdayCalendarProfile[],
+  locale: Locale,
+) {
   const cohorts = new Set<number>();
   let hasTeacher = false;
 
@@ -258,15 +276,21 @@ function birthdayFilterOptions(birthdays: BirthdayCalendarProfile[]) {
     if (birthday.is_returning_student) cohorts.add(birthday.cohort + 1);
   });
 
-  const options: BirthdayFilterOption[] = [{ id: "all", label: "전체" }];
+  const options: BirthdayFilterOption[] = [
+    { id: "all", label: translate(locale, "전체") },
+  ];
 
   Array.from(cohorts)
     .sort((left, right) => left - right)
     .forEach((cohort) => {
-      options.push({ id: cohort, label: `${cohort}기` });
+      options.push({
+        id: cohort,
+        label: translate(locale, "{cohort}기", { cohort }),
+      });
     });
 
-  if (hasTeacher) options.push({ id: "teacher", label: "교사" });
+  if (hasTeacher)
+    options.push({ id: "teacher", label: translate(locale, "교사") });
 
   return options;
 }
@@ -293,11 +317,16 @@ export function BirthdayListScreen({
   birthdays: BirthdayCalendarProfile[];
   referenceDate: string;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const scrollRef = useScrollContainer();
   const listRef = useRef<HTMLDivElement>(null);
   const startMonthRef = useRef<HTMLDivElement>(null);
   const [selectedFilter, setSelectedFilter] = useState<BirthdayFilter>("all");
-  const filters = useMemo(() => birthdayFilterOptions(birthdays), [birthdays]);
+  const filters = useMemo(
+    () => birthdayFilterOptions(birthdays, locale),
+    [birthdays, locale],
+  );
   // 스크롤할 때마다 보이는 범위가 바뀌어 다시 렌더된다. 학교 전체를 걸러 정렬하는 일을 그때마다 되풀이하지 않는다.
   const listItems = useMemo(
     () =>
@@ -444,13 +473,13 @@ export function BirthdayListScreen({
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-2 pb-10 md:px-0">
-      <h1 className="hidden text-2xl font-semibold md:block">생일</h1>
+      <h1 className="hidden text-2xl font-semibold md:block">{t("생일")}</h1>
 
       {birthdays.length > 0 ? (
         <section className="flex flex-col">
           <div
             role="group"
-            aria-label="기수 필터"
+            aria-label={t("기수 필터")}
             className="mx-1 flex overflow-x-auto overflow-y-hidden border-b md:mx-0 md:px-0"
           >
             {filters.map((filter) => {
@@ -511,7 +540,7 @@ export function BirthdayListScreen({
                 {item.kind === "month" ? (
                   <div className="flex h-16 items-end border-b px-1 pb-2">
                     <h3 className="text-md font-semibold">
-                      {formatBirthdayMonth(item.birthdayDate)}
+                      {formatBirthdayMonth(item.birthdayDate, locale)}
                     </h3>
                   </div>
                 ) : (
@@ -555,7 +584,7 @@ export function BirthdayListScreen({
           <CakeIcon className="size-8 text-muted-foreground/50" aria-hidden />
 
           <p className="text-center text-sm text-muted-foreground">
-            등록된 생일이 없습니다.
+            {t("등록된 생일이 없습니다.")}
           </p>
         </div>
       )}

@@ -182,3 +182,18 @@ describe("PullToRefresh", () => {
     expect(status).toHaveClass("invisible");
   });
 });
+
+describe("PullToRefresh in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("describes the gesture in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    render(<Subject onRefresh={() => Promise.resolve()} />);
+    const scroller = screen.getByTestId("scroller");
+
+    beginPull(scroller);
+    movePull(scroller, 60);
+
+    expect(screen.getByText("Pull down to refresh")).toBeInTheDocument();
+  });
+});

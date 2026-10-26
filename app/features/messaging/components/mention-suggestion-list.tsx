@@ -3,6 +3,7 @@ import { useEffect } from "react";
 
 import type { MessageMentionSuggestion } from "~/features/messaging/model/message-mentions";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 /** 입력창의 `aria-activedescendant`가 가리킬 후보 ID. */
@@ -29,6 +30,7 @@ export function MentionSuggestionList({
   onSelect: (suggestion: MessageMentionSuggestion) => void;
   className?: string;
 }) {
+  const t = useT();
   // 화살표로 옮긴 후보가 목록 밖에 있으면 보이게 한다.
   useEffect(() => {
     document
@@ -40,7 +42,7 @@ export function MentionSuggestionList({
     <ul
       id={id}
       role="listbox"
-      aria-label="멘션할 사람"
+      aria-label={t("멘션할 사람")}
       className={cn(
         "max-h-60 overflow-y-auto overscroll-contain rounded-2xl border bg-popover p-1 text-popover-foreground shadow-md",
         className,

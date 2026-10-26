@@ -26,6 +26,7 @@ import type { AcceptedProfile } from "~/features/profiles/model/types";
 import type { ViewerImage } from "~/shared/components/image-viewer";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
+import { useLocale, useT, type Locale } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 import { Button, buttonVariants } from "~/shared/ui/button";
@@ -81,13 +82,14 @@ function maskEmail(value: string) {
 }
 
 function ProfileFactValue({ fact }: { fact: ProfileFact }) {
+  const t = useT();
   const [revealed, setRevealed] = useState(false);
 
   if (fact.masked !== undefined && !revealed) {
     return (
       <button
         type="button"
-        aria-label={`${fact.label} 보기`}
+        aria-label={t("{label} 보기", { label: fact.label })}
         onClick={() => setRevealed(true)}
         className="cursor-pointer rounded-sm tracking-wide text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
@@ -107,9 +109,17 @@ function ProfileFactValue({ fact }: { fact: ProfileFact }) {
   return fact.value;
 }
 
-function formatBirthday(value: string) {
-  const [year, month, day] = value.split("-");
-  return `${Number(year)}년 ${Number(month)}월 ${Number(day)}일`;
+function formatBirthday(value: string, locale: Locale) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (locale === "en") {
+    return new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(Date.UTC(year, month - 1, day)));
+  }
+  return `${year}년 ${month}월 ${day}일`;
 }
 
 function profileMediaViewerImage(
@@ -133,6 +143,7 @@ function profileMediaViewerImage(
 }
 
 function ProfileDescription({ description }: { description: string }) {
+  const t = useT();
   const descriptionRef = useRef<HTMLParagraphElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [isTruncated, setIsTruncated] = useState(false);
@@ -175,7 +186,7 @@ function ProfileDescription({ description }: { description: string }) {
           aria-expanded={expanded}
           onClick={() => setExpanded((current) => !current)}
         >
-          {expanded ? "접기" : "더 보기"}
+          {expanded ? t("접기") : t("더 보기")}
         </Button>
       ) : null}
     </div>
@@ -200,6 +211,8 @@ export function ProfileDetail({
   // 좁은 화면에서는 정보 카드가 타임라인 위에 통째로 쌓여서 첫 게시물까지 한참 걸린다.
   // 그래서 모바일에서만 첫 묶음을 남기고 접는다 — `sm:`부터는 항상 전부 펼쳐 둔다.
   const [factsExpanded, setFactsExpanded] = useState(false);
+  const t = useT();
+  const locale = useLocale();
 
   const avatarViewerImage = useMemo(
     () =>
@@ -225,11 +238,11 @@ export function ProfileDetail({
   const viewer = useImageViewerParam(viewerImages);
 
   const schoolSummary = [
-    formatCohort(profile.cohort, profile.is_returning_student),
+    formatCohort(profile.cohort, profile.is_returning_student, locale),
     profile.academic_track === null
       ? null
-      : TRACK_LABELS[profile.academic_track],
-    profile.type === "teacher" ? "교사" : null,
+      : t(TRACK_LABELS[profile.academic_track]),
+    profile.type === "teacher" ? t("교사") : null,
   ].filter((value): value is string => value !== null);
 
   const hasCoverImage = Boolean(profile.cover_url?.trim());
@@ -238,35 +251,41 @@ export function ProfileDetail({
   // 묶음 사이 여백으로만 나누고, 부가 정보는 한 톤 낮춰 위계를 만든다.
   const factGroups: ProfileFactGroup[] = [
     {
-      label: "학적 정보",
+      label: t("학적 정보"),
       facts: [
         {
-          label: "학번",
+          label: t("학번"),
           value: profile.student_number,
           icon: <GraduationCapIcon aria-hidden />,
         },
         {
-          label: "반",
-          value: profile.class_no === null ? null : `${profile.class_no}반`,
+          label: t("반"),
+          value:
+            profile.class_no === null
+              ? null
+              : t("{classNo}반", { classNo: profile.class_no }),
           icon: <UsersRoundIcon aria-hidden />,
         },
         {
-          label: "부서",
+          label: t("부서"),
           value: profile.department,
           icon: <Building2Icon aria-hidden />,
         },
         {
-          label: "기숙사",
-          value: profile.dorm_room === null ? null : `${profile.dorm_room}호`,
+          label: t("기숙사"),
+          value:
+            profile.dorm_room === null
+              ? null
+              : t("{room}호", { room: profile.dorm_room }),
           icon: <HouseIcon aria-hidden />,
         },
       ],
     },
     {
-      label: "연락처",
+      label: t("연락처"),
       facts: [
         {
-          label: "전화번호",
+          label: t("전화번호"),
           value: profile.phone_number,
           icon: <PhoneIcon aria-hidden />,
           href: profile.phone_number
@@ -277,7 +296,7 @@ export function ProfileDetail({
             : undefined,
         },
         {
-          label: "이메일",
+          label: t("이메일"),
           value: profile.contact_email,
           icon: <MailIcon aria-hidden />,
           href: profile.contact_email
@@ -290,17 +309,20 @@ export function ProfileDetail({
       ],
     },
     {
-      label: "기타 정보",
+      label: t("기타 정보"),
       facts: [
         {
-          label: "성별",
-          value: profile.gender === null ? null : GENDER_LABELS[profile.gender],
+          label: t("성별"),
+          value:
+            profile.gender === null ? null : t(GENDER_LABELS[profile.gender]),
           icon: <UserRoundIcon aria-hidden />,
         },
         {
-          label: "생일",
+          label: t("생일"),
           value:
-            profile.birthday === null ? null : formatBirthday(profile.birthday),
+            profile.birthday === null
+              ? null
+              : formatBirthday(profile.birthday, locale),
           icon: <CakeIcon aria-hidden />,
         },
       ],
@@ -337,7 +359,7 @@ export function ProfileDetail({
               ) : (
                 <button
                   type="button"
-                  aria-label="커버 사진 크게 보기"
+                  aria-label={t("커버 사진 크게 보기")}
                   onClick={() => viewer.open(coverViewerImage.id)}
                   className="absolute inset-0 size-full cursor-zoom-in outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
                 >
@@ -374,7 +396,7 @@ export function ProfileDetail({
                   {!isOwnProfile && avatarViewerImage ? (
                     <button
                       type="button"
-                      aria-label="프로필 사진 크게 보기"
+                      aria-label={t("프로필 사진 크게 보기")}
                       onClick={() => viewer.open(avatarViewerImage.id)}
                       className="block cursor-zoom-in rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                     >
@@ -419,7 +441,7 @@ export function ProfileDetail({
                       className="h-[1.375rem] gap-1 border-primary/25 bg-primary/10 px-2 text-blue-700 sm:h-6 sm:px-2.5 sm:text-[13px] dark:border-primary/35 dark:bg-primary/15 dark:text-blue-300 sm:[&>svg]:size-3.5!"
                     >
                       <ShieldCheckIcon aria-hidden="true" />
-                      관리자
+                      {t("관리자")}
                     </Badge>
                   ) : null}
                 </div>
@@ -442,7 +464,7 @@ export function ProfileDetail({
                   })}
                 >
                   <PencilIcon />
-                  프로필 편집
+                  {t("프로필 편집")}
                 </Link>
               ) : (
                 <SendMessageButton
@@ -461,7 +483,7 @@ export function ProfileDetail({
         <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start">
           <section className="min-w-0 space-y-1.5 sm:space-y-2">
             <h2 className="px-0.5 text-[17px] font-semibold tracking-tight sm:px-1 sm:text-xl">
-              정보
+              {t("정보")}
             </h2>
 
             <Card className="-mx-3 h-fit gap-0 rounded-none border-x-0 py-0 shadow-none sm:mx-0 sm:rounded-xl sm:border sm:shadow-sm">
@@ -504,7 +526,7 @@ export function ProfileDetail({
                     aria-expanded={factsExpanded}
                     onClick={() => setFactsExpanded((current) => !current)}
                   >
-                    {factsExpanded ? "접기" : "정보 더 보기"}
+                    {factsExpanded ? t("접기") : t("정보 더 보기")}
                   </Button>
                 ) : null}
               </CardContent>
@@ -514,7 +536,7 @@ export function ProfileDetail({
           {/* 게시물 카드가 스스로 프레이밍을 들고 있어 Card로 감싸지 않는다(테두리 중복). */}
           <section className="-mx-3 min-w-0 space-y-1.5 sm:space-y-2 md:mx-0">
             <h2 className="px-3.5 text-[17px] font-semibold tracking-tight sm:text-xl md:px-1">
-              게시물
+              {t("게시물")}
             </h2>
 
             <Deferred value={posts} fallback={<PostListSkeleton />}>
@@ -530,7 +552,7 @@ export function ProfileDetail({
                   />
                 ) : (
                   <p className="px-4 py-12 text-center text-sm text-muted-foreground">
-                    게시물을 불러오지 못했습니다.
+                    {t("게시물을 불러오지 못했습니다.")}
                   </p>
                 )
               }

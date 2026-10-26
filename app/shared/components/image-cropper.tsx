@@ -13,6 +13,7 @@ import {
   cropImage,
   fitOutputSize,
 } from "~/shared/lib/image/crop";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
@@ -95,10 +96,11 @@ export function ImageCropper({
   maxOutputEdge,
   round = false,
   letterboxColor,
-  title = "사진 편집",
+  title,
   onCancel,
   onComplete,
 }: ImageCropperProps) {
+  const t = useT();
   const [image, setImage] = useState<{
     width: number;
     height: number;
@@ -300,13 +302,17 @@ export function ImageCropper({
             size="icon-sm"
             onClick={onCancel}
             disabled={busy}
-            aria-label="취소"
+            aria-label={t("취소")}
           >
             <XIcon />
           </Button>
-          <DialogTitle className="flex-1 text-base">{title}</DialogTitle>
+          <DialogTitle className="flex-1 text-base">
+            {title ?? t("사진 편집")}
+          </DialogTitle>
           <DialogDescription className="sr-only">
-            드래그나 방향키로 위치를, 슬라이더로 배율을 맞춘 뒤 적용합니다.
+            {t(
+              "드래그나 방향키로 위치를, 슬라이더로 배율을 맞춘 뒤 적용합니다.",
+            )}
           </DialogDescription>
           <Button
             size="sm"
@@ -314,9 +320,9 @@ export function ImageCropper({
             disabled={busy || !ready || error}
           >
             {busy ? (
-              <Spinner data-icon="inline-start" aria-label="처리 중" />
+              <Spinner data-icon="inline-start" aria-label={t("처리 중")} />
             ) : null}
-            적용
+            {t("적용")}
           </Button>
         </DialogHeader>
 
@@ -348,7 +354,7 @@ export function ImageCropper({
                 }}
                 className="relative w-full touch-none overflow-hidden select-none focus-visible:ring-1 focus-visible:ring-ring/50 focus-visible:outline-none"
                 role="application"
-                aria-label="크롭 영역"
+                aria-label={t("크롭 영역")}
                 aria-describedby="image-cropper-help"
               >
                 <img
@@ -383,7 +389,7 @@ export function ImageCropper({
                   <div className="absolute inset-0 grid place-items-center">
                     <Spinner
                       className="size-5"
-                      aria-label="이미지 불러오는 중"
+                      aria-label={t("이미지 불러오는 중")}
                     />
                   </div>
                 ) : null}
@@ -399,8 +405,9 @@ export function ImageCropper({
             </div>
 
             <p id="image-cropper-help" className="sr-only">
-              드래그하거나 방향키로 이미지 위치를 조정합니다. Shift와 함께
-              누르면 더 크게 움직입니다.
+              {t(
+                "드래그하거나 방향키로 이미지 위치를 조정합니다. Shift와 함께 누르면 더 크게 움직입니다.",
+              )}
             </p>
 
             <div className="flex items-center gap-3">
@@ -412,7 +419,7 @@ export function ImageCropper({
                   applyTransform(stepZoom(shownZoom, -ZOOM_STEP), shownOffset)
                 }
                 disabled={busy || !ready || shownZoom <= minZoom}
-                aria-label="축소"
+                aria-label={t("축소")}
               >
                 <MinusIcon />
               </Button>
@@ -427,7 +434,7 @@ export function ImageCropper({
                   applyTransform(Number(event.target.value), shownOffset)
                 }
                 disabled={busy || !ready}
-                aria-label="배율"
+                aria-label={t("배율")}
                 className="h-1 flex-1 cursor-pointer accent-primary"
               />
               <Button
@@ -438,7 +445,7 @@ export function ImageCropper({
                   applyTransform(stepZoom(shownZoom, ZOOM_STEP), shownOffset)
                 }
                 disabled={busy || !ready || shownZoom >= MAX_ZOOM}
-                aria-label="확대"
+                aria-label={t("확대")}
               >
                 <PlusIcon />
               </Button>
@@ -447,7 +454,9 @@ export function ImageCropper({
 
           {error ? (
             <p role="alert" className="text-center text-xs text-destructive">
-              이미지를 처리하지 못했습니다. 다른 파일로 다시 시도해 주세요.
+              {t(
+                "이미지를 처리하지 못했습니다. 다른 파일로 다시 시도해 주세요.",
+              )}
             </p>
           ) : null}
         </div>
