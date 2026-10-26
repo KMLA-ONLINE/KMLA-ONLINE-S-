@@ -346,7 +346,7 @@ select throws_ok(
   $$select public.set_message_reaction(
       (select id from public.list_messages((select id from made where name = 'group'))
         where system_kind = 'renamed'),
-      'like'
+      '👍'
     )$$,
   'P0002',
   null,

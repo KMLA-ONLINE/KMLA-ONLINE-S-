@@ -20,9 +20,10 @@ import type {
   MessageParticipant,
   MessageReplyPreview,
 } from "~/features/messaging/model/types";
-import type { PostReaction } from "~/features/posts/model/types";
-import { QuickReactionBar } from "~/features/posts/components/reaction/quick-reaction-bar";
-import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
+import {
+  DOUBLE_TAP_MESSAGE_REACTION,
+  MessageReactionBar,
+} from "~/features/messaging/components/message-reaction-bar";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";
@@ -84,6 +85,7 @@ export function MessageRow({
   onViewReply,
   onReply,
   onSelectReaction,
+  onPickReaction,
   onShowReactions,
   contextActions,
   contextViewportRef,
@@ -108,7 +110,9 @@ export function MessageRow({
   replyTargetAuthor?: string;
   onViewReply?: () => void;
   onReply?: () => void;
-  onSelectReaction?: (reaction: PostReaction) => void;
+  onSelectReaction?: (reaction: string) => void;
+  /** 빠른 반응 줄의 더 보기. 이모지 전체 선택창은 부모가 연다 — 이 메뉴는 곧 닫히기 때문이다. */
+  onPickReaction?: () => void;
   /** 반응 표시를 누르면 반응한 사람을 보여 준다. */
   onShowReactions?: () => void;
   contextActions?: MessageContextAction[];
@@ -263,8 +267,10 @@ export function MessageRow({
     if (singleTapTimer.current) {
       window.clearTimeout(singleTapTimer.current);
       singleTapTimer.current = 0;
-      if (message.myReaction !== "love") setHeartBurst((count) => count + 1);
-      onSelectReaction("love");
+      if (message.myReaction !== DOUBLE_TAP_MESSAGE_REACTION) {
+        setHeartBurst((count) => count + 1);
+      }
+      onSelectReaction(DOUBLE_TAP_MESSAGE_REACTION);
       return;
     }
     singleTapTimer.current = window.setTimeout(() => {
@@ -725,11 +731,15 @@ export function MessageRow({
             >
               {onSelectReaction ? (
                 <div className="rounded-full bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10">
-                  <QuickReactionBar
+                  <MessageReactionBar
                     current={message.myReaction}
                     onSelect={(reaction) => {
                       onSelectReaction(reaction);
                       changeContextMenuOpen(false);
+                    }}
+                    onMore={() => {
+                      changeContextMenuOpen(false);
+                      onPickReaction?.();
                     }}
                   />
                 </div>
@@ -808,7 +818,9 @@ function HeartBurst({ onDone }: { onDone: () => void }) {
         className="animate-message-heart drop-shadow-md"
         onAnimationEnd={onDone}
       >
-        <ReactionEmoji reaction="love" className="size-12" />
+        <span className="text-5xl leading-none">
+          {DOUBLE_TAP_MESSAGE_REACTION}
+        </span>
       </span>
     </span>
   );

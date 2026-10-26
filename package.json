@@ -53,7 +53,8 @@
     "db:push:dev": "npm run link:dev && supabase db push --linked",
     "fn:secrets:dev": "supabase secrets set --project-ref trftjcieogrewqptgidd --env-file supabase/.env.dev.local",
     "fn:deploy:dev": "supabase functions deploy --project-ref trftjcieogrewqptgidd",
-    "prepare": "husky && node scripts/link-skills.mjs"
+    "prepare": "husky && node scripts/link-skills.mjs",
+    "build:emoji-data": "node scripts/build-emoji-data.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -114,6 +115,7 @@
     "@types/react-dom": "^19.3.0",
     "@vite-pwa/assets-generator": "^2.0.0",
     "@vitest/coverage-v8": "^4.1.12",
+    "emojibase-data": "^18.0.0",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-jest-dom": "^5.10.1",

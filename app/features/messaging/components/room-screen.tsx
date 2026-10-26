@@ -21,9 +21,11 @@ import {
   XIcon,
 } from "lucide-react";
 import {
+  Suspense,
+  lazy,
+  memo,
   type CSSProperties,
   type Dispatch,
-  memo,
   type RefObject,
   type SetStateAction,
   useEffect,
@@ -72,6 +74,7 @@ import {
   EMPTY_MESSAGE_SEARCH,
   MessageSearchPanel,
 } from "~/features/messaging/components/message-search-panel";
+import { MessageReactionBar } from "~/features/messaging/components/message-reaction-bar";
 import { ReactionMembersDialog } from "~/features/messaging/components/reaction-members-dialog";
 import { SharedMediaDialog } from "~/features/messaging/components/shared-media-dialog";
 import { getSharedAttachmentCounts } from "~/features/messaging/data/queries";
@@ -123,10 +126,7 @@ import {
   type MessageMentionSuggestion,
   type PreparedMessageMentions,
 } from "~/features/messaging/model/message-mentions";
-import {
-  QuickReactionBar,
-  ReactionPickerSurface,
-} from "~/features/posts/components/reaction/quick-reaction-bar";
+import { ReactionPickerSurface } from "~/features/posts/components/reaction/quick-reaction-bar";
 import {
   MENTION_HIGHLIGHT_INPUT_CLASS,
   MentionHighlight,
@@ -139,7 +139,6 @@ import {
   toMentionDisplay,
   type MentionDraftEntry,
 } from "~/features/posts/model/mentions";
-import type { PostReaction } from "~/features/posts/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { toast } from "sonner";
@@ -246,6 +245,9 @@ export function RoomScreen({
   const searchOpen = overlay?.kind === "search";
   const pinnedDialogOpen = overlay?.kind === "pinned";
   const [findingMessage, setFindingMessage] = useState(false);
+  /** 이모지 전체 선택창을 연 메시지. 줄의 더 보기에서 연다. */
+  const [reactionPickerTarget, setReactionPickerTarget] =
+    useState<ConversationMessage | null>(null);
   // 검색 입력과 결과. 결과로 이동해 검색이 닫혀도 남겨 두어, 다시 열면 다음 결과를 이어 고른다.
   const [searchSession, setSearchSession] = useState(EMPTY_MESSAGE_SEARCH);
   const [highlightedMessageId, setHighlightedMessageId] = useState<
@@ -330,6 +332,14 @@ export function RoomScreen({
   const messageThreadRef = useRef<HTMLDivElement>(null);
   /** 메시지마다 마지막으로 반응을 바꾼 시각. 짧은 간격의 연타는 버린다. */
   const reactedAt = useRef(new Map<string, number>());
+  /** 빠른 반응 줄과 이모지 선택창이 같은 연타 제한을 지난다. */
+  const selectReaction = (message: ConversationMessage, reaction: string) => {
+    const now = Date.now();
+    const last = reactedAt.current.get(message.id) ?? 0;
+    if (now - last < SEND_COOLDOWN_MS) return;
+    reactedAt.current.set(message.id, now);
+    void react(message, reaction);
+  };
   /** 방금 보낸 메시지. 그 메시지가 화면에 나타날 때 맨 아래로 내린다. */
   const sentMessageId = useRef<string | null>(null);
   // 맨 아래를 보고 있었는지. 새 메시지가 붙기 직전의 스크롤 위치로 판단해야 하므로 스크롤할 때 적어
@@ -670,13 +680,8 @@ export function RoomScreen({
             findingMessage={findingMessage}
             loadingOlderMessages={loadingOlderMessages}
             onLoadOlderMessages={loadOlderMessages}
-            onSelectReaction={(message, reaction) => {
-              const now = Date.now();
-              const last = reactedAt.current.get(message.id) ?? 0;
-              if (now - last < SEND_COOLDOWN_MS) return;
-              reactedAt.current.set(message.id, now);
-              void react(message, reaction);
-            }}
+            onSelectReaction={selectReaction}
+            onPickReaction={setReactionPickerTarget}
             onReply={(message) => {
               if (message.deleted) return;
               setEditTarget(null);
@@ -897,6 +902,21 @@ export function RoomScreen({
             onClose={roomOverlay.close}
           />
         ) : null}
+        {reactionPickerTarget ? (
+          <Suspense fallback={null}>
+            <EmojiPicker
+              open
+              onOpenChange={(open) => {
+                if (!open) setReactionPickerTarget(null);
+              }}
+              onSelect={(emoji) => {
+                const target = reactionPickerTarget;
+                setReactionPickerTarget(null);
+                selectReaction(target, emoji);
+              }}
+            />
+          </Suspense>
+        ) : null}
         {reactionsTarget ? (
           <ReactionMembersDialog
             message={reactionsTarget}
@@ -922,6 +942,7 @@ function MessageThread({
   findingMessage,
   onLoadOlderMessages,
   onSelectReaction,
+  onPickReaction,
   onReply,
   onTogglePinned,
   onForward,
@@ -950,10 +971,9 @@ function MessageThread({
   /** 답장 인용, 고정 메시지, 검색 결과의 원래 메시지를 찾아 앞선 페이지를 읽는 중인지. */
   findingMessage: boolean;
   onLoadOlderMessages: () => Promise<OlderMessagesResult>;
-  onSelectReaction: (
-    message: ConversationMessage,
-    reaction: PostReaction,
-  ) => void;
+  onSelectReaction: (message: ConversationMessage, reaction: string) => void;
+  /** 빠른 반응 줄의 더 보기. 이모지 전체 선택창은 화면이 하나만 들고 있다. */
+  onPickReaction: (message: ConversationMessage) => void;
   onReply: (message: ConversationMessage) => void;
   onTogglePinned: (message: ConversationMessage) => void;
   onForward: (message: ConversationMessage) => void;
@@ -1025,6 +1045,7 @@ function MessageThread({
   // 행에는 한 번 만든 객체를 넘기고, 호출 시점에 최신 콜백을 읽는다.
   const latestHandlers = useRef({
     onSelectReaction,
+    onPickReaction,
     onReply,
     onTogglePinned,
     onForward,
@@ -1039,6 +1060,7 @@ function MessageThread({
   useLayoutEffect(() => {
     latestHandlers.current = {
       onSelectReaction,
+      onPickReaction,
       onReply,
       onTogglePinned,
       onForward,
@@ -1055,6 +1077,7 @@ function MessageThread({
     () => ({
       selectReaction: (message, reaction) =>
         latestHandlers.current.onSelectReaction(message, reaction),
+      pickReaction: (message) => latestHandlers.current.onPickReaction(message),
       reply: (message) => latestHandlers.current.onReply(message),
       togglePinned: (message) => latestHandlers.current.onTogglePinned(message),
       forward: (message) => latestHandlers.current.onForward(message),
@@ -1435,11 +1458,16 @@ interface HeldDraft {
 
 const EMPTY_HELD_DRAFT: HeldDraft = { text: "", mentions: [] };
 
+// 이모지 목록(200KB)은 더 보기를 처음 누를 때 받는다.
+const EmojiPicker = lazy(() =>
+  import("~/shared/components/emoji-picker").then((module) => ({
+    default: module.EmojiPicker,
+  })),
+);
+
 interface ThreadMessageActions {
-  selectReaction: (
-    message: ConversationMessage,
-    reaction: PostReaction,
-  ) => void;
+  selectReaction: (message: ConversationMessage, reaction: string) => void;
+  pickReaction: (message: ConversationMessage) => void;
   reply: (message: ConversationMessage) => void;
   togglePinned: (message: ConversationMessage) => void;
   forward: (message: ConversationMessage) => void;
@@ -1598,6 +1626,9 @@ const ThreadMessage = memo(function ThreadMessage({
             ? (reaction) => actions.selectReaction(message, reaction)
             : undefined
         }
+        onPickReaction={
+          actionable ? () => actions.pickReaction(message) : undefined
+        }
         contextActions={contextActions.length ? contextActions : undefined}
         actionRail={
           <MessageActions
@@ -1607,6 +1638,7 @@ const ThreadMessage = memo(function ThreadMessage({
             onSelectReaction={(reaction) =>
               actions.selectReaction(message, reaction)
             }
+            onPickReaction={() => actions.pickReaction(message)}
             onReply={canCompose ? () => actions.reply(message) : undefined}
             onTogglePinned={() => actions.togglePinned(message)}
             onForward={() => actions.forward(message)}
@@ -1672,6 +1704,7 @@ function MessageActions({
   message,
   isPinned,
   onSelectReaction,
+  onPickReaction,
   onReply,
   onTogglePinned,
   onForward,
@@ -1681,7 +1714,8 @@ function MessageActions({
   isOwn: boolean;
   message: ConversationMessage;
   isPinned: boolean;
-  onSelectReaction: (reaction: PostReaction) => void;
+  onSelectReaction: (reaction: string) => void;
+  onPickReaction: () => void;
   /** 입력창이 없는 대화(나간 대화, 탈퇴한 상대와의 1:1)에서는 없다. */
   onReply?: () => void;
   onTogglePinned: () => void;
@@ -1698,11 +1732,15 @@ function MessageActions({
           onDismiss={() => setReactionOpen(false)}
           className="left-1/2 mb-2 -translate-x-1/2"
         >
-          <QuickReactionBar
+          <MessageReactionBar
             current={message.myReaction}
             onSelect={(reaction) => {
               setReactionOpen(false);
               onSelectReaction(reaction);
+            }}
+            onMore={() => {
+              setReactionOpen(false);
+              onPickReaction();
             }}
           />
         </ReactionPickerSurface>

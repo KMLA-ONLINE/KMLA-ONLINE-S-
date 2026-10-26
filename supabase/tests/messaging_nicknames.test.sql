@@ -76,7 +76,7 @@ reset role;
 -- 민준이 그 메시지에 반응하고 답한다. 반응 목록과 Push가 별명을 쓴다.
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000100', true);
 set local role authenticated;
-select public.set_message_reaction('e0000000-0000-0000-0000-000000000901', 'like');
+select public.set_message_reaction('e0000000-0000-0000-0000-000000000901', '👍');
 select public.send_message(
   'c0000000-0000-0000-0000-000000000002',
   'e0000000-0000-0000-0000-000000000902',

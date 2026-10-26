@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { messagingKeys } from "~/features/messaging/data/cache";
 import { listMessageReactors } from "~/features/messaging/data/queries";
 import type { ConversationMessage } from "~/features/messaging/model/types";
-import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import {
   Dialog,
@@ -68,11 +67,9 @@ export function ReactionMembersDialog({
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">
                     {reactor.name}
                   </span>
-                  <ReactionEmoji
-                    reaction={reactor.reaction}
-                    labelled
-                    className="size-5"
-                  />
+                  <span className="text-xl leading-none">
+                    {reactor.reaction}
+                  </span>
                 </li>
               ))}
             </ul>

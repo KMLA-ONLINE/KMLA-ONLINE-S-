@@ -31,7 +31,7 @@
   시스템 메시지 종류, 멘션 대상(§8). 클라이언트가 만든 UUID를 기본 키로 받아 재전송을 멱등으로 만든다.
 - `private.message_attachments`: 메시지, 버킷, object path, MIME type, 크기, 이미지 치수, 파일 이름
   암호문과 키 버전. 상태는 다른 첨부와 같은 prepare-upload-finalize를 따른다(Storage 설계 §7).
-- `private.message_reactions`: 메시지와 프로필 기준 한 행. `private.message_pins`: 고정은 대화 전체의
+- `private.message_reactions`: 메시지와 프로필 기준 한 행. `reaction`은 enum이 아니라 Unicode 이모지 한 개를 담는 `text`이며, `private.is_message_reaction`이 공백·제어 문자·글자(한글 포함)·ASCII만인 값을 막는다. 이모지 한 덩어리인지는 선택창이 보장한다. `private.message_pins`: 고정은 대화 전체의
   상태이므로 메시지 기준 한 행에 고정한 사람과 시각을 둔다. 둘 다 평문이므로 암호화하지 않지만, 메시지를
   볼 수 있는 사람만 보도록 메시지와 같은 RPC 경계 안에 둔다.
 

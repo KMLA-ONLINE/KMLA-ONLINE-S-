@@ -2820,7 +2820,7 @@ export type Database = {
           id: string
           mention_profile_ids: number[]
           mentions_everyone: boolean
-          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          my_reaction: string
           pinned: boolean
           reactions: Json
           reply_attachment_kind: string
@@ -2843,7 +2843,7 @@ export type Database = {
           name: string
           profile_id: number
           reacted_at: string
-          reaction: Database["public"]["Enums"]["post_reaction"]
+          reaction: string
         }[]
       }
       list_message_read_counts: {
@@ -2869,7 +2869,7 @@ export type Database = {
           id: string
           mention_profile_ids: number[]
           mentions_everyone: boolean
-          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          my_reaction: string
           pinned: boolean
           reactions: Json
           reply_attachment_kind: string
@@ -2927,7 +2927,7 @@ export type Database = {
           id: string
           mention_profile_ids: number[]
           mentions_everyone: boolean
-          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          my_reaction: string
           pinned: boolean
           reactions: Json
           reply_attachment_kind: string
@@ -3512,12 +3512,9 @@ export type Database = {
         Returns: undefined
       }
       set_message_reaction: {
-        Args: {
-          p_message_id: string
-          p_reaction?: Database["public"]["Enums"]["post_reaction"]
-        }
+        Args: { p_message_id: string; p_reaction?: string }
         Returns: {
-          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          my_reaction: string
           reactions: Json
         }[]
       }

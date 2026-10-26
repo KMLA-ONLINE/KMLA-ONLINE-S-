@@ -16,7 +16,6 @@ import type {
   MessageReplyPreview,
 } from "~/features/messaging/model/types";
 import { PostPreviewCard } from "~/features/posts/components/post-preview-card";
-import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { useShrinkWrap } from "~/shared/hooks/use-shrink-wrap";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
@@ -288,12 +287,8 @@ export function MessageBubble({
           )}
         >
           {[...reactions].map(([reaction]) => (
-            <span key={reaction} className="flex items-center">
-              <ReactionEmoji
-                reaction={reaction}
-                labelled
-                className="size-[13px]"
-              />
+            <span key={reaction} className="text-[13px] leading-none">
+              {reaction}
             </span>
           ))}
           {reactionCount > 1 ? (
