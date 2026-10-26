@@ -1,4 +1,11 @@
+import { auth } from "~/shared/i18n/en/auth";
 import { common } from "~/shared/i18n/en/common";
+import { messaging } from "~/shared/i18n/en/messaging";
+import { notifications } from "~/shared/i18n/en/notifications";
+import { posts } from "~/shared/i18n/en/posts";
+import { posts_sub } from "~/shared/i18n/en/posts-sub";
+import { settings } from "~/shared/i18n/en/settings";
+import { shell } from "~/shared/i18n/en/shell";
 
 /**
  * 한국어 원문 → 영어. 화면 영역별 파일로 나눠 두고 여기서 합친다. 같은 원문이 두 파일에
@@ -6,4 +13,11 @@ import { common } from "~/shared/i18n/en/common";
  */
 export const en: Readonly<Record<string, string>> = {
   ...common,
+  ...shell,
+  ...auth,
+  ...settings,
+  ...notifications,
+  ...posts,
+  ...posts_sub,
+  ...messaging,
 };
