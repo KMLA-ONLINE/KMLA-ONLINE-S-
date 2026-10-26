@@ -65,7 +65,8 @@ export function DownloadStatus({
 
 /** 파일 이름 아래 줄에 남기는 저장 위치. 알림 대신 그 자리에 둔다(`ManagedDownloadState`의 `saved`). */
 export function DownloadNote({ state }: { state: ManagedDownloadState }) {
-  const note = managedDownloadNote(state, useLocale());
+  const locale = useLocale();
+  const note = managedDownloadNote(state, locale);
   return note ? (
     <span aria-hidden className="block text-xs text-primary">
       {note}

@@ -26,6 +26,10 @@ export function DangerSettings({
   canDeleteOfficial: boolean;
 }) {
   const t = useT();
+  // 문구는 <code>로 감싸야 해서 문장을 그 자리에서 둘로 가른다. 영어는 어순이 달라 조각 키로는 못 만든다.
+  const phraseHint = t("계속하려면 {phrase}를 입력하세요", {
+    phrase: "\u0000",
+  }).split("\u0000");
   const fetcher = useFetcher<{ error?: string }>();
   const [open, setOpen] = useState(false);
   const [officialConfirmOpen, setOfficialConfirmOpen] = useState(false);
@@ -93,8 +97,9 @@ export function DangerSettings({
         details={
           <Field>
             <FieldLabel htmlFor="group-deletion-phrase">
-              {t("계속하려면")} <code className="font-mono">{phrase}</code>
-              {t("를 입력하세요")}
+              {phraseHint[0]}
+              <code className="font-mono">{phrase}</code>
+              {phraseHint[1]}
             </FieldLabel>
             <TextField
               id="group-deletion-phrase"

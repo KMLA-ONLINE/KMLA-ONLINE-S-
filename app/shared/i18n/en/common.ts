@@ -18,6 +18,5 @@ export const common: Record<string, string> = {
   언어: "Language",
   "앱 문구에만 적용됩니다. 게시물과 메시지 내용은 바뀌지 않습니다.":
     "Applies to app text only. Posts and messages stay as written.",
-  "{count}분전": "{count} min ago",
   "댓글 {count}개": "{count} {count|comment|comments}",
 };

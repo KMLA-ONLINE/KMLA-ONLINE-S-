@@ -257,13 +257,24 @@ function inviteUrl(token: string): string {
   return `${window.location.origin}/invite/${token}`;
 }
 
-function formatExpiry(value: string, locale: Locale): string {
-  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "ko-KR", {
+// 포매터 생성이 포매팅보다 훨씬 비싸서 언어별로 하나씩 둔다.
+const EXPIRY_FORMAT: Record<Locale, Intl.DateTimeFormat> = {
+  ko: new Intl.DateTimeFormat("ko-KR", {
     month: "long",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(value));
+  }),
+  en: new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }),
+};
+
+function formatExpiry(value: string, locale: Locale): string {
+  return EXPIRY_FORMAT[locale].format(new Date(value));
 }
 
 function formatProfileTypes(

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   LANGUAGE_STORAGE_KEY,
@@ -49,5 +49,37 @@ describe("resolveLocale", () => {
     expect(resolveLocale("system", "ko")).toBe("ko");
     expect(resolveLocale("system", "ja-JP")).toBe("ko");
     expect(resolveLocale("system", undefined)).toBe("ko");
+  });
+});
+
+describe("snapshot caching", () => {
+  it("serves subscribed reads from memory and refreshes after a change", () => {
+    const unsubscribe = subscribeLanguage(vi.fn());
+    const spy = vi.spyOn(Storage.prototype, "getItem");
+
+    readLanguagePreference();
+    readLanguagePreference();
+    getCurrentLocale();
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    writeLanguagePreference("en");
+    expect(readLanguagePreference()).toBe("en");
+
+    // 다른 탭의 변경은 storage 이벤트로 온다.
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, "system");
+    window.dispatchEvent(new Event("storage"));
+    expect(readLanguagePreference()).toBe("system");
+
+    unsubscribe();
+    spy.mockRestore();
+  });
+
+  it("reads storage fresh once nobody subscribes", () => {
+    const unsubscribe = subscribeLanguage(vi.fn());
+    readLanguagePreference();
+    unsubscribe();
+
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, "en");
+    expect(readLanguagePreference()).toBe("en");
   });
 });

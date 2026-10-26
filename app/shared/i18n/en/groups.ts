@@ -289,8 +289,7 @@ export const groups: Record<string, string> = {
     "All posts, comments, attachments and members will be gone. This can't be undone.",
   "멤버 {count}명과 및 그룹의 모든 정보가 사라집니다. 되돌릴 수 없습니다.":
     "{count} {count|member|members} and everything in the group will be gone. This can't be undone.",
-  계속하려면: "Type",
-  "를 입력하세요": " to continue",
+  "계속하려면 {phrase}를 입력하세요": "Type {phrase} to continue",
   "영구 삭제": "Delete permanently",
   "‘{name}’ 공식 그룹을 삭제할까요?": "Delete the official group ‘{name}’?",
   "이 작업은 되돌릴 수 없습니다.": "This can't be undone.",

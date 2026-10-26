@@ -255,8 +255,9 @@ function PostFileLink({
   icon: React.ReactNode;
 }) {
   const t = useT();
+  const locale = useLocale();
   const download = useManagedDownload();
-  const status = managedDownloadLabel(download.state, useLocale());
+  const status = managedDownloadLabel(download.state, locale);
 
   return (
     <a

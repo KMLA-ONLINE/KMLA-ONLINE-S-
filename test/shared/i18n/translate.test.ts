@@ -34,7 +34,7 @@ describe("translate", () => {
 
   it("interpolates named params in both languages", () => {
     expect(translate("ko", "{name}님", { name: "민기" })).toBe("민기님");
-    expect(translate("en", "{count}분전", { count: 3 })).toBe("3 min ago");
+    expect(translate("en", "댓글 {count}개", { count: 3 })).toBe("3 comments");
   });
 
   it("picks the English plural form by count", () => {

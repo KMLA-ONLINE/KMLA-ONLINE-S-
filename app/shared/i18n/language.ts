@@ -17,7 +17,16 @@ function isPreference(value: unknown): value is LanguagePreference {
   return value === "system" || value === "ko" || value === "en";
 }
 
-export function readLanguagePreference(): LanguagePreference {
+/**
+ * 구독자가 있는 동안의 읽기 캐시. `useSyncExternalStore`는 구독한 컴포넌트가 그려질 때마다
+ * 스냅샷을 다시 읽는데, 피드 한 화면에 `useT()`가 수십 개라 매번 `localStorage`를 두드리면
+ * 아깝다. 바뀌는 길은 `writeLanguagePreference`와 다른 탭의 `storage` 이벤트뿐이라 그 둘에서
+ * 비운다. 구독자가 없으면(테스트, React 밖) 캐시도 두지 않아 저장소를 직접 바꿔도 바로 보인다.
+ */
+let cachedPreference: LanguagePreference | null = null;
+let subscribers = 0;
+
+function readStoredPreference(): LanguagePreference {
   if (typeof window === "undefined") return "ko";
   try {
     const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
@@ -27,6 +36,12 @@ export function readLanguagePreference(): LanguagePreference {
   }
 }
 
+export function readLanguagePreference(): LanguagePreference {
+  if (subscribers === 0) return readStoredPreference();
+  cachedPreference ??= readStoredPreference();
+  return cachedPreference;
+}
+
 export function writeLanguagePreference(preference: LanguagePreference): void {
   if (typeof window === "undefined") return;
   try {
@@ -34,6 +49,7 @@ export function writeLanguagePreference(preference: LanguagePreference): void {
   } catch {
     // 저장소를 못 써도 이번 세션 동안은 바뀐 언어로 그린다.
   }
+  cachedPreference = null;
   // 같은 탭의 `setItem`은 `storage` 이벤트를 내지 않으므로 직접 알린다.
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
@@ -59,11 +75,18 @@ export function getCurrentLocale(): Locale {
 }
 
 export function subscribeLanguage(onChange: () => void): () => void {
-  window.addEventListener(CHANGE_EVENT, onChange);
+  const handleChange = () => {
+    cachedPreference = null;
+    onChange();
+  };
+  subscribers += 1;
+  window.addEventListener(CHANGE_EVENT, handleChange);
   // 다른 탭에서 바꾼 경우까지 따라간다.
-  window.addEventListener("storage", onChange);
+  window.addEventListener("storage", handleChange);
   return () => {
-    window.removeEventListener(CHANGE_EVENT, onChange);
-    window.removeEventListener("storage", onChange);
+    window.removeEventListener(CHANGE_EVENT, handleChange);
+    window.removeEventListener("storage", handleChange);
+    subscribers -= 1;
+    if (subscribers === 0) cachedPreference = null;
   };
 }

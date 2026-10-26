@@ -105,10 +105,20 @@ export function GroupJoinRequestsPanel({
   );
 }
 
-function formatDate(value: string, locale: Locale): string {
-  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "ko-KR", {
+// 포매터 생성이 포매팅보다 훨씬 비싸서 언어별로 하나씩 둔다.
+const DATE_FORMAT: Record<Locale, Intl.DateTimeFormat> = {
+  ko: new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",
     month: "short",
     day: "numeric",
-  }).format(new Date(value));
+  }),
+  en: new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }),
+};
+
+function formatDate(value: string, locale: Locale): string {
+  return DATE_FORMAT[locale].format(new Date(value));
 }

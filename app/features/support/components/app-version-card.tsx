@@ -37,6 +37,7 @@ export function AppVersionCard({
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<UpdateCheckResult | null>(null);
   const t = useT();
+  const locale = useLocale();
 
   const check = async () => {
     if (!checkForUpdate || checking) return;
@@ -77,7 +78,7 @@ export function AppVersionCard({
         <p className="text-sm font-medium">
           {t("앱 버전")}{" "}
           <span className="font-normal text-muted-foreground tabular-nums">
-            {formatAppBuild(appBuild, useLocale())}
+            {formatAppBuild(appBuild, locale)}
           </span>
         </p>
         {message ? (
