@@ -90,7 +90,7 @@ export const school: Record<string, string> = {
   혼정끝: "After HJ",
   "2자습": "Study 2",
   "내 예약": "Mine",
-  선예약: "Prebooked",
+  선예약: "Held",
   "{cell} 선택": "Select {cell}",
   "매주 반복": "Repeats weekly",
   "주말 공강 예약": "Weekend free period reservations",
