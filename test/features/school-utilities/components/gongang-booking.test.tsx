@@ -345,7 +345,7 @@ describe("gongang screens in English", () => {
       within(table)
         .getAllByRole("rowheader")
         .map((cell) => cell.textContent),
-    ).toEqual(["Lunch", "Dinner", "Study 1", "After honjeong", "Study 2"]);
+    ).toEqual(["Lunch", "Dinner", "Study 1", "After HJ", "Study 2"]);
     expect(screen.getByRole("link", { name: "Free period" })).toHaveAttribute(
       "aria-current",
       "page",
