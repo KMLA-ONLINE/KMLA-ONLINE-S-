@@ -14,6 +14,7 @@ import {
   shouldShowInboxReminder,
 } from "~/features/notifications/model/prompt-storage";
 import { useOffline } from "~/shared/hooks/use-offline";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 
 /**
@@ -29,6 +30,7 @@ export function NotificationPermissionCard({
 }: {
   profileId: number;
 }) {
+  const t = useT();
   const [eligible, setEligible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [pending, setPending] = useState(false);
@@ -81,7 +83,9 @@ export function NotificationPermissionCard({
       setDismissed(true);
     } catch (error) {
       console.error("Failed to enable Web Push", error);
-      toast.error("알림을 켜지 못했습니다. 알림 설정에서 다시 시도해 주세요.");
+      toast.error(
+        t("알림을 켜지 못했습니다. 알림 설정에서 다시 시도해 주세요."),
+      );
       setPending(false);
     }
   };
@@ -91,12 +95,14 @@ export function NotificationPermissionCard({
     return (
       <p className="mx-4 flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground md:mx-1">
         <BellOffIcon aria-hidden className="size-4 shrink-0" />
-        <span className="min-w-0 flex-1">이 기기에서 알림이 꺼져 있어요</span>
+        <span className="min-w-0 flex-1">
+          {t("이 기기에서 알림이 꺼져 있어요")}
+        </span>
         <Link
           to="/settings/noti"
           className="shrink-0 font-medium text-foreground underline-offset-4 hover:underline"
         >
-          알림 설정
+          {t("알림 설정")}
         </Link>
       </p>
     );
@@ -112,19 +118,20 @@ export function NotificationPermissionCard({
       </span>
       <div className="min-w-0 flex-1">
         <h2 id="notification-permission-title" className="font-semibold">
-          중요한 소식을 기기에서도 받아보세요
+          {t("중요한 소식을 기기에서도 받아보세요")}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          댓글·답글과 그룹 가입 결과를 이 기기로 알립니다. 알림 종류는 알림
-          설정에서 변경할 수 있습니다.
+          {t(
+            "댓글·답글과 그룹 가입 결과를 이 기기로 알립니다. 알림 종류는 알림 설정에서 변경할 수 있습니다.",
+          )}
         </p>
       </div>
       <div className="flex shrink-0 justify-end gap-2">
         <Button variant="ghost" onClick={dismiss} disabled={pending}>
-          닫기
+          {t("닫기")}
         </Button>
         <Button onClick={() => void enable()} disabled={pending}>
-          {pending ? "설정 중" : "알림 받기"}
+          {pending ? t("설정 중") : t("알림 받기")}
         </Button>
       </div>
     </section>

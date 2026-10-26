@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import { en } from "~/shared/i18n/en";
 import { auth } from "~/shared/i18n/en/auth";
+import { admin } from "~/shared/i18n/en/admin";
+import { donations } from "~/shared/i18n/en/donations";
+import { groups } from "~/shared/i18n/en/groups";
+import { profiles } from "~/shared/i18n/en/profiles";
+import { school } from "~/shared/i18n/en/school";
+import { search } from "~/shared/i18n/en/search";
+import { stories } from "~/shared/i18n/en/stories";
+import { support } from "~/shared/i18n/en/support";
 import { common } from "~/shared/i18n/en/common";
 import { messaging } from "~/shared/i18n/en/messaging";
 import { notifications } from "~/shared/i18n/en/notifications";
@@ -46,6 +54,14 @@ describe("english dictionary", () => {
       posts,
       posts_sub,
       messaging,
+      groups,
+      profiles,
+      stories,
+      school,
+      donations,
+      search,
+      support,
+      admin,
     };
     const seen = new Map<string, [string, string]>();
     for (const [area, dictionary] of Object.entries(areas)) {

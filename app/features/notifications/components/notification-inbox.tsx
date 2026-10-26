@@ -19,6 +19,7 @@ import type {
 // 배럴(`~/features/posts`)은 편집기와 Markdown 파서까지 끌고 온다. 그림 하나만 필요하다.
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { RelativeTime } from "~/shared/components/relative-time";
+import { useLocale, useT, type Translate } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Empty,
@@ -35,11 +36,11 @@ function isRead(item: NotificationItem): boolean {
   return Boolean(item.read_at);
 }
 
-function actorName(item: NotificationItem): string {
-  if (item.actor_identity === "anonymous") return "익명";
-  if (item.actor_identity === "staff") return "운영진";
+function actorName(item: NotificationItem, t: Translate): string {
+  if (item.actor_identity === "anonymous") return t("익명");
+  if (item.actor_identity === "staff") return t("운영진");
   if (item.actor_identity === "system") return "KMLA Online";
-  return item.actor_display_name || "탈퇴한 사용자";
+  return item.actor_display_name || t("탈퇴한 사용자");
 }
 
 /** 이름·그룹·시간을 잇는 가운뎃점. 눈으로 훑을 때만 필요하므로 낭독에서는 뺀다. */
@@ -62,6 +63,8 @@ function NotificationRow({
   item: NotificationItem;
   forceRead: boolean;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [opening, setOpening] = useState(false);
@@ -104,8 +107,11 @@ function NotificationRow({
     await navigate(destination, { replace: destination === "/noti" });
     setOpening(false);
   };
-  const name = actorName(item);
-  const others = item.actor_count > 1 ? ` 외 ${item.actor_count - 1}명` : "";
+  const name = actorName(item, t);
+  const others =
+    item.actor_count > 1
+      ? t(" 외 {count}명", { count: item.actor_count - 1 })
+      : "";
   // 생성 타입은 RPC의 모든 열을 non-null로 적지만, 그룹과 무관한 알림은 실제로 비어서 온다.
   const groupName = item.group_name || null;
 
@@ -136,7 +142,7 @@ function NotificationRow({
             <>
               <MetaDot />
               {/* 가운뎃점은 낭독에서 빠져, 이름과 그룹이 한 덩어리로 읽히지 않게 한다. */}
-              <span className="sr-only">그룹 </span>
+              <span className="sr-only">{t("그룹 ")}</span>
               <span className="min-w-0 truncate text-xs text-muted-foreground">
                 {groupName}
               </span>
@@ -150,12 +156,12 @@ function NotificationRow({
           {/* 목적지 RPC를 기다리는 동안 눌린 행에서 바로 보이게 한다. 배경색만으로는 눈에 띄지 않는다. */}
           {opening ? (
             <Spinner
-              aria-label="여는 중"
+              aria-label={t("여는 중")}
               className="ml-auto size-3.5 shrink-0 text-muted-foreground"
             />
           ) : unread ? (
             <span className="ml-auto size-2 shrink-0 rounded-full bg-primary">
-              <span className="sr-only">읽지 않음</span>
+              <span className="sr-only">{t("읽지 않음")}</span>
             </span>
           ) : null}
         </span>
@@ -174,15 +180,17 @@ function NotificationRow({
               className="mr-1 inline-block align-[-0.2em]"
             />
           ) : null}
-          {getNotificationMessage(item)}
+          {getNotificationMessage(item, locale)}
         </span>
         {item.kind === "anonymous_activity_restricted" ? (
           <span className="mt-1 line-clamp-2 text-xs break-words text-muted-foreground">
             {item.detail
-              ? `사유: ${item.detail}`
-              : "사유가 기록되지 않았습니다."}
+              ? t("사유: {detail}", { detail: item.detail })
+              : t("사유가 기록되지 않았습니다.")}
             {item.restriction_expires_at
-              ? ` · 만료: ${formatDateTime(item.restriction_expires_at)}`
+              ? t(" · 만료: {date}", {
+                  date: formatDateTime(item.restriction_expires_at, locale),
+                })
               : ""}
           </span>
         ) : null}
@@ -224,6 +232,7 @@ export function NotificationInbox({
   initialPage: NotificationPage;
   profileId: number;
 }) {
+  const t = useT();
   const pageFetcher = useFetcher<NotificationPage>();
   const markAllFetcher = useFetcher();
   const [storedState, setStoredState] = useState<{
@@ -271,7 +280,7 @@ export function NotificationInbox({
     <>
       <PageHeader
         hideOnScroll
-        title="알림"
+        title={t("알림")}
         actions={
           <markAllFetcher.Form method="post" action="/noti">
             <input type="hidden" name="intent" value="mark-all" />
@@ -279,7 +288,7 @@ export function NotificationInbox({
               type="submit"
               variant="ghost"
               size="icon"
-              aria-label="모두 읽음"
+              aria-label={t("모두 읽음")}
               disabled={markAllPending || allLoadedRead}
             >
               <CheckCheckIcon />
@@ -289,7 +298,9 @@ export function NotificationInbox({
       />
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
         <div className="flex items-center gap-2 px-4 pt-1 md:px-1 md:pt-0">
-          <h1 className="hidden text-2xl font-semibold md:block">알림</h1>
+          <h1 className="hidden text-2xl font-semibold md:block">
+            {t("알림")}
+          </h1>
           <div className="ml-auto flex items-center gap-1">
             <markAllFetcher.Form
               method="post"
@@ -303,7 +314,7 @@ export function NotificationInbox({
                 size="sm"
                 disabled={markAllPending || allLoadedRead}
               >
-                <CheckCheckIcon /> 모두 읽음
+                <CheckCheckIcon /> {t("모두 읽음")}
               </Button>
             </markAllFetcher.Form>
           </div>
@@ -317,26 +328,26 @@ export function NotificationInbox({
               <EmptyMedia variant="icon">
                 <BellIcon />
               </EmptyMedia>
-              <EmptyTitle>새 알림이 없습니다</EmptyTitle>
+              <EmptyTitle>{t("새 알림이 없습니다")}</EmptyTitle>
               <EmptyDescription>
-                댓글·반응과 그룹 소식이 도착하면 여기에 모입니다.
+                {t("댓글·반응과 그룹 소식이 도착하면 여기에 모입니다.")}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
           <>
             <NotificationGroup
-              title="최근 6시간"
+              title={t("최근 6시간")}
               items={groups.recentSixHours}
               forceRead={markAllPending}
             />
             <NotificationGroup
-              title="최근 24시간"
+              title={t("최근 24시간")}
               items={groups.recentDay}
               forceRead={markAllPending}
             />
             <NotificationGroup
-              title="이전 알림"
+              title={t("이전 알림")}
               items={groups.older}
               forceRead={markAllPending}
             />
@@ -359,10 +370,10 @@ export function NotificationInbox({
             >
               {loadingMore ? (
                 <>
-                  <Spinner aria-hidden /> 불러오는 중
+                  <Spinner aria-hidden /> {t("불러오는 중")}
                 </>
               ) : (
-                "이전 알림 더 보기"
+                t("이전 알림 더 보기")
               )}
             </Button>
           </div>

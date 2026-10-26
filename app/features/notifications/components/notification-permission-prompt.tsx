@@ -11,6 +11,7 @@ import {
   recordNotificationEnabled,
   recordNotificationPromptHandled,
 } from "~/features/notifications/model/prompt-storage";
+import { useT } from "~/shared/i18n";
 import {
   setPromptActive,
   usePromptActive,
@@ -38,6 +39,7 @@ export function NotificationPermissionPrompt({
 }: {
   profileId: number;
 }) {
+  const t = useT();
   const [eligible, setEligible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [pending, setPending] = useState(false);
@@ -89,7 +91,9 @@ export function NotificationPermissionPrompt({
       setDismissed(true);
     } catch (error) {
       console.error("Failed to enable Web Push", error);
-      toast.error("알림을 켜지 못했습니다. 알림 설정에서 다시 시도해 주세요.");
+      toast.error(
+        t("알림을 켜지 못했습니다. 알림 설정에서 다시 시도해 주세요."),
+      );
       setPending(false);
     }
   };
@@ -108,10 +112,11 @@ export function NotificationPermissionPrompt({
           <span className="mx-auto w-fit rounded-xl bg-primary/10 p-2.5 text-primary sm:mx-0">
             <BellRingIcon aria-hidden className="size-5" />
           </span>
-          <DialogTitle>알림을 켜시겠어요?</DialogTitle>
+          <DialogTitle>{t("알림을 켜시겠어요?")}</DialogTitle>
           <DialogDescription>
-            댓글과 답글, 그룹 가입 결과를 이 기기로 알려드려요. 세부 유형은 알림
-            설정에서 바꿀 수 있어요.
+            {t(
+              "댓글과 답글, 그룹 가입 결과를 이 기기로 알려드려요. 세부 유형은 알림 설정에서 바꿀 수 있어요.",
+            )}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -121,10 +126,10 @@ export function NotificationPermissionPrompt({
             onClick={dismiss}
             disabled={pending}
           >
-            나중에
+            {t("나중에")}
           </Button>
           <Button size="lg" onClick={() => void enable()} disabled={pending}>
-            {pending ? "설정 중" : "알림 받기"}
+            {pending ? t("설정 중") : t("알림 받기")}
           </Button>
         </DialogFooter>
       </DialogContent>
