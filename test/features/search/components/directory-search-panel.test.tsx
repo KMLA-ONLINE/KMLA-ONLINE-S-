@@ -15,15 +15,18 @@ import { renderRoute, screen } from "../../../router";
 
 describe("DirectorySearchPanel", () => {
   it("shows recent entries when the query is empty", () => {
-    vi.mocked(useRecentSearchEntries).mockReturnValue([
-      {
-        kind: "profile",
-        id: "p1",
-        name: "김민준",
-        avatarPath: null,
-        avatarUrl: null,
-      },
-    ]);
+    vi.mocked(useRecentSearchEntries).mockReturnValue({
+      entries: [
+        {
+          kind: "profile",
+          id: "p1",
+          name: "김민준",
+          avatarPath: null,
+          avatarUrl: null,
+        },
+      ],
+      remove: vi.fn(),
+    });
 
     renderRoute(() => (
       <DirectorySearchPanel
@@ -42,8 +45,44 @@ describe("DirectorySearchPanel", () => {
     );
   });
 
+  it("removes a recent entry without navigating", async () => {
+    const remove = vi.fn();
+    vi.mocked(useRecentSearchEntries).mockReturnValue({
+      entries: [
+        {
+          kind: "group",
+          id: "g1",
+          name: "화학 스터디",
+          avatarPath: null,
+          avatarUrl: null,
+        },
+      ],
+      remove,
+    });
+    const onNavigate = vi.fn();
+    const { user } = renderRoute(() => (
+      <DirectorySearchPanel
+        query=""
+        loading={false}
+        result={null}
+        error={null}
+        onNavigate={onNavigate}
+      />
+    ));
+
+    await user.click(
+      screen.getByRole("button", { name: "화학 스터디 최근 항목에서 삭제" }),
+    );
+
+    expect(remove).toHaveBeenCalledWith("group", "g1");
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
   it("shows placeholder rows while loading", () => {
-    vi.mocked(useRecentSearchEntries).mockReturnValue([]);
+    vi.mocked(useRecentSearchEntries).mockReturnValue({
+      entries: [],
+      remove: vi.fn(),
+    });
     renderRoute(() => (
       <DirectorySearchPanel
         query="김민"
@@ -60,7 +99,10 @@ describe("DirectorySearchPanel", () => {
   });
 
   it("shows an empty state when nothing matches", () => {
-    vi.mocked(useRecentSearchEntries).mockReturnValue([]);
+    vi.mocked(useRecentSearchEntries).mockReturnValue({
+      entries: [],
+      remove: vi.fn(),
+    });
     renderRoute(() => (
       <DirectorySearchPanel
         query="없음"
@@ -75,7 +117,10 @@ describe("DirectorySearchPanel", () => {
   });
 
   it("renders people and groups, records a recent entry, and calls onNavigate on click", async () => {
-    vi.mocked(useRecentSearchEntries).mockReturnValue([]);
+    vi.mocked(useRecentSearchEntries).mockReturnValue({
+      entries: [],
+      remove: vi.fn(),
+    });
     const onNavigate = vi.fn();
     const { user } = renderRoute(() => (
       <DirectorySearchPanel
@@ -124,7 +169,10 @@ describe("DirectorySearchPanel", () => {
   });
 
   it("shows an error message", () => {
-    vi.mocked(useRecentSearchEntries).mockReturnValue([]);
+    vi.mocked(useRecentSearchEntries).mockReturnValue({
+      entries: [],
+      remove: vi.fn(),
+    });
     renderRoute(() => (
       <DirectorySearchPanel
         query="김민"

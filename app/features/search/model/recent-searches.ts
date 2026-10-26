@@ -43,6 +43,25 @@ export function addRecentSearchEntry(entry: RecentSearchEntry): void {
   }
 }
 
+/** 사용자가 지운 항목은 다시 눌러 들어가기 전까지 돌아오지 않는다(기능 명세 §3.6). */
+export function removeRecentSearchEntry(
+  kind: RecentSearchEntry["kind"],
+  id: string,
+): void {
+  if (typeof window === "undefined") return;
+  const next = readRecentSearchEntries().filter(
+    (existing) => !(existing.kind === kind && existing.id === id),
+  );
+  try {
+    window.localStorage.setItem(
+      RECENT_SEARCH_STORAGE_KEY,
+      JSON.stringify(next),
+    );
+  } catch {
+    // 쓰기에 실패하면 다음에 패널을 열 때 다시 나타난다.
+  }
+}
+
 function isRecentSearchEntry(value: unknown): value is RecentSearchEntry {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;

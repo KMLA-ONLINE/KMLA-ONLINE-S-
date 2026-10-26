@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   addRecentSearchEntry,
   readRecentSearchEntries,
+  removeRecentSearchEntry,
 } from "~/features/search/model/recent-searches";
 import { RECENT_SEARCH_STORAGE_KEY } from "~/shared/lib/user-scoped-storage";
 
@@ -64,6 +65,33 @@ describe("recent search entries", () => {
     }
 
     expect(readRecentSearchEntries()).toHaveLength(10);
+  });
+
+  it("removes one entry and keeps the others in order", () => {
+    addRecentSearchEntry({
+      kind: "profile",
+      id: "person-1",
+      name: "김민준",
+      avatarPath: null,
+    });
+    addRecentSearchEntry({
+      kind: "group",
+      id: "person-1",
+      name: "같은 ID의 그룹",
+      avatarPath: null,
+    });
+    addRecentSearchEntry({
+      kind: "group",
+      id: "group-2",
+      name: "화학 스터디",
+      avatarPath: null,
+    });
+
+    removeRecentSearchEntry("group", "person-1");
+
+    expect(
+      readRecentSearchEntries().map((entry) => `${entry.kind}:${entry.id}`),
+    ).toEqual(["group:group-2", "profile:person-1"]);
   });
 
   it("falls back to an empty list when storage is corrupted", () => {
